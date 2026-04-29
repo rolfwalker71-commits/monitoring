@@ -7,8 +7,6 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-const WEBCLIENT_VERSION_FALLBACK = "0.3.8";
-
 const state = {
   hostLimit: 20,
   hostOffset: 0,
@@ -20,44 +18,7 @@ const state = {
   reportOffset: 0,
   totalReports: 0,
   analysisHours: 24,
-  webVersion: WEBCLIENT_VERSION_FALLBACK,
-  lastUiRefreshUtc: "",
 };
-
-function renderClientMeta() {
-  const meta = document.getElementById("clientMeta");
-  if (!meta) {
-    return;
-  }
-
-  const refreshText = state.lastUiRefreshUtc ? formatUtcPlus2(state.lastUiRefreshUtc) : "-";
-  meta.textContent = `Webclient v${state.webVersion} | Letztes Update: ${refreshText}`;
-}
-
-function markUiRefreshed() {
-  state.lastUiRefreshUtc = new Date().toISOString();
-  renderClientMeta();
-}
-
-async function loadClientMeta() {
-  const timeoutMs = 1500;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch("/api/v1/meta", { signal: controller.signal });
-    if (response.ok) {
-      const data = await response.json();
-      state.webVersion = asText(data.app_version, WEBCLIENT_VERSION_FALLBACK);
-    }
-  } catch (_error) {
-    // Keep fallback values when meta endpoint is unavailable.
-  } finally {
-    clearTimeout(timeoutId);
-  }
-
-  renderClientMeta();
-}
 
 function updateViewMode() {
   const overviewView = document.getElementById("overviewView");
@@ -685,7 +646,6 @@ async function loadHosts() {
 
     renderHosts(hosts);
     updatePagerButtons();
-    markUiRefreshed();
   } catch (error) {
     hostList.innerHTML = `<p class=\"muted\">Fehler: ${escapeHtml(error.message)}</p>`;
   }
@@ -781,20 +741,12 @@ async function loadAnalysisForHost() {
   const resourceTrendCards = document.getElementById("resourceTrendCards");
   const deliveryStats = document.getElementById("deliveryStats");
 
-  if (!analysisSummary || !analysisRows || !resourceCharts || !resourceTrendCards || !deliveryStats) {
-    return;
-  }
-
   if (!state.selectedHost) {
     analysisSummary.textContent = "";
     deliveryStats.textContent = "";
     resourceCharts.innerHTML = "";
-    if (filesystemStats) {
-      filesystemStats.textContent = "";
-    }
-    if (filesystemCharts) {
-      filesystemCharts.innerHTML = "";
-    }
+    filesystemStats.textContent = "";
+    filesystemCharts.innerHTML = "";
     resourceTrendCards.innerHTML = "";
     analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
     return;
@@ -802,15 +754,11 @@ async function loadAnalysisForHost() {
 
   analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Lade Analyse...</td></tr>";
   resourceCharts.innerHTML = "";
-  if (filesystemCharts) {
-    filesystemCharts.innerHTML = "";
-  }
+  filesystemCharts.innerHTML = "";
   resourceTrendCards.innerHTML = "";
   analysisSummary.textContent = "";
   deliveryStats.textContent = "";
-  if (filesystemStats) {
-    filesystemStats.textContent = "";
-  }
+  filesystemStats.textContent = "";
 
   try {
     const hostNameParam = encodeURIComponent(state.selectedHost);
@@ -836,9 +784,7 @@ async function loadAnalysisForHost() {
     deliveryStats.textContent = `📬 Letzte Meldung: ${latestDelivery} | 🗃️ Queue: ${latestQueue} | Fenster: ${delayedCount} delayed / ${liveCount} live`;
     resourceCharts.innerHTML = renderResourceCharts(resourceSeries, data.latest_report_time_utc);
     resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc);
-    if (filesystemCharts) {
-      filesystemCharts.innerHTML = renderFilesystemTrendCharts(trendRows, data.latest_report_time_utc);
-    }
+    filesystemCharts.innerHTML = renderFilesystemTrendCharts(trendRows, data.latest_report_time_utc);
 
     const fsCurrentValues = trendRows.map((row) => Number(row.current_used_percent)).filter((value) => Number.isFinite(value));
     const fsAvgCurrent = fsCurrentValues.length > 0
@@ -846,14 +792,10 @@ async function loadAnalysisForHost() {
       : null;
     const fsRising = trendRows.filter((row) => Number(row.delta_used_percent) > 0).length;
     const fsWarnOrCritical = trendRows.filter((row) => Number(row.current_used_percent) >= 80).length;
-    if (filesystemStats) {
-      filesystemStats.textContent = `Top ${Math.min(6, trendRows.length)} FS-Charts | Avg aktuell: ${fsAvgCurrent === null ? "-" : formatNumber(fsAvgCurrent, 1) + "%"} | Steigend: ${fsRising} | >=80%: ${fsWarnOrCritical}`;
-    }
+    filesystemStats.textContent = `Top ${Math.min(6, trendRows.length)} FS-Charts | Avg aktuell: ${fsAvgCurrent === null ? "-" : formatNumber(fsAvgCurrent, 1) + "%"} | Steigend: ${fsRising} | >=80%: ${fsWarnOrCritical}`;
 
     if (trendRows.length === 0) {
-      if (filesystemCharts) {
-        filesystemCharts.innerHTML = "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfuegbar.</p>";
-      }
+      filesystemCharts.innerHTML = "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfuegbar.</p>";
       analysisRows.innerHTML =
         "<tr><td colspan=\"7\" class=\"muted\">Keine Analyse-Daten im gewaehlten Zeitfenster.</td></tr>";
       return;
@@ -874,8 +816,6 @@ async function loadAnalysisForHost() {
           </tr>
         `;
       })
-
-      markUiRefreshed();
       .join("");
   } catch (error) {
     analysisRows.innerHTML = `<tr><td colspan=\"7\" class=\"muted\">Fehler: ${escapeHtml(error.message)}</td></tr>`;
@@ -1012,8 +952,6 @@ function wireEvents() {
 async function init() {
   wireEvents();
   updateViewMode();
-  renderClientMeta();
-  loadClientMeta();
   await loadHosts();
   await loadReportsForHost();
   await loadAnalysisForHost();

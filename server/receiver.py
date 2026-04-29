@@ -16,7 +16,6 @@ DB_PATH = DATA_DIR / "monitoring.db"
 API_KEY = os.getenv("MONITORING_API_KEY", "")
 WARNING_THRESHOLD_PERCENT = float(os.getenv("MONITORING_WARNING_THRESHOLD", "80"))
 CRITICAL_THRESHOLD_PERCENT = float(os.getenv("MONITORING_CRITICAL_THRESHOLD", "90"))
-BUILD_VERSION_PATH = BASE_DIR.parent / "BUILD_VERSION"
 
 
 def parse_int(query: dict, key: str, default: int, min_value: int, max_value: int) -> int:
@@ -79,13 +78,6 @@ def utc_now_iso() -> str:
 def utc_hours_ago_iso(hours: int) -> str:
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     return cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def read_build_version() -> str:
-    try:
-        return BUILD_VERSION_PATH.read_text(encoding="utf-8").strip() or "unknown"
-    except OSError:
-        return "unknown"
 
 
 def parse_payload_json(payload_json: str) -> dict:
@@ -273,16 +265,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
-
-        if parsed.path == "/api/v1/meta":
-            self._send_json(
-                HTTPStatus.OK,
-                {
-                    "app_version": read_build_version(),
-                    "server_time_utc": utc_now_iso(),
-                },
-            )
-            return
 
         if parsed.path == "/health":
             self._send_json(HTTPStatus.OK, {"status": "ok", "time_utc": utc_now_iso()})
