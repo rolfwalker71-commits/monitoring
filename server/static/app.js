@@ -587,7 +587,7 @@ function renderHosts(hosts) {
           <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
           <span>📬 ${hostDelivery} | 🗃️ Queue ${hostQueueDepth}</span>
           <span>📦 ${Number(host.report_count || 0).toLocaleString("de-DE")} Meldungen</span>
-          <span>🕒 Last seen: ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
+          <span>🕒 Transfer: ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
         </button>
       `;
     })
