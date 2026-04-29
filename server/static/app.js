@@ -79,6 +79,9 @@ async function loadAlarmSettings(force = false) {
 
   const warningInput = document.getElementById("warningThresholdInput");
   const criticalInput = document.getElementById("criticalThresholdInput");
+  const warningConsecutiveHitsInput = document.getElementById("warningConsecutiveHitsInput");
+  const warningWindowMinutesInput = document.getElementById("warningWindowMinutesInput");
+  const criticalImmediateInput = document.getElementById("criticalImmediateInput");
   const telegramEnabledInput = document.getElementById("telegramEnabledInput");
   const telegramBotTokenInput = document.getElementById("telegramBotTokenInput");
   const telegramChatIdInput = document.getElementById("telegramChatIdInput");
@@ -92,6 +95,9 @@ async function loadAlarmSettings(force = false) {
 
     warningInput.value = Number(settings.warning_threshold_percent || 80).toFixed(1);
     criticalInput.value = Number(settings.critical_threshold_percent || 90).toFixed(1);
+    warningConsecutiveHitsInput.value = String(Number(settings.warning_consecutive_hits || 2));
+    warningWindowMinutesInput.value = String(Number(settings.warning_window_minutes || 15));
+    criticalImmediateInput.checked = settings.critical_trigger_immediate !== false;
     telegramEnabledInput.checked = settings.telegram_enabled === true;
     telegramBotTokenInput.value = asText(settings.telegram_bot_token, "") === "-" ? "" : String(settings.telegram_bot_token || "");
     telegramChatIdInput.value = asText(settings.telegram_chat_id, "") === "-" ? "" : String(settings.telegram_chat_id || "");
@@ -106,20 +112,34 @@ async function loadAlarmSettings(force = false) {
 async function saveAlarmSettings() {
   const warningInput = document.getElementById("warningThresholdInput");
   const criticalInput = document.getElementById("criticalThresholdInput");
+  const warningConsecutiveHitsInput = document.getElementById("warningConsecutiveHitsInput");
+  const warningWindowMinutesInput = document.getElementById("warningWindowMinutesInput");
+  const criticalImmediateInput = document.getElementById("criticalImmediateInput");
   const telegramEnabledInput = document.getElementById("telegramEnabledInput");
   const telegramBotTokenInput = document.getElementById("telegramBotTokenInput");
   const telegramChatIdInput = document.getElementById("telegramChatIdInput");
 
   const warning = Number(warningInput.value);
   const critical = Number(criticalInput.value);
+  const warningConsecutiveHits = Number(warningConsecutiveHitsInput.value);
+  const warningWindowMinutes = Number(warningWindowMinutesInput.value);
 
   if (!Number.isFinite(warning) || !Number.isFinite(critical) || warning < 1 || critical > 100 || warning >= critical) {
     throw new Error("Schwellwerte ungueltig: Warnung muss kleiner als Kritisch sein.");
+  }
+  if (!Number.isFinite(warningConsecutiveHits) || warningConsecutiveHits < 1 || warningConsecutiveHits > 10) {
+    throw new Error("Entprellung Treffer muss zwischen 1 und 10 liegen.");
+  }
+  if (!Number.isFinite(warningWindowMinutes) || warningWindowMinutes < 1 || warningWindowMinutes > 240) {
+    throw new Error("Entprellung Fenster muss zwischen 1 und 240 Minuten liegen.");
   }
 
   const payload = {
     warning_threshold_percent: warning,
     critical_threshold_percent: critical,
+    warning_consecutive_hits: Math.floor(warningConsecutiveHits),
+    warning_window_minutes: Math.floor(warningWindowMinutes),
+    critical_trigger_immediate: criticalImmediateInput.checked,
     telegram_enabled: telegramEnabledInput.checked,
     telegram_bot_token: telegramBotTokenInput.value.trim(),
     telegram_chat_id: telegramChatIdInput.value.trim(),
@@ -133,11 +153,11 @@ async function saveAlarmSettings() {
     body: JSON.stringify(payload),
   });
 
+  const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error("HTTP " + response.status);
+    throw new Error(data.error || data.details || ("HTTP " + response.status));
   }
 
-  await response.json();
   setAlarmSettingsStatus("Einstellungen gespeichert.");
   await loadAlertsForHost();
   await loadAnalysisForHost();

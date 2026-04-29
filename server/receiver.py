@@ -78,10 +78,38 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 warning_threshold_percent REAL NOT NULL,
                 critical_threshold_percent REAL NOT NULL,
+                warning_consecutive_hits INTEGER NOT NULL,
+                warning_window_minutes INTEGER NOT NULL,
+                critical_trigger_immediate INTEGER NOT NULL,
                 telegram_enabled INTEGER NOT NULL,
                 telegram_bot_token TEXT NOT NULL,
                 telegram_chat_id TEXT NOT NULL,
                 updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        existing_alarm_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(alarm_settings)").fetchall()
+        }
+        if "warning_consecutive_hits" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN warning_consecutive_hits INTEGER NOT NULL DEFAULT 2")
+        if "warning_window_minutes" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN warning_window_minutes INTEGER NOT NULL DEFAULT 15")
+        if "critical_trigger_immediate" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN critical_trigger_immediate INTEGER NOT NULL DEFAULT 1")
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS alert_debounce (
+                hostname TEXT NOT NULL,
+                mountpoint TEXT NOT NULL,
+                first_seen_at_utc TEXT NOT NULL,
+                last_seen_at_utc TEXT NOT NULL,
+                hit_count INTEGER NOT NULL,
+                last_used_percent REAL NOT NULL,
+                last_severity TEXT NOT NULL,
+                PRIMARY KEY(hostname, mountpoint)
             )
             """
         )
@@ -91,17 +119,23 @@ def init_db() -> None:
                 id,
                 warning_threshold_percent,
                 critical_threshold_percent,
+                warning_consecutive_hits,
+                warning_window_minutes,
+                critical_trigger_immediate,
                 telegram_enabled,
                 telegram_bot_token,
                 telegram_chat_id,
                 updated_at_utc
             )
-            VALUES (1, ?, ?, ?, ?, ?, ?)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO NOTHING
             """,
             (
                 WARNING_THRESHOLD_PERCENT,
                 CRITICAL_THRESHOLD_PERCENT,
+                2,
+                15,
+                1,
                 1 if TELEGRAM_ENABLED_DEFAULT else 0,
                 TELEGRAM_BOT_TOKEN_DEFAULT,
                 TELEGRAM_CHAT_ID_DEFAULT,
@@ -151,6 +185,7 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
     row = conn.execute(
         """
         SELECT warning_threshold_percent, critical_threshold_percent,
+               warning_consecutive_hits, warning_window_minutes, critical_trigger_immediate,
                telegram_enabled, telegram_bot_token, telegram_chat_id, updated_at_utc
         FROM alarm_settings
         WHERE id = 1
@@ -161,6 +196,9 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
         return {
             "warning_threshold_percent": WARNING_THRESHOLD_PERCENT,
             "critical_threshold_percent": CRITICAL_THRESHOLD_PERCENT,
+            "warning_consecutive_hits": 2,
+            "warning_window_minutes": 15,
+            "critical_trigger_immediate": True,
             "telegram_enabled": TELEGRAM_ENABLED_DEFAULT,
             "telegram_bot_token": TELEGRAM_BOT_TOKEN_DEFAULT,
             "telegram_chat_id": TELEGRAM_CHAT_ID_DEFAULT,
@@ -170,10 +208,13 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
     return {
         "warning_threshold_percent": clamp_threshold(row[0], 1, 99, WARNING_THRESHOLD_PERCENT),
         "critical_threshold_percent": clamp_threshold(row[1], 1, 100, CRITICAL_THRESHOLD_PERCENT),
-        "telegram_enabled": coerce_bool(row[2]),
-        "telegram_bot_token": str(row[3] or ""),
-        "telegram_chat_id": str(row[4] or ""),
-        "updated_at_utc": str(row[5] or ""),
+        "warning_consecutive_hits": max(1, int(row[2] or 2)),
+        "warning_window_minutes": max(1, int(row[3] or 15)),
+        "critical_trigger_immediate": coerce_bool(row[4]),
+        "telegram_enabled": coerce_bool(row[5]),
+        "telegram_bot_token": str(row[6] or ""),
+        "telegram_chat_id": str(row[7] or ""),
+        "updated_at_utc": str(row[8] or ""),
     }
 
 
@@ -195,9 +236,24 @@ def normalize_alarm_settings_payload(payload: dict, existing: dict | None = None
     if critical <= warning:
         critical = min(100.0, warning + 1.0)
 
+    try:
+        warning_hits = int(payload.get("warning_consecutive_hits", base.get("warning_consecutive_hits", 2)))
+    except (TypeError, ValueError):
+        warning_hits = 2
+    warning_hits = max(1, min(warning_hits, 10))
+
+    try:
+        warning_window = int(payload.get("warning_window_minutes", base.get("warning_window_minutes", 15)))
+    except (TypeError, ValueError):
+        warning_window = 15
+    warning_window = max(1, min(warning_window, 240))
+
     return {
         "warning_threshold_percent": warning,
         "critical_threshold_percent": critical,
+        "warning_consecutive_hits": warning_hits,
+        "warning_window_minutes": warning_window,
+        "critical_trigger_immediate": coerce_bool(payload.get("critical_trigger_immediate", base.get("critical_trigger_immediate", True))),
         "telegram_enabled": coerce_bool(payload.get("telegram_enabled", base.get("telegram_enabled", False))),
         "telegram_bot_token": str(payload.get("telegram_bot_token", base.get("telegram_bot_token", "")) or "").strip(),
         "telegram_chat_id": str(payload.get("telegram_chat_id", base.get("telegram_chat_id", "")) or "").strip(),
@@ -215,15 +271,21 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             id,
             warning_threshold_percent,
             critical_threshold_percent,
+            warning_consecutive_hits,
+            warning_window_minutes,
+            critical_trigger_immediate,
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,
             updated_at_utc
         )
-        VALUES (1, ?, ?, ?, ?, ?, ?)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             warning_threshold_percent = excluded.warning_threshold_percent,
             critical_threshold_percent = excluded.critical_threshold_percent,
+            warning_consecutive_hits = excluded.warning_consecutive_hits,
+            warning_window_minutes = excluded.warning_window_minutes,
+            critical_trigger_immediate = excluded.critical_trigger_immediate,
             telegram_enabled = excluded.telegram_enabled,
             telegram_bot_token = excluded.telegram_bot_token,
             telegram_chat_id = excluded.telegram_chat_id,
@@ -232,6 +294,9 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
         (
             normalized["warning_threshold_percent"],
             normalized["critical_threshold_percent"],
+            normalized["warning_consecutive_hits"],
+            normalized["warning_window_minutes"],
+            1 if normalized["critical_trigger_immediate"] else 0,
             1 if normalized["telegram_enabled"] else 0,
             normalized["telegram_bot_token"],
             normalized["telegram_chat_id"],
@@ -373,6 +438,9 @@ def evaluate_severity(used_percent: float) -> str:
 def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id: int, filesystems: list, alarm_settings: dict) -> None:
     now_utc = utc_now_iso()
     mountpoints_seen = set()
+    warning_hits_required = max(1, int(alarm_settings.get("warning_consecutive_hits", 2)))
+    warning_window_minutes = max(1, int(alarm_settings.get("warning_window_minutes", 15)))
+    critical_trigger_immediate = bool(alarm_settings.get("critical_trigger_immediate", True))
 
     for fs in filesystems:
         if not isinstance(fs, dict):
@@ -391,6 +459,53 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
         warning_threshold = float(alarm_settings.get("warning_threshold_percent", WARNING_THRESHOLD_PERCENT))
         critical_threshold = float(alarm_settings.get("critical_threshold_percent", CRITICAL_THRESHOLD_PERCENT))
         severity = evaluate_severity_for_thresholds(used_percent, warning_threshold, critical_threshold)
+        alert_started = False
+
+        if severity == "critical" and critical_trigger_immediate:
+            alert_started = True
+        elif severity in {"warning", "critical"}:
+            debounce_row = conn.execute(
+                """
+                SELECT first_seen_at_utc, last_seen_at_utc, hit_count
+                FROM alert_debounce
+                WHERE hostname = ? AND mountpoint = ?
+                """,
+                (hostname, mountpoint),
+            ).fetchone()
+
+            if debounce_row:
+                try:
+                    last_seen_dt = datetime.strptime(str(debounce_row[1]), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                    now_dt = datetime.strptime(now_utc, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                    within_window = (now_dt - last_seen_dt) <= timedelta(minutes=warning_window_minutes)
+                except ValueError:
+                    within_window = False
+
+                next_hit_count = int(debounce_row[2] or 0) + 1 if within_window else 1
+                first_seen = str(debounce_row[0]) if within_window else now_utc
+            else:
+                next_hit_count = 1
+                first_seen = now_utc
+
+            conn.execute(
+                """
+                INSERT INTO alert_debounce (
+                    hostname, mountpoint, first_seen_at_utc, last_seen_at_utc,
+                    hit_count, last_used_percent, last_severity
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(hostname, mountpoint) DO UPDATE SET
+                    first_seen_at_utc = excluded.first_seen_at_utc,
+                    last_seen_at_utc = excluded.last_seen_at_utc,
+                    hit_count = excluded.hit_count,
+                    last_used_percent = excluded.last_used_percent,
+                    last_severity = excluded.last_severity
+                """,
+                (hostname, mountpoint, first_seen, now_utc, next_hit_count, used_percent, severity),
+            )
+
+            alert_started = next_hit_count >= warning_hits_required
+
         open_alert = conn.execute(
             """
             SELECT id, severity
@@ -403,6 +518,10 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
         ).fetchone()
 
         if severity == "ok":
+            conn.execute(
+                "DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?",
+                (hostname, mountpoint),
+            )
             if open_alert:
                 conn.execute(
                     """
@@ -414,6 +533,14 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
                 )
                 maybe_send_alert_message(alarm_settings, "resolved", hostname, mountpoint, "ok", used_percent)
             continue
+
+        if not open_alert and not alert_started:
+            continue
+
+        conn.execute(
+            "DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?",
+            (hostname, mountpoint),
+        )
 
         if not open_alert:
             conn.execute(
@@ -446,6 +573,10 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
     if mountpoints_seen:
         placeholders = ",".join("?" for _ in mountpoints_seen)
         conn.execute(
+            f"DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint NOT IN ({placeholders})",
+            (hostname, *sorted(mountpoints_seen)),
+        )
+        conn.execute(
             f"""
             UPDATE alerts
             SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
@@ -455,6 +586,8 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
             """,
             (now_utc, now_utc, report_id, hostname, *sorted(mountpoints_seen)),
         )
+    else:
+        conn.execute("DELETE FROM alert_debounce WHERE hostname = ?", (hostname,))
 
 
 class MonitoringHandler(BaseHTTPRequestHandler):
@@ -1002,7 +1135,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
     def do_POST(self) -> None:
-        if self.path == "/api/v1/alarm-settings":
+        parsed = urlparse(self.path)
+        path = parsed.path.rstrip("/") or "/"
+
+        if path == "/api/v1/alarm-settings":
             content_length = int(self.headers.get("Content-Length", "0"))
             if content_length <= 0:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
@@ -1028,7 +1164,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
-        if self.path == "/api/v1/alarm-test":
+        if path == "/api/v1/alarm-test":
             with sqlite3.connect(DB_PATH) as conn:
                 settings = get_alarm_settings(conn)
 
@@ -1050,7 +1186,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
-        if self.path == "/api/v1/host-settings":
+        if path == "/api/v1/host-settings":
             content_length = int(self.headers.get("Content-Length", "0"))
             if content_length <= 0:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
@@ -1096,7 +1232,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
-        if self.path != "/api/v1/agent-report":
+        if path != "/api/v1/agent-report":
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
             return
 

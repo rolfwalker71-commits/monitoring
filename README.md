@@ -59,6 +59,8 @@ Dashboard-Funktionen:
 - Groesseres Chart-Layout ohne Horizontal-Scroll fuer Analyse/Filesystem mit sauberer Verteilung
 - Statistik-Karten vor den Graphen; Analyse- und Filesystem-Chart-Kacheln in 2er-Reihen
 - Zentrales Einstellungsmenue fuer globale Alarm-Schwellwerte (gueltig fuer alle Hosts)
+- Entprellung fuer neue Alerts: z. B. 2 Treffer in 15 Minuten, bevor ein Warning-Alert geoeffnet wird
+- Optional: Kritisch sofort ausloesen (ohne Entprellung)
 - Optionale Telegram-Benachrichtigung fuer Alert-Open, Eskalation nach Kritisch und Resolve
 - Telegram-Testbenachrichtigung direkt aus dem Webclient
 
