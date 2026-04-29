@@ -156,6 +156,31 @@ button {
   margin-bottom: 14px;
 }
 
+.resource-trend-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.trend-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.trend-card strong {
+  font-size: 12px;
+}
+
+.trend-card span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .alerts-panel {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -318,6 +343,10 @@ th {
   }
 
   .meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-trend-grid {
     grid-template-columns: 1fr;
   }
 }

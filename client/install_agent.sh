@@ -6,13 +6,17 @@ CONFIG_DIR="/etc/monitoring-agent"
 CONFIG_FILE="$CONFIG_DIR/agent.conf"
 CRON_FILE="/etc/cron.d/monitoring-agent"
 LOG_FILE="/var/log/monitoring-agent.log"
+UPDATE_LOG_FILE="/var/log/monitoring-agent-update.log"
 CRON_TAG="# monitoring-agent"
 
 SERVER_URL=""
 API_KEY=""
 AGENT_ID=""
 INTERVAL_MINUTES="15"
-COLLECT_SCRIPT_URL="https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/collect_and_send.sh"
+RAW_BASE_URL="https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main"
+COLLECT_SCRIPT_URL=""
+SELF_UPDATE_SCRIPT_URL=""
+BUILD_VERSION_URL=""
 
 usage() {
   cat <<EOF
@@ -46,6 +50,10 @@ while [[ $# -gt 0 ]]; do
       COLLECT_SCRIPT_URL="$2"
       shift 2
       ;;
+    --raw-base-url)
+      RAW_BASE_URL="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -74,9 +82,21 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
+if [[ -z "$COLLECT_SCRIPT_URL" ]]; then
+  COLLECT_SCRIPT_URL="$RAW_BASE_URL/client/collect_and_send.sh"
+fi
+if [[ -z "$SELF_UPDATE_SCRIPT_URL" ]]; then
+  SELF_UPDATE_SCRIPT_URL="$RAW_BASE_URL/client/self_update.sh"
+fi
+if [[ -z "$BUILD_VERSION_URL" ]]; then
+  BUILD_VERSION_URL="$RAW_BASE_URL/BUILD_VERSION"
+fi
+
 install_cron_in_crond() {
-  local cron_line
-  cron_line="*/$INTERVAL_MINUTES * * * * root CONFIG_FILE=$CONFIG_FILE $INSTALL_DIR/collect_and_send.sh >> $LOG_FILE 2>&1"
+  local collect_cron_line
+  local update_cron_line
+  collect_cron_line="*/$INTERVAL_MINUTES * * * * root CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/collect_and_send.sh >> $LOG_FILE 2>&1"
+  update_cron_line="11 */6 * * * root CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/self_update.sh >> $UPDATE_LOG_FILE 2>&1"
 
   if [[ ! -d "/etc/cron.d" ]]; then
     return 1
@@ -86,7 +106,10 @@ install_cron_in_crond() {
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-$cron_line
+$CRON_TAG collect
+$collect_cron_line
+$CRON_TAG update
+$update_cron_line
 EOF
 
   chmod 0644 "$CRON_FILE"
@@ -94,9 +117,11 @@ EOF
 }
 
 install_cron_in_crontab() {
-  local cron_line
+  local collect_cron_line
+  local update_cron_line
   local existing
-  cron_line="*/$INTERVAL_MINUTES * * * * CONFIG_FILE=$CONFIG_FILE $INSTALL_DIR/collect_and_send.sh >> $LOG_FILE 2>&1"
+  collect_cron_line="*/$INTERVAL_MINUTES * * * * CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/collect_and_send.sh >> $LOG_FILE 2>&1"
+  update_cron_line="11 */6 * * * CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/self_update.sh >> $UPDATE_LOG_FILE 2>&1"
 
   if ! command -v crontab >/dev/null 2>&1; then
     return 1
@@ -105,8 +130,10 @@ install_cron_in_crontab() {
   existing="$(crontab -l 2>/dev/null | grep -v 'monitoring-agent' || true)"
   {
     printf '%s\n' "$existing"
-    printf '%s\n' "$CRON_TAG"
-    printf '%s\n' "$cron_line"
+    printf '%s collect\n' "$CRON_TAG"
+    printf '%s\n' "$collect_cron_line"
+    printf '%s update\n' "$CRON_TAG"
+    printf '%s\n' "$update_cron_line"
   } | sed '/^$/N;/^\n$/D' | crontab -
 
   return 0
@@ -115,7 +142,14 @@ install_cron_in_crontab() {
 mkdir -p "$INSTALL_DIR" "$CONFIG_DIR"
 
 curl -fsSL "$COLLECT_SCRIPT_URL" -o "$INSTALL_DIR/collect_and_send.sh"
+curl -fsSL "$SELF_UPDATE_SCRIPT_URL" -o "$INSTALL_DIR/self_update.sh"
 chmod 0755 "$INSTALL_DIR/collect_and_send.sh"
+chmod 0755 "$INSTALL_DIR/self_update.sh"
+
+if ! curl -fsSL "$BUILD_VERSION_URL" -o "$INSTALL_DIR/AGENT_VERSION"; then
+  printf '%s\n' "unknown" > "$INSTALL_DIR/AGENT_VERSION"
+fi
+chmod 0644 "$INSTALL_DIR/AGENT_VERSION"
 
 if [[ -z "$AGENT_ID" ]]; then
   AGENT_ID="$(hostname -f 2>/dev/null || hostname)"
@@ -125,6 +159,9 @@ cat > "$CONFIG_FILE" <<EOF
 SERVER_URL="$SERVER_URL"
 API_KEY="$API_KEY"
 AGENT_ID="$AGENT_ID"
+RAW_BASE_URL="$RAW_BASE_URL"
+INSTALL_DIR="$INSTALL_DIR"
+AGENT_VERSION_FILE="$INSTALL_DIR/AGENT_VERSION"
 EOF
 
 chmod 0600 "$CONFIG_FILE"
@@ -146,6 +183,10 @@ fi
 echo "Monitoring agent installed."
 echo "Config: $CONFIG_FILE"
 echo "Collector: $INSTALL_DIR/collect_and_send.sh"
+echo "Updater: $INSTALL_DIR/self_update.sh"
+echo "Agent version file: $INSTALL_DIR/AGENT_VERSION"
 echo "Cron schedule: every $INTERVAL_MINUTES minutes"
+echo "Update check: every 6 hours"
 echo "Cron target: $CRON_TARGET"
 echo "Log file: $LOG_FILE"
+echo "Update log file: $UPDATE_LOG_FILE"

@@ -35,6 +35,100 @@ function formatSignedPercent(value) {
   return `${sign}${n.toFixed(1)}%`;
 }
 
+function formatNumber(value, digits = 1) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    return "-";
+  }
+  return n.toFixed(digits);
+}
+
+function formatKilobytes(kbValue) {
+  const kb = Number(kbValue);
+  if (!Number.isFinite(kb) || kb < 0) {
+    return "-";
+  }
+
+  const mib = kb / 1024;
+  if (mib < 1024) {
+    return `${mib.toFixed(0)} MiB`;
+  }
+
+  return `${(mib / 1024).toFixed(2)} GiB`;
+}
+
+function renderResourceTrendCards(resourceTrends) {
+  const entries = [
+    ["🧠 CPU", resourceTrends.cpu_usage_percent, "%"],
+    ["📉 Load 1m", resourceTrends.load_avg_1, ""],
+    ["🧮 RAM", resourceTrends.memory_used_percent, "%"],
+    ["💤 Swap", resourceTrends.swap_used_percent, "%"],
+  ];
+
+  return entries
+    .map(([label, value, suffix]) => {
+      if (!value) {
+        return `
+          <article class="trend-card muted">
+            <strong>${label}</strong>
+            <span>Keine Daten</span>
+          </article>
+        `;
+      }
+
+      return `
+        <article class="trend-card">
+          <strong>${label}</strong>
+          <span>Aktuell: ${formatNumber(value.current)}${suffix}</span>
+          <span>Min/Max: ${formatNumber(value.min)}${suffix} / ${formatNumber(value.max)}${suffix}</span>
+          <span>Avg: ${formatNumber(value.avg)}${suffix}</span>
+          <span>Delta: ${formatSignedPercent(value.delta)}${suffix === "%" ? "" : ""}</span>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderNetworkTable(network) {
+  if (!network || !Array.isArray(network.interfaces) || network.interfaces.length === 0) {
+    return "<p class=\"muted\">Keine Netzwerk-Daten</p>";
+  }
+
+  const rows = network.interfaces
+    .map((iface) => {
+      const defaultBadge = iface.is_default ? "<span class=\"badge status-open\">default</span>" : "";
+      return `
+        <tr>
+          <td>${escapeHtml(asText(iface.name))} ${defaultBadge}</td>
+          <td>${escapeHtml(asText(iface.state))}</td>
+          <td>${formatKilobytes(Number(iface.rx_bytes) / 1024)}</td>
+          <td>${formatKilobytes(Number(iface.tx_bytes) / 1024)}</td>
+          <td>${Number(iface.rx_errors || 0) + Number(iface.tx_errors || 0)}</td>
+          <td>${Number(iface.rx_dropped || 0) + Number(iface.tx_dropped || 0)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  return `
+    <div class="table-wrap">
+      <table class="network-table">
+        <thead>
+          <tr>
+            <th>🌐 Interface</th>
+            <th>🔌 State</th>
+            <th>⬇️ RX</th>
+            <th>⬆️ TX</th>
+            <th>⚠️ Errors</th>
+            <th>🧯 Drops</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 function shortPath(value, maxLen = 54) {
   const text = asText(value, "-");
   if (text === "-" || text.length <= maxLen) {
@@ -144,6 +238,10 @@ function renderFilesystemTable(filesystems) {
 
 function renderReportCard(report) {
   const payload = report && report.payload ? report.payload : {};
+  const cpu = payload.cpu || {};
+  const memory = payload.memory || {};
+  const swap = payload.swap || {};
+  const network = payload.network || {};
 
   return `
     <article class="report-card">
@@ -154,12 +252,20 @@ function renderReportCard(report) {
 
       <div class="meta-grid">
         <p><strong>🆔 Agent ID</strong><span>${escapeHtml(asText(report.agent_id || payload.agent_id))}</span></p>
+        <p><strong>🧷 Agent Version</strong><span>${escapeHtml(asText(payload.agent_version))}</span></p>
         <p><strong>🌐 Primary IP</strong><span>${escapeHtml(asText(report.primary_ip || payload.primary_ip))}</span></p>
         <p><strong>🔌 Alle IPs</strong><span>${escapeHtml(asText(payload.all_ips))}</span></p>
         <p><strong>🐧 OS</strong><span>${escapeHtml(asText(payload.os))}</span></p>
         <p><strong>⚙️ Kernel</strong><span>${escapeHtml(asText(payload.kernel))}</span></p>
         <p><strong>⏱️ Uptime</strong><span>${escapeHtml(formatUptime(payload.uptime_seconds))}</span></p>
+        <p><strong>🧠 CPU</strong><span>${formatPercent(cpu.usage_percent)} | load ${formatNumber(cpu.load_avg_1, 2)} / ${formatNumber(cpu.load_avg_5, 2)} / ${formatNumber(cpu.load_avg_15, 2)}</span></p>
+        <p><strong>🧮 RAM</strong><span>${formatPercent(memory.used_percent)} | ${formatKilobytes(memory.used_kb)} / ${formatKilobytes(memory.total_kb)}</span></p>
+        <p><strong>💤 Swap</strong><span>${formatPercent(swap.used_percent)} | ${formatKilobytes(swap.used_kb)} / ${formatKilobytes(swap.total_kb)}</span></p>
+        <p><strong>🌍 Default NIC</strong><span>${escapeHtml(asText(network.default_interface))}</span></p>
       </div>
+
+      <h4>🌐 Netzwerk</h4>
+      ${renderNetworkTable(network)}
 
       <h4>💾 Filesysteme</h4>
       ${renderFilesystemTable(payload.filesystems)}
@@ -200,6 +306,7 @@ function renderHosts(hosts) {
       return `
         <button class="${selectedClass}" type="button" data-host="${escapeHtml(hostname)}">
           <strong>${escapeHtml(hostname)}</strong>
+          <span>🧷 ${escapeHtml(asText(host.agent_version))}</span>
           <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
           <span>📦 ${Number(host.report_count || 0).toLocaleString("de-DE")} Meldungen</span>
           <span>🕒 Last seen: ${escapeHtml(formatUtc(host.last_seen_utc))}</span>
@@ -306,14 +413,17 @@ async function loadReportsForHost() {
 async function loadAnalysisForHost() {
   const analysisSummary = document.getElementById("analysisSummary");
   const analysisRows = document.getElementById("analysisRows");
+  const resourceTrendCards = document.getElementById("resourceTrendCards");
 
   if (!state.selectedHost) {
     analysisSummary.textContent = "";
+    resourceTrendCards.innerHTML = "";
     analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
     return;
   }
 
   analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Lade Analyse...</td></tr>";
+  resourceTrendCards.innerHTML = "";
   analysisSummary.textContent = "";
 
   try {
@@ -326,10 +436,12 @@ async function loadAnalysisForHost() {
 
     const data = await response.json();
     const trendRows = data.filesystem_trends || [];
+    const resourceTrends = data.resource_trends || {};
     const latestMax = formatPercent(data.latest_max_used_percent);
     const reportCount = Number(data.report_count || 0).toLocaleString("de-DE");
 
     analysisSummary.textContent = `${reportCount} Reports, hoechste aktuelle FS-Auslastung: ${latestMax}`;
+    resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends);
 
     if (trendRows.length === 0) {
       analysisRows.innerHTML =

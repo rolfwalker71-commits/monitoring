@@ -2,13 +2,15 @@
 
 Dieses Projekt ist ein rudimentaerer Start fuer dein Server-Client-Monitoring:
 
-- Linux-Agent sammelt Basisdaten (`hostname`, IPs, Filesysteme, Fuellgrad, Uptime)
+- Linux-Agent sammelt Basisdaten (`hostname`, IPs, Filesysteme, Fuellgrad, Uptime) sowie CPU, RAM, Swap und Netzwerkdaten
 - Agent sendet alle `x` Minuten per `cron` an einen HTTP-Webservice
+- Agent prueft alle 6 Stunden selbststaendig auf neue Versionen auf GitHub und aktualisiert sich bei Bedarf
 - Webservice nimmt Daten entgegen, speichert sie in SQLite und zeigt eine einfache Uebersicht
 
 ## Struktur
 
 - `client/collect_and_send.sh`: sammelt Daten und POSTet JSON
+- `client/self_update.sh`: prueft GitHub auf neue Agent-Version und aktualisiert lokale Skripte
 - `client/install_agent.sh`: Install-Skript fuer Linux (per `curl` nutzbar), schreibt Cronjob
 - `server/receiver.py`: einfacher HTTP-Receiver + API + statische Dashboard-Seite
 - `server/static/*`: kleine Weboberflaeche
@@ -39,7 +41,9 @@ Dashboard-Funktionen:
 - Host-Gruppierung links
 - Blaettern durch Hosts und Host-Meldungen
 - Analysebereich mit 24h-Trends je Mountpoint fuer den ausgewaehlten Host
+- Analysebereich mit CPU/RAM/Swap-Trends im Zeitfenster
 - Alert-Bereich mit offenen Warn/Kritisch-Events und letzter Historie je Host
+- Agent-Version pro Host zur Nachverfolgung von Self-Updates
 
 Alert-Schwellwerte (optional per Env am Receiver):
 
@@ -64,6 +68,11 @@ curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/mai
 Das Install-Skript versucht zuerst einen Eintrag in `/etc/cron.d/monitoring-agent` anzulegen.
 Falls das auf dem Zielsystem nicht verfuegbar ist, wird automatisch ein Eintrag in der `root`-crontab gesetzt.
 
+Eingerichtete Jobs:
+
+- Datensammlung und Versand alle `x` Minuten
+- Self-Update Check alle 6 Stunden gegen GitHub `main`
+
 Mit API-Key:
 
 ```bash
@@ -73,6 +82,8 @@ curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/mai
     --api-key mein-geheimer-key \
     --interval-minutes 15
 ```
+
+  Der Agent uebermittelt bei jedem Report auch seine `agent_version`, damit im Dashboard erkennbar ist, ob ein automatisches Update bereits erfolgt ist.
 
 ## Was als naechstes sinnvoll ist
 

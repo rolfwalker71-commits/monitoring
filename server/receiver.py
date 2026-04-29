@@ -81,6 +81,33 @@ def parse_payload_json(payload_json: str) -> dict:
     return {}
 
 
+def get_nested_number(payload: dict, section: str, key: str) -> float | None:
+    value = payload.get(section, {})
+    if not isinstance(value, dict):
+        return None
+    raw = value.get(key)
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def summarize_numeric_series(values: list[float]) -> dict | None:
+    if not values:
+        return None
+
+    first_value = values[0]
+    last_value = values[-1]
+    return {
+        "current": last_value,
+        "min": min(values),
+        "max": max(values),
+        "avg": sum(values) / len(values),
+        "delta": last_value - first_value,
+        "sample_count": len(values),
+    }
+
+
 def evaluate_severity(used_percent: float) -> str:
     if used_percent >= CRITICAL_THRESHOLD_PERCENT:
         return "critical"
@@ -267,7 +294,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         WHERE r3.hostname = r.hostname
                         ORDER BY r3.id DESC
                         LIMIT 1
-                      ) AS latest_agent_id
+                                            ) AS latest_agent_id,
+                                            (
+                                                SELECT payload_json
+                                                FROM reports r4
+                                                WHERE r4.hostname = r.hostname
+                                                ORDER BY r4.id DESC
+                                                LIMIT 1
+                                            ) AS latest_payload_json
                     FROM reports r
                     GROUP BY r.hostname
                     ORDER BY last_seen_utc DESC
@@ -278,6 +312,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             hosts = []
             for row in rows:
+                latest_payload = parse_payload_json(row[5] or "{}")
                 hosts.append(
                     {
                         "hostname": row[0],
@@ -285,6 +320,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "report_count": row[2],
                         "primary_ip": row[3] or "",
                         "agent_id": row[4] or "",
+                        "agent_version": str(latest_payload.get("agent_version", "")),
                     }
                 )
 
@@ -379,11 +415,31 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             latest_report_time = ""
             latest_max_used_percent = None
             latest_hotspots = []
+            cpu_usage_values: list[float] = []
+            load_avg_1_values: list[float] = []
+            memory_used_values: list[float] = []
+            swap_used_values: list[float] = []
 
             for row in rows:
                 report_count += 1
                 latest_report_time = row[1]
                 payload = parse_payload_json(row[2])
+                cpu_usage = get_nested_number(payload, "cpu", "usage_percent")
+                if cpu_usage is not None:
+                    cpu_usage_values.append(cpu_usage)
+
+                load_avg_1 = get_nested_number(payload, "cpu", "load_avg_1")
+                if load_avg_1 is not None:
+                    load_avg_1_values.append(load_avg_1)
+
+                memory_used = get_nested_number(payload, "memory", "used_percent")
+                if memory_used is not None:
+                    memory_used_values.append(memory_used)
+
+                swap_used = get_nested_number(payload, "swap", "used_percent")
+                if swap_used is not None:
+                    swap_used_values.append(swap_used)
+
                 filesystems = payload.get("filesystems", [])
                 if not isinstance(filesystems, list):
                     continue
@@ -455,6 +511,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "latest_report_time_utc": latest_report_time,
                     "latest_max_used_percent": latest_max_used_percent,
                     "latest_hotspots": latest_hotspots,
+                    "resource_trends": {
+                        "cpu_usage_percent": summarize_numeric_series(cpu_usage_values),
+                        "load_avg_1": summarize_numeric_series(load_avg_1_values),
+                        "memory_used_percent": summarize_numeric_series(memory_used_values),
+                        "swap_used_percent": summarize_numeric_series(swap_used_values),
+                    },
                     "filesystem_trends": trends,
                 },
             )
