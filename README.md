@@ -54,6 +54,7 @@ Dashboard-Funktionen:
 - Filesystem-Fokus mit Top-Verlaufskurven und kompakter FS-Statistik (Avg, steigende FS, >=80%)
 - Getrennte Unter-Menues pro Host in der Uebersicht: Alerts+Analyse auf einer Seite, Filesystem Fokus separat
 - Groesseres Chart-Layout ohne Horizontal-Scroll fuer Analyse/Filesystem mit sauberer Verteilung
+- Statistik-Karten vor den Graphen; Analyse- und Filesystem-Chart-Kacheln in 2er-Reihen
 
 Alert-Schwellwerte (optional per Env am Receiver):
 

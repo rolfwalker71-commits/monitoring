@@ -308,6 +308,12 @@ button {
   padding: 12px;
 }
 
+.mini-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .mini-chart-card header,
 .mini-chart-card footer {
   display: flex;
