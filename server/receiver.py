@@ -59,6 +59,15 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS host_settings (
+                hostname TEXT PRIMARY KEY,
+                display_name_override TEXT,
+                updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
         conn.commit()
 
 
@@ -106,6 +115,26 @@ def summarize_numeric_series(values: list[float]) -> dict | None:
         "delta": last_value - first_value,
         "sample_count": len(values),
     }
+
+
+def get_display_name_override(conn: sqlite3.Connection, hostname: str) -> str:
+    row = conn.execute(
+        "SELECT display_name_override FROM host_settings WHERE hostname = ?",
+        (hostname,),
+    ).fetchone()
+    if not row or not row[0]:
+        return ""
+    return str(row[0]).strip()
+
+
+def effective_display_name(payload: dict, override_value: str, hostname: str) -> str:
+    if override_value:
+        return override_value
+
+    payload_value = str(payload.get("display_name", "")).strip()
+    if payload_value:
+        return payload_value
+    return hostname
 
 
 def evaluate_severity(used_percent: float) -> str:
@@ -248,17 +277,25 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     """,
                     (limit,),
                 ).fetchall()
+                settings_rows = conn.execute(
+                    "SELECT hostname, display_name_override FROM host_settings"
+                ).fetchall()
 
             reports = []
+            overrides = {str(row[0]): str(row[1] or "") for row in settings_rows}
+
             for row in rows:
+                payload = json.loads(row[5])
+                hostname = row[3]
                 reports.append(
                     {
                         "id": row[0],
                         "received_at_utc": row[1],
                         "agent_id": row[2],
-                        "hostname": row[3],
+                        "hostname": hostname,
                         "primary_ip": row[4],
-                        "payload": json.loads(row[5]),
+                        "display_name": effective_display_name(payload, overrides.get(str(hostname), ""), str(hostname)),
+                        "payload": payload,
                     }
                 )
 
@@ -310,13 +347,19 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     (limit, offset),
                 ).fetchall()
 
+                settings_rows = conn.execute(
+                    "SELECT hostname, display_name_override FROM host_settings"
+                ).fetchall()
+
+            overrides = {str(row[0]): str(row[1] or "") for row in settings_rows}
             hosts = []
             for row in rows:
                 latest_payload = parse_payload_json(row[5] or "{}")
+                hostname = str(row[0])
                 hosts.append(
                     {
-                        "hostname": row[0],
-                        "display_name": str(latest_payload.get("display_name", row[0] or "")),
+                        "hostname": hostname,
+                        "display_name": effective_display_name(latest_payload, overrides.get(hostname, ""), hostname),
                         "last_seen_utc": row[1],
                         "report_count": row[2],
                         "primary_ip": row[3] or "",
@@ -364,8 +407,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     (hostname, limit, offset),
                 ).fetchall()
 
+                display_name_override = get_display_name_override(conn, hostname)
+
             reports = []
             for row in rows:
+                payload = json.loads(row[5])
                 reports.append(
                     {
                         "id": row[0],
@@ -373,7 +419,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "agent_id": row[2],
                         "hostname": row[3],
                         "primary_ip": row[4],
-                        "payload": json.loads(row[5]),
+                        "display_name": effective_display_name(payload, display_name_override, hostname),
+                        "payload": payload,
                     }
                 )
 
@@ -386,6 +433,25 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "total_reports": total_reports,
                     "hostname": hostname,
                     "reports": reports,
+                },
+            )
+            return
+
+        if parsed.path == "/api/v1/host-settings":
+            query = parse_qs(parsed.query)
+            hostname = query.get("hostname", [""])[0].strip()
+            if not hostname:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                override_value = get_display_name_override(conn, hostname)
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "hostname": hostname,
+                    "display_name_override": override_value,
                 },
             )
             return
@@ -651,6 +717,52 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
     def do_POST(self) -> None:
+        if self.path == "/api/v1/host-settings":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            hostname = str(payload.get("hostname", "")).strip()
+            display_name_override = str(payload.get("display_name_override", "")).strip()
+
+            if not hostname:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                if display_name_override:
+                    conn.execute(
+                        """
+                        INSERT INTO host_settings (hostname, display_name_override, updated_at_utc)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(hostname) DO UPDATE SET
+                          display_name_override = excluded.display_name_override,
+                          updated_at_utc = excluded.updated_at_utc
+                        """,
+                        (hostname, display_name_override, utc_now_iso()),
+                    )
+                else:
+                    conn.execute("DELETE FROM host_settings WHERE hostname = ?", (hostname,))
+                conn.commit()
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "stored",
+                    "hostname": hostname,
+                    "display_name_override": display_name_override,
+                },
+            )
+            return
+
         if self.path != "/api/v1/agent-report":
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
             return

@@ -35,6 +35,7 @@ Nutzbare API-Endpunkte fuer die Auswertung:
 - `GET /api/v1/analysis?hostname=<host>&hours=24` Aggregation pro Host (Filesystem Min/Max/Avg/Delta)
 - `GET /api/v1/alerts-summary?hostname=<host>` offene Alerts (kritisch/warn)
 - `GET /api/v1/alerts?hostname=<host>&status=all&limit=15&offset=0` Alert-Historie
+- `POST /api/v1/host-settings` serverseitiger Override fuer sprechenden Host-Titel
 
 Dashboard-Funktionen:
 
@@ -94,6 +95,9 @@ curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/mai
 ```
 
   Der Agent uebermittelt bei jedem Report auch seine `agent_version`, damit im Dashboard erkennbar ist, ob ein automatisches Update bereits erfolgt ist.
+
+  Zusätzlich kann im Dashboard ein serverseitiger Titel-Override gesetzt werden.
+  Dieser hat Vorrang vor dem vom Agent gelieferten `display_name`, ohne dass der Agent neu installiert werden muss.
 
 ## Was als naechstes sinnvoll ist
 

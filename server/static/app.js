@@ -12,6 +12,7 @@ const state = {
   hostOffset: 0,
   totalHosts: 0,
   selectedHost: "",
+  selectedDisplayName: "",
   reportLimit: 1,
   reportOffset: 0,
   totalReports: 0,
@@ -242,7 +243,7 @@ function renderReportCard(report) {
   const memory = payload.memory || {};
   const swap = payload.swap || {};
   const network = payload.network || {};
-  const title = asText(payload.display_name || report.hostname || payload.hostname);
+  const title = asText(report.display_name || payload.display_name || report.hostname || payload.hostname);
   const technicalHostname = asText(report.hostname || payload.hostname);
 
   return `
@@ -330,6 +331,7 @@ function renderHosts(hosts) {
       }
 
       state.selectedHost = hostname;
+      state.selectedDisplayName = item.querySelector("strong")?.textContent || hostname;
       state.reportOffset = 0;
       loadHosts();
       loadReportsForHost();
@@ -356,13 +358,20 @@ async function loadHosts() {
 
     if (!state.selectedHost && hosts.length > 0) {
       state.selectedHost = String(hosts[0].hostname || "");
+      state.selectedDisplayName = String(hosts[0].display_name || hosts[0].hostname || "");
       state.reportOffset = 0;
     }
 
     const selectedStillVisible = hosts.some((host) => String(host.hostname || "") === state.selectedHost);
     if (!selectedStillVisible && hosts.length > 0) {
       state.selectedHost = String(hosts[0].hostname || "");
+      state.selectedDisplayName = String(hosts[0].display_name || hosts[0].hostname || "");
       state.reportOffset = 0;
+    }
+
+    const selectedHost = hosts.find((host) => String(host.hostname || "") === state.selectedHost);
+    if (selectedHost) {
+      state.selectedDisplayName = String(selectedHost.display_name || selectedHost.hostname || "");
     }
 
     renderHosts(hosts);
@@ -385,8 +394,7 @@ async function loadReportsForHost() {
     return;
   }
 
-  const selectedHostButton = document.querySelector(`.host-item[data-host="${CSS.escape(state.selectedHost)}"] strong`);
-  const selectedLabel = selectedHostButton ? selectedHostButton.textContent : state.selectedHost;
+  const selectedLabel = state.selectedDisplayName || state.selectedHost;
   selectedHostTitle.textContent = `🗂️ Meldungen fuer ${selectedLabel}`;
   list.innerHTML = "<p class=\"muted\">Lade Daten...</p>";
   count.textContent = "";
@@ -412,11 +420,46 @@ async function loadReportsForHost() {
 
     const shownIndex = state.reportOffset + 1;
     count.textContent = `Meldung ${shownIndex} von ${state.totalReports}`;
+    state.selectedDisplayName = String(reports[0].display_name || reports[0].hostname || state.selectedHost);
+    selectedHostTitle.textContent = `🗂️ Meldungen fuer ${state.selectedDisplayName}`;
     list.innerHTML = renderReportCard(reports[0]);
     updatePagerButtons();
   } catch (error) {
     list.innerHTML = `<p class=\"muted\">Fehler: ${escapeHtml(error.message)}</p>`;
   }
+}
+
+async function editDisplayName() {
+  if (!state.selectedHost) {
+    return;
+  }
+
+  const nextValue = window.prompt(
+    `Sprechenden Titel fuer ${state.selectedHost} setzen. Leer lassen entfernt den Override.`,
+    state.selectedDisplayName || state.selectedHost,
+  );
+
+  if (nextValue === null) {
+    return;
+  }
+
+  const response = await fetch("/api/v1/host-settings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      hostname: state.selectedHost,
+      display_name_override: nextValue.trim(),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("HTTP " + response.status);
+  }
+
+  await loadHosts();
+  await loadReportsForHost();
 }
 
 async function loadAnalysisForHost() {
@@ -538,6 +581,14 @@ async function loadAlertsForHost() {
 }
 
 function wireEvents() {
+  document.getElementById("editDisplayNameButton").addEventListener("click", async () => {
+    try {
+      await editDisplayName();
+    } catch (error) {
+      window.alert(`Titel konnte nicht gespeichert werden: ${error.message}`);
+    }
+  });
+
   document.getElementById("refreshButton").addEventListener("click", async () => {
     await loadHosts();
     await loadReportsForHost();
