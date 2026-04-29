@@ -72,7 +72,8 @@ function formatKilobytes(kbValue) {
   return `${(mib / 1024).toFixed(2)} GiB`;
 }
 
-function renderResourceTrendCards(resourceTrends) {
+function renderResourceTrendCards(resourceTrends, latestReportTimeUtc) {
+  const standText = formatUtcPlus2(latestReportTimeUtc);
   const entries = [
     ["🧠 CPU", resourceTrends.cpu_usage_percent, "%"],
     ["📉 Load 1m", resourceTrends.load_avg_1, ""],
@@ -95,6 +96,7 @@ function renderResourceTrendCards(resourceTrends) {
         <article class="trend-card">
           <strong>${label}</strong>
           <span>Aktuell: ${formatNumber(value.current)}${suffix}</span>
+          <span>Stand: ${standText}</span>
           <span>Min/Max: ${formatNumber(value.min)}${suffix} / ${formatNumber(value.max)}${suffix}</span>
           <span>Avg: ${formatNumber(value.avg)}${suffix}</span>
           <span>Delta: ${formatSignedPercent(value.delta)}${suffix === "%" ? "" : ""}</span>
@@ -167,7 +169,7 @@ function asText(value, fallback = "-") {
   return text === "" ? fallback : text;
 }
 
-function formatUtc(value) {
+function formatUtcPlus2(value) {
   const text = asText(value);
   if (text === "-") {
     return text;
@@ -178,7 +180,9 @@ function formatUtc(value) {
     return text;
   }
 
-  return parsed.toLocaleString("de-DE", {
+  const shifted = new Date(parsed.getTime() + 2 * 60 * 60 * 1000);
+
+  return `${shifted.toLocaleString("de-DE", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -187,8 +191,7 @@ function formatUtc(value) {
     second: "2-digit",
     hour12: false,
     timeZone: "UTC",
-    timeZoneName: "short",
-  });
+  })} UTC+2`;
 }
 
 function formatUptime(secondsValue) {
@@ -267,7 +270,7 @@ function renderReportCard(report) {
           <h3>${escapeHtml(title)}</h3>
           <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}</p>
         </div>
-        <span class="report-time">${escapeHtml(formatUtc(report.received_at_utc || payload.timestamp_utc))}</span>
+        <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
       </div>
 
       <div class="meta-grid">
@@ -331,7 +334,7 @@ function renderHosts(hosts) {
           <span>🧷 ${escapeHtml(asText(host.agent_version))}</span>
           <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
           <span>📦 ${Number(host.report_count || 0).toLocaleString("de-DE")} Meldungen</span>
-          <span>🕒 Last seen: ${escapeHtml(formatUtc(host.last_seen_utc))}</span>
+          <span>🕒 Last seen: ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
         </button>
       `;
     })
@@ -507,7 +510,7 @@ async function loadAnalysisForHost() {
     const reportCount = Number(data.report_count || 0).toLocaleString("de-DE");
 
     analysisSummary.textContent = `${reportCount} Reports, hoechste aktuelle FS-Auslastung: ${latestMax}`;
-    resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends);
+    resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc);
 
     if (trendRows.length === 0) {
       analysisRows.innerHTML =
@@ -584,7 +587,7 @@ async function loadAlertsForHost() {
             <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
             <td>${renderPathCell(item.mountpoint, 48)}</td>
             <td>${formatPercent(item.used_percent)}</td>
-            <td>${escapeHtml(formatUtc(item.last_seen_at_utc))}</td>
+            <td>${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}</td>
           </tr>
         `;
       })
