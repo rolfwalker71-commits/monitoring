@@ -52,6 +52,7 @@ Dashboard-Funktionen:
 - Hover-Tooltips auf Verlaufspunkten mit exaktem Zeitstempel und Wert
 - Resource-Charts als horizontale 5er-Reihe (kombiniert + 4 Einzelcharts)
 - Filesystem-Fokus mit Top-Verlaufskurven und kompakter FS-Statistik (Avg, steigende FS, >=80%)
+- Immer sichtbare Webclient-Meta-Zeile mit Version und letztem Aktualisierungszeitpunkt
 
 Alert-Schwellwerte (optional per Env am Receiver):
 

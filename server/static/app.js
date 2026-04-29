@@ -18,7 +18,38 @@ const state = {
   reportOffset: 0,
   totalReports: 0,
   analysisHours: 24,
+  webVersion: "-",
+  lastUiRefreshUtc: "",
 };
+
+function renderClientMeta() {
+  const meta = document.getElementById("clientMeta");
+  if (!meta) {
+    return;
+  }
+
+  const refreshText = state.lastUiRefreshUtc ? formatUtcPlus2(state.lastUiRefreshUtc) : "-";
+  meta.textContent = `Webclient v${state.webVersion} | Letztes Update: ${refreshText}`;
+}
+
+function markUiRefreshed() {
+  state.lastUiRefreshUtc = new Date().toISOString();
+  renderClientMeta();
+}
+
+async function loadClientMeta() {
+  try {
+    const response = await fetch("/api/v1/meta");
+    if (response.ok) {
+      const data = await response.json();
+      state.webVersion = asText(data.app_version, "-");
+    }
+  } catch (_error) {
+    // Keep fallback values when meta endpoint is unavailable.
+  }
+
+  renderClientMeta();
+}
 
 function updateViewMode() {
   const overviewView = document.getElementById("overviewView");
@@ -816,6 +847,8 @@ async function loadAnalysisForHost() {
           </tr>
         `;
       })
+
+      markUiRefreshed();
       .join("");
   } catch (error) {
     analysisRows.innerHTML = `<tr><td colspan=\"7\" class=\"muted\">Fehler: ${escapeHtml(error.message)}</td></tr>`;
@@ -952,6 +985,8 @@ function wireEvents() {
 async function init() {
   wireEvents();
   updateViewMode();
+  renderClientMeta();
+  await loadClientMeta();
   await loadHosts();
   await loadReportsForHost();
   await loadAnalysisForHost();
