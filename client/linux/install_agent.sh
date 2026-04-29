@@ -25,7 +25,7 @@ usage() {
 Usage: $0 --server-url URL [--api-key KEY] [--agent-id ID] [--display-name NAME] [--interval-minutes 15] [--collect-script-url URL]
 
 Example:
-  curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/install_agent.sh \
+  curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/linux/install_agent.sh \
     | sudo bash -s -- --server-url https://monitoring.example.com --interval-minutes 15
 EOF
 }
@@ -89,10 +89,10 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 if [[ -z "$COLLECT_SCRIPT_URL" ]]; then
-  COLLECT_SCRIPT_URL="$RAW_BASE_URL/client/collect_and_send.sh"
+  COLLECT_SCRIPT_URL="$RAW_BASE_URL/client/linux/collect_and_send.sh"
 fi
 if [[ -z "$SELF_UPDATE_SCRIPT_URL" ]]; then
-  SELF_UPDATE_SCRIPT_URL="$RAW_BASE_URL/client/self_update.sh"
+  SELF_UPDATE_SCRIPT_URL="$RAW_BASE_URL/client/linux/self_update.sh"
 fi
 if [[ -z "$BUILD_VERSION_URL" ]]; then
   BUILD_VERSION_URL="$RAW_BASE_URL/BUILD_VERSION"

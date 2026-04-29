@@ -582,12 +582,26 @@ function filesystemLineColor(currentUsedPercent) {
   return "#0f766e";
 }
 
+function shouldShowFilesystemGraph(mountpoint) {
+  if (!mountpoint) return false;
+  const mp = mountpoint.replace(/\\/g, '/').toLowerCase();
+  if (mp === '/') return true;
+  if (mp.startsWith('/usr/sap')) return true;
+  if (mp.startsWith('/hana/')) return true;
+  if (mp.startsWith('/mnt/') || mp === '/mnt') return true;
+  return false;
+}
+
 function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
   if (!Array.isArray(filesystemTrends) || filesystemTrends.length === 0) {
     return "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfuegbar.</p>";
   }
 
-  const topTrends = filesystemTrends.slice(0, 6);
+  const filtered = filesystemTrends.filter((item) => shouldShowFilesystemGraph(item.mountpoint));
+  if (filtered.length === 0) {
+    return "<p class=\"muted\">Keine relevanten Filesystem-Verlaufskurven verfuegbar.</p>";
+  }
+  const topTrends = filtered.slice(0, 6);
   const standText = formatUtcPlus2(latestReportTimeUtc);
 
   return topTrends

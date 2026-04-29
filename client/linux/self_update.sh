@@ -37,8 +37,8 @@ if [[ "$remote_version" == "$local_version" ]]; then
   exit 0
 fi
 
-curl -fsSL "$RAW_BASE_URL/client/collect_and_send.sh" -o "$tmp_dir/collect_and_send.sh"
-curl -fsSL "$RAW_BASE_URL/client/self_update.sh" -o "$tmp_dir/self_update.sh"
+curl -fsSL "$RAW_BASE_URL/client/linux/collect_and_send.sh" -o "$tmp_dir/collect_and_send.sh"
+curl -fsSL "$RAW_BASE_URL/client/linux/self_update.sh" -o "$tmp_dir/self_update.sh"
 printf '%s\n' "$remote_version" > "$tmp_dir/AGENT_VERSION"
 
 install -m 0755 "$tmp_dir/collect_and_send.sh" "$INSTALL_DIR/collect_and_send.sh"
