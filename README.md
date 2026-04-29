@@ -25,6 +25,12 @@ Dann im Browser:
 - Dashboard: `http://<server-ip>:8080/`
 - Health: `http://<server-ip>:8080/health`
 
+Nutzbare API-Endpunkte fuer die Auswertung:
+
+- `GET /api/v1/latest?limit=50` letzte Meldungen global
+- `GET /api/v1/hosts?limit=20&offset=0` Hosts gruppiert inkl. Anzahl und Last Seen
+- `GET /api/v1/host-reports?hostname=<host>&limit=10&offset=0` Historie pro Host (zum Blaettern)
+
 Optional API-Key Schutz aktivieren:
 
 ```bash

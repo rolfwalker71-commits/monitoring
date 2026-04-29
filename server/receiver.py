@@ -16,6 +16,15 @@ DB_PATH = DATA_DIR / "monitoring.db"
 API_KEY = os.getenv("MONITORING_API_KEY", "")
 
 
+def parse_int(query: dict, key: str, default: int, min_value: int, max_value: int) -> int:
+    raw = query.get(key, [str(default)])[0]
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return max(min_value, min(value, max_value))
+
+
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
@@ -80,11 +89,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/v1/latest":
             query = parse_qs(parsed.query)
-            limit_raw = query.get("limit", ["20"])[0]
-            try:
-                limit = max(1, min(int(limit_raw), 200))
-            except ValueError:
-                limit = 20
+            limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
 
             with sqlite3.connect(DB_PATH) as conn:
                 rows = conn.execute(
@@ -111,6 +116,121 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 )
 
             self._send_json(HTTPStatus.OK, {"count": len(reports), "reports": reports})
+            return
+
+        if parsed.path == "/api/v1/hosts":
+            query = parse_qs(parsed.query)
+            limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
+            offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
+
+            with sqlite3.connect(DB_PATH) as conn:
+                total_hosts = conn.execute(
+                    "SELECT COUNT(DISTINCT hostname) FROM reports"
+                ).fetchone()[0]
+
+                rows = conn.execute(
+                    """
+                    SELECT
+                      r.hostname,
+                      MAX(r.received_at_utc) AS last_seen_utc,
+                      COUNT(*) AS report_count,
+                      (
+                        SELECT primary_ip
+                        FROM reports r2
+                        WHERE r2.hostname = r.hostname
+                        ORDER BY r2.id DESC
+                        LIMIT 1
+                      ) AS latest_primary_ip,
+                      (
+                        SELECT agent_id
+                        FROM reports r3
+                        WHERE r3.hostname = r.hostname
+                        ORDER BY r3.id DESC
+                        LIMIT 1
+                      ) AS latest_agent_id
+                    FROM reports r
+                    GROUP BY r.hostname
+                    ORDER BY last_seen_utc DESC
+                    LIMIT ? OFFSET ?
+                    """,
+                    (limit, offset),
+                ).fetchall()
+
+            hosts = []
+            for row in rows:
+                hosts.append(
+                    {
+                        "hostname": row[0],
+                        "last_seen_utc": row[1],
+                        "report_count": row[2],
+                        "primary_ip": row[3] or "",
+                        "agent_id": row[4] or "",
+                    }
+                )
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "count": len(hosts),
+                    "limit": limit,
+                    "offset": offset,
+                    "total_hosts": total_hosts,
+                    "hosts": hosts,
+                },
+            )
+            return
+
+        if parsed.path == "/api/v1/host-reports":
+            query = parse_qs(parsed.query)
+            hostname = query.get("hostname", [""])[0].strip()
+            if not hostname:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
+                return
+
+            limit = parse_int(query, "limit", default=10, min_value=1, max_value=200)
+            offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
+
+            with sqlite3.connect(DB_PATH) as conn:
+                total_reports = conn.execute(
+                    "SELECT COUNT(*) FROM reports WHERE hostname = ?",
+                    (hostname,),
+                ).fetchone()[0]
+
+                rows = conn.execute(
+                    """
+                    SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json
+                    FROM reports
+                    WHERE hostname = ?
+                    ORDER BY id DESC
+                    LIMIT ? OFFSET ?
+                    """,
+                    (hostname, limit, offset),
+                ).fetchall()
+
+            reports = []
+            for row in rows:
+                reports.append(
+                    {
+                        "id": row[0],
+                        "received_at_utc": row[1],
+                        "agent_id": row[2],
+                        "hostname": row[3],
+                        "primary_ip": row[4],
+                        "payload": json.loads(row[5]),
+                    }
+                )
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "count": len(reports),
+                    "limit": limit,
+                    "offset": offset,
+                    "total_reports": total_reports,
+                    "hostname": hostname,
+                    "reports": reports,
+                },
+            )
             return
 
         if parsed.path == "/":

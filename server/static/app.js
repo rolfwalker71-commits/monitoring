@@ -7,6 +7,16 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+const state = {
+  hostLimit: 20,
+  hostOffset: 0,
+  totalHosts: 0,
+  selectedHost: "",
+  reportLimit: 10,
+  reportOffset: 0,
+  totalReports: 0,
+};
+
 function asText(value, fallback = "-") {
   if (value === null || value === undefined) {
     return fallback;
@@ -125,33 +135,186 @@ function renderReportCard(report) {
   `;
 }
 
-async function loadReports() {
-  const list = document.getElementById("reportList");
-  const count = document.getElementById("reportCount");
-  list.innerHTML = "<p class=\"muted\">Lade Daten...</p>";
-  count.textContent = "";
+function updatePagerButtons() {
+  const hostsPrevButton = document.getElementById("hostsPrevButton");
+  const hostsNextButton = document.getElementById("hostsNextButton");
+  const reportsPrevButton = document.getElementById("reportsPrevButton");
+  const reportsNextButton = document.getElementById("reportsNextButton");
+
+  hostsPrevButton.disabled = state.hostOffset <= 0;
+  hostsNextButton.disabled = state.hostOffset + state.hostLimit >= state.totalHosts;
+
+  reportsPrevButton.disabled = state.reportOffset <= 0 || !state.selectedHost;
+  reportsNextButton.disabled =
+    !state.selectedHost || state.reportOffset + state.reportLimit >= state.totalReports;
+}
+
+function renderHosts(hosts) {
+  const hostList = document.getElementById("hostList");
+  const hostCount = document.getElementById("hostCount");
+
+  hostCount.textContent = `${state.totalHosts} Hosts gesamt`;
+
+  if (!Array.isArray(hosts) || hosts.length === 0) {
+    hostList.innerHTML = "<p class=\"muted\">Keine Hosts vorhanden.</p>";
+    return;
+  }
+
+  hostList.innerHTML = hosts
+    .map((host) => {
+      const hostname = asText(host.hostname);
+      const selectedClass = hostname === state.selectedHost ? "host-item selected" : "host-item";
+
+      return `
+        <button class="${selectedClass}" type="button" data-host="${escapeHtml(hostname)}">
+          <strong>${escapeHtml(hostname)}</strong>
+          <span>${escapeHtml(asText(host.primary_ip))}</span>
+          <span>${Number(host.report_count || 0).toLocaleString("de-DE")} Meldungen</span>
+          <span>Last seen: ${escapeHtml(formatUtc(host.last_seen_utc))}</span>
+        </button>
+      `;
+    })
+    .join("");
+
+  for (const item of hostList.querySelectorAll(".host-item")) {
+    item.addEventListener("click", () => {
+      const hostname = item.getAttribute("data-host") || "";
+      if (!hostname || hostname === state.selectedHost) {
+        return;
+      }
+
+      state.selectedHost = hostname;
+      state.reportOffset = 0;
+      loadHosts();
+      loadReportsForHost();
+    });
+  }
+}
+
+async function loadHosts() {
+  const hostList = document.getElementById("hostList");
+  hostList.innerHTML = "<p class=\"muted\">Lade Host-Liste...</p>";
 
   try {
-    const response = await fetch("/api/v1/latest?limit=50");
+    const url = `/api/v1/hosts?limit=${state.hostLimit}&offset=${state.hostOffset}`;
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error("HTTP " + response.status);
     }
 
     const data = await response.json();
+    state.totalHosts = Number(data.total_hosts || 0);
+    const hosts = data.hosts || [];
+
+    if (!state.selectedHost && hosts.length > 0) {
+      state.selectedHost = String(hosts[0].hostname || "");
+      state.reportOffset = 0;
+    }
+
+    const selectedStillVisible = hosts.some((host) => String(host.hostname || "") === state.selectedHost);
+    if (!selectedStillVisible && hosts.length > 0) {
+      state.selectedHost = String(hosts[0].hostname || "");
+      state.reportOffset = 0;
+    }
+
+    renderHosts(hosts);
+    updatePagerButtons();
+  } catch (error) {
+    hostList.innerHTML = `<p class=\"muted\">Fehler: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function loadReportsForHost() {
+  const list = document.getElementById("reportList");
+  const count = document.getElementById("reportCount");
+  const selectedHostTitle = document.getElementById("selectedHostTitle");
+
+  if (!state.selectedHost) {
+    selectedHostTitle.textContent = "Meldungen";
+    count.textContent = "";
+    list.innerHTML = "<p class=\"muted\">Kein Host ausgewaehlt.</p>";
+    updatePagerButtons();
+    return;
+  }
+
+  selectedHostTitle.textContent = `Meldungen fuer ${state.selectedHost}`;
+  list.innerHTML = "<p class=\"muted\">Lade Daten...</p>";
+  count.textContent = "";
+
+  try {
+    const hostNameParam = encodeURIComponent(state.selectedHost);
+    const url = `/api/v1/host-reports?hostname=${hostNameParam}&limit=${state.reportLimit}&offset=${state.reportOffset}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+
+    const data = await response.json();
+    state.totalReports = Number(data.total_reports || 0);
     const reports = data.reports || [];
 
     if (reports.length === 0) {
       list.innerHTML = "<p class=\"muted\">Noch keine Daten vorhanden.</p>";
-      count.textContent = "0 Meldungen";
+      count.textContent = `0 von ${state.totalReports} Meldungen`;
+      updatePagerButtons();
       return;
     }
 
-    count.textContent = `${reports.length} Meldungen`;
+    const shownStart = state.reportOffset + 1;
+    const shownEnd = state.reportOffset + reports.length;
+    count.textContent = `${shownStart}-${shownEnd} von ${state.totalReports} Meldungen`;
     list.innerHTML = reports.map(renderReportCard).join("");
+    updatePagerButtons();
   } catch (error) {
     list.innerHTML = `<p class=\"muted\">Fehler: ${escapeHtml(error.message)}</p>`;
   }
 }
 
-document.getElementById("refreshButton").addEventListener("click", loadReports);
-loadReports();
+function wireEvents() {
+  document.getElementById("refreshButton").addEventListener("click", async () => {
+    await loadHosts();
+    await loadReportsForHost();
+  });
+
+  document.getElementById("hostsPrevButton").addEventListener("click", async () => {
+    if (state.hostOffset <= 0) {
+      return;
+    }
+    state.hostOffset = Math.max(0, state.hostOffset - state.hostLimit);
+    await loadHosts();
+    await loadReportsForHost();
+  });
+
+  document.getElementById("hostsNextButton").addEventListener("click", async () => {
+    if (state.hostOffset + state.hostLimit >= state.totalHosts) {
+      return;
+    }
+    state.hostOffset += state.hostLimit;
+    await loadHosts();
+    await loadReportsForHost();
+  });
+
+  document.getElementById("reportsPrevButton").addEventListener("click", async () => {
+    if (state.reportOffset <= 0) {
+      return;
+    }
+    state.reportOffset = Math.max(0, state.reportOffset - state.reportLimit);
+    await loadReportsForHost();
+  });
+
+  document.getElementById("reportsNextButton").addEventListener("click", async () => {
+    if (state.reportOffset + state.reportLimit >= state.totalReports) {
+      return;
+    }
+    state.reportOffset += state.reportLimit;
+    await loadReportsForHost();
+  });
+}
+
+async function init() {
+  wireEvents();
+  await loadHosts();
+  await loadReportsForHost();
+}
+
+init();

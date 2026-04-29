@@ -13,11 +13,35 @@
 
       <section class="panel">
         <div class="panel-header">
-          <h2>Letzte Meldungen</h2>
+          <h2>Hosts und Historie</h2>
           <button id="refreshButton">Neu laden</button>
         </div>
-        <p id="reportCount" class="count"></p>
-        <div id="reportList" class="report-list"></div>
+
+        <div class="layout">
+          <aside class="hosts-column">
+            <div class="section-head">
+              <h3>Host-Gruppen</h3>
+              <p id="hostCount" class="count"></p>
+            </div>
+            <div id="hostList" class="host-list"></div>
+            <div class="pager">
+              <button id="hostsPrevButton" type="button">Hosts Zurueck</button>
+              <button id="hostsNextButton" type="button">Hosts Weiter</button>
+            </div>
+          </aside>
+
+          <section class="reports-column">
+            <div class="section-head">
+              <h3 id="selectedHostTitle">Meldungen</h3>
+              <p id="reportCount" class="count"></p>
+            </div>
+            <div id="reportList" class="report-list"></div>
+            <div class="pager">
+              <button id="reportsPrevButton" type="button">Meldungen Zurueck</button>
+              <button id="reportsNextButton" type="button">Meldungen Weiter</button>
+            </div>
+          </section>
+        </div>
       </section>
     </main>
     <script src="/app.js"></script>
