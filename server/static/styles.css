@@ -277,19 +277,26 @@ button:hover:not(.host-item) {
   font-size: 14px;
 }
 
+.host-title-line {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
 .host-alert-marker {
-  display: inline-block;
-  margin-left: 6px;
-  color: #d97706;
-  font-size: 22px;
+  display: inline-flex;
+  margin-left: auto;
+  margin-right: 6px;
+  color: #dc2626;
+  font-size: 26px;
   line-height: 1;
   vertical-align: middle;
-  text-shadow: 0 0 10px rgba(217, 119, 6, 0.35);
+  text-shadow: 0 0 12px rgba(220, 38, 38, 0.35);
 }
 
 .host-alert-marker.critical {
   color: #dc2626;
-  text-shadow: 0 0 12px rgba(220, 38, 38, 0.45);
+  text-shadow: 0 0 14px rgba(220, 38, 38, 0.5);
 }
 
 .host-item span {

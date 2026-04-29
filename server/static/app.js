@@ -730,12 +730,12 @@ function renderHosts(hosts) {
       const hasOpenAlerts = openAlertCount > 0;
       const markerClass = openCriticalAlertCount > 0 ? "host-alert-marker critical" : "host-alert-marker";
       const marker = hasOpenAlerts
-        ? `<span class="${markerClass}" title="${openAlertCount} offene Alerts (${openCriticalAlertCount} kritisch)">❗</span>`
+        ? `<span class="${markerClass}" title="${openAlertCount} offene Alerts (${openCriticalAlertCount} kritisch)">🛑</span>`
         : "";
 
       return `
         <button class="${selectedClass}" type="button" data-host="${escapeHtml(hostname)}">
-          <strong>${escapeHtml(displayName)} ${marker}</strong>
+          <strong class="host-title-line"><span>${escapeHtml(displayName)}</span>${marker}</strong>
           <span>🖥️ ${escapeHtml(hostname)}</span>
           <span>🧷 ${escapeHtml(asText(host.agent_version))}</span>
           <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
