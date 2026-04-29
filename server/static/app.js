@@ -251,8 +251,13 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
     return "<p class=\"muted\">Keine Verlaufskurven verfuegbar.</p>";
   }
 
-  const combinedWidth = 520;
-  const combinedHeight = 170;
+  const combinedWidth = 920;
+  const combinedHeight = 250;
+  const axisLeft = 12;
+  const axisTop = 12;
+  const axisBottom = combinedHeight - 12;
+  const axisRight = combinedWidth - 12;
+  const axisMid = Math.round((axisTop + axisBottom) / 2);
 
   const combinedLines = chartDefinitions
     .map((item) => {
@@ -278,12 +283,12 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
       const minValue = values.length > 0 ? Math.min(...values) : null;
       const maxValue = values.length > 0 ? Math.max(...values) : null;
       return `
-        <article class="mini-chart-card chart-tile">
+        <article class="mini-chart-card">
           <header>
             <strong>${item.label}</strong>
             <span>${points.length} Samples</span>
           </header>
-          ${buildSparklineSvg(points, item.color, 320, 82)}
+          ${buildSparklineSvg(points, item.color, 420, 120)}
           <footer>
             <span>Min: ${minValue === null ? "-" : formatNumber(minValue, 2)}</span>
             <span>Max: ${maxValue === null ? "-" : formatNumber(maxValue, 2)}</span>
@@ -294,21 +299,21 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
     .join("");
 
   return `
-    <section class="chart-scroll-row">
-    <section class="combined-chart chart-tile combined">
+    <section class="resource-chart-layout">
+    <section class="combined-chart combined-wide">
       <div class="combined-chart-head">
         <strong>Verlauf kombiniert (normalisiert)</strong>
         <span>${escapeHtml(standText)}</span>
       </div>
       <svg class="combined-chart-svg" viewBox="0 0 ${combinedWidth} ${combinedHeight}" role="img" aria-label="Kombinierter Verlauf">
-        <line x1="10" y1="10" x2="10" y2="160" stroke="#dbe5ef" stroke-width="1" />
-        <line x1="10" y1="160" x2="510" y2="160" stroke="#dbe5ef" stroke-width="1" />
-        <line x1="10" y1="85" x2="510" y2="85" stroke="#edf2f7" stroke-width="1" />
+        <line x1="${axisLeft}" y1="${axisTop}" x2="${axisLeft}" y2="${axisBottom}" stroke="#dbe5ef" stroke-width="1" />
+        <line x1="${axisLeft}" y1="${axisBottom}" x2="${axisRight}" y2="${axisBottom}" stroke="#dbe5ef" stroke-width="1" />
+        <line x1="${axisLeft}" y1="${axisMid}" x2="${axisRight}" y2="${axisMid}" stroke="#edf2f7" stroke-width="1" />
         ${combinedLines}
       </svg>
       <div class="combined-legend">${combinedLegend}</div>
     </section>
-    ${miniCharts}
+    <section class="mini-chart-grid">${miniCharts}</section>
     </section>
   `;
 }
@@ -350,7 +355,7 @@ function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
             <strong>${mountpoint}</strong>
             <span>${Number(item.sample_count || 0).toLocaleString("de-DE")} Samples</span>
           </header>
-          ${buildSparklineSvg(points, color, 360, 90)}
+          ${buildSparklineSvg(points, color, 520, 130)}
           <footer>
             <span>Aktuell: ${formatPercent(item.current_used_percent)}</span>
             <span>Delta: ${formatSignedPercent(item.delta_used_percent)}</span>
