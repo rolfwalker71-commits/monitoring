@@ -55,6 +55,8 @@ Dashboard-Funktionen:
 - In der Hostgruppe wird bei Hosts mit offenen Alerts ein grosses Ausrufezeichen angezeigt
 - Agent-Version pro Host zur Nachverfolgung von Self-Updates
 - Meldungs-Chip `LIVE` bzw. `DELAYED` auf der Detailkarte
+- Webclient mit Login-Maske und Session-Authentifizierung
+- Passwort-Änderung direkt im Webclient (Menuepunkt `Passwort aendern`)
 - Queue-Statistik im Dashboard (`letzte Meldung LIVE/DELAYED`, aktuelle Queue-Tiefe, delayed/live im Analysefenster)
 - Verlaufscharts in der Analyse: kombinierte Kurve (normalisiert) plus Einzel-Chart je Kennzahl (CPU, RAM, Swap, Load)
 - Hover-Tooltips auf Verlaufspunkten mit exaktem Zeitstempel und Wert
@@ -81,6 +83,11 @@ Optionale Telegram-Defaults beim ersten Start (koennen spaeter im UI geaendert w
 - `MONITORING_TELEGRAM_ENABLED` (`0/1`, Default `0`)
 - `MONITORING_TELEGRAM_BOT_TOKEN` (Default leer)
 - `MONITORING_TELEGRAM_CHAT_ID` (Default leer)
+
+Webclient-Login Defaults (nur beim ersten Start, wenn noch kein Web-User existiert):
+
+- `MONITORING_WEB_USER` (Default `admin`)
+- `MONITORING_WEB_PASSWORD` (Default `ChangeMe!2026`)
 
 Optional API-Key Schutz aktivieren:
 

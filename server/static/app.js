@@ -24,6 +24,8 @@ const state = {
   hostAlertsCollapsed: false,
   globalSeverityFilter: "all",
   globalOpenAlertsCount: 0,
+  authUser: "",
+  isAuthenticated: false,
 };
 
 function updateViewMode() {
@@ -81,6 +83,125 @@ function setAlarmSettingsStatus(message, isError = false) {
   }
   statusEl.textContent = message;
   statusEl.classList.toggle("status-error", isError);
+}
+
+function setLoginStatus(message, isError = false) {
+  const statusEl = document.getElementById("loginStatus");
+  if (!statusEl) {
+    return;
+  }
+  statusEl.textContent = message;
+  statusEl.classList.toggle("status-error", isError);
+}
+
+function setPasswordChangeStatus(message, isError = false) {
+  const statusEl = document.getElementById("passwordChangeStatus");
+  if (!statusEl) {
+    return;
+  }
+  statusEl.textContent = message;
+  statusEl.classList.toggle("status-error", isError);
+}
+
+function setAuthUiState(authenticated) {
+  const loginOverlay = document.getElementById("loginOverlay");
+  const appPanel = document.getElementById("appPanel");
+  loginOverlay.classList.toggle("hidden", authenticated);
+  appPanel.classList.toggle("hidden", !authenticated);
+  state.isAuthenticated = authenticated;
+}
+
+async function fetchSessionState() {
+  const response = await fetch("/api/v1/session");
+  if (!response.ok) {
+    throw new Error("HTTP " + response.status);
+  }
+  return response.json();
+}
+
+async function ensureAuthenticatedSession() {
+  try {
+    const session = await fetchSessionState();
+    state.authUser = asText(session.username, "");
+    setAuthUiState(session.authenticated === true);
+    return session.authenticated === true;
+  } catch {
+    setAuthUiState(false);
+    return false;
+  }
+}
+
+async function loginWebClient() {
+  const usernameInput = document.getElementById("loginUsernameInput");
+  const passwordInput = document.getElementById("loginPasswordInput");
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+
+  if (!username || !password) {
+    setLoginStatus("Bitte Benutzername und Passwort eingeben.", true);
+    return false;
+  }
+
+  const response = await fetch("/api/v1/web-login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ username, password }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    setLoginStatus(data.error || ("Login fehlgeschlagen (HTTP " + response.status + ")"), true);
+    return false;
+  }
+
+  state.authUser = asText(data.username, username);
+  setLoginStatus("Anmeldung erfolgreich.");
+  setAuthUiState(true);
+  passwordInput.value = "";
+  return true;
+}
+
+async function changePassword() {
+  const currentPasswordInput = document.getElementById("currentPasswordInput");
+  const newPasswordInput = document.getElementById("newPasswordInput");
+  const confirmPasswordInput = document.getElementById("confirmPasswordInput");
+
+  const currentPassword = currentPasswordInput.value;
+  const newPassword = newPasswordInput.value;
+  const confirmPassword = confirmPasswordInput.value;
+
+  if (!currentPassword || !newPassword) {
+    setPasswordChangeStatus("Bitte aktuelle und neue Zugangsdaten eingeben.", true);
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    setPasswordChangeStatus("Neue Passwoerter stimmen nicht ueberein.", true);
+    return;
+  }
+
+  const response = await fetch("/api/v1/change-password", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    setPasswordChangeStatus(data.error || ("Aenderung fehlgeschlagen (HTTP " + response.status + ")"), true);
+    return;
+  }
+
+  currentPasswordInput.value = "";
+  newPasswordInput.value = "";
+  confirmPasswordInput.value = "";
+  setPasswordChangeStatus("Passwort erfolgreich geaendert.", false);
 }
 
 async function loadAlarmSettings(force = false) {
@@ -1145,6 +1266,46 @@ function wireEvents() {
     updateViewMode();
   });
 
+  document.getElementById("loginSubmitButton").addEventListener("click", async () => {
+    const ok = await loginWebClient();
+    if (!ok) {
+      return;
+    }
+    await loadGlobalAlertsOverview();
+    await loadHosts();
+    await loadReportsForHost();
+    await loadAnalysisForHost();
+    await loadAlertsForHost();
+  });
+
+  document.getElementById("loginPasswordInput").addEventListener("keydown", async (event) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+    const ok = await loginWebClient();
+    if (!ok) {
+      return;
+    }
+    await loadGlobalAlertsOverview();
+    await loadHosts();
+    await loadReportsForHost();
+    await loadAnalysisForHost();
+    await loadAlertsForHost();
+  });
+
+  document.getElementById("openChangePasswordButton").addEventListener("click", () => {
+    document.getElementById("changePasswordModal").classList.remove("hidden");
+    setPasswordChangeStatus("");
+  });
+
+  document.getElementById("cancelPasswordButton").addEventListener("click", () => {
+    document.getElementById("changePasswordModal").classList.add("hidden");
+  });
+
+  document.getElementById("savePasswordButton").addEventListener("click", async () => {
+    await changePassword();
+  });
+
   document.getElementById("globalSeverityFilter").addEventListener("change", async (event) => {
     state.globalSeverityFilter = String(event.target?.value || "all");
     await loadGlobalAlertsOverview();
@@ -1260,6 +1421,12 @@ async function init() {
   updateOverviewSection();
   toggleAlarmSettingsPanel(false);
   document.getElementById("globalSeverityFilter").value = state.globalSeverityFilter;
+  document.getElementById("loginUsernameInput").value = "admin";
+  const isAuthenticated = await ensureAuthenticatedSession();
+  if (!isAuthenticated) {
+    setLoginStatus("Bitte anmelden, um den Webclient zu nutzen.");
+    return;
+  }
   await loadGlobalAlertsOverview();
   await loadHosts();
   await loadReportsForHost();

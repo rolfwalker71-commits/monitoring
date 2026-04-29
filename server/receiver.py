@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 import argparse
+import hashlib
+import hmac
 import json
 import os
+import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
@@ -20,6 +23,10 @@ CRITICAL_THRESHOLD_PERCENT = float(os.getenv("MONITORING_CRITICAL_THRESHOLD", "9
 TELEGRAM_ENABLED_DEFAULT = os.getenv("MONITORING_TELEGRAM_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
 TELEGRAM_BOT_TOKEN_DEFAULT = os.getenv("MONITORING_TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID_DEFAULT = os.getenv("MONITORING_TELEGRAM_CHAT_ID", "")
+WEB_DEFAULT_USERNAME = os.getenv("MONITORING_WEB_USER", "admin")
+WEB_DEFAULT_PASSWORD = os.getenv("MONITORING_WEB_PASSWORD", "ChangeMe!2026")
+WEB_SESSION_TTL_HOURS = 12
+WEB_SESSION_COOKIE = "monitoring_session"
 
 
 def parse_int(query: dict, key: str, default: int, min_value: int, max_value: int) -> int:
@@ -115,6 +122,27 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS web_users (
+                username TEXT PRIMARY KEY,
+                password_hash TEXT NOT NULL,
+                password_salt TEXT NOT NULL,
+                updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS web_sessions (
+                session_token TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                created_at_utc TEXT NOT NULL,
+                expires_at_utc TEXT NOT NULL,
+                FOREIGN KEY(username) REFERENCES web_users(username)
+            )
+            """
+        )
+        conn.execute(
+            """
             INSERT INTO alarm_settings (
                 id,
                 warning_threshold_percent,
@@ -142,6 +170,27 @@ def init_db() -> None:
                 utc_now_iso(),
             ),
         )
+
+        user_count = conn.execute("SELECT COUNT(*) FROM web_users").fetchone()[0]
+        if int(user_count or 0) == 0:
+            salt = secrets.token_hex(16)
+            conn.execute(
+                """
+                INSERT INTO web_users (username, password_hash, password_salt, updated_at_utc)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    WEB_DEFAULT_USERNAME,
+                    hash_password(WEB_DEFAULT_PASSWORD, salt),
+                    salt,
+                    utc_now_iso(),
+                ),
+            )
+
+        conn.execute(
+            "DELETE FROM web_sessions WHERE expires_at_utc <= ?",
+            (utc_now_iso(),),
+        )
         conn.commit()
 
 
@@ -162,6 +211,36 @@ def parse_payload_json(payload_json: str) -> dict:
     except json.JSONDecodeError:
         return {}
     return {}
+
+
+def hash_password(password: str, salt_hex: str) -> str:
+    salt = bytes.fromhex(salt_hex)
+    derived = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 200000)
+    return derived.hex()
+
+
+def verify_password(password: str, password_hash: str, password_salt: str) -> bool:
+    candidate = hash_password(password, password_salt)
+    return hmac.compare_digest(candidate, password_hash)
+
+
+def create_web_session(conn: sqlite3.Connection, username: str) -> tuple[str, str]:
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(hours=WEB_SESSION_TTL_HOURS)
+    session_token = secrets.token_urlsafe(32)
+    conn.execute(
+        """
+        INSERT INTO web_sessions (session_token, username, created_at_utc, expires_at_utc)
+        VALUES (?, ?, ?, ?)
+        """,
+        (
+            session_token,
+            username,
+            now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        ),
+    )
+    return session_token, expires.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def clamp_threshold(value: float, min_value: float, max_value: float, fallback: float) -> float:
@@ -593,11 +672,14 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
 class MonitoringHandler(BaseHTTPRequestHandler):
     server_version = "MonitoringReceiver/0.1"
 
-    def _send_json(self, status: int, payload: dict) -> None:
+    def _send_json(self, status: int, payload: dict, extra_headers: dict[str, str] | None = None) -> None:
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        if extra_headers:
+            for key, value in extra_headers.items():
+                self.send_header(key, value)
         self.end_headers()
         self.wfile.write(body)
 
@@ -623,12 +705,62 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return True
         return False
 
+    def _cookie_value(self, cookie_name: str) -> str:
+        cookie_header = self.headers.get("Cookie", "")
+        for part in cookie_header.split(";"):
+            name, _, value = part.strip().partition("=")
+            if name == cookie_name:
+                return value
+        return ""
+
+    def _web_session_username(self) -> str:
+        token = self._cookie_value(WEB_SESSION_COOKIE)
+        if not token:
+            return ""
+
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute(
+                "DELETE FROM web_sessions WHERE expires_at_utc <= ?",
+                (utc_now_iso(),),
+            )
+            row = conn.execute(
+                "SELECT username FROM web_sessions WHERE session_token = ?",
+                (token,),
+            ).fetchone()
+            conn.commit()
+
+        if not row:
+            return ""
+        return str(row[0] or "")
+
+    def _require_web_session(self) -> str:
+        username = self._web_session_username()
+        if not username:
+            self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "login required"})
+            return ""
+        return username
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
 
         if parsed.path == "/health":
             self._send_json(HTTPStatus.OK, {"status": "ok", "time_utc": utc_now_iso()})
             return
+
+        if parsed.path == "/api/v1/session":
+            username = self._web_session_username()
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "authenticated": bool(username),
+                    "username": username,
+                },
+            )
+            return
+
+        if parsed.path.startswith("/api/v1/"):
+            if not self._require_web_session():
+                return
 
         if parsed.path == "/api/v1/latest":
             query = parse_qs(parsed.query)
@@ -1188,6 +1320,132 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
 
+        if path == "/api/v1/web-login":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            username = str(payload.get("username", "")).strip()
+            password = str(payload.get("password", ""))
+            if not username or not password:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "username/password required"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                row = conn.execute(
+                    "SELECT password_hash, password_salt FROM web_users WHERE username = ?",
+                    (username,),
+                ).fetchone()
+                if not row or not verify_password(password, str(row[0]), str(row[1])):
+                    self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid credentials"})
+                    return
+
+                token, expires_at = create_web_session(conn, username)
+                conn.commit()
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "authenticated",
+                    "username": username,
+                    "expires_at_utc": expires_at,
+                },
+                extra_headers={
+                    "Set-Cookie": f"{WEB_SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax",
+                },
+            )
+            return
+
+        if path == "/api/v1/web-logout":
+            token = self._cookie_value(WEB_SESSION_COOKIE)
+            if token:
+                with sqlite3.connect(DB_PATH) as conn:
+                    conn.execute("DELETE FROM web_sessions WHERE session_token = ?", (token,))
+                    conn.commit()
+
+            self._send_json(
+                HTTPStatus.OK,
+                {"status": "logged_out"},
+                extra_headers={
+                    "Set-Cookie": f"{WEB_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
+                },
+            )
+            return
+
+        if path == "/api/v1/agent-report":
+            if self._unauthorized_if_needed():
+                return
+        elif path.startswith("/api/v1/"):
+            if not self._require_web_session():
+                return
+
+        if path == "/api/v1/change-password":
+            username = self._web_session_username()
+            if not username:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "login required"})
+                return
+
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            current_password = str(payload.get("current_password", ""))
+            new_password = str(payload.get("new_password", ""))
+            if len(new_password) < 8:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "new password too short (min 8)"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                row = conn.execute(
+                    "SELECT password_hash, password_salt FROM web_users WHERE username = ?",
+                    (username,),
+                ).fetchone()
+                if not row or not verify_password(current_password, str(row[0]), str(row[1])):
+                    self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "current password invalid"})
+                    return
+
+                new_salt = secrets.token_hex(16)
+                conn.execute(
+                    """
+                    UPDATE web_users
+                    SET password_hash = ?, password_salt = ?, updated_at_utc = ?
+                    WHERE username = ?
+                    """,
+                    (hash_password(new_password, new_salt), new_salt, utc_now_iso(), username),
+                )
+                conn.execute("DELETE FROM web_sessions WHERE username = ?", (username,))
+                token, expires_at = create_web_session(conn, username)
+                conn.commit()
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "password_changed",
+                    "username": username,
+                    "expires_at_utc": expires_at,
+                },
+                extra_headers={
+                    "Set-Cookie": f"{WEB_SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax",
+                },
+            )
+            return
+
         if path == "/api/v1/alarm-settings":
             content_length = int(self.headers.get("Content-Length", "0"))
             if content_length <= 0:
@@ -1284,9 +1542,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if path != "/api/v1/agent-report":
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
-            return
-
-        if self._unauthorized_if_needed():
             return
 
         content_length = int(self.headers.get("Content-Length", "0"))
