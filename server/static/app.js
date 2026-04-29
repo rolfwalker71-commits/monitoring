@@ -7,6 +7,8 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+const WEBCLIENT_VERSION_FALLBACK = "0.3.8";
+
 const state = {
   hostLimit: 20,
   hostOffset: 0,
@@ -18,7 +20,7 @@ const state = {
   reportOffset: 0,
   totalReports: 0,
   analysisHours: 24,
-  webVersion: "-",
+  webVersion: WEBCLIENT_VERSION_FALLBACK,
   lastUiRefreshUtc: "",
 };
 
@@ -38,14 +40,20 @@ function markUiRefreshed() {
 }
 
 async function loadClientMeta() {
+  const timeoutMs = 1500;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
-    const response = await fetch("/api/v1/meta");
+    const response = await fetch("/api/v1/meta", { signal: controller.signal });
     if (response.ok) {
       const data = await response.json();
-      state.webVersion = asText(data.app_version, "-");
+      state.webVersion = asText(data.app_version, WEBCLIENT_VERSION_FALLBACK);
     }
   } catch (_error) {
     // Keep fallback values when meta endpoint is unavailable.
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   renderClientMeta();
@@ -677,6 +685,7 @@ async function loadHosts() {
 
     renderHosts(hosts);
     updatePagerButtons();
+    markUiRefreshed();
   } catch (error) {
     hostList.innerHTML = `<p class=\"muted\">Fehler: ${escapeHtml(error.message)}</p>`;
   }
@@ -1004,7 +1013,7 @@ async function init() {
   wireEvents();
   updateViewMode();
   renderClientMeta();
-  await loadClientMeta();
+  loadClientMeta();
   await loadHosts();
   await loadReportsForHost();
   await loadAnalysisForHost();
