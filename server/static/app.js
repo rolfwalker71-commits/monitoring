@@ -13,11 +13,25 @@ const state = {
   totalHosts: 0,
   selectedHost: "",
   selectedDisplayName: "",
+  viewMode: "overview",
   reportLimit: 1,
   reportOffset: 0,
   totalReports: 0,
   analysisHours: 24,
 };
+
+function updateViewMode() {
+  const overviewView = document.getElementById("overviewView");
+  const reportsView = document.getElementById("reportsView");
+  const overviewTabButton = document.getElementById("overviewTabButton");
+  const reportsTabButton = document.getElementById("reportsTabButton");
+
+  const overviewActive = state.viewMode === "overview";
+  overviewView.classList.toggle("hidden", !overviewActive);
+  reportsView.classList.toggle("hidden", overviewActive);
+  overviewTabButton.classList.toggle("active", overviewActive);
+  reportsTabButton.classList.toggle("active", !overviewActive);
+}
 
 function formatPercent(value) {
   const n = Number(value);
@@ -581,6 +595,16 @@ async function loadAlertsForHost() {
 }
 
 function wireEvents() {
+  document.getElementById("overviewTabButton").addEventListener("click", () => {
+    state.viewMode = "overview";
+    updateViewMode();
+  });
+
+  document.getElementById("reportsTabButton").addEventListener("click", () => {
+    state.viewMode = "reports";
+    updateViewMode();
+  });
+
   document.getElementById("editDisplayNameButton").addEventListener("click", async () => {
     try {
       await editDisplayName();
@@ -641,6 +665,7 @@ function wireEvents() {
 
 async function init() {
   wireEvents();
+  updateViewMode();
   await loadHosts();
   await loadReportsForHost();
   await loadAnalysisForHost();

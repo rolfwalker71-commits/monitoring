@@ -113,6 +113,26 @@ button {
   color: var(--muted);
 }
 
+.view-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+
+.tab-button {
+  background: #c7e7ea;
+  color: #11424a;
+}
+
+.tab-button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.view-section.hidden {
+  display: none;
+}
+
 .report-list {
   display: grid;
   grid-template-columns: 1fr;
