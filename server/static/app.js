@@ -587,7 +587,7 @@ function shouldShowFilesystemGraph(mountpoint) {
   const mp = mountpoint.replace(/\\/g, '/').toLowerCase();
   if (mp === '/') return true;
   if (mp.startsWith('/usr/sap')) return true;
-  if (mp.startsWith('/hana/')) return true;
+  if (mp === '/hana' || mp.startsWith('/hana/')) return true;
   if (mp.startsWith('/mnt/') || mp === '/mnt') return true;
   return false;
 }
