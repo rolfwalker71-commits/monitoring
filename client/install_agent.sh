@@ -6,6 +6,7 @@ CONFIG_DIR="/etc/monitoring-agent"
 CONFIG_FILE="$CONFIG_DIR/agent.conf"
 CRON_FILE="/etc/cron.d/monitoring-agent"
 LOG_FILE="/var/log/monitoring-agent.log"
+CRON_TAG="# monitoring-agent"
 
 SERVER_URL=""
 API_KEY=""
@@ -73,6 +74,44 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
+install_cron_in_crond() {
+  local cron_line
+  cron_line="*/$INTERVAL_MINUTES * * * * root CONFIG_FILE=$CONFIG_FILE $INSTALL_DIR/collect_and_send.sh >> $LOG_FILE 2>&1"
+
+  if [[ ! -d "/etc/cron.d" ]]; then
+    return 1
+  fi
+
+  cat > "$CRON_FILE" <<EOF
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+$cron_line
+EOF
+
+  chmod 0644 "$CRON_FILE"
+  return 0
+}
+
+install_cron_in_crontab() {
+  local cron_line
+  local existing
+  cron_line="*/$INTERVAL_MINUTES * * * * CONFIG_FILE=$CONFIG_FILE $INSTALL_DIR/collect_and_send.sh >> $LOG_FILE 2>&1"
+
+  if ! command -v crontab >/dev/null 2>&1; then
+    return 1
+  fi
+
+  existing="$(crontab -l 2>/dev/null | grep -v 'monitoring-agent' || true)"
+  {
+    printf '%s\n' "$existing"
+    printf '%s\n' "$CRON_TAG"
+    printf '%s\n' "$cron_line"
+  } | sed '/^$/N;/^\n$/D' | crontab -
+
+  return 0
+}
+
 mkdir -p "$INSTALL_DIR" "$CONFIG_DIR"
 
 curl -fsSL "$COLLECT_SCRIPT_URL" -o "$INSTALL_DIR/collect_and_send.sh"
@@ -90,11 +129,15 @@ EOF
 
 chmod 0600 "$CONFIG_FILE"
 
-cat > "$CRON_FILE" <<EOF
-*/$INTERVAL_MINUTES * * * * root CONFIG_FILE=$CONFIG_FILE $INSTALL_DIR/collect_and_send.sh >> $LOG_FILE 2>&1
-EOF
-
-chmod 0644 "$CRON_FILE"
+CRON_TARGET=""
+if install_cron_in_crond; then
+  CRON_TARGET="$CRON_FILE"
+elif install_cron_in_crontab; then
+  CRON_TARGET="root crontab"
+else
+  echo "Failed to install cron job. Neither /etc/cron.d nor crontab worked." >&2
+  exit 1
+fi
 
 if command -v systemctl >/dev/null 2>&1; then
   systemctl reload cron 2>/dev/null || systemctl reload crond 2>/dev/null || true
@@ -104,4 +147,5 @@ echo "Monitoring agent installed."
 echo "Config: $CONFIG_FILE"
 echo "Collector: $INSTALL_DIR/collect_and_send.sh"
 echo "Cron schedule: every $INTERVAL_MINUTES minutes"
+echo "Cron target: $CRON_TARGET"
 echo "Log file: $LOG_FILE"

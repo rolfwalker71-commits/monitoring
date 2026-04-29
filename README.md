@@ -40,6 +40,9 @@ curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/mai
   | sudo bash -s -- --server-url http://<server-ip>:8080 --interval-minutes 15
 ```
 
+Das Install-Skript versucht zuerst einen Eintrag in `/etc/cron.d/monitoring-agent` anzulegen.
+Falls das auf dem Zielsystem nicht verfuegbar ist, wird automatisch ein Eintrag in der `root`-crontab gesetzt.
+
 Mit API-Key:
 
 ```bash
