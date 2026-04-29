@@ -26,7 +26,7 @@
         <div class="brand-text">
           <h1>MONITORING Linux Server</h1>
           <p class="subtitle">(powered by Rolf Walker)</p>
-          <p class="subtitle-meta">Webclient Version: 0.4.12</p>
+          <p class="subtitle-meta">Webclient Version: 0.4.13</p>
         </div>
       </div>
 
@@ -124,21 +124,26 @@
                 <section class="alerts-panel">
                   <div class="analysis-header">
                     <h4>🚨 Alerts</h4>
-                    <p id="alertsSummary" class="count"></p>
+                    <div class="alerts-panel-actions">
+                      <p id="alertsSummary" class="count"></p>
+                      <button id="toggleHostAlertsPanelButton" type="button">Zuklappen</button>
+                    </div>
                   </div>
-                  <div class="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>📌 Status</th>
-                          <th>⚠️ Severity</th>
-                          <th>📁 Mountpoint</th>
-                          <th>📈 Used</th>
-                          <th>🕒 Transfer</th>
-                        </tr>
-                      </thead>
-                      <tbody id="alertsRows"></tbody>
-                    </table>
+                  <div id="hostAlertsPanelBody">
+                    <div class="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>📌 Status</th>
+                            <th>⚠️ Severity</th>
+                            <th>📁 Mountpoint</th>
+                            <th>📈 Used</th>
+                            <th>🕒 Transfer</th>
+                          </tr>
+                        </thead>
+                        <tbody id="alertsRows"></tbody>
+                      </table>
+                    </div>
                   </div>
                 </section>
 

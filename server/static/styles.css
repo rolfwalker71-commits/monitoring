@@ -561,6 +561,12 @@ button:hover:not(.host-item) {
   background: #fff;
 }
 
+.alerts-panel-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .global-host-cell {
   display: grid;
   gap: 2px;

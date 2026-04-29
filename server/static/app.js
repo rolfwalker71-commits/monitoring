@@ -21,6 +21,7 @@ const state = {
   analysisHours: 24,
   alarmSettingsLoaded: false,
   globalAlertsCollapsed: false,
+  hostAlertsCollapsed: false,
   globalSeverityFilter: "all",
   globalOpenAlertsCount: 0,
 };
@@ -990,6 +991,11 @@ async function loadAnalysisForHost() {
 async function loadAlertsForHost() {
   const alertsSummary = document.getElementById("alertsSummary");
   const alertsRows = document.getElementById("alertsRows");
+  const toggleButton = document.getElementById("toggleHostAlertsPanelButton");
+  const panelBody = document.getElementById("hostAlertsPanelBody");
+
+  panelBody.classList.toggle("hidden", state.hostAlertsCollapsed);
+  toggleButton.textContent = state.hostAlertsCollapsed ? "Aufklappen" : "Zuklappen";
 
   if (!state.selectedHost) {
     alertsSummary.textContent = "";
@@ -1004,7 +1010,7 @@ async function loadAlertsForHost() {
     const hostNameParam = encodeURIComponent(state.selectedHost);
     const [summaryResp, listResp] = await Promise.all([
       fetch(`/api/v1/alerts-summary?hostname=${hostNameParam}`),
-      fetch(`/api/v1/alerts?hostname=${hostNameParam}&status=all&limit=15&offset=0`),
+      fetch(`/api/v1/alerts?hostname=${hostNameParam}&status=open&limit=50&offset=0`),
     ]);
 
     if (!summaryResp.ok) {
@@ -1157,6 +1163,11 @@ function wireEvents() {
   document.getElementById("overviewFilesystemTabButton").addEventListener("click", () => {
     state.overviewSection = "filesystem";
     updateOverviewSection();
+  });
+
+  document.getElementById("toggleHostAlertsPanelButton").addEventListener("click", async () => {
+    state.hostAlertsCollapsed = !state.hostAlertsCollapsed;
+    await loadAlertsForHost();
   });
 
   document.getElementById("editDisplayNameButton").addEventListener("click", async () => {
