@@ -601,7 +601,7 @@ function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
   if (filtered.length === 0) {
     return "<p class=\"muted\">Keine relevanten Filesystem-Verlaufskurven verfuegbar.</p>";
   }
-  const topTrends = filtered.slice(0, 6);
+  const topTrends = filtered;
   const standText = formatUtcPlus2(latestReportTimeUtc);
 
   return topTrends
@@ -1151,7 +1151,7 @@ async function loadAnalysisForHost() {
       : null;
     const fsRising = trendRows.filter((row) => Number(row.delta_used_percent) > 0).length;
     const fsWarnOrCritical = trendRows.filter((row) => Number(row.current_used_percent) >= 80).length;
-    filesystemStats.textContent = `Top ${Math.min(6, trendRows.length)} FS-Charts | Avg aktuell: ${fsAvgCurrent === null ? "-" : formatNumber(fsAvgCurrent, 1) + "%"} | Steigend: ${fsRising} | >=80%: ${fsWarnOrCritical}`;
+    filesystemStats.textContent = `${trendRows.length} FS-Charts | Avg aktuell: ${fsAvgCurrent === null ? "-" : formatNumber(fsAvgCurrent, 1) + "%"} | Steigend: ${fsRising} | >=80%: ${fsWarnOrCritical}`;
 
     if (trendRows.length === 0) {
       filesystemCharts.innerHTML = "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfuegbar.</p>";
