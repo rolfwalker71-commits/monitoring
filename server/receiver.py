@@ -707,7 +707,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                                                 WHERE r4.hostname = r.hostname
                                                 ORDER BY r4.id DESC
                                                 LIMIT 1
-                                            ) AS latest_payload_json
+                                            ) AS latest_payload_json,
+                                            (
+                                                SELECT COUNT(*)
+                                                FROM alerts a1
+                                                WHERE a1.hostname = r.hostname AND a1.status = 'open'
+                                            ) AS open_alert_count,
+                                            (
+                                                SELECT COUNT(*)
+                                                FROM alerts a2
+                                                WHERE a2.hostname = r.hostname AND a2.status = 'open' AND a2.severity = 'critical'
+                                            ) AS open_critical_alert_count
                     FROM reports r
                     GROUP BY r.hostname
                     ORDER BY last_seen_utc DESC
@@ -737,6 +747,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "delivery_mode": str(latest_payload.get("delivery_mode", "live") or "live"),
                         "is_delayed": bool(latest_payload.get("is_delayed", False)),
                         "queue_depth": payload_int(latest_payload, "queue_depth", 0),
+                        "open_alert_count": int(row[6] or 0),
+                        "open_critical_alert_count": int(row[7] or 0),
                     }
                 )
 

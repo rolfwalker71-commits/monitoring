@@ -725,14 +725,22 @@ function renderHosts(hosts) {
       const selectedClass = hostname === state.selectedHost ? "host-item selected" : "host-item";
       const hostDelivery = deliveryLabel(host.delivery_mode, host.is_delayed);
       const hostQueueDepth = queueDepthLabel(host.queue_depth);
+      const openAlertCount = Number(host.open_alert_count || 0);
+      const openCriticalAlertCount = Number(host.open_critical_alert_count || 0);
+      const hasOpenAlerts = openAlertCount > 0;
+      const markerClass = openCriticalAlertCount > 0 ? "host-alert-marker critical" : "host-alert-marker";
+      const marker = hasOpenAlerts
+        ? `<span class="${markerClass}" title="${openAlertCount} offene Alerts (${openCriticalAlertCount} kritisch)">❗</span>`
+        : "";
 
       return `
         <button class="${selectedClass}" type="button" data-host="${escapeHtml(hostname)}">
-          <strong>${escapeHtml(displayName)}</strong>
+          <strong>${escapeHtml(displayName)} ${marker}</strong>
           <span>🖥️ ${escapeHtml(hostname)}</span>
           <span>🧷 ${escapeHtml(asText(host.agent_version))}</span>
           <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
           <span>📬 ${hostDelivery} | 🗃️ Queue ${hostQueueDepth}</span>
+          <span>🚨 Offen: ${openAlertCount} (kritisch ${openCriticalAlertCount})</span>
           <span>📦 ${Number(host.report_count || 0).toLocaleString("de-DE")} Meldungen</span>
           <span>🕒 Transfer: ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
         </button>

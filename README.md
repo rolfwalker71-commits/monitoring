@@ -49,6 +49,7 @@ Dashboard-Funktionen:
 - Analysebereich mit CPU/RAM/Swap-Trends im Zeitfenster
 - Alert-Bereich mit offenen Warn/Kritisch-Events und letzter Historie je Host
 - Zusaetzliche globale Alert-Uebersicht ueber alle Hosts (ohne Host-Auswahl)
+- In der Hostgruppe wird bei Hosts mit offenen Alerts ein grosses Ausrufezeichen angezeigt
 - Agent-Version pro Host zur Nachverfolgung von Self-Updates
 - Meldungs-Chip `LIVE` bzw. `DELAYED` auf der Detailkarte
 - Queue-Statistik im Dashboard (`letzte Meldung LIVE/DELAYED`, aktuelle Queue-Tiefe, delayed/live im Analysefenster)

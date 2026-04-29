@@ -277,6 +277,21 @@ button:hover:not(.host-item) {
   font-size: 14px;
 }
 
+.host-alert-marker {
+  display: inline-block;
+  margin-left: 6px;
+  color: #d97706;
+  font-size: 22px;
+  line-height: 1;
+  vertical-align: middle;
+  text-shadow: 0 0 10px rgba(217, 119, 6, 0.35);
+}
+
+.host-alert-marker.critical {
+  color: #dc2626;
+  text-shadow: 0 0 12px rgba(220, 38, 38, 0.45);
+}
+
 .host-item span {
   color: var(--muted);
   font-size: 11px;
