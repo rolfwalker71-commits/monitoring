@@ -225,14 +225,17 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
     return "<p class=\"muted\">Keine Verlaufskurven verfuegbar.</p>";
   }
 
+  const combinedWidth = 520;
+  const combinedHeight = 170;
+
   const combinedLines = chartDefinitions
     .map((item) => {
       const normalized = normalizeForCombined(resourceSeries[item.key]);
       if (normalized.length < 2) {
         return "";
       }
-      const polyline = buildPolylinePoints(normalized, 760, 210, 0, 100);
-      const markers = buildPointMarkers(normalized, 760, 210, 0, 100, item.color, `${item.label} (norm.)`);
+      const polyline = buildPolylinePoints(normalized, combinedWidth, combinedHeight, 0, 100);
+      const markers = buildPointMarkers(normalized, combinedWidth, combinedHeight, 0, 100, item.color, `${item.label} (norm.)`);
       return `<polyline fill=\"none\" stroke=\"${item.color}\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\" points=\"${polyline}\" />${markers}`;
     })
     .join("");
@@ -249,7 +252,7 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
       const minValue = values.length > 0 ? Math.min(...values) : null;
       const maxValue = values.length > 0 ? Math.max(...values) : null;
       return `
-        <article class="mini-chart-card">
+        <article class="mini-chart-card chart-tile">
           <header>
             <strong>${item.label}</strong>
             <span>${points.length} Samples</span>
@@ -265,21 +268,72 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
     .join("");
 
   return `
-    <section class="combined-chart">
+    <section class="chart-scroll-row">
+    <section class="combined-chart chart-tile combined">
       <div class="combined-chart-head">
         <strong>Verlauf kombiniert (normalisiert)</strong>
         <span>${escapeHtml(standText)}</span>
       </div>
-      <svg class="combined-chart-svg" viewBox="0 0 760 210" role="img" aria-label="Kombinierter Verlauf">
-        <line x1="10" y1="10" x2="10" y2="200" stroke="#dbe5ef" stroke-width="1" />
-        <line x1="10" y1="200" x2="750" y2="200" stroke="#dbe5ef" stroke-width="1" />
-        <line x1="10" y1="105" x2="750" y2="105" stroke="#edf2f7" stroke-width="1" />
+      <svg class="combined-chart-svg" viewBox="0 0 ${combinedWidth} ${combinedHeight}" role="img" aria-label="Kombinierter Verlauf">
+        <line x1="10" y1="10" x2="10" y2="160" stroke="#dbe5ef" stroke-width="1" />
+        <line x1="10" y1="160" x2="510" y2="160" stroke="#dbe5ef" stroke-width="1" />
+        <line x1="10" y1="85" x2="510" y2="85" stroke="#edf2f7" stroke-width="1" />
         ${combinedLines}
       </svg>
       <div class="combined-legend">${combinedLegend}</div>
     </section>
-    <section class="mini-chart-grid">${miniCharts}</section>
+    ${miniCharts}
+    </section>
   `;
+}
+
+function filesystemLineColor(currentUsedPercent) {
+  const value = Number(currentUsedPercent);
+  if (!Number.isFinite(value)) {
+    return "#64748b";
+  }
+  if (value >= 90) {
+    return "#dc2626";
+  }
+  if (value >= 80) {
+    return "#d97706";
+  }
+  return "#0f766e";
+}
+
+function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
+  if (!Array.isArray(filesystemTrends) || filesystemTrends.length === 0) {
+    return "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfuegbar.</p>";
+  }
+
+  const topTrends = filesystemTrends.slice(0, 6);
+  const standText = formatUtcPlus2(latestReportTimeUtc);
+
+  return topTrends
+    .map((item) => {
+      const points = normalizeSeries((item.series || []).map((point) => ({
+        time_utc: point.time_utc,
+        value: point.used_percent,
+      })));
+      const color = filesystemLineColor(item.current_used_percent);
+      const mountpoint = renderPathCell(item.mountpoint, 42);
+
+      return `
+        <article class="fs-chart-card">
+          <header>
+            <strong>${mountpoint}</strong>
+            <span>${Number(item.sample_count || 0).toLocaleString("de-DE")} Samples</span>
+          </header>
+          ${buildSparklineSvg(points, color, 360, 90)}
+          <footer>
+            <span>Aktuell: ${formatPercent(item.current_used_percent)}</span>
+            <span>Delta: ${formatSignedPercent(item.delta_used_percent)}</span>
+            <span>${escapeHtml(standText)}</span>
+          </footer>
+        </article>
+      `;
+    })
+    .join("");
 }
 
 function renderNetworkTable(network) {
@@ -682,6 +736,8 @@ async function loadAnalysisForHost() {
   const analysisSummary = document.getElementById("analysisSummary");
   const analysisRows = document.getElementById("analysisRows");
   const resourceCharts = document.getElementById("resourceCharts");
+  const filesystemStats = document.getElementById("filesystemStats");
+  const filesystemCharts = document.getElementById("filesystemCharts");
   const resourceTrendCards = document.getElementById("resourceTrendCards");
   const deliveryStats = document.getElementById("deliveryStats");
 
@@ -689,6 +745,8 @@ async function loadAnalysisForHost() {
     analysisSummary.textContent = "";
     deliveryStats.textContent = "";
     resourceCharts.innerHTML = "";
+    filesystemStats.textContent = "";
+    filesystemCharts.innerHTML = "";
     resourceTrendCards.innerHTML = "";
     analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
     return;
@@ -696,9 +754,11 @@ async function loadAnalysisForHost() {
 
   analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Lade Analyse...</td></tr>";
   resourceCharts.innerHTML = "";
+  filesystemCharts.innerHTML = "";
   resourceTrendCards.innerHTML = "";
   analysisSummary.textContent = "";
   deliveryStats.textContent = "";
+  filesystemStats.textContent = "";
 
   try {
     const hostNameParam = encodeURIComponent(state.selectedHost);
@@ -724,8 +784,18 @@ async function loadAnalysisForHost() {
     deliveryStats.textContent = `📬 Letzte Meldung: ${latestDelivery} | 🗃️ Queue: ${latestQueue} | Fenster: ${delayedCount} delayed / ${liveCount} live`;
     resourceCharts.innerHTML = renderResourceCharts(resourceSeries, data.latest_report_time_utc);
     resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc);
+    filesystemCharts.innerHTML = renderFilesystemTrendCharts(trendRows, data.latest_report_time_utc);
+
+    const fsCurrentValues = trendRows.map((row) => Number(row.current_used_percent)).filter((value) => Number.isFinite(value));
+    const fsAvgCurrent = fsCurrentValues.length > 0
+      ? fsCurrentValues.reduce((sum, value) => sum + value, 0) / fsCurrentValues.length
+      : null;
+    const fsRising = trendRows.filter((row) => Number(row.delta_used_percent) > 0).length;
+    const fsWarnOrCritical = trendRows.filter((row) => Number(row.current_used_percent) >= 80).length;
+    filesystemStats.textContent = `Top ${Math.min(6, trendRows.length)} FS-Charts | Avg aktuell: ${fsAvgCurrent === null ? "-" : formatNumber(fsAvgCurrent, 1) + "%"} | Steigend: ${fsRising} | >=80%: ${fsWarnOrCritical}`;
 
     if (trendRows.length === 0) {
+      filesystemCharts.innerHTML = "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfuegbar.</p>";
       analysisRows.innerHTML =
         "<tr><td colspan=\"7\" class=\"muted\">Keine Analyse-Daten im gewaehlten Zeitfenster.</td></tr>";
       return;
