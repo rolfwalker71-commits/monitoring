@@ -84,6 +84,7 @@ UPTIME_SECONDS="$(cut -d. -f1 /proc/uptime)"
 KERNEL="$(uname -r)"
 OS_NAME="$(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-unknown}")"
 AGENT_ID_VALUE="${AGENT_ID:-$HOSTNAME_VALUE}"
+DISPLAY_NAME_VALUE="${DISPLAY_NAME:-$HOSTNAME_VALUE}"
 AGENT_VERSION_VALUE="unknown"
 if [[ -f "$AGENT_VERSION_FILE" ]]; then
   AGENT_VERSION_VALUE="$(head -n 1 "$AGENT_VERSION_FILE" | tr -d '[:space:]')"
@@ -150,6 +151,7 @@ PAYLOAD=$(cat <<EOF
 {
   "agent_id": "$(json_escape "$AGENT_ID_VALUE")",
   "agent_version": "$(json_escape "$AGENT_VERSION_VALUE")",
+  "display_name": "$(json_escape "$DISPLAY_NAME_VALUE")",
   "hostname": "$(json_escape "$HOSTNAME_VALUE")",
   "primary_ip": "$(json_escape "$PRIMARY_IP")",
   "all_ips": "$(json_escape "$ALL_IPS")",

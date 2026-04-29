@@ -12,6 +12,7 @@ CRON_TAG="# monitoring-agent"
 SERVER_URL=""
 API_KEY=""
 AGENT_ID=""
+DISPLAY_NAME=""
 INTERVAL_MINUTES="15"
 RAW_BASE_URL="https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main"
 COLLECT_SCRIPT_URL=""
@@ -20,7 +21,7 @@ BUILD_VERSION_URL=""
 
 usage() {
   cat <<EOF
-Usage: $0 --server-url URL [--api-key KEY] [--agent-id ID] [--interval-minutes 15] [--collect-script-url URL]
+Usage: $0 --server-url URL [--api-key KEY] [--agent-id ID] [--display-name NAME] [--interval-minutes 15] [--collect-script-url URL]
 
 Example:
   curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/install_agent.sh \
@@ -40,6 +41,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --agent-id)
       AGENT_ID="$2"
+      shift 2
+      ;;
+    --display-name)
+      DISPLAY_NAME="$2"
       shift 2
       ;;
     --interval-minutes)
@@ -155,10 +160,25 @@ if [[ -z "$AGENT_ID" ]]; then
   AGENT_ID="$(hostname -f 2>/dev/null || hostname)"
 fi
 
+if [[ -z "$DISPLAY_NAME" ]]; then
+  prompt_default="$AGENT_ID"
+  if [[ -r /dev/tty ]]; then
+    printf 'Anzeigename fuer diesen Host [%s]: ' "$prompt_default" > /dev/tty
+    if read -r DISPLAY_NAME < /dev/tty; then
+      DISPLAY_NAME="${DISPLAY_NAME:-$prompt_default}"
+    else
+      DISPLAY_NAME="$prompt_default"
+    fi
+  else
+    DISPLAY_NAME="$prompt_default"
+  fi
+fi
+
 cat > "$CONFIG_FILE" <<EOF
 SERVER_URL="$SERVER_URL"
 API_KEY="$API_KEY"
 AGENT_ID="$AGENT_ID"
+DISPLAY_NAME="$DISPLAY_NAME"
 RAW_BASE_URL="$RAW_BASE_URL"
 INSTALL_DIR="$INSTALL_DIR"
 AGENT_VERSION_FILE="$INSTALL_DIR/AGENT_VERSION"
@@ -182,6 +202,7 @@ fi
 
 echo "Monitoring agent installed."
 echo "Config: $CONFIG_FILE"
+echo "Display name: $DISPLAY_NAME"
 echo "Collector: $INSTALL_DIR/collect_and_send.sh"
 echo "Updater: $INSTALL_DIR/self_update.sh"
 echo "Agent version file: $INSTALL_DIR/AGENT_VERSION"

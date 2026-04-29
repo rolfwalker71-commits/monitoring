@@ -316,6 +316,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 hosts.append(
                     {
                         "hostname": row[0],
+                        "display_name": str(latest_payload.get("display_name", row[0] or "")),
                         "last_seen_utc": row[1],
                         "report_count": row[2],
                         "primary_ip": row[3] or "",

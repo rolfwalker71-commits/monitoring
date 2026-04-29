@@ -65,6 +65,16 @@ curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/mai
   | sudo bash -s -- --server-url http://<server-ip>:8080 --interval-minutes 15
 ```
 
+Bei der Installation fragt der Agent interaktiv nach einem sprechenden Anzeigenamen.
+Dieser wird im Dashboard als Titel verwendet, waehrend der technische `hostname` weiterhin der wichtige Identifikator bleibt.
+
+Optional kann der Anzeigename auch direkt uebergeben werden:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/install_agent.sh \
+  | sudo bash -s -- --server-url http://<server-ip>:8080 --display-name "Vaultwarden Prod" --interval-minutes 15
+```
+
 Das Install-Skript versucht zuerst einen Eintrag in `/etc/cron.d/monitoring-agent` anzulegen.
 Falls das auf dem Zielsystem nicht verfuegbar ist, wird automatisch ein Eintrag in der `root`-crontab gesetzt.
 

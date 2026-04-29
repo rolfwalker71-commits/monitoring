@@ -242,11 +242,16 @@ function renderReportCard(report) {
   const memory = payload.memory || {};
   const swap = payload.swap || {};
   const network = payload.network || {};
+  const title = asText(payload.display_name || report.hostname || payload.hostname);
+  const technicalHostname = asText(report.hostname || payload.hostname);
 
   return `
     <article class="report-card">
       <div class="report-header">
-        <h3>${escapeHtml(asText(report.hostname || payload.hostname))}</h3>
+        <div>
+          <h3>${escapeHtml(title)}</h3>
+          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}</p>
+        </div>
         <span class="report-time">${escapeHtml(formatUtc(report.received_at_utc || payload.timestamp_utc))}</span>
       </div>
 
@@ -301,11 +306,13 @@ function renderHosts(hosts) {
   hostList.innerHTML = hosts
     .map((host) => {
       const hostname = asText(host.hostname);
+      const displayName = asText(host.display_name || host.hostname);
       const selectedClass = hostname === state.selectedHost ? "host-item selected" : "host-item";
 
       return `
         <button class="${selectedClass}" type="button" data-host="${escapeHtml(hostname)}">
-          <strong>${escapeHtml(hostname)}</strong>
+          <strong>${escapeHtml(displayName)}</strong>
+          <span>🖥️ ${escapeHtml(hostname)}</span>
           <span>🧷 ${escapeHtml(asText(host.agent_version))}</span>
           <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
           <span>📦 ${Number(host.report_count || 0).toLocaleString("de-DE")} Meldungen</span>
@@ -378,7 +385,9 @@ async function loadReportsForHost() {
     return;
   }
 
-  selectedHostTitle.textContent = `🗂️ Meldungen fuer ${state.selectedHost}`;
+  const selectedHostButton = document.querySelector(`.host-item[data-host="${CSS.escape(state.selectedHost)}"] strong`);
+  const selectedLabel = selectedHostButton ? selectedHostButton.textContent : state.selectedHost;
+  selectedHostTitle.textContent = `🗂️ Meldungen fuer ${selectedLabel}`;
   list.innerHTML = "<p class=\"muted\">Lade Daten...</p>";
   count.textContent = "";
 
