@@ -129,11 +129,11 @@ function renderFilesystemTable(filesystems) {
       <table class="fs-table">
         <thead>
           <tr>
-            <th>Mountpoint</th>
-            <th>Filesystem</th>
-            <th>Typ</th>
-            <th>Belegt</th>
-            <th>Used / Total (Blocks)</th>
+            <th>📁 Mountpoint</th>
+            <th>💽 Filesystem</th>
+            <th>🧩 Typ</th>
+            <th>📈 Belegt</th>
+            <th>🧮 Used / Total (Blocks)</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -153,15 +153,15 @@ function renderReportCard(report) {
       </div>
 
       <div class="meta-grid">
-        <p><strong>Agent ID</strong><span>${escapeHtml(asText(report.agent_id || payload.agent_id))}</span></p>
-        <p><strong>Primary IP</strong><span>${escapeHtml(asText(report.primary_ip || payload.primary_ip))}</span></p>
-        <p><strong>Alle IPs</strong><span>${escapeHtml(asText(payload.all_ips))}</span></p>
-        <p><strong>OS</strong><span>${escapeHtml(asText(payload.os))}</span></p>
-        <p><strong>Kernel</strong><span>${escapeHtml(asText(payload.kernel))}</span></p>
-        <p><strong>Uptime</strong><span>${escapeHtml(formatUptime(payload.uptime_seconds))}</span></p>
+        <p><strong>🆔 Agent ID</strong><span>${escapeHtml(asText(report.agent_id || payload.agent_id))}</span></p>
+        <p><strong>🌐 Primary IP</strong><span>${escapeHtml(asText(report.primary_ip || payload.primary_ip))}</span></p>
+        <p><strong>🔌 Alle IPs</strong><span>${escapeHtml(asText(payload.all_ips))}</span></p>
+        <p><strong>🐧 OS</strong><span>${escapeHtml(asText(payload.os))}</span></p>
+        <p><strong>⚙️ Kernel</strong><span>${escapeHtml(asText(payload.kernel))}</span></p>
+        <p><strong>⏱️ Uptime</strong><span>${escapeHtml(formatUptime(payload.uptime_seconds))}</span></p>
       </div>
 
-      <h4>Filesysteme</h4>
+      <h4>💾 Filesysteme</h4>
       ${renderFilesystemTable(payload.filesystems)}
     </article>
   `;
@@ -200,9 +200,9 @@ function renderHosts(hosts) {
       return `
         <button class="${selectedClass}" type="button" data-host="${escapeHtml(hostname)}">
           <strong>${escapeHtml(hostname)}</strong>
-          <span>${escapeHtml(asText(host.primary_ip))}</span>
-          <span>${Number(host.report_count || 0).toLocaleString("de-DE")} Meldungen</span>
-          <span>Last seen: ${escapeHtml(formatUtc(host.last_seen_utc))}</span>
+          <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
+          <span>📦 ${Number(host.report_count || 0).toLocaleString("de-DE")} Meldungen</span>
+          <span>🕒 Last seen: ${escapeHtml(formatUtc(host.last_seen_utc))}</span>
         </button>
       `;
     })
@@ -264,14 +264,14 @@ async function loadReportsForHost() {
   const selectedHostTitle = document.getElementById("selectedHostTitle");
 
   if (!state.selectedHost) {
-    selectedHostTitle.textContent = "Meldungen";
+    selectedHostTitle.textContent = "🗂️ Meldungen";
     count.textContent = "";
     list.innerHTML = "<p class=\"muted\">Kein Host ausgewaehlt.</p>";
     updatePagerButtons();
     return;
   }
 
-  selectedHostTitle.textContent = `Meldungen fuer ${state.selectedHost}`;
+  selectedHostTitle.textContent = `🗂️ Meldungen fuer ${state.selectedHost}`;
   list.innerHTML = "<p class=\"muted\">Lade Daten...</p>";
   count.textContent = "";
 
