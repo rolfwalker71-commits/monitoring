@@ -313,6 +313,27 @@ button {
   font-size: 12px;
 }
 
+.delivery-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
+
+.delivery-chip.live {
+  color: #0f766e;
+  background: #ccfbf1;
+}
+
+.delivery-chip.delayed {
+  color: #9a3412;
+  background: #ffedd5;
+}
+
 .report-time {
   color: var(--muted);
   font-size: 12px;

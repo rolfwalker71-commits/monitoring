@@ -287,6 +287,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             for row in rows:
                 payload = json.loads(row[5])
                 hostname = row[3]
+                delivery_mode = str(payload.get("delivery_mode", "live") or "live")
                 reports.append(
                     {
                         "id": row[0],
@@ -294,6 +295,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "agent_id": row[2],
                         "hostname": hostname,
                         "primary_ip": row[4],
+                        "delivery_mode": delivery_mode,
                         "display_name": effective_display_name(payload, overrides.get(str(hostname), ""), str(hostname)),
                         "payload": payload,
                     }
@@ -365,6 +367,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "primary_ip": row[3] or "",
                         "agent_id": row[4] or "",
                         "agent_version": str(latest_payload.get("agent_version", "")),
+                        "delivery_mode": str(latest_payload.get("delivery_mode", "live") or "live"),
                     }
                 )
 
@@ -412,6 +415,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             reports = []
             for row in rows:
                 payload = json.loads(row[5])
+                delivery_mode = str(payload.get("delivery_mode", "live") or "live")
                 reports.append(
                     {
                         "id": row[0],
@@ -419,6 +423,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "agent_id": row[2],
                         "hostname": row[3],
                         "primary_ip": row[4],
+                        "delivery_mode": delivery_mode,
                         "display_name": effective_display_name(payload, display_name_override, hostname),
                         "payload": payload,
                     }

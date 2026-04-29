@@ -5,6 +5,7 @@ Dieses Projekt ist ein rudimentaerer Start fuer dein Server-Client-Monitoring:
 - Linux-Agent sammelt Basisdaten (`hostname`, IPs, Filesysteme, Fuellgrad, Uptime) sowie CPU, RAM, Swap und Netzwerkdaten
 - Agent sendet alle `x` Minuten per `cron` an einen HTTP-Webservice
 - Agent prueft alle 6 Stunden selbststaendig auf neue Versionen auf GitHub und aktualisiert sich bei Bedarf
+- Falls Senden fehlschlaegt, werden Meldungen lokal gequeued und beim naechsten erfolgreichen Lauf nachgeliefert
 - Webservice nimmt Daten entgegen, speichert sie in SQLite und zeigt eine einfache Uebersicht
 
 ## Struktur
@@ -45,6 +46,7 @@ Dashboard-Funktionen:
 - Analysebereich mit CPU/RAM/Swap-Trends im Zeitfenster
 - Alert-Bereich mit offenen Warn/Kritisch-Events und letzter Historie je Host
 - Agent-Version pro Host zur Nachverfolgung von Self-Updates
+- Meldungs-Chip `LIVE` bzw. `DELAYED` auf der Detailkarte
 
 Alert-Schwellwerte (optional per Env am Receiver):
 
@@ -83,6 +85,13 @@ Eingerichtete Jobs:
 
 - Datensammlung und Versand alle `x` Minuten
 - Self-Update Check alle 6 Stunden gegen GitHub `main`
+
+Queue-Verhalten:
+
+- Queue-Verzeichnis: `/var/lib/monitoring-agent/queue`
+- Fehlgeschlagene Reports werden dort als JSON gespeichert
+- Beim naechsten Lauf versucht der Agent zuerst die Queue zu flushen
+- Erfolgreich nachgelieferte Reports erscheinen im Dashboard als `DELAYED`
 
 Mit API-Key:
 

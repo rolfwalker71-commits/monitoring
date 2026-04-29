@@ -3,6 +3,7 @@ set -euo pipefail
 
 CONFIG_FILE="${CONFIG_FILE:-/etc/monitoring-agent/agent.conf}"
 AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-/opt/monitoring-agent/AGENT_VERSION}"
+AGENT_QUEUE_DIR="${AGENT_QUEUE_DIR:-/var/lib/monitoring-agent/queue}"
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
   echo "Config file not found: $CONFIG_FILE" >&2
@@ -16,6 +17,8 @@ if [[ -z "${SERVER_URL:-}" ]]; then
   echo "SERVER_URL is not set in $CONFIG_FILE" >&2
   exit 1
 fi
+
+mkdir -p "$AGENT_QUEUE_DIR"
 
 json_escape() {
   printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
@@ -74,6 +77,45 @@ append_json_entry() {
   else
     printf '%s,%s' "$current" "$entry"
   fi
+}
+
+post_payload() {
+  local payload_data="$1"
+
+  curl_args=(
+    --silent
+    --show-error
+    --fail
+    -X POST
+    -H "Content-Type: application/json"
+    --data "$payload_data"
+  )
+
+  if [[ -n "${API_KEY:-}" ]]; then
+    curl_args+=( -H "X-Api-Key: ${API_KEY}" )
+  fi
+
+  curl "${curl_args[@]}" "${SERVER_URL%/}/api/v1/agent-report"
+}
+
+flush_queue() {
+  local file payload_data
+
+  shopt -s nullglob
+  local queued_files=("$AGENT_QUEUE_DIR"/*.json)
+  shopt -u nullglob
+
+  for file in "${queued_files[@]}"; do
+    payload_data="$(cat "$file")"
+    if post_payload "$payload_data" >/dev/null; then
+      rm -f "$file"
+    else
+      # Keep remaining queue files for the next run when connectivity recovers.
+      return 1
+    fi
+  done
+
+  return 0
 }
 
 HOSTNAME_VALUE="$(hostname -f 2>/dev/null || hostname)"
@@ -159,6 +201,9 @@ PAYLOAD=$(cat <<EOF
   "os": "$(json_escape "$OS_NAME")",
   "uptime_seconds": $UPTIME_SECONDS,
   "timestamp_utc": "$(json_escape "$TIMESTAMP_UTC")",
+  "delivery_mode": "live",
+  "is_delayed": false,
+  "queued_at_utc": "",
   "cpu": {
     "usage_percent": $CPU_USAGE_PERCENT,
     "load_avg_1": $LOAD_AVG_1,
@@ -187,18 +232,16 @@ PAYLOAD=$(cat <<EOF
 EOF
 )
 
-curl_args=(
-  --silent
-  --show-error
-  --fail
-  -X POST
-  -H "Content-Type: application/json"
-  --data "$PAYLOAD"
-)
+flush_queue || true
 
-if [[ -n "${API_KEY:-}" ]]; then
-  curl_args+=( -H "X-Api-Key: ${API_KEY}" )
+if ! post_payload "$PAYLOAD" >/dev/null; then
+  queued_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  delayed_payload="${PAYLOAD/\"delivery_mode\": \"live\"/\"delivery_mode\": \"delayed\"}"
+  delayed_payload="${delayed_payload/\"is_delayed\": false/\"is_delayed\": true}"
+  delayed_payload="${delayed_payload/\"queued_at_utc\": \"\"/\"queued_at_utc\": \"$queued_at_utc\"}"
+  queue_file="$AGENT_QUEUE_DIR/report-${TIMESTAMP_UTC//[:T-]/}-${RANDOM}.json"
+  printf '%s\n' "$delayed_payload" > "$queue_file"
+  echo "Payload queued for retry: $queue_file" >&2
+  exit 1
 fi
-
-curl "${curl_args[@]}" "${SERVER_URL%/}/api/v1/agent-report"
 

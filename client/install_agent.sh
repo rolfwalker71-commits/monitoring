@@ -15,6 +15,7 @@ AGENT_ID=""
 DISPLAY_NAME=""
 INTERVAL_MINUTES="15"
 RAW_BASE_URL="https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main"
+AGENT_QUEUE_DIR="/var/lib/monitoring-agent/queue"
 COLLECT_SCRIPT_URL=""
 SELF_UPDATE_SCRIPT_URL=""
 BUILD_VERSION_URL=""
@@ -144,7 +145,8 @@ install_cron_in_crontab() {
   return 0
 }
 
-mkdir -p "$INSTALL_DIR" "$CONFIG_DIR"
+mkdir -p "$INSTALL_DIR" "$CONFIG_DIR" "$AGENT_QUEUE_DIR"
+chmod 0750 "$AGENT_QUEUE_DIR"
 
 curl -fsSL "$COLLECT_SCRIPT_URL" -o "$INSTALL_DIR/collect_and_send.sh"
 curl -fsSL "$SELF_UPDATE_SCRIPT_URL" -o "$INSTALL_DIR/self_update.sh"
@@ -182,6 +184,7 @@ DISPLAY_NAME="$DISPLAY_NAME"
 RAW_BASE_URL="$RAW_BASE_URL"
 INSTALL_DIR="$INSTALL_DIR"
 AGENT_VERSION_FILE="$INSTALL_DIR/AGENT_VERSION"
+AGENT_QUEUE_DIR="$AGENT_QUEUE_DIR"
 EOF
 
 chmod 0600 "$CONFIG_FILE"
@@ -206,6 +209,7 @@ echo "Display name: $DISPLAY_NAME"
 echo "Collector: $INSTALL_DIR/collect_and_send.sh"
 echo "Updater: $INSTALL_DIR/self_update.sh"
 echo "Agent version file: $INSTALL_DIR/AGENT_VERSION"
+echo "Queue dir: $AGENT_QUEUE_DIR"
 echo "Cron schedule: every $INTERVAL_MINUTES minutes"
 echo "Update check: every 6 hours"
 echo "Cron target: $CRON_TARGET"

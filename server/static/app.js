@@ -261,13 +261,17 @@ function renderReportCard(report) {
   const network = payload.network || {};
   const title = asText(report.display_name || payload.display_name || report.hostname || payload.hostname);
   const technicalHostname = asText(report.hostname || payload.hostname);
+  const deliveryMode = asText(report.delivery_mode || payload.delivery_mode || "live", "live").toLowerCase();
+  const isDelayed = deliveryMode === "delayed" || payload.is_delayed === true;
+  const chipClass = isDelayed ? "delivery-chip delayed" : "delivery-chip live";
+  const chipText = isDelayed ? "DELAYED" : "LIVE";
 
   return `
     <article class="report-card">
       <div class="report-header">
         <div>
           <h3>${escapeHtml(title)}</h3>
-          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}</p>
+          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)} <span class="${chipClass}">${chipText}</span></p>
         </div>
         <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
       </div>
