@@ -1097,9 +1097,16 @@ async function loadGlobalAlertsOverview() {
     rowsEl.innerHTML = alerts
       .map((item) => {
         const severityClass = item.severity === "critical" ? "severity-critical" : "severity-warning";
+        const hostDisplayName = asText(item.display_name || item.hostname);
+        const hostName = asText(item.hostname);
         return `
           <tr>
-            <td>${escapeHtml(asText(item.hostname))}</td>
+            <td>
+              <div class="global-host-cell">
+                <span class="global-host-label">${escapeHtml(hostDisplayName)}</span>
+                <span class="global-hostname-sub">(${escapeHtml(hostName)})</span>
+              </div>
+            </td>
             <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
             <td>${renderPathCell(item.mountpoint, 42)}</td>
             <td>${formatPercent(item.used_percent)}</td>

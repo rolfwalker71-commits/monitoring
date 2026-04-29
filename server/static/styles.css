@@ -561,6 +561,24 @@ button:hover:not(.host-item) {
   background: #fff;
 }
 
+.global-host-cell {
+  display: grid;
+  gap: 2px;
+}
+
+.global-host-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.1;
+}
+
+.global-hostname-sub {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.1;
+}
+
 .badge {
   display: inline-block;
   padding: 2px 8px;

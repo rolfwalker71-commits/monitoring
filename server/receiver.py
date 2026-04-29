@@ -1052,12 +1052,50 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     tuple(args + [limit, offset]),
                 ).fetchall()
 
+                hostnames = sorted({str(row[1]) for row in rows if row[1]})
+                display_names: dict[str, str] = {}
+                if hostnames:
+                    placeholders = ",".join("?" for _ in hostnames)
+                    settings_rows = conn.execute(
+                        f"SELECT hostname, display_name_override FROM host_settings WHERE hostname IN ({placeholders})",
+                        tuple(hostnames),
+                    ).fetchall()
+                    overrides = {str(item[0]): str(item[1] or "") for item in settings_rows}
+
+                    latest_payload_rows = conn.execute(
+                        f"""
+                        SELECT hostname, payload_json
+                        FROM reports
+                        WHERE id IN (
+                            SELECT MAX(id)
+                            FROM reports
+                            WHERE hostname IN ({placeholders})
+                            GROUP BY hostname
+                        )
+                        """,
+                        tuple(hostnames),
+                    ).fetchall()
+                    payload_by_hostname = {
+                        str(item[0]): parse_payload_json(str(item[1] or "{}"))
+                        for item in latest_payload_rows
+                    }
+
+                    for hostname in hostnames:
+                        payload = payload_by_hostname.get(hostname, {})
+                        display_names[hostname] = effective_display_name(
+                            payload,
+                            overrides.get(hostname, ""),
+                            hostname,
+                        )
+
             alerts = []
             for row in rows:
+                hostname = str(row[1] or "")
                 alerts.append(
                     {
                         "id": row[0],
-                        "hostname": row[1],
+                        "hostname": hostname,
+                        "display_name": display_names.get(hostname, hostname),
                         "mountpoint": row[2],
                         "severity": row[3],
                         "used_percent": row[4],
