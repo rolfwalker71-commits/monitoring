@@ -502,6 +502,10 @@ button:hover:not(.host-item) {
   margin-bottom: 14px;
 }
 
+.global-alerts-panel {
+  background: linear-gradient(180deg, #f6fbff 0%, #f0f8ff 100%);
+}
+
 .badge {
   display: inline-block;
   padding: 2px 8px;

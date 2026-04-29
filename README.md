@@ -48,6 +48,7 @@ Dashboard-Funktionen:
 - Analysebereich mit 24h-Trends je Mountpoint fuer den ausgewaehlten Host
 - Analysebereich mit CPU/RAM/Swap-Trends im Zeitfenster
 - Alert-Bereich mit offenen Warn/Kritisch-Events und letzter Historie je Host
+- Zusaetzliche globale Alert-Uebersicht ueber alle Hosts (ohne Host-Auswahl)
 - Agent-Version pro Host zur Nachverfolgung von Self-Updates
 - Meldungs-Chip `LIVE` bzw. `DELAYED` auf der Detailkarte
 - Queue-Statistik im Dashboard (`letzte Meldung LIVE/DELAYED`, aktuelle Queue-Tiefe, delayed/live im Analysefenster)

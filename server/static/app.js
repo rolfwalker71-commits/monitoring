@@ -1027,6 +1027,58 @@ async function loadAlertsForHost() {
   }
 }
 
+async function loadGlobalAlertsOverview() {
+  const summaryEl = document.getElementById("globalAlertsSummary");
+  const rowsEl = document.getElementById("globalAlertsRows");
+
+  rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Lade globale Alerts...</td></tr>";
+  summaryEl.textContent = "";
+
+  try {
+    const [summaryResp, listResp] = await Promise.all([
+      fetch("/api/v1/alerts-summary"),
+      fetch("/api/v1/alerts?status=all&limit=25&offset=0"),
+    ]);
+
+    if (!summaryResp.ok) {
+      throw new Error("Summary HTTP " + summaryResp.status);
+    }
+    if (!listResp.ok) {
+      throw new Error("List HTTP " + listResp.status);
+    }
+
+    const summaryData = await summaryResp.json();
+    const listData = await listResp.json();
+    const alerts = listData.alerts || [];
+
+    summaryEl.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Verlauf: ${Number(listData.total || 0).toLocaleString("de-DE")}`;
+
+    if (alerts.length === 0) {
+      rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Keine Alerts vorhanden.</td></tr>";
+      return;
+    }
+
+    rowsEl.innerHTML = alerts
+      .map((item) => {
+        const statusClass = item.status === "open" ? "status-open" : "status-resolved";
+        const severityClass = item.severity === "critical" ? "severity-critical" : "severity-warning";
+        return `
+          <tr>
+            <td>${escapeHtml(asText(item.hostname))}</td>
+            <td><span class="badge ${statusClass}">${escapeHtml(asText(item.status))}</span></td>
+            <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
+            <td>${renderPathCell(item.mountpoint, 42)}</td>
+            <td>${formatPercent(item.used_percent)}</td>
+            <td>${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}</td>
+          </tr>
+        `;
+      })
+      .join("");
+  } catch (error) {
+    rowsEl.innerHTML = `<tr><td colspan="6" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
 function wireEvents() {
   document.getElementById("overviewTabButton").addEventListener("click", () => {
     state.viewMode = "overview";
@@ -1057,6 +1109,7 @@ function wireEvents() {
   });
 
   document.getElementById("refreshButton").addEventListener("click", async () => {
+    await loadGlobalAlertsOverview();
     await loadHosts();
     await loadReportsForHost();
     await loadAnalysisForHost();
@@ -1136,6 +1189,7 @@ async function init() {
   updateViewMode();
   updateOverviewSection();
   toggleAlarmSettingsPanel(false);
+  await loadGlobalAlertsOverview();
   await loadHosts();
   await loadReportsForHost();
   await loadAnalysisForHost();
