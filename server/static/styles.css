@@ -359,7 +359,19 @@ button:hover:not(.host-item) {
   padding: 10px;
   display: grid;
   gap: 4px;
+  position: relative;
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.host-os-icon {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  opacity: 0.75;
+  pointer-events: none;
 }
 
 .host-item:hover {

@@ -881,6 +881,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "queue_depth": payload_int(latest_payload, "queue_depth", 0),
                         "open_alert_count": int(row[6] or 0),
                         "open_critical_alert_count": int(row[7] or 0),
+                        "os": str(latest_payload.get("os", "")),
                     }
                 )
 
@@ -1313,6 +1314,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/styles.css":
             self._send_file(STATIC_DIR / "styles.css", "text/css; charset=utf-8")
             return
+
+            if parsed.path in ("/icons/linux.png", "/icons/windows.png"):
+                icon_name = parsed.path.split("/")[-1]
+                self._send_file(STATIC_DIR / "icons" / icon_name, "image/png")
+                return
 
         self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
