@@ -128,6 +128,36 @@ button {
   flex-wrap: wrap;
 }
 
+.analysis-panel {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: #f9fbff;
+  margin-bottom: 14px;
+}
+
+.analysis-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.analysis-header h4 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.delta-up {
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.delta-down {
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
 .pager button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -219,6 +249,11 @@ th {
   }
 
   .report-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .analysis-header {
     align-items: flex-start;
     flex-direction: column;
   }

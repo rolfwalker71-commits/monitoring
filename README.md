@@ -30,6 +30,13 @@ Nutzbare API-Endpunkte fuer die Auswertung:
 - `GET /api/v1/latest?limit=50` letzte Meldungen global
 - `GET /api/v1/hosts?limit=20&offset=0` Hosts gruppiert inkl. Anzahl und Last Seen
 - `GET /api/v1/host-reports?hostname=<host>&limit=10&offset=0` Historie pro Host (zum Blaettern)
+- `GET /api/v1/analysis?hostname=<host>&hours=24` Aggregation pro Host (Filesystem Min/Max/Avg/Delta)
+
+Dashboard-Funktionen:
+
+- Host-Gruppierung links
+- Blaettern durch Hosts und Host-Meldungen
+- Analysebereich mit 24h-Trends je Mountpoint fuer den ausgewaehlten Host
 
 Optional API-Key Schutz aktivieren:
 

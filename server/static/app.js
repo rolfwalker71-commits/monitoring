@@ -15,7 +15,25 @@ const state = {
   reportLimit: 10,
   reportOffset: 0,
   totalReports: 0,
+  analysisHours: 24,
 };
+
+function formatPercent(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    return "-";
+  }
+  return `${n.toFixed(1)}%`;
+}
+
+function formatSignedPercent(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    return "-";
+  }
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${n.toFixed(1)}%`;
+}
 
 function asText(value, fallback = "-") {
   if (value === null || value === undefined) {
@@ -187,6 +205,7 @@ function renderHosts(hosts) {
       state.reportOffset = 0;
       loadHosts();
       loadReportsForHost();
+      loadAnalysisForHost();
     });
   }
 }
@@ -270,10 +289,66 @@ async function loadReportsForHost() {
   }
 }
 
+async function loadAnalysisForHost() {
+  const analysisSummary = document.getElementById("analysisSummary");
+  const analysisRows = document.getElementById("analysisRows");
+
+  if (!state.selectedHost) {
+    analysisSummary.textContent = "";
+    analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
+    return;
+  }
+
+  analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Lade Analyse...</td></tr>";
+  analysisSummary.textContent = "";
+
+  try {
+    const hostNameParam = encodeURIComponent(state.selectedHost);
+    const url = `/api/v1/analysis?hostname=${hostNameParam}&hours=${state.analysisHours}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+
+    const data = await response.json();
+    const trendRows = data.filesystem_trends || [];
+    const latestMax = formatPercent(data.latest_max_used_percent);
+    const reportCount = Number(data.report_count || 0).toLocaleString("de-DE");
+
+    analysisSummary.textContent = `${reportCount} Reports, hoechste aktuelle FS-Auslastung: ${latestMax}`;
+
+    if (trendRows.length === 0) {
+      analysisRows.innerHTML =
+        "<tr><td colspan=\"7\" class=\"muted\">Keine Analyse-Daten im gewaehlten Zeitfenster.</td></tr>";
+      return;
+    }
+
+    analysisRows.innerHTML = trendRows
+      .map((row) => {
+        const deltaClass = Number(row.delta_used_percent) > 0 ? "delta-up" : "delta-down";
+        return `
+          <tr>
+            <td>${escapeHtml(asText(row.mountpoint))}</td>
+            <td>${Number(row.sample_count || 0).toLocaleString("de-DE")}</td>
+            <td>${formatPercent(row.current_used_percent)}</td>
+            <td>${formatPercent(row.min_used_percent)}</td>
+            <td>${formatPercent(row.max_used_percent)}</td>
+            <td>${formatPercent(row.avg_used_percent)}</td>
+            <td class="${deltaClass}">${formatSignedPercent(row.delta_used_percent)}</td>
+          </tr>
+        `;
+      })
+      .join("");
+  } catch (error) {
+    analysisRows.innerHTML = `<tr><td colspan=\"7\" class=\"muted\">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
 function wireEvents() {
   document.getElementById("refreshButton").addEventListener("click", async () => {
     await loadHosts();
     await loadReportsForHost();
+    await loadAnalysisForHost();
   });
 
   document.getElementById("hostsPrevButton").addEventListener("click", async () => {
@@ -283,6 +358,7 @@ function wireEvents() {
     state.hostOffset = Math.max(0, state.hostOffset - state.hostLimit);
     await loadHosts();
     await loadReportsForHost();
+    await loadAnalysisForHost();
   });
 
   document.getElementById("hostsNextButton").addEventListener("click", async () => {
@@ -292,6 +368,7 @@ function wireEvents() {
     state.hostOffset += state.hostLimit;
     await loadHosts();
     await loadReportsForHost();
+    await loadAnalysisForHost();
   });
 
   document.getElementById("reportsPrevButton").addEventListener("click", async () => {
@@ -315,6 +392,7 @@ async function init() {
   wireEvents();
   await loadHosts();
   await loadReportsForHost();
+  await loadAnalysisForHost();
 }
 
 init();

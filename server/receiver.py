@@ -3,7 +3,7 @@ import argparse
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -45,6 +45,21 @@ def init_db() -> None:
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def utc_hours_ago_iso(hours: int) -> str:
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    return cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_payload_json(payload_json: str) -> dict:
+    try:
+        value = json.loads(payload_json)
+        if isinstance(value, dict):
+            return value
+    except json.JSONDecodeError:
+        return {}
+    return {}
 
 
 class MonitoringHandler(BaseHTTPRequestHandler):
@@ -229,6 +244,113 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "total_reports": total_reports,
                     "hostname": hostname,
                     "reports": reports,
+                },
+            )
+            return
+
+        if parsed.path == "/api/v1/analysis":
+            query = parse_qs(parsed.query)
+            hostname = query.get("hostname", [""])[0].strip()
+            if not hostname:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
+                return
+
+            hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
+            cutoff_iso = utc_hours_ago_iso(hours)
+
+            with sqlite3.connect(DB_PATH) as conn:
+                rows = conn.execute(
+                    """
+                    SELECT id, received_at_utc, payload_json
+                    FROM reports
+                    WHERE hostname = ? AND received_at_utc >= ?
+                    ORDER BY id ASC
+                    """,
+                    (hostname, cutoff_iso),
+                ).fetchall()
+
+            fs_by_mountpoint = {}
+            report_count = 0
+            latest_report_time = ""
+            latest_max_used_percent = None
+            latest_hotspots = []
+
+            for row in rows:
+                report_count += 1
+                latest_report_time = row[1]
+                payload = parse_payload_json(row[2])
+                filesystems = payload.get("filesystems", [])
+                if not isinstance(filesystems, list):
+                    continue
+
+                latest_fs_entries = []
+                for fs in filesystems:
+                    if not isinstance(fs, dict):
+                        continue
+
+                    mountpoint = str(fs.get("mountpoint", "")).strip()
+                    used_percent_raw = fs.get("used_percent")
+                    try:
+                        used_percent = float(used_percent_raw)
+                    except (TypeError, ValueError):
+                        continue
+
+                    latest_fs_entries.append({
+                        "mountpoint": mountpoint,
+                        "used_percent": used_percent,
+                    })
+
+                    if mountpoint not in fs_by_mountpoint:
+                        fs_by_mountpoint[mountpoint] = []
+
+                    fs_by_mountpoint[mountpoint].append(
+                        {
+                            "time_utc": row[1],
+                            "used_percent": used_percent,
+                        }
+                    )
+
+                if latest_fs_entries:
+                    latest_fs_entries.sort(key=lambda item: item["used_percent"], reverse=True)
+                    latest_max_used_percent = latest_fs_entries[0]["used_percent"]
+                    latest_hotspots = latest_fs_entries[:5]
+
+            trends = []
+            for mountpoint, points in fs_by_mountpoint.items():
+                if not points:
+                    continue
+
+                values = [point["used_percent"] for point in points]
+                first_value = values[0]
+                last_value = values[-1]
+                average_value = sum(values) / len(values)
+
+                trends.append(
+                    {
+                        "mountpoint": mountpoint,
+                        "sample_count": len(values),
+                        "current_used_percent": last_value,
+                        "min_used_percent": min(values),
+                        "max_used_percent": max(values),
+                        "avg_used_percent": average_value,
+                        "delta_used_percent": last_value - first_value,
+                        "series": points,
+                    }
+                )
+
+            trends.sort(key=lambda item: item["current_used_percent"], reverse=True)
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "hostname": hostname,
+                    "window_hours": hours,
+                    "cutoff_utc": cutoff_iso,
+                    "report_count": report_count,
+                    "latest_report_time_utc": latest_report_time,
+                    "latest_max_used_percent": latest_max_used_percent,
+                    "latest_hotspots": latest_hotspots,
+                    "filesystem_trends": trends,
                 },
             )
             return
