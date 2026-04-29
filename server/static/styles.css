@@ -213,8 +213,11 @@ button {
 }
 
 .trend-stand {
-  font-size: 10px;
-  color: #7a8696;
+  font-size: 8px;
+  color: #90a0b2;
+  font-weight: 400;
+  opacity: 0.85;
+  white-space: nowrap;
 }
 
 .alerts-panel {
