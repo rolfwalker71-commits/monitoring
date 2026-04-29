@@ -939,8 +939,8 @@ function renderHosts(hosts) {
 
         const osRaw = asText(host.os || "").toLowerCase();
         const osIcon = osRaw.includes("windows")
-          ? `<img src="/icons/windows.png" class="host-os-icon" alt="Windows" title="${escapeHtml(asText(host.os))}">`
-          : `<img src="/icons/linux.png" class="host-os-icon" alt="Linux" title="${escapeHtml(asText(host.os))}">`;
+          ? `<img src="icons/windows.png" class="host-os-icon" alt="Windows" title="${escapeHtml(asText(host.os))}">`
+          : `<img src="icons/linux.png" class="host-os-icon" alt="Linux" title="${escapeHtml(asText(host.os))}">`;
 
       return `
         <button class="${selectedClass}" type="button" data-host="${escapeHtml(hostname)}">
