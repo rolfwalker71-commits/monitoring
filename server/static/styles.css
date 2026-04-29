@@ -16,21 +16,24 @@ body {
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   background: radial-gradient(circle at top left, #dff4f2, var(--bg) 45%);
   color: var(--text);
+  font-size: 14px;
 }
 
 .container {
-  max-width: 1100px;
+  max-width: 1420px;
   margin: 32px auto;
   padding: 0 16px;
 }
 
 h1 {
   margin-bottom: 4px;
+  font-size: 34px;
 }
 
 .subtitle {
   margin-top: 0;
   color: var(--muted);
+  font-size: 17px;
 }
 
 .panel {
@@ -62,16 +65,17 @@ h1 {
 
 .section-head h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 button {
   border: 0;
   background: var(--accent);
   color: #fff;
-  padding: 8px 12px;
+  padding: 7px 11px;
   border-radius: 8px;
   cursor: pointer;
+  font-size: 12px;
 }
 
 .table-wrap {
@@ -113,8 +117,8 @@ button {
 
 .host-item {
   text-align: left;
-  border: 1px solid var(--line);
-  background: #fff;
+  border: 1px solid #bddfe3;
+  background: linear-gradient(180deg, #f4fbfc 0%, #eef8f9 100%);
   color: var(--text);
   border-radius: 10px;
   padding: 10px;
@@ -123,17 +127,18 @@ button {
 }
 
 .host-item strong {
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .host-item span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .host-item.selected {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
+  border-color: #4ca8b0;
+  background: linear-gradient(180deg, #e3f3f6 0%, #dceff3 100%);
+  box-shadow: inset 0 0 0 1px #4ca8b0;
 }
 
 .pager {
@@ -196,7 +201,7 @@ button {
 
 .analysis-header h4 {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .delta-up {
@@ -231,12 +236,12 @@ button {
 
 .report-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
 }
 
 .report-time {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .meta-grid {
@@ -255,12 +260,12 @@ button {
 .meta-grid strong {
   min-width: 90px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .report-card h4 {
   margin: 8px 0;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .fs-table {
@@ -282,7 +287,7 @@ td {
   border-bottom: 1px solid var(--line);
   text-align: left;
   padding: 10px;
-  font-size: 14px;
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
