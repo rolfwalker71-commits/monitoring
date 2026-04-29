@@ -31,12 +31,20 @@ Nutzbare API-Endpunkte fuer die Auswertung:
 - `GET /api/v1/hosts?limit=20&offset=0` Hosts gruppiert inkl. Anzahl und Last Seen
 - `GET /api/v1/host-reports?hostname=<host>&limit=10&offset=0` Historie pro Host (zum Blaettern)
 - `GET /api/v1/analysis?hostname=<host>&hours=24` Aggregation pro Host (Filesystem Min/Max/Avg/Delta)
+- `GET /api/v1/alerts-summary?hostname=<host>` offene Alerts (kritisch/warn)
+- `GET /api/v1/alerts?hostname=<host>&status=all&limit=15&offset=0` Alert-Historie
 
 Dashboard-Funktionen:
 
 - Host-Gruppierung links
 - Blaettern durch Hosts und Host-Meldungen
 - Analysebereich mit 24h-Trends je Mountpoint fuer den ausgewaehlten Host
+- Alert-Bereich mit offenen Warn/Kritisch-Events und letzter Historie je Host
+
+Alert-Schwellwerte (optional per Env am Receiver):
+
+- `MONITORING_WARNING_THRESHOLD` (Default `80`)
+- `MONITORING_CRITICAL_THRESHOLD` (Default `90`)
 
 Optional API-Key Schutz aktivieren:
 

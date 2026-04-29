@@ -136,6 +136,42 @@ button {
   margin-bottom: 14px;
 }
 
+.alerts-panel {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: #fffdf8;
+  margin-bottom: 14px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-open {
+  color: #9a3412;
+  background: #ffedd5;
+}
+
+.status-resolved {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.severity-warning {
+  color: #854d0e;
+  background: #fef3c7;
+}
+
+.severity-critical {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
 .analysis-header {
   display: flex;
   justify-content: space-between;

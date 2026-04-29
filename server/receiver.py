@@ -14,6 +14,8 @@ STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "monitoring.db"
 API_KEY = os.getenv("MONITORING_API_KEY", "")
+WARNING_THRESHOLD_PERCENT = float(os.getenv("MONITORING_WARNING_THRESHOLD", "80"))
+CRITICAL_THRESHOLD_PERCENT = float(os.getenv("MONITORING_CRITICAL_THRESHOLD", "90"))
 
 
 def parse_int(query: dict, key: str, default: int, min_value: int, max_value: int) -> int:
@@ -40,6 +42,23 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hostname TEXT NOT NULL,
+                mountpoint TEXT NOT NULL,
+                severity TEXT NOT NULL,
+                used_percent REAL NOT NULL,
+                status TEXT NOT NULL,
+                created_at_utc TEXT NOT NULL,
+                last_seen_at_utc TEXT NOT NULL,
+                resolved_at_utc TEXT,
+                report_id INTEGER,
+                FOREIGN KEY(report_id) REFERENCES reports(id)
+            )
+            """
+        )
         conn.commit()
 
 
@@ -60,6 +79,92 @@ def parse_payload_json(payload_json: str) -> dict:
     except json.JSONDecodeError:
         return {}
     return {}
+
+
+def evaluate_severity(used_percent: float) -> str:
+    if used_percent >= CRITICAL_THRESHOLD_PERCENT:
+        return "critical"
+    if used_percent >= WARNING_THRESHOLD_PERCENT:
+        return "warning"
+    return "ok"
+
+
+def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id: int, filesystems: list) -> None:
+    now_utc = utc_now_iso()
+    mountpoints_seen = set()
+
+    for fs in filesystems:
+        if not isinstance(fs, dict):
+            continue
+
+        mountpoint = str(fs.get("mountpoint", "")).strip()
+        if not mountpoint:
+            continue
+
+        mountpoints_seen.add(mountpoint)
+        try:
+            used_percent = float(fs.get("used_percent"))
+        except (TypeError, ValueError):
+            continue
+
+        severity = evaluate_severity(used_percent)
+        open_alert = conn.execute(
+            """
+            SELECT id, severity
+            FROM alerts
+            WHERE hostname = ? AND mountpoint = ? AND status = 'open'
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (hostname, mountpoint),
+        ).fetchone()
+
+        if severity == "ok":
+            if open_alert:
+                conn.execute(
+                    """
+                    UPDATE alerts
+                    SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
+                    WHERE id = ?
+                    """,
+                    (now_utc, now_utc, report_id, open_alert[0]),
+                )
+            continue
+
+        if not open_alert:
+            conn.execute(
+                """
+                INSERT INTO alerts (
+                    hostname, mountpoint, severity, used_percent, status,
+                    created_at_utc, last_seen_at_utc, resolved_at_utc, report_id
+                )
+                VALUES (?, ?, ?, ?, 'open', ?, ?, NULL, ?)
+                """,
+                (hostname, mountpoint, severity, used_percent, now_utc, now_utc, report_id),
+            )
+            continue
+
+        conn.execute(
+            """
+            UPDATE alerts
+            SET severity = ?, used_percent = ?, last_seen_at_utc = ?, report_id = ?
+            WHERE id = ?
+            """,
+            (severity, used_percent, now_utc, report_id, open_alert[0]),
+        )
+
+    if mountpoints_seen:
+        placeholders = ",".join("?" for _ in mountpoints_seen)
+        conn.execute(
+            f"""
+            UPDATE alerts
+            SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
+            WHERE hostname = ?
+              AND status = 'open'
+              AND mountpoint NOT IN ({placeholders})
+            """,
+            (now_utc, now_utc, report_id, hostname, *sorted(mountpoints_seen)),
+        )
 
 
 class MonitoringHandler(BaseHTTPRequestHandler):
@@ -355,6 +460,119 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if parsed.path == "/api/v1/alerts":
+            query = parse_qs(parsed.query)
+            status_filter = query.get("status", ["all"])[0].strip().lower()
+            if status_filter not in {"all", "open", "resolved"}:
+                status_filter = "all"
+
+            hostname_filter = query.get("hostname", [""])[0].strip()
+            limit = parse_int(query, "limit", default=50, min_value=1, max_value=500)
+            offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
+
+            where_parts = []
+            args = []
+            if status_filter != "all":
+                where_parts.append("status = ?")
+                args.append(status_filter)
+            if hostname_filter:
+                where_parts.append("hostname = ?")
+                args.append(hostname_filter)
+
+            where_clause = ""
+            if where_parts:
+                where_clause = "WHERE " + " AND ".join(where_parts)
+
+            with sqlite3.connect(DB_PATH) as conn:
+                total = conn.execute(
+                    f"SELECT COUNT(*) FROM alerts {where_clause}",
+                    tuple(args),
+                ).fetchone()[0]
+
+                rows = conn.execute(
+                    f"""
+                    SELECT id, hostname, mountpoint, severity, used_percent, status,
+                           created_at_utc, last_seen_at_utc, resolved_at_utc, report_id
+                    FROM alerts
+                    {where_clause}
+                    ORDER BY id DESC
+                    LIMIT ? OFFSET ?
+                    """,
+                    tuple(args + [limit, offset]),
+                ).fetchall()
+
+            alerts = []
+            for row in rows:
+                alerts.append(
+                    {
+                        "id": row[0],
+                        "hostname": row[1],
+                        "mountpoint": row[2],
+                        "severity": row[3],
+                        "used_percent": row[4],
+                        "status": row[5],
+                        "created_at_utc": row[6],
+                        "last_seen_at_utc": row[7],
+                        "resolved_at_utc": row[8],
+                        "report_id": row[9],
+                    }
+                )
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "count": len(alerts),
+                    "total": total,
+                    "limit": limit,
+                    "offset": offset,
+                    "status": status_filter,
+                    "hostname": hostname_filter,
+                    "alerts": alerts,
+                },
+            )
+            return
+
+        if parsed.path == "/api/v1/alerts-summary":
+            query = parse_qs(parsed.query)
+            hostname_filter = query.get("hostname", [""])[0].strip()
+
+            where_clause = "WHERE status = 'open'"
+            args = []
+            if hostname_filter:
+                where_clause += " AND hostname = ?"
+                args.append(hostname_filter)
+
+            with sqlite3.connect(DB_PATH) as conn:
+                total_open = conn.execute(
+                    f"SELECT COUNT(*) FROM alerts {where_clause}",
+                    tuple(args),
+                ).fetchone()[0]
+                warning_open = conn.execute(
+                    f"SELECT COUNT(*) FROM alerts {where_clause} AND severity = 'warning'",
+                    tuple(args),
+                ).fetchone()[0]
+                critical_open = conn.execute(
+                    f"SELECT COUNT(*) FROM alerts {where_clause} AND severity = 'critical'",
+                    tuple(args),
+                ).fetchone()[0]
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "hostname": hostname_filter,
+                    "thresholds": {
+                        "warning_percent": WARNING_THRESHOLD_PERCENT,
+                        "critical_percent": CRITICAL_THRESHOLD_PERCENT,
+                    },
+                    "open": {
+                        "total": total_open,
+                        "warning": warning_open,
+                        "critical": critical_open,
+                    },
+                },
+            )
+            return
+
         if parsed.path == "/":
             self._send_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
             return
@@ -401,7 +619,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         with sqlite3.connect(DB_PATH) as conn:
-            conn.execute(
+            cursor = conn.execute(
                 """
                 INSERT INTO reports (received_at_utc, agent_id, hostname, primary_ip, payload_json)
                 VALUES (?, ?, ?, ?, ?)
@@ -414,6 +632,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     json.dumps(payload, separators=(",", ":")),
                 ),
             )
+            report_id = int(cursor.lastrowid)
+            update_alerts_for_report(conn, hostname, report_id, filesystems)
             conn.commit()
 
         self._send_json(HTTPStatus.CREATED, {"status": "stored"})

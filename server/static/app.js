@@ -290,6 +290,64 @@ async function loadReportsForHost() {
 }
 
 async function loadAnalysisForHost() {
+
+  async function loadAlertsForHost() {
+    const alertsSummary = document.getElementById("alertsSummary");
+    const alertsRows = document.getElementById("alertsRows");
+
+    if (!state.selectedHost) {
+      alertsSummary.textContent = "";
+      alertsRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
+      return;
+    }
+
+    alertsRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Lade Alerts...</td></tr>";
+    alertsSummary.textContent = "";
+
+    try {
+      const hostNameParam = encodeURIComponent(state.selectedHost);
+      const [summaryResp, listResp] = await Promise.all([
+        fetch(`/api/v1/alerts-summary?hostname=${hostNameParam}`),
+        fetch(`/api/v1/alerts?hostname=${hostNameParam}&status=all&limit=15&offset=0`),
+      ]);
+
+      if (!summaryResp.ok) {
+        throw new Error("Summary HTTP " + summaryResp.status);
+      }
+      if (!listResp.ok) {
+        throw new Error("List HTTP " + listResp.status);
+      }
+
+      const summaryData = await summaryResp.json();
+      const listData = await listResp.json();
+      const alerts = listData.alerts || [];
+
+      alertsSummary.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning})`;
+
+      if (alerts.length === 0) {
+        alertsRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Keine Alerts vorhanden.</td></tr>";
+        return;
+      }
+
+      alertsRows.innerHTML = alerts
+        .map((item) => {
+          const statusClass = item.status === "open" ? "status-open" : "status-resolved";
+          const severityClass = item.severity === "critical" ? "severity-critical" : "severity-warning";
+          return `
+            <tr>
+              <td><span class="badge ${statusClass}">${escapeHtml(asText(item.status))}</span></td>
+              <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
+              <td>${escapeHtml(asText(item.mountpoint))}</td>
+              <td>${formatPercent(item.used_percent)}</td>
+              <td>${escapeHtml(formatUtc(item.last_seen_at_utc))}</td>
+            </tr>
+          `;
+        })
+        .join("");
+    } catch (error) {
+      alertsRows.innerHTML = `<tr><td colspan=\"5\" class=\"muted\">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+    }
+  }
   const analysisSummary = document.getElementById("analysisSummary");
   const analysisRows = document.getElementById("analysisRows");
 
@@ -337,6 +395,7 @@ async function loadAnalysisForHost() {
             <td class="${deltaClass}">${formatSignedPercent(row.delta_used_percent)}</td>
           </tr>
         `;
+        loadAlertsForHost();
       })
       .join("");
   } catch (error) {
@@ -349,6 +408,7 @@ function wireEvents() {
     await loadHosts();
     await loadReportsForHost();
     await loadAnalysisForHost();
+    await loadAlertsForHost();
   });
 
   document.getElementById("hostsPrevButton").addEventListener("click", async () => {
@@ -359,6 +419,7 @@ function wireEvents() {
     await loadHosts();
     await loadReportsForHost();
     await loadAnalysisForHost();
+    await loadAlertsForHost();
   });
 
   document.getElementById("hostsNextButton").addEventListener("click", async () => {
@@ -369,6 +430,7 @@ function wireEvents() {
     await loadHosts();
     await loadReportsForHost();
     await loadAnalysisForHost();
+    await loadAlertsForHost();
   });
 
   document.getElementById("reportsPrevButton").addEventListener("click", async () => {
@@ -393,6 +455,7 @@ async function init() {
   await loadHosts();
   await loadReportsForHost();
   await loadAnalysisForHost();
+  await loadAlertsForHost();
 }
 
 init();
