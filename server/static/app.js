@@ -555,7 +555,6 @@ function renderReportCard(report) {
         <p><strong>🐧 OS</strong><span>${escapeHtml(asText(payload.os))}</span></p>
         <p><strong>⚙️ Kernel</strong><span>${escapeHtml(asText(payload.kernel))}</span></p>
         <p><strong>⏱️ Uptime</strong><span>${escapeHtml(formatUptime(payload.uptime_seconds))}</span></p>
-        <p><strong>📬 Delivery</strong><span>${chipText}${payload.queued_at_utc ? ` | queued ${escapeHtml(formatUtcPlus2(payload.queued_at_utc))}` : ""}</span></p>
         <p><strong>🗃️ Queue</strong><span>${queueDepth} Dateien</span></p>
         <p><strong>🧠 CPU</strong><span>${formatPercent(cpu.usage_percent)} | load ${formatNumber(cpu.load_avg_1, 2)} / ${formatNumber(cpu.load_avg_5, 2)} / ${formatNumber(cpu.load_avg_15, 2)}</span></p>
         <p><strong>🧮 RAM</strong><span>${formatPercent(memory.used_percent)} | ${formatKilobytes(memory.used_kb)} / ${formatKilobytes(memory.total_kb)}</span></p>
