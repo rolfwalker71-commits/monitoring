@@ -13,6 +13,7 @@ const state = {
   totalHosts: 0,
   selectedHost: "",
   selectedDisplayName: "",
+  hostSearchQuery: "",
   viewMode: "overview",
   overviewSection: "main",
   reportLimit: 1,
@@ -868,6 +869,27 @@ async function goToNextReport() {
   await loadAlertsForHost();
 }
 
+function filterAndSortHosts(hosts) {
+  const query = state.hostSearchQuery.toLowerCase().trim();
+  
+  let filtered = hosts;
+  if (query.length > 0) {
+    filtered = hosts.filter((host) => {
+      const displayName = (host.display_name || host.hostname || "").toLowerCase();
+      const hostname = (host.hostname || "").toLowerCase();
+      return displayName.includes(query) || hostname.includes(query);
+    });
+  }
+  
+  filtered.sort((a, b) => {
+    const nameA = (a.display_name || a.hostname || "").toLowerCase();
+    const nameB = (b.display_name || b.hostname || "").toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+  
+  return filtered;
+}
+
 function renderHosts(hosts) {
   const hostList = document.getElementById("hostList");
   const hostCount = document.getElementById("hostCount");
@@ -879,7 +901,14 @@ function renderHosts(hosts) {
     return;
   }
 
-  hostList.innerHTML = hosts
+  const filteredHosts = filterAndSortHosts(hosts);
+
+  if (filteredHosts.length === 0) {
+    hostList.innerHTML = "<p class=\"muted\">Keine Hosts passen zum Suchfilter.</p>";
+    return;
+  }
+
+  hostList.innerHTML = filteredHosts
     .map((host) => {
       const hostname = asText(host.hostname);
       const displayName = asText(host.display_name || host.hostname);
@@ -1434,6 +1463,12 @@ function wireEvents() {
   if (reportsNextButtonTop) {
     reportsNextButtonTop.addEventListener("click", goToNextReport);
   }
+
+  document.getElementById("hostSearchInput").addEventListener("input", async (event) => {
+    state.hostSearchQuery = event.target.value;
+    state.hostOffset = 0;
+    await loadHosts();
+  });
 }
 
 async function init() {

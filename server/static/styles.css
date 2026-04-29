@@ -318,6 +318,32 @@ button:hover:not(.host-item) {
   margin-top: 8px;
 }
 
+.host-search-box {
+  margin-top: 10px;
+  margin-bottom: 8px;
+}
+
+.search-input {
+  width: 100%;
+  border: 1px solid #cdd9eb;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  background: #ffffff;
+  color: var(--text);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #1e40af;
+  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
+}
+
+.search-input::placeholder {
+  color: var(--muted);
+}
+
 .host-list {
   display: grid;
   gap: 8px;
