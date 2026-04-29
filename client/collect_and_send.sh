@@ -20,6 +20,15 @@ fi
 
 mkdir -p "$AGENT_QUEUE_DIR"
 
+count_queue_files() {
+  local count
+  shopt -s nullglob
+  local queued_files=("$AGENT_QUEUE_DIR"/*.json)
+  shopt -u nullglob
+  count="${#queued_files[@]}"
+  printf '%s' "$count"
+}
+
 json_escape() {
   printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
 }
@@ -189,6 +198,9 @@ EOF
   FILESYSTEMS_JSON="$(append_json_entry "$FILESYSTEMS_JSON" "$entry")"
 done < <(df -PT -x tmpfs -x devtmpfs | awk 'NR>1 {print $2, $1, $3, $4, $5, $6, $7}')
 
+flush_queue || true
+QUEUE_DEPTH_NOW="$(count_queue_files)"
+
 PAYLOAD=$(cat <<EOF
 {
   "agent_id": "$(json_escape "$AGENT_ID_VALUE")",
@@ -204,6 +216,7 @@ PAYLOAD=$(cat <<EOF
   "delivery_mode": "live",
   "is_delayed": false,
   "queued_at_utc": "",
+  "queue_depth": $QUEUE_DEPTH_NOW,
   "cpu": {
     "usage_percent": $CPU_USAGE_PERCENT,
     "load_avg_1": $LOAD_AVG_1,
@@ -232,14 +245,15 @@ PAYLOAD=$(cat <<EOF
 EOF
 )
 
-flush_queue || true
-
 if ! post_payload "$PAYLOAD" >/dev/null; then
   queued_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   delayed_payload="${PAYLOAD/\"delivery_mode\": \"live\"/\"delivery_mode\": \"delayed\"}"
   delayed_payload="${delayed_payload/\"is_delayed\": false/\"is_delayed\": true}"
   delayed_payload="${delayed_payload/\"queued_at_utc\": \"\"/\"queued_at_utc\": \"$queued_at_utc\"}"
   queue_file="$AGENT_QUEUE_DIR/report-${TIMESTAMP_UTC//[:T-]/}-${RANDOM}.json"
+  printf '%s\n' "$delayed_payload" > "$queue_file"
+  queued_depth_now="$(count_queue_files)"
+  delayed_payload="${delayed_payload/\"queue_depth\": $QUEUE_DEPTH_NOW/\"queue_depth\": $queued_depth_now}"
   printf '%s\n' "$delayed_payload" > "$queue_file"
   echo "Payload queued for retry: $queue_file" >&2
   exit 1

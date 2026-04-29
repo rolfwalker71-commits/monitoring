@@ -101,6 +101,13 @@ def get_nested_number(payload: dict, section: str, key: str) -> float | None:
         return None
 
 
+def payload_int(payload: dict, key: str, default: int = 0) -> int:
+    try:
+        return int(payload.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
 def summarize_numeric_series(values: list[float]) -> dict | None:
     if not values:
         return None
@@ -368,6 +375,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "agent_id": row[4] or "",
                         "agent_version": str(latest_payload.get("agent_version", "")),
                         "delivery_mode": str(latest_payload.get("delivery_mode", "live") or "live"),
+                        "is_delayed": bool(latest_payload.get("is_delayed", False)),
+                        "queue_depth": payload_int(latest_payload, "queue_depth", 0),
                     }
                 )
 
@@ -491,11 +500,26 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             load_avg_1_values: list[float] = []
             memory_used_values: list[float] = []
             swap_used_values: list[float] = []
+            delayed_report_count = 0
+            live_report_count = 0
+            latest_delivery_mode = "live"
+            latest_is_delayed = False
+            latest_queue_depth = 0
 
             for row in rows:
                 report_count += 1
                 latest_report_time = row[1]
                 payload = parse_payload_json(row[2])
+                delivery_mode = str(payload.get("delivery_mode", "live") or "live").lower()
+                is_delayed = delivery_mode == "delayed" or bool(payload.get("is_delayed", False))
+                if is_delayed:
+                    delayed_report_count += 1
+                else:
+                    live_report_count += 1
+                latest_delivery_mode = "delayed" if is_delayed else "live"
+                latest_is_delayed = is_delayed
+                latest_queue_depth = payload_int(payload, "queue_depth", 0)
+
                 cpu_usage = get_nested_number(payload, "cpu", "usage_percent")
                 if cpu_usage is not None:
                     cpu_usage_values.append(cpu_usage)
@@ -588,6 +612,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "load_avg_1": summarize_numeric_series(load_avg_1_values),
                         "memory_used_percent": summarize_numeric_series(memory_used_values),
                         "swap_used_percent": summarize_numeric_series(swap_used_values),
+                    },
+                    "delivery": {
+                        "latest_mode": latest_delivery_mode,
+                        "latest_is_delayed": latest_is_delayed,
+                        "latest_queue_depth": latest_queue_depth,
+                        "delayed_report_count": delayed_report_count,
+                        "live_report_count": live_report_count,
                     },
                     "filesystem_trends": trends,
                 },

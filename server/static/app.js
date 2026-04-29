@@ -159,6 +159,19 @@ function renderPathCell(value, maxLen = 54) {
   return `<span class="path-cell" title="${escapeHtml(full)}">${escapeHtml(compact)}</span>`;
 }
 
+function deliveryLabel(modeValue, isDelayedValue) {
+  const mode = asText(modeValue, "live").toLowerCase();
+  return mode === "delayed" || isDelayedValue === true ? "DELAYED" : "LIVE";
+}
+
+function queueDepthLabel(value) {
+  const depth = Number(value);
+  if (!Number.isFinite(depth) || depth < 0) {
+    return "0";
+  }
+  return String(Math.floor(depth));
+}
+
 function asText(value, fallback = "-") {
   if (value === null || value === undefined) {
     return fallback;
@@ -265,6 +278,7 @@ function renderReportCard(report) {
   const isDelayed = deliveryMode === "delayed" || payload.is_delayed === true;
   const chipClass = isDelayed ? "delivery-chip delayed" : "delivery-chip live";
   const chipText = isDelayed ? "DELAYED" : "LIVE";
+  const queueDepth = queueDepthLabel(payload.queue_depth);
 
   return `
     <article class="report-card">
@@ -284,6 +298,8 @@ function renderReportCard(report) {
         <p><strong>🐧 OS</strong><span>${escapeHtml(asText(payload.os))}</span></p>
         <p><strong>⚙️ Kernel</strong><span>${escapeHtml(asText(payload.kernel))}</span></p>
         <p><strong>⏱️ Uptime</strong><span>${escapeHtml(formatUptime(payload.uptime_seconds))}</span></p>
+        <p><strong>📬 Delivery</strong><span>${chipText}${payload.queued_at_utc ? ` | queued ${escapeHtml(formatUtcPlus2(payload.queued_at_utc))}` : ""}</span></p>
+        <p><strong>🗃️ Queue</strong><span>${queueDepth} Dateien</span></p>
         <p><strong>🧠 CPU</strong><span>${formatPercent(cpu.usage_percent)} | load ${formatNumber(cpu.load_avg_1, 2)} / ${formatNumber(cpu.load_avg_5, 2)} / ${formatNumber(cpu.load_avg_15, 2)}</span></p>
         <p><strong>🧮 RAM</strong><span>${formatPercent(memory.used_percent)} | ${formatKilobytes(memory.used_kb)} / ${formatKilobytes(memory.total_kb)}</span></p>
         <p><strong>💤 Swap</strong><span>${formatPercent(swap.used_percent)} | ${formatKilobytes(swap.used_kb)} / ${formatKilobytes(swap.total_kb)}</span></p>
@@ -329,6 +345,8 @@ function renderHosts(hosts) {
       const hostname = asText(host.hostname);
       const displayName = asText(host.display_name || host.hostname);
       const selectedClass = hostname === state.selectedHost ? "host-item selected" : "host-item";
+      const hostDelivery = deliveryLabel(host.delivery_mode, host.is_delayed);
+      const hostQueueDepth = queueDepthLabel(host.queue_depth);
 
       return `
         <button class="${selectedClass}" type="button" data-host="${escapeHtml(hostname)}">
@@ -336,6 +354,7 @@ function renderHosts(hosts) {
           <span>🖥️ ${escapeHtml(hostname)}</span>
           <span>🧷 ${escapeHtml(asText(host.agent_version))}</span>
           <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
+          <span>📬 ${hostDelivery} | 🗃️ Queue ${hostQueueDepth}</span>
           <span>📦 ${Number(host.report_count || 0).toLocaleString("de-DE")} Meldungen</span>
           <span>🕒 Last seen: ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
         </button>
@@ -486,9 +505,11 @@ async function loadAnalysisForHost() {
   const analysisSummary = document.getElementById("analysisSummary");
   const analysisRows = document.getElementById("analysisRows");
   const resourceTrendCards = document.getElementById("resourceTrendCards");
+  const deliveryStats = document.getElementById("deliveryStats");
 
   if (!state.selectedHost) {
     analysisSummary.textContent = "";
+    deliveryStats.textContent = "";
     resourceTrendCards.innerHTML = "";
     analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
     return;
@@ -497,6 +518,7 @@ async function loadAnalysisForHost() {
   analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Lade Analyse...</td></tr>";
   resourceTrendCards.innerHTML = "";
   analysisSummary.textContent = "";
+  deliveryStats.textContent = "";
 
   try {
     const hostNameParam = encodeURIComponent(state.selectedHost);
@@ -509,10 +531,16 @@ async function loadAnalysisForHost() {
     const data = await response.json();
     const trendRows = data.filesystem_trends || [];
     const resourceTrends = data.resource_trends || {};
+    const delivery = data.delivery || {};
     const latestMax = formatPercent(data.latest_max_used_percent);
     const reportCount = Number(data.report_count || 0).toLocaleString("de-DE");
+    const delayedCount = Number(delivery.delayed_report_count || 0).toLocaleString("de-DE");
+    const liveCount = Number(delivery.live_report_count || 0).toLocaleString("de-DE");
+    const latestDelivery = deliveryLabel(delivery.latest_mode, delivery.latest_is_delayed);
+    const latestQueue = queueDepthLabel(delivery.latest_queue_depth);
 
     analysisSummary.textContent = `${reportCount} Reports, hoechste aktuelle FS-Auslastung: ${latestMax}`;
+    deliveryStats.textContent = `📬 Letzte Meldung: ${latestDelivery} | 🗃️ Queue: ${latestQueue} | Fenster: ${delayedCount} delayed / ${liveCount} live`;
     resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc);
 
     if (trendRows.length === 0) {

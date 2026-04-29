@@ -113,6 +113,11 @@ button {
   color: var(--muted);
 }
 
+.count.compact {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
 .view-tabs {
   display: flex;
   gap: 8px;

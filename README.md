@@ -47,6 +47,7 @@ Dashboard-Funktionen:
 - Alert-Bereich mit offenen Warn/Kritisch-Events und letzter Historie je Host
 - Agent-Version pro Host zur Nachverfolgung von Self-Updates
 - Meldungs-Chip `LIVE` bzw. `DELAYED` auf der Detailkarte
+- Queue-Statistik im Dashboard (`letzte Meldung LIVE/DELAYED`, aktuelle Queue-Tiefe, delayed/live im Analysefenster)
 
 Alert-Schwellwerte (optional per Env am Receiver):
 
