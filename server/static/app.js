@@ -830,6 +830,8 @@ function updatePagerButtons() {
   const hostsNextButton = document.getElementById("hostsNextButton");
   const reportsPrevButton = document.getElementById("reportsPrevButton");
   const reportsNextButton = document.getElementById("reportsNextButton");
+  const reportsPrevButtonTop = document.getElementById("reportsPrevButtonTop");
+  const reportsNextButtonTop = document.getElementById("reportsNextButtonTop");
 
   hostsPrevButton.disabled = state.hostOffset <= 0;
   hostsNextButton.disabled = state.hostOffset + state.hostLimit >= state.totalHosts;
@@ -837,6 +839,33 @@ function updatePagerButtons() {
   reportsPrevButton.disabled = state.reportOffset <= 0 || !state.selectedHost;
   reportsNextButton.disabled =
     !state.selectedHost || state.reportOffset + state.reportLimit >= state.totalReports;
+
+  if (reportsPrevButtonTop) {
+    reportsPrevButtonTop.disabled = reportsPrevButton.disabled;
+  }
+  if (reportsNextButtonTop) {
+    reportsNextButtonTop.disabled = reportsNextButton.disabled;
+  }
+}
+
+async function goToPreviousReport() {
+  if (state.reportOffset <= 0) {
+    return;
+  }
+  state.reportOffset = Math.max(0, state.reportOffset - state.reportLimit);
+  await loadReportsForHost();
+  await loadAnalysisForHost();
+  await loadAlertsForHost();
+}
+
+async function goToNextReport() {
+  if (state.reportOffset + state.reportLimit >= state.totalReports) {
+    return;
+  }
+  state.reportOffset += state.reportLimit;
+  await loadReportsForHost();
+  await loadAnalysisForHost();
+  await loadAlertsForHost();
 }
 
 function renderHosts(hosts) {
@@ -1394,25 +1423,17 @@ function wireEvents() {
     await loadAlertsForHost();
   });
 
-  document.getElementById("reportsPrevButton").addEventListener("click", async () => {
-    if (state.reportOffset <= 0) {
-      return;
-    }
-    state.reportOffset = Math.max(0, state.reportOffset - state.reportLimit);
-    await loadReportsForHost();
-    await loadAnalysisForHost();
-    await loadAlertsForHost();
-  });
+  document.getElementById("reportsPrevButton").addEventListener("click", goToPreviousReport);
+  document.getElementById("reportsNextButton").addEventListener("click", goToNextReport);
 
-  document.getElementById("reportsNextButton").addEventListener("click", async () => {
-    if (state.reportOffset + state.reportLimit >= state.totalReports) {
-      return;
-    }
-    state.reportOffset += state.reportLimit;
-    await loadReportsForHost();
-    await loadAnalysisForHost();
-    await loadAlertsForHost();
-  });
+  const reportsPrevButtonTop = document.getElementById("reportsPrevButtonTop");
+  const reportsNextButtonTop = document.getElementById("reportsNextButtonTop");
+  if (reportsPrevButtonTop) {
+    reportsPrevButtonTop.addEventListener("click", goToPreviousReport);
+  }
+  if (reportsNextButtonTop) {
+    reportsNextButtonTop.addEventListener("click", goToNextReport);
+  }
 }
 
 async function init() {
