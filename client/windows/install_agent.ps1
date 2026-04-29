@@ -45,6 +45,8 @@ $ErrorActionPreference = 'Stop'
 $InstallDir      = 'C:\ProgramData\monitoring-agent'
 $ConfigFile      = "$InstallDir\agent.conf"
 $QueueDir        = "$InstallDir\queue"
+$LogFile         = "$InstallDir\monitoring-agent.log"
+$UpdateLogFile   = "$InstallDir\monitoring-agent-update.log"
 $TaskNameCollect = 'monitoring-agent-collect'
 $TaskNameUpdate  = 'monitoring-agent-update'
 
@@ -86,8 +88,8 @@ if (-not $AgentId) {
 
 if (-not $DisplayName) {
     Write-Host -NoNewline "Display name for this host [$AgentId]: "
-    $input = Read-Host
-    $DisplayName = if ($input.Trim()) { $input.Trim() } else { $AgentId }
+    $userInput = Read-Host
+    $DisplayName = if ($userInput.Trim()) { $userInput.Trim() } else { $AgentId }
 }
 
 # ---- Write config ----
@@ -114,22 +116,29 @@ Set-Acl -Path $ConfigFile -AclObject $cfgAcl
 # ---- Register Scheduled Tasks ----
 function Register-MonitoringTask {
     param(
-        [string] $TaskName,
-        [string] $ScriptPath,
-        [string] $RepeatInterval,   # e.g. "PT15M" or "PT6H"
-        [string] $Description,
+        [string]       $TaskName,
+        [string]       $ScriptPath,
+        [string]       $LogPath,
+        [System.TimeSpan] $RepeatInterval,
+        [string]       $Description,
         [System.TimeSpan] $ExecutionTimeLimit
     )
 
-    $psArgs = "-NonInteractive -NoProfile -ExecutionPolicy Bypass " +
-              "-Command `"`$env:CONFIG_FILE='$ConfigFile'; " +
+    # Wrap the script call so stdout+stderr both go to the log file.
+    # Single-quoted config paths are embedded at install time; variables
+    # with $ that should expand at RUNTIME are escaped as `$.
+    $psArgs = '-NonInteractive -NoProfile -ExecutionPolicy Bypass -Command ' +
+              '"' +
+              "`$env:CONFIG_FILE='$ConfigFile'; " +
               "`$env:AGENT_VERSION_FILE='$InstallDir\AGENT_VERSION'; " +
-              "& '$ScriptPath'`""
+              "`$env:AGENT_QUEUE_DIR='$QueueDir'; " +
+              "& '$ScriptPath' *>> '$LogPath'" +
+              '"'
 
     $action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $psArgs
-    $trigger   = New-ScheduledTaskTrigger -Once -At (Get-Date)
-    $trigger.Repetition.Interval           = $RepeatInterval
-    $trigger.Repetition.StopAtDurationEnd  = $false
+    $trigger   = New-ScheduledTaskTrigger -Once `
+                    -At (Get-Date).AddSeconds(30) `
+                    -RepetitionInterval $RepeatInterval
     $settings  = New-ScheduledTaskSettingsSet `
                     -ExecutionTimeLimit $ExecutionTimeLimit `
                     -MultipleInstances  IgnoreNew `
@@ -137,36 +146,40 @@ function Register-MonitoringTask {
     $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 
     Register-ScheduledTask `
-        -TaskName   $TaskName `
-        -Action     $action `
-        -Trigger    $trigger `
-        -Settings   $settings `
-        -Principal  $principal `
+        -TaskName    $TaskName `
+        -Action      $action `
+        -Trigger     $trigger `
+        -Settings    $settings `
+        -Principal   $principal `
         -Description $Description `
         -Force | Out-Null
 }
 
 Write-Host "Registering scheduled task: $TaskNameCollect (every $IntervalMinutes min)..."
 Register-MonitoringTask `
-    -TaskName            $TaskNameCollect `
-    -ScriptPath          "$InstallDir\collect_and_send.ps1" `
-    -RepeatInterval      "PT${IntervalMinutes}M" `
-    -Description         'Monitoring agent - collect and send system metrics' `
-    -ExecutionTimeLimit  (New-TimeSpan -Minutes 5)
+    -TaskName           $TaskNameCollect `
+    -ScriptPath         "$InstallDir\collect_and_send.ps1" `
+    -LogPath            $LogFile `
+    -RepeatInterval     (New-TimeSpan -Minutes $IntervalMinutes) `
+    -Description        'Monitoring agent - collect and send system metrics' `
+    -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
 
 Write-Host "Registering scheduled task: $TaskNameUpdate (every 6 h)..."
 Register-MonitoringTask `
-    -TaskName            $TaskNameUpdate `
-    -ScriptPath          "$InstallDir\self_update.ps1" `
-    -RepeatInterval      'PT6H' `
-    -Description         'Monitoring agent - self update' `
-    -ExecutionTimeLimit  (New-TimeSpan -Hours 1)
+    -TaskName           $TaskNameUpdate `
+    -ScriptPath         "$InstallDir\self_update.ps1" `
+    -LogPath            $UpdateLogFile `
+    -RepeatInterval     (New-TimeSpan -Hours 6) `
+    -Description        'Monitoring agent - self update' `
+    -ExecutionTimeLimit (New-TimeSpan -Hours 1)
 
 # ---- Summary ----
 Write-Host ''
 Write-Host 'Monitoring agent installed successfully.'
 Write-Host "  Install dir   : $InstallDir"
 Write-Host "  Config        : $ConfigFile"
+Write-Host "  Collect log   : $LogFile"
+Write-Host "  Update log    : $UpdateLogFile"
 Write-Host "  Collect task  : $TaskNameCollect  (every $IntervalMinutes min)"
 Write-Host "  Update task   : $TaskNameUpdate  (every 6 h)"
 Write-Host ''

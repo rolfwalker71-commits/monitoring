@@ -126,11 +126,20 @@ try {
 $allIps = ((Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue) |
            Where-Object { $_.PrefixOrigin -ne 'WellKnown' -and $_.IPAddress -ne '127.0.0.1' }).IPAddress -join ' '
 
-# CPU
-$cpuUsageRaw = ($cpuInfoList | Measure-Object -Property LoadPercentage -Average).Average
-if ($null -eq $cpuUsageRaw) { $cpuUsageRaw = 0 }
+# CPU — measure over 1 second with Get-Counter (mirrors Linux /proc/stat approach);
+# fall back to WMI LoadPercentage if the performance counter is unavailable.
 $cpuCores = ($cpuInfoList | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum
 if (-not $cpuCores -or $cpuCores -lt 1) { $cpuCores = 1 }
+
+$cpuUsageRaw = 0.0
+try {
+    $samples     = Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 1 -MaxSamples 2 -ErrorAction Stop
+    $cpuUsageRaw = ($samples.CounterSamples | Where-Object { $_.InstanceName -eq '_total' } | Select-Object -Last 1).CookedValue
+    if ($null -eq $cpuUsageRaw) { $cpuUsageRaw = 0.0 }
+} catch {
+    $wmiCpu = ($cpuInfoList | Measure-Object -Property LoadPercentage -Average).Average
+    $cpuUsageRaw = if ($null -eq $wmiCpu) { 0.0 } else { [double]$wmiCpu }
+}
 $cpuUsagePctStr = ([double]$cpuUsageRaw).ToString('F2', $IC)
 $loadAvgStr     = '0.00'   # Windows has no load average concept
 
