@@ -16,19 +16,8 @@
           <h2>Letzte Meldungen</h2>
           <button id="refreshButton">Neu laden</button>
         </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Zeit (UTC)</th>
-                <th>Host</th>
-                <th>IP</th>
-                <th>Filesystems</th>
-              </tr>
-            </thead>
-            <tbody id="reportRows"></tbody>
-          </table>
-        </div>
+        <p id="reportCount" class="count"></p>
+        <div id="reportList" class="report-list"></div>
       </section>
     </main>
     <script src="/app.js"></script>
