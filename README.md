@@ -36,6 +36,9 @@ Nutzbare API-Endpunkte fuer die Auswertung:
 - `GET /api/v1/analysis?hostname=<host>&hours=24` Aggregation pro Host (Filesystem Min/Max/Avg/Delta)
 - `GET /api/v1/alerts-summary?hostname=<host>` offene Alerts (kritisch/warn)
 - `GET /api/v1/alerts?hostname=<host>&status=all&limit=15&offset=0` Alert-Historie
+- `GET /api/v1/alarm-settings` globale Alarm-/Telegram-Konfiguration
+- `POST /api/v1/alarm-settings` globale Schwellwerte + Telegram speichern
+- `POST /api/v1/alarm-test` Telegram-Testnachricht senden
 - `POST /api/v1/host-settings` serverseitiger Override fuer sprechenden Host-Titel
 
 Dashboard-Funktionen:
@@ -55,11 +58,22 @@ Dashboard-Funktionen:
 - Getrennte Unter-Menues pro Host in der Uebersicht: Alerts+Analyse auf einer Seite, Filesystem Fokus separat
 - Groesseres Chart-Layout ohne Horizontal-Scroll fuer Analyse/Filesystem mit sauberer Verteilung
 - Statistik-Karten vor den Graphen; Analyse- und Filesystem-Chart-Kacheln in 2er-Reihen
+- Zentrales Einstellungsmenue fuer globale Alarm-Schwellwerte (gueltig fuer alle Hosts)
+- Optionale Telegram-Benachrichtigung fuer Alert-Open, Eskalation nach Kritisch und Resolve
+- Telegram-Testbenachrichtigung direkt aus dem Webclient
 
-Alert-Schwellwerte (optional per Env am Receiver):
+Alert-Schwellwerte:
 
-- `MONITORING_WARNING_THRESHOLD` (Default `80`)
-- `MONITORING_CRITICAL_THRESHOLD` (Default `90`)
+- Primar ueber das Dashboard (`Alarm Einstellungen`)
+- Beim ersten Start werden Defaults aus Env uebernommen:
+  - `MONITORING_WARNING_THRESHOLD` (Default `80`)
+  - `MONITORING_CRITICAL_THRESHOLD` (Default `90`)
+
+Optionale Telegram-Defaults beim ersten Start (koennen spaeter im UI geaendert werden):
+
+- `MONITORING_TELEGRAM_ENABLED` (`0/1`, Default `0`)
+- `MONITORING_TELEGRAM_BOT_TOKEN` (Default leer)
+- `MONITORING_TELEGRAM_CHAT_ID` (Default leer)
 
 Optional API-Key Schutz aktivieren:
 
@@ -120,6 +134,6 @@ curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/mai
 
 - Token-basierte Agent-Authentifizierung pro Host
 - Signierte Payloads (HMAC)
-- Alarmierung (z. B. E-Mail), wenn Schwellwerte ueberschritten sind
+- Feingranulare Alarm-Policies je Host-/Mountpoint-Gruppe
 - Aggregationen und Statistiken (z. B. Trends pro Host)
 - Eigene Historien- und Filteransichten im Dashboard

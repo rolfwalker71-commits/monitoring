@@ -19,6 +19,7 @@ const state = {
   reportOffset: 0,
   totalReports: 0,
   analysisHours: 24,
+  alarmSettingsLoaded: false,
 };
 
 function updateViewMode() {
@@ -52,6 +53,107 @@ function updateOverviewSection() {
 
   mainTabButton.classList.toggle("active", showMain);
   filesystemTabButton.classList.toggle("active", showFilesystem);
+}
+
+function toggleAlarmSettingsPanel(show) {
+  const panel = document.getElementById("alarmSettingsPanel");
+  if (!panel) {
+    return;
+  }
+  panel.classList.toggle("hidden", !show);
+}
+
+function setAlarmSettingsStatus(message, isError = false) {
+  const statusEl = document.getElementById("alarmSettingsStatus");
+  if (!statusEl) {
+    return;
+  }
+  statusEl.textContent = message;
+  statusEl.classList.toggle("status-error", isError);
+}
+
+async function loadAlarmSettings(force = false) {
+  if (state.alarmSettingsLoaded && !force) {
+    return;
+  }
+
+  const warningInput = document.getElementById("warningThresholdInput");
+  const criticalInput = document.getElementById("criticalThresholdInput");
+  const telegramEnabledInput = document.getElementById("telegramEnabledInput");
+  const telegramBotTokenInput = document.getElementById("telegramBotTokenInput");
+  const telegramChatIdInput = document.getElementById("telegramChatIdInput");
+
+  try {
+    const response = await fetch("/api/v1/alarm-settings");
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+    const settings = await response.json();
+
+    warningInput.value = Number(settings.warning_threshold_percent || 80).toFixed(1);
+    criticalInput.value = Number(settings.critical_threshold_percent || 90).toFixed(1);
+    telegramEnabledInput.checked = settings.telegram_enabled === true;
+    telegramBotTokenInput.value = asText(settings.telegram_bot_token, "") === "-" ? "" : String(settings.telegram_bot_token || "");
+    telegramChatIdInput.value = asText(settings.telegram_chat_id, "") === "-" ? "" : String(settings.telegram_chat_id || "");
+
+    state.alarmSettingsLoaded = true;
+    setAlarmSettingsStatus("Einstellungen geladen.");
+  } catch (error) {
+    setAlarmSettingsStatus(`Fehler beim Laden: ${error.message}`, true);
+  }
+}
+
+async function saveAlarmSettings() {
+  const warningInput = document.getElementById("warningThresholdInput");
+  const criticalInput = document.getElementById("criticalThresholdInput");
+  const telegramEnabledInput = document.getElementById("telegramEnabledInput");
+  const telegramBotTokenInput = document.getElementById("telegramBotTokenInput");
+  const telegramChatIdInput = document.getElementById("telegramChatIdInput");
+
+  const warning = Number(warningInput.value);
+  const critical = Number(criticalInput.value);
+
+  if (!Number.isFinite(warning) || !Number.isFinite(critical) || warning < 1 || critical > 100 || warning >= critical) {
+    throw new Error("Schwellwerte ungueltig: Warnung muss kleiner als Kritisch sein.");
+  }
+
+  const payload = {
+    warning_threshold_percent: warning,
+    critical_threshold_percent: critical,
+    telegram_enabled: telegramEnabledInput.checked,
+    telegram_bot_token: telegramBotTokenInput.value.trim(),
+    telegram_chat_id: telegramChatIdInput.value.trim(),
+  };
+
+  const response = await fetch("/api/v1/alarm-settings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error("HTTP " + response.status);
+  }
+
+  await response.json();
+  setAlarmSettingsStatus("Einstellungen gespeichert.");
+  await loadAlertsForHost();
+  await loadAnalysisForHost();
+}
+
+async function sendAlarmSettingsTest() {
+  const response = await fetch("/api/v1/alarm-test", {
+    method: "POST",
+  });
+
+  const data = await response.json().catch(() => ({ details: "Keine Details" }));
+  if (!response.ok) {
+    throw new Error(data.details || ("HTTP " + response.status));
+  }
+
+  setAlarmSettingsStatus("Testbenachrichtigung versendet.");
 }
 
 function formatPercent(value) {
@@ -941,6 +1043,31 @@ function wireEvents() {
     await loadAlertsForHost();
   });
 
+  document.getElementById("openAlarmSettingsButton").addEventListener("click", async () => {
+    toggleAlarmSettingsPanel(true);
+    await loadAlarmSettings(true);
+  });
+
+  document.getElementById("closeAlarmSettingsButton").addEventListener("click", () => {
+    toggleAlarmSettingsPanel(false);
+  });
+
+  document.getElementById("saveAlarmSettingsButton").addEventListener("click", async () => {
+    try {
+      await saveAlarmSettings();
+    } catch (error) {
+      setAlarmSettingsStatus(`Speichern fehlgeschlagen: ${error.message}`, true);
+    }
+  });
+
+  document.getElementById("testAlarmSettingsButton").addEventListener("click", async () => {
+    try {
+      await sendAlarmSettingsTest();
+    } catch (error) {
+      setAlarmSettingsStatus(`Test fehlgeschlagen: ${error.message}`, true);
+    }
+  });
+
   document.getElementById("hostsPrevButton").addEventListener("click", async () => {
     if (state.hostOffset <= 0) {
       return;
@@ -988,6 +1115,7 @@ async function init() {
   wireEvents();
   updateViewMode();
   updateOverviewSection();
+  toggleAlarmSettingsPanel(false);
   await loadHosts();
   await loadReportsForHost();
   await loadAnalysisForHost();

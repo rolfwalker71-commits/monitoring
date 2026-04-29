@@ -26,15 +26,52 @@
         <div class="brand-text">
           <h1>MONITORING Linux Server</h1>
           <p class="subtitle">(powered by Rolf Walker)</p>
-          <p class="subtitle-meta">Webclient Version: 0.4.3</p>
+          <p class="subtitle-meta">Webclient Version: 0.4.6</p>
         </div>
       </div>
 
       <section class="panel">
         <div class="panel-header">
           <h2>Hosts und Historie</h2>
-          <button id="refreshButton">Neu laden</button>
+          <div class="panel-actions">
+            <button id="openAlarmSettingsButton" type="button">Alarm Einstellungen</button>
+            <button id="refreshButton">Neu laden</button>
+          </div>
         </div>
+
+        <section id="alarmSettingsPanel" class="alarm-settings-panel hidden">
+          <div class="analysis-header">
+            <h4>🔔 Alarm Einstellungen (global)</h4>
+            <button id="closeAlarmSettingsButton" type="button">Schliessen</button>
+          </div>
+          <div class="alarm-settings-grid">
+            <label>
+              Warnung ab (%)
+              <input id="warningThresholdInput" type="number" min="1" max="99" step="0.1" />
+            </label>
+            <label>
+              Kritisch ab (%)
+              <input id="criticalThresholdInput" type="number" min="2" max="100" step="0.1" />
+            </label>
+            <label class="checkbox-line">
+              <input id="telegramEnabledInput" type="checkbox" />
+              Telegram aktivieren
+            </label>
+            <label>
+              Telegram Bot Token
+              <input id="telegramBotTokenInput" type="text" placeholder="123456:ABC..." />
+            </label>
+            <label>
+              Telegram Chat ID
+              <input id="telegramChatIdInput" type="text" placeholder="-1001234567890" />
+            </label>
+          </div>
+          <div class="alarm-settings-actions">
+            <button id="saveAlarmSettingsButton" type="button">Speichern</button>
+            <button id="testAlarmSettingsButton" type="button">Testbenachrichtigung</button>
+            <p id="alarmSettingsStatus" class="count compact"></p>
+          </div>
+        </section>
 
         <div class="layout">
           <aside class="hosts-column">

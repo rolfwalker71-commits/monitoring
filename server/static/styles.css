@@ -81,6 +81,61 @@ h1 {
   gap: 12px;
 }
 
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alarm-settings-panel {
+  margin-top: 10px;
+  margin-bottom: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f7faff;
+}
+
+.alarm-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 10px 12px;
+  margin-top: 10px;
+}
+
+.alarm-settings-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.alarm-settings-grid input[type="number"],
+.alarm-settings-grid input[type="text"] {
+  border: 1px solid #cfd9e6;
+  border-radius: 8px;
+  padding: 7px 8px;
+  font-size: 13px;
+}
+
+.alarm-settings-grid .checkbox-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alarm-settings-actions {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status-error {
+  color: #b91c1c;
+}
+
 .layout {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
@@ -660,6 +715,14 @@ th {
   }
 
   .resource-trend-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-actions {
+    width: 100%;
+  }
+
+  .alarm-settings-grid {
     grid-template-columns: 1fr;
   }
 }

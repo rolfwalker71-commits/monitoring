@@ -8,6 +8,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+from urllib import error, parse, request
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -16,6 +17,9 @@ DB_PATH = DATA_DIR / "monitoring.db"
 API_KEY = os.getenv("MONITORING_API_KEY", "")
 WARNING_THRESHOLD_PERCENT = float(os.getenv("MONITORING_WARNING_THRESHOLD", "80"))
 CRITICAL_THRESHOLD_PERCENT = float(os.getenv("MONITORING_CRITICAL_THRESHOLD", "90"))
+TELEGRAM_ENABLED_DEFAULT = os.getenv("MONITORING_TELEGRAM_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+TELEGRAM_BOT_TOKEN_DEFAULT = os.getenv("MONITORING_TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID_DEFAULT = os.getenv("MONITORING_TELEGRAM_CHAT_ID", "")
 
 
 def parse_int(query: dict, key: str, default: int, min_value: int, max_value: int) -> int:
@@ -68,6 +72,42 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS alarm_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                warning_threshold_percent REAL NOT NULL,
+                critical_threshold_percent REAL NOT NULL,
+                telegram_enabled INTEGER NOT NULL,
+                telegram_bot_token TEXT NOT NULL,
+                telegram_chat_id TEXT NOT NULL,
+                updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO alarm_settings (
+                id,
+                warning_threshold_percent,
+                critical_threshold_percent,
+                telegram_enabled,
+                telegram_bot_token,
+                telegram_chat_id,
+                updated_at_utc
+            )
+            VALUES (1, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO NOTHING
+            """,
+            (
+                WARNING_THRESHOLD_PERCENT,
+                CRITICAL_THRESHOLD_PERCENT,
+                1 if TELEGRAM_ENABLED_DEFAULT else 0,
+                TELEGRAM_BOT_TOKEN_DEFAULT,
+                TELEGRAM_CHAT_ID_DEFAULT,
+                utc_now_iso(),
+            ),
+        )
         conn.commit()
 
 
@@ -88,6 +128,184 @@ def parse_payload_json(payload_json: str) -> dict:
     except json.JSONDecodeError:
         return {}
     return {}
+
+
+def clamp_threshold(value: float, min_value: float, max_value: float, fallback: float) -> float:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    return max(min_value, min(numeric, max_value))
+
+
+def coerce_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    text = str(value).strip().lower()
+    return text in {"1", "true", "yes", "on", "enabled"}
+
+
+def get_alarm_settings(conn: sqlite3.Connection) -> dict:
+    row = conn.execute(
+        """
+        SELECT warning_threshold_percent, critical_threshold_percent,
+               telegram_enabled, telegram_bot_token, telegram_chat_id, updated_at_utc
+        FROM alarm_settings
+        WHERE id = 1
+        """
+    ).fetchone()
+
+    if not row:
+        return {
+            "warning_threshold_percent": WARNING_THRESHOLD_PERCENT,
+            "critical_threshold_percent": CRITICAL_THRESHOLD_PERCENT,
+            "telegram_enabled": TELEGRAM_ENABLED_DEFAULT,
+            "telegram_bot_token": TELEGRAM_BOT_TOKEN_DEFAULT,
+            "telegram_chat_id": TELEGRAM_CHAT_ID_DEFAULT,
+            "updated_at_utc": "",
+        }
+
+    return {
+        "warning_threshold_percent": clamp_threshold(row[0], 1, 99, WARNING_THRESHOLD_PERCENT),
+        "critical_threshold_percent": clamp_threshold(row[1], 1, 100, CRITICAL_THRESHOLD_PERCENT),
+        "telegram_enabled": coerce_bool(row[2]),
+        "telegram_bot_token": str(row[3] or ""),
+        "telegram_chat_id": str(row[4] or ""),
+        "updated_at_utc": str(row[5] or ""),
+    }
+
+
+def normalize_alarm_settings_payload(payload: dict, existing: dict | None = None) -> dict:
+    base = existing or {}
+    warning = clamp_threshold(
+        payload.get("warning_threshold_percent", base.get("warning_threshold_percent", WARNING_THRESHOLD_PERCENT)),
+        1,
+        99,
+        WARNING_THRESHOLD_PERCENT,
+    )
+    critical = clamp_threshold(
+        payload.get("critical_threshold_percent", base.get("critical_threshold_percent", CRITICAL_THRESHOLD_PERCENT)),
+        1,
+        100,
+        CRITICAL_THRESHOLD_PERCENT,
+    )
+
+    if critical <= warning:
+        critical = min(100.0, warning + 1.0)
+
+    return {
+        "warning_threshold_percent": warning,
+        "critical_threshold_percent": critical,
+        "telegram_enabled": coerce_bool(payload.get("telegram_enabled", base.get("telegram_enabled", False))),
+        "telegram_bot_token": str(payload.get("telegram_bot_token", base.get("telegram_bot_token", "")) or "").strip(),
+        "telegram_chat_id": str(payload.get("telegram_chat_id", base.get("telegram_chat_id", "")) or "").strip(),
+    }
+
+
+def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
+    current = get_alarm_settings(conn)
+    normalized = normalize_alarm_settings_payload(payload, current)
+    now_utc = utc_now_iso()
+
+    conn.execute(
+        """
+        INSERT INTO alarm_settings (
+            id,
+            warning_threshold_percent,
+            critical_threshold_percent,
+            telegram_enabled,
+            telegram_bot_token,
+            telegram_chat_id,
+            updated_at_utc
+        )
+        VALUES (1, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            warning_threshold_percent = excluded.warning_threshold_percent,
+            critical_threshold_percent = excluded.critical_threshold_percent,
+            telegram_enabled = excluded.telegram_enabled,
+            telegram_bot_token = excluded.telegram_bot_token,
+            telegram_chat_id = excluded.telegram_chat_id,
+            updated_at_utc = excluded.updated_at_utc
+        """,
+        (
+            normalized["warning_threshold_percent"],
+            normalized["critical_threshold_percent"],
+            1 if normalized["telegram_enabled"] else 0,
+            normalized["telegram_bot_token"],
+            normalized["telegram_chat_id"],
+            now_utc,
+        ),
+    )
+
+    normalized["updated_at_utc"] = now_utc
+    return normalized
+
+
+def evaluate_severity_for_thresholds(used_percent: float, warning_threshold: float, critical_threshold: float) -> str:
+    if used_percent >= critical_threshold:
+        return "critical"
+    if used_percent >= warning_threshold:
+        return "warning"
+    return "ok"
+
+
+def telegram_send(settings: dict, text: str) -> tuple[bool, str]:
+    if not settings.get("telegram_enabled"):
+        return False, "telegram disabled"
+
+    bot_token = str(settings.get("telegram_bot_token", "")).strip()
+    chat_id = str(settings.get("telegram_chat_id", "")).strip()
+    if not bot_token or not chat_id:
+        return False, "telegram bot token/chat id missing"
+
+    endpoint = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    payload = parse.urlencode(
+        {
+            "chat_id": chat_id,
+            "text": text,
+            "disable_web_page_preview": "true",
+        }
+    ).encode("utf-8")
+
+    req = request.Request(endpoint, data=payload, method="POST")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+
+    try:
+        with request.urlopen(req, timeout=10) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            if 200 <= resp.status < 300:
+                return True, body
+            return False, f"http {resp.status}: {body}"
+    except error.URLError as exc:
+        return False, str(exc)
+
+
+def maybe_send_alert_message(
+    settings: dict,
+    event_type: str,
+    hostname: str,
+    mountpoint: str,
+    severity: str,
+    used_percent: float,
+) -> None:
+    if not settings.get("telegram_enabled"):
+        return
+
+    icon = {
+        "opened": "ALERT OPEN",
+        "escalated": "ALERT ESCALATED",
+        "resolved": "ALERT RESOLVED",
+    }.get(event_type, "ALERT")
+    text = (
+        f"[{icon}] {hostname}\n"
+        f"Mountpoint: {mountpoint}\n"
+        f"Severity: {severity}\n"
+        f"Used: {used_percent:.1f}%\n"
+        f"Time: {utc_now_iso()}"
+    )
+    telegram_send(settings, text)
 
 
 def get_nested_number(payload: dict, section: str, key: str) -> float | None:
@@ -152,7 +370,7 @@ def evaluate_severity(used_percent: float) -> str:
     return "ok"
 
 
-def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id: int, filesystems: list) -> None:
+def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id: int, filesystems: list, alarm_settings: dict) -> None:
     now_utc = utc_now_iso()
     mountpoints_seen = set()
 
@@ -170,7 +388,9 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
         except (TypeError, ValueError):
             continue
 
-        severity = evaluate_severity(used_percent)
+        warning_threshold = float(alarm_settings.get("warning_threshold_percent", WARNING_THRESHOLD_PERCENT))
+        critical_threshold = float(alarm_settings.get("critical_threshold_percent", CRITICAL_THRESHOLD_PERCENT))
+        severity = evaluate_severity_for_thresholds(used_percent, warning_threshold, critical_threshold)
         open_alert = conn.execute(
             """
             SELECT id, severity
@@ -192,6 +412,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
                     """,
                     (now_utc, now_utc, report_id, open_alert[0]),
                 )
+                maybe_send_alert_message(alarm_settings, "resolved", hostname, mountpoint, "ok", used_percent)
             continue
 
         if not open_alert:
@@ -205,7 +426,10 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
                 """,
                 (hostname, mountpoint, severity, used_percent, now_utc, now_utc, report_id),
             )
+            maybe_send_alert_message(alarm_settings, "opened", hostname, mountpoint, severity, used_percent)
             continue
+
+        previous_severity = str(open_alert[1] or "warning")
 
         conn.execute(
             """
@@ -215,6 +439,9 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
             """,
             (severity, used_percent, now_utc, report_id, open_alert[0]),
         )
+
+        if previous_severity != "critical" and severity == "critical":
+            maybe_send_alert_message(alarm_settings, "escalated", hostname, mountpoint, severity, used_percent)
 
     if mountpoints_seen:
         placeholders = ",".join("?" for _ in mountpoints_seen)
@@ -722,6 +949,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 args.append(hostname_filter)
 
             with sqlite3.connect(DB_PATH) as conn:
+                alarm_settings = get_alarm_settings(conn)
                 total_open = conn.execute(
                     f"SELECT COUNT(*) FROM alerts {where_clause}",
                     tuple(args),
@@ -740,8 +968,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 {
                     "hostname": hostname_filter,
                     "thresholds": {
-                        "warning_percent": WARNING_THRESHOLD_PERCENT,
-                        "critical_percent": CRITICAL_THRESHOLD_PERCENT,
+                        "warning_percent": alarm_settings["warning_threshold_percent"],
+                        "critical_percent": alarm_settings["critical_threshold_percent"],
                     },
                     "open": {
                         "total": total_open,
@@ -750,6 +978,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     },
                 },
             )
+            return
+
+        if parsed.path == "/api/v1/alarm-settings":
+            with sqlite3.connect(DB_PATH) as conn:
+                settings = get_alarm_settings(conn)
+
+            self._send_json(HTTPStatus.OK, settings)
             return
 
         if parsed.path == "/":
@@ -767,6 +1002,54 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
     def do_POST(self) -> None:
+        if self.path == "/api/v1/alarm-settings":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                stored = save_alarm_settings(conn, payload)
+                conn.commit()
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "stored",
+                    "settings": stored,
+                },
+            )
+            return
+
+        if self.path == "/api/v1/alarm-test":
+            with sqlite3.connect(DB_PATH) as conn:
+                settings = get_alarm_settings(conn)
+
+            ok, details = telegram_send(
+                settings,
+                (
+                    "[TEST] Monitoring Alarm-Kanal\n"
+                    f"Serverzeit: {utc_now_iso()}\n"
+                    "Wenn du diese Nachricht siehst, ist Telegram korrekt konfiguriert."
+                ),
+            )
+            status = HTTPStatus.OK if ok else HTTPStatus.BAD_REQUEST
+            self._send_json(
+                status,
+                {
+                    "status": "sent" if ok else "failed",
+                    "details": details,
+                },
+            )
+            return
+
         if self.path == "/api/v1/host-settings":
             content_length = int(self.headers.get("Content-Length", "0"))
             if content_length <= 0:
@@ -858,7 +1141,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 ),
             )
             report_id = int(cursor.lastrowid)
-            update_alerts_for_report(conn, hostname, report_id, filesystems)
+            alarm_settings = get_alarm_settings(conn)
+            update_alerts_for_report(conn, hostname, report_id, filesystems, alarm_settings)
             conn.commit()
 
         self._send_json(HTTPStatus.CREATED, {"status": "stored"})
