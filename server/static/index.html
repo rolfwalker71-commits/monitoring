@@ -26,7 +26,7 @@
         <div class="brand-text">
           <h1>MONITORING Linux Server</h1>
           <p class="subtitle">(powered by Rolf Walker)</p>
-          <p class="subtitle-meta">Webclient Version: 0.4.10</p>
+          <p class="subtitle-meta">Webclient Version: 0.4.11</p>
         </div>
       </div>
 
@@ -110,6 +110,7 @@
 
             <div class="view-tabs">
               <button id="overviewTabButton" type="button" class="tab-button active">Uebersicht</button>
+              <button id="globalAlertsTabButton" type="button" class="tab-button">Globale Alerts</button>
               <button id="reportsTabButton" type="button" class="tab-button">Einzelmeldungen</button>
             </div>
 
@@ -120,28 +121,6 @@
               </div>
 
               <section id="overviewMainSection" class="overview-subsection">
-                <section class="alerts-panel global-alerts-panel">
-                  <div class="analysis-header">
-                    <h4>🌍 Alerts (alle Hosts)</h4>
-                    <p id="globalAlertsSummary" class="count"></p>
-                  </div>
-                  <div class="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>🖥️ Host</th>
-                          <th>📌 Status</th>
-                          <th>⚠️ Severity</th>
-                          <th>📁 Mountpoint</th>
-                          <th>📈 Used</th>
-                          <th>🕒 Transfer</th>
-                        </tr>
-                      </thead>
-                      <tbody id="globalAlertsRows"></tbody>
-                    </table>
-                  </div>
-                </section>
-
                 <section class="alerts-panel">
                   <div class="analysis-header">
                     <h4>🚨 Alerts</h4>
@@ -194,6 +173,42 @@
                     </thead>
                     <tbody id="analysisRows"></tbody>
                   </table>
+                </div>
+              </section>
+            </div>
+
+            <div id="globalAlertsView" class="view-section hidden">
+              <section class="alerts-panel global-alerts-panel">
+                <div class="analysis-header">
+                  <h4>🌍 Alerts (alle Hosts, offen)</h4>
+                  <p id="globalAlertsSummary" class="count"></p>
+                </div>
+                <div class="global-alerts-controls">
+                  <label>
+                    Severity Filter
+                    <select id="globalSeverityFilter">
+                      <option value="all">Alle</option>
+                      <option value="critical">Nur kritisch</option>
+                      <option value="warning">Nur warning</option>
+                    </select>
+                  </label>
+                  <button id="toggleGlobalAlertsPanelButton" type="button">Zuklappen</button>
+                </div>
+                <div id="globalAlertsPanelBody">
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>🖥️ Host</th>
+                          <th>⚠️ Severity</th>
+                          <th>📁 Mountpoint</th>
+                          <th>📈 Used</th>
+                          <th>🕒 Transfer</th>
+                        </tr>
+                      </thead>
+                      <tbody id="globalAlertsRows"></tbody>
+                    </table>
+                  </div>
                 </div>
               </section>
             </div>

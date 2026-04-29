@@ -49,6 +49,9 @@ Dashboard-Funktionen:
 - Analysebereich mit CPU/RAM/Swap-Trends im Zeitfenster
 - Alert-Bereich mit offenen Warn/Kritisch-Events und letzter Historie je Host
 - Zusaetzliche globale Alert-Uebersicht ueber alle Hosts (ohne Host-Auswahl)
+- Globales Alert-Dashboard als eigener Menuepunkt mit roter Markierung und Alert-Anzahl bei offenen Incidents
+- Globales Alert-Dashboard ist zuklappbar und nach Severity filterbar
+- Im globalen Dashboard werden nur offene Alerts angezeigt (resolved ausgeblendet)
 - In der Hostgruppe wird bei Hosts mit offenen Alerts ein grosses Ausrufezeichen angezeigt
 - Agent-Version pro Host zur Nachverfolgung von Self-Updates
 - Meldungs-Chip `LIVE` bzw. `DELAYED` auf der Detailkarte

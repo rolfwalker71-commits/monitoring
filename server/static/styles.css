@@ -234,6 +234,15 @@ button:hover:not(.host-item) {
   color: #fff;
 }
 
+.tab-button.alert-active {
+  background: #b91c1c;
+  color: #fff;
+}
+
+.tab-button.alert-active:hover {
+  background: #991b1b;
+}
+
 .hidden {
   display: none;
 }
@@ -528,6 +537,30 @@ button:hover:not(.host-item) {
   background: linear-gradient(180deg, #f6fbff 0%, #f0f8ff 100%);
 }
 
+.global-alerts-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.global-alerts-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 12px;
+}
+
+.global-alerts-controls select {
+  border: 1px solid #cfd9e6;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: #fff;
+}
+
 .badge {
   display: inline-block;
   padding: 2px 8px;
@@ -750,5 +783,10 @@ th {
 
   .alarm-settings-grid {
     grid-template-columns: 1fr;
+  }
+
+  .global-alerts-controls {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

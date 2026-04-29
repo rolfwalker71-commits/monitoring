@@ -20,19 +20,29 @@ const state = {
   totalReports: 0,
   analysisHours: 24,
   alarmSettingsLoaded: false,
+  globalAlertsCollapsed: false,
+  globalSeverityFilter: "all",
+  globalOpenAlertsCount: 0,
 };
 
 function updateViewMode() {
   const overviewView = document.getElementById("overviewView");
   const reportsView = document.getElementById("reportsView");
+  const globalAlertsView = document.getElementById("globalAlertsView");
   const overviewTabButton = document.getElementById("overviewTabButton");
+  const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
   const reportsTabButton = document.getElementById("reportsTabButton");
 
   const overviewActive = state.viewMode === "overview";
+  const reportsActive = state.viewMode === "reports";
+  const globalAlertsActive = state.viewMode === "global-alerts";
+
   overviewView.classList.toggle("hidden", !overviewActive);
-  reportsView.classList.toggle("hidden", overviewActive);
+  reportsView.classList.toggle("hidden", !reportsActive);
+  globalAlertsView.classList.toggle("hidden", !globalAlertsActive);
   overviewTabButton.classList.toggle("active", overviewActive);
-  reportsTabButton.classList.toggle("active", !overviewActive);
+  globalAlertsTabButton.classList.toggle("active", globalAlertsActive);
+  reportsTabButton.classList.toggle("active", reportsActive);
 }
 
 function updateOverviewSection() {
@@ -1038,14 +1048,19 @@ async function loadAlertsForHost() {
 async function loadGlobalAlertsOverview() {
   const summaryEl = document.getElementById("globalAlertsSummary");
   const rowsEl = document.getElementById("globalAlertsRows");
+  const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
+  const toggleButton = document.getElementById("toggleGlobalAlertsPanelButton");
+  const panelBody = document.getElementById("globalAlertsPanelBody");
 
-  rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Lade globale Alerts...</td></tr>";
+  rowsEl.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Lade globale Alerts...</td></tr>";
   summaryEl.textContent = "";
+  panelBody.classList.toggle("hidden", state.globalAlertsCollapsed);
+  toggleButton.textContent = state.globalAlertsCollapsed ? "Aufklappen" : "Zuklappen";
 
   try {
     const [summaryResp, listResp] = await Promise.all([
       fetch("/api/v1/alerts-summary"),
-      fetch("/api/v1/alerts?status=all&limit=25&offset=0"),
+      fetch("/api/v1/alerts?status=open&limit=100&offset=0"),
     ]);
 
     if (!summaryResp.ok) {
@@ -1057,23 +1072,34 @@ async function loadGlobalAlertsOverview() {
 
     const summaryData = await summaryResp.json();
     const listData = await listResp.json();
-    const alerts = listData.alerts || [];
+    const allOpenAlerts = listData.alerts || [];
+    state.globalOpenAlertsCount = Number(summaryData?.open?.total || 0);
 
-    summaryEl.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Verlauf: ${Number(listData.total || 0).toLocaleString("de-DE")}`;
+    globalAlertsTabButton.textContent = state.globalOpenAlertsCount > 0
+      ? `Globale Alerts (${state.globalOpenAlertsCount})`
+      : "Globale Alerts";
+    globalAlertsTabButton.classList.toggle("alert-active", state.globalOpenAlertsCount > 0);
+
+    const alerts = allOpenAlerts.filter((item) => {
+      if (state.globalSeverityFilter === "all") {
+        return true;
+      }
+      return String(item.severity || "") === state.globalSeverityFilter;
+    });
+
+    summaryEl.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}`;
 
     if (alerts.length === 0) {
-      rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Keine Alerts vorhanden.</td></tr>";
+      rowsEl.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Keine offenen Alerts fuer den gesetzten Filter.</td></tr>";
       return;
     }
 
     rowsEl.innerHTML = alerts
       .map((item) => {
-        const statusClass = item.status === "open" ? "status-open" : "status-resolved";
         const severityClass = item.severity === "critical" ? "severity-critical" : "severity-warning";
         return `
           <tr>
             <td>${escapeHtml(asText(item.hostname))}</td>
-            <td><span class="badge ${statusClass}">${escapeHtml(asText(item.status))}</span></td>
             <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
             <td>${renderPathCell(item.mountpoint, 42)}</td>
             <td>${formatPercent(item.used_percent)}</td>
@@ -1083,7 +1109,9 @@ async function loadGlobalAlertsOverview() {
       })
       .join("");
   } catch (error) {
-    rowsEl.innerHTML = `<tr><td colspan="6" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+    rowsEl.innerHTML = `<tr><td colspan="5" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+    globalAlertsTabButton.textContent = "Globale Alerts";
+    globalAlertsTabButton.classList.remove("alert-active");
   }
 }
 
@@ -1093,9 +1121,25 @@ function wireEvents() {
     updateViewMode();
   });
 
+  document.getElementById("globalAlertsTabButton").addEventListener("click", async () => {
+    state.viewMode = "global-alerts";
+    updateViewMode();
+    await loadGlobalAlertsOverview();
+  });
+
   document.getElementById("reportsTabButton").addEventListener("click", () => {
     state.viewMode = "reports";
     updateViewMode();
+  });
+
+  document.getElementById("globalSeverityFilter").addEventListener("change", async (event) => {
+    state.globalSeverityFilter = String(event.target?.value || "all");
+    await loadGlobalAlertsOverview();
+  });
+
+  document.getElementById("toggleGlobalAlertsPanelButton").addEventListener("click", async () => {
+    state.globalAlertsCollapsed = !state.globalAlertsCollapsed;
+    await loadGlobalAlertsOverview();
   });
 
   document.getElementById("overviewMainTabButton").addEventListener("click", () => {
@@ -1197,6 +1241,7 @@ async function init() {
   updateViewMode();
   updateOverviewSection();
   toggleAlarmSettingsPanel(false);
+  document.getElementById("globalSeverityFilter").value = state.globalSeverityFilter;
   await loadGlobalAlertsOverview();
   await loadHosts();
   await loadReportsForHost();
