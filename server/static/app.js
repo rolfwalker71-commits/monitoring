@@ -772,12 +772,20 @@ async function loadAnalysisForHost() {
   const resourceTrendCards = document.getElementById("resourceTrendCards");
   const deliveryStats = document.getElementById("deliveryStats");
 
+  if (!analysisSummary || !analysisRows || !resourceCharts || !resourceTrendCards || !deliveryStats) {
+    return;
+  }
+
   if (!state.selectedHost) {
     analysisSummary.textContent = "";
     deliveryStats.textContent = "";
     resourceCharts.innerHTML = "";
-    filesystemStats.textContent = "";
-    filesystemCharts.innerHTML = "";
+    if (filesystemStats) {
+      filesystemStats.textContent = "";
+    }
+    if (filesystemCharts) {
+      filesystemCharts.innerHTML = "";
+    }
     resourceTrendCards.innerHTML = "";
     analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
     return;
@@ -785,11 +793,15 @@ async function loadAnalysisForHost() {
 
   analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Lade Analyse...</td></tr>";
   resourceCharts.innerHTML = "";
-  filesystemCharts.innerHTML = "";
+  if (filesystemCharts) {
+    filesystemCharts.innerHTML = "";
+  }
   resourceTrendCards.innerHTML = "";
   analysisSummary.textContent = "";
   deliveryStats.textContent = "";
-  filesystemStats.textContent = "";
+  if (filesystemStats) {
+    filesystemStats.textContent = "";
+  }
 
   try {
     const hostNameParam = encodeURIComponent(state.selectedHost);
@@ -815,7 +827,9 @@ async function loadAnalysisForHost() {
     deliveryStats.textContent = `📬 Letzte Meldung: ${latestDelivery} | 🗃️ Queue: ${latestQueue} | Fenster: ${delayedCount} delayed / ${liveCount} live`;
     resourceCharts.innerHTML = renderResourceCharts(resourceSeries, data.latest_report_time_utc);
     resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc);
-    filesystemCharts.innerHTML = renderFilesystemTrendCharts(trendRows, data.latest_report_time_utc);
+    if (filesystemCharts) {
+      filesystemCharts.innerHTML = renderFilesystemTrendCharts(trendRows, data.latest_report_time_utc);
+    }
 
     const fsCurrentValues = trendRows.map((row) => Number(row.current_used_percent)).filter((value) => Number.isFinite(value));
     const fsAvgCurrent = fsCurrentValues.length > 0
@@ -823,10 +837,14 @@ async function loadAnalysisForHost() {
       : null;
     const fsRising = trendRows.filter((row) => Number(row.delta_used_percent) > 0).length;
     const fsWarnOrCritical = trendRows.filter((row) => Number(row.current_used_percent) >= 80).length;
-    filesystemStats.textContent = `Top ${Math.min(6, trendRows.length)} FS-Charts | Avg aktuell: ${fsAvgCurrent === null ? "-" : formatNumber(fsAvgCurrent, 1) + "%"} | Steigend: ${fsRising} | >=80%: ${fsWarnOrCritical}`;
+    if (filesystemStats) {
+      filesystemStats.textContent = `Top ${Math.min(6, trendRows.length)} FS-Charts | Avg aktuell: ${fsAvgCurrent === null ? "-" : formatNumber(fsAvgCurrent, 1) + "%"} | Steigend: ${fsRising} | >=80%: ${fsWarnOrCritical}`;
+    }
 
     if (trendRows.length === 0) {
-      filesystemCharts.innerHTML = "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfuegbar.</p>";
+      if (filesystemCharts) {
+        filesystemCharts.innerHTML = "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfuegbar.</p>";
+      }
       analysisRows.innerHTML =
         "<tr><td colspan=\"7\" class=\"muted\">Keine Analyse-Daten im gewaehlten Zeitfenster.</td></tr>";
       return;
