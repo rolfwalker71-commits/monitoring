@@ -48,6 +48,7 @@ Dashboard-Funktionen:
 - Agent-Version pro Host zur Nachverfolgung von Self-Updates
 - Meldungs-Chip `LIVE` bzw. `DELAYED` auf der Detailkarte
 - Queue-Statistik im Dashboard (`letzte Meldung LIVE/DELAYED`, aktuelle Queue-Tiefe, delayed/live im Analysefenster)
+- Verlaufscharts in der Analyse: kombinierte Kurve (normalisiert) plus Einzel-Chart je Kennzahl (CPU, RAM, Swap, Load)
 
 Alert-Schwellwerte (optional per Env am Receiver):
 

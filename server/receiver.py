@@ -500,6 +500,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             load_avg_1_values: list[float] = []
             memory_used_values: list[float] = []
             swap_used_values: list[float] = []
+            cpu_usage_series: list[dict] = []
+            load_avg_1_series: list[dict] = []
+            memory_used_series: list[dict] = []
+            swap_used_series: list[dict] = []
             delayed_report_count = 0
             live_report_count = 0
             latest_delivery_mode = "live"
@@ -523,18 +527,22 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 cpu_usage = get_nested_number(payload, "cpu", "usage_percent")
                 if cpu_usage is not None:
                     cpu_usage_values.append(cpu_usage)
+                    cpu_usage_series.append({"time_utc": row[1], "value": cpu_usage})
 
                 load_avg_1 = get_nested_number(payload, "cpu", "load_avg_1")
                 if load_avg_1 is not None:
                     load_avg_1_values.append(load_avg_1)
+                    load_avg_1_series.append({"time_utc": row[1], "value": load_avg_1})
 
                 memory_used = get_nested_number(payload, "memory", "used_percent")
                 if memory_used is not None:
                     memory_used_values.append(memory_used)
+                    memory_used_series.append({"time_utc": row[1], "value": memory_used})
 
                 swap_used = get_nested_number(payload, "swap", "used_percent")
                 if swap_used is not None:
                     swap_used_values.append(swap_used)
+                    swap_used_series.append({"time_utc": row[1], "value": swap_used})
 
                 filesystems = payload.get("filesystems", [])
                 if not isinstance(filesystems, list):
@@ -612,6 +620,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "load_avg_1": summarize_numeric_series(load_avg_1_values),
                         "memory_used_percent": summarize_numeric_series(memory_used_values),
                         "swap_used_percent": summarize_numeric_series(swap_used_values),
+                    },
+                    "resource_series": {
+                        "cpu_usage_percent": cpu_usage_series,
+                        "load_avg_1": load_avg_1_series,
+                        "memory_used_percent": memory_used_series,
+                        "swap_used_percent": swap_used_series,
                     },
                     "delivery": {
                         "latest_mode": latest_delivery_mode,

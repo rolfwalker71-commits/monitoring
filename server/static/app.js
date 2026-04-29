@@ -105,6 +105,150 @@ function renderResourceTrendCards(resourceTrends, latestReportTimeUtc) {
     .join("");
 }
 
+function normalizeSeries(series) {
+  if (!Array.isArray(series)) {
+    return [];
+  }
+
+  return series
+    .map((point) => ({
+      time_utc: asText(point.time_utc, ""),
+      value: Number(point.value),
+    }))
+    .filter((point) => point.time_utc && Number.isFinite(point.value));
+}
+
+function buildPolylinePoints(series, width, height, minValue, maxValue) {
+  if (!Array.isArray(series) || series.length < 2) {
+    return "";
+  }
+
+  const pad = 8;
+  const chartWidth = Math.max(1, width - pad * 2);
+  const chartHeight = Math.max(1, height - pad * 2);
+  const range = maxValue - minValue;
+  const safeRange = range === 0 ? 1 : range;
+
+  return series
+    .map((point, index) => {
+      const x = pad + (index / (series.length - 1)) * chartWidth;
+      const normalized = (point.value - minValue) / safeRange;
+      const y = pad + (1 - normalized) * chartHeight;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+function buildSparklineSvg(series, color, width = 320, height = 82) {
+  const points = normalizeSeries(series);
+  if (points.length === 0) {
+    return "<p class=\"muted\">Keine Verlaufsdaten</p>";
+  }
+
+  if (points.length === 1) {
+    return `<svg class=\"sparkline\" viewBox=\"0 0 ${width} ${height}\" role=\"img\" aria-label=\"Trend\"><line x1=\"8\" y1=\"${(height / 2).toFixed(2)}\" x2=\"${(width - 8).toFixed(2)}\" y2=\"${(height / 2).toFixed(2)}\" stroke=\"${color}\" stroke-width=\"2.2\" /></svg>`;
+  }
+
+  const values = points.map((point) => point.value);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const polyline = buildPolylinePoints(points, width, height, minValue, maxValue);
+
+  return `
+    <svg class="sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="Trend">
+      <line x1="8" y1="${(height - 8).toFixed(2)}" x2="${(width - 8).toFixed(2)}" y2="${(height - 8).toFixed(2)}" stroke="#dde5ee" stroke-width="1" />
+      <polyline fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="${polyline}" />
+    </svg>
+  `;
+}
+
+function normalizeForCombined(series) {
+  const points = normalizeSeries(series);
+  if (points.length === 0) {
+    return [];
+  }
+
+  const values = points.map((point) => point.value);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const range = maxValue - minValue;
+  const safeRange = range === 0 ? 1 : range;
+
+  return points.map((point) => ({
+    time_utc: point.time_utc,
+    value: ((point.value - minValue) / safeRange) * 100,
+  }));
+}
+
+function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
+  const chartDefinitions = [
+    { key: "cpu_usage_percent", label: "CPU %", color: "#0ea5a8" },
+    { key: "memory_used_percent", label: "RAM %", color: "#f59e0b" },
+    { key: "swap_used_percent", label: "Swap %", color: "#2563eb" },
+    { key: "load_avg_1", label: "Load 1m", color: "#be185d" },
+  ];
+
+  const hasAnySeries = chartDefinitions.some((item) => normalizeSeries(resourceSeries[item.key]).length > 1);
+  if (!hasAnySeries) {
+    return "<p class=\"muted\">Keine Verlaufskurven verfuegbar.</p>";
+  }
+
+  const combinedLines = chartDefinitions
+    .map((item) => {
+      const normalized = normalizeForCombined(resourceSeries[item.key]);
+      if (normalized.length < 2) {
+        return "";
+      }
+      const polyline = buildPolylinePoints(normalized, 760, 210, 0, 100);
+      return `<polyline fill=\"none\" stroke=\"${item.color}\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\" points=\"${polyline}\" />`;
+    })
+    .join("");
+
+  const combinedLegend = chartDefinitions
+    .map((item) => `<span><i style=\"background:${item.color}\"></i>${item.label}</span>`)
+    .join("");
+
+  const standText = formatUtcPlus2(latestReportTimeUtc);
+  const miniCharts = chartDefinitions
+    .map((item) => {
+      const points = normalizeSeries(resourceSeries[item.key]);
+      const values = points.map((point) => point.value);
+      const minValue = values.length > 0 ? Math.min(...values) : null;
+      const maxValue = values.length > 0 ? Math.max(...values) : null;
+      return `
+        <article class="mini-chart-card">
+          <header>
+            <strong>${item.label}</strong>
+            <span>${points.length} Samples</span>
+          </header>
+          ${buildSparklineSvg(points, item.color, 320, 82)}
+          <footer>
+            <span>Min: ${minValue === null ? "-" : formatNumber(minValue, 2)}</span>
+            <span>Max: ${maxValue === null ? "-" : formatNumber(maxValue, 2)}</span>
+          </footer>
+        </article>
+      `;
+    })
+    .join("");
+
+  return `
+    <section class="combined-chart">
+      <div class="combined-chart-head">
+        <strong>Verlauf kombiniert (normalisiert)</strong>
+        <span>${escapeHtml(standText)}</span>
+      </div>
+      <svg class="combined-chart-svg" viewBox="0 0 760 210" role="img" aria-label="Kombinierter Verlauf">
+        <line x1="10" y1="10" x2="10" y2="200" stroke="#dbe5ef" stroke-width="1" />
+        <line x1="10" y1="200" x2="750" y2="200" stroke="#dbe5ef" stroke-width="1" />
+        <line x1="10" y1="105" x2="750" y2="105" stroke="#edf2f7" stroke-width="1" />
+        ${combinedLines}
+      </svg>
+      <div class="combined-legend">${combinedLegend}</div>
+    </section>
+    <section class="mini-chart-grid">${miniCharts}</section>
+  `;
+}
+
 function renderNetworkTable(network) {
   if (!network || !Array.isArray(network.interfaces) || network.interfaces.length === 0) {
     return "<p class=\"muted\">Keine Netzwerk-Daten</p>";
@@ -504,18 +648,21 @@ async function editDisplayName() {
 async function loadAnalysisForHost() {
   const analysisSummary = document.getElementById("analysisSummary");
   const analysisRows = document.getElementById("analysisRows");
+  const resourceCharts = document.getElementById("resourceCharts");
   const resourceTrendCards = document.getElementById("resourceTrendCards");
   const deliveryStats = document.getElementById("deliveryStats");
 
   if (!state.selectedHost) {
     analysisSummary.textContent = "";
     deliveryStats.textContent = "";
+    resourceCharts.innerHTML = "";
     resourceTrendCards.innerHTML = "";
     analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
     return;
   }
 
   analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Lade Analyse...</td></tr>";
+  resourceCharts.innerHTML = "";
   resourceTrendCards.innerHTML = "";
   analysisSummary.textContent = "";
   deliveryStats.textContent = "";
@@ -531,6 +678,7 @@ async function loadAnalysisForHost() {
     const data = await response.json();
     const trendRows = data.filesystem_trends || [];
     const resourceTrends = data.resource_trends || {};
+    const resourceSeries = data.resource_series || {};
     const delivery = data.delivery || {};
     const latestMax = formatPercent(data.latest_max_used_percent);
     const reportCount = Number(data.report_count || 0).toLocaleString("de-DE");
@@ -541,6 +689,7 @@ async function loadAnalysisForHost() {
 
     analysisSummary.textContent = `${reportCount} Reports, hoechste aktuelle FS-Auslastung: ${latestMax}`;
     deliveryStats.textContent = `📬 Letzte Meldung: ${latestDelivery} | 🗃️ Queue: ${latestQueue} | Fenster: ${delayedCount} delayed / ${liveCount} live`;
+    resourceCharts.innerHTML = renderResourceCharts(resourceSeries, data.latest_report_time_utc);
     resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc);
 
     if (trendRows.length === 0) {
