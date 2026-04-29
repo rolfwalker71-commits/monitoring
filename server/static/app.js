@@ -29,6 +29,27 @@ const state = {
   isAuthenticated: false,
 };
 
+async function loadWebclientVersion() {
+  const versionEl = document.getElementById("webclientVersion");
+  if (!versionEl) {
+    return;
+  }
+
+  try {
+    const response = await fetch("BUILD_VERSION", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const text = (await response.text()).trim();
+    versionEl.textContent = text || "-";
+  } catch (_error) {
+    versionEl.textContent = "-";
+  }
+}
+
 function updateViewMode() {
   const overviewView = document.getElementById("overviewView");
   const reportsView = document.getElementById("reportsView");
@@ -1492,6 +1513,7 @@ function wireEvents() {
 }
 
 async function init() {
+  await loadWebclientVersion();
   wireEvents();
   updateViewMode();
   updateOverviewSection();

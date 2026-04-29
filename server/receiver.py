@@ -17,6 +17,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "monitoring.db"
+BUILD_VERSION_PATH = BASE_DIR.parent / "BUILD_VERSION"
 API_KEY = os.getenv("MONITORING_API_KEY", "")
 WARNING_THRESHOLD_PERCENT = float(os.getenv("MONITORING_WARNING_THRESHOLD", "80"))
 CRITICAL_THRESHOLD_PERCENT = float(os.getenv("MONITORING_CRITICAL_THRESHOLD", "90"))
@@ -1313,6 +1314,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/styles.css":
             self._send_file(STATIC_DIR / "styles.css", "text/css; charset=utf-8")
+            return
+
+        if parsed.path.endswith("/BUILD_VERSION"):
+            self._send_file(BUILD_VERSION_PATH, "text/plain; charset=utf-8")
             return
 
         if parsed.path.endswith("/icons/linux.png") or parsed.path.endswith("/icons/windows.png"):
