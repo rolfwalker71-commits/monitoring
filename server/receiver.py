@@ -1315,10 +1315,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_file(STATIC_DIR / "styles.css", "text/css; charset=utf-8")
             return
 
-            if parsed.path in ("/icons/linux.png", "/icons/windows.png"):
-                icon_name = parsed.path.split("/")[-1]
-                self._send_file(STATIC_DIR / "icons" / icon_name, "image/png")
-                return
+        if parsed.path.endswith("/icons/linux.png") or parsed.path.endswith("/icons/windows.png"):
+            icon_name = parsed.path.split("/")[-1]
+            self._send_file(STATIC_DIR / "icons" / icon_name, "image/png")
+            return
 
         self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 

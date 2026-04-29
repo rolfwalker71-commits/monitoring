@@ -937,10 +937,10 @@ function renderHosts(hosts) {
         ? `<span class="${markerClass}" title="${openAlertCount} offene Alerts (${openCriticalAlertCount} kritisch)">🛑</span>`
         : "";
 
-        const osRaw = asText(host.os || "").toLowerCase();
-        const osIcon = osRaw.includes("windows")
-          ? `<img src="icons/windows.png" class="host-os-icon" alt="Windows" title="${escapeHtml(asText(host.os))}">`
-          : `<img src="icons/linux.png" class="host-os-icon" alt="Linux" title="${escapeHtml(asText(host.os))}">`;
+      const osRaw = asText(host.os || "").toLowerCase();
+      const iconName = osRaw.includes("windows") ? "windows.png" : "linux.png";
+      const osLabel = osRaw.includes("windows") ? "Windows" : "Linux";
+      const osIcon = `<img src="icons/${iconName}" class="host-os-icon" alt="${osLabel}" title="${escapeHtml(asText(host.os))}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${iconName}';}">`;
 
       return `
         <button class="${selectedClass}" type="button" data-host="${escapeHtml(hostname)}">
@@ -952,7 +952,7 @@ function renderHosts(hosts) {
           <span>🚨 Offen: ${openAlertCount} (kritisch ${openCriticalAlertCount})</span>
           <span>📦 ${Number(host.report_count || 0).toLocaleString("de-DE")} Meldungen</span>
           <span>🕒 Transfer: ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
-            ${osIcon}
+          ${osIcon}
         </button>
       `;
     })
