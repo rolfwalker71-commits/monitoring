@@ -78,6 +78,21 @@ button {
   overflow-x: auto;
 }
 
+.analysis-panel table,
+.alerts-panel table,
+.fs-table {
+  table-layout: fixed;
+}
+
+.path-cell {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
 .count {
   margin: 10px 0 0;
   color: var(--muted);
@@ -268,6 +283,9 @@ td {
   text-align: left;
   padding: 10px;
   font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 th {

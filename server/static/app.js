@@ -12,7 +12,7 @@ const state = {
   hostOffset: 0,
   totalHosts: 0,
   selectedHost: "",
-  reportLimit: 10,
+  reportLimit: 1,
   reportOffset: 0,
   totalReports: 0,
   analysisHours: 24,
@@ -33,6 +33,20 @@ function formatSignedPercent(value) {
   }
   const sign = n > 0 ? "+" : "";
   return `${sign}${n.toFixed(1)}%`;
+}
+
+function shortPath(value, maxLen = 54) {
+  const text = asText(value, "-");
+  if (text === "-" || text.length <= maxLen) {
+    return text;
+  }
+  return `${text.slice(0, maxLen - 1)}...`;
+}
+
+function renderPathCell(value, maxLen = 54) {
+  const full = asText(value, "-");
+  const compact = shortPath(full, maxLen);
+  return `<span class="path-cell" title="${escapeHtml(full)}">${escapeHtml(compact)}</span>`;
 }
 
 function asText(value, fallback = "-") {
@@ -88,8 +102,8 @@ function renderFilesystemTable(filesystems) {
 
   const rows = filesystems
     .map((fs) => {
-      const mountpoint = escapeHtml(asText(fs.mountpoint));
-      const fsName = escapeHtml(asText(fs.fs));
+      const mountpoint = renderPathCell(fs.mountpoint, 64);
+      const fsName = renderPathCell(fs.fs, 32);
       const fsType = escapeHtml(asText(fs.type));
       const usedPercent = Number(fs.used_percent);
       const usedPercentText = Number.isFinite(usedPercent) ? `${usedPercent}%` : "-";
@@ -206,6 +220,7 @@ function renderHosts(hosts) {
       loadHosts();
       loadReportsForHost();
       loadAnalysisForHost();
+      loadAlertsForHost();
     });
   }
 }
@@ -279,10 +294,9 @@ async function loadReportsForHost() {
       return;
     }
 
-    const shownStart = state.reportOffset + 1;
-    const shownEnd = state.reportOffset + reports.length;
-    count.textContent = `${shownStart}-${shownEnd} von ${state.totalReports} Meldungen`;
-    list.innerHTML = reports.map(renderReportCard).join("");
+    const shownIndex = state.reportOffset + 1;
+    count.textContent = `Meldung ${shownIndex} von ${state.totalReports}`;
+    list.innerHTML = renderReportCard(reports[0]);
     updatePagerButtons();
   } catch (error) {
     list.innerHTML = `<p class=\"muted\">Fehler: ${escapeHtml(error.message)}</p>`;
@@ -290,64 +304,6 @@ async function loadReportsForHost() {
 }
 
 async function loadAnalysisForHost() {
-
-  async function loadAlertsForHost() {
-    const alertsSummary = document.getElementById("alertsSummary");
-    const alertsRows = document.getElementById("alertsRows");
-
-    if (!state.selectedHost) {
-      alertsSummary.textContent = "";
-      alertsRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
-      return;
-    }
-
-    alertsRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Lade Alerts...</td></tr>";
-    alertsSummary.textContent = "";
-
-    try {
-      const hostNameParam = encodeURIComponent(state.selectedHost);
-      const [summaryResp, listResp] = await Promise.all([
-        fetch(`/api/v1/alerts-summary?hostname=${hostNameParam}`),
-        fetch(`/api/v1/alerts?hostname=${hostNameParam}&status=all&limit=15&offset=0`),
-      ]);
-
-      if (!summaryResp.ok) {
-        throw new Error("Summary HTTP " + summaryResp.status);
-      }
-      if (!listResp.ok) {
-        throw new Error("List HTTP " + listResp.status);
-      }
-
-      const summaryData = await summaryResp.json();
-      const listData = await listResp.json();
-      const alerts = listData.alerts || [];
-
-      alertsSummary.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning})`;
-
-      if (alerts.length === 0) {
-        alertsRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Keine Alerts vorhanden.</td></tr>";
-        return;
-      }
-
-      alertsRows.innerHTML = alerts
-        .map((item) => {
-          const statusClass = item.status === "open" ? "status-open" : "status-resolved";
-          const severityClass = item.severity === "critical" ? "severity-critical" : "severity-warning";
-          return `
-            <tr>
-              <td><span class="badge ${statusClass}">${escapeHtml(asText(item.status))}</span></td>
-              <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
-              <td>${escapeHtml(asText(item.mountpoint))}</td>
-              <td>${formatPercent(item.used_percent)}</td>
-              <td>${escapeHtml(formatUtc(item.last_seen_at_utc))}</td>
-            </tr>
-          `;
-        })
-        .join("");
-    } catch (error) {
-      alertsRows.innerHTML = `<tr><td colspan=\"5\" class=\"muted\">Fehler: ${escapeHtml(error.message)}</td></tr>`;
-    }
-  }
   const analysisSummary = document.getElementById("analysisSummary");
   const analysisRows = document.getElementById("analysisRows");
 
@@ -386,7 +342,7 @@ async function loadAnalysisForHost() {
         const deltaClass = Number(row.delta_used_percent) > 0 ? "delta-up" : "delta-down";
         return `
           <tr>
-            <td>${escapeHtml(asText(row.mountpoint))}</td>
+            <td>${renderPathCell(row.mountpoint, 64)}</td>
             <td>${Number(row.sample_count || 0).toLocaleString("de-DE")}</td>
             <td>${formatPercent(row.current_used_percent)}</td>
             <td>${formatPercent(row.min_used_percent)}</td>
@@ -395,11 +351,68 @@ async function loadAnalysisForHost() {
             <td class="${deltaClass}">${formatSignedPercent(row.delta_used_percent)}</td>
           </tr>
         `;
-        loadAlertsForHost();
       })
       .join("");
   } catch (error) {
     analysisRows.innerHTML = `<tr><td colspan=\"7\" class=\"muted\">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
+async function loadAlertsForHost() {
+  const alertsSummary = document.getElementById("alertsSummary");
+  const alertsRows = document.getElementById("alertsRows");
+
+  if (!state.selectedHost) {
+    alertsSummary.textContent = "";
+    alertsRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
+    return;
+  }
+
+  alertsRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Lade Alerts...</td></tr>";
+  alertsSummary.textContent = "";
+
+  try {
+    const hostNameParam = encodeURIComponent(state.selectedHost);
+    const [summaryResp, listResp] = await Promise.all([
+      fetch(`/api/v1/alerts-summary?hostname=${hostNameParam}`),
+      fetch(`/api/v1/alerts?hostname=${hostNameParam}&status=all&limit=15&offset=0`),
+    ]);
+
+    if (!summaryResp.ok) {
+      throw new Error("Summary HTTP " + summaryResp.status);
+    }
+    if (!listResp.ok) {
+      throw new Error("List HTTP " + listResp.status);
+    }
+
+    const summaryData = await summaryResp.json();
+    const listData = await listResp.json();
+    const alerts = listData.alerts || [];
+
+    alertsSummary.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning})`;
+
+    if (alerts.length === 0) {
+      alertsRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Keine Alerts vorhanden.</td></tr>";
+      return;
+    }
+
+    alertsRows.innerHTML = alerts
+      .map((item) => {
+        const statusClass = item.status === "open" ? "status-open" : "status-resolved";
+        const severityClass = item.severity === "critical" ? "severity-critical" : "severity-warning";
+        return `
+          <tr>
+            <td><span class="badge ${statusClass}">${escapeHtml(asText(item.status))}</span></td>
+            <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
+            <td>${renderPathCell(item.mountpoint, 48)}</td>
+            <td>${formatPercent(item.used_percent)}</td>
+            <td>${escapeHtml(formatUtc(item.last_seen_at_utc))}</td>
+          </tr>
+        `;
+      })
+      .join("");
+  } catch (error) {
+    alertsRows.innerHTML = `<tr><td colspan=\"5\" class=\"muted\">Fehler: ${escapeHtml(error.message)}</td></tr>`;
   }
 }
 
@@ -439,6 +452,8 @@ function wireEvents() {
     }
     state.reportOffset = Math.max(0, state.reportOffset - state.reportLimit);
     await loadReportsForHost();
+    await loadAnalysisForHost();
+    await loadAlertsForHost();
   });
 
   document.getElementById("reportsNextButton").addEventListener("click", async () => {
@@ -447,6 +462,8 @@ function wireEvents() {
     }
     state.reportOffset += state.reportLimit;
     await loadReportsForHost();
+    await loadAnalysisForHost();
+    await loadAlertsForHost();
   });
 }
 
