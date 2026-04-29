@@ -14,6 +14,7 @@ const state = {
   selectedHost: "",
   selectedDisplayName: "",
   viewMode: "overview",
+  overviewSection: "alerts",
   reportLimit: 1,
   reportOffset: 0,
   totalReports: 0,
@@ -31,6 +32,31 @@ function updateViewMode() {
   reportsView.classList.toggle("hidden", overviewActive);
   overviewTabButton.classList.toggle("active", overviewActive);
   reportsTabButton.classList.toggle("active", !overviewActive);
+}
+
+function updateOverviewSection() {
+  const alertsSection = document.getElementById("overviewAlertsSection");
+  const analysisSection = document.getElementById("overviewAnalysisSection");
+  const filesystemSection = document.getElementById("overviewFilesystemSection");
+  const alertsTabButton = document.getElementById("overviewAlertsTabButton");
+  const analysisTabButton = document.getElementById("overviewAnalysisTabButton");
+  const filesystemTabButton = document.getElementById("overviewFilesystemTabButton");
+
+  if (!alertsSection || !analysisSection || !filesystemSection || !alertsTabButton || !analysisTabButton || !filesystemTabButton) {
+    return;
+  }
+
+  const showAlerts = state.overviewSection === "alerts";
+  const showAnalysis = state.overviewSection === "analysis";
+  const showFilesystem = state.overviewSection === "filesystem";
+
+  alertsSection.classList.toggle("hidden", !showAlerts);
+  analysisSection.classList.toggle("hidden", !showAnalysis);
+  filesystemSection.classList.toggle("hidden", !showFilesystem);
+
+  alertsTabButton.classList.toggle("active", showAlerts);
+  analysisTabButton.classList.toggle("active", showAnalysis);
+  filesystemTabButton.classList.toggle("active", showFilesystem);
 }
 
 function formatPercent(value) {
@@ -891,6 +917,21 @@ function wireEvents() {
     updateViewMode();
   });
 
+  document.getElementById("overviewAlertsTabButton").addEventListener("click", () => {
+    state.overviewSection = "alerts";
+    updateOverviewSection();
+  });
+
+  document.getElementById("overviewAnalysisTabButton").addEventListener("click", () => {
+    state.overviewSection = "analysis";
+    updateOverviewSection();
+  });
+
+  document.getElementById("overviewFilesystemTabButton").addEventListener("click", () => {
+    state.overviewSection = "filesystem";
+    updateOverviewSection();
+  });
+
   document.getElementById("editDisplayNameButton").addEventListener("click", async () => {
     try {
       await editDisplayName();
@@ -952,6 +993,7 @@ function wireEvents() {
 async function init() {
   wireEvents();
   updateViewMode();
+  updateOverviewSection();
   await loadHosts();
   await loadReportsForHost();
   await loadAnalysisForHost();

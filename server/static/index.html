@@ -65,7 +65,13 @@
             </div>
 
             <div id="overviewView" class="view-section">
-              <section class="alerts-panel">
+              <div class="subview-tabs">
+                <button id="overviewAlertsTabButton" type="button" class="tab-button active">Alerts</button>
+                <button id="overviewAnalysisTabButton" type="button" class="tab-button">Analyse</button>
+                <button id="overviewFilesystemTabButton" type="button" class="tab-button">Filesystem Fokus</button>
+              </div>
+
+              <section id="overviewAlertsSection" class="alerts-panel overview-subsection">
                 <div class="analysis-header">
                   <h4>🚨 Alerts</h4>
                   <p id="alertsSummary" class="count"></p>
@@ -86,13 +92,16 @@
                 </div>
               </section>
 
-              <section class="analysis-panel">
+              <section id="overviewAnalysisSection" class="analysis-panel overview-subsection hidden">
                 <div class="analysis-header">
                   <h4>📊 Analyse (letzte 24h)</h4>
                   <p id="analysisSummary" class="count"></p>
                 </div>
                 <div id="resourceCharts" class="resource-charts"></div>
                 <div id="resourceTrendCards" class="resource-trend-grid"></div>
+              </section>
+
+              <section id="overviewFilesystemSection" class="analysis-panel overview-subsection hidden">
                 <div class="analysis-header fs-focus-header">
                   <h4>💾 Filesystem Fokus</h4>
                   <p id="filesystemStats" class="count"></p>

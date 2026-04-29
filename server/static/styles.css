@@ -154,6 +154,16 @@ button {
   margin: 12px 0 14px;
 }
 
+.subview-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.overview-subsection {
+  margin-bottom: 12px;
+}
+
 .tab-button {
   background: #c7e7ea;
   color: #11424a;

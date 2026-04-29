@@ -52,6 +52,7 @@ Dashboard-Funktionen:
 - Hover-Tooltips auf Verlaufspunkten mit exaktem Zeitstempel und Wert
 - Resource-Charts als horizontale 5er-Reihe (kombiniert + 4 Einzelcharts)
 - Filesystem-Fokus mit Top-Verlaufskurven und kompakter FS-Statistik (Avg, steigende FS, >=80%)
+- Getrennte Unter-Menues pro Host in der Uebersicht: Alerts, Analyse, Filesystem Fokus
 
 Alert-Schwellwerte (optional per Env am Receiver):
 
