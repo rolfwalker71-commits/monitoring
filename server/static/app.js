@@ -139,6 +139,32 @@ function buildPolylinePoints(series, width, height, minValue, maxValue) {
     .join(" ");
 }
 
+function buildPointMarkers(series, width, height, minValue, maxValue, color, label) {
+  if (!Array.isArray(series) || series.length === 0) {
+    return "";
+  }
+
+  const pad = 8;
+  const chartWidth = Math.max(1, width - pad * 2);
+  const chartHeight = Math.max(1, height - pad * 2);
+  const range = maxValue - minValue;
+  const safeRange = range === 0 ? 1 : range;
+  const denominator = series.length > 1 ? series.length - 1 : 1;
+
+  return series
+    .map((point, index) => {
+      const x = pad + (index / denominator) * chartWidth;
+      const normalized = (point.value - minValue) / safeRange;
+      const y = pad + (1 - normalized) * chartHeight;
+      const pointTime = formatUtcPlus2(point.time_utc);
+      const pointValue = Number(point.value);
+      const valueText = Number.isFinite(pointValue) ? pointValue.toFixed(2) : "-";
+
+      return `<circle class="chart-point" cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="3.3" fill="${color}"><title>${escapeHtml(label)}: ${escapeHtml(valueText)} (${escapeHtml(pointTime)})</title></circle>`;
+    })
+    .join("");
+}
+
 function buildSparklineSvg(series, color, width = 320, height = 82) {
   const points = normalizeSeries(series);
   if (points.length === 0) {
@@ -146,18 +172,24 @@ function buildSparklineSvg(series, color, width = 320, height = 82) {
   }
 
   if (points.length === 1) {
-    return `<svg class=\"sparkline\" viewBox=\"0 0 ${width} ${height}\" role=\"img\" aria-label=\"Trend\"><line x1=\"8\" y1=\"${(height / 2).toFixed(2)}\" x2=\"${(width - 8).toFixed(2)}\" y2=\"${(height / 2).toFixed(2)}\" stroke=\"${color}\" stroke-width=\"2.2\" /></svg>`;
+    const centerY = (height / 2).toFixed(2);
+    const singleTime = formatUtcPlus2(points[0].time_utc);
+    const singleValue = Number(points[0].value);
+    const valueText = Number.isFinite(singleValue) ? singleValue.toFixed(2) : "-";
+    return `<svg class=\"sparkline\" viewBox=\"0 0 ${width} ${height}\" role=\"img\" aria-label=\"Trend\"><line x1=\"8\" y1=\"${centerY}\" x2=\"${(width - 8).toFixed(2)}\" y2=\"${centerY}\" stroke=\"${color}\" stroke-width=\"2.2\" /><circle class=\"chart-point\" cx=\"${(width / 2).toFixed(2)}\" cy=\"${centerY}\" r=\"3.6\" fill=\"${color}\"><title>${escapeHtml(valueText)} (${escapeHtml(singleTime)})</title></circle></svg>`;
   }
 
   const values = points.map((point) => point.value);
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
   const polyline = buildPolylinePoints(points, width, height, minValue, maxValue);
+  const markers = buildPointMarkers(points, width, height, minValue, maxValue, color, "Wert");
 
   return `
     <svg class="sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="Trend">
       <line x1="8" y1="${(height - 8).toFixed(2)}" x2="${(width - 8).toFixed(2)}" y2="${(height - 8).toFixed(2)}" stroke="#dde5ee" stroke-width="1" />
       <polyline fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="${polyline}" />
+      ${markers}
     </svg>
   `;
 }
@@ -200,7 +232,8 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
         return "";
       }
       const polyline = buildPolylinePoints(normalized, 760, 210, 0, 100);
-      return `<polyline fill=\"none\" stroke=\"${item.color}\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\" points=\"${polyline}\" />`;
+      const markers = buildPointMarkers(normalized, 760, 210, 0, 100, item.color, `${item.label} (norm.)`);
+      return `<polyline fill=\"none\" stroke=\"${item.color}\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\" points=\"${polyline}\" />${markers}`;
     })
     .join("");
 
