@@ -1,10 +1,10 @@
 :root {
-  --bg: #f4f6fb;
+  --bg: #edf2f7;
   --panel: #ffffff;
-  --text: #17212f;
-  --muted: #5e6b7a;
-  --accent: #006d77;
-  --line: #dce2ea;
+  --text: #1f2937;
+  --muted: #64748b;
+  --accent: #1e40af;
+  --line: #d5dee9;
 }
 
 * {
@@ -14,7 +14,7 @@
 body {
   margin: 0;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  background: radial-gradient(circle at top left, #dff4f2, var(--bg) 45%);
+  background: radial-gradient(circle at top left, #dfe9f5 0%, var(--bg) 46%);
   color: var(--text);
   font-size: 14px;
 }
@@ -61,7 +61,7 @@ h1 {
 
 .subtitle-meta {
   margin: 4px 0 0;
-  color: #3f566e;
+  color: #475569;
   font-size: 12px;
   font-weight: 600;
 }
@@ -71,7 +71,7 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 16px;
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.07);
 }
 
 .panel-header {
@@ -117,6 +117,11 @@ button {
   border-radius: 8px;
   cursor: pointer;
   font-size: 12px;
+  transition: background-color 140ms ease;
+}
+
+button:hover {
+  background: #1d4ed8;
 }
 
 .table-wrap {
@@ -165,8 +170,8 @@ button {
 }
 
 .tab-button {
-  background: #c7e7ea;
-  color: #11424a;
+  background: #dbe7f8;
+  color: #1e3a8a;
 }
 
 .tab-button.active {
@@ -197,8 +202,8 @@ button {
 
 .host-item {
   text-align: left;
-  border: 1px solid #bddfe3;
-  background: linear-gradient(180deg, #f4fbfc 0%, #eef8f9 100%);
+  border: 1px solid #cdd9e8;
+  background: linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
   color: var(--text);
   border-radius: 10px;
   padding: 10px;
@@ -216,9 +221,9 @@ button {
 }
 
 .host-item.selected {
-  border-color: #4ca8b0;
-  background: linear-gradient(180deg, #e3f3f6 0%, #dceff3 100%);
-  box-shadow: inset 0 0 0 1px #4ca8b0;
+  border-color: #60a5fa;
+  background: linear-gradient(180deg, #eaf2ff 0%, #e1ecff 100%);
+  box-shadow: inset 0 0 0 1px #60a5fa;
 }
 
 .pager {
@@ -232,7 +237,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 12px;
-  background: #f9fbff;
+  background: #f7faff;
   margin-bottom: 14px;
 }
 
@@ -250,7 +255,7 @@ button {
 }
 
 .combined-chart {
-  border: 1px solid #d8e4ef;
+  border: 1px solid #d4dfec;
   border-radius: 10px;
   background: #ffffff;
   padding: 12px;
@@ -306,7 +311,7 @@ button {
 }
 
 .mini-chart-card {
-  border: 1px solid #d8e4ef;
+  border: 1px solid #d4dfec;
   border-radius: 10px;
   background: #ffffff;
   padding: 12px;
@@ -373,7 +378,7 @@ button {
 }
 
 .fs-chart-card {
-  border: 1px solid #d8e4ef;
+  border: 1px solid #d4dfec;
   border-radius: 10px;
   background: #ffffff;
   padding: 12px;
@@ -431,7 +436,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 12px;
-  background: #fffdf8;
+  background: #f8fbff;
   margin-bottom: 14px;
 }
 
