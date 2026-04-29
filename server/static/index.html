@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Monitoring Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Server Client Monitoring</h1>
+      <p class="subtitle">Rudimentaerer Empfang und Uebersicht der Agent-Daten</p>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Letzte Meldungen</h2>
+          <button id="refreshButton">Neu laden</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Zeit (UTC)</th>
+                <th>Host</th>
+                <th>IP</th>
+                <th>Filesystems</th>
+              </tr>
+            </thead>
+            <tbody id="reportRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+  </html>
