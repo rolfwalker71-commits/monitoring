@@ -14,7 +14,7 @@ const state = {
   selectedHost: "",
   selectedDisplayName: "",
   viewMode: "overview",
-  overviewSection: "alerts",
+  overviewSection: "main",
   reportLimit: 1,
   reportOffset: 0,
   totalReports: 0,
@@ -35,27 +35,22 @@ function updateViewMode() {
 }
 
 function updateOverviewSection() {
-  const alertsSection = document.getElementById("overviewAlertsSection");
-  const analysisSection = document.getElementById("overviewAnalysisSection");
+  const mainSection = document.getElementById("overviewMainSection");
   const filesystemSection = document.getElementById("overviewFilesystemSection");
-  const alertsTabButton = document.getElementById("overviewAlertsTabButton");
-  const analysisTabButton = document.getElementById("overviewAnalysisTabButton");
+  const mainTabButton = document.getElementById("overviewMainTabButton");
   const filesystemTabButton = document.getElementById("overviewFilesystemTabButton");
 
-  if (!alertsSection || !analysisSection || !filesystemSection || !alertsTabButton || !analysisTabButton || !filesystemTabButton) {
+  if (!mainSection || !filesystemSection || !mainTabButton || !filesystemTabButton) {
     return;
   }
 
-  const showAlerts = state.overviewSection === "alerts";
-  const showAnalysis = state.overviewSection === "analysis";
+  const showMain = state.overviewSection === "main";
   const showFilesystem = state.overviewSection === "filesystem";
 
-  alertsSection.classList.toggle("hidden", !showAlerts);
-  analysisSection.classList.toggle("hidden", !showAnalysis);
+  mainSection.classList.toggle("hidden", !showMain);
   filesystemSection.classList.toggle("hidden", !showFilesystem);
 
-  alertsTabButton.classList.toggle("active", showAlerts);
-  analysisTabButton.classList.toggle("active", showAnalysis);
+  mainTabButton.classList.toggle("active", showMain);
   filesystemTabButton.classList.toggle("active", showFilesystem);
 }
 
@@ -922,13 +917,8 @@ function wireEvents() {
     updateViewMode();
   });
 
-  document.getElementById("overviewAlertsTabButton").addEventListener("click", () => {
-    state.overviewSection = "alerts";
-    updateOverviewSection();
-  });
-
-  document.getElementById("overviewAnalysisTabButton").addEventListener("click", () => {
-    state.overviewSection = "analysis";
+  document.getElementById("overviewMainTabButton").addEventListener("click", () => {
+    state.overviewSection = "main";
     updateOverviewSection();
   });
 
