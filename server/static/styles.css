@@ -212,6 +212,11 @@ button {
   color: var(--muted);
 }
 
+.trend-stand {
+  font-size: 10px;
+  color: #7a8696;
+}
+
 .alerts-panel {
   border: 1px solid var(--line);
   border-radius: 10px;

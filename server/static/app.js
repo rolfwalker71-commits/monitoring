@@ -95,8 +95,7 @@ function renderResourceTrendCards(resourceTrends, latestReportTimeUtc) {
       return `
         <article class="trend-card">
           <strong>${label}</strong>
-          <span>Aktuell: ${formatNumber(value.current)}${suffix}</span>
-          <span>Stand: ${standText}</span>
+          <span>Aktuell: ${formatNumber(value.current)}${suffix} <span class="trend-stand">(${standText})</span></span>
           <span>Min/Max: ${formatNumber(value.min)}${suffix} / ${formatNumber(value.max)}${suffix}</span>
           <span>Avg: ${formatNumber(value.avg)}${suffix}</span>
           <span>Delta: ${formatSignedPercent(value.delta)}${suffix === "%" ? "" : ""}</span>
