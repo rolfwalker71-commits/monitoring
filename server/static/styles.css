@@ -522,8 +522,29 @@ button:hover:not(.host-item) {
 
 .host-title-actions {
   display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.host-status-chips {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
+}
+
+.host-mini-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.host-mini-stack-lower {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 
 .host-alert-chip {

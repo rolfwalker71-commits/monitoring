@@ -1450,11 +1450,17 @@ function renderSingleHostCard(host) {
       <strong class="host-title-line">
         <span>${escapeHtml(displayName)}</span>
         <span class="host-title-actions">
-          ${alertChip}
-          ${updateChip}
-          <button class="host-mini-action update" type="button" data-action="update-now" data-host="${escapeHtml(hostname)}" title="Agent Update jetzt triggern">⟳</button>
-          <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
-          <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👁️" : "🙈"}</button>
+          <span class="host-status-chips">
+            ${alertChip}
+            ${updateChip}
+          </span>
+          <span class="host-mini-stack">
+            <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👁️" : "🙈"}</button>
+            <span class="host-mini-stack-lower">
+              <button class="host-mini-action update" type="button" data-action="update-now" data-host="${escapeHtml(hostname)}" title="Agent Update jetzt triggern">⟳</button>
+              <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
+            </span>
+          </span>
         </span>
       </strong>
       <span>🖥️ ${escapeHtml(hostname)}</span>
