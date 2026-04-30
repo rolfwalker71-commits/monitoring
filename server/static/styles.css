@@ -369,8 +369,27 @@ button:hover:not(.host-item) {
   display: flex;
   align-items: end;
   gap: 8px;
+  margin-top: 8px;
+}
+
+.host-tools {
   margin-top: 10px;
-  margin-bottom: 8px;
+  border: 1px solid #d7e1ef;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 6px 8px 8px;
+}
+
+.host-tools > summary {
+  cursor: pointer;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  list-style: none;
+}
+
+.host-tools > summary::-webkit-details-marker {
+  display: none;
 }
 
 .host-filter-control {
@@ -1254,6 +1273,10 @@ th {
   .host-filters {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .host-tools {
+    padding: 6px 8px;
   }
 
   .host-filter-control {
