@@ -952,24 +952,6 @@ function buildSparklineSvg(series, color, width = 320, height = 82, options = {}
   `;
 }
 
-function normalizeForCombined(series) {
-  const points = normalizeSeries(series);
-  if (points.length === 0) {
-    return [];
-  }
-
-  const values = points.map((point) => point.value);
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
-  const range = maxValue - minValue;
-  const safeRange = range === 0 ? 1 : range;
-
-  return points.map((point) => ({
-    time_utc: point.time_utc,
-    value: ((point.value - minValue) / safeRange) * 100,
-  }));
-}
-
 function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
   const chartDefinitions = [
     { key: "cpu_usage_percent", label: "CPU %", color: "#0ea5a8" },
@@ -982,39 +964,6 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
   if (!hasAnySeries) {
     return "<p class=\"muted\">Keine Verlaufskurven verfuegbar.</p>";
   }
-
-  const combinedWidth = 920;
-  const combinedHeight = 250;
-  const combinedMargins = { left: 42, right: 12, top: 12, bottom: 30 };
-  const combinedGuides = buildYAxisGuides(combinedWidth, combinedHeight, 0, 100, {
-    tickCount: 5,
-    margins: combinedMargins,
-    labelFormatter: (value) => `${Math.round(value)}%`,
-  });
-  const combinedTimeSeries = chartDefinitions
-    .map((item) => normalizeForCombined(resourceSeries[item.key]))
-    .sort((left, right) => right.length - left.length)[0] || [];
-  const combinedTimeLabels = buildXAxisTimeLabels(combinedTimeSeries, combinedWidth, combinedHeight, {
-    margins: combinedMargins,
-  });
-
-  const combinedLines = chartDefinitions
-    .map((item) => {
-      const normalized = normalizeForCombined(resourceSeries[item.key]);
-      if (normalized.length < 2) {
-        return "";
-      }
-      const polyline = buildPolylinePoints(normalized, combinedWidth, combinedHeight, 0, 100, combinedMargins);
-      const area = buildAreaPolygonPoints(normalized, combinedWidth, combinedHeight, 0, 100, combinedMargins);
-      const markers = buildPointMarkers(normalized, combinedWidth, combinedHeight, 0, 100, item.color, `${item.label} (norm.)`, combinedMargins);
-      const trendLine = buildTrendLine(normalized, combinedWidth, combinedHeight, 0, 100, item.color, combinedMargins);
-      return `<polygon class=\"chart-area\" fill=\"${item.color}\" fill-opacity=\"0.09\" points=\"${area}\" /><polyline fill=\"none\" stroke=\"${item.color}\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\" points=\"${polyline}\" />${trendLine}${markers}`;
-    })
-    .join("");
-
-  const combinedLegend = chartDefinitions
-    .map((item) => `<span><i style=\"background:${item.color}\"></i>${item.label}</span>`)
-    .join("");
 
   const standText = formatUtcPlus2(latestReportTimeUtc);
   const trendWarnings = [];
@@ -1066,18 +1015,6 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
     <section class="resource-chart-layout">
     ${trendWarningBlock}
     <section class="mini-chart-grid">${miniCharts}</section>
-    <section class="combined-chart combined-wide">
-      <div class="combined-chart-head">
-        <strong>Verlauf kombiniert (normalisiert)</strong>
-        <span>${escapeHtml(standText)}</span>
-      </div>
-      <svg class="combined-chart-svg" viewBox="0 0 ${combinedWidth} ${combinedHeight}" role="img" aria-label="Kombinierter Verlauf">
-        ${combinedGuides}
-        ${combinedTimeLabels}
-        ${combinedLines}
-      </svg>
-      <div class="combined-legend">${combinedLegend}</div>
-    </section>
     </section>
   `;
 }
