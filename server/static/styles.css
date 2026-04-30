@@ -335,6 +335,13 @@ button:hover:not(.host-item) {
   margin-bottom: 12px;
 }
 
+.overview-scroll-panel {
+  max-height: clamp(360px, calc(100dvh - 310px), 820px);
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
+}
+
 .tab-button {
   background: #dbe7f8;
   color: #1e3a8a;
@@ -1408,6 +1415,12 @@ th {
   }
 
   .host-list {
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .overview-scroll-panel {
+    max-height: none;
     overflow: visible;
     padding-right: 0;
   }
