@@ -959,14 +959,16 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
       const values = points.map((point) => point.value);
       const minValue = values.length > 0 ? Math.min(...values) : null;
       const maxValue = values.length > 0 ? Math.max(...values) : null;
+      const isPercent = item.label.includes("%");
       return `
         <article class="mini-chart-card">
           <header>
             <strong>${item.label}</strong>
             <span>${points.length} Samples</span>
           </header>
-          ${buildSparklineSvg(points, item.color, 420, 120, {
-            suffix: item.label.includes("%") ? "%" : "",
+          ${buildSparklineSvg(points, item.color, 420, 140, {
+            suffix: isPercent ? "%" : "",
+            ...(isPercent ? { minValue: 0, maxValue: 100 } : {}),
           })}
           <footer>
             <span>Min: ${minValue === null ? "-" : formatNumber(minValue, 2)}</span>
@@ -1060,7 +1062,7 @@ function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
             <strong>${mountpoint}</strong>
             <span>${Number(item.sample_count || 0).toLocaleString("de-DE")} Samples</span>
           </header>
-          ${buildSparklineSvg(points, color, 520, 130, { suffix: "%" })}
+          ${buildSparklineSvg(points, color, 520, 150, { suffix: "%", minValue: 0, maxValue: 100 })}
           <footer>
             <span>Aktuell: ${formatPercent(item.current_used_percent)}</span>
             <span>Delta: ${formatSignedPercent(item.delta_used_percent)}</span>
