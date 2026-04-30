@@ -108,8 +108,8 @@ Dieser wird im Dashboard als Titel verwendet, waehrend der technische `hostname`
 Optional kann der Anzeigename auch direkt uebergeben werden:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/install_agent.sh \
-  | sudo bash -s -- --server-url http://<server-ip>:8080 --display-name "Vaultwarden Prod" --interval-minutes 15
+curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/linux/install_agent.sh \
+  | bash -s -- --server-url http://<server-ip>:8080 --display-name "Vaultwarden Prod" --interval-minutes 15
 ```
 
 Das Install-Skript versucht zuerst einen Eintrag in `/etc/cron.d/monitoring-agent` anzulegen.
@@ -130,8 +130,8 @@ Queue-Verhalten:
 Mit API-Key:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/install_agent.sh \
-  | sudo bash -s -- \
+curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/linux/install_agent.sh \
+  | bash -s -- \
     --server-url http://<server-ip>:8080 \
     --api-key mein-geheimer-key \
     --interval-minutes 15
