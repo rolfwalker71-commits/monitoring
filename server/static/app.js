@@ -36,6 +36,7 @@ const state = {
   visibleHosts: 0,
   hiddenHosts: 0,
   hiddenHostsCollapsed: true,
+  latestAgentRelease: "",
 };
 
 const ANALYSIS_RANGE_OPTIONS = new Map([
@@ -88,6 +89,41 @@ function persistAnalysisRangePreference() {
   }
 }
 
+function parseVersionParts(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return null;
+  }
+
+  const normalized = raw.replace(/^v/i, "");
+  const parts = normalized.split(".").map((part) => Number.parseInt(part, 10));
+  if (parts.length === 0 || parts.some((part) => !Number.isFinite(part) || part < 0)) {
+    return null;
+  }
+  return parts;
+}
+
+function compareSemverLike(leftVersion, rightVersion) {
+  const left = parseVersionParts(leftVersion);
+  const right = parseVersionParts(rightVersion);
+  if (!left || !right) {
+    return null;
+  }
+
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const leftValue = left[index] ?? 0;
+    const rightValue = right[index] ?? 0;
+    if (leftValue > rightValue) {
+      return 1;
+    }
+    if (leftValue < rightValue) {
+      return -1;
+    }
+  }
+  return 0;
+}
+
 async function loadWebclientVersion() {
   const versionEl = document.getElementById("webclientVersion");
   const agentVersionEl = document.getElementById("latestAgentVersion");
@@ -122,6 +158,12 @@ async function loadWebclientVersion() {
     if (agentVersionEl) {
       agentVersionEl.textContent = agentValue;
     }
+    state.latestAgentRelease = agentValue;
+
+    // Re-render host cards so update badges reflect the latest release value immediately.
+    if (state.isAuthenticated && state.selectedHost) {
+      await loadHosts();
+    }
   } catch (_error) {
     if (versionEl) {
       versionEl.textContent = "-";
@@ -129,6 +171,7 @@ async function loadWebclientVersion() {
     if (agentVersionEl) {
       agentVersionEl.textContent = "-";
     }
+    state.latestAgentRelease = "";
   }
 }
 
@@ -1390,6 +1433,12 @@ function renderSingleHostCard(host) {
   const hiddenClass = isHidden ? " host-item-hidden" : "";
   const chipClass = openCriticalAlertCount > 0 ? "host-alert-chip critical" : "host-alert-chip";
   const alertChip = hasOpenAlerts ? `<span class="${chipClass}">Alerts ${openAlertCount}</span>` : "";
+  const currentVersion = asText(host.agent_version, "");
+  const latestVersion = asText(state.latestAgentRelease, "");
+  const versionComparison = compareSemverLike(currentVersion, latestVersion);
+  const updateChip = versionComparison === -1
+    ? `<span class="host-update-chip">Update verfuegbar</span>`
+    : "";
 
   const osRaw = asText(host.os || "").toLowerCase();
   const iconName = osRaw.includes("windows") ? "windows.png" : "linux.png";
@@ -1402,6 +1451,7 @@ function renderSingleHostCard(host) {
         <span>${escapeHtml(displayName)}</span>
         <span class="host-title-actions">
           ${alertChip}
+          ${updateChip}
           <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
           <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👁️" : "🙈"}</button>
         </span>
@@ -2019,6 +2069,7 @@ function wireEvents() {
   });
 
   document.getElementById("refreshButton").addEventListener("click", async () => {
+    await loadWebclientVersion();
     await loadGlobalAlertsOverview();
     await loadHosts();
     await loadReportsForHost();
