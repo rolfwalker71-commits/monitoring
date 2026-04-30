@@ -116,6 +116,18 @@ curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/mai
   | sudo bash -s -- --server-url http://<server-ip>:8080 --interval-minutes 15 --update-hours 6
 ```
 
+Auf einem Windows-Client (PowerShell als Administrator):
+
+```powershell
+$u='https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/windows/install_agent.ps1'; $s=(curl.exe -fsSL $u | Out-String); & ([ScriptBlock]::Create($s)) -ServerUrl 'https://monitoring.example.com'
+```
+
+Optional mit API-Key:
+
+```powershell
+$u='https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/windows/install_agent.ps1'; $s=(curl.exe -fsSL $u | Out-String); & ([ScriptBlock]::Create($s)) -ServerUrl 'https://monitoring.example.com' -ApiKey 'DEIN_API_KEY'
+```
+
 Die Installation laeuft komplett non-interactive.
 Wenn `--display-name` nicht gesetzt wird, verwendet der Agent automatisch `AGENT_ID`/Hostname als Anzeigenamen.
 
