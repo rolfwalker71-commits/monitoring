@@ -1535,11 +1535,11 @@ function splitHosts(hosts) {
 }
 
 function hiddenHostsToggleLabel(collapsed) {
-  return collapsed ? "▸ open" : "▾ open";
+  return collapsed ? "▸" : "▾";
 }
 
 function hiddenHostMutedAlertsToggleLabel(collapsed) {
-  return collapsed ? "▸ muted" : "▾ muted";
+  return collapsed ? "▸" : "▾";
 }
 
 async function loadAlertMutes() {
@@ -2066,7 +2066,12 @@ async function loadAnalysisForHost() {
     const latestQueue = queueDepthLabel(delivery.latest_queue_depth);
 
     analysisSummary.textContent = `${reportCount} Reports, hoechste aktuelle FS-Auslastung: ${latestMax}`;
-    deliveryStats.textContent = `📬 Letzte Meldung: ${latestDelivery} | 🗃️ Queue: ${latestQueue} | Fenster: ${delayedCount} delayed / ${liveCount} live`;
+    deliveryStats.innerHTML = [
+      `<span class="stat-chip">📬 ${latestDelivery}</span>`,
+      `<span class="stat-chip">Q${latestQueue}</span>`,
+      `<span class="stat-chip ${Number(delivery.delayed_report_count || 0) > 0 ? 'delayed' : 'live'}">${delayedCount} delayed</span>`,
+      `<span class="stat-chip live">${liveCount} live</span>`,
+    ].join("");
     resourceCharts.innerHTML = renderResourceCharts(resourceSeries, data.latest_report_time_utc);
     resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc);
     filesystemCharts.innerHTML = renderFilesystemTrendCharts(trendRows, data.latest_report_time_utc);
@@ -2126,7 +2131,7 @@ async function loadAlertsForHost() {
   const panelBody = document.getElementById("hostAlertsPanelBody");
 
   panelBody.classList.toggle("hidden", state.hostAlertsCollapsed);
-  toggleButton.textContent = state.hostAlertsCollapsed ? "Aufklappen" : "Zuklappen";
+  toggleButton.textContent = state.hostAlertsCollapsed ? "▸" : "▾";
 
   if (!state.selectedHost) {
     alertsSummary.textContent = "";
@@ -2205,7 +2210,7 @@ async function loadGlobalAlertsOverview() {
   rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Lade globale Alerts...</td></tr>";
   summaryEl.textContent = "";
   panelBody.classList.toggle("hidden", state.globalAlertsCollapsed);
-  toggleButton.textContent = state.globalAlertsCollapsed ? "Aufklappen" : "Zuklappen";
+  toggleButton.textContent = state.globalAlertsCollapsed ? "▸" : "▾";
 
   try {
     const [summaryResp, listResp] = await Promise.all([

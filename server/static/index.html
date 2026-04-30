@@ -113,9 +113,9 @@
           <h2>Hosts und Historie</h2>
           <div class="panel-actions">
             <button id="triggerAllAgentsUpdateButton" class="global-update-chip global-update-chip-inline" type="button">⟳ Update fuer alle Hosts</button>
-            <button id="openChangePasswordButton" type="button">Passwort ändern</button>
-            <button id="openAlarmSettingsButton" type="button">Alarm Einstellungen</button>
-            <button id="refreshButton">Neu laden</button>
+            <button id="openChangePasswordButton" class="btn-secondary" type="button">Passwort ändern</button>
+            <button id="openAlarmSettingsButton" class="btn-secondary" type="button">Alarm Einstellungen</button>
+            <button id="refreshButton" class="btn-secondary">Neu laden</button>
           </div>
         </div>
 
@@ -190,7 +190,7 @@
             <div class="section-head">
               <div class="title-row">
                 <h3 id="selectedHostTitle">Meldungen</h3>
-                <button id="editDisplayNameButton" type="button">Titel bearbeiten</button>
+                <button id="editDisplayNameButton" class="btn-icon" type="button" title="Titel bearbeiten">✏️</button>
               </div>
               <p id="reportCount" class="count"></p>
               <p id="deliveryStats" class="count compact"></p>
@@ -227,7 +227,7 @@
                     <h4>🚨 Alerts</h4>
                     <div class="alerts-panel-actions">
                       <p id="alertsSummary" class="count"></p>
-                      <button id="toggleHostAlertsPanelButton" type="button">Zuklappen</button>
+                    <button id="toggleHostAlertsPanelButton" type="button" class="host-group-toggle">▾</button>
                     </div>
                   </div>
                   <div id="hostAlertsPanelBody">
@@ -235,11 +235,11 @@
                       <table>
                         <thead>
                           <tr>
-                            <th>📌 Status</th>
-                            <th>⚠️ Severity</th>
-                            <th>📁 Mountpoint</th>
-                            <th>📈 Used</th>
-                            <th>🕒 Transfer</th>
+                        <th>Status</th>
+                            <th>Severity</th>
+                            <th>Mountpoint</th>
+                            <th>Used</th>
+                            <th>Transfer</th>
                             <th>🔇</th>
                           </tr>
                         </thead>
@@ -269,13 +269,13 @@
                   <table>
                     <thead>
                       <tr>
-                        <th>📁 Mountpoint</th>
-                        <th>🧪 Samples</th>
-                        <th>📍 Aktuell</th>
-                        <th>🔽 Min</th>
-                        <th>🔼 Max</th>
-                        <th>🧮 Avg</th>
-                        <th>↕️ Delta</th>
+                        <th>Mountpoint</th>
+                        <th>Samples</th>
+                        <th>Aktuell</th>
+                        <th>Min</th>
+                        <th>Max</th>
+                        <th>Avg</th>
+                        <th>Delta</th>
                       </tr>
                     </thead>
                     <tbody id="analysisRows"></tbody>
@@ -299,18 +299,18 @@
                       <option value="warning">Nur warning</option>
                     </select>
                   </label>
-                  <button id="toggleGlobalAlertsPanelButton" type="button">Zuklappen</button>
+                  <button id="toggleGlobalAlertsPanelButton" type="button" class="host-group-toggle">▾</button>
                 </div>
                 <div id="globalAlertsPanelBody">
                   <div class="table-wrap">
                     <table>
                       <thead>
                         <tr>
-                          <th>🖥️ Host</th>
-                          <th>⚠️ Severity</th>
-                          <th>📁 Mountpoint</th>
-                          <th>📈 Used</th>
-                          <th>🕒 Transfer</th>
+                          <th>Host</th>
+                          <th>Severity</th>
+                          <th>Mountpoint</th>
+                          <th>Used</th>
+                          <th>Transfer</th>
                           <th>🔇</th>
                         </tr>
                       </thead>
