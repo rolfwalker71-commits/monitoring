@@ -21,6 +21,7 @@ const state = {
   hostMutedFilter: "all",
   viewMode: "overview",
   overviewSection: "main",
+  criticalTrendsHours: 24,
   reportLimit: 1,
   reportOffset: 0,
   totalReports: 0,
@@ -269,19 +270,24 @@ function updateViewMode() {
   const overviewView = document.getElementById("overviewView");
   const reportsView = document.getElementById("reportsView");
   const globalAlertsView = document.getElementById("globalAlertsView");
+  const criticalTrendsView = document.getElementById("criticalTrendsView");
   const overviewTabButton = document.getElementById("overviewTabButton");
   const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
+  const criticalTrendsTabButton = document.getElementById("criticalTrendsTabButton");
   const reportsTabButton = document.getElementById("reportsTabButton");
 
   const overviewActive = state.viewMode === "overview";
   const reportsActive = state.viewMode === "reports";
   const globalAlertsActive = state.viewMode === "global-alerts";
+  const criticalTrendsActive = state.viewMode === "critical-trends";
 
   overviewView.classList.toggle("hidden", !overviewActive);
   reportsView.classList.toggle("hidden", !reportsActive);
   globalAlertsView.classList.toggle("hidden", !globalAlertsActive);
+  if (criticalTrendsView) criticalTrendsView.classList.toggle("hidden", !criticalTrendsActive);
   overviewTabButton.classList.toggle("active", overviewActive);
   globalAlertsTabButton.classList.toggle("active", globalAlertsActive);
+  if (criticalTrendsTabButton) criticalTrendsTabButton.classList.toggle("active", criticalTrendsActive);
   reportsTabButton.classList.toggle("active", reportsActive);
   updateReportSectionUi();
 }
@@ -2290,6 +2296,104 @@ async function loadAlertsForHost() {
   }
 }
 
+function renderCriticalTrends(data) {
+  const { warnings, hours } = data;
+  if (!warnings || warnings.length === 0) {
+    return `<div class="ct-empty"><span class="ct-empty-icon">✓</span><p>Keine kritischen Trends im Zeitraum der letzten ${hours} Std. erkannt.</p></div>`;
+  }
+
+  // Group by hostname
+  const byHost = new Map();
+  for (const w of warnings) {
+    if (!byHost.has(w.hostname)) byHost.set(w.hostname, []);
+    byHost.get(w.hostname).push(w);
+  }
+
+  const critCount = warnings.filter((w) => w.level === "crit").length;
+  const warnCount = warnings.filter((w) => w.level === "warn").length;
+
+  const summary = `
+    <div class="ct-summary">
+      <span class="ct-summary-label">Zeitraum: letzte ${hours} Std.</span>
+      ${critCount > 0 ? `<span class="ct-badge ct-badge-crit">${critCount} Kritisch</span>` : ""}
+      ${warnCount > 0 ? `<span class="ct-badge ct-badge-warn">${warnCount} Warnung</span>` : ""}
+      <span class="ct-summary-label">${byHost.size} betroffene Host${byHost.size !== 1 ? "s" : ""}</span>
+    </div>
+  `;
+
+  const cards = [...byHost.entries()].map(([hostname, items]) => {
+    const hostCrit = items.filter((w) => w.level === "crit").length;
+    const hostWarn = items.filter((w) => w.level === "warn").length;
+    const hostBadge = hostCrit > 0
+      ? `<span class="ct-host-badge ct-badge-crit">Kritisch</span>`
+      : `<span class="ct-host-badge ct-badge-warn">Warnung</span>`;
+
+    const rows = items.map((w) => {
+      const bar = Math.min(100, Math.max(0, w.projected));
+      const barClass = w.level === "crit" ? "ct-bar-crit" : "ct-bar-warn";
+      const icon = w.type === "filesystem" ? "💾" : "📊";
+      return `
+        <div class="ct-row ct-row-${w.level}">
+          <span class="ct-row-icon">${icon}</span>
+          <span class="ct-row-metric">${escapeHtml(w.metric)}</span>
+          <span class="ct-row-current">Aktuell: <strong>${w.current !== null ? w.current.toFixed(1) + "%" : "–"}</strong></span>
+          <span class="ct-row-arrow">→</span>
+          <span class="ct-row-projected ct-projected-${w.level}">Projektion: <strong>${w.projected.toFixed(1)}%</strong></span>
+          <div class="ct-bar-wrap"><div class="ct-bar ${barClass}" style="width:${bar.toFixed(1)}%"></div></div>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <div class="ct-host-card ct-host-card-${hostCrit > 0 ? "crit" : "warn"}">
+        <div class="ct-host-header">
+          <span class="ct-hostname">${escapeHtml(hostname)}</span>
+          ${hostBadge}
+          <span class="ct-host-meta">${hostCrit > 0 ? hostCrit + " kritisch" : ""}${hostCrit > 0 && hostWarn > 0 ? ", " : ""}${hostWarn > 0 ? hostWarn + " Warnung" : ""}</span>
+        </div>
+        <div class="ct-rows">${rows}</div>
+      </div>
+    `;
+  }).join("");
+
+  return summary + cards;
+}
+
+async function loadCriticalTrends() {
+  const listEl = document.getElementById("criticalTrendsList");
+  const tabButton = document.getElementById("criticalTrendsTabButton");
+  if (!listEl) return;
+
+  listEl.innerHTML = "<p class=\"muted\">Lade Trend-Daten…</p>";
+  try {
+    const response = await fetch(`/api/v1/critical-trends?hours=${state.criticalTrendsHours}`, {
+      credentials: "same-origin",
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    listEl.innerHTML = renderCriticalTrends(data);
+
+    const critCount = (data.warnings || []).filter((w) => w.level === "crit").length;
+    const warnCount = (data.warnings || []).filter((w) => w.level === "warn").length;
+    if (tabButton) {
+      if (critCount > 0) {
+        tabButton.dataset.alertBadge = String(critCount);
+        tabButton.classList.add("tab-has-crit");
+        tabButton.classList.remove("tab-has-warn");
+      } else if (warnCount > 0) {
+        tabButton.dataset.alertBadge = String(warnCount);
+        tabButton.classList.remove("tab-has-crit");
+        tabButton.classList.add("tab-has-warn");
+      } else {
+        delete tabButton.dataset.alertBadge;
+        tabButton.classList.remove("tab-has-crit", "tab-has-warn");
+      }
+    }
+  } catch (error) {
+    listEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
 async function loadGlobalAlertsOverview() {
   const summaryEl = document.getElementById("globalAlertsSummary");
   const rowsEl = document.getElementById("globalAlertsRows");
@@ -2390,6 +2494,21 @@ function wireEvents() {
     state.viewMode = "global-alerts";
     updateViewMode();
     await loadGlobalAlertsOverview();
+  });
+
+  document.getElementById("criticalTrendsTabButton").addEventListener("click", async () => {
+    state.viewMode = "critical-trends";
+    updateViewMode();
+    await loadCriticalTrends();
+  });
+
+  document.getElementById("refreshCriticalTrendsButton").addEventListener("click", async () => {
+    await loadCriticalTrends();
+  });
+
+  document.getElementById("criticalTrendsRangeSelect").addEventListener("change", async (event) => {
+    state.criticalTrendsHours = Number(event.target.value) || 24;
+    await loadCriticalTrends();
   });
 
   document.getElementById("reportsTabButton").addEventListener("click", () => {

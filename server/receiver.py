@@ -1475,6 +1475,142 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if parsed.path == "/api/v1/critical-trends":
+            if not self._unauthorized_if_needed():
+                return
+            query = parse_qs(parsed.query)
+            hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
+            cutoff_iso = utc_hours_ago_iso(hours)
+
+            RESOURCE_METRICS = [
+                ("cpu_usage_percent", "CPU %"),
+                ("memory_used_percent", "RAM %"),
+                ("swap_used_percent", "Swap %"),
+            ]
+
+            def linear_regression_projected(values: list[float]) -> float | None:
+                n = len(values)
+                if n < 3:
+                    return None
+                sum_x = n * (n - 1) // 2
+                sum_x2 = (n - 1) * n * (2 * n - 1) // 6
+                sum_y = sum(values)
+                sum_xy = sum(i * v for i, v in enumerate(values))
+                denom = n * sum_x2 - sum_x * sum_x
+                if denom == 0:
+                    return None
+                slope = (n * sum_xy - sum_x * sum_y) / denom
+                intercept = (sum_y - slope * sum_x) / n
+                return slope * (2 * (n - 1)) + intercept
+
+            def trend_level(projected: float | None) -> str | None:
+                if projected is None:
+                    return None
+                if projected >= 100:
+                    return "crit"
+                if projected >= 90:
+                    return "warn"
+                return None
+
+            warnings: list[dict] = []
+
+            with sqlite3.connect(DB_PATH) as conn:
+                hostnames = [
+                    row[0]
+                    for row in conn.execute(
+                        "SELECT DISTINCT hostname FROM reports WHERE received_at_utc >= ? ORDER BY hostname ASC",
+                        (cutoff_iso,),
+                    ).fetchall()
+                ]
+
+                for hostname in hostnames:
+                    rows = conn.execute(
+                        """
+                        SELECT received_at_utc, payload_json
+                        FROM reports
+                        WHERE hostname = ? AND received_at_utc >= ?
+                        ORDER BY id ASC
+                        """,
+                        (hostname, cutoff_iso),
+                    ).fetchall()
+
+                    if not rows:
+                        continue
+
+                    resource_series: dict[str, list[float]] = {
+                        "cpu_usage_percent": [],
+                        "memory_used_percent": [],
+                        "swap_used_percent": [],
+                    }
+                    fs_series: dict[str, list[float]] = {}
+
+                    for row in rows:
+                        payload = parse_payload_json(row[1])
+
+                        cpu = get_nested_number(payload, "cpu", "usage_percent")
+                        if cpu is not None:
+                            resource_series["cpu_usage_percent"].append(cpu)
+
+                        mem = get_nested_number(payload, "memory", "used_percent")
+                        if mem is not None:
+                            resource_series["memory_used_percent"].append(mem)
+
+                        swap = get_nested_number(payload, "swap", "used_percent")
+                        if swap is not None:
+                            resource_series["swap_used_percent"].append(swap)
+
+                        for fs in payload.get("filesystems", []):
+                            if not isinstance(fs, dict):
+                                continue
+                            mp = str(fs.get("mountpoint", "")).strip()
+                            try:
+                                up = float(fs["used_percent"])
+                            except (KeyError, TypeError, ValueError):
+                                continue
+                            if mp not in fs_series:
+                                fs_series[mp] = []
+                            fs_series[mp].append(up)
+
+                    for key, label in RESOURCE_METRICS:
+                        values = resource_series[key]
+                        projected = linear_regression_projected(values)
+                        level = trend_level(projected)
+                        if level:
+                            current = values[-1] if values else None
+                            warnings.append({
+                                "hostname": hostname,
+                                "metric": label,
+                                "metric_key": key,
+                                "type": "resource",
+                                "current": round(current, 1) if current is not None else None,
+                                "projected": round(projected, 1),
+                                "level": level,
+                            })
+
+                    for mp, values in fs_series.items():
+                        projected = linear_regression_projected(values)
+                        level = trend_level(projected)
+                        if level:
+                            current = values[-1] if values else None
+                            warnings.append({
+                                "hostname": hostname,
+                                "metric": mp,
+                                "metric_key": "filesystem",
+                                "type": "filesystem",
+                                "current": round(current, 1) if current is not None else None,
+                                "projected": round(projected, 1),
+                                "level": level,
+                            })
+
+            warnings.sort(key=lambda w: (0 if w["level"] == "crit" else 1, -w["projected"]))
+
+            self._send_json(HTTPStatus.OK, {
+                "hours": hours,
+                "warnings": warnings,
+                "total": len(warnings),
+            })
+            return
+
         if parsed.path == "/api/v1/analysis":
             query = parse_qs(parsed.query)
             hostname = query.get("hostname", [""])[0].strip()
