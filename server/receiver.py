@@ -179,6 +179,17 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS muted_alert_rules (
+                hostname TEXT NOT NULL,
+                mountpoint TEXT NOT NULL,
+                muted_by TEXT NOT NULL DEFAULT '',
+                muted_at_utc TEXT NOT NULL,
+                PRIMARY KEY(hostname, mountpoint)
+            )
+            """
+        )
+        conn.execute(
+            """
             INSERT INTO alarm_settings (
                 id,
                 warning_threshold_percent,
@@ -624,6 +635,14 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
     }
 
 
+def is_alert_muted(conn: sqlite3.Connection, hostname: str, mountpoint: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM muted_alert_rules WHERE hostname = ? AND mountpoint = ?",
+        (hostname, mountpoint),
+    ).fetchone()
+    return row is not None
+
+
 def resolve_open_alerts_for_host(conn: sqlite3.Connection, hostname: str, report_id: int | None) -> None:
     now_utc = utc_now_iso()
     conn.execute(
@@ -702,6 +721,18 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
             continue
 
         mountpoints_seen.add(mountpoint)
+        if is_alert_muted(conn, hostname, mountpoint):
+            muted_open = conn.execute(
+                "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open'",
+                (hostname, mountpoint),
+            ).fetchone()
+            if muted_open:
+                conn.execute(
+                    "UPDATE alerts SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ? WHERE id = ?",
+                    (now_utc, now_utc, muted_open[0]),
+                )
+            conn.execute("DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?", (hostname, mountpoint))
+            continue
         try:
             used_percent = float(fs.get("used_percent"))
         except (TypeError, ValueError):
@@ -1079,11 +1110,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                                                 SELECT COUNT(*)
                                                 FROM alerts a1
                                                 WHERE a1.hostname = r.hostname AND a1.status = 'open'
+                                                  AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a1.hostname AND m.mountpoint = a1.mountpoint)
                                             ) AS open_alert_count,
                                             (
                                                 SELECT COUNT(*)
                                                 FROM alerts a2
                                                 WHERE a2.hostname = r.hostname AND a2.status = 'open' AND a2.severity = 'critical'
+                                                  AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a2.hostname AND m.mountpoint = a2.mountpoint)
                                             ) AS open_critical_alert_count
                     FROM reports r
                     GROUP BY r.hostname
@@ -1483,14 +1516,20 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         )
 
             alerts = []
+            with sqlite3.connect(DB_PATH) as conn_mute:
+                muted_pairs = {
+                    (str(r[0]), str(r[1]))
+                    for r in conn_mute.execute("SELECT hostname, mountpoint FROM muted_alert_rules").fetchall()
+                }
             for row in rows:
                 hostname = str(row[1] or "")
+                mountpoint = str(row[2] or "")
                 alerts.append(
                     {
                         "id": row[0],
                         "hostname": hostname,
                         "display_name": display_names.get(hostname, hostname),
-                        "mountpoint": row[2],
+                        "mountpoint": mountpoint,
                         "severity": row[3],
                         "used_percent": row[4],
                         "status": row[5],
@@ -1498,6 +1537,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "last_seen_at_utc": row[7],
                         "resolved_at_utc": row[8],
                         "report_id": row[9],
+                        "is_muted": (hostname, mountpoint) in muted_pairs,
                     }
                 )
 
@@ -1522,6 +1562,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             where_clause = "WHERE status = 'open'"
             args = []
             where_clause += " AND COALESCE((SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0"
+            where_clause += " AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = alerts.hostname AND m.mountpoint = alerts.mountpoint)"
             if hostname_filter:
                 where_clause += " AND hostname = ?"
                 args.append(hostname_filter)
@@ -1563,6 +1604,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 settings = get_alarm_settings(conn)
 
             self._send_json(HTTPStatus.OK, settings)
+            return
+
+        if parsed.path == "/api/v1/alert-mutes":
+            with sqlite3.connect(DB_PATH) as conn:
+                rows = conn.execute(
+                    "SELECT hostname, mountpoint, muted_by, muted_at_utc FROM muted_alert_rules ORDER BY hostname, mountpoint"
+                ).fetchall()
+            self._send_json(
+                HTTPStatus.OK,
+                {"mutes": [{"hostname": r[0], "mountpoint": r[1], "muted_by": r[2], "muted_at_utc": r[3]} for r in rows]},
+            )
             return
 
         if parsed.path == "/":
@@ -1843,6 +1895,51 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "is_hidden": is_hidden,
                 },
             )
+            return
+
+        if path == "/api/v1/alert-mute":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            hostname = str(payload.get("hostname", "")).strip()
+            mountpoint = str(payload.get("mountpoint", "")).strip()
+            if not hostname or not mountpoint:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
+                return
+            muted_by = self._web_session_username() or "webclient"
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO muted_alert_rules (hostname, mountpoint, muted_by, muted_at_utc) VALUES (?, ?, ?, ?)",
+                    (hostname, mountpoint, muted_by, utc_now_iso()),
+                )
+                conn.commit()
+            self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "mountpoint": mountpoint})
+            return
+
+        if path == "/api/v1/alert-unmute":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            hostname = str(payload.get("hostname", "")).strip()
+            mountpoint = str(payload.get("mountpoint", "")).strip()
+            if not hostname or not mountpoint:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute(
+                    "DELETE FROM muted_alert_rules WHERE hostname = ? AND mountpoint = ?",
+                    (hostname, mountpoint),
+                )
+                conn.commit()
+            self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "mountpoint": mountpoint})
             return
 
         if path == "/api/v1/agent-command":

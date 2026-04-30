@@ -1848,6 +1848,18 @@ async function loadAnalysisForHost() {
   }
 }
 
+async function toggleAlertMute(hostname, mountpoint, currentlyMuted) {
+  const endpoint = currentlyMuted ? "/api/v1/alert-unmute" : "/api/v1/alert-mute";
+  await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ hostname, mountpoint }),
+  });
+  await loadAlertsForHost();
+  await loadGlobalAlertsOverview();
+  await loadHosts();
+}
+
 async function loadAlertsForHost() {
   const alertsSummary = document.getElementById("alertsSummary");
   const alertsRows = document.getElementById("alertsRows");
@@ -1859,11 +1871,11 @@ async function loadAlertsForHost() {
 
   if (!state.selectedHost) {
     alertsSummary.textContent = "";
-    alertsRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
+    alertsRows.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
     return;
   }
 
-  alertsRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Lade Alerts...</td></tr>";
+  alertsRows.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Lade Alerts...</td></tr>";
   alertsSummary.textContent = "";
 
   try {
@@ -1887,7 +1899,7 @@ async function loadAlertsForHost() {
     alertsSummary.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning})`;
 
     if (alerts.length === 0) {
-      alertsRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Keine Alerts vorhanden.</td></tr>";
+      alertsRows.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Keine Alerts vorhanden.</td></tr>";
       return;
     }
 
@@ -1895,19 +1907,32 @@ async function loadAlertsForHost() {
       .map((item) => {
         const statusClass = item.status === "open" ? "status-open" : "status-resolved";
         const severityClass = item.severity === "critical" ? "severity-critical" : "severity-warning";
+        const isMuted = Boolean(item.is_muted);
+        const muteBtn = `<button class="alert-mute-btn${isMuted ? " muted" : ""}" type="button" data-action="toggle-mute" data-hostname="${escapeHtml(asText(item.hostname))}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-muted="${isMuted ? "1" : "0"}" title="${isMuted ? "Stummschaltung aufheben" : "Alert stummschalten"}">${isMuted ? "🔔" : "🔇"}</button>`;
         return `
-          <tr>
+          <tr class="${isMuted ? "alert-row-muted" : ""}">
             <td><span class="badge ${statusClass}">${escapeHtml(asText(item.status))}</span></td>
             <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
             <td>${renderPathCell(item.mountpoint, 48)}</td>
             <td>${formatPercent(item.used_percent)}</td>
             <td>${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}</td>
+            <td>${muteBtn}</td>
           </tr>
         `;
       })
       .join("");
+
+    alertsRows.querySelectorAll("[data-action='toggle-mute']").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const hostname = btn.getAttribute("data-hostname");
+        const mountpoint = btn.getAttribute("data-mountpoint");
+        const isMuted = btn.getAttribute("data-muted") === "1";
+        await toggleAlertMute(hostname, mountpoint, isMuted);
+      });
+    });
   } catch (error) {
-    alertsRows.innerHTML = `<tr><td colspan=\"5\" class=\"muted\">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+    alertsRows.innerHTML = `<tr><td colspan="6" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
   }
 }
 
@@ -1918,7 +1943,7 @@ async function loadGlobalAlertsOverview() {
   const toggleButton = document.getElementById("toggleGlobalAlertsPanelButton");
   const panelBody = document.getElementById("globalAlertsPanelBody");
 
-  rowsEl.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Lade globale Alerts...</td></tr>";
+  rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Lade globale Alerts...</td></tr>";
   summaryEl.textContent = "";
   panelBody.classList.toggle("hidden", state.globalAlertsCollapsed);
   toggleButton.textContent = state.globalAlertsCollapsed ? "Aufklappen" : "Zuklappen";
@@ -1956,7 +1981,7 @@ async function loadGlobalAlertsOverview() {
     summaryEl.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}`;
 
     if (alerts.length === 0) {
-      rowsEl.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Keine offenen Alerts fuer den gesetzten Filter.</td></tr>";
+      rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Keine offenen Alerts fuer den gesetzten Filter.</td></tr>";
       return;
     }
 
@@ -1965,8 +1990,10 @@ async function loadGlobalAlertsOverview() {
         const severityClass = item.severity === "critical" ? "severity-critical" : "severity-warning";
         const hostDisplayName = asText(item.display_name || item.hostname);
         const hostName = asText(item.hostname);
+        const isMuted = Boolean(item.is_muted);
+        const muteBtn = `<button class="alert-mute-btn${isMuted ? " muted" : ""}" type="button" data-action="toggle-mute" data-hostname="${escapeHtml(hostName)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-muted="${isMuted ? "1" : "0"}" title="${isMuted ? "Stummschaltung aufheben" : "Alert stummschalten"}">${isMuted ? "🔔" : "🔇"}</button>`;
         return `
-          <tr>
+          <tr class="${isMuted ? "alert-row-muted" : ""}">
             <td>
               <div class="global-host-cell">
                 <span class="global-host-label">${escapeHtml(hostDisplayName)}</span>
@@ -1977,12 +2004,23 @@ async function loadGlobalAlertsOverview() {
             <td>${renderPathCell(item.mountpoint, 42)}</td>
             <td>${formatPercent(item.used_percent)}</td>
             <td>${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}</td>
+            <td>${muteBtn}</td>
           </tr>
         `;
       })
       .join("");
+
+    rowsEl.querySelectorAll("[data-action='toggle-mute']").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const hostname = btn.getAttribute("data-hostname");
+        const mountpoint = btn.getAttribute("data-mountpoint");
+        const isMuted = btn.getAttribute("data-muted") === "1";
+        await toggleAlertMute(hostname, mountpoint, isMuted);
+      });
+    });
   } catch (error) {
-    rowsEl.innerHTML = `<tr><td colspan="5" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+    rowsEl.innerHTML = `<tr><td colspan="6" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
     globalAlertsTabButton.textContent = "Globale Alerts";
     globalAlertsTabButton.classList.remove("alert-active");
   }

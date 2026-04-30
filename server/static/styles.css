@@ -564,6 +564,29 @@ button:hover:not(.host-item) {
   line-height: 1;
 }
 
+.alert-mute-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0.7;
+  transition: opacity 0.15s, background 0.15s;
+}
+.alert-mute-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.12);
+}
+.alert-mute-btn.muted {
+  opacity: 1;
+  color: #f59e0b;
+}
+
+.alert-row-muted td {
+  opacity: 0.45;
+}
+
 .host-mini-action {
   width: 24px;
   height: 24px;
