@@ -1006,8 +1006,8 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
 
   const trendWarningBlock = trendWarnings.length > 0
     ? `<div class="trend-warning-block">
-        <strong>⚠ Proaktive Trend-Warnung</strong>
-        <ul>${trendWarnings.map((w) => `<li class="trend-alert-${w.alertLevel}"><strong>${escapeHtml(w.label)}</strong>: Trend zeigt auf <strong>${w.projected.toFixed(1)}%</strong> (Projektion ~gleiches Zeitfenster voraus)</li>`).join("")}</ul>
+        <strong>⚠ Trend-Projektion:</strong>
+        <ul>${trendWarnings.map((w) => `<li class="trend-alert-${w.alertLevel}"><strong>${escapeHtml(w.label)}</strong> → ${w.projected.toFixed(1)}%</li>`).join("")}</ul>
       </div>`
     : "";
 
@@ -1107,8 +1107,8 @@ function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
 
   const fsWarningBlock = fsTrendWarnings.length > 0
     ? `<div class="trend-warning-block">
-        <strong>⚠ Proaktive Trend-Warnung – Dateisystem</strong>
-        <ul>${fsTrendWarnings.map((w) => `<li class="trend-alert-${w.alertLevel}"><strong>${escapeHtml(w.label)}</strong>: Trend zeigt auf <strong>${w.projected.toFixed(1)}%</strong> (Projektion ~gleiches Zeitfenster voraus)</li>`).join("")}</ul>
+        <strong>⚠ Trend-Projektion:</strong>
+        <ul>${fsTrendWarnings.map((w) => `<li class="trend-alert-${w.alertLevel}"><strong>${escapeHtml(w.label)}</strong> → ${w.projected.toFixed(1)}%</li>`).join("")}</ul>
       </div>`
     : "";
 

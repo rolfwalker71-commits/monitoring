@@ -1081,28 +1081,34 @@ button:hover:not(.host-item) {
 }
 
 .trend-warning-block {
+  grid-column: 1 / -1;
   background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
   border: 1px solid #fbbf24;
   border-left: 4px solid #f59e0b;
   border-radius: 10px;
-  padding: 10px 14px;
-  margin-bottom: 12px;
-  font-size: 13px;
+  padding: 8px 14px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
 }
 
 .trend-warning-block strong {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 13px;
+  font-size: 12px;
   color: #92400e;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .trend-warning-block ul {
   margin: 0;
-  padding-left: 18px;
+  padding: 0;
+  list-style: none;
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  flex-wrap: wrap;
+  gap: 4px 14px;
 }
 
 .trend-warning-block li {
