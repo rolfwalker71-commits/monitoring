@@ -2334,13 +2334,19 @@ function renderCriticalTrends(data) {
       const bar = Math.min(100, Math.max(0, w.projected));
       const barClass = w.level === "crit" ? "ct-bar-crit" : "ct-bar-warn";
       const icon = w.type === "filesystem" ? "💾" : "📊";
+      const diff = w.current !== null ? w.projected - w.current : 0;
+      const trendArrow = diff > 0.05
+        ? `<span class="ct-trend-arrow ct-trend-up">↑</span>`
+        : diff < -0.05
+          ? `<span class="ct-trend-arrow ct-trend-down">↓</span>`
+          : `<span class="ct-trend-arrow ct-trend-flat">→</span>`;
       return `
         <div class="ct-row ct-row-${w.level}">
           <span class="ct-row-icon">${icon}</span>
           <span class="ct-row-metric">${escapeHtml(w.metric)}</span>
           <span class="ct-row-current">Aktuell: <strong>${w.current !== null ? w.current.toFixed(1) + "%" : "–"}</strong></span>
           <span class="ct-row-arrow">→</span>
-          <span class="ct-row-projected ct-projected-${w.level}">Projektion: <strong>${w.projected.toFixed(1)}%</strong></span>
+          <span class="ct-row-projected ct-projected-${w.level}">${trendArrow} Projektion: <strong>${w.projected.toFixed(1)}%</strong></span>
           <div class="ct-bar-wrap"><div class="ct-bar ${barClass}" style="width:${bar.toFixed(1)}%"></div></div>
         </div>
       `;

@@ -707,6 +707,24 @@ button:hover:not(.host-item) {
   color: #92400e;
 }
 
+.ct-trend-arrow {
+  font-style: normal;
+  font-weight: 700;
+  margin-right: 2px;
+}
+
+.ct-trend-up {
+  color: #dc2626;
+}
+
+.ct-trend-down {
+  color: #16a34a;
+}
+
+.ct-trend-flat {
+  color: #94a3b8;
+}
+
 .ct-bar-wrap {
   grid-column: 1 / -1;
   height: 4px;
