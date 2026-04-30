@@ -1537,6 +1537,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     if not rows:
                         continue
 
+                    last_payload = parse_payload_json(rows[-1][1])
+                    dn_override = get_display_name_override(conn, hostname)
+                    host_display_name = effective_display_name(last_payload, dn_override, hostname)
+
                     resource_series: dict[str, list[float]] = {
                         "cpu_usage_percent": [],
                         "memory_used_percent": [],
@@ -1579,6 +1583,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             current = values[-1] if values else None
                             warnings.append({
                                 "hostname": hostname,
+                                "display_name": host_display_name,
                                 "metric": label,
                                 "metric_key": key,
                                 "type": "resource",
@@ -1594,6 +1599,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             current = values[-1] if values else None
                             warnings.append({
                                 "hostname": hostname,
+                                "display_name": host_display_name,
                                 "metric": mp,
                                 "metric_key": "filesystem",
                                 "type": "filesystem",
