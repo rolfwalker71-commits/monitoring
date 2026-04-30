@@ -147,8 +147,18 @@
                 <h3>🖥️ Host-Gruppen</h3>
                 <p id="hostCount" class="count"></p>
               </div>
-              <div class="host-search-box">
-                <input id="hostSearchInput" type="text" placeholder="Nach Titel suchen..." class="search-input" />
+              <div class="host-filters">
+                <div class="host-search-box">
+                  <input id="hostSearchInput" type="text" placeholder="Nach Titel suchen..." class="search-input" />
+                </div>
+                <label class="host-filter-control" for="hostAlertFilterSelect">
+                  <span>Alerts</span>
+                  <select id="hostAlertFilterSelect">
+                    <option value="all" selected>Alle</option>
+                    <option value="with-alerts">Mit Alerts</option>
+                    <option value="without-alerts">Ohne Alerts</option>
+                  </select>
+                </label>
               </div>
               <div id="hostList" class="host-list"></div>
               <div class="pager">

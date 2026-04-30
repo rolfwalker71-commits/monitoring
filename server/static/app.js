@@ -16,6 +16,7 @@ const state = {
   selectedHost: "",
   selectedDisplayName: "",
   hostSearchQuery: "",
+  hostAlertFilter: "all",
   viewMode: "overview",
   overviewSection: "main",
   reportLimit: 1,
@@ -989,6 +990,7 @@ async function goToNextReport() {
 
 function filterAndSortHosts(hosts) {
   const query = state.hostSearchQuery.toLowerCase().trim();
+  const alertFilter = String(state.hostAlertFilter || "all");
 
   let filtered = hosts;
   if (query.length > 0) {
@@ -997,6 +999,12 @@ function filterAndSortHosts(hosts) {
       const hostname = (host.hostname || "").toLowerCase();
       return displayName.includes(query) || hostname.includes(query);
     });
+  }
+
+  if (alertFilter === "with-alerts") {
+    filtered = filtered.filter((host) => Number(host.open_alert_count || 0) > 0);
+  } else if (alertFilter === "without-alerts") {
+    filtered = filtered.filter((host) => Number(host.open_alert_count || 0) <= 0);
   }
 
   filtered.sort((a, b) => {
@@ -1714,6 +1722,12 @@ function wireEvents() {
     state.hostOffset = 0;
     await loadHosts();
   });
+
+  document.getElementById("hostAlertFilterSelect").addEventListener("change", async (event) => {
+    state.hostAlertFilter = String(event.target?.value || "all");
+    state.hostOffset = 0;
+    await loadHosts();
+  });
 }
 
 async function init() {
@@ -1725,6 +1739,7 @@ async function init() {
   updateAnalysisRangeUi();
   toggleAlarmSettingsPanel(false);
   document.getElementById("globalSeverityFilter").value = state.globalSeverityFilter;
+  document.getElementById("hostAlertFilterSelect").value = state.hostAlertFilter;
   document.getElementById("loginUsernameInput").value = "admin";
   const isAuthenticated = await ensureAuthenticatedSession();
   if (!isAuthenticated) {
