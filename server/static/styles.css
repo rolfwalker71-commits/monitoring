@@ -216,9 +216,10 @@ h1 {
   position: sticky;
   top: 16px;
   max-height: calc(100vh - 32px);
-  overflow-y: auto;
-  padding-right: 6px;
-  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
 }
 
 .section-head h3 {
@@ -406,10 +407,25 @@ button:hover:not(.host-item) {
   color: var(--muted);
 }
 
+.host-list-shell {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.host-list-header {
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
 .host-list {
   display: grid;
   gap: 8px;
-  margin-top: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
 }
 
 .host-group {
@@ -1117,6 +1133,14 @@ th {
     position: static;
     top: auto;
     max-height: none;
+  }
+
+  .host-list-shell,
+  .host-list {
+    min-height: auto;
+  }
+
+  .host-list {
     overflow: visible;
     padding-right: 0;
   }

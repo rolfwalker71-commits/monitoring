@@ -1316,10 +1316,12 @@ function wireHostListInteractions() {
 
 function renderHosts(hosts) {
   const hostList = document.getElementById("hostList");
+  const hostListHeader = document.getElementById("hostListHeader");
   const hostCount = document.getElementById("hostCount");
 
   if (!Array.isArray(hosts) || hosts.length === 0) {
     hostCount.textContent = "0 Hosts gesamt";
+    hostListHeader.innerHTML = "";
     hostList.innerHTML = "<p class=\"muted\">Keine Hosts vorhanden.</p>";
     return;
   }
@@ -1328,6 +1330,7 @@ function renderHosts(hosts) {
   hostCount.textContent = `${state.totalHosts} Hosts gesamt | aktiv ${visibleHosts.length} | ausgeblendet ${hiddenHosts.length}`;
 
   if (visibleHosts.length === 0 && hiddenHosts.length === 0) {
+    hostListHeader.innerHTML = "";
     hostList.innerHTML = "<p class=\"muted\">Keine Hosts passen zum Suchfilter.</p>";
     return;
   }
@@ -1336,9 +1339,10 @@ function renderHosts(hosts) {
   const hiddenHtml = hiddenHosts.map(renderSingleHostCard).join("");
   const hiddenCollapsedClass = state.hiddenHostsCollapsed ? "hidden" : "";
 
+  hostListHeader.innerHTML = `<h4 class="host-group-title">Aktive Hosts (${visibleHosts.length})</h4>`;
+
   hostList.innerHTML = `
     <section class="host-group">
-      <h4 class="host-group-title">Aktive Hosts (${visibleHosts.length})</h4>
       ${visibleHtml || '<p class="muted">Keine aktiven Hosts im Suchfilter.</p>'}
     </section>
     <section class="host-group host-group-hidden">
@@ -1357,6 +1361,8 @@ function renderHosts(hosts) {
 
 async function loadHosts() {
   const hostList = document.getElementById("hostList");
+  const hostListHeader = document.getElementById("hostListHeader");
+  hostListHeader.innerHTML = "<h4 class=\"host-group-title\">Aktive Hosts</h4>";
   hostList.innerHTML = "<p class=\"muted\">Lade Host-Liste...</p>";
 
   try {
