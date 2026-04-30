@@ -1,7 +1,5 @@
 # Monitoring MVP (Client + Server)
 
-Dieses Projekt ist ein rudimentaerer Start fuer dein Server-Client-Monitoring:
-
 - Linux-Agent sammelt Basisdaten (`hostname`, IPs, Filesysteme, Fuellgrad, Uptime) sowie CPU, RAM, Swap und Netzwerkdaten
 - Agent sendet alle `x` Minuten per `cron` an einen HTTP-Webservice
 - Agent prueft alle 6 Stunden selbststaendig auf neue Versionen auf GitHub und aktualisiert sich bei Bedarf
