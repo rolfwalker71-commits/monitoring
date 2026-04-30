@@ -954,6 +954,7 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
 
   return `
     <section class="resource-chart-layout">
+    <section class="mini-chart-grid">${miniCharts}</section>
     <section class="combined-chart combined-wide">
       <div class="combined-chart-head">
         <strong>Verlauf kombiniert (normalisiert)</strong>
@@ -966,7 +967,6 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
       </svg>
       <div class="combined-legend">${combinedLegend}</div>
     </section>
-    <section class="mini-chart-grid">${miniCharts}</section>
     </section>
   `;
 }
