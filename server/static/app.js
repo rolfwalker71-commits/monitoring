@@ -87,7 +87,8 @@ function persistAnalysisRangePreference() {
 
 async function loadWebclientVersion() {
   const versionEl = document.getElementById("webclientVersion");
-  if (!versionEl) {
+  const agentVersionEl = document.getElementById("latestAgentVersion");
+  if (!versionEl && !agentVersionEl) {
     return;
   }
 
@@ -100,9 +101,20 @@ async function loadWebclientVersion() {
       throw new Error(`HTTP ${response.status}`);
     }
     const text = (await response.text()).trim();
-    versionEl.textContent = text || "-";
+    const value = text || "-";
+    if (versionEl) {
+      versionEl.textContent = value;
+    }
+    if (agentVersionEl) {
+      agentVersionEl.textContent = value;
+    }
   } catch (_error) {
-    versionEl.textContent = "-";
+    if (versionEl) {
+      versionEl.textContent = "-";
+    }
+    if (agentVersionEl) {
+      agentVersionEl.textContent = "-";
+    }
   }
 }
 

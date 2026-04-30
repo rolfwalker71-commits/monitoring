@@ -43,6 +43,7 @@ Dashboard-Funktionen:
 
 - Host-Gruppierung links
 - Host-Gruppierung links mit Suchfeld und Alert-Filter (alle / mit Alerts / ohne Alerts)
+- Host-Gruppierung links zeigt zusaetzlich die aktuell zur Verteilung bereitstehende Agent-Version an
 - Blaettern durch Hosts und Host-Meldungen
 - Analysebereich mit 24h-Trends je Mountpoint fuer den ausgewaehlten Host
 - Analysebereich mit CPU/RAM/Swap-Trends im Zeitfenster
