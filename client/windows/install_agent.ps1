@@ -54,8 +54,49 @@ $UpdateLogFile   = "$InstallDir\monitoring-agent-update.log"
 $TaskNameCollect = 'monitoring-agent-collect'
 $TaskNameUpdate  = 'monitoring-agent-update'
 
-$SystemSid = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-18')
-$AdminsSid = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')
+function Invoke-Icacls {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]] $Arguments
+    )
+
+    & icacls.exe @Arguments | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "icacls failed with exit code $LASTEXITCODE"
+    }
+}
+
+function Protect-PathAcl {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [bool] $IsDirectory
+    )
+
+    try {
+        if ($IsDirectory) {
+            Invoke-Icacls -Arguments @(
+                $Path,
+                '/inheritance:r',
+                '/grant:r',
+                '*S-1-5-18:(OI)(CI)F',
+                '*S-1-5-32-544:(OI)(CI)F'
+            )
+        } else {
+            Invoke-Icacls -Arguments @(
+                $Path,
+                '/inheritance:r',
+                '/grant:r',
+                '*S-1-5-18:F',
+                '*S-1-5-32-544:F'
+            )
+        }
+    } catch {
+        Write-Warning "Could not harden ACL for '$Path': $($_.Exception.Message)"
+    }
+}
 
 # ---- Create directories ----
 foreach ($dir in @($InstallDir, $QueueDir)) {
@@ -64,12 +105,8 @@ foreach ($dir in @($InstallDir, $QueueDir)) {
     }
 }
 
-# Restrict queue dir to SYSTEM + Administrators
-$acl = Get-Acl $QueueDir
-$acl.SetAccessRuleProtection($true, $false)
-$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($SystemSid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
-$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($AdminsSid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
-Set-Acl -Path $QueueDir -AclObject $acl
+# Restrict queue dir to SYSTEM + Administrators (locale-independent via SIDs)
+Protect-PathAcl -Path $QueueDir -IsDirectory $true
 
 # ---- Download scripts ----
 $wc = New-Object System.Net.WebClient
@@ -115,12 +152,8 @@ AGENT_QUEUE_DIR="$QueueDir"
 
 [System.IO.File]::WriteAllText($ConfigFile, $configContent, [System.Text.Encoding]::UTF8)
 
-# Restrict config to SYSTEM + Administrators only
-$cfgAcl = Get-Acl $ConfigFile
-$cfgAcl.SetAccessRuleProtection($true, $false)
-$cfgAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($SystemSid, 'FullControl', 'Allow')))
-$cfgAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($AdminsSid, 'FullControl', 'Allow')))
-Set-Acl -Path $ConfigFile -AclObject $cfgAcl
+# Restrict config to SYSTEM + Administrators only (locale-independent via SIDs)
+Protect-PathAcl -Path $ConfigFile -IsDirectory $false
 
 # ---- Register Scheduled Tasks ----
 function Register-MonitoringTask {
