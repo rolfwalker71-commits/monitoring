@@ -1432,7 +1432,7 @@ function renderSingleHostCard(host) {
   const isHidden = Boolean(host.is_hidden);
   const hiddenClass = isHidden ? " host-item-hidden" : "";
   const chipClass = openCriticalAlertCount > 0 ? "host-alert-chip critical" : "host-alert-chip";
-  const alertChip = hasOpenAlerts ? `<span class="${chipClass}">Alerts ${openAlertCount}</span>` : "";
+  const alertChip = hasOpenAlerts ? `<span class="${chipClass}">🔔 ${openAlertCount}</span>` : "";
   const currentVersion = asText(host.agent_version, "");
   const latestVersion = asText(state.latestAgentRelease, "");
   const versionComparison = compareSemverLike(currentVersion, latestVersion);

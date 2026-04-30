@@ -510,7 +510,8 @@ button:hover:not(.host-item) {
 }
 
 .host-item strong {
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .host-title-line {
