@@ -45,6 +45,7 @@ Dashboard-Funktionen:
 - Blaettern durch Hosts und Host-Meldungen
 - Analysebereich mit 24h-Trends je Mountpoint fuer den ausgewaehlten Host
 - Analysebereich mit CPU/RAM/Swap-Trends im Zeitfenster
+- Globaler Chart-Zeitraum fuer Analyse und Filesystem Fokus umschaltbar (6h, 24h, 3d, 7d, 14d)
 - Alert-Bereich mit offenen Warn/Kritisch-Events und letzter Historie je Host
 - Zusaetzliche globale Alert-Uebersicht ueber alle Hosts (ohne Host-Auswahl)
 - Globales Alert-Dashboard als eigener Menuepunkt mit roter Markierung und Alert-Anzahl bei offenen Incidents

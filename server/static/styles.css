@@ -208,6 +208,19 @@ h1 {
   min-width: 0;
 }
 
+.hosts-column {
+  align-self: start;
+}
+
+.hosts-column-scroll {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
+}
+
 .section-head h3 {
   margin: 0;
   font-size: 16px;
@@ -278,6 +291,30 @@ button:hover:not(.host-item) {
   display: flex;
   gap: 8px;
   margin: 0 0 10px;
+}
+
+.overview-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 12px;
+}
+
+.chart-range-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chart-range-control select {
+  border: 1px solid #cfd9e6;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: #fff;
+  color: var(--text);
 }
 
 .overview-subsection {
@@ -898,6 +935,20 @@ button:hover:not(.host-item) {
     align-items: flex-start;
   }
 
+  .overview-controls {
+    justify-content: stretch;
+  }
+
+  .chart-range-control {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .chart-range-control select {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
   .app-logo {
     width: 62px;
     height: 62px;
@@ -1000,6 +1051,14 @@ th {
 
   .layout {
     grid-template-columns: 1fr;
+  }
+
+  .hosts-column-scroll {
+    position: static;
+    top: auto;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
   }
 
   .report-header {

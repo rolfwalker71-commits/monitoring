@@ -7,6 +7,8 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+  const ANALYSIS_RANGE_STORAGE_KEY = "monitoring.analysisHours";
+
 const state = {
   hostLimit: 20,
   hostOffset: 0,
@@ -31,6 +33,56 @@ const state = {
   hiddenHosts: 0,
   hiddenHostsCollapsed: true,
 };
+
+const ANALYSIS_RANGE_OPTIONS = new Map([
+  [6, "Letzte 6 Std."],
+  [24, "Letzte 24 Std."],
+  [72, "Letzte 3 Tage"],
+  [168, "Letzte 7 Tage"],
+  [336, "Letzte 14 Tage"],
+]);
+
+function normalizeAnalysisHours(value) {
+  const parsed = Number.parseInt(String(value || ""), 10);
+  return ANALYSIS_RANGE_OPTIONS.has(parsed) ? parsed : 24;
+}
+
+function analysisWindowLabel(hours = state.analysisHours) {
+  return ANALYSIS_RANGE_OPTIONS.get(normalizeAnalysisHours(hours)) || "Letzte 24 Std.";
+}
+
+function updateAnalysisRangeUi() {
+  const select = document.getElementById("analysisRangeSelect");
+  const analysisTitle = document.getElementById("analysisSectionTitle");
+  const filesystemTitle = document.getElementById("filesystemSectionTitle");
+  const label = analysisWindowLabel();
+
+  if (select) {
+    select.value = String(state.analysisHours);
+  }
+  if (analysisTitle) {
+    analysisTitle.textContent = `📊 Analyse (${label})`;
+  }
+  if (filesystemTitle) {
+    filesystemTitle.textContent = `💾 Filesystem Fokus (${label})`;
+  }
+}
+
+function loadAnalysisRangePreference() {
+  try {
+    return normalizeAnalysisHours(window.localStorage.getItem(ANALYSIS_RANGE_STORAGE_KEY));
+  } catch (_error) {
+    return 24;
+  }
+}
+
+function persistAnalysisRangePreference() {
+  try {
+    window.localStorage.setItem(ANALYSIS_RANGE_STORAGE_KEY, String(state.analysisHours));
+  } catch (_error) {
+    // Ignore storage failures and keep the current in-memory selection.
+  }
+}
 
 async function loadWebclientVersion() {
   const versionEl = document.getElementById("webclientVersion");
@@ -1575,6 +1627,13 @@ function wireEvents() {
     await loadAlertsForHost();
   });
 
+  document.getElementById("analysisRangeSelect").addEventListener("change", async (event) => {
+    state.analysisHours = normalizeAnalysisHours(event.target?.value);
+    persistAnalysisRangePreference();
+    updateAnalysisRangeUi();
+    await loadAnalysisForHost();
+  });
+
   document.getElementById("editDisplayNameButton").addEventListener("click", async () => {
     try {
       await editDisplayName();
@@ -1658,10 +1717,12 @@ function wireEvents() {
 }
 
 async function init() {
+  state.analysisHours = loadAnalysisRangePreference();
   await loadWebclientVersion();
   wireEvents();
   updateViewMode();
   updateOverviewSection();
+  updateAnalysisRangeUi();
   toggleAlarmSettingsPanel(false);
   document.getElementById("globalSeverityFilter").value = state.globalSeverityFilter;
   document.getElementById("loginUsernameInput").value = "admin";
