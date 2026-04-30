@@ -1002,7 +1002,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_file(self, path: Path, content_type: str) -> None:
+    def _send_file(
+        self,
+        path: Path,
+        content_type: str,
+        extra_headers: dict[str, str] | None = None,
+    ) -> None:
         if not path.exists() or not path.is_file():
             self.send_error(HTTPStatus.NOT_FOUND, "File not found")
             return
@@ -1011,6 +1016,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(content)))
+        if extra_headers:
+            for key, value in extra_headers.items():
+                self.send_header(key, value)
         self.end_headers()
         self.wfile.write(content)
 
@@ -1026,6 +1034,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(content)))
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
         self.end_headers()
         self.wfile.write(content)
 
@@ -1826,7 +1837,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path.endswith("/BUILD_VERSION"):
-            self._send_file(BUILD_VERSION_PATH, "text/plain; charset=utf-8")
+            self._send_file(
+                BUILD_VERSION_PATH,
+                "text/plain; charset=utf-8",
+                extra_headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
             return
 
         if parsed.path.endswith("/AGENT_VERSION"):
