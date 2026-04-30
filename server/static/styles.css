@@ -92,6 +92,14 @@ body {
   margin-bottom: 10px;
 }
 
+.brand-tools {
+  margin-bottom: 10px;
+  border: 1px solid #d7e1ef;
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 10px 12px;
+}
+
 .app-logo {
   width: 74px;
   height: 74px;
@@ -215,7 +223,7 @@ h1 {
 .hosts-column-scroll {
   position: sticky;
   top: 16px;
-  max-height: calc(100vh - 32px);
+  max-height: clamp(360px, calc(100dvh - 250px), 820px);
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -363,6 +371,7 @@ button:hover:not(.host-item) {
 
 .host-search-box {
   flex: 1 1 auto;
+  min-width: 320px;
 }
 
 .host-filters {
@@ -370,6 +379,10 @@ button:hover:not(.host-item) {
   align-items: end;
   gap: 8px;
   margin-top: 8px;
+}
+
+.host-filters-header {
+  margin-top: 0;
 }
 
 .host-tools {
@@ -447,6 +460,7 @@ button:hover:not(.host-item) {
   display: grid;
   gap: 8px;
   min-height: 0;
+  max-height: clamp(260px, calc(100dvh - 430px), 680px);
   overflow-y: auto;
   padding-right: 6px;
   scrollbar-gutter: stable;
@@ -1275,8 +1289,12 @@ th {
     align-items: stretch;
   }
 
-  .host-tools {
-    padding: 6px 8px;
+  .brand-tools {
+    padding: 8px 10px;
+  }
+
+  .host-search-box {
+    min-width: 0;
   }
 
   .host-filter-control {

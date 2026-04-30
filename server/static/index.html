@@ -84,6 +84,30 @@
         </div>
       </div>
 
+      <section id="hostToolsHeader" class="brand-tools hidden">
+        <div class="host-filters host-filters-header">
+          <div class="host-search-box">
+            <input id="hostSearchInput" type="text" placeholder="Nach Titel suchen..." class="search-input" />
+          </div>
+          <label class="host-filter-control" for="hostAlertFilterSelect">
+            <span>Alerts</span>
+            <select id="hostAlertFilterSelect">
+              <option value="all" selected>Alle</option>
+              <option value="with-alerts">Mit Alerts</option>
+              <option value="without-alerts">Ohne Alerts</option>
+            </select>
+          </label>
+          <label class="host-filter-control" for="hostMutedFilterSelect">
+            <span>Muted</span>
+            <select id="hostMutedFilterSelect">
+              <option value="all" selected>Alle</option>
+              <option value="with-muted">Mit muted Alerts</option>
+              <option value="without-muted">Ohne muted Alerts</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
       <section id="appPanel" class="panel hidden">
         <div class="panel-header">
           <h2>Hosts und Historie</h2>
@@ -156,30 +180,6 @@
                 <button id="hostsPrevButton" type="button">Hosts Zurueck</button>
                 <button id="hostsNextButton" type="button">Hosts Weiter</button>
               </div>
-              <details class="host-tools">
-                <summary>🔎 Suche und Filter</summary>
-                <div class="host-filters">
-                  <div class="host-search-box">
-                    <input id="hostSearchInput" type="text" placeholder="Nach Titel suchen..." class="search-input" />
-                  </div>
-                  <label class="host-filter-control" for="hostAlertFilterSelect">
-                    <span>Alerts</span>
-                    <select id="hostAlertFilterSelect">
-                      <option value="all" selected>Alle</option>
-                      <option value="with-alerts">Mit Alerts</option>
-                      <option value="without-alerts">Ohne Alerts</option>
-                    </select>
-                  </label>
-                  <label class="host-filter-control" for="hostMutedFilterSelect">
-                    <span>Muted</span>
-                    <select id="hostMutedFilterSelect">
-                      <option value="all" selected>Alle</option>
-                      <option value="with-muted">Mit muted Alerts</option>
-                      <option value="without-muted">Ohne muted Alerts</option>
-                    </select>
-                  </label>
-                </div>
-              </details>
             </div>
           </aside>
 

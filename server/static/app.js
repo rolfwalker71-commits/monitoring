@@ -272,8 +272,12 @@ function setPasswordChangeStatus(message, isError = false) {
 function setAuthUiState(authenticated) {
   const loginOverlay = document.getElementById("loginOverlay");
   const appPanel = document.getElementById("appPanel");
+  const hostToolsHeader = document.getElementById("hostToolsHeader");
   loginOverlay.classList.toggle("hidden", authenticated);
   appPanel.classList.toggle("hidden", !authenticated);
+  if (hostToolsHeader) {
+    hostToolsHeader.classList.toggle("hidden", !authenticated);
+  }
   state.isAuthenticated = authenticated;
 }
 
