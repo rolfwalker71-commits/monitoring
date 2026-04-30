@@ -3,6 +3,8 @@
 - Linux-Agent sammelt Basisdaten (`hostname`, IPs, Filesysteme, Fuellgrad, Uptime) sowie CPU, RAM, Swap und Netzwerkdaten
 - Agent sendet alle `x` Minuten per `cron` an einen HTTP-Webservice
 - Agent prueft alle 6 Stunden selbststaendig auf neue Versionen auf GitHub und aktualisiert sich bei Bedarf
+- Agent sammelt zusaetzlich Journal-/Event-Fehler, Top-Prozesse sowie Container-Status
+- Agent fuehrt zusaetzlich priorisierte Self-Update-Checks im Sammellauf aus (Default 60 Minuten), damit neue Versionen schneller ankommen
 - Falls Senden fehlschlaegt, werden Meldungen lokal gequeued und beim naechsten erfolgreichen Lauf nachgeliefert
 - Webservice nimmt Daten entgegen, speichert sie in SQLite und zeigt eine einfache Uebersicht
 
@@ -43,7 +45,7 @@ Dashboard-Funktionen:
 
 - Host-Gruppierung links
 - Host-Gruppierung links mit Suchfeld und Alert-Filter (alle / mit Alerts / ohne Alerts)
-- Host-Gruppierung links zeigt zusaetzlich die aktuell zur Verteilung bereitstehende Agent-Version an
+- Host-Gruppierung links zeigt zusaetzlich die aktuell zur Verteilung bereitstehende Agent-Version aus `AGENT_VERSION` an
 - Blaettern durch Hosts und Host-Meldungen
 - Analysebereich mit 24h-Trends je Mountpoint fuer den ausgewaehlten Host
 - Analysebereich mit CPU/RAM/Swap-Trends im Zeitfenster
@@ -58,6 +60,7 @@ Dashboard-Funktionen:
 - In der Hostgruppe wird bei Hosts mit offenen Alerts ein grosses Ausrufezeichen angezeigt
 - Agent-Version pro Host zur Nachverfolgung von Self-Updates
 - Meldungs-Chip `LIVE` bzw. `DELAYED` auf der Detailkarte
+- Report-Unterseiten je Meldung: Uebersicht, Journal Fehler, Top Prozesse, Container
 - Webclient mit Login-Maske und Session-Authentifizierung
 - Passwort-Änderung direkt im Webclient (Menuepunkt `Passwort aendern`)
 - Queue-Statistik im Dashboard (`letzte Meldung LIVE/DELAYED`, aktuelle Queue-Tiefe, delayed/live im Analysefenster)
@@ -104,7 +107,7 @@ Auf einem Linux-Client:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/linux/install_agent.sh \
-  | sudo bash -s -- --server-url http://<server-ip>:8080 --interval-minutes 15
+  | sudo bash -s -- --server-url http://<server-ip>:8080 --interval-minutes 15 --update-hours 6
 ```
 
 Bei der Installation fragt der Agent interaktiv nach einem sprechenden Anzeigenamen.
@@ -123,7 +126,8 @@ Falls das auf dem Zielsystem nicht verfuegbar ist, wird automatisch ein Eintrag 
 Eingerichtete Jobs:
 
 - Datensammlung und Versand alle `x` Minuten
-- Self-Update Check alle 6 Stunden gegen GitHub `main`
+- Self-Update Check alle `n` Stunden gegen GitHub `main` (`--update-hours`, Default `6`)
+- Priorisierte Zusatz-Checks im Sammellauf (Default alle `60` Minuten, konfigurierbar ueber `PRIORITY_UPDATE_CHECK_MINUTES`)
 
 Queue-Verhalten:
 

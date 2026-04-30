@@ -33,6 +33,10 @@ param(
     [int] $IntervalMinutes = 15,
 
     [Parameter(Mandatory = $false)]
+    [ValidateRange(1, 24)]
+    [int] $UpdateHours = 6,
+
+    [Parameter(Mandatory = $false)]
     [string] $RawBaseUrl = 'https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main'
 )
 
@@ -75,9 +79,13 @@ $wc.DownloadFile("$RawBaseUrl/client/windows/self_update.ps1", "$InstallDir\self
 
 Write-Host "Downloading AGENT_VERSION..."
 try {
-    $wc.DownloadFile("$RawBaseUrl/BUILD_VERSION", "$InstallDir\AGENT_VERSION")
+    $wc.DownloadFile("$RawBaseUrl/AGENT_VERSION", "$InstallDir\AGENT_VERSION")
 } catch {
-    [System.IO.File]::WriteAllText("$InstallDir\AGENT_VERSION", "unknown`n", [System.Text.Encoding]::UTF8)
+    try {
+        $wc.DownloadFile("$RawBaseUrl/BUILD_VERSION", "$InstallDir\AGENT_VERSION")
+    } catch {
+        [System.IO.File]::WriteAllText("$InstallDir\AGENT_VERSION", "unknown`n", [System.Text.Encoding]::UTF8)
+    }
 }
 
 # ---- Determine agent identity ----
@@ -169,7 +177,7 @@ Register-MonitoringTask `
     -TaskName           $TaskNameUpdate `
     -ScriptPath         "$InstallDir\self_update.ps1" `
     -LogPath            $UpdateLogFile `
-    -RepeatInterval     (New-TimeSpan -Hours 6) `
+    -RepeatInterval     (New-TimeSpan -Hours $UpdateHours) `
     -Description        'Monitoring agent - self update' `
     -ExecutionTimeLimit (New-TimeSpan -Hours 1)
 
@@ -181,7 +189,7 @@ Write-Host "  Config        : $ConfigFile"
 Write-Host "  Collect log   : $LogFile"
 Write-Host "  Update log    : $UpdateLogFile"
 Write-Host "  Collect task  : $TaskNameCollect  (every $IntervalMinutes min)"
-Write-Host "  Update task   : $TaskNameUpdate  (every 6 h)"
+Write-Host "  Update task   : $TaskNameUpdate  (every $UpdateHours h)"
 Write-Host ''
 
 $run = Read-Host 'Run collection once now? [y/N]'

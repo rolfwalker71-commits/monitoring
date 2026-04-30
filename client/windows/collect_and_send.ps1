@@ -17,6 +17,12 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
+$PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
+$PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
+$EventErrorsSinceMinutes = if ($env:JOURNAL_ERRORS_SINCE_MINUTES) { [int]$env:JOURNAL_ERRORS_SINCE_MINUTES } else { 180 }
+$EventErrorsLimit = if ($env:JOURNAL_ERRORS_LIMIT) { [int]$env:JOURNAL_ERRORS_LIMIT } else { 20 }
+$TopProcessesLimit = if ($env:TOP_PROCESSES_LIMIT) { [int]$env:TOP_PROCESSES_LIMIT } else { 8 }
+$ContainersLimit = if ($env:CONTAINERS_LIMIT) { [int]$env:CONTAINERS_LIMIT } else { 30 }
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -82,6 +88,120 @@ function Invoke-FlushQueue {
         }
     }
     return $true
+}
+
+function Invoke-PrioritySelfUpdate {
+    if ($PriorityUpdateMinutes -le 0) {
+        return
+    }
+
+    $nowUnix = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $lastUnix = 0L
+    if (Test-Path $PriorityUpdateStateFile) {
+        $raw = (Get-Content $PriorityUpdateStateFile -TotalCount 1 -Encoding UTF8 -ErrorAction SilentlyContinue)
+        if ($raw -match '^\d+$') {
+            $lastUnix = [long]$raw
+        }
+    }
+
+    if (($nowUnix - $lastUnix) -lt ($PriorityUpdateMinutes * 60)) {
+        return
+    }
+
+    try {
+        [System.IO.File]::WriteAllText($PriorityUpdateStateFile, "$nowUnix`n", [System.Text.Encoding]::UTF8)
+    } catch { }
+
+    $selfUpdateScript = Join-Path (Split-Path $ConfigFile -Parent) 'self_update.ps1'
+    if (-not (Test-Path $selfUpdateScript)) {
+        $selfUpdateScript = 'C:\ProgramData\monitoring-agent\self_update.ps1'
+    }
+
+    if (Test-Path $selfUpdateScript) {
+        try {
+            & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $selfUpdateScript *> $null
+        } catch { }
+    }
+}
+
+function Get-SystemEventErrors {
+    $entries = @()
+    try {
+        $events = Get-WinEvent -FilterHashtable @{
+            LogName = 'System'
+            Level = @(1,2)
+            StartTime = (Get-Date).AddMinutes(-$EventErrorsSinceMinutes)
+        } -MaxEvents $EventErrorsLimit -ErrorAction Stop
+
+        foreach ($e in $events) {
+            $entries += ('{"time_utc":"' + $e.TimeCreated.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC) + '",' +
+                         '"priority":"err",' +
+                         '"unit":"' + (ConvertTo-JsonString $e.ProviderName) + '",' +
+                         '"message":"' + (ConvertTo-JsonString (([string]$e.Message).Trim())) + '"}')
+        }
+    } catch { }
+    return ($entries -join ',')
+}
+
+function Get-TopProcessEntries {
+    $entries = @()
+    try {
+        $procs = Get-Process -ErrorAction Stop |
+            Sort-Object -Property CPU -Descending |
+            Select-Object -First $TopProcessesLimit
+        $totalMem = [double](Get-CimInstance -ClassName Win32_ComputerSystem).TotalPhysicalMemory
+        if ($totalMem -le 0) { $totalMem = 1 }
+        foreach ($p in $procs) {
+            $rssKb = [long]($p.WorkingSet64 / 1024)
+            $memPct = (($p.WorkingSet64 / $totalMem) * 100)
+            $cpuSeconds = if ($null -eq $p.CPU) { 0.0 } else { [double]$p.CPU }
+            $entries += ('{"pid":' + $p.Id + ',' +
+                         '"user":"-",' +
+                         '"cpu_percent":' + $cpuSeconds.ToString('F2', $IC) + ',' +
+                         '"memory_percent":' + $memPct.ToString('F2', $IC) + ',' +
+                         '"rss_kb":' + $rssKb + ',' +
+                         '"name":"' + (ConvertTo-JsonString $p.ProcessName) + '",' +
+                         '"command":"' + (ConvertTo-JsonString $p.ProcessName) + '"}')
+        }
+    } catch { }
+    return ($entries -join ',')
+}
+
+function Get-ContainerEntries {
+    $entries = @()
+    $available = $false
+    try {
+        $docker = Get-Command docker -ErrorAction Stop
+        $null = & $docker.Path info 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $available = $true
+            $lines = & $docker.Path ps -a --format '{{.Names}}|{{.Image}}|{{.State}}|{{.Status}}' 2>$null
+            $lines = @($lines | Select-Object -First $ContainersLimit)
+            foreach ($line in $lines) {
+                if (-not $line) { continue }
+                $parts = $line -split '\|', 4
+                $name = if ($parts.Count -ge 1) { $parts[0] } else { '' }
+                $image = if ($parts.Count -ge 2) { $parts[1] } else { '' }
+                $state = if ($parts.Count -ge 3) { $parts[2] } else { '' }
+                $status = if ($parts.Count -ge 4) { $parts[3] } else { '' }
+                $health = (& $docker.Path inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}n/a{{end}}' $name 2>$null)
+                $restart = (& $docker.Path inspect -f '{{.RestartCount}}' $name 2>$null)
+                if (-not $health) { $health = 'n/a' }
+                if (-not $restart -or $restart -notmatch '^\d+$') { $restart = '0' }
+                $entries += ('{"name":"' + (ConvertTo-JsonString $name) + '",' +
+                             '"image":"' + (ConvertTo-JsonString $image) + '",' +
+                             '"state":"' + (ConvertTo-JsonString $state) + '",' +
+                             '"status":"' + (ConvertTo-JsonString $status) + '",' +
+                             '"health":"' + (ConvertTo-JsonString $health) + '",' +
+                             '"restart_count":' + $restart + '}')
+            }
+        }
+    } catch { }
+
+    return @{
+        available = $available
+        entries = ($entries -join ',')
+    }
 }
 
 # ---- Collect system info ----
@@ -214,6 +334,14 @@ foreach ($d in $logicalDisks) {
 }
 $fsStr = $fsEntries -join ','
 
+$eventErrorsStr = Get-SystemEventErrors
+$topProcStr = Get-TopProcessEntries
+$containerData = Get-ContainerEntries
+$containersStr = [string]$containerData.entries
+$dockerAvailable = if ($containerData.available) { 'true' } else { 'false' }
+
+Invoke-PrioritySelfUpdate
+
 # ---- Flush queued reports ----
 Invoke-FlushQueue | Out-Null
 $queueDepth = Get-QueueCount
@@ -269,7 +397,19 @@ $payload = @"
     "default_interface": "$defaultIfaceEsc",
     "interfaces": [$ifacesStr]
   },
-  "filesystems": [$fsStr]
+    "filesystems": [$fsStr],
+    "journal_errors": {
+        "since_minutes": $EventErrorsSinceMinutes,
+        "entries": [$eventErrorsStr]
+    },
+    "top_processes": {
+        "entries": [$topProcStr]
+    },
+    "containers": {
+        "runtime": "docker",
+        "available": $dockerAvailable,
+        "entries": [$containersStr]
+    }
 }
 "@
 

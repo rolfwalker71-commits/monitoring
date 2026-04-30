@@ -18,6 +18,7 @@ STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "monitoring.db"
 BUILD_VERSION_PATH = BASE_DIR.parent / "BUILD_VERSION"
+AGENT_VERSION_PATH = BASE_DIR.parent / "AGENT_VERSION"
 API_KEY = os.getenv("MONITORING_API_KEY", "")
 MAX_REPORTS_PER_HOST = int(os.getenv("MONITORING_MAX_REPORTS_PER_HOST", "1344"))
 WARNING_THRESHOLD_PERCENT = float(os.getenv("MONITORING_WARNING_THRESHOLD", "80"))
@@ -1447,6 +1448,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if parsed.path.endswith("/BUILD_VERSION"):
             self._send_file(BUILD_VERSION_PATH, "text/plain; charset=utf-8")
+            return
+
+        if parsed.path.endswith("/AGENT_VERSION"):
+            if AGENT_VERSION_PATH.exists():
+                self._send_file(AGENT_VERSION_PATH, "text/plain; charset=utf-8")
+            else:
+                self._send_file(BUILD_VERSION_PATH, "text/plain; charset=utf-8")
             return
 
         if parsed.path.endswith("/icons/linux.png") or parsed.path.endswith("/icons/windows.png"):

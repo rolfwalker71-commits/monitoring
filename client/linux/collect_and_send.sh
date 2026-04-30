@@ -4,6 +4,12 @@ set -euo pipefail
 CONFIG_FILE="${CONFIG_FILE:-/etc/monitoring-agent/agent.conf}"
 AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-/opt/monitoring-agent/AGENT_VERSION}"
 AGENT_QUEUE_DIR="${AGENT_QUEUE_DIR:-/var/lib/monitoring-agent/queue}"
+PRIORITY_UPDATE_CHECK_MINUTES="${PRIORITY_UPDATE_CHECK_MINUTES:-60}"
+PRIORITY_UPDATE_STATE_FILE="${PRIORITY_UPDATE_STATE_FILE:-/var/lib/monitoring-agent/last_priority_update_check}"
+JOURNAL_ERRORS_LIMIT="${JOURNAL_ERRORS_LIMIT:-20}"
+JOURNAL_ERRORS_SINCE_MINUTES="${JOURNAL_ERRORS_SINCE_MINUTES:-180}"
+TOP_PROCESSES_LIMIT="${TOP_PROCESSES_LIMIT:-8}"
+CONTAINERS_LIMIT="${CONTAINERS_LIMIT:-30}"
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
   echo "Config file not found: $CONFIG_FILE" >&2
@@ -19,6 +25,12 @@ if [[ -z "${SERVER_URL:-}" ]]; then
 fi
 
 mkdir -p "$AGENT_QUEUE_DIR"
+
+if [[ -d "$(dirname "$PRIORITY_UPDATE_STATE_FILE")" ]]; then
+  :
+else
+  mkdir -p "$(dirname "$PRIORITY_UPDATE_STATE_FILE")" 2>/dev/null || true
+fi
 
 count_queue_files() {
   local count
@@ -86,6 +98,107 @@ append_json_entry() {
   else
     printf '%s,%s' "$current" "$entry"
   fi
+}
+
+maybe_priority_self_update() {
+  local interval_minutes now_epoch last_epoch
+
+  if ! [[ "$PRIORITY_UPDATE_CHECK_MINUTES" =~ ^[0-9]+$ ]] || [[ "$PRIORITY_UPDATE_CHECK_MINUTES" -le 0 ]]; then
+    return
+  fi
+
+  now_epoch="$(date +%s)"
+  last_epoch=0
+  if [[ -f "$PRIORITY_UPDATE_STATE_FILE" ]]; then
+    last_epoch="$(head -n 1 "$PRIORITY_UPDATE_STATE_FILE" 2>/dev/null || echo 0)"
+    if ! [[ "$last_epoch" =~ ^[0-9]+$ ]]; then
+      last_epoch=0
+    fi
+  fi
+
+  interval_minutes=$(( PRIORITY_UPDATE_CHECK_MINUTES * 60 ))
+  if (( now_epoch - last_epoch < interval_minutes )); then
+    return
+  fi
+
+  printf '%s\n' "$now_epoch" > "$PRIORITY_UPDATE_STATE_FILE" 2>/dev/null || true
+
+  if [[ -x "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" ]]; then
+    CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$AGENT_VERSION_FILE" "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" >/dev/null 2>&1 || true
+  fi
+}
+
+collect_journal_errors_json() {
+  local entries="" line timestamp message entry
+
+  if ! command -v journalctl >/dev/null 2>&1; then
+    printf ''
+    return
+  fi
+
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    timestamp="${line:0:25}"
+    message="${line:26}"
+    entry=$(cat <<EOF
+{"time":"$(json_escape "$timestamp")","priority":"err","unit":"-","message":"$(json_escape "$message")"}
+EOF
+)
+    entries="$(append_json_entry "$entries" "$entry")"
+  done < <(
+    journalctl -p err..alert --since "-${JOURNAL_ERRORS_SINCE_MINUTES} minutes" --no-pager -o short-iso 2>/dev/null \
+      | tail -n "$JOURNAL_ERRORS_LIMIT"
+  )
+
+  printf '%s' "$entries"
+}
+
+collect_top_processes_json() {
+  local entries="" pid user pcpu pmem rss comm cmd entry
+
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    read -r pid user pcpu pmem rss comm cmd <<< "$line"
+    entry=$(cat <<EOF
+{"pid":${pid:-0},"user":"$(json_escape "${user:-}")","cpu_percent":${pcpu:-0},"memory_percent":${pmem:-0},"rss_kb":${rss:-0},"name":"$(json_escape "${comm:-}")","command":"$(json_escape "${cmd:-}")"}
+EOF
+)
+    entries="$(append_json_entry "$entries" "$entry")"
+  done < <(
+    ps -eo pid=,user=,pcpu=,pmem=,rss=,comm=,args= --sort=-pcpu 2>/dev/null | head -n "$TOP_PROCESSES_LIMIT"
+  )
+
+  printf '%s' "$entries"
+}
+
+collect_containers_json() {
+  local entries="" line name image state status health restarts entry
+
+  if ! command -v docker >/dev/null 2>&1; then
+    printf ''
+    return
+  fi
+
+  if ! docker info >/dev/null 2>&1; then
+    printf ''
+    return
+  fi
+
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    IFS='|' read -r name image state status <<< "$line"
+    health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}n/a{{end}}' "$name" 2>/dev/null || echo n/a)"
+    restarts="$(docker inspect -f '{{.RestartCount}}' "$name" 2>/dev/null || echo 0)"
+    entry=$(cat <<EOF
+{"name":"$(json_escape "$name")","image":"$(json_escape "$image")","state":"$(json_escape "$state")","status":"$(json_escape "$status")","health":"$(json_escape "$health")","restart_count":${restarts:-0}}
+EOF
+)
+    entries="$(append_json_entry "$entries" "$entry")"
+  done < <(
+    docker ps -a --format '{{.Names}}|{{.Image}}|{{.State}}|{{.Status}}' 2>/dev/null | head -n "$CONTAINERS_LIMIT"
+  )
+
+  printf '%s' "$entries"
 }
 
 post_payload() {
@@ -198,6 +311,17 @@ EOF
   FILESYSTEMS_JSON="$(append_json_entry "$FILESYSTEMS_JSON" "$entry")"
 done < <(df -PT -x tmpfs -x devtmpfs | awk 'NR>1 {print $2, $1, $3, $4, $5, $6, $7}')
 
+JOURNAL_ERRORS_JSON="$(collect_journal_errors_json)"
+TOP_PROCESSES_JSON="$(collect_top_processes_json)"
+CONTAINERS_JSON="$(collect_containers_json)"
+
+DOCKER_AVAILABLE=false
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  DOCKER_AVAILABLE=true
+fi
+
+maybe_priority_self_update
+
 flush_queue || true
 QUEUE_DEPTH_NOW="$(count_queue_files)"
 
@@ -240,7 +364,19 @@ PAYLOAD=$(cat <<EOF
     "default_interface": "$(json_escape "$DEFAULT_INTERFACE")",
     "interfaces": [${NETWORK_INTERFACES_JSON}]
   },
-  "filesystems": [${FILESYSTEMS_JSON}]
+  "filesystems": [${FILESYSTEMS_JSON}],
+  "journal_errors": {
+    "since_minutes": $JOURNAL_ERRORS_SINCE_MINUTES,
+    "entries": [${JOURNAL_ERRORS_JSON}]
+  },
+  "top_processes": {
+    "entries": [${TOP_PROCESSES_JSON}]
+  },
+  "containers": {
+    "runtime": "docker",
+    "available": $DOCKER_AVAILABLE,
+    "entries": [${CONTAINERS_JSON}]
+  }
 }
 EOF
 )

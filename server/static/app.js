@@ -7,7 +7,8 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-  const ANALYSIS_RANGE_STORAGE_KEY = "monitoring.analysisHours";
+const ANALYSIS_RANGE_STORAGE_KEY = "monitoring.analysisHours";
+const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers"]);
 
 const state = {
   hostLimit: 20,
@@ -22,6 +23,8 @@ const state = {
   reportLimit: 1,
   reportOffset: 0,
   totalReports: 0,
+  currentReport: null,
+  reportSection: "overview",
   analysisHours: 24,
   alarmSettingsLoaded: false,
   globalAlertsCollapsed: false,
@@ -93,20 +96,31 @@ async function loadWebclientVersion() {
   }
 
   try {
-    const response = await fetch("BUILD_VERSION", {
-      cache: "no-store",
-      credentials: "same-origin",
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    const [webResp, agentResp] = await Promise.all([
+      fetch("BUILD_VERSION", {
+        cache: "no-store",
+        credentials: "same-origin",
+      }),
+      fetch("AGENT_VERSION", {
+        cache: "no-store",
+        credentials: "same-origin",
+      }),
+    ]);
+
+    if (!webResp.ok) {
+      throw new Error(`BUILD_VERSION HTTP ${webResp.status}`);
     }
-    const text = (await response.text()).trim();
-    const value = text || "-";
+
+    const webText = (await webResp.text()).trim();
+    const agentText = agentResp.ok ? (await agentResp.text()).trim() : webText;
+    const value = webText || "-";
+    const agentValue = agentText || "-";
+
     if (versionEl) {
       versionEl.textContent = value;
     }
     if (agentVersionEl) {
-      agentVersionEl.textContent = value;
+      agentVersionEl.textContent = agentValue;
     }
   } catch (_error) {
     if (versionEl) {
@@ -115,6 +129,21 @@ async function loadWebclientVersion() {
     if (agentVersionEl) {
       agentVersionEl.textContent = "-";
     }
+  }
+}
+
+function normalizeReportSection(value) {
+  const section = String(value || "overview").toLowerCase();
+  return REPORT_SECTION_OPTIONS.has(section) ? section : "overview";
+}
+
+function updateReportSectionUi() {
+  const section = normalizeReportSection(state.reportSection);
+  state.reportSection = section;
+
+  for (const button of document.querySelectorAll("[data-report-section]")) {
+    const buttonSection = normalizeReportSection(button.getAttribute("data-report-section"));
+    button.classList.toggle("active", buttonSection === section);
   }
 }
 
@@ -136,6 +165,7 @@ function updateViewMode() {
   overviewTabButton.classList.toggle("active", overviewActive);
   globalAlertsTabButton.classList.toggle("active", globalAlertsActive);
   reportsTabButton.classList.toggle("active", reportsActive);
+  updateReportSectionUi();
 }
 
 function updateOverviewSection() {
@@ -1043,6 +1073,150 @@ function renderFilesystemTable(filesystems) {
   `;
 }
 
+function renderJournalErrorsTable(journalErrors) {
+  const block = journalErrors && typeof journalErrors === "object" ? journalErrors : {};
+  const entries = Array.isArray(block.entries) ? block.entries : [];
+  const sinceMinutes = Number(block.since_minutes || 0);
+  const sinceLabel = Number.isFinite(sinceMinutes) && sinceMinutes > 0
+    ? `Fenster: letzte ${sinceMinutes} Minuten`
+    : "Fenster: unbekannt";
+
+  if (entries.length === 0) {
+    return `<p class="muted">Keine kritischen Journal-Fehler gefunden. ${escapeHtml(sinceLabel)}</p>`;
+  }
+
+  const rows = entries
+    .map((entry) => {
+      const time = formatUtcPlus2(entry.time_utc || entry.time || "");
+      const unit = asText(entry.unit, "-");
+      const priority = asText(entry.priority, "-");
+      const message = asText(entry.message, "-");
+      return `
+        <tr>
+          <td>${escapeHtml(time)}</td>
+          <td>${escapeHtml(priority)}</td>
+          <td>${escapeHtml(unit)}</td>
+          <td title="${escapeHtml(message)}">${escapeHtml(message)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  return `
+    <p class="count compact">${escapeHtml(sinceLabel)} | Eintraege: ${entries.length}</p>
+    <div class="table-wrap">
+      <table class="report-subtable">
+        <thead>
+          <tr>
+            <th>🕒 Zeit</th>
+            <th>⚠️ Prio</th>
+            <th>🧩 Unit</th>
+            <th>📝 Meldung</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderTopProcessesTable(topProcesses) {
+  const block = topProcesses && typeof topProcesses === "object" ? topProcesses : {};
+  const entries = Array.isArray(block.entries) ? block.entries : [];
+
+  if (entries.length === 0) {
+    return "<p class=\"muted\">Keine Prozessdaten verfuegbar.</p>";
+  }
+
+  const rows = entries
+    .map((entry) => {
+      const pid = Number(entry.pid || 0);
+      const cpu = Number(entry.cpu_percent);
+      const mem = Number(entry.memory_percent);
+      const rssKb = Number(entry.rss_kb);
+      const cmd = asText(entry.command || entry.name, "-");
+      return `
+        <tr>
+          <td>${Number.isFinite(pid) && pid > 0 ? pid : "-"}</td>
+          <td>${escapeHtml(asText(entry.user, "-"))}</td>
+          <td>${Number.isFinite(cpu) ? `${cpu.toFixed(1)}%` : "-"}</td>
+          <td>${Number.isFinite(mem) ? `${mem.toFixed(1)}%` : "-"}</td>
+          <td>${Number.isFinite(rssKb) ? formatKilobytes(rssKb) : "-"}</td>
+          <td title="${escapeHtml(cmd)}">${escapeHtml(cmd)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  return `
+    <p class="count compact">Top Prozesse nach CPU-Auslastung</p>
+    <div class="table-wrap">
+      <table class="report-subtable">
+        <thead>
+          <tr>
+            <th>🆔 PID</th>
+            <th>👤 User</th>
+            <th>🧠 CPU</th>
+            <th>🧮 RAM</th>
+            <th>💾 RSS</th>
+            <th>⚙️ Command</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderContainersTable(containersBlock) {
+  const block = containersBlock && typeof containersBlock === "object" ? containersBlock : {};
+  const entries = Array.isArray(block.entries) ? block.entries : [];
+  const runtime = asText(block.runtime, "docker");
+  const available = block.available === true;
+
+  if (!available && entries.length === 0) {
+    return `<p class="muted">Container-Runtime nicht verfuegbar (${escapeHtml(runtime)}).</p>`;
+  }
+  if (entries.length === 0) {
+    return "<p class=\"muted\">Keine Container gefunden.</p>";
+  }
+
+  const rows = entries
+    .map((entry) => {
+      const restartCount = Number(entry.restart_count || 0);
+      return `
+        <tr>
+          <td>${escapeHtml(asText(entry.name, "-"))}</td>
+          <td>${escapeHtml(asText(entry.image, "-"))}</td>
+          <td>${escapeHtml(asText(entry.state, "-"))}</td>
+          <td>${escapeHtml(asText(entry.health, "-"))}</td>
+          <td>${Number.isFinite(restartCount) ? restartCount : "-"}</td>
+          <td title="${escapeHtml(asText(entry.status, "-"))}">${escapeHtml(asText(entry.status, "-"))}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  return `
+    <p class="count compact">Runtime: ${escapeHtml(runtime)} | Container: ${entries.length}</p>
+    <div class="table-wrap">
+      <table class="report-subtable">
+        <thead>
+          <tr>
+            <th>📦 Name</th>
+            <th>🖼️ Image</th>
+            <th>📌 State</th>
+            <th>❤️ Health</th>
+            <th>🔁 Restarts</th>
+            <th>📝 Status</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderReportCard(report) {
   const payload = report && report.payload ? report.payload : {};
   const cpu = payload.cpu || {};
@@ -1056,6 +1230,33 @@ function renderReportCard(report) {
   const chipClass = isDelayed ? "delivery-chip delayed" : "delivery-chip live";
   const chipText = isDelayed ? "DELAYED" : "LIVE";
   const queueDepth = queueDepthLabel(payload.queue_depth);
+  const section = normalizeReportSection(state.reportSection);
+
+  let detailContent = "";
+  if (section === "journal") {
+    detailContent = `
+      <h4>🚨 Journal Fehler (kritisch)</h4>
+      ${renderJournalErrorsTable(payload.journal_errors)}
+    `;
+  } else if (section === "processes") {
+    detailContent = `
+      <h4>🏎️ Top Prozesse</h4>
+      ${renderTopProcessesTable(payload.top_processes)}
+    `;
+  } else if (section === "containers") {
+    detailContent = `
+      <h4>🐳 Container Status</h4>
+      ${renderContainersTable(payload.containers)}
+    `;
+  } else {
+    detailContent = `
+      <h4>🌐 Netzwerk</h4>
+      ${renderNetworkTable(network)}
+
+      <h4>💾 Filesysteme</h4>
+      ${renderFilesystemTable(payload.filesystems)}
+    `;
+  }
 
   return `
     <article class="report-card">
@@ -1081,12 +1282,7 @@ function renderReportCard(report) {
         <p><strong>💤 Swap</strong><span>${formatPercent(swap.used_percent)} | ${formatKilobytes(swap.used_kb)} / ${formatKilobytes(swap.total_kb)}</span></p>
         <p><strong>🌍 Default NIC</strong><span>${escapeHtml(asText(network.default_interface))}</span></p>
       </div>
-
-      <h4>🌐 Netzwerk</h4>
-      ${renderNetworkTable(network)}
-
-      <h4>💾 Filesysteme</h4>
-      ${renderFilesystemTable(payload.filesystems)}
+      ${detailContent}
     </article>
   `;
 }
@@ -1411,6 +1607,7 @@ async function loadReportsForHost() {
   const selectedHostTitle = document.getElementById("selectedHostTitle");
 
   if (!state.selectedHost) {
+    state.currentReport = null;
     selectedHostTitle.textContent = "🗂️ Meldungen";
     count.textContent = "";
     list.innerHTML = "<p class=\"muted\">Kein Host ausgewaehlt.</p>";
@@ -1436,6 +1633,7 @@ async function loadReportsForHost() {
     const reports = data.reports || [];
 
     if (reports.length === 0) {
+      state.currentReport = null;
       list.innerHTML = "<p class=\"muted\">Noch keine Daten vorhanden.</p>";
       count.textContent = `0 von ${state.totalReports} Meldungen`;
       updatePagerButtons();
@@ -1446,11 +1644,21 @@ async function loadReportsForHost() {
     count.textContent = `Meldung ${shownIndex} von ${state.totalReports}`;
     state.selectedDisplayName = String(reports[0].display_name || reports[0].hostname || state.selectedHost);
     selectedHostTitle.textContent = `🗂️ Meldungen fuer ${state.selectedDisplayName}`;
-    list.innerHTML = renderReportCard(reports[0]);
+    state.currentReport = reports[0];
+    list.innerHTML = renderReportCard(state.currentReport);
     updatePagerButtons();
   } catch (error) {
+    state.currentReport = null;
     list.innerHTML = `<p class=\"muted\">Fehler: ${escapeHtml(error.message)}</p>`;
   }
+}
+
+function renderCurrentReportInView() {
+  const list = document.getElementById("reportList");
+  if (!state.currentReport) {
+    return;
+  }
+  list.innerHTML = renderReportCard(state.currentReport);
 }
 
 async function editDisplayName() {
@@ -1721,6 +1929,14 @@ function wireEvents() {
     state.viewMode = "reports";
     updateViewMode();
   });
+
+  for (const button of document.querySelectorAll("[data-report-section]")) {
+    button.addEventListener("click", () => {
+      state.reportSection = normalizeReportSection(button.getAttribute("data-report-section"));
+      updateReportSectionUi();
+      renderCurrentReportInView();
+    });
+  }
 
   document.getElementById("loginSubmitButton").addEventListener("click", async () => {
     const ok = await loginWebClient();

@@ -21,7 +21,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-remote_version="$(curl -fsSL "$RAW_BASE_URL/BUILD_VERSION" | tr -d '[:space:]')"
+remote_version="$(curl -fsSL "$RAW_BASE_URL/AGENT_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+if [[ -z "$remote_version" ]]; then
+  remote_version="$(curl -fsSL "$RAW_BASE_URL/BUILD_VERSION" | tr -d '[:space:]')"
+fi
 local_version="unknown"
 if [[ -f "$AGENT_VERSION_FILE" ]]; then
   local_version="$(head -n 1 "$AGENT_VERSION_FILE" | tr -d '[:space:]')"

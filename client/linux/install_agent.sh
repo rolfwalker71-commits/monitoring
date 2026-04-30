@@ -14,6 +14,7 @@ API_KEY=""
 AGENT_ID=""
 DISPLAY_NAME=""
 INTERVAL_MINUTES="15"
+UPDATE_HOURS="6"
 RAW_BASE_URL="https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main"
 AGENT_QUEUE_DIR="/var/lib/monitoring-agent/queue"
 COLLECT_SCRIPT_URL=""
@@ -22,7 +23,7 @@ BUILD_VERSION_URL=""
 
 usage() {
   cat <<EOF
-Usage: $0 --server-url URL [--api-key KEY] [--agent-id ID] [--display-name NAME] [--interval-minutes 15] [--collect-script-url URL]
+Usage: $0 --server-url URL [--api-key KEY] [--agent-id ID] [--display-name NAME] [--interval-minutes 15] [--update-hours 6] [--collect-script-url URL]
 
 Example:
   curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/linux/install_agent.sh \
@@ -50,6 +51,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --interval-minutes)
       INTERVAL_MINUTES="$2"
+      shift 2
+      ;;
+    --update-hours)
+      UPDATE_HOURS="$2"
       shift 2
       ;;
     --collect-script-url)
@@ -83,6 +88,11 @@ if ! [[ "$INTERVAL_MINUTES" =~ ^[0-9]+$ ]] || [[ "$INTERVAL_MINUTES" -lt 1 ]] ||
   exit 1
 fi
 
+if ! [[ "$UPDATE_HOURS" =~ ^[0-9]+$ ]] || [[ "$UPDATE_HOURS" -lt 1 ]] || [[ "$UPDATE_HOURS" -gt 24 ]]; then
+  echo "--update-hours must be a number between 1 and 24" >&2
+  exit 1
+fi
+
 if [[ $EUID -ne 0 ]]; then
   echo "Please run as root (or via sudo)." >&2
   exit 1
@@ -95,14 +105,14 @@ if [[ -z "$SELF_UPDATE_SCRIPT_URL" ]]; then
   SELF_UPDATE_SCRIPT_URL="$RAW_BASE_URL/client/linux/self_update.sh"
 fi
 if [[ -z "$BUILD_VERSION_URL" ]]; then
-  BUILD_VERSION_URL="$RAW_BASE_URL/BUILD_VERSION"
+  BUILD_VERSION_URL="$RAW_BASE_URL/AGENT_VERSION"
 fi
 
 install_cron_in_crond() {
   local collect_cron_line
   local update_cron_line
   collect_cron_line="*/$INTERVAL_MINUTES * * * * root CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/collect_and_send.sh >> $LOG_FILE 2>&1"
-  update_cron_line="11 */6 * * * root CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/self_update.sh >> $UPDATE_LOG_FILE 2>&1"
+  update_cron_line="11 */$UPDATE_HOURS * * * root CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/self_update.sh >> $UPDATE_LOG_FILE 2>&1"
 
   if [[ ! -d "/etc/cron.d" ]]; then
     return 1
@@ -127,7 +137,7 @@ install_cron_in_crontab() {
   local update_cron_line
   local existing
   collect_cron_line="*/$INTERVAL_MINUTES * * * * CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/collect_and_send.sh >> $LOG_FILE 2>&1"
-  update_cron_line="11 */6 * * * CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/self_update.sh >> $UPDATE_LOG_FILE 2>&1"
+  update_cron_line="11 */$UPDATE_HOURS * * * CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/self_update.sh >> $UPDATE_LOG_FILE 2>&1"
 
   if ! command -v crontab >/dev/null 2>&1; then
     return 1
@@ -211,7 +221,7 @@ echo "Updater: $INSTALL_DIR/self_update.sh"
 echo "Agent version file: $INSTALL_DIR/AGENT_VERSION"
 echo "Queue dir: $AGENT_QUEUE_DIR"
 echo "Cron schedule: every $INTERVAL_MINUTES minutes"
-echo "Update check: every 6 hours"
+echo "Update check: every $UPDATE_HOURS hours"
 echo "Cron target: $CRON_TARGET"
 echo "Log file: $LOG_FILE"
 echo "Update log file: $UPDATE_LOG_FILE"

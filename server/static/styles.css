@@ -294,6 +294,11 @@ button:hover:not(.host-item) {
   margin: 0 0 10px;
 }
 
+.report-subview-tabs {
+  margin: 0 0 8px;
+  flex-wrap: wrap;
+}
+
 .overview-controls {
   display: flex;
   justify-content: flex-end;
@@ -968,6 +973,15 @@ button:hover:not(.host-item) {
   border-radius: 10px;
   padding: 10px 12px;
   background: #fcfdff;
+}
+
+.report-subtable {
+  table-layout: fixed;
+}
+
+.report-subtable td:last-child,
+.report-subtable th:last-child {
+  width: 44%;
 }
 
 .report-header {
