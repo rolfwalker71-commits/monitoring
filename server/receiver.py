@@ -250,6 +250,14 @@ def utc_hours_ago_iso(hours: int) -> str:
     return cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def read_build_version() -> str:
+    try:
+        value = BUILD_VERSION_PATH.read_text(encoding="utf-8").strip()
+        return value or "dev"
+    except OSError:
+        return "dev"
+
+
 def parse_payload_json(payload_json: str) -> dict:
     try:
         value = json.loads(payload_json)
@@ -1002,6 +1010,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         content = path.read_bytes()
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
+
+    def _send_index_with_asset_version(self) -> None:
+        path = STATIC_DIR / "index.html"
+        if not path.exists() or not path.is_file():
+            self.send_error(HTTPStatus.NOT_FOUND, "File not found")
+            return
+
+        html = path.read_text(encoding="utf-8")
+        html = html.replace("__ASSET_VERSION__", read_build_version())
+        content = html.encode("utf-8")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(content)))
         self.end_headers()
         self.wfile.write(content)
@@ -1791,7 +1814,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/":
-            self._send_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
+            self._send_index_with_asset_version()
             return
 
         if parsed.path == "/app.js":
