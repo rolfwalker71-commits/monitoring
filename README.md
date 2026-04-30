@@ -13,7 +13,7 @@
 
 - `client/linux/collect_and_send.sh`: sammelt Daten und POSTet JSON
 - `client/linux/self_update.sh`: prueft GitHub auf neue Agent-Version und aktualisiert lokale Skripte
-- `client/linux/install_agent.sh`: Install-Skript fuer Linux (per `curl` nutzbar), schreibt Cronjob
+- `client/linux/install_agent.sh`: Install-Skript fuer Linux (per `curl` nutzbar), schreibt Cronjob und fuehrt Self-Test automatisch aus
 - `server/receiver.py`: einfacher HTTP-Receiver + API + statische Dashboard-Seite
 - `server/static/*`: kleine Weboberflaeche
 
@@ -116,8 +116,8 @@ curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/mai
   | sudo bash -s -- --server-url http://<server-ip>:8080 --interval-minutes 15 --update-hours 6
 ```
 
-Bei der Installation fragt der Agent interaktiv nach einem sprechenden Anzeigenamen.
-Dieser wird im Dashboard als Titel verwendet, waehrend der technische `hostname` weiterhin der wichtige Identifikator bleibt.
+Die Installation laeuft komplett non-interactive.
+Wenn `--display-name` nicht gesetzt wird, verwendet der Agent automatisch `AGENT_ID`/Hostname als Anzeigenamen.
 
 Optional kann der Anzeigename auch direkt uebergeben werden:
 
@@ -134,6 +134,12 @@ Eingerichtete Jobs:
 - Datensammlung und Versand alle `x` Minuten
 - Self-Update Check alle `n` Stunden gegen GitHub `main` (`--update-hours`, Default `6`)
 - Priorisierte Zusatz-Checks im Sammellauf (Default alle `60` Minuten, konfigurierbar ueber `PRIORITY_UPDATE_CHECK_MINUTES`)
+
+Automatischer Self-Test direkt nach Installation:
+
+- Ein sofortiger Lauf von `collect_and_send.sh` (ohne Benutzerinteraktion)
+- Ein sofortiger Lauf von `self_update.sh` (ohne Benutzerinteraktion)
+- Ausgabe der installierten Agent-Version am Ende
 
 Queue-Verhalten:
 

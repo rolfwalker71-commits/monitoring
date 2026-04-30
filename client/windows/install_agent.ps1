@@ -95,9 +95,7 @@ if (-not $AgentId) {
 }
 
 if (-not $DisplayName) {
-    Write-Host -NoNewline "Display name for this host [$AgentId]: "
-    $userInput = Read-Host
-    $DisplayName = if ($userInput.Trim()) { $userInput.Trim() } else { $AgentId }
+    $DisplayName = $AgentId
 }
 
 # ---- Write config ----
@@ -181,6 +179,22 @@ Register-MonitoringTask `
     -Description        'Monitoring agent - self update' `
     -ExecutionTimeLimit (New-TimeSpan -Hours 1)
 
+# Non-interactive post-install self-test: run collector and updater once immediately.
+$env:CONFIG_FILE = $ConfigFile
+$env:AGENT_VERSION_FILE = "$InstallDir\AGENT_VERSION"
+$env:AGENT_QUEUE_DIR = $QueueDir
+
+& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$InstallDir\collect_and_send.ps1" *>> $LogFile
+& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$InstallDir\self_update.ps1" *>> $UpdateLogFile
+
+$installedAgentVersion = 'unknown'
+if (Test-Path "$InstallDir\AGENT_VERSION") {
+    $rawVersion = (Get-Content -Path "$InstallDir\AGENT_VERSION" -TotalCount 1 -ErrorAction SilentlyContinue)
+    if ($rawVersion) {
+        $installedAgentVersion = $rawVersion.Trim()
+    }
+}
+
 # ---- Summary ----
 Write-Host ''
 Write-Host 'Monitoring agent installed successfully.'
@@ -190,10 +204,6 @@ Write-Host "  Collect log   : $LogFile"
 Write-Host "  Update log    : $UpdateLogFile"
 Write-Host "  Collect task  : $TaskNameCollect  (every $IntervalMinutes min)"
 Write-Host "  Update task   : $TaskNameUpdate  (every $UpdateHours h)"
+Write-Host '  Self-test     : collect + self_update executed once'
+Write-Host "  Agent version : $installedAgentVersion"
 Write-Host ''
-
-$run = Read-Host 'Run collection once now? [y/N]'
-if ($run -match '^[Yy]') {
-    Start-ScheduledTask -TaskName $TaskNameCollect
-    Write-Host 'Task started.'
-}

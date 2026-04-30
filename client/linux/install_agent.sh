@@ -173,17 +173,7 @@ if [[ -z "$AGENT_ID" ]]; then
 fi
 
 if [[ -z "$DISPLAY_NAME" ]]; then
-  prompt_default="$AGENT_ID"
-  if [[ -r /dev/tty ]]; then
-    printf 'Anzeigename fuer diesen Host [%s]: ' "$prompt_default" > /dev/tty
-    if read -r DISPLAY_NAME < /dev/tty; then
-      DISPLAY_NAME="${DISPLAY_NAME:-$prompt_default}"
-    else
-      DISPLAY_NAME="$prompt_default"
-    fi
-  else
-    DISPLAY_NAME="$prompt_default"
-  fi
+  DISPLAY_NAME="$AGENT_ID"
 fi
 
 cat > "$CONFIG_FILE" <<EOF
@@ -213,6 +203,15 @@ if command -v systemctl >/dev/null 2>&1; then
   systemctl reload cron 2>/dev/null || systemctl reload crond 2>/dev/null || true
 fi
 
+# Non-interactive post-install self-test: run collector and updater once immediately.
+CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$INSTALL_DIR/AGENT_VERSION" AGENT_QUEUE_DIR="$AGENT_QUEUE_DIR" "$INSTALL_DIR/collect_and_send.sh" >> "$LOG_FILE" 2>&1
+CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$INSTALL_DIR/AGENT_VERSION" AGENT_QUEUE_DIR="$AGENT_QUEUE_DIR" "$INSTALL_DIR/self_update.sh" >> "$UPDATE_LOG_FILE" 2>&1
+
+INSTALLED_AGENT_VERSION="unknown"
+if [[ -f "$INSTALL_DIR/AGENT_VERSION" ]]; then
+  INSTALLED_AGENT_VERSION="$(head -n 1 "$INSTALL_DIR/AGENT_VERSION" | tr -d '[:space:]')"
+fi
+
 echo "Monitoring agent installed."
 echo "Config: $CONFIG_FILE"
 echo "Display name: $DISPLAY_NAME"
@@ -225,3 +224,5 @@ echo "Update check: every $UPDATE_HOURS hours"
 echo "Cron target: $CRON_TARGET"
 echo "Log file: $LOG_FILE"
 echo "Update log file: $UPDATE_LOG_FILE"
+echo "Self-test: collect + self_update executed once"
+echo "Installed agent version: $INSTALLED_AGENT_VERSION"
