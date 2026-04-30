@@ -345,10 +345,21 @@ function setAuthUiState(authenticated) {
   const loginOverlay = document.getElementById("loginOverlay");
   const appPanel = document.getElementById("appPanel");
   const hostToolsHeader = document.getElementById("hostToolsHeader");
+  const brandUserBadge = document.getElementById("brandUserBadge");
+  const logoutButton = document.getElementById("logoutButton");
   loginOverlay.classList.toggle("hidden", authenticated);
   appPanel.classList.toggle("hidden", !authenticated);
   if (hostToolsHeader) {
     hostToolsHeader.classList.toggle("hidden", !authenticated);
+  }
+  if (brandUserBadge) {
+    brandUserBadge.classList.toggle("hidden", !authenticated);
+    if (authenticated && state.authUser) {
+      brandUserBadge.textContent = state.authUser;
+    }
+  }
+  if (logoutButton) {
+    logoutButton.classList.toggle("hidden", !authenticated);
   }
   state.isAuthenticated = authenticated;
 }
@@ -403,6 +414,20 @@ async function loginWebClient() {
   setAuthUiState(true);
   passwordInput.value = "";
   return true;
+}
+
+async function logoutWebClient() {
+  try {
+    await fetch("/api/v1/web-logout", { method: "POST", credentials: "same-origin" });
+  } catch {
+    // ignore network errors – session will be cleared server-side anyway
+  }
+  state.authUser = "";
+  setAuthUiState(false);
+  const brandUserBadge = document.getElementById("brandUserBadge");
+  if (brandUserBadge) {
+    brandUserBadge.textContent = "";
+  }
 }
 
 async function changePassword() {
@@ -2382,6 +2407,10 @@ function wireEvents() {
   document.getElementById("openChangePasswordButton").addEventListener("click", () => {
     document.getElementById("changePasswordModal").classList.remove("hidden");
     setPasswordChangeStatus("");
+  });
+
+  document.getElementById("logoutButton").addEventListener("click", async () => {
+    await logoutWebClient();
   });
 
   document.getElementById("cancelPasswordButton").addEventListener("click", () => {
