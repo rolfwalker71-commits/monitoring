@@ -18,6 +18,7 @@ const state = {
   selectedDisplayName: "",
   hostSearchQuery: "",
   hostAlertFilter: "all",
+  hostMutedFilter: "all",
   viewMode: "overview",
   overviewSection: "main",
   reportLimit: 1,
@@ -1378,6 +1379,7 @@ async function goToNextReport() {
 function filterAndSortHosts(hosts) {
   const query = state.hostSearchQuery.toLowerCase().trim();
   const alertFilter = String(state.hostAlertFilter || "all");
+  const mutedFilter = String(state.hostMutedFilter || "all");
 
   let filtered = hosts;
   if (query.length > 0) {
@@ -1392,6 +1394,20 @@ function filterAndSortHosts(hosts) {
     filtered = filtered.filter((host) => Number(host.open_alert_count || 0) > 0);
   } else if (alertFilter === "without-alerts") {
     filtered = filtered.filter((host) => Number(host.open_alert_count || 0) <= 0);
+  }
+
+  if (mutedFilter === "with-muted") {
+    filtered = filtered.filter((host) => {
+      const hostname = asText(host.hostname, "");
+      const muted = Array.isArray(state.mutedAlertsByHost[hostname]) ? state.mutedAlertsByHost[hostname] : [];
+      return muted.length > 0;
+    });
+  } else if (mutedFilter === "without-muted") {
+    filtered = filtered.filter((host) => {
+      const hostname = asText(host.hostname, "");
+      const muted = Array.isArray(state.mutedAlertsByHost[hostname]) ? state.mutedAlertsByHost[hostname] : [];
+      return muted.length === 0;
+    });
   }
 
   filtered.sort((a, b) => {
@@ -2333,6 +2349,12 @@ function wireEvents() {
     state.hostOffset = 0;
     await loadHosts();
   });
+
+  document.getElementById("hostMutedFilterSelect").addEventListener("change", async (event) => {
+    state.hostMutedFilter = String(event.target?.value || "all");
+    state.hostOffset = 0;
+    await loadHosts();
+  });
 }
 
 async function init() {
@@ -2345,6 +2367,7 @@ async function init() {
   toggleAlarmSettingsPanel(false);
   document.getElementById("globalSeverityFilter").value = state.globalSeverityFilter;
   document.getElementById("hostAlertFilterSelect").value = state.hostAlertFilter;
+  document.getElementById("hostMutedFilterSelect").value = state.hostMutedFilter;
   document.getElementById("loginUsernameInput").value = "admin";
   const isAuthenticated = await ensureAuthenticatedSession();
   if (!isAuthenticated) {
