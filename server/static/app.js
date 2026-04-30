@@ -844,13 +844,12 @@ function buildPointMarkers(series, width, height, minValue, maxValue, color, lab
     .join("");
 }
 
-function buildTrendLine(series, width, height, minValue, maxValue, color, margins = {}) {
+function computeLinearRegression(series) {
   if (!Array.isArray(series) || series.length < 3) {
-    return "";
+    return null;
   }
 
   const n = series.length;
-  // Use index as x (0..n-1) for regression, map value to SVG y
   const sumX = (n * (n - 1)) / 2;
   const sumX2 = ((n - 1) * n * (2 * n - 1)) / 6;
   let sumY = 0;
@@ -860,14 +859,34 @@ function buildTrendLine(series, width, height, minValue, maxValue, color, margin
     sumXY += i * series[i].value;
   }
   const denom = n * sumX2 - sumX * sumX;
-  if (denom === 0) return "";
+  if (denom === 0) return null;
 
   const slope = (n * sumXY - sumX * sumY) / denom;
   const intercept = (sumY - slope * sumX) / n;
+  const currentEnd = slope * (n - 1) + intercept;
+  // Project forward by the same number of steps as the data window
+  const projected = slope * (2 * (n - 1)) + intercept;
 
-  const yStart = intercept;
-  const yEnd = slope * (n - 1) + intercept;
+  return { slope, intercept, currentEnd, projected };
+}
 
+function trendAlertLevel(projected) {
+  if (projected >= 100) return "crit";
+  if (projected >= 90) return "warn";
+  return null;
+}
+
+function trendLineColor(baseColor, alertLevel) {
+  if (alertLevel === "crit") return "#dc2626";
+  if (alertLevel === "warn") return "#d97706";
+  return baseColor;
+}
+
+function buildTrendLine(series, width, height, minValue, maxValue, color, margins = {}) {
+  const reg = computeLinearRegression(series);
+  if (!reg) return "";
+
+  const { intercept, currentEnd } = reg;
   const frame = buildChartFrame(width, height, margins);
   const range = maxValue - minValue;
   const safeRange = range === 0 ? 1 : range;
@@ -879,8 +898,8 @@ function buildTrendLine(series, width, height, minValue, maxValue, color, margin
 
   const x1 = frame.left.toFixed(2);
   const x2 = (frame.left + frame.width).toFixed(2);
-  const y1 = toSvgY(yStart).toFixed(2);
-  const y2 = toSvgY(yEnd).toFixed(2);
+  const y1 = toSvgY(intercept).toFixed(2);
+  const y2 = toSvgY(currentEnd).toFixed(2);
 
   return `<line class="chart-trend-line" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" />`;
 }
@@ -918,7 +937,8 @@ function buildSparklineSvg(series, color, width = 320, height = 82, options = {}
   const polyline = buildPolylinePoints(points, width, height, minValue, maxValue, margins);
   const area = buildAreaPolygonPoints(points, width, height, minValue, maxValue, margins);
   const markers = buildPointMarkers(points, width, height, minValue, maxValue, color, "Wert", margins);
-  const trendLine = buildTrendLine(points, width, height, minValue, maxValue, color, margins);
+  const usedTrendColor = options.trendColor || color;
+  const trendLine = buildTrendLine(points, width, height, minValue, maxValue, usedTrendColor, margins);
 
   return `
     <svg class="sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="Trend">
@@ -997,6 +1017,7 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
     .join("");
 
   const standText = formatUtcPlus2(latestReportTimeUtc);
+  const trendWarnings = [];
   const miniCharts = chartDefinitions
     .map((item) => {
       const points = normalizeSeries(resourceSeries[item.key]);
@@ -1004,27 +1025,46 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
       const minValue = values.length > 0 ? Math.min(...values) : null;
       const maxValue = values.length > 0 ? Math.max(...values) : null;
       const isPercent = item.label.includes("%");
+      const reg = isPercent ? computeLinearRegression(points) : null;
+      const alertLevel = reg ? trendAlertLevel(reg.projected) : null;
+      const usedTrendColor = trendLineColor(item.color, alertLevel);
+      if (alertLevel) {
+        trendWarnings.push({ label: item.label, projected: reg.projected, alertLevel });
+      }
+      const trendBadge = alertLevel
+        ? `<span class="trend-alert-badge trend-alert-${alertLevel}" title="Trend-Projektion: ${reg.projected.toFixed(1)}%">${alertLevel === "crit" ? "⬆ Kritisch" : "⬆ Warnung"} ~${reg.projected.toFixed(0)}%</span>`
+        : "";
       return `
-        <article class="mini-chart-card">
+        <article class="mini-chart-card${alertLevel ? ` trend-alert-card-${alertLevel}` : ""}">
           <header>
             <strong>${item.label}</strong>
             <span>${points.length} Samples</span>
           </header>
           ${buildSparklineSvg(points, item.color, 420, 140, {
             suffix: isPercent ? "%" : "",
+            trendColor: usedTrendColor,
             ...(isPercent ? { minValue: 0, maxValue: 100 } : {}),
           })}
           <footer>
             <span>Min: ${minValue === null ? "-" : formatNumber(minValue, 2)}</span>
             <span>Max: ${maxValue === null ? "-" : formatNumber(maxValue, 2)}</span>
+            ${trendBadge}
           </footer>
         </article>
       `;
     })
     .join("");
 
+  const trendWarningBlock = trendWarnings.length > 0
+    ? `<div class="trend-warning-block">
+        <strong>⚠ Proaktive Trend-Warnung</strong>
+        <ul>${trendWarnings.map((w) => `<li class="trend-alert-${w.alertLevel}"><strong>${escapeHtml(w.label)}</strong>: Trend zeigt auf <strong>${w.projected.toFixed(1)}%</strong> (Projektion ~gleiches Zeitfenster voraus)</li>`).join("")}</ul>
+      </div>`
+    : "";
+
   return `
     <section class="resource-chart-layout">
+    ${trendWarningBlock}
     <section class="mini-chart-grid">${miniCharts}</section>
     <section class="combined-chart combined-wide">
       <div class="combined-chart-head">
@@ -1090,8 +1130,9 @@ function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
   }
   const topTrends = sortFilesystemByMountpointAscending(filtered);
   const standText = formatUtcPlus2(latestReportTimeUtc);
+  const fsTrendWarnings = [];
 
-  return topTrends
+  const cards = topTrends
     .map((item) => {
       const points = normalizeSeries((item.series || []).map((point) => ({
         time_utc: point.time_utc,
@@ -1099,23 +1140,42 @@ function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
       })));
       const color = filesystemLineColor(item.current_used_percent);
       const mountpoint = renderPathCell(item.mountpoint, 42);
+      const reg = computeLinearRegression(points);
+      const alertLevel = reg ? trendAlertLevel(reg.projected) : null;
+      const usedTrendColor = trendLineColor(color, alertLevel);
+      if (alertLevel) {
+        fsTrendWarnings.push({ label: item.mountpoint, projected: reg.projected, alertLevel });
+      }
+      const trendBadge = alertLevel
+        ? `<span class="trend-alert-badge trend-alert-${alertLevel}" title="Trend-Projektion: ${reg.projected.toFixed(1)}%">${alertLevel === "crit" ? "⬆ Kritisch" : "⬆ Warnung"} ~${reg.projected.toFixed(0)}%</span>`
+        : "";
 
       return `
-        <article class="fs-chart-card">
+        <article class="fs-chart-card${alertLevel ? ` trend-alert-card-${alertLevel}` : ""}">
           <header>
             <strong>${mountpoint}</strong>
             <span>${Number(item.sample_count || 0).toLocaleString("de-DE")} Samples</span>
           </header>
-          ${buildSparklineSvg(points, color, 520, 150, { suffix: "%", minValue: 0, maxValue: 100 })}
+          ${buildSparklineSvg(points, color, 520, 150, { suffix: "%", minValue: 0, maxValue: 100, trendColor: usedTrendColor })}
           <footer>
             <span>Aktuell: ${formatPercent(item.current_used_percent)}</span>
             <span>Delta: ${formatSignedPercent(item.delta_used_percent)}</span>
+            ${trendBadge}
             <span>${escapeHtml(standText)}</span>
           </footer>
         </article>
       `;
     })
     .join("");
+
+  const fsWarningBlock = fsTrendWarnings.length > 0
+    ? `<div class="trend-warning-block">
+        <strong>⚠ Proaktive Trend-Warnung – Dateisystem</strong>
+        <ul>${fsTrendWarnings.map((w) => `<li class="trend-alert-${w.alertLevel}"><strong>${escapeHtml(w.label)}</strong>: Trend zeigt auf <strong>${w.projected.toFixed(1)}%</strong> (Projektion ~gleiches Zeitfenster voraus)</li>`).join("")}</ul>
+      </div>`
+    : "";
+
+  return fsWarningBlock + cards;
 }
 
 function renderNetworkTable(network) {

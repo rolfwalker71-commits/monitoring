@@ -1139,6 +1139,73 @@ button:hover:not(.host-item) {
   stroke-linecap: round;
 }
 
+.trend-warning-block {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border: 1px solid #fbbf24;
+  border-left: 4px solid #f59e0b;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.trend-warning-block strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #92400e;
+}
+
+.trend-warning-block ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.trend-warning-block li {
+  color: #78350f;
+}
+
+.trend-warning-block li.trend-alert-crit {
+  color: #991b1b;
+}
+
+.trend-alert-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.trend-alert-badge.trend-alert-warn {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
+.trend-alert-badge.trend-alert-crit {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.trend-alert-card-warn {
+  border-color: #fbbf24 !important;
+  box-shadow: 0 0 0 1px #fde68a, 0 6px 18px rgba(245, 158, 11, 0.12) !important;
+}
+
+.trend-alert-card-crit {
+  border-color: #fca5a5 !important;
+  box-shadow: 0 0 0 1px #fecaca, 0 6px 18px rgba(220, 38, 38, 0.14) !important;
+}
+
 .chart-grid-line {
   stroke: #dbe5ef;
   stroke-width: 1;
