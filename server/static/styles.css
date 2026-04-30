@@ -587,6 +587,70 @@ button:hover:not(.host-item) {
   opacity: 0.45;
 }
 
+.host-muted-section {
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px dashed #cbd5e1;
+}
+
+.host-muted-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.host-muted-title {
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.host-muted-toggle {
+  padding: 2px 8px;
+  font-size: 10px;
+}
+
+.host-muted-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.host-muted-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.host-muted-path {
+  color: #475569;
+  font-size: 11px;
+}
+
+.host-unmute-action {
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.host-unmute-action:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
 .host-mini-action {
   width: 24px;
   height: 24px;

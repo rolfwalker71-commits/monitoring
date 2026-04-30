@@ -36,6 +36,8 @@ const state = {
   visibleHosts: 0,
   hiddenHosts: 0,
   hiddenHostsCollapsed: true,
+  hiddenHostMutedAlertsCollapsed: {},
+  mutedAlertsByHost: {},
   latestAgentRelease: "",
 };
 
@@ -1419,6 +1421,47 @@ function hiddenHostsToggleLabel(collapsed) {
   return collapsed ? "▸ open" : "▾ open";
 }
 
+function hiddenHostMutedAlertsToggleLabel(collapsed) {
+  return collapsed ? "▸ muted" : "▾ muted";
+}
+
+async function loadAlertMutes() {
+  try {
+    const response = await fetch("/api/v1/alert-mutes");
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+
+    const data = await response.json();
+    const grouped = {};
+    for (const item of (data.mutes || [])) {
+      const hostname = asText(item.hostname, "");
+      const mountpoint = asText(item.mountpoint, "");
+      if (!hostname || !mountpoint) {
+        continue;
+      }
+      if (!grouped[hostname]) {
+        grouped[hostname] = [];
+      }
+      grouped[hostname].push({
+        hostname,
+        mountpoint,
+        muted_by: asText(item.muted_by, "-"),
+        muted_at_utc: asText(item.muted_at_utc, "-"),
+      });
+    }
+
+    for (const hostname of Object.keys(grouped)) {
+      grouped[hostname].sort((left, right) => left.mountpoint.localeCompare(right.mountpoint));
+    }
+
+    state.mutedAlertsByHost = grouped;
+  } catch (_error) {
+    // Keep host list usable even if the mutes endpoint is temporarily unavailable.
+    state.mutedAlertsByHost = {};
+  }
+}
+
 function renderSingleHostCard(host) {
   const hostname = asText(host.hostname);
   const displayName = asText(host.display_name || host.hostname);
@@ -1444,6 +1487,39 @@ function renderSingleHostCard(host) {
   const iconName = osRaw.includes("windows") ? "windows.png" : "linux.png";
   const osLabel = osRaw.includes("windows") ? "Windows" : "Linux";
   const osIcon = `<img src="icons/${iconName}" class="host-os-icon" alt="${osLabel}" title="${escapeHtml(asText(host.os))}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${iconName}';}">`;
+  const mutedAlerts = Array.isArray(state.mutedAlertsByHost[hostname]) ? state.mutedAlertsByHost[hostname] : [];
+  const hasMutedAlerts = mutedAlerts.length > 0;
+  const mutedCollapsed = state.hiddenHostMutedAlertsCollapsed[hostname] !== false;
+  const mutedBodyClass = mutedCollapsed ? "hidden" : "";
+
+  let mutedAlertsSection = "";
+  if (isHidden && hasMutedAlerts) {
+    const hostnameEncForList = encodeURIComponent(hostname);
+    const rows = mutedAlerts
+      .map((item) => {
+        const hostnameEnc = encodeURIComponent(hostname);
+        const mountpointEnc = encodeURIComponent(item.mountpoint);
+        return `
+          <li>
+            <span class="host-muted-path" title="${escapeHtml(item.mountpoint)}">${escapeHtml(shortPath(item.mountpoint, 34))}</span>
+            <button class="host-unmute-action" type="button" data-action="unmute-alert" data-host-enc="${hostnameEnc}" data-mount-enc="${mountpointEnc}" title="Alert wieder aktivieren">🔔</button>
+          </li>
+        `;
+      })
+      .join("");
+
+    mutedAlertsSection = `
+      <section class="host-muted-section">
+        <div class="host-muted-row">
+          <span class="host-muted-title">🔇 Gemutet: ${mutedAlerts.length}</span>
+          <button class="host-group-toggle host-muted-toggle" type="button" data-action="toggle-muted-list" data-host-enc="${hostnameEncForList}" aria-expanded="${mutedCollapsed ? "false" : "true"}">${hiddenHostMutedAlertsToggleLabel(mutedCollapsed)}</button>
+        </div>
+        <ul class="host-muted-list ${mutedBodyClass}" data-muted-body-enc="${hostnameEncForList}">
+          ${rows}
+        </ul>
+      </section>
+    `;
+  }
 
   return `
     <article class="${selectedClass}${hiddenClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">
@@ -1464,6 +1540,7 @@ function renderSingleHostCard(host) {
         <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
         ${updateTriangle}
       </span>
+      ${mutedAlertsSection}
       ${osIcon}
     </article>
   `;
@@ -1583,6 +1660,49 @@ function wireHostListInteractions() {
       hiddenToggle.setAttribute("aria-expanded", state.hiddenHostsCollapsed ? "false" : "true");
     });
   }
+
+  for (const button of hostList.querySelectorAll("[data-action='toggle-muted-list']")) {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const hostnameEnc = button.getAttribute("data-host-enc") || "";
+      const hostname = decodeURIComponent(hostnameEnc);
+      if (!hostname) {
+        return;
+      }
+
+      const currentlyCollapsed = state.hiddenHostMutedAlertsCollapsed[hostname] !== false;
+      const nextCollapsed = !currentlyCollapsed;
+      state.hiddenHostMutedAlertsCollapsed[hostname] = nextCollapsed;
+
+      const body = hostList.querySelector(`[data-muted-body-enc='${hostnameEnc}']`);
+      if (body) {
+        body.classList.toggle("hidden", nextCollapsed);
+      }
+      button.textContent = hiddenHostMutedAlertsToggleLabel(nextCollapsed);
+      button.setAttribute("aria-expanded", nextCollapsed ? "false" : "true");
+    });
+  }
+
+  for (const button of hostList.querySelectorAll("[data-action='unmute-alert']")) {
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const hostname = decodeURIComponent(button.getAttribute("data-host-enc") || "");
+      const mountpoint = decodeURIComponent(button.getAttribute("data-mount-enc") || "");
+      if (!hostname || !mountpoint) {
+        return;
+      }
+
+      try {
+        await toggleAlertMute(hostname, mountpoint, true);
+      } catch (error) {
+        window.alert(`Alert konnte nicht reaktiviert werden: ${error.message}`);
+      }
+    });
+  }
 }
 
 function renderHosts(hosts) {
@@ -1638,7 +1758,10 @@ async function loadHosts() {
 
   try {
     const url = `/api/v1/hosts?limit=${state.hostLimit}&offset=${state.hostOffset}`;
-    const response = await fetch(url);
+    const [response] = await Promise.all([
+      fetch(url),
+      loadAlertMutes(),
+    ]);
     if (!response.ok) {
       throw new Error("HTTP " + response.status);
     }
