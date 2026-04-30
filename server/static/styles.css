@@ -721,10 +721,19 @@ button:hover:not(.host-item) {
   stroke-width: 1;
 }
 
+.chart-axis-tick {
+  stroke: #94a3b8;
+  stroke-width: 1;
+}
+
 .chart-axis-label {
   fill: #64748b;
   font-size: 10px;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+.chart-axis-label-x {
+  font-size: 9px;
 }
 
 .chart-area {

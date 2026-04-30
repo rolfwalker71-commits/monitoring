@@ -49,6 +49,7 @@ Dashboard-Funktionen:
 - Analysebereich mit CPU/RAM/Swap-Trends im Zeitfenster
 - Globaler Chart-Zeitraum fuer Analyse und Filesystem Fokus umschaltbar (6h, 24h, 3d, 7d, 14d)
 - Charts mit Y-Achsen-Skala und horizontalen Rasterlinien fuer bessere Ablesbarkeit
+- Charts zeigen auf der X-Achse kompakte Zeitmarken fuer Start, Mitte und Ende
 - Alert-Bereich mit offenen Warn/Kritisch-Events und letzter Historie je Host
 - Zusaetzliche globale Alert-Uebersicht ueber alle Hosts (ohne Host-Auswahl)
 - Globales Alert-Dashboard als eigener Menuepunkt mit roter Markierung und Alert-Anzahl bei offenen Incidents

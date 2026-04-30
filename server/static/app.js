@@ -487,7 +487,7 @@ function buildChartFrame(width, height, margins = {}) {
   const left = Number.isFinite(margins.left) ? margins.left : 42;
   const right = Number.isFinite(margins.right) ? margins.right : 10;
   const top = Number.isFinite(margins.top) ? margins.top : 10;
-  const bottom = Number.isFinite(margins.bottom) ? margins.bottom : 18;
+  const bottom = Number.isFinite(margins.bottom) ? margins.bottom : 28;
 
   return {
     left,
@@ -514,6 +514,58 @@ function formatAxisTick(value, suffix = "") {
   }
 
   return `${numeric.toFixed(digits)}${suffix}`;
+}
+
+function formatAxisTimeLabel(value) {
+  const text = asText(value);
+  if (text === "-") {
+    return text;
+  }
+
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    return text;
+  }
+
+  const shifted = new Date(parsed.getTime() + 2 * 60 * 60 * 1000);
+  return shifted.toLocaleString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
+  });
+}
+
+function buildXAxisTimeLabels(series, width, height, options = {}) {
+  if (!Array.isArray(series) || series.length === 0) {
+    return "";
+  }
+
+  const frame = buildChartFrame(width, height, options.margins);
+  const indexes = Array.from(new Set([
+    0,
+    Math.floor((series.length - 1) / 2),
+    series.length - 1,
+  ])).sort((left, right) => left - right);
+
+  const labels = indexes.map((index) => {
+    const point = series[index];
+    const denominator = series.length > 1 ? series.length - 1 : 1;
+    const x = frame.left + (index / denominator) * frame.width;
+    const anchor = index === 0 ? "start" : index === series.length - 1 ? "end" : "middle";
+    const tickTop = frame.top + frame.height;
+    const tickBottom = tickTop + 4;
+    const labelY = tickBottom + 11;
+
+    return `
+      <line class="chart-axis-tick" x1="${x.toFixed(2)}" y1="${tickTop.toFixed(2)}" x2="${x.toFixed(2)}" y2="${tickBottom.toFixed(2)}" />
+      <text class="chart-axis-label chart-axis-label-x" x="${x.toFixed(2)}" y="${labelY.toFixed(2)}" text-anchor="${anchor}">${escapeHtml(formatAxisTimeLabel(point.time_utc))}</text>
+    `;
+  });
+
+  return `<g class="chart-axis-x">${labels.join("")}</g>`;
 }
 
 function buildYAxisGuides(width, height, minValue, maxValue, options = {}) {
@@ -625,7 +677,7 @@ function buildSparklineSvg(series, color, width = 320, height = 82, options = {}
   const labelFormatter = typeof options.labelFormatter === "function"
     ? options.labelFormatter
     : (value) => formatAxisTick(value, suffix);
-  const margins = options.margins || { left: 42, right: 10, top: 10, bottom: 18 };
+  const margins = options.margins || { left: 42, right: 10, top: 10, bottom: 28 };
 
   if (points.length === 1) {
     const singleValue = Number(points[0].value);
@@ -636,13 +688,15 @@ function buildSparklineSvg(series, color, width = 320, height = 82, options = {}
     const singleTime = formatUtcPlus2(points[0].time_utc);
     const valueText = Number.isFinite(singleValue) ? singleValue.toFixed(2) : "-";
     const guides = buildYAxisGuides(width, height, minValue, maxValue, { margins, labelFormatter });
-    return `<svg class=\"sparkline\" viewBox=\"0 0 ${width} ${height}\" role=\"img\" aria-label=\"Trend\">${guides}<line x1=\"${frame.left.toFixed(2)}\" y1=\"${centerY}\" x2=\"${(frame.left + frame.width).toFixed(2)}\" y2=\"${centerY}\" stroke=\"${color}\" stroke-width=\"2.2\" /><circle class=\"chart-point\" cx=\"${(frame.left + frame.width / 2).toFixed(2)}\" cy=\"${centerY}\" r=\"3.6\" fill=\"${color}\"><title>${escapeHtml(valueText)} (${escapeHtml(singleTime)})</title></circle></svg>`;
+    const timeLabels = buildXAxisTimeLabels(points, width, height, { margins });
+    return `<svg class=\"sparkline\" viewBox=\"0 0 ${width} ${height}\" role=\"img\" aria-label=\"Trend\">${guides}${timeLabels}<line x1=\"${frame.left.toFixed(2)}\" y1=\"${centerY}\" x2=\"${(frame.left + frame.width).toFixed(2)}\" y2=\"${centerY}\" stroke=\"${color}\" stroke-width=\"2.2\" /><circle class=\"chart-point\" cx=\"${(frame.left + frame.width / 2).toFixed(2)}\" cy=\"${centerY}\" r=\"3.6\" fill=\"${color}\"><title>${escapeHtml(valueText)} (${escapeHtml(singleTime)})</title></circle></svg>`;
   }
 
   const values = points.map((point) => point.value);
   const minValue = Number.isFinite(options.minValue) ? options.minValue : Math.min(...values);
   const maxValue = Number.isFinite(options.maxValue) ? options.maxValue : Math.max(...values);
   const guides = buildYAxisGuides(width, height, minValue, maxValue, { margins, labelFormatter });
+  const timeLabels = buildXAxisTimeLabels(points, width, height, { margins });
   const polyline = buildPolylinePoints(points, width, height, minValue, maxValue, margins);
   const area = buildAreaPolygonPoints(points, width, height, minValue, maxValue, margins);
   const markers = buildPointMarkers(points, width, height, minValue, maxValue, color, "Wert", margins);
@@ -650,6 +704,7 @@ function buildSparklineSvg(series, color, width = 320, height = 82, options = {}
   return `
     <svg class="sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="Trend">
       ${guides}
+      ${timeLabels}
       <polygon class="chart-area" fill="${color}" fill-opacity="0.16" points="${area}" />
       <polyline fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="${polyline}" />
       ${markers}
@@ -690,11 +745,17 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
 
   const combinedWidth = 920;
   const combinedHeight = 250;
-  const combinedMargins = { left: 42, right: 12, top: 12, bottom: 20 };
+  const combinedMargins = { left: 42, right: 12, top: 12, bottom: 30 };
   const combinedGuides = buildYAxisGuides(combinedWidth, combinedHeight, 0, 100, {
     tickCount: 5,
     margins: combinedMargins,
     labelFormatter: (value) => `${Math.round(value)}%`,
+  });
+  const combinedTimeSeries = chartDefinitions
+    .map((item) => normalizeForCombined(resourceSeries[item.key]))
+    .sort((left, right) => right.length - left.length)[0] || [];
+  const combinedTimeLabels = buildXAxisTimeLabels(combinedTimeSeries, combinedWidth, combinedHeight, {
+    margins: combinedMargins,
   });
 
   const combinedLines = chartDefinitions
@@ -748,6 +809,7 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
       </div>
       <svg class="combined-chart-svg" viewBox="0 0 ${combinedWidth} ${combinedHeight}" role="img" aria-label="Kombinierter Verlauf">
         ${combinedGuides}
+        ${combinedTimeLabels}
         ${combinedLines}
       </svg>
       <div class="combined-legend">${combinedLegend}</div>
