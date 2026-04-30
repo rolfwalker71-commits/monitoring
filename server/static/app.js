@@ -988,6 +988,9 @@ function filesystemLineColor(currentUsedPercent) {
 function shouldShowFilesystemGraph(mountpoint) {
   if (!mountpoint) return false;
   const mp = mountpoint.replace(/\\/g, '/').toLowerCase();
+  // Windows drive letters: C:/ D:/ etc.
+  if (/^[a-z]:\/$/.test(mp)) return true;
+  // Linux root and common SAP/HANA/data paths
   if (mp === '/') return true;
   if (mp.startsWith('/usr/sap')) return true;
   if (mp === '/hana' || mp.startsWith('/hana/')) return true;
