@@ -1743,7 +1743,7 @@ function wireHostListInteractions() {
       state.selectedHost = hostname;
       state.selectedDisplayName = item.querySelector("strong")?.textContent || hostname;
       state.reportOffset = 0;
-      loadHosts();
+      loadHosts({ preserveScroll: true });
       loadReportsForHost();
       loadAnalysisForHost();
       loadAlertsForHost();
@@ -1899,11 +1899,16 @@ function renderHosts(hosts) {
   wireHostListInteractions();
 }
 
-async function loadHosts() {
+async function loadHosts(options = {}) {
+  const preserveScroll = Boolean(options && options.preserveScroll);
   const hostList = document.getElementById("hostList");
   const hostListHeader = document.getElementById("hostListHeader");
-  hostListHeader.innerHTML = "<h4 class=\"host-group-title\">Aktive Hosts</h4>";
-  hostList.innerHTML = "<p class=\"muted\">Lade Host-Liste...</p>";
+  const previousScrollTop = hostList ? hostList.scrollTop : 0;
+
+  if (!preserveScroll) {
+    hostListHeader.innerHTML = "<h4 class=\"host-group-title\">Aktive Hosts</h4>";
+    hostList.innerHTML = "<p class=\"muted\">Lade Host-Liste...</p>";
+  }
 
   try {
     const url = `/api/v1/hosts?limit=${state.hostLimit}&offset=${state.hostOffset}`;
@@ -1942,6 +1947,9 @@ async function loadHosts() {
     }
 
     renderHosts(hosts);
+    if (preserveScroll && hostList) {
+      hostList.scrollTop = previousScrollTop;
+    }
     updatePagerButtons();
   } catch (error) {
     hostList.innerHTML = `<p class=\"muted\">Fehler: ${escapeHtml(error.message)}</p>`;
