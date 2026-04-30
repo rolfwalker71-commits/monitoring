@@ -520,12 +520,6 @@ button:hover:not(.host-item) {
   width: 100%;
 }
 
-.host-title-actions {
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 6px;
-}
-
 .host-status-chips {
   display: inline-flex;
   align-items: center;
@@ -533,18 +527,11 @@ button:hover:not(.host-item) {
   flex-wrap: wrap;
 }
 
-.host-mini-stack {
-  display: inline-flex;
-  flex-direction: column;
+.host-card-actions {
+  display: flex;
   align-items: center;
-  gap: 4px;
-}
-
-.host-mini-stack-lower {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  gap: 6px;
+  margin-top: 4px;
 }
 
 .host-alert-chip {
