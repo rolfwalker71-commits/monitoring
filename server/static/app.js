@@ -1437,7 +1437,7 @@ function renderSingleHostCard(host) {
   const latestVersion = asText(state.latestAgentRelease, "");
   const versionComparison = compareSemverLike(currentVersion, latestVersion);
   const updateTriangle = versionComparison === -1
-    ? `<span class="host-update-triangle" title="Update verfügbar">⚠</span>`
+    ? `<span class="host-update-triangle" title="Update verfügbar">🆙</span>`
     : "";
 
   const osRaw = asText(host.os || "").toLowerCase();
