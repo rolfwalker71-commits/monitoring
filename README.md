@@ -8,9 +8,9 @@
 
 ## Struktur
 
-- `client/collect_and_send.sh`: sammelt Daten und POSTet JSON
-- `client/self_update.sh`: prueft GitHub auf neue Agent-Version und aktualisiert lokale Skripte
-- `client/install_agent.sh`: Install-Skript fuer Linux (per `curl` nutzbar), schreibt Cronjob
+- `client/linux/collect_and_send.sh`: sammelt Daten und POSTet JSON
+- `client/linux/self_update.sh`: prueft GitHub auf neue Agent-Version und aktualisiert lokale Skripte
+- `client/linux/install_agent.sh`: Install-Skript fuer Linux (per `curl` nutzbar), schreibt Cronjob
 - `server/receiver.py`: einfacher HTTP-Receiver + API + statische Dashboard-Seite
 - `server/static/*`: kleine Weboberflaeche
 
@@ -98,7 +98,7 @@ MONITORING_API_KEY='mein-geheimer-key' python3 receiver.py --host 0.0.0.0 --port
 Auf einem Linux-Client:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/install_agent.sh \
+curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/linux/install_agent.sh \
   | sudo bash -s -- --server-url http://<server-ip>:8080 --interval-minutes 15
 ```
 
@@ -109,7 +109,7 @@ Optional kann der Anzeigename auch direkt uebergeben werden:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/linux/install_agent.sh \
-  | bash -s -- --server-url http://<server-ip>:8080 --display-name "Vaultwarden Prod" --interval-minutes 15
+  | sudo bash -s -- --server-url http://<server-ip>:8080 --display-name "Vaultwarden Prod" --interval-minutes 15
 ```
 
 Das Install-Skript versucht zuerst einen Eintrag in `/etc/cron.d/monitoring-agent` anzulegen.
@@ -131,7 +131,7 @@ Mit API-Key:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/linux/install_agent.sh \
-  | bash -s -- \
+  | sudo bash -s -- \
     --server-url http://<server-ip>:8080 \
     --api-key mein-geheimer-key \
     --interval-minutes 15

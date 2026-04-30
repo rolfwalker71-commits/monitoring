@@ -350,6 +350,22 @@ button:hover:not(.host-item) {
   margin-top: 12px;
 }
 
+.host-group {
+  display: grid;
+  gap: 8px;
+}
+
+.host-group-hidden {
+  margin-top: 8px;
+}
+
+.host-group-title {
+  margin: 0;
+  font-size: 12px;
+  color: #475569;
+  font-weight: 700;
+}
+
 .host-item {
   text-align: left;
   border: 1px solid #cdd9e8;
@@ -360,7 +376,13 @@ button:hover:not(.host-item) {
   display: grid;
   gap: 4px;
   position: relative;
+  cursor: pointer;
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.host-item-hidden {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-style: dashed;
 }
 
 .host-os-icon {
@@ -387,23 +409,64 @@ button:hover:not(.host-item) {
 .host-title-line {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   width: 100%;
 }
 
-.host-alert-marker {
+.host-title-actions {
   display: inline-flex;
-  margin-left: auto;
-  margin-right: 6px;
-  color: #dc2626;
-  font-size: 26px;
-  line-height: 1;
-  vertical-align: middle;
-  text-shadow: 0 0 12px rgba(220, 38, 38, 0.35);
+  align-items: center;
+  gap: 6px;
 }
 
-.host-alert-marker.critical {
-  color: #dc2626;
-  text-shadow: 0 0 14px rgba(220, 38, 38, 0.5);
+.host-alert-chip {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid #f87171;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.host-alert-chip.critical {
+  background: #fecaca;
+  border-color: #ef4444;
+}
+
+.host-mini-action {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.host-mini-action:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.host-mini-action.favorite.active {
+  color: #a16207;
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+.host-mini-action.visibility.active {
+  color: #334155;
+  background: #e2e8f0;
+  border-color: #94a3b8;
 }
 
 .host-item span {

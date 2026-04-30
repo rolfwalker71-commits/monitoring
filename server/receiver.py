@@ -19,6 +19,7 @@ DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "monitoring.db"
 BUILD_VERSION_PATH = BASE_DIR.parent / "BUILD_VERSION"
 API_KEY = os.getenv("MONITORING_API_KEY", "")
+MAX_REPORTS_PER_HOST = int(os.getenv("MONITORING_MAX_REPORTS_PER_HOST", "1344"))
 WARNING_THRESHOLD_PERCENT = float(os.getenv("MONITORING_WARNING_THRESHOLD", "80"))
 CRITICAL_THRESHOLD_PERCENT = float(os.getenv("MONITORING_CRITICAL_THRESHOLD", "90"))
 TELEGRAM_ENABLED_DEFAULT = os.getenv("MONITORING_TELEGRAM_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
@@ -76,10 +77,20 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS host_settings (
                 hostname TEXT PRIMARY KEY,
                 display_name_override TEXT,
+                is_favorite INTEGER NOT NULL DEFAULT 0,
+                is_hidden INTEGER NOT NULL DEFAULT 0,
                 updated_at_utc TEXT NOT NULL
             )
             """
         )
+        existing_host_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(host_settings)").fetchall()
+        }
+        if "is_favorite" not in existing_host_columns:
+            conn.execute("ALTER TABLE host_settings ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
+        if "is_hidden" not in existing_host_columns:
+            conn.execute("ALTER TABLE host_settings ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS alarm_settings (
@@ -497,6 +508,86 @@ def get_display_name_override(conn: sqlite3.Connection, hostname: str) -> str:
     return str(row[0]).strip()
 
 
+def parse_bool(value: object, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return default
+
+
+def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
+    row = conn.execute(
+        """
+        SELECT display_name_override, COALESCE(is_favorite, 0), COALESCE(is_hidden, 0)
+        FROM host_settings
+        WHERE hostname = ?
+        """,
+        (hostname,),
+    ).fetchone()
+    if not row:
+        return {
+            "display_name_override": "",
+            "is_favorite": False,
+            "is_hidden": False,
+        }
+    return {
+        "display_name_override": str(row[0] or "").strip(),
+        "is_favorite": bool(int(row[1] or 0)),
+        "is_hidden": bool(int(row[2] or 0)),
+    }
+
+
+def resolve_open_alerts_for_host(conn: sqlite3.Connection, hostname: str, report_id: int | None) -> None:
+    now_utc = utc_now_iso()
+    conn.execute(
+        """
+        UPDATE alerts
+        SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
+        WHERE hostname = ? AND status = 'open'
+        """,
+        (now_utc, now_utc, report_id, hostname),
+    )
+    conn.execute("DELETE FROM alert_debounce WHERE hostname = ?", (hostname,))
+
+
+def prune_reports_for_host(conn: sqlite3.Connection, hostname: str, keep_count: int) -> None:
+    keep_count = max(1, int(keep_count))
+    conn.execute(
+        """
+        UPDATE alerts
+        SET report_id = NULL
+        WHERE report_id IN (
+            SELECT id
+            FROM reports
+            WHERE hostname = ?
+            ORDER BY id DESC
+            LIMIT -1 OFFSET ?
+        )
+        """,
+        (hostname, keep_count),
+    )
+    conn.execute(
+        """
+        DELETE FROM reports
+        WHERE id IN (
+            SELECT id
+            FROM reports
+            WHERE hostname = ?
+            ORDER BY id DESC
+            LIMIT -1 OFFSET ?
+        )
+        """,
+        (hostname, keep_count),
+    )
+
+
 def effective_display_name(payload: dict, override_value: str, hostname: str) -> str:
     if override_value:
         return override_value
@@ -778,11 +869,18 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     (limit,),
                 ).fetchall()
                 settings_rows = conn.execute(
-                    "SELECT hostname, display_name_override FROM host_settings"
+                    "SELECT hostname, display_name_override, COALESCE(is_favorite, 0), COALESCE(is_hidden, 0) FROM host_settings"
                 ).fetchall()
 
             reports = []
-            overrides = {str(row[0]): str(row[1] or "") for row in settings_rows}
+            host_settings_by_name = {
+                str(row[0]): {
+                    "display_name_override": str(row[1] or ""),
+                    "is_favorite": bool(int(row[2] or 0)),
+                    "is_hidden": bool(int(row[3] or 0)),
+                }
+                for row in settings_rows
+            }
 
             for row in rows:
                 payload = json.loads(row[5])
@@ -796,7 +894,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "hostname": hostname,
                         "primary_ip": row[4],
                         "delivery_mode": delivery_mode,
-                        "display_name": effective_display_name(payload, overrides.get(str(hostname), ""), str(hostname)),
+                        "display_name": effective_display_name(
+                            payload,
+                            str(host_settings_by_name.get(str(hostname), {}).get("display_name_override", "")),
+                            str(hostname),
+                        ),
                         "payload": payload,
                     }
                 )
@@ -860,18 +962,34 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 ).fetchall()
 
                 settings_rows = conn.execute(
-                    "SELECT hostname, display_name_override FROM host_settings"
+                    "SELECT hostname, display_name_override, COALESCE(is_favorite, 0), COALESCE(is_hidden, 0) FROM host_settings"
                 ).fetchall()
 
-            overrides = {str(row[0]): str(row[1] or "") for row in settings_rows}
+            settings_map = {
+                str(row[0]): {
+                    "display_name_override": str(row[1] or ""),
+                    "is_favorite": bool(int(row[2] or 0)),
+                    "is_hidden": bool(int(row[3] or 0)),
+                }
+                for row in settings_rows
+            }
             hosts = []
             for row in rows:
                 latest_payload = parse_payload_json(row[5] or "{}")
                 hostname = str(row[0])
+                host_settings = settings_map.get(hostname, {
+                    "display_name_override": "",
+                    "is_favorite": False,
+                    "is_hidden": False,
+                })
                 hosts.append(
                     {
                         "hostname": hostname,
-                        "display_name": effective_display_name(latest_payload, overrides.get(hostname, ""), hostname),
+                        "display_name": effective_display_name(
+                            latest_payload,
+                            str(host_settings.get("display_name_override", "")),
+                            hostname,
+                        ),
                         "last_seen_utc": row[1],
                         "report_count": row[2],
                         "primary_ip": row[3] or "",
@@ -883,8 +1001,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "open_alert_count": int(row[6] or 0),
                         "open_critical_alert_count": int(row[7] or 0),
                         "os": str(latest_payload.get("os", "")),
+                        "is_favorite": bool(host_settings.get("is_favorite", False)),
+                        "is_hidden": bool(host_settings.get("is_hidden", False)),
                     }
                 )
+
+            hidden_hosts = sum(1 for host in hosts if bool(host.get("is_hidden", False)))
+            visible_hosts = len(hosts) - hidden_hosts
 
             self._send_json(
                 HTTPStatus.OK,
@@ -893,6 +1016,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "limit": limit,
                     "offset": offset,
                     "total_hosts": total_hosts,
+                    "visible_hosts": visible_hosts,
+                    "hidden_hosts": hidden_hosts,
                     "hosts": hosts,
                 },
             )
@@ -965,13 +1090,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             with sqlite3.connect(DB_PATH) as conn:
-                override_value = get_display_name_override(conn, hostname)
+                host_settings = get_host_settings(conn, hostname)
 
             self._send_json(
                 HTTPStatus.OK,
                 {
                     "hostname": hostname,
-                    "display_name_override": override_value,
+                    "display_name_override": host_settings["display_name_override"],
+                    "is_favorite": host_settings["is_favorite"],
+                    "is_hidden": host_settings["is_hidden"],
                 },
             )
             return
@@ -1157,6 +1284,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             where_parts = []
             args = []
+            where_parts.append("COALESCE((SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0")
             if status_filter != "all":
                 where_parts.append("status = ?")
                 args.append(status_filter)
@@ -1261,6 +1389,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             where_clause = "WHERE status = 'open'"
             args = []
+            where_clause += " AND COALESCE((SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0"
             if hostname_filter:
                 where_clause += " AND hostname = ?"
                 args.append(hostname_filter)
@@ -1519,26 +1648,50 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             hostname = str(payload.get("hostname", "")).strip()
-            display_name_override = str(payload.get("display_name_override", "")).strip()
+            has_display_name = "display_name_override" in payload
+            has_is_favorite = "is_favorite" in payload
+            has_is_hidden = "is_hidden" in payload
 
             if not hostname:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
                 return
 
+            if not (has_display_name or has_is_favorite or has_is_hidden):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no host setting provided"})
+                return
+
             with sqlite3.connect(DB_PATH) as conn:
-                if display_name_override:
+                current = get_host_settings(conn, hostname)
+                display_name_override = current["display_name_override"]
+                is_favorite = bool(current["is_favorite"])
+                is_hidden = bool(current["is_hidden"])
+
+                if has_display_name:
+                    display_name_override = str(payload.get("display_name_override", "")).strip()
+                if has_is_favorite:
+                    is_favorite = parse_bool(payload.get("is_favorite"), is_favorite)
+                if has_is_hidden:
+                    is_hidden = parse_bool(payload.get("is_hidden"), is_hidden)
+
+                if display_name_override or is_favorite or is_hidden:
                     conn.execute(
                         """
-                        INSERT INTO host_settings (hostname, display_name_override, updated_at_utc)
-                        VALUES (?, ?, ?)
+                        INSERT INTO host_settings (hostname, display_name_override, is_favorite, is_hidden, updated_at_utc)
+                        VALUES (?, ?, ?, ?, ?)
                         ON CONFLICT(hostname) DO UPDATE SET
                           display_name_override = excluded.display_name_override,
+                          is_favorite = excluded.is_favorite,
+                          is_hidden = excluded.is_hidden,
                           updated_at_utc = excluded.updated_at_utc
                         """,
-                        (hostname, display_name_override, utc_now_iso()),
+                        (hostname, display_name_override, 1 if is_favorite else 0, 1 if is_hidden else 0, utc_now_iso()),
                     )
                 else:
                     conn.execute("DELETE FROM host_settings WHERE hostname = ?", (hostname,))
+
+                if is_hidden:
+                    resolve_open_alerts_for_host(conn, hostname, None)
+
                 conn.commit()
 
             self._send_json(
@@ -1547,6 +1700,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "status": "stored",
                     "hostname": hostname,
                     "display_name_override": display_name_override,
+                    "is_favorite": is_favorite,
+                    "is_hidden": is_hidden,
                 },
             )
             return
@@ -1593,8 +1748,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 ),
             )
             report_id = int(cursor.lastrowid)
+            prune_reports_for_host(conn, hostname, MAX_REPORTS_PER_HOST)
             alarm_settings = get_alarm_settings(conn)
-            update_alerts_for_report(conn, hostname, report_id, filesystems, alarm_settings)
+            host_settings = get_host_settings(conn, hostname)
+            if bool(host_settings.get("is_hidden", False)):
+                resolve_open_alerts_for_host(conn, hostname, report_id)
+            else:
+                update_alerts_for_report(conn, hostname, report_id, filesystems, alarm_settings)
             conn.commit()
 
         self._send_json(HTTPStatus.CREATED, {"status": "stored"})

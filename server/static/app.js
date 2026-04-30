@@ -27,6 +27,8 @@ const state = {
   globalOpenAlertsCount: 0,
   authUser: "",
   isAuthenticated: false,
+  visibleHosts: 0,
+  hiddenHosts: 0,
 };
 
 async function loadWebclientVersion() {
@@ -906,7 +908,7 @@ async function goToNextReport() {
 
 function filterAndSortHosts(hosts) {
   const query = state.hostSearchQuery.toLowerCase().trim();
-  
+
   let filtered = hosts;
   if (query.length > 0) {
     filtered = hosts.filter((host) => {
@@ -915,69 +917,93 @@ function filterAndSortHosts(hosts) {
       return displayName.includes(query) || hostname.includes(query);
     });
   }
-  
+
   filtered.sort((a, b) => {
+    const favoriteA = Boolean(a.is_favorite) ? 1 : 0;
+    const favoriteB = Boolean(b.is_favorite) ? 1 : 0;
+    if (favoriteA !== favoriteB) {
+      return favoriteB - favoriteA;
+    }
+
     const nameA = (a.display_name || a.hostname || "").toLowerCase();
     const nameB = (b.display_name || b.hostname || "").toLowerCase();
     return nameA.localeCompare(nameB);
   });
-  
+
   return filtered;
 }
 
-function renderHosts(hosts) {
+function splitHosts(hosts) {
+  const sorted = filterAndSortHosts(hosts);
+  return {
+    visibleHosts: sorted.filter((host) => !Boolean(host.is_hidden)),
+    hiddenHosts: sorted.filter((host) => Boolean(host.is_hidden)),
+  };
+}
+
+function renderSingleHostCard(host) {
+  const hostname = asText(host.hostname);
+  const displayName = asText(host.display_name || host.hostname);
+  const selectedClass = hostname === state.selectedHost ? "host-item selected" : "host-item";
+  const hostDelivery = deliveryLabel(host.delivery_mode, host.is_delayed);
+  const hostQueueDepth = queueDepthLabel(host.queue_depth);
+  const openAlertCount = Number(host.open_alert_count || 0);
+  const openCriticalAlertCount = Number(host.open_critical_alert_count || 0);
+  const hasOpenAlerts = openAlertCount > 0;
+  const isFavorite = Boolean(host.is_favorite);
+  const isHidden = Boolean(host.is_hidden);
+  const hiddenClass = isHidden ? " host-item-hidden" : "";
+  const chipClass = openCriticalAlertCount > 0 ? "host-alert-chip critical" : "host-alert-chip";
+  const alertChip = hasOpenAlerts ? `<span class="${chipClass}">Alerts ${openAlertCount}</span>` : "";
+
+  const osRaw = asText(host.os || "").toLowerCase();
+  const iconName = osRaw.includes("windows") ? "windows.png" : "linux.png";
+  const osLabel = osRaw.includes("windows") ? "Windows" : "Linux";
+  const osIcon = `<img src="icons/${iconName}" class="host-os-icon" alt="${osLabel}" title="${escapeHtml(asText(host.os))}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${iconName}';}">`;
+
+  return `
+    <article class="${selectedClass}${hiddenClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">
+      <strong class="host-title-line">
+        <span>${escapeHtml(displayName)}</span>
+        <span class="host-title-actions">
+          ${alertChip}
+          <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
+          <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👁️" : "🙈"}</button>
+        </span>
+      </strong>
+      <span>🖥️ ${escapeHtml(hostname)}</span>
+      <span>🧷 ${escapeHtml(asText(host.agent_version))}</span>
+      <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
+      <span>📬 ${hostDelivery} | 🗃️ Queue ${hostQueueDepth}</span>
+      <span>🚨 Offen: ${openAlertCount} (kritisch ${openCriticalAlertCount})</span>
+      <span>📦 ${Number(host.report_count || 0).toLocaleString("de-DE")} Meldungen</span>
+      <span>🕒 Transfer: ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
+      ${osIcon}
+    </article>
+  `;
+}
+
+async function saveHostSettings(hostname, partialSettings) {
+  const response = await fetch("/api/v1/host-settings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      hostname,
+      ...partialSettings,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("HTTP " + response.status);
+  }
+
+  return response.json();
+}
+
+function wireHostListInteractions() {
   const hostList = document.getElementById("hostList");
-  const hostCount = document.getElementById("hostCount");
-
-  hostCount.textContent = `${state.totalHosts} Hosts gesamt`;
-
-  if (!Array.isArray(hosts) || hosts.length === 0) {
-    hostList.innerHTML = "<p class=\"muted\">Keine Hosts vorhanden.</p>";
-    return;
-  }
-
-  const filteredHosts = filterAndSortHosts(hosts);
-
-  if (filteredHosts.length === 0) {
-    hostList.innerHTML = "<p class=\"muted\">Keine Hosts passen zum Suchfilter.</p>";
-    return;
-  }
-
-  hostList.innerHTML = filteredHosts
-    .map((host) => {
-      const hostname = asText(host.hostname);
-      const displayName = asText(host.display_name || host.hostname);
-      const selectedClass = hostname === state.selectedHost ? "host-item selected" : "host-item";
-      const hostDelivery = deliveryLabel(host.delivery_mode, host.is_delayed);
-      const hostQueueDepth = queueDepthLabel(host.queue_depth);
-      const openAlertCount = Number(host.open_alert_count || 0);
-      const openCriticalAlertCount = Number(host.open_critical_alert_count || 0);
-      const hasOpenAlerts = openAlertCount > 0;
-      const markerClass = openCriticalAlertCount > 0 ? "host-alert-marker critical" : "host-alert-marker";
-      const marker = hasOpenAlerts
-        ? `<span class="${markerClass}" title="${openAlertCount} offene Alerts (${openCriticalAlertCount} kritisch)">🛑</span>`
-        : "";
-
-      const osRaw = asText(host.os || "").toLowerCase();
-      const iconName = osRaw.includes("windows") ? "windows.png" : "linux.png";
-      const osLabel = osRaw.includes("windows") ? "Windows" : "Linux";
-      const osIcon = `<img src="icons/${iconName}" class="host-os-icon" alt="${osLabel}" title="${escapeHtml(asText(host.os))}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${iconName}';}">`;
-
-      return `
-        <button class="${selectedClass}" type="button" data-host="${escapeHtml(hostname)}">
-          <strong class="host-title-line"><span>${escapeHtml(displayName)}</span>${marker}</strong>
-          <span>🖥️ ${escapeHtml(hostname)}</span>
-          <span>🧷 ${escapeHtml(asText(host.agent_version))}</span>
-          <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
-          <span>📬 ${hostDelivery} | 🗃️ Queue ${hostQueueDepth}</span>
-          <span>🚨 Offen: ${openAlertCount} (kritisch ${openCriticalAlertCount})</span>
-          <span>📦 ${Number(host.report_count || 0).toLocaleString("de-DE")} Meldungen</span>
-          <span>🕒 Transfer: ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
-          ${osIcon}
-        </button>
-      `;
-    })
-    .join("");
 
   for (const item of hostList.querySelectorAll(".host-item")) {
     item.addEventListener("click", () => {
@@ -994,7 +1020,79 @@ function renderHosts(hosts) {
       loadAnalysisForHost();
       loadAlertsForHost();
     });
+
+    item.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      event.preventDefault();
+      item.click();
+    });
   }
+
+  for (const button of hostList.querySelectorAll(".host-mini-action")) {
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const hostname = button.getAttribute("data-host") || "";
+      const action = button.getAttribute("data-action") || "";
+      const current = button.getAttribute("data-current") === "1";
+      if (!hostname || !action) {
+        return;
+      }
+
+      try {
+        if (action === "favorite") {
+          await saveHostSettings(hostname, { is_favorite: !current });
+        } else if (action === "hidden") {
+          await saveHostSettings(hostname, { is_hidden: !current });
+        }
+
+        await loadHosts();
+        await loadReportsForHost();
+        await loadAnalysisForHost();
+        await loadAlertsForHost();
+      } catch (error) {
+        window.alert(`Host-Einstellung konnte nicht gespeichert werden: ${error.message}`);
+      }
+    });
+  }
+}
+
+function renderHosts(hosts) {
+  const hostList = document.getElementById("hostList");
+  const hostCount = document.getElementById("hostCount");
+
+  if (!Array.isArray(hosts) || hosts.length === 0) {
+    hostCount.textContent = "0 Hosts gesamt";
+    hostList.innerHTML = "<p class=\"muted\">Keine Hosts vorhanden.</p>";
+    return;
+  }
+
+  const { visibleHosts, hiddenHosts } = splitHosts(hosts);
+  hostCount.textContent = `${state.totalHosts} Hosts gesamt | aktiv ${visibleHosts.length} | ausgeblendet ${hiddenHosts.length}`;
+
+  if (visibleHosts.length === 0 && hiddenHosts.length === 0) {
+    hostList.innerHTML = "<p class=\"muted\">Keine Hosts passen zum Suchfilter.</p>";
+    return;
+  }
+
+  const visibleHtml = visibleHosts.map(renderSingleHostCard).join("");
+  const hiddenHtml = hiddenHosts.map(renderSingleHostCard).join("");
+
+  hostList.innerHTML = `
+    <section class="host-group">
+      <h4 class="host-group-title">Aktive Hosts (${visibleHosts.length})</h4>
+      ${visibleHtml || '<p class="muted">Keine aktiven Hosts im Suchfilter.</p>'}
+    </section>
+    <section class="host-group host-group-hidden">
+      <h4 class="host-group-title">Ausgeblendete Hosts (${hiddenHosts.length})</h4>
+      ${hiddenHtml || '<p class="muted">Keine ausgeblendeten Hosts.</p>'}
+    </section>
+  `;
+
+  wireHostListInteractions();
 }
 
 async function loadHosts() {
@@ -1011,21 +1109,25 @@ async function loadHosts() {
     const data = await response.json();
     state.totalHosts = Number(data.total_hosts || 0);
     const hosts = data.hosts || [];
+    const { visibleHosts, hiddenHosts } = splitHosts(hosts);
+    state.visibleHosts = Number(data.visible_hosts || visibleHosts.length || 0);
+    state.hiddenHosts = Number(data.hidden_hosts || hiddenHosts.length || 0);
+    const orderedHosts = [...visibleHosts, ...hiddenHosts];
 
-    if (!state.selectedHost && hosts.length > 0) {
-      state.selectedHost = String(hosts[0].hostname || "");
-      state.selectedDisplayName = String(hosts[0].display_name || hosts[0].hostname || "");
+    if (!state.selectedHost && orderedHosts.length > 0) {
+      state.selectedHost = String(orderedHosts[0].hostname || "");
+      state.selectedDisplayName = String(orderedHosts[0].display_name || orderedHosts[0].hostname || "");
       state.reportOffset = 0;
     }
 
-    const selectedStillVisible = hosts.some((host) => String(host.hostname || "") === state.selectedHost);
-    if (!selectedStillVisible && hosts.length > 0) {
-      state.selectedHost = String(hosts[0].hostname || "");
-      state.selectedDisplayName = String(hosts[0].display_name || hosts[0].hostname || "");
+    const selectedStillVisible = orderedHosts.some((host) => String(host.hostname || "") === state.selectedHost);
+    if (!selectedStillVisible && orderedHosts.length > 0) {
+      state.selectedHost = String(orderedHosts[0].hostname || "");
+      state.selectedDisplayName = String(orderedHosts[0].display_name || orderedHosts[0].hostname || "");
       state.reportOffset = 0;
     }
 
-    const selectedHost = hosts.find((host) => String(host.hostname || "") === state.selectedHost);
+    const selectedHost = orderedHosts.find((host) => String(host.hostname || "") === state.selectedHost);
     if (selectedHost) {
       state.selectedDisplayName = String(selectedHost.display_name || selectedHost.hostname || "");
     }
@@ -1099,20 +1201,9 @@ async function editDisplayName() {
     return;
   }
 
-  const response = await fetch("/api/v1/host-settings", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      hostname: state.selectedHost,
-      display_name_override: nextValue.trim(),
-    }),
+  await saveHostSettings(state.selectedHost, {
+    display_name_override: nextValue.trim(),
   });
-
-  if (!response.ok) {
-    throw new Error("HTTP " + response.status);
-  }
 
   await loadHosts();
   await loadReportsForHost();
