@@ -1132,6 +1132,13 @@ button:hover:not(.host-item) {
   filter: drop-shadow(0 3px 8px rgba(15, 23, 42, 0.18));
 }
 
+.chart-trend-line {
+  stroke-width: 1.6;
+  stroke-dasharray: 5 4;
+  opacity: 0.55;
+  stroke-linecap: round;
+}
+
 .chart-grid-line {
   stroke: #dbe5ef;
   stroke-width: 1;

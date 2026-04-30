@@ -844,6 +844,47 @@ function buildPointMarkers(series, width, height, minValue, maxValue, color, lab
     .join("");
 }
 
+function buildTrendLine(series, width, height, minValue, maxValue, color, margins = {}) {
+  if (!Array.isArray(series) || series.length < 3) {
+    return "";
+  }
+
+  const n = series.length;
+  // Use index as x (0..n-1) for regression, map value to SVG y
+  const sumX = (n * (n - 1)) / 2;
+  const sumX2 = ((n - 1) * n * (2 * n - 1)) / 6;
+  let sumY = 0;
+  let sumXY = 0;
+  for (let i = 0; i < n; i++) {
+    sumY += series[i].value;
+    sumXY += i * series[i].value;
+  }
+  const denom = n * sumX2 - sumX * sumX;
+  if (denom === 0) return "";
+
+  const slope = (n * sumXY - sumX * sumY) / denom;
+  const intercept = (sumY - slope * sumX) / n;
+
+  const yStart = intercept;
+  const yEnd = slope * (n - 1) + intercept;
+
+  const frame = buildChartFrame(width, height, margins);
+  const range = maxValue - minValue;
+  const safeRange = range === 0 ? 1 : range;
+
+  const toSvgY = (val) => {
+    const clamped = Math.max(minValue, Math.min(maxValue, val));
+    return frame.top + (1 - (clamped - minValue) / safeRange) * frame.height;
+  };
+
+  const x1 = frame.left.toFixed(2);
+  const x2 = (frame.left + frame.width).toFixed(2);
+  const y1 = toSvgY(yStart).toFixed(2);
+  const y2 = toSvgY(yEnd).toFixed(2);
+
+  return `<line class="chart-trend-line" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" />`;
+}
+
 function buildSparklineSvg(series, color, width = 320, height = 82, options = {}) {
   const points = normalizeSeries(series);
   if (points.length === 0) {
@@ -877,6 +918,7 @@ function buildSparklineSvg(series, color, width = 320, height = 82, options = {}
   const polyline = buildPolylinePoints(points, width, height, minValue, maxValue, margins);
   const area = buildAreaPolygonPoints(points, width, height, minValue, maxValue, margins);
   const markers = buildPointMarkers(points, width, height, minValue, maxValue, color, "Wert", margins);
+  const trendLine = buildTrendLine(points, width, height, minValue, maxValue, color, margins);
 
   return `
     <svg class="sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="Trend">
@@ -884,6 +926,7 @@ function buildSparklineSvg(series, color, width = 320, height = 82, options = {}
       ${timeLabels}
       <polygon class="chart-area" fill="${color}" fill-opacity="0.16" points="${area}" />
       <polyline fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="${polyline}" />
+      ${trendLine}
       ${markers}
     </svg>
   `;
@@ -944,7 +987,8 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
       const polyline = buildPolylinePoints(normalized, combinedWidth, combinedHeight, 0, 100, combinedMargins);
       const area = buildAreaPolygonPoints(normalized, combinedWidth, combinedHeight, 0, 100, combinedMargins);
       const markers = buildPointMarkers(normalized, combinedWidth, combinedHeight, 0, 100, item.color, `${item.label} (norm.)`, combinedMargins);
-      return `<polygon class=\"chart-area\" fill=\"${item.color}\" fill-opacity=\"0.09\" points=\"${area}\" /><polyline fill=\"none\" stroke=\"${item.color}\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\" points=\"${polyline}\" />${markers}`;
+      const trendLine = buildTrendLine(normalized, combinedWidth, combinedHeight, 0, 100, item.color, combinedMargins);
+      return `<polygon class=\"chart-area\" fill=\"${item.color}\" fill-opacity=\"0.09\" points=\"${area}\" /><polyline fill=\"none\" stroke=\"${item.color}\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\" points=\"${polyline}\" />${trendLine}${markers}`;
     })
     .join("");
 
