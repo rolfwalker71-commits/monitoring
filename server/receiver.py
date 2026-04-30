@@ -1476,7 +1476,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/critical-trends":
-            if not self._unauthorized_if_needed():
+            if self._unauthorized_if_needed():
                 return
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
