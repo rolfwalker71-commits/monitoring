@@ -942,6 +942,10 @@ function splitHosts(hosts) {
   };
 }
 
+function hiddenHostsToggleLabel(collapsed) {
+  return collapsed ? "▸ open" : "▾ open";
+}
+
 function renderSingleHostCard(host) {
   const hostname = asText(host.hostname);
   const displayName = asText(host.display_name || host.hostname);
@@ -1070,7 +1074,8 @@ function wireHostListInteractions() {
       if (body) {
         body.classList.toggle("hidden", state.hiddenHostsCollapsed);
       }
-      hiddenToggle.textContent = state.hiddenHostsCollapsed ? "Aufklappen" : "Zuklappen";
+      hiddenToggle.textContent = hiddenHostsToggleLabel(state.hiddenHostsCollapsed);
+      hiddenToggle.setAttribute("aria-expanded", state.hiddenHostsCollapsed ? "false" : "true");
     });
   }
 }
@@ -1105,7 +1110,7 @@ function renderHosts(hosts) {
     <section class="host-group host-group-hidden">
       <div class="host-group-title-row">
         <h4 class="host-group-title">Ausgeblendete Hosts (${hiddenHosts.length})</h4>
-        <button id="hiddenHostsToggleButton" class="host-group-toggle" type="button">${state.hiddenHostsCollapsed ? "Aufklappen" : "Zuklappen"}</button>
+        <button id="hiddenHostsToggleButton" class="host-group-toggle" type="button" aria-expanded="${state.hiddenHostsCollapsed ? "false" : "true"}">${hiddenHostsToggleLabel(state.hiddenHostsCollapsed)}</button>
       </div>
       <div id="hiddenHostsBody" class="${hiddenCollapsedClass}">
         ${hiddenHtml || '<p class="muted">Keine ausgeblendeten Hosts.</p>'}
