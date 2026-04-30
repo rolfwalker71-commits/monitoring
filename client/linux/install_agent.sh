@@ -173,7 +173,11 @@ if [[ -z "$AGENT_ID" ]]; then
 fi
 
 if [[ -z "$DISPLAY_NAME" ]]; then
-  DISPLAY_NAME="$AGENT_ID"
+  if [[ -r /dev/tty ]]; then
+    printf 'Anzeigename fuer diesen Host [%s]: ' "$AGENT_ID" > /dev/tty
+    read -r DISPLAY_NAME < /dev/tty || true
+  fi
+  DISPLAY_NAME="${DISPLAY_NAME:-$AGENT_ID}"
 fi
 
 cat > "$CONFIG_FILE" <<EOF
