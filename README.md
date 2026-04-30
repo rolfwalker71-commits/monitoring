@@ -5,6 +5,7 @@
 - Agent prueft alle 6 Stunden selbststaendig auf neue Versionen auf GitHub und aktualisiert sich bei Bedarf
 - Agent sammelt zusaetzlich Journal-/Event-Fehler, Top-Prozesse sowie Container-Status
 - Agent fuehrt zusaetzlich priorisierte Self-Update-Checks im Sammellauf aus (Default 60 Minuten), damit neue Versionen schneller ankommen
+- Agent kann zusaetzliche Remote-Befehle vom Server pollen (`update-now`) und Ergebnis zurueckmelden
 - Falls Senden fehlschlaegt, werden Meldungen lokal gequeued und beim naechsten erfolgreichen Lauf nachgeliefert
 - Webservice nimmt Daten entgegen, speichert sie in SQLite und zeigt eine einfache Uebersicht
 
@@ -36,10 +37,13 @@ Nutzbare API-Endpunkte fuer die Auswertung:
 - `GET /api/v1/analysis?hostname=<host>&hours=24` Aggregation pro Host (Filesystem Min/Max/Avg/Delta)
 - `GET /api/v1/alerts-summary?hostname=<host>` offene Alerts (kritisch/warn)
 - `GET /api/v1/alerts?hostname=<host>&status=all&limit=15&offset=0` Alert-Historie
+- `GET /api/v1/agent-commands?hostname=<host>&agent_id=<id>` Agent pollt offene Befehle (API-Key)
 - `GET /api/v1/alarm-settings` globale Alarm-/Telegram-Konfiguration
 - `POST /api/v1/alarm-settings` globale Schwellwerte + Telegram speichern
 - `POST /api/v1/alarm-test` Telegram-Testnachricht senden
 - `POST /api/v1/host-settings` serverseitiger Override fuer sprechenden Host-Titel
+- `POST /api/v1/agent-command` Remote-Befehl fuer Host enqueuen (`update-now`)
+- `POST /api/v1/agent-command-result` Agent bestaetigt Befehlsergebnis (API-Key)
 
 Dashboard-Funktionen:
 
@@ -47,6 +51,7 @@ Dashboard-Funktionen:
 - Host-Gruppierung links mit Suchfeld und Alert-Filter (alle / mit Alerts / ohne Alerts)
 - Host-Gruppierung links zeigt zusaetzlich die aktuell zur Verteilung bereitstehende Agent-Version aus `AGENT_VERSION` an
 - Host-Karten markieren mit Badge `Update verfuegbar`, wenn Host-Agent-Version kleiner als aktuelles Agent-Release ist
+- Host-Karten haben Schnellaktion `Update jetzt triggern` fuer sofortigen Agent-Update-Befehl
 - Blaettern durch Hosts und Host-Meldungen
 - Analysebereich mit 24h-Trends je Mountpoint fuer den ausgewaehlten Host
 - Analysebereich mit CPU/RAM/Swap-Trends im Zeitfenster

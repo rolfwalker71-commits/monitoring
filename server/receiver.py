@@ -156,6 +156,29 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS agent_commands (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at_utc TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                hostname TEXT NOT NULL,
+                agent_id TEXT NOT NULL DEFAULT '',
+                command_type TEXT NOT NULL,
+                command_payload_json TEXT NOT NULL,
+                status TEXT NOT NULL,
+                expires_at_utc TEXT NOT NULL,
+                executed_at_utc TEXT,
+                result_json TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_agent_commands_host_status
+            ON agent_commands(hostname, status, expires_at_utc, id)
+            """
+        )
+        conn.execute(
+            """
             INSERT INTO alarm_settings (
                 id,
                 warning_threshold_percent,
@@ -523,6 +546,62 @@ def parse_bool(value: object, default: bool = False) -> bool:
     return default
 
 
+def normalize_command_type(value: object) -> str:
+    command_type = str(value or "").strip().lower()
+    if command_type == "update-now":
+        return command_type
+    return ""
+
+
+def expire_old_agent_commands(conn: sqlite3.Connection) -> None:
+    now_utc = utc_now_iso()
+    conn.execute(
+        """
+        UPDATE agent_commands
+        SET status = 'expired'
+        WHERE status = 'pending' AND expires_at_utc <= ?
+        """,
+        (now_utc,),
+    )
+
+
+def queue_agent_command(
+    conn: sqlite3.Connection,
+    created_by: str,
+    hostname: str,
+    command_type: str,
+    command_payload: dict,
+    ttl_minutes: int,
+) -> int:
+    now_utc = datetime.now(timezone.utc)
+    expires_at_utc = now_utc + timedelta(minutes=max(1, min(ttl_minutes, 24 * 60)))
+    payload_json = json.dumps(command_payload or {}, separators=(",", ":"))
+    cursor = conn.execute(
+        """
+        INSERT INTO agent_commands (
+            created_at_utc,
+            created_by,
+            hostname,
+            agent_id,
+            command_type,
+            command_payload_json,
+            status,
+            expires_at_utc
+        )
+        VALUES (?, ?, ?, '', ?, ?, 'pending', ?)
+        """,
+        (
+            now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            created_by,
+            hostname,
+            command_type,
+            payload_json,
+            expires_at_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        ),
+    )
+    return int(cursor.lastrowid)
+
+
 def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
     row = conn.execute(
         """
@@ -851,9 +930,61 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
-        if parsed.path.startswith("/api/v1/"):
-            if not self._require_web_session():
+        if parsed.path == "/api/v1/agent-commands":
+            if self._unauthorized_if_needed():
                 return
+
+            query = parse_qs(parsed.query)
+            hostname = query.get("hostname", [""])[0].strip()
+            agent_id = query.get("agent_id", [""])[0].strip()
+            limit = parse_int(query, "limit", default=10, min_value=1, max_value=100)
+
+            if not hostname:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                expire_old_agent_commands(conn)
+                rows = conn.execute(
+                    """
+                    SELECT id, created_at_utc, command_type, command_payload_json, expires_at_utc
+                    FROM agent_commands
+                    WHERE hostname = ? AND status = 'pending' AND expires_at_utc > ?
+                    ORDER BY id ASC
+                    LIMIT ?
+                    """,
+                    (hostname, utc_now_iso(), limit),
+                ).fetchall()
+                conn.commit()
+
+            commands = []
+            for row in rows:
+                payload = parse_payload_json(str(row[3] or "{}"))
+                commands.append(
+                    {
+                        "id": int(row[0]),
+                        "created_at_utc": str(row[1] or ""),
+                        "command_type": str(row[2] or ""),
+                        "command_payload": payload,
+                        "expires_at_utc": str(row[4] or ""),
+                    }
+                )
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "hostname": hostname,
+                    "agent_id": agent_id,
+                    "count": len(commands),
+                    "commands": commands,
+                },
+            )
+            return
+
+        if parsed.path.startswith("/api/v1/"):
+            if parsed.path != "/api/v1/agent-commands":
+                if not self._require_web_session():
+                    return
 
         if parsed.path == "/api/v1/latest":
             query = parse_qs(parsed.query)
@@ -1528,7 +1659,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
-        if path == "/api/v1/agent-report":
+        if path == "/api/v1/agent-report" or path == "/api/v1/agent-command-result":
             if self._unauthorized_if_needed():
                 return
         elif path.startswith("/api/v1/"):
@@ -1712,6 +1843,120 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "is_hidden": is_hidden,
                 },
             )
+            return
+
+        if path == "/api/v1/agent-command":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            hostname = str(payload.get("hostname", "")).strip()
+            command_type = normalize_command_type(payload.get("command_type"))
+            if not hostname:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
+                return
+            if not command_type:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "unsupported command_type"})
+                return
+
+            try:
+                ttl_minutes = int(payload.get("ttl_minutes", 240))
+            except (TypeError, ValueError):
+                ttl_minutes = 240
+
+            created_by = self._web_session_username() or "webclient"
+            command_payload = payload.get("command_payload", {})
+            if not isinstance(command_payload, dict):
+                command_payload = {}
+
+            with sqlite3.connect(DB_PATH) as conn:
+                command_id = queue_agent_command(
+                    conn,
+                    created_by=created_by,
+                    hostname=hostname,
+                    command_type=command_type,
+                    command_payload=command_payload,
+                    ttl_minutes=ttl_minutes,
+                )
+                conn.commit()
+
+            self._send_json(
+                HTTPStatus.CREATED,
+                {
+                    "status": "queued",
+                    "command_id": command_id,
+                    "hostname": hostname,
+                    "command_type": command_type,
+                },
+            )
+            return
+
+        if path == "/api/v1/agent-command-result":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            hostname = str(payload.get("hostname", "")).strip()
+            try:
+                command_id = int(payload.get("command_id", 0))
+            except (TypeError, ValueError):
+                command_id = 0
+            status = str(payload.get("status", "")).strip().lower()
+            if status not in {"completed", "failed"}:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "status must be completed or failed"})
+                return
+            if not hostname or command_id <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname/command_id missing"})
+                return
+
+            result_payload = payload.get("result", {})
+            if not isinstance(result_payload, dict):
+                result_payload = {"message": str(result_payload)}
+
+            with sqlite3.connect(DB_PATH) as conn:
+                row = conn.execute(
+                    "SELECT id, status FROM agent_commands WHERE id = ? AND hostname = ?",
+                    (command_id, hostname),
+                ).fetchone()
+                if not row:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "command not found"})
+                    return
+                if str(row[1] or "") != "pending":
+                    self._send_json(HTTPStatus.OK, {"status": "ignored", "reason": "already handled"})
+                    return
+
+                conn.execute(
+                    """
+                    UPDATE agent_commands
+                    SET status = ?, executed_at_utc = ?, result_json = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        status,
+                        utc_now_iso(),
+                        json.dumps(result_payload, separators=(",", ":")),
+                        command_id,
+                    ),
+                )
+                conn.commit()
+
+            self._send_json(HTTPStatus.OK, {"status": "stored", "command_id": command_id})
             return
 
         if path != "/api/v1/agent-report":

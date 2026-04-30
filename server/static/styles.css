@@ -588,6 +588,15 @@ button:hover:not(.host-item) {
   border-color: #94a3b8;
 }
 
+.host-mini-action.update {
+  color: #0f766e;
+}
+
+.host-mini-action.update:hover {
+  border-color: #5eead4;
+  background: #ccfbf1;
+}
+
 .host-item span {
   color: var(--muted);
   font-size: 11px;

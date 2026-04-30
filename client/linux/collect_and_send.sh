@@ -220,6 +220,68 @@ post_payload() {
   curl "${curl_args[@]}" "${SERVER_URL%/}/api/v1/agent-report"
 }
 
+post_command_result() {
+  local command_id="$1"
+  local status="$2"
+  local message="$3"
+  local payload_data
+
+  payload_data=$(cat <<EOF
+{"hostname":"$(json_escape "$HOSTNAME_VALUE")","agent_id":"$(json_escape "$AGENT_ID_VALUE")","command_id":$command_id,"status":"$(json_escape "$status")","result":{"message":"$(json_escape "$message")"}}
+EOF
+)
+
+  curl_args=(
+    --silent
+    --show-error
+    --fail
+    -X POST
+    -H "Content-Type: application/json"
+    --data "$payload_data"
+  )
+
+  if [[ -n "${API_KEY:-}" ]]; then
+    curl_args+=( -H "X-Api-Key: ${API_KEY}" )
+  fi
+
+  curl "${curl_args[@]}" "${SERVER_URL%/}/api/v1/agent-command-result" >/dev/null || true
+}
+
+execute_remote_commands() {
+  local response id status message
+
+  curl_args=(
+    --silent
+    --show-error
+    --fail
+  )
+  if [[ -n "${API_KEY:-}" ]]; then
+    curl_args+=( -H "X-Api-Key: ${API_KEY}" )
+  fi
+
+  response="$(curl "${curl_args[@]}" "${SERVER_URL%/}/api/v1/agent-commands?hostname=$(printf '%s' "$HOSTNAME_VALUE" | sed 's/ /%20/g')&agent_id=$(printf '%s' "$AGENT_ID_VALUE" | sed 's/ /%20/g')&limit=10" 2>/dev/null || true)"
+  [[ -n "$response" ]] || return
+
+  while IFS= read -r id; do
+    [[ -n "$id" ]] || continue
+
+    if [[ -x "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" ]]; then
+      if CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$AGENT_VERSION_FILE" "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" >/dev/null 2>&1; then
+        status="completed"
+        message="update command executed"
+      else
+        status="failed"
+        message="update command failed"
+      fi
+    else
+      status="failed"
+      message="self_update.sh not found"
+    fi
+
+    post_command_result "$id" "$status" "$message"
+  done < <(printf '%s' "$response" | grep -o '"id":[0-9]\+' | cut -d: -f2)
+}
+
 flush_queue() {
   local file payload_data
 
@@ -320,6 +382,7 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   DOCKER_AVAILABLE=true
 fi
 
+execute_remote_commands
 maybe_priority_self_update
 
 flush_queue || true

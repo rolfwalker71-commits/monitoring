@@ -90,6 +90,63 @@ function Invoke-FlushQueue {
     return $true
 }
 
+function Send-CommandResult {
+    param(
+        [int]$CommandId,
+        [string]$Status,
+        [string]$Message
+    )
+
+    $body = '{' +
+      '"hostname":"' + (ConvertTo-JsonString $hostnameValue) + '",' +
+      '"agent_id":"' + (ConvertTo-JsonString $agentId) + '",' +
+      '"command_id":' + $CommandId + ',' +
+      '"status":"' + (ConvertTo-JsonString $Status) + '",' +
+      '"result":{"message":"' + (ConvertTo-JsonString $Message) + '"}' +
+    '}'
+
+    try {
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add('Content-Type', 'application/json')
+        if ($ApiKey) { $wc.Headers.Add('X-Api-Key', $ApiKey) }
+        $uri = ($ServerUrl.TrimEnd('/')) + '/api/v1/agent-command-result'
+        $null = $wc.UploadString($uri, 'POST', $body)
+    } catch { }
+}
+
+function Invoke-RemoteCommands {
+    try {
+        $wc = New-Object System.Net.WebClient
+        if ($ApiKey) { $wc.Headers.Add('X-Api-Key', $ApiKey) }
+        $uri = ($ServerUrl.TrimEnd('/')) + '/api/v1/agent-commands?hostname=' + [Uri]::EscapeDataString($hostnameValue) + '&agent_id=' + [Uri]::EscapeDataString($agentId) + '&limit=10'
+        $raw = $wc.DownloadString($uri)
+        if (-not $raw) { return }
+        $data = $raw | ConvertFrom-Json
+        $commands = @($data.commands)
+        foreach ($cmd in $commands) {
+            $cmdId = [int]$cmd.id
+            $cmdType = [string]$cmd.command_type
+            if ($cmdType -ne 'update-now' -or $cmdId -le 0) { continue }
+
+            $selfUpdateScript = Join-Path (Split-Path $ConfigFile -Parent) 'self_update.ps1'
+            if (-not (Test-Path $selfUpdateScript)) {
+                $selfUpdateScript = 'C:\ProgramData\monitoring-agent\self_update.ps1'
+            }
+
+            if (Test-Path $selfUpdateScript) {
+                try {
+                    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $selfUpdateScript *> $null
+                    Send-CommandResult -CommandId $cmdId -Status 'completed' -Message 'update command executed'
+                } catch {
+                    Send-CommandResult -CommandId $cmdId -Status 'failed' -Message 'update command failed'
+                }
+            } else {
+                Send-CommandResult -CommandId $cmdId -Status 'failed' -Message 'self_update.ps1 not found'
+            }
+        }
+    } catch { }
+}
+
 function Invoke-PrioritySelfUpdate {
     if ($PriorityUpdateMinutes -le 0) {
         return
@@ -340,6 +397,7 @@ $containerData = Get-ContainerEntries
 $containersStr = [string]$containerData.entries
 $dockerAvailable = if ($containerData.available) { 'true' } else { 'false' }
 
+Invoke-RemoteCommands
 Invoke-PrioritySelfUpdate
 
 # ---- Flush queued reports ----
