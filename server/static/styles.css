@@ -512,9 +512,9 @@ button:hover:not(.host-item) {
   background: linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
   color: var(--text);
   border-radius: 10px;
-  padding: 10px;
+  padding: 8px 10px;
   display: grid;
-  gap: 4px;
+  gap: 2px;
   position: relative;
   cursor: pointer;
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
@@ -729,6 +729,12 @@ button:hover:not(.host-item) {
 .host-item span {
   color: var(--muted);
   font-size: 11px;
+}
+
+.host-meta-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
 }
 
 .host-item.selected {

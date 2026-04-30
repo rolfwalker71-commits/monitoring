@@ -1547,13 +1547,10 @@ function renderSingleHostCard(host) {
         <span>${escapeHtml(displayName)}</span>
         <span class="host-status-chips">${alertChip}</span>
       </strong>
-      <span>🖥️ ${escapeHtml(hostname)}</span>
-      <span>🧷 ${escapeHtml(asText(host.agent_version))}</span>
-      <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
-      <span>📬 ${hostDelivery} | 🗃️ Queue ${hostQueueDepth}</span>
-      <span>🚨 Offen: ${openAlertCount} (kritisch ${openCriticalAlertCount})</span>
-      <span>📦 ${Number(host.report_count || 0).toLocaleString("de-DE")} Meldungen</span>
-      <span>🕒 Transfer: ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
+      <span class="host-meta-row"><span>🖥️ ${escapeHtml(hostname)}</span><span>🧷 ${escapeHtml(asText(host.agent_version))}</span></span>
+      <span class="host-meta-row"><span>🌐 ${escapeHtml(asText(host.primary_ip))}</span><span>📬 ${hostDelivery} | 🗃️ Q${hostQueueDepth}</span></span>
+      <span class="host-meta-row"><span>🚨 ${openAlertCount} (krit. ${openCriticalAlertCount})</span><span>📦 ${Number(host.report_count || 0).toLocaleString("de-DE")}</span></span>
+      <span>🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
       <span class="host-card-actions">
         <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👁️" : "🙈"}</button>
         <button class="host-mini-action update" type="button" data-action="update-now" data-host="${escapeHtml(hostname)}" title="Agent Update jetzt triggern">⟳</button>
