@@ -439,6 +439,31 @@ function buildPolylinePoints(series, width, height, minValue, maxValue) {
     .join(" ");
 }
 
+function buildAreaPolygonPoints(series, width, height, minValue, maxValue) {
+  if (!Array.isArray(series) || series.length < 2) {
+    return "";
+  }
+
+  const pad = 8;
+  const chartWidth = Math.max(1, width - pad * 2);
+  const chartHeight = Math.max(1, height - pad * 2);
+  const range = maxValue - minValue;
+  const safeRange = range === 0 ? 1 : range;
+  const baselineY = (height - pad).toFixed(2);
+
+  const coords = series.map((point, index) => {
+    const x = pad + (index / (series.length - 1)) * chartWidth;
+    const normalized = (point.value - minValue) / safeRange;
+    const y = pad + (1 - normalized) * chartHeight;
+    return { x: x.toFixed(2), y: y.toFixed(2) };
+  });
+
+  const linePoints = coords.map((p) => `${p.x},${p.y}`).join(" ");
+  const firstX = coords[0].x;
+  const lastX = coords[coords.length - 1].x;
+  return `${firstX},${baselineY} ${linePoints} ${lastX},${baselineY}`;
+}
+
 function buildPointMarkers(series, width, height, minValue, maxValue, color, label) {
   if (!Array.isArray(series) || series.length === 0) {
     return "";
@@ -483,11 +508,13 @@ function buildSparklineSvg(series, color, width = 320, height = 82) {
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
   const polyline = buildPolylinePoints(points, width, height, minValue, maxValue);
+  const area = buildAreaPolygonPoints(points, width, height, minValue, maxValue);
   const markers = buildPointMarkers(points, width, height, minValue, maxValue, color, "Wert");
 
   return `
     <svg class="sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="Trend">
       <line x1="8" y1="${(height - 8).toFixed(2)}" x2="${(width - 8).toFixed(2)}" y2="${(height - 8).toFixed(2)}" stroke="#dde5ee" stroke-width="1" />
+      <polygon class="chart-area" fill="${color}" fill-opacity="0.16" points="${area}" />
       <polyline fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="${polyline}" />
       ${markers}
     </svg>
@@ -540,8 +567,9 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
         return "";
       }
       const polyline = buildPolylinePoints(normalized, combinedWidth, combinedHeight, 0, 100);
+      const area = buildAreaPolygonPoints(normalized, combinedWidth, combinedHeight, 0, 100);
       const markers = buildPointMarkers(normalized, combinedWidth, combinedHeight, 0, 100, item.color, `${item.label} (norm.)`);
-      return `<polyline fill=\"none\" stroke=\"${item.color}\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\" points=\"${polyline}\" />${markers}`;
+      return `<polygon class=\"chart-area\" fill=\"${item.color}\" fill-opacity=\"0.09\" points=\"${area}\" /><polyline fill=\"none\" stroke=\"${item.color}\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\" points=\"${polyline}\" />${markers}`;
     })
     .join("");
 
