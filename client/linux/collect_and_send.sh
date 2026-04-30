@@ -6,6 +6,8 @@ AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-/opt/monitoring-agent/AGENT_VERSION}"
 AGENT_QUEUE_DIR="${AGENT_QUEUE_DIR:-/var/lib/monitoring-agent/queue}"
 PRIORITY_UPDATE_CHECK_MINUTES="${PRIORITY_UPDATE_CHECK_MINUTES:-60}"
 PRIORITY_UPDATE_STATE_FILE="${PRIORITY_UPDATE_STATE_FILE:-/var/lib/monitoring-agent/last_priority_update_check}"
+UPDATE_LOG_FILE="${UPDATE_LOG_FILE:-/var/log/monitoring-agent-update.log}"
+UPDATE_LOG_LINES="${UPDATE_LOG_LINES:-40}"
 JOURNAL_ERRORS_LIMIT="${JOURNAL_ERRORS_LIMIT:-20}"
 JOURNAL_ERRORS_SINCE_MINUTES="${JOURNAL_ERRORS_SINCE_MINUTES:-180}"
 TOP_PROCESSES_LIMIT="${TOP_PROCESSES_LIMIT:-8}"
@@ -100,6 +102,68 @@ append_json_entry() {
   fi
 }
 
+epoch_to_utc() {
+  local epoch_value="$1"
+  if [[ -z "$epoch_value" ]] || ! [[ "$epoch_value" =~ ^[0-9]+$ ]]; then
+    printf ''
+    return
+  fi
+
+  date -u -d "@$epoch_value" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || printf ''
+}
+
+collect_update_log_json() {
+  local entries="" line line_count=0
+  local last_epoch=0
+  local next_epoch=0
+  local last_priority_check_utc=""
+  local next_priority_check_utc=""
+  local recurring_update_hours="${UPDATE_HOURS:-6}"
+
+  if ! [[ "$recurring_update_hours" =~ ^[0-9]+$ ]]; then
+    recurring_update_hours=6
+  fi
+
+  if [[ -f "$PRIORITY_UPDATE_STATE_FILE" ]]; then
+    last_epoch="$(head -n 1 "$PRIORITY_UPDATE_STATE_FILE" 2>/dev/null || echo 0)"
+    if ! [[ "$last_epoch" =~ ^[0-9]+$ ]]; then
+      last_epoch=0
+    fi
+  fi
+
+  if [[ "$last_epoch" =~ ^[0-9]+$ ]] && [[ "$last_epoch" -gt 0 ]] && [[ "$PRIORITY_UPDATE_CHECK_MINUTES" =~ ^[0-9]+$ ]] && [[ "$PRIORITY_UPDATE_CHECK_MINUTES" -gt 0 ]]; then
+    next_epoch=$(( last_epoch + (PRIORITY_UPDATE_CHECK_MINUTES * 60) ))
+    last_priority_check_utc="$(epoch_to_utc "$last_epoch")"
+    next_priority_check_utc="$(epoch_to_utc "$next_epoch")"
+  fi
+
+  if [[ ! -r "$UPDATE_LOG_FILE" ]]; then
+    printf '{"available":false,"path":"%s","line_count":0,"lines":[],"priority_check_minutes":%s,"last_priority_check_utc":"%s","next_priority_check_utc":"%s","recurring_update_hours":%s,"recurring_update_hint":"%s"}' \
+      "$(json_escape "$UPDATE_LOG_FILE")" \
+      "${PRIORITY_UPDATE_CHECK_MINUTES:-0}" \
+      "$(json_escape "$last_priority_check_utc")" \
+      "$(json_escape "$next_priority_check_utc")" \
+      "${recurring_update_hours}" \
+      "$(json_escape "Linux-Fallback-Update per Cron standardmaessig Minute 11 alle ${recurring_update_hours} Stunden")"
+    return
+  fi
+
+  while IFS= read -r line; do
+    entries="$(append_json_entry "$entries" "\"$(json_escape "$line")\"")"
+    line_count=$((line_count + 1))
+  done < <(tail -n "$UPDATE_LOG_LINES" "$UPDATE_LOG_FILE" 2>/dev/null || true)
+
+  printf '{"available":true,"path":"%s","line_count":%s,"lines":[%s],"priority_check_minutes":%s,"last_priority_check_utc":"%s","next_priority_check_utc":"%s","recurring_update_hours":%s,"recurring_update_hint":"%s"}' \
+    "$(json_escape "$UPDATE_LOG_FILE")" \
+    "$line_count" \
+    "$entries" \
+    "${PRIORITY_UPDATE_CHECK_MINUTES:-0}" \
+    "$(json_escape "$last_priority_check_utc")" \
+    "$(json_escape "$next_priority_check_utc")" \
+    "${recurring_update_hours}" \
+    "$(json_escape "Linux-Fallback-Update per Cron standardmaessig Minute 11 alle ${recurring_update_hours} Stunden")"
+}
+
 maybe_priority_self_update() {
   local interval_minutes now_epoch last_epoch
 
@@ -124,7 +188,7 @@ maybe_priority_self_update() {
   printf '%s\n' "$now_epoch" > "$PRIORITY_UPDATE_STATE_FILE" 2>/dev/null || true
 
   if [[ -x "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" ]]; then
-    CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$AGENT_VERSION_FILE" "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" >/dev/null 2>&1 || true
+    CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$AGENT_VERSION_FILE" "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" >> "$UPDATE_LOG_FILE" 2>&1 || true
   fi
 }
 
@@ -262,11 +326,13 @@ execute_remote_commands() {
   response="$(curl "${curl_args[@]}" "${SERVER_URL%/}/api/v1/agent-commands?hostname=$(printf '%s' "$HOSTNAME_VALUE" | sed 's/ /%20/g')&agent_id=$(printf '%s' "$AGENT_ID_VALUE" | sed 's/ /%20/g')&limit=10" 2>/dev/null || true)"
   [[ -n "$response" ]] || return
 
-  while IFS= read -r id; do
+  while IFS= read -r command_line; do
+    [[ -n "$command_line" ]] || continue
+    id="$(printf '%s' "$command_line" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')"
     [[ -n "$id" ]] || continue
 
     if [[ -x "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" ]]; then
-      if CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$AGENT_VERSION_FILE" "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" >/dev/null 2>&1; then
+      if CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$AGENT_VERSION_FILE" "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" >> "$UPDATE_LOG_FILE" 2>&1; then
         status="completed"
         message="update command executed"
       else
@@ -279,7 +345,7 @@ execute_remote_commands() {
     fi
 
     post_command_result "$id" "$status" "$message"
-  done < <(printf '%s' "$response" | grep -o '"id":[0-9]\+' | cut -d: -f2)
+  done < <(printf '%s' "$response" | grep -o '{[^}]*"command_type"[[:space:]]*:[[:space:]]*"update-now"[^}]*}')
 }
 
 flush_queue() {
@@ -376,6 +442,7 @@ done < <(df -PT -x tmpfs -x devtmpfs | awk 'NR>1 {print $2, $1, $3, $4, $5, $6, 
 JOURNAL_ERRORS_JSON="$(collect_journal_errors_json)"
 TOP_PROCESSES_JSON="$(collect_top_processes_json)"
 CONTAINERS_JSON="$(collect_containers_json)"
+AGENT_UPDATE_JSON="$(collect_update_log_json)"
 
 DOCKER_AVAILABLE=false
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
@@ -439,7 +506,8 @@ PAYLOAD=$(cat <<EOF
     "runtime": "docker",
     "available": $DOCKER_AVAILABLE,
     "entries": [${CONTAINERS_JSON}]
-  }
+  },
+  "agent_update": ${AGENT_UPDATE_JSON}
 }
 EOF
 )

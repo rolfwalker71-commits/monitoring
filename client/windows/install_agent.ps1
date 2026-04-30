@@ -148,6 +148,9 @@ RAW_BASE_URL="$RawBaseUrl"
 INSTALL_DIR="$InstallDir"
 AGENT_VERSION_FILE="$InstallDir\AGENT_VERSION"
 AGENT_QUEUE_DIR="$QueueDir"
+UPDATE_HOURS="$UpdateHours"
+PRIORITY_UPDATE_CHECK_MINUTES="60"
+UPDATE_LOG_FILE="$UpdateLogFile"
 "@
 
 [System.IO.File]::WriteAllText($ConfigFile, $configContent, [System.Text.Encoding]::UTF8)

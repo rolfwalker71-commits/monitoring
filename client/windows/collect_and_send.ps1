@@ -19,6 +19,8 @@ $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { '
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
+$UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
+$UpdateLogLines = if ($env:UPDATE_LOG_LINES) { [int]$env:UPDATE_LOG_LINES } else { 40 }
 $EventErrorsSinceMinutes = if ($env:JOURNAL_ERRORS_SINCE_MINUTES) { [int]$env:JOURNAL_ERRORS_SINCE_MINUTES } else { 180 }
 $EventErrorsLimit = if ($env:JOURNAL_ERRORS_LIMIT) { [int]$env:JOURNAL_ERRORS_LIMIT } else { 20 }
 $TopProcessesLimit = if ($env:TOP_PROCESSES_LIMIT) { [int]$env:TOP_PROCESSES_LIMIT } else { 8 }
@@ -66,6 +68,45 @@ function ConvertTo-JsonString([string]$s) {
 function Get-QueueCount {
     $files = @(Get-ChildItem -Path $QueueDir -Filter '*.json' -ErrorAction SilentlyContinue)
     return $files.Count
+}
+
+function Get-UpdateLogBlock {
+    $logPathJson = ConvertTo-JsonString $UpdateLogFile
+    $priorityMinutes = $PriorityUpdateMinutes
+    $lastPriorityCheckUtc = ''
+    $nextPriorityCheckUtc = ''
+    $recurringUpdateHours = 6
+    if ($cfg.ContainsKey('UPDATE_HOURS')) {
+        try {
+            $recurringUpdateHours = [int]$cfg['UPDATE_HOURS']
+        } catch {
+            $recurringUpdateHours = 6
+        }
+    }
+
+    $lastUnix = 0L
+    if (Test-Path $PriorityUpdateStateFile) {
+        $raw = (Get-Content $PriorityUpdateStateFile -TotalCount 1 -Encoding UTF8 -ErrorAction SilentlyContinue)
+        if ($raw -match '^\d+$') {
+            $lastUnix = [long]$raw
+        }
+    }
+    if ($lastUnix -gt 0 -and $priorityMinutes -gt 0) {
+        $lastPriorityCheckUtc = [DateTimeOffset]::FromUnixTimeSeconds($lastUnix).UtcDateTime.ToString('yyyy-MM-ddTHH:mm:ssZ', $IC)
+        $nextPriorityCheckUtc = [DateTimeOffset]::FromUnixTimeSeconds($lastUnix + ($priorityMinutes * 60)).UtcDateTime.ToString('yyyy-MM-ddTHH:mm:ssZ', $IC)
+    }
+
+    if (-not (Test-Path $UpdateLogFile)) {
+        return '{"available":false,"path":"' + $logPathJson + '","line_count":0,"lines":[],"priority_check_minutes":' + $priorityMinutes + ',"last_priority_check_utc":"' + (ConvertTo-JsonString $lastPriorityCheckUtc) + '","next_priority_check_utc":"' + (ConvertTo-JsonString $nextPriorityCheckUtc) + '","recurring_update_hours":' + $recurringUpdateHours + ',"recurring_update_hint":"' + (ConvertTo-JsonString ("Windows-Fallback-Update standardmaessig alle {0} Stunden relativ zum Installationszeitpunkt" -f $recurringUpdateHours)) + '"}'
+    }
+
+    $lines = @(Get-Content -Path $UpdateLogFile -Tail $UpdateLogLines -Encoding UTF8 -ErrorAction SilentlyContinue)
+    $encodedLines = @()
+    foreach ($line in $lines) {
+        $encodedLines += ('"' + (ConvertTo-JsonString ([string]$line)) + '"')
+    }
+
+    return '{"available":true,"path":"' + $logPathJson + '","line_count":' + $lines.Count + ',"lines":[' + ($encodedLines -join ',') + '],"priority_check_minutes":' + $priorityMinutes + ',"last_priority_check_utc":"' + (ConvertTo-JsonString $lastPriorityCheckUtc) + '","next_priority_check_utc":"' + (ConvertTo-JsonString $nextPriorityCheckUtc) + '","recurring_update_hours":' + $recurringUpdateHours + ',"recurring_update_hint":"' + (ConvertTo-JsonString ("Windows-Fallback-Update standardmaessig alle {0} Stunden relativ zum Installationszeitpunkt" -f $recurringUpdateHours)) + '"}'
 }
 
 function Send-Payload([string]$body) {
@@ -135,7 +176,7 @@ function Invoke-RemoteCommands {
 
             if (Test-Path $selfUpdateScript) {
                 try {
-                    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $selfUpdateScript *> $null
+                    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $selfUpdateScript *>> $UpdateLogFile
                     Send-CommandResult -CommandId $cmdId -Status 'completed' -Message 'update command executed'
                 } catch {
                     Send-CommandResult -CommandId $cmdId -Status 'failed' -Message 'update command failed'
@@ -176,7 +217,7 @@ function Invoke-PrioritySelfUpdate {
 
     if (Test-Path $selfUpdateScript) {
         try {
-            & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $selfUpdateScript *> $null
+            & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $selfUpdateScript *>> $UpdateLogFile
         } catch { }
     }
 }
@@ -396,6 +437,7 @@ $topProcStr = Get-TopProcessEntries
 $containerData = Get-ContainerEntries
 $containersStr = [string]$containerData.entries
 $dockerAvailable = if ($containerData.available) { 'true' } else { 'false' }
+$updateLogJson = Get-UpdateLogBlock
 
 Invoke-RemoteCommands
 Invoke-PrioritySelfUpdate
@@ -467,7 +509,8 @@ $payload = @"
         "runtime": "docker",
         "available": $dockerAvailable,
         "entries": [$containersStr]
-    }
+    },
+    "agent_update": $updateLogJson
 }
 "@
 

@@ -171,6 +171,9 @@
                 <h3>🖥️ Host-Gruppen</h3>
                 <p id="hostCount" class="count"></p>
                 <p class="count compact">Agent-Release: <span id="latestAgentVersion">-</span></p>
+                <button id="triggerAllAgentsUpdateButton" class="global-update-chip" type="button">⟳ Update fuer alle Hosts</button>
+                <p id="agentUpdateStatusSummary" class="count compact"></p>
+                <div id="agentUpdateStatusList" class="agent-update-status-list"></div>
               </div>
               <div class="host-list-shell">
                 <div id="hostListHeader" class="host-list-header"></div>
@@ -324,6 +327,7 @@
                 <button type="button" class="tab-button" data-report-section="journal">Journal Fehler</button>
                 <button type="button" class="tab-button" data-report-section="processes">Top Prozesse</button>
                 <button type="button" class="tab-button" data-report-section="containers">Container</button>
+                <button type="button" class="tab-button" data-report-section="agent-update">Agent Update</button>
               </div>
               <div class="pager pager-top">
                 <button id="reportsPrevButtonTop" type="button">Vorherige Meldung</button>

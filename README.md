@@ -6,6 +6,7 @@
 - Agent sammelt zusaetzlich Journal-/Event-Fehler, Top-Prozesse sowie Container-Status
 - Agent fuehrt zusaetzlich priorisierte Self-Update-Checks im Sammellauf aus (Default 60 Minuten), damit neue Versionen schneller ankommen
 - Agent kann zusaetzliche Remote-Befehle vom Server pollen (`update-now`) und Ergebnis zurueckmelden
+- Agent liefert zusaetzlich die letzten Zeilen des lokalen Update-Logs mit, damit Remote-Update-Probleme direkt im Webclient sichtbar sind
 - Falls Senden fehlschlaegt, werden Meldungen lokal gequeued und beim naechsten erfolgreichen Lauf nachgeliefert
 - Webservice nimmt Daten entgegen, speichert sie in SQLite und zeigt eine einfache Uebersicht
 
@@ -51,7 +52,8 @@ Dashboard-Funktionen:
 - Host-Gruppierung links mit Suchfeld und Alert-Filter (alle / mit Alerts / ohne Alerts)
 - Host-Gruppierung links zeigt zusaetzlich die aktuell zur Verteilung bereitstehende Agent-Version aus `AGENT_VERSION` an
 - Host-Karten markieren mit Badge `Update verfuegbar`, wenn Host-Agent-Version kleiner als aktuelles Agent-Release ist
-- Host-Karten haben Schnellaktion `Update jetzt triggern` fuer sofortigen Agent-Update-Befehl
+- Globaler Trigger `Update fuer alle Hosts` queued den Agent-Update-Befehl fuer alle bekannten Hosts auf einmal
+- Globaler Update-Status unter dem Trigger zeigt Rueckkanal-Status je Host sowie den naechsten erwarteten priorisierten Check
 - Blaettern durch Hosts und Host-Meldungen
 - Analysebereich mit 24h-Trends je Mountpoint fuer den ausgewaehlten Host
 - Analysebereich mit CPU/RAM/Swap-Trends im Zeitfenster
@@ -67,6 +69,8 @@ Dashboard-Funktionen:
 - Agent-Version pro Host zur Nachverfolgung von Self-Updates
 - Meldungs-Chip `LIVE` bzw. `DELAYED` auf der Detailkarte
 - Report-Unterseiten je Meldung: Uebersicht, Journal Fehler, Top Prozesse, Container
+- Report-Unterseite `Agent Update` zeigt das zuletzt uebertragene Update-Log des Hosts
+- Scheduler-Hinweis im Webclient: Linux-Fallback-Check standardmaessig `00:11 / 06:11 / 12:11 / 18:11`, Windows standardmaessig alle 6 Stunden relativ zum Installationszeitpunkt
 - Webclient mit Login-Maske und Session-Authentifizierung
 - Passwort-Änderung direkt im Webclient (Menuepunkt `Passwort aendern`)
 - Queue-Statistik im Dashboard (`letzte Meldung LIVE/DELAYED`, aktuelle Queue-Tiefe, delayed/live im Analysefenster)

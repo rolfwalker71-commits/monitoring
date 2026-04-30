@@ -8,7 +8,7 @@ function escapeHtml(value) {
 }
 
 const ANALYSIS_RANGE_STORAGE_KEY = "monitoring.analysisHours";
-const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers"]);
+const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "agent-update"]);
 
 const state = {
   hostLimit: 20,
@@ -40,6 +40,7 @@ const state = {
   hiddenHostMutedAlertsCollapsed: {},
   mutedAlertsByHost: {},
   latestAgentRelease: "",
+  agentUpdateStatusLoaded: false,
 };
 
 const ANALYSIS_RANGE_OPTIONS = new Map([
@@ -190,6 +191,77 @@ function updateReportSectionUi() {
   for (const button of document.querySelectorAll("[data-report-section]")) {
     const buttonSection = normalizeReportSection(button.getAttribute("data-report-section"));
     button.classList.toggle("active", buttonSection === section);
+  }
+}
+
+function updateStatusBadgeLabel(status) {
+  switch (String(status || "idle")) {
+    case "pending":
+      return "PENDING";
+    case "completed":
+      return "COMPLETED";
+    case "failed":
+      return "FAILED";
+    case "expired":
+      return "EXPIRED";
+    default:
+      return "IDLE";
+  }
+}
+
+function renderAgentUpdateStatusRows(hosts) {
+  if (!Array.isArray(hosts) || hosts.length === 0) {
+    return '<p class="muted">Noch keine Host-Statusdaten vorhanden.</p>';
+  }
+
+  return hosts
+    .slice(0, 6)
+    .map((host) => {
+      const displayName = asText(host.display_name || host.hostname);
+      const hostname = asText(host.hostname);
+      const status = asText(host.command_status || "idle").toLowerCase();
+      const nextPriority = host.next_priority_check_utc ? formatUtcPlus2(host.next_priority_check_utc) : "-";
+      const executedAt = host.command_executed_at_utc ? formatUtcPlus2(host.command_executed_at_utc) : "-";
+      const resultMessage = asText(host.command_result_message || "");
+      const recurringHint = asText(host.recurring_update_hint || "");
+
+      return `
+        <div class="agent-update-status-row">
+          <strong>${escapeHtml(displayName)} <span class="agent-update-status-badge ${escapeHtml(status)}">${escapeHtml(updateStatusBadgeLabel(status))}</span></strong>
+          <span>🖥️ ${escapeHtml(hostname)} | Letzte Ausfuehrung: ${escapeHtml(executedAt)}</span>
+          <span>⏭️ Naechster priorisierter Check: ${escapeHtml(nextPriority)}</span>
+          <span>🕒 ${escapeHtml(recurringHint || "Kein Scheduler-Hinweis vom Agenten vorhanden.")}</span>
+          <span>${escapeHtml(resultMessage || "Kein Rueckkanal-Ergebnis gespeichert.")}</span>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+async function loadAgentUpdateStatus() {
+  const summaryEl = document.getElementById("agentUpdateStatusSummary");
+  const listEl = document.getElementById("agentUpdateStatusList");
+  if (!summaryEl || !listEl) {
+    return;
+  }
+
+  summaryEl.textContent = "Lade Update-Status...";
+  listEl.innerHTML = "";
+
+  try {
+    const response = await fetch("/api/v1/agent-update-status");
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+
+    const data = await response.json();
+    const summary = data.summary || {};
+    summaryEl.textContent = `Status: ${Number(summary.pending || 0)} pending | ${Number(summary.completed || 0)} completed | ${Number(summary.failed || 0)} failed | ${Number(summary.expired || 0)} expired | ${Number(summary.idle || 0)} idle. ${asText(data.default_schedule_note)}`;
+    listEl.innerHTML = renderAgentUpdateStatusRows(data.hosts || []);
+    state.agentUpdateStatusLoaded = true;
+  } catch (error) {
+    summaryEl.textContent = `Update-Status konnte nicht geladen werden: ${error.message}`;
+    listEl.innerHTML = "";
   }
 }
 
@@ -1267,6 +1339,26 @@ function renderContainersTable(containersBlock) {
   `;
 }
 
+function renderAgentUpdateLog(agentUpdateBlock) {
+  const block = agentUpdateBlock && typeof agentUpdateBlock === "object" ? agentUpdateBlock : {};
+  const available = block.available === true;
+  const path = asText(block.path);
+  const lines = Array.isArray(block.lines) ? block.lines.map((line) => asText(line)) : [];
+  const lineCount = Number(block.line_count || lines.length || 0);
+
+  if (!available && lines.length === 0) {
+    return `
+      <p class="muted">Kein Update-Log uebertragen.</p>
+      <p class="count compact">Pfad: ${escapeHtml(path || "-")}</p>
+    `;
+  }
+
+  return `
+    <p class="count compact">Pfad: ${escapeHtml(path || "-")} | Zeilen: ${Number.isFinite(lineCount) ? lineCount : lines.length}</p>
+    <pre class="log-viewer">${escapeHtml(lines.join("\n") || "Log-Datei ist vorhanden, enthaelt aber aktuell keine Zeilen.")}</pre>
+  `;
+}
+
 function renderReportCard(report) {
   const payload = report && report.payload ? report.payload : {};
   const cpu = payload.cpu || {};
@@ -1297,6 +1389,11 @@ function renderReportCard(report) {
     detailContent = `
       <h4>🐳 Container Status</h4>
       ${renderContainersTable(payload.containers)}
+    `;
+  } else if (section === "agent-update") {
+    detailContent = `
+      <h4>⟳ Agent Update Log</h4>
+      ${renderAgentUpdateLog(payload.agent_update)}
     `;
   } else {
     detailContent = `
@@ -1553,7 +1650,6 @@ function renderSingleHostCard(host) {
       <span>🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
       <span class="host-card-actions">
         <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👁️" : "🙈"}</button>
-        <button class="host-mini-action update" type="button" data-action="update-now" data-host="${escapeHtml(hostname)}" title="Agent Update jetzt triggern">⟳</button>
         <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
         ${updateTriangle}
       </span>
@@ -1590,6 +1686,25 @@ async function triggerAgentUpdate(hostname) {
     },
     body: JSON.stringify({
       hostname,
+      command_type: "update-now",
+      ttl_minutes: 240,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return data;
+}
+
+async function triggerAgentUpdateForAllHosts() {
+  const response = await fetch("/api/v1/agent-command-bulk", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
       command_type: "update-now",
       ttl_minutes: 240,
     }),
@@ -1647,10 +1762,6 @@ function wireHostListInteractions() {
           await saveHostSettings(hostname, { is_favorite: !current });
         } else if (action === "hidden") {
           await saveHostSettings(hostname, { is_hidden: !current });
-        } else if (action === "update-now") {
-          await triggerAgentUpdate(hostname);
-          window.alert(`Update-Trigger wurde fuer ${hostname} in die Queue gestellt.`);
-          return;
         }
 
         await loadHosts();
@@ -1726,6 +1837,14 @@ function renderHosts(hosts) {
   const hostList = document.getElementById("hostList");
   const hostListHeader = document.getElementById("hostListHeader");
   const hostCount = document.getElementById("hostCount");
+  const triggerAllButton = document.getElementById("triggerAllAgentsUpdateButton");
+
+  if (triggerAllButton) {
+    triggerAllButton.disabled = state.totalHosts <= 0;
+    triggerAllButton.textContent = state.totalHosts > 0
+      ? `⟳ Update fuer alle Hosts (${state.totalHosts})`
+      : "⟳ Update fuer alle Hosts";
+  }
 
   if (!Array.isArray(hosts) || hosts.length === 0) {
     hostCount.textContent = "0 Hosts gesamt";
@@ -2183,6 +2302,19 @@ function wireEvents() {
     updateViewMode();
   });
 
+  document.getElementById("triggerAllAgentsUpdateButton").addEventListener("click", async () => {
+    try {
+      const result = await triggerAgentUpdateForAllHosts();
+      const totalHosts = Number(result.total_hosts || 0);
+      const queuedCount = Number(result.queued_count || 0);
+      const alreadyQueuedCount = Number(result.already_queued_count || 0);
+      window.alert(`Update-Trigger gesetzt: ${queuedCount} Hosts neu gequeued, ${alreadyQueuedCount} bereits pending, gesamt ${totalHosts}.`);
+      await loadAgentUpdateStatus();
+    } catch (error) {
+      window.alert(`Globaler Update-Trigger fehlgeschlagen: ${error.message}`);
+    }
+  });
+
   for (const button of document.querySelectorAll("[data-report-section]")) {
     button.addEventListener("click", () => {
       state.reportSection = normalizeReportSection(button.getAttribute("data-report-section"));
@@ -2197,6 +2329,7 @@ function wireEvents() {
       return;
     }
     await loadGlobalAlertsOverview();
+    await loadAgentUpdateStatus();
     await loadHosts();
     await loadReportsForHost();
     await loadAnalysisForHost();
@@ -2212,6 +2345,7 @@ function wireEvents() {
       return;
     }
     await loadGlobalAlertsOverview();
+    await loadAgentUpdateStatus();
     await loadHosts();
     await loadReportsForHost();
     await loadAnalysisForHost();
@@ -2274,6 +2408,7 @@ function wireEvents() {
   document.getElementById("refreshButton").addEventListener("click", async () => {
     await loadWebclientVersion();
     await loadGlobalAlertsOverview();
+    await loadAgentUpdateStatus();
     await loadHosts();
     await loadReportsForHost();
     await loadAnalysisForHost();

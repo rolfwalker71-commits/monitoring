@@ -613,6 +613,114 @@ def queue_agent_command(
     return int(cursor.lastrowid)
 
 
+def find_pending_agent_command(conn: sqlite3.Connection, hostname: str, command_type: str) -> int:
+    row = conn.execute(
+        """
+        SELECT id
+        FROM agent_commands
+        WHERE hostname = ? AND command_type = ? AND status = 'pending' AND expires_at_utc > ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (hostname, command_type, utc_now_iso()),
+    ).fetchone()
+    if not row:
+        return 0
+    return int(row[0] or 0)
+
+
+def queue_agent_command_once(
+    conn: sqlite3.Connection,
+    created_by: str,
+    hostname: str,
+    command_type: str,
+    command_payload: dict,
+    ttl_minutes: int,
+) -> tuple[int, bool]:
+    existing_command_id = find_pending_agent_command(conn, hostname, command_type)
+    if existing_command_id > 0:
+        return existing_command_id, False
+
+    return (
+        queue_agent_command(
+            conn,
+            created_by=created_by,
+            hostname=hostname,
+            command_type=command_type,
+            command_payload=command_payload,
+            ttl_minutes=ttl_minutes,
+        ),
+        True,
+    )
+
+
+def get_known_hostnames(conn: sqlite3.Connection) -> list[str]:
+    rows = conn.execute(
+        """
+        SELECT hostname, MAX(received_at_utc) AS last_seen_utc
+        FROM reports
+        GROUP BY hostname
+        ORDER BY last_seen_utc DESC
+        """
+    ).fetchall()
+    return [str(row[0] or "").strip() for row in rows if str(row[0] or "").strip()]
+
+
+def get_latest_update_command_rows(conn: sqlite3.Connection) -> dict[str, dict]:
+    rows = conn.execute(
+        """
+        SELECT hostname, status, created_at_utc, executed_at_utc, expires_at_utc, result_json
+        FROM agent_commands
+        WHERE command_type = 'update-now'
+          AND id IN (
+              SELECT MAX(id)
+              FROM agent_commands
+              WHERE command_type = 'update-now'
+              GROUP BY hostname
+          )
+        """
+    ).fetchall()
+
+    result: dict[str, dict] = {}
+    for row in rows:
+        hostname = str(row[0] or "").strip()
+        if not hostname:
+            continue
+        result[hostname] = {
+            "status": str(row[1] or ""),
+            "created_at_utc": str(row[2] or ""),
+            "executed_at_utc": str(row[3] or ""),
+            "expires_at_utc": str(row[4] or ""),
+            "result": parse_payload_json(str(row[5] or "{}")),
+        }
+    return result
+
+
+def get_latest_report_rows_by_hostname(conn: sqlite3.Connection) -> dict[str, dict]:
+    rows = conn.execute(
+        """
+        SELECT r.hostname, r.received_at_utc, r.payload_json
+        FROM reports r
+        WHERE r.id IN (
+            SELECT MAX(id)
+            FROM reports
+            GROUP BY hostname
+        )
+        """
+    ).fetchall()
+
+    result: dict[str, dict] = {}
+    for row in rows:
+        hostname = str(row[0] or "").strip()
+        if not hostname:
+            continue
+        result[hostname] = {
+            "received_at_utc": str(row[1] or ""),
+            "payload": parse_payload_json(str(row[2] or "{}")),
+        }
+    return result
+
+
 def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
     row = conn.execute(
         """
@@ -1264,6 +1372,71 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "display_name_override": host_settings["display_name_override"],
                     "is_favorite": host_settings["is_favorite"],
                     "is_hidden": host_settings["is_hidden"],
+                },
+            )
+            return
+
+        if parsed.path == "/api/v1/agent-update-status":
+            with sqlite3.connect(DB_PATH) as conn:
+                expire_old_agent_commands(conn)
+                host_settings_rows = conn.execute(
+                    "SELECT hostname, display_name_override FROM host_settings"
+                ).fetchall()
+                latest_reports = get_latest_report_rows_by_hostname(conn)
+                latest_commands = get_latest_update_command_rows(conn)
+                conn.commit()
+
+            overrides = {str(row[0] or ""): str(row[1] or "") for row in host_settings_rows}
+            hostnames = sorted(set(latest_reports.keys()) | set(latest_commands.keys()))
+            hosts = []
+            summary = {
+                "idle": 0,
+                "pending": 0,
+                "completed": 0,
+                "failed": 0,
+                "expired": 0,
+            }
+
+            for hostname in hostnames:
+                latest_report = latest_reports.get(hostname, {})
+                payload = latest_report.get("payload", {}) if isinstance(latest_report, dict) else {}
+                command = latest_commands.get(hostname, {}) if isinstance(latest_commands, dict) else {}
+                command_status = str(command.get("status", "") or "idle")
+                if command_status not in summary:
+                    command_status = "idle"
+                summary[command_status] += 1
+
+                agent_update = payload.get("agent_update", {})
+                if not isinstance(agent_update, dict):
+                    agent_update = {}
+
+                hosts.append(
+                    {
+                        "hostname": hostname,
+                        "display_name": effective_display_name(payload, overrides.get(hostname, ""), hostname),
+                        "agent_version": str(payload.get("agent_version", "")),
+                        "last_report_utc": str(latest_report.get("received_at_utc", "")),
+                        "command_status": command_status,
+                        "command_created_at_utc": str(command.get("created_at_utc", "")),
+                        "command_executed_at_utc": str(command.get("executed_at_utc", "")),
+                        "command_expires_at_utc": str(command.get("expires_at_utc", "")),
+                        "command_result_message": str(command.get("result", {}).get("message", "")),
+                        "next_priority_check_utc": str(agent_update.get("next_priority_check_utc", "")),
+                        "last_priority_check_utc": str(agent_update.get("last_priority_check_utc", "")),
+                        "priority_check_minutes": payload_int(agent_update, "priority_check_minutes", 0),
+                        "recurring_update_hours": payload_int(agent_update, "recurring_update_hours", 0),
+                        "recurring_update_hint": str(agent_update.get("recurring_update_hint", "")),
+                    }
+                )
+
+            hosts.sort(key=lambda item: (item["display_name"].lower(), item["hostname"].lower()))
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "total_hosts": len(hosts),
+                    "summary": summary,
+                    "default_schedule_note": "Linux-Installer im Repo plant den Fallback-Check standardmaessig um 00:11, 06:11, 12:11 und 18:11 Uhr. Windows plant standardmaessig alle 6 Stunden relativ zum Installationszeitpunkt. Der priorisierte Zusatz-Check laeuft standardmaessig alle 60 Minuten seit dem letzten Check.",
+                    "hosts": hosts,
                 },
             )
             return
@@ -1975,7 +2148,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 command_payload = {}
 
             with sqlite3.connect(DB_PATH) as conn:
-                command_id = queue_agent_command(
+                expire_old_agent_commands(conn)
+                command_id, created = queue_agent_command_once(
                     conn,
                     created_by=created_by,
                     hostname=hostname,
@@ -1986,12 +2160,77 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 conn.commit()
 
             self._send_json(
-                HTTPStatus.CREATED,
+                HTTPStatus.CREATED if created else HTTPStatus.OK,
                 {
-                    "status": "queued",
+                    "status": "queued" if created else "already_queued",
                     "command_id": command_id,
                     "hostname": hostname,
                     "command_type": command_type,
+                },
+            )
+            return
+
+        if path == "/api/v1/agent-command-bulk":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            command_type = normalize_command_type(payload.get("command_type"))
+            if not command_type:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "unsupported command_type"})
+                return
+
+            try:
+                ttl_minutes = int(payload.get("ttl_minutes", 240))
+            except (TypeError, ValueError):
+                ttl_minutes = 240
+
+            command_payload = payload.get("command_payload", {})
+            if not isinstance(command_payload, dict):
+                command_payload = {}
+
+            created_by = self._web_session_username() or "webclient"
+            queued_count = 0
+            already_queued_count = 0
+
+            with sqlite3.connect(DB_PATH) as conn:
+                expire_old_agent_commands(conn)
+                hostnames = get_known_hostnames(conn)
+                if not hostnames:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no hosts available"})
+                    return
+
+                for hostname in hostnames:
+                    _command_id, created = queue_agent_command_once(
+                        conn,
+                        created_by=created_by,
+                        hostname=hostname,
+                        command_type=command_type,
+                        command_payload=command_payload,
+                        ttl_minutes=ttl_minutes,
+                    )
+                    if created:
+                        queued_count += 1
+                    else:
+                        already_queued_count += 1
+                conn.commit()
+
+            self._send_json(
+                HTTPStatus.CREATED if queued_count > 0 else HTTPStatus.OK,
+                {
+                    "status": "queued" if queued_count > 0 else "already_queued",
+                    "command_type": command_type,
+                    "total_hosts": len(hostnames),
+                    "queued_count": queued_count,
+                    "already_queued_count": already_queued_count,
                 },
             )
             return
