@@ -366,6 +366,29 @@ button:hover:not(.host-item) {
   font-weight: 700;
 }
 
+.host-group-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.host-group-toggle {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.host-group-toggle:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
 .host-item {
   text-align: left;
   border: 1px solid #cdd9e8;

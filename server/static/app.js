@@ -29,6 +29,7 @@ const state = {
   isAuthenticated: false,
   visibleHosts: 0,
   hiddenHosts: 0,
+  hiddenHostsCollapsed: true,
 };
 
 async function loadWebclientVersion() {
@@ -1058,6 +1059,20 @@ function wireHostListInteractions() {
       }
     });
   }
+
+  const hiddenToggle = hostList.querySelector("#hiddenHostsToggleButton");
+  if (hiddenToggle) {
+    hiddenToggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      state.hiddenHostsCollapsed = !state.hiddenHostsCollapsed;
+      const body = hostList.querySelector("#hiddenHostsBody");
+      if (body) {
+        body.classList.toggle("hidden", state.hiddenHostsCollapsed);
+      }
+      hiddenToggle.textContent = state.hiddenHostsCollapsed ? "Aufklappen" : "Zuklappen";
+    });
+  }
 }
 
 function renderHosts(hosts) {
@@ -1080,6 +1095,7 @@ function renderHosts(hosts) {
 
   const visibleHtml = visibleHosts.map(renderSingleHostCard).join("");
   const hiddenHtml = hiddenHosts.map(renderSingleHostCard).join("");
+  const hiddenCollapsedClass = state.hiddenHostsCollapsed ? "hidden" : "";
 
   hostList.innerHTML = `
     <section class="host-group">
@@ -1087,8 +1103,13 @@ function renderHosts(hosts) {
       ${visibleHtml || '<p class="muted">Keine aktiven Hosts im Suchfilter.</p>'}
     </section>
     <section class="host-group host-group-hidden">
-      <h4 class="host-group-title">Ausgeblendete Hosts (${hiddenHosts.length})</h4>
-      ${hiddenHtml || '<p class="muted">Keine ausgeblendeten Hosts.</p>'}
+      <div class="host-group-title-row">
+        <h4 class="host-group-title">Ausgeblendete Hosts (${hiddenHosts.length})</h4>
+        <button id="hiddenHostsToggleButton" class="host-group-toggle" type="button">${state.hiddenHostsCollapsed ? "Aufklappen" : "Zuklappen"}</button>
+      </div>
+      <div id="hiddenHostsBody" class="${hiddenCollapsedClass}">
+        ${hiddenHtml || '<p class="muted">Keine ausgeblendeten Hosts.</p>'}
+      </div>
     </section>
   `;
 
