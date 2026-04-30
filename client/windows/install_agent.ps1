@@ -54,18 +54,8 @@ $UpdateLogFile   = "$InstallDir\monitoring-agent-update.log"
 $TaskNameCollect = 'monitoring-agent-collect'
 $TaskNameUpdate  = 'monitoring-agent-update'
 
-function Resolve-NtAccountFromSid {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $SidValue
-    )
-
-    $sid = New-Object System.Security.Principal.SecurityIdentifier($SidValue)
-    return $sid.Translate([System.Security.Principal.NTAccount]).Value
-}
-
-$SystemAccount = Resolve-NtAccountFromSid -SidValue 'S-1-5-18'
-$AdminsAccount = Resolve-NtAccountFromSid -SidValue 'S-1-5-32-544'
+$SystemSid = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-18')
+$AdminsSid = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')
 
 # ---- Create directories ----
 foreach ($dir in @($InstallDir, $QueueDir)) {
@@ -77,8 +67,8 @@ foreach ($dir in @($InstallDir, $QueueDir)) {
 # Restrict queue dir to SYSTEM + Administrators
 $acl = Get-Acl $QueueDir
 $acl.SetAccessRuleProtection($true, $false)
-$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($SystemAccount, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
-$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($AdminsAccount, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($SystemSid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+$acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($AdminsSid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
 Set-Acl -Path $QueueDir -AclObject $acl
 
 # ---- Download scripts ----
@@ -128,8 +118,8 @@ AGENT_QUEUE_DIR="$QueueDir"
 # Restrict config to SYSTEM + Administrators only
 $cfgAcl = Get-Acl $ConfigFile
 $cfgAcl.SetAccessRuleProtection($true, $false)
-$cfgAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($SystemAccount, 'FullControl', 'Allow')))
-$cfgAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($AdminsAccount, 'FullControl', 'Allow')))
+$cfgAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($SystemSid, 'FullControl', 'Allow')))
+$cfgAcl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($AdminsSid, 'FullControl', 'Allow')))
 Set-Acl -Path $ConfigFile -AclObject $cfgAcl
 
 # ---- Register Scheduled Tasks ----
