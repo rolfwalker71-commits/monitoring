@@ -1436,8 +1436,8 @@ function renderSingleHostCard(host) {
   const currentVersion = asText(host.agent_version, "");
   const latestVersion = asText(state.latestAgentRelease, "");
   const versionComparison = compareSemverLike(currentVersion, latestVersion);
-  const updateChip = versionComparison === -1
-    ? `<span class="host-update-chip">Update verfuegbar</span>`
+  const updateTriangle = versionComparison === -1
+    ? `<span class="host-update-triangle" title="Update verfügbar">⚠</span>`
     : "";
 
   const osRaw = asText(host.os || "").toLowerCase();
@@ -1450,15 +1450,15 @@ function renderSingleHostCard(host) {
       <strong class="host-title-line">
         <span>${escapeHtml(displayName)}</span>
         <span class="host-title-actions">
-          <span class="host-status-chips">
+            <span class="host-status-chips">
             ${alertChip}
-            ${updateChip}
           </span>
           <span class="host-mini-stack">
             <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👁️" : "🙈"}</button>
             <span class="host-mini-stack-lower">
               <button class="host-mini-action update" type="button" data-action="update-now" data-host="${escapeHtml(hostname)}" title="Agent Update jetzt triggern">⟳</button>
               <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
+              ${updateTriangle}
             </span>
           </span>
         </span>
