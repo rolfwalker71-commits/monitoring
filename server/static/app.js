@@ -988,14 +988,24 @@ function filesystemLineColor(currentUsedPercent) {
 function shouldShowFilesystemGraph(mountpoint) {
   if (!mountpoint) return false;
   const mp = mountpoint.replace(/\\/g, '/').toLowerCase();
-  // Windows drive letters: C:/ D:/ etc.
-  if (/^[a-z]:\/$/.test(mp)) return true;
+  // Windows drive letters: C: / C:/ / D: / D:/ etc.
+  if (/^[a-z]:(?:\/)?$/.test(mp)) return true;
+  // Windows volume mount style: \\?\Volume{...}\
+  if (mp.startsWith('//?/volume{')) return true;
   // Linux root and common SAP/HANA/data paths
   if (mp === '/') return true;
   if (mp.startsWith('/usr/sap')) return true;
   if (mp === '/hana' || mp.startsWith('/hana/')) return true;
   if (mp.startsWith('/mnt/') || mp === '/mnt') return true;
   return false;
+}
+
+function sortFilesystemByMountpointAscending(rows) {
+  return [...rows].sort((left, right) => {
+    const leftMount = asText(left?.mountpoint).toLowerCase();
+    const rightMount = asText(right?.mountpoint).toLowerCase();
+    return leftMount.localeCompare(rightMount, "de", { numeric: true, sensitivity: "base" });
+  });
 }
 
 function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
@@ -1007,7 +1017,7 @@ function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
   if (filtered.length === 0) {
     return "<p class=\"muted\">Keine relevanten Filesystem-Verlaufskurven verfuegbar.</p>";
   }
-  const topTrends = filtered;
+  const topTrends = sortFilesystemByMountpointAscending(filtered);
   const standText = formatUtcPlus2(latestReportTimeUtc);
 
   return topTrends
@@ -2058,6 +2068,7 @@ async function loadAnalysisForHost() {
 
     const data = await response.json();
     const trendRows = data.filesystem_trends || [];
+    const sortedTrendRows = sortFilesystemByMountpointAscending(trendRows);
     const resourceTrends = data.resource_trends || {};
     const resourceSeries = data.resource_series || {};
     const delivery = data.delivery || {};
@@ -2077,24 +2088,24 @@ async function loadAnalysisForHost() {
     ].join("");
     resourceCharts.innerHTML = renderResourceCharts(resourceSeries, data.latest_report_time_utc);
     resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc);
-    filesystemCharts.innerHTML = renderFilesystemTrendCharts(trendRows, data.latest_report_time_utc);
+    filesystemCharts.innerHTML = renderFilesystemTrendCharts(sortedTrendRows, data.latest_report_time_utc);
 
-    const fsCurrentValues = trendRows.map((row) => Number(row.current_used_percent)).filter((value) => Number.isFinite(value));
+    const fsCurrentValues = sortedTrendRows.map((row) => Number(row.current_used_percent)).filter((value) => Number.isFinite(value));
     const fsAvgCurrent = fsCurrentValues.length > 0
       ? fsCurrentValues.reduce((sum, value) => sum + value, 0) / fsCurrentValues.length
       : null;
-    const fsRising = trendRows.filter((row) => Number(row.delta_used_percent) > 0).length;
-    const fsWarnOrCritical = trendRows.filter((row) => Number(row.current_used_percent) >= 80).length;
-    filesystemStats.textContent = `${trendRows.length} FS-Charts | Avg aktuell: ${fsAvgCurrent === null ? "-" : formatNumber(fsAvgCurrent, 1) + "%"} | Steigend: ${fsRising} | >=80%: ${fsWarnOrCritical}`;
+    const fsRising = sortedTrendRows.filter((row) => Number(row.delta_used_percent) > 0).length;
+    const fsWarnOrCritical = sortedTrendRows.filter((row) => Number(row.current_used_percent) >= 80).length;
+    filesystemStats.textContent = `${sortedTrendRows.length} FS-Charts | Avg aktuell: ${fsAvgCurrent === null ? "-" : formatNumber(fsAvgCurrent, 1) + "%"} | Steigend: ${fsRising} | >=80%: ${fsWarnOrCritical}`;
 
-    if (trendRows.length === 0) {
+    if (sortedTrendRows.length === 0) {
       filesystemCharts.innerHTML = "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfuegbar.</p>";
       analysisRows.innerHTML =
         "<tr><td colspan=\"7\" class=\"muted\">Keine Analyse-Daten im gewaehlten Zeitfenster.</td></tr>";
       return;
     }
 
-    analysisRows.innerHTML = trendRows
+    analysisRows.innerHTML = sortedTrendRows
       .map((row) => {
         const deltaClass = Number(row.delta_used_percent) > 0 ? "delta-up" : "delta-down";
         return `
