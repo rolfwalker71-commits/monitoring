@@ -112,7 +112,8 @@
         <div class="panel-header">
           <h2>Hosts und Historie</h2>
           <div class="panel-actions">
-            <button id="openChangePasswordButton" type="button">Passwort aendern</button>
+            <button id="triggerAllAgentsUpdateButton" class="global-update-chip global-update-chip-inline" type="button">⟳ Update fuer alle Hosts</button>
+            <button id="openChangePasswordButton" type="button">Passwort ändern</button>
             <button id="openAlarmSettingsButton" type="button">Alarm Einstellungen</button>
             <button id="refreshButton">Neu laden</button>
           </div>
@@ -171,7 +172,6 @@
                 <h3>🖥️ Host-Gruppen</h3>
                 <p id="hostCount" class="count"></p>
                 <p class="count compact">Agent-Release: <span id="latestAgentVersion">-</span></p>
-                <button id="triggerAllAgentsUpdateButton" class="global-update-chip" type="button">⟳ Update fuer alle Hosts</button>
                 <p id="agentUpdateStatusSummary" class="count compact"></p>
                 <div id="agentUpdateStatusList" class="agent-update-status-list"></div>
               </div>
