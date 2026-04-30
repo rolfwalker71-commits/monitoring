@@ -483,43 +483,105 @@ function normalizeSeries(series) {
     .filter((point) => point.time_utc && Number.isFinite(point.value));
 }
 
-function buildPolylinePoints(series, width, height, minValue, maxValue) {
+function buildChartFrame(width, height, margins = {}) {
+  const left = Number.isFinite(margins.left) ? margins.left : 42;
+  const right = Number.isFinite(margins.right) ? margins.right : 10;
+  const top = Number.isFinite(margins.top) ? margins.top : 10;
+  const bottom = Number.isFinite(margins.bottom) ? margins.bottom : 18;
+
+  return {
+    left,
+    right,
+    top,
+    bottom,
+    width: Math.max(1, width - left - right),
+    height: Math.max(1, height - top - bottom),
+  };
+}
+
+function formatAxisTick(value, suffix = "") {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "-";
+  }
+
+  const absValue = Math.abs(numeric);
+  let digits = 0;
+  if (absValue < 10) {
+    digits = 2;
+  } else if (absValue < 100) {
+    digits = 1;
+  }
+
+  return `${numeric.toFixed(digits)}${suffix}`;
+}
+
+function buildYAxisGuides(width, height, minValue, maxValue, options = {}) {
+  const tickCount = Math.max(2, Number(options.tickCount) || 5);
+  const suffix = options.suffix || "";
+  const formatter = typeof options.labelFormatter === "function"
+    ? options.labelFormatter
+    : (value) => formatAxisTick(value, suffix);
+  const frame = buildChartFrame(width, height, options.margins);
+  const lines = [];
+  const labels = [];
+
+  for (let index = 0; index < tickCount; index += 1) {
+    const ratio = tickCount === 1 ? 0 : index / (tickCount - 1);
+    const y = frame.top + ratio * frame.height;
+    const value = maxValue - ratio * (maxValue - minValue);
+    lines.push(
+      `<line class="chart-grid-line" x1="${frame.left.toFixed(2)}" y1="${y.toFixed(2)}" x2="${(frame.left + frame.width).toFixed(2)}" y2="${y.toFixed(2)}" />`,
+    );
+    labels.push(
+      `<text class="chart-axis-label" x="${(frame.left - 6).toFixed(2)}" y="${(y + 3.5).toFixed(2)}" text-anchor="end">${escapeHtml(formatter(value))}</text>`,
+    );
+  }
+
+  const xAxisY = frame.top + frame.height;
+  return `
+    <g class="chart-grid">
+      <line class="chart-axis-line" x1="${frame.left.toFixed(2)}" y1="${frame.top.toFixed(2)}" x2="${frame.left.toFixed(2)}" y2="${xAxisY.toFixed(2)}" />
+      <line class="chart-axis-line" x1="${frame.left.toFixed(2)}" y1="${xAxisY.toFixed(2)}" x2="${(frame.left + frame.width).toFixed(2)}" y2="${xAxisY.toFixed(2)}" />
+      ${lines.join("")}
+      ${labels.join("")}
+    </g>
+  `;
+}
+
+function buildPolylinePoints(series, width, height, minValue, maxValue, margins = {}) {
   if (!Array.isArray(series) || series.length < 2) {
     return "";
   }
 
-  const pad = 8;
-  const chartWidth = Math.max(1, width - pad * 2);
-  const chartHeight = Math.max(1, height - pad * 2);
+  const frame = buildChartFrame(width, height, margins);
   const range = maxValue - minValue;
   const safeRange = range === 0 ? 1 : range;
 
   return series
     .map((point, index) => {
-      const x = pad + (index / (series.length - 1)) * chartWidth;
+      const x = frame.left + (index / (series.length - 1)) * frame.width;
       const normalized = (point.value - minValue) / safeRange;
-      const y = pad + (1 - normalized) * chartHeight;
+      const y = frame.top + (1 - normalized) * frame.height;
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     })
     .join(" ");
 }
 
-function buildAreaPolygonPoints(series, width, height, minValue, maxValue) {
+function buildAreaPolygonPoints(series, width, height, minValue, maxValue, margins = {}) {
   if (!Array.isArray(series) || series.length < 2) {
     return "";
   }
 
-  const pad = 8;
-  const chartWidth = Math.max(1, width - pad * 2);
-  const chartHeight = Math.max(1, height - pad * 2);
+  const frame = buildChartFrame(width, height, margins);
   const range = maxValue - minValue;
   const safeRange = range === 0 ? 1 : range;
-  const baselineY = (height - pad).toFixed(2);
+  const baselineY = (frame.top + frame.height).toFixed(2);
 
   const coords = series.map((point, index) => {
-    const x = pad + (index / (series.length - 1)) * chartWidth;
+    const x = frame.left + (index / (series.length - 1)) * frame.width;
     const normalized = (point.value - minValue) / safeRange;
-    const y = pad + (1 - normalized) * chartHeight;
+    const y = frame.top + (1 - normalized) * frame.height;
     return { x: x.toFixed(2), y: y.toFixed(2) };
   });
 
@@ -529,23 +591,21 @@ function buildAreaPolygonPoints(series, width, height, minValue, maxValue) {
   return `${firstX},${baselineY} ${linePoints} ${lastX},${baselineY}`;
 }
 
-function buildPointMarkers(series, width, height, minValue, maxValue, color, label) {
+function buildPointMarkers(series, width, height, minValue, maxValue, color, label, margins = {}) {
   if (!Array.isArray(series) || series.length === 0) {
     return "";
   }
 
-  const pad = 8;
-  const chartWidth = Math.max(1, width - pad * 2);
-  const chartHeight = Math.max(1, height - pad * 2);
+  const frame = buildChartFrame(width, height, margins);
   const range = maxValue - minValue;
   const safeRange = range === 0 ? 1 : range;
   const denominator = series.length > 1 ? series.length - 1 : 1;
 
   return series
     .map((point, index) => {
-      const x = pad + (index / denominator) * chartWidth;
+      const x = frame.left + (index / denominator) * frame.width;
       const normalized = (point.value - minValue) / safeRange;
-      const y = pad + (1 - normalized) * chartHeight;
+      const y = frame.top + (1 - normalized) * frame.height;
       const pointTime = formatUtcPlus2(point.time_utc);
       const pointValue = Number(point.value);
       const valueText = Number.isFinite(pointValue) ? pointValue.toFixed(2) : "-";
@@ -555,30 +615,41 @@ function buildPointMarkers(series, width, height, minValue, maxValue, color, lab
     .join("");
 }
 
-function buildSparklineSvg(series, color, width = 320, height = 82) {
+function buildSparklineSvg(series, color, width = 320, height = 82, options = {}) {
   const points = normalizeSeries(series);
   if (points.length === 0) {
     return "<p class=\"muted\">Keine Verlaufsdaten</p>";
   }
 
+  const suffix = options.suffix || "";
+  const labelFormatter = typeof options.labelFormatter === "function"
+    ? options.labelFormatter
+    : (value) => formatAxisTick(value, suffix);
+  const margins = options.margins || { left: 42, right: 10, top: 10, bottom: 18 };
+
   if (points.length === 1) {
-    const centerY = (height / 2).toFixed(2);
-    const singleTime = formatUtcPlus2(points[0].time_utc);
     const singleValue = Number(points[0].value);
+    const minValue = Number.isFinite(options.minValue) ? options.minValue : (Number.isFinite(singleValue) ? singleValue : 0);
+    const maxValue = Number.isFinite(options.maxValue) ? options.maxValue : (Number.isFinite(singleValue) ? singleValue : 1);
+    const frame = buildChartFrame(width, height, margins);
+    const centerY = (frame.top + frame.height / 2).toFixed(2);
+    const singleTime = formatUtcPlus2(points[0].time_utc);
     const valueText = Number.isFinite(singleValue) ? singleValue.toFixed(2) : "-";
-    return `<svg class=\"sparkline\" viewBox=\"0 0 ${width} ${height}\" role=\"img\" aria-label=\"Trend\"><line x1=\"8\" y1=\"${centerY}\" x2=\"${(width - 8).toFixed(2)}\" y2=\"${centerY}\" stroke=\"${color}\" stroke-width=\"2.2\" /><circle class=\"chart-point\" cx=\"${(width / 2).toFixed(2)}\" cy=\"${centerY}\" r=\"3.6\" fill=\"${color}\"><title>${escapeHtml(valueText)} (${escapeHtml(singleTime)})</title></circle></svg>`;
+    const guides = buildYAxisGuides(width, height, minValue, maxValue, { margins, labelFormatter });
+    return `<svg class=\"sparkline\" viewBox=\"0 0 ${width} ${height}\" role=\"img\" aria-label=\"Trend\">${guides}<line x1=\"${frame.left.toFixed(2)}\" y1=\"${centerY}\" x2=\"${(frame.left + frame.width).toFixed(2)}\" y2=\"${centerY}\" stroke=\"${color}\" stroke-width=\"2.2\" /><circle class=\"chart-point\" cx=\"${(frame.left + frame.width / 2).toFixed(2)}\" cy=\"${centerY}\" r=\"3.6\" fill=\"${color}\"><title>${escapeHtml(valueText)} (${escapeHtml(singleTime)})</title></circle></svg>`;
   }
 
   const values = points.map((point) => point.value);
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
-  const polyline = buildPolylinePoints(points, width, height, minValue, maxValue);
-  const area = buildAreaPolygonPoints(points, width, height, minValue, maxValue);
-  const markers = buildPointMarkers(points, width, height, minValue, maxValue, color, "Wert");
+  const minValue = Number.isFinite(options.minValue) ? options.minValue : Math.min(...values);
+  const maxValue = Number.isFinite(options.maxValue) ? options.maxValue : Math.max(...values);
+  const guides = buildYAxisGuides(width, height, minValue, maxValue, { margins, labelFormatter });
+  const polyline = buildPolylinePoints(points, width, height, minValue, maxValue, margins);
+  const area = buildAreaPolygonPoints(points, width, height, minValue, maxValue, margins);
+  const markers = buildPointMarkers(points, width, height, minValue, maxValue, color, "Wert", margins);
 
   return `
     <svg class="sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="Trend">
-      <line x1="8" y1="${(height - 8).toFixed(2)}" x2="${(width - 8).toFixed(2)}" y2="${(height - 8).toFixed(2)}" stroke="#dde5ee" stroke-width="1" />
+      ${guides}
       <polygon class="chart-area" fill="${color}" fill-opacity="0.16" points="${area}" />
       <polyline fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="${polyline}" />
       ${markers}
@@ -619,11 +690,12 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
 
   const combinedWidth = 920;
   const combinedHeight = 250;
-  const axisLeft = 12;
-  const axisTop = 12;
-  const axisBottom = combinedHeight - 12;
-  const axisRight = combinedWidth - 12;
-  const axisMid = Math.round((axisTop + axisBottom) / 2);
+  const combinedMargins = { left: 42, right: 12, top: 12, bottom: 20 };
+  const combinedGuides = buildYAxisGuides(combinedWidth, combinedHeight, 0, 100, {
+    tickCount: 5,
+    margins: combinedMargins,
+    labelFormatter: (value) => `${Math.round(value)}%`,
+  });
 
   const combinedLines = chartDefinitions
     .map((item) => {
@@ -631,9 +703,9 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
       if (normalized.length < 2) {
         return "";
       }
-      const polyline = buildPolylinePoints(normalized, combinedWidth, combinedHeight, 0, 100);
-      const area = buildAreaPolygonPoints(normalized, combinedWidth, combinedHeight, 0, 100);
-      const markers = buildPointMarkers(normalized, combinedWidth, combinedHeight, 0, 100, item.color, `${item.label} (norm.)`);
+      const polyline = buildPolylinePoints(normalized, combinedWidth, combinedHeight, 0, 100, combinedMargins);
+      const area = buildAreaPolygonPoints(normalized, combinedWidth, combinedHeight, 0, 100, combinedMargins);
+      const markers = buildPointMarkers(normalized, combinedWidth, combinedHeight, 0, 100, item.color, `${item.label} (norm.)`, combinedMargins);
       return `<polygon class=\"chart-area\" fill=\"${item.color}\" fill-opacity=\"0.09\" points=\"${area}\" /><polyline fill=\"none\" stroke=\"${item.color}\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\" points=\"${polyline}\" />${markers}`;
     })
     .join("");
@@ -655,7 +727,9 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
             <strong>${item.label}</strong>
             <span>${points.length} Samples</span>
           </header>
-          ${buildSparklineSvg(points, item.color, 420, 120)}
+          ${buildSparklineSvg(points, item.color, 420, 120, {
+            suffix: item.label.includes("%") ? "%" : "",
+          })}
           <footer>
             <span>Min: ${minValue === null ? "-" : formatNumber(minValue, 2)}</span>
             <span>Max: ${maxValue === null ? "-" : formatNumber(maxValue, 2)}</span>
@@ -673,9 +747,7 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
         <span>${escapeHtml(standText)}</span>
       </div>
       <svg class="combined-chart-svg" viewBox="0 0 ${combinedWidth} ${combinedHeight}" role="img" aria-label="Kombinierter Verlauf">
-        <line x1="${axisLeft}" y1="${axisTop}" x2="${axisLeft}" y2="${axisBottom}" stroke="#dbe5ef" stroke-width="1" />
-        <line x1="${axisLeft}" y1="${axisBottom}" x2="${axisRight}" y2="${axisBottom}" stroke="#dbe5ef" stroke-width="1" />
-        <line x1="${axisLeft}" y1="${axisMid}" x2="${axisRight}" y2="${axisMid}" stroke="#edf2f7" stroke-width="1" />
+        ${combinedGuides}
         ${combinedLines}
       </svg>
       <div class="combined-legend">${combinedLegend}</div>
@@ -736,7 +808,7 @@ function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
             <strong>${mountpoint}</strong>
             <span>${Number(item.sample_count || 0).toLocaleString("de-DE")} Samples</span>
           </header>
-          ${buildSparklineSvg(points, color, 520, 130)}
+          ${buildSparklineSvg(points, color, 520, 130, { suffix: "%" })}
           <footer>
             <span>Aktuell: ${formatPercent(item.current_used_percent)}</span>
             <span>Delta: ${formatSignedPercent(item.delta_used_percent)}</span>
