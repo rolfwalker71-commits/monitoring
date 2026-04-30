@@ -2336,10 +2336,10 @@ function renderCriticalTrends(data) {
       const icon = w.type === "filesystem" ? "💾" : "📊";
       const diff = w.current !== null ? w.projected - w.current : 0;
       const trendArrow = diff > 0.05
-        ? `<span class="ct-trend-arrow ct-trend-up">↑</span>`
+        ? `<span class="ct-trend-arrow ct-trend-up">🔺</span>`
         : diff < -0.05
-          ? `<span class="ct-trend-arrow ct-trend-down">↓</span>`
-          : `<span class="ct-trend-arrow ct-trend-flat">→</span>`;
+          ? `<span class="ct-trend-arrow ct-trend-down">🔻</span>`
+          : `<span class="ct-trend-arrow ct-trend-flat">➡️</span>`;
       return `
         <div class="ct-row ct-row-${w.level}">
           <span class="ct-row-icon">${icon}</span>

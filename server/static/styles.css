@@ -709,24 +709,15 @@ button:hover:not(.host-item) {
 
 .ct-trend-arrow {
   font-style: normal;
-  font-weight: 900;
-  font-size: 16px;
+  font-size: 13px;
   margin-right: 3px;
   vertical-align: middle;
   line-height: 1;
 }
 
-.ct-trend-up {
-  color: #dc2626;
-}
-
-.ct-trend-down {
-  color: #16a34a;
-}
-
-.ct-trend-flat {
-  color: #94a3b8;
-}
+.ct-trend-up {}
+.ct-trend-down {}
+.ct-trend-flat {}
 
 .ct-bar-wrap {
   grid-column: 1 / -1;
