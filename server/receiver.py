@@ -2363,19 +2363,23 @@ def maybe_send_alert_message(
     severity: str,
     used_percent: float,
     conn: sqlite3.Connection | None = None,
+    display_name: str = "",
 ) -> None:
     if settings.get("telegram_enabled"):
         icon = {
-            "opened": "ALERT OPEN",
-            "escalated": "ALERT ESCALATED",
-            "resolved": "ALERT RESOLVED",
-        }.get(event_type, "ALERT")
+            "opened": "🚨 ALERT OPEN",
+            "escalated": "⬆️ ALERT ESCALATED",
+            "resolved": "✅ ALERT RESOLVED",
+        }.get(event_type, "⚠️ ALERT")
+        title = display_name.strip() if display_name.strip() else hostname
+        now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
         text = (
-            f"[{icon}] {hostname}\n"
+            f"{icon}\n"
+            f"Host: {title} ({hostname})\n"
             f"Mountpoint: {mountpoint}\n"
             f"Severity: {severity}\n"
             f"Used: {used_percent:.1f}%\n"
-            f"Time: {utc_now_iso()}"
+            f"Zeit: {now_local}"
         )
         telegram_send(settings, text)
     if conn is not None:
@@ -2904,6 +2908,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
     warning_hits_required = max(1, int(alarm_settings.get("warning_consecutive_hits", 2)))
     warning_window_minutes = max(1, int(alarm_settings.get("warning_window_minutes", 15)))
     critical_trigger_immediate = bool(alarm_settings.get("critical_trigger_immediate", True))
+    display_name = get_display_name_override(conn, hostname) or hostname
 
     for fs in filesystems:
         if not isinstance(fs, dict):
@@ -3006,7 +3011,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
                     """,
                     (now_utc, now_utc, report_id, open_alert[0]),
                 )
-                maybe_send_alert_message(alarm_settings, "resolved", hostname, mountpoint, "ok", used_percent, conn=conn)
+                maybe_send_alert_message(alarm_settings, "resolved", hostname, mountpoint, "ok", used_percent, conn=conn, display_name=display_name)
             continue
 
         if not open_alert and not alert_started:
@@ -3028,7 +3033,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
                 """,
                 (hostname, mountpoint, severity, used_percent, now_utc, now_utc, report_id),
             )
-            maybe_send_alert_message(alarm_settings, "opened", hostname, mountpoint, severity, used_percent, conn=conn)
+            maybe_send_alert_message(alarm_settings, "opened", hostname, mountpoint, severity, used_percent, conn=conn, display_name=display_name)
             continue
 
         previous_severity = str(open_alert[1] or "warning")
@@ -3043,7 +3048,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
         )
 
         if previous_severity != "critical" and severity == "critical":
-            maybe_send_alert_message(alarm_settings, "escalated", hostname, mountpoint, severity, used_percent, conn=conn)
+            maybe_send_alert_message(alarm_settings, "escalated", hostname, mountpoint, severity, used_percent, conn=conn, display_name=display_name)
 
     if mountpoints_seen:
         placeholders = ",".join("?" for _ in mountpoints_seen)
