@@ -1285,7 +1285,7 @@ button:hover:not(.host-item) {
 
 .host-os-icon {
   position: absolute;
-  bottom: 10px;
+  top: 8px;
   right: 10px;
   width: 28px;
   height: 28px;
@@ -1296,7 +1296,7 @@ button:hover:not(.host-item) {
 
 .host-flag-icon {
   position: absolute;
-  top: 8px;
+  bottom: 10px;
   right: 10px;
   width: 28px;
   height: 28px;

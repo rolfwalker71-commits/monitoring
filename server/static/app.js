@@ -3146,8 +3146,8 @@ function renderInactiveHosts(data) {
       <div class="ih-host-card">
         <div class="ih-host-info">
           <div class="ih-host-icons">
-            <img src="${osIconSrc}" class="ih-host-icon" alt="${escapeHtml(host.os)}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${osFamily}.png';}" />
             ${countryIconSrc ? `<img src="${countryIconSrc}" class="ih-host-icon" alt="${escapeHtml(host.country_code)}" onerror="if(!this.dataset.fallback1){this.dataset.fallback1='1';this.src='/icons/${countryCode}.png';return;}if(!this.dataset.fallback2){this.dataset.fallback2='1';this.src='/icons/${countryIconFallback}.png';return;}if(!this.dataset.fallback3){this.dataset.fallback3='1';this.src='/icons/${countryIconFallback}.svg';return;}this.style.display='none';" />` : ""}
+            <img src="${osIconSrc}" class="ih-host-icon" alt="${escapeHtml(host.os)}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${osFamily}.png';}" />
           </div>
           <div class="ih-host-details">
             <span class="ih-hostname">${escapeHtml(displayName)}${showHostname ? ` <span class="ih-hostname-sub">(${escapeHtml(host.hostname)})</span>` : ""}</span>
