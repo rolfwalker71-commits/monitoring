@@ -3096,7 +3096,7 @@ async function loadAlertsForHost() {
           <tr class="${isMuted ? "alert-row-muted" : ""}">
             <td><span class="badge ${statusClass}">${escapeHtml(asText(item.status))}</span></td>
             <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
-            <td>${renderPathCell(item.mountpoint, 48)}</td>
+            <td>${renderPathCell(item.mountpoint, 60)}</td>
             <td>${formatPercent(item.used_percent)}</td>
             <td>${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}</td>
             <td>${muteBtn}</td>
@@ -3368,7 +3368,7 @@ async function loadGlobalAlertsOverview() {
               </div>
             </td>
             <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
-            <td>${renderPathCell(item.mountpoint, 42)}</td>
+            <td>${renderPathCell(item.mountpoint, 56)}</td>
             <td>${formatPercent(item.used_percent)}</td>
             <td>${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}</td>
             <td>${muteBtn}</td>
