@@ -21,6 +21,7 @@ STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "monitoring.db"
 APP_LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
+ANG_LOGO_PATH = STATIC_DIR / "icons" / "ANG.png"
 BUILD_VERSION_PATH = BASE_DIR.parent / "BUILD_VERSION"
 AGENT_VERSION_PATH = BASE_DIR.parent / "AGENT_VERSION"
 OPENAPI_SPEC_PATH = BASE_DIR.parent / "openapi.yaml"
@@ -1226,6 +1227,7 @@ def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
 
 def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
     app_logo_uri = app_logo_data_uri()
+    ang_logo_uri = ang_logo_data_uri()
     build_version = html.escape(read_build_version())
     rows_html = "".join(
         (
@@ -1268,6 +1270,7 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
         "</tr></thead>"
         f"<tbody>{rows_html}</tbody>"
         "</table>"
+        f"<div style='margin-top:18px;padding-top:14px;border-top:1px solid #e2e8f0;text-align:right;'><img src='{ang_logo_uri}' alt='ANG' width='110' style='display:inline-block;max-width:110px;height:auto;'></div>"
         "</div>"
         "</div>"
         "</body></html>"
@@ -1288,6 +1291,7 @@ def trend_digest_subject(warnings: list[dict], local_date: str) -> str:
 
 def alert_digest_html(username: str, alerts: list[dict]) -> str:
     app_logo_uri = app_logo_data_uri()
+    ang_logo_uri = ang_logo_data_uri()
     build_version = html.escape(read_build_version())
     rows_html = "".join(
         (
@@ -1330,6 +1334,7 @@ def alert_digest_html(username: str, alerts: list[dict]) -> str:
         "</tr></thead>"
         f"<tbody>{rows_html}</tbody>"
         "</table>"
+        f"<div style='margin-top:18px;padding-top:14px;border-top:1px solid #e2e8f0;text-align:right;'><img src='{ang_logo_uri}' alt='ANG' width='110' style='display:inline-block;max-width:110px;height:auto;'></div>"
         "</div>"
         "</div>"
         "</body></html>"
@@ -1390,6 +1395,7 @@ def alert_instant_mail_html(
     os_label = os_family_label(normalized_os_family)
     os_logo_uri = os_logo_data_uri(normalized_os_family)
     app_logo_uri = app_logo_data_uri()
+    ang_logo_uri = ang_logo_data_uri()
     build_version = html.escape(read_build_version())
     reported_at = format_mail_datetime(reported_at_utc)
     return (
@@ -1437,6 +1443,7 @@ def alert_instant_mail_html(
         f"<div style='margin-top:14px;background:#f1f5f9;border-radius:8px;overflow:hidden;height:12px;'>"
         f"<div style='width:{bar_width}%;height:100%;background:{bar_color};transition:width .3s;'></div>"
         "</div>"
+        f"<div style='margin-top:18px;padding-top:14px;border-top:1px solid #e2e8f0;text-align:right;'><img src='{ang_logo_uri}' alt='ANG' width='110' style='display:inline-block;max-width:110px;height:auto;'></div>"
         "</div>"
         "</div>"
         "</body></html>"
@@ -2427,6 +2434,14 @@ def app_logo_data_uri() -> str:
             "</svg>"
         )
         return "data:image/svg+xml;utf8," + parse.quote(svg)
+
+
+def ang_logo_data_uri() -> str:
+    try:
+        encoded = base64.b64encode(ANG_LOGO_PATH.read_bytes()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    except OSError:
+        return ""
 
 
 def collect_host_mail_context(conn: sqlite3.Connection, hostname: str) -> dict:
