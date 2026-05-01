@@ -1311,8 +1311,10 @@ button:hover:not(.host-item) {
   transform: translateY(-1px);
 }
 
-.host-item strong {
-  font-size: 24px;
+.host-item strong,
+.host-item .host-title-line,
+.host-item .host-title-line span {
+  font-size: 16px;
   font-weight: 900;
   line-height: 1.1;
 }
