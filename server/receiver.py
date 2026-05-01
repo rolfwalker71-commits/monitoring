@@ -3513,8 +3513,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/critical-trends":
-            if self._unauthorized_if_needed():
-                return
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
             with sqlite3.connect(DB_PATH) as conn:
@@ -3528,8 +3526,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/inactive-hosts":
-            if self._unauthorized_if_needed():
-                return
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=3, min_value=1, max_value=24 * 30)
             with sqlite3.connect(DB_PATH) as conn:

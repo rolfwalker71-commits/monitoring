@@ -722,7 +722,7 @@ paths:
       summary: Critical trend warnings over a time window
       operationId: getCriticalTrends
       security:
-        - ApiKeyAuth: []
+        - CookieAuth: []
       parameters:
         - name: hours
           in: query
@@ -750,7 +750,7 @@ paths:
       summary: Hosts inactive for given window
       operationId: getInactiveHosts
       security:
-        - ApiKeyAuth: []
+        - CookieAuth: []
       parameters:
         - name: hours
           in: query
