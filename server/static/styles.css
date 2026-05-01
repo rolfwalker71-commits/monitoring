@@ -412,7 +412,7 @@ button:disabled {
 .hosts-column-scroll {
   position: sticky;
   top: 16px;
-  max-height: clamp(360px, calc(100dvh - 250px), 820px);
+  max-height: calc(100dvh - 180px);
   display: flex;
   flex-direction: column;
   gap: 0;
