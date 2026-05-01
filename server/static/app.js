@@ -2424,12 +2424,6 @@ function renderSingleHostCard(host) {
     : apiKeyStatus === "missing" ? "API-Key: fehlt"
     : "API-Key: nicht konfiguriert";
   const apiKeyChip = `<span class="host-apikey-chip ${apiKeyChipMod}" title="${escapeHtml(apiKeyChipTitle)}">API</span>`;
-  const currentVersion = asText(host.agent_version, "");
-  const latestVersion = asText(state.latestAgentRelease, "");
-  const versionComparison = compareSemverLike(currentVersion, latestVersion);
-  const updateTriangle = versionComparison === -1
-    ? `<span class="host-update-triangle" title="Update verfügbar">⬆️</span>`
-    : "";
 
   const osRaw = asText(host.os || "").toLowerCase();
   const countryCode = asText(host.country_code || "", "").toUpperCase();
@@ -2487,7 +2481,6 @@ function renderSingleHostCard(host) {
       <span class="host-card-actions">
         <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👁️" : "🙈"}</button>
         <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
-        ${updateTriangle}
         ${apiKeyChip}
         ${alertChip}
       </span>
