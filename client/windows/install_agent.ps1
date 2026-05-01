@@ -46,6 +46,8 @@ $ErrorActionPreference = 'Stop'
 
 # Enable TLS 1.2 for older Windows versions
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+[Net.ServicePointManager]::Expect100Continue = $false
+[Net.ServicePointManager]::CheckCertificateRevocationList = $false
 
 $InstallDir      = 'C:\ProgramData\monitoring-agent'
 $ConfigFile      = "$InstallDir\agent.conf"
