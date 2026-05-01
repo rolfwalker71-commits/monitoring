@@ -1,0 +1,1167 @@
+openapi: 3.0.3
+info:
+  title: Monitoring Receiver API
+  version: 0.5.27
+  description: >-
+    Compact OpenAPI spec for the Monitoring server endpoints in receiver.py.
+    Most /api/v1 endpoints require an authenticated web session cookie,
+    except the agent endpoints used by collectors.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: Auth
+  - name: User
+  - name: Admin
+  - name: Hosts
+  - name: Reports
+  - name: Alerts
+  - name: Agent
+  - name: Analysis
+  - name: OAuth
+  - name: Notifications
+paths:
+  /health:
+    get:
+      tags: [Auth]
+      summary: Health check
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  time_utc: { type: string, format: date-time, example: '2026-05-01T12:00:00Z' }
+
+  /api/v1/session:
+    get:
+      tags: [Auth]
+      summary: Current web session
+      operationId: getSession
+      responses:
+        '200':
+          description: Session status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionStatus'
+
+  /api/v1/web-login:
+    post:
+      tags: [Auth]
+      summary: Login and create session cookie
+      operationId: postWebLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, example: admin }
+                password: { type: string, example: secret123 }
+      responses:
+        '200':
+          description: Authenticated
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              example: monitoring_session=<token>; Path=/; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: authenticated }
+                  username: { type: string, example: admin }
+                  expires_at_utc: { type: string, format: date-time }
+        '401':
+          $ref: '#/components/responses/ErrorUnauthorized'
+
+  /api/v1/web-logout:
+    post:
+      tags: [Auth]
+      summary: Logout and clear session cookie
+      operationId: postWebLogout
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: logged_out }
+
+  /api/v1/change-password:
+    post:
+      tags: [User]
+      summary: Change password for current user
+      operationId: postChangePassword
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string }
+                new_password: { type: string }
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: password_changed }
+                  username: { type: string }
+                  expires_at_utc: { type: string, format: date-time }
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+
+  /api/v1/user-profile:
+    get:
+      tags: [User]
+      summary: Get current user profile/settings
+      operationId: getUserProfile
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: User profile payload
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [User]
+      summary: Save current user profile/settings
+      operationId: postUserProfile
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+            example:
+              email_recipient: ops@example.com
+              alert_email_recipients: team@example.com
+      responses:
+        '200':
+          description: Saved settings
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/v1/web-users:
+    get:
+      tags: [Admin]
+      summary: List web users (admin)
+      operationId: getWebUsers
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+    post:
+      tags: [Admin]
+      summary: Manage users (create/set-password/update-flags/delete)
+      operationId: postWebUsers
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, username]
+              properties:
+                action:
+                  type: string
+                  enum: [create, set-password, update-flags, delete]
+                username: { type: string }
+                password: { type: string }
+                is_admin: { type: boolean }
+                is_disabled: { type: boolean }
+            examples:
+              create:
+                value: { action: create, username: operator, password: Passw0rd!, is_admin: false }
+              setPassword:
+                value: { action: set-password, username: operator, password: NewPassw0rd! }
+      responses:
+        '200':
+          description: Updated user list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  users:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /api/v1/oauth-settings:
+    get:
+      tags: [OAuth]
+      summary: Get OAuth settings (admin)
+      operationId: getOauthSettings
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Public OAuth settings view
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [OAuth]
+      summary: Save OAuth settings (admin)
+      operationId: postOauthSettings
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Stored OAuth settings
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/v1/oauth/microsoft/start:
+    get:
+      tags: [OAuth]
+      summary: Start Microsoft OAuth flow
+      operationId: getOauthMicrosoftStart
+      security:
+        - CookieAuth: []
+      responses:
+        '302':
+          description: Redirect to Microsoft authorization URL
+
+  /api/v1/oauth/microsoft/disconnect:
+    post:
+      tags: [OAuth]
+      summary: Disconnect current user's Microsoft OAuth link
+      operationId: postOauthMicrosoftDisconnect
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Current user payload after disconnect
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/v1/latest:
+    get:
+      tags: [Reports]
+      summary: Get latest reports across all hosts
+      operationId: getLatestReports
+      security:
+        - CookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Latest reports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer, example: 2 }
+                  reports:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReportListItem'
+
+  /api/v1/hosts:
+    get:
+      tags: [Hosts]
+      summary: Get host cards list
+      operationId: getHosts
+      security:
+        - CookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Host list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+                  total_hosts: { type: integer }
+                  visible_hosts: { type: integer }
+                  hidden_hosts: { type: integer }
+                  hosts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HostCard'
+
+  /api/v1/host-reports:
+    get:
+      tags: [Reports]
+      summary: Get paged reports for one host
+      operationId: getHostReports
+      security:
+        - CookieAuth: []
+      parameters:
+        - name: hostname
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Host reports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+                  total_reports: { type: integer }
+                  hostname: { type: string }
+                  reports:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReportListItem'
+
+  /api/v1/host-settings:
+    get:
+      tags: [Hosts]
+      summary: Get settings/overrides for a host
+      operationId: getHostSettings
+      security:
+        - CookieAuth: []
+      parameters:
+        - name: hostname
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Host settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostSettings'
+    post:
+      tags: [Hosts]
+      summary: Save settings/overrides for a host
+      operationId: postHostSettings
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/HostSettings'
+                - type: object
+                  required: [hostname]
+            example:
+              hostname: support01
+              display_name_override: Support Server
+              country_code_override: AT
+              is_favorite: true
+              is_hidden: false
+      responses:
+        '200':
+          description: Stored host settings
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/v1/host-delete:
+    post:
+      tags: [Hosts]
+      summary: Delete host card/report/alert related data
+      operationId: postHostDelete
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hostname]
+              properties:
+                hostname: { type: string }
+      responses:
+        '200':
+          description: Deletion summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: deleted }
+                  hostname: { type: string }
+                  deleted: { type: object, additionalProperties: { type: integer } }
+                  deleted_total: { type: integer }
+
+  /api/v1/agent-update-status:
+    get:
+      tags: [Agent]
+      summary: Get per-host update command lifecycle status
+      operationId: getAgentUpdateStatus
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Agent update status overview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_hosts: { type: integer }
+                  summary:
+                    type: object
+                    additionalProperties: { type: integer }
+                  hosts:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /api/v1/agent-command:
+    post:
+      tags: [Agent]
+      summary: Queue one command for one host
+      operationId: postAgentCommand
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hostname, command_type]
+              properties:
+                hostname: { type: string, example: support01 }
+                command_type: { type: string, enum: [update-now, set-api-key] }
+                ttl_minutes: { type: integer, example: 240 }
+                command_payload:
+                  type: object
+                  additionalProperties: true
+            examples:
+              updateNow:
+                value:
+                  hostname: support01
+                  command_type: update-now
+                  ttl_minutes: 240
+                  command_payload: {}
+              setApiKey:
+                value:
+                  hostname: support01
+                  command_type: set-api-key
+                  ttl_minutes: 240
+                  command_payload:
+                    api_key: your-secret-api-key
+      responses:
+        '201':
+          description: Command queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: queued }
+                  command_id: { type: integer, example: 123 }
+                  hostname: { type: string }
+                  command_type: { type: string }
+
+  /api/v1/agent-command-bulk:
+    post:
+      tags: [Agent]
+      summary: Queue one command for all known hosts
+      operationId: postAgentCommandBulk
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [command_type]
+              properties:
+                command_type: { type: string, enum: [update-now, set-api-key] }
+                ttl_minutes: { type: integer, example: 240 }
+                command_payload:
+                  type: object
+                  additionalProperties: true
+            example:
+              command_type: set-api-key
+              ttl_minutes: 240
+              command_payload:
+                api_key: your-secret-api-key
+      responses:
+        '201':
+          description: Bulk queue result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: queued }
+                  command_type: { type: string, example: set-api-key }
+                  total_hosts: { type: integer, example: 12 }
+                  queued_count: { type: integer, example: 12 }
+                  already_queued_count: { type: integer, example: 0 }
+
+  /api/v1/agent-commands:
+    get:
+      tags: [Agent]
+      summary: Agent pulls pending commands for itself
+      operationId: getAgentCommands
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: hostname
+          in: query
+          required: true
+          schema: { type: string }
+        - name: agent_id
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, default: 10, minimum: 1, maximum: 100 }
+      responses:
+        '200':
+          description: Pending commands
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hostname: { type: string }
+                  count: { type: integer }
+                  commands:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        created_at_utc: { type: string, format: date-time }
+                        command_type: { type: string, enum: [update-now, set-api-key] }
+                        command_payload: { type: object, additionalProperties: true }
+                        expires_at_utc: { type: string, format: date-time }
+
+  /api/v1/agent-command-result:
+    post:
+      tags: [Agent]
+      summary: Agent reports command execution result
+      operationId: postAgentCommandResult
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hostname, command_id, status]
+              properties:
+                hostname: { type: string }
+                command_id: { type: integer }
+                status: { type: string, enum: [completed, failed] }
+                result:
+                  type: object
+                  additionalProperties: true
+            example:
+              hostname: support01
+              command_id: 123
+              status: completed
+              result:
+                message: API key written successfully
+      responses:
+        '200':
+          description: Result accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: stored }
+                  command_id: { type: integer, example: 123 }
+
+  /api/v1/agent-report:
+    post:
+      tags: [Agent]
+      summary: Submit monitoring report from agent
+      operationId: postAgentReport
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hostname, primary_ip, filesystems]
+              properties:
+                agent_id: { type: string, example: linux-01 }
+                hostname: { type: string, example: support01 }
+                primary_ip: { type: string, example: 192.168.90.52 }
+                os: { type: string, example: Linux }
+                agent_version: { type: string, example: 0.5.26 }
+                filesystems:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      mountpoint: { type: string, example: / }
+                      used_percent: { type: number, example: 63.5 }
+            example:
+              agent_id: linux-01
+              hostname: support01
+              primary_ip: 192.168.90.52
+              os: Linux
+              agent_version: 0.5.26
+              filesystems:
+                - mountpoint: /
+                  used_percent: 63.5
+                - mountpoint: /data
+                  used_percent: 79.2
+      responses:
+        '201':
+          description: Report stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: stored }
+
+  /api/v1/analysis:
+    get:
+      tags: [Analysis]
+      summary: Time-window analysis for one host
+      operationId: getAnalysis
+      security:
+        - CookieAuth: []
+      parameters:
+        - name: hostname
+          in: query
+          required: true
+          schema: { type: string }
+        - name: hours
+          in: query
+          required: false
+          schema: { type: integer, default: 24, minimum: 1, maximum: 720 }
+      responses:
+        '200':
+          description: Analysis payload with trends and series
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/v1/critical-trends:
+    get:
+      tags: [Analysis]
+      summary: Critical trend warnings over a time window
+      operationId: getCriticalTrends
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: hours
+          in: query
+          required: false
+          schema: { type: integer, default: 24, minimum: 1, maximum: 720 }
+      responses:
+        '200':
+          description: Trend warnings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hours: { type: integer }
+                  total: { type: integer }
+                  warnings:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /api/v1/inactive-hosts:
+    get:
+      tags: [Analysis]
+      summary: Hosts inactive for given window
+      operationId: getInactiveHosts
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: hours
+          in: query
+          required: false
+          schema: { type: integer, default: 3, minimum: 1, maximum: 720 }
+      responses:
+        '200':
+          description: Inactive host list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hours: { type: integer }
+                  total: { type: integer }
+                  inactive_hosts:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /api/v1/alerts:
+    get:
+      tags: [Alerts]
+      summary: Get alerts list with filters
+      operationId: getAlerts
+      security:
+        - CookieAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [all, open, resolved], default: all }
+        - name: hostname
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, default: 50, minimum: 1, maximum: 500 }
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Alerts page
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+                  total: { type: integer }
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Alert'
+
+  /api/v1/alerts-summary:
+    get:
+      tags: [Alerts]
+      summary: Get open alert counters and thresholds
+      operationId: getAlertsSummary
+      security:
+        - CookieAuth: []
+      parameters:
+        - name: hostname
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: Alert summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hostname: { type: string }
+                  thresholds:
+                    type: object
+                    properties:
+                      warning_percent: { type: number }
+                      critical_percent: { type: number }
+                  open:
+                    type: object
+                    properties:
+                      total: { type: integer }
+                      warning: { type: integer }
+                      critical: { type: integer }
+
+  /api/v1/alarm-settings:
+    get:
+      tags: [Alerts]
+      summary: Get alarm settings
+      operationId: getAlarmSettings
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Alarm settings
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Alerts]
+      summary: Save alarm settings
+      operationId: postAlarmSettings
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+            example:
+              warning_threshold_percent: 80
+              critical_threshold_percent: 90
+              telegram_bot_token: 123456:ABCDEF
+              telegram_chat_id: -123456789
+      responses:
+        '200':
+          description: Saved alarm settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: stored }
+                  settings: { type: object, additionalProperties: true }
+
+  /api/v1/alert-mutes:
+    get:
+      tags: [Alerts]
+      summary: List all muted alert rules
+      operationId: getAlertMutes
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Mute rules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mutes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        hostname: { type: string }
+                        mountpoint: { type: string }
+                        muted_by: { type: string }
+                        muted_at_utc: { type: string, format: date-time }
+
+  /api/v1/alert-mute:
+    post:
+      tags: [Alerts]
+      summary: Mute one alert target
+      operationId: postAlertMute
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hostname, mountpoint]
+              properties:
+                hostname: { type: string }
+                mountpoint: { type: string }
+            example:
+              hostname: support01
+              mountpoint: /data
+      responses:
+        '200':
+          description: Mute set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  hostname: { type: string }
+                  mountpoint: { type: string }
+
+  /api/v1/alert-unmute:
+    post:
+      tags: [Alerts]
+      summary: Remove mute from one alert target
+      operationId: postAlertUnmute
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hostname, mountpoint]
+              properties:
+                hostname: { type: string }
+                mountpoint: { type: string }
+            example:
+              hostname: support01
+              mountpoint: /data
+      responses:
+        '200':
+          description: Mute removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  hostname: { type: string }
+                  mountpoint: { type: string }
+
+  /api/v1/alarm-test:
+    post:
+      tags: [Notifications]
+      summary: Send Telegram test alarm
+      operationId: postAlarmTest
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Test sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: sent }
+                  details: { type: string }
+
+  /api/v1/mail-test:
+    post:
+      tags: [Notifications]
+      summary: Send generic Microsoft OAuth test mail
+      operationId: postMailTest
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Mail test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: sent }
+                  mode: { type: string, example: generic }
+                  details: { type: string }
+
+  /api/v1/mail-test/trends:
+    post:
+      tags: [Notifications]
+      summary: Send trends test mail
+      operationId: postMailTestTrends
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Mail test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: sent }
+                  mode: { type: string, example: trends }
+                  details: { type: string }
+
+  /api/v1/mail-test/alerts:
+    post:
+      tags: [Notifications]
+      summary: Send alerts test mail
+      operationId: postMailTestAlerts
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Mail test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: sent }
+                  mode: { type: string, example: alerts }
+                  details: { type: string }
+
+components:
+  securitySchemes:
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: monitoring_session
+      description: Session cookie set by /api/v1/web-login
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: >-
+        Agent/server API key header. Depending on server grace mode,
+        known hosts may be temporarily allowed without this key.
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 200
+    Offset:
+      name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+        maximum: 500000
+  responses:
+    ErrorBadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string, example: invalid json }
+    ErrorUnauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string, example: unauthorized }
+  schemas:
+    SessionStatus:
+      type: object
+      properties:
+        authenticated: { type: boolean, example: true }
+        username: { type: string, nullable: true, example: admin }
+        is_admin: { type: boolean, example: true }
+    HostSettings:
+      type: object
+      properties:
+        hostname: { type: string, example: support01 }
+        display_name_override: { type: string, example: Support Server }
+        country_code_override: { type: string, example: AT }
+        is_favorite: { type: boolean, example: true }
+        is_hidden: { type: boolean, example: false }
+    HostCard:
+      type: object
+      properties:
+        hostname: { type: string, example: support01 }
+        display_name: { type: string, example: ANG AT Supportserver }
+        last_seen_utc: { type: string, format: date-time }
+        report_count: { type: integer, example: 170 }
+        primary_ip: { type: string, example: 192.168.90.52 }
+        agent_id: { type: string, example: linux-01 }
+        agent_version: { type: string, example: 0.5.26 }
+        delivery_mode: { type: string, enum: [live, delayed], example: live }
+        is_delayed: { type: boolean, example: false }
+        queue_depth: { type: integer, example: 0 }
+        open_alert_count: { type: integer, example: 0 }
+        open_critical_alert_count: { type: integer, example: 0 }
+        os: { type: string, example: Linux }
+        country_code: { type: string, example: AT }
+        is_favorite: { type: boolean, example: true }
+        is_hidden: { type: boolean, example: false }
+        agent_api_key_status:
+          type: string
+          enum: [key-auth, grace, configured, missing, off]
+          example: key-auth
+    ReportListItem:
+      type: object
+      properties:
+        id: { type: integer, example: 12345 }
+        received_at_utc: { type: string, format: date-time }
+        agent_id: { type: string, example: linux-01 }
+        hostname: { type: string, example: support01 }
+        primary_ip: { type: string, example: 192.168.90.52 }
+        delivery_mode: { type: string, enum: [live, delayed], example: live }
+        display_name: { type: string, example: ANG AT Supportserver }
+        payload:
+          type: object
+          additionalProperties: true
+    Alert:
+      type: object
+      properties:
+        id: { type: integer, example: 987 }
+        hostname: { type: string, example: support01 }
+        display_name: { type: string, example: ANG AT Supportserver }
+        mountpoint: { type: string, example: /data }
+        severity: { type: string, enum: [warning, critical], example: warning }
+        used_percent: { type: number, example: 81.3 }
+        status: { type: string, enum: [open, resolved], example: open }
+        created_at_utc: { type: string, format: date-time }
+        last_seen_at_utc: { type: string, format: date-time }
+        resolved_at_utc: { type: string, format: date-time, nullable: true }
+        report_id: { type: integer, example: 12345 }
+        is_muted: { type: boolean, example: false }
