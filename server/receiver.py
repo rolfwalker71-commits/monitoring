@@ -232,6 +232,8 @@ def init_db() -> None:
                 alert_email_time_hhmm TEXT NOT NULL DEFAULT '08:05',
                 alert_email_recipients TEXT NOT NULL DEFAULT '',
                 alert_email_last_sent_local_date TEXT NOT NULL DEFAULT '',
+                alert_instant_mail_enabled INTEGER NOT NULL DEFAULT 0,
+                alert_instant_min_severity TEXT NOT NULL DEFAULT 'warning',
                 updated_at_utc TEXT NOT NULL,
                 FOREIGN KEY(username) REFERENCES web_users(username)
             )
@@ -255,6 +257,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_email_recipients TEXT NOT NULL DEFAULT ''")
         if "alert_email_last_sent_local_date" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_email_last_sent_local_date TEXT NOT NULL DEFAULT ''")
+        if "alert_instant_mail_enabled" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_instant_mail_enabled INTEGER NOT NULL DEFAULT 0")
+        if "alert_instant_min_severity" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_instant_min_severity TEXT NOT NULL DEFAULT 'warning'")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS oauth_settings (
@@ -788,6 +794,8 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
                COALESCE(alert_email_time_hhmm, ''),
                COALESCE(alert_email_recipients, ''),
                COALESCE(alert_email_last_sent_local_date, ''),
+               COALESCE(alert_instant_mail_enabled, 0),
+               COALESCE(alert_instant_min_severity, 'warning'),
                COALESCE(updated_at_utc, '')
         FROM web_user_settings
         WHERE username = ?
@@ -805,6 +813,8 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
             "alert_email_time_hhmm": DEFAULT_ALERT_DIGEST_TIME,
             "alert_email_recipients": "",
             "alert_email_last_sent_local_date": "",
+            "alert_instant_mail_enabled": False,
+            "alert_instant_min_severity": "warning",
             "updated_at_utc": "",
         }
     return {
@@ -817,7 +827,9 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
         "alert_email_time_hhmm": normalize_hhmm(row[6], DEFAULT_ALERT_DIGEST_TIME),
         "alert_email_recipients": str(row[7] or ""),
         "alert_email_last_sent_local_date": str(row[8] or ""),
-        "updated_at_utc": str(row[9] or ""),
+        "alert_instant_mail_enabled": bool(int(row[9] or 0)),
+        "alert_instant_min_severity": str(row[10] or "warning"),
+        "updated_at_utc": str(row[11] or ""),
     }
 
 
@@ -844,6 +856,9 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
     alert_email_last_sent_local_date = str(
         payload.get("alert_email_last_sent_local_date", existing.get("alert_email_last_sent_local_date", "")) or ""
     ).strip()
+    alert_instant_mail_enabled = coerce_bool(payload.get("alert_instant_mail_enabled", existing.get("alert_instant_mail_enabled", False)))
+    raw_min_sev = str(payload.get("alert_instant_min_severity", existing.get("alert_instant_min_severity", "warning")) or "warning").strip().lower()
+    alert_instant_min_severity = raw_min_sev if raw_min_sev in {"warning", "critical"} else "warning"
     now_utc = utc_now_iso()
     conn.execute(
         """
@@ -858,9 +873,11 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_email_time_hhmm,
             alert_email_recipients,
             alert_email_last_sent_local_date,
+            alert_instant_mail_enabled,
+            alert_instant_min_severity,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             email_enabled = excluded.email_enabled,
             email_recipient = excluded.email_recipient,
@@ -871,6 +888,8 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_email_time_hhmm = excluded.alert_email_time_hhmm,
             alert_email_recipients = excluded.alert_email_recipients,
             alert_email_last_sent_local_date = excluded.alert_email_last_sent_local_date,
+            alert_instant_mail_enabled = excluded.alert_instant_mail_enabled,
+            alert_instant_min_severity = excluded.alert_instant_min_severity,
             updated_at_utc = excluded.updated_at_utc
         """,
         (
@@ -884,6 +903,8 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_email_time_hhmm,
             alert_email_recipients,
             alert_email_last_sent_local_date,
+            1 if alert_instant_mail_enabled else 0,
+            alert_instant_min_severity,
             now_utc,
         ),
     )
@@ -897,6 +918,8 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
         "alert_email_time_hhmm": alert_email_time_hhmm,
         "alert_email_recipients": alert_email_recipients,
         "alert_email_last_sent_local_date": alert_email_last_sent_local_date,
+        "alert_instant_mail_enabled": alert_instant_mail_enabled,
+        "alert_instant_min_severity": alert_instant_min_severity,
         "updated_at_utc": now_utc,
     }
 
@@ -1206,6 +1229,108 @@ def alert_digest_subject(alerts: list[dict], local_date: str) -> str:
     return f"[Monitoring][{level}] Alert Digest {local_date} (C:{critical_count} W:{warning_count})"
 
 
+def alert_instant_mail_subject(event_type: str, hostname: str, severity: str) -> str:
+    sev_label = "KRITISCH" if severity == "critical" else "WARNUNG"
+    event_label = {
+        "opened": "Alarm ausgelöst",
+        "escalated": "Alarm eskaliert",
+        "resolved": "Alarm behoben",
+    }.get(event_type, "Alarm")
+    return f"[Monitoring][{sev_label}] {event_label}: {hostname}"
+
+
+def alert_instant_mail_html(username: str, event_type: str, hostname: str, mountpoint: str, severity: str, used_percent: float) -> str:
+    sev_color = "#dc2626" if severity == "critical" else "#d97706"
+    sev_bg = "#fee2e2" if severity == "critical" else "#fef3c7"
+    sev_text = "#991b1b" if severity == "critical" else "#92400e"
+    sev_label = "KRITISCH" if severity == "critical" else "WARNUNG"
+    header_bg = "linear-gradient(135deg,#7f1d1d,#b91c1c)" if severity == "critical" else "linear-gradient(135deg,#78350f,#d97706)"
+    event_label = {
+        "opened": "Alarm ausgelöst",
+        "escalated": "Alarm eskaliert",
+        "resolved": "Alarm behoben",
+    }.get(event_type, "Alarm")
+    bar_width = min(100, max(0, int(used_percent)))
+    bar_color = sev_color
+    used_str = f"{used_percent:.1f}"
+    return (
+        "<html><body style='margin:0;background:#f3f6ff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
+        "<div style='max-width:600px;margin:20px auto;background:#ffffff;border:1px solid #dbe3ef;border-radius:14px;overflow:hidden;'>"
+        f"<div style='padding:18px 20px;background:{header_bg};color:#fff;'>"
+        f"<h2 style='margin:0 0 4px 0;font-size:20px;'>{html.escape(event_label)}</h2>"
+        f"<div style='font-size:12px;opacity:.9;'>Benutzer: {html.escape(username)} | {html.escape(utc_now_iso())}</div>"
+        "</div>"
+        "<div style='padding:20px;'>"
+        "<table style='width:100%;border-collapse:collapse;font-size:14px;'>"
+        "<tr><td style='padding:8px 0;color:#64748b;width:120px;'>Host</td>"
+        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(hostname)}</td></tr>"
+        "<tr><td style='padding:8px 0;color:#64748b;'>Mountpoint</td>"
+        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(mountpoint)}</td></tr>"
+        "<tr><td style='padding:8px 0;color:#64748b;'>Auslastung</td>"
+        f"<td style='padding:8px 0;font-weight:600;'>{used_str}%</td></tr>"
+        "<tr><td style='padding:8px 0;color:#64748b;'>Schweregrad</td>"
+        f"<td style='padding:8px 0;'><span style='display:inline-block;padding:2px 10px;border-radius:999px;background:{sev_bg};color:{sev_text};font-weight:700;font-size:12px;'>{sev_label}</span></td></tr>"
+        "</table>"
+        f"<div style='margin-top:14px;background:#f1f5f9;border-radius:8px;overflow:hidden;height:12px;'>"
+        f"<div style='width:{bar_width}%;height:100%;background:{bar_color};transition:width .3s;'></div>"
+        "</div>"
+        "</div>"
+        "</div>"
+        "</body></html>"
+    )
+
+
+def send_instant_alert_mails_to_users(
+    conn: sqlite3.Connection,
+    event_type: str,
+    hostname: str,
+    mountpoint: str,
+    severity: str,
+    used_percent: float,
+) -> None:
+    if event_type not in {"opened", "escalated", "resolved"}:
+        return
+    try:
+        rows = conn.execute(
+            """
+            SELECT u.username, COALESCE(s.alert_instant_min_severity, 'warning')
+            FROM web_users u
+            JOIN web_user_settings s ON s.username = u.username
+            WHERE COALESCE(u.is_disabled, 0) = 0
+              AND COALESCE(s.alert_instant_mail_enabled, 0) = 1
+              AND COALESCE(s.email_enabled, 0) = 1
+              AND COALESCE(s.email_recipient, '') != ''
+            """
+        ).fetchall()
+    except Exception:
+        return
+
+    for row in rows:
+        username = str(row[0] or "").strip()
+        min_severity = str(row[1] or "warning").strip().lower()
+        if not username:
+            continue
+        if min_severity == "critical" and severity not in {"critical"}:
+            continue
+        user_settings = get_web_user_settings(conn, username)
+        recipient = user_settings.get("email_recipient", "").strip()
+        if not recipient:
+            continue
+        extra = parse_email_recipients(user_settings.get("alert_email_recipients", ""))
+        all_recipients = parse_email_recipients(",".join([recipient] + extra))
+        if not all_recipients:
+            continue
+        try:
+            ok_token, access_token, _err = ensure_microsoft_access_token(conn, username)
+            if not ok_token:
+                continue
+            subject = alert_instant_mail_subject(event_type, hostname, severity)
+            body = alert_instant_mail_html(username, event_type, hostname, mountpoint, severity, used_percent)
+            send_microsoft_mail_multi(access_token, all_recipients, subject, body, content_type="HTML")
+        except Exception:
+            pass
+
+
 def get_oauth_settings(conn: sqlite3.Connection) -> dict:
     row = conn.execute(
         """
@@ -1465,6 +1590,8 @@ def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
         "alert_email_enabled": settings["alert_email_enabled"],
         "alert_email_time_hhmm": settings["alert_email_time_hhmm"],
         "alert_email_recipients": settings["alert_email_recipients"],
+        "alert_instant_mail_enabled": settings["alert_instant_mail_enabled"],
+        "alert_instant_min_severity": settings["alert_instant_min_severity"],
         "mail_oauth_available": oauth_is_configured(oauth_settings),
         "microsoft_oauth": {
             "connected": connection is not None,
@@ -1981,23 +2108,24 @@ def maybe_send_alert_message(
     mountpoint: str,
     severity: str,
     used_percent: float,
+    conn: sqlite3.Connection | None = None,
 ) -> None:
-    if not settings.get("telegram_enabled"):
-        return
-
-    icon = {
-        "opened": "ALERT OPEN",
-        "escalated": "ALERT ESCALATED",
-        "resolved": "ALERT RESOLVED",
-    }.get(event_type, "ALERT")
-    text = (
-        f"[{icon}] {hostname}\n"
-        f"Mountpoint: {mountpoint}\n"
-        f"Severity: {severity}\n"
-        f"Used: {used_percent:.1f}%\n"
-        f"Time: {utc_now_iso()}"
-    )
-    telegram_send(settings, text)
+    if settings.get("telegram_enabled"):
+        icon = {
+            "opened": "ALERT OPEN",
+            "escalated": "ALERT ESCALATED",
+            "resolved": "ALERT RESOLVED",
+        }.get(event_type, "ALERT")
+        text = (
+            f"[{icon}] {hostname}\n"
+            f"Mountpoint: {mountpoint}\n"
+            f"Severity: {severity}\n"
+            f"Used: {used_percent:.1f}%\n"
+            f"Time: {utc_now_iso()}"
+        )
+        telegram_send(settings, text)
+    if conn is not None:
+        send_instant_alert_mails_to_users(conn, event_type, hostname, mountpoint, severity, used_percent)
 
 
 def get_nested_number(payload: dict, section: str, key: str) -> float | None:
@@ -2422,7 +2550,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
                     """,
                     (now_utc, now_utc, report_id, open_alert[0]),
                 )
-                maybe_send_alert_message(alarm_settings, "resolved", hostname, mountpoint, "ok", used_percent)
+                maybe_send_alert_message(alarm_settings, "resolved", hostname, mountpoint, "ok", used_percent, conn=conn)
             continue
 
         if not open_alert and not alert_started:
@@ -2444,7 +2572,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
                 """,
                 (hostname, mountpoint, severity, used_percent, now_utc, now_utc, report_id),
             )
-            maybe_send_alert_message(alarm_settings, "opened", hostname, mountpoint, severity, used_percent)
+            maybe_send_alert_message(alarm_settings, "opened", hostname, mountpoint, severity, used_percent, conn=conn)
             continue
 
         previous_severity = str(open_alert[1] or "warning")
@@ -2459,7 +2587,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
         )
 
         if previous_severity != "critical" and severity == "critical":
-            maybe_send_alert_message(alarm_settings, "escalated", hostname, mountpoint, severity, used_percent)
+            maybe_send_alert_message(alarm_settings, "escalated", hostname, mountpoint, severity, used_percent, conn=conn)
 
     if mountpoints_seen:
         placeholders = ",".join("?" for _ in mountpoints_seen)

@@ -196,6 +196,26 @@
               </div>
             </section>
 
+            <section class="settings-subsection">
+              <div class="settings-subsection-head">
+                <h5>Sofort-Alarmmail (Event-getriggert)</h5>
+                <p class="count compact">Sendet sofort eine Mail wenn ein Alarm ausgelöst, eskaliert oder behoben wird</p>
+              </div>
+              <div class="alarm-settings-grid">
+                <label class="checkbox-line">
+                  <input id="alertInstantMailEnabledInput" type="checkbox" />
+                  Sofort-Alarmmail aktivieren
+                </label>
+                <label>
+                  Mindest-Schweregrad
+                  <select id="alertInstantMinSeveritySelect">
+                    <option value="warning">Alle (Warnung + Kritisch)</option>
+                    <option value="critical">Nur Kritisch</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+
             <section id="adminOauthSettingsSection" class="settings-subsection hidden">
               <div class="settings-subsection-head">
                 <h5>Microsoft OAuth App</h5>

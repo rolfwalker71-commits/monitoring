@@ -583,6 +583,8 @@ async function loadUserProfile(force = false) {
   const alertEnabledInput = document.getElementById("alertEmailEnabledInput");
   const alertTimeInput = document.getElementById("alertEmailTimeInput");
   const alertRecipientsInput = document.getElementById("alertEmailRecipientsInput");
+  const alertInstantEnabledInput = document.getElementById("alertInstantMailEnabledInput");
+  const alertInstantMinSeveritySelect = document.getElementById("alertInstantMinSeveritySelect");
   const trendTestButton = document.getElementById("testTrendDigestMailButton");
   const alertTestButton = document.getElementById("testAlertDigestMailButton");
 
@@ -599,6 +601,8 @@ async function loadUserProfile(force = false) {
     alertEnabledInput.checked = profile.alert_email_enabled === true;
     alertTimeInput.value = asText(profile.alert_email_time_hhmm, "08:05");
     alertRecipientsInput.value = asText(profile.alert_email_recipients, "") === "-" ? "" : asText(profile.alert_email_recipients, "");
+    if (alertInstantEnabledInput) alertInstantEnabledInput.checked = profile.alert_instant_mail_enabled === true;
+    if (alertInstantMinSeveritySelect) alertInstantMinSeveritySelect.value = profile.alert_instant_min_severity || "warning";
 
     const oauth = profile.microsoft_oauth || {};
     const oauthConnected = oauth.connected === true;
@@ -642,6 +646,8 @@ async function saveUserProfile() {
     alert_email_enabled: document.getElementById("alertEmailEnabledInput").checked,
     alert_email_time_hhmm: document.getElementById("alertEmailTimeInput").value || "08:05",
     alert_email_recipients: document.getElementById("alertEmailRecipientsInput").value.trim(),
+    alert_instant_mail_enabled: document.getElementById("alertInstantMailEnabledInput")?.checked ?? false,
+    alert_instant_min_severity: document.getElementById("alertInstantMinSeveritySelect")?.value || "warning",
   };
 
   if (payload.email_enabled && !payload.email_recipient) {
