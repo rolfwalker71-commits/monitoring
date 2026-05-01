@@ -562,6 +562,13 @@ button:disabled {
   justify-content: space-between;
   gap: 10px;
 }
+.title-row-tools {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin-left: auto;
+}
 
 .title-row h3 {
   margin: 0;
@@ -610,7 +617,8 @@ button:hover:not(.host-item) {
   font-size: 15px;
   line-height: 1;
   min-width: 0;
-  border-radius: 6px;
+  text-align: right;
+  line-height: 1.2;
 }
 
 .btn-icon:hover {

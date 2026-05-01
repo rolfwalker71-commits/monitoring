@@ -120,7 +120,6 @@
         <div class="panel-header">
           <h2>Hosts und Historie</h2>
           <div class="panel-actions">
-            <span id="autoRefreshStatus" class="auto-refresh-status">Letzte automatische Aktualisierung: -</span>
             <button id="triggerAllAgentsUpdateButton" class="global-update-chip global-update-chip-inline" type="button" title="Update fuer alle Hosts">⟳ Update (alle)</button>
             <button id="rolloutApiKeyButton" class="btn-emoji-pill" type="button" title="API-Key verteilen">🔐</button>
             <button id="openChangePasswordButton" class="btn-emoji-pill" type="button" title="Passwort ändern">🔑</button>
@@ -370,7 +369,10 @@
             <div class="section-head">
               <div class="title-row">
                 <h3 id="selectedHostTitle">Meldungen</h3>
-                <button id="editDisplayNameButton" class="btn-icon" type="button" title="Titel bearbeiten">✏️</button>
+                <div class="title-row-tools">
+                  <span id="autoRefreshStatus" class="auto-refresh-status">Letzte automatische Aktualisierung: -</span>
+                  <button id="editDisplayNameButton" class="btn-icon" type="button" title="Titel bearbeiten">✏️</button>
+                </div>
               </div>
               <p id="reportCount" class="count"></p>
               <p id="deliveryStats" class="count compact"></p>
