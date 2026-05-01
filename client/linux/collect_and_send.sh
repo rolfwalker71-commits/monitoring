@@ -47,6 +47,43 @@ json_escape() {
   printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
 }
 
+upsert_config_value() {
+  local key="$1"
+  local value="$2"
+  local tmp_file
+
+  tmp_file="$(mktemp)"
+  awk -v key="$key" -v value="$value" '
+    BEGIN { updated = 0 }
+    $0 ~ "^[[:space:]]*" key "=" {
+      print key "=\"" value "\""
+      updated = 1
+      next
+    }
+    { print }
+    END {
+      if (!updated) {
+        print key "=\"" value "\""
+      }
+    }
+  ' "$CONFIG_FILE" > "$tmp_file"
+  mv "$tmp_file" "$CONFIG_FILE"
+  chmod 0600 "$CONFIG_FILE" 2>/dev/null || true
+}
+
+apply_api_key_update() {
+  local next_api_key="$1"
+
+  if [[ -z "$next_api_key" ]]; then
+    return 1
+  fi
+
+  upsert_config_value "API_KEY" "$next_api_key"
+  API_KEY="$next_api_key"
+  export API_KEY
+  return 0
+}
+
 read_meminfo_kb() {
   local key="$1"
   awk -v key="$key" '$1 == key ":" {print $2; exit}' /proc/meminfo
@@ -358,7 +395,7 @@ EOF
 }
 
 execute_remote_commands() {
-  local response id status message
+  local response id status message command_type next_api_key
 
   curl_args=(
     --silent
@@ -377,21 +414,39 @@ execute_remote_commands() {
     id="$(printf '%s' "$command_line" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')"
     [[ -n "$id" ]] || continue
 
-    if run_self_update_now; then
-      status="completed"
-      message="update command executed"
-    else
-      if [[ -x "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" ]]; then
-        status="failed"
-        message="update command failed"
-      else
-        status="failed"
-        message="self_update.sh not found"
-      fi
-    fi
+    command_type="$(printf '%s' "$command_line" | sed -n 's/.*"command_type"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+    case "$command_type" in
+      update-now)
+        if run_self_update_now; then
+          status="completed"
+          message="update command executed"
+        else
+          if [[ -x "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" ]]; then
+            status="failed"
+            message="update command failed"
+          else
+            status="failed"
+            message="self_update.sh not found"
+          fi
+        fi
+        ;;
+      set-api-key)
+        next_api_key="$(printf '%s' "$command_line" | sed -n 's/.*"api_key"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+        if apply_api_key_update "$next_api_key"; then
+          status="completed"
+          message="api key updated"
+        else
+          status="failed"
+          message="api key update failed"
+        fi
+        ;;
+      *)
+        continue
+        ;;
+    esac
 
     post_command_result "$id" "$status" "$message"
-  done < <(printf '%s' "$response" | grep -o '{[^}]*"command_type"[[:space:]]*:[[:space:]]*"update-now"[^}]*}')
+  done < <(printf '%s' "$response" | grep -o '{[^}]*"command_type"[[:space:]]*:[[:space:]]*"[^"]*"[^}]*}')
 }
 
 flush_queue() {

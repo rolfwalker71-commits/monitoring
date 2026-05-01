@@ -55,6 +55,42 @@ if (-not (Test-Path $QueueDir)) {
 
 # ---- Helpers ----
 
+function Set-ConfigValue {
+    param(
+        [string]$Key,
+        [string]$Value
+    )
+
+    $updated = $false
+    $pattern = '^\s*' + [regex]::Escape($Key) + '\s*='
+    $lines = @()
+    foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
+        if ($line -match $pattern) {
+            $lines += ($Key + '="' + $Value + '"')
+            $updated = $true
+        } else {
+            $lines += $line
+        }
+    }
+    if (-not $updated) {
+        $lines += ($Key + '="' + $Value + '"')
+    }
+    [System.IO.File]::WriteAllLines($ConfigFile, $lines, [System.Text.Encoding]::UTF8)
+}
+
+function Set-AgentApiKey {
+    param([string]$NextApiKey)
+
+    if (-not $NextApiKey) {
+        return $false
+    }
+
+    Set-ConfigValue -Key 'API_KEY' -Value $NextApiKey
+    $script:cfg['API_KEY'] = $NextApiKey
+    $script:ApiKey = $NextApiKey
+    return $true
+}
+
 function ConvertTo-JsonString([string]$s) {
     if ($null -eq $s) {
         return ''
@@ -273,12 +309,27 @@ function Invoke-RemoteCommands {
         foreach ($cmd in $commands) {
             $cmdId = [int]$cmd.id
             $cmdType = [string]$cmd.command_type
-            if ($cmdType -ne 'update-now' -or $cmdId -le 0) { continue }
+            if ($cmdId -le 0) { continue }
 
-            if (Invoke-AgentSelfUpdate) {
-                Send-CommandResult -CommandId $cmdId -Status 'completed' -Message 'update command executed'
-            } else {
-                Send-CommandResult -CommandId $cmdId -Status 'failed' -Message 'update command failed'
+            if ($cmdType -eq 'update-now') {
+                if (Invoke-AgentSelfUpdate) {
+                    Send-CommandResult -CommandId $cmdId -Status 'completed' -Message 'update command executed'
+                } else {
+                    Send-CommandResult -CommandId $cmdId -Status 'failed' -Message 'update command failed'
+                }
+                continue
+            }
+
+            if ($cmdType -eq 'set-api-key') {
+                $nextApiKey = ''
+                if ($cmd.command_payload -and $cmd.command_payload.api_key) {
+                    $nextApiKey = [string]$cmd.command_payload.api_key
+                }
+                if (Set-AgentApiKey -NextApiKey $nextApiKey) {
+                    Send-CommandResult -CommandId $cmdId -Status 'completed' -Message 'api key updated'
+                } else {
+                    Send-CommandResult -CommandId $cmdId -Status 'failed' -Message 'api key update failed'
+                }
             }
         }
     } catch { }

@@ -23,6 +23,7 @@ DB_PATH = DATA_DIR / "monitoring.db"
 BUILD_VERSION_PATH = BASE_DIR.parent / "BUILD_VERSION"
 AGENT_VERSION_PATH = BASE_DIR.parent / "AGENT_VERSION"
 API_KEY = os.getenv("MONITORING_API_KEY", "")
+API_KEY_GRACE_ALLOW_KNOWN_HOSTS = os.getenv("MONITORING_API_KEY_GRACE_ALLOW_KNOWN_HOSTS", "1").strip().lower() in {"1", "true", "yes", "on"}
 MAX_REPORTS_PER_HOST = int(os.getenv("MONITORING_MAX_REPORTS_PER_HOST", "1344"))
 WARNING_THRESHOLD_PERCENT = float(os.getenv("MONITORING_WARNING_THRESHOLD", "80"))
 CRITICAL_THRESHOLD_PERCENT = float(os.getenv("MONITORING_CRITICAL_THRESHOLD", "90"))
@@ -2317,7 +2318,7 @@ def extract_country_code_from_payload(payload: dict) -> str:
 
 def normalize_command_type(value: object) -> str:
     command_type = str(value or "").strip().lower()
-    if command_type == "update-now":
+    if command_type in {"update-now", "set-api-key"}:
         return command_type
     return ""
 
@@ -2371,16 +2372,17 @@ def queue_agent_command(
     return int(cursor.lastrowid)
 
 
-def find_pending_agent_command(conn: sqlite3.Connection, hostname: str, command_type: str) -> int:
+def find_pending_agent_command(conn: sqlite3.Connection, hostname: str, command_type: str, command_payload: dict) -> int:
+    payload_json = json.dumps(command_payload or {}, separators=(",", ":"))
     row = conn.execute(
         """
         SELECT id
         FROM agent_commands
-        WHERE hostname = ? AND command_type = ? AND status = 'pending' AND expires_at_utc > ?
+        WHERE hostname = ? AND command_type = ? AND command_payload_json = ? AND status = 'pending' AND expires_at_utc > ?
         ORDER BY id DESC
         LIMIT 1
         """,
-        (hostname, command_type, utc_now_iso()),
+        (hostname, command_type, payload_json, utc_now_iso()),
     ).fetchone()
     if not row:
         return 0
@@ -2395,7 +2397,7 @@ def queue_agent_command_once(
     command_payload: dict,
     ttl_minutes: int,
 ) -> tuple[int, bool]:
-    existing_command_id = find_pending_agent_command(conn, hostname, command_type)
+    existing_command_id = find_pending_agent_command(conn, hostname, command_type, command_payload)
     if existing_command_id > 0:
         return existing_command_id, False
 
@@ -2422,6 +2424,15 @@ def get_known_hostnames(conn: sqlite3.Connection) -> list[str]:
         """
     ).fetchall()
     return [str(row[0] or "").strip() for row in rows if str(row[0] or "").strip()]
+
+
+def is_known_hostname(conn: sqlite3.Connection, hostname: str) -> bool:
+    normalized = str(hostname or "").strip()
+    if not normalized:
+        return False
+
+    row = conn.execute("SELECT 1 FROM reports WHERE hostname = ? LIMIT 1", (normalized,)).fetchone()
+    return bool(row)
 
 
 def get_latest_update_command_rows(conn: sqlite3.Connection) -> dict[str, dict]:
@@ -2829,11 +2840,19 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(content)
 
-    def _unauthorized_if_needed(self) -> bool:
+    def _unauthorized_if_needed(self, hostname: str = "") -> bool:
         if not API_KEY:
             return False
 
         request_key = self.headers.get("X-Api-Key", "")
+        if request_key == API_KEY:
+            return False
+
+        if not request_key and hostname and API_KEY_GRACE_ALLOW_KNOWN_HOSTS:
+            with sqlite3.connect(DB_PATH) as conn:
+                if is_known_hostname(conn, hostname):
+                    return False
+
         if request_key != API_KEY:
             self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid api key"})
             return True
@@ -2988,9 +3007,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/agent-commands":
-            if self._unauthorized_if_needed():
-                return
-
             query = parse_qs(parsed.query)
             hostname = query.get("hostname", [""])[0].strip()
             agent_id = query.get("agent_id", [""])[0].strip()
@@ -2998,6 +3014,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             if not hostname:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
+                return
+
+            if self._unauthorized_if_needed(hostname):
                 return
 
             with sqlite3.connect(DB_PATH) as conn:
@@ -3895,10 +3914,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
-        if path == "/api/v1/agent-report" or path == "/api/v1/agent-command-result":
-            if self._unauthorized_if_needed():
-                return
-        elif path.startswith("/api/v1/"):
+        if path.startswith("/api/v1/") and path not in {"/api/v1/agent-report", "/api/v1/agent-command-result"}:
             if not self._require_web_session():
                 return
 
@@ -4359,6 +4375,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             command_payload = payload.get("command_payload", {})
             if not isinstance(command_payload, dict):
                 command_payload = {}
+            if command_type == "set-api-key":
+                api_key_value = str(command_payload.get("api_key", "")).strip()
+                if not api_key_value:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "command_payload.api_key missing"})
+                    return
+                command_payload = {"api_key": api_key_value}
 
             with sqlite3.connect(DB_PATH) as conn:
                 expire_old_agent_commands(conn)
@@ -4409,6 +4431,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             command_payload = payload.get("command_payload", {})
             if not isinstance(command_payload, dict):
                 command_payload = {}
+            if command_type == "set-api-key":
+                api_key_value = str(command_payload.get("api_key", "")).strip()
+                if not api_key_value:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "command_payload.api_key missing"})
+                    return
+                command_payload = {"api_key": api_key_value}
 
             created_by = self._web_session_username() or "webclient"
             queued_count = 0
@@ -4462,6 +4490,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             hostname = str(payload.get("hostname", "")).strip()
+            if self._unauthorized_if_needed(hostname):
+                return
+
             try:
                 command_id = int(payload.get("command_id", 0))
             except (TypeError, ValueError):
@@ -4480,7 +4511,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             with sqlite3.connect(DB_PATH) as conn:
                 row = conn.execute(
-                    "SELECT id, status FROM agent_commands WHERE id = ? AND hostname = ?",
+                    "SELECT id, status, command_type FROM agent_commands WHERE id = ? AND hostname = ?",
                     (command_id, hostname),
                 ).fetchone()
                 if not row:
@@ -4493,7 +4524,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 conn.execute(
                     """
                     UPDATE agent_commands
-                    SET status = ?, executed_at_utc = ?, result_json = ?
+                    SET status = ?, executed_at_utc = ?, result_json = ?,
+                        command_payload_json = CASE WHEN command_type = 'set-api-key' THEN '{}' ELSE command_payload_json END
                     WHERE id = ?
                     """,
                     (
@@ -4525,6 +4557,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         hostname = str(payload.get("hostname", "")).strip()
+        if self._unauthorized_if_needed(hostname):
+            return
+
         filesystems = payload.get("filesystems", [])
 
         if not hostname:

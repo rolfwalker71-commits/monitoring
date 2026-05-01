@@ -2488,6 +2488,28 @@ async function triggerAgentUpdateForAllHosts() {
   return data;
 }
 
+async function triggerAgentApiKeyRolloutForAllHosts(apiKey) {
+  const response = await fetch("/api/v1/agent-command-bulk", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      command_type: "set-api-key",
+      ttl_minutes: 240,
+      command_payload: {
+        api_key: String(apiKey || "").trim(),
+      },
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return data;
+}
+
 function wireHostListInteractions() {
   const hostList = document.getElementById("hostList");
 
@@ -3359,6 +3381,36 @@ function wireEvents() {
       await loadAgentUpdateStatus();
     } catch (error) {
       window.alert(`Globaler Update-Trigger fehlgeschlagen: ${error.message}`);
+    }
+  });
+
+  document.getElementById("rolloutApiKeyButton").addEventListener("click", async () => {
+    const apiKey = window.prompt("API-Key fuer alle bekannten Hosts verteilen:", "");
+    if (apiKey === null) {
+      return;
+    }
+
+    const normalizedApiKey = String(apiKey).trim();
+    if (!normalizedApiKey) {
+      window.alert("Kein API-Key eingegeben.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "API-Key jetzt an alle bekannten Hosts verteilen?\n\nBestehende Hosts duerfen waehrend der Grace-Phase weiter ohne Key pollen, bis ihre agent.conf aktualisiert wurde."
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const result = await triggerAgentApiKeyRolloutForAllHosts(normalizedApiKey);
+      const totalHosts = Number(result.total_hosts || 0);
+      const queuedCount = Number(result.queued_count || 0);
+      const alreadyQueuedCount = Number(result.already_queued_count || 0);
+      window.alert(`API-Key-Rollout gesetzt: ${queuedCount} Hosts neu gequeued, ${alreadyQueuedCount} bereits pending, gesamt ${totalHosts}.`);
+    } catch (error) {
+      window.alert(`API-Key-Rollout fehlgeschlagen: ${error.message}`);
     }
   });
 
