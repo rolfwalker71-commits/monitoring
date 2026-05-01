@@ -1240,8 +1240,8 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
         rows_html = "<tr><td colspan='5' style='padding:12px 8px;text-align:left;color:#475569;'>Keine kritischen Trends im gewaehlten Zeitraum.</td></tr>"
 
     return (
-        "<html><body style='margin:0;background:#eef3fb;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
-        "<div style='max-width:900px;margin:20px auto;background:#ffffff;border:1px solid #d5e1f2;border-radius:14px;overflow:hidden;'>"
+        "<html><body style='margin:0;background:#f4f5f7;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
+        "<div style='max-width:900px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;box-shadow:0 18px 38px rgba(15,23,42,.18),0 4px 10px rgba(15,23,42,.12);'>"
         "<div style='padding:18px 20px;background:linear-gradient(135deg,#0f4c81,#1f6aa5);color:#fff;'>"
         "<h2 style='margin:0 0 6px 0;font-size:22px;'>Daily Trend Digest</h2>"
         f"<div style='font-size:13px;opacity:.95;'>Benutzer: {html.escape(username)} | Fenster: letzte {hours}h | Zeit: {html.escape(format_mail_datetime())}</div>"
@@ -1293,8 +1293,8 @@ def alert_digest_html(username: str, alerts: list[dict]) -> str:
         rows_html = "<tr><td colspan='5' style='padding:12px 8px;text-align:left;color:#7f1d1d;'>Keine offenen Alarme vorhanden.</td></tr>"
 
     return (
-        "<html><body style='margin:0;background:#f3f6ff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
-        "<div style='max-width:900px;margin:20px auto;background:#ffffff;border:1px solid #dbe3ef;border-radius:14px;overflow:hidden;'>"
+        "<html><body style='margin:0;background:#f4f5f7;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
+        "<div style='max-width:900px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;box-shadow:0 18px 38px rgba(15,23,42,.18),0 4px 10px rgba(15,23,42,.12);'>"
         "<div style='padding:18px 20px;background:linear-gradient(135deg,#7f1d1d,#b91c1c);color:#fff;'>"
         "<h2 style='margin:0 0 6px 0;font-size:22px;'>Open Alert Digest</h2>"
         f"<div style='font-size:13px;opacity:.95;'>Benutzer: {html.escape(username)} | Zeit: {html.escape(format_mail_datetime())}</div>"
@@ -1374,8 +1374,8 @@ def alert_instant_mail_html(
     app_logo_uri = app_logo_data_uri()
     reported_at = format_mail_datetime(reported_at_utc)
     return (
-        "<html><body style='margin:0;background:#f3f6ff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
-        "<div style='max-width:700px;margin:20px auto;background:#ffffff;border:1px solid #dbe3ef;border-radius:14px;overflow:hidden;'>"
+        "<html><body style='margin:0;background:#f4f5f7;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
+        "<div style='max-width:700px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;box-shadow:0 18px 38px rgba(15,23,42,.18),0 4px 10px rgba(15,23,42,.12);'>"
         f"<div style='padding:18px 20px;background:{header_bg};color:#fff;'>"
         "<div style='display:flex;align-items:center;gap:10px;margin-bottom:10px;'>"
         f"<img src='{html.escape(app_logo_uri)}' alt='Monitoring' width='26' height='26' style='display:block;'>"
