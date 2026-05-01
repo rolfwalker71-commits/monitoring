@@ -20,6 +20,7 @@ AGENT_QUEUE_DIR="/var/lib/monitoring-agent/queue"
 COLLECT_SCRIPT_URL=""
 SELF_UPDATE_SCRIPT_URL=""
 BUILD_VERSION_URL=""
+SELF_TEST_STATUS="ok"
 
 usage() {
   cat <<EOF
@@ -211,8 +212,25 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 
 # Non-interactive post-install self-test: run collector and updater once immediately.
-CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$INSTALL_DIR/AGENT_VERSION" AGENT_QUEUE_DIR="$AGENT_QUEUE_DIR" "$INSTALL_DIR/collect_and_send.sh" >> "$LOG_FILE" 2>&1
-CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$INSTALL_DIR/AGENT_VERSION" AGENT_QUEUE_DIR="$AGENT_QUEUE_DIR" "$INSTALL_DIR/self_update.sh" >> "$UPDATE_LOG_FILE" 2>&1
+if ! CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$INSTALL_DIR/AGENT_VERSION" AGENT_QUEUE_DIR="$AGENT_QUEUE_DIR" "$INSTALL_DIR/collect_and_send.sh" >> "$LOG_FILE" 2>&1; then
+  SELF_TEST_STATUS="collect_failed"
+  echo "Warning: collect_and_send self-test failed (agent is still installed)." >&2
+  if grep -q "curl: (60)" "$LOG_FILE" 2>/dev/null; then
+    echo "Hint: TLS certificate chain validation failed (curl error 60)." >&2
+    echo "- Ensure server certificate includes full chain/intermediate certificates." >&2
+    echo "- Ensure client trusts current root CAs (package: ca-certificates)." >&2
+    echo "- Test manually: curl -v ${SERVER_URL%/}/api/v1/agent-commands" >&2
+  fi
+fi
+
+if ! CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$INSTALL_DIR/AGENT_VERSION" AGENT_QUEUE_DIR="$AGENT_QUEUE_DIR" "$INSTALL_DIR/self_update.sh" >> "$UPDATE_LOG_FILE" 2>&1; then
+  if [[ "$SELF_TEST_STATUS" == "ok" ]]; then
+    SELF_TEST_STATUS="update_failed"
+  else
+    SELF_TEST_STATUS="collect_and_update_failed"
+  fi
+  echo "Warning: self_update self-test failed (agent is still installed)." >&2
+fi
 
 INSTALLED_AGENT_VERSION="unknown"
 if [[ -f "$INSTALL_DIR/AGENT_VERSION" ]]; then
@@ -231,5 +249,5 @@ echo "Update check: every $UPDATE_HOURS hours"
 echo "Cron target: $CRON_TARGET"
 echo "Log file: $LOG_FILE"
 echo "Update log file: $UPDATE_LOG_FILE"
-echo "Self-test: collect + self_update executed once"
+echo "Self-test status: $SELF_TEST_STATUS"
 echo "Installed agent version: $INSTALLED_AGENT_VERSION"
