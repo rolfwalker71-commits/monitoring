@@ -9,6 +9,7 @@ function escapeHtml(value) {
 
 const ANALYSIS_RANGE_STORAGE_KEY = "monitoring.analysisHours";
 const THEME_STORAGE_KEY = "monitoring.theme";
+const HOST_FILTERS_STORAGE_KEY = "monitoring.hostFilters";
 const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "agent-update"]);
 
 const state = {
@@ -101,6 +102,35 @@ function persistAnalysisRangePreference() {
     window.localStorage.setItem(ANALYSIS_RANGE_STORAGE_KEY, String(state.analysisHours));
   } catch (_error) {
     // Ignore storage failures and keep the current in-memory selection.
+  }
+}
+
+function loadHostFilterPreferences() {
+  try {
+    const raw = window.localStorage.getItem(HOST_FILTERS_STORAGE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (saved.hostSearchQuery !== undefined) state.hostSearchQuery = String(saved.hostSearchQuery);
+    if (saved.hostAlertFilter !== undefined) state.hostAlertFilter = String(saved.hostAlertFilter);
+    if (saved.hostMutedFilter !== undefined) state.hostMutedFilter = String(saved.hostMutedFilter);
+    if (saved.hostOsFilter !== undefined) state.hostOsFilter = String(saved.hostOsFilter);
+    if (saved.hostCountryFilter !== undefined) state.hostCountryFilter = String(saved.hostCountryFilter);
+  } catch (_error) {
+    // Ignore
+  }
+}
+
+function persistHostFilterPreferences() {
+  try {
+    window.localStorage.setItem(HOST_FILTERS_STORAGE_KEY, JSON.stringify({
+      hostSearchQuery: state.hostSearchQuery,
+      hostAlertFilter: state.hostAlertFilter,
+      hostMutedFilter: state.hostMutedFilter,
+      hostOsFilter: state.hostOsFilter,
+      hostCountryFilter: state.hostCountryFilter,
+    }));
+  } catch (_error) {
+    // Ignore
   }
 }
 
@@ -2169,6 +2199,7 @@ function renderHostIconFilters(hosts) {
       }
       state.hostOsFilter = nextFilter;
       state.hostOffset = 0;
+      persistHostFilterPreferences();
       await loadHosts();
     });
   });
@@ -2182,6 +2213,7 @@ function renderHostIconFilters(hosts) {
       }
       state.hostCountryFilter = nextFilter;
       state.hostOffset = 0;
+      persistHostFilterPreferences();
       await loadHosts();
     });
   });
@@ -3710,17 +3742,20 @@ function wireEvents() {
   document.getElementById("hostSearchInput").addEventListener("input", async (event) => {
     state.hostSearchQuery = event.target.value;
     state.hostOffset = 0;
+    persistHostFilterPreferences();
     await loadHosts();
   });
 
   document.getElementById("hostAlertFilterSelect").addEventListener("change", async (event) => {
     state.hostAlertFilter = String(event.target?.value || "all");
+    persistHostFilterPreferences();
     state.hostOffset = 0;
     await loadHosts();
   });
 
   document.getElementById("hostMutedFilterSelect").addEventListener("change", async (event) => {
     state.hostMutedFilter = String(event.target?.value || "all");
+    persistHostFilterPreferences();
     state.hostOffset = 0;
     await loadHosts();
   });
@@ -3732,6 +3767,7 @@ function wireEvents() {
     state.hostOsFilter = "all";
     state.hostCountryFilter = "all";
     state.hostOffset = 0;
+    persistHostFilterPreferences();
     document.getElementById("hostSearchInput").value = "";
     document.getElementById("hostAlertFilterSelect").value = "all";
     document.getElementById("hostMutedFilterSelect").value = "all";
@@ -3741,6 +3777,7 @@ function wireEvents() {
 
 async function init() {
   state.analysisHours = loadAnalysisRangePreference();
+  loadHostFilterPreferences();
   applyTheme(loadThemePreference());
   const oauthResult = consumeOauthStatusFromUrl();
   await loadWebclientVersion();
@@ -3751,6 +3788,7 @@ async function init() {
   document.getElementById("globalSeverityFilter").value = state.globalSeverityFilter;
   document.getElementById("hostAlertFilterSelect").value = state.hostAlertFilter;
   document.getElementById("hostMutedFilterSelect").value = state.hostMutedFilter;
+  document.getElementById("hostSearchInput").value = state.hostSearchQuery;
   document.getElementById("loginUsernameInput").value = "admin";
   const isAuthenticated = await ensureAuthenticatedSession();
   if (!isAuthenticated) {
