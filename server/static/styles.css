@@ -1215,7 +1215,7 @@ button:hover:not(.host-item) {
   display: grid;
   gap: 8px;
   min-height: 0;
-  max-height: clamp(260px, calc(100dvh - 430px), 680px);
+  flex: 1 1 auto;
   overflow-y: auto;
   overflow-x: hidden;
   padding-top: 4px;

@@ -11,7 +11,7 @@ const ANALYSIS_RANGE_STORAGE_KEY = "monitoring.analysisHours";
 const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "agent-update"]);
 
 const state = {
-  hostLimit: 20,
+  hostLimit: 500,
   hostOffset: 0,
   hosts: [],
   totalHosts: 0,
@@ -3640,28 +3640,6 @@ function wireEvents() {
     } catch (error) {
       setUserManagementStatus(error.message, true);
     }
-  });
-
-  document.getElementById("hostsPrevButton").addEventListener("click", async () => {
-    if (state.hostOffset <= 0) {
-      return;
-    }
-    state.hostOffset = Math.max(0, state.hostOffset - state.hostLimit);
-    await loadHosts();
-    await loadReportsForHost();
-    await loadAnalysisForHost();
-    await loadAlertsForHost();
-  });
-
-  document.getElementById("hostsNextButton").addEventListener("click", async () => {
-    if (state.hostOffset + state.hostLimit >= state.totalHosts) {
-      return;
-    }
-    state.hostOffset += state.hostLimit;
-    await loadHosts();
-    await loadReportsForHost();
-    await loadAnalysisForHost();
-    await loadAlertsForHost();
   });
 
   document.getElementById("reportsPrevButton").addEventListener("click", goToPreviousReport);
