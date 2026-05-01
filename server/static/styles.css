@@ -1312,8 +1312,9 @@ button:hover:not(.host-item) {
 }
 
 .host-item strong {
-  font-size: 17px;
-  font-weight: 800;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.1;
 }
 
 .host-title-line {
