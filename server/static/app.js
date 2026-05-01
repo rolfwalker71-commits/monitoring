@@ -2331,6 +2331,124 @@ async function saveHostSettings(hostname, partialSettings) {
   return response.json();
 }
 
+async function deleteHostCard(hostname) {
+  const response = await fetch("/api/v1/host-delete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ hostname }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return data;
+}
+
+function closeHostContextMenu() {
+  const menu = document.getElementById("hostContextMenu");
+  if (!menu) {
+    return;
+  }
+  menu.classList.add("hidden");
+  delete menu.dataset.hostname;
+}
+
+function ensureHostContextMenu() {
+  let menu = document.getElementById("hostContextMenu");
+  if (menu) {
+    return menu;
+  }
+
+  menu = document.createElement("div");
+  menu.id = "hostContextMenu";
+  menu.className = "host-context-menu hidden";
+  menu.innerHTML = `
+    <div class="host-context-menu-label"></div>
+    <button type="button" data-action="delete-host-card">🗑️ Karte löschen…</button>
+  `;
+  document.body.appendChild(menu);
+
+  menu.addEventListener("click", async (event) => {
+    const trigger = event.target.closest("button[data-action='delete-host-card']");
+    if (!trigger) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const hostname = String(menu.dataset.hostname || "").trim();
+    closeHostContextMenu();
+    if (!hostname) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Karte fuer ${hostname} wirklich loeschen?\n\nDas entfernt Reports, Alerts und Host-Settings dauerhaft.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteHostCard(hostname);
+      if (state.selectedHost === hostname) {
+        state.selectedHost = "";
+        state.selectedDisplayName = "";
+        state.currentReport = null;
+        state.reportOffset = 0;
+      }
+
+      await loadHosts();
+      await loadReportsForHost();
+      await loadAnalysisForHost();
+      await loadAlertsForHost();
+    } catch (error) {
+      window.alert(`Host-Karte konnte nicht geloescht werden: ${error.message}`);
+    }
+  });
+
+  document.addEventListener("click", () => closeHostContextMenu());
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeHostContextMenu();
+    }
+  });
+  document.addEventListener("scroll", () => closeHostContextMenu(), true);
+  window.addEventListener("resize", () => closeHostContextMenu());
+
+  return menu;
+}
+
+function openHostContextMenu(hostname, clientX, clientY) {
+  const menu = ensureHostContextMenu();
+  const normalizedHost = String(hostname || "").trim();
+  if (!normalizedHost) {
+    return;
+  }
+
+  const label = menu.querySelector(".host-context-menu-label");
+  if (label) {
+    label.textContent = normalizedHost;
+  }
+  menu.dataset.hostname = normalizedHost;
+  menu.classList.remove("hidden");
+
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const rect = menu.getBoundingClientRect();
+  const menuWidth = rect.width || 220;
+  const menuHeight = rect.height || 88;
+  const margin = 8;
+  const left = Math.min(Math.max(clientX, margin), viewportWidth - menuWidth - margin);
+  const top = Math.min(Math.max(clientY, margin), viewportHeight - menuHeight - margin);
+
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+
 async function triggerAgentUpdate(hostname) {
   const response = await fetch("/api/v1/agent-command", {
     method: "POST",
@@ -2395,6 +2513,16 @@ function wireHostListInteractions() {
       }
       event.preventDefault();
       item.click();
+    });
+
+    item.addEventListener("contextmenu", (event) => {
+      const hostname = item.getAttribute("data-host") || "";
+      if (!hostname) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      openHostContextMenu(hostname, event.clientX, event.clientY);
     });
   }
 

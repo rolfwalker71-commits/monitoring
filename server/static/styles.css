@@ -1489,6 +1489,46 @@ button:hover:not(.host-item) {
   background: #ccfbf1;
 }
 
+.host-context-menu {
+  position: fixed;
+  z-index: 1200;
+  min-width: 220px;
+  padding: 8px;
+  border: 1px solid #d1dbe9;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.2);
+}
+
+.host-context-menu-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  padding: 4px 8px 8px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.host-context-menu button {
+  width: 100%;
+  text-align: left;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #fff5f5;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px 10px;
+}
+
+.host-context-menu button:hover {
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+
 .host-item span {
   color: var(--muted);
   font-size: 11px;

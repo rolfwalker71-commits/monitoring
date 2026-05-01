@@ -2555,6 +2555,32 @@ def prune_reports_for_host(conn: sqlite3.Connection, hostname: str, keep_count: 
     )
 
 
+def delete_host_card_data(conn: sqlite3.Connection, hostname: str) -> dict[str, int]:
+    deleted: dict[str, int] = {}
+    cleanup_plan = [
+        ("muted_alert_rules", "hostname = ?"),
+        ("alert_debounce", "hostname = ?"),
+        ("alerts", "hostname = ?"),
+        ("agent_commands", "hostname = ?"),
+        ("host_settings", "hostname = ?"),
+        ("reports", "hostname = ?"),
+    ]
+
+    for table_name, where_clause in cleanup_plan:
+        row = conn.execute(
+            f"SELECT COUNT(*) FROM {table_name} WHERE {where_clause}",
+            (hostname,),
+        ).fetchone()
+        count = int(row[0] or 0) if row else 0
+        conn.execute(
+            f"DELETE FROM {table_name} WHERE {where_clause}",
+            (hostname,),
+        )
+        deleted[table_name] = count
+
+    return deleted
+
+
 def effective_display_name(payload: dict, override_value: str, hostname: str) -> str:
     if override_value:
         return override_value
@@ -4220,6 +4246,39 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "country_code_override": country_code_override,
                     "is_favorite": is_favorite,
                     "is_hidden": is_hidden,
+                },
+            )
+            return
+
+        if path == "/api/v1/host-delete":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            hostname = str(payload.get("hostname", "")).strip()
+            if not hostname:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                deleted = delete_host_card_data(conn, hostname)
+                conn.commit()
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "deleted",
+                    "hostname": hostname,
+                    "deleted": deleted,
+                    "deleted_total": int(sum(deleted.values())),
                 },
             )
             return
