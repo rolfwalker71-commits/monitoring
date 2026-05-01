@@ -180,12 +180,86 @@ function Get-AgentConfigBlock {
 }
 
 function Send-Payload([string]$body) {
-    $wc = New-Object System.Net.WebClient
-    $wc.Encoding = [System.Text.Encoding]::UTF8
-    $wc.Headers.Add('Content-Type', 'application/json; charset=utf-8')
-    if ($ApiKey) { $wc.Headers.Add('X-Api-Key', $ApiKey) }
     $uri = ($ServerUrl.TrimEnd('/')) + '/api/v1/agent-report'
-    $null = $wc.UploadString($uri, 'POST', $body)
+    Invoke-ServerJsonPost -Uri $uri -Body $body | Out-Null
+}
+
+function Invoke-ServerJsonPost {
+    param(
+        [string]$Uri,
+        [string]$Body
+    )
+
+    try {
+        $wc = New-Object System.Net.WebClient
+        $wc.Encoding = [System.Text.Encoding]::UTF8
+        $wc.Headers.Add('Content-Type', 'application/json; charset=utf-8')
+        if ($ApiKey) { $wc.Headers.Add('X-Api-Key', $ApiKey) }
+        return $wc.UploadString($Uri, 'POST', $Body)
+    } catch {
+        $curl = Get-Command 'curl.exe' -ErrorAction SilentlyContinue
+        if (-not $curl) {
+            throw
+        }
+
+        $tmpBody = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + '.json')
+        try {
+            [System.IO.File]::WriteAllText($tmpBody, $Body, [System.Text.Encoding]::UTF8)
+            $args = @(
+                '--silent',
+                '--show-error',
+                '--fail',
+                '--ssl-no-revoke',
+                '-X', 'POST',
+                '-H', 'Content-Type: application/json; charset=utf-8'
+            )
+            if ($ApiKey) {
+                $args += @('-H', ('X-Api-Key: ' + $ApiKey))
+            }
+            $args += @('--data-binary', ('@' + $tmpBody), $Uri)
+            $result = & $curl.Source @args 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw ($result | Out-String).Trim()
+            }
+            return ($result | Out-String)
+        } finally {
+            if (Test-Path $tmpBody) {
+                Remove-Item $tmpBody -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}
+
+function Invoke-ServerGet {
+    param([string]$Uri)
+
+    try {
+        $wc = New-Object System.Net.WebClient
+        $wc.Encoding = [System.Text.Encoding]::UTF8
+        if ($ApiKey) { $wc.Headers.Add('X-Api-Key', $ApiKey) }
+        return $wc.DownloadString($Uri)
+    } catch {
+        $curl = Get-Command 'curl.exe' -ErrorAction SilentlyContinue
+        if (-not $curl) {
+            throw
+        }
+
+        $args = @(
+            '--silent',
+            '--show-error',
+            '--fail',
+            '--ssl-no-revoke'
+        )
+        if ($ApiKey) {
+            $args += @('-H', ('X-Api-Key: ' + $ApiKey))
+        }
+        $args += @($Uri)
+        $result = & $curl.Source @args 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw ($result | Out-String).Trim()
+        }
+        return ($result | Out-String)
+    }
 }
 
 function Get-HttpExceptionSummary($exception) {
@@ -256,12 +330,8 @@ function Send-CommandResult {
     '}'
 
     try {
-        $wc = New-Object System.Net.WebClient
-        $wc.Encoding = [System.Text.Encoding]::UTF8
-        $wc.Headers.Add('Content-Type', 'application/json; charset=utf-8')
-        if ($ApiKey) { $wc.Headers.Add('X-Api-Key', $ApiKey) }
         $uri = ($ServerUrl.TrimEnd('/')) + '/api/v1/agent-command-result'
-        $null = $wc.UploadString($uri, 'POST', $body)
+        Invoke-ServerJsonPost -Uri $uri -Body $body | Out-Null
     } catch { }
 }
 
@@ -302,10 +372,8 @@ function Invoke-AgentSelfUpdate {
 
 function Invoke-RemoteCommands {
     try {
-        $wc = New-Object System.Net.WebClient
-        if ($ApiKey) { $wc.Headers.Add('X-Api-Key', $ApiKey) }
         $uri = ($ServerUrl.TrimEnd('/')) + '/api/v1/agent-commands?hostname=' + [Uri]::EscapeDataString($hostnameValue) + '&agent_id=' + [Uri]::EscapeDataString($agentId) + '&limit=10'
-        $raw = $wc.DownloadString($uri)
+        $raw = Invoke-ServerGet -Uri $uri
         if (-not $raw) { return }
         $data = $raw | ConvertFrom-Json
         $commands = @($data.commands)
