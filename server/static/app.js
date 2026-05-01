@@ -2138,6 +2138,7 @@ function renderSingleHostCard(host) {
   const hiddenClass = isHidden ? " host-item-hidden" : "";
   const chipClass = openCriticalAlertCount > 0 ? "host-alert-chip critical" : "host-alert-chip";
   const alertChip = hasOpenAlerts ? `<span class="${chipClass}">🔔 ${openAlertCount}</span>` : "";
+  const alertChipRow = hasOpenAlerts ? `<span class="host-alert-chip-row">${alertChip}</span>` : "";
   const currentVersion = asText(host.agent_version, "");
   const latestVersion = asText(state.latestAgentRelease, "");
   const versionComparison = compareSemverLike(currentVersion, latestVersion);
@@ -2193,7 +2194,6 @@ function renderSingleHostCard(host) {
       ${flagIcon}
       <strong class="host-title-line">
         <span>${escapeHtml(displayName)}</span>
-        <span class="host-status-chips">${alertChip}</span>
       </strong>
       <span>🖥️ ${escapeHtml(hostname)} &nbsp;·&nbsp; 🧷 ${escapeHtml(asText(host.agent_version))}</span>
       <span>🌐 ${escapeHtml(asText(host.primary_ip))} &nbsp;·&nbsp; 📬 ${hostDelivery} | 🗃️ Q${hostQueueDepth}</span>
@@ -2204,6 +2204,7 @@ function renderSingleHostCard(host) {
         <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
         ${updateTriangle}
       </span>
+      ${alertChipRow}
       ${mutedAlertsSection}
       ${osIcon}
     </article>
