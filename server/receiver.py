@@ -22,6 +22,7 @@ DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "monitoring.db"
 BUILD_VERSION_PATH = BASE_DIR.parent / "BUILD_VERSION"
 AGENT_VERSION_PATH = BASE_DIR.parent / "AGENT_VERSION"
+OPENAPI_SPEC_PATH = BASE_DIR.parent / "openapi.yaml"
 API_KEY = os.getenv("MONITORING_API_KEY", "")
 API_KEY_GRACE_ALLOW_KNOWN_HOSTS = os.getenv("MONITORING_API_KEY_GRACE_ALLOW_KNOWN_HOSTS", "1").strip().lower() in {"1", "true", "yes", "on"}
 MAX_REPORTS_PER_HOST = int(os.getenv("MONITORING_MAX_REPORTS_PER_HOST", "1344"))
@@ -2831,6 +2832,42 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
 class MonitoringHandler(BaseHTTPRequestHandler):
     server_version = "MonitoringReceiver/0.1"
 
+    def _swagger_ui_html(self) -> str:
+        return """<!doctype html>
+<html lang=\"en\">
+    <head>
+        <meta charset=\"utf-8\">
+        <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+        <title>Monitoring API Docs</title>
+        <link rel=\"stylesheet\" href=\"https://unpkg.com/swagger-ui-dist@5/swagger-ui.css\">
+        <style>
+            html, body {
+                margin: 0;
+                padding: 0;
+                background: #f8fafc;
+            }
+            #swagger-ui {
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+        </style>
+    </head>
+    <body>
+        <div id=\"swagger-ui\"></div>
+        <script src=\"https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js\"></script>
+        <script>
+            window.ui = SwaggerUIBundle({
+                url: '/openapi.yaml',
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [SwaggerUIBundle.presets.apis],
+                layout: 'BaseLayout'
+            });
+        </script>
+    </body>
+</html>
+"""
+
     def _send_json(self, status: int, payload: dict, extra_headers: dict[str, str] | None = None) -> None:
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
@@ -3864,6 +3901,22 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/styles.css":
             self._send_file(STATIC_DIR / "styles.css", "text/css; charset=utf-8")
+            return
+
+        if parsed.path == "/openapi.yaml":
+            self._send_file(
+                OPENAPI_SPEC_PATH,
+                "application/yaml; charset=utf-8",
+                extra_headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
+            return
+
+        if parsed.path in {"/swagger", "/swagger/", "/docs", "/docs/"}:
+            self._send_html(HTTPStatus.OK, self._swagger_ui_html())
             return
 
         if parsed.path.endswith("/BUILD_VERSION"):
