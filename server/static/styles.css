@@ -2033,6 +2033,12 @@ th {
     gap: 5px;
   }
 
+  #hostFiltersResetButton {
+    min-width: 0;
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
   .hosts-column-scroll {
     position: static;
     top: auto;
