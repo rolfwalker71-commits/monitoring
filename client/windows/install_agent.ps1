@@ -222,17 +222,11 @@ Register-MonitoringTask `
 # Non-interactive post-install self-test: run collector and updater once immediately.
 Write-Host "Running self-test (collect and update)..."
 
-& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command `
-    "`$env:CONFIG_FILE='$ConfigFile'; " + `
-    "`$env:AGENT_VERSION_FILE='$InstallDir\AGENT_VERSION'; " + `
-    "`$env:AGENT_QUEUE_DIR='$QueueDir'; " + `
-    "& '$InstallDir\collect_and_send.ps1' *>> '$LogFile'"
+$selfTestCollect = "`$env:CONFIG_FILE='$ConfigFile'; `$env:AGENT_VERSION_FILE='$InstallDir\AGENT_VERSION'; `$env:AGENT_QUEUE_DIR='$QueueDir'; & '$InstallDir\collect_and_send.ps1' *>> '$LogFile'"
+& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command $selfTestCollect
 
-& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command `
-    "`$env:CONFIG_FILE='$ConfigFile'; " + `
-    "`$env:AGENT_VERSION_FILE='$InstallDir\AGENT_VERSION'; " + `
-    "`$env:AGENT_QUEUE_DIR='$QueueDir'; " + `
-    "& '$InstallDir\self_update.ps1' *>> '$UpdateLogFile'"
+$selfTestUpdate = "`$env:CONFIG_FILE='$ConfigFile'; `$env:AGENT_VERSION_FILE='$InstallDir\AGENT_VERSION'; `$env:AGENT_QUEUE_DIR='$QueueDir'; & '$InstallDir\self_update.ps1' *>> '$UpdateLogFile'"
+& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command $selfTestUpdate
 
 $installedAgentVersion = 'unknown'
 if (Test-Path "$InstallDir\AGENT_VERSION") {
