@@ -460,6 +460,21 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def format_mail_datetime(value: str | None = None) -> str:
+    if not value:
+        return datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
+    raw = str(value).strip()
+    if not raw:
+        return datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone().strftime("%d.%m.%Y %H:%M")
+    except ValueError:
+        return raw
+
+
 def utc_hours_ago_iso(hours: int) -> str:
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     return cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1130,24 +1145,24 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
     rows_html = "".join(
         (
             "<tr>"
-            f"<td>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</td>"
-            f"<td>{html.escape(str(item.get('metric') or '-'))}</td>"
-            f"<td>{html.escape(str(item.get('current') if item.get('current') is not None else '-'))}%</td>"
-            f"<td><strong>{html.escape(str(item.get('projected') if item.get('projected') is not None else '-'))}%</strong></td>"
-            f"<td><span style='display:inline-block;padding:2px 8px;border-radius:999px;background:{'#fee2e2' if str(item.get('level')) == 'crit' else '#fef3c7'};color:{'#991b1b' if str(item.get('level')) == 'crit' else '#92400e'};font-weight:600;'>{'KRITISCH' if str(item.get('level')) == 'crit' else 'WARNUNG'}</span></td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:middle;'>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:middle;'>{html.escape(str(item.get('metric') or '-'))}</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums;'>{html.escape(str(item.get('current') if item.get('current') is not None else '-'))}%</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums;'><strong>{html.escape(str(item.get('projected') if item.get('projected') is not None else '-'))}%</strong></td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:middle;'><span style='display:inline-block;padding:2px 8px;border-radius:999px;background:{'#fee2e2' if str(item.get('level')) == 'crit' else '#fef3c7'};color:{'#991b1b' if str(item.get('level')) == 'crit' else '#92400e'};font-weight:600;'>{'KRITISCH' if str(item.get('level')) == 'crit' else 'WARNUNG'}</span></td>"
             "</tr>"
         )
         for item in warnings
     )
     if not rows_html:
-        rows_html = "<tr><td colspan='5'>Keine kritischen Trends im gewaehlten Zeitraum.</td></tr>"
+        rows_html = "<tr><td colspan='5' style='padding:12px 8px;text-align:left;color:#475569;'>Keine kritischen Trends im gewaehlten Zeitraum.</td></tr>"
 
     return (
         "<html><body style='margin:0;background:#eef3fb;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:900px;margin:20px auto;background:#ffffff;border:1px solid #d5e1f2;border-radius:14px;overflow:hidden;'>"
         "<div style='padding:18px 20px;background:linear-gradient(135deg,#0f4c81,#1f6aa5);color:#fff;'>"
         "<h2 style='margin:0 0 6px 0;font-size:22px;'>Daily Trend Digest</h2>"
-        f"<div style='font-size:13px;opacity:.95;'>Benutzer: {html.escape(username)} | Fenster: letzte {hours}h | Zeit: {html.escape(utc_now_iso())}</div>"
+        f"<div style='font-size:13px;opacity:.95;'>Benutzer: {html.escape(username)} | Fenster: letzte {hours}h | Zeit: {html.escape(format_mail_datetime())}</div>"
         "</div>"
         "<div style='padding:18px 20px;'>"
         f"<p style='margin:0 0 14px 0;font-size:14px;'>Es wurden <strong>{len(warnings)}</strong> trend-kritische Signale erkannt.</p>"
@@ -1183,24 +1198,24 @@ def alert_digest_html(username: str, alerts: list[dict]) -> str:
     rows_html = "".join(
         (
             f"<tr style='background:{'#fff1f2' if str(item.get('severity')) == 'critical' else '#fffaf0'};'>"
-            f"<td>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</td>"
-            f"<td>{html.escape(str(item.get('mountpoint') or '-'))}</td>"
-            f"<td><strong style='color:{'#991b1b' if str(item.get('severity')) == 'critical' else '#9a3412'};'>{html.escape(str(item.get('severity') or '-').upper())}</strong></td>"
-            f"<td>{html.escape('{:.1f}'.format(float(item.get('used_percent') or 0)))}%</td>"
-            f"<td>{html.escape(str(item.get('last_seen_at_utc') or '-'))}</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'>{html.escape(str(item.get('mountpoint') or '-'))}</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><strong style='color:{'#991b1b' if str(item.get('severity')) == 'critical' else '#9a3412'};'>{html.escape(str(item.get('severity') or '-').upper())}</strong></td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums;'>{html.escape('{:.1f}'.format(float(item.get('used_percent') or 0)))}%</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;font-variant-numeric:tabular-nums;'>{html.escape(format_mail_datetime(str(item.get('last_seen_at_utc') or '')))}</td>"
             "</tr>"
         )
         for item in alerts
     )
     if not rows_html:
-        rows_html = "<tr><td colspan='5'>Keine offenen Alarme vorhanden.</td></tr>"
+        rows_html = "<tr><td colspan='5' style='padding:12px 8px;text-align:left;color:#7f1d1d;'>Keine offenen Alarme vorhanden.</td></tr>"
 
     return (
         "<html><body style='margin:0;background:#f3f6ff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:900px;margin:20px auto;background:#ffffff;border:1px solid #dbe3ef;border-radius:14px;overflow:hidden;'>"
         "<div style='padding:18px 20px;background:linear-gradient(135deg,#7f1d1d,#b91c1c);color:#fff;'>"
         "<h2 style='margin:0 0 6px 0;font-size:22px;'>Open Alert Digest</h2>"
-        f"<div style='font-size:13px;opacity:.95;'>Benutzer: {html.escape(username)} | Zeit: {html.escape(utc_now_iso())}</div>"
+        f"<div style='font-size:13px;opacity:.95;'>Benutzer: {html.escape(username)} | Zeit: {html.escape(format_mail_datetime())}</div>"
         "</div>"
         "<div style='padding:18px 20px;'>"
         f"<p style='margin:0 0 14px 0;font-size:14px;'>Aktuell <strong>{len(alerts)}</strong> offene, nicht stummgeschaltete Alarme.</p>"
@@ -1261,7 +1276,7 @@ def alert_instant_mail_html(username: str, event_type: str, hostname: str, mount
         "<div style='max-width:600px;margin:20px auto;background:#ffffff;border:1px solid #dbe3ef;border-radius:14px;overflow:hidden;'>"
         f"<div style='padding:18px 20px;background:{header_bg};color:#fff;'>"
         f"<h2 style='margin:0 0 4px 0;font-size:20px;'>{html.escape(event_label)}</h2>"
-        f"<div style='font-size:12px;opacity:.9;'>Benutzer: {html.escape(username)} | {html.escape(utc_now_iso())}</div>"
+        f"<div style='font-size:12px;opacity:.9;'>Benutzer: {html.escape(username)} | {html.escape(format_mail_datetime())}</div>"
         "</div>"
         "<div style='padding:20px;'>"
         "<table style='width:100%;border-collapse:collapse;font-size:14px;'>"
