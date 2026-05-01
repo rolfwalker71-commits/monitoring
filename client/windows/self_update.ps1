@@ -59,7 +59,18 @@ if (Test-Path $VersionFile) {
     $localVersion = ((Get-Content $VersionFile -TotalCount 1 -Encoding UTF8) -replace '\s', '')
 }
 
-Write-Host "Updating from $localVersion to $remoteVersion..."
+# ---- Version comparison: only proceed if remote is strictly newer ----
+function Compare-Versions {
+    param([string]$Newer, [string]$Older)
+    if ($Newer -eq $Older) { return $false }
+    try {
+        $n = [System.Version]::new(($Newer -replace '[^0-9.]', ''))
+        $o = [System.Version]::new(($Older -replace '[^0-9.]', ''))
+        return $n -gt $o
+    } catch {
+        return $Newer -ne $Older
+    }
+}
 
 # ---- Download to temp dir ----
 $tmpDir = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), [System.IO.Path]::GetRandomFileName())
@@ -77,4 +88,7 @@ try {
     Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-Write-Host "Monitoring agent refreshed from $localVersion to $remoteVersion"
+if (Compare-Versions -Newer $remoteVersion -Older $localVersion) {
+    $ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    Write-Host "${ts} Monitoring agent updated from $localVersion to $remoteVersion"
+}
