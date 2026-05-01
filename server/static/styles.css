@@ -133,15 +133,15 @@ body {
 
 .brand-text h1 {
   margin: 0;
-  font-size: 42px;
-  line-height: 1;
-  letter-spacing: 0.01em;
+  font-size: 24px;
+  line-height: 1.05;
+  letter-spacing: 0.4px;
 }
 
 .subtitle-meta {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: #64748b;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
 }
 
