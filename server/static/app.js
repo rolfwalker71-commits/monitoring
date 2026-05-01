@@ -2268,17 +2268,17 @@ function renderSingleHostCard(host) {
   const chipClass = openCriticalAlertCount > 0 ? "host-alert-chip critical" : "host-alert-chip";
   const alertChip = hasOpenAlerts ? `<span class="${chipClass}">🔔 ${openAlertCount}</span>` : "";
   const apiKeyStatus = asText(host.agent_api_key_status || "off").toLowerCase();
-  const apiKeyChipClass = apiKeyStatus === "key-auth" ? "host-apikey-chip ok"
-    : apiKeyStatus === "grace" ? "host-apikey-chip grace"
-    : apiKeyStatus === "configured" ? "host-apikey-chip configured"
-    : apiKeyStatus === "missing" ? "host-apikey-chip missing"
-    : "";
+  const apiKeyChipMod = apiKeyStatus === "key-auth" ? "ok"
+    : apiKeyStatus === "grace" ? "grace"
+    : apiKeyStatus === "configured" ? "configured"
+    : apiKeyStatus === "missing" ? "missing"
+    : "off";
   const apiKeyChipTitle = apiKeyStatus === "key-auth" ? "API-Key: aktiv"
     : apiKeyStatus === "grace" ? "API-Key: Grace (noch kein Key)"
     : apiKeyStatus === "configured" ? "API-Key: konfiguriert"
     : apiKeyStatus === "missing" ? "API-Key: fehlt"
-    : "";
-  const apiKeyChip = apiKeyChipClass ? `<span class="${apiKeyChipClass}" title="${escapeHtml(apiKeyChipTitle)}">🔐</span>` : "";
+    : "API-Key: nicht konfiguriert";
+  const apiKeyChip = `<span class="host-apikey-chip ${apiKeyChipMod}" title="${escapeHtml(apiKeyChipTitle)}">API</span>`;
   const currentVersion = asText(host.agent_version, "");
   const latestVersion = asText(state.latestAgentRelease, "");
   const versionComparison = compareSemverLike(currentVersion, latestVersion);
