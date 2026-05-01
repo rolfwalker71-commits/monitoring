@@ -22,6 +22,8 @@ DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "monitoring.db"
 APP_LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
 ANG_LOGO_PATH = STATIC_DIR / "icons" / "ANG.png"
+LINUX_LOGO_PATH = STATIC_DIR / "icons" / "linux.png"
+WINDOWS_LOGO_PATH = STATIC_DIR / "icons" / "windows.png"
 BUILD_VERSION_PATH = BASE_DIR.parent / "BUILD_VERSION"
 AGENT_VERSION_PATH = BASE_DIR.parent / "AGENT_VERSION"
 OPENAPI_SPEC_PATH = BASE_DIR.parent / "openapi.yaml"
@@ -1003,8 +1005,15 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
             continue
 
         last_payload = parse_payload_json(rows[-1][0])
-        dn_override = get_display_name_override(conn, hostname)
-        host_display_name = effective_display_name(last_payload, dn_override, hostname)
+        host_settings = conn.execute(
+            "SELECT COALESCE(display_name_override, ''), COALESCE(country_code_override, '') FROM host_settings WHERE hostname = ?",
+            (hostname,),
+        ).fetchone()
+        display_name_override = str(host_settings[0] or "").strip() if host_settings else ""
+        country_code_override = normalize_country_code(host_settings[1] if host_settings else "")
+        host_display_name = effective_display_name(last_payload, display_name_override, hostname)
+        host_country_code = country_code_override or extract_country_code_from_payload(last_payload)
+        host_os_family = normalize_os_family(last_payload.get("os", ""))
 
         resource_series: dict[str, list[float]] = {
             "cpu_usage_percent": [],
@@ -1057,6 +1066,8 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
                     "current": round(current, 1) if current is not None else None,
                     "projected": round(float(projected), 1),
                     "level": level,
+                    "country_code": host_country_code,
+                    "os_family": host_os_family,
                 }
             )
 
@@ -1076,6 +1087,8 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
                     "current": round(current, 1) if current is not None else None,
                     "projected": round(float(projected), 1),
                     "level": level,
+                    "country_code": host_country_code,
+                    "os_family": host_os_family,
                 }
             )
 
@@ -1180,13 +1193,16 @@ def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
 
     hostnames = sorted({str(row[1] or "") for row in rows if str(row[1] or "")})
     display_names: dict[str, str] = {}
+    country_codes: dict[str, str] = {}
+    os_families: dict[str, str] = {}
     if hostnames:
         placeholders = ",".join("?" for _ in hostnames)
         settings_rows = conn.execute(
-            f"SELECT hostname, display_name_override FROM host_settings WHERE hostname IN ({placeholders})",
+            f"SELECT hostname, display_name_override, COALESCE(country_code_override, '') FROM host_settings WHERE hostname IN ({placeholders})",
             tuple(hostnames),
         ).fetchall()
         overrides = {str(item[0]): str(item[1] or "") for item in settings_rows}
+        country_overrides = {str(item[0]): normalize_country_code(item[2]) for item in settings_rows}
 
         latest_payload_rows = conn.execute(
             f"""
@@ -1209,6 +1225,8 @@ def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
         for hostname in hostnames:
             payload = payload_by_hostname.get(hostname, {})
             display_names[hostname] = effective_display_name(payload, overrides.get(hostname, ""), hostname)
+            country_codes[hostname] = country_overrides.get(hostname, "") or extract_country_code_from_payload(payload)
+            os_families[hostname] = normalize_os_family(payload.get("os", ""))
 
     return [
         {
@@ -1220,9 +1238,36 @@ def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
             "used_percent": float(row[4] or 0),
             "created_at_utc": str(row[5] or ""),
             "last_seen_at_utc": str(row[6] or ""),
+            "country_code": country_codes.get(str(row[1] or ""), ""),
+            "os_family": os_families.get(str(row[1] or ""), "linux"),
         }
         for row in rows
     ]
+
+
+def host_badges_html(country_code: object, os_family: object) -> str:
+    normalized_country_code = normalize_country_code(country_code)
+    country_badge = normalized_country_code if normalized_country_code else "--"
+    normalized_os_family = normalize_os_family(os_family)
+    os_label = os_family_label(normalized_os_family)
+    os_logo_uri = os_logo_data_uri(normalized_os_family)
+    country_flag_uri = country_flag_data_uri(normalized_country_code)
+    os_icon_html = (
+        f"<img src='{html.escape(os_logo_uri)}' alt='{html.escape(os_label)}' width='13' height='13' style='display:block;'>"
+        if os_logo_uri
+        else ""
+    )
+    country_icon_html = (
+        f"<img src='{html.escape(country_flag_uri)}' alt='{html.escape(country_badge)}' width='13' height='13' style='display:block;'>"
+        if country_flag_uri
+        else ""
+    )
+    return (
+        "<div style='margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;'>"
+        f"<span style='display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;background:#d9ebff;color:#244566;font-size:11px;font-weight:700;'>{os_icon_html}{html.escape(os_label)}</span>"
+        f"<span style='display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;background:#d9ebff;color:#244566;font-size:11px;font-weight:700;'>{country_icon_html}Land {html.escape(country_badge)}</span>"
+        "</div>"
+    )
 
 
 def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
@@ -1232,7 +1277,7 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
     rows_html = "".join(
         (
             "<tr>"
-            f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:middle;'>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:middle;'><div style='font-weight:600;'>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</div>{host_badges_html(item.get('country_code', ''), item.get('os_family', 'linux'))}</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:middle;'>{html.escape(str(item.get('metric') or '-'))}</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums;'>{html.escape(str(item.get('current') if item.get('current') is not None else '-'))}%</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums;'><strong>{html.escape(str(item.get('projected') if item.get('projected') is not None else '-'))}%</strong></td>"
@@ -1296,7 +1341,7 @@ def alert_digest_html(username: str, alerts: list[dict]) -> str:
     rows_html = "".join(
         (
             f"<tr style='background:{'#fff1f2' if str(item.get('severity')) == 'critical' else '#fffaf0'};'>"
-            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><div style='font-weight:600;'>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</div>{host_badges_html(item.get('country_code', ''), item.get('os_family', 'linux'))}</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'>{html.escape(str(item.get('mountpoint') or '-'))}</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><strong style='color:{'#991b1b' if str(item.get('severity')) == 'critical' else '#9a3412'};'>{html.escape(str(item.get('severity') or '-').upper())}</strong></td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums;'>{html.escape('{:.1f}'.format(float(item.get('used_percent') or 0)))}%</td>"
@@ -1394,6 +1439,17 @@ def alert_instant_mail_html(
     normalized_os_family = normalize_os_family(os_family)
     os_label = os_family_label(normalized_os_family)
     os_logo_uri = os_logo_data_uri(normalized_os_family)
+    country_flag_uri = country_flag_data_uri(normalized_country_code)
+    os_icon_html = (
+        f"<img src='{html.escape(os_logo_uri)}' alt='{html.escape(os_label)}' width='14' height='14' style='display:block;'>"
+        if os_logo_uri
+        else ""
+    )
+    country_icon_html = (
+        f"<img src='{html.escape(country_flag_uri)}' alt='{html.escape(country_badge)}' width='14' height='14' style='display:block;'>"
+        if country_flag_uri
+        else ""
+    )
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
     build_version = html.escape(read_build_version())
@@ -1414,9 +1470,8 @@ def alert_instant_mail_html(
         f"<div style='margin-top:6px;font-size:14px;color:#5f7590;'>Host: {html.escape(hostname)}</div>"
         "<div style='margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;'>"
         f"<span style='display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#d9ebff;color:#244566;font-size:12px;font-weight:700;'>"
-        f"<img src='{html.escape(os_logo_uri)}' alt='{html.escape(os_label)}' width='14' height='14' style='display:block;'>"
-        f"{html.escape(os_label)}</span>"
-        f"<span style='display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#d9ebff;color:#244566;font-size:12px;font-weight:700;'>Land {html.escape(country_badge)}</span>"
+        f"{os_icon_html}{html.escape(os_label)}</span>"
+        f"<span style='display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#d9ebff;color:#244566;font-size:12px;font-weight:700;'>{country_icon_html}Land {html.escape(country_badge)}</span>"
         f"<span style='display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:{sev_bg};color:{sev_text};font-size:12px;font-weight:800;'>{sev_label}</span>"
         "</div>"
         "</div>"
@@ -2401,25 +2456,24 @@ def os_family_label(os_family: str) -> str:
 
 
 def os_logo_data_uri(os_family: str) -> str:
-    if os_family == "windows":
-        svg = (
-            "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>"
-            "<rect x='1' y='1' width='10' height='10' rx='1.4' fill='#1674ea'/>"
-            "<rect x='13' y='1' width='10' height='10' rx='1.4' fill='#0f62d7'/>"
-            "<rect x='1' y='13' width='10' height='10' rx='1.4' fill='#0f62d7'/>"
-            "<rect x='13' y='13' width='10' height='10' rx='1.4' fill='#1674ea'/>"
-            "</svg>"
-        )
-    else:
-        svg = (
-            "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>"
-            "<rect x='1' y='2' width='22' height='20' rx='5' fill='#111827'/>"
-            "<rect x='4' y='6' width='16' height='10' rx='2' fill='#1f2937'/>"
-            "<path d='M8 11h4v2H8zm6 0h3v2h-3z' fill='#6ee7b7'/>"
-            "<rect x='9' y='17' width='6' height='2' rx='1' fill='#9ca3af'/>"
-            "</svg>"
-        )
-    return "data:image/svg+xml;utf8," + parse.quote(svg)
+    icon_path = WINDOWS_LOGO_PATH if os_family == "windows" else LINUX_LOGO_PATH
+    try:
+        encoded = base64.b64encode(icon_path.read_bytes()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    except OSError:
+        return ""
+
+
+def country_flag_data_uri(country_code: str) -> str:
+    normalized_country_code = normalize_country_code(country_code)
+    if not normalized_country_code:
+        return ""
+    icon_path = STATIC_DIR / "icons" / f"{normalized_country_code}.png"
+    try:
+        encoded = base64.b64encode(icon_path.read_bytes()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    except OSError:
+        return ""
 
 
 def app_logo_data_uri() -> str:
