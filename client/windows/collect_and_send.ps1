@@ -109,6 +109,29 @@ function Get-UpdateLogBlock {
     return '{"available":true,"path":"' + $logPathJson + '","line_count":' + $lines.Count + ',"lines":[' + ($encodedLines -join ',') + '],"priority_check_minutes":' + $priorityMinutes + ',"last_priority_check_utc":"' + (ConvertTo-JsonString $lastPriorityCheckUtc) + '","next_priority_check_utc":"' + (ConvertTo-JsonString $nextPriorityCheckUtc) + '","recurring_update_hours":' + $recurringUpdateHours + ',"recurring_update_hint":"' + (ConvertTo-JsonString ("Windows-Fallback-Update standardmaessig alle {0} Stunden relativ zum Installationszeitpunkt" -f $recurringUpdateHours)) + '"}'
 }
 
+function Get-AgentConfigBlock {
+    $maskedKeys = @('API_KEY','PASSWORD','SECRET','TOKEN','PASS')
+    $configPathJson = ConvertTo-JsonString $ConfigFile
+    if (-not (Test-Path $ConfigFile)) {
+        return '{"available":false,"path":"' + $configPathJson + '","entries":[]}'
+    }
+    $entries = @()
+    foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8 -ErrorAction SilentlyContinue) {
+        if ([string]::IsNullOrWhiteSpace($line) -or $line -match '^\s*#') { continue }
+        if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"?(.*?)"?\s*$') {
+            $k = $Matches[1]
+            $v = $Matches[2]
+            $shouldMask = $false
+            foreach ($mk in $maskedKeys) {
+                if ($k -imatch $mk) { $shouldMask = $true; break }
+            }
+            if ($shouldMask) { $v = '***' }
+            $entries += ('{"key":"' + (ConvertTo-JsonString $k) + '","value":"' + (ConvertTo-JsonString $v) + '"}')
+        }
+    }
+    return '{"available":true,"path":"' + $configPathJson + '","entries":[' + ($entries -join ',') + ']}'
+}
+
 function Send-Payload([string]$body) {
     $wc = New-Object System.Net.WebClient
     $wc.Headers.Add('Content-Type', 'application/json')
@@ -453,7 +476,8 @@ $topProcStr = Get-TopProcessEntries
 $containerData = Get-ContainerEntries
 $containersStr = [string]$containerData.entries
 $dockerAvailable = if ($containerData.available) { 'true' } else { 'false' }
-$updateLogJson = Get-UpdateLogBlock
+$updateLogJson  = Get-UpdateLogBlock
+$agentConfigJson = Get-AgentConfigBlock
 
 Invoke-RemoteCommands
 Invoke-PrioritySelfUpdate
@@ -526,7 +550,8 @@ $payload = @"
         "available": $dockerAvailable,
         "entries": [$containersStr]
     },
-    "agent_update": $updateLogJson
+    "agent_update": $updateLogJson,
+    "agent_config": $agentConfigJson
 }
 "@
 

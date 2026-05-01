@@ -214,6 +214,30 @@ run_self_update_now() {
   return 127
 }
 
+collect_agent_config_json() {
+  local entries="" line key value masked_keys="API_KEY|PASSWORD|SECRET|TOKEN|PASS"
+  if [[ ! -r "$CONFIG_FILE" ]]; then
+    printf '{"available":false,"path":"%s","entries":[]}' "$(json_escape "$CONFIG_FILE")"
+    return
+  fi
+  while IFS= read -r line; do
+    # skip blank lines and comments
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    if [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)[[:space:]]*$ ]]; then
+      key="${BASH_REMATCH[1]}"
+      value="${BASH_REMATCH[2]}"
+      # strip surrounding quotes
+      value="${value%\"}"
+      value="${value#\"}"
+      if echo "$key" | grep -qiE "$masked_keys"; then
+        value="***"
+      fi
+      entries="$(append_json_entry "$entries" "{\"key\":\"$(json_escape "$key")\",\"value\":\"$(json_escape "$value")\"}")"
+    fi
+  done < "$CONFIG_FILE"
+  printf '{"available":true,"path":"%s","entries":[%s]}' "$(json_escape "$CONFIG_FILE")" "$entries"
+}
+
 collect_journal_errors_json() {
   local entries="" line timestamp message entry
 
@@ -465,6 +489,7 @@ JOURNAL_ERRORS_JSON="$(collect_journal_errors_json)"
 TOP_PROCESSES_JSON="$(collect_top_processes_json)"
 CONTAINERS_JSON="$(collect_containers_json)"
 AGENT_UPDATE_JSON="$(collect_update_log_json)"
+AGENT_CONFIG_JSON="$(collect_agent_config_json)"
 
 DOCKER_AVAILABLE=false
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
@@ -529,7 +554,8 @@ PAYLOAD=$(cat <<EOF
     "available": $DOCKER_AVAILABLE,
     "entries": [${CONTAINERS_JSON}]
   },
-  "agent_update": ${AGENT_UPDATE_JSON}
+  "agent_update": ${AGENT_UPDATE_JSON},
+  "agent_config": ${AGENT_CONFIG_JSON}
 }
 EOF
 )

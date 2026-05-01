@@ -1857,6 +1857,27 @@ function renderContainersTable(containersBlock) {
   `;
 }
 
+function renderAgentConfig(agentConfigBlock) {
+  const block = agentConfigBlock && typeof agentConfigBlock === "object" ? agentConfigBlock : {};
+  const available = block.available === true;
+  const path = asText(block.path);
+  const entries = Array.isArray(block.entries) ? block.entries : [];
+  if (!available && entries.length === 0) {
+    return `<p class="muted">Keine Agent-Konfiguration übertragen.</p>`;
+  }
+  const rows = entries.map(e => {
+    const k = escapeHtml(asText(e.key));
+    const v = asText(e.value) === "***"
+      ? `<span style="color:#94a3b8;font-style:italic;">***</span>`
+      : `<span>${escapeHtml(asText(e.value))}</span>`;
+    return `<tr><td style="padding:4px 10px 4px 0;color:#64748b;white-space:nowrap;vertical-align:top;">${k}</td><td style="padding:4px 0;word-break:break-all;">${v}</td></tr>`;
+  }).join("");
+  return `
+    <p class="count compact">Pfad: ${escapeHtml(path || "-")}</p>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;font-family:monospace;">${rows}</table>
+  `;
+}
+
 function renderAgentUpdateLog(agentUpdateBlock) {
   const block = agentUpdateBlock && typeof agentUpdateBlock === "object" ? agentUpdateBlock : {};
   const available = block.available === true;
@@ -1913,6 +1934,10 @@ function renderReportCard(report) {
     detailContent = `
       <h4>⟳ Agent Update Log</h4>
       ${renderAgentUpdateLog(payload.agent_update)}
+    `;
+    detailContent += `
+      <h4>🗂️ agent.conf</h4>
+      ${renderAgentConfig(payload.agent_config)}
     `;
   } else {
     detailContent = `
