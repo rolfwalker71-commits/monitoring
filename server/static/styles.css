@@ -28,6 +28,17 @@ body {
   font-size: 14px;
 }
 
+body[data-theme="dark"] {
+  --bg: #0d1728;
+  --panel: #111b2f;
+  --text: #e6edf7;
+  --muted: #9fb3cc;
+  --line: #24344d;
+  --accent: #3b82f6;
+  color-scheme: dark;
+  background: radial-gradient(circle at top left, #1b2b45 0%, var(--bg) 48%);
+}
+
 .login-overlay {
   position: fixed;
   inset: 0;
@@ -199,6 +210,10 @@ body {
   background: #fef2f2;
   border-color: #ef4444;
   color: #991b1b;
+}
+
+.btn-theme-toggle {
+  min-width: 130px;
 }
 
 .panel {
@@ -2435,4 +2450,108 @@ th {
 * {
   scrollbar-width: thin;
   scrollbar-color: #c0cfe0 transparent;
+}
+
+body[data-theme="dark"] .brand-header {
+  background: linear-gradient(135deg, #18273f 0%, #142238 100%);
+  border-color: #2a3c59;
+}
+
+body[data-theme="dark"] .brand-tools,
+body[data-theme="dark"] .alarm-settings-panel,
+body[data-theme="dark"] .settings-page,
+body[data-theme="dark"] .subview-tabs-shell,
+body[data-theme="dark"] .view-tabs-shell,
+body[data-theme="dark"] .panel,
+body[data-theme="dark"] .report-card {
+  background: #111b2f;
+  border-color: #2a3c59;
+  color: var(--text);
+}
+
+body[data-theme="dark"] .settings-page {
+  background: linear-gradient(180deg, #131f34 0%, #101a2c 100%);
+}
+
+body[data-theme="dark"] .settings-page-header h3,
+body[data-theme="dark"] .settings-subsection h5,
+body[data-theme="dark"] .subtitle-meta,
+body[data-theme="dark"] .count,
+body[data-theme="dark"] .settings-helper-text,
+body[data-theme="dark"] .chart-range-control,
+body[data-theme="dark"] .alarm-settings-grid label,
+body[data-theme="dark"] .login-card label,
+body[data-theme="dark"] th {
+  color: var(--muted);
+}
+
+body[data-theme="dark"] .login-card {
+  border-color: #2a3c59;
+  background: linear-gradient(180deg, #17253d 0%, #101a2d 100%);
+  color: var(--text);
+}
+
+body[data-theme="dark"] .login-card input,
+body[data-theme="dark"] input,
+body[data-theme="dark"] select,
+body[data-theme="dark"] textarea {
+  background: #0f1829;
+  color: var(--text);
+  border-color: #355174;
+}
+
+body[data-theme="dark"] .btn-secondary {
+  background: linear-gradient(180deg, #1b2b45 0%, #14233a 100%);
+  border-color: #345178;
+  color: #d9e8ff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+body[data-theme="dark"] .btn-secondary:hover:not(:disabled) {
+  background: #213551;
+  border-color: #4a6f9f;
+  color: #ffffff;
+}
+
+body[data-theme="dark"] .btn-icon:hover {
+  background: #1e3352;
+  border-color: #335987;
+  color: #9cc3ff;
+}
+
+body[data-theme="dark"] .stat-chip {
+  background: #13233a;
+  color: #b8d0ec;
+  border-color: #2f4a6e;
+}
+
+body[data-theme="dark"] .stat-chip.live {
+  background: #103225;
+  color: #89ddb4;
+  border-color: #226948;
+}
+
+body[data-theme="dark"] .stat-chip.delayed {
+  background: #3b2f12;
+  color: #f7d083;
+  border-color: #7f611f;
+}
+
+body[data-theme="dark"] .user-flag-pill.off,
+body[data-theme="dark"] .oauth-state-pill.disconnected {
+  background: #1f2f46;
+  color: #a9bfd9;
+}
+
+body[data-theme="dark"] .view-tabs-shell,
+body[data-theme="dark"] .overview-scroll-panel .analysis-header,
+body[data-theme="dark"] .overview-scroll-panel .analysis-panel .analysis-header {
+  background: #16253b;
+}
+
+body[data-theme="dark"] table,
+body[data-theme="dark"] th,
+body[data-theme="dark"] td,
+body[data-theme="dark"] .ih-host-card {
+  border-color: #2a3c59;
 }

@@ -8,6 +8,7 @@ function escapeHtml(value) {
 }
 
 const ANALYSIS_RANGE_STORAGE_KEY = "monitoring.analysisHours";
+const THEME_STORAGE_KEY = "monitoring.theme";
 const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "agent-update"]);
 
 const state = {
@@ -101,6 +102,50 @@ function persistAnalysisRangePreference() {
   } catch (_error) {
     // Ignore storage failures and keep the current in-memory selection.
   }
+}
+
+function normalizeTheme(value) {
+  return String(value || "").toLowerCase() === "dark" ? "dark" : "light";
+}
+
+function loadThemePreference() {
+  try {
+    return normalizeTheme(window.localStorage.getItem(THEME_STORAGE_KEY));
+  } catch (_error) {
+    return "light";
+  }
+}
+
+function persistThemePreference(theme) {
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, normalizeTheme(theme));
+  } catch (_error) {
+    // Ignore storage failures and keep runtime theme.
+  }
+}
+
+function updateThemeToggleUi(theme) {
+  const button = document.getElementById("themeToggleButton");
+  if (!button) {
+    return;
+  }
+  const isDark = normalizeTheme(theme) === "dark";
+  button.textContent = isDark ? "☀️ Lightmode" : "🌙 Darkmode";
+  button.setAttribute("aria-pressed", isDark ? "true" : "false");
+  button.title = isDark ? "Zum Lightmode wechseln" : "Zum Darkmode wechseln";
+}
+
+function applyTheme(theme) {
+  const normalized = normalizeTheme(theme);
+  document.body.setAttribute("data-theme", normalized);
+  updateThemeToggleUi(normalized);
+}
+
+function toggleTheme() {
+  const current = normalizeTheme(document.body.getAttribute("data-theme"));
+  const next = current === "dark" ? "light" : "dark";
+  applyTheme(next);
+  persistThemePreference(next);
 }
 
 function parseVersionParts(value) {
@@ -3348,6 +3393,13 @@ async function loadGlobalAlertsOverview() {
 }
 
 function wireEvents() {
+  const themeToggleButton = document.getElementById("themeToggleButton");
+  if (themeToggleButton) {
+    themeToggleButton.addEventListener("click", () => {
+      toggleTheme();
+    });
+  }
+
   document.getElementById("overviewTabButton").addEventListener("click", () => {
     state.viewMode = "overview";
     updateViewMode();
@@ -3688,6 +3740,7 @@ function wireEvents() {
 
 async function init() {
   state.analysisHours = loadAnalysisRangePreference();
+  applyTheme(loadThemePreference());
   const oauthResult = consumeOauthStatusFromUrl();
   await loadWebclientVersion();
   wireEvents();
