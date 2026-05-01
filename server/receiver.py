@@ -1079,6 +1079,86 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
     return warnings
 
 
+def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
+    cutoff_iso = utc_hours_ago_iso(hours)
+    now_utc = datetime.now(timezone.utc)
+
+    rows = conn.execute(
+        """
+        SELECT DISTINCT hostname FROM reports ORDER BY hostname
+        """
+    ).fetchall()
+
+    inactive_hosts = []
+    for (hostname,) in rows:
+        last_report = conn.execute(
+            """
+            SELECT id, received_at_utc, payload_json
+            FROM reports
+            WHERE hostname = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (hostname,),
+        ).fetchone()
+
+        if not last_report:
+            continue
+
+        last_report_id, last_report_time_utc, payload_json_str = last_report
+        if last_report_time_utc >= cutoff_iso:
+            continue
+
+        try:
+            payload = json.loads(payload_json_str) if isinstance(payload_json_str, str) else {}
+        except (json.JSONDecodeError, TypeError):
+            payload = {}
+
+        display_name = str(payload.get("agent_config", {}).get("DISPLAY_NAME", hostname) or hostname)
+        os_name = str(payload.get("os", "") or "")
+        primary_ip = str(payload.get("primary_ip", "") or "")
+
+        host_settings = conn.execute(
+            "SELECT display_name_override, country_code_override FROM host_settings WHERE hostname = ?",
+            (hostname,),
+        ).fetchone()
+        if host_settings:
+            override_name = host_settings[0]
+            country_code = host_settings[1]
+            if override_name:
+                display_name = override_name
+        else:
+            country_code = ""
+
+        open_alerts = conn.execute(
+            "SELECT COUNT(*) FROM alerts WHERE hostname = ? AND status = 'open'",
+            (hostname,),
+        ).fetchone()
+        open_alert_count = open_alerts[0] if open_alerts else 0
+
+        try:
+            last_time = datetime.fromisoformat(last_report_time_utc.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            last_time = now_utc
+
+        time_diff = now_utc - last_time
+        hours_inactive = time_diff.total_seconds() / 3600
+
+        inactive_hosts.append({
+            "hostname": hostname,
+            "display_name": display_name,
+            "last_report_time_utc": last_report_time_utc,
+            "hours_inactive": round(hours_inactive, 1),
+            "os": os_name,
+            "primary_ip": primary_ip,
+            "country_code": country_code,
+            "open_alert_count": open_alert_count,
+        })
+
+    inactive_hosts.sort(key=lambda item: -item["hours_inactive"])
+    return inactive_hosts
+
+
 def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         """
@@ -3310,6 +3390,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "hours": hours,
                 "warnings": warnings,
                 "total": len(warnings),
+            })
+            return
+
+        if parsed.path == "/api/v1/inactive-hosts":
+            if self._unauthorized_if_needed():
+                return
+            query = parse_qs(parsed.query)
+            hours = parse_int(query, "hours", default=3, min_value=1, max_value=24 * 30)
+            with sqlite3.connect(DB_PATH) as conn:
+                inactive = collect_inactive_hosts(conn, hours)
+
+            self._send_json(HTTPStatus.OK, {
+                "hours": hours,
+                "inactive_hosts": inactive,
+                "total": len(inactive),
             })
             return
 

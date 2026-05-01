@@ -25,6 +25,8 @@ const state = {
   viewMode: "reports",
   overviewSection: "main",
   criticalTrendsHours: 24,
+  inactiveHostsHours: 3,
+  inactiveHosts: [],
   reportLimit: 1,
   reportOffset: 0,
   totalReports: 0,
@@ -278,10 +280,12 @@ function updateViewMode() {
   const reportsView = document.getElementById("reportsView");
   const globalAlertsView = document.getElementById("globalAlertsView");
   const criticalTrendsView = document.getElementById("criticalTrendsView");
+  const inactiveHostsView = document.getElementById("inactiveHostsView");
   const settingsView = document.getElementById("settingsView");
   const overviewTabButton = document.getElementById("overviewTabButton");
   const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
   const criticalTrendsTabButton = document.getElementById("criticalTrendsTabButton");
+  const inactiveHostsTabButton = document.getElementById("inactiveHostsTabButton");
   const reportsTabButton = document.getElementById("reportsTabButton");
   const settingsTabButton = document.getElementById("settingsTabButton");
 
@@ -289,16 +293,19 @@ function updateViewMode() {
   const reportsActive = state.viewMode === "reports";
   const globalAlertsActive = state.viewMode === "global-alerts";
   const criticalTrendsActive = state.viewMode === "critical-trends";
+  const inactiveHostsActive = state.viewMode === "inactive-hosts";
   const settingsActive = state.viewMode === "settings";
 
   overviewView.classList.toggle("hidden", !overviewActive);
   reportsView.classList.toggle("hidden", !reportsActive);
   globalAlertsView.classList.toggle("hidden", !globalAlertsActive);
   if (criticalTrendsView) criticalTrendsView.classList.toggle("hidden", !criticalTrendsActive);
+  if (inactiveHostsView) inactiveHostsView.classList.toggle("hidden", !inactiveHostsActive);
   if (settingsView) settingsView.classList.toggle("hidden", !settingsActive);
   overviewTabButton.classList.toggle("active", overviewActive);
   globalAlertsTabButton.classList.toggle("active", globalAlertsActive);
   if (criticalTrendsTabButton) criticalTrendsTabButton.classList.toggle("active", criticalTrendsActive);
+  if (inactiveHostsTabButton) inactiveHostsTabButton.classList.toggle("active", inactiveHostsActive);
   reportsTabButton.classList.toggle("active", reportsActive);
   if (settingsTabButton) settingsTabButton.classList.toggle("active", settingsActive);
   updateReportSectionUi();
@@ -2973,6 +2980,76 @@ async function loadCriticalTrends() {
   }
 }
 
+function renderInactiveHosts(data) {
+  const { inactive_hosts, hours } = data;
+  if (!inactive_hosts || inactive_hosts.length === 0) {
+    return `<div class="ih-empty"><span class="ih-empty-icon">✓</span><p>Alle Hosts sind aktiv. Keine Hosts inaktiv seit ${hours} Stunde${hours !== 1 ? "n" : ""}.</p></div>`;
+  }
+
+  const cards = inactive_hosts.map((host) => {
+    const displayName = host.display_name || host.hostname;
+    const showHostname = displayName !== host.hostname;
+    const osIcon = getOsIcon(host.os);
+    const countryIcon = getCountryIcon(host.country_code);
+    const alertsHtml = host.open_alert_count > 0
+      ? `<span class="ih-alerts-badge">${host.open_alert_count} Alert${host.open_alert_count !== 1 ? "s" : ""}</span>`
+      : "";
+    const hoursClass = host.hours_inactive > 12 ? "critical" : "";
+    const lastSeenText = formatUtcPlus2(host.last_report_time_utc);
+
+    return `
+      <div class="ih-host-card">
+        <div class="ih-host-info">
+          <div class="ih-host-icons">
+            ${osIcon ? `<img src="${osIcon}" class="ih-host-icon" alt="${escapeHtml(host.os)}" />` : ""}
+            ${countryIcon ? `<img src="${countryIcon}" class="ih-host-icon" alt="${escapeHtml(host.country_code)}" />` : ""}
+          </div>
+          <div class="ih-host-details">
+            <span class="ih-hostname">${escapeHtml(displayName)}${showHostname ? ` <span class="ih-hostname-sub">(${escapeHtml(host.hostname)})</span>` : ""}</span>
+            <div class="ih-meta-row">
+              <span class="ih-meta-item">Letzter Kontakt: <span class="ih-last-seen">${escapeHtml(lastSeenText)}</span></span>
+              <span class="ih-meta-item"><span class="ih-hours-badge ${hoursClass}">${host.hours_inactive.toFixed(1)}h inaktiv</span></span>
+              ${alertsHtml}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  return cards;
+}
+
+async function loadInactiveHosts() {
+  const listEl = document.getElementById("inactiveHostsList");
+  const tabButton = document.getElementById("inactiveHostsTabButton");
+  if (!listEl) return;
+
+  listEl.innerHTML = "<p class=\"muted\">Lade Daten…</p>";
+  try {
+    const response = await fetch(`/api/v1/inactive-hosts?hours=${state.inactiveHostsHours}`, {
+      credentials: "same-origin",
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    state.inactiveHosts = data.inactive_hosts || [];
+    listEl.innerHTML = renderInactiveHosts(data);
+
+    const total = (data.total || 0);
+    if (tabButton) {
+      if (total > 0) {
+        tabButton.dataset.alertBadge = String(total);
+        tabButton.classList.add("tab-has-warn");
+      } else {
+        delete tabButton.dataset.alertBadge;
+        tabButton.classList.remove("tab-has-warn");
+      }
+    }
+  } catch (error) {
+    listEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
 async function loadGlobalAlertsOverview() {
   const summaryEl = document.getElementById("globalAlertsSummary");
   const rowsEl = document.getElementById("globalAlertsRows");
@@ -3088,6 +3165,21 @@ function wireEvents() {
   document.getElementById("criticalTrendsRangeSelect").addEventListener("change", async (event) => {
     state.criticalTrendsHours = Number(event.target.value) || 24;
     await loadCriticalTrends();
+  });
+
+  document.getElementById("inactiveHostsTabButton").addEventListener("click", async () => {
+    state.viewMode = "inactive-hosts";
+    updateViewMode();
+    await loadInactiveHosts();
+  });
+
+  document.getElementById("refreshInactiveHostsButton").addEventListener("click", async () => {
+    await loadInactiveHosts();
+  });
+
+  document.getElementById("inactiveHostsRangeSelect").addEventListener("change", async (event) => {
+    state.inactiveHostsHours = Number(event.target.value) || 3;
+    await loadInactiveHosts();
   });
 
   document.getElementById("reportsTabButton").addEventListener("click", () => {

@@ -384,6 +384,7 @@
               <button id="overviewTabButton" type="button" class="tab-button">Uebersicht</button>
               <button id="globalAlertsTabButton" type="button" class="tab-button">Globale Alerts</button>
               <button id="criticalTrendsTabButton" type="button" class="tab-button">Kritische Trends</button>
+              <button id="inactiveHostsTabButton" type="button" class="tab-button">Inaktive Hosts</button>
               <button id="reportsTabButton" type="button" class="tab-button active">Einzelmeldungen</button>
             </div>
 
@@ -521,6 +522,25 @@
               </div>
               <div id="criticalTrendsList" class="critical-trends-list">
                 <p class="muted">Lade Trend-Daten…</p>
+              </div>
+            </div>
+
+            <div id="inactiveHostsView" class="view-section hidden">
+              <div class="inactive-hosts-toolbar">
+                <label class="chart-range-control" for="inactiveHostsRangeSelect">
+                  <span>Inaktiv seit</span>
+                  <select id="inactiveHostsRangeSelect">
+                    <option value="1">1 Stunde</option>
+                    <option value="3" selected>3 Stunden</option>
+                    <option value="6">6 Stunden</option>
+                    <option value="12">12 Stunden</option>
+                    <option value="24">24 Stunden</option>
+                  </select>
+                </label>
+                <button id="refreshInactiveHostsButton" type="button" class="btn-secondary">Neu laden</button>
+              </div>
+              <div id="inactiveHostsList" class="inactive-hosts-list">
+                <p class="muted">Lade Daten…</p>
               </div>
             </div>
 
