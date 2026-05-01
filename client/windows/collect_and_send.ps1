@@ -196,7 +196,8 @@ function Get-HttpExceptionSummary($exception) {
         $parts += [string]$exception.Message
     }
 
-    $response = $exception.Response
+    $response = $null
+    try { $response = $exception.Response } catch { }
     if ($response) {
         try {
             $statusCode = [int]$response.StatusCode
