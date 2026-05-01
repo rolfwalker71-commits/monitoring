@@ -557,8 +557,8 @@ button:hover:not(.host-item) {
 }
 
 .view-tabs-shell {
-  margin: 18px 0 18px;
-  padding: 7px 8px 0;
+  margin: 14px 0 14px;
+  padding: 4px 6px 0;
   border: 1px solid #d9e3f1;
   border-radius: 18px 18px 0 0;
   border-bottom: 0;
@@ -566,8 +566,8 @@ button:hover:not(.host-item) {
 }
 
 .subview-tabs-shell {
-  margin: 0 0 14px;
-  padding: 5px;
+  margin: 0 0 10px;
+  padding: 4px;
   border: 1px solid #e1e8f2;
   border-radius: 16px;
   background: #f8fbff;
@@ -627,20 +627,27 @@ button:hover:not(.host-item) {
 .tab-button {
   position: relative;
   border: 1px solid transparent;
-  border-radius: 14px 14px 0 0;
+  border-radius: 12px 12px 0 0;
   background: transparent;
   color: #48617f;
   font-size: 12px;
   font-weight: 700;
-  padding: 10px 15px 11px;
+  padding: 6px 12px 7px;
   transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
+.tab-button:hover:not(.active):not(.alert-active) {
+  background: #f2f7fd;
+  color: #3f5d82;
+  border-color: #d9e4f2;
+  box-shadow: none;
+}
+
 .tab-button.active {
-  background: #ffffff;
-  color: #143b74;
-  border-color: #cfdaea;
-  box-shadow: 0 10px 22px rgba(59, 130, 246, 0.12);
+  background: linear-gradient(180deg, #ffffff 0%, #f1f7ff 100%);
+  color: #0f3470;
+  border-color: #b8cbe6;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18), inset 0 1px 0 #ffffff;
 }
 
 .tab-button.alert-active:not(.active) {
@@ -665,7 +672,7 @@ button:hover:not(.host-item) {
 .view-tabs .tab-button {
   font-size: 13px;
   font-weight: 700;
-  min-height: 48px;
+  min-height: 36px;
 }
 
 /* Second-level subview tabs: subtler */
@@ -673,17 +680,17 @@ button:hover:not(.host-item) {
   border-radius: 12px;
   font-size: 11px;
   font-weight: 600;
-  padding: 8px 12px;
+  padding: 5px 10px;
   background: transparent;
   color: #597295;
 }
 
 .subview-tabs .tab-button.active {
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%);
   color: #1e3a8a;
-  border-color: #d5dfec;
+  border-color: #c6d4e7;
   font-weight: 700;
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 10px rgba(30, 64, 175, 0.12);
 }
 
 .tab-button.tab-has-crit:not(.active),
@@ -704,16 +711,16 @@ button:hover:not(.host-item) {
 .tab-button.tab-has-warn::after {
   content: attr(data-alert-badge);
   position: absolute;
-  top: 6px;
-  right: 8px;
-  min-width: 18px;
-  height: 18px;
+  top: 3px;
+  right: 6px;
+  min-width: 16px;
+  height: 16px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 5px;
-  font-size: 10px;
+  padding: 0 4px;
+  font-size: 9px;
   font-weight: 800;
   line-height: 1;
 }
