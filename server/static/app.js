@@ -275,24 +275,29 @@ function updateViewMode() {
   const reportsView = document.getElementById("reportsView");
   const globalAlertsView = document.getElementById("globalAlertsView");
   const criticalTrendsView = document.getElementById("criticalTrendsView");
+  const settingsView = document.getElementById("settingsView");
   const overviewTabButton = document.getElementById("overviewTabButton");
   const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
   const criticalTrendsTabButton = document.getElementById("criticalTrendsTabButton");
   const reportsTabButton = document.getElementById("reportsTabButton");
+  const settingsTabButton = document.getElementById("settingsTabButton");
 
   const overviewActive = state.viewMode === "overview";
   const reportsActive = state.viewMode === "reports";
   const globalAlertsActive = state.viewMode === "global-alerts";
   const criticalTrendsActive = state.viewMode === "critical-trends";
+  const settingsActive = state.viewMode === "settings";
 
   overviewView.classList.toggle("hidden", !overviewActive);
   reportsView.classList.toggle("hidden", !reportsActive);
   globalAlertsView.classList.toggle("hidden", !globalAlertsActive);
   if (criticalTrendsView) criticalTrendsView.classList.toggle("hidden", !criticalTrendsActive);
+  if (settingsView) settingsView.classList.toggle("hidden", !settingsActive);
   overviewTabButton.classList.toggle("active", overviewActive);
   globalAlertsTabButton.classList.toggle("active", globalAlertsActive);
   if (criticalTrendsTabButton) criticalTrendsTabButton.classList.toggle("active", criticalTrendsActive);
   reportsTabButton.classList.toggle("active", reportsActive);
+  if (settingsTabButton) settingsTabButton.classList.toggle("active", settingsActive);
   updateReportSectionUi();
 }
 
@@ -314,14 +319,6 @@ function updateOverviewSection() {
 
   mainTabButton.classList.toggle("active", showMain);
   filesystemTabButton.classList.toggle("active", showFilesystem);
-}
-
-function toggleAlarmSettingsPanel(show) {
-  const panel = document.getElementById("alarmSettingsPanel");
-  if (!panel) {
-    return;
-  }
-  panel.classList.toggle("hidden", !show);
 }
 
 function setAlarmSettingsStatus(message, isError = false) {
@@ -581,7 +578,12 @@ async function loadUserProfile(force = false) {
   const summaryEl = document.getElementById("userMailSettingsSummary");
   const connectButton = document.getElementById("connectMicrosoftOauthButton");
   const disconnectButton = document.getElementById("disconnectMicrosoftOauthButton");
-  const testButton = document.getElementById("testMicrosoftMailButton");
+  const trendEnabledInput = document.getElementById("trendEmailEnabledInput");
+  const trendTimeInput = document.getElementById("trendEmailTimeInput");
+  const alertEnabledInput = document.getElementById("alertEmailEnabledInput");
+  const alertTimeInput = document.getElementById("alertEmailTimeInput");
+  const trendTestButton = document.getElementById("testTrendDigestMailButton");
+  const alertTestButton = document.getElementById("testAlertDigestMailButton");
 
   try {
     const response = await fetch("/api/v1/user-profile");
@@ -591,6 +593,10 @@ async function loadUserProfile(force = false) {
     const profile = await response.json();
     enabledInput.checked = profile.email_enabled === true;
     recipientInput.value = asText(profile.email_recipient, "") === "-" ? "" : asText(profile.email_recipient, "");
+    trendEnabledInput.checked = profile.trend_email_enabled === true;
+    trendTimeInput.value = asText(profile.trend_email_time_hhmm, "08:00");
+    alertEnabledInput.checked = profile.alert_email_enabled === true;
+    alertTimeInput.value = asText(profile.alert_email_time_hhmm, "08:05");
 
     const oauth = profile.microsoft_oauth || {};
     const oauthConnected = oauth.connected === true;
@@ -609,8 +615,11 @@ async function loadUserProfile(force = false) {
     if (disconnectButton) {
       disconnectButton.disabled = !oauthConnected;
     }
-    if (testButton) {
-      testButton.disabled = !oauthConnected;
+    if (trendTestButton) {
+      trendTestButton.disabled = !oauthConnected;
+    }
+    if (alertTestButton) {
+      alertTestButton.disabled = !oauthConnected;
     }
 
     state.userProfileLoaded = true;
@@ -626,6 +635,10 @@ async function saveUserProfile() {
   const payload = {
     email_enabled: enabledInput.checked,
     email_recipient: recipientInput.value.trim(),
+    trend_email_enabled: document.getElementById("trendEmailEnabledInput").checked,
+    trend_email_time_hhmm: document.getElementById("trendEmailTimeInput").value || "08:00",
+    alert_email_enabled: document.getElementById("alertEmailEnabledInput").checked,
+    alert_email_time_hhmm: document.getElementById("alertEmailTimeInput").value || "08:05",
   };
 
   if (payload.email_enabled && !payload.email_recipient) {
@@ -875,15 +888,26 @@ async function disconnectMicrosoftOauth() {
   }
 }
 
-async function sendMicrosoftMailTest() {
-  const response = await fetch("/api/v1/mail-test", {
+async function sendTrendDigestMailTest() {
+  const response = await fetch("/api/v1/mail-test/trends", {
     method: "POST",
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.error || data.details || ("HTTP " + response.status));
   }
-  setUserMailSettingsStatus("Testmail versendet.");
+  setUserMailSettingsStatus("Trend-Testmail versendet.");
+}
+
+async function sendAlertDigestMailTest() {
+  const response = await fetch("/api/v1/mail-test/alerts", {
+    method: "POST",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || data.details || ("HTTP " + response.status));
+  }
+  setUserMailSettingsStatus("Alarm-Testmail versendet.");
 }
 
 async function loadSettingsPanel(force = false) {
@@ -2922,6 +2946,12 @@ function wireEvents() {
     updateViewMode();
   });
 
+  document.getElementById("settingsTabButton").addEventListener("click", async () => {
+    state.viewMode = "settings";
+    updateViewMode();
+    await loadSettingsPanel(true);
+  });
+
   document.getElementById("triggerAllAgentsUpdateButton").addEventListener("click", async () => {
     try {
       const result = await triggerAgentUpdateForAllHosts();
@@ -2954,7 +2984,7 @@ function wireEvents() {
     await loadReportsForHost();
     await loadAnalysisForHost();
     await loadAlertsForHost();
-    if (!document.getElementById("alarmSettingsPanel").classList.contains("hidden")) {
+    if (state.viewMode === "settings") {
       await loadSettingsPanel(true);
     }
   });
@@ -2973,7 +3003,7 @@ function wireEvents() {
     await loadReportsForHost();
     await loadAnalysisForHost();
     await loadAlertsForHost();
-    if (!document.getElementById("alarmSettingsPanel").classList.contains("hidden")) {
+    if (state.viewMode === "settings") {
       await loadSettingsPanel(true);
     }
   });
@@ -2985,7 +3015,6 @@ function wireEvents() {
 
   document.getElementById("logoutButton").addEventListener("click", async () => {
     await logoutWebClient();
-    toggleAlarmSettingsPanel(false);
   });
 
   document.getElementById("cancelPasswordButton").addEventListener("click", () => {
@@ -3044,18 +3073,15 @@ function wireEvents() {
     await loadReportsForHost();
     await loadAnalysisForHost();
     await loadAlertsForHost();
-    if (!document.getElementById("alarmSettingsPanel").classList.contains("hidden")) {
+    if (state.viewMode === "settings") {
       await loadSettingsPanel(true);
     }
   });
 
   document.getElementById("openAlarmSettingsButton").addEventListener("click", async () => {
-    toggleAlarmSettingsPanel(true);
+    state.viewMode = "settings";
+    updateViewMode();
     await loadSettingsPanel(true);
-  });
-
-  document.getElementById("closeAlarmSettingsButton").addEventListener("click", () => {
-    toggleAlarmSettingsPanel(false);
   });
 
   document.getElementById("saveAlarmSettingsButton").addEventListener("click", async () => {
@@ -3095,9 +3121,17 @@ function wireEvents() {
     }
   });
 
-  document.getElementById("testMicrosoftMailButton").addEventListener("click", async () => {
+  document.getElementById("testTrendDigestMailButton").addEventListener("click", async () => {
     try {
-      await sendMicrosoftMailTest();
+      await sendTrendDigestMailTest();
+    } catch (error) {
+      setUserMailSettingsStatus(error.message, true);
+    }
+  });
+
+  document.getElementById("testAlertDigestMailButton").addEventListener("click", async () => {
+    try {
+      await sendAlertDigestMailTest();
     } catch (error) {
       setUserMailSettingsStatus(error.message, true);
     }
@@ -3180,7 +3214,6 @@ async function init() {
   updateViewMode();
   updateOverviewSection();
   updateAnalysisRangeUi();
-  toggleAlarmSettingsPanel(false);
   document.getElementById("globalSeverityFilter").value = state.globalSeverityFilter;
   document.getElementById("hostAlertFilterSelect").value = state.hostAlertFilter;
   document.getElementById("hostMutedFilterSelect").value = state.hostMutedFilter;
@@ -3191,7 +3224,8 @@ async function init() {
     return;
   }
   if (oauthResult) {
-    toggleAlarmSettingsPanel(true);
+    state.viewMode = "settings";
+    updateViewMode();
     setUserMailSettingsStatus(
       oauthResult.status === "success"
         ? "Microsoft Verbindung erfolgreich hergestellt."

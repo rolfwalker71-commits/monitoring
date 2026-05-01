@@ -218,6 +218,28 @@ h1 {
   background: #f7faff;
 }
 
+.settings-view {
+  margin-top: 12px;
+}
+
+.settings-page {
+  border: 1px solid #d7e4f2;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f8fbff 0%, #f3f8ff 100%);
+  padding: 14px;
+}
+
+.settings-page-header {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-page-header h3 {
+  margin: 0;
+  font-size: 22px;
+  color: #17365d;
+}
+
 .settings-subsection {
   margin-top: 14px;
   padding-top: 14px;
@@ -261,7 +283,8 @@ h1 {
 .alarm-settings-grid input[type="number"],
 .alarm-settings-grid input[type="text"],
 .alarm-settings-grid input[type="email"],
-.alarm-settings-grid input[type="password"] {
+.alarm-settings-grid input[type="password"],
+.alarm-settings-grid input[type="time"] {
   border: 1px solid #cfd9e6;
   border-radius: 8px;
   padding: 7px 8px;

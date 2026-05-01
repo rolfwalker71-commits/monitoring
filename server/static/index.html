@@ -117,158 +117,200 @@
           <div class="panel-actions">
             <button id="triggerAllAgentsUpdateButton" class="global-update-chip global-update-chip-inline" type="button">⟳ Update fuer alle Hosts</button>
             <button id="openChangePasswordButton" class="btn-secondary" type="button">Passwort ändern</button>
-            <button id="openAlarmSettingsButton" class="btn-secondary" type="button">Alarm Einstellungen</button>
+            <button id="openAlarmSettingsButton" class="btn-secondary" type="button">Einstellungen</button>
             <button id="refreshButton" class="btn-secondary">Neu laden</button>
           </div>
         </div>
 
-        <section id="alarmSettingsPanel" class="alarm-settings-panel hidden">
-          <div class="analysis-header">
-            <h4>🔔 Einstellungen</h4>
-            <button id="closeAlarmSettingsButton" type="button">Schliessen</button>
-          </div>
-          <section class="settings-subsection">
-            <div class="settings-subsection-head">
-              <h5>Mein Mailversand per OAuth</h5>
-              <p id="userMailSettingsSummary" class="count compact"></p>
+        <section id="settingsView" class="view-section hidden settings-view">
+          <div class="settings-page">
+            <div class="settings-page-header">
+              <h3>⚙️ Einstellungen</h3>
+              <p class="count">Benutzer, OAuth, Mail-Digests und globale Alarmregeln</p>
             </div>
-            <div class="alarm-settings-grid">
-              <label class="checkbox-line">
-                <input id="userEmailEnabledInput" type="checkbox" />
-                Mailversand fuer mich aktivieren
-              </label>
-              <label>
-                Mail Empfaenger
-                <input id="userEmailRecipientInput" type="email" placeholder="alerts@example.com" />
-              </label>
-            </div>
-            <div class="alarm-settings-actions">
-              <button id="saveUserMailSettingsButton" type="button">Mail Einstellungen speichern</button>
-              <button id="connectMicrosoftOauthButton" type="button">Microsoft verbinden</button>
-              <button id="disconnectMicrosoftOauthButton" type="button">Verbindung trennen</button>
-              <button id="testMicrosoftMailButton" type="button">Testmail senden</button>
-              <p id="userMailSettingsStatus" class="count compact"></p>
-            </div>
-          </section>
 
-          <section id="adminOauthSettingsSection" class="settings-subsection hidden">
-            <div class="settings-subsection-head">
-              <h5>Microsoft OAuth App</h5>
-              <p class="count compact">Globale App-Registrierung fuer den Webserver</p>
-            </div>
-            <div class="alarm-settings-grid">
-              <label class="checkbox-line">
-                <input id="microsoftOauthEnabledInput" type="checkbox" />
-                Microsoft OAuth global aktivieren
-              </label>
-              <label>
-                Tenant ID
-                <input id="microsoftTenantIdInput" type="text" placeholder="organizations oder Tenant GUID" />
-              </label>
-              <label>
-                Client ID
-                <input id="microsoftClientIdInput" type="text" placeholder="Azure App Client ID" />
-              </label>
-              <label>
-                Client Secret
-                <input id="microsoftClientSecretInput" type="password" placeholder="Azure App Client Secret" />
-              </label>
-            </div>
-            <div class="alarm-settings-actions">
-              <button id="saveOauthSettingsButton" type="button">OAuth App speichern</button>
-              <p id="oauthSettingsStatus" class="count compact"></p>
-            </div>
-          </section>
+            <section class="settings-subsection">
+              <div class="settings-subsection-head">
+                <h5>Mein Mailversand per OAuth</h5>
+                <p id="userMailSettingsSummary" class="count compact"></p>
+              </div>
+              <div class="alarm-settings-grid">
+                <label class="checkbox-line">
+                  <input id="userEmailEnabledInput" type="checkbox" />
+                  Mailversand fuer mich aktivieren
+                </label>
+                <label>
+                  Mail Empfaenger
+                  <input id="userEmailRecipientInput" type="email" placeholder="alerts@example.com" />
+                </label>
+              </div>
+              <div class="alarm-settings-actions">
+                <button id="saveUserMailSettingsButton" type="button">Mail Einstellungen speichern</button>
+                <button id="connectMicrosoftOauthButton" type="button">Microsoft verbinden</button>
+                <button id="disconnectMicrosoftOauthButton" type="button">Verbindung trennen</button>
+                <p id="userMailSettingsStatus" class="count compact"></p>
+              </div>
+            </section>
 
-          <section id="adminUserManagementSection" class="settings-subsection hidden">
-            <div class="settings-subsection-head">
-              <h5>Benutzerverwaltung</h5>
-              <p class="count compact">Einfache Web-Benutzer mit Passwort und Admin-Flag</p>
-            </div>
-            <div class="alarm-settings-grid user-create-grid">
-              <label>
-                Neuer Benutzername
-                <input id="newUserUsernameInput" type="text" autocomplete="off" />
-              </label>
-              <label>
-                Startpasswort
-                <input id="newUserPasswordInput" type="password" autocomplete="new-password" />
-              </label>
-              <label class="checkbox-line">
-                <input id="newUserIsAdminInput" type="checkbox" />
-                Als Admin anlegen
-              </label>
-            </div>
-            <div class="alarm-settings-actions">
-              <button id="createUserButton" type="button">Benutzer anlegen</button>
-              <p id="userManagementStatus" class="count compact"></p>
-            </div>
-            <div class="table-wrap user-management-table-wrap">
-              <table class="user-management-table">
-                <thead>
-                  <tr>
-                    <th>Benutzer</th>
-                    <th>Admin</th>
-                    <th>Aktiv</th>
-                    <th>Mail Empfaenger</th>
-                    <th>Microsoft</th>
-                    <th>Aktionen</th>
-                  </tr>
-                </thead>
-                <tbody id="userManagementRows">
-                  <tr>
-                    <td colspan="6" class="muted">Noch keine Daten geladen.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
+            <section class="settings-subsection">
+              <div class="settings-subsection-head">
+                <h5>Trend Mail (Daily Digest)</h5>
+                <p class="count compact">Uebersendet die kritischen Trends aus dem Dashboard als HTML Mail</p>
+              </div>
+              <div class="alarm-settings-grid">
+                <label class="checkbox-line">
+                  <input id="trendEmailEnabledInput" type="checkbox" />
+                  Trend-Mail aktivieren
+                </label>
+                <label>
+                  Versandzeit (lokale Serverzeit)
+                  <input id="trendEmailTimeInput" type="time" />
+                </label>
+              </div>
+              <div class="alarm-settings-actions">
+                <button id="testTrendDigestMailButton" type="button">Trend-Testmail senden</button>
+              </div>
+            </section>
 
-          <section class="settings-subsection">
-            <div class="settings-subsection-head">
-              <h5>Globale Alarm Einstellungen</h5>
-              <p class="count compact">Bestehender Systemkanal fuer globale Telegram/Threshold-Werte</p>
-            </div>
-          <div class="alarm-settings-grid">
-            <label>
-              Warnung ab (%)
-              <input id="warningThresholdInput" type="number" min="1" max="99" step="0.1" />
-            </label>
-            <label>
-              Kritisch ab (%)
-              <input id="criticalThresholdInput" type="number" min="2" max="100" step="0.1" />
-            </label>
-            <label>
-              Entprellung: Treffer
-              <input id="warningConsecutiveHitsInput" type="number" min="1" max="10" step="1" />
-            </label>
-            <label>
-              Entprellung: Fenster (Minuten)
-              <input id="warningWindowMinutesInput" type="number" min="1" max="240" step="1" />
-            </label>
-            <label class="checkbox-line">
-              <input id="criticalImmediateInput" type="checkbox" />
-              Kritisch sofort ausloesen
-            </label>
-            <label class="checkbox-line">
-              <input id="telegramEnabledInput" type="checkbox" />
-              Telegram aktivieren
-            </label>
-            <label>
-              Telegram Bot Token
-              <input id="telegramBotTokenInput" type="text" placeholder="123456:ABC..." />
-            </label>
-            <label>
-              Telegram Chat ID
-              <input id="telegramChatIdInput" type="text" placeholder="-1001234567890" />
-            </label>
+            <section class="settings-subsection">
+              <div class="settings-subsection-head">
+                <h5>Alarm Mail (Open Alerts Digest)</h5>
+                <p class="count compact">Uebersendet die aktuell offenen Alarme als HTML Mail</p>
+              </div>
+              <div class="alarm-settings-grid">
+                <label class="checkbox-line">
+                  <input id="alertEmailEnabledInput" type="checkbox" />
+                  Alarm-Mail aktivieren
+                </label>
+                <label>
+                  Versandzeit (lokale Serverzeit)
+                  <input id="alertEmailTimeInput" type="time" />
+                </label>
+              </div>
+              <div class="alarm-settings-actions">
+                <button id="testAlertDigestMailButton" type="button">Alarm-Testmail senden</button>
+              </div>
+            </section>
+
+            <section id="adminOauthSettingsSection" class="settings-subsection hidden">
+              <div class="settings-subsection-head">
+                <h5>Microsoft OAuth App</h5>
+                <p class="count compact">Globale App-Registrierung fuer den Webserver</p>
+              </div>
+              <div class="alarm-settings-grid">
+                <label class="checkbox-line">
+                  <input id="microsoftOauthEnabledInput" type="checkbox" />
+                  Microsoft OAuth global aktivieren
+                </label>
+                <label>
+                  Tenant ID
+                  <input id="microsoftTenantIdInput" type="text" placeholder="organizations oder Tenant GUID" />
+                </label>
+                <label>
+                  Client ID
+                  <input id="microsoftClientIdInput" type="text" placeholder="Azure App Client ID" />
+                </label>
+                <label>
+                  Client Secret
+                  <input id="microsoftClientSecretInput" type="password" placeholder="Azure App Client Secret" />
+                </label>
+              </div>
+              <div class="alarm-settings-actions">
+                <button id="saveOauthSettingsButton" type="button">OAuth App speichern</button>
+                <p id="oauthSettingsStatus" class="count compact"></p>
+              </div>
+            </section>
+
+            <section id="adminUserManagementSection" class="settings-subsection hidden">
+              <div class="settings-subsection-head">
+                <h5>Benutzerverwaltung</h5>
+                <p class="count compact">Einfache Web-Benutzer mit Passwort und Admin-Flag</p>
+              </div>
+              <div class="alarm-settings-grid user-create-grid">
+                <label>
+                  Neuer Benutzername
+                  <input id="newUserUsernameInput" type="text" autocomplete="off" />
+                </label>
+                <label>
+                  Startpasswort
+                  <input id="newUserPasswordInput" type="password" autocomplete="new-password" />
+                </label>
+                <label class="checkbox-line">
+                  <input id="newUserIsAdminInput" type="checkbox" />
+                  Als Admin anlegen
+                </label>
+              </div>
+              <div class="alarm-settings-actions">
+                <button id="createUserButton" type="button">Benutzer anlegen</button>
+                <p id="userManagementStatus" class="count compact"></p>
+              </div>
+              <div class="table-wrap user-management-table-wrap">
+                <table class="user-management-table">
+                  <thead>
+                    <tr>
+                      <th>Benutzer</th>
+                      <th>Admin</th>
+                      <th>Aktiv</th>
+                      <th>Mail Empfaenger</th>
+                      <th>Microsoft</th>
+                      <th>Aktionen</th>
+                    </tr>
+                  </thead>
+                  <tbody id="userManagementRows">
+                    <tr>
+                      <td colspan="6" class="muted">Noch keine Daten geladen.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="settings-subsection">
+              <div class="settings-subsection-head">
+                <h5>Globale Alarm Einstellungen</h5>
+                <p class="count compact">Systemweite Schwellwerte und Telegram Kanal</p>
+              </div>
+              <div class="alarm-settings-grid">
+                <label>
+                  Warnung ab (%)
+                  <input id="warningThresholdInput" type="number" min="1" max="99" step="0.1" />
+                </label>
+                <label>
+                  Kritisch ab (%)
+                  <input id="criticalThresholdInput" type="number" min="2" max="100" step="0.1" />
+                </label>
+                <label>
+                  Entprellung: Treffer
+                  <input id="warningConsecutiveHitsInput" type="number" min="1" max="10" step="1" />
+                </label>
+                <label>
+                  Entprellung: Fenster (Minuten)
+                  <input id="warningWindowMinutesInput" type="number" min="1" max="240" step="1" />
+                </label>
+                <label class="checkbox-line">
+                  <input id="criticalImmediateInput" type="checkbox" />
+                  Kritisch sofort ausloesen
+                </label>
+                <label class="checkbox-line">
+                  <input id="telegramEnabledInput" type="checkbox" />
+                  Telegram aktivieren
+                </label>
+                <label>
+                  Telegram Bot Token
+                  <input id="telegramBotTokenInput" type="text" placeholder="123456:ABC..." />
+                </label>
+                <label>
+                  Telegram Chat ID
+                  <input id="telegramChatIdInput" type="text" placeholder="-1001234567890" />
+                </label>
+              </div>
+              <div class="alarm-settings-actions">
+                <button id="saveAlarmSettingsButton" type="button">Globale Alarmwerte speichern</button>
+                <button id="testAlarmSettingsButton" type="button">Telegram Test</button>
+                <p id="alarmSettingsStatus" class="count compact"></p>
+              </div>
+            </section>
           </div>
-          <div class="alarm-settings-actions">
-            <button id="saveAlarmSettingsButton" type="button">Speichern</button>
-            <button id="testAlarmSettingsButton" type="button">Testbenachrichtigung</button>
-            <p id="alarmSettingsStatus" class="count compact"></p>
-          </div>
-          </section>
         </section>
 
         <div class="layout">
@@ -307,6 +349,7 @@
               <button id="globalAlertsTabButton" type="button" class="tab-button">Globale Alerts</button>
               <button id="criticalTrendsTabButton" type="button" class="tab-button">Kritische Trends</button>
               <button id="reportsTabButton" type="button" class="tab-button active">Einzelmeldungen</button>
+              <button id="settingsTabButton" type="button" class="tab-button">Einstellungen</button>
             </div>
 
             <div id="overviewView" class="view-section">

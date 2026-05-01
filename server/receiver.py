@@ -3,6 +3,7 @@ import argparse
 import base64
 import hashlib
 import hmac
+import html
 import json
 import os
 import secrets
@@ -44,6 +45,8 @@ MICROSOFT_OAUTH_SCOPES = [
     "email",
     "https://graph.microsoft.com/Mail.Send",
 ]
+DEFAULT_TREND_DIGEST_TIME = "08:00"
+DEFAULT_ALERT_DIGEST_TIME = "08:05"
 
 
 def parse_int(query: dict, key: str, default: int, min_value: int, max_value: int) -> int:
@@ -221,11 +224,33 @@ def init_db() -> None:
                 username TEXT PRIMARY KEY,
                 email_enabled INTEGER NOT NULL DEFAULT 0,
                 email_recipient TEXT NOT NULL DEFAULT '',
+                trend_email_enabled INTEGER NOT NULL DEFAULT 0,
+                trend_email_time_hhmm TEXT NOT NULL DEFAULT '08:00',
+                trend_email_last_sent_local_date TEXT NOT NULL DEFAULT '',
+                alert_email_enabled INTEGER NOT NULL DEFAULT 0,
+                alert_email_time_hhmm TEXT NOT NULL DEFAULT '08:05',
+                alert_email_last_sent_local_date TEXT NOT NULL DEFAULT '',
                 updated_at_utc TEXT NOT NULL,
                 FOREIGN KEY(username) REFERENCES web_users(username)
             )
             """
         )
+        existing_web_user_settings_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(web_user_settings)").fetchall()
+        }
+        if "trend_email_enabled" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN trend_email_enabled INTEGER NOT NULL DEFAULT 0")
+        if "trend_email_time_hhmm" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN trend_email_time_hhmm TEXT NOT NULL DEFAULT '08:00'")
+        if "trend_email_last_sent_local_date" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN trend_email_last_sent_local_date TEXT NOT NULL DEFAULT ''")
+        if "alert_email_enabled" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_email_enabled INTEGER NOT NULL DEFAULT 0")
+        if "alert_email_time_hhmm" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_email_time_hhmm TEXT NOT NULL DEFAULT '08:05'")
+        if "alert_email_last_sent_local_date" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_email_last_sent_local_date TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS oauth_settings (
@@ -328,11 +353,22 @@ def init_db() -> None:
             )
             conn.execute(
                 """
-                INSERT INTO web_user_settings (username, email_enabled, email_recipient, updated_at_utc)
-                VALUES (?, 0, '', ?)
+                INSERT INTO web_user_settings (
+                    username,
+                    email_enabled,
+                    email_recipient,
+                    trend_email_enabled,
+                    trend_email_time_hhmm,
+                    trend_email_last_sent_local_date,
+                    alert_email_enabled,
+                    alert_email_time_hhmm,
+                    alert_email_last_sent_local_date,
+                    updated_at_utc
+                )
+                VALUES (?, 0, '', 0, ?, '', 0, ?, '', ?)
                 ON CONFLICT(username) DO NOTHING
                 """,
-                (WEB_DEFAULT_USERNAME, now_utc),
+                (WEB_DEFAULT_USERNAME, DEFAULT_TREND_DIGEST_TIME, DEFAULT_ALERT_DIGEST_TIME, now_utc),
             )
 
         conn.execute(
@@ -366,11 +402,32 @@ def init_db() -> None:
         )
         conn.execute(
             """
-            INSERT INTO web_user_settings (username, email_enabled, email_recipient, updated_at_utc)
-            SELECT username, 0, '', updated_at_utc
+            INSERT INTO web_user_settings (
+                username,
+                email_enabled,
+                email_recipient,
+                trend_email_enabled,
+                trend_email_time_hhmm,
+                trend_email_last_sent_local_date,
+                alert_email_enabled,
+                alert_email_time_hhmm,
+                alert_email_last_sent_local_date,
+                updated_at_utc
+            )
+            SELECT username, 0, '', 0, ?, '', 0, ?, '', updated_at_utc
             FROM web_users
             WHERE username NOT IN (SELECT username FROM web_user_settings)
             """
+            ,
+            (DEFAULT_TREND_DIGEST_TIME, DEFAULT_ALERT_DIGEST_TIME),
+        )
+        conn.execute(
+            "UPDATE web_user_settings SET trend_email_time_hhmm = ? WHERE COALESCE(trend_email_time_hhmm, '') = ''",
+            (DEFAULT_TREND_DIGEST_TIME,),
+        )
+        conn.execute(
+            "UPDATE web_user_settings SET alert_email_time_hhmm = ? WHERE COALESCE(alert_email_time_hhmm, '') = ''",
+            (DEFAULT_ALERT_DIGEST_TIME,),
         )
 
         conn.execute(
@@ -459,6 +516,40 @@ def parse_utc_iso(value: object) -> datetime | None:
         return None
 
 
+def normalize_hhmm(value: object, fallback: str) -> str:
+    text = str(value or "").strip()
+    if len(text) != 5 or text[2] != ":":
+        return fallback
+    try:
+        hour = int(text[:2])
+        minute = int(text[3:5])
+    except ValueError:
+        return fallback
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        return fallback
+    return f"{hour:02d}:{minute:02d}"
+
+
+def scheduled_digest_due(now_local: datetime, scheduled_hhmm: str, last_sent_local_date: str) -> bool:
+    if not scheduled_hhmm:
+        return False
+    parts = scheduled_hhmm.split(":", 1)
+    if len(parts) != 2:
+        return False
+    try:
+        hour = int(parts[0])
+        minute = int(parts[1])
+    except ValueError:
+        return False
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        return False
+
+    today = now_local.date().isoformat()
+    if str(last_sent_local_date or "").strip() == today:
+        return False
+    return (now_local.hour, now_local.minute) >= (hour, minute)
+
+
 def is_token_expiring_soon(expires_at_utc: str, within_minutes: int = 5) -> bool:
     expires_at = parse_utc_iso(expires_at_utc)
     if expires_at is None:
@@ -517,6 +608,10 @@ def list_web_users(conn: sqlite3.Connection) -> list[dict]:
                u.updated_at_utc,
                COALESCE(s.email_enabled, 0),
                COALESCE(s.email_recipient, ''),
+             COALESCE(s.trend_email_enabled, 0),
+             COALESCE(s.trend_email_time_hhmm, ''),
+             COALESCE(s.alert_email_enabled, 0),
+             COALESCE(s.alert_email_time_hhmm, ''),
                COALESCE(c.external_email, ''),
                COALESCE(c.updated_at_utc, '')
         FROM web_users u
@@ -535,9 +630,13 @@ def list_web_users(conn: sqlite3.Connection) -> list[dict]:
             "updated_at_utc": str(row[4] or ""),
             "email_enabled": bool(int(row[5] or 0)),
             "email_recipient": str(row[6] or ""),
-            "microsoft_connected_email": str(row[7] or ""),
-            "microsoft_connected_at_utc": str(row[8] or ""),
-            "has_microsoft_oauth": bool(str(row[7] or "").strip()),
+            "trend_email_enabled": bool(int(row[7] or 0)),
+            "trend_email_time_hhmm": normalize_hhmm(row[8], DEFAULT_TREND_DIGEST_TIME),
+            "alert_email_enabled": bool(int(row[9] or 0)),
+            "alert_email_time_hhmm": normalize_hhmm(row[10], DEFAULT_ALERT_DIGEST_TIME),
+            "microsoft_connected_email": str(row[11] or ""),
+            "microsoft_connected_at_utc": str(row[12] or ""),
+            "has_microsoft_oauth": bool(str(row[11] or "").strip()),
         }
         for row in rows
     ]
@@ -578,10 +677,21 @@ def create_web_user(conn: sqlite3.Connection, username: str, password: str, is_a
     )
     conn.execute(
         """
-        INSERT INTO web_user_settings (username, email_enabled, email_recipient, updated_at_utc)
-        VALUES (?, 0, '', ?)
+        INSERT INTO web_user_settings (
+            username,
+            email_enabled,
+            email_recipient,
+            trend_email_enabled,
+            trend_email_time_hhmm,
+            trend_email_last_sent_local_date,
+            alert_email_enabled,
+            alert_email_time_hhmm,
+            alert_email_last_sent_local_date,
+            updated_at_utc
+        )
+        VALUES (?, 0, '', 0, ?, '', 0, ?, '', ?)
         """,
-        (normalized_username, now_utc),
+        (normalized_username, DEFAULT_TREND_DIGEST_TIME, DEFAULT_ALERT_DIGEST_TIME, now_utc),
     )
     created = get_web_user(conn, normalized_username)
     if created is None:
@@ -649,7 +759,15 @@ def delete_web_user(conn: sqlite3.Connection, username: str) -> None:
 def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
     row = conn.execute(
         """
-        SELECT COALESCE(email_enabled, 0), COALESCE(email_recipient, ''), COALESCE(updated_at_utc, '')
+        SELECT COALESCE(email_enabled, 0),
+               COALESCE(email_recipient, ''),
+               COALESCE(trend_email_enabled, 0),
+               COALESCE(trend_email_time_hhmm, ''),
+               COALESCE(trend_email_last_sent_local_date, ''),
+               COALESCE(alert_email_enabled, 0),
+               COALESCE(alert_email_time_hhmm, ''),
+               COALESCE(alert_email_last_sent_local_date, ''),
+               COALESCE(updated_at_utc, '')
         FROM web_user_settings
         WHERE username = ?
         """,
@@ -659,12 +777,24 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
         return {
             "email_enabled": False,
             "email_recipient": "",
+            "trend_email_enabled": False,
+            "trend_email_time_hhmm": DEFAULT_TREND_DIGEST_TIME,
+            "trend_email_last_sent_local_date": "",
+            "alert_email_enabled": False,
+            "alert_email_time_hhmm": DEFAULT_ALERT_DIGEST_TIME,
+            "alert_email_last_sent_local_date": "",
             "updated_at_utc": "",
         }
     return {
         "email_enabled": bool(int(row[0] or 0)),
         "email_recipient": str(row[1] or ""),
-        "updated_at_utc": str(row[2] or ""),
+        "trend_email_enabled": bool(int(row[2] or 0)),
+        "trend_email_time_hhmm": normalize_hhmm(row[3], DEFAULT_TREND_DIGEST_TIME),
+        "trend_email_last_sent_local_date": str(row[4] or ""),
+        "alert_email_enabled": bool(int(row[5] or 0)),
+        "alert_email_time_hhmm": normalize_hhmm(row[6], DEFAULT_ALERT_DIGEST_TIME),
+        "alert_email_last_sent_local_date": str(row[7] or ""),
+        "updated_at_utc": str(row[8] or ""),
     }
 
 
@@ -672,23 +802,354 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
     existing = get_web_user_settings(conn, username)
     email_recipient = str(payload.get("email_recipient", existing.get("email_recipient", "")) or "").strip()
     email_enabled = coerce_bool(payload.get("email_enabled", existing.get("email_enabled", False)))
+    trend_email_enabled = coerce_bool(payload.get("trend_email_enabled", existing.get("trend_email_enabled", False)))
+    alert_email_enabled = coerce_bool(payload.get("alert_email_enabled", existing.get("alert_email_enabled", False)))
+    trend_email_time_hhmm = normalize_hhmm(
+        payload.get("trend_email_time_hhmm", existing.get("trend_email_time_hhmm", DEFAULT_TREND_DIGEST_TIME)),
+        DEFAULT_TREND_DIGEST_TIME,
+    )
+    alert_email_time_hhmm = normalize_hhmm(
+        payload.get("alert_email_time_hhmm", existing.get("alert_email_time_hhmm", DEFAULT_ALERT_DIGEST_TIME)),
+        DEFAULT_ALERT_DIGEST_TIME,
+    )
+    trend_email_last_sent_local_date = str(
+        payload.get("trend_email_last_sent_local_date", existing.get("trend_email_last_sent_local_date", "")) or ""
+    ).strip()
+    alert_email_last_sent_local_date = str(
+        payload.get("alert_email_last_sent_local_date", existing.get("alert_email_last_sent_local_date", "")) or ""
+    ).strip()
     now_utc = utc_now_iso()
     conn.execute(
         """
-        INSERT INTO web_user_settings (username, email_enabled, email_recipient, updated_at_utc)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO web_user_settings (
+            username,
+            email_enabled,
+            email_recipient,
+            trend_email_enabled,
+            trend_email_time_hhmm,
+            trend_email_last_sent_local_date,
+            alert_email_enabled,
+            alert_email_time_hhmm,
+            alert_email_last_sent_local_date,
+            updated_at_utc
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             email_enabled = excluded.email_enabled,
             email_recipient = excluded.email_recipient,
+            trend_email_enabled = excluded.trend_email_enabled,
+            trend_email_time_hhmm = excluded.trend_email_time_hhmm,
+            trend_email_last_sent_local_date = excluded.trend_email_last_sent_local_date,
+            alert_email_enabled = excluded.alert_email_enabled,
+            alert_email_time_hhmm = excluded.alert_email_time_hhmm,
+            alert_email_last_sent_local_date = excluded.alert_email_last_sent_local_date,
             updated_at_utc = excluded.updated_at_utc
         """,
-        (username, 1 if email_enabled else 0, email_recipient, now_utc),
+        (
+            username,
+            1 if email_enabled else 0,
+            email_recipient,
+            1 if trend_email_enabled else 0,
+            trend_email_time_hhmm,
+            trend_email_last_sent_local_date,
+            1 if alert_email_enabled else 0,
+            alert_email_time_hhmm,
+            alert_email_last_sent_local_date,
+            now_utc,
+        ),
     )
     return {
         "email_enabled": email_enabled,
         "email_recipient": email_recipient,
+        "trend_email_enabled": trend_email_enabled,
+        "trend_email_time_hhmm": trend_email_time_hhmm,
+        "trend_email_last_sent_local_date": trend_email_last_sent_local_date,
+        "alert_email_enabled": alert_email_enabled,
+        "alert_email_time_hhmm": alert_email_time_hhmm,
+        "alert_email_last_sent_local_date": alert_email_last_sent_local_date,
         "updated_at_utc": now_utc,
     }
+
+
+def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
+    cutoff_iso = utc_hours_ago_iso(hours)
+
+    resource_metrics = [
+        ("cpu_usage_percent", "CPU %"),
+        ("memory_used_percent", "RAM %"),
+        ("swap_used_percent", "Swap %"),
+    ]
+
+    def linear_regression_projected(values: list[float]) -> float | None:
+        n = len(values)
+        if n < 3:
+            return None
+        sum_x = n * (n - 1) // 2
+        sum_x2 = (n - 1) * n * (2 * n - 1) // 6
+        sum_y = sum(values)
+        sum_xy = sum(i * v for i, v in enumerate(values))
+        denom = n * sum_x2 - sum_x * sum_x
+        if denom == 0:
+            return None
+        slope = (n * sum_xy - sum_x * sum_y) / denom
+        intercept = (sum_y - slope * sum_x) / n
+        return slope * (2 * (n - 1)) + intercept
+
+    def trend_level(projected: float | None) -> str | None:
+        if projected is None:
+            return None
+        if projected >= 100:
+            return "crit"
+        if projected >= 90:
+            return "warn"
+        return None
+
+    warnings: list[dict] = []
+    hostnames = [
+        row[0]
+        for row in conn.execute(
+            "SELECT DISTINCT hostname FROM reports WHERE received_at_utc >= ? ORDER BY hostname ASC",
+            (cutoff_iso,),
+        ).fetchall()
+    ]
+
+    for hostname in hostnames:
+        rows = conn.execute(
+            """
+            SELECT payload_json
+            FROM reports
+            WHERE hostname = ? AND received_at_utc >= ?
+            ORDER BY id ASC
+            """,
+            (hostname, cutoff_iso),
+        ).fetchall()
+
+        if not rows:
+            continue
+
+        last_payload = parse_payload_json(rows[-1][0])
+        dn_override = get_display_name_override(conn, hostname)
+        host_display_name = effective_display_name(last_payload, dn_override, hostname)
+
+        resource_series: dict[str, list[float]] = {
+            "cpu_usage_percent": [],
+            "memory_used_percent": [],
+            "swap_used_percent": [],
+        }
+        fs_series: dict[str, list[float]] = {}
+
+        for row in rows:
+            payload = parse_payload_json(row[0])
+
+            cpu = get_nested_number(payload, "cpu", "usage_percent")
+            if cpu is not None:
+                resource_series["cpu_usage_percent"].append(cpu)
+
+            mem = get_nested_number(payload, "memory", "used_percent")
+            if mem is not None:
+                resource_series["memory_used_percent"].append(mem)
+
+            swap = get_nested_number(payload, "swap", "used_percent")
+            if swap is not None:
+                resource_series["swap_used_percent"].append(swap)
+
+            for fs in payload.get("filesystems", []):
+                if not isinstance(fs, dict):
+                    continue
+                mountpoint = str(fs.get("mountpoint", "")).strip()
+                try:
+                    used_percent = float(fs["used_percent"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if mountpoint not in fs_series:
+                    fs_series[mountpoint] = []
+                fs_series[mountpoint].append(used_percent)
+
+        for key, label in resource_metrics:
+            values = resource_series[key]
+            projected = linear_regression_projected(values)
+            level = trend_level(projected)
+            if not level:
+                continue
+            current = values[-1] if values else None
+            warnings.append(
+                {
+                    "hostname": hostname,
+                    "display_name": host_display_name,
+                    "metric": label,
+                    "metric_key": key,
+                    "type": "resource",
+                    "current": round(current, 1) if current is not None else None,
+                    "projected": round(float(projected), 1),
+                    "level": level,
+                }
+            )
+
+        for mountpoint, values in fs_series.items():
+            projected = linear_regression_projected(values)
+            level = trend_level(projected)
+            if not level:
+                continue
+            current = values[-1] if values else None
+            warnings.append(
+                {
+                    "hostname": hostname,
+                    "display_name": host_display_name,
+                    "metric": mountpoint,
+                    "metric_key": "filesystem",
+                    "type": "filesystem",
+                    "current": round(current, 1) if current is not None else None,
+                    "projected": round(float(projected), 1),
+                    "level": level,
+                }
+            )
+
+    warnings.sort(key=lambda item: (0 if item["level"] == "crit" else 1, -item["projected"]))
+    return warnings
+
+
+def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT id, hostname, mountpoint, severity, used_percent, created_at_utc, last_seen_at_utc
+        FROM alerts
+        WHERE status = 'open'
+          AND COALESCE((SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0
+          AND NOT EXISTS (
+              SELECT 1 FROM muted_alert_rules m
+              WHERE m.hostname = alerts.hostname AND m.mountpoint = alerts.mountpoint
+          )
+        ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, used_percent DESC, id DESC
+        """
+    ).fetchall()
+
+    hostnames = sorted({str(row[1] or "") for row in rows if str(row[1] or "")})
+    display_names: dict[str, str] = {}
+    if hostnames:
+        placeholders = ",".join("?" for _ in hostnames)
+        settings_rows = conn.execute(
+            f"SELECT hostname, display_name_override FROM host_settings WHERE hostname IN ({placeholders})",
+            tuple(hostnames),
+        ).fetchall()
+        overrides = {str(item[0]): str(item[1] or "") for item in settings_rows}
+
+        latest_payload_rows = conn.execute(
+            f"""
+            SELECT hostname, payload_json
+            FROM reports
+            WHERE id IN (
+                SELECT MAX(id)
+                FROM reports
+                WHERE hostname IN ({placeholders})
+                GROUP BY hostname
+            )
+            """,
+            tuple(hostnames),
+        ).fetchall()
+        payload_by_hostname = {
+            str(item[0]): parse_payload_json(str(item[1] or "{}"))
+            for item in latest_payload_rows
+        }
+
+        for hostname in hostnames:
+            payload = payload_by_hostname.get(hostname, {})
+            display_names[hostname] = effective_display_name(payload, overrides.get(hostname, ""), hostname)
+
+    return [
+        {
+            "id": int(row[0] or 0),
+            "hostname": str(row[1] or ""),
+            "display_name": display_names.get(str(row[1] or ""), str(row[1] or "")),
+            "mountpoint": str(row[2] or ""),
+            "severity": str(row[3] or "warning"),
+            "used_percent": float(row[4] or 0),
+            "created_at_utc": str(row[5] or ""),
+            "last_seen_at_utc": str(row[6] or ""),
+        }
+        for row in rows
+    ]
+
+
+def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
+    rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</td>"
+            f"<td>{html.escape(str(item.get('metric') or '-'))}</td>"
+            f"<td>{html.escape(str(item.get('current') if item.get('current') is not None else '-'))}%</td>"
+            f"<td><strong>{html.escape(str(item.get('projected') if item.get('projected') is not None else '-'))}%</strong></td>"
+            f"<td>{'KRITISCH' if str(item.get('level')) == 'crit' else 'WARNUNG'}</td>"
+            "</tr>"
+        )
+        for item in warnings
+    )
+    if not rows_html:
+        rows_html = "<tr><td colspan='5'>Keine kritischen Trends im gewaehlten Zeitraum.</td></tr>"
+
+    return (
+        "<html><body style='margin:0;background:#eef3fb;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
+        "<div style='max-width:900px;margin:20px auto;background:#ffffff;border:1px solid #d5e1f2;border-radius:14px;overflow:hidden;'>"
+        "<div style='padding:18px 20px;background:linear-gradient(135deg,#0f4c81,#1f6aa5);color:#fff;'>"
+        "<h2 style='margin:0 0 6px 0;font-size:22px;'>Daily Trend Digest</h2>"
+        f"<div style='font-size:13px;opacity:.95;'>Benutzer: {html.escape(username)} | Fenster: letzte {hours}h | Zeit: {html.escape(utc_now_iso())}</div>"
+        "</div>"
+        "<div style='padding:18px 20px;'>"
+        f"<p style='margin:0 0 14px 0;font-size:14px;'>Es wurden <strong>{len(warnings)}</strong> trend-kritische Signale erkannt.</p>"
+        "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
+        "<thead><tr style='background:#f1f5f9;'>"
+        "<th style='text-align:left;padding:8px;border:1px solid #dbe3ef;'>Host</th>"
+        "<th style='text-align:left;padding:8px;border:1px solid #dbe3ef;'>Trend</th>"
+        "<th style='text-align:right;padding:8px;border:1px solid #dbe3ef;'>Aktuell</th>"
+        "<th style='text-align:right;padding:8px;border:1px solid #dbe3ef;'>Prognose</th>"
+        "<th style='text-align:left;padding:8px;border:1px solid #dbe3ef;'>Level</th>"
+        "</tr></thead>"
+        f"<tbody>{rows_html}</tbody>"
+        "</table>"
+        "</div>"
+        "</div>"
+        "</body></html>"
+    )
+
+
+def alert_digest_html(username: str, alerts: list[dict]) -> str:
+    rows_html = "".join(
+        (
+            "<tr>"
+            f"<td>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</td>"
+            f"<td>{html.escape(str(item.get('mountpoint') or '-'))}</td>"
+            f"<td>{html.escape(str(item.get('severity') or '-').upper())}</td>"
+            f"<td>{html.escape('{:.1f}'.format(float(item.get('used_percent') or 0)))}%</td>"
+            f"<td>{html.escape(str(item.get('last_seen_at_utc') or '-'))}</td>"
+            "</tr>"
+        )
+        for item in alerts
+    )
+    if not rows_html:
+        rows_html = "<tr><td colspan='5'>Keine offenen Alarme vorhanden.</td></tr>"
+
+    return (
+        "<html><body style='margin:0;background:#f3f6ff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
+        "<div style='max-width:900px;margin:20px auto;background:#ffffff;border:1px solid #dbe3ef;border-radius:14px;overflow:hidden;'>"
+        "<div style='padding:18px 20px;background:linear-gradient(135deg,#7f1d1d,#b91c1c);color:#fff;'>"
+        "<h2 style='margin:0 0 6px 0;font-size:22px;'>Open Alert Digest</h2>"
+        f"<div style='font-size:13px;opacity:.95;'>Benutzer: {html.escape(username)} | Zeit: {html.escape(utc_now_iso())}</div>"
+        "</div>"
+        "<div style='padding:18px 20px;'>"
+        f"<p style='margin:0 0 14px 0;font-size:14px;'>Aktuell <strong>{len(alerts)}</strong> offene, nicht stummgeschaltete Alarme.</p>"
+        "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
+        "<thead><tr style='background:#fee2e2;'>"
+        "<th style='text-align:left;padding:8px;border:1px solid #fecaca;'>Host</th>"
+        "<th style='text-align:left;padding:8px;border:1px solid #fecaca;'>Mountpoint</th>"
+        "<th style='text-align:left;padding:8px;border:1px solid #fecaca;'>Severity</th>"
+        "<th style='text-align:right;padding:8px;border:1px solid #fecaca;'>Used</th>"
+        "<th style='text-align:left;padding:8px;border:1px solid #fecaca;'>Letztes Signal</th>"
+        "</tr></thead>"
+        f"<tbody>{rows_html}</tbody>"
+        "</table>"
+        "</div>"
+        "</div>"
+        "</body></html>"
+    )
 
 
 def get_oauth_settings(conn: sqlite3.Connection) -> dict:
@@ -945,6 +1406,10 @@ def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
         "updated_at_utc": user["updated_at_utc"],
         "email_enabled": settings["email_enabled"],
         "email_recipient": settings["email_recipient"],
+        "trend_email_enabled": settings["trend_email_enabled"],
+        "trend_email_time_hhmm": settings["trend_email_time_hhmm"],
+        "alert_email_enabled": settings["alert_email_enabled"],
+        "alert_email_time_hhmm": settings["alert_email_time_hhmm"],
         "mail_oauth_available": oauth_is_configured(oauth_settings),
         "microsoft_oauth": {
             "connected": connection is not None,
@@ -1107,7 +1572,14 @@ def ensure_microsoft_access_token(conn: sqlite3.Connection, username: str) -> tu
     return True, refreshed["access_token"], ""
 
 
-def send_microsoft_mail(access_token: str, recipient: str, subject: str, content: str) -> tuple[bool, str]:
+def send_microsoft_mail(
+    access_token: str,
+    recipient: str,
+    subject: str,
+    content: str,
+    *,
+    content_type: str = "Text",
+) -> tuple[bool, str]:
     status, payload, raw = request_json(
         "https://graph.microsoft.com/v1.0/me/sendMail",
         method="POST",
@@ -1115,7 +1587,7 @@ def send_microsoft_mail(access_token: str, recipient: str, subject: str, content
             "message": {
                 "subject": subject,
                 "body": {
-                    "contentType": "Text",
+                    "contentType": content_type,
                     "content": content,
                 },
                 "toRecipients": [
@@ -1135,6 +1607,94 @@ def send_microsoft_mail(access_token: str, recipient: str, subject: str, content
     if 200 <= status < 300:
         return True, raw or "accepted"
     return False, raw or payload.get("error_description", payload.get("error", "send failed"))
+
+
+def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
+    now_local = datetime.now().astimezone()
+    today_local = now_local.date().isoformat()
+
+    rows = conn.execute(
+        """
+        SELECT u.username,
+               COALESCE(u.is_disabled, 0),
+               COALESCE(s.email_enabled, 0),
+               COALESCE(s.email_recipient, ''),
+               COALESCE(s.trend_email_enabled, 0),
+               COALESCE(s.trend_email_time_hhmm, ''),
+               COALESCE(s.trend_email_last_sent_local_date, ''),
+               COALESCE(s.alert_email_enabled, 0),
+               COALESCE(s.alert_email_time_hhmm, ''),
+               COALESCE(s.alert_email_last_sent_local_date, '')
+        FROM web_users u
+        JOIN web_user_settings s ON s.username = u.username
+        ORDER BY LOWER(u.username)
+        """
+    ).fetchall()
+
+    for row in rows:
+        username = str(row[0] or "").strip()
+        if not username:
+            continue
+        if bool(int(row[1] or 0)):
+            continue
+        email_enabled = bool(int(row[2] or 0))
+        recipient = str(row[3] or "").strip()
+        trend_enabled = bool(int(row[4] or 0))
+        trend_time = normalize_hhmm(row[5], DEFAULT_TREND_DIGEST_TIME)
+        trend_last_sent = str(row[6] or "").strip()
+        alert_enabled = bool(int(row[7] or 0))
+        alert_time = normalize_hhmm(row[8], DEFAULT_ALERT_DIGEST_TIME)
+        alert_last_sent = str(row[9] or "").strip()
+
+        if not email_enabled or not recipient:
+            continue
+
+        send_trend = trend_enabled and scheduled_digest_due(now_local, trend_time, trend_last_sent)
+        send_alert = alert_enabled and scheduled_digest_due(now_local, alert_time, alert_last_sent)
+        if not send_trend and not send_alert:
+            continue
+
+        ok_token, access_token, _details = ensure_microsoft_access_token(conn, username)
+        if not ok_token:
+            continue
+
+        if send_trend:
+            warnings = collect_critical_trends(conn, 24)
+            trend_ok, _trend_details = send_microsoft_mail(
+                access_token,
+                recipient,
+                f"[Monitoring] Daily Trend Digest {today_local}",
+                trend_digest_html(username, warnings, 24),
+                content_type="HTML",
+            )
+            if trend_ok:
+                conn.execute(
+                    """
+                    UPDATE web_user_settings
+                    SET trend_email_last_sent_local_date = ?, updated_at_utc = ?
+                    WHERE username = ?
+                    """,
+                    (today_local, utc_now_iso(), username),
+                )
+
+        if send_alert:
+            alerts = collect_open_alerts(conn)
+            alert_ok, _alert_details = send_microsoft_mail(
+                access_token,
+                recipient,
+                f"[Monitoring] Open Alert Digest {today_local}",
+                alert_digest_html(username, alerts),
+                content_type="HTML",
+            )
+            if alert_ok:
+                conn.execute(
+                    """
+                    UPDATE web_user_settings
+                    SET alert_email_last_sent_local_date = ?, updated_at_utc = ?
+                    WHERE username = ?
+                    """,
+                    (today_local, utc_now_iso(), username),
+                )
 
 
 def append_query_param(path: str, key: str, value: str) -> str:
@@ -2467,135 +3027,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
-            cutoff_iso = utc_hours_ago_iso(hours)
-
-            RESOURCE_METRICS = [
-                ("cpu_usage_percent", "CPU %"),
-                ("memory_used_percent", "RAM %"),
-                ("swap_used_percent", "Swap %"),
-            ]
-
-            def linear_regression_projected(values: list[float]) -> float | None:
-                n = len(values)
-                if n < 3:
-                    return None
-                sum_x = n * (n - 1) // 2
-                sum_x2 = (n - 1) * n * (2 * n - 1) // 6
-                sum_y = sum(values)
-                sum_xy = sum(i * v for i, v in enumerate(values))
-                denom = n * sum_x2 - sum_x * sum_x
-                if denom == 0:
-                    return None
-                slope = (n * sum_xy - sum_x * sum_y) / denom
-                intercept = (sum_y - slope * sum_x) / n
-                return slope * (2 * (n - 1)) + intercept
-
-            def trend_level(projected: float | None) -> str | None:
-                if projected is None:
-                    return None
-                if projected >= 100:
-                    return "crit"
-                if projected >= 90:
-                    return "warn"
-                return None
-
-            warnings: list[dict] = []
-
             with sqlite3.connect(DB_PATH) as conn:
-                hostnames = [
-                    row[0]
-                    for row in conn.execute(
-                        "SELECT DISTINCT hostname FROM reports WHERE received_at_utc >= ? ORDER BY hostname ASC",
-                        (cutoff_iso,),
-                    ).fetchall()
-                ]
-
-                for hostname in hostnames:
-                    rows = conn.execute(
-                        """
-                        SELECT received_at_utc, payload_json
-                        FROM reports
-                        WHERE hostname = ? AND received_at_utc >= ?
-                        ORDER BY id ASC
-                        """,
-                        (hostname, cutoff_iso),
-                    ).fetchall()
-
-                    if not rows:
-                        continue
-
-                    last_payload = parse_payload_json(rows[-1][1])
-                    dn_override = get_display_name_override(conn, hostname)
-                    host_display_name = effective_display_name(last_payload, dn_override, hostname)
-
-                    resource_series: dict[str, list[float]] = {
-                        "cpu_usage_percent": [],
-                        "memory_used_percent": [],
-                        "swap_used_percent": [],
-                    }
-                    fs_series: dict[str, list[float]] = {}
-
-                    for row in rows:
-                        payload = parse_payload_json(row[1])
-
-                        cpu = get_nested_number(payload, "cpu", "usage_percent")
-                        if cpu is not None:
-                            resource_series["cpu_usage_percent"].append(cpu)
-
-                        mem = get_nested_number(payload, "memory", "used_percent")
-                        if mem is not None:
-                            resource_series["memory_used_percent"].append(mem)
-
-                        swap = get_nested_number(payload, "swap", "used_percent")
-                        if swap is not None:
-                            resource_series["swap_used_percent"].append(swap)
-
-                        for fs in payload.get("filesystems", []):
-                            if not isinstance(fs, dict):
-                                continue
-                            mp = str(fs.get("mountpoint", "")).strip()
-                            try:
-                                up = float(fs["used_percent"])
-                            except (KeyError, TypeError, ValueError):
-                                continue
-                            if mp not in fs_series:
-                                fs_series[mp] = []
-                            fs_series[mp].append(up)
-
-                    for key, label in RESOURCE_METRICS:
-                        values = resource_series[key]
-                        projected = linear_regression_projected(values)
-                        level = trend_level(projected)
-                        if level:
-                            current = values[-1] if values else None
-                            warnings.append({
-                                "hostname": hostname,
-                                "display_name": host_display_name,
-                                "metric": label,
-                                "metric_key": key,
-                                "type": "resource",
-                                "current": round(current, 1) if current is not None else None,
-                                "projected": round(projected, 1),
-                                "level": level,
-                            })
-
-                    for mp, values in fs_series.items():
-                        projected = linear_regression_projected(values)
-                        level = trend_level(projected)
-                        if level:
-                            current = values[-1] if values else None
-                            warnings.append({
-                                "hostname": hostname,
-                                "display_name": host_display_name,
-                                "metric": mp,
-                                "metric_key": "filesystem",
-                                "type": "filesystem",
-                                "current": round(current, 1) if current is not None else None,
-                                "projected": round(projected, 1),
-                                "level": level,
-                            })
-
-            warnings.sort(key=lambda w: (0 if w["level"] == "crit" else 1, -w["projected"]))
+                warnings = collect_critical_trends(conn, hours)
 
             self._send_json(HTTPStatus.OK, {
                 "hours": hours,
@@ -3182,8 +3615,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, payload)
             return
 
-        if path == "/api/v1/mail-test":
+        if path in {"/api/v1/mail-test", "/api/v1/mail-test/trends", "/api/v1/mail-test/alerts"}:
             username = self._web_session_username()
+            endpoint_mode = "generic"
+            if path.endswith("/trends"):
+                endpoint_mode = "trends"
+            elif path.endswith("/alerts"):
+                endpoint_mode = "alerts"
+
             with sqlite3.connect(DB_PATH) as conn:
                 settings = get_web_user_settings(conn, username)
                 recipient = str(settings.get("email_recipient", "") or "").strip()
@@ -3194,22 +3633,42 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 if not ok:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": details or "oauth unavailable"})
                     return
-                mail_ok, mail_details = send_microsoft_mail(
-                    access_token,
-                    recipient,
-                    "[TEST] Monitoring OAuth Mail",
-                    (
-                        "Monitoring OAuth Test\n"
-                        f"Benutzer: {username}\n"
-                        f"Zeit: {utc_now_iso()}\n"
-                        "Wenn diese Mail ankommt, funktioniert Microsoft Graph OAuth."
-                    ),
-                )
+                if endpoint_mode == "trends":
+                    warnings = collect_critical_trends(conn, 24)
+                    mail_ok, mail_details = send_microsoft_mail(
+                        access_token,
+                        recipient,
+                        "[TEST] Monitoring Trend Digest",
+                        trend_digest_html(username, warnings, 24),
+                        content_type="HTML",
+                    )
+                elif endpoint_mode == "alerts":
+                    alerts = collect_open_alerts(conn)
+                    mail_ok, mail_details = send_microsoft_mail(
+                        access_token,
+                        recipient,
+                        "[TEST] Monitoring Alert Digest",
+                        alert_digest_html(username, alerts),
+                        content_type="HTML",
+                    )
+                else:
+                    mail_ok, mail_details = send_microsoft_mail(
+                        access_token,
+                        recipient,
+                        "[TEST] Monitoring OAuth Mail",
+                        (
+                            "Monitoring OAuth Test\n"
+                            f"Benutzer: {username}\n"
+                            f"Zeit: {utc_now_iso()}\n"
+                            "Wenn diese Mail ankommt, funktioniert Microsoft Graph OAuth."
+                        ),
+                    )
                 conn.commit()
             self._send_json(
                 HTTPStatus.OK if mail_ok else HTTPStatus.BAD_REQUEST,
                 {
                     "status": "sent" if mail_ok else "failed",
+                    "mode": endpoint_mode,
                     "details": mail_details,
                 },
             )
@@ -3636,6 +4095,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 resolve_open_alerts_for_host(conn, hostname, report_id)
             else:
                 update_alerts_for_report(conn, hostname, report_id, filesystems, alarm_settings)
+            maybe_send_scheduled_user_mails(conn)
             conn.commit()
 
         self._send_json(HTTPStatus.CREATED, {"status": "stored"})
