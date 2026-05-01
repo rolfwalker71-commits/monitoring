@@ -20,6 +20,8 @@ const state = {
   hostSearchQuery: "",
   hostAlertFilter: "all",
   hostMutedFilter: "all",
+  hostOsFilter: "all",
+  hostCountryFilter: "all",
   viewMode: "reports",
   overviewSection: "main",
   criticalTrendsHours: 24,
@@ -2022,10 +2024,86 @@ async function goToNextReport() {
   await loadAlertsForHost();
 }
 
+function normalizeHostOsFamily(host) {
+  const osRaw = asText(host?.os || "", "").toLowerCase();
+  if (osRaw.includes("windows")) {
+    return "windows";
+  }
+  return "linux";
+}
+
+function normalizeHostCountryCode(host) {
+  return asText(host?.country_code || "", "").trim().toUpperCase();
+}
+
+function renderHostIconFilters(hosts) {
+  const osContainer = document.getElementById("hostOsFilterChips");
+  const countryContainer = document.getElementById("hostCountryFilterChips");
+  if (!osContainer || !countryContainer) {
+    return;
+  }
+
+  const osFamilies = Array.from(new Set((hosts || []).map((host) => normalizeHostOsFamily(host))));
+  const osOptions = ["all", ...osFamilies.filter((item) => item !== "all")];
+  if (!osOptions.includes(state.hostOsFilter)) {
+    state.hostOsFilter = "all";
+  }
+  osContainer.innerHTML = osOptions.map((item) => {
+    if (item === "all") {
+      return `<button class="icon-filter-chip${state.hostOsFilter === "all" ? " active" : ""}" type="button" data-os-filter="all" title="Alle Betriebssysteme">Alle</button>`;
+    }
+    const iconName = item === "windows" ? "windows.png" : "linux.png";
+    const label = item === "windows" ? "Windows" : "Linux";
+    return `<button class="icon-filter-chip${state.hostOsFilter === item ? " active" : ""}" type="button" data-os-filter="${item}" title="${label}"><img src="icons/${iconName}" alt="${label}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${iconName}';}"></button>`;
+  }).join("");
+
+  const countryCodes = Array.from(
+    new Set((hosts || []).map((host) => normalizeHostCountryCode(host)).filter((code) => /^[A-Z]{2}$/.test(code))),
+  ).sort();
+  const countryOptions = ["all", ...countryCodes];
+  if (state.hostCountryFilter !== "all" && !countryOptions.includes(state.hostCountryFilter)) {
+    state.hostCountryFilter = "all";
+  }
+  countryContainer.innerHTML = countryOptions.map((code) => {
+    if (code === "all") {
+      return `<button class="icon-filter-chip${state.hostCountryFilter === "all" ? " active" : ""}" type="button" data-country-filter="all" title="Alle Länder">Alle</button>`;
+    }
+    const lower = code.toLowerCase();
+    return `<button class="icon-filter-chip${state.hostCountryFilter === code ? " active" : ""}" type="button" data-country-filter="${code}" title="Land ${code}"><img src="icons/${code}.png" alt="${code}" onerror="if(!this.dataset.fallback1){this.dataset.fallback1='1';this.src='/icons/${code}.png';return;}if(!this.dataset.fallback2){this.dataset.fallback2='1';this.src='/icons/${lower}.png';return;}if(!this.dataset.fallback3){this.dataset.fallback3='1';this.src='/icons/${lower}.svg';return;}this.parentElement.style.display='none';"></button>`;
+  }).join("");
+
+  osContainer.querySelectorAll("[data-os-filter]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const nextFilter = String(button.getAttribute("data-os-filter") || "all");
+      if (state.hostOsFilter === nextFilter) {
+        return;
+      }
+      state.hostOsFilter = nextFilter;
+      state.hostOffset = 0;
+      await loadHosts();
+    });
+  });
+
+  countryContainer.querySelectorAll("[data-country-filter]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const nextFilterRaw = String(button.getAttribute("data-country-filter") || "all");
+      const nextFilter = nextFilterRaw.toUpperCase() === "ALL" ? "all" : nextFilterRaw.toUpperCase();
+      if (state.hostCountryFilter === nextFilter) {
+        return;
+      }
+      state.hostCountryFilter = nextFilter;
+      state.hostOffset = 0;
+      await loadHosts();
+    });
+  });
+}
+
 function filterAndSortHosts(hosts) {
   const query = state.hostSearchQuery.toLowerCase().trim();
   const alertFilter = String(state.hostAlertFilter || "all");
   const mutedFilter = String(state.hostMutedFilter || "all");
+  const osFilter = String(state.hostOsFilter || "all");
+  const countryFilter = String(state.hostCountryFilter || "all").toUpperCase();
 
   let filtered = hosts;
   if (query.length > 0) {
@@ -2054,6 +2132,14 @@ function filterAndSortHosts(hosts) {
       const muted = Array.isArray(state.mutedAlertsByHost[hostname]) ? state.mutedAlertsByHost[hostname] : [];
       return muted.length === 0;
     });
+  }
+
+  if (osFilter !== "all") {
+    filtered = filtered.filter((host) => normalizeHostOsFamily(host) === osFilter);
+  }
+
+  if (countryFilter !== "ALL") {
+    filtered = filtered.filter((host) => normalizeHostCountryCode(host) === countryFilter);
   }
 
   filtered.sort((a, b) => {
@@ -2401,6 +2487,7 @@ function renderHosts(hosts) {
     hostCount.textContent = "0 Hosts gesamt";
     hostListHeader.innerHTML = "";
     hostList.innerHTML = "<p class=\"muted\">Keine Hosts vorhanden.</p>";
+    renderHostIconFilters([]);
     return;
   }
 
@@ -2410,6 +2497,7 @@ function renderHosts(hosts) {
   if (visibleHosts.length === 0 && hiddenHosts.length === 0) {
     hostListHeader.innerHTML = "";
     hostList.innerHTML = "<p class=\"muted\">Keine Hosts passen zum Suchfilter.</p>";
+    renderHostIconFilters(hosts);
     return;
   }
 
@@ -2434,6 +2522,7 @@ function renderHosts(hosts) {
     </section>
   `;
 
+  renderHostIconFilters(hosts);
   wireHostListInteractions();
 }
 
