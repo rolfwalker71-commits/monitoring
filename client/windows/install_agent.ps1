@@ -5,14 +5,15 @@
     Installs the Windows monitoring agent.
 
 .EXAMPLE
-    # Run directly (as Administrator):
+    # Download to temp file and run (as Administrator):
+    $tmp = "$env:TEMP\install_agent.ps1"
+    (New-Object System.Net.WebClient).DownloadFile('https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/windows/install_agent.ps1', $tmp)
+    & $tmp -ServerUrl 'https://monitoring.example.com'
+    Remove-Item $tmp -ErrorAction SilentlyContinue
+
+    # Run directly from file (as Administrator):
     Set-ExecutionPolicy Bypass -Scope Process -Force
     .\install_agent.ps1 -ServerUrl https://monitoring.example.com
-
-    # Or via one-liner (as Administrator):
-    $url = 'https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/windows/install_agent.ps1'
-    Invoke-Expression ((New-Object System.Net.WebClient).DownloadString($url) + "`n" +
-        'Install-MonitoringAgent -ServerUrl "https://monitoring.example.com"')
 #>
 [CmdletBinding()]
 param(
