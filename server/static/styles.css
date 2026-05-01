@@ -198,22 +198,75 @@ body[data-theme="dark"] {
   font-size: 11px;
 }
 
-.btn-logout {
-  font-size: 12px;
-  padding: 5px 12px;
-  border-color: #fca5a5;
+.brand-logout-btn {
+  background: #ffeaea;
   color: #b91c1c;
-  white-space: nowrap;
+  border: 1px solid #fca5a5;
+  cursor: pointer;
 }
 
-.btn-logout:hover {
-  background: #fef2f2;
+.brand-logout-btn::before {
+  content: none;
+}
+
+.brand-logout-btn:hover {
+  background: #ffd7d7;
   border-color: #ef4444;
   color: #991b1b;
 }
 
-.btn-theme-toggle {
-  min-width: 130px;
+/* ── Dark Mode Toggle Switch ──────────────────────────────── */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid #c8d5e6;
+  border-radius: 999px;
+  padding: 3px 10px 3px 4px;
+  cursor: pointer;
+  color: #42526e;
+  font-size: 12px;
+  font-weight: 600;
+  height: 28px;
+  white-space: nowrap;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.theme-toggle:hover {
+  border-color: #9fb8d8;
+  background: #f0f6ff;
+}
+
+.theme-toggle-track {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: #c8d5e6;
+  flex-shrink: 0;
+  transition: background 200ms ease;
+}
+
+.theme-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 200ms ease;
+}
+
+/* active = dark mode on */
+.theme-toggle[aria-pressed="true"] .theme-toggle-track {
+  background: #3b82f6;
+}
+
+.theme-toggle[aria-pressed="true"] .theme-toggle-thumb {
+  transform: translateX(12px);
 }
 
 .panel {
@@ -2865,15 +2918,26 @@ body[data-theme="dark"] .brand-user-badge {
   color: #93c5fd;
 }
 
-body[data-theme="dark"] .btn-logout {
-  border-color: #7f1d1d;
+body[data-theme="dark"] .brand-logout-btn {
+  background: #1f1212;
   color: #f87171;
+  border-color: #7f1d1d;
 }
 
-body[data-theme="dark"] .btn-logout:hover {
-  background: #1f1212;
+body[data-theme="dark"] .brand-logout-btn:hover {
+  background: #2e1a1a;
   border-color: #ef4444;
   color: #fca5a5;
+}
+
+body[data-theme="dark"] .theme-toggle {
+  border-color: #2a3c59;
+  color: #a9bfd9;
+}
+
+body[data-theme="dark"] .theme-toggle:hover {
+  border-color: #4a6f9f;
+  background: #1a2b42;
 }
 
 /* ── Dark Mode: Settings & misc ───────────────────────────── */

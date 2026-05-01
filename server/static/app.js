@@ -130,7 +130,8 @@ function updateThemeToggleUi(theme) {
     return;
   }
   const isDark = normalizeTheme(theme) === "dark";
-  button.textContent = isDark ? "☀️ Lightmode" : "🌙 Darkmode";
+  const label = button.querySelector(".theme-toggle-label");
+  if (label) label.textContent = isDark ? "Light" : "Dark";
   button.setAttribute("aria-pressed", isDark ? "true" : "false");
   button.title = isDark ? "Zum Lightmode wechseln" : "Zum Darkmode wechseln";
 }
