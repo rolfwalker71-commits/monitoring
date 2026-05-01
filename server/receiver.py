@@ -1262,10 +1262,17 @@ def host_badges_html(country_code: object, os_family: object) -> str:
         if country_flag_uri
         else ""
     )
+    os_badge = (
+        f"<span style='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;background:#d9ebff;'>{os_icon_html}</span>"
+        if os_icon_html else ""
+    )
+    country_badge_html = (
+        f"<span style='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;background:#d9ebff;'>{country_icon_html}</span>"
+        if country_icon_html else ""
+    )
     return (
         "<div style='margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;'>"
-        f"<span style='display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;background:#d9ebff;color:#244566;font-size:11px;font-weight:700;'>{os_icon_html}{html.escape(os_label)}</span>"
-        f"<span style='display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;background:#d9ebff;color:#244566;font-size:11px;font-weight:700;'>{country_icon_html}Land {html.escape(country_badge)}</span>"
+        f"{os_badge}{country_badge_html}"
         "</div>"
     )
 
