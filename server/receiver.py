@@ -3308,6 +3308,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "country_code": country_code,
                         "is_favorite": bool(host_settings.get("is_favorite", False)),
                         "is_hidden": bool(host_settings.get("is_hidden", False)),
+                        "agent_api_key_status": str((latest_payload.get("agent_api_key") or {}).get("status", "off")),
                     }
                 )
 

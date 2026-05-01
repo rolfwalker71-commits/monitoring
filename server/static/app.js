@@ -2267,6 +2267,18 @@ function renderSingleHostCard(host) {
   const hiddenClass = isHidden ? " host-item-hidden" : "";
   const chipClass = openCriticalAlertCount > 0 ? "host-alert-chip critical" : "host-alert-chip";
   const alertChip = hasOpenAlerts ? `<span class="${chipClass}">🔔 ${openAlertCount}</span>` : "";
+  const apiKeyStatus = asText(host.agent_api_key_status || "off").toLowerCase();
+  const apiKeyChipClass = apiKeyStatus === "key-auth" ? "host-apikey-chip ok"
+    : apiKeyStatus === "grace" ? "host-apikey-chip grace"
+    : apiKeyStatus === "configured" ? "host-apikey-chip configured"
+    : apiKeyStatus === "missing" ? "host-apikey-chip missing"
+    : "";
+  const apiKeyChipTitle = apiKeyStatus === "key-auth" ? "API-Key: aktiv"
+    : apiKeyStatus === "grace" ? "API-Key: Grace (noch kein Key)"
+    : apiKeyStatus === "configured" ? "API-Key: konfiguriert"
+    : apiKeyStatus === "missing" ? "API-Key: fehlt"
+    : "";
+  const apiKeyChip = apiKeyChipClass ? `<span class="${apiKeyChipClass}" title="${escapeHtml(apiKeyChipTitle)}">🔐</span>` : "";
   const currentVersion = asText(host.agent_version, "");
   const latestVersion = asText(state.latestAgentRelease, "");
   const versionComparison = compareSemverLike(currentVersion, latestVersion);
@@ -2325,7 +2337,7 @@ function renderSingleHostCard(host) {
       </strong>
       <span>🖥️ ${escapeHtml(hostname)} &nbsp;·&nbsp; 🧷 ${escapeHtml(asText(host.agent_version))}</span>
       <span>🌐 ${escapeHtml(asText(host.primary_ip))} &nbsp;·&nbsp; 📬 ${hostDelivery} | 🗃️ Q${hostQueueDepth}</span>
-      <span>🚨 ${openAlertCount} (krit. ${openCriticalAlertCount}) &nbsp;·&nbsp; 📦 ${Number(host.report_count || 0).toLocaleString("de-DE")}</span>
+      <span>🚨 ${openAlertCount} (krit. ${openCriticalAlertCount}) &nbsp;·&nbsp; 📦 ${Number(host.report_count || 0).toLocaleString("de-DE")} ${apiKeyChip}</span>
       <span>🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
       <span class="host-card-actions">
         <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👁️" : "🙈"}</button>
