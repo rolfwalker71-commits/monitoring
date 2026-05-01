@@ -1263,11 +1263,11 @@ def host_badges_html(country_code: object, os_family: object) -> str:
         else ""
     )
     os_badge = (
-        f"<span style='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;background:#d9ebff;'>{os_icon_html}</span>"
+        f"<span style='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;background:transparent;'>{os_icon_html}</span>"
         if os_icon_html else ""
     )
     country_badge_html = (
-        f"<span style='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;background:#d9ebff;'>{country_icon_html}</span>"
+        f"<span style='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;background:transparent;'>{country_icon_html}</span>"
         if country_icon_html else ""
     )
     return (
@@ -1476,9 +1476,8 @@ def alert_instant_mail_html(
         f"<h1 style='margin:0;font-size:34px;line-height:1.05;font-weight:800;letter-spacing:.2px;color:#17324d;'>{html.escape(customer_title)}</h1>"
         f"<div style='margin-top:6px;font-size:14px;color:#5f7590;'>Host: {html.escape(hostname)}</div>"
         "<div style='margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;'>"
-        f"<span style='display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#d9ebff;color:#244566;font-size:12px;font-weight:700;'>"
-        f"{os_icon_html}{html.escape(os_label)}</span>"
-        f"<span style='display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#d9ebff;color:#244566;font-size:12px;font-weight:700;'>{country_icon_html}Land {html.escape(country_badge)}</span>"
+        f"<span style='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;background:transparent;'>{os_icon_html}</span>"
+        f"<span style='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;background:transparent;'>{country_icon_html}</span>"
         f"<span style='display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:{sev_bg};color:{sev_text};font-size:12px;font-weight:800;'>{sev_label}</span>"
         "</div>"
         "</div>"
