@@ -1009,6 +1009,13 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
             "SELECT COALESCE(display_name_override, ''), COALESCE(country_code_override, '') FROM host_settings WHERE hostname = ?",
             (hostname,),
         ).fetchone()
+        muted_mountpoints = {
+            str(item[0] or "").strip()
+            for item in conn.execute(
+                "SELECT mountpoint FROM muted_alert_rules WHERE hostname = ?",
+                (hostname,),
+            ).fetchall()
+        }
         display_name_override = str(host_settings[0] or "").strip() if host_settings else ""
         country_code_override = normalize_country_code(host_settings[1] if host_settings else "")
         host_display_name = effective_display_name(last_payload, display_name_override, hostname)
@@ -1072,6 +1079,8 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
             )
 
         for mountpoint, values in fs_series.items():
+            if mountpoint in muted_mountpoints:
+                continue
             projected = linear_regression_projected(values)
             level = trend_level(projected)
             if not level:

@@ -190,7 +190,6 @@ function formatAutoRefreshTimestamp(value = new Date()) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
   }).format(value);
 }
 
@@ -200,8 +199,8 @@ function updateAutoRefreshStatus(lastRefreshAt = null) {
     return;
   }
   statusEl.textContent = lastRefreshAt
-    ? `Letzte automatische Aktualisierung: ${formatAutoRefreshTimestamp(lastRefreshAt)}`
-    : "Letzte automatische Aktualisierung: -";
+    ? `🔄 ${formatAutoRefreshTimestamp(lastRefreshAt)}`
+    : "🔄 -";
 }
 
 function stopAutoRefreshTimer() {
