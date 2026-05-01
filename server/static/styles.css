@@ -129,7 +129,7 @@ body[data-theme="dark"] {
   min-height: 30px;
   padding: 0 14px;
   font-size: 12px;
-  border-radius: 10px;
+  border-radius: 999px;
 }
 
 .btn-emoji-pill {
