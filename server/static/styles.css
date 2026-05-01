@@ -1312,7 +1312,7 @@ button:hover:not(.host-item) {
 }
 
 .host-item strong {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 900;
   line-height: 1.1;
 }
