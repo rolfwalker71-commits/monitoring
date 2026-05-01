@@ -1918,6 +1918,32 @@ function renderAgentUpdateLog(agentUpdateBlock) {
   `;
 }
 
+function formatAgentApiKeyStatus(agentApiKeyBlock, agentConfigBlock) {
+  const block = agentApiKeyBlock && typeof agentApiKeyBlock === "object" ? agentApiKeyBlock : {};
+  const status = asText(block.status).toLowerCase();
+  const entries = agentConfigBlock && typeof agentConfigBlock === "object" && Array.isArray(agentConfigBlock.entries)
+    ? agentConfigBlock.entries
+    : [];
+  const hasConfiguredApiKey = entries.some((entry) => asText(entry && entry.key).toUpperCase() === "API_KEY" && asText(entry && entry.value));
+
+  if (status === "key-auth") {
+    return "aktiv | letzter Report mit API-Key authentifiziert";
+  }
+  if (status === "grace") {
+    return "Grace | Host noch ohne Header zugelassen";
+  }
+  if (status === "configured") {
+    return "konfiguriert | letzter Report noch nicht mit Key authentifiziert";
+  }
+  if (status === "missing") {
+    return "fehlt | Server erwartet API-Key";
+  }
+  if (hasConfiguredApiKey) {
+    return "konfiguriert | Status ab naechstem Report exakt sichtbar";
+  }
+  return "aus | Server verlangt aktuell keinen API-Key";
+}
+
 function renderReportCard(report) {
   const payload = report && report.payload ? report.payload : {};
   const cpu = payload.cpu || {};
@@ -1981,6 +2007,7 @@ function renderReportCard(report) {
       <div class="meta-grid">
         <p><strong>🆔 Agent ID</strong><span>${escapeHtml(asText(report.agent_id || payload.agent_id))}</span></p>
         <p><strong>🧷 Agent Version</strong><span>${escapeHtml(asText(payload.agent_version))}</span></p>
+        <p><strong>🔐 API-Key</strong><span>${escapeHtml(formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}</span></p>
         <p><strong>🌐 Primary IP</strong><span>${escapeHtml(asText(report.primary_ip || payload.primary_ip))}</span></p>
         <p><strong>🔌 Alle IPs</strong><span>${escapeHtml(asText(payload.all_ips))}</span></p>
         <p><strong>🐧 OS</strong><span>${escapeHtml(asText(payload.os))}</span></p>

@@ -2316,6 +2316,57 @@ def extract_country_code_from_payload(payload: dict) -> str:
     return ""
 
 
+def payload_has_agent_api_key(payload: dict) -> bool:
+    agent_config = payload.get("agent_config", {})
+    if not isinstance(agent_config, dict):
+        return False
+
+    entries = agent_config.get("entries", [])
+    if not isinstance(entries, list):
+        return False
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        key = str(entry.get("key", "")).strip().upper()
+        if key != "API_KEY":
+            continue
+        value = str(entry.get("value", "") or "").strip()
+        if value:
+            return True
+    return False
+
+
+def build_agent_api_key_status(payload: dict, request_key: str, hostname: str) -> dict:
+    configured = payload_has_agent_api_key(payload)
+    server_requires_api_key = bool(API_KEY)
+    request_authenticated = bool(API_KEY and request_key == API_KEY)
+    grace_allowed = False
+
+    if server_requires_api_key and not request_authenticated and not request_key and hostname and API_KEY_GRACE_ALLOW_KNOWN_HOSTS:
+        with sqlite3.connect(DB_PATH) as conn:
+            grace_allowed = is_known_hostname(conn, hostname)
+
+    status = "off"
+    if server_requires_api_key:
+        if request_authenticated:
+            status = "key-auth"
+        elif grace_allowed:
+            status = "grace"
+        elif configured:
+            status = "configured"
+        else:
+            status = "missing"
+
+    return {
+        "configured": configured,
+        "request_authenticated": request_authenticated,
+        "grace_allowed": grace_allowed,
+        "server_requires_api_key": server_requires_api_key,
+        "status": status,
+    }
+
+
 def normalize_command_type(value: object) -> str:
     command_type = str(value or "").strip().lower()
     if command_type in {"update-now", "set-api-key"}:
@@ -4559,6 +4610,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         hostname = str(payload.get("hostname", "")).strip()
         if self._unauthorized_if_needed(hostname):
             return
+
+        payload["agent_api_key"] = build_agent_api_key_status(
+            payload,
+            str(self.headers.get("X-Api-Key", "") or ""),
+            hostname,
+        )
 
         filesystems = payload.get("filesystems", [])
 
