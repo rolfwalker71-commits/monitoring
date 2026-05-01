@@ -97,7 +97,7 @@ body {
 .brand-header {
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 32px;
   margin-bottom: 10px;
   background: linear-gradient(135deg, #f0f6ff 0%, #e8f2ff 100%);
   border: 1px solid #c7d9f0;
