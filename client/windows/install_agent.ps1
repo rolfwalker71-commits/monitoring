@@ -119,10 +119,10 @@ $wc.DownloadFile("$RawBaseUrl/client/windows/self_update.ps1", "$InstallDir\self
 
 Write-Host "Downloading AGENT_VERSION..."
 try {
-    $wc.DownloadFile("$RawBaseUrl/AGENT_VERSION", "$InstallDir\AGENT_VERSION")
+    $wc.DownloadFile("$RawBaseUrl/BUILD_VERSION", "$InstallDir\AGENT_VERSION")
 } catch {
     try {
-        $wc.DownloadFile("$RawBaseUrl/BUILD_VERSION", "$InstallDir\AGENT_VERSION")
+        $wc.DownloadFile("$RawBaseUrl/AGENT_VERSION", "$InstallDir\AGENT_VERSION")
     } catch {
         [System.IO.File]::WriteAllText("$InstallDir\AGENT_VERSION", "unknown`n", [System.Text.Encoding]::UTF8)
     }

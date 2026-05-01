@@ -38,12 +38,16 @@ $wc = New-Object System.Net.WebClient
 # ---- Version check ----
 $remoteVersion = ''
 try {
-    $remoteVersion = ($wc.DownloadString("$RawBaseUrl/AGENT_VERSION")).Trim()
+    $remoteVersion = ($wc.DownloadString("$RawBaseUrl/BUILD_VERSION")).Trim()
 } catch {
     $remoteVersion = ''
 }
 if (-not $remoteVersion) {
-    $remoteVersion = ($wc.DownloadString("$RawBaseUrl/BUILD_VERSION")).Trim()
+    try {
+        $remoteVersion = ($wc.DownloadString("$RawBaseUrl/AGENT_VERSION")).Trim()
+    } catch {
+        $remoteVersion = ''
+    }
 }
 if (-not $remoteVersion) {
     Write-Error 'Remote version is empty; aborting update check.'

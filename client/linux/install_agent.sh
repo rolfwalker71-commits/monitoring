@@ -105,7 +105,7 @@ if [[ -z "$SELF_UPDATE_SCRIPT_URL" ]]; then
   SELF_UPDATE_SCRIPT_URL="$RAW_BASE_URL/client/linux/self_update.sh"
 fi
 if [[ -z "$BUILD_VERSION_URL" ]]; then
-  BUILD_VERSION_URL="$RAW_BASE_URL/AGENT_VERSION"
+  BUILD_VERSION_URL="$RAW_BASE_URL/BUILD_VERSION"
 fi
 
 install_cron_in_crond() {
