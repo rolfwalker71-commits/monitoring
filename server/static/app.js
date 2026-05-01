@@ -22,7 +22,7 @@ const state = {
   hostMutedFilter: "all",
   hostOsFilter: "all",
   hostCountryFilter: "all",
-  viewMode: "reports",
+  viewMode: "overview",
   overviewSection: "main",
   criticalTrendsHours: 24,
   inactiveHostsHours: 3,

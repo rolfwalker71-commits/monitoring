@@ -643,14 +643,21 @@ button:hover:not(.host-item) {
   box-shadow: 0 10px 22px rgba(59, 130, 246, 0.12);
 }
 
-.tab-button.alert-active {
+.tab-button.alert-active:not(.active) {
+  background: #fff5f5;
+  color: #b91c1c;
+  border-color: #fecaca;
+  box-shadow: none;
+}
+
+.tab-button.alert-active.active {
   background: linear-gradient(180deg, #dc2626 0%, #b91c1c 100%);
   color: #fff;
   border-color: #b91c1c;
   box-shadow: 0 12px 24px rgba(185, 28, 28, 0.2);
 }
 
-.tab-button.alert-active:hover {
+.tab-button.alert-active.active:hover {
   background: linear-gradient(180deg, #b91c1c 0%, #991b1b 100%);
 }
 
@@ -679,13 +686,45 @@ button:hover:not(.host-item) {
   box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
 }
 
-.tab-button.tab-has-crit {
+.tab-button.tab-has-crit:not(.active),
+.tab-button.tab-has-warn:not(.active) {
+  background: #f8fbff;
+  border-color: #dbe4f0;
+}
+
+.tab-button.tab-has-crit:not(.active) {
+  color: #9f1239;
+}
+
+.tab-button.tab-has-warn:not(.active) {
+  color: #92400e;
+}
+
+.tab-button.tab-has-crit::after,
+.tab-button.tab-has-warn::after {
+  content: attr(data-alert-badge);
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.tab-button.tab-has-crit::after {
   background: #dc2626;
   color: #fff;
 }
 
-.tab-button.tab-has-warn {
-  background: #d97706;
+.tab-button.tab-has-warn::after {
+  background: #f59e0b;
   color: #fff;
 }
 
