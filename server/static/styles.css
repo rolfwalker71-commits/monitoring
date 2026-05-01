@@ -201,12 +201,14 @@ h1 {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  margin-bottom: 14px;
 }
 
 .panel-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .alarm-settings-panel {
@@ -450,15 +452,21 @@ button:hover:not(.host-item) {
 
 /* Secondary / ghost button */
 .btn-secondary {
-  background: transparent;
-  color: #475569;
-  border: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, #ffffff 0%, #f6f9fd 100%);
+  color: #42526e;
+  border: 1px solid #c8d5e6;
+  border-radius: 14px;
+  min-height: 44px;
+  padding: 0 16px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: #f1f5f9;
-  border-color: #94a3b8;
+  background: #ffffff;
+  border-color: #9fb8d8;
   color: #1e293b;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
 }
 
 /* Icon-only button (e.g. pencil) */
@@ -483,33 +491,35 @@ button:hover:not(.host-item) {
 #deliveryStats {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 8px;
   align-items: center;
-  margin-top: 4px;
+  margin-top: 10px;
 }
 
 .stat-chip {
   display: inline-flex;
   align-items: center;
-  padding: 2px 9px;
+  gap: 7px;
+  padding: 5px 12px;
   border-radius: 999px;
   font-size: 11px;
-  font-weight: 600;
-  background: #e8f0fb;
-  color: #1e3a8a;
-  border: 1px solid #c7d9f5;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  background: #f8fbff;
+  color: #315177;
+  border: 1px solid #d7e1ef;
 }
 
 .stat-chip.live {
-  background: var(--ok-bg);
-  color: var(--ok);
-  border-color: var(--ok-border);
+  background: #eefaf2;
+  color: #1f6a3c;
+  border-color: #b8e6c6;
 }
 
 .stat-chip.delayed {
-  background: var(--warn-bg);
-  color: var(--warn);
-  border-color: var(--warn-border);
+  background: #fff7dd;
+  color: #9a6411;
+  border-color: #f2d588;
 }
 
 .table-wrap {
@@ -541,21 +551,42 @@ button:hover:not(.host-item) {
   font-size: 12px;
 }
 
+.view-tabs-shell,
+.subview-tabs-shell {
+  position: relative;
+}
+
+.view-tabs-shell {
+  margin: 18px 0 18px;
+  padding: 7px 8px 0;
+  border: 1px solid #d9e3f1;
+  border-radius: 18px 18px 0 0;
+  border-bottom: 0;
+  background: linear-gradient(180deg, #f6faff 0%, #edf4fd 100%);
+}
+
+.subview-tabs-shell {
+  margin: 0 0 14px;
+  padding: 5px;
+  border: 1px solid #e1e8f2;
+  border-radius: 16px;
+  background: #f8fbff;
+}
+
 .view-tabs {
   display: flex;
   gap: 8px;
-  margin: 16px 0 18px;
+  flex-wrap: wrap;
 }
 
 .subview-tabs {
   display: flex;
   gap: 6px;
-  margin: 0 0 12px;
+  flex-wrap: wrap;
 }
 
 .report-subview-tabs {
-  margin: 0 0 8px;
-  flex-wrap: wrap;
+  gap: 5px;
 }
 
 .overview-controls {
@@ -594,47 +625,58 @@ button:hover:not(.host-item) {
 }
 
 .tab-button {
-  background: #dbe7f8;
-  color: #1e3a8a;
+  position: relative;
+  border: 1px solid transparent;
+  border-radius: 14px 14px 0 0;
+  background: transparent;
+  color: #48617f;
   font-size: 12px;
-  font-weight: 600;
-  padding: 7px 12px;
+  font-weight: 700;
+  padding: 10px 15px 11px;
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .tab-button.active {
-  background: var(--accent);
-  color: #fff;
+  background: #ffffff;
+  color: #143b74;
+  border-color: #cfdaea;
+  box-shadow: 0 10px 22px rgba(59, 130, 246, 0.12);
 }
 
 .tab-button.alert-active {
-  background: #b91c1c;
+  background: linear-gradient(180deg, #dc2626 0%, #b91c1c 100%);
   color: #fff;
+  border-color: #b91c1c;
+  box-shadow: 0 12px 24px rgba(185, 28, 28, 0.2);
 }
 
 .tab-button.alert-active:hover {
-  background: #991b1b;
+  background: linear-gradient(180deg, #b91c1c 0%, #991b1b 100%);
 }
 
 /* First-level view tabs: visually stronger */
 .view-tabs .tab-button {
   font-size: 13px;
   font-weight: 700;
-  padding: 8px 15px;
+  min-height: 48px;
 }
 
 /* Second-level subview tabs: subtler */
 .subview-tabs .tab-button {
+  border-radius: 12px;
   font-size: 11px;
   font-weight: 600;
-  padding: 5px 10px;
-  background: #eef3fb;
-  color: #4b6a9e;
+  padding: 8px 12px;
+  background: transparent;
+  color: #597295;
 }
 
 .subview-tabs .tab-button.active {
-  background: #dbeafe;
+  background: #ffffff;
   color: #1e3a8a;
+  border-color: #d5dfec;
   font-weight: 700;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
 }
 
 .tab-button.tab-has-crit {
@@ -1039,11 +1081,14 @@ button:hover:not(.host-item) {
 
 .global-update-chip {
   width: 100%;
-  border-radius: 999px;
+  border-radius: 14px;
+  min-height: 44px;
+  padding: 0 16px;
   background: linear-gradient(135deg, #0f766e 0%, #0ea5e9 100%);
   color: #fff;
   font-weight: 700;
   letter-spacing: 0.01em;
+  box-shadow: 0 10px 22px rgba(14, 165, 233, 0.22);
 }
 
 .global-update-chip-inline {

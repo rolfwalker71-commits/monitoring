@@ -201,6 +201,7 @@ function updateReportSectionUi() {
   for (const button of document.querySelectorAll("[data-report-section]")) {
     const buttonSection = normalizeReportSection(button.getAttribute("data-report-section"));
     button.classList.toggle("active", buttonSection === section);
+    button.setAttribute("aria-selected", buttonSection === section ? "true" : "false");
   }
 }
 
@@ -308,6 +309,12 @@ function updateViewMode() {
   if (inactiveHostsTabButton) inactiveHostsTabButton.classList.toggle("active", inactiveHostsActive);
   reportsTabButton.classList.toggle("active", reportsActive);
   if (settingsTabButton) settingsTabButton.classList.toggle("active", settingsActive);
+  overviewTabButton.setAttribute("aria-selected", overviewActive ? "true" : "false");
+  globalAlertsTabButton.setAttribute("aria-selected", globalAlertsActive ? "true" : "false");
+  if (criticalTrendsTabButton) criticalTrendsTabButton.setAttribute("aria-selected", criticalTrendsActive ? "true" : "false");
+  if (inactiveHostsTabButton) inactiveHostsTabButton.setAttribute("aria-selected", inactiveHostsActive ? "true" : "false");
+  reportsTabButton.setAttribute("aria-selected", reportsActive ? "true" : "false");
+  if (settingsTabButton) settingsTabButton.setAttribute("aria-selected", settingsActive ? "true" : "false");
   updateReportSectionUi();
 }
 
@@ -329,6 +336,8 @@ function updateOverviewSection() {
 
   mainTabButton.classList.toggle("active", showMain);
   filesystemTabButton.classList.toggle("active", showFilesystem);
+  mainTabButton.setAttribute("aria-selected", showMain ? "true" : "false");
+  filesystemTabButton.setAttribute("aria-selected", showFilesystem ? "true" : "false");
 }
 
 function setAlarmSettingsStatus(message, isError = false) {

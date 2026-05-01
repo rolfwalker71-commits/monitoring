@@ -380,18 +380,22 @@
               <p id="deliveryStats" class="count compact"></p>
             </div>
 
-            <div class="view-tabs">
-              <button id="overviewTabButton" type="button" class="tab-button">Uebersicht</button>
-              <button id="globalAlertsTabButton" type="button" class="tab-button">Globale Alerts</button>
-              <button id="criticalTrendsTabButton" type="button" class="tab-button">Kritische Trends</button>
-              <button id="inactiveHostsTabButton" type="button" class="tab-button">Inaktive Hosts</button>
-              <button id="reportsTabButton" type="button" class="tab-button active">Einzelmeldungen</button>
+            <div class="view-tabs-shell">
+              <div class="view-tabs" role="tablist" aria-label="Hauptansichten">
+                <button id="overviewTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="overviewView">Uebersicht</button>
+                <button id="globalAlertsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="globalAlertsView">Globale Alerts</button>
+                <button id="criticalTrendsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="criticalTrendsView">Kritische Trends</button>
+                <button id="inactiveHostsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="inactiveHostsView">Inaktive Hosts</button>
+                <button id="reportsTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="reportsView">Einzelmeldungen</button>
+              </div>
             </div>
 
-            <div id="overviewView" class="view-section">
-              <div class="subview-tabs">
-                <button id="overviewMainTabButton" type="button" class="tab-button active">Alerts + Analyse</button>
-                <button id="overviewFilesystemTabButton" type="button" class="tab-button">Filesystem Fokus</button>
+            <div id="overviewView" class="view-section" role="tabpanel" aria-labelledby="overviewTabButton">
+              <div class="subview-tabs-shell">
+                <div class="subview-tabs" role="tablist" aria-label="Uebersichts-Register">
+                  <button id="overviewMainTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="overviewMainSection">Alerts + Analyse</button>
+                  <button id="overviewFilesystemTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="overviewFilesystemSection">Filesystem Fokus</button>
+                </div>
               </div>
 
               <div class="overview-controls">
@@ -407,7 +411,7 @@
                 </label>
               </div>
 
-              <section id="overviewMainSection" class="overview-subsection overview-scroll-panel">
+              <section id="overviewMainSection" class="overview-subsection overview-scroll-panel" role="tabpanel" aria-labelledby="overviewMainTabButton">
                 <section class="alerts-panel">
                   <div class="analysis-header">
                     <h4>🚨 Alerts</h4>
@@ -445,7 +449,7 @@
                 </section>
               </section>
 
-              <section id="overviewFilesystemSection" class="analysis-panel overview-subsection overview-scroll-panel hidden">
+              <section id="overviewFilesystemSection" class="analysis-panel overview-subsection overview-scroll-panel hidden" role="tabpanel" aria-labelledby="overviewFilesystemTabButton">
                 <div class="analysis-header fs-focus-header">
                   <h4 id="filesystemSectionTitle">💾 Filesystem Fokus (letzte 24 Std.)</h4>
                   <p id="filesystemStats" class="count"></p>
@@ -470,7 +474,7 @@
               </section>
             </div>
 
-            <div id="globalAlertsView" class="view-section hidden">
+            <div id="globalAlertsView" class="view-section hidden" role="tabpanel" aria-labelledby="globalAlertsTabButton">
               <section class="alerts-panel global-alerts-panel">
                 <div class="analysis-header">
                   <h4>🌍 Alerts (alle Hosts, offen)</h4>
@@ -507,7 +511,7 @@
               </section>
             </div>
 
-            <div id="criticalTrendsView" class="view-section hidden">
+            <div id="criticalTrendsView" class="view-section hidden" role="tabpanel" aria-labelledby="criticalTrendsTabButton">
               <div class="critical-trends-toolbar">
                 <label class="chart-range-control" for="criticalTrendsRangeSelect">
                   <span>Zeitraum</span>
@@ -525,7 +529,7 @@
               </div>
             </div>
 
-            <div id="inactiveHostsView" class="view-section hidden">
+            <div id="inactiveHostsView" class="view-section hidden" role="tabpanel" aria-labelledby="inactiveHostsTabButton">
               <div class="inactive-hosts-toolbar">
                 <label class="chart-range-control" for="inactiveHostsRangeSelect">
                   <span>Inaktiv seit</span>
@@ -544,13 +548,15 @@
               </div>
             </div>
 
-            <div id="reportsView" class="view-section hidden">
-              <div class="subview-tabs report-subview-tabs">
-                <button type="button" class="tab-button active" data-report-section="overview">Uebersicht</button>
-                <button type="button" class="tab-button" data-report-section="journal">Journal Fehler</button>
-                <button type="button" class="tab-button" data-report-section="processes">Top Prozesse</button>
-                <button type="button" class="tab-button" data-report-section="containers">Container</button>
-                <button type="button" class="tab-button" data-report-section="agent-update">Agent Update</button>
+            <div id="reportsView" class="view-section hidden" role="tabpanel" aria-labelledby="reportsTabButton">
+              <div class="subview-tabs-shell">
+                <div class="subview-tabs report-subview-tabs" role="tablist" aria-label="Einzelmeldungs-Register">
+                  <button type="button" class="tab-button active" role="tab" aria-selected="true" data-report-section="overview">Uebersicht</button>
+                  <button type="button" class="tab-button" role="tab" aria-selected="false" data-report-section="journal">Journal Fehler</button>
+                  <button type="button" class="tab-button" role="tab" aria-selected="false" data-report-section="processes">Top Prozesse</button>
+                  <button type="button" class="tab-button" role="tab" aria-selected="false" data-report-section="containers">Container</button>
+                  <button type="button" class="tab-button" role="tab" aria-selected="false" data-report-section="agent-update">Agent Update</button>
+                </div>
               </div>
               <div class="pager pager-top">
                 <button id="reportsPrevButtonTop" type="button">Vorherige Meldung</button>
