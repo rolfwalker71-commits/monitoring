@@ -59,11 +59,6 @@ if (Test-Path $VersionFile) {
     $localVersion = ((Get-Content $VersionFile -TotalCount 1 -Encoding UTF8) -replace '\s', '')
 }
 
-if ($remoteVersion -eq $localVersion) {
-    Write-Host "Monitoring agent already up to date: $localVersion"
-    exit 0
-}
-
 Write-Host "Updating from $localVersion to $remoteVersion..."
 
 # ---- Download to temp dir ----
@@ -82,4 +77,4 @@ try {
     Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-Write-Host "Monitoring agent updated from $localVersion to $remoteVersion"
+Write-Host "Monitoring agent refreshed from $localVersion to $remoteVersion"

@@ -187,9 +187,31 @@ maybe_priority_self_update() {
 
   printf '%s\n' "$now_epoch" > "$PRIORITY_UPDATE_STATE_FILE" 2>/dev/null || true
 
-  if [[ -x "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" ]]; then
-    CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$AGENT_VERSION_FILE" "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" >> "$UPDATE_LOG_FILE" 2>&1 || true
+  run_self_update_now || true
+}
+
+run_self_update_now() {
+  local updater_path="${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh"
+  local tmp_updater=""
+
+  if [[ -n "${RAW_BASE_URL:-}" ]]; then
+    tmp_updater="$(mktemp)"
+    if curl --silent --show-error --fail "$RAW_BASE_URL/client/linux/self_update.sh" -o "$tmp_updater" 2>/dev/null; then
+      chmod 0755 "$tmp_updater"
+      if CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$AGENT_VERSION_FILE" "$tmp_updater" >> "$UPDATE_LOG_FILE" 2>&1; then
+        rm -f "$tmp_updater"
+        return 0
+      fi
+    fi
+    [[ -n "$tmp_updater" ]] && rm -f "$tmp_updater"
   fi
+
+  if [[ -x "$updater_path" ]]; then
+    CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$AGENT_VERSION_FILE" "$updater_path" >> "$UPDATE_LOG_FILE" 2>&1
+    return $?
+  fi
+
+  return 127
 }
 
 collect_journal_errors_json() {
@@ -331,17 +353,17 @@ execute_remote_commands() {
     id="$(printf '%s' "$command_line" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')"
     [[ -n "$id" ]] || continue
 
-    if [[ -x "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" ]]; then
-      if CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$AGENT_VERSION_FILE" "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" >> "$UPDATE_LOG_FILE" 2>&1; then
-        status="completed"
-        message="update command executed"
-      else
+    if run_self_update_now; then
+      status="completed"
+      message="update command executed"
+    else
+      if [[ -x "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" ]]; then
         status="failed"
         message="update command failed"
+      else
+        status="failed"
+        message="self_update.sh not found"
       fi
-    else
-      status="failed"
-      message="self_update.sh not found"
     fi
 
     post_command_result "$id" "$status" "$message"

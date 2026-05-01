@@ -155,6 +155,41 @@ function Send-CommandResult {
     } catch { }
 }
 
+function Invoke-AgentSelfUpdate {
+    $tmpScript = $null
+    try {
+        if ($cfg.ContainsKey('RAW_BASE_URL') -and $cfg['RAW_BASE_URL']) {
+            $tmpScript = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + '.ps1')
+            $wc = New-Object System.Net.WebClient
+            $wc.DownloadFile(($cfg['RAW_BASE_URL'].TrimEnd('/')) + '/client/windows/self_update.ps1', $tmpScript)
+            & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $tmpScript *>> $UpdateLogFile
+            if ($LASTEXITCODE -eq 0) {
+                return $true
+            }
+        }
+    } catch { }
+    finally {
+        if ($tmpScript -and (Test-Path $tmpScript)) {
+            Remove-Item $tmpScript -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    $selfUpdateScript = Join-Path (Split-Path $ConfigFile -Parent) 'self_update.ps1'
+    if (-not (Test-Path $selfUpdateScript)) {
+        $selfUpdateScript = 'C:\ProgramData\monitoring-agent\self_update.ps1'
+    }
+    if (-not (Test-Path $selfUpdateScript)) {
+        return $false
+    }
+
+    try {
+        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $selfUpdateScript *>> $UpdateLogFile
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    }
+}
+
 function Invoke-RemoteCommands {
     try {
         $wc = New-Object System.Net.WebClient
@@ -169,20 +204,10 @@ function Invoke-RemoteCommands {
             $cmdType = [string]$cmd.command_type
             if ($cmdType -ne 'update-now' -or $cmdId -le 0) { continue }
 
-            $selfUpdateScript = Join-Path (Split-Path $ConfigFile -Parent) 'self_update.ps1'
-            if (-not (Test-Path $selfUpdateScript)) {
-                $selfUpdateScript = 'C:\ProgramData\monitoring-agent\self_update.ps1'
-            }
-
-            if (Test-Path $selfUpdateScript) {
-                try {
-                    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $selfUpdateScript *>> $UpdateLogFile
-                    Send-CommandResult -CommandId $cmdId -Status 'completed' -Message 'update command executed'
-                } catch {
-                    Send-CommandResult -CommandId $cmdId -Status 'failed' -Message 'update command failed'
-                }
+            if (Invoke-AgentSelfUpdate) {
+                Send-CommandResult -CommandId $cmdId -Status 'completed' -Message 'update command executed'
             } else {
-                Send-CommandResult -CommandId $cmdId -Status 'failed' -Message 'self_update.ps1 not found'
+                Send-CommandResult -CommandId $cmdId -Status 'failed' -Message 'update command failed'
             }
         }
     } catch { }
@@ -210,16 +235,7 @@ function Invoke-PrioritySelfUpdate {
         [System.IO.File]::WriteAllText($PriorityUpdateStateFile, "$nowUnix`n", [System.Text.Encoding]::UTF8)
     } catch { }
 
-    $selfUpdateScript = Join-Path (Split-Path $ConfigFile -Parent) 'self_update.ps1'
-    if (-not (Test-Path $selfUpdateScript)) {
-        $selfUpdateScript = 'C:\ProgramData\monitoring-agent\self_update.ps1'
-    }
-
-    if (Test-Path $selfUpdateScript) {
-        try {
-            & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $selfUpdateScript *>> $UpdateLogFile
-        } catch { }
-    }
+    Invoke-AgentSelfUpdate | Out-Null
 }
 
 function Get-SystemEventErrors {

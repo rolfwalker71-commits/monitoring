@@ -35,11 +35,6 @@ if [[ -z "$remote_version" ]]; then
   exit 1
 fi
 
-if [[ "$remote_version" == "$local_version" ]]; then
-  echo "Monitoring agent already up to date: $local_version"
-  exit 0
-fi
-
 curl -fsSL "$RAW_BASE_URL/client/linux/collect_and_send.sh" -o "$tmp_dir/collect_and_send.sh"
 curl -fsSL "$RAW_BASE_URL/client/linux/self_update.sh" -o "$tmp_dir/self_update.sh"
 printf '%s\n' "$remote_version" > "$tmp_dir/AGENT_VERSION"
@@ -48,4 +43,4 @@ install -m 0755 "$tmp_dir/collect_and_send.sh" "$INSTALL_DIR/collect_and_send.sh
 install -m 0755 "$tmp_dir/self_update.sh" "$INSTALL_DIR/self_update.sh"
 install -m 0644 "$tmp_dir/AGENT_VERSION" "$AGENT_VERSION_FILE"
 
-echo "Monitoring agent updated from $local_version to $remote_version"
+echo "Monitoring agent refreshed from $local_version to $remote_version"
