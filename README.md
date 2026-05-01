@@ -123,13 +123,13 @@ curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/mai
 Auf einem Windows-Client (PowerShell als Administrator):
 
 ```powershell
-$u='https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/windows/install_agent.ps1'; $s=(curl.exe -fsSL $u | Out-String); & ([ScriptBlock]::Create($s)) -ServerUrl 'https://monitoring.example.com'
+$u='https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/windows/install_agent.ps1'; $s=(curl.exe -fsSL --ssl-no-revoke $u | Out-String); & ([ScriptBlock]::Create($s)) -ServerUrl 'https://monitoring.example.com'
 ```
 
 Optional mit API-Key:
 
 ```powershell
-$u='https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/windows/install_agent.ps1'; $s=(curl.exe -fsSL $u | Out-String); & ([ScriptBlock]::Create($s)) -ServerUrl 'https://monitoring.example.com' -ApiKey 'DEIN_API_KEY'
+$u='https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/windows/install_agent.ps1'; $s=(curl.exe -fsSL --ssl-no-revoke $u | Out-String); & ([ScriptBlock]::Create($s)) -ServerUrl 'https://monitoring.example.com' -ApiKey 'DEIN_API_KEY'
 ```
 
 Die Installation laeuft komplett non-interactive.
