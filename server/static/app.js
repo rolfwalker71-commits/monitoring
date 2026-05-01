@@ -13,6 +13,7 @@ const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "con
 const state = {
   hostLimit: 20,
   hostOffset: 0,
+  hosts: [],
   totalHosts: 0,
   selectedHost: "",
   selectedDisplayName: "",
@@ -2145,9 +2146,13 @@ function renderSingleHostCard(host) {
     : "";
 
   const osRaw = asText(host.os || "").toLowerCase();
+  const countryCode = asText(host.country_code || "", "").toUpperCase();
   const iconName = osRaw.includes("windows") ? "windows.png" : "linux.png";
   const osLabel = osRaw.includes("windows") ? "Windows" : "Linux";
   const osIcon = `<img src="icons/${iconName}" class="host-os-icon" alt="${osLabel}" title="${escapeHtml(asText(host.os))}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${iconName}';}">`;
+  const flagIcon = countryCode
+    ? `<img src="icons/${countryCode}.png" class="host-flag-icon" alt="${countryCode}" title="Land: ${countryCode}" onerror="this.style.display='none'">`
+    : "";
   const mutedAlerts = Array.isArray(state.mutedAlertsByHost[hostname]) ? state.mutedAlertsByHost[hostname] : [];
   const hasMutedAlerts = mutedAlerts.length > 0;
   const mutedCollapsed = state.hiddenHostMutedAlertsCollapsed[hostname] !== false;
@@ -2184,6 +2189,7 @@ function renderSingleHostCard(host) {
 
   return `
     <article class="${selectedClass}${hiddenClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">
+      ${flagIcon}
       <strong class="host-title-line">
         <span>${escapeHtml(displayName)}</span>
         <span class="host-status-chips">${alertChip}</span>
@@ -2454,6 +2460,7 @@ async function loadHosts(options = {}) {
     const data = await response.json();
     state.totalHosts = Number(data.total_hosts || 0);
     const hosts = data.hosts || [];
+    state.hosts = hosts;
     const { visibleHosts, hiddenHosts } = splitHosts(hosts);
     state.visibleHosts = Number(data.visible_hosts || visibleHosts.length || 0);
     state.hiddenHosts = Number(data.hidden_hosts || hiddenHosts.length || 0);
@@ -2561,8 +2568,25 @@ async function editDisplayName() {
     return;
   }
 
+  const currentHost = Array.isArray(state.hosts)
+    ? state.hosts.find((item) => asText(item.hostname, "") === state.selectedHost)
+    : null;
+  const currentCountryCode = currentHost ? asText(currentHost.country_code || "", "") : "";
+  const nextCountryCodeRaw = window.prompt(
+    `2-stelliges Laenderkuerzel fuer ${state.selectedHost} (z.B. CH, DE). Leer entfernt den Override.`,
+    currentCountryCode,
+  );
+  if (nextCountryCodeRaw === null) {
+    return;
+  }
+  const nextCountryCode = nextCountryCodeRaw.trim().toUpperCase();
+  if (nextCountryCode && !/^[A-Z]{2}$/.test(nextCountryCode)) {
+    throw new Error("Laenderkuerzel muss genau 2 Buchstaben haben (z.B. CH).");
+  }
+
   await saveHostSettings(state.selectedHost, {
     display_name_override: nextValue.trim(),
+    country_code_override: nextCountryCode,
   });
 
   await loadHosts();

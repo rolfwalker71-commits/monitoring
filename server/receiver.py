@@ -96,6 +96,7 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS host_settings (
                 hostname TEXT PRIMARY KEY,
                 display_name_override TEXT,
+                country_code_override TEXT NOT NULL DEFAULT '',
                 is_favorite INTEGER NOT NULL DEFAULT 0,
                 is_hidden INTEGER NOT NULL DEFAULT 0,
                 updated_at_utc TEXT NOT NULL
@@ -110,6 +111,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE host_settings ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
         if "is_hidden" not in existing_host_columns:
             conn.execute("ALTER TABLE host_settings ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0")
+        if "country_code_override" not in existing_host_columns:
+            conn.execute("ALTER TABLE host_settings ADD COLUMN country_code_override TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS alarm_settings (
@@ -2186,6 +2189,37 @@ def parse_bool(value: object, default: bool = False) -> bool:
     return default
 
 
+def normalize_country_code(value: object) -> str:
+    raw = str(value or "").strip().upper()
+    if not raw:
+        return ""
+    if len(raw) != 2 or not raw.isalpha():
+        return ""
+    return raw
+
+
+def extract_country_code_from_payload(payload: dict) -> str:
+    direct = normalize_country_code(payload.get("country_code", ""))
+    if direct:
+        return direct
+
+    agent_config = payload.get("agent_config", {})
+    if not isinstance(agent_config, dict):
+        return ""
+
+    entries = agent_config.get("entries", [])
+    if not isinstance(entries, list):
+        return ""
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        key = str(entry.get("key", "")).strip().upper()
+        if key in {"COUNTRY_CODE", "COUNTRY", "COUNTRY_ISO", "COUNTRY_ISO2", "LAND", "LAND_CODE", "LAND_ISO2"}:
+            return normalize_country_code(entry.get("value", ""))
+    return ""
+
+
 def normalize_command_type(value: object) -> str:
     command_type = str(value or "").strip().lower()
     if command_type == "update-now":
@@ -2353,7 +2387,7 @@ def get_latest_report_rows_by_hostname(conn: sqlite3.Connection) -> dict[str, di
 def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
     row = conn.execute(
         """
-        SELECT display_name_override, COALESCE(is_favorite, 0), COALESCE(is_hidden, 0)
+        SELECT display_name_override, COALESCE(country_code_override, ''), COALESCE(is_favorite, 0), COALESCE(is_hidden, 0)
         FROM host_settings
         WHERE hostname = ?
         """,
@@ -2362,13 +2396,15 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
     if not row:
         return {
             "display_name_override": "",
+            "country_code_override": "",
             "is_favorite": False,
             "is_hidden": False,
         }
     return {
         "display_name_override": str(row[0] or "").strip(),
-        "is_favorite": bool(int(row[1] or 0)),
-        "is_hidden": bool(int(row[2] or 0)),
+        "country_code_override": normalize_country_code(row[1]),
+        "is_favorite": bool(int(row[2] or 0)),
+        "is_hidden": bool(int(row[3] or 0)),
     }
 
 
@@ -2938,15 +2974,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     (limit,),
                 ).fetchall()
                 settings_rows = conn.execute(
-                    "SELECT hostname, display_name_override, COALESCE(is_favorite, 0), COALESCE(is_hidden, 0) FROM host_settings"
+                    "SELECT hostname, display_name_override, COALESCE(country_code_override, ''), COALESCE(is_favorite, 0), COALESCE(is_hidden, 0) FROM host_settings"
                 ).fetchall()
 
             reports = []
             host_settings_by_name = {
                 str(row[0]): {
                     "display_name_override": str(row[1] or ""),
-                    "is_favorite": bool(int(row[2] or 0)),
-                    "is_hidden": bool(int(row[3] or 0)),
+                    "country_code_override": normalize_country_code(row[2]),
+                    "is_favorite": bool(int(row[3] or 0)),
+                    "is_hidden": bool(int(row[4] or 0)),
                 }
                 for row in settings_rows
             }
@@ -3033,14 +3070,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 ).fetchall()
 
                 settings_rows = conn.execute(
-                    "SELECT hostname, display_name_override, COALESCE(is_favorite, 0), COALESCE(is_hidden, 0) FROM host_settings"
+                    "SELECT hostname, display_name_override, COALESCE(country_code_override, ''), COALESCE(is_favorite, 0), COALESCE(is_hidden, 0) FROM host_settings"
                 ).fetchall()
 
             settings_map = {
                 str(row[0]): {
                     "display_name_override": str(row[1] or ""),
-                    "is_favorite": bool(int(row[2] or 0)),
-                    "is_hidden": bool(int(row[3] or 0)),
+                    "country_code_override": normalize_country_code(row[2]),
+                    "is_favorite": bool(int(row[3] or 0)),
+                    "is_hidden": bool(int(row[4] or 0)),
                 }
                 for row in settings_rows
             }
@@ -3050,9 +3088,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 hostname = str(row[0])
                 host_settings = settings_map.get(hostname, {
                     "display_name_override": "",
+                    "country_code_override": "",
                     "is_favorite": False,
                     "is_hidden": False,
                 })
+                country_code = normalize_country_code(host_settings.get("country_code_override", ""))
+                if not country_code:
+                    country_code = extract_country_code_from_payload(latest_payload)
                 hosts.append(
                     {
                         "hostname": hostname,
@@ -3072,6 +3114,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "open_alert_count": int(row[6] or 0),
                         "open_critical_alert_count": int(row[7] or 0),
                         "os": str(latest_payload.get("os", "")),
+                        "country_code": country_code,
                         "is_favorite": bool(host_settings.get("is_favorite", False)),
                         "is_hidden": bool(host_settings.get("is_hidden", False)),
                     }
@@ -3168,6 +3211,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 {
                     "hostname": hostname,
                     "display_name_override": host_settings["display_name_override"],
+                    "country_code_override": host_settings["country_code_override"],
                     "is_favorite": host_settings["is_favorite"],
                     "is_hidden": host_settings["is_hidden"],
                 },
@@ -3634,10 +3678,20 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_file(BUILD_VERSION_PATH, "text/plain; charset=utf-8")
             return
 
-        if parsed.path.endswith("/icons/linux.png") or parsed.path.endswith("/icons/windows.png"):
-            icon_name = parsed.path.split("/")[-1]
-            self._send_file(STATIC_DIR / "icons" / icon_name, "image/png")
-            return
+        if parsed.path.startswith("/icons/"):
+            icon_name = Path(parsed.path).name
+            icon_path = STATIC_DIR / "icons" / icon_name
+            if icon_path.exists() and icon_path.is_file():
+                if icon_name.lower().endswith(".png"):
+                    mime = "image/png"
+                elif icon_name.lower().endswith(".svg"):
+                    mime = "image/svg+xml"
+                elif icon_name.lower().endswith(".jpg") or icon_name.lower().endswith(".jpeg"):
+                    mime = "image/jpeg"
+                else:
+                    mime = "application/octet-stream"
+                self._send_file(icon_path, mime)
+                return
 
         self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
@@ -3986,6 +4040,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             hostname = str(payload.get("hostname", "")).strip()
             has_display_name = "display_name_override" in payload
+            has_country_code = "country_code_override" in payload
             has_is_favorite = "is_favorite" in payload
             has_is_hidden = "is_hidden" in payload
 
@@ -3993,35 +4048,50 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
                 return
 
-            if not (has_display_name or has_is_favorite or has_is_hidden):
+            if not (has_display_name or has_country_code or has_is_favorite or has_is_hidden):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no host setting provided"})
                 return
 
             with sqlite3.connect(DB_PATH) as conn:
                 current = get_host_settings(conn, hostname)
                 display_name_override = current["display_name_override"]
+                country_code_override = current["country_code_override"]
                 is_favorite = bool(current["is_favorite"])
                 is_hidden = bool(current["is_hidden"])
 
                 if has_display_name:
                     display_name_override = str(payload.get("display_name_override", "")).strip()
+                if has_country_code:
+                    raw_country_code = str(payload.get("country_code_override", "") or "").strip()
+                    if raw_country_code and not normalize_country_code(raw_country_code):
+                        self._send_json(HTTPStatus.BAD_REQUEST, {"error": "country_code_override must be empty or a 2-letter code"})
+                        return
+                    country_code_override = normalize_country_code(raw_country_code)
                 if has_is_favorite:
                     is_favorite = parse_bool(payload.get("is_favorite"), is_favorite)
                 if has_is_hidden:
                     is_hidden = parse_bool(payload.get("is_hidden"), is_hidden)
 
-                if display_name_override or is_favorite or is_hidden:
+                if display_name_override or country_code_override or is_favorite or is_hidden:
                     conn.execute(
                         """
-                        INSERT INTO host_settings (hostname, display_name_override, is_favorite, is_hidden, updated_at_utc)
-                        VALUES (?, ?, ?, ?, ?)
+                        INSERT INTO host_settings (hostname, display_name_override, country_code_override, is_favorite, is_hidden, updated_at_utc)
+                        VALUES (?, ?, ?, ?, ?, ?)
                         ON CONFLICT(hostname) DO UPDATE SET
                           display_name_override = excluded.display_name_override,
+                          country_code_override = excluded.country_code_override,
                           is_favorite = excluded.is_favorite,
                           is_hidden = excluded.is_hidden,
                           updated_at_utc = excluded.updated_at_utc
                         """,
-                        (hostname, display_name_override, 1 if is_favorite else 0, 1 if is_hidden else 0, utc_now_iso()),
+                        (
+                            hostname,
+                            display_name_override,
+                            country_code_override,
+                            1 if is_favorite else 0,
+                            1 if is_hidden else 0,
+                            utc_now_iso(),
+                        ),
                     )
                 else:
                     conn.execute("DELETE FROM host_settings WHERE hostname = ?", (hostname,))
@@ -4037,6 +4107,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "status": "stored",
                     "hostname": hostname,
                     "display_name_override": display_name_override,
+                    "country_code_override": country_code_override,
                     "is_favorite": is_favorite,
                     "is_hidden": is_hidden,
                 },
