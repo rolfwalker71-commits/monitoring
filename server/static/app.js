@@ -1861,8 +1861,9 @@ function renderAgentUpdateLog(agentUpdateBlock) {
   const block = agentUpdateBlock && typeof agentUpdateBlock === "object" ? agentUpdateBlock : {};
   const available = block.available === true;
   const path = asText(block.path);
-  const lines = Array.isArray(block.lines) ? block.lines.map((line) => asText(line)) : [];
-  const lineCount = Number(block.line_count || lines.length || 0);
+  const allLines = Array.isArray(block.lines) ? block.lines.map((line) => asText(line)) : [];
+  const lineCount = Number(block.line_count || allLines.length || 0);
+  const lines = allLines.slice(-10);
 
   if (!available && lines.length === 0) {
     return `
@@ -1872,7 +1873,7 @@ function renderAgentUpdateLog(agentUpdateBlock) {
   }
 
   return `
-    <p class="count compact">Pfad: ${escapeHtml(path || "-")} | Zeilen: ${Number.isFinite(lineCount) ? lineCount : lines.length}</p>
+    <p class="count compact">Pfad: ${escapeHtml(path || "-")} | Zeilen: ${Number.isFinite(lineCount) ? lineCount : allLines.length} (letzte 10)</p>
     <pre class="log-viewer">${escapeHtml(lines.join("\n") || "Log-Datei ist vorhanden, enthaelt aber aktuell keine Zeilen.")}</pre>
   `;
 }

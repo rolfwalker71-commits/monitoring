@@ -43,4 +43,19 @@ install -m 0755 "$tmp_dir/collect_and_send.sh" "$INSTALL_DIR/collect_and_send.sh
 install -m 0755 "$tmp_dir/self_update.sh" "$INSTALL_DIR/self_update.sh"
 install -m 0644 "$tmp_dir/AGENT_VERSION" "$AGENT_VERSION_FILE"
 
-echo "Monitoring agent refreshed from $local_version to $remote_version"
+version_is_newer() {
+  local newer older
+  newer="$1"
+  older="$2"
+  if [[ "$newer" == "$older" ]]; then
+    return 1
+  fi
+  local lowest
+  lowest="$(printf '%s\n' "$newer" "$older" | sort -V | head -n 1)"
+  [[ "$lowest" == "$older" ]]
+}
+
+if version_is_newer "$remote_version" "$local_version"; then
+  ts="$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || true)"
+  echo "${ts} Monitoring agent updated from $local_version to $remote_version"
+fi
