@@ -1196,13 +1196,6 @@ button:hover:not(.host-item) {
   margin-top: 4px;
 }
 
-.host-alert-chip-row {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-top: 2px;
-}
-
 .host-alert-chip {
   display: inline-block;
   padding: 2px 9px;
