@@ -336,6 +336,13 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   flex-wrap: wrap;
 }
 
+.auto-refresh-status {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  padding: 0 4px;
+}
+
 .alarm-settings-panel {
   margin-top: 10px;
   margin-bottom: 8px;
@@ -2573,6 +2580,7 @@ body[data-theme="dark"] .settings-page {
 body[data-theme="dark"] .settings-page-header h3,
 body[data-theme="dark"] .settings-subsection h5,
 body[data-theme="dark"] .subtitle-meta,
+body[data-theme="dark"] .auto-refresh-status,
 body[data-theme="dark"] .count,
 body[data-theme="dark"] .settings-helper-text,
 body[data-theme="dark"] .chart-range-control,

@@ -10,7 +10,11 @@ function escapeHtml(value) {
 const ANALYSIS_RANGE_STORAGE_KEY = "monitoring.analysisHours";
 const THEME_STORAGE_KEY = "monitoring.theme";
 const HOST_FILTERS_STORAGE_KEY = "monitoring.hostFilters";
+const AUTO_REFRESH_INTERVAL_MS = 8 * 60 * 1000;
 const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "agent-update"]);
+
+let autoRefreshTimerId = null;
+let autoRefreshInProgress = false;
 
 const state = {
   hostLimit: 500,
@@ -177,6 +181,69 @@ function toggleTheme() {
   const next = current === "dark" ? "light" : "dark";
   applyTheme(next);
   persistThemePreference(next);
+}
+
+function formatAutoRefreshTimestamp(value = new Date()) {
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(value);
+}
+
+function updateAutoRefreshStatus(lastRefreshAt = null) {
+  const statusEl = document.getElementById("autoRefreshStatus");
+  if (!statusEl) {
+    return;
+  }
+  statusEl.textContent = lastRefreshAt
+    ? `Letzte automatische Aktualisierung: ${formatAutoRefreshTimestamp(lastRefreshAt)}`
+    : "Letzte automatische Aktualisierung: -";
+}
+
+function stopAutoRefreshTimer() {
+  if (autoRefreshTimerId !== null) {
+    window.clearInterval(autoRefreshTimerId);
+    autoRefreshTimerId = null;
+  }
+}
+
+function startAutoRefreshTimer() {
+  stopAutoRefreshTimer();
+  autoRefreshTimerId = window.setInterval(() => {
+    void refreshDashboard({ automatic: true, preserveScroll: true });
+  }, AUTO_REFRESH_INTERVAL_MS);
+}
+
+async function refreshDashboard(options = {}) {
+  const automatic = options.automatic === true;
+  const preserveScroll = options.preserveScroll === true;
+
+  if (!state.isAuthenticated || autoRefreshInProgress) {
+    return;
+  }
+
+  autoRefreshInProgress = true;
+  try {
+    await loadWebclientVersion();
+    await loadGlobalAlertsOverview();
+    await loadAgentUpdateStatus();
+    await loadHosts({ preserveScroll });
+    await loadReportsForHost();
+    await loadAnalysisForHost();
+    await loadAlertsForHost();
+    if (state.viewMode === "settings") {
+      await loadSettingsPanel(true);
+    }
+    if (automatic) {
+      updateAutoRefreshStatus(new Date());
+    }
+  } finally {
+    autoRefreshInProgress = false;
+  }
 }
 
 function parseVersionParts(value) {
@@ -576,6 +643,8 @@ async function logoutWebClient() {
   } catch {
     // ignore network errors – session will be cleared server-side anyway
   }
+  stopAutoRefreshTimer();
+  updateAutoRefreshStatus(null);
   state.authUser = "";
   state.isAdmin = false;
   setAuthUiState(false);
@@ -3552,15 +3621,8 @@ function wireEvents() {
     if (!ok) {
       return;
     }
-    await loadGlobalAlertsOverview();
-    await loadAgentUpdateStatus();
-    await loadHosts();
-    await loadReportsForHost();
-    await loadAnalysisForHost();
-    await loadAlertsForHost();
-    if (state.viewMode === "settings") {
-      await loadSettingsPanel(true);
-    }
+    await refreshDashboard({ preserveScroll: false });
+    startAutoRefreshTimer();
   });
 
   document.getElementById("loginPasswordInput").addEventListener("keydown", async (event) => {
@@ -3571,15 +3633,8 @@ function wireEvents() {
     if (!ok) {
       return;
     }
-    await loadGlobalAlertsOverview();
-    await loadAgentUpdateStatus();
-    await loadHosts();
-    await loadReportsForHost();
-    await loadAnalysisForHost();
-    await loadAlertsForHost();
-    if (state.viewMode === "settings") {
-      await loadSettingsPanel(true);
-    }
+    await refreshDashboard({ preserveScroll: false });
+    startAutoRefreshTimer();
   });
 
   document.getElementById("openChangePasswordButton").addEventListener("click", () => {
@@ -3640,16 +3695,7 @@ function wireEvents() {
   });
 
   document.getElementById("refreshButton").addEventListener("click", async () => {
-    await loadWebclientVersion();
-    await loadGlobalAlertsOverview();
-    await loadAgentUpdateStatus();
-    await loadHosts();
-    await loadReportsForHost();
-    await loadAnalysisForHost();
-    await loadAlertsForHost();
-    if (state.viewMode === "settings") {
-      await loadSettingsPanel(true);
-    }
+    await refreshDashboard({ preserveScroll: false });
   });
 
   document.getElementById("openAlarmSettingsButton").addEventListener("click", async () => {
@@ -3779,6 +3825,7 @@ async function init() {
   state.analysisHours = loadAnalysisRangePreference();
   loadHostFilterPreferences();
   applyTheme(loadThemePreference());
+  updateAutoRefreshStatus(null);
   const oauthResult = consumeOauthStatusFromUrl();
   await loadWebclientVersion();
   wireEvents();
@@ -3806,11 +3853,8 @@ async function init() {
     );
     await loadSettingsPanel(true);
   }
-  await loadGlobalAlertsOverview();
-  await loadHosts();
-  await loadReportsForHost();
-  await loadAnalysisForHost();
-  await loadAlertsForHost();
+  await refreshDashboard({ preserveScroll: false });
+  startAutoRefreshTimer();
 }
 
 init();
