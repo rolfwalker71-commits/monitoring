@@ -21,14 +21,19 @@ COLLECT_SCRIPT_URL=""
 SELF_UPDATE_SCRIPT_URL=""
 BUILD_VERSION_URL=""
 SELF_TEST_STATUS="ok"
+CURL_INSECURE="0"
 
 usage() {
   cat <<EOF
-Usage: $0 --server-url URL [--api-key KEY] [--agent-id ID] [--display-name NAME] [--interval-minutes 15] [--update-hours 6] [--collect-script-url URL]
+Usage: $0 --server-url URL [--api-key KEY] [--agent-id ID] [--display-name NAME] [--interval-minutes 15] [--update-hours 6] [--collect-script-url URL] [--insecure-tls]
 
 Example:
   curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/linux/install_agent.sh \
     | sudo bash -s -- --server-url https://monitoring.example.com --interval-minutes 15
+
+  # Emergency fallback for broken CA chains (less secure):
+  curl -kfsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/linux/install_agent.sh \
+    | sudo bash -s -- --server-url https://monitoring.example.com --insecure-tls
 EOF
 }
 
@@ -65,6 +70,10 @@ while [[ $# -gt 0 ]]; do
     --raw-base-url)
       RAW_BASE_URL="$2"
       shift 2
+      ;;
+    --insecure-tls)
+      CURL_INSECURE="1"
+      shift
       ;;
     -h|--help)
       usage
@@ -107,6 +116,11 @@ if [[ -z "$SELF_UPDATE_SCRIPT_URL" ]]; then
 fi
 if [[ -z "$BUILD_VERSION_URL" ]]; then
   BUILD_VERSION_URL="$RAW_BASE_URL/BUILD_VERSION"
+fi
+
+CURL_BASE_ARGS=(--fail --silent --show-error --location)
+if [[ "$CURL_INSECURE" == "1" ]]; then
+  CURL_BASE_ARGS+=(--insecure)
 fi
 
 install_cron_in_crond() {
@@ -159,12 +173,12 @@ install_cron_in_crontab() {
 mkdir -p "$INSTALL_DIR" "$CONFIG_DIR" "$AGENT_QUEUE_DIR"
 chmod 0750 "$AGENT_QUEUE_DIR"
 
-curl -fsSL "$COLLECT_SCRIPT_URL" -o "$INSTALL_DIR/collect_and_send.sh"
-curl -fsSL "$SELF_UPDATE_SCRIPT_URL" -o "$INSTALL_DIR/self_update.sh"
+curl "${CURL_BASE_ARGS[@]}" "$COLLECT_SCRIPT_URL" -o "$INSTALL_DIR/collect_and_send.sh"
+curl "${CURL_BASE_ARGS[@]}" "$SELF_UPDATE_SCRIPT_URL" -o "$INSTALL_DIR/self_update.sh"
 chmod 0755 "$INSTALL_DIR/collect_and_send.sh"
 chmod 0755 "$INSTALL_DIR/self_update.sh"
 
-if ! curl -fsSL "$BUILD_VERSION_URL" -o "$INSTALL_DIR/AGENT_VERSION"; then
+if ! curl "${CURL_BASE_ARGS[@]}" "$BUILD_VERSION_URL" -o "$INSTALL_DIR/AGENT_VERSION"; then
   printf '%s\n' "unknown" > "$INSTALL_DIR/AGENT_VERSION"
 fi
 chmod 0644 "$INSTALL_DIR/AGENT_VERSION"
@@ -193,6 +207,7 @@ AGENT_QUEUE_DIR="$AGENT_QUEUE_DIR"
 UPDATE_HOURS="$UPDATE_HOURS"
 PRIORITY_UPDATE_CHECK_MINUTES="60"
 UPDATE_LOG_FILE="$UPDATE_LOG_FILE"
+TLS_INSECURE="$CURL_INSECURE"
 EOF
 
 chmod 0600 "$CONFIG_FILE"
@@ -249,5 +264,6 @@ echo "Update check: every $UPDATE_HOURS hours"
 echo "Cron target: $CRON_TARGET"
 echo "Log file: $LOG_FILE"
 echo "Update log file: $UPDATE_LOG_FILE"
+echo "TLS insecure mode: $CURL_INSECURE"
 echo "Self-test status: $SELF_TEST_STATUS"
 echo "Installed agent version: $INSTALLED_AGENT_VERSION"

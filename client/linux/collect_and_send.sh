@@ -26,6 +26,8 @@ if [[ -z "${SERVER_URL:-}" ]]; then
   exit 1
 fi
 
+TLS_INSECURE="${TLS_INSECURE:-0}"
+
 mkdir -p "$AGENT_QUEUE_DIR"
 
 if [[ -d "$(dirname "$PRIORITY_UPDATE_STATE_FILE")" ]]; then
@@ -230,10 +232,15 @@ maybe_priority_self_update() {
 run_self_update_now() {
   local updater_path="${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh"
   local tmp_updater=""
+  local curl_args=(--silent --show-error --fail)
+
+  if [[ "$TLS_INSECURE" == "1" ]]; then
+    curl_args+=(--insecure)
+  fi
 
   if [[ -n "${RAW_BASE_URL:-}" ]]; then
     tmp_updater="$(mktemp)"
-    if curl --silent --show-error --fail "$RAW_BASE_URL/client/linux/self_update.sh" -o "$tmp_updater" 2>/dev/null; then
+    if curl "${curl_args[@]}" "$RAW_BASE_URL/client/linux/self_update.sh" -o "$tmp_updater" 2>/dev/null; then
       chmod 0755 "$tmp_updater"
       if CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$AGENT_VERSION_FILE" "$tmp_updater" >> "$UPDATE_LOG_FILE" 2>&1; then
         rm -f "$tmp_updater"
@@ -364,6 +371,10 @@ post_payload() {
     curl_args+=( -H "X-Api-Key: ${API_KEY}" )
   fi
 
+  if [[ "$TLS_INSECURE" == "1" ]]; then
+    curl_args+=( --insecure )
+  fi
+
   curl "${curl_args[@]}" "${SERVER_URL%/}/api/v1/agent-report"
 }
 
@@ -391,6 +402,10 @@ EOF
     curl_args+=( -H "X-Api-Key: ${API_KEY}" )
   fi
 
+  if [[ "$TLS_INSECURE" == "1" ]]; then
+    curl_args+=( --insecure )
+  fi
+
   curl "${curl_args[@]}" "${SERVER_URL%/}/api/v1/agent-command-result" >/dev/null || true
 }
 
@@ -404,6 +419,10 @@ execute_remote_commands() {
   )
   if [[ -n "${API_KEY:-}" ]]; then
     curl_args+=( -H "X-Api-Key: ${API_KEY}" )
+  fi
+
+  if [[ "$TLS_INSECURE" == "1" ]]; then
+    curl_args+=( --insecure )
   fi
 
   response="$(curl "${curl_args[@]}" "${SERVER_URL%/}/api/v1/agent-commands?hostname=$(printf '%s' "$HOSTNAME_VALUE" | sed 's/ /%20/g')&agent_id=$(printf '%s' "$AGENT_ID_VALUE" | sed 's/ /%20/g')&limit=10" 2>/dev/null || true)"

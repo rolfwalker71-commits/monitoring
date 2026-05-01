@@ -14,6 +14,12 @@ source "$CONFIG_FILE"
 INSTALL_DIR="${INSTALL_DIR:-/opt/monitoring-agent}"
 RAW_BASE_URL="${RAW_BASE_URL:-https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main}"
 AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-$INSTALL_DIR/AGENT_VERSION}"
+TLS_INSECURE="${TLS_INSECURE:-0}"
+
+CURL_BASE_ARGS=(--fail --silent --show-error --location)
+if [[ "$TLS_INSECURE" == "1" ]]; then
+  CURL_BASE_ARGS+=(--insecure)
+fi
 
 tmp_dir="$(mktemp -d)"
 cleanup() {
@@ -21,9 +27,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-remote_version="$(curl -fsSL "$RAW_BASE_URL/BUILD_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+remote_version="$(curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/BUILD_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
 if [[ -z "$remote_version" ]]; then
-  remote_version="$(curl -fsSL "$RAW_BASE_URL/AGENT_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+  remote_version="$(curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/AGENT_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
 fi
 local_version="unknown"
 if [[ -f "$AGENT_VERSION_FILE" ]]; then
@@ -35,8 +41,8 @@ if [[ -z "$remote_version" ]]; then
   exit 1
 fi
 
-curl -fsSL "$RAW_BASE_URL/client/linux/collect_and_send.sh" -o "$tmp_dir/collect_and_send.sh"
-curl -fsSL "$RAW_BASE_URL/client/linux/self_update.sh" -o "$tmp_dir/self_update.sh"
+curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/client/linux/collect_and_send.sh" -o "$tmp_dir/collect_and_send.sh"
+curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/client/linux/self_update.sh" -o "$tmp_dir/self_update.sh"
 printf '%s\n' "$remote_version" > "$tmp_dir/AGENT_VERSION"
 
 install -m 0755 "$tmp_dir/collect_and_send.sh" "$INSTALL_DIR/collect_and_send.sh"
