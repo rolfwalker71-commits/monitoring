@@ -230,7 +230,6 @@ async function refreshDashboard(options = {}) {
   try {
     await loadWebclientVersion();
     await loadGlobalAlertsOverview();
-    await loadAgentUpdateStatus();
     await loadHosts({ preserveScroll });
     await loadReportsForHost();
     await loadAnalysisForHost();
@@ -3572,7 +3571,6 @@ function wireEvents() {
       const queuedCount = Number(result.queued_count || 0);
       const alreadyQueuedCount = Number(result.already_queued_count || 0);
       window.alert(`Update-Trigger gesetzt: ${queuedCount} Hosts neu gequeued, ${alreadyQueuedCount} bereits pending, gesamt ${totalHosts}.`);
-      await loadAgentUpdateStatus();
     } catch (error) {
       window.alert(`Globaler Update-Trigger fehlgeschlagen: ${error.message}`);
     }
