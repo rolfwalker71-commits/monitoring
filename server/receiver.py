@@ -1224,7 +1224,6 @@ def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
 
 
 def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
-    app_logo_uri = app_logo_data_uri()
     rows_html = "".join(
         (
             "<tr>"
@@ -1241,11 +1240,11 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
         rows_html = "<tr><td colspan='5' style='padding:12px 8px;text-align:left;color:#475569;'>Keine kritischen Trends im gewaehlten Zeitraum.</td></tr>"
 
     return (
-        "<html><body style='margin:0;background:#f4f5f7;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
+        "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:900px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;box-shadow:0 18px 38px rgba(15,23,42,.18),0 4px 10px rgba(15,23,42,.12);'>"
-        "<div style='padding:18px 20px;background:linear-gradient(135deg,#0f4c81,#1f6aa5);color:#fff;'>"
+        "<div style='padding:18px 20px;background-color:#0f4c81;background-image:linear-gradient(135deg,#0f4c81,#1f6aa5);color:#fff;'>"
         "<div style='display:flex;align-items:center;gap:10px;margin-bottom:10px;'>"
-        f"<img src='{html.escape(app_logo_uri)}' alt='Monitoring' width='26' height='26' style='display:block;'>"
+        "<span style='display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;border-radius:8px;background:#ffffff;color:#0f4c81;font-weight:900;font-size:14px;font-family:Segoe UI,Arial,sans-serif;'>M</span>"
         "<div style='font-size:15px;font-weight:800;letter-spacing:.3px;'>Monitoring App</div>"
         "</div>"
         "<h2 style='margin:0 0 6px 0;font-size:22px;'>Daily Trend Digest</h2>"
@@ -1282,7 +1281,6 @@ def trend_digest_subject(warnings: list[dict], local_date: str) -> str:
 
 
 def alert_digest_html(username: str, alerts: list[dict]) -> str:
-    app_logo_uri = app_logo_data_uri()
     rows_html = "".join(
         (
             f"<tr style='background:{'#fff1f2' if str(item.get('severity')) == 'critical' else '#fffaf0'};'>"
@@ -1299,11 +1297,11 @@ def alert_digest_html(username: str, alerts: list[dict]) -> str:
         rows_html = "<tr><td colspan='5' style='padding:12px 8px;text-align:left;color:#7f1d1d;'>Keine offenen Alarme vorhanden.</td></tr>"
 
     return (
-        "<html><body style='margin:0;background:#f4f5f7;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
+        "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:900px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;box-shadow:0 18px 38px rgba(15,23,42,.18),0 4px 10px rgba(15,23,42,.12);'>"
-        "<div style='padding:18px 20px;background:linear-gradient(135deg,#7f1d1d,#b91c1c);color:#fff;'>"
+        "<div style='padding:18px 20px;background-color:#7f1d1d;background-image:linear-gradient(135deg,#7f1d1d,#b91c1c);color:#fff;'>"
         "<div style='display:flex;align-items:center;gap:10px;margin-bottom:10px;'>"
-        f"<img src='{html.escape(app_logo_uri)}' alt='Monitoring' width='26' height='26' style='display:block;'>"
+        "<span style='display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;border-radius:8px;background:#ffffff;color:#7f1d1d;font-weight:900;font-size:14px;font-family:Segoe UI,Arial,sans-serif;'>M</span>"
         "<div style='font-size:15px;font-weight:800;letter-spacing:.3px;'>Monitoring App</div>"
         "</div>"
         "<h2 style='margin:0 0 6px 0;font-size:22px;'>Open Alert Digest</h2>"
@@ -1367,6 +1365,7 @@ def alert_instant_mail_html(
     sev_text = "#991b1b" if severity == "critical" else "#92400e"
     sev_label = "KRITISCH" if severity == "critical" else "WARNUNG"
     header_bg = "linear-gradient(135deg,#7f1d1d,#b91c1c)" if severity == "critical" else "linear-gradient(135deg,#78350f,#d97706)"
+    header_bg_color = "#7f1d1d" if severity == "critical" else "#78350f"
     event_label = {
         "opened": "Alarm ausgelöst",
         "escalated": "Alarm eskaliert",
@@ -1381,14 +1380,13 @@ def alert_instant_mail_html(
     normalized_os_family = normalize_os_family(os_family)
     os_label = os_family_label(normalized_os_family)
     os_logo_uri = os_logo_data_uri(normalized_os_family)
-    app_logo_uri = app_logo_data_uri()
     reported_at = format_mail_datetime(reported_at_utc)
     return (
-        "<html><body style='margin:0;background:#f4f5f7;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
+        "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:700px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;box-shadow:0 18px 38px rgba(15,23,42,.18),0 4px 10px rgba(15,23,42,.12);'>"
-        f"<div style='padding:18px 20px;background:{header_bg};color:#fff;'>"
+        f"<div style='padding:18px 20px;background-color:{header_bg_color};background-image:{header_bg};color:#fff;'>"
         "<div style='display:flex;align-items:center;gap:10px;margin-bottom:10px;'>"
-        f"<img src='{html.escape(app_logo_uri)}' alt='Monitoring' width='26' height='26' style='display:block;'>"
+        f"<span style='display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;border-radius:8px;background:#ffffff;color:{header_bg_color};font-weight:900;font-size:14px;font-family:Segoe UI,Arial,sans-serif;'>M</span>"
         "<div style='font-size:15px;font-weight:800;letter-spacing:.3px;'>Monitoring App</div>"
         "</div>"
         f"<div style='font-size:12px;opacity:.9;margin-bottom:8px;'>Benutzer: {html.escape(username)} | {html.escape(format_mail_datetime())}</div>"
