@@ -2147,11 +2147,12 @@ function renderSingleHostCard(host) {
 
   const osRaw = asText(host.os || "").toLowerCase();
   const countryCode = asText(host.country_code || "", "").toUpperCase();
+  const countryCodeLower = countryCode.toLowerCase();
   const iconName = osRaw.includes("windows") ? "windows.png" : "linux.png";
   const osLabel = osRaw.includes("windows") ? "Windows" : "Linux";
   const osIcon = `<img src="icons/${iconName}" class="host-os-icon" alt="${osLabel}" title="${escapeHtml(asText(host.os))}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${iconName}';}">`;
   const flagIcon = countryCode
-    ? `<img src="icons/${countryCode}.png" class="host-flag-icon" alt="${countryCode}" title="Land: ${countryCode}" onerror="this.style.display='none'">`
+    ? `<img src="icons/${countryCode}.png" class="host-flag-icon" alt="${countryCode}" title="Land: ${countryCode}" onerror="if(!this.dataset.fallback1){this.dataset.fallback1='1';this.src='/icons/${countryCode}.png';return;}if(!this.dataset.fallback2){this.dataset.fallback2='1';this.src='/icons/${countryCodeLower}.png';return;}if(!this.dataset.fallback3){this.dataset.fallback3='1';this.src='/icons/${countryCodeLower}.svg';return;}this.style.display='none'">`
     : "";
   const mutedAlerts = Array.isArray(state.mutedAlertsByHost[hostname]) ? state.mutedAlertsByHost[hostname] : [];
   const hasMutedAlerts = mutedAlerts.length > 0;
