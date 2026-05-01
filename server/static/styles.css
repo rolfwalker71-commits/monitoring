@@ -350,6 +350,11 @@ h1 {
   color: #b91c1c;
 }
 
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 @media (max-width: 980px) {
   .user-create-grid {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
