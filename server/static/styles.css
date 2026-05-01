@@ -1145,8 +1145,8 @@ button:hover:not(.host-item) {
   position: absolute;
   bottom: 10px;
   right: 10px;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   object-fit: contain;
   opacity: 0.75;
   pointer-events: none;
@@ -1156,8 +1156,8 @@ button:hover:not(.host-item) {
   position: absolute;
   top: 8px;
   right: 10px;
-  width: 24px;
-  height: 16px;
+  width: 28px;
+  height: 28px;
   object-fit: contain;
   background: transparent;
   pointer-events: none;
