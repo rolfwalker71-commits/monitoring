@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import base64
 import hashlib
 import hmac
 import json
@@ -30,6 +31,19 @@ WEB_DEFAULT_USERNAME = os.getenv("MONITORING_WEB_USER", "admin")
 WEB_DEFAULT_PASSWORD = os.getenv("MONITORING_WEB_PASSWORD", "ChangeMe!2026")
 WEB_SESSION_TTL_HOURS = 12
 WEB_SESSION_COOKIE = "monitoring_session"
+MIN_PASSWORD_LENGTH = 8
+MICROSOFT_PROVIDER = "microsoft"
+MICROSOFT_TENANT_ID_DEFAULT = os.getenv("MONITORING_MS_TENANT_ID", "organizations").strip() or "organizations"
+MICROSOFT_CLIENT_ID_DEFAULT = os.getenv("MONITORING_MS_CLIENT_ID", "").strip()
+MICROSOFT_CLIENT_SECRET_DEFAULT = os.getenv("MONITORING_MS_CLIENT_SECRET", "").strip()
+MICROSOFT_OAUTH_ENABLED_DEFAULT = os.getenv("MONITORING_MS_OAUTH_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+MICROSOFT_OAUTH_SCOPES = [
+    "offline_access",
+    "openid",
+    "profile",
+    "email",
+    "https://graph.microsoft.com/Mail.Send",
+]
 
 
 def parse_int(query: dict, key: str, default: int, min_value: int, max_value: int) -> int:
@@ -139,10 +153,23 @@ def init_db() -> None:
                 username TEXT PRIMARY KEY,
                 password_hash TEXT NOT NULL,
                 password_salt TEXT NOT NULL,
+                is_admin INTEGER NOT NULL DEFAULT 0,
+                is_disabled INTEGER NOT NULL DEFAULT 0,
+                created_at_utc TEXT NOT NULL DEFAULT '',
                 updated_at_utc TEXT NOT NULL
             )
             """
         )
+        existing_web_user_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(web_users)").fetchall()
+        }
+        if "is_admin" not in existing_web_user_columns:
+            conn.execute("ALTER TABLE web_users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+        if "is_disabled" not in existing_web_user_columns:
+            conn.execute("ALTER TABLE web_users ADD COLUMN is_disabled INTEGER NOT NULL DEFAULT 0")
+        if "created_at_utc" not in existing_web_user_columns:
+            conn.execute("ALTER TABLE web_users ADD COLUMN created_at_utc TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS web_sessions (
@@ -190,6 +217,60 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS web_user_settings (
+                username TEXT PRIMARY KEY,
+                email_enabled INTEGER NOT NULL DEFAULT 0,
+                email_recipient TEXT NOT NULL DEFAULT '',
+                updated_at_utc TEXT NOT NULL,
+                FOREIGN KEY(username) REFERENCES web_users(username)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS oauth_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                microsoft_enabled INTEGER NOT NULL DEFAULT 0,
+                microsoft_tenant_id TEXT NOT NULL DEFAULT '',
+                microsoft_client_id TEXT NOT NULL DEFAULT '',
+                microsoft_client_secret TEXT NOT NULL DEFAULT '',
+                updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS oauth_connections (
+                username TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                access_token TEXT NOT NULL,
+                refresh_token TEXT NOT NULL,
+                token_type TEXT NOT NULL DEFAULT 'Bearer',
+                scopes TEXT NOT NULL DEFAULT '',
+                expires_at_utc TEXT NOT NULL,
+                external_email TEXT NOT NULL DEFAULT '',
+                external_display_name TEXT NOT NULL DEFAULT '',
+                updated_at_utc TEXT NOT NULL,
+                PRIMARY KEY(username, provider),
+                FOREIGN KEY(username) REFERENCES web_users(username)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS oauth_pending_states (
+                state_token TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                redirect_path TEXT NOT NULL DEFAULT '/',
+                created_at_utc TEXT NOT NULL,
+                expires_at_utc TEXT NOT NULL,
+                FOREIGN KEY(username) REFERENCES web_users(username)
+            )
+            """
+        )
+        conn.execute(
+            """
             INSERT INTO alarm_settings (
                 id,
                 warning_threshold_percent,
@@ -221,21 +302,83 @@ def init_db() -> None:
         user_count = conn.execute("SELECT COUNT(*) FROM web_users").fetchone()[0]
         if int(user_count or 0) == 0:
             salt = secrets.token_hex(16)
+            now_utc = utc_now_iso()
             conn.execute(
                 """
-                INSERT INTO web_users (username, password_hash, password_salt, updated_at_utc)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO web_users (
+                    username,
+                    password_hash,
+                    password_salt,
+                    is_admin,
+                    is_disabled,
+                    created_at_utc,
+                    updated_at_utc
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     WEB_DEFAULT_USERNAME,
                     hash_password(WEB_DEFAULT_PASSWORD, salt),
                     salt,
-                    utc_now_iso(),
+                    1,
+                    0,
+                    now_utc,
+                    now_utc,
                 ),
+            )
+            conn.execute(
+                """
+                INSERT INTO web_user_settings (username, email_enabled, email_recipient, updated_at_utc)
+                VALUES (?, 0, '', ?)
+                ON CONFLICT(username) DO NOTHING
+                """,
+                (WEB_DEFAULT_USERNAME, now_utc),
             )
 
         conn.execute(
+            """
+            INSERT INTO oauth_settings (
+                id,
+                microsoft_enabled,
+                microsoft_tenant_id,
+                microsoft_client_id,
+                microsoft_client_secret,
+                updated_at_utc
+            )
+            VALUES (1, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO NOTHING
+            """,
+            (
+                1 if MICROSOFT_OAUTH_ENABLED_DEFAULT else 0,
+                MICROSOFT_TENANT_ID_DEFAULT,
+                MICROSOFT_CLIENT_ID_DEFAULT,
+                MICROSOFT_CLIENT_SECRET_DEFAULT,
+                utc_now_iso(),
+            ),
+        )
+
+        conn.execute(
+            "UPDATE web_users SET is_admin = 1 WHERE username = ?",
+            (WEB_DEFAULT_USERNAME,),
+        )
+        conn.execute(
+            "UPDATE web_users SET created_at_utc = updated_at_utc WHERE COALESCE(created_at_utc, '') = ''",
+        )
+        conn.execute(
+            """
+            INSERT INTO web_user_settings (username, email_enabled, email_recipient, updated_at_utc)
+            SELECT username, 0, '', updated_at_utc
+            FROM web_users
+            WHERE username NOT IN (SELECT username FROM web_user_settings)
+            """
+        )
+
+        conn.execute(
             "DELETE FROM web_sessions WHERE expires_at_utc <= ?",
+            (utc_now_iso(),),
+        )
+        conn.execute(
+            "DELETE FROM oauth_pending_states WHERE expires_at_utc <= ?",
             (utc_now_iso(),),
         )
         conn.commit()
@@ -296,6 +439,707 @@ def create_web_session(conn: sqlite3.Connection, username: str) -> tuple[str, st
         ),
     )
     return session_token, expires.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def normalize_username(value: object) -> str:
+    return str(value or "").strip()
+
+
+def password_meets_policy(password: str) -> bool:
+    return len(str(password or "")) >= MIN_PASSWORD_LENGTH
+
+
+def parse_utc_iso(value: object) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def is_token_expiring_soon(expires_at_utc: str, within_minutes: int = 5) -> bool:
+    expires_at = parse_utc_iso(expires_at_utc)
+    if expires_at is None:
+        return True
+    return expires_at <= datetime.now(timezone.utc) + timedelta(minutes=max(1, within_minutes))
+
+
+def decode_jwt_claims_unverified(token: str) -> dict:
+    parts = str(token or "").split(".")
+    if len(parts) < 2:
+        return {}
+    payload = parts[1]
+    payload += "=" * (-len(payload) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode(payload.encode("ascii"))
+        value = json.loads(decoded.decode("utf-8"))
+    except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def microsoft_scope_string() -> str:
+    return " ".join(MICROSOFT_OAUTH_SCOPES)
+
+
+def get_web_user(conn: sqlite3.Connection, username: str) -> dict | None:
+    row = conn.execute(
+        """
+        SELECT username, password_hash, password_salt, COALESCE(is_admin, 0), COALESCE(is_disabled, 0),
+               COALESCE(created_at_utc, ''), updated_at_utc
+        FROM web_users
+        WHERE username = ?
+        """,
+        (username,),
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "username": str(row[0] or ""),
+        "password_hash": str(row[1] or ""),
+        "password_salt": str(row[2] or ""),
+        "is_admin": bool(int(row[3] or 0)),
+        "is_disabled": bool(int(row[4] or 0)),
+        "created_at_utc": str(row[5] or ""),
+        "updated_at_utc": str(row[6] or ""),
+    }
+
+
+def list_web_users(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT u.username,
+               COALESCE(u.is_admin, 0),
+               COALESCE(u.is_disabled, 0),
+               COALESCE(u.created_at_utc, ''),
+               u.updated_at_utc,
+               COALESCE(s.email_enabled, 0),
+               COALESCE(s.email_recipient, ''),
+               COALESCE(c.external_email, ''),
+               COALESCE(c.updated_at_utc, '')
+        FROM web_users u
+        LEFT JOIN web_user_settings s ON s.username = u.username
+        LEFT JOIN oauth_connections c ON c.username = u.username AND c.provider = ?
+        ORDER BY LOWER(u.username)
+        """,
+        (MICROSOFT_PROVIDER,),
+    ).fetchall()
+    return [
+        {
+            "username": str(row[0] or ""),
+            "is_admin": bool(int(row[1] or 0)),
+            "is_disabled": bool(int(row[2] or 0)),
+            "created_at_utc": str(row[3] or ""),
+            "updated_at_utc": str(row[4] or ""),
+            "email_enabled": bool(int(row[5] or 0)),
+            "email_recipient": str(row[6] or ""),
+            "microsoft_connected_email": str(row[7] or ""),
+            "microsoft_connected_at_utc": str(row[8] or ""),
+            "has_microsoft_oauth": bool(str(row[7] or "").strip()),
+        }
+        for row in rows
+    ]
+
+
+def create_web_user(conn: sqlite3.Connection, username: str, password: str, is_admin: bool = False) -> dict:
+    normalized_username = normalize_username(username)
+    if not normalized_username:
+        raise ValueError("username required")
+    if not password_meets_policy(password):
+        raise ValueError(f"password too short (min {MIN_PASSWORD_LENGTH})")
+    if get_web_user(conn, normalized_username):
+        raise ValueError("user already exists")
+
+    now_utc = utc_now_iso()
+    salt = secrets.token_hex(16)
+    conn.execute(
+        """
+        INSERT INTO web_users (
+            username,
+            password_hash,
+            password_salt,
+            is_admin,
+            is_disabled,
+            created_at_utc,
+            updated_at_utc
+        )
+        VALUES (?, ?, ?, ?, 0, ?, ?)
+        """,
+        (
+            normalized_username,
+            hash_password(password, salt),
+            salt,
+            1 if is_admin else 0,
+            now_utc,
+            now_utc,
+        ),
+    )
+    conn.execute(
+        """
+        INSERT INTO web_user_settings (username, email_enabled, email_recipient, updated_at_utc)
+        VALUES (?, 0, '', ?)
+        """,
+        (normalized_username, now_utc),
+    )
+    created = get_web_user(conn, normalized_username)
+    if created is None:
+        raise ValueError("user creation failed")
+    return created
+
+
+def update_web_user_password(conn: sqlite3.Connection, username: str, new_password: str) -> None:
+    if not password_meets_policy(new_password):
+        raise ValueError(f"password too short (min {MIN_PASSWORD_LENGTH})")
+    user = get_web_user(conn, username)
+    if user is None:
+        raise ValueError("user not found")
+    new_salt = secrets.token_hex(16)
+    conn.execute(
+        """
+        UPDATE web_users
+        SET password_hash = ?, password_salt = ?, updated_at_utc = ?
+        WHERE username = ?
+        """,
+        (hash_password(new_password, new_salt), new_salt, utc_now_iso(), username),
+    )
+    conn.execute("DELETE FROM web_sessions WHERE username = ?", (username,))
+
+
+def update_web_user_flags(
+    conn: sqlite3.Connection,
+    username: str,
+    *,
+    is_admin: bool | None = None,
+    is_disabled: bool | None = None,
+) -> dict:
+    user = get_web_user(conn, username)
+    if user is None:
+        raise ValueError("user not found")
+    next_is_admin = user["is_admin"] if is_admin is None else bool(is_admin)
+    next_is_disabled = user["is_disabled"] if is_disabled is None else bool(is_disabled)
+    conn.execute(
+        """
+        UPDATE web_users
+        SET is_admin = ?, is_disabled = ?, updated_at_utc = ?
+        WHERE username = ?
+        """,
+        (1 if next_is_admin else 0, 1 if next_is_disabled else 0, utc_now_iso(), username),
+    )
+    if next_is_disabled:
+        conn.execute("DELETE FROM web_sessions WHERE username = ?", (username,))
+    updated = get_web_user(conn, username)
+    if updated is None:
+        raise ValueError("user update failed")
+    return updated
+
+
+def delete_web_user(conn: sqlite3.Connection, username: str) -> None:
+    user = get_web_user(conn, username)
+    if user is None:
+        raise ValueError("user not found")
+    conn.execute("DELETE FROM web_sessions WHERE username = ?", (username,))
+    conn.execute("DELETE FROM oauth_pending_states WHERE username = ?", (username,))
+    conn.execute("DELETE FROM oauth_connections WHERE username = ?", (username,))
+    conn.execute("DELETE FROM web_user_settings WHERE username = ?", (username,))
+    conn.execute("DELETE FROM web_users WHERE username = ?", (username,))
+
+
+def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
+    row = conn.execute(
+        """
+        SELECT COALESCE(email_enabled, 0), COALESCE(email_recipient, ''), COALESCE(updated_at_utc, '')
+        FROM web_user_settings
+        WHERE username = ?
+        """,
+        (username,),
+    ).fetchone()
+    if not row:
+        return {
+            "email_enabled": False,
+            "email_recipient": "",
+            "updated_at_utc": "",
+        }
+    return {
+        "email_enabled": bool(int(row[0] or 0)),
+        "email_recipient": str(row[1] or ""),
+        "updated_at_utc": str(row[2] or ""),
+    }
+
+
+def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dict) -> dict:
+    existing = get_web_user_settings(conn, username)
+    email_recipient = str(payload.get("email_recipient", existing.get("email_recipient", "")) or "").strip()
+    email_enabled = coerce_bool(payload.get("email_enabled", existing.get("email_enabled", False)))
+    now_utc = utc_now_iso()
+    conn.execute(
+        """
+        INSERT INTO web_user_settings (username, email_enabled, email_recipient, updated_at_utc)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(username) DO UPDATE SET
+            email_enabled = excluded.email_enabled,
+            email_recipient = excluded.email_recipient,
+            updated_at_utc = excluded.updated_at_utc
+        """,
+        (username, 1 if email_enabled else 0, email_recipient, now_utc),
+    )
+    return {
+        "email_enabled": email_enabled,
+        "email_recipient": email_recipient,
+        "updated_at_utc": now_utc,
+    }
+
+
+def get_oauth_settings(conn: sqlite3.Connection) -> dict:
+    row = conn.execute(
+        """
+        SELECT COALESCE(microsoft_enabled, 0), COALESCE(microsoft_tenant_id, ''),
+               COALESCE(microsoft_client_id, ''), COALESCE(microsoft_client_secret, ''),
+               COALESCE(updated_at_utc, '')
+        FROM oauth_settings
+        WHERE id = 1
+        """
+    ).fetchone()
+    if not row:
+        return {
+            "microsoft_enabled": MICROSOFT_OAUTH_ENABLED_DEFAULT,
+            "microsoft_tenant_id": MICROSOFT_TENANT_ID_DEFAULT,
+            "microsoft_client_id": MICROSOFT_CLIENT_ID_DEFAULT,
+            "microsoft_client_secret": MICROSOFT_CLIENT_SECRET_DEFAULT,
+            "updated_at_utc": "",
+        }
+    return {
+        "microsoft_enabled": bool(int(row[0] or 0)),
+        "microsoft_tenant_id": str(row[1] or ""),
+        "microsoft_client_id": str(row[2] or ""),
+        "microsoft_client_secret": str(row[3] or ""),
+        "updated_at_utc": str(row[4] or ""),
+    }
+
+
+def oauth_settings_public_view(settings: dict) -> dict:
+    client_secret = str(settings.get("microsoft_client_secret", "") or "")
+    return {
+        "microsoft_enabled": bool(settings.get("microsoft_enabled")),
+        "microsoft_tenant_id": str(settings.get("microsoft_tenant_id", "") or ""),
+        "microsoft_client_id": str(settings.get("microsoft_client_id", "") or ""),
+        "microsoft_client_secret_configured": bool(client_secret.strip()),
+        "updated_at_utc": str(settings.get("updated_at_utc", "") or ""),
+    }
+
+
+def save_oauth_settings(conn: sqlite3.Connection, payload: dict) -> dict:
+    existing = get_oauth_settings(conn)
+    next_settings = {
+        "microsoft_enabled": coerce_bool(payload.get("microsoft_enabled", existing.get("microsoft_enabled", False))),
+        "microsoft_tenant_id": str(payload.get("microsoft_tenant_id", existing.get("microsoft_tenant_id", MICROSOFT_TENANT_ID_DEFAULT)) or "").strip() or "organizations",
+        "microsoft_client_id": str(payload.get("microsoft_client_id", existing.get("microsoft_client_id", "")) or "").strip(),
+        "microsoft_client_secret": str(payload.get("microsoft_client_secret", existing.get("microsoft_client_secret", "")) or "").strip(),
+        "updated_at_utc": utc_now_iso(),
+    }
+    conn.execute(
+        """
+        INSERT INTO oauth_settings (
+            id,
+            microsoft_enabled,
+            microsoft_tenant_id,
+            microsoft_client_id,
+            microsoft_client_secret,
+            updated_at_utc
+        )
+        VALUES (1, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            microsoft_enabled = excluded.microsoft_enabled,
+            microsoft_tenant_id = excluded.microsoft_tenant_id,
+            microsoft_client_id = excluded.microsoft_client_id,
+            microsoft_client_secret = excluded.microsoft_client_secret,
+            updated_at_utc = excluded.updated_at_utc
+        """,
+        (
+            1 if next_settings["microsoft_enabled"] else 0,
+            next_settings["microsoft_tenant_id"],
+            next_settings["microsoft_client_id"],
+            next_settings["microsoft_client_secret"],
+            next_settings["updated_at_utc"],
+        ),
+    )
+    return next_settings
+
+
+def oauth_is_configured(settings: dict) -> bool:
+    return bool(
+        settings.get("microsoft_enabled")
+        and str(settings.get("microsoft_tenant_id", "")).strip()
+        and str(settings.get("microsoft_client_id", "")).strip()
+        and str(settings.get("microsoft_client_secret", "")).strip()
+    )
+
+
+def get_oauth_connection(conn: sqlite3.Connection, username: str, provider: str = MICROSOFT_PROVIDER) -> dict | None:
+    row = conn.execute(
+        """
+        SELECT access_token, refresh_token, token_type, scopes, expires_at_utc,
+               external_email, external_display_name, updated_at_utc
+        FROM oauth_connections
+        WHERE username = ? AND provider = ?
+        """,
+        (username, provider),
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "username": username,
+        "provider": provider,
+        "access_token": str(row[0] or ""),
+        "refresh_token": str(row[1] or ""),
+        "token_type": str(row[2] or "Bearer"),
+        "scopes": str(row[3] or ""),
+        "expires_at_utc": str(row[4] or ""),
+        "external_email": str(row[5] or ""),
+        "external_display_name": str(row[6] or ""),
+        "updated_at_utc": str(row[7] or ""),
+    }
+
+
+def upsert_oauth_connection(
+    conn: sqlite3.Connection,
+    username: str,
+    provider: str,
+    token_payload: dict,
+    id_claims: dict | None = None,
+) -> dict:
+    id_token_claims = id_claims or decode_jwt_claims_unverified(token_payload.get("id_token", ""))
+    expires_in = max(60, int(token_payload.get("expires_in", 3600) or 3600))
+    expires_at_utc = (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    external_email = str(
+        id_token_claims.get("preferred_username")
+        or id_token_claims.get("email")
+        or id_token_claims.get("upn")
+        or ""
+    ).strip()
+    external_display_name = str(id_token_claims.get("name") or external_email or username).strip()
+    scopes = token_payload.get("scope", "")
+    if isinstance(scopes, list):
+        scopes = " ".join(str(item).strip() for item in scopes if str(item).strip())
+    now_utc = utc_now_iso()
+    conn.execute(
+        """
+        INSERT INTO oauth_connections (
+            username,
+            provider,
+            access_token,
+            refresh_token,
+            token_type,
+            scopes,
+            expires_at_utc,
+            external_email,
+            external_display_name,
+            updated_at_utc
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(username, provider) DO UPDATE SET
+            access_token = excluded.access_token,
+            refresh_token = excluded.refresh_token,
+            token_type = excluded.token_type,
+            scopes = excluded.scopes,
+            expires_at_utc = excluded.expires_at_utc,
+            external_email = excluded.external_email,
+            external_display_name = excluded.external_display_name,
+            updated_at_utc = excluded.updated_at_utc
+        """,
+        (
+            username,
+            provider,
+            str(token_payload.get("access_token", "") or ""),
+            str(token_payload.get("refresh_token", "") or ""),
+            str(token_payload.get("token_type", "Bearer") or "Bearer"),
+            str(scopes or "").strip(),
+            expires_at_utc,
+            external_email,
+            external_display_name,
+            now_utc,
+        ),
+    )
+    connection = get_oauth_connection(conn, username, provider)
+    if connection is None:
+        raise ValueError("oauth connection persistence failed")
+    return connection
+
+
+def delete_oauth_connection(conn: sqlite3.Connection, username: str, provider: str = MICROSOFT_PROVIDER) -> None:
+    conn.execute(
+        "DELETE FROM oauth_connections WHERE username = ? AND provider = ?",
+        (username, provider),
+    )
+
+
+def create_oauth_state(
+    conn: sqlite3.Connection,
+    username: str,
+    provider: str,
+    redirect_path: str = "/",
+    ttl_minutes: int = 10,
+) -> str:
+    state_token = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(minutes=max(1, min(ttl_minutes, 30)))
+    conn.execute(
+        """
+        INSERT INTO oauth_pending_states (
+            state_token,
+            username,
+            provider,
+            redirect_path,
+            created_at_utc,
+            expires_at_utc
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            state_token,
+            username,
+            provider,
+            redirect_path,
+            now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        ),
+    )
+    return state_token
+
+
+def consume_oauth_state(conn: sqlite3.Connection, state_token: str, provider: str) -> dict | None:
+    conn.execute("DELETE FROM oauth_pending_states WHERE expires_at_utc <= ?", (utc_now_iso(),))
+    row = conn.execute(
+        """
+        SELECT username, redirect_path, expires_at_utc
+        FROM oauth_pending_states
+        WHERE state_token = ? AND provider = ?
+        """,
+        (state_token, provider),
+    ).fetchone()
+    if not row:
+        return None
+    conn.execute("DELETE FROM oauth_pending_states WHERE state_token = ?", (state_token,))
+    expires_at = parse_utc_iso(row[2])
+    if expires_at is None or expires_at <= datetime.now(timezone.utc):
+        return None
+    return {
+        "username": str(row[0] or ""),
+        "redirect_path": str(row[1] or "/") or "/",
+    }
+
+
+def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
+    user = get_web_user(conn, username)
+    if user is None:
+        raise ValueError("user not found")
+    settings = get_web_user_settings(conn, username)
+    oauth_settings = get_oauth_settings(conn)
+    connection = get_oauth_connection(conn, username, MICROSOFT_PROVIDER)
+    return {
+        "username": user["username"],
+        "is_admin": user["is_admin"],
+        "is_disabled": user["is_disabled"],
+        "created_at_utc": user["created_at_utc"],
+        "updated_at_utc": user["updated_at_utc"],
+        "email_enabled": settings["email_enabled"],
+        "email_recipient": settings["email_recipient"],
+        "mail_oauth_available": oauth_is_configured(oauth_settings),
+        "microsoft_oauth": {
+            "connected": connection is not None,
+            "external_email": connection["external_email"] if connection else "",
+            "external_display_name": connection["external_display_name"] if connection else "",
+            "expires_at_utc": connection["expires_at_utc"] if connection else "",
+            "updated_at_utc": connection["updated_at_utc"] if connection else "",
+        },
+    }
+
+
+def microsoft_authorize_endpoint(tenant_id: str) -> str:
+    tenant = str(tenant_id or "organizations").strip() or "organizations"
+    return f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
+
+
+def microsoft_token_endpoint(tenant_id: str) -> str:
+    tenant = str(tenant_id or "organizations").strip() or "organizations"
+    return f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
+
+
+def build_microsoft_authorize_url(settings: dict, redirect_uri: str, state_token: str) -> str:
+    query = parse.urlencode(
+        {
+            "client_id": str(settings.get("microsoft_client_id", "") or "").strip(),
+            "response_type": "code",
+            "redirect_uri": redirect_uri,
+            "response_mode": "query",
+            "scope": microsoft_scope_string(),
+            "state": state_token,
+            "prompt": "select_account",
+        }
+    )
+    return f"{microsoft_authorize_endpoint(settings.get('microsoft_tenant_id', 'organizations'))}?{query}"
+
+
+def request_json(
+    url: str,
+    *,
+    method: str = "GET",
+    payload: dict | None = None,
+    headers: dict[str, str] | None = None,
+    timeout: int = 15,
+) -> tuple[int, dict, str]:
+    data = None
+    request_headers = dict(headers or {})
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        request_headers.setdefault("Content-Type", "application/json")
+    req = request.Request(url, data=data, method=method.upper())
+    for key, value in request_headers.items():
+        req.add_header(key, value)
+
+    try:
+        with request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            try:
+                parsed_body = json.loads(body) if body else {}
+            except json.JSONDecodeError:
+                parsed_body = {}
+            return resp.status, parsed_body if isinstance(parsed_body, dict) else {}, body
+    except error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        try:
+            parsed_body = json.loads(body) if body else {}
+        except json.JSONDecodeError:
+            parsed_body = {}
+        return exc.code, parsed_body if isinstance(parsed_body, dict) else {}, body
+
+
+def request_form_encoded(
+    url: str,
+    form_data: dict[str, str],
+    *,
+    timeout: int = 15,
+) -> tuple[int, dict, str]:
+    encoded = parse.urlencode(form_data).encode("utf-8")
+    req = request.Request(url, data=encoded, method="POST")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    try:
+        with request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            try:
+                parsed_body = json.loads(body) if body else {}
+            except json.JSONDecodeError:
+                parsed_body = {}
+            return resp.status, parsed_body if isinstance(parsed_body, dict) else {}, body
+    except error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        try:
+            parsed_body = json.loads(body) if body else {}
+        except json.JSONDecodeError:
+            parsed_body = {}
+        return exc.code, parsed_body if isinstance(parsed_body, dict) else {}, body
+    except error.URLError as exc:
+        return 0, {}, str(exc)
+
+
+def exchange_microsoft_code_for_tokens(settings: dict, code: str, redirect_uri: str) -> tuple[bool, dict, str]:
+    status, payload, raw = request_form_encoded(
+        microsoft_token_endpoint(settings.get("microsoft_tenant_id", "organizations")),
+        {
+            "client_id": str(settings.get("microsoft_client_id", "") or ""),
+            "client_secret": str(settings.get("microsoft_client_secret", "") or ""),
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "scope": microsoft_scope_string(),
+        },
+    )
+    if status < 200 or status >= 300:
+        return False, payload, raw
+    return True, payload, raw
+
+
+def refresh_microsoft_tokens(settings: dict, connection: dict) -> tuple[bool, dict, str]:
+    status, payload, raw = request_form_encoded(
+        microsoft_token_endpoint(settings.get("microsoft_tenant_id", "organizations")),
+        {
+            "client_id": str(settings.get("microsoft_client_id", "") or ""),
+            "client_secret": str(settings.get("microsoft_client_secret", "") or ""),
+            "grant_type": "refresh_token",
+            "refresh_token": str(connection.get("refresh_token", "") or ""),
+            "scope": microsoft_scope_string(),
+        },
+    )
+    if status < 200 or status >= 300:
+        return False, payload, raw
+    if not payload.get("refresh_token"):
+        payload["refresh_token"] = connection.get("refresh_token", "")
+    return True, payload, raw
+
+
+def ensure_microsoft_access_token(conn: sqlite3.Connection, username: str) -> tuple[bool, str, str]:
+    settings = get_oauth_settings(conn)
+    if not oauth_is_configured(settings):
+        return False, "", "Microsoft OAuth ist noch nicht konfiguriert."
+    connection = get_oauth_connection(conn, username, MICROSOFT_PROVIDER)
+    if connection is None:
+        return False, "", "Kein Microsoft OAuth Konto verbunden."
+    if not connection.get("access_token"):
+        return False, "", "Microsoft OAuth Token fehlt."
+    if not is_token_expiring_soon(connection.get("expires_at_utc", "")):
+        return True, str(connection.get("access_token", "") or ""), ""
+
+    ok, payload, raw = refresh_microsoft_tokens(settings, connection)
+    if not ok:
+        return False, "", raw or payload.get("error_description", "Token-Refresh fehlgeschlagen")
+
+    refreshed = upsert_oauth_connection(
+        conn,
+        username,
+        MICROSOFT_PROVIDER,
+        payload,
+        {
+            "preferred_username": connection.get("external_email", ""),
+            "name": connection.get("external_display_name", ""),
+        },
+    )
+    return True, refreshed["access_token"], ""
+
+
+def send_microsoft_mail(access_token: str, recipient: str, subject: str, content: str) -> tuple[bool, str]:
+    status, payload, raw = request_json(
+        "https://graph.microsoft.com/v1.0/me/sendMail",
+        method="POST",
+        payload={
+            "message": {
+                "subject": subject,
+                "body": {
+                    "contentType": "Text",
+                    "content": content,
+                },
+                "toRecipients": [
+                    {
+                        "emailAddress": {
+                            "address": recipient,
+                        }
+                    }
+                ],
+            },
+            "saveToSentItems": True,
+        },
+        headers={
+            "Authorization": f"Bearer {access_token}",
+        },
+    )
+    if 200 <= status < 300:
+        return True, raw or "accepted"
+    return False, raw or payload.get("error_description", payload.get("error", "send failed"))
+
+
+def append_query_param(path: str, key: str, value: str) -> str:
+    separator = "&" if "?" in path else "?"
+    return f"{path}{separator}{parse.urlencode({key: value})}"
 
 
 def clamp_threshold(value: float, min_value: float, max_value: float, fallback: float) -> float:
@@ -1002,6 +1846,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_html(self, status: int, html: str, extra_headers: dict[str, str] | None = None) -> None:
+        body = html.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        if extra_headers:
+            for key, value in extra_headers.items():
+                self.send_header(key, value)
+        self.end_headers()
+        self.wfile.write(body)
+
     def _send_file(
         self,
         path: Path,
@@ -1069,7 +1924,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 (utc_now_iso(),),
             )
             row = conn.execute(
-                "SELECT username FROM web_sessions WHERE session_token = ?",
+                """
+                SELECT s.username
+                FROM web_sessions s
+                JOIN web_users u ON u.username = s.username
+                WHERE s.session_token = ? AND COALESCE(u.is_disabled, 0) = 0
+                """,
                 (token,),
             ).fetchone()
             conn.commit()
@@ -1085,8 +1945,92 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return ""
         return username
 
+    def _require_admin_session(self) -> str:
+        username = self._require_web_session()
+        if not username:
+            return ""
+        with sqlite3.connect(DB_PATH) as conn:
+            user = get_web_user(conn, username)
+        if not user or not user.get("is_admin"):
+            self._send_json(HTTPStatus.FORBIDDEN, {"error": "admin required"})
+            return ""
+        return username
+
+    def _external_base_url(self) -> str:
+        scheme = (self.headers.get("X-Forwarded-Proto", "") or "").split(",")[0].strip()
+        host = (self.headers.get("X-Forwarded-Host", "") or "").split(",")[0].strip()
+        if not scheme:
+            scheme = "https" if self.headers.get("X-Forwarded-Ssl", "").lower() == "on" else "http"
+        if not host:
+            host = (self.headers.get("Host", "") or "").strip() or "localhost"
+        return f"{scheme}://{host}"
+
+    def _absolute_url(self, path: str) -> str:
+        return f"{self._external_base_url()}{path}"
+
+    def _oauth_callback_html(self, redirect_path: str) -> str:
+        target = json.dumps(redirect_path)
+        return (
+            "<!doctype html><html lang=\"de\"><head><meta charset=\"utf-8\">"
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+            "<title>OAuth Verbindung</title></head><body>"
+            "<p>Weiterleitung...</p>"
+            f"<script>window.location.replace({target});</script>"
+            f"<noscript><meta http-equiv=\"refresh\" content=\"0;url={parse.quote(redirect_path, safe='/:?=&%')}\"></noscript>"
+            "</body></html>"
+        )
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+
+        if parsed.path == "/oauth/microsoft/callback":
+            query = parse_qs(parsed.query)
+            state_token = str(query.get("state", [""])[0] or "").strip()
+            code = str(query.get("code", [""])[0] or "").strip()
+            remote_error = str(query.get("error", [""])[0] or "").strip()
+            remote_error_description = str(query.get("error_description", [""])[0] or "").strip()
+
+            if not state_token:
+                self._send_html(HTTPStatus.BAD_REQUEST, self._oauth_callback_html("/?oauth_status=error&oauth_message=missing_state"))
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                state_row = consume_oauth_state(conn, state_token, MICROSOFT_PROVIDER)
+                conn.commit()
+
+            if not state_row:
+                self._send_html(HTTPStatus.BAD_REQUEST, self._oauth_callback_html("/?oauth_status=error&oauth_message=invalid_state"))
+                return
+
+            redirect_path = state_row["redirect_path"]
+            if remote_error:
+                message = remote_error_description or remote_error
+                target = append_query_param(append_query_param(redirect_path, "oauth_status", "error"), "oauth_message", message)
+                self._send_html(HTTPStatus.OK, self._oauth_callback_html(target))
+                return
+
+            if not code:
+                target = append_query_param(append_query_param(redirect_path, "oauth_status", "error"), "oauth_message", "missing_code")
+                self._send_html(HTTPStatus.BAD_REQUEST, self._oauth_callback_html(target))
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                oauth_settings = get_oauth_settings(conn)
+
+            redirect_uri = self._absolute_url("/oauth/microsoft/callback")
+            ok, token_payload, raw = exchange_microsoft_code_for_tokens(oauth_settings, code, redirect_uri)
+            if not ok:
+                target = append_query_param(append_query_param(redirect_path, "oauth_status", "error"), "oauth_message", raw or token_payload.get("error_description", "oauth_exchange_failed"))
+                self._send_html(HTTPStatus.OK, self._oauth_callback_html(target))
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                upsert_oauth_connection(conn, state_row["username"], MICROSOFT_PROVIDER, token_payload)
+                conn.commit()
+
+            target = append_query_param(redirect_path, "oauth_status", "success")
+            self._send_html(HTTPStatus.OK, self._oauth_callback_html(target))
+            return
 
         if parsed.path == "/health":
             self._send_json(HTTPStatus.OK, {"status": "ok", "time_utc": utc_now_iso()})
@@ -1094,11 +2038,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/v1/session":
             username = self._web_session_username()
+            is_admin = False
+            if username:
+                with sqlite3.connect(DB_PATH) as conn:
+                    user = get_web_user(conn, username)
+                    is_admin = bool(user and user.get("is_admin"))
             self._send_json(
                 HTTPStatus.OK,
                 {
                     "authenticated": bool(username),
                     "username": username,
+                    "is_admin": is_admin,
                 },
             )
             return
@@ -1158,6 +2108,43 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if parsed.path != "/api/v1/agent-commands":
                 if not self._require_web_session():
                     return
+
+        if parsed.path == "/api/v1/user-profile":
+            username = self._web_session_username()
+            with sqlite3.connect(DB_PATH) as conn:
+                payload = current_user_payload(conn, username)
+            self._send_json(HTTPStatus.OK, payload)
+            return
+
+        if parsed.path == "/api/v1/web-users":
+            if not self._require_admin_session():
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                self._send_json(HTTPStatus.OK, {"users": list_web_users(conn)})
+            return
+
+        if parsed.path == "/api/v1/oauth-settings":
+            if not self._require_admin_session():
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                settings = oauth_settings_public_view(get_oauth_settings(conn))
+            self._send_json(HTTPStatus.OK, settings)
+            return
+
+        if parsed.path == "/api/v1/oauth/microsoft/start":
+            username = self._web_session_username()
+            with sqlite3.connect(DB_PATH) as conn:
+                settings = get_oauth_settings(conn)
+                if not oauth_is_configured(settings):
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "microsoft oauth not configured"})
+                    return
+                state_token = create_oauth_state(conn, username, MICROSOFT_PROVIDER, "/")
+                conn.commit()
+            redirect_uri = self._absolute_url("/oauth/microsoft/callback")
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header("Location", build_microsoft_authorize_url(settings, redirect_uri, state_token))
+            self.end_headers()
+            return
 
         if parsed.path == "/api/v1/latest":
             query = parse_qs(parsed.query)
@@ -2028,11 +3015,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             with sqlite3.connect(DB_PATH) as conn:
-                row = conn.execute(
-                    "SELECT password_hash, password_salt FROM web_users WHERE username = ?",
-                    (username,),
-                ).fetchone()
-                if not row or not verify_password(password, str(row[0]), str(row[1])):
+                user = get_web_user(conn, username)
+                if not user or user.get("is_disabled"):
+                    self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid credentials"})
+                    return
+                if not verify_password(password, str(user["password_hash"]), str(user["password_salt"])):
                     self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid credentials"})
                     return
 
@@ -2095,29 +3082,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             current_password = str(payload.get("current_password", ""))
             new_password = str(payload.get("new_password", ""))
-            if len(new_password) < 8:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "new password too short (min 8)"})
+            if not password_meets_policy(new_password):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": f"new password too short (min {MIN_PASSWORD_LENGTH})"})
                 return
 
             with sqlite3.connect(DB_PATH) as conn:
-                row = conn.execute(
-                    "SELECT password_hash, password_salt FROM web_users WHERE username = ?",
-                    (username,),
-                ).fetchone()
-                if not row or not verify_password(current_password, str(row[0]), str(row[1])):
+                user = get_web_user(conn, username)
+                if not user or not verify_password(current_password, str(user["password_hash"]), str(user["password_salt"])):
                     self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "current password invalid"})
                     return
 
-                new_salt = secrets.token_hex(16)
-                conn.execute(
-                    """
-                    UPDATE web_users
-                    SET password_hash = ?, password_salt = ?, updated_at_utc = ?
-                    WHERE username = ?
-                    """,
-                    (hash_password(new_password, new_salt), new_salt, utc_now_iso(), username),
-                )
-                conn.execute("DELETE FROM web_sessions WHERE username = ?", (username,))
+                update_web_user_password(conn, username, new_password)
                 token, expires_at = create_web_session(conn, username)
                 conn.commit()
 
@@ -2158,6 +3133,139 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "settings": stored,
                 },
             )
+            return
+
+        if path == "/api/v1/user-profile":
+            username = self._web_session_username()
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                settings = save_web_user_settings(conn, username, payload)
+                conn.commit()
+            self._send_json(HTTPStatus.OK, settings)
+            return
+
+        if path == "/api/v1/oauth-settings":
+            if not self._require_admin_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                settings = save_oauth_settings(conn, payload)
+                conn.commit()
+            self._send_json(HTTPStatus.OK, oauth_settings_public_view(settings))
+            return
+
+        if path == "/api/v1/oauth/microsoft/disconnect":
+            username = self._web_session_username()
+            with sqlite3.connect(DB_PATH) as conn:
+                delete_oauth_connection(conn, username, MICROSOFT_PROVIDER)
+                conn.commit()
+                payload = current_user_payload(conn, username)
+            self._send_json(HTTPStatus.OK, payload)
+            return
+
+        if path == "/api/v1/mail-test":
+            username = self._web_session_username()
+            with sqlite3.connect(DB_PATH) as conn:
+                settings = get_web_user_settings(conn, username)
+                recipient = str(settings.get("email_recipient", "") or "").strip()
+                if not recipient:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "email recipient missing"})
+                    return
+                ok, access_token, details = ensure_microsoft_access_token(conn, username)
+                if not ok:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": details or "oauth unavailable"})
+                    return
+                mail_ok, mail_details = send_microsoft_mail(
+                    access_token,
+                    recipient,
+                    "[TEST] Monitoring OAuth Mail",
+                    (
+                        "Monitoring OAuth Test\n"
+                        f"Benutzer: {username}\n"
+                        f"Zeit: {utc_now_iso()}\n"
+                        "Wenn diese Mail ankommt, funktioniert Microsoft Graph OAuth."
+                    ),
+                )
+                conn.commit()
+            self._send_json(
+                HTTPStatus.OK if mail_ok else HTTPStatus.BAD_REQUEST,
+                {
+                    "status": "sent" if mail_ok else "failed",
+                    "details": mail_details,
+                },
+            )
+            return
+
+        if path == "/api/v1/web-users":
+            current_admin = self._require_admin_session()
+            if not current_admin:
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            action = str(payload.get("action", "") or "").strip().lower()
+            target_username = normalize_username(payload.get("username", ""))
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    if action == "create":
+                        create_web_user(
+                            conn,
+                            target_username,
+                            str(payload.get("password", "") or ""),
+                            is_admin=coerce_bool(payload.get("is_admin", False)),
+                        )
+                    elif action == "set-password":
+                        update_web_user_password(conn, target_username, str(payload.get("password", "") or ""))
+                    elif action == "update-flags":
+                        if current_admin == target_username and coerce_bool(payload.get("is_disabled", False)):
+                            raise ValueError("current admin cannot disable self")
+                        update_web_user_flags(
+                            conn,
+                            target_username,
+                            is_admin=coerce_bool(payload["is_admin"]) if "is_admin" in payload else None,
+                            is_disabled=coerce_bool(payload["is_disabled"]) if "is_disabled" in payload else None,
+                        )
+                    elif action == "delete":
+                        if current_admin == target_username:
+                            raise ValueError("current admin cannot delete self")
+                        delete_web_user(conn, target_username)
+                    else:
+                        self._send_json(HTTPStatus.BAD_REQUEST, {"error": "unsupported action"})
+                        return
+                    users = list_web_users(conn)
+                    conn.commit()
+            except ValueError as exc:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                return
+
+            self._send_json(HTTPStatus.OK, {"status": "ok", "users": users})
             return
 
         if path == "/api/v1/alarm-test":

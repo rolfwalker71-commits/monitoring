@@ -42,6 +42,10 @@ const state = {
   mutedAlertsByHost: {},
   latestAgentRelease: "",
   agentUpdateStatusLoaded: false,
+  isAdmin: false,
+  userProfileLoaded: false,
+  oauthSettingsLoaded: false,
+  userManagementLoaded: false,
 };
 
 const ANALYSIS_RANGE_OPTIONS = new Map([
@@ -329,6 +333,33 @@ function setAlarmSettingsStatus(message, isError = false) {
   statusEl.classList.toggle("status-error", isError);
 }
 
+function setUserMailSettingsStatus(message, isError = false) {
+  const statusEl = document.getElementById("userMailSettingsStatus");
+  if (!statusEl) {
+    return;
+  }
+  statusEl.textContent = message;
+  statusEl.classList.toggle("status-error", isError);
+}
+
+function setOauthSettingsStatus(message, isError = false) {
+  const statusEl = document.getElementById("oauthSettingsStatus");
+  if (!statusEl) {
+    return;
+  }
+  statusEl.textContent = message;
+  statusEl.classList.toggle("status-error", isError);
+}
+
+function setUserManagementStatus(message, isError = false) {
+  const statusEl = document.getElementById("userManagementStatus");
+  if (!statusEl) {
+    return;
+  }
+  statusEl.textContent = message;
+  statusEl.classList.toggle("status-error", isError);
+}
+
 function setLoginStatus(message, isError = false) {
   const statusEl = document.getElementById("loginStatus");
   if (!statusEl) {
@@ -368,6 +399,24 @@ function setAuthUiState(authenticated) {
     logoutButton.classList.toggle("hidden", !authenticated);
   }
   state.isAuthenticated = authenticated;
+  if (!authenticated) {
+    state.isAdmin = false;
+    state.userProfileLoaded = false;
+    state.oauthSettingsLoaded = false;
+    state.userManagementLoaded = false;
+  }
+  updateAdminSettingsVisibility();
+}
+
+function updateAdminSettingsVisibility() {
+  const adminOauthSection = document.getElementById("adminOauthSettingsSection");
+  const adminUserSection = document.getElementById("adminUserManagementSection");
+  if (adminOauthSection) {
+    adminOauthSection.classList.toggle("hidden", !state.isAdmin);
+  }
+  if (adminUserSection) {
+    adminUserSection.classList.toggle("hidden", !state.isAdmin);
+  }
 }
 
 async function fetchSessionState() {
@@ -382,6 +431,7 @@ async function ensureAuthenticatedSession() {
   try {
     const session = await fetchSessionState();
     state.authUser = asText(session.username, "");
+    state.isAdmin = session.is_admin === true;
     setAuthUiState(session.authenticated === true);
     return session.authenticated === true;
   } catch {
@@ -416,6 +466,12 @@ async function loginWebClient() {
   }
 
   state.authUser = asText(data.username, username);
+  try {
+    const session = await fetchSessionState();
+    state.isAdmin = session.is_admin === true;
+  } catch {
+    state.isAdmin = false;
+  }
   setLoginStatus("Anmeldung erfolgreich.");
   setAuthUiState(true);
   passwordInput.value = "";
@@ -429,6 +485,7 @@ async function logoutWebClient() {
     // ignore network errors – session will be cleared server-side anyway
   }
   state.authUser = "";
+  state.isAdmin = false;
   setAuthUiState(false);
   const brandUserBadge = document.getElementById("brandUserBadge");
   if (brandUserBadge) {
@@ -512,6 +569,347 @@ async function loadAlarmSettings(force = false) {
   } catch (error) {
     setAlarmSettingsStatus(`Fehler beim Laden: ${error.message}`, true);
   }
+}
+
+async function loadUserProfile(force = false) {
+  if (state.userProfileLoaded && !force) {
+    return;
+  }
+
+  const enabledInput = document.getElementById("userEmailEnabledInput");
+  const recipientInput = document.getElementById("userEmailRecipientInput");
+  const summaryEl = document.getElementById("userMailSettingsSummary");
+  const connectButton = document.getElementById("connectMicrosoftOauthButton");
+  const disconnectButton = document.getElementById("disconnectMicrosoftOauthButton");
+  const testButton = document.getElementById("testMicrosoftMailButton");
+
+  try {
+    const response = await fetch("/api/v1/user-profile");
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+    const profile = await response.json();
+    enabledInput.checked = profile.email_enabled === true;
+    recipientInput.value = asText(profile.email_recipient, "") === "-" ? "" : asText(profile.email_recipient, "");
+
+    const oauth = profile.microsoft_oauth || {};
+    const oauthConnected = oauth.connected === true;
+    const oauthLabel = oauthConnected
+      ? `Verbunden: ${asText(oauth.external_email || oauth.external_display_name, "Microsoft Konto")}`
+      : "Keine Microsoft Verbindung";
+    const availabilityLabel = profile.mail_oauth_available
+      ? "OAuth App konfiguriert"
+      : "OAuth App noch nicht konfiguriert";
+    if (summaryEl) {
+      summaryEl.textContent = `${oauthLabel} | ${availabilityLabel}`;
+    }
+    if (connectButton) {
+      connectButton.disabled = profile.mail_oauth_available !== true;
+    }
+    if (disconnectButton) {
+      disconnectButton.disabled = !oauthConnected;
+    }
+    if (testButton) {
+      testButton.disabled = !oauthConnected;
+    }
+
+    state.userProfileLoaded = true;
+    setUserMailSettingsStatus("Benutzerspezifische Mail-Einstellungen geladen.");
+  } catch (error) {
+    setUserMailSettingsStatus(`Fehler beim Laden: ${error.message}`, true);
+  }
+}
+
+async function saveUserProfile() {
+  const enabledInput = document.getElementById("userEmailEnabledInput");
+  const recipientInput = document.getElementById("userEmailRecipientInput");
+  const payload = {
+    email_enabled: enabledInput.checked,
+    email_recipient: recipientInput.value.trim(),
+  };
+
+  if (payload.email_enabled && !payload.email_recipient) {
+    throw new Error("Bitte zuerst einen Mail-Empfaenger eintragen.");
+  }
+
+  const response = await fetch("/api/v1/user-profile", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+
+  setUserMailSettingsStatus("Mail-Einstellungen gespeichert.");
+  state.userProfileLoaded = false;
+  await loadUserProfile(true);
+}
+
+async function loadOauthSettings(force = false) {
+  if (!state.isAdmin) {
+    return;
+  }
+  if (state.oauthSettingsLoaded && !force) {
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/v1/oauth-settings");
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+    const settings = await response.json();
+    document.getElementById("microsoftOauthEnabledInput").checked = settings.microsoft_enabled === true;
+    document.getElementById("microsoftTenantIdInput").value = asText(settings.microsoft_tenant_id, "") === "-" ? "" : asText(settings.microsoft_tenant_id, "");
+    document.getElementById("microsoftClientIdInput").value = asText(settings.microsoft_client_id, "") === "-" ? "" : asText(settings.microsoft_client_id, "");
+    document.getElementById("microsoftClientSecretInput").value = "";
+    setOauthSettingsStatus(
+      settings.microsoft_client_secret_configured
+        ? "OAuth App geladen. Client Secret bleibt aus Sicherheitsgruenden verborgen."
+        : "OAuth App geladen. Client Secret fehlt noch.",
+    );
+    state.oauthSettingsLoaded = true;
+  } catch (error) {
+    setOauthSettingsStatus(`Fehler beim Laden: ${error.message}`, true);
+  }
+}
+
+async function saveOauthSettings() {
+  const payload = {
+    microsoft_enabled: document.getElementById("microsoftOauthEnabledInput").checked,
+    microsoft_tenant_id: document.getElementById("microsoftTenantIdInput").value.trim(),
+    microsoft_client_id: document.getElementById("microsoftClientIdInput").value.trim(),
+  };
+  const clientSecret = document.getElementById("microsoftClientSecretInput").value.trim();
+  if (clientSecret) {
+    payload.microsoft_client_secret = clientSecret;
+  }
+
+  const response = await fetch("/api/v1/oauth-settings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  state.oauthSettingsLoaded = false;
+  state.userProfileLoaded = false;
+  setOauthSettingsStatus("OAuth App gespeichert.");
+  await loadOauthSettings(true);
+  await loadUserProfile(true);
+}
+
+function renderUserManagementRows(users) {
+  if (!Array.isArray(users) || users.length === 0) {
+    return '<tr><td colspan="6" class="muted">Keine Benutzer vorhanden.</td></tr>';
+  }
+
+  return users.map((user) => {
+    const username = asText(user.username, "");
+    const usernameEnc = encodeURIComponent(username);
+    const adminPill = `<span class="user-flag-pill ${user.is_admin ? "on" : "off"}">${user.is_admin ? "Admin" : "User"}</span>`;
+    const activePill = `<span class="user-flag-pill ${user.is_disabled ? "off" : "on"}">${user.is_disabled ? "Gesperrt" : "Aktiv"}</span>`;
+    const oauthPill = `<span class="oauth-state-pill ${user.has_microsoft_oauth ? "connected" : "disconnected"}">${user.has_microsoft_oauth ? asText(user.microsoft_connected_email, "verbunden") : "nicht verbunden"}</span>`;
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(username)}</strong></td>
+        <td>${adminPill}</td>
+        <td>${activePill}</td>
+        <td>${escapeHtml(asText(user.email_recipient, "-"))}</td>
+        <td>${oauthPill}</td>
+        <td>
+          <div class="user-management-actions">
+            <button type="button" data-user-action="password" data-username-enc="${usernameEnc}">Passwort</button>
+            <button type="button" data-user-action="admin" data-username-enc="${usernameEnc}" data-next="${user.is_admin ? "0" : "1"}">${user.is_admin ? "Admin aus" : "Admin an"}</button>
+            <button type="button" data-user-action="disable" data-username-enc="${usernameEnc}" data-next="${user.is_disabled ? "0" : "1"}">${user.is_disabled ? "Aktivieren" : "Sperren"}</button>
+            <button type="button" data-user-action="delete" data-username-enc="${usernameEnc}">Loeschen</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function submitWebUserAction(payload) {
+  const response = await fetch("/api/v1/web-users", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return data;
+}
+
+function wireUserManagementActions() {
+  const rows = document.getElementById("userManagementRows");
+  if (!rows) {
+    return;
+  }
+
+  rows.querySelectorAll("[data-user-action]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const action = button.getAttribute("data-user-action") || "";
+      const username = decodeURIComponent(button.getAttribute("data-username-enc") || "");
+      if (!action || !username) {
+        return;
+      }
+
+      try {
+        if (action === "password") {
+          const password = window.prompt(`Neues Passwort fuer ${username}:`, "");
+          if (password === null) {
+            return;
+          }
+          await submitWebUserAction({ action: "set-password", username, password });
+          setUserManagementStatus(`Passwort fuer ${username} aktualisiert.`);
+        } else if (action === "admin") {
+          await submitWebUserAction({
+            action: "update-flags",
+            username,
+            is_admin: button.getAttribute("data-next") === "1",
+          });
+          setUserManagementStatus(`Admin-Flag fuer ${username} aktualisiert.`);
+        } else if (action === "disable") {
+          await submitWebUserAction({
+            action: "update-flags",
+            username,
+            is_disabled: button.getAttribute("data-next") === "1",
+          });
+          setUserManagementStatus(`Status fuer ${username} aktualisiert.`);
+        } else if (action === "delete") {
+          if (!window.confirm(`Benutzer ${username} wirklich loeschen?`)) {
+            return;
+          }
+          await submitWebUserAction({ action: "delete", username });
+          setUserManagementStatus(`Benutzer ${username} geloescht.`);
+        }
+        state.userManagementLoaded = false;
+        await loadWebUsers(true);
+      } catch (error) {
+        setUserManagementStatus(error.message, true);
+      }
+    });
+  });
+}
+
+async function loadWebUsers(force = false) {
+  if (!state.isAdmin) {
+    return;
+  }
+  if (state.userManagementLoaded && !force) {
+    return;
+  }
+
+  const rowsEl = document.getElementById("userManagementRows");
+  rowsEl.innerHTML = '<tr><td colspan="6" class="muted">Lade Benutzer...</td></tr>';
+  try {
+    const response = await fetch("/api/v1/web-users");
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+    const data = await response.json();
+    rowsEl.innerHTML = renderUserManagementRows(data.users || []);
+    wireUserManagementActions();
+    state.userManagementLoaded = true;
+    setUserManagementStatus("Benutzerliste geladen.");
+  } catch (error) {
+    rowsEl.innerHTML = `<tr><td colspan="6" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+    setUserManagementStatus(`Fehler beim Laden: ${error.message}`, true);
+  }
+}
+
+async function createUser() {
+  const usernameInput = document.getElementById("newUserUsernameInput");
+  const passwordInput = document.getElementById("newUserPasswordInput");
+  const isAdminInput = document.getElementById("newUserIsAdminInput");
+
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+  if (!username || !password) {
+    throw new Error("Bitte Benutzername und Passwort eingeben.");
+  }
+
+  await submitWebUserAction({
+    action: "create",
+    username,
+    password,
+    is_admin: isAdminInput.checked,
+  });
+
+  usernameInput.value = "";
+  passwordInput.value = "";
+  isAdminInput.checked = false;
+  setUserManagementStatus(`Benutzer ${username} angelegt.`);
+  state.userManagementLoaded = false;
+  await loadWebUsers(true);
+}
+
+async function disconnectMicrosoftOauth() {
+  const response = await fetch("/api/v1/oauth/microsoft/disconnect", {
+    method: "POST",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  state.userProfileLoaded = false;
+  setUserMailSettingsStatus("Microsoft Verbindung getrennt.");
+  await loadUserProfile(true);
+  if (state.isAdmin) {
+    state.userManagementLoaded = false;
+    await loadWebUsers(true);
+  }
+}
+
+async function sendMicrosoftMailTest() {
+  const response = await fetch("/api/v1/mail-test", {
+    method: "POST",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || data.details || ("HTTP " + response.status));
+  }
+  setUserMailSettingsStatus("Testmail versendet.");
+}
+
+async function loadSettingsPanel(force = false) {
+  updateAdminSettingsVisibility();
+  await loadAlarmSettings(force);
+  await loadUserProfile(force);
+  if (state.isAdmin) {
+    await loadOauthSettings(force);
+    await loadWebUsers(force);
+  }
+}
+
+function consumeOauthStatusFromUrl() {
+  const url = new URL(window.location.href);
+  const oauthStatus = url.searchParams.get("oauth_status");
+  const oauthMessage = url.searchParams.get("oauth_message");
+  if (!oauthStatus) {
+    return null;
+  }
+  url.searchParams.delete("oauth_status");
+  url.searchParams.delete("oauth_message");
+  window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ""));
+  return {
+    status: oauthStatus,
+    message: oauthMessage || "",
+  };
 }
 
 async function saveAlarmSettings() {
@@ -2556,6 +2954,9 @@ function wireEvents() {
     await loadReportsForHost();
     await loadAnalysisForHost();
     await loadAlertsForHost();
+    if (!document.getElementById("alarmSettingsPanel").classList.contains("hidden")) {
+      await loadSettingsPanel(true);
+    }
   });
 
   document.getElementById("loginPasswordInput").addEventListener("keydown", async (event) => {
@@ -2572,6 +2973,9 @@ function wireEvents() {
     await loadReportsForHost();
     await loadAnalysisForHost();
     await loadAlertsForHost();
+    if (!document.getElementById("alarmSettingsPanel").classList.contains("hidden")) {
+      await loadSettingsPanel(true);
+    }
   });
 
   document.getElementById("openChangePasswordButton").addEventListener("click", () => {
@@ -2581,6 +2985,7 @@ function wireEvents() {
 
   document.getElementById("logoutButton").addEventListener("click", async () => {
     await logoutWebClient();
+    toggleAlarmSettingsPanel(false);
   });
 
   document.getElementById("cancelPasswordButton").addEventListener("click", () => {
@@ -2639,11 +3044,14 @@ function wireEvents() {
     await loadReportsForHost();
     await loadAnalysisForHost();
     await loadAlertsForHost();
+    if (!document.getElementById("alarmSettingsPanel").classList.contains("hidden")) {
+      await loadSettingsPanel(true);
+    }
   });
 
   document.getElementById("openAlarmSettingsButton").addEventListener("click", async () => {
     toggleAlarmSettingsPanel(true);
-    await loadAlarmSettings(true);
+    await loadSettingsPanel(true);
   });
 
   document.getElementById("closeAlarmSettingsButton").addEventListener("click", () => {
@@ -2663,6 +3071,51 @@ function wireEvents() {
       await sendAlarmSettingsTest();
     } catch (error) {
       setAlarmSettingsStatus(`Test fehlgeschlagen: ${error.message}`, true);
+    }
+  });
+
+  document.getElementById("saveUserMailSettingsButton").addEventListener("click", async () => {
+    try {
+      await saveUserProfile();
+    } catch (error) {
+      setUserMailSettingsStatus(error.message, true);
+    }
+  });
+
+  document.getElementById("connectMicrosoftOauthButton").addEventListener("click", () => {
+    setUserMailSettingsStatus("Weiterleitung zu Microsoft...");
+    window.location.assign("/api/v1/oauth/microsoft/start");
+  });
+
+  document.getElementById("disconnectMicrosoftOauthButton").addEventListener("click", async () => {
+    try {
+      await disconnectMicrosoftOauth();
+    } catch (error) {
+      setUserMailSettingsStatus(error.message, true);
+    }
+  });
+
+  document.getElementById("testMicrosoftMailButton").addEventListener("click", async () => {
+    try {
+      await sendMicrosoftMailTest();
+    } catch (error) {
+      setUserMailSettingsStatus(error.message, true);
+    }
+  });
+
+  document.getElementById("saveOauthSettingsButton").addEventListener("click", async () => {
+    try {
+      await saveOauthSettings();
+    } catch (error) {
+      setOauthSettingsStatus(error.message, true);
+    }
+  });
+
+  document.getElementById("createUserButton").addEventListener("click", async () => {
+    try {
+      await createUser();
+    } catch (error) {
+      setUserManagementStatus(error.message, true);
     }
   });
 
@@ -2721,6 +3174,7 @@ function wireEvents() {
 
 async function init() {
   state.analysisHours = loadAnalysisRangePreference();
+  const oauthResult = consumeOauthStatusFromUrl();
   await loadWebclientVersion();
   wireEvents();
   updateViewMode();
@@ -2735,6 +3189,16 @@ async function init() {
   if (!isAuthenticated) {
     setLoginStatus("Bitte anmelden, um den Webclient zu nutzen.");
     return;
+  }
+  if (oauthResult) {
+    toggleAlarmSettingsPanel(true);
+    setUserMailSettingsStatus(
+      oauthResult.status === "success"
+        ? "Microsoft Verbindung erfolgreich hergestellt."
+        : `Microsoft OAuth Fehler: ${oauthResult.message || "unbekannt"}`,
+      oauthResult.status !== "success",
+    );
+    await loadSettingsPanel(true);
   }
   await loadGlobalAlertsOverview();
   await loadHosts();
