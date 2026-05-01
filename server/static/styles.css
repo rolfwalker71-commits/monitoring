@@ -2558,18 +2558,20 @@ body[data-theme="dark"] .ih-host-card {
 
 /* ── Dark Mode: Host list items ───────────────────────────── */
 body[data-theme="dark"] .host-item {
-  border-color: #2a3c59;
-  background: linear-gradient(180deg, #162034 0%, #111b2f 100%);
+  border-color: #334d6e;
+  background: linear-gradient(180deg, #1e3050 0%, #172543 100%);
 }
 
 body[data-theme="dark"] .host-item-hidden {
-  background: linear-gradient(180deg, #121c2f 0%, #0f1926 100%);
-  border-color: #1e2f49;
+  background: linear-gradient(180deg, #141e2f 0%, #111828 100%);
+  border-color: #3d5578;
+  border-style: dashed;
+  opacity: 0.75;
 }
 
 body[data-theme="dark"] .host-item:hover {
-  border-color: #4a6f9f;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.12);
+  border-color: #5a82b8;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.18);
 }
 
 body[data-theme="dark"] .host-item.selected {
