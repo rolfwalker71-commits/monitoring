@@ -56,6 +56,6 @@ version_is_newer() {
 }
 
 if version_is_newer "$remote_version" "$local_version"; then
-  ts="$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || true)"
+  ts="$(date +"%d.%m.%Y %H:%M" 2>/dev/null || true)"
   echo "${ts} Monitoring agent updated from $local_version to $remote_version"
 fi

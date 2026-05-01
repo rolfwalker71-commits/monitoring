@@ -89,6 +89,6 @@ try {
 }
 
 if (Compare-Versions -Newer $remoteVersion -Older $localVersion) {
-    $ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    $ts = (Get-Date).ToString('dd.MM.yyyy HH:mm')
     Write-Host "${ts} Monitoring agent updated from $localVersion to $remoteVersion"
 }
