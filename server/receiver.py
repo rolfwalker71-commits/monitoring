@@ -20,6 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "monitoring.db"
+APP_LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
 BUILD_VERSION_PATH = BASE_DIR.parent / "BUILD_VERSION"
 AGENT_VERSION_PATH = BASE_DIR.parent / "AGENT_VERSION"
 OPENAPI_SPEC_PATH = BASE_DIR.parent / "openapi.yaml"
@@ -1224,6 +1225,8 @@ def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
 
 
 def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
+    app_logo_uri = app_logo_data_uri()
+    build_version = html.escape(read_build_version())
     rows_html = "".join(
         (
             "<tr>"
@@ -1242,13 +1245,16 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
     return (
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:900px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;box-shadow:0 18px 38px rgba(15,23,42,.18),0 4px 10px rgba(15,23,42,.12);'>"
-        "<div style='padding:18px 20px;background-color:#0f4c81;background-image:linear-gradient(135deg,#0f4c81,#1f6aa5);color:#fff;'>"
-        "<div style='display:flex;align-items:center;gap:10px;margin-bottom:10px;'>"
-        "<span style='display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;border-radius:8px;background:#ffffff;color:#0f4c81;font-weight:900;font-size:14px;font-family:Segoe UI,Arial,sans-serif;'>M</span>"
-        "<div style='font-size:15px;font-weight:800;letter-spacing:.3px;'>Monitoring App</div>"
+        "<div style='padding:18px 20px;background-color:#eaf4ff;background-image:linear-gradient(180deg,#f4faff,#e6f1ff);color:#17324d;border-bottom:1px solid #cfe0f5;'>"
+        "<div style='display:flex;align-items:center;gap:14px;margin-bottom:12px;'>"
+        f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;border-radius:12px;'>"
+        "<div>"
+        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>MONITORING Linux Server</div>"
+        f"<div style='margin-top:4px;font-size:12px;color:#5f7590;'>powered by Rolf Walker &nbsp;&middot;&nbsp; v{build_version}</div>"
         "</div>"
-        "<h2 style='margin:0 0 6px 0;font-size:22px;'>Daily Trend Digest</h2>"
-        f"<div style='font-size:13px;opacity:.95;'>Benutzer: {html.escape(username)} | Fenster: letzte {hours}h | Zeit: {html.escape(format_mail_datetime())}</div>"
+        "</div>"
+        "<h2 style='margin:0 0 6px 0;font-size:22px;color:#17324d;'>Daily Trend Digest</h2>"
+        f"<div style='font-size:13px;color:#5f7590;'>Benutzer: {html.escape(username)} | Fenster: letzte {hours}h | Zeit: {html.escape(format_mail_datetime())}</div>"
         "</div>"
         "<div style='padding:18px 20px;'>"
         f"<p style='margin:0 0 14px 0;font-size:14px;'>Es wurden <strong>{len(warnings)}</strong> trend-kritische Signale erkannt.</p>"
@@ -1281,6 +1287,8 @@ def trend_digest_subject(warnings: list[dict], local_date: str) -> str:
 
 
 def alert_digest_html(username: str, alerts: list[dict]) -> str:
+    app_logo_uri = app_logo_data_uri()
+    build_version = html.escape(read_build_version())
     rows_html = "".join(
         (
             f"<tr style='background:{'#fff1f2' if str(item.get('severity')) == 'critical' else '#fffaf0'};'>"
@@ -1299,13 +1307,16 @@ def alert_digest_html(username: str, alerts: list[dict]) -> str:
     return (
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:900px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;box-shadow:0 18px 38px rgba(15,23,42,.18),0 4px 10px rgba(15,23,42,.12);'>"
-        "<div style='padding:18px 20px;background-color:#7f1d1d;background-image:linear-gradient(135deg,#7f1d1d,#b91c1c);color:#fff;'>"
-        "<div style='display:flex;align-items:center;gap:10px;margin-bottom:10px;'>"
-        "<span style='display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;border-radius:8px;background:#ffffff;color:#7f1d1d;font-weight:900;font-size:14px;font-family:Segoe UI,Arial,sans-serif;'>M</span>"
-        "<div style='font-size:15px;font-weight:800;letter-spacing:.3px;'>Monitoring App</div>"
+        "<div style='padding:18px 20px;background-color:#eaf4ff;background-image:linear-gradient(180deg,#f4faff,#e6f1ff);color:#17324d;border-bottom:1px solid #cfe0f5;'>"
+        "<div style='display:flex;align-items:center;gap:14px;margin-bottom:12px;'>"
+        f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;border-radius:12px;'>"
+        "<div>"
+        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>MONITORING Linux Server</div>"
+        f"<div style='margin-top:4px;font-size:12px;color:#5f7590;'>powered by Rolf Walker &nbsp;&middot;&nbsp; v{build_version}</div>"
         "</div>"
-        "<h2 style='margin:0 0 6px 0;font-size:22px;'>Open Alert Digest</h2>"
-        f"<div style='font-size:13px;opacity:.95;'>Benutzer: {html.escape(username)} | Zeit: {html.escape(format_mail_datetime())}</div>"
+        "</div>"
+        "<h2 style='margin:0 0 6px 0;font-size:22px;color:#17324d;'>Open Alert Digest</h2>"
+        f"<div style='font-size:13px;color:#5f7590;'>Benutzer: {html.escape(username)} | Zeit: {html.escape(format_mail_datetime())}</div>"
         "</div>"
         "<div style='padding:18px 20px;'>"
         f"<p style='margin:0 0 14px 0;font-size:14px;'>Aktuell <strong>{len(alerts)}</strong> offene, nicht stummgeschaltete Alarme.</p>"
@@ -1364,8 +1375,6 @@ def alert_instant_mail_html(
     sev_bg = "#fee2e2" if severity == "critical" else "#fef3c7"
     sev_text = "#991b1b" if severity == "critical" else "#92400e"
     sev_label = "KRITISCH" if severity == "critical" else "WARNUNG"
-    header_bg = "linear-gradient(135deg,#7f1d1d,#b91c1c)" if severity == "critical" else "linear-gradient(135deg,#78350f,#d97706)"
-    header_bg_color = "#7f1d1d" if severity == "critical" else "#78350f"
     event_label = {
         "opened": "Alarm ausgelöst",
         "escalated": "Alarm eskaliert",
@@ -1380,23 +1389,28 @@ def alert_instant_mail_html(
     normalized_os_family = normalize_os_family(os_family)
     os_label = os_family_label(normalized_os_family)
     os_logo_uri = os_logo_data_uri(normalized_os_family)
+    app_logo_uri = app_logo_data_uri()
+    build_version = html.escape(read_build_version())
     reported_at = format_mail_datetime(reported_at_utc)
     return (
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:700px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;box-shadow:0 18px 38px rgba(15,23,42,.18),0 4px 10px rgba(15,23,42,.12);'>"
-        f"<div style='padding:18px 20px;background-color:{header_bg_color};background-image:{header_bg};color:#fff;'>"
-        "<div style='display:flex;align-items:center;gap:10px;margin-bottom:10px;'>"
-        f"<span style='display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;border-radius:8px;background:#ffffff;color:{header_bg_color};font-weight:900;font-size:14px;font-family:Segoe UI,Arial,sans-serif;'>M</span>"
-        "<div style='font-size:15px;font-weight:800;letter-spacing:.3px;'>Monitoring App</div>"
+        "<div style='padding:18px 20px;background-color:#eaf4ff;background-image:linear-gradient(180deg,#f4faff,#e6f1ff);color:#17324d;border-bottom:1px solid #cfe0f5;'>"
+        "<div style='display:flex;align-items:center;gap:14px;margin-bottom:12px;'>"
+        f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;border-radius:12px;'>"
+        "<div>"
+        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>MONITORING Linux Server</div>"
+        f"<div style='margin-top:4px;font-size:12px;color:#5f7590;'>powered by Rolf Walker &nbsp;&middot;&nbsp; v{build_version}</div>"
         "</div>"
-        f"<div style='font-size:12px;opacity:.9;margin-bottom:8px;'>Benutzer: {html.escape(username)} | {html.escape(format_mail_datetime())}</div>"
-        f"<h1 style='margin:0;font-size:34px;line-height:1.05;font-weight:800;letter-spacing:.2px;'>{html.escape(customer_title)}</h1>"
-        f"<div style='margin-top:6px;font-size:14px;opacity:.92;'>Host: {html.escape(hostname)}</div>"
+        "</div>"
+        f"<div style='font-size:12px;color:#5f7590;margin-bottom:8px;'>Benutzer: {html.escape(username)} | {html.escape(format_mail_datetime())}</div>"
+        f"<h1 style='margin:0;font-size:34px;line-height:1.05;font-weight:800;letter-spacing:.2px;color:#17324d;'>{html.escape(customer_title)}</h1>"
+        f"<div style='margin-top:6px;font-size:14px;color:#5f7590;'>Host: {html.escape(hostname)}</div>"
         "<div style='margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;'>"
-        f"<span style='display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:12px;font-weight:700;'>"
+        f"<span style='display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#d9ebff;color:#244566;font-size:12px;font-weight:700;'>"
         f"<img src='{html.escape(os_logo_uri)}' alt='{html.escape(os_label)}' width='14' height='14' style='display:block;'>"
         f"{html.escape(os_label)}</span>"
-        f"<span style='display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:12px;font-weight:700;'>Land {html.escape(country_badge)}</span>"
+        f"<span style='display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#d9ebff;color:#244566;font-size:12px;font-weight:700;'>Land {html.escape(country_badge)}</span>"
         f"<span style='display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:{sev_bg};color:{sev_text};font-size:12px;font-weight:800;'>{sev_label}</span>"
         "</div>"
         "</div>"
@@ -2402,13 +2416,17 @@ def os_logo_data_uri(os_family: str) -> str:
 
 
 def app_logo_data_uri() -> str:
-    svg = (
-        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'>"
-        "<rect x='1' y='1' width='26' height='26' rx='8' fill='#0f4c81'/>"
-        "<path d='M8 18V9h2.6l3.4 5 3.4-5H20v9h-2V12l-3 4.4h-2L10 12v6z' fill='#e2ecff'/>"
-        "</svg>"
-    )
-    return "data:image/svg+xml;utf8," + parse.quote(svg)
+    try:
+        encoded = base64.b64encode(APP_LOGO_PATH.read_bytes()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    except OSError:
+        svg = (
+            "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'>"
+            "<rect x='1' y='1' width='26' height='26' rx='8' fill='#2f68d8'/>"
+            "<path d='M7 15h5l2-5 3 9 2-4h4' fill='none' stroke='#ffffff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/>"
+            "</svg>"
+        )
+        return "data:image/svg+xml;utf8," + parse.quote(svg)
 
 
 def collect_host_mail_context(conn: sqlite3.Connection, hostname: str) -> dict:
