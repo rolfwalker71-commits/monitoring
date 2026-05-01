@@ -1329,17 +1329,28 @@ def alert_digest_subject(alerts: list[dict], local_date: str) -> str:
     return f"[Monitoring][{level}] Alert Digest {local_date} (C:{critical_count} W:{warning_count})"
 
 
-def alert_instant_mail_subject(event_type: str, hostname: str, severity: str) -> str:
+def alert_instant_mail_subject(event_type: str, hostname: str, severity: str, display_name: str = "") -> str:
     sev_label = "KRITISCH" if severity == "critical" else "WARNUNG"
     event_label = {
         "opened": "Alarm ausgelöst",
         "escalated": "Alarm eskaliert",
         "resolved": "Alarm behoben",
     }.get(event_type, "Alarm")
-    return f"[Monitoring][{sev_label}] {event_label}: {hostname}"
+    title_target = display_name.strip() or hostname
+    return f"[Monitoring][{sev_label}] {event_label}: {title_target}"
 
 
-def alert_instant_mail_html(username: str, event_type: str, hostname: str, mountpoint: str, severity: str, used_percent: float) -> str:
+def alert_instant_mail_html(
+    username: str,
+    event_type: str,
+    hostname: str,
+    mountpoint: str,
+    severity: str,
+    used_percent: float,
+    display_name: str = "",
+    country_code: str = "",
+    os_family: str = "linux",
+) -> str:
     sev_color = "#dc2626" if severity == "critical" else "#d97706"
     sev_bg = "#fee2e2" if severity == "critical" else "#fef3c7"
     sev_text = "#991b1b" if severity == "critical" else "#92400e"
@@ -1353,19 +1364,40 @@ def alert_instant_mail_html(username: str, event_type: str, hostname: str, mount
     bar_width = min(100, max(0, int(used_percent)))
     bar_color = sev_color
     used_str = f"{used_percent:.1f}"
+    customer_title = display_name.strip() or hostname
+    normalized_country_code = normalize_country_code(country_code)
+    country_badge = normalized_country_code if normalized_country_code else "--"
+    normalized_os_family = normalize_os_family(os_family)
+    os_label = os_family_label(normalized_os_family)
+    os_logo_uri = os_logo_data_uri(normalized_os_family)
     return (
         "<html><body style='margin:0;background:#f3f6ff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
-        "<div style='max-width:600px;margin:20px auto;background:#ffffff;border:1px solid #dbe3ef;border-radius:14px;overflow:hidden;'>"
+        "<div style='max-width:700px;margin:20px auto;background:#ffffff;border:1px solid #dbe3ef;border-radius:14px;overflow:hidden;'>"
         f"<div style='padding:18px 20px;background:{header_bg};color:#fff;'>"
-        f"<h2 style='margin:0 0 4px 0;font-size:20px;'>{html.escape(event_label)}</h2>"
-        f"<div style='font-size:12px;opacity:.9;'>Benutzer: {html.escape(username)} | {html.escape(format_mail_datetime())}</div>"
+        f"<div style='font-size:12px;opacity:.9;margin-bottom:8px;'>Benutzer: {html.escape(username)} | {html.escape(format_mail_datetime())}</div>"
+        f"<h1 style='margin:0;font-size:34px;line-height:1.05;font-weight:800;letter-spacing:.2px;'>{html.escape(customer_title)}</h1>"
+        f"<div style='margin-top:6px;font-size:14px;opacity:.92;'>Host: {html.escape(hostname)}</div>"
+        "<div style='margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;'>"
+        f"<span style='display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:12px;font-weight:700;'>"
+        f"<img src='{html.escape(os_logo_uri)}' alt='{html.escape(os_label)}' width='14' height='14' style='display:block;'>"
+        f"{html.escape(os_label)}</span>"
+        f"<span style='display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:12px;font-weight:700;'>Land {html.escape(country_badge)}</span>"
+        f"<span style='display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:{sev_bg};color:{sev_text};font-size:12px;font-weight:800;'>{sev_label}</span>"
+        "</div>"
         "</div>"
         "<div style='padding:20px;'>"
+        f"<h2 style='margin:0 0 14px 0;font-size:20px;color:#0f172a;'>{html.escape(event_label)}</h2>"
         "<table style='width:100%;border-collapse:collapse;font-size:14px;'>"
-        "<tr><td style='padding:8px 0;color:#64748b;width:120px;'>Host</td>"
+        "<tr><td style='padding:8px 0;color:#64748b;width:140px;'>Kunde</td>"
+        f"<td style='padding:8px 0;font-weight:700;'>{html.escape(customer_title)}</td></tr>"
+        "<tr><td style='padding:8px 0;color:#64748b;'>Host</td>"
         f"<td style='padding:8px 0;font-weight:600;'>{html.escape(hostname)}</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Mountpoint</td>"
         f"<td style='padding:8px 0;font-weight:600;'>{html.escape(mountpoint)}</td></tr>"
+        "<tr><td style='padding:8px 0;color:#64748b;'>Land</td>"
+        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(country_badge)}</td></tr>"
+        "<tr><td style='padding:8px 0;color:#64748b;'>OS Typ</td>"
+        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(os_label)}</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Auslastung</td>"
         f"<td style='padding:8px 0;font-weight:600;'>{used_str}%</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Schweregrad</td>"
@@ -1390,6 +1422,7 @@ def send_instant_alert_mails_to_users(
 ) -> None:
     if event_type not in {"opened", "escalated", "resolved"}:
         return
+    host_context = collect_host_mail_context(conn, hostname)
     try:
         rows = conn.execute(
             """
@@ -1424,8 +1457,23 @@ def send_instant_alert_mails_to_users(
             ok_token, access_token, _err = ensure_microsoft_access_token(conn, username)
             if not ok_token:
                 continue
-            subject = alert_instant_mail_subject(event_type, hostname, severity)
-            body = alert_instant_mail_html(username, event_type, hostname, mountpoint, severity, used_percent)
+            subject = alert_instant_mail_subject(
+                event_type,
+                hostname,
+                severity,
+                str(host_context.get("display_name", "") or ""),
+            )
+            body = alert_instant_mail_html(
+                username,
+                event_type,
+                hostname,
+                mountpoint,
+                severity,
+                used_percent,
+                display_name=str(host_context.get("display_name", "") or ""),
+                country_code=str(host_context.get("country_code", "") or ""),
+                os_family=str(host_context.get("os_family", "linux") or "linux"),
+            )
             send_microsoft_mail_multi(access_token, all_recipients, subject, body, content_type="HTML")
         except Exception:
             pass
@@ -2293,6 +2341,67 @@ def normalize_country_code(value: object) -> str:
     if len(raw) != 2 or not raw.isalpha():
         return ""
     return raw
+
+
+def normalize_os_family(value: object) -> str:
+    os_text = str(value or "").strip().lower()
+    if not os_text:
+        return "linux"
+    if "win" in os_text:
+        return "windows"
+    return "linux"
+
+
+def os_family_label(os_family: str) -> str:
+    return "Windows" if os_family == "windows" else "Linux"
+
+
+def os_logo_data_uri(os_family: str) -> str:
+    if os_family == "windows":
+        svg = (
+            "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>"
+            "<rect x='1' y='1' width='10' height='10' rx='1.4' fill='#1674ea'/>"
+            "<rect x='13' y='1' width='10' height='10' rx='1.4' fill='#0f62d7'/>"
+            "<rect x='1' y='13' width='10' height='10' rx='1.4' fill='#0f62d7'/>"
+            "<rect x='13' y='13' width='10' height='10' rx='1.4' fill='#1674ea'/>"
+            "</svg>"
+        )
+    else:
+        svg = (
+            "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>"
+            "<rect x='1' y='2' width='22' height='20' rx='5' fill='#111827'/>"
+            "<rect x='4' y='6' width='16' height='10' rx='2' fill='#1f2937'/>"
+            "<path d='M8 11h4v2H8zm6 0h3v2h-3z' fill='#6ee7b7'/>"
+            "<rect x='9' y='17' width='6' height='2' rx='1' fill='#9ca3af'/>"
+            "</svg>"
+        )
+    return "data:image/svg+xml;utf8," + parse.quote(svg)
+
+
+def collect_host_mail_context(conn: sqlite3.Connection, hostname: str) -> dict:
+    settings_row = conn.execute(
+        "SELECT COALESCE(display_name_override, ''), COALESCE(country_code_override, '') FROM host_settings WHERE hostname = ?",
+        (hostname,),
+    ).fetchone()
+    display_name_override = str(settings_row[0] or "").strip() if settings_row else ""
+    country_code_override = normalize_country_code(settings_row[1] if settings_row else "")
+
+    latest_payload_row = conn.execute(
+        "SELECT payload_json FROM reports WHERE hostname = ? ORDER BY id DESC LIMIT 1",
+        (hostname,),
+    ).fetchone()
+    latest_payload = parse_payload_json(str(latest_payload_row[0] or "{}")) if latest_payload_row else {}
+
+    display_name = effective_display_name(latest_payload, display_name_override, hostname)
+    country_code = country_code_override or extract_country_code_from_payload(latest_payload)
+    os_name = str(latest_payload.get("os", "") or "")
+    os_family = normalize_os_family(os_name)
+    return {
+        "display_name": display_name,
+        "country_code": country_code,
+        "os_name": os_name,
+        "os_family": os_family,
+    }
 
 
 def extract_country_code_from_payload(payload: dict) -> str:
