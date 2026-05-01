@@ -150,6 +150,43 @@ function Send-Payload([string]$body) {
     $null = $wc.UploadString($uri, 'POST', $body)
 }
 
+function Get-HttpExceptionSummary($exception) {
+    if ($null -eq $exception) {
+        return ''
+    }
+
+    $parts = @()
+    if ($exception.Message) {
+        $parts += [string]$exception.Message
+    }
+
+    $response = $exception.Response
+    if ($response) {
+        try {
+            $statusCode = [int]$response.StatusCode
+            $statusText = [string]$response.StatusDescription
+            if ($statusText) {
+                $parts += ("HTTP {0} {1}" -f $statusCode, $statusText)
+            } else {
+                $parts += ("HTTP {0}" -f $statusCode)
+            }
+        } catch { }
+
+        try {
+            $stream = $response.GetResponseStream()
+            if ($stream) {
+                $reader = New-Object System.IO.StreamReader($stream)
+                $body = $reader.ReadToEnd()
+                if ($body) {
+                    $parts += ("Response: {0}" -f $body)
+                }
+            }
+        } catch { }
+    }
+
+    return ($parts -join ' | ')
+}
+
 function Invoke-FlushQueue {
     $files = @(Get-ChildItem -Path $QueueDir -Filter '*.json' -ErrorAction SilentlyContinue | Sort-Object Name)
     foreach ($f in $files) {
@@ -570,6 +607,7 @@ $payload = @"
 try {
     Send-Payload $payload
 } catch {
+    $sendErrorSummary = Get-HttpExceptionSummary $_.Exception
     $queuedAt = [System.DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ', $IC)
     $delayed  = $payload `
                   -replace '"delivery_mode": "live"',  '"delivery_mode": "delayed"' `
@@ -586,6 +624,9 @@ try {
     $delayed  = $delayed -replace ('"queue_depth": ' + $queueDepth), ('"queue_depth": ' + $newDepth)
     [System.IO.File]::WriteAllText($qf, $delayed, [System.Text.Encoding]::UTF8)
 
+    if ($sendErrorSummary) {
+        Write-Error "Send failed: $sendErrorSummary"
+    }
     Write-Error "Payload queued for retry: $qf"
     exit 1
 }
