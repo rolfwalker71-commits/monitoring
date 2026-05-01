@@ -3006,11 +3006,22 @@ function wireEvents() {
     updateViewMode();
   });
 
-  document.getElementById("settingsTabButton").addEventListener("click", async () => {
-    state.viewMode = "settings";
-    updateViewMode();
-    await loadSettingsPanel(true);
-  });
+  const settingsTabButton = document.getElementById("settingsTabButton");
+  if (settingsTabButton) {
+    settingsTabButton.addEventListener("click", async () => {
+      state.viewMode = "settings";
+      updateViewMode();
+      await loadSettingsPanel(true);
+    });
+  }
+
+  const settingsBackToOverviewButton = document.getElementById("settingsBackToOverviewButton");
+  if (settingsBackToOverviewButton) {
+    settingsBackToOverviewButton.addEventListener("click", () => {
+      state.viewMode = "overview";
+      updateViewMode();
+    });
+  }
 
   document.getElementById("triggerAllAgentsUpdateButton").addEventListener("click", async () => {
     try {
