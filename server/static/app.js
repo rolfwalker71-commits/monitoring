@@ -19,7 +19,7 @@ const state = {
   hostSearchQuery: "",
   hostAlertFilter: "all",
   hostMutedFilter: "all",
-  viewMode: "overview",
+  viewMode: "reports",
   overviewSection: "main",
   criticalTrendsHours: 24,
   reportLimit: 1,
