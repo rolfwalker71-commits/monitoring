@@ -18,14 +18,28 @@ if [[ -z "$SHA" ]]; then
 fi
 
 RAW_BASE="https://raw.githubusercontent.com/$OWNER_REPO/$SHA"
+download_file() {
+    local source_path="$1"
+    local target_path="$2"
+    mkdir -p "$(dirname "$target_path")"
+    curl -fsSL --retry 5 --retry-delay 1 "$RAW_BASE/$source_path" -o "$target_path"
+    echo "Datei geladen: $source_path"
+}
 
-curl -fsSL --retry 5 --retry-delay 1 "$RAW_BASE/server/receiver.py" -o "$TARGET_DIR/server/receiver.py"
-curl -fsSL --retry 5 --retry-delay 1 "$RAW_BASE/server/static/index.html" -o "$TARGET_DIR/server/static/index.html"
-curl -fsSL --retry 5 --retry-delay 1 "$RAW_BASE/server/static/app.js" -o "$TARGET_DIR/server/static/app.js"
-curl -fsSL --retry 5 --retry-delay 1 "$RAW_BASE/server/static/styles.css" -o "$TARGET_DIR/server/static/styles.css"
-curl -fsSL --retry 5 --retry-delay 1 "$RAW_BASE/BUILD_VERSION" -o "$TARGET_DIR/BUILD_VERSION"
+FILES=(
+    "server/receiver.py"
+    "server/static/index.html"
+    "server/static/app.js"
+    "server/static/styles.css"
+    "BUILD_VERSION"
+    "AGENT_VERSION"
+    "openapi.yaml"
+)
 
-# Alle PNG-Icons aus server/static/icons dynamisch laden (robust ohne Pipe-Parsing)
+for rel_path in "${FILES[@]}"; do
+    download_file "$rel_path" "$TARGET_DIR/$rel_path"
+done
+
 ICONS_API="https://api.github.com/repos/$OWNER_REPO/contents/server/static/icons?ref=$SHA"
 TMP_DIR="$(mktemp -d)"
 cleanup() {
@@ -40,61 +54,23 @@ curl -fsSL --retry 5 --retry-delay 1 \
   "$ICONS_API" \
   -o "$ICONS_JSON"
 
-python3 - "$ICONS_JSON" "$RAW_BASE" "$TARGET_DIR/server/static/icons" <<'PY'
-import json
-import os
-import sys
-import urllib.request
+mapfile -t ICON_NAMES < <(
+  sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\.png\)".*/\1/p' "$ICONS_JSON"
+)
 
-json_path = sys.argv[1]
-raw_base = sys.argv[2]
-target_dir = sys.argv[3]
+if [[ ${#ICON_NAMES[@]} -eq 0 ]]; then
+  echo "Keine PNG-Icons geladen (Liste war leer oder ungeeignet)." >&2
+  exit 1
+fi
 
-with open(json_path, "r", encoding="utf-8") as f:
-    raw = f.read().strip()
-
-if not raw:
-    raise SystemExit("Icons API lieferte leere Antwort.")
-
-try:
-    data = json.loads(raw)
-except json.JSONDecodeError as exc:
-    raise SystemExit(f"Icons API lieferte kein valides JSON: {exc}")
-
-if isinstance(data, dict):
-    msg = data.get("message")
-    if msg:
-        raise SystemExit(f"Icons API Fehler: {msg}")
-    raise SystemExit("Icons API lieferte unerwartetes JSON-Objekt statt Liste.")
-
-if not isinstance(data, list):
-    raise SystemExit("Icons API lieferte unerwartetes Format.")
-
-os.makedirs(target_dir, exist_ok=True)
-loaded = 0
-for item in data:
-    if not isinstance(item, dict):
-        continue
-    if item.get("type") != "file":
-        continue
-    name = str(item.get("name", ""))
-    if not name.lower().endswith(".png"):
-        continue
-
-    url = f"{raw_base}/server/static/icons/{name}"
-    out = os.path.join(target_dir, name)
-
-    with urllib.request.urlopen(url, timeout=20) as resp, open(out, "wb") as out_file:
-        out_file.write(resp.read())
-
-    loaded += 1
-    print(f"Icon geladen: {name}")
-
-if loaded == 0:
-    raise SystemExit("Keine PNG-Icons geladen (Liste war leer oder ungeeignet).")
-PY
+for icon_name in "${ICON_NAMES[@]}"; do
+  download_file "server/static/icons/$icon_name" "$TARGET_DIR/server/static/icons/$icon_name"
+done
 
 echo "$SHA" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
 echo "Fertig. Deploy-Commit: $SHA"
 echo -n "BUILD_VERSION lokal: "
 cat "$TARGET_DIR/BUILD_VERSION"
+echo -n "AGENT_VERSION lokal: "
+cat "$TARGET_DIR/AGENT_VERSION"
+ls -ld "$TARGET_DIR/server"
