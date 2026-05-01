@@ -582,6 +582,7 @@ async function loadUserProfile(force = false) {
   const trendTimeInput = document.getElementById("trendEmailTimeInput");
   const alertEnabledInput = document.getElementById("alertEmailEnabledInput");
   const alertTimeInput = document.getElementById("alertEmailTimeInput");
+  const alertRecipientsInput = document.getElementById("alertEmailRecipientsInput");
   const trendTestButton = document.getElementById("testTrendDigestMailButton");
   const alertTestButton = document.getElementById("testAlertDigestMailButton");
 
@@ -597,6 +598,7 @@ async function loadUserProfile(force = false) {
     trendTimeInput.value = asText(profile.trend_email_time_hhmm, "08:00");
     alertEnabledInput.checked = profile.alert_email_enabled === true;
     alertTimeInput.value = asText(profile.alert_email_time_hhmm, "08:05");
+    alertRecipientsInput.value = asText(profile.alert_email_recipients, "") === "-" ? "" : asText(profile.alert_email_recipients, "");
 
     const oauth = profile.microsoft_oauth || {};
     const oauthConnected = oauth.connected === true;
@@ -639,6 +641,7 @@ async function saveUserProfile() {
     trend_email_time_hhmm: document.getElementById("trendEmailTimeInput").value || "08:00",
     alert_email_enabled: document.getElementById("alertEmailEnabledInput").checked,
     alert_email_time_hhmm: document.getElementById("alertEmailTimeInput").value || "08:05",
+    alert_email_recipients: document.getElementById("alertEmailRecipientsInput").value.trim(),
   };
 
   if (payload.email_enabled && !payload.email_recipient) {

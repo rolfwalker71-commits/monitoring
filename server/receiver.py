@@ -6,6 +6,7 @@ import hmac
 import html
 import json
 import os
+import re
 import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -229,6 +230,7 @@ def init_db() -> None:
                 trend_email_last_sent_local_date TEXT NOT NULL DEFAULT '',
                 alert_email_enabled INTEGER NOT NULL DEFAULT 0,
                 alert_email_time_hhmm TEXT NOT NULL DEFAULT '08:05',
+                alert_email_recipients TEXT NOT NULL DEFAULT '',
                 alert_email_last_sent_local_date TEXT NOT NULL DEFAULT '',
                 updated_at_utc TEXT NOT NULL,
                 FOREIGN KEY(username) REFERENCES web_users(username)
@@ -249,6 +251,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_email_enabled INTEGER NOT NULL DEFAULT 0")
         if "alert_email_time_hhmm" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_email_time_hhmm TEXT NOT NULL DEFAULT '08:05'")
+        if "alert_email_recipients" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_email_recipients TEXT NOT NULL DEFAULT ''")
         if "alert_email_last_sent_local_date" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_email_last_sent_local_date TEXT NOT NULL DEFAULT ''")
         conn.execute(
@@ -362,10 +366,11 @@ def init_db() -> None:
                     trend_email_last_sent_local_date,
                     alert_email_enabled,
                     alert_email_time_hhmm,
+                    alert_email_recipients,
                     alert_email_last_sent_local_date,
                     updated_at_utc
                 )
-                VALUES (?, 0, '', 0, ?, '', 0, ?, '', ?)
+                VALUES (?, 0, '', 0, ?, '', 0, ?, '', '', ?)
                 ON CONFLICT(username) DO NOTHING
                 """,
                 (WEB_DEFAULT_USERNAME, DEFAULT_TREND_DIGEST_TIME, DEFAULT_ALERT_DIGEST_TIME, now_utc),
@@ -411,10 +416,11 @@ def init_db() -> None:
                 trend_email_last_sent_local_date,
                 alert_email_enabled,
                 alert_email_time_hhmm,
+                alert_email_recipients,
                 alert_email_last_sent_local_date,
                 updated_at_utc
             )
-            SELECT username, 0, '', 0, ?, '', 0, ?, '', updated_at_utc
+            SELECT username, 0, '', 0, ?, '', 0, ?, '', '', updated_at_utc
             FROM web_users
             WHERE username NOT IN (SELECT username FROM web_user_settings)
             """
@@ -528,6 +534,20 @@ def normalize_hhmm(value: object, fallback: str) -> str:
     if hour < 0 or hour > 23 or minute < 0 or minute > 59:
         return fallback
     return f"{hour:02d}:{minute:02d}"
+
+
+def parse_email_recipients(value: object) -> list[str]:
+    raw = str(value or "")
+    parts = [item.strip() for item in re.split(r"[,;\n]+", raw) if item.strip()]
+    unique: list[str] = []
+    seen: set[str] = set()
+    for item in parts:
+        lowered = item.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        unique.append(item)
+    return unique
 
 
 def scheduled_digest_due(now_local: datetime, scheduled_hhmm: str, last_sent_local_date: str) -> bool:
@@ -766,6 +786,7 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
                COALESCE(trend_email_last_sent_local_date, ''),
                COALESCE(alert_email_enabled, 0),
                COALESCE(alert_email_time_hhmm, ''),
+               COALESCE(alert_email_recipients, ''),
                COALESCE(alert_email_last_sent_local_date, ''),
                COALESCE(updated_at_utc, '')
         FROM web_user_settings
@@ -782,6 +803,7 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
             "trend_email_last_sent_local_date": "",
             "alert_email_enabled": False,
             "alert_email_time_hhmm": DEFAULT_ALERT_DIGEST_TIME,
+            "alert_email_recipients": "",
             "alert_email_last_sent_local_date": "",
             "updated_at_utc": "",
         }
@@ -793,8 +815,9 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
         "trend_email_last_sent_local_date": str(row[4] or ""),
         "alert_email_enabled": bool(int(row[5] or 0)),
         "alert_email_time_hhmm": normalize_hhmm(row[6], DEFAULT_ALERT_DIGEST_TIME),
-        "alert_email_last_sent_local_date": str(row[7] or ""),
-        "updated_at_utc": str(row[8] or ""),
+        "alert_email_recipients": str(row[7] or ""),
+        "alert_email_last_sent_local_date": str(row[8] or ""),
+        "updated_at_utc": str(row[9] or ""),
     }
 
 
@@ -812,6 +835,9 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
         payload.get("alert_email_time_hhmm", existing.get("alert_email_time_hhmm", DEFAULT_ALERT_DIGEST_TIME)),
         DEFAULT_ALERT_DIGEST_TIME,
     )
+    alert_email_recipients = str(
+        payload.get("alert_email_recipients", existing.get("alert_email_recipients", "")) or ""
+    ).strip()
     trend_email_last_sent_local_date = str(
         payload.get("trend_email_last_sent_local_date", existing.get("trend_email_last_sent_local_date", "")) or ""
     ).strip()
@@ -830,10 +856,11 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             trend_email_last_sent_local_date,
             alert_email_enabled,
             alert_email_time_hhmm,
+            alert_email_recipients,
             alert_email_last_sent_local_date,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             email_enabled = excluded.email_enabled,
             email_recipient = excluded.email_recipient,
@@ -842,6 +869,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             trend_email_last_sent_local_date = excluded.trend_email_last_sent_local_date,
             alert_email_enabled = excluded.alert_email_enabled,
             alert_email_time_hhmm = excluded.alert_email_time_hhmm,
+            alert_email_recipients = excluded.alert_email_recipients,
             alert_email_last_sent_local_date = excluded.alert_email_last_sent_local_date,
             updated_at_utc = excluded.updated_at_utc
         """,
@@ -854,6 +882,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             trend_email_last_sent_local_date,
             1 if alert_email_enabled else 0,
             alert_email_time_hhmm,
+            alert_email_recipients,
             alert_email_last_sent_local_date,
             now_utc,
         ),
@@ -866,6 +895,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
         "trend_email_last_sent_local_date": trend_email_last_sent_local_date,
         "alert_email_enabled": alert_email_enabled,
         "alert_email_time_hhmm": alert_email_time_hhmm,
+        "alert_email_recipients": alert_email_recipients,
         "alert_email_last_sent_local_date": alert_email_last_sent_local_date,
         "updated_at_utc": now_utc,
     }
@@ -1078,7 +1108,7 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
             f"<td>{html.escape(str(item.get('metric') or '-'))}</td>"
             f"<td>{html.escape(str(item.get('current') if item.get('current') is not None else '-'))}%</td>"
             f"<td><strong>{html.escape(str(item.get('projected') if item.get('projected') is not None else '-'))}%</strong></td>"
-            f"<td>{'KRITISCH' if str(item.get('level')) == 'crit' else 'WARNUNG'}</td>"
+            f"<td><span style='display:inline-block;padding:2px 8px;border-radius:999px;background:{'#fee2e2' if str(item.get('level')) == 'crit' else '#fef3c7'};color:{'#991b1b' if str(item.get('level')) == 'crit' else '#92400e'};font-weight:600;'>{'KRITISCH' if str(item.get('level')) == 'crit' else 'WARNUNG'}</span></td>"
             "</tr>"
         )
         for item in warnings
@@ -1111,13 +1141,25 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
     )
 
 
+def trend_digest_subject(warnings: list[dict], local_date: str) -> str:
+    critical_count = sum(1 for item in warnings if str(item.get("level")) == "crit")
+    warning_count = sum(1 for item in warnings if str(item.get("level")) == "warn")
+    if critical_count > 0:
+        level = "KRITISCH"
+    elif warning_count > 0:
+        level = "WARNUNG"
+    else:
+        level = "INFO"
+    return f"[Monitoring][{level}] Trend Digest {local_date} (C:{critical_count} W:{warning_count})"
+
+
 def alert_digest_html(username: str, alerts: list[dict]) -> str:
     rows_html = "".join(
         (
-            "<tr>"
+            f"<tr style='background:{'#fff1f2' if str(item.get('severity')) == 'critical' else '#fffaf0'};'>"
             f"<td>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</td>"
             f"<td>{html.escape(str(item.get('mountpoint') or '-'))}</td>"
-            f"<td>{html.escape(str(item.get('severity') or '-').upper())}</td>"
+            f"<td><strong style='color:{'#991b1b' if str(item.get('severity')) == 'critical' else '#9a3412'};'>{html.escape(str(item.get('severity') or '-').upper())}</strong></td>"
             f"<td>{html.escape('{:.1f}'.format(float(item.get('used_percent') or 0)))}%</td>"
             f"<td>{html.escape(str(item.get('last_seen_at_utc') or '-'))}</td>"
             "</tr>"
@@ -1150,6 +1192,18 @@ def alert_digest_html(username: str, alerts: list[dict]) -> str:
         "</div>"
         "</body></html>"
     )
+
+
+def alert_digest_subject(alerts: list[dict], local_date: str) -> str:
+    critical_count = sum(1 for item in alerts if str(item.get("severity")) == "critical")
+    warning_count = sum(1 for item in alerts if str(item.get("severity")) == "warning")
+    if critical_count > 0:
+        level = "KRITISCH"
+    elif warning_count > 0:
+        level = "WARNUNG"
+    else:
+        level = "INFO"
+    return f"[Monitoring][{level}] Alert Digest {local_date} (C:{critical_count} W:{warning_count})"
 
 
 def get_oauth_settings(conn: sqlite3.Connection) -> dict:
@@ -1410,6 +1464,7 @@ def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
         "trend_email_time_hhmm": settings["trend_email_time_hhmm"],
         "alert_email_enabled": settings["alert_email_enabled"],
         "alert_email_time_hhmm": settings["alert_email_time_hhmm"],
+        "alert_email_recipients": settings["alert_email_recipients"],
         "mail_oauth_available": oauth_is_configured(oauth_settings),
         "microsoft_oauth": {
             "connected": connection is not None,
@@ -1609,6 +1664,37 @@ def send_microsoft_mail(
     return False, raw or payload.get("error_description", payload.get("error", "send failed"))
 
 
+def send_microsoft_mail_multi(
+    access_token: str,
+    recipients: list[str],
+    subject: str,
+    content: str,
+    *,
+    content_type: str = "Text",
+) -> tuple[bool, str]:
+    if not recipients:
+        return False, "no recipients"
+
+    failures: list[str] = []
+    sent_count = 0
+    for recipient in recipients:
+        ok, details = send_microsoft_mail(
+            access_token,
+            recipient,
+            subject,
+            content,
+            content_type=content_type,
+        )
+        if ok:
+            sent_count += 1
+        else:
+            failures.append(f"{recipient}: {details}")
+
+    if failures:
+        return False, "; ".join(failures)
+    return True, f"sent to {sent_count} recipient(s)"
+
+
 def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
     now_local = datetime.now().astimezone()
     today_local = now_local.date().isoformat()
@@ -1645,12 +1731,15 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
         alert_enabled = bool(int(row[7] or 0))
         alert_time = normalize_hhmm(row[8], DEFAULT_ALERT_DIGEST_TIME)
         alert_last_sent = str(row[9] or "").strip()
+        settings = get_web_user_settings(conn, username)
+        extra_alert_recipients = parse_email_recipients(settings.get("alert_email_recipients", ""))
+        all_alert_recipients = parse_email_recipients(",".join([recipient] + extra_alert_recipients))
 
-        if not email_enabled or not recipient:
+        if not email_enabled:
             continue
 
-        send_trend = trend_enabled and scheduled_digest_due(now_local, trend_time, trend_last_sent)
-        send_alert = alert_enabled and scheduled_digest_due(now_local, alert_time, alert_last_sent)
+        send_trend = trend_enabled and bool(recipient) and scheduled_digest_due(now_local, trend_time, trend_last_sent)
+        send_alert = alert_enabled and bool(all_alert_recipients) and scheduled_digest_due(now_local, alert_time, alert_last_sent)
         if not send_trend and not send_alert:
             continue
 
@@ -1663,7 +1752,7 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
             trend_ok, _trend_details = send_microsoft_mail(
                 access_token,
                 recipient,
-                f"[Monitoring] Daily Trend Digest {today_local}",
+                trend_digest_subject(warnings, today_local),
                 trend_digest_html(username, warnings, 24),
                 content_type="HTML",
             )
@@ -1679,10 +1768,10 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
 
         if send_alert:
             alerts = collect_open_alerts(conn)
-            alert_ok, _alert_details = send_microsoft_mail(
+            alert_ok, _alert_details = send_microsoft_mail_multi(
                 access_token,
-                recipient,
-                f"[Monitoring] Open Alert Digest {today_local}",
+                all_alert_recipients,
+                alert_digest_subject(alerts, today_local),
                 alert_digest_html(username, alerts),
                 content_type="HTML",
             )
@@ -3638,16 +3727,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     mail_ok, mail_details = send_microsoft_mail(
                         access_token,
                         recipient,
-                        "[TEST] Monitoring Trend Digest",
+                        trend_digest_subject(warnings, datetime.now().astimezone().date().isoformat()) + " [TEST]",
                         trend_digest_html(username, warnings, 24),
                         content_type="HTML",
                     )
                 elif endpoint_mode == "alerts":
                     alerts = collect_open_alerts(conn)
-                    mail_ok, mail_details = send_microsoft_mail(
+                    extra_alert_recipients = parse_email_recipients(settings.get("alert_email_recipients", ""))
+                    all_alert_recipients = parse_email_recipients(",".join([recipient] + extra_alert_recipients))
+                    if not all_alert_recipients:
+                        self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no alert recipients configured"})
+                        return
+                    mail_ok, mail_details = send_microsoft_mail_multi(
                         access_token,
-                        recipient,
-                        "[TEST] Monitoring Alert Digest",
+                        all_alert_recipients,
+                        alert_digest_subject(alerts, datetime.now().astimezone().date().isoformat()) + " [TEST]",
                         alert_digest_html(username, alerts),
                         content_type="HTML",
                     )
