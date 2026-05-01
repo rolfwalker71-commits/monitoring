@@ -56,7 +56,16 @@ if (-not (Test-Path $QueueDir)) {
 # ---- Helpers ----
 
 function ConvertTo-JsonString([string]$s) {
-    $s `
+    if ($null -eq $s) {
+        return ''
+    }
+
+    $clean = [regex]::Replace($s, '[\x00-\x08\x0B\x0C\x0E-\x1F]', {
+        param($match)
+        return ('\u{0:x4}' -f [int][char]$match.Value)
+    })
+
+    $clean `
         -replace '\\',   '\\' `
         -replace '"',    '\"' `
         -replace "`r`n", '\n' `
