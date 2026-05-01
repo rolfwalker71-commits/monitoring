@@ -143,7 +143,8 @@ function Get-AgentConfigBlock {
 
 function Send-Payload([string]$body) {
     $wc = New-Object System.Net.WebClient
-    $wc.Headers.Add('Content-Type', 'application/json')
+    $wc.Encoding = [System.Text.Encoding]::UTF8
+    $wc.Headers.Add('Content-Type', 'application/json; charset=utf-8')
     if ($ApiKey) { $wc.Headers.Add('X-Api-Key', $ApiKey) }
     $uri = ($ServerUrl.TrimEnd('/')) + '/api/v1/agent-report'
     $null = $wc.UploadString($uri, 'POST', $body)
@@ -180,7 +181,8 @@ function Send-CommandResult {
 
     try {
         $wc = New-Object System.Net.WebClient
-        $wc.Headers.Add('Content-Type', 'application/json')
+        $wc.Encoding = [System.Text.Encoding]::UTF8
+        $wc.Headers.Add('Content-Type', 'application/json; charset=utf-8')
         if ($ApiKey) { $wc.Headers.Add('X-Api-Key', $ApiKey) }
         $uri = ($ServerUrl.TrimEnd('/')) + '/api/v1/agent-command-result'
         $null = $wc.UploadString($uri, 'POST', $body)
