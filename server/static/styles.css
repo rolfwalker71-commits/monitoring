@@ -132,6 +132,42 @@ body[data-theme="dark"] {
   border-radius: 10px;
 }
 
+.btn-emoji-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff 0%, #f6f9fd 100%);
+  border: 1px solid #c8d5e6;
+  color: #42526e;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.btn-emoji-pill:hover:not(:disabled) {
+  background: #ffffff;
+  border-color: #9fb8d8;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.1);
+}
+
+body[data-theme="dark"] .btn-emoji-pill {
+  background: linear-gradient(180deg, #1b2b45 0%, #14233a 100%);
+  border-color: #2a3c59;
+  color: #d9e8ff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
+  background: #213551;
+  border-color: #4a6f9f;
+}
+
 .app-logo {
   width: 76px;
   height: 76px;
