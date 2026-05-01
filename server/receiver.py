@@ -1350,6 +1350,7 @@ def alert_instant_mail_html(
     display_name: str = "",
     country_code: str = "",
     os_family: str = "linux",
+    reported_at_utc: str = "",
 ) -> str:
     sev_color = "#dc2626" if severity == "critical" else "#d97706"
     sev_bg = "#fee2e2" if severity == "critical" else "#fef3c7"
@@ -1370,10 +1371,16 @@ def alert_instant_mail_html(
     normalized_os_family = normalize_os_family(os_family)
     os_label = os_family_label(normalized_os_family)
     os_logo_uri = os_logo_data_uri(normalized_os_family)
+    app_logo_uri = app_logo_data_uri()
+    reported_at = format_mail_datetime(reported_at_utc)
     return (
         "<html><body style='margin:0;background:#f3f6ff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:700px;margin:20px auto;background:#ffffff;border:1px solid #dbe3ef;border-radius:14px;overflow:hidden;'>"
         f"<div style='padding:18px 20px;background:{header_bg};color:#fff;'>"
+        "<div style='display:flex;align-items:center;gap:10px;margin-bottom:10px;'>"
+        f"<img src='{html.escape(app_logo_uri)}' alt='Monitoring' width='26' height='26' style='display:block;'>"
+        "<div style='font-size:15px;font-weight:800;letter-spacing:.3px;'>Monitoring App</div>"
+        "</div>"
         f"<div style='font-size:12px;opacity:.9;margin-bottom:8px;'>Benutzer: {html.escape(username)} | {html.escape(format_mail_datetime())}</div>"
         f"<h1 style='margin:0;font-size:34px;line-height:1.05;font-weight:800;letter-spacing:.2px;'>{html.escape(customer_title)}</h1>"
         f"<div style='margin-top:6px;font-size:14px;opacity:.92;'>Host: {html.escape(hostname)}</div>"
@@ -1398,6 +1405,8 @@ def alert_instant_mail_html(
         f"<td style='padding:8px 0;font-weight:600;'>{html.escape(country_badge)}</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>OS Typ</td>"
         f"<td style='padding:8px 0;font-weight:600;'>{html.escape(os_label)}</td></tr>"
+        "<tr><td style='padding:8px 0;color:#64748b;'>Gemeldet am</td>"
+        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(reported_at)}</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Auslastung</td>"
         f"<td style='padding:8px 0;font-weight:600;'>{used_str}%</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Schweregrad</td>"
@@ -1423,6 +1432,11 @@ def send_instant_alert_mails_to_users(
     if event_type not in {"opened", "escalated", "resolved"}:
         return
     host_context = collect_host_mail_context(conn, hostname)
+    reported_row = conn.execute(
+        "SELECT created_at_utc FROM alerts WHERE hostname = ? AND mountpoint = ? ORDER BY id DESC LIMIT 1",
+        (hostname, mountpoint),
+    ).fetchone()
+    reported_at_utc = str(reported_row[0] or "") if reported_row else utc_now_iso()
     try:
         rows = conn.execute(
             """
@@ -1473,6 +1487,7 @@ def send_instant_alert_mails_to_users(
                 display_name=str(host_context.get("display_name", "") or ""),
                 country_code=str(host_context.get("country_code", "") or ""),
                 os_family=str(host_context.get("os_family", "linux") or "linux"),
+                reported_at_utc=reported_at_utc,
             )
             send_microsoft_mail_multi(access_token, all_recipients, subject, body, content_type="HTML")
         except Exception:
@@ -2375,6 +2390,16 @@ def os_logo_data_uri(os_family: str) -> str:
             "<rect x='9' y='17' width='6' height='2' rx='1' fill='#9ca3af'/>"
             "</svg>"
         )
+    return "data:image/svg+xml;utf8," + parse.quote(svg)
+
+
+def app_logo_data_uri() -> str:
+    svg = (
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'>"
+        "<rect x='1' y='1' width='26' height='26' rx='8' fill='#0f4c81'/>"
+        "<path d='M8 18V9h2.6l3.4 5 3.4-5H20v9h-2V12l-3 4.4h-2L10 12v6z' fill='#e2ecff'/>"
+        "</svg>"
+    )
     return "data:image/svg+xml;utf8," + parse.quote(svg)
 
 
