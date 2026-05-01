@@ -2989,8 +2989,16 @@ function renderInactiveHosts(data) {
   const cards = inactive_hosts.map((host) => {
     const displayName = host.display_name || host.hostname;
     const showHostname = displayName !== host.hostname;
-    const osIcon = getOsIcon(host.os);
-    const countryIcon = getCountryIcon(host.country_code);
+    
+    // Determine OS icon
+    const osFamily = host.os.toLowerCase().includes("windows") ? "windows" : "linux";
+    const osIconSrc = `icons/${osFamily}.png`;
+    
+    // Determine country icon
+    const countryCode = (host.country_code || "").toUpperCase();
+    const countryIconSrc = /^[A-Z]{2}$/.test(countryCode) ? `icons/${countryCode}.png` : null;
+    const countryIconFallback = countryCode.toLowerCase();
+    
     const alertsHtml = host.open_alert_count > 0
       ? `<span class="ih-alerts-badge">${host.open_alert_count} Alert${host.open_alert_count !== 1 ? "s" : ""}</span>`
       : "";
@@ -3001,8 +3009,8 @@ function renderInactiveHosts(data) {
       <div class="ih-host-card">
         <div class="ih-host-info">
           <div class="ih-host-icons">
-            ${osIcon ? `<img src="${osIcon}" class="ih-host-icon" alt="${escapeHtml(host.os)}" />` : ""}
-            ${countryIcon ? `<img src="${countryIcon}" class="ih-host-icon" alt="${escapeHtml(host.country_code)}" />` : ""}
+            <img src="${osIconSrc}" class="ih-host-icon" alt="${escapeHtml(host.os)}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${osFamily}.png';}" />
+            ${countryIconSrc ? `<img src="${countryIconSrc}" class="ih-host-icon" alt="${escapeHtml(host.country_code)}" onerror="if(!this.dataset.fallback1){this.dataset.fallback1='1';this.src='/icons/${countryCode}.png';return;}if(!this.dataset.fallback2){this.dataset.fallback2='1';this.src='/icons/${countryIconFallback}.png';return;}if(!this.dataset.fallback3){this.dataset.fallback3='1';this.src='/icons/${countryIconFallback}.svg';return;}this.style.display='none';" />` : ""}
           </div>
           <div class="ih-host-details">
             <span class="ih-hostname">${escapeHtml(displayName)}${showHostname ? ` <span class="ih-hostname-sub">(${escapeHtml(host.hostname)})</span>` : ""}</span>
