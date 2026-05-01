@@ -97,7 +97,7 @@ body {
 .brand-header {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 22px;
   margin-bottom: 10px;
   background: linear-gradient(135deg, #f0f6ff 0%, #e8f2ff 100%);
   border: 1px solid #c7d9f0;
@@ -114,15 +114,16 @@ body {
 }
 
 .app-logo {
-  width: 58px;
-  height: 58px;
-  flex: 0 0 58px;
+  width: 76px;
+  height: 76px;
+  flex: 0 0 76px;
 }
 
-.app-logo svg {
+.app-logo img {
   width: 100%;
   height: 100%;
   display: block;
+  object-fit: contain;
 }
 
 .brand-text {
@@ -130,22 +131,17 @@ body {
   flex: 1;
 }
 
-h1 {
+.brand-text h1 {
   margin: 0;
-  font-size: 26px;
+  font-size: 42px;
+  line-height: 1;
   letter-spacing: 0.01em;
 }
 
-.brand-subtitle {
-  font-weight: 400;
-  color: #3b82f6;
-  font-size: 22px;
-}
-
 .subtitle-meta {
-  margin: 3px 0 0;
+  margin: 6px 0 0;
   color: #64748b;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
 }
 
