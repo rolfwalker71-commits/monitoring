@@ -537,6 +537,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   margin: 14px 0;
 }
 
+th.center,
 td.center {
   text-align: center;
 }

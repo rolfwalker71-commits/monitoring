@@ -1109,88 +1109,47 @@ async function sendAlertDigestMailTest() {
   setUserMailSettingsStatus("Alarm-Testmail versendet.");
 }
 
-function normalizeHostLabelMap(hosts = []) {
-  const map = new Map();
-  for (const host of hosts) {
-    const hostname = asText(host.hostname, "").trim();
-    if (!hostname) {
-      continue;
-    }
-    const displayName = asText(host.display_name, hostname).trim() || hostname;
-    map.set(hostname, displayName);
-  }
-  return map;
-}
-
-function renderUserAlertSubscriptionRows(subscriptions = []) {
-  if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
-    return '<tr><td colspan="4" class="muted">Noch keine Host-Abos konfiguriert.</td></tr>';
+function renderUserAlertSubscriptionRows(availableHosts, subscriptions) {
+  const subMap = new Map();
+  for (const sub of (subscriptions || [])) {
+    const hn = asText(sub.hostname, "").trim();
+    if (hn) subMap.set(hn, sub);
   }
 
-  return subscriptions
-    .slice()
-    .sort((left, right) => {
-      const leftLabel = asText(left.display_name || left.hostname, "").toLowerCase();
-      const rightLabel = asText(right.display_name || right.hostname, "").toLowerCase();
-      return leftLabel.localeCompare(rightLabel);
-    })
-    .map((item) => {
-      const hostname = asText(item.hostname, "");
-      const displayName = asText(item.display_name, hostname);
-      const hostnameEnc = encodeURIComponent(hostname);
-      const mailBadge = item.notify_mail === true
-        ? '<span class="user-flag-pill on">Mail</span>'
-        : '<span class="user-flag-pill off">Mail aus</span>';
-      const telegramBadge = item.notify_telegram === true
-        ? '<span class="user-flag-pill on">Telegram</span>'
-        : '<span class="user-flag-pill off">Telegram aus</span>';
-      return `
-        <tr>
-          <td>
-            <div class="user-alert-host-cell">
-              <strong>${escapeHtml(displayName)}</strong>
-              ${displayName !== hostname ? `<span class="global-hostname-sub">(${escapeHtml(hostname)})</span>` : ""}
-            </div>
-          </td>
-          <td>${mailBadge}</td>
-          <td>${telegramBadge}</td>
-          <td>
-            <div class="user-management-actions">
-              <button type="button" data-user-alert-action="test-mail" data-hostname-enc="${hostnameEnc}">Mail Test</button>
-              <button type="button" data-user-alert-action="test-telegram" data-hostname-enc="${hostnameEnc}">Telegram Test</button>
-              <button type="button" data-user-alert-action="remove" data-hostname-enc="${hostnameEnc}">Entfernen</button>
-            </div>
-          </td>
-        </tr>
-      `;
-    })
-    .join("");
-}
+  const hosts = (availableHosts || []).slice().sort((a, b) => {
+    const la = asText(a.display_name || a.hostname, "").toLowerCase();
+    const lb = asText(b.display_name || b.hostname, "").toLowerCase();
+    return la.localeCompare(lb);
+  });
 
-function renderUserAlertHostOptions() {
-  const hostSelect = document.getElementById("userAlertHostSelect");
-  if (!hostSelect) {
-    return;
+  if (hosts.length === 0) {
+    return '<tr><td colspan="4" class="muted">Keine Hosts vorhanden.</td></tr>';
   }
 
-  const labelMap = normalizeHostLabelMap(state.userAlertAvailableHosts || []);
-  for (const sub of state.userAlertSubscriptions || []) {
-    const hostname = asText(sub.hostname, "").trim();
-    if (!hostname || labelMap.has(hostname)) {
-      continue;
-    }
-    labelMap.set(hostname, asText(sub.display_name, hostname));
-  }
-
-  const options = [...labelMap.entries()]
-    .sort((left, right) => left[1].toLowerCase().localeCompare(right[1].toLowerCase()))
-    .map(([hostname, displayName]) => {
-      const label = displayName === hostname ? hostname : `${displayName} (${hostname})`;
-      return `<option value="${escapeHtml(hostname)}">${escapeHtml(label)}</option>`;
-    })
-    .join("");
-
-  hostSelect.innerHTML = `<option value="">Host waehlen...</option>${options}`;
+  return hosts.map((host) => {
+    const hostname = asText(host.hostname, "");
+    const displayName = asText(host.display_name, hostname) || hostname;
+    const sub = subMap.get(hostname);
+    const mailChecked = sub ? sub.notify_mail : true;
+    const tgChecked = sub ? sub.notify_telegram : true;
+    const hn = escapeHtml(hostname);
+    const dn = escapeHtml(displayName);
+    const hostnameEnc = encodeURIComponent(hostname);
+    return `<tr>
+      <td>
+        <strong>${dn}</strong>
+        ${dn !== hn ? `<span class="global-hostname-sub">${hn}</span>` : ""}
+      </td>
+      <td class="center"><input type="checkbox" class="alert-sub-mail-cb" data-hostname="${hn}" ${mailChecked ? "checked" : ""}></td>
+      <td class="center"><input type="checkbox" class="alert-sub-tg-cb" data-hostname="${hn}" ${tgChecked ? "checked" : ""}></td>
+      <td>
+        <div class="user-management-actions">
+          <button type="button" data-user-alert-action="test-mail" data-hostname-enc="${hostnameEnc}">Mail</button>
+          <button type="button" data-user-alert-action="test-telegram" data-hostname-enc="${hostnameEnc}">Telegram</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
 }
 
 function refreshUserAlertSubscriptionTable() {
@@ -1198,73 +1157,45 @@ function refreshUserAlertSubscriptionTable() {
   if (!rowsEl) {
     return;
   }
-  rowsEl.innerHTML = renderUserAlertSubscriptionRows(state.userAlertSubscriptions || []);
+  rowsEl.innerHTML = renderUserAlertSubscriptionRows(
+    state.userAlertAvailableHosts || [],
+    state.userAlertSubscriptions || [],
+  );
   wireUserAlertSubscriptionActions();
 }
 
-function upsertUserAlertSubscriptionFromForm() {
-  const hostSelect = document.getElementById("userAlertHostSelect");
-  const mailInput = document.getElementById("userAlertNotifyMailInput");
-  const telegramInput = document.getElementById("userAlertNotifyTelegramInput");
-  const hostname = asText(hostSelect?.value, "").trim();
-
-  if (!hostname) {
-    throw new Error("Bitte zuerst einen Host auswaehlen.");
-  }
-
-  const notifyMail = mailInput?.checked === true;
-  const notifyTelegram = telegramInput?.checked === true;
-  if (!notifyMail && !notifyTelegram) {
-    throw new Error("Mindestens ein Kanal (Mail oder Telegram) muss aktiv sein.");
-  }
-
-  const labelMap = normalizeHostLabelMap(state.userAlertAvailableHosts || []);
-  const displayName = labelMap.get(hostname) || hostname;
-  const next = Array.isArray(state.userAlertSubscriptions) ? [...state.userAlertSubscriptions] : [];
-  const index = next.findIndex((item) => asText(item.hostname, "") === hostname);
-  const payload = {
-    hostname,
-    display_name: displayName,
-    notify_mail: notifyMail,
-    notify_telegram: notifyTelegram,
-  };
-
-  if (index >= 0) {
-    next[index] = payload;
-  } else {
-    next.push(payload);
-  }
-
-  state.userAlertSubscriptions = next;
-  refreshUserAlertSubscriptionTable();
-  setUserAlertSubscriptionsStatus(`Abo fuer ${displayName} vorbereitet. Jetzt speichern.`);
-}
-
 async function saveUserAlertSubscriptions() {
+  const rowsEl = document.getElementById("userAlertSubscriptionsRows");
+  const subscriptions = [];
+  if (rowsEl) {
+    rowsEl.querySelectorAll("tr").forEach((tr) => {
+      const mailCb = tr.querySelector(".alert-sub-mail-cb");
+      const tgCb = tr.querySelector(".alert-sub-tg-cb");
+      if (!mailCb) return;
+      subscriptions.push({
+        hostname: mailCb.dataset.hostname,
+        notify_mail: mailCb.checked,
+        notify_telegram: tgCb ? tgCb.checked : false,
+      });
+    });
+  }
   const response = await fetch("/api/v1/user-alert-subscriptions", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      subscriptions: state.userAlertSubscriptions || [],
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ subscriptions }),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.error || data.details || ("HTTP " + response.status));
   }
   state.userAlertSubscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
-  refreshUserAlertSubscriptionTable();
   setUserAlertSubscriptionsStatus("Host-Abos gespeichert.");
 }
 
 async function sendUserAlertSubscriptionTest(hostname, channel) {
   const response = await fetch("/api/v1/user-alert-subscriptions/test", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ hostname, channel }),
   });
   const data = await response.json().catch(() => ({}));
@@ -1276,30 +1207,16 @@ async function sendUserAlertSubscriptionTest(hostname, channel) {
 
 function wireUserAlertSubscriptionActions() {
   const rowsEl = document.getElementById("userAlertSubscriptionsRows");
-  if (!rowsEl) {
-    return;
-  }
-
+  if (!rowsEl) return;
   rowsEl.querySelectorAll("[data-user-alert-action]").forEach((button) => {
     button.addEventListener("click", async () => {
       const action = button.getAttribute("data-user-alert-action") || "";
       const hostname = decodeURIComponent(button.getAttribute("data-hostname-enc") || "");
-      if (!action || !hostname) {
-        return;
-      }
-
+      if (!action || !hostname) return;
       try {
-        if (action === "remove") {
-          state.userAlertSubscriptions = (state.userAlertSubscriptions || []).filter((item) => asText(item.hostname, "") !== hostname);
-          refreshUserAlertSubscriptionTable();
-          setUserAlertSubscriptionsStatus(`Abo fuer ${hostname} entfernt. Jetzt speichern.`);
-          return;
-        }
         if (action === "test-mail") {
           await sendUserAlertSubscriptionTest(hostname, "mail");
-          return;
-        }
-        if (action === "test-telegram") {
+        } else if (action === "test-telegram") {
           await sendUserAlertSubscriptionTest(hostname, "telegram");
         }
       } catch (error) {
@@ -1313,12 +1230,10 @@ async function loadUserAlertSubscriptions(force = false) {
   if (state.userAlertSubscriptionsLoaded && !force) {
     return;
   }
-
   const rowsEl = document.getElementById("userAlertSubscriptionsRows");
   if (!rowsEl) {
     return;
   }
-
   rowsEl.innerHTML = '<tr><td colspan="4" class="muted">Lade Host-Abos...</td></tr>';
   try {
     const response = await fetch("/api/v1/user-alert-subscriptions");
@@ -1328,7 +1243,6 @@ async function loadUserAlertSubscriptions(force = false) {
     const data = await response.json();
     state.userAlertAvailableHosts = Array.isArray(data.available_hosts) ? data.available_hosts : [];
     state.userAlertSubscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
-    renderUserAlertHostOptions();
     refreshUserAlertSubscriptionTable();
     state.userAlertSubscriptionsLoaded = true;
     setUserAlertSubscriptionsStatus("Host-Abos geladen.");
@@ -1357,46 +1271,45 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
   const sections = users.map((userEntry) => {
     const username = escapeHtml(userEntry.username || "");
     const subs = Array.isArray(userEntry.subscriptions) ? userEntry.subscriptions : [];
-    const subsJson = encodeURIComponent(JSON.stringify(subs));
+    const subMap = new Map();
+    for (const sub of subs) {
+      const hn = String(sub.hostname || "").trim();
+      if (hn) subMap.set(hn, sub);
+    }
 
-    const hostOptions = (availableHosts || []).map((h) => {
-      const val = escapeHtml(h.hostname);
-      const label = escapeHtml(h.display_name || h.hostname);
-      return `<option value="${val}">${label}</option>`;
-    }).join("");
+    const hosts = (availableHosts || []).slice().sort((a, b) => {
+      const la = String(a.display_name || a.hostname || "").toLowerCase();
+      const lb = String(b.display_name || b.hostname || "").toLowerCase();
+      return la.localeCompare(lb);
+    });
 
-    const rows = subs.length === 0
-      ? `<tr><td colspan="4" class="muted">Keine Abos.</td></tr>`
-      : subs.map((sub) => {
-          const hn = escapeHtml(sub.hostname || "");
-          const dn = escapeHtml(sub.display_name || sub.hostname || "");
-          const mail = sub.notify_mail ? "&#10003;" : "&#8211;";
-          const tg = sub.notify_telegram ? "&#10003;" : "&#8211;";
+    const rows = hosts.length === 0
+      ? `<tr><td colspan="3" class="muted">Keine Hosts vorhanden.</td></tr>`
+      : hosts.map((host) => {
+          const hn = escapeHtml(host.hostname || "");
+          const dn = escapeHtml(host.display_name || host.hostname || "");
+          const sub = subMap.get(host.hostname || "");
+          const mailChecked = sub ? sub.notify_mail : true;
+          const tgChecked = sub ? sub.notify_telegram : true;
           return `<tr>
-            <td>${dn}</td>
-            <td class="center">${mail}</td>
-            <td class="center">${tg}</td>
             <td>
-              <button class="admin-sub-remove-btn" data-username="${username}" data-hostname="${hn}">Entfernen</button>
+              <strong>${dn}</strong>
+              ${dn !== hn ? `<span class="global-hostname-sub">${hn}</span>` : ""}
             </td>
+            <td class="center"><input type="checkbox" class="admin-sub-mail-cb" data-hostname="${hn}" ${mailChecked ? "checked" : ""}></td>
+            <td class="center"><input type="checkbox" class="admin-sub-tg-cb" data-hostname="${hn}" ${!telegramAvailable ? "disabled " : ""}${tgChecked ? "checked" : ""}></td>
           </tr>`;
         }).join("");
 
     return `<div class="admin-alert-sub-user-block" data-username="${username}">
-      <h6 class="admin-alert-sub-username">${username}${userEntry.is_admin ? ' <span class="tag-admin">Admin</span>' : ''}</h6>
-      <div class="alarm-settings-grid user-alert-subscription-grid">
-        <label>Host <select class="admin-sub-host-select" data-username="${username}">${hostOptions}</select></label>
-        <label class="checkbox-line"><input class="admin-sub-mail-cb" type="checkbox" data-username="${username}" checked /> Mail</label>
-        <label class="checkbox-line"><input class="admin-sub-tg-cb" type="checkbox" data-username="${username}" ${telegramAvailable ? "" : "disabled"} /> Telegram</label>
-      </div>
+      <h6 class="admin-alert-sub-username">${username}${userEntry.is_admin ? ' <span class="tag-admin">Admin</span>' : ""}</h6>
       <div class="alarm-settings-actions">
-        <button class="admin-sub-add-btn" data-username="${username}">Abo hinzufuegen/aktualisieren</button>
         <button class="admin-sub-save-btn" data-username="${username}">Abos speichern</button>
         <span class="admin-sub-status count compact" data-username="${username}"></span>
       </div>
       <div class="table-wrap user-management-table-wrap">
         <table class="user-management-table">
-          <thead><tr><th>Host</th><th>Mail</th><th>Telegram</th><th>Aktion</th></tr></thead>
+          <thead><tr><th>Host</th><th class="center">Mail</th><th class="center">Telegram</th></tr></thead>
           <tbody class="admin-sub-rows" data-username="${username}">${rows}</tbody>
         </table>
       </div>
@@ -1404,19 +1317,6 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
   }).join('<hr class="admin-sub-divider">');
 
   container.innerHTML = sections;
-
-  container.querySelectorAll(".admin-sub-add-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const uname = btn.dataset.username;
-      const block = container.querySelector(`.admin-alert-sub-user-block[data-username="${uname}"]`);
-      const hostSelect = block.querySelector(".admin-sub-host-select");
-      const mailCb = block.querySelector(".admin-sub-mail-cb");
-      const tgCb = block.querySelector(".admin-sub-tg-cb");
-      const hostname = hostSelect ? hostSelect.value : "";
-      if (!hostname) return;
-      adminAlertSubUpsert(uname, hostname, mailCb ? mailCb.checked : false, tgCb ? tgCb.checked : false);
-    });
-  });
 
   container.querySelectorAll(".admin-sub-save-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -1428,30 +1328,6 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
       }
     });
   });
-
-  container.querySelectorAll(".admin-sub-remove-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const uname = btn.dataset.username;
-      const hn = btn.dataset.hostname;
-      adminAlertSubRemove(uname, hn);
-    });
-  });
-}
-
-function getAdminSubRows(username) {
-  const container = document.getElementById("adminAlertSubscriptionsContainer");
-  if (!container) return [];
-  const tbody = container.querySelector(`.admin-sub-rows[data-username="${username}"]`);
-  if (!tbody) return [];
-  const rows = [];
-  tbody.querySelectorAll("tr[data-hostname]").forEach((tr) => {
-    rows.push({
-      hostname: tr.dataset.hostname,
-      notify_mail: tr.dataset.notifyMail === "true",
-      notify_telegram: tr.dataset.notifyTelegram === "true",
-    });
-  });
-  return rows;
 }
 
 function setAdminSubStatus(username, message, isError = false) {
@@ -1463,65 +1339,20 @@ function setAdminSubStatus(username, message, isError = false) {
   el.classList.toggle("error", isError);
 }
 
-function adminAlertSubUpsert(username, hostname, notifyMail, notifyTelegram) {
-  if (!notifyMail && !notifyTelegram) {
-    setAdminSubStatus(username, "Mindestens einen Kanal aktivieren.", true);
-    return;
-  }
-  const container = document.getElementById("adminAlertSubscriptionsContainer");
-  if (!container) return;
-  const tbody = container.querySelector(`.admin-sub-rows[data-username="${username}"]`);
-  if (!tbody) return;
-
-  const existing = tbody.querySelector(`tr[data-hostname="${CSS.escape(hostname)}"]`);
-  const mailMark = notifyMail ? "&#10003;" : "&#8211;";
-  const tgMark = notifyTelegram ? "&#10003;" : "&#8211;";
-  const newRowHtml = `<tr data-hostname="${escapeHtml(hostname)}" data-notify-mail="${notifyMail}" data-notify-telegram="${notifyTelegram}">
-    <td>${escapeHtml(hostname)}</td>
-    <td class="center">${mailMark}</td>
-    <td class="center">${tgMark}</td>
-    <td><button class="admin-sub-remove-btn" data-username="${escapeHtml(username)}" data-hostname="${escapeHtml(hostname)}">Entfernen</button></td>
-  </tr>`;
-
-  if (existing) {
-    existing.outerHTML = newRowHtml;
-  } else {
-    const empty = tbody.querySelector("tr td[colspan]");
-    if (empty) empty.closest("tr").remove();
-    tbody.insertAdjacentHTML("beforeend", newRowHtml);
-  }
-
-  tbody.querySelectorAll(".admin-sub-remove-btn").forEach((btn) => {
-    btn.addEventListener("click", () => adminAlertSubRemove(btn.dataset.username, btn.dataset.hostname));
-  });
-
-  setAdminSubStatus(username, `Abo fuer ${hostname} vorgemerkt (noch nicht gespeichert).`);
-}
-
-function adminAlertSubRemove(username, hostname) {
-  const container = document.getElementById("adminAlertSubscriptionsContainer");
-  if (!container) return;
-  const tbody = container.querySelector(`.admin-sub-rows[data-username="${username}"]`);
-  if (!tbody) return;
-  const row = tbody.querySelector(`tr[data-hostname="${CSS.escape(hostname)}"]`);
-  if (row) row.remove();
-  if (tbody.children.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" class="muted">Keine Abos.</td></tr>';
-  }
-  setAdminSubStatus(username, `Abo fuer ${hostname} entfernt (noch nicht gespeichert).`);
-}
-
 async function saveAdminAlertSubscriptions(username) {
   const container = document.getElementById("adminAlertSubscriptionsContainer");
   if (!container) return;
   const tbody = container.querySelector(`.admin-sub-rows[data-username="${username}"]`);
   const subscriptions = [];
   if (tbody) {
-    tbody.querySelectorAll("tr[data-hostname]").forEach((tr) => {
+    tbody.querySelectorAll("tr").forEach((tr) => {
+      const mailCb = tr.querySelector(".admin-sub-mail-cb");
+      const tgCb = tr.querySelector(".admin-sub-tg-cb");
+      if (!mailCb) return;
       subscriptions.push({
-        hostname: tr.dataset.hostname,
-        notify_mail: tr.dataset.notifyMail === "true",
-        notify_telegram: tr.dataset.notifyTelegram === "true",
+        hostname: mailCb.dataset.hostname,
+        notify_mail: mailCb.checked,
+        notify_telegram: tgCb ? tgCb.checked : false,
       });
     });
   }
@@ -4220,14 +4051,6 @@ function wireEvents() {
       await saveUserProfile();
     } catch (error) {
       setUserMailSettingsStatus(error.message, true);
-    }
-  });
-
-  document.getElementById("addUserAlertSubscriptionButton").addEventListener("click", () => {
-    try {
-      upsertUserAlertSubscriptionFromForm();
-    } catch (error) {
-      setUserAlertSubscriptionsStatus(error.message, true);
     }
   });
 

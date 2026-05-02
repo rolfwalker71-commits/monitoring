@@ -227,23 +227,8 @@
                 <h5>Host Alert Abo Dashboard</h5>
                 <p class="count compact">Pro Host festlegen, ob Benachrichtigung per Mail und/oder Telegram erfolgen soll</p>
               </div>
-              <div class="alarm-settings-grid user-alert-subscription-grid">
-                <label>
-                  Host
-                  <select id="userAlertHostSelect"></select>
-                </label>
-                <label class="checkbox-line">
-                  <input id="userAlertNotifyMailInput" type="checkbox" checked />
-                  Mail fuer diesen Host
-                </label>
-                <label class="checkbox-line">
-                  <input id="userAlertNotifyTelegramInput" type="checkbox" />
-                  Telegram fuer diesen Host
-                </label>
-              </div>
               <div class="alarm-settings-actions">
-                <button id="addUserAlertSubscriptionButton" type="button">Host-Abo hinzufuegen/aktualisieren</button>
-                <button id="saveUserAlertSubscriptionsButton" type="button">Host-Abos speichern</button>
+                <button id="saveUserAlertSubscriptionsButton" type="button">Abos speichern</button>
                 <p id="userAlertSubscriptionsStatus" class="count compact"></p>
               </div>
               <div class="table-wrap user-management-table-wrap">
@@ -251,9 +236,9 @@
                   <thead>
                     <tr>
                       <th>Host</th>
-                      <th>Mail</th>
-                      <th>Telegram</th>
-                      <th>Aktionen</th>
+                      <th class="center">Mail</th>
+                      <th class="center">Telegram</th>
+                      <th>Test</th>
                     </tr>
                   </thead>
                   <tbody id="userAlertSubscriptionsRows">
