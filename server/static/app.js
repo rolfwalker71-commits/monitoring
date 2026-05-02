@@ -10,11 +10,21 @@ function escapeHtml(value) {
 const ANALYSIS_RANGE_STORAGE_KEY = "monitoring.analysisHours";
 const THEME_STORAGE_KEY = "monitoring.theme";
 const HOST_FILTERS_STORAGE_KEY = "monitoring.hostFilters";
-const AUTO_REFRESH_INTERVAL_MS = 8 * 60 * 1000;
+const AUTO_REFRESH_STORAGE_KEY = "monitoring.autoRefreshInterval";
+const AUTO_REFRESH_INTERVAL_OPTIONS = new Map([
+  [30, "30 Sek."],
+  [60, "1 Min."],
+  [300, "5 Min."],
+  [480, "8 Min."],
+  [0, "Aus"],
+]);
 const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "agent-update"]);
 
 let autoRefreshTimerId = null;
 let autoRefreshInProgress = false;
+let autoRefreshCurrentIntervalSec = 480;
+let autoRefreshLastRefreshAt = null;
+let autoRefreshCountdownTimerId = null;
 
 const state = {
   hostLimit: 500,
@@ -105,6 +115,22 @@ function loadAnalysisRangePreference() {
     return normalizeAnalysisHours(window.localStorage.getItem(ANALYSIS_RANGE_STORAGE_KEY));
   } catch (_error) {
     return 24;
+
+  function loadAutoRefreshPreference() {
+    try {
+      const raw = window.localStorage.getItem(AUTO_REFRESH_STORAGE_KEY);
+      const parsed = Number.parseInt(String(raw || ""), 10);
+      return AUTO_REFRESH_INTERVAL_OPTIONS.has(parsed) ? parsed : 480;
+    } catch (_error) {
+      return 480;
+    }
+  }
+
+  function persistAutoRefreshPreference(seconds) {
+    try {
+      window.localStorage.setItem(AUTO_REFRESH_STORAGE_KEY, String(seconds));
+    } catch (_error) { /* ignore */ }
+  }
   }
 }
 
@@ -294,18 +320,82 @@ function updateAutoRefreshStatus(lastRefreshAt = null) {
     : "🔄 -";
 }
 
+function renderAutoRefreshStatus() {
+  const statusEl = document.getElementById("autoRefreshStatus");
+  if (!statusEl) return;
+  if (!autoRefreshLastRefreshAt) {
+    statusEl.textContent = "-";
+    return;
+  }
+  if (autoRefreshCurrentIntervalSec <= 0) {
+    statusEl.textContent = formatAutoRefreshTimestamp(autoRefreshLastRefreshAt);
+    return;
+  }
+  const nextMs = autoRefreshLastRefreshAt.getTime() + autoRefreshCurrentIntervalSec * 1000;
+  const secLeft = Math.max(0, Math.ceil((nextMs - Date.now()) / 1000));
+  statusEl.textContent = `${formatAutoRefreshTimestamp(autoRefreshLastRefreshAt)} · in ${secLeft}s`;
+}
+
+function updateAutoRefreshStatus(lastRefreshAt = null) {
+  autoRefreshLastRefreshAt = lastRefreshAt;
+  renderAutoRefreshStatus();
+  if (lastRefreshAt && autoRefreshCurrentIntervalSec > 0) {
+    startAutoRefreshCountdown();
+  }
+  updateSummaryStrip();
+}
+
 function stopAutoRefreshTimer() {
   if (autoRefreshTimerId !== null) {
     window.clearInterval(autoRefreshTimerId);
     autoRefreshTimerId = null;
   }
+  if (autoRefreshCountdownTimerId !== null) {
+    window.clearInterval(autoRefreshCountdownTimerId);
+    autoRefreshCountdownTimerId = null;
+  }
 }
 
 function startAutoRefreshTimer() {
   stopAutoRefreshTimer();
+  if (autoRefreshCurrentIntervalSec <= 0) return;
   autoRefreshTimerId = window.setInterval(() => {
     void refreshDashboard({ automatic: true, preserveScroll: true });
-  }, AUTO_REFRESH_INTERVAL_MS);
+  }, autoRefreshCurrentIntervalSec * 1000);
+}
+
+function startAutoRefreshCountdown() {
+  if (autoRefreshCountdownTimerId !== null) {
+    window.clearInterval(autoRefreshCountdownTimerId);
+  }
+  autoRefreshCountdownTimerId = window.setInterval(renderAutoRefreshStatus, 1000);
+}
+
+function updateSummaryStrip() {
+  const strip = document.getElementById("summaryStrip");
+  if (!strip) return;
+  const visible = state.isAuthenticated && state.totalHosts > 0;
+  strip.classList.toggle("hidden", !visible);
+  if (!visible) return;
+
+  const hostsEl = document.getElementById("summaryHosts");
+  const alertsEl = document.getElementById("summaryAlerts");
+  const trendsEl = document.getElementById("summaryTrends");
+  const lastEl = document.getElementById("summaryLastUpdate");
+
+  if (hostsEl) hostsEl.textContent = `🖥️ ${state.totalHosts} Hosts`;
+  if (alertsEl) {
+    alertsEl.textContent = `🚨 ${state.globalOpenAlertsCount} Alerts`;
+    alertsEl.classList.toggle("stat-chip-alert", state.globalOpenAlertsCount > 0);
+    alertsEl.classList.toggle("stat-chip-ok", state.globalOpenAlertsCount === 0);
+  }
+  if (trendsEl) {
+    trendsEl.textContent = `📈 ${state.criticalTrendsCount} Trends`;
+    trendsEl.classList.toggle("stat-chip-warn", state.criticalTrendsCount > 0);
+  }
+  if (lastEl && autoRefreshLastRefreshAt) {
+    lastEl.textContent = `🕒 ${formatAutoRefreshTimestamp(autoRefreshLastRefreshAt)}`;
+  }
 }
 
 let sessionRefreshTimerId = null;
@@ -366,6 +456,7 @@ async function refreshDashboard(options = {}) {
     if (state.viewMode === "settings") {
       await loadSettingsPanel(true);
     }
+    updateSummaryStrip();
     if (automatic) {
       updateAutoRefreshStatus(new Date());
     }
@@ -1997,6 +2088,41 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
   `;
 }
 
+function openChartDrillModal(item, latestReportTimeUtc) {
+  const modal = document.getElementById("chartDrillModal");
+  const titleEl = document.getElementById("chartDrillTitle");
+  const bodyEl = document.getElementById("chartDrillBody");
+  if (!modal || !titleEl || !bodyEl) return;
+
+  const points = normalizeSeries((item.series || []).map((p) => ({ time_utc: p.time_utc, value: p.used_percent })));
+  const color = filesystemLineColor(item.current_used_percent);
+  const reg = computeLinearRegression(points);
+  const alertLevel = reg ? trendAlertLevel(reg.projected) : null;
+  const usedTrendColor = trendLineColor(color, alertLevel);
+  const standText = formatUtcPlus2(latestReportTimeUtc);
+
+  titleEl.textContent = asText(item.mountpoint);
+  const trendBadge = alertLevel
+    ? `<span class="trend-alert-badge trend-alert-${alertLevel}">⬆ ${alertLevel === "crit" ? "Kritisch" : "Warnung"} ~${reg.projected.toFixed(0)}%</span>`
+    : "";
+  bodyEl.innerHTML = `
+    <div class="chart-drill-svg-wrap">
+      ${buildSparklineSvg(points, color, 700, 220, { suffix: "%", minValue: 0, maxValue: 100, trendColor: usedTrendColor })}
+    </div>
+    <div class="chart-drill-stats">
+      <span class="stat-chip">Aktuell: ${escapeHtml(formatPercent(item.current_used_percent))}</span>
+      <span class="stat-chip">Min: ${escapeHtml(formatPercent(item.min_used_percent))}</span>
+      <span class="stat-chip">Max: ${escapeHtml(formatPercent(item.max_used_percent))}</span>
+      <span class="stat-chip">Avg: ${escapeHtml(formatPercent(item.avg_used_percent))}</span>
+      <span class="stat-chip">Delta: ${escapeHtml(formatSignedPercent(item.delta_used_percent))}</span>
+      <span class="stat-chip">${Number(item.sample_count || 0).toLocaleString("de-DE")} Samples</span>
+      ${trendBadge}
+      <span class="stat-chip muted">${escapeHtml(standText)}</span>
+    </div>
+  `;
+  modal.classList.remove("hidden");
+}
+
 function filesystemLineColor(currentUsedPercent) {
   const value = Number(currentUsedPercent);
   if (!Number.isFinite(value)) {
@@ -2861,6 +2987,10 @@ function renderSingleHostCard(host) {
   const isFavorite = Boolean(host.is_favorite);
   const isHidden = Boolean(host.is_hidden);
   const hiddenClass = isHidden ? " host-item-hidden" : "";
+  const favoriteClass = isFavorite ? " host-item-favorite" : "";
+  const statusBarClass = openCriticalAlertCount > 0 ? "host-status-bar host-status-bar--critical"
+    : openAlertCount > 0 ? "host-status-bar host-status-bar--warning"
+    : "host-status-bar host-status-bar--ok";
   const chipClass = openCriticalAlertCount > 0 ? "host-alert-chip critical" : "host-alert-chip";
   const alertChip = hasOpenAlerts ? `<span class="${chipClass}">🔔 ${openAlertCount}</span>` : "";
   const apiKeyStatus = asText(host.agent_api_key_status || "off").toLowerCase();
@@ -2920,7 +3050,8 @@ function renderSingleHostCard(host) {
   }
 
   return `
-    <article class="${selectedClass}${hiddenClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">
+    <article class="${selectedClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">
+      <div class="${statusBarClass}"></div>
       ${flagIcon}
       <strong class="host-title-line">
         <span>${escapeHtml(displayName)}</span>
@@ -3510,10 +3641,10 @@ async function loadAnalysisForHost() {
     resourceTrendCards.innerHTML = "";
     analysisRows.innerHTML = state.hostFilterNoMatches
       ? "<tr><td colspan=\"7\" class=\"muted\">Keine Daten zum Suchfilter vorhanden.</td></tr>"
-      : "<tr><td colspan=\"7\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
-    if (state.hostFilterNoMatches) {
-      filesystemCharts.innerHTML = "<p class=\"muted\">Keine Daten zum Suchfilter vorhanden.</p>";
-    }
+      : "<tr><td colspan=\"7\"><div class=\"empty-state\"><span>🖥️</span><p>Wähle einen Host in der linken Spalte.</p></div></td></tr>";
+    filesystemCharts.innerHTML = state.hostFilterNoMatches
+      ? "<p class=\"muted\">Keine Daten zum Suchfilter vorhanden.</p>"
+      : "<div class=\"empty-state\"><span>💾</span><p>Wähle einen Host, um Filesystem-Trends zu sehen.</p></div>";
     return;
   }
 
@@ -3564,6 +3695,21 @@ async function loadAnalysisForHost() {
     const fsRising = sortedTrendRows.filter((row) => Number(row.delta_used_percent) > 0).length;
     const fsWarnOrCritical = sortedTrendRows.filter((row) => Number(row.current_used_percent) >= 80).length;
     filesystemStats.textContent = `${sortedTrendRows.length} FS-Charts | Avg aktuell: ${fsAvgCurrent === null ? "-" : formatNumber(fsAvgCurrent, 1) + "%"} | Steigend: ${fsRising} | >=80%: ${fsWarnOrCritical}`;
+
+    const fsTabBtn = document.getElementById("overviewFilesystemTabButton");
+    if (fsTabBtn) {
+      fsTabBtn.textContent = fsWarnOrCritical > 0
+        ? `💾 Filesystem Fokus ⚠ ${fsWarnOrCritical}`
+        : "💾 Filesystem Fokus";
+    }
+
+    filesystemCharts.querySelectorAll(".fs-chart-card").forEach((card, idx) => {
+      card.style.cursor = "zoom-in";
+      card.addEventListener("click", () => {
+        const item = sortedTrendRows[idx];
+        if (item) openChartDrillModal(item, data.latest_report_time_utc);
+      });
+    });
 
     if (sortedTrendRows.length === 0) {
       filesystemCharts.innerHTML = "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfuegbar.</p>";
@@ -3618,7 +3764,7 @@ async function loadAlertsForHost() {
     alertsSummary.textContent = "";
     alertsRows.innerHTML = state.hostFilterNoMatches
       ? "<tr><td colspan=\"6\" class=\"muted\">Keine Daten zum Suchfilter vorhanden.</td></tr>"
-      : "<tr><td colspan=\"6\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
+      : "<tr><td colspan=\"6\"><div class=\"empty-state\"><span>🔕</span><p>Wähle einen Host, um Alerts zu sehen.</p></div></td></tr>";
     return;
   }
 
@@ -3662,7 +3808,7 @@ async function loadAlertsForHost() {
             <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
             <td>${renderPathCell(item.mountpoint, 60)}</td>
             <td>${formatPercent(item.used_percent)}</td>
-            <td>${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}</td>
+            <td title="Zuletzt gesehen: ${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}">${escapeHtml(formatUtcPlus2(item.created_at_utc))}</td>
             <td>${muteBtn}</td>
           </tr>
         `;
@@ -3956,7 +4102,7 @@ async function loadGlobalAlertsOverview() {
             <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
             <td>${renderPathCell(item.mountpoint, 56)}</td>
             <td>${formatPercent(item.used_percent)}</td>
-            <td>${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}</td>
+            <td title="Zuletzt gesehen: ${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}">${escapeHtml(formatUtcPlus2(item.created_at_utc))}</td>
             <td>${muteBtn}</td>
           </tr>
         `;
@@ -3984,6 +4130,58 @@ function wireEvents() {
   if (themeToggleButton) {
     themeToggleButton.addEventListener("click", () => {
       toggleTheme();
+    });
+  }
+
+
+  const arSelect = document.getElementById("autoRefreshIntervalSelect");
+  if (arSelect) {
+    arSelect.addEventListener("change", () => {
+      autoRefreshCurrentIntervalSec = Number.parseInt(arSelect.value, 10) || 0;
+      persistAutoRefreshPreference(autoRefreshCurrentIntervalSec);
+      if (autoRefreshCurrentIntervalSec <= 0) {
+        stopAutoRefreshTimer();
+        renderAutoRefreshStatus();
+      } else {
+        startAutoRefreshTimer();
+        if (autoRefreshLastRefreshAt) startAutoRefreshCountdown();
+      }
+    });
+  }
+
+  const chartDrillCloseBtn = document.getElementById("chartDrillCloseBtn");
+  if (chartDrillCloseBtn) {
+    chartDrillCloseBtn.addEventListener("click", () => {
+      document.getElementById("chartDrillModal").classList.add("hidden");
+    });
+  }
+  const chartDrillBackdrop = document.querySelector(".chart-drill-backdrop");
+  if (chartDrillBackdrop) {
+    chartDrillBackdrop.addEventListener("click", () => {
+      document.getElementById("chartDrillModal").classList.add("hidden");
+    });
+  }
+
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      const modal = document.getElementById("chartDrillModal");
+      if (modal && !modal.classList.contains("hidden")) {
+        modal.classList.add("hidden");
+      }
+    }
+  });
+
+  const toggleMountpointBtn = document.getElementById("toggleMountpointTableButton");
+  if (toggleMountpointBtn) {
+    toggleMountpointBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const tableWrap = document.getElementById("mountpointTableWrap");
+      if (!tableWrap) return;
+      const collapsed = !tableWrap.classList.contains("hidden");
+      tableWrap.classList.toggle("hidden", collapsed);
+      toggleMountpointBtn.textContent = collapsed ? "▸" : "▾";
+      toggleMountpointBtn.setAttribute("aria-expanded", String(!collapsed));
     });
   }
 
@@ -4227,6 +4425,8 @@ function wireEvents() {
 
   document.getElementById("refreshButton").addEventListener("click", async () => {
     await refreshDashboard({ preserveScroll: false });
+    updateAutoRefreshStatus(new Date());
+    if (autoRefreshCurrentIntervalSec > 0) startAutoRefreshTimer();
   });
 
   document.getElementById("openAlarmSettingsButton").addEventListener("click", async () => {
@@ -4375,6 +4575,9 @@ async function init() {
   state.analysisHours = loadAnalysisRangePreference();
   loadHostFilterPreferences();
   applyTheme(loadThemePreference());
+    autoRefreshCurrentIntervalSec = loadAutoRefreshPreference();
+    const arSelect = document.getElementById("autoRefreshIntervalSelect");
+    if (arSelect) arSelect.value = String(autoRefreshCurrentIntervalSec);
   updateAutoRefreshStatus(null);
   const oauthResult = consumeOauthStatusFromUrl();
   await loadWebclientVersion();

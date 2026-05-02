@@ -414,6 +414,189 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   padding: 0 4px;
 }
 
+.auto-refresh-interval-label {
+  display: inline-flex;
+  align-items: center;
+}
+
+.auto-refresh-interval-select {
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+/* Summary strip */
+.summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 14px 4px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.summary-strip .stat-chip-alert {
+  background: var(--crit-bg);
+  color: var(--crit);
+  border-color: var(--crit-border);
+  font-weight: 700;
+}
+
+.summary-strip .stat-chip-warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: var(--warn-border);
+  font-weight: 700;
+}
+
+.summary-strip .stat-chip-ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-color: var(--ok-border);
+}
+
+/* Host item enhancements */
+.host-item-favorite {
+  border-color: #f59e0b;
+  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+}
+
+.host-item-favorite:hover {
+  border-color: #d97706;
+  box-shadow: 0 2px 10px rgba(217, 119, 6, 0.18);
+}
+
+.host-status-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 0 0 10px 10px;
+  transition: opacity 200ms ease;
+}
+
+.host-status-bar--ok {
+  background: var(--ok);
+  opacity: 0.35;
+}
+
+.host-status-bar--warning {
+  background: var(--warn);
+}
+
+.host-status-bar--critical {
+  background: var(--crit);
+}
+
+/* Chart drill-down modal */
+.chart-drill-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.chart-drill-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 18, 36, 0.45);
+  backdrop-filter: blur(4px);
+}
+
+.chart-drill-inner {
+  position: relative;
+  z-index: 1;
+  width: min(780px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.chart-drill-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, #f0f5ff 0%, #f8fbff 100%);
+}
+
+.chart-drill-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.chart-drill-close {
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.chart-drill-body {
+  padding: 12px 16px 16px;
+}
+
+.chart-drill-svg-wrap svg {
+  width: 100%;
+  height: auto;
+}
+
+.chart-drill-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+/* Mountpoint table toggle */
+.mountpoint-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mountpoint-table-header h4 {
+  margin: 0;
+}
+
+.mountpoint-toggle-btn {
+  flex-shrink: 0;
+}
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.empty-state span {
+  font-size: 28px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+}
+
 .alarm-settings-panel {
   margin-top: 10px;
   margin-bottom: 8px;
@@ -2930,6 +3113,38 @@ body[data-theme="dark"] .login-card {
   border-color: #2a3c59;
   background: linear-gradient(180deg, #17253d 0%, #101a2d 100%);
   color: var(--text);
+}
+
+body[data-theme="dark"] .auto-refresh-interval-select {
+  background: #17253d;
+  border-color: #2a3c59;
+  color: var(--text);
+}
+
+body[data-theme="dark"] .summary-strip {
+  background: var(--panel);
+  border-bottom-color: var(--line);
+}
+
+body[data-theme="dark"] .host-item-favorite {
+  border-color: #d97706;
+  background: linear-gradient(180deg, #1f1a08 0%, #181408 100%);
+}
+
+body[data-theme="dark"] .host-item-favorite:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.18);
+}
+
+body[data-theme="dark"] .chart-drill-header {
+  background: linear-gradient(180deg, #162136 0%, #111b2f 100%);
+  border-bottom-color: #2a3c59;
+}
+
+body[data-theme="dark"] .chart-drill-inner {
+  background: #111b2f;
+  border-color: #2a3c59;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
 }
 
 body[data-theme="dark"] .login-card input,

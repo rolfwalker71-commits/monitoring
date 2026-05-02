@@ -127,6 +127,14 @@
           <div id="activeUsersList" class="active-users-list"></div>
         </div>
 
+
+          <div id="summaryStrip" class="summary-strip hidden" aria-label="Dashboard-Übersicht">
+            <span id="summaryHosts" class="stat-chip">🖥️ -</span>
+            <span id="summaryAlerts" class="stat-chip">🚨 -</span>
+            <span id="summaryTrends" class="stat-chip">📈 -</span>
+            <span id="summaryLastUpdate" class="stat-chip">🕒 -</span>
+          </div>
+
         <div id="globalView" class="view-section hidden settings-view">
           <div class="settings-page">
             <div class="settings-page-header">
@@ -179,7 +187,7 @@
                           <th>Severity</th>
                           <th>Mountpoint</th>
                           <th>Used</th>
-                          <th>Transfer</th>
+                          <th title="Zeitpunkt der ersten Auslösung">Aktiv seit</th>
                           <th>🔇</th>
                         </tr>
                       </thead>
@@ -499,7 +507,16 @@
               <div class="title-row">
                 <h3 id="selectedHostTitle">Meldungen</h3>
                 <div class="title-row-tools">
-                  <span id="autoRefreshStatus" class="auto-refresh-status">Letzte automatische Aktualisierung: -</span>
+                  <label class="auto-refresh-interval-label" for="autoRefreshIntervalSelect" title="Auto-Refresh Intervall">
+                    <select id="autoRefreshIntervalSelect" class="auto-refresh-interval-select">
+                      <option value="30">⟳ 30s</option>
+                      <option value="60">⟳ 1 Min.</option>
+                      <option value="300">⟳ 5 Min.</option>
+                      <option value="480" selected>⟳ 8 Min.</option>
+                      <option value="0">⟳ Aus</option>
+                    </select>
+                  </label>
+                  <span id="autoRefreshStatus" class="auto-refresh-status">-</span>
                   <button id="editDisplayNameButton" class="btn-icon" type="button" title="Titel bearbeiten">✏️</button>
                 </div>
               </div>
@@ -561,7 +578,7 @@
                             <th>Severity</th>
                             <th>Mountpoint</th>
                             <th>Used</th>
-                            <th>Transfer</th>
+                            <th title="Zeitpunkt der ersten Auslösung">Aktiv seit</th>
                             <th>🔇</th>
                           </tr>
                         </thead>
@@ -588,8 +605,11 @@
                 </div>
                 <div id="filesystemCharts" class="filesystem-charts"></div>
                 <div class="detail-card">
-                  <h4>📊 Mountpoint-Übersicht</h4>
-                  <div class="table-wrap">
+                  <div class="mountpoint-table-header">
+                    <h4>📊 Mountpoint-Übersicht</h4>
+                    <button id="toggleMountpointTableButton" class="host-group-toggle mountpoint-toggle-btn" type="button" aria-expanded="true" title="Tabelle ein-/ausklappen">▾</button>
+                  </div>
+                  <div id="mountpointTableWrap" class="table-wrap">
                     <table>
                       <thead>
                         <tr>
@@ -634,5 +654,15 @@
       </section>
     </main>
     <script src="/app.js?v=__ASSET_VERSION__"></script>
+      <div id="chartDrillModal" class="chart-drill-modal hidden" role="dialog" aria-modal="true" aria-labelledby="chartDrillTitle">
+        <div class="chart-drill-backdrop"></div>
+        <div class="chart-drill-inner">
+          <div class="chart-drill-header">
+            <strong id="chartDrillTitle" class="chart-drill-title"></strong>
+            <button id="chartDrillCloseBtn" class="btn-icon chart-drill-close" type="button" title="Schließen">✕</button>
+          </div>
+          <div id="chartDrillBody" class="chart-drill-body"></div>
+        </div>
+      </div>
   </body>
   </html>
