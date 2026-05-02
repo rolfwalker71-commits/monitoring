@@ -2538,27 +2538,37 @@ function renderReportCard(report) {
   let detailContent = "";
   if (section === "journal") {
     detailContent = `
-      <h4>🚨 Journal Fehler (kritisch)</h4>
-      ${renderJournalErrorsTable(payload.journal_errors)}
+      <section class="detail-card">
+        <h4>🚨 Journal Fehler (kritisch)</h4>
+        ${renderJournalErrorsTable(payload.journal_errors)}
+      </section>
     `;
   } else if (section === "processes") {
     detailContent = `
-      <h4>🏎️ Top Prozesse</h4>
-      ${renderTopProcessesTable(payload.top_processes)}
+      <section class="detail-card">
+        <h4>🏎️ Top Prozesse</h4>
+        ${renderTopProcessesTable(payload.top_processes)}
+      </section>
     `;
   } else if (section === "containers") {
     detailContent = `
-      <h4>🐳 Container Status</h4>
-      ${renderContainersTable(payload.containers)}
+      <section class="detail-card">
+        <h4>🐳 Container Status</h4>
+        ${renderContainersTable(payload.containers)}
+      </section>
     `;
   } else if (section === "agent-update") {
     detailContent = `
-      <h4>⟳ Agent Update Log</h4>
-      ${renderAgentUpdateLog(payload.agent_update)}
+      <section class="detail-card">
+        <h4>⟳ Agent Update Log</h4>
+        ${renderAgentUpdateLog(payload.agent_update)}
+      </section>
     `;
     detailContent += `
-      <h4>🗂️ agent.conf</h4>
-      ${renderAgentConfig(payload.agent_config)}
+      <section class="detail-card">
+        <h4>🗂️ agent.conf</h4>
+        ${renderAgentConfig(payload.agent_config)}
+      </section>
     `;
   } else {
     detailContent = `
