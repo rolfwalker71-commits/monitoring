@@ -1341,10 +1341,10 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
             ? (sub ? sub.notify_mail !== false : true)
             : (sub ? sub.notify_telegram !== false : true);
           const disabled = channel === "telegram" && !telegramAvailable;
-          return `<div class="admin-sub-user-toggle-row">
-            <span class="admin-sub-user-chip${userEntry.is_admin ? " is-admin" : ""}">${username}</span>
-            <button type="button" class="admin-sub-toggle${enabled ? " is-on" : " is-off"}" data-username="${username}" data-hostname="${hostname}" data-channel="${channel}" ${disabled ? "disabled" : ""} aria-pressed="${enabled ? "true" : "false"}">${enabled ? "Aktiv" : "Aus"}</button>
-          </div>`;
+          return `<label class="admin-sub-user-chip${userEntry.is_admin ? " is-admin" : ""}${disabled ? " is-disabled" : ""}">
+            <input type="checkbox" class="admin-sub-cb" data-username="${username}" data-hostname="${hostname}" data-channel="${channel}" ${enabled ? "checked" : ""} ${disabled ? "disabled" : ""}>
+            <span class="admin-sub-user-name">${username}</span>
+          </label>`;
         }).join("");
 
         return `<tr>
@@ -1361,14 +1361,8 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     </table>
   </div>`;
 
-  container.querySelectorAll(".admin-sub-toggle").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (button.disabled) return;
-      const nextEnabled = button.getAttribute("aria-pressed") !== "true";
-      button.setAttribute("aria-pressed", nextEnabled ? "true" : "false");
-      button.classList.toggle("is-on", nextEnabled);
-      button.classList.toggle("is-off", !nextEnabled);
-      button.textContent = nextEnabled ? "Aktiv" : "Aus";
+  container.querySelectorAll(".admin-sub-cb").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
       setAdminAlertSubscriptionsStatus("Ungespeicherte Aenderungen.");
     });
   });
@@ -1377,7 +1371,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
 async function saveAdminAlertSubscriptions() {
   const container = document.getElementById("adminAlertSubscriptionsContainer");
   if (!container) return;
-  const toggles = Array.from(container.querySelectorAll(".admin-sub-toggle[data-username][data-hostname][data-channel]"));
+  const toggles = Array.from(container.querySelectorAll(".admin-sub-cb[data-username][data-hostname][data-channel]"));
   const groupedByUser = new Map();
 
   for (const userEntry of state.adminAlertSubscriptionsUsers || []) {
@@ -1406,7 +1400,7 @@ async function saveAdminAlertSubscriptions() {
       hostMap.set(hostname, { hostname, notify_mail: true, notify_telegram: true });
     }
     const entry = hostMap.get(hostname);
-    const enabled = toggle.getAttribute("aria-pressed") === "true";
+    const enabled = toggle.checked;
     if (channel === "mail") entry.notify_mail = enabled;
     if (channel === "telegram") entry.notify_telegram = enabled;
   }
