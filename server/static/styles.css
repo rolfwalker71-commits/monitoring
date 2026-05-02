@@ -2515,6 +2515,23 @@ button:hover:not(.host-item) {
   flex-shrink: 0;
 }
 
+.detail-cards {
+  display: grid;
+  gap: 12px;
+}
+
+.detail-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: #fcfdff;
+}
+
+.detail-card h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
 .report-card h4 {
   margin: 6px 0 4px;
   font-size: 13px;
@@ -2815,7 +2832,8 @@ body[data-theme="dark"] .subview-tabs-shell,
 body[data-theme="dark"] .view-tabs-shell,
 body[data-theme="dark"] .panel,
 body[data-theme="dark"] .report-card,
-body[data-theme="dark"] .meta-group {
+body[data-theme="dark"] .meta-group,
+body[data-theme="dark"] .detail-card {
   background: #111b2f;
   border-color: #2a3c59;
   color: var(--text);

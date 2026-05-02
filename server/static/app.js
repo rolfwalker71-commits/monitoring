@@ -2562,11 +2562,17 @@ function renderReportCard(report) {
     `;
   } else {
     detailContent = `
-      <h4>🌐 Netzwerk-Details</h4>
-      ${renderNetworkTable(network)}
+      <div class="detail-cards">
+        <section class="detail-card">
+          <h4>🌐 Netzwerk-Details</h4>
+          ${renderNetworkTable(network)}
+        </section>
 
-      <h4>💾 Filesysteme</h4>
-      ${renderFilesystemTable(payload.filesystems)}
+        <section class="detail-card">
+          <h4>💾 Filesysteme</h4>
+          ${renderFilesystemTable(payload.filesystems)}
+        </section>
+      </div>
     `;
   }
 
