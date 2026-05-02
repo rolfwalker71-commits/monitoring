@@ -323,19 +323,7 @@
               </div>
             </section>
 
-            <section id="adminAlertSubscriptionsSection" class="settings-subsection hidden">
-              <div class="settings-subsection-head">
-                <h5>Host Alert Abos aller User (Admin)</h5>
-                <p class="count compact">Uebersicht und Bearbeitung der Benachrichtigungs-Abos aller Benutzer</p>
-              </div>
-              <div class="alarm-settings-actions">
-                <button id="reloadAdminAlertSubscriptionsButton" type="button">Aktualisieren</button>
-                <p id="adminAlertSubscriptionsStatus" class="count compact"></p>
-              </div>
-              <div id="adminAlertSubscriptionsContainer">
-                <p class="muted">Noch keine Daten geladen.</p>
-              </div>
-            </section>
+
 
             <section class="settings-subsection">
               <div class="settings-subsection-head">
@@ -421,6 +409,7 @@
                 <button id="criticalTrendsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="criticalTrendsView">Kritische Trends</button>
                 <button id="inactiveHostsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="inactiveHostsView">Inaktive Hosts</button>
                 <button id="reportsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="reportsView">Einzelmeldungen</button>
+                <button id="adminAlertSubsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="adminAlertSubsView">Alert Abos</button>
               </div>
             </div>
 
@@ -595,6 +584,22 @@
               </div>
               <div id="inactiveHostsList" class="inactive-hosts-list">
                 <p class="muted">Lade Daten…</p>
+              </div>
+            </div>
+
+            <div id="adminAlertSubsView" class="view-section hidden" role="tabpanel" aria-labelledby="adminAlertSubsTabButton">
+              <div class="settings-page">
+                <div class="settings-page-header">
+                  <h3>&#128276; Alert Abos (Admin)</h3>
+                  <p class="count">Benachrichtigungs-Abos aller Benutzer verwalten</p>
+                  <div>
+                    <button id="reloadAdminAlertSubscriptionsButton" type="button">Aktualisieren</button>
+                    <p id="adminAlertSubscriptionsStatus" class="count compact"></p>
+                  </div>
+                </div>
+                <div id="adminAlertSubscriptionsContainer">
+                  <p class="muted">Noch keine Daten geladen.</p>
+                </div>
               </div>
             </div>
 

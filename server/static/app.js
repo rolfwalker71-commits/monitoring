@@ -429,12 +429,14 @@ function updateViewMode() {
   const criticalTrendsView = document.getElementById("criticalTrendsView");
   const inactiveHostsView = document.getElementById("inactiveHostsView");
   const settingsView = document.getElementById("settingsView");
+  const adminAlertSubsView = document.getElementById("adminAlertSubsView");
   const overviewTabButton = document.getElementById("overviewTabButton");
   const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
   const criticalTrendsTabButton = document.getElementById("criticalTrendsTabButton");
   const inactiveHostsTabButton = document.getElementById("inactiveHostsTabButton");
   const reportsTabButton = document.getElementById("reportsTabButton");
   const settingsTabButton = document.getElementById("settingsTabButton");
+  const adminAlertSubsTabButton = document.getElementById("adminAlertSubsTabButton");
 
   const overviewActive = state.viewMode === "overview";
   const reportsActive = state.viewMode === "reports";
@@ -442,6 +444,7 @@ function updateViewMode() {
   const criticalTrendsActive = state.viewMode === "critical-trends";
   const inactiveHostsActive = state.viewMode === "inactive-hosts";
   const settingsActive = state.viewMode === "settings";
+  const adminAlertSubsActive = state.viewMode === "admin-alert-subs";
 
   overviewView.classList.toggle("hidden", !overviewActive);
   reportsView.classList.toggle("hidden", !reportsActive);
@@ -449,18 +452,21 @@ function updateViewMode() {
   if (criticalTrendsView) criticalTrendsView.classList.toggle("hidden", !criticalTrendsActive);
   if (inactiveHostsView) inactiveHostsView.classList.toggle("hidden", !inactiveHostsActive);
   if (settingsView) settingsView.classList.toggle("hidden", !settingsActive);
+  if (adminAlertSubsView) adminAlertSubsView.classList.toggle("hidden", !adminAlertSubsActive);
   overviewTabButton.classList.toggle("active", overviewActive);
   globalAlertsTabButton.classList.toggle("active", globalAlertsActive);
   if (criticalTrendsTabButton) criticalTrendsTabButton.classList.toggle("active", criticalTrendsActive);
   if (inactiveHostsTabButton) inactiveHostsTabButton.classList.toggle("active", inactiveHostsActive);
   reportsTabButton.classList.toggle("active", reportsActive);
   if (settingsTabButton) settingsTabButton.classList.toggle("active", settingsActive);
+  if (adminAlertSubsTabButton) adminAlertSubsTabButton.classList.toggle("active", adminAlertSubsActive);
   overviewTabButton.setAttribute("aria-selected", overviewActive ? "true" : "false");
   globalAlertsTabButton.setAttribute("aria-selected", globalAlertsActive ? "true" : "false");
   if (criticalTrendsTabButton) criticalTrendsTabButton.setAttribute("aria-selected", criticalTrendsActive ? "true" : "false");
   if (inactiveHostsTabButton) inactiveHostsTabButton.setAttribute("aria-selected", inactiveHostsActive ? "true" : "false");
   reportsTabButton.setAttribute("aria-selected", reportsActive ? "true" : "false");
   if (settingsTabButton) settingsTabButton.setAttribute("aria-selected", settingsActive ? "true" : "false");
+  if (adminAlertSubsTabButton) adminAlertSubsTabButton.setAttribute("aria-selected", adminAlertSubsActive ? "true" : "false");
   updateReportSectionUi();
 }
 
@@ -586,15 +592,15 @@ function setAuthUiState(authenticated) {
 function updateAdminSettingsVisibility() {
   const adminOauthSection = document.getElementById("adminOauthSettingsSection");
   const adminUserSection = document.getElementById("adminUserManagementSection");
-  const adminAlertSubSection = document.getElementById("adminAlertSubscriptionsSection");
+  const adminAlertSubsTab = document.getElementById("adminAlertSubsTabButton");
   if (adminOauthSection) {
     adminOauthSection.classList.toggle("hidden", !state.isAdmin);
   }
   if (adminUserSection) {
     adminUserSection.classList.toggle("hidden", !state.isAdmin);
   }
-  if (adminAlertSubSection) {
-    adminAlertSubSection.classList.toggle("hidden", !state.isAdmin);
+  if (adminAlertSubsTab) {
+    adminAlertSubsTab.classList.toggle("hidden", !state.isAdmin);
   }
 }
 
@@ -1399,7 +1405,6 @@ async function loadSettingsPanel(force = false) {
   if (state.isAdmin) {
     await loadOauthSettings(force);
     await loadWebUsers(force);
-    await loadAdminAlertSubscriptions(force);
   }
 }
 
@@ -4067,6 +4072,15 @@ function wireEvents() {
     reloadAdminAlertSubBtn.addEventListener("click", async () => {
       state.adminAlertSubscriptionsLoaded = false;
       await loadAdminAlertSubscriptions(true);
+    });
+  }
+
+  const adminAlertSubsTabButton = document.getElementById("adminAlertSubsTabButton");
+  if (adminAlertSubsTabButton) {
+    adminAlertSubsTabButton.addEventListener("click", async () => {
+      state.viewMode = "admin-alert-subs";
+      updateViewMode();
+      await loadAdminAlertSubscriptions();
     });
   }
 
