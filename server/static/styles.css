@@ -1945,6 +1945,45 @@ button:hover:not(.host-item) {
   margin-bottom: 14px;
 }
 
+#overviewFilesystemSection {
+  border: 2px solid var(--line) !important;
+  border-radius: 8px !important;
+  padding: 0 !important;
+  background: #fcfdff !important;
+  overflow: hidden;
+}
+
+#overviewFilesystemSection .fs-focus-header {
+  background: #f0f4fa;
+  padding: 12px;
+  margin: 0 !important;
+  border-bottom: 1px solid var(--line);
+}
+
+#overviewFilesystemSection .fs-focus-header h4 {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 14px;
+  margin: 0 0 4px;
+}
+
+#overviewFilesystemSection .fs-focus-header .count {
+  margin: 0;
+}
+
+#overviewFilesystemSection #filesystemCharts,
+#overviewFilesystemSection .table-wrap {
+  padding: 0 12px;
+}
+
+#overviewFilesystemSection #filesystemCharts {
+  padding-top: 12px;
+}
+
+#overviewFilesystemSection .table-wrap {
+  padding-bottom: 12px;
+}
+
 .resource-charts {
   margin-top: 12px;
   margin-bottom: 10px;
@@ -3133,6 +3172,20 @@ body[data-theme="dark"] .search-input:focus {
 body[data-theme="dark"] .analysis-panel {
   background: linear-gradient(180deg, #131f34 0%, #101c30 100%);
   border-color: #2a3c59;
+}
+
+body[data-theme="dark"] #overviewFilesystemSection {
+  background: #111b2f !important;
+  border-color: #2a3c59 !important;
+}
+
+body[data-theme="dark"] #overviewFilesystemSection .fs-focus-header {
+  background: #1a2540;
+  border-color: #2a3c59;
+}
+
+body[data-theme="dark"] #overviewFilesystemSection .fs-focus-header h4 {
+  color: var(--text);
 }
 
 body[data-theme="dark"] .alerts-panel {
