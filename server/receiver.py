@@ -152,6 +152,15 @@ def init_db() -> None:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN warning_window_minutes INTEGER NOT NULL DEFAULT 15")
         if "critical_trigger_immediate" not in existing_alarm_columns:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN critical_trigger_immediate INTEGER NOT NULL DEFAULT 1")
+        if "alert_reminder_interval_hours" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN alert_reminder_interval_hours INTEGER NOT NULL DEFAULT 0")
+
+        existing_alert_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(alerts)").fetchall()
+        }
+        if "last_reminder_sent_utc" not in existing_alert_columns:
+            conn.execute("ALTER TABLE alerts ADD COLUMN last_reminder_sent_utc TEXT")
 
         conn.execute(
             """
@@ -1792,6 +1801,7 @@ def alert_instant_mail_subject(event_type: str, hostname: str, severity: str, di
         "opened": "Alarm ausgelöst",
         "escalated": "Alarm eskaliert",
         "resolved": "Alarm behoben",
+        "reminder": "Heads-Up: Alert noch offen",
     }.get(event_type, "Alarm")
     title_target = display_name.strip() or hostname
     return f"[Monitoring][{sev_label}] {event_label}: {title_target}"
@@ -1821,6 +1831,7 @@ def alert_instant_mail_html(
         "opened": "Alarm ausgelöst",
         "escalated": "Alarm eskaliert",
         "resolved": "Alarm behoben",
+        "reminder": "Heads-Up: Alert noch offen",
     }.get(event_type, "Alarm")
     used_str = f"{used_percent:.1f}"
     customer_title = display_name.strip() or hostname
@@ -2561,6 +2572,134 @@ def send_microsoft_mail_multi(
     return True, f"sent to {sent_count} recipient(s)"
 
 
+def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
+    alarm_settings = get_alarm_settings(conn)
+    interval_hours = int(alarm_settings.get("alert_reminder_interval_hours") or 0)
+    if interval_hours <= 0:
+        return
+
+    now_utc_dt = datetime.now(timezone.utc)
+    cutoff_iso = (now_utc_dt - timedelta(hours=interval_hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    open_alerts = conn.execute(
+        """
+        SELECT id, hostname, mountpoint, severity, used_percent
+        FROM alerts
+        WHERE status = 'open'
+          AND created_at_utc <= ?
+          AND (last_reminder_sent_utc IS NULL OR last_reminder_sent_utc <= ?)
+        ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, used_percent DESC
+        """,
+        (cutoff_iso, cutoff_iso),
+    ).fetchall()
+
+    if not open_alerts:
+        return
+
+    now_utc_iso = now_utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    host_context_cache: dict[str, dict] = {}
+
+    try:
+        user_rows = conn.execute(
+            """
+            SELECT u.username, COALESCE(s.alert_instant_min_severity, 'warning')
+            FROM web_users u
+            JOIN web_user_settings s ON s.username = u.username
+            WHERE COALESCE(u.is_disabled, 0) = 0
+              AND COALESCE(s.alert_instant_mail_enabled, 0) = 1
+              AND COALESCE(s.email_enabled, 0) = 1
+              AND COALESCE(s.email_recipient, '') != ''
+            """
+        ).fetchall()
+    except Exception:
+        return
+
+    if not user_rows:
+        return
+
+    for alert_row in open_alerts:
+        alert_id = int(alert_row[0])
+        hostname = str(alert_row[1] or "")
+        mountpoint = str(alert_row[2] or "")
+        severity = str(alert_row[3] or "warning")
+        used_percent = float(alert_row[4] or 0)
+
+        if hostname not in host_context_cache:
+            host_context_cache[hostname] = collect_host_mail_context(conn, hostname)
+        host_ctx = host_context_cache[hostname]
+
+        reported_row = conn.execute(
+            "SELECT created_at_utc FROM alerts WHERE id = ?",
+            (alert_id,),
+        ).fetchone()
+        reported_at_utc = str(reported_row[0] or "") if reported_row else now_utc_iso
+
+        sent_to_anyone = False
+        for urow in user_rows:
+            username = str(urow[0] or "").strip()
+            min_severity = str(urow[1] or "warning").strip().lower()
+            if not username:
+                continue
+            if min_severity == "critical" and severity != "critical":
+                continue
+
+            sub = conn.execute(
+                "SELECT notify_mail FROM web_user_alert_subscriptions WHERE username = ? AND hostname = ?",
+                (username, hostname),
+            ).fetchone()
+            if not sub or not bool(sub[0]):
+                continue
+
+            user_settings = get_web_user_settings(conn, username)
+            recipient = user_settings.get("email_recipient", "").strip()
+            if not recipient:
+                continue
+            extra = parse_email_recipients(user_settings.get("alert_email_recipients", ""))
+            all_recipients = parse_email_recipients(",".join([recipient] + extra))
+            if not all_recipients:
+                continue
+
+            try:
+                ok_token, access_token, _err = ensure_microsoft_access_token(conn, username)
+                if not ok_token:
+                    continue
+                graph_cid, graph_attachment = build_alert_usage_graph_attachment(
+                    conn, hostname, mountpoint, severity=severity, hours=24
+                )
+                graph_attachments = [graph_attachment] if graph_attachment else []
+                subject = f"[Monitoring][HEADS-UP] Offener Alert: {html.escape(str(host_ctx.get('display_name', hostname)))}"
+                body = alert_instant_mail_html(
+                    username,
+                    "reminder",
+                    hostname,
+                    mountpoint,
+                    severity,
+                    used_percent,
+                    display_name=str(host_ctx.get("display_name", "") or ""),
+                    country_code=str(host_ctx.get("country_code", "") or ""),
+                    os_family=str(host_ctx.get("os_family", "linux") or "linux"),
+                    reported_at_utc=reported_at_utc,
+                    graph_cid=graph_cid or "",
+                )
+                send_microsoft_mail_multi(
+                    access_token,
+                    all_recipients,
+                    subject,
+                    body,
+                    content_type="HTML",
+                    attachments=graph_attachments,
+                )
+                sent_to_anyone = True
+            except Exception:
+                pass
+
+        if sent_to_anyone:
+            conn.execute(
+                "UPDATE alerts SET last_reminder_sent_utc = ? WHERE id = ?",
+                (now_utc_iso, alert_id),
+            )
+
+
 def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
     now_local = datetime.now(SCHEDULE_TIMEZONE)
     today_local = now_local.date().isoformat()
@@ -2681,7 +2820,8 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
         """
         SELECT warning_threshold_percent, critical_threshold_percent,
                warning_consecutive_hits, warning_window_minutes, critical_trigger_immediate,
-               telegram_enabled, telegram_bot_token, telegram_chat_id, updated_at_utc
+               telegram_enabled, telegram_bot_token, telegram_chat_id, updated_at_utc,
+               COALESCE(alert_reminder_interval_hours, 0)
         FROM alarm_settings
         WHERE id = 1
         """
@@ -2698,6 +2838,7 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
             "telegram_bot_token": TELEGRAM_BOT_TOKEN_DEFAULT,
             "telegram_chat_id": TELEGRAM_CHAT_ID_DEFAULT,
             "updated_at_utc": "",
+            "alert_reminder_interval_hours": 0,
         }
 
     return {
@@ -2710,6 +2851,7 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
         "telegram_bot_token": str(row[6] or ""),
         "telegram_chat_id": str(row[7] or ""),
         "updated_at_utc": str(row[8] or ""),
+        "alert_reminder_interval_hours": max(0, int(row[9] or 0)) if row[9] is not None else 0,
     }
 
 
@@ -2752,6 +2894,7 @@ def normalize_alarm_settings_payload(payload: dict, existing: dict | None = None
         "telegram_enabled": coerce_bool(payload.get("telegram_enabled", base.get("telegram_enabled", False))),
         "telegram_bot_token": str(payload.get("telegram_bot_token", base.get("telegram_bot_token", "")) or "").strip(),
         "telegram_chat_id": str(payload.get("telegram_chat_id", base.get("telegram_chat_id", "")) or "").strip(),
+        "alert_reminder_interval_hours": max(0, min(int(payload.get("alert_reminder_interval_hours", base.get("alert_reminder_interval_hours", 0)) or 0), 168)),
     }
 
 
@@ -2772,9 +2915,10 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,
-            updated_at_utc
+            updated_at_utc,
+            alert_reminder_interval_hours
         )
-        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             warning_threshold_percent = excluded.warning_threshold_percent,
             critical_threshold_percent = excluded.critical_threshold_percent,
@@ -2784,7 +2928,8 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             telegram_enabled = excluded.telegram_enabled,
             telegram_bot_token = excluded.telegram_bot_token,
             telegram_chat_id = excluded.telegram_chat_id,
-            updated_at_utc = excluded.updated_at_utc
+            updated_at_utc = excluded.updated_at_utc,
+            alert_reminder_interval_hours = excluded.alert_reminder_interval_hours
         """,
         (
             normalized["warning_threshold_percent"],
@@ -2796,6 +2941,7 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             normalized["telegram_bot_token"],
             normalized["telegram_chat_id"],
             now_utc,
+            normalized["alert_reminder_interval_hours"],
         ),
     )
 
@@ -5627,6 +5773,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 resolve_open_alerts_for_host(conn, hostname, report_id)
             else:
                 update_alerts_for_report(conn, hostname, report_id, filesystems, alarm_settings)
+            maybe_send_alert_reminders(conn)
             maybe_send_scheduled_user_mails(conn)
             conn.commit()
 

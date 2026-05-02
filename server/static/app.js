@@ -745,6 +745,7 @@ async function loadAlarmSettings(force = false) {
   const telegramEnabledInput = document.getElementById("telegramEnabledInput");
   const telegramBotTokenInput = document.getElementById("telegramBotTokenInput");
   const telegramChatIdInput = document.getElementById("telegramChatIdInput");
+  const alertReminderIntervalHoursInput = document.getElementById("alertReminderIntervalHoursInput");
 
   try {
     const response = await fetch("/api/v1/alarm-settings");
@@ -761,6 +762,7 @@ async function loadAlarmSettings(force = false) {
     telegramEnabledInput.checked = settings.telegram_enabled === true;
     telegramBotTokenInput.value = asText(settings.telegram_bot_token, "") === "-" ? "" : String(settings.telegram_bot_token || "");
     telegramChatIdInput.value = asText(settings.telegram_chat_id, "") === "-" ? "" : String(settings.telegram_chat_id || "");
+    alertReminderIntervalHoursInput.value = String(Number(settings.alert_reminder_interval_hours || 0));
 
     state.alarmSettingsLoaded = true;
     setAlarmSettingsStatus("Einstellungen geladen.");
@@ -1328,6 +1330,7 @@ async function saveAlarmSettings() {
   const critical = Number(criticalInput.value);
   const warningConsecutiveHits = Number(warningConsecutiveHitsInput.value);
   const warningWindowMinutes = Number(warningWindowMinutesInput.value);
+  const alertReminderIntervalHours = Number(document.getElementById("alertReminderIntervalHoursInput")?.value || 0);
 
   if (!Number.isFinite(warning) || !Number.isFinite(critical) || warning < 1 || critical > 100 || warning >= critical) {
     throw new Error("Schwellwerte ungueltig: Warnung muss kleiner als Kritisch sein.");
@@ -1348,6 +1351,7 @@ async function saveAlarmSettings() {
     telegram_enabled: telegramEnabledInput.checked,
     telegram_bot_token: telegramBotTokenInput.value.trim(),
     telegram_chat_id: telegramChatIdInput.value.trim(),
+    alert_reminder_interval_hours: Number.isFinite(alertReminderIntervalHours) ? Math.max(0, Math.min(168, Math.floor(alertReminderIntervalHours))) : 0,
   };
 
   const response = await fetch("/api/v1/alarm-settings", {
