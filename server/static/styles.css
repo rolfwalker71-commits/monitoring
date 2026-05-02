@@ -1978,17 +1978,18 @@ button:hover:not(.host-item) {
   margin: 0;
 }
 
-#overviewFilesystemSection #filesystemCharts,
-#overviewFilesystemSection .table-wrap {
-  padding: 0 12px;
-}
-
 #overviewFilesystemSection #filesystemCharts {
-  padding-top: 12px;
+  padding: 12px 12px 0 12px;
 }
 
-#overviewFilesystemSection .table-wrap {
-  padding-bottom: 12px;
+#overviewFilesystemSection .detail-card {
+  margin: 12px;
+  margin-top: 12px;
+}
+
+#overviewFilesystemSection .detail-card h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
 }
 
 .resource-charts {
@@ -3206,6 +3207,11 @@ body[data-theme="dark"] #overviewFilesystemSection .fs-focus-header {
 
 body[data-theme="dark"] #overviewFilesystemSection .fs-focus-header h4 {
   color: var(--text);
+}
+
+body[data-theme="dark"] #overviewFilesystemSection .detail-card {
+  background: #151f35;
+  border-color: #2a3c59;
 }
 
 body[data-theme="dark"] .alerts-panel {
