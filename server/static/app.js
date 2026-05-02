@@ -2482,6 +2482,59 @@ function renderReportCard(report) {
   const queueDepth = queueDepthLabel(payload.queue_depth);
   const section = normalizeReportSection(state.reportSection);
 
+  // Helper function to render meta-group items
+  function renderMetaItem(icon, label, value) {
+    return `<p class="meta-group-item"><strong>${icon} ${label}</strong><span>${escapeHtml(asText(value || "-"))}</span></p>`;
+  }
+
+  // Build grouped meta sections
+  const agentGroup = `
+    <div class="meta-group">
+      <div class="meta-group-title">🤖 Agent-Info</div>
+      <div class="meta-group-content">
+        ${renderMetaItem("🆔", "Agent ID", report.agent_id || payload.agent_id)}
+        ${renderMetaItem("🧷", "Version", payload.agent_version)}
+        ${renderMetaItem("🔐", "API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}
+      </div>
+    </div>
+  `;
+
+  const systemGroup = `
+    <div class="meta-group">
+      <div class="meta-group-title">🖥️ System</div>
+      <div class="meta-group-content">
+        ${renderMetaItem("🐧", "OS", payload.os)}
+        ${renderMetaItem("⚙️", "Kernel", payload.kernel)}
+        ${renderMetaItem("⏱️", "Uptime", formatUptime(payload.uptime_seconds))}
+        ${renderMetaItem("🗃️", "Queue", queueDepth + " Dateien")}
+      </div>
+    </div>
+  `;
+
+  const resourcesGroup = `
+    <div class="meta-group">
+      <div class="meta-group-title">📊 Ressourcen</div>
+      <div class="meta-group-content">
+        ${renderMetaItem("🧠", "CPU", formatPercent(cpu.usage_percent) + " | load " + formatNumber(cpu.load_avg_1, 2) + " / " + formatNumber(cpu.load_avg_5, 2) + " / " + formatNumber(cpu.load_avg_15, 2))}
+        ${renderMetaItem("🧮", "RAM", formatPercent(memory.used_percent) + " | " + formatKilobytes(memory.used_kb) + " / " + formatKilobytes(memory.total_kb))}
+        ${renderMetaItem("💤", "Swap", formatPercent(swap.used_percent) + " | " + formatKilobytes(swap.used_kb) + " / " + formatKilobytes(swap.total_kb))}
+      </div>
+    </div>
+  `;
+
+  const networkGroup = `
+    <div class="meta-group">
+      <div class="meta-group-title">🌐 Netzwerk</div>
+      <div class="meta-group-content">
+        ${renderMetaItem("🌍", "Primary IP", report.primary_ip || payload.primary_ip)}
+        ${renderMetaItem("🔌", "Std. NIC IP", defaultNicIpv4 || "-")}
+        ${renderMetaItem("🌍", "Default NIC", network.default_interface)}
+        ${renderMetaItem("🛣️", "Default GW", network.default_gateway)}
+        ${renderMetaItem("🧭", "DNS", formatDnsServers(network.dns_servers))}
+      </div>
+    </div>
+  `;
+
   let detailContent = "";
   if (section === "journal") {
     detailContent = `
@@ -2509,7 +2562,7 @@ function renderReportCard(report) {
     `;
   } else {
     detailContent = `
-      <h4>🌐 Netzwerk</h4>
+      <h4>🌐 Netzwerk-Details</h4>
       ${renderNetworkTable(network)}
 
       <h4>💾 Filesysteme</h4>
@@ -2527,22 +2580,11 @@ function renderReportCard(report) {
         <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
       </div>
 
-      <div class="meta-grid">
-        <p><strong>🆔 Agent ID</strong><span>${escapeHtml(asText(report.agent_id || payload.agent_id))}</span></p>
-        <p><strong>🧷 Agent Version</strong><span>${escapeHtml(asText(payload.agent_version))}</span></p>
-        <p><strong>🔐 API-Key</strong><span>${escapeHtml(formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}</span></p>
-        <p><strong>🌐 Primary IP</strong><span>${escapeHtml(asText(report.primary_ip || payload.primary_ip))}</span></p>
-        <p><strong>🔌 IP (Default NIC)</strong><span>${escapeHtml(asText(defaultNicIpv4 || "-"))}</span></p>
-        <p><strong>🐧 OS</strong><span>${escapeHtml(asText(payload.os))}</span></p>
-        <p><strong>⚙️ Kernel</strong><span>${escapeHtml(asText(payload.kernel))}</span></p>
-        <p><strong>⏱️ Uptime</strong><span>${escapeHtml(formatUptime(payload.uptime_seconds))}</span></p>
-        <p><strong>🗃️ Queue</strong><span>${queueDepth} Dateien</span></p>
-        <p><strong>🧠 CPU</strong><span>${formatPercent(cpu.usage_percent)} | load ${formatNumber(cpu.load_avg_1, 2)} / ${formatNumber(cpu.load_avg_5, 2)} / ${formatNumber(cpu.load_avg_15, 2)}</span></p>
-        <p><strong>🧮 RAM</strong><span>${formatPercent(memory.used_percent)} | ${formatKilobytes(memory.used_kb)} / ${formatKilobytes(memory.total_kb)}</span></p>
-        <p><strong>💤 Swap</strong><span>${formatPercent(swap.used_percent)} | ${formatKilobytes(swap.used_kb)} / ${formatKilobytes(swap.total_kb)}</span></p>
-        <p><strong>🌍 Default NIC</strong><span>${escapeHtml(asText(network.default_interface))}</span></p>
-        <p><strong>🛣️ Default GW</strong><span>${escapeHtml(asText(network.default_gateway))}</span></p>
-        <p><strong>🧭 DNS</strong><span>${escapeHtml(formatDnsServers(network.dns_servers))}</span></p>
+      <div class="meta-groups">
+        ${agentGroup}
+        ${systemGroup}
+        ${resourcesGroup}
+        ${networkGroup}
       </div>
       ${detailContent}
     </article>

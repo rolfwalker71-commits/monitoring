@@ -2471,6 +2471,50 @@ button:hover:not(.host-item) {
   font-size: 12px;
 }
 
+.meta-groups {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.meta-group {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px;
+  background: var(--card-bg);
+}
+
+.meta-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0 0 8px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.meta-group-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.meta-group-item {
+  margin: 0;
+  display: flex;
+  gap: 8px;
+  line-height: 1.25;
+  font-size: 13px;
+}
+
+.meta-group-item strong {
+  min-width: 80px;
+  color: var(--muted);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
 .report-card h4 {
   margin: 6px 0 4px;
   font-size: 13px;
@@ -2506,6 +2550,10 @@ th {
 }
 
 @media (max-width: 760px) {
+  .meta-groups {
+    grid-template-columns: 1fr;
+  }
+
   .panel-header {
     align-items: flex-start;
     flex-direction: column;
