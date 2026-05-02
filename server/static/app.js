@@ -4234,7 +4234,8 @@ async function init() {
   document.getElementById("hostAlertFilterSelect").value = state.hostAlertFilter;
   document.getElementById("hostMutedFilterSelect").value = state.hostMutedFilter;
   document.getElementById("hostSearchInput").value = state.hostSearchQuery;
-  document.getElementById("loginUsernameInput").value = "admin";
+  document.getElementById("loginUsernameInput").value = "";
+  document.getElementById("loginPasswordInput").value = "";
   const isAuthenticated = await ensureAuthenticatedSession();
   if (!isAuthenticated) {
     setLoginStatus("Bitte anmelden, um den Webclient zu nutzen.");
