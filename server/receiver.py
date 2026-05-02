@@ -2131,14 +2131,15 @@ def send_instant_alert_telegram_to_users(
         if min_severity == "critical" and severity not in {"critical"}:
             continue
 
+        sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
         text = (
             f"{icon}\n"
-            f"User: {username}\n"
-            f"Host: {title} ({hostname})\n"
-            f"Mountpoint: {mountpoint}\n"
-            f"Severity: {severity}\n"
-            f"Used: {used_percent:.1f}%\n"
-            f"Zeit: {now_local}"
+            f"👤 {username}\n"
+            f"🖥️ {title} ({hostname})\n"
+            f"📂 {mountpoint}\n"
+            f"{sev_icon} {severity}\n"
+            f"📊 {used_percent:.1f}%\n"
+            f"🕐 {now_local}"
         )
         telegram_send_to_chat(bot_token, chat_id, text)
 
@@ -3116,15 +3117,16 @@ def maybe_send_alert_message(
             "escalated": "⬆️ ALERT ESCALATED",
             "resolved": "✅ ALERT RESOLVED",
         }.get(event_type, "⚠️ ALERT")
+        sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
         title = display_name.strip() if display_name.strip() else hostname
         now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
         text = (
             f"{icon}\n"
-            f"Host: {title} ({hostname})\n"
-            f"Mountpoint: {mountpoint}\n"
-            f"Severity: {severity}\n"
-            f"Used: {used_percent:.1f}%\n"
-            f"Zeit: {now_local}"
+            f"🖥️ {title} ({hostname})\n"
+            f"📂 {mountpoint}\n"
+            f"{sev_icon} {severity}\n"
+            f"📊 {used_percent:.1f}%\n"
+            f"🕐 {now_local}"
         )
         telegram_send(settings, text)
     if conn is not None:
