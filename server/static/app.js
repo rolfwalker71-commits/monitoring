@@ -3183,6 +3183,13 @@ async function loadHosts(options = {}) {
       state.selectedHost = String(orderedHosts[0].hostname || "");
       state.selectedDisplayName = String(orderedHosts[0].display_name || orderedHosts[0].hostname || "");
       state.reportOffset = 0;
+      renderHosts(hosts);
+      if (preserveScroll && hostList) hostList.scrollTop = previousScrollTop;
+      updatePagerButtons();
+      loadReportsForHost();
+      loadAnalysisForHost();
+      loadAlertsForHost();
+      return;
     }
 
     const selectedHost = orderedHosts.find((host) => String(host.hostname || "") === state.selectedHost);
