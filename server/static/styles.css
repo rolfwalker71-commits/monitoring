@@ -418,7 +418,8 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 .alarm-settings-grid input[type="text"],
 .alarm-settings-grid input[type="email"],
 .alarm-settings-grid input[type="password"],
-.alarm-settings-grid input[type="time"] {
+.alarm-settings-grid input[type="time"],
+.alarm-settings-grid select {
   border: 1px solid #cfd9e6;
   border-radius: 8px;
   padding: 7px 8px;
@@ -441,6 +442,15 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .user-create-grid {
   grid-template-columns: repeat(3, minmax(180px, 1fr));
+}
+
+.user-alert-subscription-grid {
+  grid-template-columns: repeat(3, minmax(200px, 1fr));
+}
+
+.user-alert-host-cell {
+  display: grid;
+  gap: 2px;
 }
 
 .user-management-table-wrap {
@@ -513,14 +523,16 @@ button:disabled {
 }
 
 @media (max-width: 980px) {
-  .user-create-grid {
+  .user-create-grid,
+  .user-alert-subscription-grid {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
   }
 }
 
 @media (max-width: 760px) {
   .alarm-settings-grid,
-  .user-create-grid {
+  .user-create-grid,
+  .user-alert-subscription-grid {
     grid-template-columns: 1fr;
   }
 }

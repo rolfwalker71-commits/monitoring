@@ -58,6 +58,9 @@ const state = {
   oauthSettingsLoaded: false,
   userManagementLoaded: false,
   hostFilterNoMatches: false,
+  userAlertSubscriptionsLoaded: false,
+  userAlertSubscriptions: [],
+  userAlertAvailableHosts: [],
 };
 
 const ANALYSIS_RANGE_OPTIONS = new Map([
@@ -518,6 +521,15 @@ function setUserManagementStatus(message, isError = false) {
   statusEl.classList.toggle("status-error", isError);
 }
 
+function setUserAlertSubscriptionsStatus(message, isError = false) {
+  const statusEl = document.getElementById("userAlertSubscriptionsStatus");
+  if (!statusEl) {
+    return;
+  }
+  statusEl.textContent = message;
+  statusEl.classList.toggle("status-error", isError);
+}
+
 function setLoginStatus(message, isError = false) {
   const statusEl = document.getElementById("loginStatus");
   if (!statusEl) {
@@ -562,6 +574,9 @@ function setAuthUiState(authenticated) {
     state.userProfileLoaded = false;
     state.oauthSettingsLoaded = false;
     state.userManagementLoaded = false;
+    state.userAlertSubscriptionsLoaded = false;
+    state.userAlertSubscriptions = [];
+    state.userAlertAvailableHosts = [];
   }
   updateAdminSettingsVisibility();
 }
@@ -748,6 +763,8 @@ async function loadUserProfile(force = false) {
   const alertRecipientsInput = document.getElementById("alertEmailRecipientsInput");
   const alertInstantEnabledInput = document.getElementById("alertInstantMailEnabledInput");
   const alertInstantMinSeveritySelect = document.getElementById("alertInstantMinSeveritySelect");
+  const alertInstantTelegramEnabledInput = document.getElementById("alertInstantTelegramEnabledInput");
+  const alertTelegramChatIdInput = document.getElementById("alertTelegramChatIdInput");
   const trendTestButton = document.getElementById("testTrendDigestMailButton");
   const alertTestButton = document.getElementById("testAlertDigestMailButton");
 
@@ -766,6 +783,8 @@ async function loadUserProfile(force = false) {
     alertRecipientsInput.value = asText(profile.alert_email_recipients, "") === "-" ? "" : asText(profile.alert_email_recipients, "");
     if (alertInstantEnabledInput) alertInstantEnabledInput.checked = profile.alert_instant_mail_enabled === true;
     if (alertInstantMinSeveritySelect) alertInstantMinSeveritySelect.value = profile.alert_instant_min_severity || "warning";
+    if (alertInstantTelegramEnabledInput) alertInstantTelegramEnabledInput.checked = profile.alert_instant_telegram_enabled === true;
+    if (alertTelegramChatIdInput) alertTelegramChatIdInput.value = asText(profile.alert_telegram_chat_id, "") === "-" ? "" : asText(profile.alert_telegram_chat_id, "");
 
     const oauth = profile.microsoft_oauth || {};
     const oauthConnected = oauth.connected === true;
@@ -811,6 +830,8 @@ async function saveUserProfile() {
     alert_email_recipients: document.getElementById("alertEmailRecipientsInput").value.trim(),
     alert_instant_mail_enabled: document.getElementById("alertInstantMailEnabledInput")?.checked ?? false,
     alert_instant_min_severity: document.getElementById("alertInstantMinSeveritySelect")?.value || "warning",
+    alert_instant_telegram_enabled: document.getElementById("alertInstantTelegramEnabledInput")?.checked ?? false,
+    alert_telegram_chat_id: document.getElementById("alertTelegramChatIdInput")?.value.trim() || "",
   };
 
   if (payload.email_enabled && !payload.email_recipient) {
@@ -1082,10 +1103,240 @@ async function sendAlertDigestMailTest() {
   setUserMailSettingsStatus("Alarm-Testmail versendet.");
 }
 
+function normalizeHostLabelMap(hosts = []) {
+  const map = new Map();
+  for (const host of hosts) {
+    const hostname = asText(host.hostname, "").trim();
+    if (!hostname) {
+      continue;
+    }
+    const displayName = asText(host.display_name, hostname).trim() || hostname;
+    map.set(hostname, displayName);
+  }
+  return map;
+}
+
+function renderUserAlertSubscriptionRows(subscriptions = []) {
+  if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
+    return '<tr><td colspan="4" class="muted">Noch keine Host-Abos konfiguriert.</td></tr>';
+  }
+
+  return subscriptions
+    .slice()
+    .sort((left, right) => {
+      const leftLabel = asText(left.display_name || left.hostname, "").toLowerCase();
+      const rightLabel = asText(right.display_name || right.hostname, "").toLowerCase();
+      return leftLabel.localeCompare(rightLabel);
+    })
+    .map((item) => {
+      const hostname = asText(item.hostname, "");
+      const displayName = asText(item.display_name, hostname);
+      const hostnameEnc = encodeURIComponent(hostname);
+      const mailBadge = item.notify_mail === true
+        ? '<span class="user-flag-pill on">Mail</span>'
+        : '<span class="user-flag-pill off">Mail aus</span>';
+      const telegramBadge = item.notify_telegram === true
+        ? '<span class="user-flag-pill on">Telegram</span>'
+        : '<span class="user-flag-pill off">Telegram aus</span>';
+      return `
+        <tr>
+          <td>
+            <div class="user-alert-host-cell">
+              <strong>${escapeHtml(displayName)}</strong>
+              ${displayName !== hostname ? `<span class="global-hostname-sub">(${escapeHtml(hostname)})</span>` : ""}
+            </div>
+          </td>
+          <td>${mailBadge}</td>
+          <td>${telegramBadge}</td>
+          <td>
+            <div class="user-management-actions">
+              <button type="button" data-user-alert-action="test-mail" data-hostname-enc="${hostnameEnc}">Mail Test</button>
+              <button type="button" data-user-alert-action="test-telegram" data-hostname-enc="${hostnameEnc}">Telegram Test</button>
+              <button type="button" data-user-alert-action="remove" data-hostname-enc="${hostnameEnc}">Entfernen</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+function renderUserAlertHostOptions() {
+  const hostSelect = document.getElementById("userAlertHostSelect");
+  if (!hostSelect) {
+    return;
+  }
+
+  const labelMap = normalizeHostLabelMap(state.userAlertAvailableHosts || []);
+  for (const sub of state.userAlertSubscriptions || []) {
+    const hostname = asText(sub.hostname, "").trim();
+    if (!hostname || labelMap.has(hostname)) {
+      continue;
+    }
+    labelMap.set(hostname, asText(sub.display_name, hostname));
+  }
+
+  const options = [...labelMap.entries()]
+    .sort((left, right) => left[1].toLowerCase().localeCompare(right[1].toLowerCase()))
+    .map(([hostname, displayName]) => {
+      const label = displayName === hostname ? hostname : `${displayName} (${hostname})`;
+      return `<option value="${escapeHtml(hostname)}">${escapeHtml(label)}</option>`;
+    })
+    .join("");
+
+  hostSelect.innerHTML = `<option value="">Host waehlen...</option>${options}`;
+}
+
+function refreshUserAlertSubscriptionTable() {
+  const rowsEl = document.getElementById("userAlertSubscriptionsRows");
+  if (!rowsEl) {
+    return;
+  }
+  rowsEl.innerHTML = renderUserAlertSubscriptionRows(state.userAlertSubscriptions || []);
+  wireUserAlertSubscriptionActions();
+}
+
+function upsertUserAlertSubscriptionFromForm() {
+  const hostSelect = document.getElementById("userAlertHostSelect");
+  const mailInput = document.getElementById("userAlertNotifyMailInput");
+  const telegramInput = document.getElementById("userAlertNotifyTelegramInput");
+  const hostname = asText(hostSelect?.value, "").trim();
+
+  if (!hostname) {
+    throw new Error("Bitte zuerst einen Host auswaehlen.");
+  }
+
+  const notifyMail = mailInput?.checked === true;
+  const notifyTelegram = telegramInput?.checked === true;
+  if (!notifyMail && !notifyTelegram) {
+    throw new Error("Mindestens ein Kanal (Mail oder Telegram) muss aktiv sein.");
+  }
+
+  const labelMap = normalizeHostLabelMap(state.userAlertAvailableHosts || []);
+  const displayName = labelMap.get(hostname) || hostname;
+  const next = Array.isArray(state.userAlertSubscriptions) ? [...state.userAlertSubscriptions] : [];
+  const index = next.findIndex((item) => asText(item.hostname, "") === hostname);
+  const payload = {
+    hostname,
+    display_name: displayName,
+    notify_mail: notifyMail,
+    notify_telegram: notifyTelegram,
+  };
+
+  if (index >= 0) {
+    next[index] = payload;
+  } else {
+    next.push(payload);
+  }
+
+  state.userAlertSubscriptions = next;
+  refreshUserAlertSubscriptionTable();
+  setUserAlertSubscriptionsStatus(`Abo fuer ${displayName} vorbereitet. Jetzt speichern.`);
+}
+
+async function saveUserAlertSubscriptions() {
+  const response = await fetch("/api/v1/user-alert-subscriptions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      subscriptions: state.userAlertSubscriptions || [],
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || data.details || ("HTTP " + response.status));
+  }
+  state.userAlertSubscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
+  refreshUserAlertSubscriptionTable();
+  setUserAlertSubscriptionsStatus("Host-Abos gespeichert.");
+}
+
+async function sendUserAlertSubscriptionTest(hostname, channel) {
+  const response = await fetch("/api/v1/user-alert-subscriptions/test", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ hostname, channel }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || data.details || ("HTTP " + response.status));
+  }
+  setUserAlertSubscriptionsStatus(`${channel === "mail" ? "Mail" : "Telegram"}-Test fuer ${hostname} versendet.`);
+}
+
+function wireUserAlertSubscriptionActions() {
+  const rowsEl = document.getElementById("userAlertSubscriptionsRows");
+  if (!rowsEl) {
+    return;
+  }
+
+  rowsEl.querySelectorAll("[data-user-alert-action]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const action = button.getAttribute("data-user-alert-action") || "";
+      const hostname = decodeURIComponent(button.getAttribute("data-hostname-enc") || "");
+      if (!action || !hostname) {
+        return;
+      }
+
+      try {
+        if (action === "remove") {
+          state.userAlertSubscriptions = (state.userAlertSubscriptions || []).filter((item) => asText(item.hostname, "") !== hostname);
+          refreshUserAlertSubscriptionTable();
+          setUserAlertSubscriptionsStatus(`Abo fuer ${hostname} entfernt. Jetzt speichern.`);
+          return;
+        }
+        if (action === "test-mail") {
+          await sendUserAlertSubscriptionTest(hostname, "mail");
+          return;
+        }
+        if (action === "test-telegram") {
+          await sendUserAlertSubscriptionTest(hostname, "telegram");
+        }
+      } catch (error) {
+        setUserAlertSubscriptionsStatus(error.message, true);
+      }
+    });
+  });
+}
+
+async function loadUserAlertSubscriptions(force = false) {
+  if (state.userAlertSubscriptionsLoaded && !force) {
+    return;
+  }
+
+  const rowsEl = document.getElementById("userAlertSubscriptionsRows");
+  if (!rowsEl) {
+    return;
+  }
+
+  rowsEl.innerHTML = '<tr><td colspan="4" class="muted">Lade Host-Abos...</td></tr>';
+  try {
+    const response = await fetch("/api/v1/user-alert-subscriptions");
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+    const data = await response.json();
+    state.userAlertAvailableHosts = Array.isArray(data.available_hosts) ? data.available_hosts : [];
+    state.userAlertSubscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
+    renderUserAlertHostOptions();
+    refreshUserAlertSubscriptionTable();
+    state.userAlertSubscriptionsLoaded = true;
+    setUserAlertSubscriptionsStatus("Host-Abos geladen.");
+  } catch (error) {
+    rowsEl.innerHTML = `<tr><td colspan="4" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+    setUserAlertSubscriptionsStatus(`Fehler beim Laden: ${error.message}`, true);
+  }
+}
+
 async function loadSettingsPanel(force = false) {
   updateAdminSettingsVisibility();
   await loadAlarmSettings(force);
   await loadUserProfile(force);
+  await loadUserAlertSubscriptions(force);
   if (state.isAdmin) {
     await loadOauthSettings(force);
     await loadWebUsers(force);
@@ -3740,6 +3991,22 @@ function wireEvents() {
       await saveUserProfile();
     } catch (error) {
       setUserMailSettingsStatus(error.message, true);
+    }
+  });
+
+  document.getElementById("addUserAlertSubscriptionButton").addEventListener("click", () => {
+    try {
+      upsertUserAlertSubscriptionFromForm();
+    } catch (error) {
+      setUserAlertSubscriptionsStatus(error.message, true);
+    }
+  });
+
+  document.getElementById("saveUserAlertSubscriptionsButton").addEventListener("click", async () => {
+    try {
+      await saveUserAlertSubscriptions();
+    } catch (error) {
+      setUserAlertSubscriptionsStatus(error.message, true);
     }
   });
 

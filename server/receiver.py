@@ -270,6 +270,29 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_instant_mail_enabled INTEGER NOT NULL DEFAULT 0")
         if "alert_instant_min_severity" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_instant_min_severity TEXT NOT NULL DEFAULT 'warning'")
+        if "alert_instant_telegram_enabled" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_instant_telegram_enabled INTEGER NOT NULL DEFAULT 0")
+        if "alert_telegram_chat_id" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_telegram_chat_id TEXT NOT NULL DEFAULT ''")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS web_user_alert_subscriptions (
+                username TEXT NOT NULL,
+                hostname TEXT NOT NULL,
+                notify_mail INTEGER NOT NULL DEFAULT 1,
+                notify_telegram INTEGER NOT NULL DEFAULT 0,
+                updated_at_utc TEXT NOT NULL,
+                PRIMARY KEY(username, hostname),
+                FOREIGN KEY(username) REFERENCES web_users(username)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_web_user_alert_subscriptions_host
+            ON web_user_alert_subscriptions(hostname)
+            """
+        )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS oauth_settings (
@@ -802,6 +825,7 @@ def delete_web_user(conn: sqlite3.Connection, username: str) -> None:
     conn.execute("DELETE FROM web_sessions WHERE username = ?", (username,))
     conn.execute("DELETE FROM oauth_pending_states WHERE username = ?", (username,))
     conn.execute("DELETE FROM oauth_connections WHERE username = ?", (username,))
+    conn.execute("DELETE FROM web_user_alert_subscriptions WHERE username = ?", (username,))
     conn.execute("DELETE FROM web_user_settings WHERE username = ?", (username,))
     conn.execute("DELETE FROM web_users WHERE username = ?", (username,))
 
@@ -820,6 +844,8 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
                COALESCE(alert_email_last_sent_local_date, ''),
                COALESCE(alert_instant_mail_enabled, 0),
                COALESCE(alert_instant_min_severity, 'warning'),
+             COALESCE(alert_instant_telegram_enabled, 0),
+             COALESCE(alert_telegram_chat_id, ''),
                COALESCE(updated_at_utc, '')
         FROM web_user_settings
         WHERE username = ?
@@ -839,6 +865,8 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
             "alert_email_last_sent_local_date": "",
             "alert_instant_mail_enabled": False,
             "alert_instant_min_severity": "warning",
+            "alert_instant_telegram_enabled": False,
+            "alert_telegram_chat_id": "",
             "updated_at_utc": "",
         }
     return {
@@ -853,7 +881,9 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
         "alert_email_last_sent_local_date": str(row[8] or ""),
         "alert_instant_mail_enabled": bool(int(row[9] or 0)),
         "alert_instant_min_severity": str(row[10] or "warning"),
-        "updated_at_utc": str(row[11] or ""),
+        "alert_instant_telegram_enabled": bool(int(row[11] or 0)),
+        "alert_telegram_chat_id": str(row[12] or ""),
+        "updated_at_utc": str(row[13] or ""),
     }
 
 
@@ -883,6 +913,12 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
     alert_instant_mail_enabled = coerce_bool(payload.get("alert_instant_mail_enabled", existing.get("alert_instant_mail_enabled", False)))
     raw_min_sev = str(payload.get("alert_instant_min_severity", existing.get("alert_instant_min_severity", "warning")) or "warning").strip().lower()
     alert_instant_min_severity = raw_min_sev if raw_min_sev in {"warning", "critical"} else "warning"
+    alert_instant_telegram_enabled = coerce_bool(
+        payload.get("alert_instant_telegram_enabled", existing.get("alert_instant_telegram_enabled", False))
+    )
+    alert_telegram_chat_id = str(
+        payload.get("alert_telegram_chat_id", existing.get("alert_telegram_chat_id", "")) or ""
+    ).strip()
     now_utc = utc_now_iso()
     conn.execute(
         """
@@ -899,9 +935,11 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_email_last_sent_local_date,
             alert_instant_mail_enabled,
             alert_instant_min_severity,
+            alert_instant_telegram_enabled,
+            alert_telegram_chat_id,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             email_enabled = excluded.email_enabled,
             email_recipient = excluded.email_recipient,
@@ -914,6 +952,8 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_email_last_sent_local_date = excluded.alert_email_last_sent_local_date,
             alert_instant_mail_enabled = excluded.alert_instant_mail_enabled,
             alert_instant_min_severity = excluded.alert_instant_min_severity,
+            alert_instant_telegram_enabled = excluded.alert_instant_telegram_enabled,
+            alert_telegram_chat_id = excluded.alert_telegram_chat_id,
             updated_at_utc = excluded.updated_at_utc
         """,
         (
@@ -929,6 +969,8 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_email_last_sent_local_date,
             1 if alert_instant_mail_enabled else 0,
             alert_instant_min_severity,
+            1 if alert_instant_telegram_enabled else 0,
+            alert_telegram_chat_id,
             now_utc,
         ),
     )
@@ -944,8 +986,106 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
         "alert_email_last_sent_local_date": alert_email_last_sent_local_date,
         "alert_instant_mail_enabled": alert_instant_mail_enabled,
         "alert_instant_min_severity": alert_instant_min_severity,
+        "alert_instant_telegram_enabled": alert_instant_telegram_enabled,
+        "alert_telegram_chat_id": alert_telegram_chat_id,
         "updated_at_utc": now_utc,
     }
+
+
+def list_available_alert_hosts(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT DISTINCT r.hostname, COALESCE(h.display_name_override, '')
+        FROM reports r
+        LEFT JOIN host_settings h ON h.hostname = r.hostname
+        WHERE COALESCE(r.hostname, '') != ''
+        ORDER BY LOWER(COALESCE(NULLIF(h.display_name_override, ''), r.hostname)), LOWER(r.hostname)
+        """
+    ).fetchall()
+    return [
+        {
+            "hostname": str(row[0] or ""),
+            "display_name": str(row[1] or "") if str(row[1] or "").strip() else str(row[0] or ""),
+        }
+        for row in rows
+        if str(row[0] or "").strip()
+    ]
+
+
+def get_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT s.hostname,
+               COALESCE(h.display_name_override, ''),
+               COALESCE(s.notify_mail, 0),
+               COALESCE(s.notify_telegram, 0),
+               COALESCE(s.updated_at_utc, '')
+        FROM web_user_alert_subscriptions s
+        LEFT JOIN host_settings h ON h.hostname = s.hostname
+        WHERE s.username = ?
+        ORDER BY LOWER(COALESCE(NULLIF(h.display_name_override, ''), s.hostname)), LOWER(s.hostname)
+        """,
+        (username,),
+    ).fetchall()
+    return [
+        {
+            "hostname": str(row[0] or ""),
+            "display_name": str(row[1] or "") if str(row[1] or "").strip() else str(row[0] or ""),
+            "notify_mail": bool(int(row[2] or 0)),
+            "notify_telegram": bool(int(row[3] or 0)),
+            "updated_at_utc": str(row[4] or ""),
+        }
+        for row in rows
+        if str(row[0] or "").strip()
+    ]
+
+
+def replace_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str, subscriptions: list[dict]) -> list[dict]:
+    user = get_web_user(conn, username)
+    if user is None:
+        raise ValueError("user not found")
+
+    now_utc = utc_now_iso()
+    normalized: dict[str, dict] = {}
+    for item in subscriptions:
+        if not isinstance(item, dict):
+            continue
+        hostname = str(item.get("hostname", "") or "").strip()
+        if not hostname:
+            continue
+        notify_mail = coerce_bool(item.get("notify_mail", False))
+        notify_telegram = coerce_bool(item.get("notify_telegram", False))
+        if not notify_mail and not notify_telegram:
+            continue
+        normalized[hostname] = {
+            "notify_mail": notify_mail,
+            "notify_telegram": notify_telegram,
+        }
+
+    conn.execute("DELETE FROM web_user_alert_subscriptions WHERE username = ?", (username,))
+
+    for hostname, channel_settings in normalized.items():
+        conn.execute(
+            """
+            INSERT INTO web_user_alert_subscriptions (
+                username,
+                hostname,
+                notify_mail,
+                notify_telegram,
+                updated_at_utc
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                username,
+                hostname,
+                1 if channel_settings["notify_mail"] else 0,
+                1 if channel_settings["notify_telegram"] else 0,
+                now_utc,
+            ),
+        )
+
+    return get_web_user_alert_subscriptions(conn, username)
 
 
 def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
@@ -1542,11 +1682,16 @@ def send_instant_alert_mails_to_users(
             SELECT u.username, COALESCE(s.alert_instant_min_severity, 'warning')
             FROM web_users u
             JOIN web_user_settings s ON s.username = u.username
+                        JOIN web_user_alert_subscriptions sub ON sub.username = u.username
             WHERE COALESCE(u.is_disabled, 0) = 0
               AND COALESCE(s.alert_instant_mail_enabled, 0) = 1
               AND COALESCE(s.email_enabled, 0) = 1
               AND COALESCE(s.email_recipient, '') != ''
+                            AND sub.hostname = ?
+                            AND COALESCE(sub.notify_mail, 0) = 1
             """
+                        ,
+                        (hostname,),
         ).fetchall()
     except Exception:
         return
@@ -1591,6 +1736,72 @@ def send_instant_alert_mails_to_users(
             send_microsoft_mail_multi(access_token, all_recipients, subject, body, content_type="HTML")
         except Exception:
             pass
+
+
+def send_instant_alert_telegram_to_users(
+    conn: sqlite3.Connection,
+    event_type: str,
+    hostname: str,
+    mountpoint: str,
+    severity: str,
+    used_percent: float,
+    display_name: str = "",
+) -> None:
+    if event_type not in {"opened", "escalated", "resolved"}:
+        return
+
+    alarm_settings = get_alarm_settings(conn)
+    bot_token = str(alarm_settings.get("telegram_bot_token", "") or "").strip()
+    if not alarm_settings.get("telegram_enabled") or not bot_token:
+        return
+
+    try:
+        rows = conn.execute(
+            """
+            SELECT u.username,
+                   COALESCE(s.alert_instant_min_severity, 'warning'),
+                   COALESCE(s.alert_telegram_chat_id, '')
+            FROM web_users u
+            JOIN web_user_settings s ON s.username = u.username
+            JOIN web_user_alert_subscriptions sub ON sub.username = u.username
+            WHERE COALESCE(u.is_disabled, 0) = 0
+              AND COALESCE(s.alert_instant_telegram_enabled, 0) = 1
+              AND COALESCE(s.alert_telegram_chat_id, '') != ''
+              AND sub.hostname = ?
+              AND COALESCE(sub.notify_telegram, 0) = 1
+            """,
+            (hostname,),
+        ).fetchall()
+    except Exception:
+        return
+
+    icon = {
+        "opened": "🚨 ALERT OPEN",
+        "escalated": "⬆️ ALERT ESCALATED",
+        "resolved": "✅ ALERT RESOLVED",
+    }.get(event_type, "⚠️ ALERT")
+    title = display_name.strip() if display_name.strip() else hostname
+    now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
+
+    for row in rows:
+        username = str(row[0] or "").strip()
+        min_severity = str(row[1] or "warning").strip().lower()
+        chat_id = str(row[2] or "").strip()
+        if not username or not chat_id:
+            continue
+        if min_severity == "critical" and severity not in {"critical"}:
+            continue
+
+        text = (
+            f"{icon}\\n"
+            f"User: {username}\\n"
+            f"Host: {title} ({hostname})\\n"
+            f"Mountpoint: {mountpoint}\\n"
+            f"Severity: {severity}\\n"
+            f"Used: {used_percent:.1f}%\\n"
+            f"Zeit: {now_local}"
+        )
+        telegram_send_to_chat(bot_token, chat_id, text)
 
 
 def get_oauth_settings(conn: sqlite3.Connection) -> dict:
@@ -1854,6 +2065,8 @@ def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
         "alert_email_recipients": settings["alert_email_recipients"],
         "alert_instant_mail_enabled": settings["alert_instant_mail_enabled"],
         "alert_instant_min_severity": settings["alert_instant_min_severity"],
+        "alert_instant_telegram_enabled": settings["alert_instant_telegram_enabled"],
+        "alert_telegram_chat_id": settings["alert_telegram_chat_id"],
         "mail_oauth_available": oauth_is_configured(oauth_settings),
         "microsoft_oauth": {
             "connected": connection is not None,
@@ -2332,15 +2545,7 @@ def evaluate_severity_for_thresholds(used_percent: float, warning_threshold: flo
     return "ok"
 
 
-def telegram_send(settings: dict, text: str) -> tuple[bool, str]:
-    if not settings.get("telegram_enabled"):
-        return False, "telegram disabled"
-
-    bot_token = str(settings.get("telegram_bot_token", "")).strip()
-    chat_id = str(settings.get("telegram_chat_id", "")).strip()
-    if not bot_token or not chat_id:
-        return False, "telegram bot token/chat id missing"
-
+def telegram_send_to_chat(bot_token: str, chat_id: str, text: str) -> tuple[bool, str]:
     endpoint = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = parse.urlencode(
         {
@@ -2361,6 +2566,18 @@ def telegram_send(settings: dict, text: str) -> tuple[bool, str]:
             return False, f"http {resp.status}: {body}"
     except error.URLError as exc:
         return False, str(exc)
+
+
+def telegram_send(settings: dict, text: str) -> tuple[bool, str]:
+    if not settings.get("telegram_enabled"):
+        return False, "telegram disabled"
+
+    bot_token = str(settings.get("telegram_bot_token", "")).strip()
+    chat_id = str(settings.get("telegram_chat_id", "")).strip()
+    if not bot_token or not chat_id:
+        return False, "telegram bot token/chat id missing"
+
+    return telegram_send_to_chat(bot_token, chat_id, text)
 
 
 def maybe_send_alert_message(
@@ -2391,6 +2608,15 @@ def maybe_send_alert_message(
         )
         telegram_send(settings, text)
     if conn is not None:
+        send_instant_alert_telegram_to_users(
+            conn,
+            event_type,
+            hostname,
+            mountpoint,
+            severity,
+            used_percent,
+            display_name=display_name,
+        )
         send_instant_alert_mails_to_users(conn, event_type, hostname, mountpoint, severity, used_percent)
 
 
@@ -3406,6 +3632,26 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, payload)
             return
 
+        if parsed.path == "/api/v1/user-alert-subscriptions":
+            username = self._web_session_username()
+            with sqlite3.connect(DB_PATH) as conn:
+                user_settings = get_web_user_settings(conn, username)
+                oauth_connection = get_oauth_connection(conn, username, MICROSOFT_PROVIDER)
+                alarm_settings = get_alarm_settings(conn)
+                self._send_json(
+                    HTTPStatus.OK,
+                    {
+                        "username": username,
+                        "subscriptions": get_web_user_alert_subscriptions(conn, username),
+                        "available_hosts": list_available_alert_hosts(conn),
+                        "mail_available": oauth_connection is not None and bool(str(user_settings.get("email_recipient", "") or "").strip()),
+                        "telegram_available": bool(alarm_settings.get("telegram_enabled")) and bool(str(alarm_settings.get("telegram_bot_token", "") or "").strip()),
+                        "alert_instant_mail_enabled": bool(user_settings.get("alert_instant_mail_enabled", False)),
+                        "alert_instant_telegram_enabled": bool(user_settings.get("alert_instant_telegram_enabled", False)),
+                    },
+                )
+            return
+
         if parsed.path == "/api/v1/web-users":
             if not self._require_admin_session():
                 return
@@ -4359,6 +4605,124 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 conn.commit()
             self._send_json(HTTPStatus.OK, settings)
             return
+
+        if path == "/api/v1/user-alert-subscriptions":
+            username = self._web_session_username()
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            subscriptions = payload.get("subscriptions", [])
+            if not isinstance(subscriptions, list):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "subscriptions must be a list"})
+                return
+
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    saved = replace_web_user_alert_subscriptions(conn, username, subscriptions)
+                    conn.commit()
+                self._send_json(HTTPStatus.OK, {"status": "stored", "subscriptions": saved})
+            except ValueError as exc:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            return
+
+        if path == "/api/v1/user-alert-subscriptions/test":
+            username = self._web_session_username()
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            hostname = str(payload.get("hostname", "") or "").strip()
+            channel = str(payload.get("channel", "") or "").strip().lower()
+            if not hostname:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
+                return
+            if channel not in {"mail", "telegram"}:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "channel must be mail or telegram"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                subscriptions = get_web_user_alert_subscriptions(conn, username)
+                matched = next((item for item in subscriptions if str(item.get("hostname", "")) == hostname), None)
+                if matched is None:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "host not subscribed"})
+                    return
+                if channel == "mail" and not bool(matched.get("notify_mail", False)):
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "mail channel not enabled for host"})
+                    return
+                if channel == "telegram" and not bool(matched.get("notify_telegram", False)):
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "telegram channel not enabled for host"})
+                    return
+
+                host_context = collect_host_mail_context(conn, hostname)
+                user_settings = get_web_user_settings(conn, username)
+
+                if channel == "mail":
+                    recipient = str(user_settings.get("email_recipient", "") or "").strip()
+                    if not recipient:
+                        self._send_json(HTTPStatus.BAD_REQUEST, {"error": "email recipient missing"})
+                        return
+                    ok_token, access_token, details = ensure_microsoft_access_token(conn, username)
+                    if not ok_token:
+                        self._send_json(HTTPStatus.BAD_REQUEST, {"error": details or "oauth unavailable"})
+                        return
+                    subject = f"[TEST] Host Alert Abo fuer {host_context.get('display_name', hostname)}"
+                    body = (
+                        "<html><body>"
+                        f"<p>Test fuer Host Alert Abo.</p>"
+                        f"<p>User: <strong>{html.escape(username)}</strong></p>"
+                        f"<p>Host: <strong>{html.escape(str(host_context.get('display_name', hostname)))}</strong> ({html.escape(hostname)})</p>"
+                        f"<p>Zeit: {html.escape(format_mail_datetime())}</p>"
+                        "</body></html>"
+                    )
+                    mail_ok, mail_details = send_microsoft_mail(
+                        access_token,
+                        recipient,
+                        subject,
+                        body,
+                        content_type="HTML",
+                    )
+                    status = HTTPStatus.OK if mail_ok else HTTPStatus.BAD_REQUEST
+                    self._send_json(status, {"status": "sent" if mail_ok else "failed", "channel": "mail", "details": mail_details})
+                    return
+
+                alarm_settings = get_alarm_settings(conn)
+                bot_token = str(alarm_settings.get("telegram_bot_token", "") or "").strip()
+                if not alarm_settings.get("telegram_enabled") or not bot_token:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "telegram global not configured"})
+                    return
+                chat_id = str(user_settings.get("alert_telegram_chat_id", "") or "").strip()
+                if not chat_id:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "personal telegram chat id missing"})
+                    return
+
+                telegram_ok, telegram_details = telegram_send_to_chat(
+                    bot_token,
+                    chat_id,
+                    (
+                        "[TEST] Host Alert Abo\n"
+                        f"User: {username}\n"
+                        f"Host: {str(host_context.get('display_name', hostname))} ({hostname})\n"
+                        f"Zeit: {datetime.now().astimezone().strftime('%d.%m.%Y %H:%M')}"
+                    ),
+                )
+                status = HTTPStatus.OK if telegram_ok else HTTPStatus.BAD_REQUEST
+                self._send_json(status, {"status": "sent" if telegram_ok else "failed", "channel": "telegram", "details": telegram_details})
+                return
 
         if path == "/api/v1/oauth-settings":
             if not self._require_admin_session():
