@@ -30,6 +30,7 @@ const state = {
   hostCountryFilter: "all",
   viewMode: "overview",
   overviewSection: "main",
+  globalSubMode: "global-alerts",
   criticalTrendsHours: 24,
   inactiveHostsHours: 3,
   inactiveHosts: [],
@@ -425,49 +426,56 @@ async function loadAgentUpdateStatus() {
 function updateViewMode() {
   const overviewView = document.getElementById("overviewView");
   const reportsView = document.getElementById("reportsView");
-  const globalAlertsView = document.getElementById("globalAlertsView");
-  const criticalTrendsView = document.getElementById("criticalTrendsView");
-  const inactiveHostsView = document.getElementById("inactiveHostsView");
+  const globalView = document.getElementById("globalView");
   const settingsView = document.getElementById("settingsView");
   const adminAlertSubsView = document.getElementById("adminAlertSubsView");
   const overviewTabButton = document.getElementById("overviewTabButton");
-  const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
-  const criticalTrendsTabButton = document.getElementById("criticalTrendsTabButton");
-  const inactiveHostsTabButton = document.getElementById("inactiveHostsTabButton");
   const reportsTabButton = document.getElementById("reportsTabButton");
   const settingsTabButton = document.getElementById("settingsTabButton");
   const adminAlertSubsTabButton = document.getElementById("adminAlertSubsTabButton");
+  const globalViewButton = document.getElementById("globalViewButton");
 
   const overviewActive = state.viewMode === "overview";
   const reportsActive = state.viewMode === "reports";
-  const globalAlertsActive = state.viewMode === "global-alerts";
-  const criticalTrendsActive = state.viewMode === "critical-trends";
-  const inactiveHostsActive = state.viewMode === "inactive-hosts";
+  const globalActive = state.viewMode === "global";
   const settingsActive = state.viewMode === "settings";
   const adminAlertSubsActive = state.viewMode === "admin-alert-subs";
 
   overviewView.classList.toggle("hidden", !overviewActive);
   reportsView.classList.toggle("hidden", !reportsActive);
-  globalAlertsView.classList.toggle("hidden", !globalAlertsActive);
-  if (criticalTrendsView) criticalTrendsView.classList.toggle("hidden", !criticalTrendsActive);
-  if (inactiveHostsView) inactiveHostsView.classList.toggle("hidden", !inactiveHostsActive);
+  if (globalView) globalView.classList.toggle("hidden", !globalActive);
   if (settingsView) settingsView.classList.toggle("hidden", !settingsActive);
   if (adminAlertSubsView) adminAlertSubsView.classList.toggle("hidden", !adminAlertSubsActive);
   overviewTabButton.classList.toggle("active", overviewActive);
-  globalAlertsTabButton.classList.toggle("active", globalAlertsActive);
-  if (criticalTrendsTabButton) criticalTrendsTabButton.classList.toggle("active", criticalTrendsActive);
-  if (inactiveHostsTabButton) inactiveHostsTabButton.classList.toggle("active", inactiveHostsActive);
   reportsTabButton.classList.toggle("active", reportsActive);
   if (settingsTabButton) settingsTabButton.classList.toggle("active", settingsActive);
   if (adminAlertSubsTabButton) adminAlertSubsTabButton.classList.toggle("active", adminAlertSubsActive);
+  if (globalViewButton) globalViewButton.classList.toggle("active", globalActive);
   overviewTabButton.setAttribute("aria-selected", overviewActive ? "true" : "false");
-  globalAlertsTabButton.setAttribute("aria-selected", globalAlertsActive ? "true" : "false");
-  if (criticalTrendsTabButton) criticalTrendsTabButton.setAttribute("aria-selected", criticalTrendsActive ? "true" : "false");
-  if (inactiveHostsTabButton) inactiveHostsTabButton.setAttribute("aria-selected", inactiveHostsActive ? "true" : "false");
   reportsTabButton.setAttribute("aria-selected", reportsActive ? "true" : "false");
   if (settingsTabButton) settingsTabButton.setAttribute("aria-selected", settingsActive ? "true" : "false");
   if (adminAlertSubsTabButton) adminAlertSubsTabButton.setAttribute("aria-selected", adminAlertSubsActive ? "true" : "false");
   updateReportSectionUi();
+}
+
+function updateGlobalSubMode() {
+  const globalAlertsView = document.getElementById("globalAlertsView");
+  const criticalTrendsView = document.getElementById("criticalTrendsView");
+  const inactiveHostsView = document.getElementById("inactiveHostsView");
+  const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
+  const criticalTrendsTabButton = document.getElementById("criticalTrendsTabButton");
+  const inactiveHostsTabButton = document.getElementById("inactiveHostsTabButton");
+
+  const alertsActive = state.globalSubMode === "global-alerts";
+  const trendsActive = state.globalSubMode === "critical-trends";
+  const inactiveActive = state.globalSubMode === "inactive-hosts";
+
+  if (globalAlertsView) globalAlertsView.classList.toggle("hidden", !alertsActive);
+  if (criticalTrendsView) criticalTrendsView.classList.toggle("hidden", !trendsActive);
+  if (inactiveHostsView) inactiveHostsView.classList.toggle("hidden", !inactiveActive);
+  if (globalAlertsTabButton) { globalAlertsTabButton.classList.toggle("active", alertsActive); globalAlertsTabButton.setAttribute("aria-selected", alertsActive ? "true" : "false"); }
+  if (criticalTrendsTabButton) { criticalTrendsTabButton.classList.toggle("active", trendsActive); criticalTrendsTabButton.setAttribute("aria-selected", trendsActive ? "true" : "false"); }
+  if (inactiveHostsTabButton) { inactiveHostsTabButton.classList.toggle("active", inactiveActive); inactiveHostsTabButton.setAttribute("aria-selected", inactiveActive ? "true" : "false"); }
 }
 
 function updateOverviewSection() {
@@ -3840,14 +3848,14 @@ function wireEvents() {
   });
 
   document.getElementById("globalAlertsTabButton").addEventListener("click", async () => {
-    state.viewMode = "global-alerts";
-    updateViewMode();
+    state.globalSubMode = "global-alerts";
+    updateGlobalSubMode();
     await loadGlobalAlertsOverview();
   });
 
   document.getElementById("criticalTrendsTabButton").addEventListener("click", async () => {
-    state.viewMode = "critical-trends";
-    updateViewMode();
+    state.globalSubMode = "critical-trends";
+    updateGlobalSubMode();
     await loadCriticalTrends();
   });
 
@@ -3861,9 +3869,19 @@ function wireEvents() {
   });
 
   document.getElementById("inactiveHostsTabButton").addEventListener("click", async () => {
-    state.viewMode = "inactive-hosts";
-    updateViewMode();
+    state.globalSubMode = "inactive-hosts";
+    updateGlobalSubMode();
     await loadInactiveHosts();
+  });
+
+  document.getElementById("globalViewButton").addEventListener("click", async () => {
+    state.viewMode = "global";
+    updateViewMode();
+    state.globalSubMode = state.globalSubMode || "global-alerts";
+    updateGlobalSubMode();
+    if (state.globalSubMode === "global-alerts") await loadGlobalAlertsOverview();
+    else if (state.globalSubMode === "critical-trends") await loadCriticalTrends();
+    else if (state.globalSubMode === "inactive-hosts") await loadInactiveHosts();
   });
 
   document.getElementById("refreshInactiveHostsButton").addEventListener("click", async () => {
