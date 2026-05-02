@@ -55,13 +55,34 @@ curl -fsSL --retry 5 --retry-delay 1 \
   -o "$ICONS_JSON"
 
 mapfile -t ICON_NAMES < <(
-  sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\.png\)".*/\1/p' "$ICONS_JSON"
+  python3 - "$ICONS_JSON" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as f:
+  data = json.load(f)
+
+if isinstance(data, list):
+  names = [
+    str(item.get("name", ""))
+    for item in data
+    if isinstance(item, dict) and str(item.get("name", "")).lower().endswith(".png")
+  ]
+else:
+  names = []
+
+for name in sorted(set(names)):
+  print(name)
+PY
 )
 
 if [[ ${#ICON_NAMES[@]} -eq 0 ]]; then
   echo "Keine PNG-Icons geladen (Liste war leer oder ungeeignet)." >&2
   exit 1
 fi
+
+echo "Gefundene PNG-Icons (${#ICON_NAMES[@]}): ${ICON_NAMES[*]}"
 
 for icon_name in "${ICON_NAMES[@]}"; do
   download_file "server/static/icons/$icon_name" "$TARGET_DIR/server/static/icons/$icon_name"
