@@ -1943,6 +1943,8 @@ button:hover:not(.host-item) {
   padding: 12px;
   background: linear-gradient(180deg, #f8fbff 0%, #f3f8ff 100%);
   margin-bottom: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(0, 0, 0, 0.03);
+  transition: box-shadow 200ms ease;
 }
 
 #overviewFilesystemSection {
@@ -1951,6 +1953,8 @@ button:hover:not(.host-item) {
   padding: 0 !important;
   background: #fcfdff !important;
   overflow: hidden;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08), 0 6px 16px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 200ms ease;
 }
 
 #overviewFilesystemSection .fs-focus-header {
@@ -2564,6 +2568,12 @@ button:hover:not(.host-item) {
   border-radius: 6px;
   padding: 10px;
   background: #fcfdff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 200ms ease;
+}
+
+.detail-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 8px 16px rgba(0, 0, 0, 0.06);
 }
 
 .detail-card h4 {
@@ -2889,6 +2899,11 @@ body[data-theme="dark"] .detail-card {
   background: #111b2f;
   border-color: #2a3c59;
   color: var(--text);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+body[data-theme="dark"] .detail-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 8px 16px rgba(0, 0, 0, 0.3);
 }
 
 body[data-theme="dark"] .settings-page {
@@ -3172,11 +3187,13 @@ body[data-theme="dark"] .search-input:focus {
 body[data-theme="dark"] .analysis-panel {
   background: linear-gradient(180deg, #131f34 0%, #101c30 100%);
   border-color: #2a3c59;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 body[data-theme="dark"] #overviewFilesystemSection {
   background: #111b2f !important;
   border-color: #2a3c59 !important;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.25) !important;
 }
 
 body[data-theme="dark"] #overviewFilesystemSection .fs-focus-header {
