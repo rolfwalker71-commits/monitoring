@@ -428,27 +428,23 @@ function updateViewMode() {
   const overviewView = document.getElementById("overviewView");
   const reportsView = document.getElementById("reportsView");
   const globalView = document.getElementById("globalView");
-  const adminAlertSubsView = document.getElementById("adminAlertSubsView");
   const settingsView = document.getElementById("settingsView");
   const overviewTabButton = document.getElementById("overviewTabButton");
   const reportsTabButton = document.getElementById("reportsTabButton");
   const settingsTabButton = document.getElementById("settingsTabButton");
-  const adminAlertSubsTabButton = document.getElementById("adminAlertSubsTabButton");
   const globalViewButton = document.getElementById("globalViewButton");
 
   const overviewActive = state.viewMode === "overview";
   const reportsActive = state.viewMode === "reports";
   const globalActive = state.viewMode === "global";
   const settingsActive = state.viewMode === "settings";
-  const adminAlertSubsActive = state.viewMode === "admin-alert-subs";
 
   // full-panel views hide the layout (host list + reports column)
-  const fullPanelActive = globalActive || settingsActive || adminAlertSubsActive;
+  const fullPanelActive = globalActive || settingsActive;
   if (layout) layout.classList.toggle("hidden", fullPanelActive);
 
   if (globalView) globalView.classList.toggle("hidden", !globalActive);
   if (settingsView) settingsView.classList.toggle("hidden", !settingsActive);
-  if (adminAlertSubsView) adminAlertSubsView.classList.toggle("hidden", !adminAlertSubsActive);
 
   // tab views only relevant when layout is visible
   if (overviewView) overviewView.classList.toggle("hidden", !overviewActive);
@@ -457,12 +453,10 @@ function updateViewMode() {
   overviewTabButton.classList.toggle("active", overviewActive);
   reportsTabButton.classList.toggle("active", reportsActive);
   if (settingsTabButton) settingsTabButton.classList.toggle("active", settingsActive);
-  if (adminAlertSubsTabButton) adminAlertSubsTabButton.classList.toggle("active", adminAlertSubsActive);
   if (globalViewButton) globalViewButton.classList.toggle("active", globalActive);
   overviewTabButton.setAttribute("aria-selected", overviewActive ? "true" : "false");
   reportsTabButton.setAttribute("aria-selected", reportsActive ? "true" : "false");
   if (settingsTabButton) settingsTabButton.setAttribute("aria-selected", settingsActive ? "true" : "false");
-  if (adminAlertSubsTabButton) adminAlertSubsTabButton.setAttribute("aria-selected", adminAlertSubsActive ? "true" : "false");
   updateReportSectionUi();
 }
 
@@ -470,20 +464,25 @@ function updateGlobalSubMode() {
   const globalAlertsView = document.getElementById("globalAlertsView");
   const criticalTrendsView = document.getElementById("criticalTrendsView");
   const inactiveHostsView = document.getElementById("inactiveHostsView");
+  const globalAdminAlertSubsView = document.getElementById("globalAdminAlertSubsView");
   const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
   const criticalTrendsTabButton = document.getElementById("criticalTrendsTabButton");
   const inactiveHostsTabButton = document.getElementById("inactiveHostsTabButton");
+  const globalAdminAlertSubsTabButton = document.getElementById("globalAdminAlertSubsTabButton");
 
   const alertsActive = state.globalSubMode === "global-alerts";
   const trendsActive = state.globalSubMode === "critical-trends";
   const inactiveActive = state.globalSubMode === "inactive-hosts";
+  const adminAlertSubsActive = state.globalSubMode === "admin-alert-subs";
 
   if (globalAlertsView) globalAlertsView.classList.toggle("hidden", !alertsActive);
   if (criticalTrendsView) criticalTrendsView.classList.toggle("hidden", !trendsActive);
   if (inactiveHostsView) inactiveHostsView.classList.toggle("hidden", !inactiveActive);
+  if (globalAdminAlertSubsView) globalAdminAlertSubsView.classList.toggle("hidden", !adminAlertSubsActive);
   if (globalAlertsTabButton) { globalAlertsTabButton.classList.toggle("active", alertsActive); globalAlertsTabButton.setAttribute("aria-selected", alertsActive ? "true" : "false"); }
   if (criticalTrendsTabButton) { criticalTrendsTabButton.classList.toggle("active", trendsActive); criticalTrendsTabButton.setAttribute("aria-selected", trendsActive ? "true" : "false"); }
   if (inactiveHostsTabButton) { inactiveHostsTabButton.classList.toggle("active", inactiveActive); inactiveHostsTabButton.setAttribute("aria-selected", inactiveActive ? "true" : "false"); }
+  if (globalAdminAlertSubsTabButton) { globalAdminAlertSubsTabButton.classList.toggle("active", adminAlertSubsActive); globalAdminAlertSubsTabButton.setAttribute("aria-selected", adminAlertSubsActive ? "true" : "false"); }
 }
 
 function updateOverviewSection() {
@@ -608,15 +607,19 @@ function setAuthUiState(authenticated) {
 function updateAdminSettingsVisibility() {
   const adminOauthSection = document.getElementById("adminOauthSettingsSection");
   const adminUserSection = document.getElementById("adminUserManagementSection");
-  const adminAlertSubsTab = document.getElementById("adminAlertSubsTabButton");
+  const globalAdminAlertSubsTab = document.getElementById("globalAdminAlertSubsTabButton");
   if (adminOauthSection) {
     adminOauthSection.classList.toggle("hidden", !state.isAdmin);
   }
   if (adminUserSection) {
     adminUserSection.classList.toggle("hidden", !state.isAdmin);
   }
-  if (adminAlertSubsTab) {
-    adminAlertSubsTab.classList.toggle("hidden", !state.isAdmin);
+  if (globalAdminAlertSubsTab) {
+    globalAdminAlertSubsTab.classList.toggle("hidden", !state.isAdmin);
+  }
+  if (!state.isAdmin && state.globalSubMode === "admin-alert-subs") {
+    state.globalSubMode = "global-alerts";
+    updateGlobalSubMode();
   }
 }
 
@@ -3882,14 +3885,27 @@ function wireEvents() {
     await loadInactiveHosts();
   });
 
+  const globalAdminAlertSubsTabButton = document.getElementById("globalAdminAlertSubsTabButton");
+  if (globalAdminAlertSubsTabButton) {
+    globalAdminAlertSubsTabButton.addEventListener("click", async () => {
+      state.globalSubMode = "admin-alert-subs";
+      updateGlobalSubMode();
+      await loadAdminAlertSubscriptions();
+    });
+  }
+
   document.getElementById("globalViewButton").addEventListener("click", async () => {
     state.viewMode = "global";
     updateViewMode();
     state.globalSubMode = state.globalSubMode || "global-alerts";
+    if (state.globalSubMode === "admin-alert-subs" && !state.isAdmin) {
+      state.globalSubMode = "global-alerts";
+    }
     updateGlobalSubMode();
     if (state.globalSubMode === "global-alerts") await loadGlobalAlertsOverview();
     else if (state.globalSubMode === "critical-trends") await loadCriticalTrends();
     else if (state.globalSubMode === "inactive-hosts") await loadInactiveHosts();
+    else if (state.globalSubMode === "admin-alert-subs") await loadAdminAlertSubscriptions();
   });
 
   document.getElementById("refreshInactiveHostsButton").addEventListener("click", async () => {
@@ -3926,14 +3942,6 @@ function wireEvents() {
   const globalViewBackButton = document.getElementById("globalViewBackButton");
   if (globalViewBackButton) {
     globalViewBackButton.addEventListener("click", () => {
-      state.viewMode = "overview";
-      updateViewMode();
-    });
-  }
-
-  const adminAlertSubsBackButton = document.getElementById("adminAlertSubsBackButton");
-  if (adminAlertSubsBackButton) {
-    adminAlertSubsBackButton.addEventListener("click", () => {
       state.viewMode = "overview";
       updateViewMode();
     });
@@ -4114,15 +4122,6 @@ function wireEvents() {
     reloadAdminAlertSubBtn.addEventListener("click", async () => {
       state.adminAlertSubscriptionsLoaded = false;
       await loadAdminAlertSubscriptions(true);
-    });
-  }
-
-  const adminAlertSubsTabButton = document.getElementById("adminAlertSubsTabButton");
-  if (adminAlertSubsTabButton) {
-    adminAlertSubsTabButton.addEventListener("click", async () => {
-      state.viewMode = "admin-alert-subs";
-      updateViewMode();
-      await loadAdminAlertSubscriptions();
     });
   }
 

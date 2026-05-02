@@ -758,18 +758,17 @@ button:hover:not(.host-item) {
 
 .view-tabs-shell {
   margin: 14px 0 14px;
-  padding: 4px 6px 0;
+  padding: 6px;
   border: 1px solid #d9e3f1;
-  border-radius: 18px 18px 0 0;
-  border-bottom: 0;
+  border-radius: 999px;
   background: linear-gradient(180deg, #f6faff 0%, #edf4fd 100%);
 }
 
 .subview-tabs-shell {
   margin: 0 0 10px;
-  padding: 4px;
+  padding: 5px;
   border: 1px solid #e1e8f2;
-  border-radius: 16px;
+  border-radius: 999px;
   background: #f8fbff;
 }
 
@@ -827,12 +826,12 @@ button:hover:not(.host-item) {
 .tab-button {
   position: relative;
   border: 1px solid transparent;
-  border-radius: 12px 12px 0 0;
+  border-radius: 999px;
   background: transparent;
   color: #48617f;
   font-size: 12px;
   font-weight: 700;
-  padding: 6px 12px 7px;
+  padding: 7px 14px;
   transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
@@ -877,10 +876,10 @@ button:hover:not(.host-item) {
 
 /* Second-level subview tabs: subtler */
 .subview-tabs .tab-button {
-  border-radius: 12px;
+  border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
-  padding: 5px 10px;
+  padding: 6px 12px;
   background: transparent;
   color: #597295;
 }
