@@ -12,7 +12,7 @@ SHA="$(curl -fsSL --retry 5 --retry-delay 1 "https://api.github.com/repos/$OWNER
   | sed -n 's/.*"sha":[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' \
   | head -n 1)"
 
-if [[ -z "$SHA" ]]; then
+if [ -z "$SHA" ]; then
   echo "Konnte Commit-SHA nicht ermitteln." >&2
   exit 1
 fi
@@ -35,20 +35,20 @@ download_file() {
 export -f download_file
 export RAW_BASE TARGET_DIR
 
-FILES=(
-    "server/receiver.py"
-    "server/static/index.html"
-    "server/static/app.js"
-    "server/static/styles.css"
-    "BUILD_VERSION"
-    "AGENT_VERSION"
-    "openapi.yaml"
-    "pull-server-only.sh"
-)
+FILES_LIST="
+server/receiver.py
+server/static/index.html
+server/static/app.js
+server/static/styles.css
+BUILD_VERSION
+AGENT_VERSION
+openapi.yaml
+pull-server-only.sh
+"
 
 # Parallele downloads: bis zu 4 gleichzeitig
-echo "Lade ${#FILES[@]} Dateien parallel (max 4 gleichzeitig)..."
-printf '%s\n' "${FILES[@]}" | xargs -P 4 -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"' || {
+echo "Lade 8 Dateien parallel (max 4 gleichzeitig)..."
+printf '%s\n' "$FILES_LIST" | sed '/^$/d' | xargs -P 4 -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"' || {
     echo "Fehler bei parallelen Downloads" >&2
     exit 1
 }
@@ -68,8 +68,8 @@ curl -fsSL --retry 5 --retry-delay 1 \
   "$ICONS_API" \
   -o "$ICONS_JSON"
 
-mapfile -t ICON_NAMES < <(
-  python3 - "$ICONS_JSON" <<'PY'
+ICON_NAMES_FILE="$TMP_DIR/icon_names.txt"
+python3 - "$ICONS_JSON" > "$ICON_NAMES_FILE" <<'PY'
 import json
 import sys
 
@@ -89,15 +89,15 @@ else:
 for name in sorted(set(names)):
   print(name)
 PY
-)
 
-if [[ ${#ICON_NAMES[@]} -eq 0 ]]; then
+if [ ! -s "$ICON_NAMES_FILE" ]; then
   echo "Keine PNG-Icons geladen (Liste war leer oder ungeeignet)." >&2
   exit 1
 fi
 
-echo "Lade ${#ICON_NAMES[@]} PNG-Icons parallel..."
-printf 'server/static/icons/%s\n' "${ICON_NAMES[@]}" | xargs -P 4 -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"' || {
+ICON_COUNT="$(wc -l < "$ICON_NAMES_FILE" | tr -d ' ')"
+echo "Lade ${ICON_COUNT} PNG-Icons parallel..."
+sed 's#^#server/static/icons/#' "$ICON_NAMES_FILE" | xargs -P 4 -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"' || {
     echo "Fehler bei Icon-Downloads (nicht kritisch)" >&2
 }
 echo "Icons geladen ✓"
@@ -111,7 +111,7 @@ cat "$TARGET_DIR/AGENT_VERSION"
 ls -ld "$TARGET_DIR/server"
 
 # --- venv sicherstellen ---
-if [[ ! -x "$TARGET_DIR/.venv/bin/python" ]]; then
+if [ ! -x "$TARGET_DIR/.venv/bin/python" ]; then
     echo "Erstelle Python-venv in $TARGET_DIR/.venv ..."
     python3 -m venv "$TARGET_DIR/.venv"
 fi
@@ -127,7 +127,7 @@ echo "Installiere/aktualisiere Python-Abhaengigkeiten ..."
 
 # --- EnvironmentFile anlegen (nur wenn noch nicht vorhanden) ---
 ENV_FILE="$TARGET_DIR/monitoring.env"
-if [[ ! -f "$ENV_FILE" ]]; then
+if [ ! -f "$ENV_FILE" ]; then
     cat > "$ENV_FILE" <<'EOF'
 # Monitoring Server – Umgebungsvariablen
 # Diese Datei bleibt nur auf dem Server und kommt NIE ins Git!
