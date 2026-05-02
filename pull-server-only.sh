@@ -74,3 +74,60 @@ cat "$TARGET_DIR/BUILD_VERSION"
 echo -n "AGENT_VERSION lokal: "
 cat "$TARGET_DIR/AGENT_VERSION"
 ls -ld "$TARGET_DIR/server"
+
+# --- venv sicherstellen ---
+if [[ ! -x "$TARGET_DIR/.venv/bin/python" ]]; then
+    echo "Erstelle Python-venv in $TARGET_DIR/.venv ..."
+    python3 -m venv "$TARGET_DIR/.venv"
+fi
+echo "Installiere/aktualisiere Python-Abhaengigkeiten ..."
+"$TARGET_DIR/.venv/bin/pip" install --quiet --upgrade cairosvg
+
+# --- EnvironmentFile anlegen (nur wenn noch nicht vorhanden) ---
+ENV_FILE="$TARGET_DIR/monitoring.env"
+if [[ ! -f "$ENV_FILE" ]]; then
+    cat > "$ENV_FILE" <<'EOF'
+# Monitoring Server – Umgebungsvariablen
+# Diese Datei bleibt nur auf dem Server und kommt NIE ins Git!
+MONITORING_API_KEY=HIER_API_KEY_EINTRAGEN
+MONITORING_API_KEY_GRACE_ALLOW_KNOWN_HOSTS=0
+# MONITORING_SCHEDULE_TIMEZONE=Europe/Zurich
+EOF
+    chmod 600 "$ENV_FILE"
+    echo "EnvironmentFile angelegt: $ENV_FILE"
+    echo "  --> Bitte den API-Key dort eintragen!"
+else
+    echo "EnvironmentFile bereits vorhanden: $ENV_FILE (unveraendert)"
+fi
+
+# --- systemd Service installieren/aktualisieren ---
+SERVICE_FILE="/etc/systemd/system/monitoring.service"
+cat > "$SERVICE_FILE" <<EOF
+[Unit]
+Description=Monitoring Receiver
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$TARGET_DIR
+EnvironmentFile=$TARGET_DIR/monitoring.env
+ExecStart=$TARGET_DIR/.venv/bin/python $TARGET_DIR/server/receiver.py --host 0.0.0.0 --port 8080
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:$TARGET_DIR/server/data/receiver.log
+StandardError=append:$TARGET_DIR/server/data/receiver.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable monitoring
+echo ""
+echo "systemd Service installiert: $SERVICE_FILE"
+echo ""
+echo "Naechste Schritte:"
+echo "  1. API-Key eintragen:  nano $ENV_FILE"
+echo "  2. Dienst starten:     systemctl restart monitoring"
+echo "  3. Status pruefen:     systemctl status monitoring"
