@@ -2476,6 +2476,10 @@ button:hover:not(.host-item) {
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
   margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: #fcfdff;
 }
 
 .meta-group {
@@ -2814,7 +2818,8 @@ body[data-theme="dark"] .settings-page,
 body[data-theme="dark"] .subview-tabs-shell,
 body[data-theme="dark"] .view-tabs-shell,
 body[data-theme="dark"] .panel,
-body[data-theme="dark"] .report-card {
+body[data-theme="dark"] .report-card,
+body[data-theme="dark"] .meta-groups {
   background: #111b2f;
   border-color: #2a3c59;
   color: var(--text);
