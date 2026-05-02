@@ -18,13 +18,22 @@ if [[ -z "$SHA" ]]; then
 fi
 
 RAW_BASE="https://raw.githubusercontent.com/$OWNER_REPO/$SHA"
+
+# Hilfsfunction fuer parallele downloads
 download_file() {
     local source_path="$1"
     local target_path="$2"
     mkdir -p "$(dirname "$target_path")"
-    curl -fsSL --retry 5 --retry-delay 1 "$RAW_BASE/$source_path" -o "$target_path"
-    echo "Datei geladen: $source_path"
+    if curl -fsSL --retry 5 --retry-delay 1 "$RAW_BASE/$source_path" -o "$target_path"; then
+        echo "✓ $source_path"
+    else
+        echo "✗ FEHLER: $source_path" >&2
+        return 1
+    fi
 }
+
+export -f download_file
+export RAW_BASE TARGET_DIR
 
 FILES=(
     "server/receiver.py"
@@ -37,9 +46,13 @@ FILES=(
     "pull-server-only.sh"
 )
 
-for rel_path in "${FILES[@]}"; do
-    download_file "$rel_path" "$TARGET_DIR/$rel_path"
-done
+# Parallele downloads: bis zu 4 gleichzeitig
+echo "Lade ${#FILES[@]} Dateien parallel (max 4 gleichzeitig)..."
+printf '%s\n' "${FILES[@]}" | xargs -P 4 -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"' || {
+    echo "Fehler bei parallelen Downloads" >&2
+    exit 1
+}
+echo "Dateien geladen ✓"
 
 ICONS_API="https://api.github.com/repos/$OWNER_REPO/contents/server/static/icons?ref=$SHA"
 TMP_DIR="$(mktemp -d)"
@@ -83,11 +96,11 @@ if [[ ${#ICON_NAMES[@]} -eq 0 ]]; then
   exit 1
 fi
 
-echo "Gefundene PNG-Icons (${#ICON_NAMES[@]}): ${ICON_NAMES[*]}"
-
-for icon_name in "${ICON_NAMES[@]}"; do
-  download_file "server/static/icons/$icon_name" "$TARGET_DIR/server/static/icons/$icon_name"
-done
+echo "Lade ${#ICON_NAMES[@]} PNG-Icons parallel..."
+printf 'server/static/icons/%s\n' "${ICON_NAMES[@]}" | xargs -P 4 -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"' || {
+    echo "Fehler bei Icon-Downloads (nicht kritisch)" >&2
+}
+echo "Icons geladen ✓"
 
 echo "$SHA" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
 echo "Fertig. Deploy-Commit: $SHA"
@@ -159,4 +172,3 @@ echo ""
 echo "Naechste Schritte:"
 echo "  1. API-Key eintragen:  nano $ENV_FILE"
 echo "  2. Dienst starten:     systemctl restart monitoring"
-echo "  3. Status pruefen:     systemctl status monitoring"
