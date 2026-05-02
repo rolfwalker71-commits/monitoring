@@ -34,6 +34,7 @@ FILES=(
     "BUILD_VERSION"
     "AGENT_VERSION"
     "openapi.yaml"
+    "pull-server-only.sh"
 )
 
 for rel_path in "${FILES[@]}"; do
