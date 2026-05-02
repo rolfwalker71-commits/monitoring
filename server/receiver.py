@@ -3029,7 +3029,43 @@ def evaluate_severity_for_thresholds(used_percent: float, warning_threshold: flo
     return "ok"
 
 
+_LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
+
+
+def _build_multipart(fields: dict, files: dict) -> tuple[bytes, str]:
+    boundary = secrets.token_hex(16).encode()
+    body = b""
+    for name, value in fields.items():
+        body += b"--" + boundary + b"\r\n"
+        body += f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode()
+        body += str(value).encode("utf-8") + b"\r\n"
+    for name, (filename, data, content_type) in files.items():
+        body += b"--" + boundary + b"\r\n"
+        body += f'Content-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'.encode()
+        body += f"Content-Type: {content_type}\r\n\r\n".encode()
+        body += data + b"\r\n"
+    body += b"--" + boundary + b"--\r\n"
+    return body, f"multipart/form-data; boundary={boundary.decode()}"
+
+
 def telegram_send_to_chat(bot_token: str, chat_id: str, text: str) -> tuple[bool, str]:
+    # Try sendPhoto with logo as thumbnail; fall back to sendMessage on any error
+    if _LOGO_PATH.is_file():
+        try:
+            photo_data = _LOGO_PATH.read_bytes()
+            fields = {"chat_id": chat_id, "caption": text[:1024]}
+            files = {"photo": (_LOGO_PATH.name, photo_data, "image/png")}
+            body, content_type = _build_multipart(fields, files)
+            endpoint = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+            req = request.Request(endpoint, data=body, method="POST")
+            req.add_header("Content-Type", content_type)
+            with request.urlopen(req, timeout=10) as resp:
+                resp_body = resp.read().decode("utf-8", errors="replace")
+                if 200 <= resp.status < 300:
+                    return True, resp_body
+        except Exception:
+            pass  # fall through to plain text
+
     endpoint = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     payload = parse.urlencode(
         {
