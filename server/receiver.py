@@ -1079,8 +1079,6 @@ def replace_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str
             continue
         notify_mail = coerce_bool(item.get("notify_mail", False))
         notify_telegram = coerce_bool(item.get("notify_telegram", False))
-        if not notify_mail and not notify_telegram:
-            continue
         normalized[hostname] = {
             "notify_mail": notify_mail,
             "notify_telegram": notify_telegram,
