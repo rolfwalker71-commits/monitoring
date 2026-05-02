@@ -2563,7 +2563,15 @@ td {
 }
 
 th {
-  color: var(--muted);
+  color: var(--text);
+  background: #f0f4fa;
+  font-weight: 600;
+  padding: 9px 10px;
+}
+
+body[data-theme="dark"] th {
+  background: #1a2540;
+  color: var(--text);
 }
 
 @media (max-width: 760px) {
@@ -2818,6 +2826,11 @@ th {
 * {
   scrollbar-width: thin;
   scrollbar-color: #c0cfe0 transparent;
+}
+
+body[data-theme="dark"] th {
+  background: #1a2540;
+  color: var(--text);
 }
 
 body[data-theme="dark"] .brand-header {
