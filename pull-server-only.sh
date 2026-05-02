@@ -78,7 +78,7 @@ curl -fsSL --retry 5 --retry-delay 1 \
 
 ICON_NAMES_FILE="$TMP_DIR/icon_names.txt"
 grep -o '"name":[[:space:]]*"[^"]*\.png"' "$ICONS_JSON" \
-  | sed -E 's/.*"name":[[:space:]]*"([^"]*)"/\1/' \
+  | cut -d '"' -f 4 \
   | sort -u > "$ICON_NAMES_FILE"
 
 if [ ! -s "$ICON_NAMES_FILE" ]; then
