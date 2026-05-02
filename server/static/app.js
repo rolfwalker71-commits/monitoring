@@ -115,23 +115,23 @@ function loadAnalysisRangePreference() {
     return normalizeAnalysisHours(window.localStorage.getItem(ANALYSIS_RANGE_STORAGE_KEY));
   } catch (_error) {
     return 24;
+  }
+}
 
-  function loadAutoRefreshPreference() {
-    try {
-      const raw = window.localStorage.getItem(AUTO_REFRESH_STORAGE_KEY);
-      const parsed = Number.parseInt(String(raw || ""), 10);
-      return AUTO_REFRESH_INTERVAL_OPTIONS.has(parsed) ? parsed : 480;
-    } catch (_error) {
-      return 480;
-    }
+function loadAutoRefreshPreference() {
+  try {
+    const raw = window.localStorage.getItem(AUTO_REFRESH_STORAGE_KEY);
+    const parsed = Number.parseInt(String(raw || ""), 10);
+    return AUTO_REFRESH_INTERVAL_OPTIONS.has(parsed) ? parsed : 480;
+  } catch (_error) {
+    return 480;
   }
+}
 
-  function persistAutoRefreshPreference(seconds) {
-    try {
-      window.localStorage.setItem(AUTO_REFRESH_STORAGE_KEY, String(seconds));
-    } catch (_error) { /* ignore */ }
-  }
-  }
+function persistAutoRefreshPreference(seconds) {
+  try {
+    window.localStorage.setItem(AUTO_REFRESH_STORAGE_KEY, String(seconds));
+  } catch (_error) { /* ignore */ }
 }
 
 function persistAnalysisRangePreference() {
@@ -308,16 +308,6 @@ function formatDnsServers(value) {
     return cleaned.length > 0 ? cleaned.join(" ") : "-";
   }
   return asText(value);
-}
-
-function updateAutoRefreshStatus(lastRefreshAt = null) {
-  const statusEl = document.getElementById("autoRefreshStatus");
-  if (!statusEl) {
-    return;
-  }
-  statusEl.textContent = lastRefreshAt
-    ? `🔄 ${formatAutoRefreshTimestamp(lastRefreshAt)}`
-    : "🔄 -";
 }
 
 function renderAutoRefreshStatus() {
