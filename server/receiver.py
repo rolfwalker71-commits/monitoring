@@ -2826,12 +2826,12 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
             continue
 
         if send_trend:
-            warnings = collect_critical_trends(conn, 24)
+            warnings = collect_critical_trends(conn, 72)
             trend_ok, _trend_details = send_microsoft_mail(
                 access_token,
                 recipient,
                 trend_digest_subject(warnings, today_local),
-                trend_digest_html(username, warnings, 24),
+                trend_digest_html(username, warnings, 72),
                 content_type="HTML",
             )
             if trend_ok:
@@ -4563,7 +4563,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/v1/critical-trends":
             query = parse_qs(parsed.query)
-            hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
+            hours = parse_int(query, "hours", default=72, min_value=1, max_value=24 * 30)
             with sqlite3.connect(DB_PATH) as conn:
                 warnings = collect_critical_trends(conn, hours)
 
@@ -5325,12 +5325,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": details or "oauth unavailable"})
                     return
                 if endpoint_mode == "trends":
-                    warnings = collect_critical_trends(conn, 24)
+                    warnings = collect_critical_trends(conn, 72)
                     mail_ok, mail_details = send_microsoft_mail(
                         access_token,
                         recipient,
                         trend_digest_subject(warnings, datetime.now().astimezone().date().isoformat()) + " [TEST]",
-                        trend_digest_html(username, warnings, 24),
+                        trend_digest_html(username, warnings, 72),
                         content_type="HTML",
                     )
                 elif endpoint_mode == "alerts":
