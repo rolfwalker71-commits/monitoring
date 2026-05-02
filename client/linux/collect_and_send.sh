@@ -519,7 +519,14 @@ SWAP_FREE_KB="$(read_meminfo_kb SwapFree)"
 SWAP_USED_KB=$(( SWAP_TOTAL_KB - SWAP_FREE_KB ))
 SWAP_USED_PERCENT="$(calc_percent "$SWAP_USED_KB" "$SWAP_TOTAL_KB")"
 
-DEFAULT_INTERFACE="$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')"
+DEFAULT_INTERFACE="$(ip -4 route show default 2>/dev/null | awk '/default/ {print $5; exit}')"
+DEFAULT_GATEWAY="$(ip -4 route show default 2>/dev/null | awk '/default/ {print $3; exit}')"
+
+DNS_SERVERS_JSON=""
+while read -r dns_ip; do
+  [[ -n "$dns_ip" ]] || continue
+  DNS_SERVERS_JSON="$(append_json_entry "$DNS_SERVERS_JSON" "\"$(json_escape "$dns_ip")\"")"
+done < <(awk '/^nameserver[[:space:]]+/ {print $2}' /etc/resolv.conf 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | awk '!seen[$0]++')
 
 NETWORK_INTERFACES_JSON=""
 for iface_path in /sys/class/net/*; do
@@ -613,6 +620,8 @@ PAYLOAD=$(cat <<EOF
   },
   "network": {
     "default_interface": "$(json_escape "$DEFAULT_INTERFACE")",
+    "default_gateway": "$(json_escape "$DEFAULT_GATEWAY")",
+    "dns_servers": [${DNS_SERVERS_JSON}],
     "interfaces": [${NETWORK_INTERFACES_JSON}]
   },
   "filesystems": [${FILESYSTEMS_JSON}],

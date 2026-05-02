@@ -539,19 +539,30 @@ $kernelVersion = $osInfo.Version   # e.g. "10.0.19045"
 # IPs / default interface
 $primaryIp        = ''
 $defaultInterface = ''
+$defaultGateway   = ''
+$dnsServers       = @()
 try {
     $defRoute = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop |
                 Sort-Object { [int]$_.RouteMetric + [int]$_.InterfaceMetric } |
                 Select-Object -First 1
     $defaultInterface = $defRoute.InterfaceAlias
+    $defaultGateway = [string]$defRoute.NextHop
     $primaryIp = (Get-NetIPAddress -InterfaceIndex $defRoute.InterfaceIndex `
                     -AddressFamily IPv4 -ErrorAction SilentlyContinue).IPAddress |
                  Where-Object { $_ -ne '127.0.0.1' } | Select-Object -First 1
+    $dnsServers = @((Get-DnsClientServerAddress -InterfaceIndex $defRoute.InterfaceIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).
+        ServerAddresses | Where-Object { $_ } | Select-Object -Unique)
     if (-not $primaryIp) { $primaryIp = '' }
 } catch { }
 
 $allIps = ((Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue) |
            Where-Object { $_.PrefixOrigin -ne 'WellKnown' -and $_.IPAddress -ne '127.0.0.1' }).IPAddress -join ' '
+
+$dnsServerEntries = @()
+foreach ($dns in $dnsServers) {
+    $dnsServerEntries += ('"' + (ConvertTo-JsonString ([string]$dns)) + '"')
+}
+$dnsServersJson = $dnsServerEntries -join ','
 
 # CPU — measure over 1 second with Get-Counter (mirrors Linux /proc/stat approach);
 # fall back to WMI LoadPercentage if the performance counter is unavailable.
@@ -667,6 +678,7 @@ $allIpsEsc       = ConvertTo-JsonString $allIps
 $kernelEsc       = ConvertTo-JsonString $kernelVersion
 $osNameEsc       = ConvertTo-JsonString $osName
 $defaultIfaceEsc = ConvertTo-JsonString $defaultInterface
+$defaultGwEsc    = ConvertTo-JsonString $defaultGateway
 
 $payload = @"
 {
@@ -705,6 +717,8 @@ $payload = @"
   },
   "network": {
     "default_interface": "$defaultIfaceEsc",
+        "default_gateway": "$defaultGwEsc",
+        "dns_servers": [$dnsServersJson],
     "interfaces": [$ifacesStr]
   },
     "filesystems": [$fsStr],

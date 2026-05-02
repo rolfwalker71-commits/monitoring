@@ -274,6 +274,16 @@ function resolveDefaultNicIpv4(report, payload, network) {
   return firstIpv4FromValue(payload?.all_ips);
 }
 
+function formatDnsServers(value) {
+  if (Array.isArray(value)) {
+    const cleaned = value
+      .map((entry) => String(entry || "").trim())
+      .filter((entry) => entry.length > 0);
+    return cleaned.length > 0 ? cleaned.join(" ") : "-";
+  }
+  return asText(value);
+}
+
 function updateAutoRefreshStatus(lastRefreshAt = null) {
   const statusEl = document.getElementById("autoRefreshStatus");
   if (!statusEl) {
@@ -2493,6 +2503,8 @@ function renderReportCard(report) {
         <p><strong>🧮 RAM</strong><span>${formatPercent(memory.used_percent)} | ${formatKilobytes(memory.used_kb)} / ${formatKilobytes(memory.total_kb)}</span></p>
         <p><strong>💤 Swap</strong><span>${formatPercent(swap.used_percent)} | ${formatKilobytes(swap.used_kb)} / ${formatKilobytes(swap.total_kb)}</span></p>
         <p><strong>🌍 Default NIC</strong><span>${escapeHtml(asText(network.default_interface))}</span></p>
+        <p><strong>🛣️ Default GW</strong><span>${escapeHtml(asText(network.default_gateway))}</span></p>
+        <p><strong>🧭 DNS</strong><span>${escapeHtml(formatDnsServers(network.dns_servers))}</span></p>
       </div>
       ${detailContent}
     </article>
