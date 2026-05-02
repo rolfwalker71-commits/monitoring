@@ -1955,7 +1955,6 @@ button:hover:not(.host-item) {
   border-radius: 8px !important;
   padding: 0 !important;
   background: #fcfdff !important;
-  overflow: hidden;
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08), 0 6px 16px rgba(0, 0, 0, 0.05);
   transition: box-shadow 200ms ease;
 }
