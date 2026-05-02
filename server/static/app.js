@@ -3699,12 +3699,16 @@ function renderCriticalTrends(data) {
   const critCount = warnings.filter((w) => w.level === "crit").length;
   const warnCount = warnings.filter((w) => w.level === "warn").length;
 
+  const projectionTargetIso = new Date(Date.now() + hours * 3600 * 1000).toISOString();
+  const projectionTargetFormatted = formatUtcPlus2(projectionTargetIso);
+
   const summary = `
     <div class="ct-summary">
       <span class="ct-summary-label">Zeitraum: letzte ${hours} Std.</span>
       ${critCount > 0 ? `<span class="ct-badge ct-badge-crit">${critCount} Kritisch</span>` : ""}
       ${warnCount > 0 ? `<span class="ct-badge ct-badge-warn">${warnCount} Warnung</span>` : ""}
       <span class="ct-summary-label">${byHost.size} betroffene Host${byHost.size !== 1 ? "s" : ""}</span>
+      <span class="ct-summary-label ct-projection-horizon">📅 Projektion bis: <strong>${escapeHtml(projectionTargetFormatted)}</strong></span>
     </div>
   `;
 

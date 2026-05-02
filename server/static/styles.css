@@ -1067,7 +1067,10 @@ button:hover:not(.host-item) {
   color: var(--muted);
 }
 
-.ct-badge {
+.ct-projection-horizon {
+  margin-left: auto;
+  color: var(--muted);
+}
   display: inline-flex;
   align-items: center;
   border-radius: 20px;
