@@ -80,6 +80,13 @@ if [[ ! -x "$TARGET_DIR/.venv/bin/python" ]]; then
     echo "Erstelle Python-venv in $TARGET_DIR/.venv ..."
     python3 -m venv "$TARGET_DIR/.venv"
 fi
+if command -v apt-get >/dev/null 2>&1; then
+  echo "Installiere Systembibliothek libcairo2 (falls noetig) ..."
+  if ! apt-get install -y libcairo2 >/dev/null 2>&1; then
+    echo "WARNUNG: libcairo2 konnte nicht automatisch installiert werden."
+    echo "         PNG-Chart-Rendering faellt ggf. auf SVG zurueck."
+  fi
+fi
 echo "Installiere/aktualisiere Python-Abhaengigkeiten ..."
 "$TARGET_DIR/.venv/bin/pip" install --quiet --upgrade cairosvg
 

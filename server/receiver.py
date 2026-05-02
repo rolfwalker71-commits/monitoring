@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 try:
     import cairosvg as _cairosvg
     _CAIROSVG_AVAILABLE = True
-except ImportError:
+except Exception:
     _cairosvg = None  # type: ignore
     _CAIROSVG_AVAILABLE = False
 
