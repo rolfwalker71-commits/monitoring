@@ -1226,6 +1226,7 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
         host_display_name = effective_display_name(last_payload, display_name_override, hostname)
         host_country_code = country_code_override or extract_country_code_from_payload(last_payload)
         host_os_family = normalize_os_family(last_payload.get("os", ""))
+        host_primary_ip = str(last_payload.get("primary_ip", "") or "").strip()
 
         resource_series: dict[str, list[float]] = {
             "cpu_usage_percent": [],
@@ -1272,6 +1273,7 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
                 {
                     "hostname": hostname,
                     "display_name": host_display_name,
+                    "primary_ip": host_primary_ip,
                     "metric": label,
                     "metric_key": key,
                     "type": "resource",
@@ -1295,6 +1297,7 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
                 {
                     "hostname": hostname,
                     "display_name": host_display_name,
+                    "primary_ip": host_primary_ip,
                     "metric": mountpoint,
                     "metric_key": "filesystem",
                     "type": "filesystem",
@@ -1420,7 +1423,7 @@ def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
 
         latest_payload_rows = conn.execute(
             f"""
-            SELECT hostname, payload_json
+            SELECT hostname, COALESCE(primary_ip, ''), payload_json
             FROM reports
             WHERE id IN (
                 SELECT MAX(id)
@@ -1432,7 +1435,11 @@ def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
             tuple(hostnames),
         ).fetchall()
         payload_by_hostname = {
-            str(item[0]): parse_payload_json(str(item[1] or "{}"))
+            str(item[0]): parse_payload_json(str(item[2] or "{}"))
+            for item in latest_payload_rows
+        }
+        primary_ip_by_hostname = {
+            str(item[0]): str(item[1] or "").strip()
             for item in latest_payload_rows
         }
 
@@ -1441,12 +1448,15 @@ def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
             display_names[hostname] = effective_display_name(payload, overrides.get(hostname, ""), hostname)
             country_codes[hostname] = country_overrides.get(hostname, "") or extract_country_code_from_payload(payload)
             os_families[hostname] = normalize_os_family(payload.get("os", ""))
+    else:
+        primary_ip_by_hostname = {}
 
     return [
         {
             "id": int(row[0] or 0),
             "hostname": str(row[1] or ""),
             "display_name": display_names.get(str(row[1] or ""), str(row[1] or "")),
+            "primary_ip": primary_ip_by_hostname.get(str(row[1] or ""), ""),
             "mountpoint": str(row[2] or ""),
             "severity": str(row[3] or "warning"),
             "used_percent": float(row[4] or 0),
@@ -1723,7 +1733,7 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
     rows_html = "".join(
         (
             "<tr>"
-            f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:middle;'><div style='font-weight:600;'>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</div>{host_badges_html(item.get('country_code', ''), item.get('os_family', 'linux'))}</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:middle;'><div style='font-weight:600;'>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</div><div style='margin-top:3px;font-size:12px;color:#64748b;'>IP: {html.escape(str(item.get('primary_ip') or '-'))}</div>{host_badges_html(item.get('country_code', ''), item.get('os_family', 'linux'))}</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:middle;'>{html.escape(str(item.get('metric') or '-'))}</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums;'>{html.escape(str(item.get('current') if item.get('current') is not None else '-'))}%</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums;'><strong>{html.escape(str(item.get('projected') if item.get('projected') is not None else '-'))}%</strong></td>"
@@ -1792,7 +1802,7 @@ def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int
         graph_cid = graph_lookup.get(alert_id, "")
         row_parts.append(
             f"<tr style='background:{'#fff1f2' if severity == 'critical' else '#fffaf0'};'>"
-            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><div style='font-weight:600;'>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</div>{host_badges_html(item.get('country_code', ''), item.get('os_family', 'linux'))}</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><div style='font-weight:600;'>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</div><div style='margin-top:3px;font-size:12px;color:#64748b;'>IP: {html.escape(str(item.get('primary_ip') or '-'))}</div>{host_badges_html(item.get('country_code', ''), item.get('os_family', 'linux'))}</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'>{html.escape(str(item.get('mountpoint') or '-'))}</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><strong style='color:{'#991b1b' if severity == 'critical' else '#9a3412'};'>{html.escape(str(item.get('severity') or '-').upper())}</strong></td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums;'>{html.escape('{:.1f}'.format(float(item.get('used_percent') or 0)))}%</td>"
@@ -1877,6 +1887,7 @@ def alert_instant_mail_html(
     severity: str,
     used_percent: float,
     display_name: str = "",
+    primary_ip: str = "",
     country_code: str = "",
     os_family: str = "linux",
     reported_at_utc: str = "",
@@ -1940,6 +1951,7 @@ def alert_instant_mail_html(
         f"<div style='font-size:12px;color:#5f7590;margin-bottom:8px;'>Benutzer: {html.escape(username)} | {html.escape(format_mail_datetime())}</div>"
         f"<h1 style='margin:0;font-size:34px;line-height:1.05;font-weight:800;letter-spacing:.2px;color:#17324d;'>{html.escape(customer_title)}</h1>"
         f"<div style='margin-top:6px;font-size:14px;color:#5f7590;'>Host: {html.escape(hostname)}</div>"
+        f"<div style='margin-top:4px;font-size:13px;color:#5f7590;'>IP: {html.escape(primary_ip or '-')}</div>"
         "<div style='margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;'>"
         f"<span style='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;background:transparent;'>{os_icon_html}</span>"
         f"<span style='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;background:transparent;'>{country_icon_html}</span>"
@@ -1953,6 +1965,8 @@ def alert_instant_mail_html(
         f"<td style='padding:8px 0;font-weight:700;'>{html.escape(customer_title)}</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Host</td>"
         f"<td style='padding:8px 0;font-weight:600;'>{html.escape(hostname)}</td></tr>"
+        "<tr><td style='padding:8px 0;color:#64748b;'>IP Adresse</td>"
+        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(primary_ip or '-')}</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Mountpoint</td>"
         f"<td style='padding:8px 0;font-weight:600;'>{html.escape(mountpoint)}</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Land</td>"
@@ -2051,6 +2065,7 @@ def send_instant_alert_mails_to_users(
                 severity,
                 used_percent,
                 display_name=str(host_context.get("display_name", "") or ""),
+                primary_ip=str(host_context.get("primary_ip", "") or ""),
                 country_code=str(host_context.get("country_code", "") or ""),
                 os_family=str(host_context.get("os_family", "linux") or "linux"),
                 reported_at_utc=reported_at_utc,
@@ -2738,6 +2753,7 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                     severity,
                     used_percent,
                     display_name=str(host_ctx.get("display_name", "") or ""),
+                    primary_ip=str(host_ctx.get("primary_ip", "") or ""),
                     country_code=str(host_ctx.get("country_code", "") or ""),
                     os_family=str(host_ctx.get("os_family", "linux") or "linux"),
                     reported_at_utc=reported_at_utc,
@@ -3235,11 +3251,13 @@ def collect_host_mail_context(conn: sqlite3.Connection, hostname: str) -> dict:
     country_code = country_code_override or extract_country_code_from_payload(latest_payload)
     os_name = str(latest_payload.get("os", "") or "")
     os_family = normalize_os_family(os_name)
+    primary_ip = str(latest_payload.get("primary_ip", "") or "").strip()
     return {
         "display_name": display_name,
         "country_code": country_code,
         "os_name": os_name,
         "os_family": os_family,
+        "primary_ip": primary_ip,
     }
 
 
