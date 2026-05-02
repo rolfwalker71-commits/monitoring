@@ -200,6 +200,80 @@ function formatAutoRefreshTimestamp(value = new Date()) {
   }).format(value);
 }
 
+function isValidIpv4(value) {
+  const text = String(value || "").trim();
+  if (!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(text)) {
+    return false;
+  }
+  return text.split(".").every((part) => Number(part) >= 0 && Number(part) <= 255);
+}
+
+function firstIpv4FromValue(value) {
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const candidate = firstIpv4FromValue(entry);
+      if (candidate) return candidate;
+    }
+    return "";
+  }
+
+  if (value && typeof value === "object") {
+    const objectCandidates = [
+      value.ipv4,
+      value.ip,
+      value.address,
+      value.addr,
+      value.local,
+      value.value,
+      value.addresses,
+    ];
+    for (const candidateValue of objectCandidates) {
+      const candidate = firstIpv4FromValue(candidateValue);
+      if (candidate) return candidate;
+    }
+    return "";
+  }
+
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+  const parts = text.split(/\s+/);
+  for (const part of parts) {
+    if (isValidIpv4(part)) {
+      return part;
+    }
+  }
+  return isValidIpv4(text) ? text : "";
+}
+
+function resolveDefaultNicIpv4(report, payload, network) {
+  const defaultInterface = String(network?.default_interface || "").trim();
+  const interfaces = Array.isArray(network?.interfaces) ? network.interfaces : [];
+
+  if (defaultInterface && interfaces.length > 0) {
+    const iface = interfaces.find((entry) => String(entry?.name || "") === defaultInterface);
+    if (iface) {
+      const fromInterface = firstIpv4FromValue([
+        iface.ipv4,
+        iface.ip,
+        iface.address,
+        iface.addresses,
+      ]);
+      if (fromInterface) {
+        return fromInterface;
+      }
+    }
+  }
+
+  const primary = firstIpv4FromValue(report?.primary_ip || payload?.primary_ip);
+  if (primary) {
+    return primary;
+  }
+
+  return firstIpv4FromValue(payload?.all_ips);
+}
+
 function updateAutoRefreshStatus(lastRefreshAt = null) {
   const statusEl = document.getElementById("autoRefreshStatus");
   if (!statusEl) {
@@ -2350,6 +2424,7 @@ function renderReportCard(report) {
   const memory = payload.memory || {};
   const swap = payload.swap || {};
   const network = payload.network || {};
+  const defaultNicIpv4 = resolveDefaultNicIpv4(report, payload, network);
   const title = asText(report.display_name || payload.display_name || report.hostname || payload.hostname);
   const technicalHostname = asText(report.hostname || payload.hostname);
   const deliveryMode = asText(report.delivery_mode || payload.delivery_mode || "live", "live").toLowerCase();
@@ -2409,7 +2484,7 @@ function renderReportCard(report) {
         <p><strong>🧷 Agent Version</strong><span>${escapeHtml(asText(payload.agent_version))}</span></p>
         <p><strong>🔐 API-Key</strong><span>${escapeHtml(formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}</span></p>
         <p><strong>🌐 Primary IP</strong><span>${escapeHtml(asText(report.primary_ip || payload.primary_ip))}</span></p>
-        <p><strong>🔌 Alle IPs</strong><span>${escapeHtml(asText(payload.all_ips))}</span></p>
+        <p><strong>🔌 IP (Default NIC)</strong><span>${escapeHtml(asText(defaultNicIpv4 || "-"))}</span></p>
         <p><strong>🐧 OS</strong><span>${escapeHtml(asText(payload.os))}</span></p>
         <p><strong>⚙️ Kernel</strong><span>${escapeHtml(asText(payload.kernel))}</span></p>
         <p><strong>⏱️ Uptime</strong><span>${escapeHtml(formatUptime(payload.uptime_seconds))}</span></p>
