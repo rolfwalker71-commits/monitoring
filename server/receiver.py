@@ -506,9 +506,10 @@ def init_db() -> None:
             (DEFAULT_ALERT_DIGEST_TIME,),
         )
 
+        session_cutoff_iso = utc_hours_ago_iso(1)
         conn.execute(
-            "DELETE FROM web_sessions WHERE expires_at_utc <= ?",
-            (utc_now_iso(),),
+            "DELETE FROM web_sessions WHERE last_activity_at_utc <= ?",
+            (session_cutoff_iso,),
         )
         conn.execute(
             "DELETE FROM oauth_pending_states WHERE expires_at_utc <= ?",
@@ -3974,9 +3975,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return ""
 
         with sqlite3.connect(DB_PATH) as conn:
+            session_cutoff_iso = utc_hours_ago_iso(1)
             conn.execute(
-                "DELETE FROM web_sessions WHERE expires_at_utc <= ?",
-                (utc_now_iso(),),
+                "DELETE FROM web_sessions WHERE last_activity_at_utc <= ?",
+                (session_cutoff_iso,),
             )
             row = conn.execute(
                 """
