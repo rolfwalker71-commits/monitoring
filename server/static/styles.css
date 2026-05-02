@@ -1433,8 +1433,8 @@ button:hover:not(.host-item) {
 .global-update-chip {
   width: 100%;
   border-radius: 999px;
-  min-height: 44px;
-  padding: 0 16px;
+  min-height: 36px;
+  padding: 0 14px;
   background: linear-gradient(135deg, #0f766e 0%, #0ea5e9 100%);
   color: #fff;
   font-weight: 700;
@@ -1463,8 +1463,8 @@ button:hover:not(.host-item) {
   align-items: center;
   gap: 4px;
   border-radius: 999px;
-  padding: 0 12px;
-  min-height: 36px;
+  padding: 0 10px;
+  min-height: 32px;
   font-size: 0.92rem;
   font-weight: 700;
   white-space: nowrap;
