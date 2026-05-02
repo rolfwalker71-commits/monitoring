@@ -2039,18 +2039,16 @@ function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
     return "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfuegbar.</p>";
   }
 
-  const focusMounts = filesystemTrends.filter((item) => shouldShowFilesystemGraph(item.mountpoint));
-  const otherMounts = filesystemTrends.filter((item) => !shouldShowFilesystemGraph(item.mountpoint));
-  const topTrends = [
-    ...sortFilesystemByMountpointAscending(focusMounts),
-    ...sortFilesystemByMountpointAscending(otherMounts),
-  ];
+  const filtered = filesystemTrends.filter((item) => shouldShowFilesystemGraph(item.mountpoint));
+  if (filtered.length === 0) {
+    return "<p class=\"muted\">Keine relevanten Filesystem-Verlaufskurven verfuegbar.</p>";
+  }
+  const topTrends = sortFilesystemByMountpointAscending(filtered);
   const standText = formatUtcPlus2(latestReportTimeUtc);
   const fsTrendWarnings = [];
 
   const cards = topTrends
     .map((item) => {
-      const isFocus = shouldShowFilesystemGraph(item.mountpoint);
       const points = normalizeSeries((item.series || []).map((point) => ({
         time_utc: point.time_utc,
         value: point.used_percent,
@@ -2068,7 +2066,7 @@ function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
         : "";
 
       return `
-        <article class="fs-chart-card${isFocus ? " fs-chart-card--focus" : ""}${alertLevel ? ` trend-alert-card-${alertLevel}` : ""}">
+        <article class="fs-chart-card${alertLevel ? ` trend-alert-card-${alertLevel}` : ""}">
           <header>
             <strong>${mountpoint}</strong>
             <span>${Number(item.sample_count || 0).toLocaleString("de-DE")} Samples</span>
