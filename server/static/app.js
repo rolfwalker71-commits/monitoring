@@ -424,11 +424,12 @@ async function loadAgentUpdateStatus() {
 }
 
 function updateViewMode() {
+  const layout = document.getElementById("layout");
   const overviewView = document.getElementById("overviewView");
   const reportsView = document.getElementById("reportsView");
   const globalView = document.getElementById("globalView");
-  const settingsView = document.getElementById("settingsView");
   const adminAlertSubsView = document.getElementById("adminAlertSubsView");
+  const settingsView = document.getElementById("settingsView");
   const overviewTabButton = document.getElementById("overviewTabButton");
   const reportsTabButton = document.getElementById("reportsTabButton");
   const settingsTabButton = document.getElementById("settingsTabButton");
@@ -441,11 +442,18 @@ function updateViewMode() {
   const settingsActive = state.viewMode === "settings";
   const adminAlertSubsActive = state.viewMode === "admin-alert-subs";
 
-  overviewView.classList.toggle("hidden", !overviewActive);
-  reportsView.classList.toggle("hidden", !reportsActive);
+  // full-panel views hide the layout (host list + reports column)
+  const fullPanelActive = globalActive || settingsActive || adminAlertSubsActive;
+  if (layout) layout.classList.toggle("hidden", fullPanelActive);
+
   if (globalView) globalView.classList.toggle("hidden", !globalActive);
   if (settingsView) settingsView.classList.toggle("hidden", !settingsActive);
   if (adminAlertSubsView) adminAlertSubsView.classList.toggle("hidden", !adminAlertSubsActive);
+
+  // tab views only relevant when layout is visible
+  if (overviewView) overviewView.classList.toggle("hidden", !overviewActive);
+  if (reportsView) reportsView.classList.toggle("hidden", !reportsActive);
+
   overviewTabButton.classList.toggle("active", overviewActive);
   reportsTabButton.classList.toggle("active", reportsActive);
   if (settingsTabButton) settingsTabButton.classList.toggle("active", settingsActive);
@@ -3910,6 +3918,22 @@ function wireEvents() {
   const settingsBackToOverviewButton = document.getElementById("settingsBackToOverviewButton");
   if (settingsBackToOverviewButton) {
     settingsBackToOverviewButton.addEventListener("click", () => {
+      state.viewMode = "overview";
+      updateViewMode();
+    });
+  }
+
+  const globalViewBackButton = document.getElementById("globalViewBackButton");
+  if (globalViewBackButton) {
+    globalViewBackButton.addEventListener("click", () => {
+      state.viewMode = "overview";
+      updateViewMode();
+    });
+  }
+
+  const adminAlertSubsBackButton = document.getElementById("adminAlertSubsBackButton");
+  if (adminAlertSubsBackButton) {
+    adminAlertSubsBackButton.addEventListener("click", () => {
       state.viewMode = "overview";
       updateViewMode();
     });
