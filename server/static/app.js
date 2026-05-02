@@ -2559,16 +2559,17 @@ function renderReportCard(report) {
     `;
   } else if (section === "agent-update") {
     detailContent = `
-      <section class="detail-card">
-        <h4>⟳ Agent Update Log</h4>
-        ${renderAgentUpdateLog(payload.agent_update)}
-      </section>
-    `;
-    detailContent += `
-      <section class="detail-card">
-        <h4>🗂️ agent.conf</h4>
-        ${renderAgentConfig(payload.agent_config)}
-      </section>
+      <div class="detail-cards">
+        <section class="detail-card">
+          <h4>⟳ Agent Update Log</h4>
+          ${renderAgentUpdateLog(payload.agent_update)}
+        </section>
+
+        <section class="detail-card">
+          <h4>🗂️ agent.conf</h4>
+          ${renderAgentConfig(payload.agent_config)}
+        </section>
+      </div>
     `;
   } else {
     detailContent = `
