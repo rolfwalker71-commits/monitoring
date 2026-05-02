@@ -3357,10 +3357,10 @@ async function loadAnalysisForHost() {
 
     analysisSummary.textContent = `${reportCount} Reports, hoechste aktuelle FS-Auslastung: ${latestMax}`;
     deliveryStats.innerHTML = [
-      `<span class="stat-chip">📬 ${latestDelivery}</span>`,
-      `<span class="stat-chip">Q${latestQueue}</span>`,
-      `<span class="stat-chip ${Number(delivery.delayed_report_count || 0) > 0 ? 'delayed' : 'live'}">${delayedCount} delayed</span>`,
-      `<span class="stat-chip live">${liveCount} live</span>`,
+      `<span class="stat-chip">📡 ${latestDelivery}</span>`,
+      `<span class="stat-chip">📥 Q${latestQueue}</span>`,
+      `<span class="stat-chip ${Number(delivery.delayed_report_count || 0) > 0 ? 'delayed' : 'live'}">⏳ ${delayedCount} delayed</span>`,
+      `<span class="stat-chip live">⚡ ${liveCount} live</span>`,
     ].join("");
     resourceCharts.innerHTML = renderResourceCharts(resourceSeries, data.latest_report_time_utc);
     resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc);
