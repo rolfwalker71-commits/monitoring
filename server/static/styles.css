@@ -1377,6 +1377,32 @@ button:hover:not(.host-item) {
   opacity: 0.55;
 }
 
+.header-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 0 12px;
+  min-height: 36px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.header-stat-chip-alert {
+  background: rgba(220, 38, 38, 0.15);
+  color: #dc2626;
+  border: 1.5px solid rgba(220, 38, 38, 0.35);
+}
+
+.header-stat-chip-warn {
+  background: rgba(217, 119, 6, 0.15);
+  color: #b45309;
+  border: 1.5px solid rgba(217, 119, 6, 0.35);
+}
+
 .agent-update-status-list {
   display: grid;
   gap: 6px;
@@ -2695,6 +2721,18 @@ body[data-theme="dark"] textarea {
   background: #0f1829;
   color: var(--text);
   border-color: #355174;
+}
+
+body[data-theme="dark"] .header-stat-chip-alert {
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+body[data-theme="dark"] .header-stat-chip-warn {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.35);
 }
 
 body[data-theme="dark"] .btn-secondary {

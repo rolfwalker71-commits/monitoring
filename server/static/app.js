@@ -45,6 +45,7 @@ const state = {
   hostAlertsCollapsed: false,
   globalSeverityFilter: "all",
   globalOpenAlertsCount: 0,
+  criticalTrendsCount: 0,
   authUser: "",
   isAuthenticated: false,
   visibleHosts: 0,
@@ -3528,6 +3529,8 @@ async function loadCriticalTrends() {
 
     const critCount = (data.warnings || []).filter((w) => w.level === "crit").length;
     const warnCount = (data.warnings || []).filter((w) => w.level === "warn").length;
+    state.criticalTrendsCount = critCount + warnCount;
+    updateHeaderStatChips();
     if (tabButton) {
       if (critCount > 0) {
         tabButton.dataset.alertBadge = String(critCount);
@@ -3625,6 +3628,21 @@ async function loadInactiveHosts() {
   }
 }
 
+function updateHeaderStatChips() {
+  const alertChip = document.getElementById("headerAlertChip");
+  const alertCount = document.getElementById("headerAlertCount");
+  const trendsChip = document.getElementById("headerTrendsChip");
+  const trendsCount = document.getElementById("headerTrendsCount");
+  if (alertChip && alertCount) {
+    alertCount.textContent = String(state.globalOpenAlertsCount);
+    alertChip.classList.toggle("hidden", state.globalOpenAlertsCount === 0);
+  }
+  if (trendsChip && trendsCount) {
+    trendsCount.textContent = String(state.criticalTrendsCount);
+    trendsChip.classList.toggle("hidden", state.criticalTrendsCount === 0);
+  }
+}
+
 async function loadGlobalAlertsOverview() {
   const summaryEl = document.getElementById("globalAlertsSummary");
   const rowsEl = document.getElementById("globalAlertsRows");
@@ -3659,6 +3677,7 @@ async function loadGlobalAlertsOverview() {
       ? `Globale Alerts (${state.globalOpenAlertsCount})`
       : "Globale Alerts";
     globalAlertsTabButton.classList.toggle("alert-active", state.globalOpenAlertsCount > 0);
+    updateHeaderStatChips();
 
     const alerts = allOpenAlerts.filter((item) => {
       if (state.globalSeverityFilter === "all") {
