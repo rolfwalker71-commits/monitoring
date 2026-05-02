@@ -2479,10 +2479,10 @@ button:hover:not(.host-item) {
 }
 
 .meta-group {
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
   padding: 10px;
-  background: var(--card-bg);
+  background: #fcfdff;
 }
 
 .meta-group-title {
@@ -2814,7 +2814,8 @@ body[data-theme="dark"] .settings-page,
 body[data-theme="dark"] .subview-tabs-shell,
 body[data-theme="dark"] .view-tabs-shell,
 body[data-theme="dark"] .panel,
-body[data-theme="dark"] .report-card {
+body[data-theme="dark"] .report-card,
+body[data-theme="dark"] .meta-group {
   background: #111b2f;
   border-color: #2a3c59;
   color: var(--text);
