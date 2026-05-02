@@ -1800,6 +1800,9 @@ def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int
         severity = str(item.get("severity") or "warning")
         alert_id = int(item.get("id") or 0)
         graph_cid = graph_lookup.get(alert_id, "")
+        graph_alt = html.escape(
+            f"Verlaufsgrafik {str(item.get('display_name') or item.get('hostname') or '-')}: {str(item.get('mountpoint') or '-')}"
+        )
         row_parts.append(
             f"<tr style='background:{'#fff1f2' if severity == 'critical' else '#fffaf0'};'>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><div style='font-weight:600;'>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</div><div style='margin-top:3px;font-size:12px;color:#64748b;'>IP: {html.escape(str(item.get('primary_ip') or '-'))}</div>{host_badges_html(item.get('country_code', ''), item.get('os_family', 'linux'))}</td>"
@@ -1814,7 +1817,7 @@ def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int
                 "<tr>"
                 "<td colspan='5' style='padding:10px 8px 14px;border-bottom:1px solid #fde2e2;background:#ffffff;'>"
                 f"<div style='margin:0 0 6px 0;font-size:12px;color:#64748b;'>Verlauf {graph_hours}h (Mountpoint-Auslastung)</div>"
-                f"<img src='cid:{html.escape(graph_cid)}' alt='Verlaufsgrafik' style='display:block;width:100%;max-width:620px;height:auto;border:1px solid #dbe3ef;border-radius:10px;background:#ffffff;'>"
+                f"<img src='cid:{html.escape(graph_cid)}' alt='{graph_alt}' style='display:block;width:100%;max-width:620px;height:auto;border:1px solid #dbe3ef;border-radius:10px;background:#ffffff;'>"
                 "</td>"
                 "</tr>"
             )
@@ -1928,10 +1931,11 @@ def alert_instant_mail_html(
     ang_logo_uri = ang_logo_data_uri()
     build_version = html.escape(read_build_version())
     reported_at = format_mail_datetime(reported_at_utc)
+    graph_alt = html.escape(f"Auslastungsverlauf {customer_title}: {mountpoint}")
     graph_block = (
         "<div style='margin-top:14px;'>"
         "<div style='margin:0 0 6px 0;font-size:12px;color:#64748b;'>Verlauf letzte 24h (Mountpoint-Auslastung)</div>"
-        f"<img src='cid:{html.escape(graph_cid)}' alt='Auslastungsverlauf' style='display:block;width:100%;max-width:620px;height:auto;border:1px solid #dbe3ef;border-radius:10px;background:#ffffff;'>"
+        f"<img src='cid:{html.escape(graph_cid)}' alt='{graph_alt}' style='display:block;width:100%;max-width:620px;height:auto;border:1px solid #dbe3ef;border-radius:10px;background:#ffffff;'>"
         "</div>"
     ) if graph_cid else (
         "<div style='margin-top:14px;padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #dbe3ef;color:#64748b;font-size:12px;'>"
