@@ -43,16 +43,24 @@ server/static/styles.css
 BUILD_VERSION
 AGENT_VERSION
 openapi.yaml
-pull-server-only.sh
 "
 
 # Parallele downloads: bis zu 4 gleichzeitig
-echo "Lade 8 Dateien parallel (max 4 gleichzeitig)..."
+echo "Lade 7 Dateien parallel (max 4 gleichzeitig)..."
 if ! printf '%s\n' "$FILES_LIST" | sed '/^$/d' | xargs -P 4 -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"'; then
   echo "Fehler bei parallelen Downloads" >&2
   exit 1
 fi
 echo "Dateien geladen ✓"
+
+# Selbst-Update: erst am Ende austauschen, damit das laufende Skript nicht waehrend
+# des Parsens ueberschrieben wird.
+NEW_PULL_SCRIPT="$TARGET_DIR/pull-server-only.sh.new"
+if download_file "pull-server-only.sh" "$NEW_PULL_SCRIPT"; then
+  chmod +x "$NEW_PULL_SCRIPT"
+else
+  echo "WARNUNG: Konnte neue pull-server-only.sh nicht laden." >&2
+fi
 
 ICONS_API="https://api.github.com/repos/$OWNER_REPO/contents/server/static/icons?ref=$SHA"
 TMP_DIR="$(mktemp -d)"
@@ -149,6 +157,12 @@ EOF
 
 systemctl daemon-reload
 systemctl enable monitoring
+
+if [ -f "$NEW_PULL_SCRIPT" ]; then
+  mv -f "$NEW_PULL_SCRIPT" "$TARGET_DIR/pull-server-only.sh"
+  echo "Self-Update abgeschlossen: pull-server-only.sh aktualisiert"
+fi
+
 echo ""
 echo "systemd Service installiert: $SERVICE_FILE"
 echo ""
