@@ -1787,7 +1787,7 @@ def trend_digest_subject(warnings: list[dict], local_date: str) -> str:
         level = "WARNUNG"
     else:
         level = "INFO"
-    return f"[Monitoring][{level}] Trend Digest {local_date} (C:{critical_count} W:{warning_count})"
+    return f"[Monitoring] [{level}] Trend Digest {local_date} (C:{critical_count} W:{warning_count})"
 
 
 def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int, str] | None = None, graph_hours: int = 24) -> str:
@@ -1864,7 +1864,7 @@ def alert_digest_subject(alerts: list[dict], local_date: str) -> str:
         level = "WARNUNG"
     else:
         level = "INFO"
-    return f"[Monitoring][{level}] Alert Digest {local_date} (C:{critical_count} W:{warning_count})"
+    return f"[Monitoring] [{level}] Alert Digest {local_date} (C:{critical_count} W:{warning_count})"
 
 
 def alert_instant_mail_subject(event_type: str, hostname: str, severity: str, display_name: str = "") -> str:
@@ -1876,7 +1876,7 @@ def alert_instant_mail_subject(event_type: str, hostname: str, severity: str, di
         "reminder": "Heads-Up: Alert noch offen",
     }.get(event_type, "Alarm")
     title_target = display_name.strip() or hostname
-    return f"[Monitoring][{sev_label}] {event_label}: {title_target}"
+    return f"[Monitoring] [{sev_label}] {event_label}: {title_target}"
 
 
 def alert_instant_mail_html(
@@ -1961,18 +1961,8 @@ def alert_instant_mail_html(
         "<div style='padding:20px;'>"
         f"<h2 style='margin:0 0 14px 0;font-size:20px;color:#0f172a;'>{html.escape(event_label)}</h2>"
         "<table style='width:100%;border-collapse:collapse;font-size:14px;'>"
-        "<tr><td style='padding:8px 0;color:#64748b;width:140px;'>Kunde</td>"
-        f"<td style='padding:8px 0;font-weight:700;'>{html.escape(customer_title)}</td></tr>"
-        "<tr><td style='padding:8px 0;color:#64748b;'>Host</td>"
-        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(hostname)}</td></tr>"
-        "<tr><td style='padding:8px 0;color:#64748b;'>IP Adresse</td>"
-        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(primary_ip or '-')}</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Mountpoint</td>"
         f"<td style='padding:8px 0;font-weight:600;'>{html.escape(mountpoint)}</td></tr>"
-        "<tr><td style='padding:8px 0;color:#64748b;'>Land</td>"
-        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(country_badge)}</td></tr>"
-        "<tr><td style='padding:8px 0;color:#64748b;'>OS Typ</td>"
-        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(os_label)}</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Gemeldet am</td>"
         f"<td style='padding:8px 0;font-weight:600;'>{html.escape(reported_at)}</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Auslastung</td>"
@@ -2744,7 +2734,7 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                     conn, hostname, mountpoint, severity=severity, hours=24
                 )
                 graph_attachments = [graph_attachment] if graph_attachment else []
-                subject = f"[Monitoring][HEADS-UP] Offener Alert: {html.escape(str(host_ctx.get('display_name', hostname)))}"
+                subject = f"[Monitoring] [HEADS-UP] Offener Alert: {html.escape(str(host_ctx.get('display_name', hostname)))}"
                 body = alert_instant_mail_html(
                     username,
                     "reminder",
