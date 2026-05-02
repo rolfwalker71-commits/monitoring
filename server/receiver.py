@@ -2132,12 +2132,12 @@ def send_instant_alert_telegram_to_users(
             continue
 
         text = (
-            f"{icon}\\n"
-            f"User: {username}\\n"
-            f"Host: {title} ({hostname})\\n"
-            f"Mountpoint: {mountpoint}\\n"
-            f"Severity: {severity}\\n"
-            f"Used: {used_percent:.1f}%\\n"
+            f"{icon}\n"
+            f"User: {username}\n"
+            f"Host: {title} ({hostname})\n"
+            f"Mountpoint: {mountpoint}\n"
+            f"Severity: {severity}\n"
+            f"Used: {used_percent:.1f}%\n"
             f"Zeit: {now_local}"
         )
         telegram_send_to_chat(bot_token, chat_id, text)
