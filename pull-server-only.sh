@@ -48,10 +48,10 @@ pull-server-only.sh
 
 # Parallele downloads: bis zu 4 gleichzeitig
 echo "Lade 8 Dateien parallel (max 4 gleichzeitig)..."
-printf '%s\n' "$FILES_LIST" | sed '/^$/d' | xargs -P 4 -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"' || {
-    echo "Fehler bei parallelen Downloads" >&2
-    exit 1
-}
+if ! printf '%s\n' "$FILES_LIST" | sed '/^$/d' | xargs -P 4 -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"'; then
+  echo "Fehler bei parallelen Downloads" >&2
+  exit 1
+fi
 echo "Dateien geladen ✓"
 
 ICONS_API="https://api.github.com/repos/$OWNER_REPO/contents/server/static/icons?ref=$SHA"
@@ -69,26 +69,9 @@ curl -fsSL --retry 5 --retry-delay 1 \
   -o "$ICONS_JSON"
 
 ICON_NAMES_FILE="$TMP_DIR/icon_names.txt"
-python3 - "$ICONS_JSON" > "$ICON_NAMES_FILE" <<'PY'
-import json
-import sys
-
-path = sys.argv[1]
-with open(path, "r", encoding="utf-8") as f:
-  data = json.load(f)
-
-if isinstance(data, list):
-  names = [
-    str(item.get("name", ""))
-    for item in data
-    if isinstance(item, dict) and str(item.get("name", "")).lower().endswith(".png")
-  ]
-else:
-  names = []
-
-for name in sorted(set(names)):
-  print(name)
-PY
+grep -o '"name":[[:space:]]*"[^"]*\.png"' "$ICONS_JSON" \
+  | sed -E 's/.*"name":[[:space:]]*"([^"]*)"/\1/' \
+  | sort -u > "$ICON_NAMES_FILE"
 
 if [ ! -s "$ICON_NAMES_FILE" ]; then
   echo "Keine PNG-Icons geladen (Liste war leer oder ungeeignet)." >&2
@@ -97,9 +80,9 @@ fi
 
 ICON_COUNT="$(wc -l < "$ICON_NAMES_FILE" | tr -d ' ')"
 echo "Lade ${ICON_COUNT} PNG-Icons parallel..."
-sed 's#^#server/static/icons/#' "$ICON_NAMES_FILE" | xargs -P 4 -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"' || {
-    echo "Fehler bei Icon-Downloads (nicht kritisch)" >&2
-}
+if ! sed 's#^#server/static/icons/#' "$ICON_NAMES_FILE" | xargs -P 4 -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"'; then
+  echo "Fehler bei Icon-Downloads (nicht kritisch)" >&2
+fi
 echo "Icons geladen ✓"
 
 echo "$SHA" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
