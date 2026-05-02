@@ -57,6 +57,7 @@ const state = {
   userProfileLoaded: false,
   oauthSettingsLoaded: false,
   userManagementLoaded: false,
+  hostFilterNoMatches: false,
 };
 
 const ANALYSIS_RANGE_OPTIONS = new Map([
@@ -2353,6 +2354,16 @@ function splitHosts(hosts) {
   };
 }
 
+function hasActiveHostFilters() {
+  return Boolean(
+    String(state.hostSearchQuery || "").trim().length > 0
+    || String(state.hostAlertFilter || "all") !== "all"
+    || String(state.hostMutedFilter || "all") !== "all"
+    || String(state.hostOsFilter || "all") !== "all"
+    || String(state.hostCountryFilter || "all") !== "all"
+  );
+}
+
 function hiddenHostsToggleLabel(collapsed) {
   return collapsed ? "▸" : "▾";
 }
@@ -2899,8 +2910,13 @@ async function loadHosts(options = {}) {
     state.visibleHosts = Number(data.visible_hosts || visibleHosts.length || 0);
     state.hiddenHosts = Number(data.hidden_hosts || hiddenHosts.length || 0);
     const orderedHosts = [...visibleHosts, ...hiddenHosts];
+    state.hostFilterNoMatches = hosts.length > 0 && orderedHosts.length === 0 && hasActiveHostFilters();
 
-    if (!state.selectedHost && orderedHosts.length > 0) {
+    if (orderedHosts.length === 0) {
+      state.selectedHost = "";
+      state.selectedDisplayName = "";
+      state.reportOffset = 0;
+    } else if (!state.selectedHost) {
       state.selectedHost = String(orderedHosts[0].hostname || "");
       state.selectedDisplayName = String(orderedHosts[0].display_name || orderedHosts[0].hostname || "");
       state.reportOffset = 0;
@@ -2937,7 +2953,9 @@ async function loadReportsForHost() {
     state.currentReport = null;
     selectedHostTitle.textContent = "🗂️ Meldungen";
     count.textContent = "";
-    list.innerHTML = "<p class=\"muted\">Kein Host ausgewaehlt.</p>";
+    list.innerHTML = state.hostFilterNoMatches
+      ? "<p class=\"muted\">Keine Daten zum Suchfilter vorhanden.</p>"
+      : "<p class=\"muted\">Kein Host ausgewaehlt.</p>";
     updatePagerButtons();
     return;
   }
@@ -3043,7 +3061,12 @@ async function loadAnalysisForHost() {
     filesystemStats.textContent = "";
     filesystemCharts.innerHTML = "";
     resourceTrendCards.innerHTML = "";
-    analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
+    analysisRows.innerHTML = state.hostFilterNoMatches
+      ? "<tr><td colspan=\"7\" class=\"muted\">Keine Daten zum Suchfilter vorhanden.</td></tr>"
+      : "<tr><td colspan=\"7\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
+    if (state.hostFilterNoMatches) {
+      filesystemCharts.innerHTML = "<p class=\"muted\">Keine Daten zum Suchfilter vorhanden.</p>";
+    }
     return;
   }
 
@@ -3146,7 +3169,9 @@ async function loadAlertsForHost() {
 
   if (!state.selectedHost) {
     alertsSummary.textContent = "";
-    alertsRows.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
+    alertsRows.innerHTML = state.hostFilterNoMatches
+      ? "<tr><td colspan=\"6\" class=\"muted\">Keine Daten zum Suchfilter vorhanden.</td></tr>"
+      : "<tr><td colspan=\"6\" class=\"muted\">Kein Host ausgewaehlt.</td></tr>";
     return;
   }
 
