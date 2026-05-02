@@ -308,6 +308,44 @@ function startAutoRefreshTimer() {
   }, AUTO_REFRESH_INTERVAL_MS);
 }
 
+let sessionRefreshTimerId = null;
+
+function startSessionRefreshTimer() {
+  stopSessionRefreshTimer();
+  // Refresh session every 8 minutes (480 seconds)
+  sessionRefreshTimerId = window.setInterval(() => {
+    void refreshSession();
+  }, 8 * 60 * 1000);
+}
+
+function stopSessionRefreshTimer() {
+  if (sessionRefreshTimerId !== null) {
+    window.clearInterval(sessionRefreshTimerId);
+    sessionRefreshTimerId = null;
+  }
+}
+
+async function refreshSession() {
+  const sessionToken = localStorage.getItem("sessionToken");
+  if (!sessionToken) {
+    return;
+  }
+  try {
+    const response = await fetch("/api/v1/session/refresh", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${sessionToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+    if (!response.ok) {
+      console.warn("Session refresh failed:", response.status);
+    }
+  } catch (error) {
+    console.warn("Session refresh error:", error);
+  }
+}
+
 async function refreshDashboard(options = {}) {
   const automatic = options.automatic === true;
   const preserveScroll = options.preserveScroll === true;
@@ -4305,6 +4343,7 @@ async function init() {
   }
   await refreshDashboard({ preserveScroll: false });
   startAutoRefreshTimer();
+  startSessionRefreshTimer();
 }
 
 init();

@@ -212,11 +212,20 @@ def init_db() -> None:
                 session_token TEXT PRIMARY KEY,
                 username TEXT NOT NULL,
                 created_at_utc TEXT NOT NULL,
-                expires_at_utc TEXT NOT NULL,
+                last_activity_at_utc TEXT NOT NULL,
                 FOREIGN KEY(username) REFERENCES web_users(username)
             )
             """
         )
+        # Migration: Add last_activity_at_utc column if missing (for old databases)
+        existing_web_sessions_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(web_sessions)").fetchall()
+        }
+        if "last_activity_at_utc" not in existing_web_sessions_columns:
+            conn.execute("ALTER TABLE web_sessions ADD COLUMN last_activity_at_utc TEXT NOT NULL DEFAULT ''")
+            # Set activity timestamp to creation time for existing sessions
+            conn.execute("UPDATE web_sessions SET last_activity_at_utc = created_at_utc WHERE last_activity_at_utc = ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS agent_commands (
@@ -563,44 +572,50 @@ def verify_password(password: str, password_hash: str, password_salt: str) -> bo
 
 def create_web_session(conn: sqlite3.Connection, username: str) -> tuple[str, str]:
     now = datetime.now(timezone.utc)
-    expires = now + timedelta(hours=WEB_SESSION_TTL_HOURS)
     session_token = secrets.token_urlsafe(32)
+    now_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Session expires 1 hour after last activity (inactivity timeout)
+    expires = now + timedelta(hours=1)
     conn.execute(
         """
-        INSERT INTO web_sessions (session_token, username, created_at_utc, expires_at_utc)
+        INSERT INTO web_sessions (session_token, username, created_at_utc, last_activity_at_utc)
         VALUES (?, ?, ?, ?)
         """,
         (
             session_token,
             username,
-            now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            now_iso,
+            now_iso,
         ),
     )
     return session_token, expires.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def list_active_web_sessions(conn: sqlite3.Connection) -> list[dict]:
-    now_iso = utc_now_iso()
+    now = datetime.now(timezone.utc)
+    one_hour_ago = now - timedelta(hours=1)
+    one_hour_ago_iso = one_hour_ago.strftime("%Y-%m-%dT%H:%M:%SZ")
+    
+    # Delete sessions that have been inactive for more than 1 hour
     conn.execute(
-        "DELETE FROM web_sessions WHERE expires_at_utc <= ?",
-        (now_iso,),
+        "DELETE FROM web_sessions WHERE last_activity_at_utc <= ?",
+        (one_hour_ago_iso,),
     )
     rows = conn.execute(
         """
-        SELECT username, COUNT(*) AS session_count, MAX(expires_at_utc) AS latest_expires_at_utc
+        SELECT username, COUNT(*) AS session_count, MAX(last_activity_at_utc) AS latest_activity_at_utc
         FROM web_sessions
-        WHERE expires_at_utc > ?
+        WHERE last_activity_at_utc > ?
         GROUP BY username
         ORDER BY username COLLATE NOCASE ASC
         """,
-        (now_iso,),
+        (one_hour_ago_iso,),
     ).fetchall()
     return [
         {
             "username": str(row[0] or ""),
             "session_count": int(row[1] or 0),
-            "latest_expires_at_utc": str(row[2] or ""),
+            "latest_activity_at_utc": str(row[2] or ""),
         }
         for row in rows
         if str(row[0] or "").strip()
@@ -4154,6 +4169,32 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 payload = current_user_payload(conn, username)
             self._send_json(HTTPStatus.OK, payload)
+            return
+
+        if parsed.path == "/api/v1/session/refresh":
+            username = self._web_session_username()
+            if not username:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "Not authenticated"})
+                return
+            session_token = self.headers.get("Authorization", "").replace("Bearer ", "")
+            if not session_token:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "No session token"})
+                return
+            now_iso = utc_now_iso()
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute(
+                    "UPDATE web_sessions SET last_activity_at_utc = ? WHERE session_token = ?",
+                    (now_iso, session_token),
+                )
+                conn.commit()
+            expires = datetime.now(timezone.utc) + timedelta(hours=1)
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "username": username,
+                    "expires_at_utc": expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                },
+            )
             return
 
         if parsed.path == "/api/v1/active-users":
