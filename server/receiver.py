@@ -1416,6 +1416,203 @@ def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
     ]
 
 
+def _safe_attachment_token(value: str, fallback: str) -> str:
+    token = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value or "")).strip("-._")
+    return token or fallback
+
+
+def _filesystem_usage_from_payload(payload: dict, mountpoint: str) -> float | None:
+    mount = str(mountpoint or "").strip()
+    if not mount:
+        return None
+    for item in payload.get("filesystems", []):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("mountpoint", "")).strip() != mount:
+            continue
+        try:
+            value = float(item.get("used_percent"))
+        except (TypeError, ValueError):
+            return None
+        return max(0.0, min(value, 100.0))
+    return None
+
+
+def collect_filesystem_usage_series(
+    conn: sqlite3.Connection,
+    hostname: str,
+    mountpoint: str,
+    *,
+    hours: int = 24,
+    max_points: int = 72,
+) -> list[float]:
+    host = str(hostname or "").strip()
+    mount = str(mountpoint or "").strip()
+    if not host or not mount:
+        return []
+
+    cutoff_iso = utc_hours_ago_iso(hours)
+    rows = conn.execute(
+        """
+        SELECT payload_json
+        FROM reports
+        WHERE hostname = ? AND received_at_utc >= ?
+        ORDER BY id ASC
+        """,
+        (host, cutoff_iso),
+    ).fetchall()
+
+    values: list[float] = []
+    for row in rows:
+        payload = parse_payload_json(str(row[0] or "{}"))
+        used = _filesystem_usage_from_payload(payload, mount)
+        if used is not None:
+            values.append(used)
+
+    if len(values) <= max_points:
+        return values
+
+    step = max(1, len(values) // max_points)
+    compact = [values[i] for i in range(0, len(values), step)]
+    if compact and compact[-1] != values[-1]:
+        compact.append(values[-1])
+    return compact[-max_points:]
+
+
+def render_usage_series_svg(
+    values: list[float],
+    *,
+    warning_threshold: float = WARNING_THRESHOLD_PERCENT,
+    critical_threshold: float = CRITICAL_THRESHOLD_PERCENT,
+    severity: str = "warning",
+    title: str = "Auslastung letzte 24h",
+) -> str | None:
+    if len(values) < 3:
+        return None
+
+    width = 640
+    height = 220
+    left = 44
+    right = 16
+    top = 16
+    bottom = 32
+    plot_width = width - left - right
+    plot_height = height - top - bottom
+
+    cleaned = [max(0.0, min(float(v), 100.0)) for v in values]
+    n = len(cleaned)
+
+    def x_at(index: int) -> float:
+        if n <= 1:
+            return float(left)
+        return left + (plot_width * index / (n - 1))
+
+    def y_at(percent: float) -> float:
+        return top + (100.0 - percent) * plot_height / 100.0
+
+    points = " ".join(f"{x_at(idx):.2f},{y_at(value):.2f}" for idx, value in enumerate(cleaned))
+    fill_points = f"{left:.2f},{top + plot_height:.2f} {points} {left + plot_width:.2f},{top + plot_height:.2f}"
+
+    warning_y = y_at(max(0.0, min(float(warning_threshold), 100.0)))
+    critical_y = y_at(max(0.0, min(float(critical_threshold), 100.0)))
+    last_value = cleaned[-1]
+    line_color = "#dc2626" if severity == "critical" else "#d97706"
+    if severity not in {"critical", "warning"}:
+        line_color = "#2563eb"
+
+    svg_title = html.escape(title)
+    return (
+        f"<svg xmlns='http://www.w3.org/2000/svg' width='{width}' height='{height}' viewBox='0 0 {width} {height}' role='img' aria-label='{svg_title}'>"
+        "<defs>"
+        "<linearGradient id='usageFill' x1='0' y1='0' x2='0' y2='1'>"
+        "<stop offset='0%' stop-color='#93c5fd' stop-opacity='0.45'/>"
+        "<stop offset='100%' stop-color='#93c5fd' stop-opacity='0.02'/>"
+        "</linearGradient>"
+        "</defs>"
+        "<rect x='0' y='0' width='640' height='220' rx='12' fill='#ffffff'/>"
+        f"<rect x='{left}' y='{top}' width='{plot_width}' height='{plot_height}' rx='10' fill='#f8fbff' stroke='#dbe4f0'/>"
+        f"<line x1='{left}' y1='{warning_y:.2f}' x2='{left + plot_width}' y2='{warning_y:.2f}' stroke='#f59e0b' stroke-dasharray='5 4' stroke-width='1'/>"
+        f"<line x1='{left}' y1='{critical_y:.2f}' x2='{left + plot_width}' y2='{critical_y:.2f}' stroke='#ef4444' stroke-dasharray='5 4' stroke-width='1'/>"
+        f"<polyline points='{fill_points}' fill='url(#usageFill)' stroke='none'/>"
+        f"<polyline points='{points}' fill='none' stroke='{line_color}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/>"
+        f"<circle cx='{x_at(n - 1):.2f}' cy='{y_at(last_value):.2f}' r='5' fill='{line_color}' stroke='#ffffff' stroke-width='2'/>"
+        f"<text x='12' y='{y_at(100):.2f}' fill='#64748b' font-family='Segoe UI,Arial,sans-serif' font-size='11'>100%</text>"
+        f"<text x='18' y='{y_at(50):.2f}' fill='#64748b' font-family='Segoe UI,Arial,sans-serif' font-size='11'>50%</text>"
+        f"<text x='24' y='{y_at(0):.2f}' fill='#64748b' font-family='Segoe UI,Arial,sans-serif' font-size='11'>0%</text>"
+        f"<text x='{left}' y='{height - 10}' fill='#64748b' font-family='Segoe UI,Arial,sans-serif' font-size='11'>letzte {n} Messpunkte</text>"
+        f"<text x='{left + plot_width}' y='{height - 10}' text-anchor='end' fill='#0f172a' font-family='Segoe UI,Arial,sans-serif' font-size='12' font-weight='700'>aktuell {last_value:.1f}%</text>"
+        "</svg>"
+    )
+
+
+def make_inline_svg_attachment(svg_content: str, *, cid: str, name: str) -> dict:
+    return {
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        "name": name,
+        "contentType": "image/svg+xml",
+        "isInline": True,
+        "contentId": cid,
+        "contentBytes": base64.b64encode(svg_content.encode("utf-8")).decode("ascii"),
+    }
+
+
+def build_alert_usage_graph_attachment(
+    conn: sqlite3.Connection,
+    hostname: str,
+    mountpoint: str,
+    *,
+    severity: str,
+    hours: int = 24,
+) -> tuple[str | None, dict | None]:
+    series = collect_filesystem_usage_series(conn, hostname, mountpoint, hours=hours)
+    if len(series) < 3:
+        return None, None
+
+    graph_title = f"{hostname} {mountpoint} Auslastung (letzte {hours}h)"
+    svg = render_usage_series_svg(series, severity=severity, title=graph_title)
+    if not svg:
+        return None, None
+
+    safe_host = _safe_attachment_token(hostname, "host")
+    safe_mount = _safe_attachment_token(mountpoint.replace("/", "-"), "mount")
+    cid = f"graph-{safe_host}-{safe_mount}-{secrets.token_hex(4)}@monitoring"
+    filename = f"graph-{safe_host}-{safe_mount}.svg"
+    return cid, make_inline_svg_attachment(svg, cid=cid, name=filename)
+
+
+def build_alert_digest_graph_bundle(
+    conn: sqlite3.Connection,
+    alerts: list[dict],
+    *,
+    hours: int = 24,
+    max_graphs: int = 8,
+) -> tuple[dict[int, str], list[dict]]:
+    graph_cids: dict[int, str] = {}
+    attachments: list[dict] = []
+
+    for item in alerts[:max_graphs]:
+        alert_id = int(item.get("id") or 0)
+        hostname = str(item.get("hostname") or "").strip()
+        mountpoint = str(item.get("mountpoint") or "").strip()
+        severity = str(item.get("severity") or "warning").strip().lower()
+        if alert_id <= 0 or not hostname or not mountpoint or severity not in {"critical", "warning"}:
+            continue
+
+        cid, attachment = build_alert_usage_graph_attachment(
+            conn,
+            hostname,
+            mountpoint,
+            severity=severity,
+            hours=hours,
+        )
+        if not cid or not attachment:
+            continue
+        graph_cids[alert_id] = cid
+        attachments.append(attachment)
+
+    return graph_cids, attachments
+
+
 def host_badges_html(country_code: object, os_family: object) -> str:
     normalized_country_code = normalize_country_code(country_code)
     country_badge = normalized_country_code if normalized_country_code else "--"
@@ -1512,22 +1709,35 @@ def trend_digest_subject(warnings: list[dict], local_date: str) -> str:
     return f"[Monitoring][{level}] Trend Digest {local_date} (C:{critical_count} W:{warning_count})"
 
 
-def alert_digest_html(username: str, alerts: list[dict]) -> str:
+def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int, str] | None = None, graph_hours: int = 24) -> str:
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
     build_version = html.escape(read_build_version())
-    rows_html = "".join(
-        (
-            f"<tr style='background:{'#fff1f2' if str(item.get('severity')) == 'critical' else '#fffaf0'};'>"
+    graph_lookup = graph_cids or {}
+    row_parts: list[str] = []
+    for item in alerts:
+        severity = str(item.get("severity") or "warning")
+        alert_id = int(item.get("id") or 0)
+        graph_cid = graph_lookup.get(alert_id, "")
+        row_parts.append(
+            f"<tr style='background:{'#fff1f2' if severity == 'critical' else '#fffaf0'};'>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><div style='font-weight:600;'>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</div>{host_badges_html(item.get('country_code', ''), item.get('os_family', 'linux'))}</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'>{html.escape(str(item.get('mountpoint') or '-'))}</td>"
-            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><strong style='color:{'#991b1b' if str(item.get('severity')) == 'critical' else '#9a3412'};'>{html.escape(str(item.get('severity') or '-').upper())}</strong></td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><strong style='color:{'#991b1b' if severity == 'critical' else '#9a3412'};'>{html.escape(str(item.get('severity') or '-').upper())}</strong></td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums;'>{html.escape('{:.1f}'.format(float(item.get('used_percent') or 0)))}%</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;font-variant-numeric:tabular-nums;'>{html.escape(format_mail_datetime(str(item.get('last_seen_at_utc') or '')))}</td>"
             "</tr>"
         )
-        for item in alerts
-    )
+        if graph_cid:
+            row_parts.append(
+                "<tr>"
+                "<td colspan='5' style='padding:10px 8px 14px;border-bottom:1px solid #fde2e2;background:#ffffff;'>"
+                f"<div style='margin:0 0 6px 0;font-size:12px;color:#64748b;'>Verlauf {graph_hours}h (Mountpoint-Auslastung)</div>"
+                f"<img src='cid:{html.escape(graph_cid)}' alt='Verlaufsgrafik' style='display:block;width:100%;max-width:620px;height:auto;border:1px solid #dbe3ef;border-radius:10px;background:#ffffff;'>"
+                "</td>"
+                "</tr>"
+            )
+    rows_html = "".join(row_parts)
     if not rows_html:
         rows_html = "<tr><td colspan='5' style='padding:12px 8px;text-align:left;color:#7f1d1d;'>Keine offenen Alarme vorhanden.</td></tr>"
 
@@ -1598,18 +1808,20 @@ def alert_instant_mail_html(
     country_code: str = "",
     os_family: str = "linux",
     reported_at_utc: str = "",
+    graph_cid: str = "",
 ) -> str:
-    sev_color = "#dc2626" if severity == "critical" else "#d97706"
-    sev_bg = "#fee2e2" if severity == "critical" else "#fef3c7"
-    sev_text = "#991b1b" if severity == "critical" else "#92400e"
-    sev_label = "KRITISCH" if severity == "critical" else "WARNUNG"
+    normalized_severity = str(severity or "").strip().lower()
+    if normalized_severity == "critical":
+        sev_color, sev_bg, sev_text, sev_label = "#dc2626", "#fee2e2", "#991b1b", "KRITISCH"
+    elif normalized_severity == "warning":
+        sev_color, sev_bg, sev_text, sev_label = "#d97706", "#fef3c7", "#92400e", "WARNUNG"
+    else:
+        sev_color, sev_bg, sev_text, sev_label = "#2563eb", "#dbeafe", "#1e3a8a", "INFO"
     event_label = {
         "opened": "Alarm ausgelöst",
         "escalated": "Alarm eskaliert",
         "resolved": "Alarm behoben",
     }.get(event_type, "Alarm")
-    bar_width = min(100, max(0, int(used_percent)))
-    bar_color = sev_color
     used_str = f"{used_percent:.1f}"
     customer_title = display_name.strip() or hostname
     normalized_country_code = normalize_country_code(country_code)
@@ -1632,6 +1844,15 @@ def alert_instant_mail_html(
     ang_logo_uri = ang_logo_data_uri()
     build_version = html.escape(read_build_version())
     reported_at = format_mail_datetime(reported_at_utc)
+    graph_block = (
+        "<div style='margin-top:14px;'>"
+        "<div style='margin:0 0 6px 0;font-size:12px;color:#64748b;'>Verlauf letzte 24h (Mountpoint-Auslastung)</div>"
+        f"<img src='cid:{html.escape(graph_cid)}' alt='Auslastungsverlauf' style='display:block;width:100%;max-width:620px;height:auto;border:1px solid #dbe3ef;border-radius:10px;background:#ffffff;'>"
+        "</div>"
+    ) if graph_cid else (
+        "<div style='margin-top:14px;padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #dbe3ef;color:#64748b;font-size:12px;'>"
+        "Keine Verlaufsgrafik verfuegbar (zu wenig Datenpunkte).</div>"
+    )
     return (
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:700px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;'>"
@@ -1672,9 +1893,7 @@ def alert_instant_mail_html(
         "<tr><td style='padding:8px 0;color:#64748b;'>Schweregrad</td>"
         f"<td style='padding:8px 0;'><span style='display:inline-block;padding:2px 10px;border-radius:999px;background:{sev_bg};color:{sev_text};font-weight:700;font-size:12px;'>{sev_label}</span></td></tr>"
         "</table>"
-        f"<div style='margin-top:14px;background:#f1f5f9;border-radius:8px;overflow:hidden;height:12px;'>"
-        f"<div style='width:{bar_width}%;height:100%;background:{bar_color};transition:width .3s;'></div>"
-        "</div>"
+        f"{graph_block}"
         f"<div style='margin-top:18px;padding-top:14px;border-top:1px solid #e2e8f0;text-align:right;'><img src='{ang_logo_uri}' alt='ANG' width='110' style='display:inline-block;max-width:110px;height:auto;'></div>"
         "</div>"
         "</div>"
@@ -1737,6 +1956,14 @@ def send_instant_alert_mails_to_users(
             ok_token, access_token, _err = ensure_microsoft_access_token(conn, username)
             if not ok_token:
                 continue
+            graph_cid, graph_attachment = build_alert_usage_graph_attachment(
+                conn,
+                hostname,
+                mountpoint,
+                severity=severity,
+                hours=24,
+            )
+            graph_attachments = [graph_attachment] if graph_attachment else []
             subject = alert_instant_mail_subject(
                 event_type,
                 hostname,
@@ -1754,8 +1981,16 @@ def send_instant_alert_mails_to_users(
                 country_code=str(host_context.get("country_code", "") or ""),
                 os_family=str(host_context.get("os_family", "linux") or "linux"),
                 reported_at_utc=reported_at_utc,
+                graph_cid=graph_cid or "",
             )
-            send_microsoft_mail_multi(access_token, all_recipients, subject, body, content_type="HTML")
+            send_microsoft_mail_multi(
+                access_token,
+                all_recipients,
+                subject,
+                body,
+                content_type="HTML",
+                attachments=graph_attachments,
+            )
         except Exception:
             pass
 
@@ -2258,25 +2493,30 @@ def send_microsoft_mail(
     content: str,
     *,
     content_type: str = "Text",
+    attachments: list[dict] | None = None,
 ) -> tuple[bool, str]:
+    message_payload = {
+        "subject": subject,
+        "body": {
+            "contentType": content_type,
+            "content": content,
+        },
+        "toRecipients": [
+            {
+                "emailAddress": {
+                    "address": recipient,
+                }
+            }
+        ],
+    }
+    if attachments:
+        message_payload["attachments"] = attachments
+
     status, payload, raw = request_json(
         "https://graph.microsoft.com/v1.0/me/sendMail",
         method="POST",
         payload={
-            "message": {
-                "subject": subject,
-                "body": {
-                    "contentType": content_type,
-                    "content": content,
-                },
-                "toRecipients": [
-                    {
-                        "emailAddress": {
-                            "address": recipient,
-                        }
-                    }
-                ],
-            },
+            "message": message_payload,
             "saveToSentItems": True,
         },
         headers={
@@ -2295,6 +2535,7 @@ def send_microsoft_mail_multi(
     content: str,
     *,
     content_type: str = "Text",
+    attachments: list[dict] | None = None,
 ) -> tuple[bool, str]:
     if not recipients:
         return False, "no recipients"
@@ -2308,6 +2549,7 @@ def send_microsoft_mail_multi(
             subject,
             content,
             content_type=content_type,
+            attachments=attachments,
         )
         if ok:
             sent_count += 1
@@ -2392,12 +2634,14 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
 
         if send_alert:
             alerts = collect_open_alerts(conn)
+            graph_cids, graph_attachments = build_alert_digest_graph_bundle(conn, alerts, hours=24)
             alert_ok, _alert_details = send_microsoft_mail_multi(
                 access_token,
                 all_alert_recipients,
                 alert_digest_subject(alerts, today_local),
-                alert_digest_html(username, alerts),
+                alert_digest_html(username, alerts, graph_cids=graph_cids, graph_hours=24),
                 content_type="HTML",
+                attachments=graph_attachments,
             )
             if alert_ok:
                 conn.execute(
@@ -4818,6 +5062,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     )
                 elif endpoint_mode == "alerts":
                     alerts = collect_open_alerts(conn)
+                    graph_cids, graph_attachments = build_alert_digest_graph_bundle(conn, alerts, hours=24)
                     extra_alert_recipients = parse_email_recipients(settings.get("alert_email_recipients", ""))
                     all_alert_recipients = parse_email_recipients(",".join([recipient] + extra_alert_recipients))
                     if not all_alert_recipients:
@@ -4827,8 +5072,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         access_token,
                         all_alert_recipients,
                         alert_digest_subject(alerts, datetime.now().astimezone().date().isoformat()) + " [TEST]",
-                        alert_digest_html(username, alerts),
+                        alert_digest_html(username, alerts, graph_cids=graph_cids, graph_hours=24),
                         content_type="HTML",
+                        attachments=graph_attachments,
                     )
                 else:
                     mail_ok, mail_details = send_microsoft_mail(
