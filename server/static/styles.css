@@ -508,6 +508,38 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   color: #475569;
 }
 
+/* Admin alert subscriptions section */
+.admin-alert-sub-user-block {
+  margin-bottom: 16px;
+}
+
+.admin-alert-sub-username {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: var(--text-primary, #1e293b);
+}
+
+.tag-admin {
+  font-size: 11px;
+  font-weight: 600;
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 1px 7px;
+  vertical-align: middle;
+}
+
+.admin-sub-divider {
+  border: none;
+  border-top: 1px solid var(--border, #e2e8f0);
+  margin: 14px 0;
+}
+
+td.center {
+  text-align: center;
+}
+
 .settings-helper-text {
   color: #64748b;
   font-size: 12px;

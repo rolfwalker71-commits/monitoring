@@ -1040,6 +1040,23 @@ def get_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str) ->
     ]
 
 
+def list_all_user_alert_subscriptions(conn: sqlite3.Connection) -> list[dict]:
+    """Return all users together with their host alert subscriptions (admin view)."""
+    users = list_web_users(conn)
+    result = []
+    for user in users:
+        uname = user["username"]
+        subs = get_web_user_alert_subscriptions(conn, uname)
+        result.append(
+            {
+                "username": uname,
+                "is_admin": user["is_admin"],
+                "subscriptions": subs,
+            }
+        )
+    return result
+
+
 def replace_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str, subscriptions: list[dict]) -> list[dict]:
     user = get_web_user(conn, username)
     if user is None:
@@ -3659,6 +3676,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.OK, {"users": list_web_users(conn)})
             return
 
+        if parsed.path == "/api/v1/admin/user-alert-subscriptions":
+            if not self._require_admin_session():
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                alarm_settings = get_alarm_settings(conn)
+                self._send_json(
+                    HTTPStatus.OK,
+                    {
+                        "users": list_all_user_alert_subscriptions(conn),
+                        "available_hosts": list_available_alert_hosts(conn),
+                        "telegram_available": bool(alarm_settings.get("telegram_enabled")) and bool(str(alarm_settings.get("telegram_bot_token", "") or "").strip()),
+                    },
+                )
+            return
+
         if parsed.path == "/api/v1/oauth-settings":
             if not self._require_admin_session():
                 return
@@ -4867,6 +4899,38 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             self._send_json(HTTPStatus.OK, {"status": "ok", "users": users})
+            return
+
+        if path == "/api/v1/admin/user-alert-subscriptions":
+            if not self._require_admin_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            target_username = normalize_username(payload.get("username", ""))
+            if not target_username:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "username missing"})
+                return
+            subscriptions = payload.get("subscriptions", [])
+            if not isinstance(subscriptions, list):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "subscriptions must be a list"})
+                return
+
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    saved = replace_web_user_alert_subscriptions(conn, target_username, subscriptions)
+                    conn.commit()
+                self._send_json(HTTPStatus.OK, {"status": "stored", "username": target_username, "subscriptions": saved})
+            except ValueError as exc:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             return
 
         if path == "/api/v1/alarm-test":

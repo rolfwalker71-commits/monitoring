@@ -61,6 +61,7 @@ const state = {
   userAlertSubscriptionsLoaded: false,
   userAlertSubscriptions: [],
   userAlertAvailableHosts: [],
+  adminAlertSubscriptionsLoaded: false,
 };
 
 const ANALYSIS_RANGE_OPTIONS = new Map([
@@ -577,6 +578,7 @@ function setAuthUiState(authenticated) {
     state.userAlertSubscriptionsLoaded = false;
     state.userAlertSubscriptions = [];
     state.userAlertAvailableHosts = [];
+    state.adminAlertSubscriptionsLoaded = false;
   }
   updateAdminSettingsVisibility();
 }
@@ -584,11 +586,15 @@ function setAuthUiState(authenticated) {
 function updateAdminSettingsVisibility() {
   const adminOauthSection = document.getElementById("adminOauthSettingsSection");
   const adminUserSection = document.getElementById("adminUserManagementSection");
+  const adminAlertSubSection = document.getElementById("adminAlertSubscriptionsSection");
   if (adminOauthSection) {
     adminOauthSection.classList.toggle("hidden", !state.isAdmin);
   }
   if (adminUserSection) {
     adminUserSection.classList.toggle("hidden", !state.isAdmin);
+  }
+  if (adminAlertSubSection) {
+    adminAlertSubSection.classList.toggle("hidden", !state.isAdmin);
   }
 }
 
@@ -1332,6 +1338,228 @@ async function loadUserAlertSubscriptions(force = false) {
   }
 }
 
+function setAdminAlertSubscriptionsStatus(message, isError = false) {
+  const statusEl = document.getElementById("adminAlertSubscriptionsStatus");
+  if (!statusEl) return;
+  statusEl.textContent = message;
+  statusEl.classList.toggle("error", isError);
+}
+
+function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramAvailable) {
+  const container = document.getElementById("adminAlertSubscriptionsContainer");
+  if (!container) return;
+
+  if (!users || users.length === 0) {
+    container.innerHTML = '<p class="muted">Keine Benutzer vorhanden.</p>';
+    return;
+  }
+
+  const sections = users.map((userEntry) => {
+    const username = escapeHtml(userEntry.username || "");
+    const subs = Array.isArray(userEntry.subscriptions) ? userEntry.subscriptions : [];
+    const subsJson = encodeURIComponent(JSON.stringify(subs));
+
+    const hostOptions = (availableHosts || []).map((h) => {
+      const val = escapeHtml(h.hostname);
+      const label = escapeHtml(h.display_name || h.hostname);
+      return `<option value="${val}">${label}</option>`;
+    }).join("");
+
+    const rows = subs.length === 0
+      ? `<tr><td colspan="4" class="muted">Keine Abos.</td></tr>`
+      : subs.map((sub) => {
+          const hn = escapeHtml(sub.hostname || "");
+          const dn = escapeHtml(sub.display_name || sub.hostname || "");
+          const mail = sub.notify_mail ? "&#10003;" : "&#8211;";
+          const tg = sub.notify_telegram ? "&#10003;" : "&#8211;";
+          return `<tr>
+            <td>${dn}</td>
+            <td class="center">${mail}</td>
+            <td class="center">${tg}</td>
+            <td>
+              <button class="admin-sub-remove-btn" data-username="${username}" data-hostname="${hn}">Entfernen</button>
+            </td>
+          </tr>`;
+        }).join("");
+
+    return `<div class="admin-alert-sub-user-block" data-username="${username}">
+      <h6 class="admin-alert-sub-username">${username}${userEntry.is_admin ? ' <span class="tag-admin">Admin</span>' : ''}</h6>
+      <div class="alarm-settings-grid user-alert-subscription-grid">
+        <label>Host <select class="admin-sub-host-select" data-username="${username}">${hostOptions}</select></label>
+        <label class="checkbox-line"><input class="admin-sub-mail-cb" type="checkbox" data-username="${username}" checked /> Mail</label>
+        <label class="checkbox-line"><input class="admin-sub-tg-cb" type="checkbox" data-username="${username}" ${telegramAvailable ? "" : "disabled"} /> Telegram</label>
+      </div>
+      <div class="alarm-settings-actions">
+        <button class="admin-sub-add-btn" data-username="${username}">Abo hinzufuegen/aktualisieren</button>
+        <button class="admin-sub-save-btn" data-username="${username}">Abos speichern</button>
+        <span class="admin-sub-status count compact" data-username="${username}"></span>
+      </div>
+      <div class="table-wrap user-management-table-wrap">
+        <table class="user-management-table">
+          <thead><tr><th>Host</th><th>Mail</th><th>Telegram</th><th>Aktion</th></tr></thead>
+          <tbody class="admin-sub-rows" data-username="${username}">${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('<hr class="admin-sub-divider">');
+
+  container.innerHTML = sections;
+
+  container.querySelectorAll(".admin-sub-add-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const uname = btn.dataset.username;
+      const block = container.querySelector(`.admin-alert-sub-user-block[data-username="${uname}"]`);
+      const hostSelect = block.querySelector(".admin-sub-host-select");
+      const mailCb = block.querySelector(".admin-sub-mail-cb");
+      const tgCb = block.querySelector(".admin-sub-tg-cb");
+      const hostname = hostSelect ? hostSelect.value : "";
+      if (!hostname) return;
+      adminAlertSubUpsert(uname, hostname, mailCb ? mailCb.checked : false, tgCb ? tgCb.checked : false);
+    });
+  });
+
+  container.querySelectorAll(".admin-sub-save-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const uname = btn.dataset.username;
+      try {
+        await saveAdminAlertSubscriptions(uname);
+      } catch (err) {
+        setAdminSubStatus(uname, err.message, true);
+      }
+    });
+  });
+
+  container.querySelectorAll(".admin-sub-remove-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const uname = btn.dataset.username;
+      const hn = btn.dataset.hostname;
+      adminAlertSubRemove(uname, hn);
+    });
+  });
+}
+
+function getAdminSubRows(username) {
+  const container = document.getElementById("adminAlertSubscriptionsContainer");
+  if (!container) return [];
+  const tbody = container.querySelector(`.admin-sub-rows[data-username="${username}"]`);
+  if (!tbody) return [];
+  const rows = [];
+  tbody.querySelectorAll("tr[data-hostname]").forEach((tr) => {
+    rows.push({
+      hostname: tr.dataset.hostname,
+      notify_mail: tr.dataset.notifyMail === "true",
+      notify_telegram: tr.dataset.notifyTelegram === "true",
+    });
+  });
+  return rows;
+}
+
+function setAdminSubStatus(username, message, isError = false) {
+  const container = document.getElementById("adminAlertSubscriptionsContainer");
+  if (!container) return;
+  const el = container.querySelector(`.admin-sub-status[data-username="${username}"]`);
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle("error", isError);
+}
+
+function adminAlertSubUpsert(username, hostname, notifyMail, notifyTelegram) {
+  if (!notifyMail && !notifyTelegram) {
+    setAdminSubStatus(username, "Mindestens einen Kanal aktivieren.", true);
+    return;
+  }
+  const container = document.getElementById("adminAlertSubscriptionsContainer");
+  if (!container) return;
+  const tbody = container.querySelector(`.admin-sub-rows[data-username="${username}"]`);
+  if (!tbody) return;
+
+  const existing = tbody.querySelector(`tr[data-hostname="${CSS.escape(hostname)}"]`);
+  const mailMark = notifyMail ? "&#10003;" : "&#8211;";
+  const tgMark = notifyTelegram ? "&#10003;" : "&#8211;";
+  const newRowHtml = `<tr data-hostname="${escapeHtml(hostname)}" data-notify-mail="${notifyMail}" data-notify-telegram="${notifyTelegram}">
+    <td>${escapeHtml(hostname)}</td>
+    <td class="center">${mailMark}</td>
+    <td class="center">${tgMark}</td>
+    <td><button class="admin-sub-remove-btn" data-username="${escapeHtml(username)}" data-hostname="${escapeHtml(hostname)}">Entfernen</button></td>
+  </tr>`;
+
+  if (existing) {
+    existing.outerHTML = newRowHtml;
+  } else {
+    const empty = tbody.querySelector("tr td[colspan]");
+    if (empty) empty.closest("tr").remove();
+    tbody.insertAdjacentHTML("beforeend", newRowHtml);
+  }
+
+  tbody.querySelectorAll(".admin-sub-remove-btn").forEach((btn) => {
+    btn.addEventListener("click", () => adminAlertSubRemove(btn.dataset.username, btn.dataset.hostname));
+  });
+
+  setAdminSubStatus(username, `Abo fuer ${hostname} vorgemerkt (noch nicht gespeichert).`);
+}
+
+function adminAlertSubRemove(username, hostname) {
+  const container = document.getElementById("adminAlertSubscriptionsContainer");
+  if (!container) return;
+  const tbody = container.querySelector(`.admin-sub-rows[data-username="${username}"]`);
+  if (!tbody) return;
+  const row = tbody.querySelector(`tr[data-hostname="${CSS.escape(hostname)}"]`);
+  if (row) row.remove();
+  if (tbody.children.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="muted">Keine Abos.</td></tr>';
+  }
+  setAdminSubStatus(username, `Abo fuer ${hostname} entfernt (noch nicht gespeichert).`);
+}
+
+async function saveAdminAlertSubscriptions(username) {
+  const container = document.getElementById("adminAlertSubscriptionsContainer");
+  if (!container) return;
+  const tbody = container.querySelector(`.admin-sub-rows[data-username="${username}"]`);
+  const subscriptions = [];
+  if (tbody) {
+    tbody.querySelectorAll("tr[data-hostname]").forEach((tr) => {
+      subscriptions.push({
+        hostname: tr.dataset.hostname,
+        notify_mail: tr.dataset.notifyMail === "true",
+        notify_telegram: tr.dataset.notifyTelegram === "true",
+      });
+    });
+  }
+  const response = await fetch("/api/v1/admin/user-alert-subscriptions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, subscriptions }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || "HTTP " + response.status);
+  }
+  setAdminSubStatus(username, "Abos gespeichert.");
+}
+
+async function loadAdminAlertSubscriptions(force = false) {
+  if (state.adminAlertSubscriptionsLoaded && !force) return;
+  const container = document.getElementById("adminAlertSubscriptionsContainer");
+  if (!container) return;
+  container.innerHTML = '<p class="muted">Lade Admin-Daten...</p>';
+  setAdminAlertSubscriptionsStatus("Lade...");
+  try {
+    const response = await fetch("/api/v1/admin/user-alert-subscriptions");
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    renderAdminAlertSubscriptionsContainer(
+      data.users || [],
+      data.available_hosts || [],
+      !!data.telegram_available,
+    );
+    state.adminAlertSubscriptionsLoaded = true;
+    setAdminAlertSubscriptionsStatus("Geladen.");
+  } catch (err) {
+    container.innerHTML = `<p class="muted">Fehler: ${escapeHtml(err.message)}</p>`;
+    setAdminAlertSubscriptionsStatus(`Fehler: ${err.message}`, true);
+  }
+}
+
 async function loadSettingsPanel(force = false) {
   updateAdminSettingsVisibility();
   await loadAlarmSettings(force);
@@ -1340,6 +1568,7 @@ async function loadSettingsPanel(force = false) {
   if (state.isAdmin) {
     await loadOauthSettings(force);
     await loadWebUsers(force);
+    await loadAdminAlertSubscriptions(force);
   }
 }
 
@@ -4009,6 +4238,14 @@ function wireEvents() {
       setUserAlertSubscriptionsStatus(error.message, true);
     }
   });
+
+  const reloadAdminAlertSubBtn = document.getElementById("reloadAdminAlertSubscriptionsButton");
+  if (reloadAdminAlertSubBtn) {
+    reloadAdminAlertSubBtn.addEventListener("click", async () => {
+      state.adminAlertSubscriptionsLoaded = false;
+      await loadAdminAlertSubscriptions(true);
+    });
+  }
 
   document.getElementById("connectMicrosoftOauthButton").addEventListener("click", () => {
     setUserMailSettingsStatus("Weiterleitung zu Microsoft...");

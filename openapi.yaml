@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Monitoring Receiver API
-  version: 0.5.27
+  version: 0.5.76
   description: >-
     Compact OpenAPI spec for the Monitoring server endpoints in receiver.py.
     Most /api/v1 endpoints require an authenticated web session cookie,
@@ -1049,6 +1049,184 @@ paths:
                   mode: { type: string, example: alerts }
                   details: { type: string }
 
+  /api/v1/user-alert-subscriptions:
+    get:
+      tags: [Notifications]
+      summary: Get current user's host alert subscriptions
+      operationId: getUserAlertSubscriptions
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Subscriptions and available hosts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  username: { type: string }
+                  subscriptions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AlertSubscription'
+                  available_hosts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AlertHostRef'
+                  mail_available: { type: boolean }
+                  telegram_available: { type: boolean }
+                  alert_instant_mail_enabled: { type: boolean }
+                  alert_instant_telegram_enabled: { type: boolean }
+        '401':
+          $ref: '#/components/responses/ErrorUnauthorized'
+    post:
+      tags: [Notifications]
+      summary: Save current user's host alert subscriptions
+      operationId: postUserAlertSubscriptions
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subscriptions]
+              properties:
+                subscriptions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/AlertSubscriptionInput'
+            example:
+              subscriptions:
+                - hostname: support01
+                  notify_mail: true
+                  notify_telegram: false
+      responses:
+        '200':
+          description: Stored subscriptions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: stored }
+                  subscriptions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AlertSubscription'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+
+  /api/v1/user-alert-subscriptions/test:
+    post:
+      tags: [Notifications]
+      summary: Send test notification for a subscribed host
+      operationId: postUserAlertSubscriptionsTest
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hostname, channel]
+              properties:
+                hostname: { type: string, example: support01 }
+                channel:
+                  type: string
+                  enum: [mail, telegram]
+                  example: mail
+      responses:
+        '200':
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [sent, failed] }
+                  channel: { type: string }
+                  details: { type: string }
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+
+  /api/v1/admin/user-alert-subscriptions:
+    get:
+      tags: [Admin]
+      summary: Get host alert subscriptions for all users (admin)
+      operationId: getAdminUserAlertSubscriptions
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: All users' subscriptions with available hosts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        username: { type: string }
+                        is_admin: { type: boolean }
+                        subscriptions:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/AlertSubscription'
+                  available_hosts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AlertHostRef'
+                  telegram_available: { type: boolean }
+        '401':
+          $ref: '#/components/responses/ErrorUnauthorized'
+    post:
+      tags: [Admin]
+      summary: Save host alert subscriptions for a specific user (admin)
+      operationId: postAdminUserAlertSubscriptions
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, subscriptions]
+              properties:
+                username: { type: string, example: operator }
+                subscriptions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/AlertSubscriptionInput'
+            example:
+              username: operator
+              subscriptions:
+                - hostname: support01
+                  notify_mail: true
+                  notify_telegram: true
+      responses:
+        '200':
+          description: Stored subscriptions for user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: stored }
+                  username: { type: string }
+                  subscriptions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AlertSubscription'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+
 components:
   securitySchemes:
     CookieAuth:
@@ -1165,3 +1343,23 @@ components:
         resolved_at_utc: { type: string, format: date-time, nullable: true }
         report_id: { type: integer, example: 12345 }
         is_muted: { type: boolean, example: false }
+    AlertSubscription:
+      type: object
+      properties:
+        hostname: { type: string, example: support01 }
+        display_name: { type: string, example: ANG AT Supportserver }
+        notify_mail: { type: boolean, example: true }
+        notify_telegram: { type: boolean, example: false }
+        updated_at_utc: { type: string, format: date-time }
+    AlertSubscriptionInput:
+      type: object
+      required: [hostname]
+      properties:
+        hostname: { type: string, example: support01 }
+        notify_mail: { type: boolean, example: true }
+        notify_telegram: { type: boolean, example: false }
+    AlertHostRef:
+      type: object
+      properties:
+        hostname: { type: string, example: support01 }
+        display_name: { type: string, example: ANG AT Supportserver }
