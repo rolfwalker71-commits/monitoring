@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from urllib import error, parse, request
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -54,6 +55,12 @@ MICROSOFT_OAUTH_SCOPES = [
 ]
 DEFAULT_TREND_DIGEST_TIME = "08:00"
 DEFAULT_ALERT_DIGEST_TIME = "08:05"
+SCHEDULE_TIMEZONE_NAME = os.getenv("MONITORING_SCHEDULE_TIMEZONE", "Europe/Zurich").strip() or "Europe/Zurich"
+try:
+    SCHEDULE_TIMEZONE = ZoneInfo(SCHEDULE_TIMEZONE_NAME)
+except ZoneInfoNotFoundError:
+    SCHEDULE_TIMEZONE = datetime.now().astimezone().tzinfo
+    SCHEDULE_TIMEZONE_NAME = str(SCHEDULE_TIMEZONE) if SCHEDULE_TIMEZONE else "local"
 
 
 def parse_int(query: dict, key: str, default: int, min_value: int, max_value: int) -> int:
@@ -2315,7 +2322,7 @@ def send_microsoft_mail_multi(
 
 
 def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
-    now_local = datetime.now().astimezone()
+    now_local = datetime.now(SCHEDULE_TIMEZONE)
     today_local = now_local.date().isoformat()
 
     rows = conn.execute(
