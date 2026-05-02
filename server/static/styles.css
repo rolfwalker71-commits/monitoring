@@ -639,7 +639,7 @@ button {
   background: var(--accent);
   color: #fff;
   padding: 7px 11px;
-  border-radius: 8px;
+  border-radius: 999px;
   cursor: pointer;
   font-size: 12px;
   transition: background-color 140ms ease;
@@ -654,7 +654,7 @@ button:hover:not(.host-item) {
   background: linear-gradient(180deg, #ffffff 0%, #f6f9fd 100%);
   color: #42526e;
   border: 1px solid #c8d5e6;
-  border-radius: 14px;
+  border-radius: 999px;
   min-height: 44px;
   padding: 0 16px;
   font-weight: 600;
@@ -670,15 +670,19 @@ button:hover:not(.host-item) {
 
 /* Icon-only button (e.g. pencil) */
 .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   color: var(--muted);
   border: 1px solid transparent;
-  padding: 3px 6px;
+  border-radius: 999px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 4px 8px;
   font-size: 15px;
   line-height: 1;
-  min-width: 0;
-  text-align: right;
-  line-height: 1.2;
+  text-align: center;
 }
 
 .btn-icon:hover {
@@ -1326,7 +1330,7 @@ button:hover:not(.host-item) {
 
 .global-update-chip {
   width: 100%;
-  border-radius: 14px;
+  border-radius: 999px;
   min-height: 44px;
   padding: 0 16px;
   background: linear-gradient(135deg, #0f766e 0%, #0ea5e9 100%);
@@ -1766,13 +1770,13 @@ button:hover:not(.host-item) {
 .host-context-menu button {
   width: 100%;
   text-align: left;
-  border-radius: 8px;
+  border-radius: 999px;
   border: 1px solid transparent;
   background: #fff5f5;
   color: #b91c1c;
   font-size: 12px;
   font-weight: 700;
-  padding: 8px 10px;
+  padding: 9px 14px;
 }
 
 .host-context-menu button:hover {
