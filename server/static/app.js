@@ -235,6 +235,7 @@ async function refreshDashboard(options = {}) {
   autoRefreshInProgress = true;
   try {
     await loadWebclientVersion();
+    await loadActiveUsers();
     await loadGlobalAlertsOverview();
     await loadHosts({ preserveScroll });
     await loadReportsForHost();
@@ -633,6 +634,51 @@ async function ensureAuthenticatedSession() {
   } catch {
     setAuthUiState(false);
     return false;
+  }
+}
+
+async function loadActiveUsers() {
+  const bar = document.getElementById("activeUsersBar");
+  const list = document.getElementById("activeUsersList");
+  if (!bar || !list) {
+    return;
+  }
+  if (!state.isAuthenticated) {
+    bar.classList.add("hidden");
+    list.innerHTML = "";
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/v1/active-users");
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+
+    const data = await response.json();
+    const users = Array.isArray(data.users) ? data.users : [];
+    if (users.length === 0) {
+      bar.classList.remove("hidden");
+      list.innerHTML = '<span class="muted">niemand</span>';
+      return;
+    }
+
+    list.innerHTML = users.map((item) => {
+      const username = asText(item.username, "-");
+      const isCurrent = username === state.authUser;
+      const sessionCount = Number(item.session_count || 0);
+      const latestExpires = asText(item.latest_expires_at_utc, "");
+      return `
+        <span class="active-user-chip${isCurrent ? " current" : ""}" title="Session gueltig bis ${escapeHtml(latestExpires || "-")}">
+          <span>${escapeHtml(username)}${isCurrent ? " (du)" : ""}</span>
+          ${sessionCount > 1 ? `<span class="active-user-chip-count">${sessionCount}</span>` : ""}
+        </span>
+      `;
+    }).join("");
+    bar.classList.remove("hidden");
+  } catch (error) {
+    bar.classList.remove("hidden");
+    list.innerHTML = `<span class="muted">Fehler: ${escapeHtml(error.message)}</span>`;
   }
 }
 

@@ -580,6 +580,33 @@ def create_web_session(conn: sqlite3.Connection, username: str) -> tuple[str, st
     return session_token, expires.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def list_active_web_sessions(conn: sqlite3.Connection) -> list[dict]:
+    now_iso = utc_now_iso()
+    conn.execute(
+        "DELETE FROM web_sessions WHERE expires_at_utc <= ?",
+        (now_iso,),
+    )
+    rows = conn.execute(
+        """
+        SELECT username, COUNT(*) AS session_count, MAX(expires_at_utc) AS latest_expires_at_utc
+        FROM web_sessions
+        WHERE expires_at_utc > ?
+        GROUP BY username
+        ORDER BY username COLLATE NOCASE ASC
+        """,
+        (now_iso,),
+    ).fetchall()
+    return [
+        {
+            "username": str(row[0] or ""),
+            "session_count": int(row[1] or 0),
+            "latest_expires_at_utc": str(row[2] or ""),
+        }
+        for row in rows
+        if str(row[0] or "").strip()
+    ]
+
+
 def normalize_username(value: object) -> str:
     return str(value or "").strip()
 
@@ -4077,6 +4104,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 payload = current_user_payload(conn, username)
             self._send_json(HTTPStatus.OK, payload)
+            return
+
+        if parsed.path == "/api/v1/active-users":
+            username = self._web_session_username()
+            with sqlite3.connect(DB_PATH) as conn:
+                users = list_active_web_sessions(conn)
+                conn.commit()
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "current_username": username,
+                    "count": len(users),
+                    "users": users,
+                },
+            )
             return
 
         if parsed.path == "/api/v1/user-alert-subscriptions":
