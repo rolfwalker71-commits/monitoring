@@ -17,6 +17,13 @@ from urllib.parse import parse_qs, urlparse
 from urllib import error, parse, request
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+try:
+    import cairosvg as _cairosvg
+    _CAIROSVG_AVAILABLE = True
+except ImportError:
+    _cairosvg = None  # type: ignore
+    _CAIROSVG_AVAILABLE = False
+
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
@@ -1565,6 +1572,27 @@ def make_inline_svg_attachment(svg_content: str, *, cid: str, name: str) -> dict
     }
 
 
+def svg_to_png_bytes(svg_content: str, *, scale: float = 1.5) -> bytes | None:
+    """Convert SVG string to PNG bytes using cairosvg, returns None if unavailable."""
+    if not _CAIROSVG_AVAILABLE or _cairosvg is None:
+        return None
+    try:
+        return _cairosvg.svg2png(bytestring=svg_content.encode("utf-8"), scale=scale)
+    except Exception:
+        return None
+
+
+def make_inline_png_attachment(png_bytes: bytes, *, cid: str, name: str) -> dict:
+    return {
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        "name": name,
+        "contentType": "image/png",
+        "isInline": True,
+        "contentId": cid,
+        "contentBytes": base64.b64encode(png_bytes).decode("ascii"),
+    }
+
+
 def build_alert_usage_graph_attachment(
     conn: sqlite3.Connection,
     hostname: str,
@@ -1585,6 +1613,13 @@ def build_alert_usage_graph_attachment(
     safe_host = _safe_attachment_token(hostname, "host")
     safe_mount = _safe_attachment_token(mountpoint.replace("/", "-"), "mount")
     cid = f"graph-{safe_host}-{safe_mount}-{secrets.token_hex(4)}@monitoring"
+
+    # Prefer PNG (works in Outlook); fall back to SVG if cairosvg unavailable
+    png_bytes = svg_to_png_bytes(svg)
+    if png_bytes:
+        filename = f"graph-{safe_host}-{safe_mount}.png"
+        return cid, make_inline_png_attachment(png_bytes, cid=cid, name=filename)
+
     filename = f"graph-{safe_host}-{safe_mount}.svg"
     return cid, make_inline_svg_attachment(svg, cid=cid, name=filename)
 
