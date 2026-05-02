@@ -1387,7 +1387,7 @@ button:hover:not(.host-item) {
   font-size: 0.92rem;
   font-weight: 700;
   white-space: nowrap;
-  cursor: default;
+  cursor: pointer;
   user-select: none;
 }
 

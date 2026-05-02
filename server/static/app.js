@@ -3797,6 +3797,22 @@ function wireEvents() {
     else if (state.globalSubMode === "admin-alert-subs") await loadAdminAlertSubscriptions();
   });
 
+  document.getElementById("headerAlertChip").addEventListener("click", async () => {
+    state.viewMode = "global";
+    state.globalSubMode = "global-alerts";
+    updateViewMode();
+    updateGlobalSubMode();
+    await loadGlobalAlertsOverview();
+  });
+
+  document.getElementById("headerTrendsChip").addEventListener("click", async () => {
+    state.viewMode = "global";
+    state.globalSubMode = "critical-trends";
+    updateViewMode();
+    updateGlobalSubMode();
+    await loadCriticalTrends();
+  });
+
   document.getElementById("refreshInactiveHostsButton").addEventListener("click", async () => {
     await loadInactiveHosts();
   });
