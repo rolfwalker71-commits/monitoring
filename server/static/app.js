@@ -59,9 +59,6 @@ const state = {
   oauthSettingsLoaded: false,
   userManagementLoaded: false,
   hostFilterNoMatches: false,
-  userAlertSubscriptionsLoaded: false,
-  userAlertSubscriptions: [],
-  userAlertAvailableHosts: [],
   adminAlertSubscriptionsLoaded: false,
   adminAlertSubscriptionsUsers: [],
   adminAlertAvailableHosts: [],
@@ -546,15 +543,6 @@ function setUserManagementStatus(message, isError = false) {
   statusEl.classList.toggle("status-error", isError);
 }
 
-function setUserAlertSubscriptionsStatus(message, isError = false) {
-  const statusEl = document.getElementById("userAlertSubscriptionsStatus");
-  if (!statusEl) {
-    return;
-  }
-  statusEl.textContent = message;
-  statusEl.classList.toggle("status-error", isError);
-}
-
 function setLoginStatus(message, isError = false) {
   const statusEl = document.getElementById("loginStatus");
   if (!statusEl) {
@@ -599,9 +587,6 @@ function setAuthUiState(authenticated) {
     state.userProfileLoaded = false;
     state.oauthSettingsLoaded = false;
     state.userManagementLoaded = false;
-    state.userAlertSubscriptionsLoaded = false;
-    state.userAlertSubscriptions = [];
-    state.userAlertAvailableHosts = [];
     state.adminAlertSubscriptionsLoaded = false;
     state.adminAlertSubscriptionsUsers = [];
     state.adminAlertAvailableHosts = [];
@@ -1140,149 +1125,6 @@ async function sendAlertDigestMailTest() {
   setUserMailSettingsStatus("Alarm-Testmail versendet.");
 }
 
-function renderUserAlertSubscriptionRows(availableHosts, subscriptions) {
-  const subMap = new Map();
-  for (const sub of (subscriptions || [])) {
-    const hn = asText(sub.hostname, "").trim();
-    if (hn) subMap.set(hn, sub);
-  }
-
-  const hosts = (availableHosts || []).slice().sort((a, b) => {
-    const la = asText(a.display_name || a.hostname, "").toLowerCase();
-    const lb = asText(b.display_name || b.hostname, "").toLowerCase();
-    return la.localeCompare(lb);
-  });
-
-  if (hosts.length === 0) {
-    return '<tr><td colspan="4" class="muted">Keine Hosts vorhanden.</td></tr>';
-  }
-
-  return hosts.map((host) => {
-    const hostname = asText(host.hostname, "");
-    const displayName = asText(host.display_name, hostname) || hostname;
-    const sub = subMap.get(hostname);
-    const mailChecked = sub ? sub.notify_mail : true;
-    const tgChecked = sub ? sub.notify_telegram : true;
-    const hn = escapeHtml(hostname);
-    const dn = escapeHtml(displayName);
-    const hostnameEnc = encodeURIComponent(hostname);
-    return `<tr>
-      <td>
-        <strong>${dn}</strong>
-        ${dn !== hn ? `<span class="global-hostname-sub">${hn}</span>` : ""}
-      </td>
-      <td class="center"><input type="checkbox" class="alert-sub-mail-cb" data-hostname="${hn}" ${mailChecked ? "checked" : ""}></td>
-      <td class="center"><input type="checkbox" class="alert-sub-tg-cb" data-hostname="${hn}" ${tgChecked ? "checked" : ""}></td>
-      <td>
-        <div class="user-management-actions">
-          <button type="button" data-user-alert-action="test-mail" data-hostname-enc="${hostnameEnc}">Mail</button>
-          <button type="button" data-user-alert-action="test-telegram" data-hostname-enc="${hostnameEnc}">Telegram</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join("");
-}
-
-function refreshUserAlertSubscriptionTable() {
-  const rowsEl = document.getElementById("userAlertSubscriptionsRows");
-  if (!rowsEl) {
-    return;
-  }
-  rowsEl.innerHTML = renderUserAlertSubscriptionRows(
-    state.userAlertAvailableHosts || [],
-    state.userAlertSubscriptions || [],
-  );
-  wireUserAlertSubscriptionActions();
-}
-
-async function saveUserAlertSubscriptions() {
-  const rowsEl = document.getElementById("userAlertSubscriptionsRows");
-  const subscriptions = [];
-  if (rowsEl) {
-    rowsEl.querySelectorAll("tr").forEach((tr) => {
-      const mailCb = tr.querySelector(".alert-sub-mail-cb");
-      const tgCb = tr.querySelector(".alert-sub-tg-cb");
-      if (!mailCb) return;
-      subscriptions.push({
-        hostname: mailCb.dataset.hostname,
-        notify_mail: mailCb.checked,
-        notify_telegram: tgCb ? tgCb.checked : false,
-      });
-    });
-  }
-  const response = await fetch("/api/v1/user-alert-subscriptions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ subscriptions }),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || data.details || ("HTTP " + response.status));
-  }
-  state.userAlertSubscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
-  setUserAlertSubscriptionsStatus("Host-Abos gespeichert.");
-}
-
-async function sendUserAlertSubscriptionTest(hostname, channel) {
-  const response = await fetch("/api/v1/user-alert-subscriptions/test", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ hostname, channel }),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || data.details || ("HTTP " + response.status));
-  }
-  setUserAlertSubscriptionsStatus(`${channel === "mail" ? "Mail" : "Telegram"}-Test fuer ${hostname} versendet.`);
-}
-
-function wireUserAlertSubscriptionActions() {
-  const rowsEl = document.getElementById("userAlertSubscriptionsRows");
-  if (!rowsEl) return;
-  rowsEl.querySelectorAll("[data-user-alert-action]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const action = button.getAttribute("data-user-alert-action") || "";
-      const hostname = decodeURIComponent(button.getAttribute("data-hostname-enc") || "");
-      if (!action || !hostname) return;
-      try {
-        if (action === "test-mail") {
-          await sendUserAlertSubscriptionTest(hostname, "mail");
-        } else if (action === "test-telegram") {
-          await sendUserAlertSubscriptionTest(hostname, "telegram");
-        }
-      } catch (error) {
-        setUserAlertSubscriptionsStatus(error.message, true);
-      }
-    });
-  });
-}
-
-async function loadUserAlertSubscriptions(force = false) {
-  if (state.userAlertSubscriptionsLoaded && !force) {
-    return;
-  }
-  const rowsEl = document.getElementById("userAlertSubscriptionsRows");
-  if (!rowsEl) {
-    return;
-  }
-  rowsEl.innerHTML = '<tr><td colspan="4" class="muted">Lade Host-Abos...</td></tr>';
-  try {
-    const response = await fetch("/api/v1/user-alert-subscriptions");
-    if (!response.ok) {
-      throw new Error("HTTP " + response.status);
-    }
-    const data = await response.json();
-    state.userAlertAvailableHosts = Array.isArray(data.available_hosts) ? data.available_hosts : [];
-    state.userAlertSubscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
-    refreshUserAlertSubscriptionTable();
-    state.userAlertSubscriptionsLoaded = true;
-    setUserAlertSubscriptionsStatus("Host-Abos geladen.");
-  } catch (error) {
-    rowsEl.innerHTML = `<tr><td colspan="4" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
-    setUserAlertSubscriptionsStatus(`Fehler beim Laden: ${error.message}`, true);
-  }
-}
-
 function setAdminAlertSubscriptionsStatus(message, isError = false) {
   const statusEl = document.getElementById("adminAlertSubscriptionsStatus");
   if (!statusEl) return;
@@ -1449,7 +1291,6 @@ async function loadSettingsPanel(force = false) {
   updateAdminSettingsVisibility();
   await loadAlarmSettings(force);
   await loadUserProfile(force);
-  await loadUserAlertSubscriptions(force);
   if (state.isAdmin) {
     await loadOauthSettings(force);
     await loadWebUsers(force);
@@ -4135,14 +3976,6 @@ function wireEvents() {
       await saveUserProfile();
     } catch (error) {
       setUserMailSettingsStatus(error.message, true);
-    }
-  });
-
-  document.getElementById("saveUserAlertSubscriptionsButton").addEventListener("click", async () => {
-    try {
-      await saveUserAlertSubscriptions();
-    } catch (error) {
-      setUserAlertSubscriptionsStatus(error.message, true);
     }
   });
 
