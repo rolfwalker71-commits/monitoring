@@ -1755,10 +1755,14 @@ function renderLargeFilesPanel(largeFiles) {
             const modified = formatUtcPlus2(entry.modified_at_utc);
             return `
               <tr>
-                <td class="lf-col-path">${renderLargeFilePathCell(path)}</td>
-                <td class="lf-col-size">${escapeHtml(size)}</td>
-                <td class="lf-col-owner">${escapeHtml(owner)}</td>
-                <td class="lf-col-modified">${escapeHtml(modified)}</td>
+                <td class="lf-row-cell" colspan="4">
+                  ${renderLargeFilePathCell(path)}
+                  <div class="large-file-meta-row">
+                    <span><strong>Groesse:</strong> ${escapeHtml(size)}</span>
+                    <span><strong>Owner:</strong> ${escapeHtml(owner)}</span>
+                    <span><strong>Geaendert:</strong> ${escapeHtml(modified)}</span>
+                  </div>
+                </td>
               </tr>
             `;
           })
@@ -1771,10 +1775,7 @@ function renderLargeFilesPanel(largeFiles) {
             <table class="large-files-table">
               <thead>
                 <tr>
-                  <th>Datei</th>
-                  <th>Groesse</th>
-                  <th>Owner</th>
-                  <th>Geaendert</th>
+                  <th>Datei / Details</th>
                 </tr>
               </thead>
               <tbody>
