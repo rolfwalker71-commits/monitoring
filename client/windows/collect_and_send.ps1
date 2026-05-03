@@ -45,6 +45,17 @@ foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
 
 $ServerUrl = $cfg['SERVER_URL']
 $ApiKey    = if ($cfg.ContainsKey('API_KEY')) { $cfg['API_KEY'] } else { '' }
+$SendJitterMaxSec = 600
+
+if ($env:SEND_JITTER_MAX_SEC -match '^\d+$') {
+    $SendJitterMaxSec = [int]$env:SEND_JITTER_MAX_SEC
+} elseif ($cfg.ContainsKey('SEND_JITTER_MAX_SEC') -and ($cfg['SEND_JITTER_MAX_SEC'] -match '^\d+$')) {
+    $SendJitterMaxSec = [int]$cfg['SEND_JITTER_MAX_SEC']
+}
+
+if ($SendJitterMaxSec -lt 0) {
+    $SendJitterMaxSec = 0
+}
 
 if (-not $ServerUrl) {
     Write-Error 'SERVER_URL is not set in config'
@@ -522,6 +533,21 @@ $cpuInfoList = @(Get-CimInstance -ClassName Win32_Processor)
 # Agent identity
 $agentId     = if ($cfg.ContainsKey('AGENT_ID')      -and $cfg['AGENT_ID'])      { $cfg['AGENT_ID'] }      else { $hostnameValue }
 $displayName = if ($cfg.ContainsKey('DISPLAY_NAME')  -and $cfg['DISPLAY_NAME'])  { $cfg['DISPLAY_NAME'] }  else { $hostnameValue }
+
+if ($SendJitterMaxSec -gt 0) {
+    $jitterIdentity = "$hostnameValue$agentId"
+    $hashProvider = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = $hashProvider.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($jitterIdentity))
+    } finally {
+        $hashProvider.Dispose()
+    }
+    $jitterSec = [int]([System.BitConverter]::ToUInt32($hash, 0) % ($SendJitterMaxSec + 1))
+    if ($jitterSec -gt 0) {
+        Write-Host ("Applying deterministic send jitter: {0}s (max {1}s)" -f $jitterSec, $SendJitterMaxSec)
+        Start-Sleep -Seconds $jitterSec
+    }
+}
 
 $agentVersion = 'unknown'
 if (Test-Path $VersionFile) {
