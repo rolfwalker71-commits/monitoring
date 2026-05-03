@@ -2214,6 +2214,7 @@ def alert_instant_mail_html(
         f"<div style='margin-bottom:12px;'><img src='{html.escape(event_icon_uri)}' alt='{html.escape(event_label)}' width='52' height='52' style='display:block;'></div>"
         if event_icon_uri else ""
     )
+    build_version = html.escape(read_build_version())
     reported_at = format_mail_datetime(reported_at_utc)
     graph_alt = html.escape(f"Auslastungsverlauf {customer_title}: {mountpoint}")
     is_cpu_alert = (mountpoint == CPU_ALERT_MOUNTPOINT)
@@ -2225,6 +2226,7 @@ def alert_instant_mail_html(
         f"<img src='{html.escape(linux_logo_uri)}' alt='Linux' width='16' height='16' style='display:block;'>"
         "<span style='font-size:14px;line-height:1;'>/</span>"
         f"<img src='{html.escape(windows_logo_uri)}' alt='Windows' width='16' height='16' style='display:block;'>"
+        f"<span style='margin-left:10px;white-space:nowrap;'>v{build_version}</span>"
         "</div>"
     ) if linux_logo_uri and windows_logo_uri else ""
     graph_block = "" if is_cpu_alert else (

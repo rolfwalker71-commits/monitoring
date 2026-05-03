@@ -249,6 +249,11 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   line-height: 1;
 }
 
+.brand-version {
+  margin-left: 10px;
+  white-space: nowrap;
+}
+
 .brand-user {
   display: flex;
   align-items: center;
