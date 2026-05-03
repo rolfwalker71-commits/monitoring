@@ -5673,18 +5673,80 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         content_type="HTML",
                     )
                 elif endpoint_mode == "alerts":
-                    alerts = collect_open_alerts(conn)
-                    graph_cids, graph_attachments = build_alert_digest_graph_bundle(conn, alerts, hours=24)
+                    alarm_settings = get_alarm_settings(conn)
+                    warning_threshold = float(alarm_settings.get("warning_threshold_percent", 80.0) or 80.0)
+                    critical_threshold = float(alarm_settings.get("critical_threshold_percent", 90.0) or 90.0)
+
+                    sample_row = conn.execute(
+                        "SELECT hostname, mountpoint, severity FROM alerts WHERE status = 'open' ORDER BY id DESC LIMIT 1"
+                    ).fetchone()
+                    if sample_row:
+                        sample_hostname = str(sample_row[0] or "").strip() or "monitoring-testhost"
+                        sample_mountpoint = str(sample_row[1] or "").strip() or "/hana/data"
+                        sample_severity = str(sample_row[2] or "critical").strip().lower()
+                    else:
+                        host_row = conn.execute(
+                            "SELECT hostname FROM reports ORDER BY id DESC LIMIT 1"
+                        ).fetchone()
+                        sample_hostname = str(host_row[0] or "").strip() if host_row else ""
+                        if not sample_hostname:
+                            sample_hostname = "monitoring-testhost"
+                        sample_mountpoint = "/hana/data"
+                        sample_severity = "critical"
+
+                    if sample_severity not in {"warning", "critical"}:
+                        sample_severity = "critical"
+
+                    sample_used_percent = (critical_threshold + 1.0) if sample_severity == "critical" else (warning_threshold + 1.0)
+                    sample_used_percent = max(0.0, min(100.0, sample_used_percent))
+
+                    host_context = collect_host_mail_context(conn, sample_hostname)
+                    sample_display_name = str(host_context.get("display_name", "") or "")
+                    sample_primary_ip = str(host_context.get("primary_ip", "") or "")
+                    sample_country_code = str(host_context.get("country_code", "") or "")
+                    sample_os_family = str(host_context.get("os_family", "linux") or "linux")
+
+                    graph_cid, graph_attachment = build_alert_usage_graph_attachment(
+                        conn,
+                        sample_hostname,
+                        sample_mountpoint,
+                        severity=sample_severity,
+                        hours=24,
+                    )
+                    graph_attachments = [graph_attachment] if graph_attachment else []
+
                     extra_alert_recipients = parse_email_recipients(settings.get("alert_email_recipients", ""))
                     all_alert_recipients = parse_email_recipients(",".join([recipient] + extra_alert_recipients))
                     if not all_alert_recipients:
                         self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no alert recipients configured"})
                         return
+
+                    subject = alert_instant_mail_subject(
+                        "opened",
+                        sample_hostname,
+                        sample_severity,
+                        sample_display_name,
+                    )
+                    body = alert_instant_mail_html(
+                        username,
+                        "opened",
+                        sample_hostname,
+                        sample_mountpoint,
+                        sample_severity,
+                        sample_used_percent,
+                        display_name=sample_display_name,
+                        primary_ip=sample_primary_ip,
+                        country_code=sample_country_code,
+                        os_family=sample_os_family,
+                        reported_at_utc=utc_now_iso(),
+                        graph_cid=graph_cid or "",
+                    )
+
                     mail_ok, mail_details = send_microsoft_mail_multi(
                         access_token,
                         all_alert_recipients,
-                        alert_digest_subject(alerts, datetime.now().astimezone().date().isoformat()) + " [TEST]",
-                        alert_digest_html(username, alerts, graph_cids=graph_cids, graph_hours=24),
+                        subject,
+                        body,
                         content_type="HTML",
                         attachments=graph_attachments,
                     )
