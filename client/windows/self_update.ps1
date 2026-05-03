@@ -39,6 +39,30 @@ $ApiBaseUrl = "https://api.github.com/repos/$GithubRepo/contents"
 
 $wc = New-Object System.Net.WebClient
 $wc.Headers['Accept'] = 'application/vnd.github.v3.raw'
+$wc.Headers['User-Agent'] = 'monitoring-agent-self-update'
+
+function Download-RepoFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RelativePath,
+        [Parameter(Mandatory = $true)]
+        [string]$DestinationPath
+    )
+
+    try {
+        $wc.Headers['Accept'] = 'application/vnd.github.v3.raw'
+        $wc.DownloadFile("$ApiBaseUrl/$RelativePath", $DestinationPath)
+        return $true
+    } catch {
+    }
+
+    try {
+        $wc.DownloadFile("$RawBaseUrl/$RelativePath", $DestinationPath)
+        return $true
+    } catch {
+        return $false
+    }
+}
 
 # ---- Version check ----
 $remoteVersion = ''
@@ -82,8 +106,12 @@ $tmpDir = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), [System.IO.
 New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
 
 try {
-    $wc.DownloadFile("$ApiBaseUrl/client/windows/collect_and_send.ps1", "$tmpDir\collect_and_send.ps1")
-    $wc.DownloadFile("$ApiBaseUrl/client/windows/self_update.ps1",      "$tmpDir\self_update.ps1")
+    if (-not (Download-RepoFile -RelativePath 'client/windows/collect_and_send.ps1' -DestinationPath "$tmpDir\collect_and_send.ps1")) {
+        throw 'Failed to download collect_and_send.ps1 from API and raw sources.'
+    }
+    if (-not (Download-RepoFile -RelativePath 'client/windows/self_update.ps1' -DestinationPath "$tmpDir\self_update.ps1")) {
+        throw 'Failed to download self_update.ps1 from API and raw sources.'
+    }
     [System.IO.File]::WriteAllText("$tmpDir\AGENT_VERSION", "$remoteVersion`n", [System.Text.Encoding]::UTF8)
 
     Copy-Item "$tmpDir\collect_and_send.ps1" "$InstallDir\collect_and_send.ps1" -Force
