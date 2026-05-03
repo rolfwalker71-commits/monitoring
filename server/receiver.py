@@ -5105,6 +5105,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     """,
                     (hostname, cutoff_iso),
                 ).fetchall()
+                total_rows = conn.execute(
+                    """
+                    SELECT received_at_utc, payload_json
+                    FROM reports
+                    WHERE hostname = ?
+                    ORDER BY id ASC
+                    """,
+                    (hostname,),
+                ).fetchall()
 
             fs_by_mountpoint = {}
             report_count = 0
@@ -5124,7 +5133,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             latest_delivery_mode = "live"
             latest_is_delayed = False
             latest_queue_depth = 0
+            total_delayed_report_count = 0
+            total_live_report_count = 0
             latest_large_files: dict = {}
+
+            for total_row in total_rows:
+                total_payload = parse_payload_json(total_row[1])
+                total_delivery_mode = str(total_payload.get("delivery_mode", "live") or "live").lower()
+                total_is_delayed = total_delivery_mode == "delayed" or bool(total_payload.get("is_delayed", False))
+                if total_is_delayed:
+                    total_delayed_report_count += 1
+                else:
+                    total_live_report_count += 1
+                latest_delivery_mode = "delayed" if total_is_delayed else "live"
+                latest_is_delayed = total_is_delayed
+                latest_queue_depth = payload_int(total_payload, "queue_depth", 0)
 
             for row in rows:
                 report_count += 1
@@ -5265,6 +5288,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "latest_queue_depth": latest_queue_depth,
                         "delayed_report_count": delayed_report_count,
                         "live_report_count": live_report_count,
+                        "total_delayed_report_count": total_delayed_report_count,
+                        "total_live_report_count": total_live_report_count,
                     },
                     "filesystem_visibility": {
                         "editable": visibility_editable,
