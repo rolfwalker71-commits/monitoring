@@ -5376,7 +5376,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json
                     FROM reports
                     WHERE hostname = ?
-                    ORDER BY id DESC
+                    ORDER BY
+                        CASE
+                            WHEN LOWER(COALESCE(json_extract(payload_json, '$.delivery_mode'), 'live')) = 'live' THEN 0
+                            ELSE 1
+                        END,
+                        COALESCE(
+                            NULLIF(json_extract(payload_json, '$.send_started_utc'), ''),
+                            NULLIF(json_extract(payload_json, '$.timestamp_utc'), ''),
+                            received_at_utc
+                        ) DESC,
+                        id DESC
                     LIMIT ? OFFSET ?
                     """,
                     (hostname, limit, resolved_offset),
