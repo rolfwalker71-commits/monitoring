@@ -1658,6 +1658,29 @@ function formatKilobytes(kbValue) {
   return `${(mib / 1024).toFixed(2)} GiB`;
 }
 
+function resourceTroubleshootingHint(label, value, suffix) {
+  const v = Number(value?.current);
+  if (!Number.isFinite(v)) return "";
+  let hint = "";
+  if (label.includes("Swap") && v >= 50) {
+    hint = v >= 80
+      ? "Swap kritisch: Speicherleck möglich. Prüfe: <code>ps aux --sort=-%mem | head -10</code> — ggf. Dienst neu starten oder RAM erweitern."
+      : "Swap erhöht: RAM-Auslastung beobachten. Prüfe: <code>free -h</code> und speicherintensive Prozesse mit <code>top -o %MEM</code>.";
+  } else if (label.includes("RAM") && v >= 85) {
+    hint = v >= 95
+      ? "RAM kritisch: Sofort prüfen. <code>ps aux --sort=-%mem | head -10</code> — Dienst mit Leak neu starten."
+      : "RAM hoch: Prüfe mit <code>ps aux --sort=-%mem | head</code> welcher Prozess am meisten verbraucht.";
+  } else if (label.includes("CPU") && v >= 80) {
+    hint = v >= 95
+      ? "CPU kritisch: <code>top</code> oder <code>htop</code> — überlastenden Prozess identifizieren und Logs prüfen."
+      : "CPU hoch: Prüfe mit <code>top -o %CPU</code> welcher Prozess belastet. Cronjobs oder Backups als Ursache ausschliessen.";
+  } else if (label.includes("Load") && v >= 4) {
+    hint = "Load erhöht: Prüfe Prozessanzahl mit <code>ps aux | wc -l</code> und I/O-Last mit <code>iostat -x 1 5</code>.";
+  }
+  if (!hint) return "";
+  return `<span class="trend-hint">💡 ${hint}</span>`;
+}
+
 function renderResourceTrendCards(resourceTrends, latestReportTimeUtc) {
   const standText = formatUtcPlus2(latestReportTimeUtc);
   const entries = [
@@ -1685,6 +1708,7 @@ function renderResourceTrendCards(resourceTrends, latestReportTimeUtc) {
           <span>Min/Max: ${formatNumber(value.min)}${suffix} / ${formatNumber(value.max)}${suffix}</span>
           <span>Avg: ${formatNumber(value.avg)}${suffix}</span>
           <span>Delta: ${formatSignedPercent(value.delta)}${suffix === "%" ? "" : ""}</span>
+          ${resourceTroubleshootingHint(label, value, suffix)}
         </article>
       `;
     })

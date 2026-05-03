@@ -2446,6 +2446,25 @@ button:hover:not(.host-item) {
   white-space: nowrap;
 }
 
+.trend-hint {
+  margin-top: 4px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  background: #fffbea;
+  border: 1px solid #f0c040;
+  color: #7a5c00;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.trend-hint code {
+  background: rgba(0,0,0,0.07);
+  border-radius: 3px;
+  padding: 1px 3px;
+  font-size: 9.5px;
+  font-family: monospace;
+}
+
 .alerts-panel {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -3475,6 +3494,16 @@ body[data-theme="dark"] .fs-chart-card:hover {
 body[data-theme="dark"] .trend-card {
   background: #131f34;
   border-color: #2a3c59;
+}
+
+body[data-theme="dark"] .trend-hint {
+  background: #2a2200;
+  border-color: #7a5c00;
+  color: #ffd866;
+}
+
+body[data-theme="dark"] .trend-hint code {
+  background: rgba(255,255,255,0.1);
 }
 
 body[data-theme="dark"] .chart-grid-line {
