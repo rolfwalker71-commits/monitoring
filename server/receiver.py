@@ -1406,10 +1406,23 @@ def ensure_default_user_filesystem_visibility(
     if not username or not hostname_normalized:
         return []
 
-    if is_user_filesystem_visibility_configured(conn, username, hostname_normalized, section_normalized):
-        return get_user_hidden_filesystems(conn, username, hostname_normalized, section_normalized)
-
     candidates = unique_mountpoints(list(available_mountpoints or []))
+    if is_user_filesystem_visibility_configured(conn, username, hostname_normalized, section_normalized):
+        current_hidden = get_user_hidden_filesystems(conn, username, hostname_normalized, section_normalized)
+        candidate_keys = {normalize_mountpoint_key(item) for item in candidates if normalize_mountpoint_key(item)}
+        hidden_keys = {normalize_mountpoint_key(item) for item in current_hidden if normalize_mountpoint_key(item)}
+
+        # Safety net: never keep a config that hides all currently available filesystems.
+        if candidate_keys and candidate_keys.issubset(hidden_keys):
+            if "/" in candidates:
+                repaired_hidden = [item for item in current_hidden if normalize_mountpoint_key(item) != "/"]
+            else:
+                keep_visible_key = normalize_mountpoint_key(candidates[0])
+                repaired_hidden = [item for item in current_hidden if normalize_mountpoint_key(item) != keep_visible_key]
+            return replace_user_hidden_filesystems(conn, username, hostname_normalized, section_normalized, repaired_hidden)
+
+        return current_hidden
+
     hidden_defaults = [mountpoint for mountpoint in candidates if not is_default_visible_mountpoint(mountpoint)]
     return replace_user_hidden_filesystems(conn, username, hostname_normalized, section_normalized, hidden_defaults)
 
