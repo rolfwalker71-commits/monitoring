@@ -1758,9 +1758,9 @@ function renderLargeFilesPanel(largeFiles) {
                 <td class="lf-row-cell" colspan="4">
                   ${renderLargeFilePathCell(path)}
                   <div class="large-file-meta-row">
-                    <span><strong>Groesse:</strong> ${escapeHtml(size)}</span>
-                    <span><strong>Owner:</strong> ${escapeHtml(owner)}</span>
-                    <span><strong>Geaendert:</strong> ${escapeHtml(modified)}</span>
+                    <span><strong>📦 Groesse:</strong> ${escapeHtml(size)}</span>
+                    <span><strong>👤 Owner:</strong> ${escapeHtml(owner)}</span>
+                    <span><strong>🕒 Geaendert:</strong> ${escapeHtml(modified)}</span>
                   </div>
                 </td>
               </tr>
