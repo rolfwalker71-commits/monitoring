@@ -2208,17 +2208,25 @@ def alert_instant_mail_html(
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
     event_icon_uri = alert_event_icon_data_uri(event_type)
+    linux_logo_uri = os_logo_data_uri("linux")
+    windows_logo_uri = os_logo_data_uri("windows")
     event_icon_block = (
         f"<div style='margin-bottom:12px;'><img src='{html.escape(event_icon_uri)}' alt='{html.escape(event_label)}' width='52' height='52' style='display:block;'></div>"
         if event_icon_uri else ""
     )
-    build_version = html.escape(read_build_version())
     reported_at = format_mail_datetime(reported_at_utc)
     graph_alt = html.escape(f"Auslastungsverlauf {customer_title}: {mountpoint}")
     is_cpu_alert = (mountpoint == CPU_ALERT_MOUNTPOINT)
     resource_row_label = "CPU-Auslastung" if is_cpu_alert else "Mountpoint"
     resource_row_value = "CPU" if is_cpu_alert else mountpoint
     value_row_label = "CPU-Auslastung" if is_cpu_alert else "Auslastung"
+    platform_row = (
+        "<div style='margin-top:4px;display:flex;align-items:center;gap:8px;color:#5f7590;'>"
+        f"<img src='{html.escape(linux_logo_uri)}' alt='Linux' width='16' height='16' style='display:block;'>"
+        "<span style='font-size:14px;line-height:1;'>/</span>"
+        f"<img src='{html.escape(windows_logo_uri)}' alt='Windows' width='16' height='16' style='display:block;'>"
+        "</div>"
+    ) if linux_logo_uri and windows_logo_uri else ""
     graph_block = "" if is_cpu_alert else (
         (
             "<div style='margin-top:14px;'>"
@@ -2237,8 +2245,8 @@ def alert_instant_mail_html(
         "<div style='display:flex;align-items:center;gap:22px;margin-bottom:12px;'>"
         f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;'>"
         "<div>"
-        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>MONITORING</div>"
-        f"<div style='margin-top:4px;font-size:12px;color:#5f7590;'>powered by Rolf Walker &nbsp;&middot;&nbsp; v{build_version}</div>"
+        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>Proaktives Monitoring</div>"
+        f"{platform_row}"
         "</div>"
         "</div>"
         f"<div style='font-size:12px;color:#5f7590;margin-bottom:8px;'>Benutzer: {html.escape(username)} | {html.escape(format_mail_datetime())}</div>"

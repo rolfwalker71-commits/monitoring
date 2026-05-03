@@ -230,6 +230,25 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   font-weight: 500;
 }
 
+.brand-platforms {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-platform-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+  object-fit: contain;
+}
+
+.brand-platform-separator {
+  color: currentColor;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .brand-user {
   display: flex;
   align-items: center;
