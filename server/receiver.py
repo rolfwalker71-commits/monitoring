@@ -69,6 +69,15 @@ except ZoneInfoNotFoundError:
     SCHEDULE_TIMEZONE = datetime.now().astimezone().tzinfo
     SCHEDULE_TIMEZONE_NAME = str(SCHEDULE_TIMEZONE) if SCHEDULE_TIMEZONE else "local"
 
+DEFAULT_VISIBLE_FILESYSTEM_MOUNTPOINTS = {
+    "/",
+    "/usr/sap",
+    "/hana",
+    "/hana/log",
+    "/hana/data",
+    "/hana/shared",
+}
+
 
 def parse_int(query: dict, key: str, default: int, min_value: int, max_value: int) -> int:
     raw = query.get(key, [str(default)])[0]
@@ -300,6 +309,18 @@ def init_db() -> None:
                 mountpoint TEXT NOT NULL,
                 updated_at_utc TEXT NOT NULL,
                 PRIMARY KEY(username, hostname, section, mountpoint),
+                FOREIGN KEY(username) REFERENCES web_users(username)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS web_user_filesystem_visibility_config (
+                username TEXT NOT NULL,
+                hostname TEXT NOT NULL,
+                section TEXT NOT NULL,
+                configured_at_utc TEXT NOT NULL,
+                PRIMARY KEY(username, hostname, section),
                 FOREIGN KEY(username) REFERENCES web_users(username)
             )
             """
@@ -1207,6 +1228,14 @@ def normalize_mountpoint_for_visibility(value: object) -> str:
     return mountpoint[:512]
 
 
+def normalize_mountpoint_key(value: object) -> str:
+    return normalize_mountpoint_for_visibility(value).lower()
+
+
+def is_default_visible_mountpoint(value: object) -> bool:
+    return normalize_mountpoint_key(value) in DEFAULT_VISIBLE_FILESYSTEM_MOUNTPOINTS
+
+
 def get_user_hidden_filesystems(conn: sqlite3.Connection, username: str, hostname: str, section: str) -> list[str]:
     rows = conn.execute(
         """
@@ -1218,6 +1247,31 @@ def get_user_hidden_filesystems(conn: sqlite3.Connection, username: str, hostnam
         (username, hostname, section),
     ).fetchall()
     return [str(row[0] or "") for row in rows if str(row[0] or "").strip()]
+
+
+def is_user_filesystem_visibility_configured(conn: sqlite3.Connection, username: str, hostname: str, section: str) -> bool:
+    row = conn.execute(
+        """
+        SELECT 1
+        FROM web_user_filesystem_visibility_config
+        WHERE username = ? AND hostname = ? AND section = ?
+        LIMIT 1
+        """,
+        (username, hostname, section),
+    ).fetchone()
+    if row:
+        return True
+
+    legacy_row = conn.execute(
+        """
+        SELECT 1
+        FROM web_user_filesystem_visibility_hidden
+        WHERE username = ? AND hostname = ? AND section = ?
+        LIMIT 1
+        """,
+        (username, hostname, section),
+    ).fetchone()
+    return bool(legacy_row)
 
 
 def replace_user_hidden_filesystems(
@@ -1270,7 +1324,61 @@ def replace_user_hidden_filesystems(
             (username, hostname_normalized, section_normalized, mountpoint, now_utc),
         )
 
+    conn.execute(
+        """
+        INSERT INTO web_user_filesystem_visibility_config (
+            username,
+            hostname,
+            section,
+            configured_at_utc
+        )
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(username, hostname, section) DO UPDATE SET
+            configured_at_utc = excluded.configured_at_utc
+        """,
+        (username, hostname_normalized, section_normalized, now_utc),
+    )
+
     return get_user_hidden_filesystems(conn, username, hostname_normalized, section_normalized)
+
+
+def unique_mountpoints(values: list[object]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        mountpoint = normalize_mountpoint_for_visibility(value)
+        if not mountpoint:
+            continue
+        key = mountpoint.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(mountpoint)
+    result.sort(key=lambda item: item.lower())
+    return result
+
+
+def ensure_default_user_filesystem_visibility(
+    conn: sqlite3.Connection,
+    username: str,
+    hostname: str,
+    section: str,
+    available_mountpoints: list[object],
+) -> list[str]:
+    section_normalized = normalize_filesystem_visibility_section(section)
+    if not section_normalized:
+        return []
+
+    hostname_normalized = str(hostname or "").strip()
+    if not username or not hostname_normalized:
+        return []
+
+    if is_user_filesystem_visibility_configured(conn, username, hostname_normalized, section_normalized):
+        return get_user_hidden_filesystems(conn, username, hostname_normalized, section_normalized)
+
+    candidates = unique_mountpoints(list(available_mountpoints or []))
+    hidden_defaults = [mountpoint for mountpoint in candidates if not is_default_visible_mountpoint(mountpoint)]
+    return replace_user_hidden_filesystems(conn, username, hostname_normalized, section_normalized, hidden_defaults)
 
 
 def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
@@ -4745,10 +4853,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             visibility_editable = bool(username)
             fs_focus_hidden: list[str] = []
             large_files_hidden: list[str] = []
-            if username:
-                with sqlite3.connect(DB_PATH) as conn:
-                    fs_focus_hidden = get_user_hidden_filesystems(conn, username, hostname, "fs-focus")
-                    large_files_hidden = get_user_hidden_filesystems(conn, username, hostname, "large-files")
 
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
             cutoff_iso = utc_hours_ago_iso(hours)
@@ -4881,6 +4985,19 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 )
 
             trends.sort(key=lambda item: item["current_used_percent"], reverse=True)
+
+            if username:
+                fs_mountpoints = [item.get("mountpoint", "") for item in trends if isinstance(item, dict)]
+                raw_large_filesystems = latest_large_files.get("filesystems", []) if isinstance(latest_large_files, dict) else []
+                lf_mountpoints = [
+                    item.get("mountpoint", "")
+                    for item in raw_large_filesystems
+                    if isinstance(item, dict)
+                ]
+                with sqlite3.connect(DB_PATH) as conn:
+                    fs_focus_hidden = ensure_default_user_filesystem_visibility(conn, username, hostname, "fs-focus", fs_mountpoints)
+                    large_files_hidden = ensure_default_user_filesystem_visibility(conn, username, hostname, "large-files", lf_mountpoints)
+                    conn.commit()
 
             self._send_json(
                 HTTPStatus.OK,
