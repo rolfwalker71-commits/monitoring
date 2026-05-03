@@ -5247,6 +5247,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             for row in rows:
                 latest_payload = parse_payload_json(row[5] or "{}")
                 hostname = str(row[0])
+                last_seen_utc = str(row[1] or "")
+                received_at_dt = parse_utc_iso(last_seen_utc)
+                send_started_utc = str(latest_payload.get("send_started_utc", "") or "").strip()
+                timestamp_utc = str(latest_payload.get("timestamp_utc", "") or "").strip()
+                client_send_dt = parse_utc_iso(send_started_utc) or parse_utc_iso(timestamp_utc)
+                delivery_lag_sec = None
+                if received_at_dt and client_send_dt:
+                    lag_value = int((received_at_dt - client_send_dt).total_seconds())
+                    delivery_lag_sec = max(0, lag_value)
                 host_settings = settings_map.get(hostname, {
                     "display_name_override": "",
                     "country_code_override": "",
@@ -5264,11 +5273,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             str(host_settings.get("display_name_override", "")),
                             hostname,
                         ),
-                        "last_seen_utc": row[1],
+                        "last_seen_utc": last_seen_utc,
                         "report_count": row[2],
                         "primary_ip": row[3] or "",
                         "agent_id": row[4] or "",
                         "agent_version": str(latest_payload.get("agent_version", "")),
+                        "delivery_lag_sec": delivery_lag_sec,
                         "delivery_mode": str(latest_payload.get("delivery_mode", "live") or "live"),
                         "is_delayed": bool(latest_payload.get("is_delayed", False)),
                         "queue_depth": payload_int(latest_payload, "queue_depth", 0),

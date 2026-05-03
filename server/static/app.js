@@ -2694,6 +2694,14 @@ function queueDepthLabel(value) {
   return String(Math.floor(depth));
 }
 
+function deliveryLagLabel(value) {
+  const sec = Number(value);
+  if (!Number.isFinite(sec) || sec < 0) {
+    return "-";
+  }
+  return `${Math.floor(sec)}s`;
+}
+
 function asText(value, fallback = "-") {
   if (value === null || value === undefined) {
     return fallback;
@@ -3406,6 +3414,7 @@ function renderSingleHostCard(host) {
   const selectedClass = hostname === state.selectedHost ? "host-item selected" : "host-item";
   const hostDelivery = deliveryLabel(host.delivery_mode, host.is_delayed);
   const hostQueueDepth = queueDepthLabel(host.queue_depth);
+  const hostDeliveryLag = deliveryLagLabel(host.delivery_lag_sec);
   const openAlertCount = Number(host.open_alert_count || 0);
   const openCriticalAlertCount = Number(host.open_critical_alert_count || 0);
   const hasOpenAlerts = openAlertCount > 0;
@@ -3483,6 +3492,7 @@ function renderSingleHostCard(host) {
       </strong>
       <span>🖥️ ${escapeHtml(hostname)} &nbsp;·&nbsp; 🧷 ${escapeHtml(asText(host.agent_version))}</span>
       <span>🌐 ${escapeHtml(asText(host.primary_ip))} &nbsp;·&nbsp; 📬 ${hostDelivery} | 🗃️ Q${hostQueueDepth}</span>
+      <span>⏱️ Zustellung: ${escapeHtml(hostDeliveryLag)}</span>
       <span>🚨 ${openAlertCount} (krit. ${openCriticalAlertCount}) &nbsp;·&nbsp; 📦 ${Number(host.report_count || 0).toLocaleString("de-DE")}</span>
       <span>🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
       <span class="host-card-actions">
