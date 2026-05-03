@@ -52,6 +52,9 @@ const state = {
   analysisHours: 24,
   alarmSettingsLoaded: false,
   globalAlertsCollapsed: false,
+  globalAlertsOffset: 0,
+  globalAlertsTotal: 0,
+  globalAlertsPageSize: 100,
   hostAlertsCollapsed: false,
   globalSeverityFilter: "all",
   globalOpenAlertsCount: 0,
@@ -1014,6 +1017,12 @@ async function loadAlarmSettings(force = false) {
   const warningConsecutiveHitsInput = document.getElementById("warningConsecutiveHitsInput");
   const warningWindowMinutesInput = document.getElementById("warningWindowMinutesInput");
   const criticalImmediateInput = document.getElementById("criticalImmediateInput");
+  const cpuWarningThresholdInput = document.getElementById("cpuWarningThresholdInput");
+  const cpuCriticalThresholdInput = document.getElementById("cpuCriticalThresholdInput");
+  const cpuAlertWindowReportsInput = document.getElementById("cpuAlertWindowReportsInput");
+  const ramWarningThresholdInput = document.getElementById("ramWarningThresholdInput");
+  const ramCriticalThresholdInput = document.getElementById("ramCriticalThresholdInput");
+  const ramAlertWindowReportsInput = document.getElementById("ramAlertWindowReportsInput");
   const telegramEnabledInput = document.getElementById("telegramEnabledInput");
   const telegramBotTokenInput = document.getElementById("telegramBotTokenInput");
   const telegramChatIdInput = document.getElementById("telegramChatIdInput");
@@ -1028,6 +1037,12 @@ async function loadAlarmSettings(force = false) {
 
     warningInput.value = Number(settings.warning_threshold_percent || 80).toFixed(1);
     criticalInput.value = Number(settings.critical_threshold_percent || 90).toFixed(1);
+    cpuWarningThresholdInput.value = Number(settings.cpu_warning_threshold_percent || 80).toFixed(1);
+    cpuCriticalThresholdInput.value = Number(settings.cpu_critical_threshold_percent || 95).toFixed(1);
+    cpuAlertWindowReportsInput.value = String(Number(settings.cpu_alert_window_reports || 4));
+    ramWarningThresholdInput.value = Number(settings.ram_warning_threshold_percent || 85).toFixed(1);
+    ramCriticalThresholdInput.value = Number(settings.ram_critical_threshold_percent || 95).toFixed(1);
+    ramAlertWindowReportsInput.value = String(Number(settings.ram_alert_window_reports || 4));
     warningConsecutiveHitsInput.value = String(Number(settings.warning_consecutive_hits || 2));
     warningWindowMinutesInput.value = String(Number(settings.warning_window_minutes || 15));
     criticalImmediateInput.checked = settings.critical_trigger_immediate !== false;
@@ -1591,6 +1606,12 @@ function consumeOauthStatusFromUrl() {
 async function saveAlarmSettings() {
   const warningInput = document.getElementById("warningThresholdInput");
   const criticalInput = document.getElementById("criticalThresholdInput");
+  const cpuWarningThresholdInput = document.getElementById("cpuWarningThresholdInput");
+  const cpuCriticalThresholdInput = document.getElementById("cpuCriticalThresholdInput");
+  const cpuAlertWindowReportsInput = document.getElementById("cpuAlertWindowReportsInput");
+  const ramWarningThresholdInput = document.getElementById("ramWarningThresholdInput");
+  const ramCriticalThresholdInput = document.getElementById("ramCriticalThresholdInput");
+  const ramAlertWindowReportsInput = document.getElementById("ramAlertWindowReportsInput");
   const warningConsecutiveHitsInput = document.getElementById("warningConsecutiveHitsInput");
   const warningWindowMinutesInput = document.getElementById("warningWindowMinutesInput");
   const criticalImmediateInput = document.getElementById("criticalImmediateInput");
@@ -1600,12 +1621,30 @@ async function saveAlarmSettings() {
 
   const warning = Number(warningInput.value);
   const critical = Number(criticalInput.value);
+  const cpuWarning = Number(cpuWarningThresholdInput.value);
+  const cpuCritical = Number(cpuCriticalThresholdInput.value);
+  const cpuWindowReports = Number(cpuAlertWindowReportsInput.value);
+  const ramWarning = Number(ramWarningThresholdInput.value);
+  const ramCritical = Number(ramCriticalThresholdInput.value);
+  const ramWindowReports = Number(ramAlertWindowReportsInput.value);
   const warningConsecutiveHits = Number(warningConsecutiveHitsInput.value);
   const warningWindowMinutes = Number(warningWindowMinutesInput.value);
   const alertReminderIntervalHours = Number(document.getElementById("alertReminderIntervalHoursInput")?.value || 0);
 
   if (!Number.isFinite(warning) || !Number.isFinite(critical) || warning < 1 || critical > 100 || warning >= critical) {
     throw new Error("Schwellwerte ungueltig: Warnung muss kleiner als Kritisch sein.");
+  }
+  if (!Number.isFinite(cpuWarning) || !Number.isFinite(cpuCritical) || cpuWarning < 1 || cpuCritical > 100 || cpuWarning >= cpuCritical) {
+    throw new Error("CPU Schwellwerte ungueltig: Warnung muss kleiner als Kritisch sein.");
+  }
+  if (!Number.isFinite(ramWarning) || !Number.isFinite(ramCritical) || ramWarning < 1 || ramCritical > 100 || ramWarning >= ramCritical) {
+    throw new Error("RAM Schwellwerte ungueltig: Warnung muss kleiner als Kritisch sein.");
+  }
+  if (!Number.isFinite(cpuWindowReports) || cpuWindowReports < 2 || cpuWindowReports > 24) {
+    throw new Error("CPU Fenster muss zwischen 2 und 24 Meldungen liegen.");
+  }
+  if (!Number.isFinite(ramWindowReports) || ramWindowReports < 2 || ramWindowReports > 24) {
+    throw new Error("RAM Fenster muss zwischen 2 und 24 Meldungen liegen.");
   }
   if (!Number.isFinite(warningConsecutiveHits) || warningConsecutiveHits < 1 || warningConsecutiveHits > 10) {
     throw new Error("Entprellung Treffer muss zwischen 1 und 10 liegen.");
@@ -1617,6 +1656,12 @@ async function saveAlarmSettings() {
   const payload = {
     warning_threshold_percent: warning,
     critical_threshold_percent: critical,
+    cpu_warning_threshold_percent: cpuWarning,
+    cpu_critical_threshold_percent: cpuCritical,
+    cpu_alert_window_reports: Math.floor(cpuWindowReports),
+    ram_warning_threshold_percent: ramWarning,
+    ram_critical_threshold_percent: ramCritical,
+    ram_alert_window_reports: Math.floor(ramWindowReports),
     warning_consecutive_hits: Math.floor(warningConsecutiveHits),
     warning_window_minutes: Math.floor(warningWindowMinutes),
     critical_trigger_immediate: criticalImmediateInput.checked,
@@ -1663,6 +1708,12 @@ function formatPercent(value) {
     return "-";
   }
   return `${n.toFixed(1)}%`;
+}
+
+function renderAlertMountpointLabel(mountpoint, width = 60) {
+  if (mountpoint === "cpu") return "🖥️ CPU-Auslastung";
+  if (mountpoint === "ram") return "🧠 RAM-Auslastung";
+  return renderPathCell(mountpoint, width);
 }
 
 function formatSignedPercent(value) {
@@ -4307,7 +4358,7 @@ async function loadAlertsForHost() {
           <tr class="${isMuted ? "alert-row-muted" : ""}">
             <td><span class="badge ${statusClass}">${escapeHtml(asText(item.status))}</span></td>
             <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
-            <td>${item.mountpoint === "cpu" ? "🖥️ CPU-Auslastung" : renderPathCell(item.mountpoint, 60)}</td>
+            <td>${renderAlertMountpointLabel(item.mountpoint, 60)}</td>
             <td>${formatPercent(item.used_percent)}</td>
             <td title="Zuletzt gesehen: ${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}">${escapeHtml(formatUtcPlus2(item.created_at_utc))}</td>
             <td>${muteBtn}</td>
@@ -4559,17 +4610,29 @@ function updateHeaderStatChips() {
 
 async function loadGlobalAlertsOverview(options = {}) {
   const updateList = options.updateList !== false;
+  const append = options.append === true;
   const summaryEl = document.getElementById("globalAlertsSummary");
   const rowsEl = document.getElementById("globalAlertsRows");
   const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
   const toggleButton = document.getElementById("toggleGlobalAlertsPanelButton");
   const panelBody = document.getElementById("globalAlertsPanelBody");
+  const loadMoreButton = document.getElementById("globalAlertsLoadMoreButton");
+  const pagingStatus = document.getElementById("globalAlertsPagingStatus");
+  const requestOffset = append ? state.globalAlertsOffset : 0;
+  const requestLimit = Math.max(20, Number(state.globalAlertsPageSize || 100));
+  const severityQuery = state.globalSeverityFilter && state.globalSeverityFilter !== "all"
+    ? `&severity=${encodeURIComponent(state.globalSeverityFilter)}`
+    : "";
 
-  if (updateList && rowsEl) {
+  if (updateList && rowsEl && !append) {
     rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Lade globale Alerts...</td></tr>";
   }
-  if (updateList && summaryEl) {
+  if (updateList && summaryEl && !append) {
     summaryEl.textContent = "";
+  }
+  if (!append) {
+    state.globalAlertsOffset = 0;
+    state.globalAlertsTotal = 0;
   }
   if (panelBody && toggleButton) {
     panelBody.classList.toggle("hidden", state.globalAlertsCollapsed);
@@ -4597,30 +4660,27 @@ async function loadGlobalAlertsOverview(options = {}) {
       return;
     }
 
-    const listResp = await fetch("/api/v1/alerts?status=open&limit=100&offset=0", {
+    const listResp = await fetch(`/api/v1/alerts?status=open&limit=${requestLimit}&offset=${requestOffset}${severityQuery}`, {
       credentials: "same-origin",
       cache: "no-store",
     });
     if (!listResp.ok) throw new Error("List HTTP " + listResp.status);
 
     const listData = await listResp.json();
-    const allOpenAlerts = listData.alerts || [];
-
-    const alerts = allOpenAlerts.filter((item) => {
-      if (state.globalSeverityFilter === "all") {
-        return true;
-      }
-      return String(item.severity || "") === state.globalSeverityFilter;
-    });
+    const alerts = listData.alerts || [];
+    const totalForFilter = Number(listData.total || 0);
+    state.globalAlertsTotal = totalForFilter;
 
     summaryEl.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}`;
 
-    if (alerts.length === 0) {
+    if (!append && alerts.length === 0) {
       rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Keine offenen Alerts fuer den gesetzten Filter.</td></tr>";
+      if (loadMoreButton) loadMoreButton.classList.add("hidden");
+      if (pagingStatus) pagingStatus.textContent = "0 / 0";
       return;
     }
 
-    rowsEl.innerHTML = alerts
+    const rowsHtml = alerts
       .map((item) => {
         const severityClass = item.severity === "critical" ? "severity-critical" : "severity-warning";
         const hostDisplayName = asText(item.display_name || item.hostname);
@@ -4636,7 +4696,7 @@ async function loadGlobalAlertsOverview(options = {}) {
               </div>
             </td>
             <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
-            <td>${item.mountpoint === "cpu" ? "🖥️ CPU-Auslastung" : renderPathCell(item.mountpoint, 56)}</td>
+            <td>${renderAlertMountpointLabel(item.mountpoint, 56)}</td>
             <td>${formatPercent(item.used_percent)}</td>
             <td title="Zuletzt gesehen: ${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}">${escapeHtml(formatUtcPlus2(item.created_at_utc))}</td>
             <td>${muteBtn}</td>
@@ -4644,6 +4704,23 @@ async function loadGlobalAlertsOverview(options = {}) {
         `;
       })
       .join("");
+
+    if (append && requestOffset > 0) {
+      rowsEl.insertAdjacentHTML("beforeend", rowsHtml);
+    } else {
+      rowsEl.innerHTML = rowsHtml;
+    }
+
+    state.globalAlertsOffset = requestOffset + alerts.length;
+    const shownCount = state.globalAlertsOffset;
+    const hasMore = shownCount < totalForFilter;
+    if (loadMoreButton) {
+      loadMoreButton.classList.toggle("hidden", !hasMore);
+      loadMoreButton.disabled = !hasMore;
+    }
+    if (pagingStatus) {
+      pagingStatus.textContent = `${Math.min(shownCount, totalForFilter)} / ${totalForFilter}`;
+    }
 
     rowsEl.querySelectorAll("[data-action='toggle-mute']").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
@@ -4982,8 +5059,16 @@ function wireEvents() {
 
   document.getElementById("globalSeverityFilter").addEventListener("change", async (event) => {
     state.globalSeverityFilter = String(event.target?.value || "all");
-    await loadGlobalAlertsOverview();
+    state.globalAlertsOffset = 0;
+    await loadGlobalAlertsOverview({ append: false });
   });
+
+  const globalAlertsLoadMoreButton = document.getElementById("globalAlertsLoadMoreButton");
+  if (globalAlertsLoadMoreButton) {
+    globalAlertsLoadMoreButton.addEventListener("click", async () => {
+      await loadGlobalAlertsOverview({ append: true });
+    });
+  }
 
   document.getElementById("toggleGlobalAlertsPanelButton").addEventListener("click", async () => {
     state.globalAlertsCollapsed = !state.globalAlertsCollapsed;

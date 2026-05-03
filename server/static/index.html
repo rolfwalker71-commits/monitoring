@@ -168,6 +168,10 @@
                       <tbody id="globalAlertsRows"></tbody>
                     </table>
                   </div>
+                  <div class="alarm-settings-actions">
+                    <button id="globalAlertsLoadMoreButton" type="button" class="btn-secondary hidden">Mehr laden</button>
+                    <p id="globalAlertsPagingStatus" class="count compact"></p>
+                  </div>
                 </div>
               </section>
             </div>
@@ -458,6 +462,30 @@
                 <label>
                   Kritisch ab (%)
                   <input id="criticalThresholdInput" type="number" min="2" max="100" step="0.1" />
+                </label>
+                <label>
+                  CPU Warnung ab (%)
+                  <input id="cpuWarningThresholdInput" type="number" min="1" max="99" step="0.1" />
+                </label>
+                <label>
+                  CPU Kritisch ab (%)
+                  <input id="cpuCriticalThresholdInput" type="number" min="2" max="100" step="0.1" />
+                </label>
+                <label>
+                  CPU Fenster (Meldungen)
+                  <input id="cpuAlertWindowReportsInput" type="number" min="2" max="24" step="1" />
+                </label>
+                <label>
+                  RAM Warnung ab (%)
+                  <input id="ramWarningThresholdInput" type="number" min="1" max="99" step="0.1" />
+                </label>
+                <label>
+                  RAM Kritisch ab (%)
+                  <input id="ramCriticalThresholdInput" type="number" min="2" max="100" step="0.1" />
+                </label>
+                <label>
+                  RAM Fenster (Meldungen)
+                  <input id="ramAlertWindowReportsInput" type="number" min="2" max="24" step="1" />
                 </label>
                 <label>
                   Entprellung: Treffer

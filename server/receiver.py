@@ -45,6 +45,10 @@ CPU_WARNING_THRESHOLD_PERCENT = 80.0
 CPU_CRITICAL_THRESHOLD_PERCENT = 95.0
 CPU_ALERT_WINDOW_REPORTS = 4
 CPU_ALERT_MOUNTPOINT = "cpu"
+RAM_WARNING_THRESHOLD_PERCENT = 85.0
+RAM_CRITICAL_THRESHOLD_PERCENT = 95.0
+RAM_ALERT_WINDOW_REPORTS = 4
+RAM_ALERT_MOUNTPOINT = "ram"
 TELEGRAM_ENABLED_DEFAULT = os.getenv("MONITORING_TELEGRAM_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
 TELEGRAM_BOT_TOKEN_DEFAULT = os.getenv("MONITORING_TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID_DEFAULT = os.getenv("MONITORING_TELEGRAM_CHAT_ID", "")
@@ -159,6 +163,12 @@ def init_db() -> None:
                 warning_consecutive_hits INTEGER NOT NULL,
                 warning_window_minutes INTEGER NOT NULL,
                 critical_trigger_immediate INTEGER NOT NULL,
+                cpu_warning_threshold_percent REAL NOT NULL,
+                cpu_critical_threshold_percent REAL NOT NULL,
+                cpu_alert_window_reports INTEGER NOT NULL,
+                ram_warning_threshold_percent REAL NOT NULL,
+                ram_critical_threshold_percent REAL NOT NULL,
+                ram_alert_window_reports INTEGER NOT NULL,
                 telegram_enabled INTEGER NOT NULL,
                 telegram_bot_token TEXT NOT NULL,
                 telegram_chat_id TEXT NOT NULL,
@@ -176,6 +186,18 @@ def init_db() -> None:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN warning_window_minutes INTEGER NOT NULL DEFAULT 15")
         if "critical_trigger_immediate" not in existing_alarm_columns:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN critical_trigger_immediate INTEGER NOT NULL DEFAULT 1")
+        if "cpu_warning_threshold_percent" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN cpu_warning_threshold_percent REAL NOT NULL DEFAULT 80")
+        if "cpu_critical_threshold_percent" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN cpu_critical_threshold_percent REAL NOT NULL DEFAULT 95")
+        if "cpu_alert_window_reports" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN cpu_alert_window_reports INTEGER NOT NULL DEFAULT 4")
+        if "ram_warning_threshold_percent" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN ram_warning_threshold_percent REAL NOT NULL DEFAULT 85")
+        if "ram_critical_threshold_percent" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN ram_critical_threshold_percent REAL NOT NULL DEFAULT 95")
+        if "ram_alert_window_reports" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN ram_alert_window_reports INTEGER NOT NULL DEFAULT 4")
         if "alert_reminder_interval_hours" not in existing_alarm_columns:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN alert_reminder_interval_hours INTEGER NOT NULL DEFAULT 0")
 
@@ -462,12 +484,18 @@ def init_db() -> None:
                 warning_consecutive_hits,
                 warning_window_minutes,
                 critical_trigger_immediate,
+                cpu_warning_threshold_percent,
+                cpu_critical_threshold_percent,
+                cpu_alert_window_reports,
+                ram_warning_threshold_percent,
+                ram_critical_threshold_percent,
+                ram_alert_window_reports,
                 telegram_enabled,
                 telegram_bot_token,
                 telegram_chat_id,
                 updated_at_utc
             )
-            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO NOTHING
             """,
             (
@@ -476,6 +504,12 @@ def init_db() -> None:
                 2,
                 15,
                 1,
+                CPU_WARNING_THRESHOLD_PERCENT,
+                CPU_CRITICAL_THRESHOLD_PERCENT,
+                CPU_ALERT_WINDOW_REPORTS,
+                RAM_WARNING_THRESHOLD_PERCENT,
+                RAM_CRITICAL_THRESHOLD_PERCENT,
+                RAM_ALERT_WINDOW_REPORTS,
                 1 if TELEGRAM_ENABLED_DEFAULT else 0,
                 TELEGRAM_BOT_TOKEN_DEFAULT,
                 TELEGRAM_CHAT_ID_DEFAULT,
@@ -2237,10 +2271,12 @@ def alert_instant_mail_html(
     build_version = html.escape(read_build_version())
     reported_at = format_mail_datetime(reported_at_utc)
     graph_alt = html.escape(f"Auslastungsverlauf {customer_title}: {mountpoint}")
-    is_cpu_alert = (mountpoint == CPU_ALERT_MOUNTPOINT)
-    resource_row_label = "CPU-Auslastung" if is_cpu_alert else "Mountpoint"
-    resource_row_value = "CPU" if is_cpu_alert else mountpoint
-    value_row_label = "CPU-Auslastung" if is_cpu_alert else "Auslastung"
+    is_cpu_alert = mountpoint == CPU_ALERT_MOUNTPOINT
+    is_ram_alert = mountpoint == RAM_ALERT_MOUNTPOINT
+    is_resource_alert = is_resource_alert_mountpoint(mountpoint)
+    resource_row_label = "Ressource" if is_resource_alert else "Mountpoint"
+    resource_row_value = "CPU" if is_cpu_alert else ("RAM" if is_ram_alert else mountpoint)
+    value_row_label = "Auslastung"
     platform_row = (
         "<div style='margin-top:4px;display:flex;align-items:center;gap:8px;color:#5f7590;'>"
         f"<img src='{html.escape(linux_logo_uri)}' alt='Linux' width='16' height='16' style='display:block;'>"
@@ -2249,7 +2285,7 @@ def alert_instant_mail_html(
         f"<span style='margin-left:10px;white-space:nowrap;'>v{build_version}</span>"
         "</div>"
     ) if linux_logo_uri and windows_logo_uri else ""
-    graph_block = "" if is_cpu_alert else (
+    graph_block = "" if is_resource_alert else (
         (
             "<div style='margin-top:14px;'>"
             "<div style='margin:0 0 6px 0;font-size:12px;color:#64748b;'>Verlauf letzte 24h (Mountpoint-Auslastung)</div>"
@@ -2357,7 +2393,7 @@ def send_instant_alert_mails_to_users(
             ok_token, access_token, _err = ensure_microsoft_access_token(conn, username)
             if not ok_token:
                 continue
-            if mountpoint == CPU_ALERT_MOUNTPOINT:
+            if is_resource_alert_mountpoint(mountpoint):
                 graph_cid = ""
                 graph_attachments = []
             else:
@@ -3203,6 +3239,12 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
         """
         SELECT warning_threshold_percent, critical_threshold_percent,
                warning_consecutive_hits, warning_window_minutes, critical_trigger_immediate,
+               COALESCE(cpu_warning_threshold_percent, 80),
+               COALESCE(cpu_critical_threshold_percent, 95),
+               COALESCE(cpu_alert_window_reports, 4),
+               COALESCE(ram_warning_threshold_percent, 85),
+               COALESCE(ram_critical_threshold_percent, 95),
+               COALESCE(ram_alert_window_reports, 4),
                telegram_enabled, telegram_bot_token, telegram_chat_id, updated_at_utc,
                COALESCE(alert_reminder_interval_hours, 0)
         FROM alarm_settings
@@ -3217,6 +3259,12 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
             "warning_consecutive_hits": 2,
             "warning_window_minutes": 15,
             "critical_trigger_immediate": True,
+            "cpu_warning_threshold_percent": CPU_WARNING_THRESHOLD_PERCENT,
+            "cpu_critical_threshold_percent": CPU_CRITICAL_THRESHOLD_PERCENT,
+            "cpu_alert_window_reports": CPU_ALERT_WINDOW_REPORTS,
+            "ram_warning_threshold_percent": RAM_WARNING_THRESHOLD_PERCENT,
+            "ram_critical_threshold_percent": RAM_CRITICAL_THRESHOLD_PERCENT,
+            "ram_alert_window_reports": RAM_ALERT_WINDOW_REPORTS,
             "telegram_enabled": TELEGRAM_ENABLED_DEFAULT,
             "telegram_bot_token": TELEGRAM_BOT_TOKEN_DEFAULT,
             "telegram_chat_id": TELEGRAM_CHAT_ID_DEFAULT,
@@ -3230,11 +3278,17 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
         "warning_consecutive_hits": max(1, int(row[2] or 2)),
         "warning_window_minutes": max(1, int(row[3] or 15)),
         "critical_trigger_immediate": coerce_bool(row[4]),
-        "telegram_enabled": coerce_bool(row[5]),
-        "telegram_bot_token": str(row[6] or ""),
-        "telegram_chat_id": str(row[7] or ""),
-        "updated_at_utc": str(row[8] or ""),
-        "alert_reminder_interval_hours": max(0, int(row[9] or 0)) if row[9] is not None else 0,
+        "cpu_warning_threshold_percent": clamp_threshold(row[5], 1, 99, CPU_WARNING_THRESHOLD_PERCENT),
+        "cpu_critical_threshold_percent": clamp_threshold(row[6], 1, 100, CPU_CRITICAL_THRESHOLD_PERCENT),
+        "cpu_alert_window_reports": max(2, min(int(row[7] or CPU_ALERT_WINDOW_REPORTS), 24)),
+        "ram_warning_threshold_percent": clamp_threshold(row[8], 1, 99, RAM_WARNING_THRESHOLD_PERCENT),
+        "ram_critical_threshold_percent": clamp_threshold(row[9], 1, 100, RAM_CRITICAL_THRESHOLD_PERCENT),
+        "ram_alert_window_reports": max(2, min(int(row[10] or RAM_ALERT_WINDOW_REPORTS), 24)),
+        "telegram_enabled": coerce_bool(row[11]),
+        "telegram_bot_token": str(row[12] or ""),
+        "telegram_chat_id": str(row[13] or ""),
+        "updated_at_utc": str(row[14] or ""),
+        "alert_reminder_interval_hours": max(0, int(row[15] or 0)) if row[15] is not None else 0,
     }
 
 
@@ -3268,12 +3322,60 @@ def normalize_alarm_settings_payload(payload: dict, existing: dict | None = None
         warning_window = 15
     warning_window = max(1, min(warning_window, 240))
 
+    cpu_warning = clamp_threshold(
+        payload.get("cpu_warning_threshold_percent", base.get("cpu_warning_threshold_percent", CPU_WARNING_THRESHOLD_PERCENT)),
+        1,
+        99,
+        CPU_WARNING_THRESHOLD_PERCENT,
+    )
+    cpu_critical = clamp_threshold(
+        payload.get("cpu_critical_threshold_percent", base.get("cpu_critical_threshold_percent", CPU_CRITICAL_THRESHOLD_PERCENT)),
+        1,
+        100,
+        CPU_CRITICAL_THRESHOLD_PERCENT,
+    )
+    if cpu_critical <= cpu_warning:
+        cpu_critical = min(100.0, cpu_warning + 1.0)
+
+    ram_warning = clamp_threshold(
+        payload.get("ram_warning_threshold_percent", base.get("ram_warning_threshold_percent", RAM_WARNING_THRESHOLD_PERCENT)),
+        1,
+        99,
+        RAM_WARNING_THRESHOLD_PERCENT,
+    )
+    ram_critical = clamp_threshold(
+        payload.get("ram_critical_threshold_percent", base.get("ram_critical_threshold_percent", RAM_CRITICAL_THRESHOLD_PERCENT)),
+        1,
+        100,
+        RAM_CRITICAL_THRESHOLD_PERCENT,
+    )
+    if ram_critical <= ram_warning:
+        ram_critical = min(100.0, ram_warning + 1.0)
+
+    try:
+        cpu_window = int(payload.get("cpu_alert_window_reports", base.get("cpu_alert_window_reports", CPU_ALERT_WINDOW_REPORTS)))
+    except (TypeError, ValueError):
+        cpu_window = CPU_ALERT_WINDOW_REPORTS
+    cpu_window = max(2, min(cpu_window, 24))
+
+    try:
+        ram_window = int(payload.get("ram_alert_window_reports", base.get("ram_alert_window_reports", RAM_ALERT_WINDOW_REPORTS)))
+    except (TypeError, ValueError):
+        ram_window = RAM_ALERT_WINDOW_REPORTS
+    ram_window = max(2, min(ram_window, 24))
+
     return {
         "warning_threshold_percent": warning,
         "critical_threshold_percent": critical,
         "warning_consecutive_hits": warning_hits,
         "warning_window_minutes": warning_window,
         "critical_trigger_immediate": coerce_bool(payload.get("critical_trigger_immediate", base.get("critical_trigger_immediate", True))),
+        "cpu_warning_threshold_percent": cpu_warning,
+        "cpu_critical_threshold_percent": cpu_critical,
+        "cpu_alert_window_reports": cpu_window,
+        "ram_warning_threshold_percent": ram_warning,
+        "ram_critical_threshold_percent": ram_critical,
+        "ram_alert_window_reports": ram_window,
         "telegram_enabled": coerce_bool(payload.get("telegram_enabled", base.get("telegram_enabled", False))),
         "telegram_bot_token": str(payload.get("telegram_bot_token", base.get("telegram_bot_token", "")) or "").strip(),
         "telegram_chat_id": str(payload.get("telegram_chat_id", base.get("telegram_chat_id", "")) or "").strip(),
@@ -3295,19 +3397,31 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             warning_consecutive_hits,
             warning_window_minutes,
             critical_trigger_immediate,
+            cpu_warning_threshold_percent,
+            cpu_critical_threshold_percent,
+            cpu_alert_window_reports,
+            ram_warning_threshold_percent,
+            ram_critical_threshold_percent,
+            ram_alert_window_reports,
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,
             updated_at_utc,
             alert_reminder_interval_hours
         )
-        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             warning_threshold_percent = excluded.warning_threshold_percent,
             critical_threshold_percent = excluded.critical_threshold_percent,
             warning_consecutive_hits = excluded.warning_consecutive_hits,
             warning_window_minutes = excluded.warning_window_minutes,
             critical_trigger_immediate = excluded.critical_trigger_immediate,
+            cpu_warning_threshold_percent = excluded.cpu_warning_threshold_percent,
+            cpu_critical_threshold_percent = excluded.cpu_critical_threshold_percent,
+            cpu_alert_window_reports = excluded.cpu_alert_window_reports,
+            ram_warning_threshold_percent = excluded.ram_warning_threshold_percent,
+            ram_critical_threshold_percent = excluded.ram_critical_threshold_percent,
+            ram_alert_window_reports = excluded.ram_alert_window_reports,
             telegram_enabled = excluded.telegram_enabled,
             telegram_bot_token = excluded.telegram_bot_token,
             telegram_chat_id = excluded.telegram_chat_id,
@@ -3320,6 +3434,12 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             normalized["warning_consecutive_hits"],
             normalized["warning_window_minutes"],
             1 if normalized["critical_trigger_immediate"] else 0,
+            normalized["cpu_warning_threshold_percent"],
+            normalized["cpu_critical_threshold_percent"],
+            normalized["cpu_alert_window_reports"],
+            normalized["ram_warning_threshold_percent"],
+            normalized["ram_critical_threshold_percent"],
+            normalized["ram_alert_window_reports"],
             1 if normalized["telegram_enabled"] else 0,
             normalized["telegram_bot_token"],
             normalized["telegram_chat_id"],
@@ -3348,6 +3468,10 @@ _ALERT_ICON_PATHS: dict[str, Path] = {
     "resolved": STATIC_DIR / "icons" / "alertresolved.png",
     "reminder": STATIC_DIR / "icons" / "alertreminder.png",
 }
+
+
+def is_resource_alert_mountpoint(mountpoint: str) -> bool:
+    return mountpoint in {CPU_ALERT_MOUNTPOINT, RAM_ALERT_MOUNTPOINT}
 
 # Characters that must be escaped in Telegram MarkdownV2
 _MDV2_RE = re.compile(r'([_*\[\]()~`>#+=|{}.!\\-])')
@@ -3452,10 +3576,10 @@ def build_telegram_alert_text(
     hostname_part = f"🖥️ *{_mdv2(title)}*" if title == hostname else f"🖥️ *{_mdv2(title)}* \\({_mdv2(hostname)}\\)"
     if mountpoint == CPU_ALERT_MOUNTPOINT:
         resource_line = "🖥️ CPU\\-Auslastung"
-        value_label = "CPU"
+    elif mountpoint == RAM_ALERT_MOUNTPOINT:
+        resource_line = "🧠 RAM\\-Auslastung"
     else:
         resource_line = f"📂 {_mdv2(mountpoint)}"
-        value_label = "Disk"
     return (
         f"{hostname_part}\n"
         f"{resource_line}\n"
@@ -4198,6 +4322,28 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
 def update_cpu_alerts_for_report(
     conn: sqlite3.Connection, hostname: str, report_id: int, payload: dict, alarm_settings: dict
 ) -> None:
+    cpu_warning_threshold = clamp_threshold(
+        alarm_settings.get("cpu_warning_threshold_percent", CPU_WARNING_THRESHOLD_PERCENT),
+        1,
+        99,
+        CPU_WARNING_THRESHOLD_PERCENT,
+    )
+    cpu_critical_threshold = clamp_threshold(
+        alarm_settings.get("cpu_critical_threshold_percent", CPU_CRITICAL_THRESHOLD_PERCENT),
+        1,
+        100,
+        CPU_CRITICAL_THRESHOLD_PERCENT,
+    )
+    if cpu_critical_threshold <= cpu_warning_threshold:
+        cpu_critical_threshold = min(100.0, cpu_warning_threshold + 1.0)
+    cpu_window_reports = max(
+        2,
+        min(
+            int(alarm_settings.get("cpu_alert_window_reports", CPU_ALERT_WINDOW_REPORTS) or CPU_ALERT_WINDOW_REPORTS),
+            24,
+        ),
+    )
+
     rows = conn.execute(
         """
         SELECT payload_json FROM reports
@@ -4205,10 +4351,10 @@ def update_cpu_alerts_for_report(
         ORDER BY id DESC
         LIMIT ?
         """,
-        (hostname, CPU_ALERT_WINDOW_REPORTS),
+        (hostname, cpu_window_reports),
     ).fetchall()
 
-    if len(rows) < CPU_ALERT_WINDOW_REPORTS:
+    if len(rows) < cpu_window_reports:
         return
 
     cpu_values: list[float] = []
@@ -4221,12 +4367,12 @@ def update_cpu_alerts_for_report(
         except Exception:
             pass
 
-    if len(cpu_values) < CPU_ALERT_WINDOW_REPORTS:
+    if len(cpu_values) < cpu_window_reports:
         return
 
     avg_cpu = sum(cpu_values) / len(cpu_values)
     severity = evaluate_severity_for_thresholds(
-        avg_cpu, CPU_WARNING_THRESHOLD_PERCENT, CPU_CRITICAL_THRESHOLD_PERCENT
+        avg_cpu, cpu_warning_threshold, cpu_critical_threshold
     )
 
     now_utc = utc_now_iso()
@@ -4288,6 +4434,125 @@ def update_cpu_alerts_for_report(
     if previous_severity != "critical" and severity == "critical":
         maybe_send_alert_message(
             alarm_settings, "escalated", hostname, CPU_ALERT_MOUNTPOINT, severity, avg_cpu,
+            conn=conn, display_name=display_name,
+        )
+
+
+def update_ram_alerts_for_report(
+    conn: sqlite3.Connection, hostname: str, report_id: int, payload: dict, alarm_settings: dict
+) -> None:
+    ram_warning_threshold = clamp_threshold(
+        alarm_settings.get("ram_warning_threshold_percent", RAM_WARNING_THRESHOLD_PERCENT),
+        1,
+        99,
+        RAM_WARNING_THRESHOLD_PERCENT,
+    )
+    ram_critical_threshold = clamp_threshold(
+        alarm_settings.get("ram_critical_threshold_percent", RAM_CRITICAL_THRESHOLD_PERCENT),
+        1,
+        100,
+        RAM_CRITICAL_THRESHOLD_PERCENT,
+    )
+    if ram_critical_threshold <= ram_warning_threshold:
+        ram_critical_threshold = min(100.0, ram_warning_threshold + 1.0)
+    ram_window_reports = max(
+        2,
+        min(
+            int(alarm_settings.get("ram_alert_window_reports", RAM_ALERT_WINDOW_REPORTS) or RAM_ALERT_WINDOW_REPORTS),
+            24,
+        ),
+    )
+
+    rows = conn.execute(
+        """
+        SELECT payload_json FROM reports
+        WHERE hostname = ?
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (hostname, ram_window_reports),
+    ).fetchall()
+
+    if len(rows) < ram_window_reports:
+        return
+
+    ram_values: list[float] = []
+    for row in rows:
+        try:
+            p = parse_payload_json(str(row[0] or "{}"))
+            v = get_nested_number(p, "memory", "used_percent")
+            if v is not None:
+                ram_values.append(float(v))
+        except Exception:
+            pass
+
+    if len(ram_values) < ram_window_reports:
+        return
+
+    avg_ram = sum(ram_values) / len(ram_values)
+    severity = evaluate_severity_for_thresholds(
+        avg_ram, ram_warning_threshold, ram_critical_threshold
+    )
+
+    now_utc = utc_now_iso()
+    display_name = get_display_name_override(conn, hostname) or hostname
+
+    open_alert = conn.execute(
+        """
+        SELECT id, severity
+        FROM alerts
+        WHERE hostname = ? AND mountpoint = ? AND status = 'open'
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (hostname, RAM_ALERT_MOUNTPOINT),
+    ).fetchone()
+
+    if severity == "ok":
+        if open_alert:
+            conn.execute(
+                """
+                UPDATE alerts
+                SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
+                WHERE id = ?
+                """,
+                (now_utc, now_utc, report_id, open_alert[0]),
+            )
+            maybe_send_alert_message(
+                alarm_settings, "resolved", hostname, RAM_ALERT_MOUNTPOINT, "ok", avg_ram,
+                conn=conn, display_name=display_name,
+            )
+        return
+
+    if not open_alert:
+        conn.execute(
+            """
+            INSERT INTO alerts (
+                hostname, mountpoint, severity, used_percent, status,
+                created_at_utc, last_seen_at_utc, resolved_at_utc, report_id
+            )
+            VALUES (?, ?, ?, ?, 'open', ?, ?, NULL, ?)
+            """,
+            (hostname, RAM_ALERT_MOUNTPOINT, severity, avg_ram, now_utc, now_utc, report_id),
+        )
+        maybe_send_alert_message(
+            alarm_settings, "opened", hostname, RAM_ALERT_MOUNTPOINT, severity, avg_ram,
+            conn=conn, display_name=display_name,
+        )
+        return
+
+    previous_severity = str(open_alert[1] or "warning")
+    conn.execute(
+        """
+        UPDATE alerts
+        SET severity = ?, used_percent = ?, last_seen_at_utc = ?, report_id = ?
+        WHERE id = ?
+        """,
+        (severity, avg_ram, now_utc, report_id, open_alert[0]),
+    )
+    if previous_severity != "critical" and severity == "critical":
+        maybe_send_alert_message(
+            alarm_settings, "escalated", hostname, RAM_ALERT_MOUNTPOINT, severity, avg_ram,
             conn=conn, display_name=display_name,
         )
 
@@ -5358,6 +5623,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if status_filter not in {"all", "open", "resolved"}:
                 status_filter = "all"
 
+            severity_filter = query.get("severity", ["all"])[0].strip().lower()
+            if severity_filter not in {"all", "warning", "critical"}:
+                severity_filter = "all"
+
             hostname_filter = query.get("hostname", [""])[0].strip()
             limit = parse_int(query, "limit", default=50, min_value=1, max_value=500)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
@@ -5368,6 +5637,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if status_filter != "all":
                 where_parts.append("status = ?")
                 args.append(status_filter)
+            if severity_filter != "all":
+                where_parts.append("severity = ?")
+                args.append(severity_filter)
             if hostname_filter:
                 where_parts.append("hostname = ?")
                 args.append(hostname_filter)
@@ -5464,6 +5736,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "limit": limit,
                     "offset": offset,
                     "status": status_filter,
+                    "severity": severity_filter,
                     "hostname": hostname_filter,
                     "alerts": alerts,
                 },
@@ -6622,6 +6895,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             else:
                 update_alerts_for_report(conn, hostname, report_id, filesystems, alarm_settings)
                 update_cpu_alerts_for_report(conn, hostname, report_id, payload, alarm_settings)
+                update_ram_alerts_for_report(conn, hostname, report_id, payload, alarm_settings)
             maybe_send_alert_reminders(conn)
             maybe_send_scheduled_user_mails(conn)
             conn.commit()
