@@ -40,6 +40,10 @@ API_KEY_GRACE_ALLOW_KNOWN_HOSTS = os.getenv("MONITORING_API_KEY_GRACE_ALLOW_KNOW
 MAX_REPORTS_PER_HOST = int(os.getenv("MONITORING_MAX_REPORTS_PER_HOST", "2880"))
 WARNING_THRESHOLD_PERCENT = float(os.getenv("MONITORING_WARNING_THRESHOLD", "80"))
 CRITICAL_THRESHOLD_PERCENT = float(os.getenv("MONITORING_CRITICAL_THRESHOLD", "90"))
+CPU_WARNING_THRESHOLD_PERCENT = 80.0
+CPU_CRITICAL_THRESHOLD_PERCENT = 95.0
+CPU_ALERT_WINDOW_REPORTS = 4
+CPU_ALERT_MOUNTPOINT = "cpu"
 TELEGRAM_ENABLED_DEFAULT = os.getenv("MONITORING_TELEGRAM_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
 TELEGRAM_BOT_TOKEN_DEFAULT = os.getenv("MONITORING_TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID_DEFAULT = os.getenv("MONITORING_TELEGRAM_CHAT_ID", "")
@@ -2211,14 +2215,20 @@ def alert_instant_mail_html(
     build_version = html.escape(read_build_version())
     reported_at = format_mail_datetime(reported_at_utc)
     graph_alt = html.escape(f"Auslastungsverlauf {customer_title}: {mountpoint}")
-    graph_block = (
-        "<div style='margin-top:14px;'>"
-        "<div style='margin:0 0 6px 0;font-size:12px;color:#64748b;'>Verlauf letzte 24h (Mountpoint-Auslastung)</div>"
-        f"<img src='cid:{html.escape(graph_cid)}' alt='{graph_alt}' style='display:block;width:100%;max-width:620px;height:auto;border:1px solid #dbe3ef;border-radius:10px;background:#ffffff;'>"
-        "</div>"
-    ) if graph_cid else (
-        "<div style='margin-top:14px;padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #dbe3ef;color:#64748b;font-size:12px;'>"
-        "Keine Verlaufsgrafik verfuegbar (zu wenig Datenpunkte).</div>"
+    is_cpu_alert = (mountpoint == CPU_ALERT_MOUNTPOINT)
+    resource_row_label = "CPU-Auslastung" if is_cpu_alert else "Mountpoint"
+    resource_row_value = "CPU" if is_cpu_alert else mountpoint
+    value_row_label = "CPU-Auslastung" if is_cpu_alert else "Auslastung"
+    graph_block = "" if is_cpu_alert else (
+        (
+            "<div style='margin-top:14px;'>"
+            "<div style='margin:0 0 6px 0;font-size:12px;color:#64748b;'>Verlauf letzte 24h (Mountpoint-Auslastung)</div>"
+            f"<img src='cid:{html.escape(graph_cid)}' alt='{graph_alt}' style='display:block;width:100%;max-width:620px;height:auto;border:1px solid #dbe3ef;border-radius:10px;background:#ffffff;'>"
+            "</div>"
+        ) if graph_cid else (
+            "<div style='margin-top:14px;padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #dbe3ef;color:#64748b;font-size:12px;'>"
+            "Keine Verlaufsgrafik verfuegbar (zu wenig Datenpunkte).</div>"
+        )
     )
     return (
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
@@ -2245,11 +2255,11 @@ def alert_instant_mail_html(
         f"{event_icon_block}"
         f"<h2 style='margin:0 0 14px 0;font-size:20px;color:#0f172a;'>{html.escape(event_label)}</h2>"
         "<table style='width:100%;border-collapse:collapse;font-size:14px;'>"
-        "<tr><td style='padding:8px 0;color:#64748b;'>Mountpoint</td>"
-        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(mountpoint)}</td></tr>"
+        f"<tr><td style='padding:8px 0;color:#64748b;'>{html.escape(resource_row_label)}</td>"
+        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(resource_row_value)}</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Gemeldet am</td>"
         f"<td style='padding:8px 0;font-weight:600;'>{html.escape(reported_at)}</td></tr>"
-        "<tr><td style='padding:8px 0;color:#64748b;'>Auslastung</td>"
+        f"<tr><td style='padding:8px 0;color:#64748b;'>{html.escape(value_row_label)}</td>"
         f"<td style='padding:8px 0;font-weight:600;'>{used_str}%</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Schweregrad</td>"
         f"<td style='padding:8px 0;'><span style='display:inline-block;padding:2px 10px;border-radius:999px;background:{sev_bg};color:{sev_text};font-weight:700;font-size:12px;'>{sev_label}</span></td></tr>"
@@ -2317,14 +2327,18 @@ def send_instant_alert_mails_to_users(
             ok_token, access_token, _err = ensure_microsoft_access_token(conn, username)
             if not ok_token:
                 continue
-            graph_cid, graph_attachment = build_alert_usage_graph_attachment(
-                conn,
-                hostname,
-                mountpoint,
-                severity=severity,
-                hours=24,
-            )
-            graph_attachments = [graph_attachment] if graph_attachment else []
+            if mountpoint == CPU_ALERT_MOUNTPOINT:
+                graph_cid = ""
+                graph_attachments = []
+            else:
+                graph_cid, graph_attachment = build_alert_usage_graph_attachment(
+                    conn,
+                    hostname,
+                    mountpoint,
+                    severity=severity,
+                    hours=24,
+                )
+                graph_attachments = [graph_attachment] if graph_attachment else []
             subject = alert_instant_mail_subject(
                 event_type,
                 hostname,
@@ -3406,9 +3420,15 @@ def build_telegram_alert_text(
 
     # MarkdownV2: bold hostname/title, monospace usage
     hostname_part = f"🖥️ *{_mdv2(title)}*" if title == hostname else f"🖥️ *{_mdv2(title)}* \\({_mdv2(hostname)}\\)"
+    if mountpoint == CPU_ALERT_MOUNTPOINT:
+        resource_line = "🖥️ CPU\\-Auslastung"
+        value_label = "CPU"
+    else:
+        resource_line = f"📂 {_mdv2(mountpoint)}"
+        value_label = "Disk"
     return (
         f"{hostname_part}\n"
-        f"📂 {_mdv2(mountpoint)}\n"
+        f"{resource_line}\n"
         f"{sev_icon} *{_mdv2(severity)}*\n"
         f"📊 `{_mdv2(used_text)}`\n"
         f"🕐 {_mdv2(now_local)}"
@@ -4143,6 +4163,103 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
         )
     else:
         conn.execute("DELETE FROM alert_debounce WHERE hostname = ?", (hostname,))
+
+
+def update_cpu_alerts_for_report(
+    conn: sqlite3.Connection, hostname: str, report_id: int, payload: dict, alarm_settings: dict
+) -> None:
+    rows = conn.execute(
+        """
+        SELECT payload_json FROM reports
+        WHERE hostname = ?
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (hostname, CPU_ALERT_WINDOW_REPORTS),
+    ).fetchall()
+
+    if len(rows) < CPU_ALERT_WINDOW_REPORTS:
+        return
+
+    cpu_values: list[float] = []
+    for row in rows:
+        try:
+            p = parse_payload_json(str(row[0] or "{}"))
+            v = get_nested_number(p, "cpu", "usage_percent")
+            if v is not None:
+                cpu_values.append(float(v))
+        except Exception:
+            pass
+
+    if len(cpu_values) < CPU_ALERT_WINDOW_REPORTS:
+        return
+
+    avg_cpu = sum(cpu_values) / len(cpu_values)
+    severity = evaluate_severity_for_thresholds(
+        avg_cpu, CPU_WARNING_THRESHOLD_PERCENT, CPU_CRITICAL_THRESHOLD_PERCENT
+    )
+
+    now_utc = utc_now_iso()
+    display_name = get_display_name_override(conn, hostname) or hostname
+
+    open_alert = conn.execute(
+        """
+        SELECT id, severity
+        FROM alerts
+        WHERE hostname = ? AND mountpoint = ? AND status = 'open'
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (hostname, CPU_ALERT_MOUNTPOINT),
+    ).fetchone()
+
+    if severity == "ok":
+        if open_alert:
+            conn.execute(
+                """
+                UPDATE alerts
+                SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
+                WHERE id = ?
+                """,
+                (now_utc, now_utc, report_id, open_alert[0]),
+            )
+            maybe_send_alert_message(
+                alarm_settings, "resolved", hostname, CPU_ALERT_MOUNTPOINT, "ok", avg_cpu,
+                conn=conn, display_name=display_name,
+            )
+        return
+
+    if not open_alert:
+        conn.execute(
+            """
+            INSERT INTO alerts (
+                hostname, mountpoint, severity, used_percent, status,
+                created_at_utc, last_seen_at_utc, resolved_at_utc, report_id
+            )
+            VALUES (?, ?, ?, ?, 'open', ?, ?, NULL, ?)
+            """,
+            (hostname, CPU_ALERT_MOUNTPOINT, severity, avg_cpu, now_utc, now_utc, report_id),
+        )
+        maybe_send_alert_message(
+            alarm_settings, "opened", hostname, CPU_ALERT_MOUNTPOINT, severity, avg_cpu,
+            conn=conn, display_name=display_name,
+        )
+        return
+
+    previous_severity = str(open_alert[1] or "warning")
+    conn.execute(
+        """
+        UPDATE alerts
+        SET severity = ?, used_percent = ?, last_seen_at_utc = ?, report_id = ?
+        WHERE id = ?
+        """,
+        (severity, avg_cpu, now_utc, report_id, open_alert[0]),
+    )
+    if previous_severity != "critical" and severity == "critical":
+        maybe_send_alert_message(
+            alarm_settings, "escalated", hostname, CPU_ALERT_MOUNTPOINT, severity, avg_cpu,
+            conn=conn, display_name=display_name,
+        )
 
 
 class MonitoringHandler(BaseHTTPRequestHandler):
@@ -6419,6 +6536,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 resolve_open_alerts_for_host(conn, hostname, report_id)
             else:
                 update_alerts_for_report(conn, hostname, report_id, filesystems, alarm_settings)
+                update_cpu_alerts_for_report(conn, hostname, report_id, payload, alarm_settings)
             maybe_send_alert_reminders(conn)
             maybe_send_scheduled_user_mails(conn)
             conn.commit()
