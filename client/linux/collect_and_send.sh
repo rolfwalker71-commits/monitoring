@@ -589,7 +589,7 @@ EOF
       result.update({"status": "error", "error": str(exc)[:240]})
 
   print(json.dumps(result, separators=(",", ":")))
-  PY
+PY
   }
 
 post_payload() {
