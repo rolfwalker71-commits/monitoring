@@ -435,16 +435,36 @@ def is_under(path, prefix):
 
 def collect_mountpoints():
   mounts = []
+  pseudo_fs = {
+    "autofs", "bpf", "cgroup", "cgroup2", "configfs", "debugfs", "devpts", "devtmpfs",
+    "fusectl", "hugetlbfs", "mqueue", "overlay", "proc", "pstore", "rpc_pipefs", "securityfs",
+    "selinuxfs", "squashfs", "sysfs", "tmpfs", "tracefs",
+  }
+
+  # Preferred source: kernel mount table, independent of df output format quirks.
   try:
-    output = subprocess.check_output(
-      ["df", "-PT", "-x", "tmpfs", "-x", "devtmpfs"],
-      text=True,
-      stderr=subprocess.DEVNULL,
-    )
-    for line in output.splitlines()[1:]:
-      parts = line.split()
-      if len(parts) >= 7:
-        mounts.append(parts[6])
+    with open("/proc/self/mountinfo", "r", encoding="utf-8", errors="replace") as fh:
+      for line in fh:
+        line = line.rstrip("\n")
+        if not line:
+          continue
+        if " - " not in line:
+          continue
+        left, right = line.split(" - ", 1)
+        left_parts = left.split()
+        right_parts = right.split()
+        if len(left_parts) < 5 or len(right_parts) < 3:
+          continue
+        mountpoint = left_parts[4].replace("\\040", " ").replace("\\011", "\t")
+        fstype = right_parts[0]
+        source = right_parts[1]
+        if fstype in pseudo_fs:
+          continue
+        if source in {"none", "rootfs"}:
+          continue
+        if mountpoint.startswith("/proc") or mountpoint.startswith("/sys") or mountpoint.startswith("/dev"):
+          continue
+        mounts.append(mountpoint)
   except Exception:
     pass
 
