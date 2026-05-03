@@ -500,6 +500,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .host-status-bar {
+  display: none;
   position: absolute;
   bottom: 0;
   left: 0;
