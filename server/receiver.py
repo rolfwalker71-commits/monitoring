@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import argparse
 import base64
+import csv
 import hashlib
 import hmac
 import html
+import io
 import json
 import os
 import re
@@ -207,6 +209,12 @@ def init_db() -> None:
         }
         if "last_reminder_sent_utc" not in existing_alert_columns:
             conn.execute("ALTER TABLE alerts ADD COLUMN last_reminder_sent_utc TEXT")
+        if "ack_note" not in existing_alert_columns:
+            conn.execute("ALTER TABLE alerts ADD COLUMN ack_note TEXT")
+        if "ack_by" not in existing_alert_columns:
+            conn.execute("ALTER TABLE alerts ADD COLUMN ack_by TEXT")
+        if "ack_at_utc" not in existing_alert_columns:
+            conn.execute("ALTER TABLE alerts ADD COLUMN ack_at_utc TEXT")
 
         conn.execute(
             """
@@ -5656,8 +5664,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
                 rows = conn.execute(
                     f"""
-                    SELECT id, hostname, mountpoint, severity, used_percent, status,
-                           created_at_utc, last_seen_at_utc, resolved_at_utc, report_id
+                      SELECT id, hostname, mountpoint, severity, used_percent, status,
+                          created_at_utc, last_seen_at_utc, resolved_at_utc, report_id,
+                          COALESCE(ack_note, ''), COALESCE(ack_by, ''), COALESCE(ack_at_utc, '')
                     FROM alerts
                     {where_clause}
                     ORDER BY id DESC
@@ -5724,6 +5733,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "last_seen_at_utc": row[7],
                         "resolved_at_utc": row[8],
                         "report_id": row[9],
+                        "ack_note": str(row[10] or ""),
+                        "ack_by": str(row[11] or ""),
+                        "ack_at_utc": str(row[12] or ""),
+                        "is_acknowledged": bool(str(row[12] or "").strip()),
                         "is_muted": (hostname, mountpoint) in muted_pairs,
                     }
                 )
@@ -5785,6 +5798,126 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     },
                 },
             )
+            return
+
+        if parsed.path == "/api/v1/export/alerts.csv":
+            query = parse_qs(parsed.query)
+            status_filter = query.get("status", ["all"])[0].strip().lower()
+            if status_filter not in {"all", "open", "resolved"}:
+                status_filter = "all"
+            severity_filter = query.get("severity", ["all"])[0].strip().lower()
+            if severity_filter not in {"all", "warning", "critical"}:
+                severity_filter = "all"
+            hostname_filter = query.get("hostname", [""])[0].strip()
+
+            where_parts = []
+            args: list[object] = []
+            where_parts.append("COALESCE((SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0")
+            if status_filter != "all":
+                where_parts.append("status = ?")
+                args.append(status_filter)
+            if severity_filter != "all":
+                where_parts.append("severity = ?")
+                args.append(severity_filter)
+            if hostname_filter:
+                where_parts.append("hostname = ?")
+                args.append(hostname_filter)
+            where_clause = "WHERE " + " AND ".join(where_parts) if where_parts else ""
+
+            with sqlite3.connect(DB_PATH) as conn:
+                rows = conn.execute(
+                    f"""
+                    SELECT id, hostname, mountpoint, severity, used_percent, status,
+                           created_at_utc, last_seen_at_utc, resolved_at_utc,
+                           COALESCE(ack_by, ''), COALESCE(ack_at_utc, ''), COALESCE(ack_note, '')
+                    FROM alerts
+                    {where_clause}
+                    ORDER BY id DESC
+                    """,
+                    tuple(args),
+                ).fetchall()
+
+            buffer = io.StringIO()
+            writer = csv.writer(buffer)
+            writer.writerow([
+                "id",
+                "hostname",
+                "mountpoint",
+                "severity",
+                "used_percent",
+                "status",
+                "created_at_utc",
+                "last_seen_at_utc",
+                "resolved_at_utc",
+                "ack_by",
+                "ack_at_utc",
+                "ack_note",
+            ])
+            for row in rows:
+                writer.writerow(row)
+
+            csv_bytes = buffer.getvalue().encode("utf-8")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
+            filename = f"monitoring-alerts-{timestamp}.csv"
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Length", str(len(csv_bytes)))
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(csv_bytes)
+            return
+
+        if parsed.path == "/api/v1/export/reports.json":
+            query = parse_qs(parsed.query)
+            hostname = query.get("hostname", [""])[0].strip()
+            if not hostname:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
+                return
+            limit = parse_int(query, "limit", default=2000, min_value=1, max_value=50000)
+
+            with sqlite3.connect(DB_PATH) as conn:
+                rows = conn.execute(
+                    """
+                    SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json
+                    FROM reports
+                    WHERE hostname = ?
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (hostname, limit),
+                ).fetchall()
+
+            reports = [
+                {
+                    "id": int(row[0]),
+                    "received_at_utc": str(row[1] or ""),
+                    "agent_id": str(row[2] or ""),
+                    "hostname": str(row[3] or ""),
+                    "primary_ip": str(row[4] or ""),
+                    "payload": parse_payload_json(str(row[5] or "{}")),
+                }
+                for row in rows
+            ]
+
+            payload = {
+                "hostname": hostname,
+                "count": len(reports),
+                "limit": limit,
+                "exported_at_utc": utc_now_iso(),
+                "reports": reports,
+            }
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
+            safe_hostname = re.sub(r"[^0-9A-Za-z._-]", "-", hostname) or "host"
+            filename = f"monitoring-reports-{safe_hostname}-{timestamp}.json"
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
             return
 
         if parsed.path == "/api/v1/alarm-settings":
@@ -6638,6 +6771,66 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 )
                 conn.commit()
             self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "mountpoint": mountpoint})
+            return
+
+        if path == "/api/v1/alert-ack":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            hostname = str(payload.get("hostname", "")).strip()
+            mountpoint = str(payload.get("mountpoint", "")).strip()
+            note = str(payload.get("ack_note", "") or "").strip()
+            if not hostname or not mountpoint:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
+                return
+            if len(note) > 500:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "ack_note too long (max 500)"})
+                return
+
+            ack_by = self._web_session_username() or "webclient"
+            ack_at_utc = utc_now_iso()
+
+            with sqlite3.connect(DB_PATH) as conn:
+                target = conn.execute(
+                    """
+                    SELECT id
+                    FROM alerts
+                    WHERE hostname = ? AND mountpoint = ? AND status = 'open'
+                    ORDER BY id DESC
+                    LIMIT 1
+                    """,
+                    (hostname, mountpoint),
+                ).fetchone()
+                if not target:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "open alert not found"})
+                    return
+
+                conn.execute(
+                    """
+                    UPDATE alerts
+                    SET ack_note = ?, ack_by = ?, ack_at_utc = ?
+                    WHERE id = ?
+                    """,
+                    (note, ack_by, ack_at_utc, int(target[0])),
+                )
+                conn.commit()
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "ok": True,
+                    "hostname": hostname,
+                    "mountpoint": mountpoint,
+                    "ack_note": note,
+                    "ack_by": ack_by,
+                    "ack_at_utc": ack_at_utc,
+                },
+            )
             return
 
         if path == "/api/v1/agent-command":

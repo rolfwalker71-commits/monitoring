@@ -2064,6 +2064,33 @@ button:hover:not(.host-item) {
   color: #f59e0b;
 }
 
+.alert-action-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.alert-ack-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0.75;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.alert-ack-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.alert-ack-btn.acknowledged {
+  opacity: 1;
+  color: #16a34a;
+}
+
 .alert-row-muted td {
   opacity: 0.45;
 }
