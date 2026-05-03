@@ -4302,12 +4302,8 @@ async function loadAnalysisForHost() {
     const delivery = data.delivery || {};
     const latestMax = formatPercent(data.latest_max_used_percent);
     const reportCount = Number(data.report_count || 0).toLocaleString("de-DE");
-    const delayedCount = Number(
-      delivery.total_delayed_report_count ?? delivery.delayed_report_count ?? 0,
-    ).toLocaleString("de-DE");
-    const liveCount = Number(
-      delivery.total_live_report_count ?? delivery.live_report_count ?? 0,
-    ).toLocaleString("de-DE");
+    const delayedCount = Number(delivery.delayed_report_count ?? 0).toLocaleString("de-DE");
+    const liveCount = Number(delivery.live_report_count ?? 0).toLocaleString("de-DE");
     const latestDelivery = deliveryLabel(delivery.latest_mode, delivery.latest_is_delayed);
     const latestDeliveryLabel = latestDelivery === "DELAYED" ? "Verzögert" : "LIVE";
 
