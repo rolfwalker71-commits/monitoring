@@ -655,6 +655,12 @@ PY
 
 post_payload() {
   local payload_data="$1"
+  local curl_metrics=""
+  local curl_exit=0
+  local curl_error_file
+  local http_code="000"
+  local time_total="0"
+  local time_connect="0"
 
   curl_args=(
     --silent
@@ -675,7 +681,24 @@ post_payload() {
     curl_args+=( --insecure )
   fi
 
-  curl "${curl_args[@]}" "${SERVER_URL%/}/api/v1/agent-report"
+  curl_error_file="$(mktemp)"
+  curl_metrics="$(curl "${curl_args[@]}" -o /dev/null -w "%{http_code}|%{time_total}|%{time_connect}" "${SERVER_URL%/}/api/v1/agent-report" 2>"$curl_error_file")"
+  curl_exit=$?
+
+  if [[ -s "$curl_error_file" ]]; then
+    cat "$curl_error_file" >&2
+  fi
+  rm -f "$curl_error_file"
+
+  if [[ "$curl_metrics" == *"|"* ]]; then
+    http_code="${curl_metrics%%|*}"
+    local rest="${curl_metrics#*|}"
+    time_total="${rest%%|*}"
+    time_connect="${rest#*|}"
+  fi
+
+  echo "Payload delivery metrics: http_code=$http_code total_sec=$time_total connect_sec=$time_connect curl_exit=$curl_exit" >&2
+  return "$curl_exit"
 }
 
 post_command_result() {
@@ -876,6 +899,7 @@ CONTAINERS_JSON="$(collect_containers_json)"
 AGENT_UPDATE_JSON="$(collect_update_log_json)"
 AGENT_CONFIG_JSON="$(collect_agent_config_json)"
 LARGE_FILES_JSON="$(collect_large_files_json)"
+SEND_STARTED_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 DOCKER_AVAILABLE=false
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
@@ -900,6 +924,7 @@ PAYLOAD=$(cat <<EOF
   "os": "$(json_escape "$OS_NAME")",
   "uptime_seconds": $UPTIME_SECONDS,
   "timestamp_utc": "$(json_escape "$TIMESTAMP_UTC")",
+  "send_started_utc": "$(json_escape "$SEND_STARTED_UTC")",
   "delivery_mode": "live",
   "is_delayed": false,
   "queued_at_utc": "",
