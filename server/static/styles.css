@@ -682,6 +682,14 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   gap: 4px;
 }
 
+#globalView .settings-page-header {
+  gap: 8px;
+}
+
+#globalView .settings-page-header > div {
+  margin-bottom: 6px;
+}
+
 .settings-page-header h3 {
   margin: 0;
   font-size: 22px;
@@ -1295,6 +1303,12 @@ button:hover:not(.host-item) {
   gap: 12px;
   margin-bottom: 14px;
   flex-wrap: wrap;
+}
+
+#refreshCriticalTrendsButton,
+#refreshInactiveHostsButton {
+  min-height: 36px;
+  padding: 0 14px;
 }
 
 .ct-summary {
