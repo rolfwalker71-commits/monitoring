@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '0.6.107'
+$EmbeddedAgentVersion = '0.6.108'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -131,32 +131,26 @@ function Select-AgentVersion {
     )
 
     $selectedVersion = [string]$EmbeddedVersion
-    if (-not $selectedVersion) {
-        $selectedVersion = 'unknown'
+    if ($selectedVersion) {
+        return $selectedVersion
     }
+    if (-not (Test-Path $FilePath)) {
+        return 'unknown'
+    }
+    $fileVersion = ((Get-Content $FilePath -TotalCount 1 -Encoding UTF8) -replace '\s', '')
+    if ($fileVersion) {
+        return $fileVersion
+    }
+    return 'unknown'
+}
+
+function Get-VersionFileValue {
+    param([string]$FilePath)
 
     if (-not (Test-Path $FilePath)) {
-        return $selectedVersion
+        return ''
     }
-
-    $fileVersion = ((Get-Content $FilePath -TotalCount 1 -Encoding UTF8) -replace '\s', '')
-    if (-not $fileVersion) {
-        return $selectedVersion
-    }
-
-    try {
-        $embeddedParsed = [System.Version]::new(($selectedVersion -replace '[^0-9.]', ''))
-        $fileParsed = [System.Version]::new(($fileVersion -replace '[^0-9.]', ''))
-        if ($fileParsed -ge $embeddedParsed) {
-            return $fileVersion
-        }
-        return $selectedVersion
-    } catch {
-        if ($fileVersion -and $fileVersion -ne 'unknown') {
-            return $fileVersion
-        }
-        return $selectedVersion
-    }
+    return ((Get-Content $FilePath -TotalCount 1 -Encoding UTF8) -replace '\s', '')
 }
 
 function Get-QueueCount {
@@ -726,6 +720,13 @@ Invoke-PrioritySelfUpdate
 # A self-update can replace AGENT_VERSION during this run.
 # Re-read it so the outgoing payload reflects the current installed version.
 $agentVersion = Select-AgentVersion -EmbeddedVersion $EmbeddedAgentVersion -FilePath $VersionFile
+$versionFileValue = Get-VersionFileValue -FilePath $VersionFile
+$scriptPath = ''
+if ($PSCommandPath) {
+    $scriptPath = $PSCommandPath
+} elseif ($MyInvocation.MyCommand.Path) {
+    $scriptPath = $MyInvocation.MyCommand.Path
+}
 
 # ---- Flush queued reports ----
 Invoke-FlushQueue | Out-Null
@@ -743,6 +744,10 @@ $kernelEsc       = ConvertTo-JsonString $kernelVersion
 $osNameEsc       = ConvertTo-JsonString $osName
 $defaultIfaceEsc = ConvertTo-JsonString $defaultInterface
 $defaultGwEsc    = ConvertTo-JsonString $defaultGateway
+$scriptPathEsc   = ConvertTo-JsonString $scriptPath
+$embeddedVerEsc  = ConvertTo-JsonString $EmbeddedAgentVersion
+$fileVerEsc      = ConvertTo-JsonString $versionFileValue
+$versionFilePathEsc = ConvertTo-JsonString $VersionFile
 
 $payload = @"
 {
@@ -760,6 +765,13 @@ $payload = @"
   "is_delayed": false,
   "queued_at_utc": "",
   "queue_depth": $queueDepth,
+    "agent_runtime": {
+        "script_path": "$scriptPathEsc",
+        "embedded_version": "$embeddedVerEsc",
+        "version_file_value": "$fileVerEsc",
+        "version_file_path": "$versionFilePathEsc",
+        "selected_version": "$agentVerEsc"
+    },
   "cpu": {
     "usage_percent": $cpuUsagePctStr,
     "load_avg_1": $loadAvgStr,
