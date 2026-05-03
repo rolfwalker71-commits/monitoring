@@ -375,6 +375,12 @@ EOF
     return
     fi
 
+    _py_ver="$(python3 -c 'import sys; print("%d%02d" % sys.version_info[:2])' 2>/dev/null || echo 0)"
+    if [[ "$_py_ver" -lt 306 ]]; then
+    printf '{"enabled":true,"status":"unavailable","error":"python3 >= 3.6 required","filesystems":[]}'
+    return
+    fi
+
     LARGE_FILES_SCAN_INTERVAL_HOURS="${LARGE_FILES_SCAN_INTERVAL_HOURS}" \
     LARGE_FILES_SCAN_RUN_HOUR_UTC="${LARGE_FILES_SCAN_RUN_HOUR_UTC}" \
     LARGE_FILES_SCAN_TIMEOUT_SEC="${LARGE_FILES_SCAN_TIMEOUT_SEC}" \
@@ -412,7 +418,9 @@ def parse_iso(value):
   if not text:
     return None
   try:
-    return dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
+    text = text.replace("Z", "").split("+")[0]
+    naive = dt.datetime.strptime(text, "%Y-%m-%dT%H:%M:%S")
+    return naive.replace(tzinfo=dt.timezone.utc)
   except Exception:
     return None
 
