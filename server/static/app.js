@@ -42,7 +42,7 @@ const state = {
   overviewSection: "main",
   globalSubMode: "global-alerts",
   criticalTrendsHours: 24,
-  inactiveHostsHours: 3,
+  inactiveHostsHours: 1,
   inactiveHosts: [],
   reportLimit: 1,
   reportOffset: 0,
@@ -56,6 +56,7 @@ const state = {
   globalSeverityFilter: "all",
   globalOpenAlertsCount: 0,
   criticalTrendsCount: 0,
+  inactiveHostsCount: 0,
   authUser: "",
   isAuthenticated: false,
   visibleHosts: 0,
@@ -427,10 +428,15 @@ async function refreshDashboard(options = {}) {
 
   autoRefreshInProgress = true;
   try {
+    const shouldRefreshGlobalAlertsList = state.viewMode === "global" && state.globalSubMode === "global-alerts";
     await loadWebclientVersion();
     await loadActiveUsers();
-    await loadGlobalAlertsOverview();
-    await loadHosts({ preserveScroll });
+    await Promise.all([
+      loadGlobalAlertsOverview({ updateList: shouldRefreshGlobalAlertsList }),
+      loadCriticalTrends({ updateList: false }),
+      loadInactiveHosts({ updateList: false }),
+      loadHosts({ preserveScroll }),
+    ]);
     await loadReportsForHost();
     await loadAnalysisForHost();
     await loadAlertsForHost();
@@ -4253,19 +4259,24 @@ function renderCriticalTrends(data) {
   return summary + cards;
 }
 
-async function loadCriticalTrends() {
+async function loadCriticalTrends(options = {}) {
+  const updateList = options.updateList !== false;
   const listEl = document.getElementById("criticalTrendsList");
   const tabButton = document.getElementById("criticalTrendsTabButton");
-  if (!listEl) return;
+  if (updateList && !listEl) return;
 
-  listEl.innerHTML = "<p class=\"muted\">Lade Trend-Daten…</p>";
+  if (updateList && listEl) {
+    listEl.innerHTML = "<p class=\"muted\">Lade Trend-Daten…</p>";
+  }
   try {
     const response = await fetch(`/api/v1/critical-trends?hours=${state.criticalTrendsHours}`, {
       credentials: "same-origin",
     });
     if (!response.ok) throw new Error("HTTP " + response.status);
     const data = await response.json();
-    listEl.innerHTML = renderCriticalTrends(data);
+    if (updateList && listEl) {
+      listEl.innerHTML = renderCriticalTrends(data);
+    }
 
     const critCount = (data.warnings || []).filter((w) => w.level === "crit").length;
     const warnCount = (data.warnings || []).filter((w) => w.level === "warn").length;
@@ -4286,7 +4297,9 @@ async function loadCriticalTrends() {
       }
     }
   } catch (error) {
-    listEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
+    if (updateList && listEl) {
+      listEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
+    }
   }
 }
 
@@ -4338,12 +4351,15 @@ function renderInactiveHosts(data) {
   return cards;
 }
 
-async function loadInactiveHosts() {
+async function loadInactiveHosts(options = {}) {
+  const updateList = options.updateList !== false;
   const listEl = document.getElementById("inactiveHostsList");
   const tabButton = document.getElementById("inactiveHostsTabButton");
-  if (!listEl) return;
+  if (updateList && !listEl) return;
 
-  listEl.innerHTML = "<p class=\"muted\">Lade Daten…</p>";
+  if (updateList && listEl) {
+    listEl.innerHTML = "<p class=\"muted\">Lade Daten…</p>";
+  }
   try {
     const response = await fetch(`/api/v1/inactive-hosts?hours=${state.inactiveHostsHours}`, {
       credentials: "same-origin",
@@ -4351,9 +4367,13 @@ async function loadInactiveHosts() {
     if (!response.ok) throw new Error("HTTP " + response.status);
     const data = await response.json();
     state.inactiveHosts = data.inactive_hosts || [];
-    listEl.innerHTML = renderInactiveHosts(data);
+    if (updateList && listEl) {
+      listEl.innerHTML = renderInactiveHosts(data);
+    }
 
     const total = (data.total || 0);
+    state.inactiveHostsCount = total;
+    updateHeaderStatChips();
     if (tabButton) {
       if (total > 0) {
         tabButton.dataset.alertBadge = String(total);
@@ -4364,7 +4384,9 @@ async function loadInactiveHosts() {
       }
     }
   } catch (error) {
-    listEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
+    if (updateList && listEl) {
+      listEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
+    }
   }
 }
 
@@ -4373,6 +4395,8 @@ function updateHeaderStatChips() {
   const alertCount = document.getElementById("headerAlertCount");
   const trendsChip = document.getElementById("headerTrendsChip");
   const trendsCount = document.getElementById("headerTrendsCount");
+  const inactiveChip = document.getElementById("headerInactiveChip");
+  const inactiveCount = document.getElementById("headerInactiveCount");
   if (alertChip && alertCount) {
     alertCount.textContent = String(state.globalOpenAlertsCount);
     alertChip.classList.toggle("hidden", state.globalOpenAlertsCount === 0);
@@ -4381,36 +4405,40 @@ function updateHeaderStatChips() {
     trendsCount.textContent = String(state.criticalTrendsCount);
     trendsChip.classList.toggle("hidden", state.criticalTrendsCount === 0);
   }
+  if (inactiveChip && inactiveCount) {
+    inactiveCount.textContent = String(state.inactiveHostsCount);
+    inactiveChip.classList.toggle("hidden", state.inactiveHostsCount === 0);
+  }
 }
 
-async function loadGlobalAlertsOverview() {
+async function loadGlobalAlertsOverview(options = {}) {
+  const updateList = options.updateList !== false;
   const summaryEl = document.getElementById("globalAlertsSummary");
   const rowsEl = document.getElementById("globalAlertsRows");
   const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
   const toggleButton = document.getElementById("toggleGlobalAlertsPanelButton");
   const panelBody = document.getElementById("globalAlertsPanelBody");
 
-  rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Lade globale Alerts...</td></tr>";
-  summaryEl.textContent = "";
-  panelBody.classList.toggle("hidden", state.globalAlertsCollapsed);
-  toggleButton.textContent = state.globalAlertsCollapsed ? "▸" : "▾";
+  if (updateList && rowsEl) {
+    rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Lade globale Alerts...</td></tr>";
+  }
+  if (updateList && summaryEl) {
+    summaryEl.textContent = "";
+  }
+  if (panelBody && toggleButton) {
+    panelBody.classList.toggle("hidden", state.globalAlertsCollapsed);
+    toggleButton.textContent = state.globalAlertsCollapsed ? "▸" : "▾";
+  }
 
   try {
-    const [summaryResp, listResp] = await Promise.all([
-      fetch("/api/v1/alerts-summary"),
-      fetch("/api/v1/alerts?status=open&limit=100&offset=0"),
-    ]);
-
-    if (!summaryResp.ok) {
-      throw new Error("Summary HTTP " + summaryResp.status);
-    }
-    if (!listResp.ok) {
-      throw new Error("List HTTP " + listResp.status);
-    }
-
+    const summaryResp = await fetch("/api/v1/alerts-summary", {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (!summaryResp.ok) throw new Error("Summary HTTP " + summaryResp.status);
     const summaryData = await summaryResp.json();
-    const listData = await listResp.json();
-    const allOpenAlerts = listData.alerts || [];
+
+    // Header and tab counters are always based on ALL open alerts.
     state.globalOpenAlertsCount = Number(summaryData?.open?.total || 0);
 
     globalAlertsTabButton.textContent = state.globalOpenAlertsCount > 0
@@ -4418,6 +4446,19 @@ async function loadGlobalAlertsOverview() {
       : "Globale Alerts";
     globalAlertsTabButton.classList.toggle("alert-active", state.globalOpenAlertsCount > 0);
     updateHeaderStatChips();
+
+    if (!updateList || !rowsEl || !summaryEl) {
+      return;
+    }
+
+    const listResp = await fetch("/api/v1/alerts?status=open&limit=100&offset=0", {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (!listResp.ok) throw new Error("List HTTP " + listResp.status);
+
+    const listData = await listResp.json();
+    const allOpenAlerts = listData.alerts || [];
 
     const alerts = allOpenAlerts.filter((item) => {
       if (state.globalSeverityFilter === "all") {
@@ -4471,6 +4512,9 @@ async function loadGlobalAlertsOverview() {
     rowsEl.innerHTML = `<tr><td colspan="6" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
     globalAlertsTabButton.textContent = "Globale Alerts";
     globalAlertsTabButton.classList.remove("alert-active");
+    if (updateList && rowsEl) {
+      rowsEl.innerHTML = `<tr><td colspan="6" class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</td></tr>`;
+    }
   }
 }
 
@@ -4652,12 +4696,20 @@ function wireEvents() {
     await loadCriticalTrends();
   });
 
+  document.getElementById("headerInactiveChip").addEventListener("click", async () => {
+    state.viewMode = "global";
+    state.globalSubMode = "inactive-hosts";
+    updateViewMode();
+    updateGlobalSubMode();
+    await loadInactiveHosts();
+  });
+
   document.getElementById("refreshInactiveHostsButton").addEventListener("click", async () => {
     await loadInactiveHosts();
   });
 
   document.getElementById("inactiveHostsRangeSelect").addEventListener("change", async (event) => {
-    state.inactiveHostsHours = Number(event.target.value) || 3;
+    state.inactiveHostsHours = Number(event.target.value) || 1;
     await loadInactiveHosts();
   });
 
@@ -4981,6 +5033,8 @@ async function init() {
   updateViewMode();
   updateOverviewSection();
   updateAnalysisRangeUi();
+  document.getElementById("criticalTrendsRangeSelect").value = String(state.criticalTrendsHours);
+  document.getElementById("inactiveHostsRangeSelect").value = String(state.inactiveHostsHours);
   document.getElementById("globalSeverityFilter").value = state.globalSeverityFilter;
   document.getElementById("hostAlertFilterSelect").value = state.hostAlertFilter;
   document.getElementById("hostMutedFilterSelect").value = state.hostMutedFilter;

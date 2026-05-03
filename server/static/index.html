@@ -112,8 +112,9 @@
         <div class="panel-header">
           <h2>Hosts und Historie</h2>
           <div class="panel-actions">
-            <span id="headerAlertChip" class="header-stat-chip header-stat-chip-alert hidden" title="Globale offene Alerts">🚨 <span id="headerAlertCount">0</span></span>
-            <span id="headerTrendsChip" class="header-stat-chip header-stat-chip-warn hidden" title="Kritische Trends">📈 <span id="headerTrendsCount">0</span></span>
+            <span id="headerAlertChip" class="header-stat-chip header-stat-chip-alert hidden" title="Globale offene Alerts (Alle)">🚨 <span id="headerAlertCount">0</span> <span class="header-chip-scope">Alle</span></span>
+            <span id="headerTrendsChip" class="header-stat-chip header-stat-chip-warn hidden" title="Kritische Trends (24h)">📈 <span id="headerTrendsCount">0</span> <span class="header-chip-scope">24h</span></span>
+            <span id="headerInactiveChip" class="header-stat-chip header-stat-chip-inactive hidden" title="Inaktive Hosts (1h)">💤 <span id="headerInactiveCount">0</span> <span class="header-chip-scope">1h</span></span>
             <button id="openChangePasswordButton" class="btn-emoji-pill" type="button" title="Passwort ändern">🔑</button>
             <button id="globalViewButton" class="btn-emoji-pill" type="button" title="Globale Ansichten">🌐</button>
             <button id="openAlarmSettingsButton" class="btn-emoji-pill" type="button" title="Einstellungen">⚙️</button>
@@ -211,8 +212,8 @@
                 <label class="chart-range-control" for="inactiveHostsRangeSelect">
                   <span>Inaktiv seit</span>
                   <select id="inactiveHostsRangeSelect">
-                    <option value="1">1 Stunde</option>
-                    <option value="3" selected>3 Stunden</option>
+                    <option value="1" selected>1 Stunde</option>
+                    <option value="3">3 Stunden</option>
                     <option value="6">6 Stunden</option>
                     <option value="12">12 Stunden</option>
                     <option value="24">24 Stunden</option>
