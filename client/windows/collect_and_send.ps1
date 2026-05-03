@@ -46,7 +46,7 @@ foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
 
 $ServerUrl = $cfg['SERVER_URL']
 $ApiKey    = if ($cfg.ContainsKey('API_KEY')) { $cfg['API_KEY'] } else { '' }
-$SendJitterMaxSec = 600
+$SendJitterMaxSec = 300
 
 if ($env:SEND_JITTER_MAX_SEC -match '^\d+$') {
     $SendJitterMaxSec = [int]$env:SEND_JITTER_MAX_SEC
