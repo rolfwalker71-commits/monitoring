@@ -1168,6 +1168,12 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   border-color: #f2d588;
 }
 
+.delivery-calc-button {
+  min-height: 28px;
+  padding: 0 12px;
+  font-size: 11px;
+}
+
 .table-wrap {
   overflow-x: auto;
 }
@@ -3629,6 +3635,10 @@ body[data-theme="dark"] .stat-chip.delayed {
   background: #3b2f12;
   color: #f7d083;
   border-color: #7f611f;
+}
+
+body[data-theme="dark"] .delivery-calc-button {
+  border-color: #3f5f8a;
 }
 
 body[data-theme="dark"] .user-flag-pill.off,

@@ -5542,6 +5542,57 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             })
             return
 
+        if parsed.path == "/api/v1/analysis-delivery":
+            query = parse_qs(parsed.query)
+            hostname = query.get("hostname", [""])[0].strip()
+            if not hostname:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
+                return
+
+            hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
+            cutoff_iso = utc_hours_ago_iso(hours)
+
+            with sqlite3.connect(DB_PATH) as conn:
+                counts_row = conn.execute(
+                    """
+                    SELECT
+                        SUM(
+                            CASE
+                                WHEN LOWER(COALESCE(json_extract(payload_json, '$.delivery_mode'), 'live')) = 'delayed'
+                                     OR CAST(COALESCE(json_extract(payload_json, '$.is_delayed'), 0) AS INTEGER) = 1
+                                THEN 1
+                                ELSE 0
+                            END
+                        ) AS delayed_reports,
+                        SUM(
+                            CASE
+                                WHEN LOWER(COALESCE(json_extract(payload_json, '$.delivery_mode'), 'live')) = 'delayed'
+                                     OR CAST(COALESCE(json_extract(payload_json, '$.is_delayed'), 0) AS INTEGER) = 1
+                                THEN 0
+                                ELSE 1
+                            END
+                        ) AS live_reports
+                    FROM reports
+                    WHERE hostname = ? AND received_at_utc >= ?
+                    """,
+                    (hostname, cutoff_iso),
+                ).fetchone()
+
+            delayed_reports = int(counts_row[0] or 0) if counts_row else 0
+            live_reports = int(counts_row[1] or 0) if counts_row else 0
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "hostname": hostname,
+                    "window_hours": hours,
+                    "cutoff_utc": cutoff_iso,
+                    "delayed_report_count": delayed_reports,
+                    "live_report_count": live_reports,
+                },
+            )
+            return
+
         if parsed.path == "/api/v1/analysis":
             query = parse_qs(parsed.query)
             hostname = query.get("hostname", [""])[0].strip()
@@ -5567,23 +5618,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     """,
                     (hostname, cutoff_iso),
                 ).fetchall()
-                total_counts_row = conn.execute(
-                    """
-                    SELECT
-                        COUNT(*) AS total_reports,
-                        SUM(
-                            CASE
-                                WHEN LOWER(COALESCE(json_extract(payload_json, '$.delivery_mode'), 'live')) = 'delayed'
-                                     OR CAST(COALESCE(json_extract(payload_json, '$.is_delayed'), 0) AS INTEGER) = 1
-                                THEN 1
-                                ELSE 0
-                            END
-                        ) AS delayed_reports
-                    FROM reports
-                    WHERE hostname = ?
-                    """,
-                    (hostname,),
-                ).fetchone()
                 latest_total_payload_row = conn.execute(
                     """
                     SELECT payload_json
@@ -5608,14 +5642,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             load_avg_1_series: list[dict] = []
             memory_used_series: list[dict] = []
             swap_used_series: list[dict] = []
-            delayed_report_count = 0
-            live_report_count = 0
+            delayed_report_count = None
+            live_report_count = None
             latest_delivery_mode = "live"
             latest_is_delayed = False
             latest_queue_depth = 0
-            total_reports_all_time = int(total_counts_row[0] or 0) if total_counts_row else 0
-            total_delayed_report_count = int(total_counts_row[1] or 0) if total_counts_row else 0
-            total_live_report_count = max(0, total_reports_all_time - total_delayed_report_count)
             latest_large_files: dict = {}
 
             if latest_total_payload_row:
@@ -5632,10 +5663,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 payload = parse_payload_json(row[2])
                 delivery_mode = str(payload.get("delivery_mode", "live") or "live").lower()
                 is_delayed = delivery_mode == "delayed" or bool(payload.get("is_delayed", False))
-                if is_delayed:
-                    delayed_report_count += 1
-                else:
-                    live_report_count += 1
                 latest_delivery_mode = "delayed" if is_delayed else "live"
                 latest_is_delayed = is_delayed
                 latest_queue_depth = payload_int(payload, "queue_depth", 0)
@@ -5765,8 +5792,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "latest_queue_depth": latest_queue_depth,
                         "delayed_report_count": delayed_report_count,
                         "live_report_count": live_report_count,
-                        "total_delayed_report_count": total_delayed_report_count,
-                        "total_live_report_count": total_live_report_count,
                     },
                     "filesystem_visibility": {
                         "editable": visibility_editable,
