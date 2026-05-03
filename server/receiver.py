@@ -2190,6 +2190,11 @@ def alert_instant_mail_html(
     )
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
+    event_icon_uri = alert_event_icon_data_uri(event_type)
+    event_icon_block = (
+        f"<div style='margin-bottom:12px;'><img src='{html.escape(event_icon_uri)}' alt='{html.escape(event_label)}' width='52' height='52' style='display:block;'></div>"
+        if event_icon_uri else ""
+    )
     build_version = html.escape(read_build_version())
     reported_at = format_mail_datetime(reported_at_utc)
     graph_alt = html.escape(f"Auslastungsverlauf {customer_title}: {mountpoint}")
@@ -2224,6 +2229,7 @@ def alert_instant_mail_html(
         "</div>"
         "</div>"
         "<div style='padding:20px;'>"
+        f"{event_icon_block}"
         f"<h2 style='margin:0 0 14px 0;font-size:20px;color:#0f172a;'>{html.escape(event_label)}</h2>"
         "<table style='width:100%;border-collapse:collapse;font-size:14px;'>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Mountpoint</td>"
@@ -2375,13 +2381,8 @@ def send_instant_alert_telegram_to_users(
     except Exception:
         return
 
-    icon = {
-        "opened": "🚨 ALERT OPEN",
-        "escalated": "⬆️ ALERT ESCALATED",
-        "resolved": "✅ ALERT RESOLVED",
-    }.get(event_type, "⚠️ ALERT")
-    title = display_name.strip() if display_name.strip() else hostname
-    now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
+    alert_text = build_telegram_alert_text(event_type, hostname, mountpoint, severity, used_percent, display_name=display_name)
+    icon_path = _ALERT_ICON_PATHS.get(event_type)
 
     for row in rows:
         username = str(row[0] or "").strip()
@@ -2392,17 +2393,8 @@ def send_instant_alert_telegram_to_users(
         if min_severity == "critical" and severity not in {"critical"}:
             continue
 
-        sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
-        text = (
-            f"{icon}\n"
-            f"👤 {username}\n"
-            f"🖥️ {title} ({hostname})\n"
-            f"📂 {mountpoint}\n"
-            f"{sev_icon} {severity}\n"
-            f"📊 {used_percent:.1f}%\n"
-            f"🕐 {now_local}"
-        )
-        telegram_send_to_chat(bot_token, chat_id, text)
+        text = f"👤 *{_mdv2(username)}*\n{alert_text}"
+        telegram_send_to_chat(bot_token, chat_id, text, image_path=icon_path)
 
 
 def get_oauth_settings(conn: sqlite3.Connection) -> dict:
@@ -3293,6 +3285,12 @@ def evaluate_severity_for_thresholds(used_percent: float, warning_threshold: flo
 
 _LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
 
+_ALERT_ICON_PATHS: dict[str, Path] = {
+    "opened": STATIC_DIR / "icons" / "alertopen.png",
+    "escalated": STATIC_DIR / "icons" / "alertescalated.png",
+    "resolved": STATIC_DIR / "icons" / "alertresolved.png",
+}
+
 # Characters that must be escaped in Telegram MarkdownV2
 _MDV2_RE = re.compile(r'([_*\[\]()~`>#+=|{}.!\\-])')
 
@@ -3317,13 +3315,14 @@ def _build_multipart(fields: dict, files: dict) -> tuple[bytes, str]:
     return body, f"multipart/form-data; boundary={boundary.decode()}"
 
 
-def telegram_send_to_chat(bot_token: str, chat_id: str, text: str) -> tuple[bool, str]:
-    # Try sendPhoto with logo as thumbnail; fall back to sendMessage on any error
-    if _LOGO_PATH.is_file():
+def telegram_send_to_chat(bot_token: str, chat_id: str, text: str, image_path: Path | None = None) -> tuple[bool, str]:
+    # Try sendPhoto with status icon; fall back to sendMessage on any error
+    photo_path = (image_path if image_path and image_path.is_file() else (_LOGO_PATH if _LOGO_PATH.is_file() else None))
+    if photo_path:
         try:
-            photo_data = _LOGO_PATH.read_bytes()
+            photo_data = photo_path.read_bytes()
             fields = {"chat_id": chat_id, "caption": text[:1024], "parse_mode": "MarkdownV2"}
-            files = {"photo": (_LOGO_PATH.name, photo_data, "image/png")}
+            files = {"photo": (photo_path.name, photo_data, "image/png")}
             body, content_type = _build_multipart(fields, files)
             endpoint = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
             req = request.Request(endpoint, data=body, method="POST")
@@ -3358,7 +3357,7 @@ def telegram_send_to_chat(bot_token: str, chat_id: str, text: str) -> tuple[bool
         return False, str(exc)
 
 
-def telegram_send(settings: dict, text: str) -> tuple[bool, str]:
+def telegram_send(settings: dict, text: str, image_path: Path | None = None) -> tuple[bool, str]:
     if not settings.get("telegram_enabled"):
         return False, "telegram disabled"
 
@@ -3367,7 +3366,7 @@ def telegram_send(settings: dict, text: str) -> tuple[bool, str]:
     if not bot_token or not chat_id:
         return False, "telegram bot token/chat id missing"
 
-    return telegram_send_to_chat(bot_token, chat_id, text)
+    return telegram_send_to_chat(bot_token, chat_id, text, image_path=image_path)
 
 
 def build_telegram_alert_text(
@@ -3391,10 +3390,9 @@ def build_telegram_alert_text(
     except (TypeError, ValueError):
         used_text = "-"
 
-    # MarkdownV2: bold event line, bold hostname/title, monospace usage
+    # MarkdownV2: bold hostname/title, monospace usage
     hostname_part = f"🖥️ *{_mdv2(title)}*" if title == hostname else f"🖥️ *{_mdv2(title)}* \\({_mdv2(hostname)}\\)"
     return (
-        f"*{_mdv2(icon)}*\n"
         f"{hostname_part}\n"
         f"📂 {_mdv2(mountpoint)}\n"
         f"{sev_icon} *{_mdv2(severity)}*\n"
@@ -3422,7 +3420,7 @@ def maybe_send_alert_message(
             used_percent,
             display_name=display_name,
         )
-        telegram_send(settings, text)
+        telegram_send(settings, text, image_path=_ALERT_ICON_PATHS.get(event_type))
     if conn is not None:
         send_instant_alert_telegram_to_users(
             conn,
@@ -3554,6 +3552,17 @@ def app_logo_data_uri() -> str:
 def ang_logo_data_uri() -> str:
     try:
         encoded = base64.b64encode(ANG_LOGO_PATH.read_bytes()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    except OSError:
+        return ""
+
+
+def alert_event_icon_data_uri(event_type: str) -> str:
+    icon_path = _ALERT_ICON_PATHS.get(event_type)
+    if not icon_path:
+        return ""
+    try:
+        encoded = base64.b64encode(icon_path.read_bytes()).decode("ascii")
         return f"data:image/png;base64,{encoded}"
     except OSError:
         return ""
@@ -5617,11 +5626,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     bot_token,
                     chat_id,
                     (
-                        "[TEST] Host Alert Abo\n"
-                        f"User: {username}\n"
-                        f"Host: {str(host_context.get('display_name', hostname))} ({hostname})\n"
-                        f"Zeit: {datetime.now().astimezone().strftime('%d.%m.%Y %H:%M')}"
+                        f"{_mdv2('[TEST]')} Host Alert Abo\n"
+                        f"👤 *{_mdv2(username)}*\n"
+                    ) + build_telegram_alert_text(
+                        "opened",
+                        hostname,
+                        "/hana/data",
+                        "critical",
+                        min(100.0, float(alarm_settings.get("critical_threshold_percent", 90.0) or 90.0) + 2.0),
+                        display_name=str(host_context.get("display_name", "") or ""),
                     ),
+                    image_path=_ALERT_ICON_PATHS.get("opened"),
                 )
                 status = HTTPStatus.OK if telegram_ok else HTTPStatus.BAD_REQUEST
                 self._send_json(status, {"status": "sent" if telegram_ok else "failed", "channel": "telegram", "details": telegram_details})
@@ -5886,6 +5901,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             ok, details = telegram_send(
                 settings,
                 sample_text,
+                image_path=_ALERT_ICON_PATHS.get("opened"),
             )
             status = HTTPStatus.OK if ok else HTTPStatus.BAD_REQUEST
             self._send_json(
