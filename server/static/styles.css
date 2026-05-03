@@ -2006,8 +2006,8 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 }
 
 .host-item:hover {
-  border-color: #9fd9b2;
-  box-shadow: 0 6px 16px rgba(22, 163, 74, 0.1);
+  border-color: #a8bbd1;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.1);
   transform: translateY(-1px);
 }
 
@@ -2361,9 +2361,9 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 
 
 .host-item.selected {
-  border-color: #86efac;
-  background: linear-gradient(180deg, #f3fbf6 0%, #ebf7f0 100%);
-  box-shadow: inset 0 0 0 1px #86efac, 0 8px 20px rgba(22, 163, 74, 0.12);
+  border-color: #8fa6bf;
+  background: linear-gradient(180deg, #f1f5fb 0%, #e8eef7 100%);
+  box-shadow: inset 0 0 0 1px #8fa6bf, 0 8px 20px rgba(15, 23, 42, 0.12);
 }
 
 .pager {
