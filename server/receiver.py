@@ -3362,6 +3362,37 @@ def telegram_send(settings: dict, text: str) -> tuple[bool, str]:
     return telegram_send_to_chat(bot_token, chat_id, text)
 
 
+def build_telegram_alert_text(
+    event_type: str,
+    hostname: str,
+    mountpoint: str,
+    severity: str,
+    used_percent: float,
+    display_name: str = "",
+) -> str:
+    icon = {
+        "opened": "🚨 ALERT OPEN",
+        "escalated": "⬆️ ALERT ESCALATED",
+        "resolved": "✅ ALERT RESOLVED",
+    }.get(event_type, "⚠️ ALERT")
+    sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
+    title = display_name.strip() if display_name.strip() else hostname
+    now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
+    try:
+        used_text = f"{float(used_percent):.1f}%"
+    except (TypeError, ValueError):
+        used_text = "-"
+
+    return (
+        f"{icon}\n"
+        f"🖥️ {title} ({hostname})\n"
+        f"📂 {mountpoint}\n"
+        f"{sev_icon} {severity}\n"
+        f"📊 {used_text}\n"
+        f"🕐 {now_local}"
+    )
+
+
 def maybe_send_alert_message(
     settings: dict,
     event_type: str,
@@ -3373,21 +3404,13 @@ def maybe_send_alert_message(
     display_name: str = "",
 ) -> None:
     if settings.get("telegram_enabled"):
-        icon = {
-            "opened": "🚨 ALERT OPEN",
-            "escalated": "⬆️ ALERT ESCALATED",
-            "resolved": "✅ ALERT RESOLVED",
-        }.get(event_type, "⚠️ ALERT")
-        sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
-        title = display_name.strip() if display_name.strip() else hostname
-        now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
-        text = (
-            f"{icon}\n"
-            f"🖥️ {title} ({hostname})\n"
-            f"📂 {mountpoint}\n"
-            f"{sev_icon} {severity}\n"
-            f"📊 {used_percent:.1f}%\n"
-            f"🕐 {now_local}"
+        text = build_telegram_alert_text(
+            event_type,
+            hostname,
+            mountpoint,
+            severity,
+            used_percent,
+            display_name=display_name,
         )
         telegram_send(settings, text)
     if conn is not None:
@@ -5777,13 +5800,20 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 settings = get_alarm_settings(conn)
 
+            critical_threshold = float(settings.get("critical_threshold_percent", 90.0) or 90.0)
+            sample_used_percent = min(100.0, critical_threshold + 2.0)
+            sample_text = build_telegram_alert_text(
+                "opened",
+                "monitoring-testhost",
+                "/hana/data",
+                "critical",
+                sample_used_percent,
+                display_name="Monitoring Testhost",
+            )
+
             ok, details = telegram_send(
                 settings,
-                (
-                    "[TEST] Monitoring Alarm-Kanal\n"
-                    f"Serverzeit: {utc_now_iso()}\n"
-                    "Wenn du diese Nachricht siehst, ist Telegram korrekt konfiguriert."
-                ),
+                sample_text,
             )
             status = HTTPStatus.OK if ok else HTTPStatus.BAD_REQUEST
             self._send_json(
