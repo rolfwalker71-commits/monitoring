@@ -76,6 +76,7 @@ DEFAULT_VISIBLE_FILESYSTEM_MOUNTPOINTS = {
     "/hana/log",
     "/hana/data",
     "/hana/shared",
+    "/hana/shared/backup_service",
 }
 
 
@@ -325,6 +326,38 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        backup_service_migration_key = "fs_visibility_default_backup_service_v1"
+        backup_service_migration_done = conn.execute(
+            "SELECT 1 FROM app_meta WHERE key = ? LIMIT 1",
+            (backup_service_migration_key,),
+        ).fetchone()
+        if not backup_service_migration_done:
+            conn.execute(
+                """
+                DELETE FROM web_user_filesystem_visibility_hidden
+                WHERE LOWER(mountpoint) = '/hana/shared/backup_service'
+                  AND section IN ('fs-focus', 'large-files')
+                """
+            )
+            conn.execute(
+                """
+                INSERT INTO app_meta (key, value, updated_at_utc)
+                VALUES (?, '1', ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at_utc = excluded.updated_at_utc
+                """,
+                (backup_service_migration_key, utc_now_iso()),
+            )
         existing_web_user_settings_columns = {
             str(row[1])
             for row in conn.execute("PRAGMA table_info(web_user_settings)").fetchall()
