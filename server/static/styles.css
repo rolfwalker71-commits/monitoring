@@ -510,8 +510,8 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .host-status-bar--ok {
-  background: var(--ok);
-  opacity: 0.35;
+  background: #64748b;
+  opacity: 0.32;
 }
 
 .host-status-bar--warning {
