@@ -1086,6 +1086,12 @@ button:hover:not(.host-item) {
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
 }
 
+.btn-secondary--compact {
+  min-height: 30px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+
 /* Icon-only button (e.g. pencil) */
 .btn-danger-outline {
   color: #b91c1c;
