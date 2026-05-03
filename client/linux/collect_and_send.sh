@@ -24,6 +24,7 @@ LARGE_FILES_EXCLUDE_PATHS="${LARGE_FILES_EXCLUDE_PATHS:-/hana/data/.snapshot}"
 LARGE_FILES_SCAN_FORCE="${LARGE_FILES_SCAN_FORCE:-0}"
 CURL_CONNECT_TIMEOUT_SEC="${CURL_CONNECT_TIMEOUT_SEC:-10}"
 CURL_MAX_TIME_SEC="${CURL_MAX_TIME_SEC:-45}"
+SEND_JITTER_MAX_SEC="${SEND_JITTER_MAX_SEC:-120}"
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
   echo "Config file not found: $CONFIG_FILE" >&2
@@ -36,6 +37,14 @@ source "$CONFIG_FILE"
 if [[ -z "${SERVER_URL:-}" ]]; then
   echo "SERVER_URL is not set in $CONFIG_FILE" >&2
   exit 1
+fi
+
+if [[ "$SEND_JITTER_MAX_SEC" =~ ^[0-9]+$ ]] && [[ "$SEND_JITTER_MAX_SEC" -gt 0 ]]; then
+  jitter_identity="${AGENT_ID:-$(hostname -f 2>/dev/null || hostname)}"
+  jitter_sec="$(printf '%s' "$jitter_identity" | cksum | awk -v max="$SEND_JITTER_MAX_SEC" '{print $1 % (max + 1)}')"
+  if [[ "$jitter_sec" =~ ^[0-9]+$ ]] && [[ "$jitter_sec" -gt 0 ]]; then
+    sleep "$jitter_sec"
+  fi
 fi
 
 TLS_INSECURE="${TLS_INSECURE:-0}"
