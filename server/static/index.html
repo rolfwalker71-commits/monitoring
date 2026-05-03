@@ -114,8 +114,6 @@
           <div class="panel-actions">
             <span id="headerAlertChip" class="header-stat-chip header-stat-chip-alert hidden" title="Globale offene Alerts">🚨 <span id="headerAlertCount">0</span></span>
             <span id="headerTrendsChip" class="header-stat-chip header-stat-chip-warn hidden" title="Kritische Trends">📈 <span id="headerTrendsCount">0</span></span>
-            <button id="triggerAllAgentsUpdateButton" class="global-update-chip global-update-chip-inline" type="button" title="Update fuer alle Hosts">⟳ Update (alle)</button>
-            <button id="rolloutApiKeyButton" class="btn-emoji-pill" type="button" title="API-Key verteilen">🔐</button>
             <button id="openChangePasswordButton" class="btn-emoji-pill" type="button" title="Passwort ändern">🔑</button>
             <button id="globalViewButton" class="btn-emoji-pill" type="button" title="Globale Ansichten">🌐</button>
             <button id="openAlarmSettingsButton" class="btn-emoji-pill" type="button" title="Einstellungen">⚙️</button>
@@ -243,6 +241,17 @@
                 </div>
               </section>
             </div>
+
+            <section id="globalAdminOpsSection" class="settings-subsection hidden">
+              <div class="settings-subsection-head">
+                <h5>Admin Aktionen</h5>
+                <p class="count compact">Systemweite Agent-Aktionen</p>
+              </div>
+              <div class="global-admin-ops-actions">
+                <button id="triggerAllAgentsUpdateButton" class="global-update-chip" type="button" title="Update fuer alle Hosts">⟳ Update fuer alle Hosts</button>
+                <button id="rolloutApiKeyButton" class="btn-secondary" type="button" title="Neuen API-Key auf alle Agenten ausrollen">🔐 API-Key verteilen</button>
+              </div>
+            </section>
           </div>
         </div>
 

@@ -796,6 +796,7 @@ function updateAdminSettingsVisibility() {
   const adminOauthSection = document.getElementById("adminOauthSettingsSection");
   const adminUserSection = document.getElementById("adminUserManagementSection");
   const globalAdminAlertSubsTab = document.getElementById("globalAdminAlertSubsTabButton");
+  const globalAdminOpsSection = document.getElementById("globalAdminOpsSection");
   if (adminOauthSection) {
     adminOauthSection.classList.toggle("hidden", !state.isAdmin);
   }
@@ -804,6 +805,9 @@ function updateAdminSettingsVisibility() {
   }
   if (globalAdminAlertSubsTab) {
     globalAdminAlertSubsTab.classList.toggle("hidden", !state.isAdmin);
+  }
+  if (globalAdminOpsSection) {
+    globalAdminOpsSection.classList.toggle("hidden", !state.isAdmin);
   }
   if (!state.isAdmin && state.globalSubMode === "admin-alert-subs") {
     state.globalSubMode = "global-alerts";

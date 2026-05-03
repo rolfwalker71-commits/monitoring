@@ -620,6 +620,13 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   gap: 8px;
 }
 
+.global-admin-ops-actions {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .mountpoint-table-header h4 {
   margin: 0;
 }
