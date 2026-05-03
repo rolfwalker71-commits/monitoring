@@ -3725,25 +3725,24 @@ async function downloadDatabaseBackup() {
   return triggerFileDownload(
     "/api/v1/backup/database",
     `monitoring-backup-${new Date().toISOString().replace(/[.:]/g, "-")}.db`,
-
-  async function restoreDatabaseFromFile(file) {
-    const data = await file.arrayBuffer();
-    const response = await fetch("/api/v1/restore/database", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/octet-stream",
-        "Content-Length": String(data.byteLength),
-      },
-      body: data,
-      credentials: "same-origin",
-    });
-    const json = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(json.error || ("HTTP " + response.status));
-    }
-    return json;
-  }
   );
+}
+
+async function restoreDatabaseFromFile(file) {
+  const data = await file.arrayBuffer();
+  const response = await fetch("/api/v1/restore/database", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/octet-stream",
+    },
+    body: data,
+    credentials: "same-origin",
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(json.error || ("HTTP " + response.status));
+  }
+  return json;
 }
 
 async function exportGlobalAlertsCsv() {
@@ -5169,37 +5168,6 @@ function wireEvents() {
   });
 
   const backupButton = document.getElementById("downloadDatabaseBackupButton");
-
-    const restoreButton = document.getElementById("restoreDatabaseButton");
-    const restoreFileInput = document.getElementById("restoreDatabaseFileInput");
-    if (restoreButton && restoreFileInput) {
-      restoreButton.addEventListener("click", () => {
-        restoreFileInput.value = "";
-        restoreFileInput.click();
-      });
-      restoreFileInput.addEventListener("change", async () => {
-        const file = restoreFileInput.files?.[0];
-        if (!file) return;
-        const confirmed = window.confirm(
-          `Datenbank wirklich aus "${file.name}" (${(file.size / 1024).toFixed(0)} KB) wiederherstellen?\n\nDie aktuelle Datenbank wird dabei ÜBERSCHRIEBEN. Vorher ein Backup anlegen!`
-        );
-        if (!confirmed) return;
-        restoreButton.disabled = true;
-        restoreButton.textContent = "⏳ Wiederherstelle…";
-        try {
-          await restoreDatabaseFromFile(file);
-          window.alert(`Datenbank erfolgreich wiederhergestellt aus: ${file.name}\n\nBitte den Server neu starten, damit alle Änderungen wirksam werden.`);
-        } catch (error) {
-          window.alert(`DB-Restore fehlgeschlagen: ${error.message}`);
-        } finally {
-          restoreButton.disabled = false;
-          restoreButton.textContent = "♻️ DB wiederherstellen";
-          restoreFileInput.value = "";
-        }
-      });
-    }
-
-    for (const button of document.querySelectorAll("[data-report-section]")) {
   if (backupButton) {
     backupButton.addEventListener("click", async () => {
       try {
@@ -5207,6 +5175,35 @@ function wireEvents() {
         window.alert(`Datenbank-Backup heruntergeladen: ${filename}`);
       } catch (error) {
         window.alert(`DB-Backup fehlgeschlagen: ${error.message}`);
+      }
+    });
+  }
+
+  const restoreButton = document.getElementById("restoreDatabaseButton");
+  const restoreFileInput = document.getElementById("restoreDatabaseFileInput");
+  if (restoreButton && restoreFileInput) {
+    restoreButton.addEventListener("click", () => {
+      restoreFileInput.value = "";
+      restoreFileInput.click();
+    });
+    restoreFileInput.addEventListener("change", async () => {
+      const file = restoreFileInput.files?.[0];
+      if (!file) return;
+      const confirmed = window.confirm(
+        `Datenbank wirklich aus "${file.name}" (${(file.size / 1024).toFixed(0)} KB) wiederherstellen?\n\nDie aktuelle Datenbank wird dabei UEBERSCHRIEBEN. Vorher ein Backup anlegen!`
+      );
+      if (!confirmed) return;
+      restoreButton.disabled = true;
+      restoreButton.textContent = "Wiederherstellen...";
+      try {
+        await restoreDatabaseFromFile(file);
+        window.alert(`Datenbank erfolgreich wiederhergestellt aus: ${file.name}\n\nBitte den Server neu starten, damit alle Aenderungen wirksam werden.`);
+      } catch (error) {
+        window.alert(`DB-Restore fehlgeschlagen: ${error.message}`);
+      } finally {
+        restoreButton.disabled = false;
+        restoreButton.innerHTML = "&#x267B;&#xFE0F; DB wiederherstellen";
+        restoreFileInput.value = "";
       }
     });
   }
