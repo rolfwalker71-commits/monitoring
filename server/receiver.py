@@ -5567,15 +5567,33 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     """,
                     (hostname, cutoff_iso),
                 ).fetchall()
-                total_rows = conn.execute(
+                total_counts_row = conn.execute(
                     """
-                    SELECT received_at_utc, payload_json
+                    SELECT
+                        COUNT(*) AS total_reports,
+                        SUM(
+                            CASE
+                                WHEN LOWER(COALESCE(json_extract(payload_json, '$.delivery_mode'), 'live')) = 'delayed'
+                                     OR CAST(COALESCE(json_extract(payload_json, '$.is_delayed'), 0) AS INTEGER) = 1
+                                THEN 1
+                                ELSE 0
+                            END
+                        ) AS delayed_reports
                     FROM reports
                     WHERE hostname = ?
-                    ORDER BY id ASC
                     """,
                     (hostname,),
-                ).fetchall()
+                ).fetchone()
+                latest_total_payload_row = conn.execute(
+                    """
+                    SELECT payload_json
+                    FROM reports
+                    WHERE hostname = ?
+                    ORDER BY id DESC
+                    LIMIT 1
+                    """,
+                    (hostname,),
+                ).fetchone()
 
             fs_by_mountpoint = {}
             report_count = 0
@@ -5595,18 +5613,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             latest_delivery_mode = "live"
             latest_is_delayed = False
             latest_queue_depth = 0
-            total_delayed_report_count = 0
-            total_live_report_count = 0
+            total_reports_all_time = int(total_counts_row[0] or 0) if total_counts_row else 0
+            total_delayed_report_count = int(total_counts_row[1] or 0) if total_counts_row else 0
+            total_live_report_count = max(0, total_reports_all_time - total_delayed_report_count)
             latest_large_files: dict = {}
 
-            for total_row in total_rows:
-                total_payload = parse_payload_json(total_row[1])
+            if latest_total_payload_row:
+                total_payload = parse_payload_json(latest_total_payload_row[0])
                 total_delivery_mode = str(total_payload.get("delivery_mode", "live") or "live").lower()
                 total_is_delayed = total_delivery_mode == "delayed" or bool(total_payload.get("is_delayed", False))
-                if total_is_delayed:
-                    total_delayed_report_count += 1
-                else:
-                    total_live_report_count += 1
                 latest_delivery_mode = "delayed" if total_is_delayed else "live"
                 latest_is_delayed = total_is_delayed
                 latest_queue_depth = payload_int(total_payload, "queue_depth", 0)
