@@ -2215,6 +2215,30 @@ button:hover:not(.host-item) {
   margin-bottom: 8px;
 }
 
+.report-jump-row {
+  align-items: end;
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.report-jump-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.report-jump-control input {
+  border: 1px solid #cfd9e6;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: #fff;
+  color: var(--text);
+}
+
 .analysis-panel {
   border: 1px solid var(--line);
   border-radius: 10px;

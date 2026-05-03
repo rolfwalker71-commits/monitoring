@@ -37,7 +37,7 @@ AGENT_VERSION_PATH = BASE_DIR.parent / "AGENT_VERSION"
 OPENAPI_SPEC_PATH = BASE_DIR.parent / "openapi.yaml"
 API_KEY = os.getenv("MONITORING_API_KEY", "")
 API_KEY_GRACE_ALLOW_KNOWN_HOSTS = os.getenv("MONITORING_API_KEY_GRACE_ALLOW_KNOWN_HOSTS", "1").strip().lower() in {"1", "true", "yes", "on"}
-MAX_REPORTS_PER_HOST = int(os.getenv("MONITORING_MAX_REPORTS_PER_HOST", "1344"))
+MAX_REPORTS_PER_HOST = int(os.getenv("MONITORING_MAX_REPORTS_PER_HOST", "2880"))
 WARNING_THRESHOLD_PERCENT = float(os.getenv("MONITORING_WARNING_THRESHOLD", "80"))
 CRITICAL_THRESHOLD_PERCENT = float(os.getenv("MONITORING_CRITICAL_THRESHOLD", "90"))
 TELEGRAM_ENABLED_DEFAULT = os.getenv("MONITORING_TELEGRAM_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
@@ -4768,12 +4768,33 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             limit = parse_int(query, "limit", default=10, min_value=1, max_value=200)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
+            jump_to_utc_raw = query.get("jump_to_utc", [""])[0].strip()
+            jump_to_utc = ""
+            jump_to_dt: datetime | None = None
+            if jump_to_utc_raw:
+                try:
+                    parsed_jump = datetime.fromisoformat(jump_to_utc_raw.replace("Z", "+00:00"))
+                    if parsed_jump.tzinfo is None:
+                        parsed_jump = parsed_jump.replace(tzinfo=timezone.utc)
+                    jump_to_dt = parsed_jump.astimezone(timezone.utc)
+                    jump_to_utc = jump_to_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+                except ValueError:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "jump_to_utc must be ISO datetime"})
+                    return
 
             with sqlite3.connect(DB_PATH) as conn:
                 total_reports = conn.execute(
                     "SELECT COUNT(*) FROM reports WHERE hostname = ?",
                     (hostname,),
                 ).fetchone()[0]
+
+                resolved_offset = offset
+                if jump_to_dt is not None and total_reports > 0:
+                    newer_count = conn.execute(
+                        "SELECT COUNT(*) FROM reports WHERE hostname = ? AND received_at_utc > ?",
+                        (hostname, jump_to_utc),
+                    ).fetchone()[0]
+                    resolved_offset = min(max(0, int(newer_count or 0)), max(0, int(total_reports) - 1))
 
                 rows = conn.execute(
                     """
@@ -4783,7 +4804,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     ORDER BY id DESC
                     LIMIT ? OFFSET ?
                     """,
-                    (hostname, limit, offset),
+                    (hostname, limit, resolved_offset),
                 ).fetchall()
 
                 display_name_override = get_display_name_override(conn, hostname)
@@ -4810,9 +4831,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 {
                     "count": len(reports),
                     "limit": limit,
-                    "offset": offset,
+                    "offset": resolved_offset,
                     "total_reports": total_reports,
                     "hostname": hostname,
+                    "jump_to_utc": jump_to_utc,
                     "reports": reports,
                 },
             )

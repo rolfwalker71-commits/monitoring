@@ -89,6 +89,7 @@ const ANALYSIS_RANGE_OPTIONS = new Map([
   [72, "Letzte 3 Tage"],
   [168, "Letzte 7 Tage"],
   [336, "Letzte 14 Tage"],
+  [720, "Letzte 30 Tage"],
 ]);
 
 function normalizeAnalysisHours(value) {
@@ -3874,7 +3875,8 @@ async function loadHosts(options = {}) {
   }
 }
 
-async function loadReportsForHost() {
+async function loadReportsForHost(options = {}) {
+  const jumpToUtc = typeof options?.jumpToUtc === "string" ? options.jumpToUtc.trim() : "";
   const list = document.getElementById("reportList");
   const count = document.getElementById("reportCount");
   const selectedHostTitle = document.getElementById("selectedHostTitle");
@@ -3897,13 +3899,17 @@ async function loadReportsForHost() {
 
   try {
     const hostNameParam = encodeURIComponent(state.selectedHost);
-    const url = `/api/v1/host-reports?hostname=${hostNameParam}&limit=${state.reportLimit}&offset=${state.reportOffset}`;
+    const jumpParam = jumpToUtc ? `&jump_to_utc=${encodeURIComponent(jumpToUtc)}` : "";
+    const url = `/api/v1/host-reports?hostname=${hostNameParam}&limit=${state.reportLimit}&offset=${state.reportOffset}${jumpParam}`;
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error("HTTP " + response.status);
     }
 
     const data = await response.json();
+    if (Number.isFinite(Number(data.offset))) {
+      state.reportOffset = Math.max(0, Number(data.offset));
+    }
     state.totalReports = Number(data.total_reports || 0);
     const reports = data.reports || [];
 
@@ -3926,6 +3932,30 @@ async function loadReportsForHost() {
     state.currentReport = null;
     list.innerHTML = `<p class=\"muted\">Fehler: ${escapeHtml(error.message)}</p>`;
   }
+}
+
+async function jumpToReportDateTime() {
+  if (!state.selectedHost) {
+    return;
+  }
+  const input = document.getElementById("reportJumpDateTimeInput");
+  if (!input) {
+    return;
+  }
+  const raw = String(input.value || "").trim();
+  if (!raw) {
+    window.alert("Bitte Datum/Uhrzeit waehlen.");
+    return;
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    window.alert("Ungueltiges Datum/Uhrzeit.");
+    return;
+  }
+
+  await loadReportsForHost({ jumpToUtc: parsed.toISOString() });
+  await loadAnalysisForHost();
+  await loadAlertsForHost();
 }
 
 function renderCurrentReportInView() {
@@ -4993,6 +5023,23 @@ function wireEvents() {
 
   document.getElementById("reportsPrevButton").addEventListener("click", goToPreviousReport);
   document.getElementById("reportsNextButton").addEventListener("click", goToNextReport);
+
+  const reportJumpButton = document.getElementById("reportJumpButton");
+  const reportJumpDateTimeInput = document.getElementById("reportJumpDateTimeInput");
+  if (reportJumpButton) {
+    reportJumpButton.addEventListener("click", async () => {
+      await jumpToReportDateTime();
+    });
+  }
+  if (reportJumpDateTimeInput) {
+    reportJumpDateTimeInput.addEventListener("keydown", async (event) => {
+      if (event.key !== "Enter") {
+        return;
+      }
+      event.preventDefault();
+      await jumpToReportDateTime();
+    });
+  }
 
   const reportsPrevButtonTop = document.getElementById("reportsPrevButtonTop");
   const reportsNextButtonTop = document.getElementById("reportsNextButtonTop");

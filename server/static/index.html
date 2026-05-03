@@ -551,6 +551,7 @@
                     <option value="72">Letzte 3 Tage</option>
                     <option value="168">Letzte 7 Tage</option>
                     <option value="336">Letzte 14 Tage</option>
+                    <option value="720">Letzte 30 Tage</option>
                   </select>
                 </label>
               </div>
@@ -658,6 +659,13 @@
               <div class="pager pager-top">
                 <button id="reportsPrevButtonTop" type="button">Vorherige Meldung</button>
                 <button id="reportsNextButtonTop" type="button">Naechste Meldung</button>
+              </div>
+              <div class="pager report-jump-row">
+                <label class="report-jump-control" for="reportJumpDateTimeInput">
+                  <span>Zu Datum/Uhrzeit springen</span>
+                  <input id="reportJumpDateTimeInput" type="datetime-local" step="60" />
+                </label>
+                <button id="reportJumpButton" type="button">Springen</button>
               </div>
               <div id="reportList" class="report-list"></div>
               <div class="pager">
