@@ -2387,6 +2387,11 @@ button:hover:not(.host-item) {
   margin-bottom: 12px;
 }
 
+.large-files-panel #largeFilesMeta {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .large-files-body {
   display: grid;
   gap: 8px;

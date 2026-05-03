@@ -1714,10 +1714,8 @@ function renderLargeFilesPanel(largeFiles) {
   const minSizeMb = Number(largeFiles.min_size_mb || 0);
   const timedOut = Boolean(largeFiles.timed_out);
   const forceScan = Boolean(largeFiles.force_scan);
-  const scanDurationSec = Number(largeFiles.scan_duration_sec);
   const scanIntervalHours = Number(largeFiles.scan_interval_hours);
   const runHourUtc = Number(largeFiles.run_hour_utc);
-  const excludedPrefixes = Array.isArray(largeFiles.excluded_prefixes) ? largeFiles.excluded_prefixes : [];
   const statusLabelMap = {
     ok: "OK",
     cached: "Cache",
@@ -1731,12 +1729,6 @@ function renderLargeFilesPanel(largeFiles) {
   const runHourText = Number.isFinite(runHourUtc)
     ? `${String(Math.max(0, Math.min(23, Math.floor(runHourUtc)))).padStart(2, "0")}:00 UTC`
     : "-";
-  const durationText = Number.isFinite(scanDurationSec) ? `${scanDurationSec.toFixed(1)}s` : "-";
-  const excludePreview = excludedPrefixes.length === 0
-    ? "keine"
-    : excludedPrefixes.length <= 2
-      ? excludedPrefixes.join(", ")
-      : `${excludedPrefixes.slice(0, 2).join(", ")} +${excludedPrefixes.length - 2}`;
 
   panel.classList.remove("hidden");
 
@@ -1749,7 +1741,7 @@ function renderLargeFilesPanel(largeFiles) {
     return;
   }
 
-  meta.textContent = `🕒 Scan: ${scanTimeText} | 📌 Status: ${statusLabel} | ⏱️ Dauer: ${durationText} | 🧮 Min ${minSizeMb} MB / Top ${topN} | ⏰ Plan: ${Number.isFinite(scanIntervalHours) ? `${Math.max(1, Math.floor(scanIntervalHours))}h` : "-"} @ ${runHourText} | 🚫 Excludes: ${excludePreview}${timedOut ? " | ⚠️ Timeout" : ""}${forceScan ? " | 🚀 Force" : ""}`;
+  meta.textContent = `🕒 Scan: ${scanTimeText} | 📌 Status: ${statusLabel} | 🧮 Min ${minSizeMb} MB / Top ${topN} | ⏰ Plan: ${Number.isFinite(scanIntervalHours) ? `${Math.max(1, Math.floor(scanIntervalHours))}h` : "-"} @ ${runHourText}${timedOut ? " | ⚠️ Timeout" : ""}${forceScan ? " | 🚀 Force" : ""}`;
 
   if (filesystems.length === 0) {
     const statusText = scanStatus === "scheduled"
