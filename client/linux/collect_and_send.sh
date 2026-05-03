@@ -383,7 +383,7 @@ EOF
     LARGE_FILES_CACHE_FILE="${LARGE_FILES_CACHE_FILE}" \
     LARGE_FILES_EXCLUDE_PATHS="${LARGE_FILES_EXCLUDE_PATHS}" \
     LARGE_FILES_SCAN_FORCE="${LARGE_FILES_SCAN_FORCE}" \
-    python3 - <<'PY'
+    sed 's/^  //' <<'PY' | python3 -
   import datetime as dt
   import heapq
   import json
