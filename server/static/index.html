@@ -670,8 +670,9 @@
               </div>
               <div class="pager report-jump-row">
                 <label class="report-jump-control" for="reportJumpDateTimeInput">
-                  <input id="reportJumpDateTimeInput" type="date" />
+                  <input id="reportJumpDateTimeInput" type="datetime-local" step="60" />
                 </label>
+                <button id="reportJumpLatestButton" type="button">Aktuellste Meldung</button>
                 <p id="reportJumpBounds" class="count compact"></p>
               </div>
               <div id="reportList" class="report-list"></div>

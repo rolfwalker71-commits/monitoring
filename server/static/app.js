@@ -2673,7 +2673,7 @@ function formatUtcPlus2(value) {
   })} UTC+2`;
 }
 
-function toLocalDateInputValue(value) {
+function toLocalDateTimeInputValue(value) {
   const text = asText(value, "");
   if (!text) {
     return "";
@@ -2685,7 +2685,9 @@ function toLocalDateInputValue(value) {
   const yyyy = parsed.getFullYear();
   const mm = String(parsed.getMonth() + 1).padStart(2, "0");
   const dd = String(parsed.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  const hh = String(parsed.getHours()).padStart(2, "0");
+  const mi = String(parsed.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
 
 function formatUptime(secondsValue) {
@@ -3935,17 +3937,20 @@ async function loadReportsForHost(options = {}) {
     const oldestReportAtUtc = asText(data.oldest_report_at_utc, "");
     const newestReportAtUtc = asText(data.newest_report_at_utc, "");
     if (reportJumpDateInput) {
-      const minDate = toLocalDateInputValue(oldestReportAtUtc);
-      const maxDate = toLocalDateInputValue(newestReportAtUtc);
-      if (minDate) {
-        reportJumpDateInput.min = minDate;
+      const minDateTime = toLocalDateTimeInputValue(oldestReportAtUtc);
+      const maxDateTime = toLocalDateTimeInputValue(newestReportAtUtc);
+      if (minDateTime) {
+        reportJumpDateInput.min = minDateTime;
       } else {
         reportJumpDateInput.removeAttribute("min");
       }
-      if (maxDate) {
-        reportJumpDateInput.max = maxDate;
+      if (maxDateTime) {
+        reportJumpDateInput.max = maxDateTime;
       } else {
         reportJumpDateInput.removeAttribute("max");
+      }
+      if (!reportJumpDateInput.value && maxDateTime) {
+        reportJumpDateInput.value = maxDateTime;
       }
     }
     if (reportJumpBounds) {
@@ -3993,16 +3998,26 @@ async function jumpToReportDateTime() {
   }
   const raw = String(input.value || "").trim();
   if (!raw) {
-    window.alert("Bitte Datum waehlen.");
+    window.alert("Bitte Datum/Uhrzeit waehlen.");
     return;
   }
-  const parsed = new Date(`${raw}T00:00:00`);
+  const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) {
-    window.alert("Ungueltiges Datum.");
+    window.alert("Ungueltiges Datum/Uhrzeit.");
     return;
   }
 
   await loadReportsForHost({ jumpToUtc: parsed.toISOString() });
+  await loadAnalysisForHost();
+  await loadAlertsForHost();
+}
+
+async function jumpToLatestReport() {
+  if (!state.selectedHost) {
+    return;
+  }
+  state.reportOffset = 0;
+  await loadReportsForHost();
   await loadAnalysisForHost();
   await loadAlertsForHost();
 }
@@ -5068,6 +5083,7 @@ function wireEvents() {
   document.getElementById("reportsNextButton").addEventListener("click", goToNextReport);
 
   const reportJumpDateTimeInput = document.getElementById("reportJumpDateTimeInput");
+  const reportJumpLatestButton = document.getElementById("reportJumpLatestButton");
   if (reportJumpDateTimeInput) {
     reportJumpDateTimeInput.addEventListener("change", async () => {
       await jumpToReportDateTime();
@@ -5078,6 +5094,11 @@ function wireEvents() {
       }
       event.preventDefault();
       await jumpToReportDateTime();
+    });
+  }
+  if (reportJumpLatestButton) {
+    reportJumpLatestButton.addEventListener("click", async () => {
+      await jumpToLatestReport();
     });
   }
 
