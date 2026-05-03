@@ -74,6 +74,12 @@ const state = {
   adminAlertSubscriptionsUsers: [],
   adminAlertAvailableHosts: [],
   adminAlertTelegramAvailable: false,
+  fsVisibilityEditable: false,
+  fsFocusHiddenMountpoints: [],
+  largeFilesHiddenMountpoints: [],
+  fsFocusAvailableMountpoints: [],
+  largeFilesAvailableMountpoints: [],
+  fsVisibilitySection: "",
 };
 
 const ANALYSIS_RANGE_OPTIONS = new Map([
@@ -782,6 +788,7 @@ function setAuthUiState(authenticated) {
     state.adminAlertAvailableHosts = [];
     state.adminAlertTelegramAvailable = false;
   }
+  updateFilesystemVisibilityButtons();
   updateAdminSettingsVisibility();
 }
 
@@ -1674,6 +1681,173 @@ function formatBytes(value) {
   return `${amount.toFixed(digits)} ${units[unitIndex]}`;
 }
 
+function normalizeMountpointValue(value) {
+  return String(value || "").trim();
+}
+
+function uniqueSortedMountpoints(values) {
+  const seen = new Set();
+  const result = [];
+  for (const value of Array.isArray(values) ? values : []) {
+    const mountpoint = normalizeMountpointValue(value);
+    if (!mountpoint) continue;
+    const key = mountpoint.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(mountpoint);
+  }
+  return result.sort((left, right) => left.localeCompare(right, "de", { numeric: true, sensitivity: "base" }));
+}
+
+function mountpointHiddenSet(values) {
+  return new Set(uniqueSortedMountpoints(values).map((item) => item.toLowerCase()));
+}
+
+function hiddenMountpointsForSection(section) {
+  if (section === "fs-focus") {
+    return uniqueSortedMountpoints(state.fsFocusHiddenMountpoints);
+  }
+  if (section === "large-files") {
+    return uniqueSortedMountpoints(state.largeFilesHiddenMountpoints);
+  }
+  return [];
+}
+
+function availableMountpointsForSection(section) {
+  if (section === "fs-focus") {
+    return uniqueSortedMountpoints(state.fsFocusAvailableMountpoints);
+  }
+  if (section === "large-files") {
+    return uniqueSortedMountpoints(state.largeFilesAvailableMountpoints);
+  }
+  return [];
+}
+
+function setHiddenMountpointsForSection(section, values) {
+  const normalized = uniqueSortedMountpoints(values);
+  if (section === "fs-focus") {
+    state.fsFocusHiddenMountpoints = normalized;
+  } else if (section === "large-files") {
+    state.largeFilesHiddenMountpoints = normalized;
+  }
+}
+
+function filterFilesystemTrendsByVisibility(rows, hiddenMountpoints) {
+  const hidden = mountpointHiddenSet(hiddenMountpoints);
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const mountpoint = normalizeMountpointValue(row?.mountpoint).toLowerCase();
+    return mountpoint && !hidden.has(mountpoint);
+  });
+}
+
+function collectLargeFilesMountpoints(largeFiles) {
+  if (!largeFiles || typeof largeFiles !== "object") {
+    return [];
+  }
+  const filesystems = Array.isArray(largeFiles.filesystems) ? largeFiles.filesystems : [];
+  return uniqueSortedMountpoints(filesystems.map((item) => normalizeMountpointValue(item?.mountpoint)));
+}
+
+function setFilesystemVisibilityStatus(message, isError = false) {
+  const statusEl = document.getElementById("filesystemVisibilityStatus");
+  if (!statusEl) return;
+  statusEl.textContent = message;
+  statusEl.classList.toggle("status-error", isError);
+}
+
+function updateFilesystemVisibilityButtons() {
+  const fsButton = document.getElementById("filesystemFocusSettingsButton");
+  const lfButton = document.getElementById("largeFilesSettingsButton");
+  const enabled = Boolean(state.isAuthenticated && state.fsVisibilityEditable && state.selectedHost);
+  if (fsButton) fsButton.classList.toggle("hidden", !enabled);
+  if (lfButton) lfButton.classList.toggle("hidden", !enabled);
+}
+
+function renderFilesystemVisibilityModalContent() {
+  const listEl = document.getElementById("filesystemVisibilityList");
+  const summaryEl = document.getElementById("filesystemVisibilitySummary");
+  const titleEl = document.getElementById("filesystemVisibilityTitle");
+  if (!listEl || !summaryEl || !titleEl) return;
+
+  const section = state.fsVisibilitySection;
+  const available = availableMountpointsForSection(section);
+  const hidden = hiddenMountpointsForSection(section);
+  const hiddenSet = mountpointHiddenSet(hidden);
+  const visibleCount = available.filter((item) => !hiddenSet.has(item.toLowerCase())).length;
+
+  titleEl.textContent = section === "large-files"
+    ? "⚙️ Top-Dateien: Filesystem-Auswahl"
+    : "⚙️ Filesystem Fokus: Filesystem-Auswahl";
+  summaryEl.textContent = `Host: ${state.selectedDisplayName || state.selectedHost} | Sichtbar: ${visibleCount}/${available.length}`;
+
+  if (available.length === 0) {
+    listEl.innerHTML = '<p class="muted">Keine Filesysteme verfuegbar.</p>';
+    return;
+  }
+
+  listEl.innerHTML = available
+    .map((mountpoint, idx) => {
+      const key = `fsVis-${idx}`;
+      const checked = !hiddenSet.has(mountpoint.toLowerCase());
+      return `
+        <label class="filesystem-visibility-item" for="${key}">
+          <input id="${key}" type="checkbox" data-mountpoint="${escapeHtml(mountpoint)}" ${checked ? "checked" : ""} />
+          <span class="filesystem-visibility-mount">${escapeHtml(mountpoint)}</span>
+        </label>
+      `;
+    })
+    .join("");
+}
+
+function closeFilesystemVisibilityModal() {
+  const modal = document.getElementById("filesystemVisibilityModal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  state.fsVisibilitySection = "";
+  setFilesystemVisibilityStatus("");
+}
+
+function openFilesystemVisibilityModal(section) {
+  if (!state.selectedHost || !state.fsVisibilityEditable) return;
+  state.fsVisibilitySection = section;
+  setFilesystemVisibilityStatus("");
+  renderFilesystemVisibilityModalContent();
+  const modal = document.getElementById("filesystemVisibilityModal");
+  if (modal) modal.classList.remove("hidden");
+}
+
+async function saveFilesystemVisibilityFromModal() {
+  const section = state.fsVisibilitySection;
+  if (!section || !state.selectedHost) return;
+  const listEl = document.getElementById("filesystemVisibilityList");
+  if (!listEl) return;
+
+  const checkboxes = Array.from(listEl.querySelectorAll("input[type='checkbox'][data-mountpoint]"));
+  const hiddenMountpoints = checkboxes
+    .filter((item) => !item.checked)
+    .map((item) => normalizeMountpointValue(item.getAttribute("data-mountpoint")));
+
+  setFilesystemVisibilityStatus("Speichere...");
+  const response = await fetch("/api/v1/filesystem-visibility", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      hostname: state.selectedHost,
+      section,
+      hidden_mountpoints: hiddenMountpoints,
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || ("HTTP " + response.status));
+  }
+
+  setHiddenMountpointsForSection(section, payload.hidden_mountpoints || hiddenMountpoints);
+  setFilesystemVisibilityStatus("Gespeichert.");
+  await loadAnalysisForHost();
+  closeFilesystemVisibilityModal();
+}
+
 function renderLargeFilePathCell(value) {
   const full = asText(value, "-");
   if (full === "-") {
@@ -1691,7 +1865,7 @@ function renderLargeFilePathCell(value) {
   `;
 }
 
-function renderLargeFilesPanel(largeFiles) {
+function renderLargeFilesPanel(largeFiles, hiddenMountpoints = []) {
   const panel = document.getElementById("largeFilesPanel");
   const meta = document.getElementById("largeFilesMeta");
   const body = document.getElementById("largeFilesBody");
@@ -1706,7 +1880,9 @@ function renderLargeFilesPanel(largeFiles) {
     return;
   }
 
-  const filesystems = Array.isArray(largeFiles.filesystems) ? largeFiles.filesystems : [];
+  const rawFilesystems = Array.isArray(largeFiles.filesystems) ? largeFiles.filesystems : [];
+  const hiddenSet = mountpointHiddenSet(hiddenMountpoints);
+  const filesystems = rawFilesystems.filter((fs) => !hiddenSet.has(normalizeMountpointValue(fs?.mountpoint).toLowerCase()));
   const scanStatus = asText(largeFiles.status, "");
   const scanTime = asText(largeFiles.scanned_at_utc, "");
   const scanTimeText = scanTime ? formatUtcPlus2(scanTime) : "-";
@@ -3781,6 +3957,12 @@ async function loadAnalysisForHost() {
   const largeFilesBody = document.getElementById("largeFilesBody");
 
   if (!state.selectedHost) {
+    state.fsVisibilityEditable = false;
+    state.fsFocusHiddenMountpoints = [];
+    state.largeFilesHiddenMountpoints = [];
+    state.fsFocusAvailableMountpoints = [];
+    state.largeFilesAvailableMountpoints = [];
+    updateFilesystemVisibilityButtons();
     analysisSummary.textContent = "";
     deliveryStats.textContent = "";
     resourceCharts.innerHTML = "";
@@ -3807,6 +3989,7 @@ async function loadAnalysisForHost() {
   analysisSummary.textContent = "";
   deliveryStats.textContent = "";
   filesystemStats.textContent = "";
+  updateFilesystemVisibilityButtons();
 
   try {
     const hostNameParam = encodeURIComponent(state.selectedHost);
@@ -3817,8 +4000,17 @@ async function loadAnalysisForHost() {
     }
 
     const data = await response.json();
-    const trendRows = data.filesystem_trends || [];
-    const sortedTrendRows = sortFilesystemByMountpointAscending(trendRows);
+    const trendRows = Array.isArray(data.filesystem_trends) ? data.filesystem_trends : [];
+    const visibility = data.filesystem_visibility || {};
+    state.fsVisibilityEditable = visibility.editable !== false;
+    state.fsFocusHiddenMountpoints = uniqueSortedMountpoints(visibility.fs_focus_hidden || []);
+    state.largeFilesHiddenMountpoints = uniqueSortedMountpoints(visibility.large_files_hidden || []);
+    state.fsFocusAvailableMountpoints = uniqueSortedMountpoints(trendRows.map((item) => normalizeMountpointValue(item?.mountpoint)));
+    state.largeFilesAvailableMountpoints = collectLargeFilesMountpoints(data.large_files || {});
+    updateFilesystemVisibilityButtons();
+
+    const visibleTrendRows = filterFilesystemTrendsByVisibility(trendRows, state.fsFocusHiddenMountpoints);
+    const sortedTrendRows = sortFilesystemByMountpointAscending(visibleTrendRows);
     const resourceTrends = data.resource_trends || {};
     const resourceSeries = data.resource_series || {};
     const delivery = data.delivery || {};
@@ -3839,7 +4031,7 @@ async function loadAnalysisForHost() {
     resourceCharts.innerHTML = renderResourceCharts(resourceSeries, data.latest_report_time_utc);
     resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc);
     filesystemCharts.innerHTML = renderFilesystemTrendCharts(sortedTrendRows, data.latest_report_time_utc);
-    renderLargeFilesPanel(data.large_files || {});
+    renderLargeFilesPanel(data.large_files || {}, state.largeFilesHiddenMountpoints);
 
     const fsCurrentValues = sortedTrendRows.map((row) => Number(row.current_used_percent)).filter((value) => Number.isFinite(value));
     const fsAvgCurrent = fsCurrentValues.length > 0
@@ -4315,9 +4507,56 @@ function wireEvents() {
     });
   }
 
+  const filesystemVisibilityBackdrop = document.getElementById("filesystemVisibilityBackdrop");
+  if (filesystemVisibilityBackdrop) {
+    filesystemVisibilityBackdrop.addEventListener("click", () => {
+      closeFilesystemVisibilityModal();
+    });
+  }
+  const filesystemVisibilityCloseButton = document.getElementById("filesystemVisibilityCloseButton");
+  if (filesystemVisibilityCloseButton) {
+    filesystemVisibilityCloseButton.addEventListener("click", () => {
+      closeFilesystemVisibilityModal();
+    });
+  }
+  const filesystemVisibilityCancelButton = document.getElementById("filesystemVisibilityCancelButton");
+  if (filesystemVisibilityCancelButton) {
+    filesystemVisibilityCancelButton.addEventListener("click", () => {
+      closeFilesystemVisibilityModal();
+    });
+  }
+  const filesystemVisibilitySaveButton = document.getElementById("filesystemVisibilitySaveButton");
+  if (filesystemVisibilitySaveButton) {
+    filesystemVisibilitySaveButton.addEventListener("click", async () => {
+      try {
+        await saveFilesystemVisibilityFromModal();
+      } catch (error) {
+        setFilesystemVisibilityStatus(`Fehler: ${error.message}`, true);
+      }
+    });
+  }
+
+  const filesystemFocusSettingsButton = document.getElementById("filesystemFocusSettingsButton");
+  if (filesystemFocusSettingsButton) {
+    filesystemFocusSettingsButton.addEventListener("click", () => {
+      openFilesystemVisibilityModal("fs-focus");
+    });
+  }
+  const largeFilesSettingsButton = document.getElementById("largeFilesSettingsButton");
+  if (largeFilesSettingsButton) {
+    largeFilesSettingsButton.addEventListener("click", () => {
+      openFilesystemVisibilityModal("large-files");
+    });
+  }
+
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      const fsModal = document.getElementById("filesystemVisibilityModal");
+      if (fsModal && !fsModal.classList.contains("hidden")) {
+        closeFilesystemVisibilityModal();
+        return;
+      }
       const modal = document.getElementById("chartDrillModal");
       if (modal && !modal.classList.contains("hidden")) {
         modal.classList.add("hidden");

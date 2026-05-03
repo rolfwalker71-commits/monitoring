@@ -572,6 +572,54 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   gap: 8px;
 }
 
+.fs-focus-actions,
+.large-files-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filesystem-visibility-inner {
+  width: min(680px, 100%);
+}
+
+.filesystem-visibility-list {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 6px;
+}
+
+.filesystem-visibility-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.filesystem-visibility-item:hover {
+  background: rgba(30, 64, 175, 0.08);
+}
+
+.filesystem-visibility-item input {
+  margin: 0;
+}
+
+.filesystem-visibility-mount {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+}
+
+.filesystem-visibility-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+}
+
 .mountpoint-table-header h4 {
   margin: 0;
 }

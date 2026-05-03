@@ -291,6 +291,19 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS web_user_filesystem_visibility_hidden (
+                username TEXT NOT NULL,
+                hostname TEXT NOT NULL,
+                section TEXT NOT NULL,
+                mountpoint TEXT NOT NULL,
+                updated_at_utc TEXT NOT NULL,
+                PRIMARY KEY(username, hostname, section, mountpoint),
+                FOREIGN KEY(username) REFERENCES web_users(username)
+            )
+            """
+        )
         existing_web_user_settings_columns = {
             str(row[1])
             for row in conn.execute("PRAGMA table_info(web_user_settings)").fetchall()
@@ -1180,6 +1193,84 @@ def replace_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str
         )
 
     return get_web_user_alert_subscriptions(conn, username)
+
+
+def normalize_filesystem_visibility_section(value: object) -> str:
+    section = str(value or "").strip().lower()
+    return section if section in {"fs-focus", "large-files"} else ""
+
+
+def normalize_mountpoint_for_visibility(value: object) -> str:
+    mountpoint = str(value or "").strip()
+    if not mountpoint:
+        return ""
+    return mountpoint[:512]
+
+
+def get_user_hidden_filesystems(conn: sqlite3.Connection, username: str, hostname: str, section: str) -> list[str]:
+    rows = conn.execute(
+        """
+        SELECT mountpoint
+        FROM web_user_filesystem_visibility_hidden
+        WHERE username = ? AND hostname = ? AND section = ?
+        ORDER BY LOWER(mountpoint), mountpoint
+        """,
+        (username, hostname, section),
+    ).fetchall()
+    return [str(row[0] or "") for row in rows if str(row[0] or "").strip()]
+
+
+def replace_user_hidden_filesystems(
+    conn: sqlite3.Connection,
+    username: str,
+    hostname: str,
+    section: str,
+    hidden_mountpoints: list[object],
+) -> list[str]:
+    section_normalized = normalize_filesystem_visibility_section(section)
+    if not section_normalized:
+        raise ValueError("section must be fs-focus or large-files")
+
+    hostname_normalized = str(hostname or "").strip()
+    if not hostname_normalized:
+        raise ValueError("hostname missing")
+
+    unique_mountpoints: list[str] = []
+    seen = set()
+    for item in hidden_mountpoints:
+        mountpoint = normalize_mountpoint_for_visibility(item)
+        if not mountpoint:
+            continue
+        key = mountpoint.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_mountpoints.append(mountpoint)
+
+    now_utc = utc_now_iso()
+    conn.execute(
+        """
+        DELETE FROM web_user_filesystem_visibility_hidden
+        WHERE username = ? AND hostname = ? AND section = ?
+        """,
+        (username, hostname_normalized, section_normalized),
+    )
+    for mountpoint in unique_mountpoints:
+        conn.execute(
+            """
+            INSERT INTO web_user_filesystem_visibility_hidden (
+                username,
+                hostname,
+                section,
+                mountpoint,
+                updated_at_utc
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (username, hostname_normalized, section_normalized, mountpoint, now_utc),
+        )
+
+    return get_user_hidden_filesystems(conn, username, hostname_normalized, section_normalized)
 
 
 def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
@@ -4650,6 +4741,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
                 return
 
+            username = self._web_session_username()
+            visibility_editable = bool(username)
+            fs_focus_hidden: list[str] = []
+            large_files_hidden: list[str] = []
+            if username:
+                with sqlite3.connect(DB_PATH) as conn:
+                    fs_focus_hidden = get_user_hidden_filesystems(conn, username, hostname, "fs-focus")
+                    large_files_hidden = get_user_hidden_filesystems(conn, username, hostname, "large-files")
+
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
             cutoff_iso = utc_hours_ago_iso(hours)
 
@@ -4810,6 +4910,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "latest_queue_depth": latest_queue_depth,
                         "delayed_report_count": delayed_report_count,
                         "live_report_count": live_report_count,
+                    },
+                    "filesystem_visibility": {
+                        "editable": visibility_editable,
+                        "fs_focus_hidden": fs_focus_hidden,
+                        "large_files_hidden": large_files_hidden,
                     },
                     "filesystem_trends": trends,
                     "large_files": latest_large_files,
@@ -5627,6 +5732,55 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "is_hidden": is_hidden,
                 },
             )
+            return
+
+        if path == "/api/v1/filesystem-visibility":
+            username = self._require_web_session()
+            if not username:
+                return
+
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            hostname = str(payload.get("hostname", "") or "").strip()
+            section = normalize_filesystem_visibility_section(payload.get("section", ""))
+            hidden_mountpoints = payload.get("hidden_mountpoints", [])
+
+            if not hostname:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
+                return
+            if not section:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "section must be fs-focus or large-files"})
+                return
+            if not isinstance(hidden_mountpoints, list):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hidden_mountpoints must be a list"})
+                return
+
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    stored = replace_user_hidden_filesystems(conn, username, hostname, section, hidden_mountpoints)
+                    conn.commit()
+                self._send_json(
+                    HTTPStatus.OK,
+                    {
+                        "status": "stored",
+                        "username": username,
+                        "hostname": hostname,
+                        "section": section,
+                        "hidden_mountpoints": stored,
+                    },
+                )
+            except ValueError as exc:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             return
 
         if path == "/api/v1/host-delete":

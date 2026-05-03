@@ -594,13 +594,19 @@
               <section id="overviewFilesystemSection" class="analysis-panel overview-subsection overview-scroll-panel hidden" role="tabpanel" aria-labelledby="overviewFilesystemTabButton">
                 <div class="analysis-header fs-focus-header">
                   <h4 id="filesystemSectionTitle">💾 Filesystem Fokus (letzte 24 Std.)</h4>
-                  <p id="filesystemStats" class="count"></p>
+                  <div class="fs-focus-actions">
+                    <p id="filesystemStats" class="count"></p>
+                    <button id="filesystemFocusSettingsButton" class="btn-emoji-pill hidden" type="button" title="Filesystem Fokus konfigurieren">⚙️</button>
+                  </div>
                 </div>
                 <div id="filesystemCharts" class="filesystem-charts"></div>
                 <div id="largeFilesPanel" class="detail-card large-files-panel hidden">
                   <div class="mountpoint-table-header">
                     <h4>🧱 Groesste Dateien (Top 10 je Filesystem)</h4>
-                    <span id="largeFilesMeta" class="count compact"></span>
+                    <div class="large-files-head-actions">
+                      <span id="largeFilesMeta" class="count compact"></span>
+                      <button id="largeFilesSettingsButton" class="btn-emoji-pill hidden" type="button" title="Top-Dateien konfigurieren">⚙️</button>
+                    </div>
                   </div>
                   <div id="largeFilesBody" class="large-files-body"></div>
                 </div>
@@ -662,6 +668,24 @@
             <button id="chartDrillCloseBtn" class="btn-icon chart-drill-close" type="button" title="Schließen">✕</button>
           </div>
           <div id="chartDrillBody" class="chart-drill-body"></div>
+        </div>
+      </div>
+      <div id="filesystemVisibilityModal" class="chart-drill-modal hidden" role="dialog" aria-modal="true" aria-labelledby="filesystemVisibilityTitle">
+        <div id="filesystemVisibilityBackdrop" class="chart-drill-backdrop"></div>
+        <div class="chart-drill-inner filesystem-visibility-inner">
+          <div class="chart-drill-header">
+            <strong id="filesystemVisibilityTitle" class="chart-drill-title">⚙️ Filesystem-Auswahl</strong>
+            <button id="filesystemVisibilityCloseButton" class="btn-icon chart-drill-close" type="button" title="Schliessen">✕</button>
+          </div>
+          <div class="chart-drill-body">
+            <p id="filesystemVisibilitySummary" class="count compact"></p>
+            <div id="filesystemVisibilityList" class="filesystem-visibility-list"></div>
+            <div class="filesystem-visibility-actions">
+              <button id="filesystemVisibilitySaveButton" type="button">Speichern</button>
+              <button id="filesystemVisibilityCancelButton" class="btn-secondary" type="button">Abbrechen</button>
+            </div>
+            <p id="filesystemVisibilityStatus" class="count compact"></p>
+          </div>
         </div>
       </div>
   </body>
