@@ -3289,6 +3289,7 @@ _ALERT_ICON_PATHS: dict[str, Path] = {
     "opened": STATIC_DIR / "icons" / "alertopen.png",
     "escalated": STATIC_DIR / "icons" / "alertescalated.png",
     "resolved": STATIC_DIR / "icons" / "alertresolved.png",
+    "reminder": STATIC_DIR / "icons" / "alertreminder.png",
 }
 
 # Characters that must be escaped in Telegram MarkdownV2
