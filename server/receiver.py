@@ -2526,6 +2526,43 @@ def send_instant_alert_telegram_to_users(
         telegram_send_to_chat(bot_token, chat_id, text, image_path=icon_path)
 
 
+def get_instant_alert_telegram_chat_ids(conn: sqlite3.Connection, hostname: str, severity: str) -> set[str]:
+    alarm_settings = get_alarm_settings(conn)
+    bot_token = str(alarm_settings.get("telegram_bot_token", "") or "").strip()
+    if not alarm_settings.get("telegram_enabled") or not bot_token:
+        return set()
+
+    try:
+        rows = conn.execute(
+            """
+            SELECT COALESCE(s.alert_instant_min_severity, 'warning'),
+                   COALESCE(s.alert_telegram_chat_id, '')
+            FROM web_users u
+            JOIN web_user_settings s ON s.username = u.username
+            JOIN web_user_alert_subscriptions sub ON sub.username = u.username
+            WHERE COALESCE(u.is_disabled, 0) = 0
+              AND COALESCE(s.alert_instant_telegram_enabled, 0) = 1
+              AND COALESCE(s.alert_telegram_chat_id, '') != ''
+              AND sub.hostname = ?
+              AND COALESCE(sub.notify_telegram, 0) = 1
+            """,
+            (hostname,),
+        ).fetchall()
+    except Exception:
+        return set()
+
+    chat_ids: set[str] = set()
+    for row in rows:
+        min_severity = str(row[0] or "warning").strip().lower()
+        chat_id = str(row[1] or "").strip()
+        if not chat_id:
+            continue
+        if min_severity == "critical" and severity not in {"critical"}:
+            continue
+        chat_ids.add(chat_id)
+    return chat_ids
+
+
 def get_oauth_settings(conn: sqlite3.Connection) -> dict:
     row = conn.execute(
         """
@@ -3635,7 +3672,13 @@ def maybe_send_alert_message(
     conn: sqlite3.Connection | None = None,
     display_name: str = "",
 ) -> None:
-    if settings.get("telegram_enabled"):
+    skip_global_chat = False
+    if conn is not None and settings.get("telegram_enabled"):
+        global_chat_id = str(settings.get("telegram_chat_id", "") or "").strip()
+        if global_chat_id:
+            skip_global_chat = global_chat_id in get_instant_alert_telegram_chat_ids(conn, hostname, severity)
+
+    if settings.get("telegram_enabled") and not skip_global_chat:
         text = build_telegram_alert_text(
             event_type,
             hostname,
