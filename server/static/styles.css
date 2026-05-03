@@ -776,9 +776,39 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .alarm-settings-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
   gap: 10px 12px;
-  margin-top: 10px;
+  margin-top: 8px;
+}
+
+.alarm-settings-grid-span2 {
+  grid-column: span 2;
+}
+
+.alarm-settings-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.alarm-settings-card {
+  border: 1px solid #d0dde8;
+  border-radius: 10px;
+  padding: 14px 16px 16px;
+  background: #f6f9fc;
+}
+
+.alarm-settings-card--wide {
+  grid-column: span 2;
+}
+
+.alarm-settings-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #183b66;
+  margin-bottom: 6px;
+  letter-spacing: 0.01em;
 }
 
 .alarm-settings-grid label {
@@ -3207,6 +3237,18 @@ body[data-theme="dark"] th {
     grid-template-columns: 1fr;
   }
 
+  .alarm-settings-grid-span2 {
+    grid-column: span 1;
+  }
+
+  .alarm-settings-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .alarm-settings-card--wide {
+    grid-column: span 1;
+  }
+
   .global-alerts-controls {
     align-items: flex-start;
     flex-direction: column;
@@ -3938,6 +3980,15 @@ body[data-theme="dark"] .theme-toggle:hover {
 /* ── Dark Mode: Settings & misc ───────────────────────────── */
 body[data-theme="dark"] .settings-subsection {
   border-top-color: #2a3c59;
+}
+
+body[data-theme="dark"] .alarm-settings-card {
+  background: #152035;
+  border-color: #2a3c59;
+}
+
+body[data-theme="dark"] .alarm-settings-card-title {
+  color: #93c5fd;
 }
 
 body[data-theme="dark"] .agent-update-status-row {

@@ -459,67 +459,92 @@
                 <h5>Globale Alarm Einstellungen</h5>
                 <p class="count compact">Systemweite Schwellwerte und Telegram Kanal</p>
               </div>
-              <div class="alarm-settings-grid">
-                <label>
-                  Warnung ab (%)
-                  <input id="warningThresholdInput" type="number" min="1" max="99" step="0.1" />
-                </label>
-                <label>
-                  Kritisch ab (%)
-                  <input id="criticalThresholdInput" type="number" min="2" max="100" step="0.1" />
-                </label>
-                <label>
-                  CPU Warnung ab (%)
-                  <input id="cpuWarningThresholdInput" type="number" min="1" max="99" step="0.1" />
-                </label>
-                <label>
-                  CPU Kritisch ab (%)
-                  <input id="cpuCriticalThresholdInput" type="number" min="2" max="100" step="0.1" />
-                </label>
-                <label>
-                  CPU Fenster (Meldungen)
-                  <input id="cpuAlertWindowReportsInput" type="number" min="2" max="24" step="1" />
-                </label>
-                <label>
-                  RAM Warnung ab (%)
-                  <input id="ramWarningThresholdInput" type="number" min="1" max="99" step="0.1" />
-                </label>
-                <label>
-                  RAM Kritisch ab (%)
-                  <input id="ramCriticalThresholdInput" type="number" min="2" max="100" step="0.1" />
-                </label>
-                <label>
-                  RAM Fenster (Meldungen)
-                  <input id="ramAlertWindowReportsInput" type="number" min="2" max="24" step="1" />
-                </label>
-                <label>
-                  Entprellung: Treffer
-                  <input id="warningConsecutiveHitsInput" type="number" min="1" max="10" step="1" />
-                </label>
-                <label>
-                  Entprellung: Fenster (Minuten)
-                  <input id="warningWindowMinutesInput" type="number" min="1" max="240" step="1" />
-                </label>
-                <label class="checkbox-line">
-                  <input id="criticalImmediateInput" type="checkbox" />
-                  Kritisch sofort ausloesen
-                </label>
-                <label class="checkbox-line">
-                  <input id="telegramEnabledInput" type="checkbox" />
-                  Telegram aktivieren
-                </label>
-                <label>
-                  Telegram Bot Token
-                  <input id="telegramBotTokenInput" type="text" placeholder="123456:ABC..." />
-                </label>
-                <label>
-                  Telegram Chat ID
-                  <input id="telegramChatIdInput" type="text" placeholder="-1001234567890" />
-                </label>
-                <label>
-                  Heads-Up Interval (Stunden, 0=aus)
-                  <input id="alertReminderIntervalHoursInput" type="number" min="0" max="168" step="1" />
-                </label>
+              <div class="alarm-settings-cards">
+
+                <div class="alarm-settings-card">
+                  <div class="alarm-settings-card-title">&#x1F4BE; Festplatte</div>
+                  <div class="alarm-settings-grid">
+                    <label>
+                      Warnung ab (%)
+                      <input id="warningThresholdInput" type="number" min="1" max="99" step="0.1" />
+                    </label>
+                    <label>
+                      Kritisch ab (%)
+                      <input id="criticalThresholdInput" type="number" min="2" max="100" step="0.1" />
+                    </label>
+                    <label>
+                      Entprellung: Treffer
+                      <input id="warningConsecutiveHitsInput" type="number" min="1" max="10" step="1" />
+                    </label>
+                    <label>
+                      Entprellung: Fenster (Minuten)
+                      <input id="warningWindowMinutesInput" type="number" min="1" max="240" step="1" />
+                    </label>
+                    <label class="checkbox-line alarm-settings-grid-span2">
+                      <input id="criticalImmediateInput" type="checkbox" />
+                      Kritisch sofort ausloesen
+                    </label>
+                  </div>
+                </div>
+
+                <div class="alarm-settings-card">
+                  <div class="alarm-settings-card-title">&#x1F5A5;&#xFE0F; CPU</div>
+                  <div class="alarm-settings-grid">
+                    <label>
+                      Warnung ab (%)
+                      <input id="cpuWarningThresholdInput" type="number" min="1" max="99" step="0.1" />
+                    </label>
+                    <label>
+                      Kritisch ab (%)
+                      <input id="cpuCriticalThresholdInput" type="number" min="2" max="100" step="0.1" />
+                    </label>
+                    <label class="alarm-settings-grid-span2">
+                      Fenster (Meldungen)
+                      <input id="cpuAlertWindowReportsInput" type="number" min="2" max="24" step="1" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="alarm-settings-card">
+                  <div class="alarm-settings-card-title">&#x1F9E0; RAM</div>
+                  <div class="alarm-settings-grid">
+                    <label>
+                      Warnung ab (%)
+                      <input id="ramWarningThresholdInput" type="number" min="1" max="99" step="0.1" />
+                    </label>
+                    <label>
+                      Kritisch ab (%)
+                      <input id="ramCriticalThresholdInput" type="number" min="2" max="100" step="0.1" />
+                    </label>
+                    <label class="alarm-settings-grid-span2">
+                      Fenster (Meldungen)
+                      <input id="ramAlertWindowReportsInput" type="number" min="2" max="24" step="1" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="alarm-settings-card alarm-settings-card--wide">
+                  <div class="alarm-settings-card-title">&#x1F514; Benachrichtigungen</div>
+                  <div class="alarm-settings-grid">
+                    <label class="checkbox-line">
+                      <input id="telegramEnabledInput" type="checkbox" />
+                      Telegram aktivieren
+                    </label>
+                    <label>
+                      Heads-Up Interval (Stunden, 0=aus)
+                      <input id="alertReminderIntervalHoursInput" type="number" min="0" max="168" step="1" />
+                    </label>
+                    <label>
+                      Telegram Bot Token
+                      <input id="telegramBotTokenInput" type="text" placeholder="123456:ABC..." />
+                    </label>
+                    <label>
+                      Telegram Chat ID
+                      <input id="telegramChatIdInput" type="text" placeholder="-1001234567890" />
+                    </label>
+                  </div>
+                </div>
+
               </div>
               <div class="alarm-settings-actions">
                 <button id="saveAlarmSettingsButton" type="button">Globale Alarmwerte speichern</button>
