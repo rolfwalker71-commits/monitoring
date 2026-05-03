@@ -3027,6 +3027,7 @@ function formatAgentApiKeyStatus(agentApiKeyBlock, agentConfigBlock) {
 
 function renderReportCard(report) {
   const payload = report && report.payload ? report.payload : {};
+  const agentRuntime = payload.agent_runtime && typeof payload.agent_runtime === "object" ? payload.agent_runtime : {};
   const cpu = payload.cpu || {};
   const memory = payload.memory || {};
   const swap = payload.swap || {};
@@ -3040,6 +3041,13 @@ function renderReportCard(report) {
   const chipText = isDelayed ? "DELAYED" : "LIVE";
   const queueDepth = queueDepthLabel(payload.queue_depth);
   const section = normalizeReportSection(state.reportSection);
+  const hasAgentRuntimeDiagnostics = Boolean(
+    asText(agentRuntime.script_path, "") ||
+    asText(agentRuntime.embedded_version, "") ||
+    asText(agentRuntime.version_file_value, "") ||
+    asText(agentRuntime.version_file_path, "") ||
+    asText(agentRuntime.selected_version, "")
+  );
 
   // Helper function to render meta-group items
   function renderMetaItem(icon, label, value) {
@@ -3057,6 +3065,19 @@ function renderReportCard(report) {
       </div>
     </div>
   `;
+
+  const agentRuntimeGroup = hasAgentRuntimeDiagnostics ? `
+    <div class="meta-group">
+      <div class="meta-group-title">🧪 Agent-Runtime</div>
+      <div class="meta-group-content">
+        ${renderMetaItem("📍", "Script-Pfad", agentRuntime.script_path)}
+        ${renderMetaItem("🧷", "Script-Version", agentRuntime.embedded_version)}
+        ${renderMetaItem("📄", "Version-Datei", agentRuntime.version_file_path)}
+        ${renderMetaItem("📘", "Wert aus Datei", agentRuntime.version_file_value)}
+        ${renderMetaItem("✅", "Gemeldete Version", agentRuntime.selected_version)}
+      </div>
+    </div>
+  ` : "";
 
   const systemGroup = `
     <div class="meta-group">
@@ -3158,6 +3179,7 @@ function renderReportCard(report) {
 
       <div class="meta-groups">
         ${agentGroup}
+        ${agentRuntimeGroup}
         ${systemGroup}
         ${resourcesGroup}
         ${networkGroup}
