@@ -4079,14 +4079,13 @@ async function loadAnalysisForHost() {
     const delayedCount = Number(delivery.delayed_report_count || 0).toLocaleString("de-DE");
     const liveCount = Number(delivery.live_report_count || 0).toLocaleString("de-DE");
     const latestDelivery = deliveryLabel(delivery.latest_mode, delivery.latest_is_delayed);
-    const latestQueue = queueDepthLabel(delivery.latest_queue_depth);
+    const latestDeliveryLabel = latestDelivery === "DELAYED" ? "Verzögert" : "LIVE";
 
     analysisSummary.textContent = `${reportCount} Reports, hoechste aktuelle FS-Auslastung: ${latestMax}`;
     deliveryStats.innerHTML = [
-      `<span class="stat-chip">📡 ${latestDelivery}</span>`,
-      `<span class="stat-chip">📥 Q${latestQueue}</span>`,
-      `<span class="stat-chip ${Number(delivery.delayed_report_count || 0) > 0 ? 'delayed' : 'live'}">⏳ ${delayedCount} delayed</span>`,
-      `<span class="stat-chip live">⚡ ${liveCount} live</span>`,
+      `<span class="stat-chip">📡 ${latestDeliveryLabel}</span>`,
+      `<span class="stat-chip ${Number(delivery.delayed_report_count || 0) > 0 ? 'delayed' : 'live'}">⏳ ${delayedCount} Verzögert</span>`,
+      `<span class="stat-chip live">⚡ ${liveCount} LIVE</span>`,
     ].join("");
     resourceCharts.innerHTML = renderResourceCharts(resourceSeries, data.latest_report_time_utc);
     resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc);
