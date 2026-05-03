@@ -5635,6 +5635,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if severity_filter not in {"all", "warning", "critical"}:
                 severity_filter = "all"
 
+            acknowledged_filter = query.get("acknowledged", ["all"])[0].strip().lower()
+            if acknowledged_filter not in {"all", "yes", "no"}:
+                acknowledged_filter = "all"
+
             hostname_filter = query.get("hostname", [""])[0].strip()
             limit = parse_int(query, "limit", default=50, min_value=1, max_value=500)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
@@ -5648,6 +5652,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if severity_filter != "all":
                 where_parts.append("severity = ?")
                 args.append(severity_filter)
+            if acknowledged_filter == "no":
+                where_parts.append("(ack_at_utc IS NULL OR ack_at_utc = '')")
+            elif acknowledged_filter == "yes":
+                where_parts.append("(ack_at_utc IS NOT NULL AND ack_at_utc != '')")
             if hostname_filter:
                 where_parts.append("hostname = ?")
                 args.append(hostname_filter)
@@ -6830,6 +6838,52 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "ack_by": ack_by,
                     "ack_at_utc": ack_at_utc,
                 },
+            )
+            return
+
+        if path == "/api/v1/alert-unack":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            hostname = str(payload.get("hostname", "")).strip()
+            mountpoint = str(payload.get("mountpoint", "")).strip()
+            if not hostname or not mountpoint:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                target = conn.execute(
+                    """
+                    SELECT id
+                    FROM alerts
+                    WHERE hostname = ? AND mountpoint = ? AND status = 'open'
+                    ORDER BY id DESC
+                    LIMIT 1
+                    """,
+                    (hostname, mountpoint),
+                ).fetchone()
+                if not target:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "open alert not found"})
+                    return
+
+                conn.execute(
+                    """
+                    UPDATE alerts
+                    SET ack_note = NULL, ack_by = NULL, ack_at_utc = NULL
+                    WHERE id = ?
+                    """,
+                    (int(target[0]),),
+                )
+                conn.commit()
+
+            self._send_json(
+                HTTPStatus.OK,
+                {"ok": True, "hostname": hostname, "mountpoint": mountpoint},
             )
             return
 

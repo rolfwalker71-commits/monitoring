@@ -142,6 +142,10 @@
                       <option value="warning">Nur warning</option>
                     </select>
                   </label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="globalShowAcknowledgedCheckbox">
+                    Quittierte anzeigen
+                  </label>
                   <button id="exportGlobalAlertsButton" type="button" class="btn-secondary" title="Alerts als CSV exportieren">Export CSV</button>
                   <button id="toggleGlobalAlertsPanelButton" type="button" class="host-group-toggle">▾</button>
                 </div>
@@ -742,6 +746,26 @@
               <button id="filesystemVisibilityCancelButton" class="btn-secondary" type="button">Abbrechen</button>
             </div>
             <p id="filesystemVisibilityStatus" class="count compact"></p>
+          </div>
+        </div>
+      </div>
+      <div id="ackModal" class="chart-drill-modal hidden" role="dialog" aria-modal="true" aria-labelledby="ackModalTitle">
+        <div id="ackModalBackdrop" class="chart-drill-backdrop"></div>
+        <div class="chart-drill-inner ack-modal-inner">
+          <div class="chart-drill-header">
+            <strong id="ackModalTitle" class="chart-drill-title">Alert quittieren</strong>
+            <button id="ackModalCloseBtn" class="btn-icon chart-drill-close" type="button" title="Schließen">✕</button>
+          </div>
+          <div class="chart-drill-body">
+            <p id="ackModalSubtitle" class="count compact"></p>
+            <label for="ackModalNoteInput" class="ack-modal-note-label">Notiz (optional, max. 500 Zeichen)</label>
+            <textarea id="ackModalNoteInput" class="ack-modal-textarea" maxlength="500" rows="3" placeholder="z. B. geplante Wartung, wird beobachtet …"></textarea>
+            <div class="filesystem-visibility-actions">
+              <button id="ackModalConfirmBtn" type="button">Quittieren</button>
+              <button id="ackModalUnackBtn" type="button" class="btn-secondary hidden">Quittierung aufheben</button>
+              <button id="ackModalCancelBtn" type="button" class="btn-secondary">Abbrechen</button>
+            </div>
+            <p id="ackModalStatus" class="count compact"></p>
           </div>
         </div>
       </div>

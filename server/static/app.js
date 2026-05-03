@@ -55,6 +55,7 @@ const state = {
   globalAlertsOffset: 0,
   globalAlertsTotal: 0,
   globalAlertsPageSize: 100,
+  globalShowAcknowledged: false,
   hostAlertsCollapsed: false,
   globalSeverityFilter: "all",
   globalOpenAlertsCount: 0,
@@ -4332,27 +4333,74 @@ async function toggleAlertMute(hostname, mountpoint, currentlyMuted) {
   await loadHosts();
 }
 
-async function acknowledgeAlert(hostname, mountpoint, currentNote = "") {
-  const noteInput = window.prompt("Quittierungsnotiz (optional):", String(currentNote || ""));
-  if (noteInput === null) {
+let _ackModalResolve = null;
+
+function openAckModal(hostname, mountpoint, currentNote, isAcknowledged) {
+  return new Promise((resolve) => {
+    _ackModalResolve = resolve;
+    const modal = document.getElementById("ackModal");
+    const titleEl = document.getElementById("ackModalTitle");
+    const subtitleEl = document.getElementById("ackModalSubtitle");
+    const noteInput = document.getElementById("ackModalNoteInput");
+    const confirmBtn = document.getElementById("ackModalConfirmBtn");
+    const unackBtn = document.getElementById("ackModalUnackBtn");
+    const statusEl = document.getElementById("ackModalStatus");
+    if (!modal) { resolve(null); return; }
+    titleEl.textContent = isAcknowledged ? "Quittierung bearbeiten" : "Alert quittieren";
+    subtitleEl.textContent = `${hostname} – ${mountpoint}`;
+    noteInput.value = String(currentNote || "");
+    statusEl.textContent = "";
+    confirmBtn.textContent = isAcknowledged ? "Aktualisieren" : "Quittieren";
+    unackBtn.classList.toggle("hidden", !isAcknowledged);
+    modal.classList.remove("hidden");
+    noteInput.focus();
+  });
+}
+
+function closeAckModal(result) {
+  const modal = document.getElementById("ackModal");
+  if (modal) modal.classList.add("hidden");
+  if (_ackModalResolve) {
+    _ackModalResolve(result !== undefined ? result : null);
+    _ackModalResolve = null;
+  }
+}
+
+async function acknowledgeAlert(hostname, mountpoint, currentNote = "", isAcknowledged = false) {
+  const result = await openAckModal(hostname, mountpoint, currentNote, isAcknowledged);
+  if (!result) return;
+
+  const statusEl = document.getElementById("ackModalStatus");
+  if (statusEl) statusEl.textContent = "Wird gespeichert…";
+
+  try {
+    if (result.unack) {
+      const response = await fetch("/api/v1/alert-unack", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hostname, mountpoint }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || ("HTTP " + response.status));
+    } else {
+      const response = await fetch("/api/v1/alert-ack", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hostname,
+          mountpoint,
+          ack_note: String(result.note || "").trim(),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || ("HTTP " + response.status));
+    }
+  } catch (err) {
+    if (statusEl) statusEl.textContent = `Fehler: ${err.message}`;
     return;
   }
 
-  const response = await fetch("/api/v1/alert-ack", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      hostname,
-      mountpoint,
-      ack_note: String(noteInput || "").trim(),
-    }),
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || ("HTTP " + response.status));
-  }
-
+  closeAckModal(null);
   await loadAlertsForHost();
   await loadGlobalAlertsOverview();
   await loadHosts();
@@ -4414,7 +4462,7 @@ async function loadAlertsForHost() {
           ? `Quittiert von ${asText(item.ack_by, "-")} am ${formatUtcPlus2(item.ack_at_utc)}${ackNote ? ` | Notiz: ${ackNote}` : ""}`
           : "Alert quittieren";
         const muteBtn = `<button class="alert-mute-btn${isMuted ? " muted" : ""}" type="button" data-action="toggle-mute" data-hostname="${escapeHtml(asText(item.hostname))}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-muted="${isMuted ? "1" : "0"}" title="${isMuted ? "Stummschaltung aufheben" : "Alert stummschalten"}">${isMuted ? "🔔" : "🔇"}</button>`;
-        const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-hostname="${escapeHtml(asText(item.hostname))}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
+        const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-acknowledged="${isAcknowledged ? "1" : "0"}" data-hostname="${escapeHtml(asText(item.hostname))}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
         const ackMeta = isAcknowledged
           ? `<div class="count compact">✅ ${escapeHtml(asText(item.ack_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.ack_at_utc))}</div>`
           : "";
@@ -4446,7 +4494,8 @@ async function loadAlertsForHost() {
         const hostname = btn.getAttribute("data-hostname");
         const mountpoint = btn.getAttribute("data-mountpoint");
         const currentNote = decodeURIComponent(btn.getAttribute("data-ack-note") || "");
-        await acknowledgeAlert(hostname, mountpoint, currentNote);
+        const isAlreadyAcknowledged = btn.getAttribute("data-acknowledged") === "1";
+        await acknowledgeAlert(hostname, mountpoint, currentNote, isAlreadyAcknowledged);
       });
     });
   } catch (error) {
@@ -4696,6 +4745,7 @@ async function loadGlobalAlertsOverview(options = {}) {
   const severityQuery = state.globalSeverityFilter && state.globalSeverityFilter !== "all"
     ? `&severity=${encodeURIComponent(state.globalSeverityFilter)}`
     : "";
+  const acknowledgedQuery = state.globalShowAcknowledged ? "" : "&acknowledged=no";
 
   if (updateList && rowsEl && !append) {
     rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Lade globale Alerts...</td></tr>";
@@ -4733,7 +4783,7 @@ async function loadGlobalAlertsOverview(options = {}) {
       return;
     }
 
-    const listResp = await fetch(`/api/v1/alerts?status=open&limit=${requestLimit}&offset=${requestOffset}${severityQuery}`, {
+    const listResp = await fetch(`/api/v1/alerts?status=open&limit=${requestLimit}&offset=${requestOffset}${severityQuery}${acknowledgedQuery}`, {
       credentials: "same-origin",
       cache: "no-store",
     });
@@ -4765,7 +4815,7 @@ async function loadGlobalAlertsOverview(options = {}) {
           ? `Quittiert von ${asText(item.ack_by, "-")} am ${formatUtcPlus2(item.ack_at_utc)}${ackNote ? ` | Notiz: ${ackNote}` : ""}`
           : "Alert quittieren";
         const muteBtn = `<button class="alert-mute-btn${isMuted ? " muted" : ""}" type="button" data-action="toggle-mute" data-hostname="${escapeHtml(hostName)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-muted="${isMuted ? "1" : "0"}" title="${isMuted ? "Stummschaltung aufheben" : "Alert stummschalten"}">${isMuted ? "🔔" : "🔇"}</button>`;
-        const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-hostname="${escapeHtml(hostName)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
+        const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-acknowledged="${isAcknowledged ? "1" : "0"}" data-hostname="${escapeHtml(hostName)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
         const ackMeta = isAcknowledged
           ? `<div class="count compact">✅ ${escapeHtml(asText(item.ack_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.ack_at_utc))}</div>`
           : "";
@@ -4819,7 +4869,8 @@ async function loadGlobalAlertsOverview(options = {}) {
         const hostname = btn.getAttribute("data-hostname");
         const mountpoint = btn.getAttribute("data-mountpoint");
         const currentNote = decodeURIComponent(btn.getAttribute("data-ack-note") || "");
-        await acknowledgeAlert(hostname, mountpoint, currentNote);
+        const isAlreadyAcknowledged = btn.getAttribute("data-acknowledged") === "1";
+        await acknowledgeAlert(hostname, mountpoint, currentNote, isAlreadyAcknowledged);
       });
     });
   } catch (error) {
@@ -5164,6 +5215,46 @@ function wireEvents() {
     state.globalSeverityFilter = String(event.target?.value || "all");
     state.globalAlertsOffset = 0;
     await loadGlobalAlertsOverview({ append: false });
+  });
+
+  const globalShowAcknowledgedCheckbox = document.getElementById("globalShowAcknowledgedCheckbox");
+  if (globalShowAcknowledgedCheckbox) {
+    globalShowAcknowledgedCheckbox.checked = state.globalShowAcknowledged;
+    globalShowAcknowledgedCheckbox.addEventListener("change", async (event) => {
+      state.globalShowAcknowledged = event.target.checked;
+      state.globalAlertsOffset = 0;
+      await loadGlobalAlertsOverview({ append: false });
+    });
+  }
+
+  // Ack modal wiring
+  const ackModalCloseBtn = document.getElementById("ackModalCloseBtn");
+  const ackModalCancelBtn = document.getElementById("ackModalCancelBtn");
+  const ackModalConfirmBtn = document.getElementById("ackModalConfirmBtn");
+  const ackModalUnackBtn = document.getElementById("ackModalUnackBtn");
+  const ackModalBackdrop = document.getElementById("ackModalBackdrop");
+  if (ackModalCloseBtn) ackModalCloseBtn.addEventListener("click", () => closeAckModal(null));
+  if (ackModalCancelBtn) ackModalCancelBtn.addEventListener("click", () => closeAckModal(null));
+  if (ackModalBackdrop) ackModalBackdrop.addEventListener("click", () => closeAckModal(null));
+  if (ackModalConfirmBtn) {
+    ackModalConfirmBtn.addEventListener("click", () => {
+      const note = (document.getElementById("ackModalNoteInput")?.value || "").trim();
+      closeAckModal({ note });
+    });
+  }
+  if (ackModalUnackBtn) {
+    ackModalUnackBtn.addEventListener("click", () => {
+      closeAckModal({ unack: true });
+    });
+  }
+  // Close modal on Escape
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      const modal = document.getElementById("ackModal");
+      if (modal && !modal.classList.contains("hidden")) {
+        closeAckModal(null);
+      }
+    }
   });
 
   const exportGlobalAlertsButton = document.getElementById("exportGlobalAlertsButton");
