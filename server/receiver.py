@@ -2839,6 +2839,7 @@ def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
         "alert_instant_min_severity": settings["alert_instant_min_severity"],
         "alert_instant_telegram_enabled": settings["alert_instant_telegram_enabled"],
         "alert_telegram_chat_id": settings["alert_telegram_chat_id"],
+        "email_sender": settings["email_sender"],
         "mail_oauth_available": oauth_is_configured(oauth_settings),
         "microsoft_oauth": {
             "connected": connection is not None,
