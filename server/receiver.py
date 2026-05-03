@@ -3293,6 +3293,13 @@ def evaluate_severity_for_thresholds(used_percent: float, warning_threshold: flo
 
 _LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
 
+# Characters that must be escaped in Telegram MarkdownV2
+_MDV2_RE = re.compile(r'([_*\[\]()~`>#+=|{}.!\\-])')
+
+
+def _mdv2(text: object) -> str:
+    return _MDV2_RE.sub(r'\\\1', str(text))
+
 
 def _build_multipart(fields: dict, files: dict) -> tuple[bytes, str]:
     boundary = secrets.token_hex(16).encode()
@@ -3315,7 +3322,7 @@ def telegram_send_to_chat(bot_token: str, chat_id: str, text: str) -> tuple[bool
     if _LOGO_PATH.is_file():
         try:
             photo_data = _LOGO_PATH.read_bytes()
-            fields = {"chat_id": chat_id, "caption": text[:1024]}
+            fields = {"chat_id": chat_id, "caption": text[:1024], "parse_mode": "MarkdownV2"}
             files = {"photo": (_LOGO_PATH.name, photo_data, "image/png")}
             body, content_type = _build_multipart(fields, files)
             endpoint = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
@@ -3333,6 +3340,7 @@ def telegram_send_to_chat(bot_token: str, chat_id: str, text: str) -> tuple[bool
         {
             "chat_id": chat_id,
             "text": text,
+            "parse_mode": "MarkdownV2",
             "disable_web_page_preview": "true",
         }
     ).encode("utf-8")
@@ -3383,13 +3391,15 @@ def build_telegram_alert_text(
     except (TypeError, ValueError):
         used_text = "-"
 
+    # MarkdownV2: bold event line, bold hostname/title, monospace usage
+    hostname_part = f"🖥️ *{_mdv2(title)}*" if title == hostname else f"🖥️ *{_mdv2(title)}* \\({_mdv2(hostname)}\\)"
     return (
-        f"{icon}\n"
-        f"🖥️ {title} ({hostname})\n"
-        f"📂 {mountpoint}\n"
-        f"{sev_icon} {severity}\n"
-        f"📊 {used_text}\n"
-        f"🕐 {now_local}"
+        f"*{_mdv2(icon)}*\n"
+        f"{hostname_part}\n"
+        f"📂 {_mdv2(mountpoint)}\n"
+        f"{sev_icon} *{_mdv2(severity)}*\n"
+        f"📊 `{_mdv2(used_text)}`\n"
+        f"🕐 {_mdv2(now_local)}"
     )
 
 
