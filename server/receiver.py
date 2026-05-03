@@ -70,6 +70,7 @@ MICROSOFT_OAUTH_SCOPES = [
     "profile",
     "email",
     "https://graph.microsoft.com/Mail.Send",
+    "https://graph.microsoft.com/Mail.Send.Shared",
 ]
 DEFAULT_TREND_DIGEST_TIME = "08:00"
 DEFAULT_ALERT_DIGEST_TIME = "08:05"
@@ -3029,9 +3030,10 @@ def send_microsoft_mail(
     if attachments:
         message_payload["attachments"] = attachments
 
+    sender_id = parse.quote(sender, safe="") if sender else ""
     send_url = (
-        f"https://graph.microsoft.com/v1.0/users/{sender}/sendMail"
-        if sender
+        f"https://graph.microsoft.com/v1.0/users/{sender_id}/sendMail"
+        if sender_id
         else "https://graph.microsoft.com/v1.0/me/sendMail"
     )
     status, payload, raw = request_json(
