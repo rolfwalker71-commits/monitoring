@@ -2383,6 +2383,38 @@ button:hover:not(.host-item) {
   gap: 10px;
 }
 
+.large-files-panel {
+  margin-bottom: 12px;
+}
+
+.large-files-body {
+  display: grid;
+  gap: 8px;
+}
+
+.large-files-fs {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.large-files-fs > summary {
+  cursor: pointer;
+  padding: 8px 10px;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.large-files-fs > summary span {
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .fs-chart-card {
   border: 1px solid #d4dfec;
   border-radius: 10px;
@@ -3492,6 +3524,11 @@ body[data-theme="dark"] .fs-chart-card:hover {
 }
 
 body[data-theme="dark"] .trend-card {
+  background: #131f34;
+  border-color: #2a3c59;
+}
+
+body[data-theme="dark"] .large-files-fs {
   background: #131f34;
   border-color: #2a3c59;
 }

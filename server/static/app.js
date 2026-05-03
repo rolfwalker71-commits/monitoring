@@ -1658,6 +1658,105 @@ function formatKilobytes(kbValue) {
   return `${(mib / 1024).toFixed(2)} GiB`;
 }
 
+function formatBytes(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) {
+    return "-";
+  }
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let amount = n;
+  let unitIndex = 0;
+  while (amount >= 1024 && unitIndex < units.length - 1) {
+    amount /= 1024;
+    unitIndex += 1;
+  }
+  const digits = amount >= 100 ? 0 : amount >= 10 ? 1 : 2;
+  return `${amount.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+function renderLargeFilesPanel(largeFiles) {
+  const panel = document.getElementById("largeFilesPanel");
+  const meta = document.getElementById("largeFilesMeta");
+  const body = document.getElementById("largeFilesBody");
+  if (!panel || !meta || !body) {
+    return;
+  }
+
+  if (!largeFiles || typeof largeFiles !== "object" || largeFiles.enabled === false) {
+    panel.classList.add("hidden");
+    body.innerHTML = "";
+    meta.textContent = "";
+    return;
+  }
+
+  const filesystems = Array.isArray(largeFiles.filesystems) ? largeFiles.filesystems : [];
+  const scanStatus = asText(largeFiles.status, "");
+  const scanTime = asText(largeFiles.scanned_at_utc, "");
+  const scanTimeText = scanTime ? formatUtcPlus2(scanTime) : "-";
+  const topN = Number(largeFiles.top_n || 10);
+  const minSizeMb = Number(largeFiles.min_size_mb || 0);
+  const timedOut = Boolean(largeFiles.timed_out);
+
+  panel.classList.remove("hidden");
+  meta.textContent = `Scan: ${scanTimeText} | Min ${minSizeMb} MB | Top ${topN}${timedOut ? " | Timeout" : ""}`;
+
+  if (filesystems.length === 0) {
+    const statusText = scanStatus === "scheduled"
+      ? "Naechster geplanter Scan steht noch aus (taeglicher Lauf)."
+      : scanStatus === "unavailable"
+        ? "Large-File-Scan nicht verfuegbar auf diesem Host."
+        : "Noch keine Large-File-Daten verfuegbar.";
+    body.innerHTML = `<p class="muted">${statusText}</p>`;
+    return;
+  }
+
+  body.innerHTML = filesystems
+    .map((fs) => {
+      const mountpoint = asText(fs.mountpoint, "-");
+      const entries = Array.isArray(fs.top_files) ? fs.top_files : [];
+      const scannedFiles = Number(fs.scanned_regular_files || 0).toLocaleString("de-DE");
+      const rows = entries.length > 0
+        ? entries
+          .map((entry) => {
+            const path = asText(entry.path, "-");
+            const owner = asText(entry.owner, "-");
+            const size = formatBytes(entry.size_bytes);
+            const modified = formatUtcPlus2(entry.modified_at_utc);
+            return `
+              <tr>
+                <td>${renderPathCell(path, 92)}</td>
+                <td>${escapeHtml(size)}</td>
+                <td>${escapeHtml(owner)}</td>
+                <td>${escapeHtml(modified)}</td>
+              </tr>
+            `;
+          })
+          .join("")
+        : '<tr><td colspan="4" class="muted">Keine Dateien ueber Schwellwert gefunden.</td></tr>';
+      return `
+        <details class="large-files-fs">
+          <summary>${escapeHtml(mountpoint)} <span>${entries.length} Treffer, ${scannedFiles} Dateien gescannt</span></summary>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Datei</th>
+                  <th>Groesse</th>
+                  <th>Owner</th>
+                  <th>Geaendert</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      `;
+    })
+    .join("");
+}
+
 function resourceTroubleshootingHint(label, value, suffix) {
   const v = Number(value?.current);
   if (!Number.isFinite(v)) return "";
@@ -3630,6 +3729,8 @@ async function loadAnalysisForHost() {
   const filesystemCharts = document.getElementById("filesystemCharts");
   const resourceTrendCards = document.getElementById("resourceTrendCards");
   const deliveryStats = document.getElementById("deliveryStats");
+  const largeFilesPanel = document.getElementById("largeFilesPanel");
+  const largeFilesBody = document.getElementById("largeFilesBody");
 
   if (!state.selectedHost) {
     analysisSummary.textContent = "";
@@ -3638,6 +3739,8 @@ async function loadAnalysisForHost() {
     filesystemStats.textContent = "";
     filesystemCharts.innerHTML = "";
     resourceTrendCards.innerHTML = "";
+    if (largeFilesPanel) largeFilesPanel.classList.add("hidden");
+    if (largeFilesBody) largeFilesBody.innerHTML = "";
     analysisRows.innerHTML = state.hostFilterNoMatches
       ? "<tr><td colspan=\"7\" class=\"muted\">Keine Daten zum Suchfilter vorhanden.</td></tr>"
       : "<tr><td colspan=\"7\"><div class=\"empty-state\"><span>🖥️</span><p>Wähle einen Host in der linken Spalte.</p></div></td></tr>";
@@ -3651,6 +3754,8 @@ async function loadAnalysisForHost() {
   resourceCharts.innerHTML = "";
   filesystemCharts.innerHTML = "";
   resourceTrendCards.innerHTML = "";
+  if (largeFilesPanel) largeFilesPanel.classList.add("hidden");
+  if (largeFilesBody) largeFilesBody.innerHTML = "";
   analysisSummary.textContent = "";
   deliveryStats.textContent = "";
   filesystemStats.textContent = "";
@@ -3686,6 +3791,7 @@ async function loadAnalysisForHost() {
     resourceCharts.innerHTML = renderResourceCharts(resourceSeries, data.latest_report_time_utc);
     resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc);
     filesystemCharts.innerHTML = renderFilesystemTrendCharts(sortedTrendRows, data.latest_report_time_utc);
+    renderLargeFilesPanel(data.large_files || {});
 
     const fsCurrentValues = sortedTrendRows.map((row) => Number(row.current_used_percent)).filter((value) => Number.isFinite(value));
     const fsAvgCurrent = fsCurrentValues.length > 0

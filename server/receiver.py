@@ -4682,6 +4682,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             latest_delivery_mode = "live"
             latest_is_delayed = False
             latest_queue_depth = 0
+            latest_large_files: dict = {}
 
             for row in rows:
                 report_count += 1
@@ -4696,6 +4697,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 latest_delivery_mode = "delayed" if is_delayed else "live"
                 latest_is_delayed = is_delayed
                 latest_queue_depth = payload_int(payload, "queue_depth", 0)
+                raw_large_files = payload.get("large_files", {})
+                if isinstance(raw_large_files, dict):
+                    latest_large_files = raw_large_files
 
                 cpu_usage = get_nested_number(payload, "cpu", "usage_percent")
                 if cpu_usage is not None:
@@ -4808,6 +4812,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "live_report_count": live_report_count,
                     },
                     "filesystem_trends": trends,
+                    "large_files": latest_large_files,
                 },
             )
             return

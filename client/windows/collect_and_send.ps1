@@ -659,6 +659,7 @@ $containersStr = [string]$containerData.entries
 $dockerAvailable = if ($containerData.available) { 'true' } else { 'false' }
 $updateLogJson  = Get-UpdateLogBlock
 $agentConfigJson = Get-AgentConfigBlock
+$largeFilesJson = '{"enabled":false,"status":"unsupported","filesystems":[]}'
 
 Invoke-RemoteCommands
 Invoke-PrioritySelfUpdate
@@ -735,7 +736,8 @@ $payload = @"
         "entries": [$containersStr]
     },
     "agent_update": $updateLogJson,
-    "agent_config": $agentConfigJson
+    "agent_config": $agentConfigJson,
+    "large_files": $largeFilesJson
 }
 "@
 
