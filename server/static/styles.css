@@ -2415,6 +2415,57 @@ button:hover:not(.host-item) {
   font-size: 11px;
 }
 
+.large-files-table {
+  width: 100%;
+  min-width: 1140px;
+  table-layout: auto;
+}
+
+.large-files-table .lf-col-size,
+.large-files-table .lf-col-owner,
+.large-files-table .lf-col-modified {
+  white-space: nowrap;
+}
+
+.large-files-table th:nth-child(2),
+.large-files-table td.lf-col-size {
+  width: 130px;
+}
+
+.large-files-table th:nth-child(3),
+.large-files-table td.lf-col-owner {
+  width: 160px;
+}
+
+.large-files-table th:nth-child(4),
+.large-files-table td.lf-col-modified {
+  width: 220px;
+}
+
+.large-files-table th:first-child,
+.large-files-table td.lf-col-path {
+  min-width: 600px;
+}
+
+.large-file-path {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 13px;
+}
+
+.large-file-path-dir {
+  color: var(--muted);
+}
+
+.large-file-path-name {
+  color: var(--text);
+  font-weight: 700;
+}
+
 .fs-chart-card {
   border: 1px solid #d4dfec;
   border-radius: 10px;

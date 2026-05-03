@@ -1674,6 +1674,23 @@ function formatBytes(value) {
   return `${amount.toFixed(digits)} ${units[unitIndex]}`;
 }
 
+function renderLargeFilePathCell(value) {
+  const full = asText(value, "-");
+  if (full === "-") {
+    return `<span class="path-cell">-</span>`;
+  }
+  const lastSlash = full.lastIndexOf("/");
+  const hasSlash = lastSlash >= 0;
+  const dir = hasSlash ? full.slice(0, lastSlash + 1) : "";
+  const name = hasSlash ? full.slice(lastSlash + 1) : full;
+  const displayName = name || "/";
+  return `
+    <div class="large-file-path" title="${escapeHtml(full)}">
+      <span class="large-file-path-dir">${escapeHtml(dir)}</span><span class="large-file-path-name">${escapeHtml(displayName)}</span>
+    </div>
+  `;
+}
+
 function renderLargeFilesPanel(largeFiles) {
   const panel = document.getElementById("largeFilesPanel");
   const meta = document.getElementById("largeFilesMeta");
@@ -1738,10 +1755,10 @@ function renderLargeFilesPanel(largeFiles) {
             const modified = formatUtcPlus2(entry.modified_at_utc);
             return `
               <tr>
-                <td>${renderPathCell(path, 92)}</td>
-                <td>${escapeHtml(size)}</td>
-                <td>${escapeHtml(owner)}</td>
-                <td>${escapeHtml(modified)}</td>
+                <td class="lf-col-path">${renderLargeFilePathCell(path)}</td>
+                <td class="lf-col-size">${escapeHtml(size)}</td>
+                <td class="lf-col-owner">${escapeHtml(owner)}</td>
+                <td class="lf-col-modified">${escapeHtml(modified)}</td>
               </tr>
             `;
           })
@@ -1751,7 +1768,7 @@ function renderLargeFilesPanel(largeFiles) {
         <details class="large-files-fs">
           <summary>${escapeHtml(mountpoint)} <span>${entries.length} Treffer, ${scannedFiles} Dateien gescannt</span></summary>
           <div class="table-wrap">
-            <table>
+            <table class="large-files-table">
               <thead>
                 <tr>
                   <th>Datei</th>
