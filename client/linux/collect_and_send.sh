@@ -434,20 +434,33 @@ def is_under(path, prefix):
 
 
 def collect_mountpoints():
+  mounts = []
   try:
     output = subprocess.check_output(
       ["df", "-PT", "-x", "tmpfs", "-x", "devtmpfs"],
       text=True,
       stderr=subprocess.DEVNULL,
     )
+    for line in output.splitlines()[1:]:
+      parts = line.split()
+      if len(parts) >= 7:
+        mounts.append(parts[6])
   except Exception:
-    return []
-  mounts = []
-  for line in output.splitlines()[1:]:
-    parts = line.split()
-    if len(parts) < 7:
-      continue
-    mounts.append(parts[6])
+    pass
+
+  if not mounts:
+    try:
+      output = subprocess.check_output(["df", "-P"], text=True, stderr=subprocess.DEVNULL)
+      for line in output.splitlines()[1:]:
+        parts = line.split()
+        if len(parts) >= 6:
+          mounts.append(parts[-1])
+    except Exception:
+      pass
+
+  if not mounts and os.path.isdir("/"):
+    mounts.append("/")
+
   return sorted(set(mounts))
 
 

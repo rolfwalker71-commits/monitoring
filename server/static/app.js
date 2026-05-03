@@ -1682,7 +1682,7 @@ function renderLargeFilesPanel(largeFiles) {
     return;
   }
 
-  if (!largeFiles || typeof largeFiles !== "object" || largeFiles.enabled === false) {
+  if (!largeFiles || typeof largeFiles !== "object") {
     panel.classList.add("hidden");
     body.innerHTML = "";
     meta.textContent = "";
@@ -1698,6 +1698,16 @@ function renderLargeFilesPanel(largeFiles) {
   const timedOut = Boolean(largeFiles.timed_out);
 
   panel.classList.remove("hidden");
+
+  if (largeFiles.enabled === false) {
+    const unsupportedReason = asText(largeFiles.status, "disabled") === "unsupported"
+      ? "Nicht unterstuetzt auf diesem Host"
+      : "Deaktiviert";
+    meta.textContent = `Scan: ${unsupportedReason}`;
+    body.innerHTML = '<p class="muted">Large-File-Scan ist fuer dieses Betriebssystem nicht verfuegbar.</p>';
+    return;
+  }
+
   meta.textContent = `Scan: ${scanTimeText} | Min ${minSizeMb} MB | Top ${topN}${timedOut ? " | Timeout" : ""}`;
 
   if (filesystems.length === 0) {
@@ -1705,7 +1715,11 @@ function renderLargeFilesPanel(largeFiles) {
       ? "Naechster geplanter Scan steht noch aus (taeglicher Lauf)."
       : scanStatus === "unavailable"
         ? "Large-File-Scan nicht verfuegbar auf diesem Host."
-        : "Noch keine Large-File-Daten verfuegbar.";
+        : scanStatus === "ok"
+          ? "Scan abgeschlossen, aber es konnten keine Dateisysteme ausgewertet werden."
+          : scanStatus === "error"
+            ? `Scan fehlgeschlagen: ${escapeHtml(asText(largeFiles.error, "unbekannter Fehler"))}`
+            : "Noch keine Large-File-Daten verfuegbar.";
     body.innerHTML = `<p class="muted">${statusText}</p>`;
     return;
   }
