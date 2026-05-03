@@ -3640,6 +3640,35 @@ async function triggerAgentApiKeyRolloutForAllHosts(apiKey) {
   return data;
 }
 
+async function downloadDatabaseBackup() {
+  const response = await fetch("/api/v1/backup/database", {
+    method: "GET",
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+
+  const blob = await response.blob();
+  const disposition = String(response.headers.get("Content-Disposition") || "");
+  const match = disposition.match(/filename="([^"]+)"/i);
+  const filename = (match && match[1])
+    ? match[1]
+    : `monitoring-backup-${new Date().toISOString().replace(/[.:]/g, "-")}.db`;
+
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(url);
+  return filename;
+}
+
 function wireHostListInteractions() {
   const hostList = document.getElementById("hostList");
 
@@ -4901,6 +4930,18 @@ function wireEvents() {
       window.alert(`API-Key-Rollout fehlgeschlagen: ${error.message}`);
     }
   });
+
+  const backupButton = document.getElementById("downloadDatabaseBackupButton");
+  if (backupButton) {
+    backupButton.addEventListener("click", async () => {
+      try {
+        const filename = await downloadDatabaseBackup();
+        window.alert(`Datenbank-Backup heruntergeladen: ${filename}`);
+      } catch (error) {
+        window.alert(`DB-Backup fehlgeschlagen: ${error.message}`);
+      }
+    });
+  }
 
   for (const button of document.querySelectorAll("[data-report-section]")) {
     button.addEventListener("click", () => {

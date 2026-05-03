@@ -9,6 +9,7 @@ import os
 import re
 import secrets
 import sqlite3
+import tempfile
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -96,6 +97,8 @@ def parse_int(query: dict, key: str, default: int, min_value: int, max_value: in
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS reports (
@@ -598,6 +601,23 @@ def init_db() -> None:
             (utc_now_iso(),),
         )
         conn.commit()
+
+
+def create_sqlite_backup_bytes(source_path: Path) -> bytes:
+    with tempfile.NamedTemporaryFile(prefix="monitoring-backup-", suffix=".db", delete=False) as tmp:
+        temp_path = Path(tmp.name)
+
+    try:
+        with sqlite3.connect(f"file:{source_path}?mode=ro", uri=True) as source_conn:
+            with sqlite3.connect(temp_path) as backup_conn:
+                source_conn.backup(backup_conn)
+                backup_conn.commit()
+        return temp_path.read_bytes()
+    finally:
+        try:
+            temp_path.unlink()
+        except OSError:
+            pass
 
 
 def utc_now_iso() -> str:
@@ -4690,6 +4710,28 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 settings = oauth_settings_public_view(get_oauth_settings(conn))
             self._send_json(HTTPStatus.OK, settings)
+            return
+
+        if parsed.path == "/api/v1/backup/database":
+            if not self._require_admin_session():
+                return
+            try:
+                backup_content = create_sqlite_backup_bytes(DB_PATH)
+            except Exception:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "database backup failed"})
+                return
+
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
+            version = re.sub(r"[^0-9A-Za-z._-]", "-", read_build_version())
+            filename = f"monitoring-backup-v{version}-{timestamp}.db"
+
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/x-sqlite3")
+            self.send_header("Content-Length", str(len(backup_content)))
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(backup_content)
             return
 
         if parsed.path == "/api/v1/oauth/microsoft/start":
