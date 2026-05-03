@@ -16,8 +16,10 @@ RAW_BASE_URL="${RAW_BASE_URL:-https://raw.githubusercontent.com/rolfwalker71-com
 GITHUB_REPO="${GITHUB_REPO:-rolfwalker71-commits/monitoring}"
 AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-$INSTALL_DIR/AGENT_VERSION}"
 TLS_INSECURE="${TLS_INSECURE:-0}"
+CURL_CONNECT_TIMEOUT_SEC="${CURL_CONNECT_TIMEOUT_SEC:-10}"
+CURL_MAX_TIME_SEC="${CURL_MAX_TIME_SEC:-45}"
 
-CURL_BASE_ARGS=(--fail --silent --show-error --location)
+CURL_BASE_ARGS=(--fail --silent --show-error --location --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC" --max-time "$CURL_MAX_TIME_SEC")
 if [[ "$TLS_INSECURE" == "1" ]]; then
   CURL_BASE_ARGS+=(--insecure)
 fi

@@ -4,6 +4,7 @@ set -euo pipefail
 CONFIG_FILE="${CONFIG_FILE:-/etc/monitoring-agent/agent.conf}"
 AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-/opt/monitoring-agent/AGENT_VERSION}"
 AGENT_QUEUE_DIR="${AGENT_QUEUE_DIR:-/var/lib/monitoring-agent/queue}"
+COLLECT_LOCK_FILE="${COLLECT_LOCK_FILE:-/var/lib/monitoring-agent/collect.lock}"
 PRIORITY_UPDATE_CHECK_MINUTES="${PRIORITY_UPDATE_CHECK_MINUTES:-60}"
 PRIORITY_UPDATE_STATE_FILE="${PRIORITY_UPDATE_STATE_FILE:-/var/lib/monitoring-agent/last_priority_update_check}"
 UPDATE_LOG_FILE="${UPDATE_LOG_FILE:-/var/log/monitoring-agent-update.log}"
@@ -21,6 +22,8 @@ LARGE_FILES_TOP_PER_FS="${LARGE_FILES_TOP_PER_FS:-10}"
 LARGE_FILES_CACHE_FILE="${LARGE_FILES_CACHE_FILE:-/var/lib/monitoring-agent/large-files-cache.json}"
 LARGE_FILES_EXCLUDE_PATHS="${LARGE_FILES_EXCLUDE_PATHS:-/hana/data/.snapshot}"
 LARGE_FILES_SCAN_FORCE="${LARGE_FILES_SCAN_FORCE:-0}"
+CURL_CONNECT_TIMEOUT_SEC="${CURL_CONNECT_TIMEOUT_SEC:-10}"
+CURL_MAX_TIME_SEC="${CURL_MAX_TIME_SEC:-45}"
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
   echo "Config file not found: $CONFIG_FILE" >&2
@@ -38,6 +41,14 @@ fi
 TLS_INSECURE="${TLS_INSECURE:-0}"
 
 mkdir -p "$AGENT_QUEUE_DIR"
+
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$COLLECT_LOCK_FILE"
+  if ! flock -n 9; then
+    echo "Another collect_and_send run is still active; skipping this cycle." >&2
+    exit 0
+  fi
+fi
 
 if [[ -d "$(dirname "$PRIORITY_UPDATE_STATE_FILE")" ]]; then
   :
@@ -241,7 +252,7 @@ maybe_priority_self_update() {
 run_self_update_now() {
   local updater_path="${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh"
   local tmp_updater=""
-  local curl_args=(--silent --show-error --fail)
+  local curl_args=(--silent --show-error --fail --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC" --max-time "$CURL_MAX_TIME_SEC")
 
   if [[ "$TLS_INSECURE" == "1" ]]; then
     curl_args+=(--insecure)
@@ -640,6 +651,8 @@ post_payload() {
     --silent
     --show-error
     --fail
+    --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC"
+    --max-time "$CURL_MAX_TIME_SEC"
     -X POST
     -H "Content-Type: application/json"
     --data "$payload_data"
@@ -671,6 +684,8 @@ EOF
     --silent
     --show-error
     --fail
+    --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC"
+    --max-time "$CURL_MAX_TIME_SEC"
     -X POST
     -H "Content-Type: application/json"
     --data "$payload_data"
@@ -694,6 +709,8 @@ execute_remote_commands() {
     --silent
     --show-error
     --fail
+    --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC"
+    --max-time "$CURL_MAX_TIME_SEC"
   )
   if [[ -n "${API_KEY:-}" ]]; then
     curl_args+=( -H "X-Api-Key: ${API_KEY}" )
