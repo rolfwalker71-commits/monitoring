@@ -4258,6 +4258,29 @@ def effective_display_name(payload: dict, override_value: str, hostname: str) ->
     return hostname
 
 
+def effective_agent_version(payload: dict) -> str:
+    runtime = payload.get("agent_runtime")
+    if isinstance(runtime, dict):
+        file_value = str(runtime.get("version_file_value", "") or "").strip()
+        if file_value:
+            return file_value
+
+    payload_value = str(payload.get("agent_version", "") or "").strip()
+    if payload_value:
+        return payload_value
+
+    if isinstance(runtime, dict):
+        selected_value = str(runtime.get("selected_version", "") or "").strip()
+        if selected_value:
+            return selected_value
+
+        embedded_value = str(runtime.get("embedded_version", "") or "").strip()
+        if embedded_value:
+            return embedded_value
+
+    return ""
+
+
 def evaluate_severity(used_percent: float) -> str:
     if used_percent >= CRITICAL_THRESHOLD_PERCENT:
         return "critical"
@@ -5298,7 +5321,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "report_count": row[2],
                         "primary_ip": row[3] or "",
                         "agent_id": row[4] or "",
-                        "agent_version": str(latest_payload.get("agent_version", "")),
+                        "agent_version": effective_agent_version(latest_payload),
                         "delivery_lag_sec": delivery_lag_sec,
                         "delivery_mode": str(latest_payload.get("delivery_mode", "live") or "live"),
                         "is_delayed": bool(latest_payload.get("is_delayed", False)),
@@ -5489,7 +5512,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     {
                         "hostname": hostname,
                         "display_name": effective_display_name(payload, overrides.get(hostname, ""), hostname),
-                        "agent_version": str(payload.get("agent_version", "")),
+                        "agent_version": effective_agent_version(payload),
                         "last_report_utc": str(latest_report.get("received_at_utc", "")),
                         "command_status": command_status,
                         "command_created_at_utc": str(command.get("created_at_utc", "")),
