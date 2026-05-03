@@ -2240,18 +2240,14 @@ button:hover:not(.host-item) {
 }
 
 .report-jump-row {
-  align-items: end;
+  align-items: center;
   margin-top: 0;
   margin-bottom: 8px;
+  gap: 12px;
 }
 
 .report-jump-control {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #475569;
-  font-size: 12px;
-  font-weight: 600;
+  display: inline-block;
 }
 
 .report-jump-control input {

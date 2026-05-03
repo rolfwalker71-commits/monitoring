@@ -2673,6 +2673,21 @@ function formatUtcPlus2(value) {
   })} UTC+2`;
 }
 
+function toLocalDateInputValue(value) {
+  const text = asText(value, "");
+  if (!text) {
+    return "";
+  }
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+  const yyyy = parsed.getFullYear();
+  const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+  const dd = String(parsed.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function formatUptime(secondsValue) {
   const seconds = Number(secondsValue);
   if (!Number.isFinite(seconds) || seconds < 0) {
@@ -3880,11 +3895,21 @@ async function loadReportsForHost(options = {}) {
   const list = document.getElementById("reportList");
   const count = document.getElementById("reportCount");
   const selectedHostTitle = document.getElementById("selectedHostTitle");
+  const reportJumpDateInput = document.getElementById("reportJumpDateTimeInput");
+  const reportJumpBounds = document.getElementById("reportJumpBounds");
 
   if (!state.selectedHost) {
     state.currentReport = null;
     selectedHostTitle.textContent = "🗂️ Meldungen";
     count.textContent = "";
+    if (reportJumpDateInput) {
+      reportJumpDateInput.value = "";
+      reportJumpDateInput.removeAttribute("min");
+      reportJumpDateInput.removeAttribute("max");
+    }
+    if (reportJumpBounds) {
+      reportJumpBounds.textContent = "";
+    }
     list.innerHTML = state.hostFilterNoMatches
       ? "<p class=\"muted\">Keine Daten zum Suchfilter vorhanden.</p>"
       : "<p class=\"muted\">Kein Host ausgewaehlt.</p>";
@@ -3907,6 +3932,27 @@ async function loadReportsForHost(options = {}) {
     }
 
     const data = await response.json();
+    const oldestReportAtUtc = asText(data.oldest_report_at_utc, "");
+    const newestReportAtUtc = asText(data.newest_report_at_utc, "");
+    if (reportJumpDateInput) {
+      const minDate = toLocalDateInputValue(oldestReportAtUtc);
+      const maxDate = toLocalDateInputValue(newestReportAtUtc);
+      if (minDate) {
+        reportJumpDateInput.min = minDate;
+      } else {
+        reportJumpDateInput.removeAttribute("min");
+      }
+      if (maxDate) {
+        reportJumpDateInput.max = maxDate;
+      } else {
+        reportJumpDateInput.removeAttribute("max");
+      }
+    }
+    if (reportJumpBounds) {
+      reportJumpBounds.textContent = oldestReportAtUtc
+        ? `Erste Nachricht: ${formatUtcPlus2(oldestReportAtUtc)}`
+        : "";
+    }
     if (Number.isFinite(Number(data.offset))) {
       state.reportOffset = Math.max(0, Number(data.offset));
     }
@@ -3917,6 +3963,9 @@ async function loadReportsForHost(options = {}) {
       state.currentReport = null;
       list.innerHTML = "<p class=\"muted\">Noch keine Daten vorhanden.</p>";
       count.textContent = `0 von ${state.totalReports} Meldungen`;
+      if (reportJumpDateInput) {
+        reportJumpDateInput.value = "";
+      }
       updatePagerButtons();
       return;
     }
@@ -3944,12 +3993,12 @@ async function jumpToReportDateTime() {
   }
   const raw = String(input.value || "").trim();
   if (!raw) {
-    window.alert("Bitte Datum/Uhrzeit waehlen.");
+    window.alert("Bitte Datum waehlen.");
     return;
   }
-  const parsed = new Date(raw);
+  const parsed = new Date(`${raw}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) {
-    window.alert("Ungueltiges Datum/Uhrzeit.");
+    window.alert("Ungueltiges Datum.");
     return;
   }
 
@@ -5018,14 +5067,11 @@ function wireEvents() {
   document.getElementById("reportsPrevButton").addEventListener("click", goToPreviousReport);
   document.getElementById("reportsNextButton").addEventListener("click", goToNextReport);
 
-  const reportJumpButton = document.getElementById("reportJumpButton");
   const reportJumpDateTimeInput = document.getElementById("reportJumpDateTimeInput");
-  if (reportJumpButton) {
-    reportJumpButton.addEventListener("click", async () => {
+  if (reportJumpDateTimeInput) {
+    reportJumpDateTimeInput.addEventListener("change", async () => {
       await jumpToReportDateTime();
     });
-  }
-  if (reportJumpDateTimeInput) {
     reportJumpDateTimeInput.addEventListener("keydown", async (event) => {
       if (event.key !== "Enter") {
         return;

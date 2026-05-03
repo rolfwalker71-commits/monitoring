@@ -4914,6 +4914,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "SELECT COUNT(*) FROM reports WHERE hostname = ?",
                     (hostname,),
                 ).fetchone()[0]
+                bounds_row = conn.execute(
+                    "SELECT MIN(received_at_utc), MAX(received_at_utc) FROM reports WHERE hostname = ?",
+                    (hostname,),
+                ).fetchone()
+                oldest_report_at_utc = str(bounds_row[0] or "") if bounds_row else ""
+                newest_report_at_utc = str(bounds_row[1] or "") if bounds_row else ""
 
                 resolved_offset = offset
                 if jump_to_dt is not None and total_reports > 0:
@@ -4962,6 +4968,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "total_reports": total_reports,
                     "hostname": hostname,
                     "jump_to_utc": jump_to_utc,
+                    "oldest_report_at_utc": oldest_report_at_utc,
+                    "newest_report_at_utc": newest_report_at_utc,
                     "reports": reports,
                 },
             )
