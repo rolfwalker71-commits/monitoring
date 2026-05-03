@@ -1086,6 +1086,31 @@ button:hover:not(.host-item) {
 }
 
 /* Icon-only button (e.g. pencil) */
+.btn-danger-outline {
+  color: #b91c1c;
+  border-color: #fca5a5;
+  background: linear-gradient(180deg, #fff5f5 0%, #fff1f1 100%);
+}
+
+.btn-danger-outline:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #7f1d1d;
+}
+
+body[data-theme="dark"] .btn-danger-outline {
+  color: #fca5a5;
+  border-color: #7f1d1d;
+  background: linear-gradient(180deg, #2a1010 0%, #1f0d0d 100%);
+}
+
+body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
+  background: #3b1010;
+  border-color: #ef4444;
+  color: #fecaca;
+}
+
+/* Icon-only button (e.g. pencil) */
 .btn-icon {
   display: inline-flex;
   align-items: center;

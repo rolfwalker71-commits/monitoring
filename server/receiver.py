@@ -662,6 +662,34 @@ def create_sqlite_backup_bytes(source_path: Path) -> bytes:
             pass
 
 
+def restore_sqlite_from_bytes(dest_path: Path, data: bytes) -> None:
+    """Validate data is a SQLite file, then atomically replace dest_path."""
+    if not data.startswith(b"SQLite format 3\x00"):
+        raise ValueError("uploaded file is not a valid SQLite database")
+    if len(data) < 100:
+        raise ValueError("uploaded file is too small to be a valid database")
+
+    with tempfile.NamedTemporaryFile(
+        prefix="monitoring-restore-", suffix=".db",
+        dir=dest_path.parent, delete=False
+    ) as tmp:
+        tmp_path = Path(tmp.name)
+        tmp.write(data)
+
+    try:
+        # Verify the uploaded DB can be opened and read
+        with sqlite3.connect(tmp_path) as test_conn:
+            test_conn.execute("PRAGMA integrity_check").fetchone()
+        # Atomic replace
+        tmp_path.replace(dest_path)
+    except Exception:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+        raise
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -6888,6 +6916,35 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {"ok": True, "hostname": hostname, "mountpoint": mountpoint},
             )
+            return
+
+        if path == "/api/v1/restore/database":
+            if not self._require_admin_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no data received"})
+                return
+            max_restore_bytes = 512 * 1024 * 1024  # 512 MB hard cap
+            if content_length > max_restore_bytes:
+                self._send_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "file too large (max 512 MB)"})
+                return
+            data = self.rfile.read(content_length)
+            try:
+                restore_sqlite_from_bytes(DB_PATH, data)
+            except ValueError as exc:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                return
+            except Exception:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "restore failed – file may be corrupt"})
+                return
+            # Re-run migrations so the restored DB is compatible with current schema
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    init_db(conn)
+            except Exception:
+                pass
+            self._send_json(HTTPStatus.OK, {"ok": True, "restored_bytes": len(data)})
             return
 
         if path == "/api/v1/agent-command":
