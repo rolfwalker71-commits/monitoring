@@ -4115,11 +4115,18 @@ def get_latest_report_rows_by_hostname(conn: sqlite3.Connection) -> dict[str, di
         """
         SELECT r.hostname, r.received_at_utc, r.payload_json
         FROM reports r
-        WHERE r.id IN (
-            SELECT MAX(id)
-            FROM reports
-            GROUP BY hostname
-        )
+        ORDER BY
+            r.hostname,
+            CASE
+                WHEN LOWER(COALESCE(json_extract(r.payload_json, '$.delivery_mode'), 'live')) = 'live' THEN 0
+                ELSE 1
+            END,
+            COALESCE(
+                NULLIF(json_extract(r.payload_json, '$.send_started_utc'), ''),
+                NULLIF(json_extract(r.payload_json, '$.timestamp_utc'), ''),
+                r.received_at_utc
+            ) DESC,
+            r.id DESC
         """
     ).fetchall()
 
@@ -4127,6 +4134,8 @@ def get_latest_report_rows_by_hostname(conn: sqlite3.Connection) -> dict[str, di
     for row in rows:
         hostname = str(row[0] or "").strip()
         if not hostname:
+            continue
+        if hostname in result:
             continue
         result[hostname] = {
             "received_at_utc": str(row[1] or ""),
@@ -5205,7 +5214,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                                                 SELECT payload_json
                                                 FROM reports r4
                                                 WHERE r4.hostname = r.hostname
-                                                ORDER BY r4.id DESC
+                                                ORDER BY
+                                                    CASE
+                                                        WHEN LOWER(COALESCE(json_extract(r4.payload_json, '$.delivery_mode'), 'live')) = 'live' THEN 0
+                                                        ELSE 1
+                                                    END,
+                                                    COALESCE(
+                                                        NULLIF(json_extract(r4.payload_json, '$.send_started_utc'), ''),
+                                                        NULLIF(json_extract(r4.payload_json, '$.timestamp_utc'), ''),
+                                                        r4.received_at_utc
+                                                    ) DESC,
+                                                    r4.id DESC
                                                 LIMIT 1
                                             ) AS latest_payload_json,
                                             (
