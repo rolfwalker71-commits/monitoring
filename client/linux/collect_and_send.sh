@@ -20,6 +20,7 @@ LARGE_FILES_MIN_SIZE_MB="${LARGE_FILES_MIN_SIZE_MB:-500}"
 LARGE_FILES_TOP_PER_FS="${LARGE_FILES_TOP_PER_FS:-10}"
 LARGE_FILES_CACHE_FILE="${LARGE_FILES_CACHE_FILE:-/var/lib/monitoring-agent/large-files-cache.json}"
 LARGE_FILES_EXCLUDE_PATHS="${LARGE_FILES_EXCLUDE_PATHS:-/hana/data/.snapshot}"
+LARGE_FILES_SCAN_FORCE="${LARGE_FILES_SCAN_FORCE:-0}"
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
   echo "Config file not found: $CONFIG_FILE" >&2
@@ -381,6 +382,7 @@ EOF
     LARGE_FILES_TOP_PER_FS="${LARGE_FILES_TOP_PER_FS}" \
     LARGE_FILES_CACHE_FILE="${LARGE_FILES_CACHE_FILE}" \
     LARGE_FILES_EXCLUDE_PATHS="${LARGE_FILES_EXCLUDE_PATHS}" \
+    LARGE_FILES_SCAN_FORCE="${LARGE_FILES_SCAN_FORCE}" \
     python3 - <<'PY'
   import datetime as dt
   import heapq
@@ -446,6 +448,7 @@ EOF
   timeout_sec = to_int("LARGE_FILES_SCAN_TIMEOUT_SEC", 900, 30, 3600)
   min_size_mb = to_int("LARGE_FILES_MIN_SIZE_MB", 500, 1, 1024 * 1024)
   top_n = to_int("LARGE_FILES_TOP_PER_FS", 10, 1, 100)
+  force_scan = str(os.getenv("LARGE_FILES_SCAN_FORCE", "0")).strip().lower() in {"1", "true", "yes", "on"}
   cache_file = os.getenv("LARGE_FILES_CACHE_FILE", "/var/lib/monitoring-agent/large-files-cache.json").strip()
   exclude_raw = os.getenv("LARGE_FILES_EXCLUDE_PATHS", "/hana/data/.snapshot")
   exclude_prefixes = [os.path.normpath(p.strip()) for p in exclude_raw.split(":") if p.strip()]
@@ -461,12 +464,14 @@ EOF
   now = dt.datetime.now(dt.timezone.utc)
   cached_scan_time = parse_iso(cached.get("scanned_at_utc", "")) if isinstance(cached, dict) else None
   scan_due = cached_scan_time is None or (now - cached_scan_time).total_seconds() >= scan_interval_hours * 3600
+  first_scan = cached_scan_time is None
   in_scan_hour = now.hour == run_hour_utc
-  should_scan = scan_due and in_scan_hour
+  should_scan = force_scan or (scan_due and (first_scan or in_scan_hour))
 
   result = {
     "enabled": True,
     "status": "scheduled" if scan_due else "cached",
+    "force_scan": force_scan,
     "scanned_at_utc": str(cached.get("scanned_at_utc", "")) if isinstance(cached, dict) else "",
     "scan_interval_hours": scan_interval_hours,
     "run_hour_utc": run_hour_utc,
