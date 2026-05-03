@@ -1920,7 +1920,6 @@ function renderLargeFilesPanel(largeFiles, hiddenMountpoints = []) {
   const topN = Number(largeFiles.top_n || 10);
   const minSizeMb = Number(largeFiles.min_size_mb || 0);
   const timedOut = Boolean(largeFiles.timed_out);
-  const forceScan = Boolean(largeFiles.force_scan);
   const scanIntervalHours = Number(largeFiles.scan_interval_hours);
   const runHourUtc = Number(largeFiles.run_hour_utc);
   const statusLabelMap = {
@@ -1948,7 +1947,8 @@ function renderLargeFilesPanel(largeFiles, hiddenMountpoints = []) {
     return;
   }
 
-  meta.textContent = `🕒 Scan: ${scanTimeText} | 📌 Status: ${statusLabel} | 🧮 Min ${minSizeMb} MB / Top ${topN} | ⏰ Plan: ${Number.isFinite(scanIntervalHours) ? `${Math.max(1, Math.floor(scanIntervalHours))}h` : "-"} @ ${runHourText}${timedOut ? " | ⚠️ Timeout" : ""}${forceScan ? " | 🚀 Force" : ""}`;
+  meta.textContent = `🕒 Scan: ${scanTimeText} | 📌 Status: ${statusLabel} | 🧮 Min ${minSizeMb} MB / Top ${topN} | ⏰ Plan: ${Number.isFinite(scanIntervalHours) ? `${Math.max(1, Math.floor(scanIntervalHours))}h` : "-"} @ ${runHourText}${timedOut ? " | ⚠️ Timeout" : ""}`;
+
 
   if (filesystems.length === 0) {
     const statusText = scanStatus === "scheduled"
