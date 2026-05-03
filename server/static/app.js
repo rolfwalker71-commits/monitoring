@@ -9,7 +9,7 @@ function escapeHtml(value) {
 
 const ANALYSIS_RANGE_STORAGE_KEY = "monitoring.analysisHours";
 const THEME_STORAGE_KEY = "monitoring.theme";
-const HOST_FILTERS_STORAGE_KEY = "monitoring.hostFilters";
+const HOST_FILTERS_STORAGE_KEY_PREFIX = "monitoring.hostFilters.";
 const AUTO_REFRESH_STORAGE_KEY = "monitoring.autoRefreshInterval";
 const AUTO_REFRESH_INTERVAL_OPTIONS = new Map([
   [30, "30 Sek."],
@@ -150,8 +150,19 @@ function persistAnalysisRangePreference() {
 }
 
 function loadHostFilterPreferences() {
+  state.hostSearchQuery = "";
+  state.hostAlertFilter = "all";
+  state.hostMutedFilter = "all";
+  state.hostOsFilter = "all";
+  state.hostCountryFilter = "all";
+
+  const username = String(state.authUser || "").trim().toLowerCase();
+  if (!username) {
+    return;
+  }
+
   try {
-    const raw = window.localStorage.getItem(HOST_FILTERS_STORAGE_KEY);
+    const raw = window.localStorage.getItem(`${HOST_FILTERS_STORAGE_KEY_PREFIX}${username}`);
     if (!raw) return;
     const saved = JSON.parse(raw);
     if (saved.hostSearchQuery !== undefined) state.hostSearchQuery = String(saved.hostSearchQuery);
@@ -165,8 +176,13 @@ function loadHostFilterPreferences() {
 }
 
 function persistHostFilterPreferences() {
+  const username = String(state.authUser || "").trim().toLowerCase();
+  if (!username) {
+    return;
+  }
+
   try {
-    window.localStorage.setItem(HOST_FILTERS_STORAGE_KEY, JSON.stringify({
+    window.localStorage.setItem(`${HOST_FILTERS_STORAGE_KEY_PREFIX}${username}`, JSON.stringify({
       hostSearchQuery: state.hostSearchQuery,
       hostAlertFilter: state.hostAlertFilter,
       hostMutedFilter: state.hostMutedFilter,
@@ -835,6 +851,9 @@ async function ensureAuthenticatedSession() {
     state.authUser = asText(session.username, "");
     state.isAdmin = session.is_admin === true;
     setAuthUiState(session.authenticated === true);
+    if (session.authenticated === true) {
+      loadHostFilterPreferences();
+    }
     return session.authenticated === true;
   } catch {
     setAuthUiState(false);
@@ -919,6 +938,7 @@ async function loginWebClient() {
   } catch {
     state.isAdmin = false;
   }
+  loadHostFilterPreferences();
   setLoginStatus("Anmeldung erfolgreich.");
   setAuthUiState(true);
   passwordInput.value = "";
@@ -5021,7 +5041,6 @@ function wireEvents() {
 
 async function init() {
   state.analysisHours = loadAnalysisRangePreference();
-  loadHostFilterPreferences();
   applyTheme(loadThemePreference());
     autoRefreshCurrentIntervalSec = loadAutoRefreshPreference();
     const arSelect = document.getElementById("autoRefreshIntervalSelect");
@@ -5046,6 +5065,9 @@ async function init() {
     setLoginStatus("Bitte anmelden, um den Webclient zu nutzen.");
     return;
   }
+  document.getElementById("hostAlertFilterSelect").value = state.hostAlertFilter;
+  document.getElementById("hostMutedFilterSelect").value = state.hostMutedFilter;
+  document.getElementById("hostSearchInput").value = state.hostSearchQuery;
   if (oauthResult) {
     state.viewMode = "settings";
     updateViewMode();
