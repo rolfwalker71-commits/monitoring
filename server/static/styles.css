@@ -2138,6 +2138,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   font-size: 14px;
   padding: 2px 4px;
   border-radius: 4px;
+  color: #64748b;
   opacity: 0.75;
   transition: opacity 0.15s, background 0.15s;
 }
@@ -2150,6 +2151,13 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 .alert-ack-btn.acknowledged {
   opacity: 1;
   color: #16a34a;
+}
+
+.alert-row-muted td:last-child,
+.alert-row-muted .alert-action-buttons,
+.alert-row-muted .alert-mute-btn,
+.alert-row-muted .alert-ack-btn {
+  opacity: 1;
 }
 
 .ack-modal-inner {
