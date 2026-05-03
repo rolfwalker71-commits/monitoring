@@ -776,8 +776,8 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .alarm-settings-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(160px, 1fr));
-  gap: 10px 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 10px;
   margin-top: 8px;
 }
 
@@ -787,16 +787,18 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .alarm-settings-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
   margin-top: 12px;
 }
 
 .alarm-settings-card {
   border: 1px solid #d0dde8;
   border-radius: 10px;
-  padding: 14px 16px 16px;
+  padding: 11px 12px 13px;
   background: #f6f9fc;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .alarm-settings-card--wide {
@@ -804,7 +806,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .alarm-settings-card-title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: #183b66;
   margin-bottom: 6px;
@@ -813,9 +815,10 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .alarm-settings-grid label {
   display: grid;
-  gap: 6px;
-  font-size: 12px;
+  gap: 4px;
+  font-size: 11px;
   color: #475569;
+  min-width: 0;
 }
 
 .alarm-settings-grid input[type="number"],
@@ -825,15 +828,18 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 .alarm-settings-grid input[type="time"],
 .alarm-settings-grid select {
   border: 1px solid #cfd9e6;
-  border-radius: 8px;
-  padding: 7px 8px;
-  font-size: 13px;
+  border-radius: 6px;
+  padding: 5px 6px;
+  font-size: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .alarm-settings-grid .checkbox-line {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .alarm-settings-actions {
@@ -3242,6 +3248,21 @@ body[data-theme="dark"] th {
   }
 
   .alarm-settings-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .alarm-settings-card--wide {
+    grid-column: span 2;
+  }
+
+  .global-alerts-controls {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 560px) {
+  .alarm-settings-cards {
     grid-template-columns: 1fr;
   }
 
@@ -3249,9 +3270,8 @@ body[data-theme="dark"] th {
     grid-column: span 1;
   }
 
-  .global-alerts-controls {
-    align-items: flex-start;
-    flex-direction: column;
+  .alarm-settings-grid-span2 {
+    grid-column: span 1;
   }
 }
 
