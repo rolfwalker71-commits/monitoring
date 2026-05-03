@@ -1705,7 +1705,7 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
             country_code = ""
 
         open_alerts = conn.execute(
-            "SELECT COUNT(*) FROM alerts WHERE hostname = ? AND status = 'open'",
+            "SELECT COUNT(*) FROM alerts WHERE hostname = ? AND status = 'open' AND (ack_at_utc IS NULL OR ack_at_utc = '')",
             (hostname,),
         ).fetchone()
         open_alert_count = open_alerts[0] if open_alerts else 0
@@ -5117,12 +5117,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                                                 FROM alerts a1
                                                 WHERE a1.hostname = r.hostname AND a1.status = 'open'
                                                   AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a1.hostname AND m.mountpoint = a1.mountpoint)
+                                                  AND (a1.ack_at_utc IS NULL OR a1.ack_at_utc = '')
                                             ) AS open_alert_count,
                                             (
                                                 SELECT COUNT(*)
                                                 FROM alerts a2
                                                 WHERE a2.hostname = r.hostname AND a2.status = 'open' AND a2.severity = 'critical'
                                                   AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a2.hostname AND m.mountpoint = a2.mountpoint)
+                                                  AND (a2.ack_at_utc IS NULL OR a2.ack_at_utc = '')
                                             ) AS open_critical_alert_count
                     FROM reports r
                     GROUP BY r.hostname
@@ -5772,6 +5774,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             args = []
             where_clause += " AND COALESCE((SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0"
             where_clause += " AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = alerts.hostname AND m.mountpoint = alerts.mountpoint)"
+            where_clause += " AND (ack_at_utc IS NULL OR ack_at_utc = '')"
             if hostname_filter:
                 where_clause += " AND hostname = ?"
                 args.append(hostname_filter)
