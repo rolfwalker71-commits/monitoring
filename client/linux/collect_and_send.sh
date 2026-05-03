@@ -394,7 +394,7 @@ import subprocess
 import time
 
 
-def to_int(name: str, default: int, minimum: int = 0, maximum: int = 10**9) -> int:
+def to_int(name, default, minimum=0, maximum=10**9):
   raw = os.getenv(name, str(default)).strip()
   try:
     value = int(raw)
@@ -403,11 +403,11 @@ def to_int(name: str, default: int, minimum: int = 0, maximum: int = 10**9) -> i
   return max(minimum, min(value, maximum))
 
 
-def utc_now_iso() -> str:
+def utc_now_iso():
   return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def parse_iso(value: str):
+def parse_iso(value):
   text = str(value or "").strip()
   if not text:
     return None
@@ -417,7 +417,7 @@ def parse_iso(value: str):
     return None
 
 
-def is_under(path: str, prefix: str) -> bool:
+def is_under(path, prefix):
   if not prefix:
     return False
   p = os.path.normpath(path)
@@ -425,7 +425,7 @@ def is_under(path: str, prefix: str) -> bool:
   return p == pref or p.startswith(pref + os.sep)
 
 
-def collect_mountpoints() -> list[str]:
+def collect_mountpoints():
   try:
     output = subprocess.check_output(
       ["df", "-PT", "-x", "tmpfs", "-x", "devtmpfs"],
