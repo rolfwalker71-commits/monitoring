@@ -383,212 +383,212 @@ EOF
     LARGE_FILES_CACHE_FILE="${LARGE_FILES_CACHE_FILE}" \
     LARGE_FILES_EXCLUDE_PATHS="${LARGE_FILES_EXCLUDE_PATHS}" \
     LARGE_FILES_SCAN_FORCE="${LARGE_FILES_SCAN_FORCE}" \
-    sed 's/^  //' <<'PY' | python3 -
-  import datetime as dt
-  import heapq
-  import json
-  import os
-  import pwd
-  import stat
-  import subprocess
-  import time
+    python3 - <<'PY'
+import datetime as dt
+import heapq
+import json
+import os
+import pwd
+import stat
+import subprocess
+import time
 
 
-  def to_int(name: str, default: int, minimum: int = 0, maximum: int = 10**9) -> int:
-    raw = os.getenv(name, str(default)).strip()
-    try:
-      value = int(raw)
-    except Exception:
-      value = default
-    return max(minimum, min(value, maximum))
+def to_int(name: str, default: int, minimum: int = 0, maximum: int = 10**9) -> int:
+  raw = os.getenv(name, str(default)).strip()
+  try:
+    value = int(raw)
+  except Exception:
+    value = default
+  return max(minimum, min(value, maximum))
 
 
-  def utc_now_iso() -> str:
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+def utc_now_iso() -> str:
+  return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-  def parse_iso(value: str):
-    text = str(value or "").strip()
-    if not text:
-      return None
-    try:
-      return dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except Exception:
-      return None
+def parse_iso(value: str):
+  text = str(value or "").strip()
+  if not text:
+    return None
+  try:
+    return dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
+  except Exception:
+    return None
 
 
-  def is_under(path: str, prefix: str) -> bool:
-    if not prefix:
-      return False
-    p = os.path.normpath(path)
-    pref = os.path.normpath(prefix)
-    return p == pref or p.startswith(pref + os.sep)
+def is_under(path: str, prefix: str) -> bool:
+  if not prefix:
+    return False
+  p = os.path.normpath(path)
+  pref = os.path.normpath(prefix)
+  return p == pref or p.startswith(pref + os.sep)
 
 
-  def collect_mountpoints() -> list[str]:
-    try:
-      output = subprocess.check_output(
-        ["df", "-PT", "-x", "tmpfs", "-x", "devtmpfs"],
-        text=True,
-        stderr=subprocess.DEVNULL,
-      )
-    except Exception:
-      return []
-    mounts = []
-    for line in output.splitlines()[1:]:
-      parts = line.split()
-      if len(parts) < 7:
+def collect_mountpoints() -> list[str]:
+  try:
+    output = subprocess.check_output(
+      ["df", "-PT", "-x", "tmpfs", "-x", "devtmpfs"],
+      text=True,
+      stderr=subprocess.DEVNULL,
+    )
+  except Exception:
+    return []
+  mounts = []
+  for line in output.splitlines()[1:]:
+    parts = line.split()
+    if len(parts) < 7:
+      continue
+    mounts.append(parts[6])
+  return sorted(set(mounts))
+
+
+scan_interval_hours = to_int("LARGE_FILES_SCAN_INTERVAL_HOURS", 24, 1, 24 * 30)
+run_hour_utc = to_int("LARGE_FILES_SCAN_RUN_HOUR_UTC", 2, 0, 23)
+timeout_sec = to_int("LARGE_FILES_SCAN_TIMEOUT_SEC", 900, 30, 3600)
+min_size_mb = to_int("LARGE_FILES_MIN_SIZE_MB", 500, 1, 1024 * 1024)
+top_n = to_int("LARGE_FILES_TOP_PER_FS", 10, 1, 100)
+force_scan = str(os.getenv("LARGE_FILES_SCAN_FORCE", "0")).strip().lower() in {"1", "true", "yes", "on"}
+cache_file = os.getenv("LARGE_FILES_CACHE_FILE", "/var/lib/monitoring-agent/large-files-cache.json").strip()
+exclude_raw = os.getenv("LARGE_FILES_EXCLUDE_PATHS", "/hana/data/.snapshot")
+exclude_prefixes = [os.path.normpath(p.strip()) for p in exclude_raw.split(":") if p.strip()]
+
+cached = {}
+if cache_file and os.path.exists(cache_file):
+  try:
+    with open(cache_file, "r", encoding="utf-8") as fh:
+      cached = json.load(fh)
+  except Exception:
+    cached = {}
+
+now = dt.datetime.now(dt.timezone.utc)
+cached_scan_time = parse_iso(cached.get("scanned_at_utc", "")) if isinstance(cached, dict) else None
+scan_due = cached_scan_time is None or (now - cached_scan_time).total_seconds() >= scan_interval_hours * 3600
+first_scan = cached_scan_time is None
+in_scan_hour = now.hour == run_hour_utc
+should_scan = force_scan or (scan_due and (first_scan or in_scan_hour))
+
+result = {
+  "enabled": True,
+  "status": "scheduled" if scan_due else "cached",
+  "force_scan": force_scan,
+  "scanned_at_utc": str(cached.get("scanned_at_utc", "")) if isinstance(cached, dict) else "",
+  "scan_interval_hours": scan_interval_hours,
+  "run_hour_utc": run_hour_utc,
+  "min_size_mb": min_size_mb,
+  "top_n": top_n,
+  "timed_out": bool(cached.get("timed_out", False)) if isinstance(cached, dict) else False,
+  "excluded_prefixes": exclude_prefixes,
+  "filesystems": list(cached.get("filesystems", [])) if isinstance(cached.get("filesystems", []), list) else [],
+}
+
+if should_scan:
+  started = time.time()
+  deadline = started + timeout_sec
+  timed_out = False
+  filesystems = []
+  try:
+    for mountpoint in collect_mountpoints():
+      if any(is_under(mountpoint, pref) for pref in exclude_prefixes):
         continue
-      mounts.append(parts[6])
-    return sorted(set(mounts))
-
-
-  scan_interval_hours = to_int("LARGE_FILES_SCAN_INTERVAL_HOURS", 24, 1, 24 * 30)
-  run_hour_utc = to_int("LARGE_FILES_SCAN_RUN_HOUR_UTC", 2, 0, 23)
-  timeout_sec = to_int("LARGE_FILES_SCAN_TIMEOUT_SEC", 900, 30, 3600)
-  min_size_mb = to_int("LARGE_FILES_MIN_SIZE_MB", 500, 1, 1024 * 1024)
-  top_n = to_int("LARGE_FILES_TOP_PER_FS", 10, 1, 100)
-  force_scan = str(os.getenv("LARGE_FILES_SCAN_FORCE", "0")).strip().lower() in {"1", "true", "yes", "on"}
-  cache_file = os.getenv("LARGE_FILES_CACHE_FILE", "/var/lib/monitoring-agent/large-files-cache.json").strip()
-  exclude_raw = os.getenv("LARGE_FILES_EXCLUDE_PATHS", "/hana/data/.snapshot")
-  exclude_prefixes = [os.path.normpath(p.strip()) for p in exclude_raw.split(":") if p.strip()]
-
-  cached = {}
-  if cache_file and os.path.exists(cache_file):
-    try:
-      with open(cache_file, "r", encoding="utf-8") as fh:
-        cached = json.load(fh)
-    except Exception:
-      cached = {}
-
-  now = dt.datetime.now(dt.timezone.utc)
-  cached_scan_time = parse_iso(cached.get("scanned_at_utc", "")) if isinstance(cached, dict) else None
-  scan_due = cached_scan_time is None or (now - cached_scan_time).total_seconds() >= scan_interval_hours * 3600
-  first_scan = cached_scan_time is None
-  in_scan_hour = now.hour == run_hour_utc
-  should_scan = force_scan or (scan_due and (first_scan or in_scan_hour))
-
-  result = {
-    "enabled": True,
-    "status": "scheduled" if scan_due else "cached",
-    "force_scan": force_scan,
-    "scanned_at_utc": str(cached.get("scanned_at_utc", "")) if isinstance(cached, dict) else "",
-    "scan_interval_hours": scan_interval_hours,
-    "run_hour_utc": run_hour_utc,
-    "min_size_mb": min_size_mb,
-    "top_n": top_n,
-    "timed_out": bool(cached.get("timed_out", False)) if isinstance(cached, dict) else False,
-    "excluded_prefixes": exclude_prefixes,
-    "filesystems": list(cached.get("filesystems", [])) if isinstance(cached.get("filesystems", []), list) else [],
-  }
-
-  if should_scan:
-    started = time.time()
-    deadline = started + timeout_sec
-    timed_out = False
-    filesystems = []
-    try:
-      for mountpoint in collect_mountpoints():
-        if any(is_under(mountpoint, pref) for pref in exclude_prefixes):
-          continue
+      if time.time() > deadline:
+        timed_out = True
+        break
+      try:
+        root_stat = os.stat(mountpoint)
+      except Exception:
+        continue
+      root_dev = root_stat.st_dev
+      heap = []
+      scanned_regular_files = 0
+      for root, dirs, files in os.walk(mountpoint, topdown=True, followlinks=False):
         if time.time() > deadline:
           timed_out = True
           break
-        try:
-          root_stat = os.stat(mountpoint)
-        except Exception:
-          continue
-        root_dev = root_stat.st_dev
-        heap = []
-        scanned_regular_files = 0
-        for root, dirs, files in os.walk(mountpoint, topdown=True, followlinks=False):
+        kept_dirs = []
+        for dirname in dirs:
+          dpath = os.path.join(root, dirname)
+          if any(is_under(dpath, pref) for pref in exclude_prefixes):
+            continue
+          try:
+            dstat = os.lstat(dpath)
+          except Exception:
+            continue
+          if not stat.S_ISDIR(dstat.st_mode):
+            continue
+          if dstat.st_dev != root_dev:
+            continue
+          kept_dirs.append(dirname)
+        dirs[:] = kept_dirs
+
+        for filename in files:
           if time.time() > deadline:
             timed_out = True
             break
-          kept_dirs = []
-          for dirname in dirs:
-            dpath = os.path.join(root, dirname)
-            if any(is_under(dpath, pref) for pref in exclude_prefixes):
-              continue
-            try:
-              dstat = os.lstat(dpath)
-            except Exception:
-              continue
-            if not stat.S_ISDIR(dstat.st_mode):
-              continue
-            if dstat.st_dev != root_dev:
-              continue
-            kept_dirs.append(dirname)
-          dirs[:] = kept_dirs
-
-          for filename in files:
-            if time.time() > deadline:
-              timed_out = True
-              break
-            fpath = os.path.join(root, filename)
-            if any(is_under(fpath, pref) for pref in exclude_prefixes):
-              continue
-            try:
-              fstat = os.lstat(fpath)
-            except Exception:
-              continue
-            if not stat.S_ISREG(fstat.st_mode):
-              continue
-            if fstat.st_dev != root_dev:
-              continue
-            scanned_regular_files += 1
-            if fstat.st_size < min_size_mb * 1024 * 1024:
-              continue
-            row = (int(fstat.st_size), fpath, int(fstat.st_mtime), int(fstat.st_uid))
-            if len(heap) < top_n:
-              heapq.heappush(heap, row)
-            elif row[0] > heap[0][0]:
-              heapq.heapreplace(heap, row)
-
-        top_files = []
-        for size_bytes, path, mtime, uid in sorted(heap, key=lambda item: item[0], reverse=True):
+          fpath = os.path.join(root, filename)
+          if any(is_under(fpath, pref) for pref in exclude_prefixes):
+            continue
           try:
-            owner = pwd.getpwuid(uid).pw_name
+            fstat = os.lstat(fpath)
           except Exception:
-            owner = str(uid)
-          top_files.append(
-            {
-              "path": path,
-              "size_bytes": size_bytes,
-              "modified_at_utc": dt.datetime.fromtimestamp(mtime, tz=dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-              "owner": owner,
-            }
-          )
+            continue
+          if not stat.S_ISREG(fstat.st_mode):
+            continue
+          if fstat.st_dev != root_dev:
+            continue
+          scanned_regular_files += 1
+          if fstat.st_size < min_size_mb * 1024 * 1024:
+            continue
+          row = (int(fstat.st_size), fpath, int(fstat.st_mtime), int(fstat.st_uid))
+          if len(heap) < top_n:
+            heapq.heappush(heap, row)
+          elif row[0] > heap[0][0]:
+            heapq.heapreplace(heap, row)
 
-        filesystems.append(
+      top_files = []
+      for size_bytes, path, mtime, uid in sorted(heap, key=lambda item: item[0], reverse=True):
+        try:
+          owner = pwd.getpwuid(uid).pw_name
+        except Exception:
+          owner = str(uid)
+        top_files.append(
           {
-            "mountpoint": mountpoint,
-            "scanned_regular_files": scanned_regular_files,
-            "top_files": top_files,
+            "path": path,
+            "size_bytes": size_bytes,
+            "modified_at_utc": dt.datetime.fromtimestamp(mtime, tz=dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "owner": owner,
           }
         )
 
-      result.update(
+      filesystems.append(
         {
-          "status": "ok",
-          "scanned_at_utc": utc_now_iso(),
-          "timed_out": timed_out,
-          "scan_duration_sec": round(time.time() - started, 2),
-          "filesystems": filesystems,
+          "mountpoint": mountpoint,
+          "scanned_regular_files": scanned_regular_files,
+          "top_files": top_files,
         }
       )
 
-      if cache_file:
-        try:
-          os.makedirs(os.path.dirname(cache_file), exist_ok=True)
-          with open(cache_file, "w", encoding="utf-8") as fh:
-            json.dump(result, fh, separators=(",", ":"))
-        except Exception:
-          pass
-    except Exception as exc:
-      result.update({"status": "error", "error": str(exc)[:240]})
+    result.update(
+      {
+        "status": "ok",
+        "scanned_at_utc": utc_now_iso(),
+        "timed_out": timed_out,
+        "scan_duration_sec": round(time.time() - started, 2),
+        "filesystems": filesystems,
+      }
+    )
 
-  print(json.dumps(result, separators=(",", ":")))
+    if cache_file:
+      try:
+        os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+        with open(cache_file, "w", encoding="utf-8") as fh:
+          json.dump(result, fh, separators=(",", ":"))
+      except Exception:
+        pass
+  except Exception as exc:
+    result.update({"status": "error", "error": str(exc)[:240]})
+
+print(json.dumps(result, separators=(",", ":")))
 PY
   }
 
