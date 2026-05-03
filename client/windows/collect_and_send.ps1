@@ -690,6 +690,13 @@ $largeFilesJson = '{"enabled":false,"status":"unsupported","filesystems":[]}'
 Invoke-RemoteCommands
 Invoke-PrioritySelfUpdate
 
+# A self-update can replace AGENT_VERSION during this run.
+# Re-read it so the outgoing payload reflects the current installed version.
+$agentVersion = 'unknown'
+if (Test-Path $VersionFile) {
+    $agentVersion = ((Get-Content $VersionFile -TotalCount 1 -Encoding UTF8) -replace '\s', '')
+}
+
 # ---- Flush queued reports ----
 Invoke-FlushQueue | Out-Null
 $queueDepth = Get-QueueCount
