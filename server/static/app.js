@@ -4864,17 +4864,8 @@ function wireEvents() {
     startAutoRefreshTimer();
   });
 
-  document.getElementById("openChangePasswordButton").addEventListener("click", () => {
-    document.getElementById("changePasswordModal").classList.remove("hidden");
-    setPasswordChangeStatus("");
-  });
-
   document.getElementById("logoutButton").addEventListener("click", async () => {
     await logoutWebClient();
-  });
-
-  document.getElementById("cancelPasswordButton").addEventListener("click", () => {
-    document.getElementById("changePasswordModal").classList.add("hidden");
   });
 
   document.getElementById("savePasswordButton").addEventListener("click", async () => {

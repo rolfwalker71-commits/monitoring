@@ -30,29 +30,6 @@
       </div>
     </div>
 
-    <div id="changePasswordModal" class="login-overlay hidden">
-      <div class="login-card change-password-card">
-        <h3>Passwort aendern</h3>
-        <label>
-          Aktuelles Passwort
-          <input id="currentPasswordInput" type="password" autocomplete="current-password" />
-        </label>
-        <label>
-          Neues Passwort
-          <input id="newPasswordInput" type="password" autocomplete="new-password" />
-        </label>
-        <label>
-          Neues Passwort bestaetigen
-          <input id="confirmPasswordInput" type="password" autocomplete="new-password" />
-        </label>
-        <div class="panel-actions">
-          <button id="savePasswordButton" type="button">Speichern</button>
-          <button id="cancelPasswordButton" type="button">Abbrechen</button>
-        </div>
-        <p id="passwordChangeStatus" class="count compact"></p>
-      </div>
-    </div>
-
     <main class="container">
       <div class="brand-header">
         <div class="app-logo" aria-hidden="true">
@@ -122,7 +99,6 @@
             <span id="headerAlertChip" class="header-stat-chip header-stat-chip-alert hidden" title="Globale offene Alerts (Alle)">🚨 <span id="headerAlertCount">0</span> <span class="header-chip-scope">Alle</span></span>
             <span id="headerTrendsChip" class="header-stat-chip header-stat-chip-warn hidden" title="Kritische Trends (24h)">📈 <span id="headerTrendsCount">0</span> <span class="header-chip-scope">24h</span></span>
             <span id="headerInactiveChip" class="header-stat-chip header-stat-chip-inactive hidden" title="Inaktive Hosts (1h)">💤 <span id="headerInactiveCount">0</span> <span class="header-chip-scope">1h</span></span>
-            <button id="openChangePasswordButton" class="btn-emoji-pill" type="button" title="Passwort ändern">🔑</button>
             <button id="globalViewButton" class="btn-emoji-pill" type="button" title="Globale Ansichten">🌐</button>
             <button id="openAlarmSettingsButton" class="btn-emoji-pill" type="button" title="Einstellungen">⚙️</button>
             <button id="refreshButton" class="btn-emoji-pill" title="Neu laden">↻</button>
@@ -272,6 +248,31 @@
                 <button id="settingsBackToOverviewButton" class="btn-secondary" type="button">Zur Hauptansicht</button>
               </div>
             </div>
+
+            <section class="settings-subsection">
+              <div class="settings-subsection-head">
+                <h5>🔑 Passwort aendern</h5>
+                <p class="count compact">Eigenes Web-Passwort aktualisieren</p>
+              </div>
+              <div class="alarm-settings-grid">
+                <label>
+                  Aktuelles Passwort
+                  <input id="currentPasswordInput" type="password" autocomplete="current-password" />
+                </label>
+                <label>
+                  Neues Passwort
+                  <input id="newPasswordInput" type="password" autocomplete="new-password" />
+                </label>
+                <label>
+                  Neues Passwort bestaetigen
+                  <input id="confirmPasswordInput" type="password" autocomplete="new-password" />
+                </label>
+              </div>
+              <div class="alarm-settings-actions">
+                <button id="savePasswordButton" type="button">🔑 Passwort speichern</button>
+                <p id="passwordChangeStatus" class="count compact"></p>
+              </div>
+            </section>
 
             <section class="settings-subsection">
               <div class="settings-subsection-head">
