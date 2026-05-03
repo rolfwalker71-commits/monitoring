@@ -1098,6 +1098,8 @@ async function loadUserProfile(force = false) {
     if (alertInstantMinSeveritySelect) alertInstantMinSeveritySelect.value = profile.alert_instant_min_severity || "warning";
     if (alertInstantTelegramEnabledInput) alertInstantTelegramEnabledInput.checked = profile.alert_instant_telegram_enabled === true;
     if (alertTelegramChatIdInput) alertTelegramChatIdInput.value = asText(profile.alert_telegram_chat_id, "") === "-" ? "" : asText(profile.alert_telegram_chat_id, "");
+    const senderInput = document.getElementById("userEmailSenderInput");
+    if (senderInput) senderInput.value = asText(profile.email_sender, "") === "-" ? "" : asText(profile.email_sender, "");
 
     const oauth = profile.microsoft_oauth || {};
     const oauthConnected = oauth.connected === true;
@@ -1145,6 +1147,7 @@ async function saveUserProfile() {
     alert_instant_min_severity: document.getElementById("alertInstantMinSeveritySelect")?.value || "warning",
     alert_instant_telegram_enabled: document.getElementById("alertInstantTelegramEnabledInput")?.checked ?? false,
     alert_telegram_chat_id: document.getElementById("alertTelegramChatIdInput")?.value.trim() || "",
+    email_sender: document.getElementById("userEmailSenderInput")?.value.trim() || "",
   };
 
   if (payload.email_enabled && !payload.email_recipient) {

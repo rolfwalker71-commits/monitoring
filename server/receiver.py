@@ -421,6 +421,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_instant_telegram_enabled INTEGER NOT NULL DEFAULT 0")
         if "alert_telegram_chat_id" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_telegram_chat_id TEXT NOT NULL DEFAULT ''")
+        if "email_sender" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN email_sender TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS web_user_alert_subscriptions (
@@ -1084,8 +1086,9 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
                COALESCE(alert_email_last_sent_local_date, ''),
                COALESCE(alert_instant_mail_enabled, 0),
                COALESCE(alert_instant_min_severity, 'warning'),
-             COALESCE(alert_instant_telegram_enabled, 0),
-             COALESCE(alert_telegram_chat_id, ''),
+               COALESCE(alert_instant_telegram_enabled, 0),
+               COALESCE(alert_telegram_chat_id, ''),
+               COALESCE(email_sender, ''),
                COALESCE(updated_at_utc, '')
         FROM web_user_settings
         WHERE username = ?
@@ -1107,6 +1110,7 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
             "alert_instant_min_severity": "warning",
             "alert_instant_telegram_enabled": False,
             "alert_telegram_chat_id": "",
+            "email_sender": "",
             "updated_at_utc": "",
         }
     return {
@@ -1123,7 +1127,8 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
         "alert_instant_min_severity": str(row[10] or "warning"),
         "alert_instant_telegram_enabled": bool(int(row[11] or 0)),
         "alert_telegram_chat_id": str(row[12] or ""),
-        "updated_at_utc": str(row[13] or ""),
+        "email_sender": str(row[13] or ""),
+        "updated_at_utc": str(row[14] or ""),
     }
 
 
@@ -1159,6 +1164,9 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
     alert_telegram_chat_id = str(
         payload.get("alert_telegram_chat_id", existing.get("alert_telegram_chat_id", "")) or ""
     ).strip()
+    email_sender = str(
+        payload.get("email_sender", existing.get("email_sender", "")) or ""
+    ).strip()
     now_utc = utc_now_iso()
     conn.execute(
         """
@@ -1177,9 +1185,10 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_instant_min_severity,
             alert_instant_telegram_enabled,
             alert_telegram_chat_id,
+            email_sender,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             email_enabled = excluded.email_enabled,
             email_recipient = excluded.email_recipient,
@@ -1194,6 +1203,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_instant_min_severity = excluded.alert_instant_min_severity,
             alert_instant_telegram_enabled = excluded.alert_instant_telegram_enabled,
             alert_telegram_chat_id = excluded.alert_telegram_chat_id,
+            email_sender = excluded.email_sender,
             updated_at_utc = excluded.updated_at_utc
         """,
         (
@@ -1211,6 +1221,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_instant_min_severity,
             1 if alert_instant_telegram_enabled else 0,
             alert_telegram_chat_id,
+            email_sender,
             now_utc,
         ),
     )
@@ -1228,6 +1239,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
         "alert_instant_min_severity": alert_instant_min_severity,
         "alert_instant_telegram_enabled": alert_instant_telegram_enabled,
         "alert_telegram_chat_id": alert_telegram_chat_id,
+        "email_sender": email_sender,
         "updated_at_utc": now_utc,
     }
 
@@ -2468,6 +2480,7 @@ def send_instant_alert_mails_to_users(
                 body,
                 content_type="HTML",
                 attachments=graph_attachments,
+                sender=user_settings.get("email_sender", ""),
             )
         except Exception:
             pass
@@ -2996,6 +3009,7 @@ def send_microsoft_mail(
     *,
     content_type: str = "Text",
     attachments: list[dict] | None = None,
+    sender: str = "",
 ) -> tuple[bool, str]:
     message_payload = {
         "subject": subject,
@@ -3014,8 +3028,13 @@ def send_microsoft_mail(
     if attachments:
         message_payload["attachments"] = attachments
 
+    send_url = (
+        f"https://graph.microsoft.com/v1.0/users/{sender}/sendMail"
+        if sender
+        else "https://graph.microsoft.com/v1.0/me/sendMail"
+    )
     status, payload, raw = request_json(
-        "https://graph.microsoft.com/v1.0/me/sendMail",
+        send_url,
         method="POST",
         payload={
             "message": message_payload,
@@ -3038,6 +3057,7 @@ def send_microsoft_mail_multi(
     *,
     content_type: str = "Text",
     attachments: list[dict] | None = None,
+    sender: str = "",
 ) -> tuple[bool, str]:
     if not recipients:
         return False, "no recipients"
@@ -3052,6 +3072,7 @@ def send_microsoft_mail_multi(
             content,
             content_type=content_type,
             attachments=attachments,
+            sender=sender,
         )
         if ok:
             sent_count += 1
@@ -3180,6 +3201,7 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                     body,
                     content_type="HTML",
                     attachments=graph_attachments,
+                    sender=user_settings.get("email_sender", ""),
                 )
                 sent_to_anyone = True
             except Exception:
@@ -3252,6 +3274,7 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
                 trend_digest_subject(warnings, today_local),
                 trend_digest_html(username, warnings, 72),
                 content_type="HTML",
+                sender=settings.get("email_sender", ""),
             )
             if trend_ok:
                 conn.execute(
@@ -3273,6 +3296,7 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
                 alert_digest_html(username, alerts, graph_cids=graph_cids, graph_hours=24),
                 content_type="HTML",
                 attachments=graph_attachments,
+                sender=settings.get("email_sender", ""),
             )
             if alert_ok:
                 conn.execute(
@@ -6333,6 +6357,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         subject,
                         body,
                         content_type="HTML",
+                        sender=user_settings.get("email_sender", ""),
                     )
                     status = HTTPStatus.OK if mail_ok else HTTPStatus.BAD_REQUEST
                     self._send_json(status, {"status": "sent" if mail_ok else "failed", "channel": "mail", "details": mail_details})
@@ -6422,6 +6447,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         trend_digest_subject(warnings, datetime.now().astimezone().date().isoformat()) + " [TEST]",
                         trend_digest_html(username, warnings, 72),
                         content_type="HTML",
+                        sender=settings.get("email_sender", ""),
                     )
                 elif endpoint_mode == "alerts":
                     alarm_settings = get_alarm_settings(conn)
@@ -6500,6 +6526,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         body,
                         content_type="HTML",
                         attachments=graph_attachments,
+                        sender=settings.get("email_sender", ""),
                     )
                 else:
                     mail_ok, mail_details = send_microsoft_mail(
@@ -6512,6 +6539,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             f"Zeit: {utc_now_iso()}\n"
                             "Wenn diese Mail ankommt, funktioniert Microsoft Graph OAuth."
                         ),
+                        sender=settings.get("email_sender", ""),
                     )
                 conn.commit()
             self._send_json(
