@@ -429,6 +429,11 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   cursor: pointer;
 }
 
+.auto-refresh-last-update {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 /* Summary strip */
 .summary-strip {
   display: flex;

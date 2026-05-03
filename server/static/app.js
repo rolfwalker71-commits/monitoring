@@ -362,29 +362,14 @@ function startAutoRefreshCountdown() {
 }
 
 function updateSummaryStrip() {
-  const strip = document.getElementById("summaryStrip");
-  if (!strip) return;
-  const visible = state.isAuthenticated && state.totalHosts > 0;
-  strip.classList.toggle("hidden", !visible);
-  if (!visible) return;
-
-  const hostsEl = document.getElementById("summaryHosts");
-  const alertsEl = document.getElementById("summaryAlerts");
-  const trendsEl = document.getElementById("summaryTrends");
   const lastEl = document.getElementById("summaryLastUpdate");
-
-  if (hostsEl) hostsEl.textContent = `🖥️ ${state.totalHosts} Hosts`;
-  if (alertsEl) {
-    alertsEl.textContent = `🚨 ${state.globalOpenAlertsCount} Alerts`;
-    alertsEl.classList.toggle("stat-chip-alert", state.globalOpenAlertsCount > 0);
-    alertsEl.classList.toggle("stat-chip-ok", state.globalOpenAlertsCount === 0);
-  }
-  if (trendsEl) {
-    trendsEl.textContent = `📈 ${state.criticalTrendsCount} Trends`;
-    trendsEl.classList.toggle("stat-chip-warn", state.criticalTrendsCount > 0);
-  }
-  if (lastEl && autoRefreshLastRefreshAt) {
-    lastEl.textContent = `🕒 ${formatAutoRefreshTimestamp(autoRefreshLastRefreshAt)}`;
+  if (lastEl) {
+    if (autoRefreshLastRefreshAt) {
+      lastEl.textContent = `🕒 ${formatAutoRefreshTimestamp(autoRefreshLastRefreshAt)}`;
+      lastEl.classList.remove("hidden");
+    } else {
+      lastEl.classList.add("hidden");
+    }
   }
 }
 
