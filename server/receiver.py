@@ -7686,10 +7686,7 @@ def _do_telegram_ack(bot_token: str, chat_id: str, alert_id: int) -> None:
         conn.commit()
 
     reply = (
-        f"✅ Alert \\#{alert_id} quittiert\\!\n"
-        f"🖥️ {_mdv2(str(a_hostname))}\n"
-        f"📂 {_mdv2(str(a_mountpoint))}\n"
-        f"👤 {_mdv2(username)}"
+        f"✅ Alert \\#{alert_id} wurde quittiert\\."
     )
     telegram_send_to_chat(bot_token, chat_id, reply)
 
