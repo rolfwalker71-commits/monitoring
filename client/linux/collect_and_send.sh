@@ -22,6 +22,9 @@ LARGE_FILES_TOP_PER_FS="${LARGE_FILES_TOP_PER_FS:-10}"
 LARGE_FILES_CACHE_FILE="${LARGE_FILES_CACHE_FILE:-/var/lib/monitoring-agent/large-files-cache.json}"
 LARGE_FILES_EXCLUDE_PATHS="${LARGE_FILES_EXCLUDE_PATHS:-/hana/data/.snapshot}"
 LARGE_FILES_SCAN_FORCE="${LARGE_FILES_SCAN_FORCE:-0}"
+SAP_B1_CATALINA_OUT_PATH="${SAP_B1_CATALINA_OUT_PATH:-/usr/sap/SAPBusinessOne/Common/tomcat/logs/catalina.out}"
+SAP_B1_BUSINESSONE_LOG_DIR="${SAP_B1_BUSINESSONE_LOG_DIR:-/usr/sap/SAPBusinessOne/home/b1service0/SAP/SAP Business One/Log/BusinessOne}"
+SAP_B1_SIZE_TIMEOUT_SEC="${SAP_B1_SIZE_TIMEOUT_SEC:-20}"
 CURL_CONNECT_TIMEOUT_SEC="${CURL_CONNECT_TIMEOUT_SEC:-10}"
 CURL_MAX_TIME_SEC="${CURL_MAX_TIME_SEC:-45}"
 SEND_JITTER_MAX_SEC="${SEND_JITTER_MAX_SEC:-300}"
@@ -76,6 +79,63 @@ count_queue_files() {
 
 json_escape() {
   printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+
+json_number_or_null() {
+  local value="$1"
+  if [[ "$value" =~ ^[0-9]+$ ]]; then
+    printf '%s' "$value"
+  else
+    printf 'null'
+  fi
+}
+
+collect_sap_business_one_json() {
+  local catalina_path="$SAP_B1_CATALINA_OUT_PATH"
+  local businessone_dir="$SAP_B1_BUSINESSONE_LOG_DIR"
+  local catalina_exists=false
+  local catalina_size=""
+  local catalina_error=""
+  local businessone_exists=false
+  local businessone_size=""
+  local businessone_error=""
+  local timeout_sec="$SAP_B1_SIZE_TIMEOUT_SEC"
+
+  if ! [[ "$timeout_sec" =~ ^[0-9]+$ ]] || [[ "$timeout_sec" -lt 1 ]]; then
+    timeout_sec=20
+  fi
+
+  if [[ -f "$catalina_path" ]]; then
+    catalina_exists=true
+    catalina_size="$(stat -c%s "$catalina_path" 2>/dev/null || true)"
+    if ! [[ "$catalina_size" =~ ^[0-9]+$ ]]; then
+      catalina_size=""
+      catalina_error="size read failed"
+    fi
+  fi
+
+  if [[ -d "$businessone_dir" ]]; then
+    businessone_exists=true
+    if command -v timeout >/dev/null 2>&1; then
+      businessone_size="$(timeout "${timeout_sec}s" du -sb "$businessone_dir" 2>/dev/null | awk '{print $1}' || true)"
+    else
+      businessone_size="$(du -sb "$businessone_dir" 2>/dev/null | awk '{print $1}' || true)"
+    fi
+    if ! [[ "$businessone_size" =~ ^[0-9]+$ ]]; then
+      businessone_size=""
+      businessone_error="size read failed or timeout"
+    fi
+  fi
+
+  printf '{"catalina_out":{"path":"%s","exists":%s,"size_bytes":%s,"error":"%s"},"businessone_log_dir":{"path":"%s","exists":%s,"size_bytes":%s,"error":"%s"}}' \
+    "$(json_escape "$catalina_path")" \
+    "$catalina_exists" \
+    "$(json_number_or_null "$catalina_size")" \
+    "$(json_escape "$catalina_error")" \
+    "$(json_escape "$businessone_dir")" \
+    "$businessone_exists" \
+    "$(json_number_or_null "$businessone_size")" \
+    "$(json_escape "$businessone_error")"
 }
 
 upsert_config_value() {
@@ -899,6 +959,7 @@ CONTAINERS_JSON="$(collect_containers_json)"
 AGENT_UPDATE_JSON="$(collect_update_log_json)"
 AGENT_CONFIG_JSON="$(collect_agent_config_json)"
 LARGE_FILES_JSON="$(collect_large_files_json)"
+SAP_BUSINESS_ONE_JSON="$(collect_sap_business_one_json)"
 SEND_STARTED_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 DOCKER_AVAILABLE=false
@@ -969,7 +1030,8 @@ PAYLOAD=$(cat <<EOF
   },
   "agent_update": ${AGENT_UPDATE_JSON},
   "agent_config": ${AGENT_CONFIG_JSON},
-  "large_files": ${LARGE_FILES_JSON}
+  "large_files": ${LARGE_FILES_JSON},
+  "sap_business_one": ${SAP_BUSINESS_ONE_JSON}
 }
 EOF
 )

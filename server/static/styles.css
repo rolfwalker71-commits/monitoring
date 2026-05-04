@@ -3159,6 +3159,72 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   font-size: 13px;
 }
 
+.sap-b1-card {
+  border: 1px solid #93c5fd;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
+}
+
+.sap-b1-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.sap-b1-item {
+  border: 1px solid #d4e4f7;
+  border-radius: 8px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.sap-b1-item header {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e3a5f;
+  margin-bottom: 6px;
+}
+
+.sap-b1-path {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #334155;
+  word-break: break-word;
+}
+
+.sap-path-full {
+  white-space: normal;
+}
+
+.sap-path-dir {
+  color: #64748b;
+}
+
+.sap-path-name {
+  color: #0f172a;
+  font-weight: 700;
+  background: #e0ecff;
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.sap-b1-size-row {
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.sap-b1-size-label {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.sap-b1-size-value {
+  font-size: 13px;
+  color: #0f172a;
+}
+
 .fs-table {
   margin-top: 0;
 }
@@ -3499,6 +3565,41 @@ body[data-theme="dark"] .detail-card {
   border-color: #2a3c59;
   color: var(--text);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+body[data-theme="dark"] .sap-b1-card {
+  border-color: #1d4ed8;
+  background: linear-gradient(180deg, #10233f 0%, #0f1d34 100%);
+}
+
+body[data-theme="dark"] .sap-b1-item {
+  border-color: #334155;
+  background: #0b1628;
+}
+
+body[data-theme="dark"] .sap-b1-item header {
+  color: #bfdbfe;
+}
+
+body[data-theme="dark"] .sap-b1-path {
+  color: #cbd5e1;
+}
+
+body[data-theme="dark"] .sap-path-dir {
+  color: #94a3b8;
+}
+
+body[data-theme="dark"] .sap-path-name {
+  color: #dbeafe;
+  background: rgba(59, 130, 246, 0.28);
+}
+
+body[data-theme="dark"] .sap-b1-size-label {
+  color: #94a3b8;
+}
+
+body[data-theme="dark"] .sap-b1-size-value {
+  color: #e2e8f0;
 }
 
 body[data-theme="dark"] .detail-card:hover {

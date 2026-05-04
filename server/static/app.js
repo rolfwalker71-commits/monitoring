@@ -2700,6 +2700,65 @@ function renderPathCell(value, maxLen = 54) {
   return `<span class="path-cell" title="${escapeHtml(full)}">${escapeHtml(compact)}</span>`;
 }
 
+function renderPathWithNameHighlight(value) {
+  const full = asText(value, "-");
+  if (full === "-") {
+    return '<span class="sap-path-full">-</span>';
+  }
+
+  const separatorIndex = full.lastIndexOf("/");
+  if (separatorIndex < 0) {
+    return `<span class="sap-path-full"><span class="sap-path-name">${escapeHtml(full)}</span></span>`;
+  }
+
+  const dirPart = full.slice(0, separatorIndex + 1);
+  const namePart = full.slice(separatorIndex + 1) || "/";
+  return `<span class="sap-path-full"><span class="sap-path-dir">${escapeHtml(dirPart)}</span><span class="sap-path-name">${escapeHtml(namePart)}</span></span>`;
+}
+
+function renderSapPathSizeItem(title, item, missingText) {
+  const block = item && typeof item === "object" ? item : {};
+  const pathValue = asText(block.path, "-");
+  const exists = block.exists === true;
+  const sizeNumber = Number(block.size_bytes);
+  const sizeText = exists
+    ? (Number.isFinite(sizeNumber) && sizeNumber >= 0 ? formatBytes(sizeNumber) : "n/a")
+    : missingText;
+
+  return `
+    <article class="sap-b1-item">
+      <header>${escapeHtml(title)}</header>
+      <div class="sap-b1-path" title="${escapeHtml(pathValue)}">${renderPathWithNameHighlight(pathValue)}</div>
+      <div class="sap-b1-size-row">
+        <span class="sap-b1-size-label">Groesse</span>
+        <strong class="sap-b1-size-value">${escapeHtml(sizeText)}</strong>
+      </div>
+    </article>
+  `;
+}
+
+function renderSapBusinessOneCard(payload) {
+  const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
+  if (!sap) {
+    return `
+      <section class="detail-card sap-b1-card">
+        <h4>📦 SAP Business One Groessen</h4>
+        <p class="muted">Keine SAP-Business-One-Daten im Payload vorhanden.</p>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="detail-card sap-b1-card">
+      <h4>📦 SAP Business One Groessen</h4>
+      <div class="sap-b1-grid">
+        ${renderSapPathSizeItem("catalina.out", sap.catalina_out, "Datei nicht vorhanden")}
+        ${renderSapPathSizeItem("BusinessOne Log Ordner", sap.businessone_log_dir, "Ordner nicht vorhanden")}
+      </div>
+    </section>
+  `;
+}
+
 function deliveryLabel(modeValue, isDelayedValue) {
   const mode = asText(modeValue, "live").toLowerCase();
   return mode === "delayed" || isDelayedValue === true ? "DELAYED" : "LIVE";
@@ -3251,6 +3310,7 @@ function renderReportCard(report) {
   } else {
     detailContent = `
       <div class="detail-cards">
+        ${renderSapBusinessOneCard(payload)}
         <section class="detail-card">
           <h4>🌐 Netzwerk-Details</h4>
           ${renderNetworkTable(network)}
