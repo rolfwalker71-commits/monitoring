@@ -2990,7 +2990,8 @@ function renderFilesystemTable(filesystems) {
           <td>${mountpoint}</td>
           <td>${fsName}</td>
           <td>${fsType}</td>
-          <td class="fs-size-cell">${usedStr} / ${totalStr}</td>
+          <td class="fs-size-cell">${totalStr}</td>
+          <td class="fs-size-cell">${usedStr}</td>
           <td class="fs-avail-cell">${availStr}</td>
           <td class="fs-bar-cell">${progressBar}</td>
         </tr>
@@ -3006,7 +3007,8 @@ function renderFilesystemTable(filesystems) {
             <th>📁 Mountpoint</th>
             <th>💽 Filesystem</th>
             <th>🧩 Typ</th>
-            <th>📊 Belegt / Gesamt</th>
+            <th>📦 Gesamt</th>
+            <th>📊 Belegt</th>
             <th>✅ Frei</th>
             <th>📈 Auslastung</th>
           </tr>
