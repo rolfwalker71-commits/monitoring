@@ -2304,10 +2304,21 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   border-color: #f59e0b;
 }
 
+.host-mini-action.visibility {
+  color: #1e3a8a;
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.host-mini-action.visibility:hover {
+  border-color: #60a5fa;
+  background: #bfdbfe;
+}
+
 .host-mini-action.visibility.active {
-  color: #334155;
-  background: #e2e8f0;
-  border-color: #94a3b8;
+  color: #1e40af;
+  background: #c7d2fe;
+  border-color: #818cf8;
 }
 
 .host-mini-action.update {
@@ -3924,10 +3935,21 @@ body[data-theme="dark"] .host-mini-action.favorite.active {
   border-color: #d97706;
 }
 
+body[data-theme="dark"] .host-mini-action.visibility {
+  color: #93c5fd;
+  background: #10213c;
+  border-color: #2f4c75;
+}
+
+body[data-theme="dark"] .host-mini-action.visibility:hover {
+  border-color: #527fb8;
+  background: #163258;
+}
+
 body[data-theme="dark"] .host-mini-action.visibility.active {
-  color: #a9bfd9;
-  background: #1a2b42;
-  border-color: #3d567a;
+  color: #bfdbfe;
+  background: #1d3b66;
+  border-color: #5b8ccc;
 }
 
 body[data-theme="dark"] .host-unmute-action {
