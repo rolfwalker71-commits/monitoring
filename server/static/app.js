@@ -1196,6 +1196,13 @@ async function loadUserProfile(force = false) {
     recipientInput.value = asText(profile.email_recipient, "") === "-" ? "" : asText(profile.email_recipient, "");
     trendEnabledInput.checked = profile.trend_email_enabled === true;
     trendTimeInput.value = asText(profile.trend_email_time_hhmm, "08:00");
+    const trendRecipientInput = document.getElementById("trendDigestRecipientInput");
+    if (trendRecipientInput) trendRecipientInput.value = asText(profile.email_recipient, "") === "-" ? "" : asText(profile.email_recipient, "");
+    const digestMetrics = (profile.digest_trend_metrics || "cpu,memory,swap,filesystem").split(",").map((m) => m.trim());
+    ["digestMetricCpu", "digestMetricMemory", "digestMetricSwap", "digestMetricFilesystem"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.checked = digestMetrics.includes(id.replace("digestMetric", "").toLowerCase());
+    });
     alertEnabledInput.checked = profile.alert_email_enabled === true;
     alertTimeInput.value = asText(profile.alert_email_time_hhmm, "08:05");
     alertRecipientsInput.value = asText(profile.alert_email_recipients, "") === "-" ? "" : asText(profile.alert_email_recipients, "");
@@ -1246,11 +1253,20 @@ async function loadUserProfile(force = false) {
 async function saveUserProfile() {
   const enabledInput = document.getElementById("userEmailEnabledInput");
   const recipientInput = document.getElementById("userEmailRecipientInput");
+  const trendRecipientInput = document.getElementById("trendDigestRecipientInput");
+  // Sync digest recipient back to main email_recipient field if it changed
+  if (trendRecipientInput && trendRecipientInput.value.trim()) {
+    recipientInput.value = trendRecipientInput.value.trim();
+  }
   const payload = {
     email_enabled: enabledInput.checked,
     email_recipient: recipientInput.value.trim(),
     trend_email_enabled: document.getElementById("trendEmailEnabledInput").checked,
     trend_email_time_hhmm: document.getElementById("trendEmailTimeInput").value || "08:00",
+    digest_trend_metrics: ["digestMetricCpu", "digestMetricMemory", "digestMetricSwap", "digestMetricFilesystem"]
+      .filter((id) => document.getElementById(id)?.checked)
+      .map((id) => id.replace("digestMetric", "").toLowerCase())
+      .join(",") || "cpu,memory,swap,filesystem",
     alert_email_enabled: document.getElementById("alertEmailEnabledInput").checked,
     alert_email_time_hhmm: document.getElementById("alertEmailTimeInput").value || "08:05",
     alert_email_recipients: document.getElementById("alertEmailRecipientsInput").value.trim(),

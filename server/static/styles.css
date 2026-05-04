@@ -843,6 +843,45 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   gap: 6px;
 }
 
+.settings-fieldset-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-fieldset-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.settings-checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.settings-checkbox-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: normal;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+
+.settings-checkbox-group label:hover {
+  background: #f1f5f9;
+}
+
+.settings-checkbox-group input[type="checkbox"] {
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+}
+
 .alarm-settings-actions {
   margin-top: 10px;
   display: flex;
@@ -3734,6 +3773,14 @@ body[data-theme="dark"] .alarm-settings-grid label,
 body[data-theme="dark"] .login-card label,
 body[data-theme="dark"] th {
   color: var(--muted);
+}
+
+body[data-theme="dark"] .settings-fieldset-label {
+  color: #7fa0c0;
+}
+
+body[data-theme="dark"] .settings-checkbox-group label:hover {
+  background: #1a2b42;
 }
 
 body[data-theme="dark"] .login-card {

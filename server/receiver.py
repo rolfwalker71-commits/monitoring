@@ -444,6 +444,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN email_sender TEXT NOT NULL DEFAULT ''")
         if "critical_trends_metrics" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN critical_trends_metrics TEXT NOT NULL DEFAULT 'filesystem'")
+        if "digest_trend_metrics" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN digest_trend_metrics TEXT NOT NULL DEFAULT 'cpu,memory,swap,filesystem'")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS web_user_alert_subscriptions (
@@ -1217,7 +1219,8 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
                COALESCE(alert_telegram_chat_id, ''),
                COALESCE(email_sender, ''),
                COALESCE(updated_at_utc, ''),
-               COALESCE(critical_trends_metrics, 'filesystem')
+               COALESCE(critical_trends_metrics, 'filesystem'),
+               COALESCE(digest_trend_metrics, 'cpu,memory,swap,filesystem')
         FROM web_user_settings
         WHERE username = ?
         """,
@@ -1243,6 +1246,7 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
             "email_sender": "",
             "updated_at_utc": "",
             "critical_trends_metrics": "filesystem",
+            "digest_trend_metrics": "cpu,memory,swap,filesystem",
         }
     return {
         "email_enabled": bool(int(row[0] or 0)),
@@ -1263,6 +1267,7 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
         "email_sender": str(row[15] or ""),
         "updated_at_utc": str(row[16] or ""),
         "critical_trends_metrics": str(row[17] or "filesystem"),
+        "digest_trend_metrics": str(row[18] or "cpu,memory,swap,filesystem"),
     }
 
 
@@ -1310,6 +1315,9 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
     critical_trends_metrics = str(
         payload.get("critical_trends_metrics", existing.get("critical_trends_metrics", "filesystem")) or "filesystem"
     ).strip()
+    digest_trend_metrics = str(
+        payload.get("digest_trend_metrics", existing.get("digest_trend_metrics", "cpu,memory,swap,filesystem")) or "cpu,memory,swap,filesystem"
+    ).strip()
     now_utc = utc_now_iso()
     conn.execute(
         """
@@ -1332,9 +1340,10 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_telegram_chat_id,
             email_sender,
             critical_trends_metrics,
+            digest_trend_metrics,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             email_enabled = excluded.email_enabled,
             email_recipient = excluded.email_recipient,
@@ -1353,6 +1362,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_telegram_chat_id = excluded.alert_telegram_chat_id,
             email_sender = excluded.email_sender,
             critical_trends_metrics = excluded.critical_trends_metrics,
+            digest_trend_metrics = excluded.digest_trend_metrics,
             updated_at_utc = excluded.updated_at_utc
         """,
         (
@@ -1374,6 +1384,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_telegram_chat_id,
             email_sender,
             critical_trends_metrics,
+            digest_trend_metrics,
             now_utc,
         ),
     )
@@ -1395,6 +1406,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
         "alert_telegram_chat_id": alert_telegram_chat_id,
         "email_sender": email_sender,
         "critical_trends_metrics": critical_trends_metrics,
+        "digest_trend_metrics": digest_trend_metrics,
         "updated_at_utc": now_utc,
     }
 
@@ -3112,6 +3124,7 @@ def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
         "alert_instant_telegram_enabled": settings["alert_instant_telegram_enabled"],
         "alert_telegram_chat_id": settings["alert_telegram_chat_id"],
         "email_sender": settings["email_sender"],
+        "digest_trend_metrics": settings.get("digest_trend_metrics", "cpu,memory,swap,filesystem"),
         "mail_oauth_available": oauth_is_configured(oauth_settings),
         "microsoft_oauth": {
             "connected": connection is not None,
@@ -3619,7 +3632,9 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
             continue
 
         if send_trend:
-            warnings = collect_critical_trends(conn, 72)
+            all_warnings = collect_critical_trends(conn, 72)
+            digest_metrics = [m.strip() for m in settings.get("digest_trend_metrics", "cpu,memory,swap,filesystem").split(",") if m.strip()]
+            warnings = [w for w in all_warnings if w.get("type") in digest_metrics] if digest_metrics else all_warnings
             trend_ok, _trend_details = send_microsoft_mail(
                 access_token,
                 recipient,

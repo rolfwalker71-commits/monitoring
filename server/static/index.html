@@ -206,10 +206,10 @@
                 </label>
                 <fieldset class="chart-metrics-control">
                   <legend>Metriken</legend>
-                  <label><input type="checkbox" id="ctMetricCpu" /> CPU</label>
-                  <label><input type="checkbox" id="ctMetricMemory" /> RAM</label>
-                  <label><input type="checkbox" id="ctMetricSwap" /> SWAP</label>
-                  <label><input type="checkbox" id="ctMetricFilesystem" checked /> Filesystem</label>
+                  <label><input type="checkbox" id="ctMetricCpu" /> ⚙️ CPU</label>
+                  <label><input type="checkbox" id="ctMetricMemory" /> 🧠 RAM</label>
+                  <label><input type="checkbox" id="ctMetricSwap" /> 🔃 SWAP</label>
+                  <label><input type="checkbox" id="ctMetricFilesystem" checked /> 💾 Filesystem</label>
                 </fieldset>
                 <button id="refreshCriticalTrendsButton" type="button" class="btn-secondary">Neu laden</button>
               </div>
@@ -346,6 +346,19 @@
                   Versandzeit (feste Zeitzone: Europe/Zurich)
                   <input id="trendEmailTimeInput" type="time" />
                 </label>
+                <label>
+                  Empfaenger Mail-Adresse
+                  <input id="trendDigestRecipientInput" type="email" placeholder="alerts@example.com" />
+                </label>
+                <div class="settings-fieldset-row">
+                  <span class="settings-fieldset-label">Metriken im Digest</span>
+                  <div class="settings-checkbox-group">
+                    <label><input type="checkbox" id="digestMetricCpu" /> ⚙️ CPU</label>
+                    <label><input type="checkbox" id="digestMetricMemory" /> 🧠 RAM</label>
+                    <label><input type="checkbox" id="digestMetricSwap" /> 🔃 SWAP</label>
+                    <label><input type="checkbox" id="digestMetricFilesystem" /> 💾 Filesystem</label>
+                  </div>
+                </div>
               </div>
               <div class="alarm-settings-actions">
                 <button id="testTrendDigestMailButton" type="button">Trend-Testmail senden</button>
