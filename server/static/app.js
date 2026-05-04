@@ -3593,10 +3593,10 @@ function renderSingleHostCard(host) {
       <strong class="host-title-line">
         <span>${escapeHtml(displayName)}</span>
       </strong>
-      <span>🖥️ ${escapeHtml(hostname)} &nbsp;·&nbsp; 🧷 ${escapeHtml(asText(host.agent_version))}</span>
-      <span>🌐 ${escapeHtml(asText(host.primary_ip))} &nbsp;·&nbsp; 📬 ${hostDelivery} | 🗃️ Q${hostQueueDepth}</span>
+      <span>🖥️ ${escapeHtml(hostname)}</span>
+      <span>🌐 ${escapeHtml(asText(host.primary_ip))} &nbsp;·&nbsp; 📬 ${hostDelivery}</span>
       <span>⏱️ Zustellung: ${escapeHtml(hostDeliveryLag)}</span>
-      <span>🚨 ${openAlertCount} (krit. ${openCriticalAlertCount}) &nbsp;·&nbsp; 📦 ${Number(host.report_count || 0).toLocaleString("de-DE")}</span>
+      <span>🧷 ${escapeHtml(asText(host.agent_version))} &nbsp;·&nbsp; 📦 ${Number(host.report_count || 0).toLocaleString("de-DE")}</span>
       <span>🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
       <span class="host-card-actions">
         <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👁️" : "🙈"}</button>
