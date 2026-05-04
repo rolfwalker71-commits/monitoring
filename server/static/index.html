@@ -536,9 +536,17 @@
                       <input id="telegramEnabledInput" type="checkbox" />
                       Telegram aktivieren
                     </label>
+                    <label class="checkbox-line">
+                      <input id="inactiveHostAlertEnabledInput" type="checkbox" />
+                      Inaktive Hosts alarmieren
+                    </label>
                     <label>
                       Heads-Up Interval (Stunden, 0=aus)
                       <input id="alertReminderIntervalHoursInput" type="number" min="0" max="168" step="1" />
+                    </label>
+                    <label>
+                      Inaktiv ab (Stunden)
+                      <input id="inactiveHostAlertHoursInput" type="number" min="1" max="168" step="1" />
                     </label>
                     <label>
                       Telegram Bot Token

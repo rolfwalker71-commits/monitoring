@@ -1031,6 +1031,8 @@ async function loadAlarmSettings(force = false) {
   const telegramBotTokenInput = document.getElementById("telegramBotTokenInput");
   const telegramChatIdInput = document.getElementById("telegramChatIdInput");
   const alertReminderIntervalHoursInput = document.getElementById("alertReminderIntervalHoursInput");
+  const inactiveHostAlertEnabledInput = document.getElementById("inactiveHostAlertEnabledInput");
+  const inactiveHostAlertHoursInput = document.getElementById("inactiveHostAlertHoursInput");
 
   try {
     const response = await fetch("/api/v1/alarm-settings");
@@ -1054,6 +1056,14 @@ async function loadAlarmSettings(force = false) {
     telegramBotTokenInput.value = asText(settings.telegram_bot_token, "") === "-" ? "" : String(settings.telegram_bot_token || "");
     telegramChatIdInput.value = asText(settings.telegram_chat_id, "") === "-" ? "" : String(settings.telegram_chat_id || "");
     alertReminderIntervalHoursInput.value = String(Number(settings.alert_reminder_interval_hours || 0));
+    if (inactiveHostAlertEnabledInput) {
+      inactiveHostAlertEnabledInput.checked = settings.inactive_host_alert_enabled === true;
+    }
+    if (inactiveHostAlertHoursInput) {
+      const configuredHours = Number(settings.inactive_host_alert_hours || 3);
+      const clampedHours = Number.isFinite(configuredHours) ? Math.max(1, Math.min(168, Math.floor(configuredHours))) : 3;
+      inactiveHostAlertHoursInput.value = String(clampedHours);
+    }
 
     state.alarmSettingsLoaded = true;
     setAlarmSettingsStatus("Einstellungen geladen.");
@@ -1625,6 +1635,8 @@ async function saveAlarmSettings() {
   const telegramEnabledInput = document.getElementById("telegramEnabledInput");
   const telegramBotTokenInput = document.getElementById("telegramBotTokenInput");
   const telegramChatIdInput = document.getElementById("telegramChatIdInput");
+  const inactiveHostAlertEnabledInput = document.getElementById("inactiveHostAlertEnabledInput");
+  const inactiveHostAlertHoursInput = document.getElementById("inactiveHostAlertHoursInput");
 
   const warning = Number(warningInput.value);
   const critical = Number(criticalInput.value);
@@ -1637,6 +1649,7 @@ async function saveAlarmSettings() {
   const warningConsecutiveHits = Number(warningConsecutiveHitsInput.value);
   const warningWindowMinutes = Number(warningWindowMinutesInput.value);
   const alertReminderIntervalHours = Number(document.getElementById("alertReminderIntervalHoursInput")?.value || 0);
+  const inactiveHostAlertHours = Number(inactiveHostAlertHoursInput?.value || 3);
 
   if (!Number.isFinite(warning) || !Number.isFinite(critical) || warning < 1 || critical > 100 || warning >= critical) {
     throw new Error("Schwellwerte ungueltig: Warnung muss kleiner als Kritisch sein.");
@@ -1676,6 +1689,8 @@ async function saveAlarmSettings() {
     telegram_bot_token: telegramBotTokenInput.value.trim(),
     telegram_chat_id: telegramChatIdInput.value.trim(),
     alert_reminder_interval_hours: Number.isFinite(alertReminderIntervalHours) ? Math.max(0, Math.min(168, Math.floor(alertReminderIntervalHours))) : 0,
+    inactive_host_alert_enabled: inactiveHostAlertEnabledInput?.checked === true,
+    inactive_host_alert_hours: Number.isFinite(inactiveHostAlertHours) ? Math.max(1, Math.min(168, Math.floor(inactiveHostAlertHours))) : 3,
   };
 
   const response = await fetch("/api/v1/alarm-settings", {
@@ -1720,6 +1735,7 @@ function formatPercent(value) {
 function renderAlertMountpointLabel(mountpoint, width = 60) {
   if (mountpoint === "cpu") return "🖥️ CPU-Auslastung";
   if (mountpoint === "ram") return "🧠 RAM-Auslastung";
+  if (mountpoint === "__inactive_host__") return "💤 Host inaktiv";
   return renderPathCell(mountpoint, width);
 }
 

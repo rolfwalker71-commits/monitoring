@@ -11,6 +11,7 @@ import os
 import re
 import secrets
 import sqlite3
+import threading
 import tempfile
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
@@ -51,6 +52,8 @@ RAM_WARNING_THRESHOLD_PERCENT = 85.0
 RAM_CRITICAL_THRESHOLD_PERCENT = 95.0
 RAM_ALERT_WINDOW_REPORTS = 4
 RAM_ALERT_MOUNTPOINT = "ram"
+INACTIVE_HOST_ALERT_MOUNTPOINT = "__inactive_host__"
+INACTIVE_HOST_ALERT_HOURS_DEFAULT = 3
 TELEGRAM_ENABLED_DEFAULT = os.getenv("MONITORING_TELEGRAM_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
 TELEGRAM_BOT_TOKEN_DEFAULT = os.getenv("MONITORING_TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID_DEFAULT = os.getenv("MONITORING_TELEGRAM_CHAT_ID", "")
@@ -2258,6 +2261,8 @@ def alert_instant_mail_subject(event_type: str, hostname: str, severity: str, di
         "escalated": "Alarm eskaliert",
         "resolved": "Alarm behoben",
         "reminder": "Heads-Up: Alert noch offen",
+        "inactive": "Host inaktiv",
+        "inactive_resolved": "Host wieder aktiv",
     }.get(event_type, "Alarm")
     title_target = display_name.strip() or hostname
     return f"[Monitoring] [{sev_label}] {event_label}: {title_target}"
@@ -2289,8 +2294,9 @@ def alert_instant_mail_html(
         "escalated": "Alarm eskaliert",
         "resolved": "Alarm behoben",
         "reminder": "Heads-Up: Alert noch offen",
+        "inactive": "Host inaktiv",
+        "inactive_resolved": "Host wieder aktiv",
     }.get(event_type, "Alarm")
-    used_str = f"{used_percent:.1f}"
     customer_title = display_name.strip() or hostname
     normalized_country_code = normalize_country_code(country_code)
     country_badge = normalized_country_code if normalized_country_code else "--"
@@ -2322,10 +2328,12 @@ def alert_instant_mail_html(
     graph_alt = html.escape(f"Auslastungsverlauf {customer_title}: {mountpoint}")
     is_cpu_alert = mountpoint == CPU_ALERT_MOUNTPOINT
     is_ram_alert = mountpoint == RAM_ALERT_MOUNTPOINT
+    is_inactive_alert = mountpoint == INACTIVE_HOST_ALERT_MOUNTPOINT
     is_resource_alert = is_resource_alert_mountpoint(mountpoint)
     resource_row_label = "Ressource" if is_resource_alert else "Mountpoint"
-    resource_row_value = "CPU" if is_cpu_alert else ("RAM" if is_ram_alert else mountpoint)
-    value_row_label = "Auslastung"
+    resource_row_value = "CPU" if is_cpu_alert else ("RAM" if is_ram_alert else ("Host inaktiv" if is_inactive_alert else mountpoint))
+    value_row_label = "Inaktiv seit" if is_inactive_alert else "Auslastung"
+    used_value_display = f"{used_percent:.1f} h" if is_inactive_alert else f"{used_percent:.1f}%"
     platform_row = (
         "<div style='margin-top:4px;display:flex;align-items:center;gap:8px;color:#5f7590;'>"
         f"<img src='{html.escape(linux_logo_uri)}' alt='Linux' width='16' height='16' style='display:block;'>"
@@ -2375,7 +2383,7 @@ def alert_instant_mail_html(
         "<tr><td style='padding:8px 0;color:#64748b;'>Gemeldet am</td>"
         f"<td style='padding:8px 0;font-weight:600;'>{html.escape(reported_at)}</td></tr>"
         f"<tr><td style='padding:8px 0;color:#64748b;'>{html.escape(value_row_label)}</td>"
-        f"<td style='padding:8px 0;font-weight:600;'>{used_str}%</td></tr>"
+        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(used_value_display)}</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Schweregrad</td>"
         f"<td style='padding:8px 0;'><span style='display:inline-block;padding:2px 10px;border-radius:999px;background:{sev_bg};color:{sev_text};font-weight:700;font-size:12px;'>{sev_label}</span></td></tr>"
         "</table>"
@@ -2395,7 +2403,7 @@ def send_instant_alert_mails_to_users(
     severity: str,
     used_percent: float,
 ) -> None:
-    if event_type not in {"opened", "escalated", "resolved"}:
+    if event_type not in {"opened", "escalated", "resolved", "inactive", "inactive_resolved"}:
         return
     host_context = collect_host_mail_context(conn, hostname)
     reported_row = conn.execute(
@@ -2496,7 +2504,7 @@ def send_instant_alert_telegram_to_users(
     used_percent: float,
     display_name: str = "",
 ) -> None:
-    if event_type not in {"opened", "escalated", "resolved"}:
+    if event_type not in {"opened", "escalated", "resolved", "inactive", "inactive_resolved"}:
         return
 
     alarm_settings = get_alarm_settings(conn)
@@ -3217,6 +3225,85 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
             )
 
 
+def check_inactive_host_alerts(conn: sqlite3.Connection) -> None:
+    alarm_settings = get_alarm_settings(conn)
+    if not alarm_settings.get("inactive_host_alert_enabled"):
+        return
+
+    inactive_hours = max(1, int(alarm_settings.get("inactive_host_alert_hours") or INACTIVE_HOST_ALERT_HOURS_DEFAULT))
+    cutoff_iso = utc_hours_ago_iso(inactive_hours)
+    now_utc_dt = datetime.now(timezone.utc)
+    now_utc_iso = now_utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    rows = conn.execute(
+        """
+        SELECT hostname, MAX(received_at_utc) AS last_seen_utc
+        FROM reports
+        GROUP BY hostname
+        """
+    ).fetchall()
+
+    for row in rows:
+        hostname = str(row[0] or "").strip()
+        last_seen_utc = str(row[1] or "").strip()
+        if not hostname or not last_seen_utc:
+            continue
+
+        host_settings = get_host_settings(conn, hostname)
+        if bool(host_settings.get("is_hidden", False)):
+            _resolve_inactive_host_alert_if_open(conn, hostname, None, alarm_settings=alarm_settings, send_notification=False)
+            continue
+
+        if is_alert_muted(conn, hostname, INACTIVE_HOST_ALERT_MOUNTPOINT):
+            _resolve_inactive_host_alert_if_open(conn, hostname, None, alarm_settings=alarm_settings, send_notification=False)
+            continue
+
+        is_inactive = last_seen_utc < cutoff_iso
+        if not is_inactive:
+            _resolve_inactive_host_alert_if_open(conn, hostname, None, alarm_settings=alarm_settings, send_notification=False)
+            continue
+
+        open_row = conn.execute(
+            "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open'",
+            (hostname, INACTIVE_HOST_ALERT_MOUNTPOINT),
+        ).fetchone()
+
+        try:
+            last_seen_dt = datetime.fromisoformat(last_seen_utc.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            last_seen_dt = now_utc_dt
+        hours_inactive = max(0.0, round((now_utc_dt - last_seen_dt).total_seconds() / 3600.0, 1))
+
+        if open_row:
+            conn.execute(
+                "UPDATE alerts SET used_percent = ?, last_seen_at_utc = ? WHERE id = ?",
+                (hours_inactive, now_utc_iso, int(open_row[0])),
+            )
+            continue
+
+        conn.execute(
+            """
+            INSERT INTO alerts (
+                hostname, mountpoint, severity, used_percent, status,
+                created_at_utc, last_seen_at_utc, resolved_at_utc, report_id
+            ) VALUES (?, ?, 'warning', ?, 'open', ?, ?, NULL, NULL)
+            """,
+            (hostname, INACTIVE_HOST_ALERT_MOUNTPOINT, hours_inactive, now_utc_iso, now_utc_iso),
+        )
+
+        display_name = get_display_name_override(conn, hostname) or hostname
+        maybe_send_alert_message(
+            alarm_settings,
+            "inactive",
+            hostname,
+            INACTIVE_HOST_ALERT_MOUNTPOINT,
+            "warning",
+            hours_inactive,
+            conn=conn,
+            display_name=display_name,
+        )
+
+
 def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
     now_local = datetime.now(SCHEDULE_TIMEZONE)
     today_local = now_local.date().isoformat()
@@ -3346,7 +3433,9 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
                COALESCE(ram_critical_threshold_percent, 95),
                COALESCE(ram_alert_window_reports, 4),
                telegram_enabled, telegram_bot_token, telegram_chat_id, updated_at_utc,
-               COALESCE(alert_reminder_interval_hours, 0)
+               COALESCE(alert_reminder_interval_hours, 0),
+               COALESCE(inactive_host_alert_enabled, 0),
+               COALESCE(inactive_host_alert_hours, 3)
         FROM alarm_settings
         WHERE id = 1
         """
@@ -3370,6 +3459,8 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
             "telegram_chat_id": TELEGRAM_CHAT_ID_DEFAULT,
             "updated_at_utc": "",
             "alert_reminder_interval_hours": 0,
+            "inactive_host_alert_enabled": False,
+            "inactive_host_alert_hours": INACTIVE_HOST_ALERT_HOURS_DEFAULT,
         }
 
     return {
@@ -3507,9 +3598,11 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             telegram_bot_token,
             telegram_chat_id,
             updated_at_utc,
-            alert_reminder_interval_hours
+            alert_reminder_interval_hours,
+            inactive_host_alert_enabled,
+            inactive_host_alert_hours
         )
-        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             warning_threshold_percent = excluded.warning_threshold_percent,
             critical_threshold_percent = excluded.critical_threshold_percent,
@@ -3526,7 +3619,9 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             telegram_bot_token = excluded.telegram_bot_token,
             telegram_chat_id = excluded.telegram_chat_id,
             updated_at_utc = excluded.updated_at_utc,
-            alert_reminder_interval_hours = excluded.alert_reminder_interval_hours
+            alert_reminder_interval_hours = excluded.alert_reminder_interval_hours,
+            inactive_host_alert_enabled = excluded.inactive_host_alert_enabled,
+            inactive_host_alert_hours = excluded.inactive_host_alert_hours
         """,
         (
             normalized["warning_threshold_percent"],
@@ -3545,6 +3640,8 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             normalized["telegram_chat_id"],
             now_utc,
             normalized["alert_reminder_interval_hours"],
+            1 if normalized["inactive_host_alert_enabled"] else 0,
+            normalized["inactive_host_alert_hours"],
         ),
     )
 
@@ -3567,11 +3664,13 @@ _ALERT_ICON_PATHS: dict[str, Path] = {
     "escalated": STATIC_DIR / "icons" / "alertescalated.png",
     "resolved": STATIC_DIR / "icons" / "alertresolved.png",
     "reminder": STATIC_DIR / "icons" / "alertreminder.png",
+    "inactive": STATIC_DIR / "icons" / "inactivehost.png",
+    "inactive_resolved": STATIC_DIR / "icons" / "inactivehost.png",
 }
 
 
 def is_resource_alert_mountpoint(mountpoint: str) -> bool:
-    return mountpoint in {CPU_ALERT_MOUNTPOINT, RAM_ALERT_MOUNTPOINT}
+    return mountpoint in {CPU_ALERT_MOUNTPOINT, RAM_ALERT_MOUNTPOINT, INACTIVE_HOST_ALERT_MOUNTPOINT}
 
 # Characters that must be escaped in Telegram MarkdownV2
 _MDV2_RE = re.compile(r'([_*\[\]()~`>#+=|{}.!\\-])')
@@ -3663,6 +3762,8 @@ def build_telegram_alert_text(
         "opened": "🚨 ALERT OPEN",
         "escalated": "⬆️ ALERT ESCALATED",
         "resolved": "✅ ALERT RESOLVED",
+        "inactive": "💤 HOST INAKTIV",
+        "inactive_resolved": "✅ HOST WIEDER AKTIV",
     }.get(event_type, "⚠️ ALERT")
     sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
     title = display_name.strip() if display_name.strip() else hostname
@@ -3678,13 +3779,24 @@ def build_telegram_alert_text(
         resource_line = "🖥️ CPU\\-Auslastung"
     elif mountpoint == RAM_ALERT_MOUNTPOINT:
         resource_line = "🧠 RAM\\-Auslastung"
+    elif mountpoint == INACTIVE_HOST_ALERT_MOUNTPOINT:
+        resource_line = "💤 Host inaktiv"
     else:
         resource_line = f"📂 {_mdv2(mountpoint)}"
+    if mountpoint == INACTIVE_HOST_ALERT_MOUNTPOINT:
+        try:
+            used_text = f"{float(used_percent):.1f}"
+        except (TypeError, ValueError):
+            used_text = "-"
+        value_line = f"⏱️ {_mdv2(used_text)} h"
+    else:
+        value_line = f"📊 `{_mdv2(used_text)}`"
     return (
+        f"{_mdv2(icon)}\n"
         f"{hostname_part}\n"
         f"{resource_line}\n"
         f"{sev_icon} *{_mdv2(severity)}*\n"
-        f"📊 `{_mdv2(used_text)}`\n"
+        f"{value_line}\n"
         f"🕐 {_mdv2(now_local)}"
     )
 
@@ -4189,6 +4301,48 @@ def resolve_open_alerts_for_host(conn: sqlite3.Connection, hostname: str, report
         (now_utc, now_utc, report_id, hostname),
     )
     conn.execute("DELETE FROM alert_debounce WHERE hostname = ?", (hostname,))
+
+
+def _resolve_inactive_host_alert_if_open(
+    conn: sqlite3.Connection,
+    hostname: str,
+    report_id: int | None,
+    *,
+    alarm_settings: dict | None = None,
+    send_notification: bool = True,
+) -> bool:
+    row = conn.execute(
+        "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open' ORDER BY id DESC LIMIT 1",
+        (hostname, INACTIVE_HOST_ALERT_MOUNTPOINT),
+    ).fetchone()
+    if not row:
+        return False
+
+    now_utc = utc_now_iso()
+    alert_id = int(row[0])
+    conn.execute(
+        """
+        UPDATE alerts
+        SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
+        WHERE id = ?
+        """,
+        (now_utc, now_utc, report_id, alert_id),
+    )
+
+    if send_notification and alarm_settings and alarm_settings.get("inactive_host_alert_enabled"):
+        display_name = get_display_name_override(conn, hostname) or hostname
+        maybe_send_alert_message(
+            alarm_settings,
+            "inactive_resolved",
+            hostname,
+            INACTIVE_HOST_ALERT_MOUNTPOINT,
+            "ok",
+            0.0,
+            conn=conn,
+            display_name=display_name,
+        )
+
+    return True
 
 
 def prune_reports_for_host(conn: sqlite3.Connection, hostname: str, keep_count: int) -> None:
@@ -7373,12 +7527,20 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             prune_reports_for_host(conn, hostname, MAX_REPORTS_PER_HOST)
             alarm_settings = get_alarm_settings(conn)
             host_settings = get_host_settings(conn, hostname)
+            _resolve_inactive_host_alert_if_open(
+                conn,
+                hostname,
+                report_id,
+                alarm_settings=alarm_settings,
+                send_notification=not bool(host_settings.get("is_hidden", False)),
+            )
             if bool(host_settings.get("is_hidden", False)):
                 resolve_open_alerts_for_host(conn, hostname, report_id)
             else:
                 update_alerts_for_report(conn, hostname, report_id, filesystems, alarm_settings)
                 update_cpu_alerts_for_report(conn, hostname, report_id, payload, alarm_settings)
                 update_ram_alerts_for_report(conn, hostname, report_id, payload, alarm_settings)
+            check_inactive_host_alerts(conn)
             maybe_send_alert_reminders(conn)
             maybe_send_scheduled_user_mails(conn)
             conn.commit()
@@ -7393,9 +7555,28 @@ def main() -> None:
     args = parser.parse_args()
 
     init_db()
+    stop_event = threading.Event()
+
+    def inactive_alert_loop() -> None:
+        while not stop_event.is_set():
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    check_inactive_host_alerts(conn)
+                    conn.commit()
+            except Exception as exc:
+                print(f"inactive alert check failed: {exc}")
+            stop_event.wait(600)
+
+    threading.Thread(target=inactive_alert_loop, name="inactive-alert-checker", daemon=True).start()
     server = ThreadingHTTPServer((args.host, args.port), MonitoringHandler)
     print(f"Monitoring receiver running on http://{args.host}:{args.port}")
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stop_event.set()
+        server.server_close()
 
 
 if __name__ == "__main__":
