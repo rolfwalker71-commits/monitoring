@@ -3818,7 +3818,7 @@ def build_telegram_alert_text(
         f"🕐 {_mdv2(now_local)}"
     )
     if alert_id is not None and event_type not in {"resolved", "inactive_resolved"}:
-        msg += f"\n🆔 ID {alert_id}  \u2022  Quittieren mit `/ack {alert_id}`"
+        msg += f"\n🆔 ID {alert_id}"
     return msg
 
 
