@@ -178,6 +178,8 @@ def init_db() -> None:
                 telegram_enabled INTEGER NOT NULL,
                 telegram_bot_token TEXT NOT NULL,
                 telegram_chat_id TEXT NOT NULL,
+                inactive_host_alert_enabled INTEGER NOT NULL DEFAULT 0,
+                inactive_host_alert_hours INTEGER NOT NULL DEFAULT 3,
                 updated_at_utc TEXT NOT NULL
             )
             """
@@ -206,6 +208,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN ram_alert_window_reports INTEGER NOT NULL DEFAULT 4")
         if "alert_reminder_interval_hours" not in existing_alarm_columns:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN alert_reminder_interval_hours INTEGER NOT NULL DEFAULT 0")
+        if "inactive_host_alert_enabled" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN inactive_host_alert_enabled INTEGER NOT NULL DEFAULT 0")
+        if "inactive_host_alert_hours" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN inactive_host_alert_hours INTEGER NOT NULL DEFAULT 3")
 
         existing_alert_columns = {
             str(row[1])
@@ -3480,6 +3486,8 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
         "telegram_chat_id": str(row[13] or ""),
         "updated_at_utc": str(row[14] or ""),
         "alert_reminder_interval_hours": max(0, int(row[15] or 0)) if row[15] is not None else 0,
+        "inactive_host_alert_enabled": coerce_bool(row[16]) if len(row) > 16 else False,
+        "inactive_host_alert_hours": max(1, min(int(row[17] or INACTIVE_HOST_ALERT_HOURS_DEFAULT), 168)) if len(row) > 17 else INACTIVE_HOST_ALERT_HOURS_DEFAULT,
     }
 
 
@@ -3555,6 +3563,12 @@ def normalize_alarm_settings_payload(payload: dict, existing: dict | None = None
         ram_window = RAM_ALERT_WINDOW_REPORTS
     ram_window = max(2, min(ram_window, 24))
 
+    try:
+        inactive_hours = int(payload.get("inactive_host_alert_hours", base.get("inactive_host_alert_hours", INACTIVE_HOST_ALERT_HOURS_DEFAULT)))
+    except (TypeError, ValueError):
+        inactive_hours = INACTIVE_HOST_ALERT_HOURS_DEFAULT
+    inactive_hours = max(1, min(inactive_hours, 168))
+
     return {
         "warning_threshold_percent": warning,
         "critical_threshold_percent": critical,
@@ -3571,6 +3585,8 @@ def normalize_alarm_settings_payload(payload: dict, existing: dict | None = None
         "telegram_bot_token": str(payload.get("telegram_bot_token", base.get("telegram_bot_token", "")) or "").strip(),
         "telegram_chat_id": str(payload.get("telegram_chat_id", base.get("telegram_chat_id", "")) or "").strip(),
         "alert_reminder_interval_hours": max(0, min(int(payload.get("alert_reminder_interval_hours", base.get("alert_reminder_interval_hours", 0)) or 0), 168)),
+        "inactive_host_alert_enabled": coerce_bool(payload.get("inactive_host_alert_enabled", base.get("inactive_host_alert_enabled", False))),
+        "inactive_host_alert_hours": inactive_hours,
     }
 
 
