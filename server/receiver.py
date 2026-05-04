@@ -2546,7 +2546,10 @@ def send_instant_alert_telegram_to_users(
             continue
 
         text = f"👤 *{_mdv2(username)}*\n{alert_text}"
-        telegram_send_to_chat(bot_token, chat_id, text, image_path=icon_path)
+        markup = None
+        if alert_id is not None and event_type not in {"resolved", "inactive_resolved"}:
+            markup = json.dumps({"inline_keyboard": [[{"text": "✅ Quittieren", "callback_data": f"ack:{alert_id}"}]]})
+        telegram_send_to_chat(bot_token, chat_id, text, image_path=icon_path, reply_markup=markup)
 
 
 def get_instant_alert_telegram_chat_ids(conn: sqlite3.Connection, hostname: str, severity: str) -> set[str]:
@@ -3707,13 +3710,15 @@ def _build_multipart(fields: dict, files: dict) -> tuple[bytes, str]:
     return body, f"multipart/form-data; boundary={boundary.decode()}"
 
 
-def telegram_send_to_chat(bot_token: str, chat_id: str, text: str, image_path: Path | None = None) -> tuple[bool, str]:
+def telegram_send_to_chat(bot_token: str, chat_id: str, text: str, image_path: Path | None = None, reply_markup: str | None = None) -> tuple[bool, str]:
     # Try sendPhoto with status icon; fall back to sendMessage on any error
     photo_path = (image_path if image_path and image_path.is_file() else (_LOGO_PATH if _LOGO_PATH.is_file() else None))
     if photo_path:
         try:
             photo_data = photo_path.read_bytes()
-            fields = {"chat_id": chat_id, "caption": text[:1024], "parse_mode": "MarkdownV2"}
+            fields: dict = {"chat_id": chat_id, "caption": text[:1024], "parse_mode": "MarkdownV2"}
+            if reply_markup:
+                fields["reply_markup"] = reply_markup
             files = {"photo": (photo_path.name, photo_data, "image/png")}
             body, content_type = _build_multipart(fields, files)
             endpoint = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
@@ -3727,14 +3732,15 @@ def telegram_send_to_chat(bot_token: str, chat_id: str, text: str, image_path: P
             pass  # fall through to plain text
 
     endpoint = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    payload = parse.urlencode(
-        {
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": "MarkdownV2",
-            "disable_web_page_preview": "true",
-        }
-    ).encode("utf-8")
+    params: dict = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "MarkdownV2",
+        "disable_web_page_preview": "true",
+    }
+    if reply_markup:
+        params["reply_markup"] = reply_markup
+    payload = parse.urlencode(params).encode("utf-8")
 
     req = request.Request(endpoint, data=payload, method="POST")
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
@@ -3749,7 +3755,7 @@ def telegram_send_to_chat(bot_token: str, chat_id: str, text: str, image_path: P
         return False, str(exc)
 
 
-def telegram_send(settings: dict, text: str, image_path: Path | None = None) -> tuple[bool, str]:
+def telegram_send(settings: dict, text: str, image_path: Path | None = None, reply_markup: str | None = None) -> tuple[bool, str]:
     if not settings.get("telegram_enabled"):
         return False, "telegram disabled"
 
@@ -3758,7 +3764,7 @@ def telegram_send(settings: dict, text: str, image_path: Path | None = None) -> 
     if not bot_token or not chat_id:
         return False, "telegram bot token/chat id missing"
 
-    return telegram_send_to_chat(bot_token, chat_id, text, image_path=image_path)
+    return telegram_send_to_chat(bot_token, chat_id, text, image_path=image_path, reply_markup=reply_markup)
 
 
 def build_telegram_alert_text(
@@ -3812,7 +3818,7 @@ def build_telegram_alert_text(
         f"🕐 {_mdv2(now_local)}"
     )
     if alert_id is not None and event_type not in {"resolved", "inactive_resolved"}:
-        msg += f"\n🆔 `/ack {alert_id}`"
+        msg += f"\n🆔 ID {alert_id}  \u2022  Quittieren mit `/ack {alert_id}`"
     return msg
 
 
@@ -3851,7 +3857,10 @@ def maybe_send_alert_message(
             display_name=display_name,
             alert_id=alert_id,
         )
-        telegram_send(settings, text, image_path=_ALERT_ICON_PATHS.get(event_type))
+        markup = None
+        if alert_id is not None and event_type not in {"resolved", "inactive_resolved"}:
+            markup = json.dumps({"inline_keyboard": [[{"text": "✅ Quittieren", "callback_data": f"ack:{alert_id}"}]]})
+        telegram_send(settings, text, image_path=_ALERT_ICON_PATHS.get(event_type), reply_markup=markup)
     if conn is not None:
         send_instant_alert_telegram_to_users(
             conn,
@@ -7575,7 +7584,28 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
 
 def _handle_telegram_ack_update(bot_token: str, update: dict) -> None:
-    """Process a single Telegram update: handle /ack <id> commands."""
+    """Process a single Telegram update: handle /ack commands and inline keyboard callbacks."""
+    # --- Inline keyboard callback ---
+    callback = update.get("callback_query") or {}
+    if callback:
+        callback_id = str(callback.get("id", ""))
+        cb_data = str(callback.get("data", ""))
+        cb_chat_id = str(callback.get("message", {}).get("chat", {}).get("id", "") or callback.get("from", {}).get("id", ""))
+        # Answer callback immediately to remove loading spinner
+        if callback_id:
+            try:
+                _telegram_answer_callback(bot_token, callback_id)
+            except Exception:
+                pass
+        if cb_data.startswith("ack:") and cb_chat_id:
+            try:
+                alert_id = int(cb_data.split(":", 1)[1])
+            except (ValueError, IndexError):
+                return
+            _do_telegram_ack(bot_token, cb_chat_id, alert_id)
+        return
+
+    # --- Text command /ack <id> ---
     message = update.get("message") or {}
     text = (message.get("text") or "").strip()
     chat_id = str(message.get("chat", {}).get("id", ""))
@@ -7584,7 +7614,7 @@ def _handle_telegram_ack_update(bot_token: str, update: dict) -> None:
 
     parts = text.split()
     if len(parts) < 2:
-        telegram_send_to_chat(bot_token, chat_id, "Verwendung: `/ack <Alert-ID>`")
+        telegram_send_to_chat(bot_token, chat_id, "Verwendung: `/ack <Alert\\-ID>`")
         return
 
     try:
@@ -7593,6 +7623,21 @@ def _handle_telegram_ack_update(bot_token: str, update: dict) -> None:
         telegram_send_to_chat(bot_token, chat_id, _mdv2("Ungültige Alert-ID. Verwendung: /ack <Nummer>"))
         return
 
+    _do_telegram_ack(bot_token, chat_id, alert_id)
+
+
+def _telegram_answer_callback(bot_token: str, callback_query_id: str) -> None:
+    """Acknowledge a Telegram callback_query to remove the loading spinner."""
+    endpoint = f"https://api.telegram.org/bot{bot_token}/answerCallbackQuery"
+    payload = parse.urlencode({"callback_query_id": callback_query_id}).encode("utf-8")
+    req = request.Request(endpoint, data=payload, method="POST")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    with request.urlopen(req, timeout=10) as resp:
+        resp.read()
+
+
+def _do_telegram_ack(bot_token: str, chat_id: str, alert_id: int) -> None:
+    """Perform the actual acknowledgement for a given alert_id and send a reply."""
     with sqlite3.connect(DB_PATH) as conn:
         user_row = conn.execute(
             """
@@ -7671,7 +7716,7 @@ def _telegram_ack_poll_loop() -> None:
         try:
             url = (
                 f"https://api.telegram.org/bot{current_token}/getUpdates"
-                f"?offset={offset}&timeout=30&allowed_updates=%5B%22message%22%5D"
+                f"?offset={offset}&timeout=30&allowed_updates=%5B%22message%22%2C%22callback_query%22%5D"
             )
             req = request.Request(url)
             with request.urlopen(req, timeout=35) as resp:
