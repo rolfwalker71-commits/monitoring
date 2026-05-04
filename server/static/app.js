@@ -2144,7 +2144,7 @@ function resourceTroubleshootingHint(label, value, suffix) {
   return `<span class="trend-hint">💡 ${hint}</span>`;
 }
 
-function renderResourceTrendCards(resourceTrends, latestReportTimeUtc) {
+function renderResourceTrendCards(resourceTrends, latestReportTimeUtc, swapTotalKb) {
   const standText = formatUtcPlus2(latestReportTimeUtc);
   const entries = [
     ["🧠 CPU", resourceTrends.cpu_usage_percent, "%"],
@@ -2164,6 +2164,10 @@ function renderResourceTrendCards(resourceTrends, latestReportTimeUtc) {
         `;
       }
 
+      const swapSizeLine = label.includes("Swap") && swapTotalKb != null && swapTotalKb > 0
+        ? `<span>Gesamt: ${formatKilobytes(swapTotalKb)}</span>`
+        : "";
+
       return `
         <article class="trend-card">
           <strong>${label}</strong>
@@ -2171,6 +2175,7 @@ function renderResourceTrendCards(resourceTrends, latestReportTimeUtc) {
           <span>Min/Max: ${formatNumber(value.min)}${suffix} / ${formatNumber(value.max)}${suffix}</span>
           <span>Avg: ${formatNumber(value.avg)}${suffix}</span>
           <span>Delta: ${formatSignedPercent(value.delta)}${suffix === "%" ? "" : ""}</span>
+          ${swapSizeLine}
           ${resourceTroubleshootingHint(label, value, suffix)}
         </article>
       `;
@@ -4540,7 +4545,7 @@ async function loadAnalysisForHost() {
     state.analysisLatestDeliveryLabel = latestDeliveryLabel;
     renderDeliveryStatsBar();
     resourceCharts.innerHTML = renderResourceCharts(resourceSeries, data.latest_report_time_utc);
-    resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc);
+    resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc, data.latest_swap_total_kb);
     filesystemCharts.innerHTML = renderFilesystemTrendCharts(sortedTrendRows, data.latest_report_time_utc);
     renderLargeFilesPanel(data.large_files || {}, state.largeFilesHiddenMountpoints);
 

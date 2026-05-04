@@ -6191,6 +6191,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             load_avg_1_series: list[dict] = []
             memory_used_series: list[dict] = []
             swap_used_series: list[dict] = []
+            latest_swap_total_kb: float | None = None
             delayed_report_count = None
             live_report_count = None
             latest_delivery_mode = "live"
@@ -6238,6 +6239,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 if swap_used is not None:
                     swap_used_values.append(swap_used)
                     swap_used_series.append({"time_utc": row[1], "value": swap_used})
+                swap_total_kb = get_nested_number(payload, "swap", "total_kb")
+                if swap_total_kb is not None:
+                    latest_swap_total_kb = swap_total_kb
 
                 filesystems = payload.get("filesystems", [])
                 if not isinstance(filesystems, list):
@@ -6329,6 +6333,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "memory_used_percent": summarize_numeric_series(memory_used_values),
                         "swap_used_percent": summarize_numeric_series(swap_used_values),
                     },
+                    "latest_swap_total_kb": latest_swap_total_kb,
                     "resource_series": {
                         "cpu_usage_percent": cpu_usage_series,
                         "load_avg_1": load_avg_1_series,
