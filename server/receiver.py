@@ -1623,20 +1623,35 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
         ("swap_used_percent", "Swap %"),
     ]
 
-    def linear_regression_projected(values: list[float]) -> float | None:
+    # Minimum requirements for a reliable trend prediction
+    TREND_MIN_POINTS = 8          # at least 8 data points
+    TREND_MIN_SPAN_SEC = 7200     # data must span at least 2 hours
+    TREND_PROJECT_SEC = 8 * 3600  # always project 8 hours ahead
+
+    def linear_regression_projected(timestamps_sec: list[float], values: list[float]) -> float | None:
+        """Fit a linear regression on (timestamp, value) pairs and project TREND_PROJECT_SEC ahead.
+
+        Uses actual elapsed seconds as x-values so uneven reporting intervals are handled
+        correctly.  Returns None when there is insufficient data for a reliable estimate.
+        """
         n = len(values)
-        if n < 3:
+        if n < TREND_MIN_POINTS:
             return None
-        sum_x = n * (n - 1) // 2
-        sum_x2 = (n - 1) * n * (2 * n - 1) // 6
+        t0 = timestamps_sec[0]
+        xs = [t - t0 for t in timestamps_sec]
+        if xs[-1] < TREND_MIN_SPAN_SEC:
+            return None
+        sum_x = sum(xs)
+        sum_x2 = sum(x * x for x in xs)
         sum_y = sum(values)
-        sum_xy = sum(i * v for i, v in enumerate(values))
+        sum_xy = sum(x * v for x, v in zip(xs, values))
         denom = n * sum_x2 - sum_x * sum_x
         if denom == 0:
             return None
         slope = (n * sum_xy - sum_x * sum_y) / denom
         intercept = (sum_y - slope * sum_x) / n
-        return slope * (2 * (n - 1)) + intercept
+        project_x = xs[-1] + TREND_PROJECT_SEC
+        return slope * project_x + intercept
 
     def trend_level(projected: float | None) -> str | None:
         if projected is None:
@@ -1659,7 +1674,7 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
     for hostname in hostnames:
         rows = conn.execute(
             """
-            SELECT payload_json
+            SELECT received_at_utc, payload_json
             FROM reports
             WHERE hostname = ? AND received_at_utc >= ?
             ORDER BY id ASC
@@ -1670,7 +1685,7 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
         if not rows:
             continue
 
-        last_payload = parse_payload_json(rows[-1][0])
+        last_payload = parse_payload_json(rows[-1][1])
         host_settings = conn.execute(
             "SELECT COALESCE(display_name_override, ''), COALESCE(country_code_override, '') FROM host_settings WHERE hostname = ?",
             (hostname,),
@@ -1694,22 +1709,34 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
             "memory_used_percent": [],
             "swap_used_percent": [],
         }
+        resource_ts: dict[str, list[float]] = {
+            "cpu_usage_percent": [],
+            "memory_used_percent": [],
+            "swap_used_percent": [],
+        }
         fs_series: dict[str, list[float]] = {}
+        fs_ts: dict[str, list[float]] = {}
 
         for row in rows:
-            payload = parse_payload_json(row[0])
+            ts_str = str(row[0] or "")
+            ts_dt = parse_utc_iso(ts_str)
+            ts_sec = ts_dt.timestamp() if ts_dt is not None else None
+            payload = parse_payload_json(row[1])
 
             cpu = get_nested_number(payload, "cpu", "usage_percent")
-            if cpu is not None:
+            if cpu is not None and ts_sec is not None:
                 resource_series["cpu_usage_percent"].append(cpu)
+                resource_ts["cpu_usage_percent"].append(ts_sec)
 
             mem = get_nested_number(payload, "memory", "used_percent")
-            if mem is not None:
+            if mem is not None and ts_sec is not None:
                 resource_series["memory_used_percent"].append(mem)
+                resource_ts["memory_used_percent"].append(ts_sec)
 
             swap = get_nested_number(payload, "swap", "used_percent")
-            if swap is not None:
+            if swap is not None and ts_sec is not None:
                 resource_series["swap_used_percent"].append(swap)
+                resource_ts["swap_used_percent"].append(ts_sec)
 
             for fs in payload.get("filesystems", []):
                 if not isinstance(fs, dict):
@@ -1719,13 +1746,18 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
                     used_percent = float(fs["used_percent"])
                 except (KeyError, TypeError, ValueError):
                     continue
+                if ts_sec is None:
+                    continue
                 if mountpoint not in fs_series:
                     fs_series[mountpoint] = []
+                    fs_ts[mountpoint] = []
                 fs_series[mountpoint].append(used_percent)
+                fs_ts[mountpoint].append(ts_sec)
 
         for key, label in resource_metrics:
             values = resource_series[key]
-            projected = linear_regression_projected(values)
+            timestamps = resource_ts[key]
+            projected = linear_regression_projected(timestamps, values)
             level = trend_level(projected)
             if not level:
                 continue
@@ -1749,7 +1781,8 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
         for mountpoint, values in fs_series.items():
             if mountpoint in muted_mountpoints:
                 continue
-            projected = linear_regression_projected(values)
+            timestamps = fs_ts[mountpoint]
+            projected = linear_regression_projected(timestamps, values)
             level = trend_level(projected)
             if not level:
                 continue
