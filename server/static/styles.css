@@ -1704,6 +1704,22 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   background: linear-gradient(90deg, #fbbf24, #d97706);
 }
 
+.ct-critical-eta {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 2px 8px;
+  margin-top: 2px;
+  width: fit-content;
+}
+
 .view-section.hidden {
   display: none;
 }
@@ -4255,6 +4271,12 @@ body[data-theme="dark"] .ct-row-metric {
 
 body[data-theme="dark"] .ct-bar-wrap {
   background: #1e2f49;
+}
+
+body[data-theme="dark"] .ct-critical-eta {
+  color: #f87171;
+  background: #2a1010;
+  border-color: #7f1d1d;
 }
 
 /* ── Dark Mode: Tabs ──────────────────────────────────────── */

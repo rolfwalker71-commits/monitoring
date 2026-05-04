@@ -1743,6 +1743,7 @@ def ensure_default_user_filesystem_visibility(
 
 def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours: int = 8) -> list[dict]:
     cutoff_iso = utc_hours_ago_iso(hours)
+    alarm_settings = get_alarm_settings(conn)
 
     resource_metrics = [
         ("cpu_usage_percent", "CPU %"),
@@ -1750,16 +1751,21 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours:
         ("swap_used_percent", "Swap %"),
     ]
 
+    # Critical thresholds from alarm settings
+    fs_crit_threshold = float(alarm_settings.get("critical_threshold_percent", CRITICAL_THRESHOLD_PERCENT))
+    cpu_crit_threshold = float(alarm_settings.get("cpu_critical_threshold_percent", CPU_CRITICAL_THRESHOLD_PERCENT))
+    ram_crit_threshold = float(alarm_settings.get("ram_critical_threshold_percent", RAM_CRITICAL_THRESHOLD_PERCENT))
+
     # Minimum requirements for a reliable trend prediction
     TREND_MIN_POINTS = 8                           # at least 8 data points
     TREND_MIN_SPAN_SEC = 7200                      # data must span at least 2 hours
     TREND_PROJECT_SEC = project_hours * 3600       # configurable projection horizon
 
-    def linear_regression_projected(timestamps_sec: list[float], values: list[float]) -> float | None:
-        """Fit a linear regression on (timestamp, value) pairs and project TREND_PROJECT_SEC ahead.
+    def linear_regression_fit(timestamps_sec: list[float], values: list[float]) -> tuple[float, float, float, float] | None:
+        """Fit a linear regression on (timestamp, value) pairs.
 
-        Uses actual elapsed seconds as x-values so uneven reporting intervals are handled
-        correctly.  Returns None when there is insufficient data for a reliable estimate.
+        Returns (slope, intercept, t0, last_x) where x = seconds since t0.
+        Returns None when there is insufficient data for a reliable estimate.
         """
         n = len(values)
         if n < TREND_MIN_POINTS:
@@ -1777,8 +1783,31 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours:
             return None
         slope = (n * sum_xy - sum_x * sum_y) / denom
         intercept = (sum_y - slope * sum_x) / n
-        project_x = xs[-1] + TREND_PROJECT_SEC
+        return slope, intercept, t0, xs[-1]
+
+    def linear_regression_projected(timestamps_sec: list[float], values: list[float]) -> float | None:
+        fit = linear_regression_fit(timestamps_sec, values)
+        if fit is None:
+            return None
+        slope, intercept, _t0, last_x = fit
+        project_x = last_x + TREND_PROJECT_SEC
         return slope * project_x + intercept
+
+    def compute_critical_eta(timestamps_sec: list[float], values: list[float], threshold: float) -> str | None:
+        """Return ISO UTC timestamp when the trend line is expected to cross `threshold`,
+        or None if it cannot be determined or the crossing is in the past."""
+        fit = linear_regression_fit(timestamps_sec, values)
+        if fit is None:
+            return None
+        slope, intercept, t0, _last_x = fit
+        if slope <= 0:
+            return None
+        x_crit = (threshold - intercept) / slope
+        eta_utc = t0 + x_crit
+        now_ts = datetime.now(timezone.utc).timestamp()
+        if eta_utc <= now_ts:
+            return None
+        return datetime.fromtimestamp(eta_utc, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def trend_level(projected: float | None) -> str | None:
         if projected is None:
@@ -1891,12 +1920,17 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours:
             current = values[-1] if values else None
             if key == "cpu_usage_percent":
                 metric_type = "cpu"
+                crit_threshold = cpu_crit_threshold
             elif key == "memory_used_percent":
                 metric_type = "memory"
+                crit_threshold = ram_crit_threshold
             elif key == "swap_used_percent":
                 metric_type = "swap"
+                crit_threshold = fs_crit_threshold
             else:
                 metric_type = "resource"
+                crit_threshold = fs_crit_threshold
+            critical_eta_utc = compute_critical_eta(timestamps, values, crit_threshold) if level == "warn" else None
             warnings.append(
                 {
                     "hostname": hostname,
@@ -1910,6 +1944,8 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours:
                     "level": level,
                     "country_code": host_country_code,
                     "os_family": host_os_family,
+                    "critical_eta_utc": critical_eta_utc,
+                    "critical_threshold": crit_threshold,
                 }
             )
 
@@ -1922,6 +1958,7 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours:
             if not level:
                 continue
             current = values[-1] if values else None
+            critical_eta_utc = compute_critical_eta(timestamps, values, fs_crit_threshold) if level == "warn" else None
             warnings.append(
                 {
                     "hostname": hostname,
@@ -1935,6 +1972,8 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours:
                     "level": level,
                     "country_code": host_country_code,
                     "os_family": host_os_family,
+                    "critical_eta_utc": critical_eta_utc,
+                    "critical_threshold": fs_crit_threshold,
                 }
             )
 

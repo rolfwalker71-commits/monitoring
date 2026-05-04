@@ -3038,6 +3038,21 @@ function formatUtcPlus2(value) {
   })} UTC+2`;
 }
 
+function formatUtcPlus2Short(isoUtc) {
+  // Returns "DD.MM. HH:MM" (no year, no seconds) for compact inline display
+  const parsed = new Date(isoUtc);
+  if (Number.isNaN(parsed.getTime())) return isoUtc;
+  const shifted = new Date(parsed.getTime() + 2 * 60 * 60 * 1000);
+  return shifted.toLocaleString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
+  });
+}
+
 function toLocalDateTimeInputValue(value) {
   const text = asText(value, "");
   if (!text) {
@@ -4943,6 +4958,9 @@ function renderCriticalTrends(data) {
         : diff < -0.05
           ? `<span class="ct-trend-arrow ct-trend-down">🔻</span>`
           : `<span class="ct-trend-arrow ct-trend-flat">➖</span>`;
+      const etaHtml = (w.level === "warn" && w.critical_eta_utc)
+        ? `<span class="ct-critical-eta" title="Kritisch (≥${w.critical_threshold != null ? w.critical_threshold.toFixed(0) : "?"}%) voraussichtlich ab diesem Zeitpunkt">🔴 Kritisch ca. ${escapeHtml(formatUtcPlus2Short(w.critical_eta_utc))}</span>`
+        : "";
       return `
         <div class="ct-row ct-row-${w.level}">
           <span class="ct-row-icon">${icon}</span>
@@ -4950,6 +4968,7 @@ function renderCriticalTrends(data) {
           <span class="ct-row-current">Aktuell: <strong>${w.current !== null ? w.current.toFixed(1) + "%" : "–"}</strong></span>
           <span class="ct-row-arrow">·</span>
           <span class="ct-row-projected ct-projected-${w.level}">${trendArrow} Projektion: <strong>${w.projected.toFixed(1)}%</strong></span>
+          ${etaHtml}
           <div class="ct-bar-wrap"><div class="ct-bar ${barClass}" style="width:${bar.toFixed(1)}%"></div></div>
         </div>
       `;
