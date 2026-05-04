@@ -2967,19 +2967,31 @@ function renderFilesystemTable(filesystems) {
       const fsName = renderPathCell(fs.fs, 32);
       const fsType = escapeHtml(asText(fs.type));
       const usedPercent = Number(fs.used_percent);
-      const usedPercentText = Number.isFinite(usedPercent) ? `${usedPercent}%` : "-";
-      const usedBlocks = Number(fs.used);
-      const totalBlocks = Number(fs.blocks);
-      const usedBlocksText = Number.isFinite(usedBlocks) ? usedBlocks.toLocaleString("de-DE") : "-";
-      const totalBlocksText = Number.isFinite(totalBlocks) ? totalBlocks.toLocaleString("de-DE") : "-";
+      const usedKb = Number(fs.used);
+      const totalKb = Number(fs.blocks);
+      const availKb = Number(fs.available);
+
+      const usedStr = Number.isFinite(usedKb) && usedKb >= 0 ? formatKilobytes(usedKb) : "-";
+      const totalStr = Number.isFinite(totalKb) && totalKb >= 0 ? formatKilobytes(totalKb) : "-";
+      const availStr = Number.isFinite(availKb) && availKb >= 0 ? formatKilobytes(availKb) : "-";
+      const pct = Number.isFinite(usedPercent) ? usedPercent : 0;
+      const pctText = Number.isFinite(usedPercent) ? `${usedPercent}%` : "-";
+      const barColor = pct >= 90 ? "#ef4444" : pct >= 75 ? "#f59e0b" : "#22c55e";
+      const progressBar = `
+        <div class="fs-bar-wrap">
+          <div class="fs-bar-fill" style="width:${Math.min(pct,100)}%;background:${barColor};"></div>
+        </div>
+        <span class="fs-pct-label">${pctText}</span>
+      `;
 
       return `
         <tr>
           <td>${mountpoint}</td>
           <td>${fsName}</td>
           <td>${fsType}</td>
-          <td>${usedPercentText}</td>
-          <td>${usedBlocksText} / ${totalBlocksText}</td>
+          <td class="fs-size-cell">${usedStr} / ${totalStr}</td>
+          <td class="fs-avail-cell">${availStr}</td>
+          <td class="fs-bar-cell">${progressBar}</td>
         </tr>
       `;
     })
@@ -2993,8 +3005,9 @@ function renderFilesystemTable(filesystems) {
             <th>📁 Mountpoint</th>
             <th>💽 Filesystem</th>
             <th>🧩 Typ</th>
-            <th>📈 Belegt</th>
-            <th>🧮 Used / Total (Blocks)</th>
+            <th>📊 Belegt / Gesamt</th>
+            <th>✅ Frei</th>
+            <th>📈 Auslastung</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
