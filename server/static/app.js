@@ -2742,7 +2742,7 @@ function renderSapBusinessOneCard(payload) {
   if (!sap) {
     return `
       <section class="detail-card sap-b1-card">
-        <h4>📦 SAP Business One Groessen</h4>
+        <h4>📦 SAP Business One Files / Ordner</h4>
         <p class="muted">Keine SAP-Business-One-Daten im Payload vorhanden.</p>
       </section>
     `;
@@ -2750,7 +2750,7 @@ function renderSapBusinessOneCard(payload) {
 
   return `
     <section class="detail-card sap-b1-card">
-      <h4>📦 SAP Business One Groessen</h4>
+      <h4>📦 SAP Business One Files / Ordner</h4>
       <div class="sap-b1-grid">
         ${renderSapPathSizeItem("catalina.out", sap.catalina_out, "Datei nicht vorhanden")}
         ${renderSapPathSizeItem("BusinessOne Log Ordner", sap.businessone_log_dir, "Ordner nicht vorhanden")}
