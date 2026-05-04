@@ -1408,6 +1408,47 @@ def normalize_mountpoint_key(value: object) -> str:
     return normalize_mountpoint_for_visibility(value).lower()
 
 
+def normalize_alert_mountpoint(value: object) -> str:
+    mountpoint = str(value or "").strip()
+    if not mountpoint:
+        return ""
+    if mountpoint != "/":
+        mountpoint = mountpoint.rstrip("/")
+    return mountpoint[:512]
+
+
+def alert_mountpoint_variants(value: object) -> list[str]:
+    normalized = normalize_alert_mountpoint(value)
+    if not normalized:
+        return []
+    variants = {normalized}
+    if normalized != "/":
+        variants.add(normalized + "/")
+    return sorted(variants)
+
+
+def find_open_alert_for_mountpoint(conn: sqlite3.Connection, hostname: str, mountpoint: str) -> tuple[int, str, str] | None:
+    variants = alert_mountpoint_variants(mountpoint)
+    if not variants:
+        return None
+    placeholders = ",".join("?" for _ in variants)
+    row = conn.execute(
+        f"""
+        SELECT id, severity, mountpoint
+        FROM alerts
+        WHERE hostname = ?
+          AND status = 'open'
+          AND mountpoint IN ({placeholders})
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (hostname, *variants),
+    ).fetchone()
+    if not row:
+        return None
+    return int(row[0]), str(row[1] or "warning"), str(row[2] or "")
+
+
 def is_default_visible_mountpoint(value: object) -> bool:
     return normalize_mountpoint_key(value) in DEFAULT_VISIBLE_FILESYSTEM_MOUNTPOINTS
 
@@ -4388,11 +4429,15 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
 
 
 def is_alert_muted(conn: sqlite3.Connection, hostname: str, mountpoint: str) -> bool:
+    variants = alert_mountpoint_variants(mountpoint)
+    if not variants:
+        return False
+    placeholders = ",".join("?" for _ in variants)
     row = conn.execute(
-        "SELECT 1 FROM muted_alert_rules WHERE hostname = ? AND mountpoint = ?",
-        (hostname, mountpoint),
+        f"SELECT 1 FROM muted_alert_rules WHERE hostname = ? AND mountpoint IN ({placeholders}) LIMIT 1",
+        (hostname, *variants),
     ).fetchone()
-    return row is not None
+    return bool(row)
 
 
 def resolve_open_alerts_for_host(conn: sqlite3.Connection, hostname: str, report_id: int | None) -> None:
@@ -4560,16 +4605,13 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
         if not isinstance(fs, dict):
             continue
 
-        mountpoint = str(fs.get("mountpoint", "")).strip()
+        mountpoint = normalize_alert_mountpoint(fs.get("mountpoint", ""))
         if not mountpoint:
             continue
 
         mountpoints_seen.add(mountpoint)
         if is_alert_muted(conn, hostname, mountpoint):
-            muted_open = conn.execute(
-                "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open'",
-                (hostname, mountpoint),
-            ).fetchone()
+            muted_open = find_open_alert_for_mountpoint(conn, hostname, mountpoint)
             if muted_open:
                 conn.execute(
                     "UPDATE alerts SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ? WHERE id = ?",
@@ -4632,16 +4674,10 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
 
             alert_started = next_hit_count >= warning_hits_required
 
-        open_alert = conn.execute(
-            """
-            SELECT id, severity
-            FROM alerts
-            WHERE hostname = ? AND mountpoint = ? AND status = 'open'
-            ORDER BY id DESC
-            LIMIT 1
-            """,
-            (hostname, mountpoint),
-        ).fetchone()
+        open_alert = find_open_alert_for_mountpoint(conn, hostname, mountpoint)
+        if open_alert and open_alert[2] != mountpoint:
+            # Canonicalize existing rows to keep one logical alert identity per mountpoint.
+            conn.execute("UPDATE alerts SET mountpoint = ? WHERE id = ?", (mountpoint, open_alert[0]))
 
         if severity == "ok":
             conn.execute(
@@ -4702,6 +4738,12 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
             f"DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint NOT IN ({placeholders})",
             (hostname, *sorted(mountpoints_seen)),
         )
+        excluded_synthetic = (
+            CPU_ALERT_MOUNTPOINT,
+            RAM_ALERT_MOUNTPOINT,
+            INACTIVE_HOST_ALERT_MOUNTPOINT,
+        )
+        synthetic_placeholders = ",".join("?" for _ in excluded_synthetic)
         conn.execute(
             f"""
             UPDATE alerts
@@ -4709,8 +4751,9 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
             WHERE hostname = ?
               AND status = 'open'
               AND mountpoint NOT IN ({placeholders})
+              AND mountpoint NOT IN ({synthetic_placeholders})
             """,
-            (now_utc, now_utc, report_id, hostname, *sorted(mountpoints_seen)),
+            (now_utc, now_utc, report_id, hostname, *sorted(mountpoints_seen), *excluded_synthetic),
         )
     else:
         conn.execute("DELETE FROM alert_debounce WHERE hostname = ?", (hostname,))
