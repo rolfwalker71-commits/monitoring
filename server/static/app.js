@@ -5007,6 +5007,7 @@ async function loadGlobalAlertsOverview(options = {}) {
               <div class="global-host-cell">
                 <span class="global-host-label">${escapeHtml(hostDisplayName)}</span>
                 <span class="global-hostname-sub">(${escapeHtml(hostName)})</span>
+                <span class="global-hostname-sub alert-id-sub">#${item.id}</span>
               </div>
             </td>
             <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>

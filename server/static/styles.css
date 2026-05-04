@@ -2888,6 +2888,11 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   line-height: 1.1;
 }
 
+.alert-id-sub {
+  color: #94a3b8;
+  font-style: italic;
+}
+
 .badge {
   display: inline-block;
   padding: 2px 8px;
