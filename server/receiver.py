@@ -12,6 +12,7 @@ import re
 import secrets
 import sqlite3
 import threading
+import time
 import tempfile
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
@@ -2502,6 +2503,7 @@ def send_instant_alert_telegram_to_users(
     severity: str,
     used_percent: float,
     display_name: str = "",
+    alert_id: int | None = None,
 ) -> None:
     if event_type not in {"opened", "escalated", "resolved", "inactive", "inactive_resolved"}:
         return
@@ -2531,7 +2533,7 @@ def send_instant_alert_telegram_to_users(
     except Exception:
         return
 
-    alert_text = build_telegram_alert_text(event_type, hostname, mountpoint, severity, used_percent, display_name=display_name)
+    alert_text = build_telegram_alert_text(event_type, hostname, mountpoint, severity, used_percent, display_name=display_name, alert_id=alert_id)
     icon_path = _ALERT_ICON_PATHS.get(event_type)
 
     for row in rows:
@@ -3766,6 +3768,7 @@ def build_telegram_alert_text(
     severity: str,
     used_percent: float,
     display_name: str = "",
+    alert_id: int | None = None,
 ) -> str:
     icon = {
         "opened": "🚨 ALERT OPEN",
@@ -3800,7 +3803,7 @@ def build_telegram_alert_text(
         value_line = f"⏱️ {_mdv2(used_text)} h"
     else:
         value_line = f"📊 `{_mdv2(used_text)}`"
-    return (
+    msg = (
         f"{_mdv2(icon)}\n"
         f"{hostname_part}\n"
         f"{resource_line}\n"
@@ -3808,6 +3811,9 @@ def build_telegram_alert_text(
         f"{value_line}\n"
         f"🕐 {_mdv2(now_local)}"
     )
+    if alert_id is not None and event_type not in {"resolved", "inactive_resolved"}:
+        msg += f"\n🆔 `/ack {alert_id}`"
+    return msg
 
 
 def maybe_send_alert_message(
@@ -3819,7 +3825,16 @@ def maybe_send_alert_message(
     used_percent: float,
     conn: sqlite3.Connection | None = None,
     display_name: str = "",
+    alert_id: int | None = None,
 ) -> None:
+    if alert_id is None and conn is not None:
+        _id_row = conn.execute(
+            "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open' ORDER BY id DESC LIMIT 1",
+            (hostname, mountpoint),
+        ).fetchone()
+        if _id_row:
+            alert_id = int(_id_row[0])
+
     skip_global_chat = False
     if conn is not None and settings.get("telegram_enabled"):
         global_chat_id = str(settings.get("telegram_chat_id", "") or "").strip()
@@ -3834,6 +3849,7 @@ def maybe_send_alert_message(
             severity,
             used_percent,
             display_name=display_name,
+            alert_id=alert_id,
         )
         telegram_send(settings, text, image_path=_ALERT_ICON_PATHS.get(event_type))
     if conn is not None:
@@ -3845,6 +3861,7 @@ def maybe_send_alert_message(
             severity,
             used_percent,
             display_name=display_name,
+            alert_id=alert_id,
         )
         send_instant_alert_mails_to_users(conn, event_type, hostname, mountpoint, severity, used_percent)
 
@@ -7557,6 +7574,120 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         self._send_json(HTTPStatus.CREATED, {"status": "stored"})
 
 
+def _handle_telegram_ack_update(bot_token: str, update: dict) -> None:
+    """Process a single Telegram update: handle /ack <id> commands."""
+    message = update.get("message") or {}
+    text = (message.get("text") or "").strip()
+    chat_id = str(message.get("chat", {}).get("id", ""))
+    if not chat_id or not text.lower().startswith("/ack"):
+        return
+
+    parts = text.split()
+    if len(parts) < 2:
+        telegram_send_to_chat(bot_token, chat_id, "Verwendung: `/ack <Alert-ID>`")
+        return
+
+    try:
+        alert_id = int(parts[1])
+    except ValueError:
+        telegram_send_to_chat(bot_token, chat_id, _mdv2("Ungültige Alert-ID. Verwendung: /ack <Nummer>"))
+        return
+
+    with sqlite3.connect(DB_PATH) as conn:
+        user_row = conn.execute(
+            """
+            SELECT u.username FROM web_users u
+            JOIN web_user_settings s ON s.username = u.username
+            WHERE COALESCE(s.alert_telegram_chat_id, '') = ?
+              AND COALESCE(u.is_disabled, 0) = 0
+            LIMIT 1
+            """,
+            (chat_id,),
+        ).fetchone()
+        if not user_row:
+            telegram_send_to_chat(
+                bot_token, chat_id,
+                _mdv2("Nicht autorisiert. Diese Chat-ID ist keinem Monitoring-Benutzer zugeordnet."),
+            )
+            return
+
+        username = str(user_row[0])
+
+        alert_row = conn.execute(
+            "SELECT id, hostname, mountpoint, status, ack_at_utc FROM alerts WHERE id = ?",
+            (alert_id,),
+        ).fetchone()
+        if not alert_row:
+            telegram_send_to_chat(bot_token, chat_id, _mdv2(f"Alert #{alert_id} nicht gefunden."))
+            return
+
+        _, a_hostname, a_mountpoint, a_status, a_ack_at = alert_row
+        if a_status != "open":
+            telegram_send_to_chat(
+                bot_token, chat_id,
+                _mdv2(f"Alert #{alert_id} ist bereits geschlossen (Status: {a_status})."),
+            )
+            return
+
+        if a_ack_at:
+            telegram_send_to_chat(bot_token, chat_id, _mdv2(f"Alert #{alert_id} wurde bereits quittiert."))
+            return
+
+        ack_at_utc = utc_now_iso()
+        conn.execute(
+            "UPDATE alerts SET ack_by = ?, ack_at_utc = ?, ack_note = ? WHERE id = ?",
+            (username, ack_at_utc, "Via Telegram quittiert", alert_id),
+        )
+        conn.commit()
+
+    reply = (
+        f"✅ Alert \\#{alert_id} quittiert\\!\n"
+        f"🖥️ {_mdv2(str(a_hostname))}\n"
+        f"📂 {_mdv2(str(a_mountpoint))}\n"
+        f"👤 {_mdv2(username)}"
+    )
+    telegram_send_to_chat(bot_token, chat_id, reply)
+
+
+def _telegram_ack_poll_loop() -> None:
+    """Background thread: polls Telegram getUpdates for /ack commands."""
+    offset = 0
+    current_token = ""
+    while True:
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                alarm_settings = get_alarm_settings(conn)
+            bot_token = str(alarm_settings.get("telegram_bot_token", "") or "").strip()
+            if not alarm_settings.get("telegram_enabled") or not bot_token:
+                time.sleep(30)
+                continue
+            if bot_token != current_token:
+                current_token = bot_token
+                offset = 0
+        except Exception:
+            time.sleep(30)
+            continue
+
+        try:
+            url = (
+                f"https://api.telegram.org/bot{current_token}/getUpdates"
+                f"?offset={offset}&timeout=30&allowed_updates=%5B%22message%22%5D"
+            )
+            req = request.Request(url)
+            with request.urlopen(req, timeout=35) as resp:
+                data = json.loads(resp.read().decode("utf-8", errors="replace"))
+        except Exception:
+            time.sleep(5)
+            continue
+
+        for update in data.get("result", []):
+            offset = int(update["update_id"]) + 1
+            try:
+                _handle_telegram_ack_update(current_token, update)
+            except Exception as exc:
+                print(f"[telegram-ack] update handling error: {exc}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Simple monitoring receiver")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind")
@@ -7577,6 +7708,7 @@ def main() -> None:
             stop_event.wait(600)
 
     threading.Thread(target=inactive_alert_loop, name="inactive-alert-checker", daemon=True).start()
+    threading.Thread(target=_telegram_ack_poll_loop, name="telegram-ack-poller", daemon=True).start()
     server = ThreadingHTTPServer((args.host, args.port), MonitoringHandler)
     print(f"Monitoring receiver running on http://{args.host}:{args.port}")
     try:
