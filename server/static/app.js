@@ -453,19 +453,43 @@ async function refreshDashboard(options = {}) {
   autoRefreshInProgress = true;
   try {
     const shouldRefreshGlobalAlertsList = state.viewMode === "global" && state.globalSubMode === "global-alerts";
-    await loadWebclientVersion();
-    await loadActiveUsers();
-    await Promise.all([
+    try {
+      await loadWebclientVersion();
+    } catch (error) {
+      console.warn("loadWebclientVersion failed:", error);
+    }
+    try {
+      await loadActiveUsers();
+    } catch (error) {
+      console.warn("loadActiveUsers failed:", error);
+    }
+    await Promise.allSettled([
       loadGlobalAlertsOverview({ updateList: shouldRefreshGlobalAlertsList }),
       loadCriticalTrends({ updateList: false }),
       loadInactiveHosts({ updateList: false }),
       loadHosts({ preserveScroll }),
     ]);
-    await loadReportsForHost();
-    await loadAnalysisForHost();
-    await loadAlertsForHost();
+    try {
+      await loadReportsForHost();
+    } catch (error) {
+      console.warn("loadReportsForHost failed:", error);
+    }
+    try {
+      await loadAnalysisForHost();
+    } catch (error) {
+      console.warn("loadAnalysisForHost failed:", error);
+    }
+    try {
+      await loadAlertsForHost();
+    } catch (error) {
+      console.warn("loadAlertsForHost failed:", error);
+    }
     if (state.viewMode === "settings") {
-      await loadSettingsPanel(true);
+      try {
+        await loadSettingsPanel(true);
+      } catch (error) {
+        console.warn("loadSettingsPanel failed:", error);
+      }
     }
     updateSummaryStrip();
     if (automatic) {
@@ -5699,7 +5723,11 @@ async function init() {
     if (arSelect) arSelect.value = String(autoRefreshCurrentIntervalSec);
   updateAutoRefreshStatus(null);
   const oauthResult = consumeOauthStatusFromUrl();
-  await loadWebclientVersion();
+  try {
+    await loadWebclientVersion();
+  } catch (error) {
+    console.warn("initial loadWebclientVersion failed:", error);
+  }
   wireEvents();
   updateViewMode();
   updateOverviewSection();
