@@ -351,6 +351,14 @@
                   Weitere Alarm Empfaenger (optional, comma/semicolon getrennt)
                   <input id="alertEmailRecipientsInput" type="text" placeholder="ops@example.com; noc@example.com" />
                 </label>
+                <label>
+                  Empfaenger nur fuer Warnung (optional, ueberschreibt Standard)
+                  <input id="alertWarningEmailRecipientsInput" type="text" placeholder="warn@example.com; team-warning@example.com" />
+                </label>
+                <label>
+                  Empfaenger nur fuer Kritisch (optional, ueberschreibt Standard)
+                  <input id="alertCriticalEmailRecipientsInput" type="text" placeholder="critical@example.com; team-critical@example.com" />
+                </label>
               </div>
               <div class="alarm-settings-actions">
                 <button id="testAlertDigestMailButton" type="button">Alarm-Testmail senden</button>

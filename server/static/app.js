@@ -1111,6 +1111,8 @@ async function loadUserProfile(force = false) {
   const alertEnabledInput = document.getElementById("alertEmailEnabledInput");
   const alertTimeInput = document.getElementById("alertEmailTimeInput");
   const alertRecipientsInput = document.getElementById("alertEmailRecipientsInput");
+  const alertWarningRecipientsInput = document.getElementById("alertWarningEmailRecipientsInput");
+  const alertCriticalRecipientsInput = document.getElementById("alertCriticalEmailRecipientsInput");
   const alertInstantEnabledInput = document.getElementById("alertInstantMailEnabledInput");
   const alertInstantMinSeveritySelect = document.getElementById("alertInstantMinSeveritySelect");
   const alertInstantTelegramEnabledInput = document.getElementById("alertInstantTelegramEnabledInput");
@@ -1131,6 +1133,12 @@ async function loadUserProfile(force = false) {
     alertEnabledInput.checked = profile.alert_email_enabled === true;
     alertTimeInput.value = asText(profile.alert_email_time_hhmm, "08:05");
     alertRecipientsInput.value = asText(profile.alert_email_recipients, "") === "-" ? "" : asText(profile.alert_email_recipients, "");
+    if (alertWarningRecipientsInput) {
+      alertWarningRecipientsInput.value = asText(profile.alert_warning_email_recipients, "") === "-" ? "" : asText(profile.alert_warning_email_recipients, "");
+    }
+    if (alertCriticalRecipientsInput) {
+      alertCriticalRecipientsInput.value = asText(profile.alert_critical_email_recipients, "") === "-" ? "" : asText(profile.alert_critical_email_recipients, "");
+    }
     if (alertInstantEnabledInput) alertInstantEnabledInput.checked = profile.alert_instant_mail_enabled === true;
     if (alertInstantMinSeveritySelect) alertInstantMinSeveritySelect.value = profile.alert_instant_min_severity || "warning";
     if (alertInstantTelegramEnabledInput) alertInstantTelegramEnabledInput.checked = profile.alert_instant_telegram_enabled === true;
@@ -1180,6 +1188,8 @@ async function saveUserProfile() {
     alert_email_enabled: document.getElementById("alertEmailEnabledInput").checked,
     alert_email_time_hhmm: document.getElementById("alertEmailTimeInput").value || "08:05",
     alert_email_recipients: document.getElementById("alertEmailRecipientsInput").value.trim(),
+    alert_warning_email_recipients: document.getElementById("alertWarningEmailRecipientsInput")?.value.trim() || "",
+    alert_critical_email_recipients: document.getElementById("alertCriticalEmailRecipientsInput")?.value.trim() || "",
     alert_instant_mail_enabled: document.getElementById("alertInstantMailEnabledInput")?.checked ?? false,
     alert_instant_min_severity: document.getElementById("alertInstantMinSeveritySelect")?.value || "warning",
     alert_instant_telegram_enabled: document.getElementById("alertInstantTelegramEnabledInput")?.checked ?? false,
