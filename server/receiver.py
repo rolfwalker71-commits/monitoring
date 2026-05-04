@@ -3285,7 +3285,7 @@ def check_inactive_host_alerts(conn: sqlite3.Connection) -> None:
             )
             continue
 
-        conn.execute(
+        _cur = conn.execute(
             """
             INSERT INTO alerts (
                 hostname, mountpoint, severity, used_percent, status,
@@ -3294,6 +3294,7 @@ def check_inactive_host_alerts(conn: sqlite3.Connection) -> None:
             """,
             (hostname, INACTIVE_HOST_ALERT_MOUNTPOINT, hours_inactive, now_utc_iso, now_utc_iso),
         )
+        _new_alert_id = int(_cur.lastrowid)
 
         display_name = get_display_name_override(conn, hostname) or hostname
         maybe_send_alert_message(
@@ -3305,6 +3306,7 @@ def check_inactive_host_alerts(conn: sqlite3.Connection) -> None:
             hours_inactive,
             conn=conn,
             display_name=display_name,
+            alert_id=_new_alert_id,
         )
 
 
@@ -3833,14 +3835,6 @@ def maybe_send_alert_message(
     display_name: str = "",
     alert_id: int | None = None,
 ) -> None:
-    if alert_id is None and conn is not None:
-        _id_row = conn.execute(
-            "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open' ORDER BY id DESC LIMIT 1",
-            (hostname, mountpoint),
-        ).fetchone()
-        if _id_row:
-            alert_id = int(_id_row[0])
-
     skip_global_chat = False
     if conn is not None and settings.get("telegram_enabled"):
         global_chat_id = str(settings.get("telegram_chat_id", "") or "").strip()
@@ -4599,7 +4593,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
         )
 
         if not open_alert:
-            conn.execute(
+            _cur = conn.execute(
                 """
                 INSERT INTO alerts (
                     hostname, mountpoint, severity, used_percent, status,
@@ -4609,7 +4603,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
                 """,
                 (hostname, mountpoint, severity, used_percent, now_utc, now_utc, report_id),
             )
-            maybe_send_alert_message(alarm_settings, "opened", hostname, mountpoint, severity, used_percent, conn=conn, display_name=display_name)
+            maybe_send_alert_message(alarm_settings, "opened", hostname, mountpoint, severity, used_percent, conn=conn, display_name=display_name, alert_id=int(_cur.lastrowid))
             continue
 
         previous_severity = str(open_alert[1] or "warning")
@@ -4733,7 +4727,7 @@ def update_cpu_alerts_for_report(
         return
 
     if not open_alert:
-        conn.execute(
+        _cur = conn.execute(
             """
             INSERT INTO alerts (
                 hostname, mountpoint, severity, used_percent, status,
@@ -4745,7 +4739,7 @@ def update_cpu_alerts_for_report(
         )
         maybe_send_alert_message(
             alarm_settings, "opened", hostname, CPU_ALERT_MOUNTPOINT, severity, avg_cpu,
-            conn=conn, display_name=display_name,
+            conn=conn, display_name=display_name, alert_id=int(_cur.lastrowid),
         )
         return
 
@@ -4852,7 +4846,7 @@ def update_ram_alerts_for_report(
         return
 
     if not open_alert:
-        conn.execute(
+        _cur = conn.execute(
             """
             INSERT INTO alerts (
                 hostname, mountpoint, severity, used_percent, status,
@@ -4864,7 +4858,7 @@ def update_ram_alerts_for_report(
         )
         maybe_send_alert_message(
             alarm_settings, "opened", hostname, RAM_ALERT_MOUNTPOINT, severity, avg_ram,
-            conn=conn, display_name=display_name,
+            conn=conn, display_name=display_name, alert_id=int(_cur.lastrowid),
         )
         return
 
