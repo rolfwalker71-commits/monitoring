@@ -42,6 +42,7 @@ const state = {
   overviewSection: "main",
   globalSubMode: "global-alerts",
   criticalTrendsHours: 24,
+  criticalTrendsProjectHours: 8,
   inactiveHostsHours: 1,
   inactiveHosts: [],
   reportLimit: 1,
@@ -4733,9 +4734,9 @@ async function loadAlertsForHost() {
 }
 
 function renderCriticalTrends(data) {
-  const { warnings, hours } = data;
+  const { warnings, hours, project_hours: projectHours } = data;
   if (!warnings || warnings.length === 0) {
-    return `<div class="ct-empty"><span class="ct-empty-icon">✓</span><p>Keine kritischen Trends im Zeitraum der letzten ${hours} Std. erkannt.</p></div>`;
+    return `<div class="ct-empty"><span class="ct-empty-icon">✓</span><p>Keine kritischen Trends im Zeitraum der letzten ${hours} Std. erkannt (Projektion: ${projectHours} Std.).</p></div>`;
   }
 
   // Group by hostname
@@ -4748,16 +4749,16 @@ function renderCriticalTrends(data) {
   const critCount = warnings.filter((w) => w.level === "crit").length;
   const warnCount = warnings.filter((w) => w.level === "warn").length;
 
-  const projectionTargetIso = new Date(Date.now() + hours * 3600 * 1000).toISOString();
+  const projectionTargetIso = new Date(Date.now() + projectHours * 3600 * 1000).toISOString();
   const projectionTargetFormatted = formatUtcPlus2(projectionTargetIso);
 
   const summary = `
     <div class="ct-summary">
-      <span class="ct-summary-label">Zeitraum: letzte ${hours} Std.</span>
+      <span class="ct-summary-label">Datenbasis: letzte ${hours} Std.</span>
       ${critCount > 0 ? `<span class="ct-badge ct-badge-crit">${critCount} Kritisch</span>` : ""}
       ${warnCount > 0 ? `<span class="ct-badge ct-badge-warn">${warnCount} Warnung</span>` : ""}
       <span class="ct-summary-label">${byHost.size} betroffene Host${byHost.size !== 1 ? "s" : ""}</span>
-      <span class="ct-summary-label ct-projection-horizon">📅 Projektion bis: <strong>${escapeHtml(projectionTargetFormatted)}</strong></span>
+      <span class="ct-summary-label ct-projection-horizon">📅 Projektion bis: <strong>${escapeHtml(projectionTargetFormatted)}</strong> (+${projectHours} Std.)</span>
     </div>
   `;
 
@@ -4817,7 +4818,7 @@ async function loadCriticalTrends(options = {}) {
     listEl.innerHTML = "<p class=\"muted\">Lade Trend-Daten…</p>";
   }
   try {
-    const response = await fetch(`/api/v1/critical-trends?hours=${state.criticalTrendsHours}`, {
+    const response = await fetch(`/api/v1/critical-trends?hours=${state.criticalTrendsHours}&project_hours=${state.criticalTrendsProjectHours}`, {
       credentials: "same-origin",
     });
     if (!response.ok) throw new Error("HTTP " + response.status);
@@ -5243,6 +5244,11 @@ function wireEvents() {
 
   document.getElementById("criticalTrendsRangeSelect").addEventListener("change", async (event) => {
     state.criticalTrendsHours = Number(event.target.value) || 24;
+    await loadCriticalTrends();
+  });
+
+  document.getElementById("criticalTrendsProjectSelect").addEventListener("change", async (event) => {
+    state.criticalTrendsProjectHours = Number(event.target.value) || 8;
     await loadCriticalTrends();
   });
 
@@ -5756,6 +5762,7 @@ async function init() {
   updateOverviewSection();
   updateAnalysisRangeUi();
   document.getElementById("criticalTrendsRangeSelect").value = String(state.criticalTrendsHours);
+  document.getElementById("criticalTrendsProjectSelect").value = String(state.criticalTrendsProjectHours);
   document.getElementById("inactiveHostsRangeSelect").value = String(state.inactiveHostsHours);
   document.getElementById("globalSeverityFilter").value = state.globalSeverityFilter;
   document.getElementById("hostAlertFilterSelect").value = state.hostAlertFilter;

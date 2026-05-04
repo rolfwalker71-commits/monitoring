@@ -1614,7 +1614,7 @@ def ensure_default_user_filesystem_visibility(
     return replace_user_hidden_filesystems(conn, username, hostname_normalized, section_normalized, hidden_defaults)
 
 
-def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
+def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours: int = 8) -> list[dict]:
     cutoff_iso = utc_hours_ago_iso(hours)
 
     resource_metrics = [
@@ -1624,9 +1624,9 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
     ]
 
     # Minimum requirements for a reliable trend prediction
-    TREND_MIN_POINTS = 8          # at least 8 data points
-    TREND_MIN_SPAN_SEC = 7200     # data must span at least 2 hours
-    TREND_PROJECT_SEC = 8 * 3600  # always project 8 hours ahead
+    TREND_MIN_POINTS = 8                           # at least 8 data points
+    TREND_MIN_SPAN_SEC = 7200                      # data must span at least 2 hours
+    TREND_PROJECT_SEC = project_hours * 3600       # configurable projection horizon
 
     def linear_regression_projected(timestamps_sec: list[float], values: list[float]) -> float | None:
         """Fit a linear regression on (timestamp, value) pairs and project TREND_PROJECT_SEC ahead.
@@ -5891,11 +5891,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/critical-trends":
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=72, min_value=1, max_value=24 * 30)
+            project_hours = parse_int(query, "project_hours", default=8, min_value=1, max_value=24 * 7)
             with sqlite3.connect(DB_PATH) as conn:
-                warnings = collect_critical_trends(conn, hours)
+                warnings = collect_critical_trends(conn, hours, project_hours)
 
             self._send_json(HTTPStatus.OK, {
                 "hours": hours,
+                "project_hours": project_hours,
                 "warnings": warnings,
                 "total": len(warnings),
             })
