@@ -2092,12 +2092,12 @@ def host_badges_html(country_code: object, os_family: object) -> str:
     os_logo_uri = os_logo_data_uri(normalized_os_family)
     country_flag_uri = country_flag_data_uri(normalized_country_code)
     os_icon_html = (
-        f"<img src='{html.escape(os_logo_uri)}' alt='{html.escape(os_label)}' width='13' height='13' style='display:block;'>"
+        f"<img src='{html.escape(os_logo_uri)}' alt='{html.escape(os_label)}' width='26' height='26' style='display:block;'>"
         if os_logo_uri
         else ""
     )
     country_icon_html = (
-        f"<img src='{html.escape(country_flag_uri)}' alt='{html.escape(country_badge)}' width='13' height='13' style='display:block;'>"
+        f"<img src='{html.escape(country_flag_uri)}' alt='{html.escape(country_badge)}' width='26' height='26' style='display:block;'>"
         if country_flag_uri
         else ""
     )
@@ -2311,12 +2311,12 @@ def alert_instant_mail_html(
     os_logo_uri = os_logo_data_uri(normalized_os_family)
     country_flag_uri = country_flag_data_uri(normalized_country_code)
     os_icon_html = (
-        f"<img src='{html.escape(os_logo_uri)}' alt='{html.escape(os_label)}' width='14' height='14' style='display:block;'>"
+        f"<img src='{html.escape(os_logo_uri)}' alt='{html.escape(os_label)}' width='28' height='28' style='display:block;'>"
         if os_logo_uri
         else ""
     )
     country_icon_html = (
-        f"<img src='{html.escape(country_flag_uri)}' alt='{html.escape(country_badge)}' width='14' height='14' style='display:block;'>"
+        f"<img src='{html.escape(country_flag_uri)}' alt='{html.escape(country_badge)}' width='28' height='28' style='display:block;'>"
         if country_flag_uri
         else ""
     )
@@ -2340,14 +2340,7 @@ def alert_instant_mail_html(
     resource_row_value = "CPU" if is_cpu_alert else ("RAM" if is_ram_alert else ("Host inaktiv" if is_inactive_alert else mountpoint))
     value_row_label = "Inaktiv seit" if is_inactive_alert else "Auslastung"
     used_value_display = f"{used_percent:.1f} h" if is_inactive_alert else f"{used_percent:.1f}%"
-    platform_row = (
-        "<div style='margin-top:4px;display:flex;align-items:center;gap:8px;color:#5f7590;'>"
-        f"<img src='{html.escape(linux_logo_uri)}' alt='Linux' width='16' height='16' style='display:block;'>"
-        "<span style='font-size:14px;line-height:1;'>/</span>"
-        f"<img src='{html.escape(windows_logo_uri)}' alt='Windows' width='16' height='16' style='display:block;'>"
-        f"<span style='margin-left:10px;white-space:nowrap;'>v{build_version}</span>"
-        "</div>"
-    ) if linux_logo_uri and windows_logo_uri else ""
+    platform_row = f"<div style='margin-top:4px;color:#5f7590;font-size:13px;'>v{build_version}</div>"
     graph_block = "" if is_resource_alert else (
         (
             "<div style='margin-top:14px;'>"
