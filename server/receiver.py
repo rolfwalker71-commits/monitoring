@@ -895,11 +895,13 @@ def list_active_web_sessions(conn: sqlite3.Connection) -> list[dict]:
     )
     rows = conn.execute(
         """
-        SELECT username, COUNT(*) AS session_count, MAX(last_activity_at_utc) AS latest_activity_at_utc
-        FROM web_sessions
-        WHERE last_activity_at_utc > ?
-        GROUP BY username
-        ORDER BY username COLLATE NOCASE ASC
+        SELECT s.username, COUNT(*) AS session_count, MAX(s.last_activity_at_utc) AS latest_activity_at_utc,
+               COALESCE(u.display_name, '')
+        FROM web_sessions s
+        LEFT JOIN web_users u ON u.username = s.username
+        WHERE s.last_activity_at_utc > ?
+        GROUP BY s.username
+        ORDER BY s.username COLLATE NOCASE ASC
         """,
         (one_hour_ago_iso,),
     ).fetchall()
@@ -908,6 +910,7 @@ def list_active_web_sessions(conn: sqlite3.Connection) -> list[dict]:
             "username": str(row[0] or ""),
             "session_count": int(row[1] or 0),
             "latest_activity_at_utc": str(row[2] or ""),
+            "display_name": str(row[3] or ""),
         }
         for row in rows
         if str(row[0] or "").strip()

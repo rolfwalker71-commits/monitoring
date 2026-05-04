@@ -924,12 +924,13 @@ async function loadActiveUsers() {
 
     list.innerHTML = users.map((item) => {
       const username = asText(item.username, "-");
+      const label = asText(item.display_name, "") || username;
       const isCurrent = username === state.authUser;
       const sessionCount = Number(item.session_count || 0);
       const latestExpires = asText(item.latest_expires_at_utc, "");
       return `
         <span class="active-user-chip${isCurrent ? " current" : ""}" title="Session gueltig bis ${escapeHtml(latestExpires || "-")}">
-          <span>${escapeHtml(username)}${isCurrent ? " (du)" : ""}</span>
+          <span>${escapeHtml(label)}${isCurrent ? " (du)" : ""}</span>
           ${sessionCount > 1 ? `<span class="active-user-chip-count">${sessionCount}</span>` : ""}
         </span>
       `;
