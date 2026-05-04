@@ -55,7 +55,7 @@
             <span class="theme-toggle-label">Dark</span>
           </button>
           <span id="brandUserBadge" class="brand-user-badge hidden"></span>
-          <button id="logoutButton" class="brand-user-badge brand-logout-btn hidden" type="button" title="Abmelden">&#x2192; Abmelden</button>
+          <button id="logoutButton" class="brand-user-badge brand-logout-btn hidden" type="button" title="Abmelden">&#x1F6AA; Abmelden</button>
         </div>
         <div class="brand-partner-logo" aria-hidden="true">
           <img src="icons/ANG.png" alt="ANG" />
@@ -445,6 +445,10 @@
                   <input id="newUserUsernameInput" type="text" autocomplete="off" />
                 </label>
                 <label>
+                  Anzeigename (optional)
+                  <input id="newUserDisplayNameInput" type="text" autocomplete="off" placeholder="z.B. Max Muster" />
+                </label>
+                <label>
                   Startpasswort
                   <input id="newUserPasswordInput" type="password" autocomplete="new-password" />
                 </label>
@@ -462,6 +466,7 @@
                   <thead>
                     <tr>
                       <th>Benutzer</th>
+                      <th>Anzeigename</th>
                       <th>Admin</th>
                       <th>Aktiv</th>
                       <th>Mail Empfaenger</th>
@@ -471,7 +476,7 @@
                   </thead>
                   <tbody id="userManagementRows">
                     <tr>
-                      <td colspan="6" class="muted">Noch keine Daten geladen.</td>
+                      <td colspan="7" class="muted">Noch keine Daten geladen.</td>
                     </tr>
                   </tbody>
                 </table>

@@ -63,6 +63,7 @@ const state = {
   criticalTrendsCount: 0,
   inactiveHostsCount: 0,
   authUser: "",
+  authDisplayName: "",
   isAuthenticated: false,
   visibleHosts: 0,
   hiddenHosts: 0,
@@ -826,7 +827,7 @@ function setAuthUiState(authenticated) {
   if (brandUserBadge) {
     brandUserBadge.classList.toggle("hidden", !authenticated);
     if (authenticated && state.authUser) {
-      brandUserBadge.textContent = state.authUser;
+      brandUserBadge.textContent = state.authDisplayName || state.authUser;
     }
   }
   if (logoutButton) {
@@ -882,6 +883,7 @@ async function ensureAuthenticatedSession() {
   try {
     const session = await fetchSessionState();
     state.authUser = asText(session.username, "");
+    state.authDisplayName = asText(session.display_name, "");
     state.isAdmin = session.is_admin === true;
     setAuthUiState(session.authenticated === true);
     if (session.authenticated === true) {
@@ -968,6 +970,7 @@ async function loginWebClient() {
   try {
     const session = await fetchSessionState();
     state.isAdmin = session.is_admin === true;
+    state.authDisplayName = asText(session.display_name, "");
   } catch {
     state.isAdmin = false;
   }
@@ -993,6 +996,7 @@ async function logoutWebClient() {
   if (brandUserBadge) {
     brandUserBadge.textContent = "";
   }
+  state.authDisplayName = "";
 }
 
 async function changePassword() {
@@ -1279,12 +1283,13 @@ async function saveOauthSettings() {
 
 function renderUserManagementRows(users) {
   if (!Array.isArray(users) || users.length === 0) {
-    return '<tr><td colspan="6" class="muted">Keine Benutzer vorhanden.</td></tr>';
+    return '<tr><td colspan="7" class="muted">Keine Benutzer vorhanden.</td></tr>';
   }
 
   return users.map((user) => {
     const username = asText(user.username, "");
     const usernameEnc = encodeURIComponent(username);
+    const displayName = asText(user.display_name, "");
     const adminPill = `<span class="user-flag-pill ${user.is_admin ? "on" : "off"}">${user.is_admin ? "Admin" : "User"}</span>`;
     const activePill = `<span class="user-flag-pill ${user.is_disabled ? "off" : "on"}">${user.is_disabled ? "Gesperrt" : "Aktiv"}</span>`;
     const oauthPill = `<span class="oauth-state-pill ${user.has_microsoft_oauth ? "connected" : "disconnected"}">${user.has_microsoft_oauth ? asText(user.microsoft_connected_email, "verbunden") : "nicht verbunden"}</span>`;
@@ -1292,6 +1297,10 @@ function renderUserManagementRows(users) {
     return `
       <tr>
         <td><strong>${escapeHtml(username)}</strong></td>
+        <td>
+          <span class="user-display-name-text">${displayName ? escapeHtml(displayName) : '<span class="muted">—</span>'}</span>
+          <button type="button" class="inline-edit-btn" data-user-action="display-name" data-username-enc="${usernameEnc}" data-current-name="${escapeHtml(displayName)}" title="Anzeigename bearbeiten">✏️</button>
+        </td>
         <td>${adminPill}</td>
         <td>${activePill}</td>
         <td>${escapeHtml(asText(user.email_recipient, "-"))}</td>
@@ -1346,6 +1355,14 @@ function wireUserManagementActions() {
           }
           await submitWebUserAction({ action: "set-password", username, password });
           setUserManagementStatus(`Passwort fuer ${username} aktualisiert.`);
+        } else if (action === "display-name") {
+          const current = button.getAttribute("data-current-name") || "";
+          const newName = window.prompt(`Anzeigename fuer ${username}:`, current);
+          if (newName === null) {
+            return;
+          }
+          await submitWebUserAction({ action: "update-display-name", username, display_name: newName.trim() });
+          setUserManagementStatus(`Anzeigename fuer ${username} aktualisiert.`);
         } else if (action === "admin") {
           await submitWebUserAction({
             action: "update-flags",
@@ -1369,6 +1386,15 @@ function wireUserManagementActions() {
         }
         state.userManagementLoaded = false;
         await loadWebUsers(true);
+        // Refresh badge if the current user changed their own display name
+        if (action === "display-name" && username === state.authUser) {
+          try {
+            const session = await fetchSessionState();
+            state.authDisplayName = asText(session.display_name, "");
+            const badge = document.getElementById("brandUserBadge");
+            if (badge) badge.textContent = state.authDisplayName || state.authUser;
+          } catch { /* non-critical */ }
+        }
       } catch (error) {
         setUserManagementStatus(error.message, true);
       }
@@ -1404,6 +1430,7 @@ async function loadWebUsers(force = false) {
 
 async function createUser() {
   const usernameInput = document.getElementById("newUserUsernameInput");
+  const displayNameInput = document.getElementById("newUserDisplayNameInput");
   const passwordInput = document.getElementById("newUserPasswordInput");
   const isAdminInput = document.getElementById("newUserIsAdminInput");
 
@@ -1418,9 +1445,11 @@ async function createUser() {
     username,
     password,
     is_admin: isAdminInput.checked,
+    display_name: displayNameInput ? displayNameInput.value.trim() : "",
   });
 
   usernameInput.value = "";
+  if (displayNameInput) displayNameInput.value = "";
   passwordInput.value = "";
   isAdminInput.checked = false;
   setUserManagementStatus(`Benutzer ${username} angelegt.`);

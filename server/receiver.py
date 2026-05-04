@@ -264,6 +264,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_users ADD COLUMN is_disabled INTEGER NOT NULL DEFAULT 0")
         if "created_at_utc" not in existing_web_user_columns:
             conn.execute("ALTER TABLE web_users ADD COLUMN created_at_utc TEXT NOT NULL DEFAULT ''")
+        if "display_name" not in existing_web_user_columns:
+            conn.execute("ALTER TABLE web_users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS web_sessions (
@@ -1007,7 +1009,7 @@ def get_web_user(conn: sqlite3.Connection, username: str) -> dict | None:
     row = conn.execute(
         """
         SELECT username, password_hash, password_salt, COALESCE(is_admin, 0), COALESCE(is_disabled, 0),
-               COALESCE(created_at_utc, ''), updated_at_utc
+               COALESCE(created_at_utc, ''), updated_at_utc, COALESCE(display_name, '')
         FROM web_users
         WHERE username = ?
         """,
@@ -1023,6 +1025,7 @@ def get_web_user(conn: sqlite3.Connection, username: str) -> dict | None:
         "is_disabled": bool(int(row[4] or 0)),
         "created_at_utc": str(row[5] or ""),
         "updated_at_utc": str(row[6] or ""),
+        "display_name": str(row[7] or ""),
     }
 
 
@@ -1041,7 +1044,8 @@ def list_web_users(conn: sqlite3.Connection) -> list[dict]:
              COALESCE(s.alert_email_enabled, 0),
              COALESCE(s.alert_email_time_hhmm, ''),
                COALESCE(c.external_email, ''),
-               COALESCE(c.updated_at_utc, '')
+               COALESCE(c.updated_at_utc, ''),
+               COALESCE(u.display_name, '')
         FROM web_users u
         LEFT JOIN web_user_settings s ON s.username = u.username
         LEFT JOIN oauth_connections c ON c.username = u.username AND c.provider = ?
@@ -1065,12 +1069,13 @@ def list_web_users(conn: sqlite3.Connection) -> list[dict]:
             "microsoft_connected_email": str(row[11] or ""),
             "microsoft_connected_at_utc": str(row[12] or ""),
             "has_microsoft_oauth": bool(str(row[11] or "").strip()),
+            "display_name": str(row[13] or ""),
         }
         for row in rows
     ]
 
 
-def create_web_user(conn: sqlite3.Connection, username: str, password: str, is_admin: bool = False) -> dict:
+def create_web_user(conn: sqlite3.Connection, username: str, password: str, is_admin: bool = False, display_name: str = "") -> dict:
     normalized_username = normalize_username(username)
     if not normalized_username:
         raise ValueError("username required")
@@ -1090,9 +1095,10 @@ def create_web_user(conn: sqlite3.Connection, username: str, password: str, is_a
             is_admin,
             is_disabled,
             created_at_utc,
-            updated_at_utc
+            updated_at_utc,
+            display_name
         )
-        VALUES (?, ?, ?, ?, 0, ?, ?)
+        VALUES (?, ?, ?, ?, 0, ?, ?, ?)
         """,
         (
             normalized_username,
@@ -1101,6 +1107,7 @@ def create_web_user(conn: sqlite3.Connection, username: str, password: str, is_a
             1 if is_admin else 0,
             now_utc,
             now_utc,
+            display_name.strip(),
         ),
     )
     conn.execute(
@@ -5388,6 +5395,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "authenticated": bool(username),
                     "username": username,
                     "is_admin": is_admin,
+                    "display_name": user["display_name"] if (username and user) else "",
                 },
             )
             return
@@ -7230,6 +7238,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             target_username,
                             str(payload.get("password", "") or ""),
                             is_admin=coerce_bool(payload.get("is_admin", False)),
+                            display_name=str(payload.get("display_name", "") or ""),
                         )
                     elif action == "set-password":
                         update_web_user_password(conn, target_username, str(payload.get("password", "") or ""))
@@ -7246,6 +7255,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         if current_admin == target_username:
                             raise ValueError("current admin cannot delete self")
                         delete_web_user(conn, target_username)
+                    elif action == "update-display-name":
+                        user = get_web_user(conn, target_username)
+                        if user is None:
+                            raise ValueError("user not found")
+                        new_display_name = str(payload.get("display_name", "") or "").strip()
+                        conn.execute(
+                            "UPDATE web_users SET display_name = ?, updated_at_utc = ? WHERE username = ?",
+                            (new_display_name, utc_now_iso(), target_username),
+                        )
                     else:
                         self._send_json(HTTPStatus.BAD_REQUEST, {"error": "unsupported action"})
                         return
