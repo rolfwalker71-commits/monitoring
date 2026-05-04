@@ -664,21 +664,24 @@ def init_db() -> None:
         conn.commit()
 
 
-def create_sqlite_backup_bytes(source_path: Path) -> bytes:
+def create_sqlite_backup_file(source_path: Path) -> tuple[Path, int]:
     with tempfile.NamedTemporaryFile(prefix="monitoring-backup-", suffix=".db", delete=False) as tmp:
         temp_path = Path(tmp.name)
 
     try:
         with sqlite3.connect(f"file:{source_path}?mode=ro", uri=True) as source_conn:
             with sqlite3.connect(temp_path) as backup_conn:
-                source_conn.backup(backup_conn)
+                # Use incremental page copy to behave better under write load.
+                source_conn.backup(backup_conn, pages=1024, sleep=0.01)
                 backup_conn.commit()
-        return temp_path.read_bytes()
-    finally:
+        size = temp_path.stat().st_size
+        return temp_path, int(size)
+    except Exception:
         try:
             temp_path.unlink()
         except OSError:
             pass
+        raise
 
 
 def restore_sqlite_from_bytes(dest_path: Path, data: bytes) -> None:
@@ -5421,7 +5424,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not self._require_admin_session():
                 return
             try:
-                backup_content = create_sqlite_backup_bytes(DB_PATH)
+                backup_path, backup_size = create_sqlite_backup_file(DB_PATH)
             except Exception:
                 self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "database backup failed"})
                 return
@@ -5430,13 +5433,24 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             version = re.sub(r"[^0-9A-Za-z._-]", "-", read_build_version())
             filename = f"monitoring-backup-v{version}-{timestamp}.db"
 
-            self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", "application/x-sqlite3")
-            self.send_header("Content-Length", str(len(backup_content)))
-            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            self.wfile.write(backup_content)
+            try:
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "application/x-sqlite3")
+                self.send_header("Content-Length", str(backup_size))
+                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                with backup_path.open("rb") as handle:
+                    while True:
+                        chunk = handle.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+            finally:
+                try:
+                    backup_path.unlink()
+                except OSError:
+                    pass
             return
 
         if parsed.path == "/api/v1/oauth/microsoft/start":
