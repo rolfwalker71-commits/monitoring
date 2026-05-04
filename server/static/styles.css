@@ -1270,6 +1270,42 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   color: var(--text);
 }
 
+.chart-metrics-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.chart-metrics-control legend {
+  display: none;
+}
+
+.chart-metrics-control label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.chart-metrics-control label:hover {
+  background: #f1f5f9;
+}
+
+.chart-metrics-control input[type="checkbox"] {
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+}
+
 .overview-subsection {
   margin-bottom: 12px;
 }
@@ -3950,6 +3986,14 @@ body[data-theme="dark"] .host-mini-action.visibility.active {
   color: #bfdbfe;
   background: #1d3b66;
   border-color: #5b8ccc;
+}
+
+body[data-theme="dark"] .chart-metrics-control {
+  color: #a9bfd9;
+}
+
+body[data-theme="dark"] .chart-metrics-control label:hover {
+  background: #1a2b42;
 }
 
 body[data-theme="dark"] .host-unmute-action {

@@ -43,6 +43,7 @@ const state = {
   globalSubMode: "global-alerts",
   criticalTrendsHours: 24,
   criticalTrendsProjectHours: 8,
+  criticalTrendsMetrics: ["filesystem"],
   inactiveHostsHours: 1,
   inactiveHosts: [],
   reportLimit: 1,
@@ -183,6 +184,62 @@ function loadHostFilterPreferences() {
   } catch (_error) {
     // Ignore
   }
+}
+
+async function loadUserPreferences() {
+  try {
+    const response = await fetch("/api/v1/user-preferences", { credentials: "same-origin" });
+    if (!response.ok) return;
+    const prefs = await response.json();
+    if (prefs.critical_trends_metrics) {
+      const metricsStr = String(prefs.critical_trends_metrics || "filesystem").trim();
+      state.criticalTrendsMetrics = metricsStr.split(",").map((m) => m.trim()).filter((m) => m.length > 0);
+    }
+    updateCriticalTrendsMetricsCheckboxes();
+  } catch (_error) {
+    // Ignore
+  }
+}
+
+function updateCriticalTrendsMetricsCheckboxes() {
+  const checkboxes = {
+    cpu: document.getElementById("ctMetricCpu"),
+    swap: document.getElementById("ctMetricSwap"),
+    filesystem: document.getElementById("ctMetricFilesystem"),
+  };
+  for (const [metric, checkbox] of Object.entries(checkboxes)) {
+    if (checkbox) {
+      checkbox.checked = state.criticalTrendsMetrics.includes(metric);
+    }
+  }
+}
+
+async function updateCriticalTrendsMetrics() {
+  const metrics = [];
+  const checkboxes = {
+    cpu: document.getElementById("ctMetricCpu"),
+    swap: document.getElementById("ctMetricSwap"),
+    filesystem: document.getElementById("ctMetricFilesystem"),
+  };
+  for (const [metric, checkbox] of Object.entries(checkboxes)) {
+    if (checkbox && checkbox.checked) {
+      metrics.push(metric);
+    }
+  }
+  state.criticalTrendsMetrics = metrics.length > 0 ? metrics : ["filesystem"];
+
+  try {
+    await fetch("/api/v1/user-preferences", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ critical_trends_metrics: state.criticalTrendsMetrics.join(",") }),
+    });
+  } catch (_error) {
+    // Ignore
+  }
+
+  await loadCriticalTrends();
 }
 
 function persistHostFilterPreferences() {
@@ -888,6 +945,7 @@ async function ensureAuthenticatedSession() {
     setAuthUiState(session.authenticated === true);
     if (session.authenticated === true) {
       loadHostFilterPreferences();
+      loadUserPreferences();
     }
     return session.authenticated === true;
   } catch {
@@ -4818,15 +4876,21 @@ function renderCriticalTrends(data) {
     return `<div class="ct-empty"><span class="ct-empty-icon">✓</span><p>Keine kritischen Trends im Zeitraum der letzten ${hours} Std. erkannt (Projektion: ${projectHours} Std.).</p></div>`;
   }
 
+  // Filter by selected metrics
+  const filteredWarnings = warnings.filter((w) => state.criticalTrendsMetrics.includes(w.type));
+  if (filteredWarnings.length === 0) {
+    return `<div class="ct-empty"><span class="ct-empty-icon">✓</span><p>Keine Trends für die ausgewählten Metriken im Zeitraum der letzten ${hours} Std. erkannt.</p></div>`;
+  }
+
   // Group by hostname
   const byHost = new Map();
-  for (const w of warnings) {
+  for (const w of filteredWarnings) {
     if (!byHost.has(w.hostname)) byHost.set(w.hostname, []);
     byHost.get(w.hostname).push(w);
   }
 
-  const critCount = warnings.filter((w) => w.level === "crit").length;
-  const warnCount = warnings.filter((w) => w.level === "warn").length;
+  const critCount = filteredWarnings.filter((w) => w.level === "crit").length;
+  const warnCount = filteredWarnings.filter((w) => w.level === "warn").length;
 
   const dataEndTimeMs = Date.now();
   const projectionTargetIso = new Date(dataEndTimeMs + projectHours * 3600 * 1000).toISOString();
@@ -5331,6 +5395,15 @@ function wireEvents() {
   document.getElementById("criticalTrendsProjectSelect").addEventListener("change", async (event) => {
     state.criticalTrendsProjectHours = Number(event.target.value) || 8;
     await loadCriticalTrends();
+  });
+
+  ["ctMetricCpu", "ctMetricSwap", "ctMetricFilesystem"].forEach((checkboxId) => {
+    const checkbox = document.getElementById(checkboxId);
+    if (checkbox) {
+      checkbox.addEventListener("change", async () => {
+        updateCriticalTrendsMetrics();
+      });
+    }
   });
 
   document.getElementById("inactiveHostsTabButton").addEventListener("click", async () => {

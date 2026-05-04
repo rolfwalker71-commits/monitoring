@@ -204,6 +204,12 @@
                     <option value="168">7 Tage</option>
                   </select>
                 </label>
+                <fieldset class="chart-metrics-control">
+                  <legend>Metriken</legend>
+                  <label><input type="checkbox" id="ctMetricCpu" /> CPU</label>
+                  <label><input type="checkbox" id="ctMetricSwap" /> SWAP</label>
+                  <label><input type="checkbox" id="ctMetricFilesystem" checked /> Filesystem</label>
+                </fieldset>
                 <button id="refreshCriticalTrendsButton" type="button" class="btn-secondary">Neu laden</button>
               </div>
               <div id="criticalTrendsList" class="critical-trends-list">

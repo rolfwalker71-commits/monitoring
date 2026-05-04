@@ -442,6 +442,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_telegram_chat_id TEXT NOT NULL DEFAULT ''")
         if "email_sender" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN email_sender TEXT NOT NULL DEFAULT ''")
+        if "critical_trends_metrics" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN critical_trends_metrics TEXT NOT NULL DEFAULT 'filesystem'")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS web_user_alert_subscriptions (
@@ -1214,7 +1216,8 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
                COALESCE(alert_instant_telegram_enabled, 0),
                COALESCE(alert_telegram_chat_id, ''),
                COALESCE(email_sender, ''),
-               COALESCE(updated_at_utc, '')
+               COALESCE(updated_at_utc, ''),
+               COALESCE(critical_trends_metrics, 'filesystem')
         FROM web_user_settings
         WHERE username = ?
         """,
@@ -1239,6 +1242,7 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
             "alert_telegram_chat_id": "",
             "email_sender": "",
             "updated_at_utc": "",
+            "critical_trends_metrics": "filesystem",
         }
     return {
         "email_enabled": bool(int(row[0] or 0)),
@@ -1258,6 +1262,7 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
         "alert_telegram_chat_id": str(row[14] or ""),
         "email_sender": str(row[15] or ""),
         "updated_at_utc": str(row[16] or ""),
+        "critical_trends_metrics": str(row[17] or "filesystem"),
     }
 
 
@@ -1302,6 +1307,9 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
     email_sender = str(
         payload.get("email_sender", existing.get("email_sender", "")) or ""
     ).strip()
+    critical_trends_metrics = str(
+        payload.get("critical_trends_metrics", existing.get("critical_trends_metrics", "filesystem")) or "filesystem"
+    ).strip()
     now_utc = utc_now_iso()
     conn.execute(
         """
@@ -1323,9 +1331,10 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_instant_telegram_enabled,
             alert_telegram_chat_id,
             email_sender,
+            critical_trends_metrics,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             email_enabled = excluded.email_enabled,
             email_recipient = excluded.email_recipient,
@@ -1343,6 +1352,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_instant_telegram_enabled = excluded.alert_instant_telegram_enabled,
             alert_telegram_chat_id = excluded.alert_telegram_chat_id,
             email_sender = excluded.email_sender,
+            critical_trends_metrics = excluded.critical_trends_metrics,
             updated_at_utc = excluded.updated_at_utc
         """,
         (
@@ -1363,6 +1373,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             1 if alert_instant_telegram_enabled else 0,
             alert_telegram_chat_id,
             email_sender,
+            critical_trends_metrics,
             now_utc,
         ),
     )
@@ -1383,6 +1394,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
         "alert_instant_telegram_enabled": alert_instant_telegram_enabled,
         "alert_telegram_chat_id": alert_telegram_chat_id,
         "email_sender": email_sender,
+        "critical_trends_metrics": critical_trends_metrics,
         "updated_at_utc": now_utc,
     }
 
@@ -5402,6 +5414,32 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 },
             )
             return
+
+        if parsed.path == "/api/v1/user-preferences":
+            username = self._web_session_username()
+            if not username:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "not authenticated"})
+                return
+
+            if self.command == "GET":
+                with sqlite3.connect(DB_PATH) as conn:
+                    prefs = get_web_user_settings(conn, username)
+                self._send_json(HTTPStatus.OK, prefs)
+                return
+
+            if self.command == "POST":
+                try:
+                    payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
+                except (json.JSONDecodeError, ValueError):
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid JSON"})
+                    return
+
+                with sqlite3.connect(DB_PATH) as conn:
+                    result = save_web_user_settings(conn, username, payload)
+                    conn.commit()
+
+                self._send_json(HTTPStatus.OK, {"updated": True, **result})
+                return
 
         if parsed.path == "/api/v1/agent-commands":
             query = parse_qs(parsed.query)
