@@ -4828,7 +4828,8 @@ function renderCriticalTrends(data) {
   const critCount = warnings.filter((w) => w.level === "crit").length;
   const warnCount = warnings.filter((w) => w.level === "warn").length;
 
-  const projectionTargetIso = new Date(Date.now() + projectHours * 3600 * 1000).toISOString();
+  const dataEndTimeMs = Date.now();
+  const projectionTargetIso = new Date(dataEndTimeMs + projectHours * 3600 * 1000).toISOString();
   const projectionTargetFormatted = formatUtcPlus2(projectionTargetIso);
 
   const summary = `
@@ -5323,6 +5324,7 @@ function wireEvents() {
 
   document.getElementById("criticalTrendsRangeSelect").addEventListener("change", async (event) => {
     state.criticalTrendsHours = Number(event.target.value) || 24;
+    state.criticalTrendsProjectHours = state.criticalTrendsHours;
     await loadCriticalTrends();
   });
 
