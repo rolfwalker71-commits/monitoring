@@ -204,6 +204,7 @@ async function loadUserPreferences() {
 function updateCriticalTrendsMetricsCheckboxes() {
   const checkboxes = {
     cpu: document.getElementById("ctMetricCpu"),
+    memory: document.getElementById("ctMetricMemory"),
     swap: document.getElementById("ctMetricSwap"),
     filesystem: document.getElementById("ctMetricFilesystem"),
   };
@@ -218,6 +219,7 @@ async function updateCriticalTrendsMetrics() {
   const metrics = [];
   const checkboxes = {
     cpu: document.getElementById("ctMetricCpu"),
+    memory: document.getElementById("ctMetricMemory"),
     swap: document.getElementById("ctMetricSwap"),
     filesystem: document.getElementById("ctMetricFilesystem"),
   };
@@ -4918,7 +4920,7 @@ function renderCriticalTrends(data) {
     const rows = items.map((w) => {
       const bar = Math.min(100, Math.max(0, w.projected));
       const barClass = w.level === "crit" ? "ct-bar-crit" : "ct-bar-warn";
-      const icon = w.type === "filesystem" ? "💾" : "📊";
+      const icon = w.type === "filesystem" ? "💾" : w.type === "cpu" ? "⚙️" : w.type === "memory" ? "🧠" : w.type === "swap" ? "🔃" : "📊";
       const diff = w.current !== null ? w.projected - w.current : 0;
       const trendArrow = diff > 0.05
         ? `<span class="ct-trend-arrow ct-trend-up">🔺</span>`
@@ -5397,7 +5399,7 @@ function wireEvents() {
     await loadCriticalTrends();
   });
 
-  ["ctMetricCpu", "ctMetricSwap", "ctMetricFilesystem"].forEach((checkboxId) => {
+  ["ctMetricCpu", "ctMetricMemory", "ctMetricSwap", "ctMetricFilesystem"].forEach((checkboxId) => {
     const checkbox = document.getElementById(checkboxId);
     if (checkbox) {
       checkbox.addEventListener("change", async () => {

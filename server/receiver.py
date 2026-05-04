@@ -1877,6 +1877,14 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours:
             if not level:
                 continue
             current = values[-1] if values else None
+            if key == "cpu_usage_percent":
+                metric_type = "cpu"
+            elif key == "memory_used_percent":
+                metric_type = "memory"
+            elif key == "swap_used_percent":
+                metric_type = "swap"
+            else:
+                metric_type = "resource"
             warnings.append(
                 {
                     "hostname": hostname,
@@ -1884,7 +1892,7 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours:
                     "primary_ip": host_primary_ip,
                     "metric": label,
                     "metric_key": key,
-                    "type": "resource",
+                    "type": metric_type,
                     "current": round(current, 1) if current is not None else None,
                     "projected": round(float(projected), 1),
                     "level": level,
