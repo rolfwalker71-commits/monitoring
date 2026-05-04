@@ -6687,6 +6687,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_file(STATIC_DIR / "styles.css", "text/css; charset=utf-8")
             return
 
+        if parsed.path == "/manifest.json":
+            self._send_file(STATIC_DIR / "manifest.json", "application/manifest+json; charset=utf-8")
+            return
+
+        if parsed.path == "/sw.js":
+            self._send_file(
+                STATIC_DIR / "sw.js",
+                "application/javascript; charset=utf-8",
+                extra_headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Service-Worker-Allowed": "/",
+                },
+            )
+            return
+
         if parsed.path == "/openapi.yaml":
             self._send_file(
                 OPENAPI_SPEC_PATH,
