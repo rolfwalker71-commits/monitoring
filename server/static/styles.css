@@ -1186,8 +1186,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 }
 
 .analysis-panel table,
-.alerts-panel table,
-.fs-table {
+.alerts-panel table {
   table-layout: fixed;
 }
 
@@ -3232,16 +3231,41 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 
 .fs-table {
   margin-top: 0;
+  table-layout: auto;
+}
+
+.fs-table .fs-col-mountpoint {
+  width: 20%;
+  min-width: 190px;
+}
+
+.fs-table .fs-col-filesystem {
+  width: 21%;
+  min-width: 210px;
+}
+
+.fs-table .fs-col-type {
+  width: 8%;
+  min-width: 70px;
+}
+
+.fs-table .fs-col-size {
+  width: 11%;
+  min-width: 120px;
+}
+
+.fs-table .fs-col-usage {
+  width: 18%;
+  min-width: 180px;
 }
 
 .fs-bar-cell {
-  width: 140px;
-  min-width: 120px;
+  min-width: 170px;
 }
 
 .fs-bar-wrap {
   display: inline-block;
-  width: 90px;
+  width: 135px;
   height: 8px;
   background: #e2e8f0;
   border-radius: 4px;
