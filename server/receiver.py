@@ -684,6 +684,99 @@ def create_sqlite_backup_file(source_path: Path) -> tuple[Path, int]:
         raise
 
 
+BACKUP_JOB_TTL_SEC = 30 * 60
+_BACKUP_JOBS_LOCK = threading.Lock()
+_BACKUP_JOBS: dict[str, dict[str, object]] = {}
+
+
+def _cleanup_backup_jobs_unlocked(now_ts: float) -> None:
+    expired_ids: list[str] = []
+    for job_id, job in _BACKUP_JOBS.items():
+        status = str(job.get("status", ""))
+        created_ts = float(job.get("created_ts", now_ts))
+        reference_ts = float(job.get("ready_ts", created_ts)) if status in {"ready", "error", "downloaded"} else created_ts
+        if now_ts - reference_ts <= BACKUP_JOB_TTL_SEC:
+            continue
+        backup_path = str(job.get("backup_path", "") or "")
+        if backup_path:
+            try:
+                Path(backup_path).unlink()
+            except OSError:
+                pass
+        expired_ids.append(job_id)
+
+    for job_id in expired_ids:
+        _BACKUP_JOBS.pop(job_id, None)
+
+
+def cleanup_backup_jobs() -> None:
+    with _BACKUP_JOBS_LOCK:
+        _cleanup_backup_jobs_unlocked(time.time())
+
+
+def start_database_backup_job() -> tuple[str, str]:
+    cleanup_backup_jobs()
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
+    version = re.sub(r"[^0-9A-Za-z._-]", "-", read_build_version())
+    filename = f"monitoring-backup-v{version}-{timestamp}.db"
+    job_id = secrets.token_urlsafe(16)
+
+    with _BACKUP_JOBS_LOCK:
+        _BACKUP_JOBS[job_id] = {
+            "job_id": job_id,
+            "status": "running",
+            "created_ts": time.time(),
+            "filename": filename,
+            "backup_size": 0,
+            "backup_path": "",
+            "error": "",
+        }
+
+    def worker() -> None:
+        try:
+            backup_path, backup_size = create_sqlite_backup_file(DB_PATH)
+        except Exception:
+            with _BACKUP_JOBS_LOCK:
+                job = _BACKUP_JOBS.get(job_id)
+                if job is not None:
+                    job["status"] = "error"
+                    job["error"] = "database backup failed"
+                    job["ready_ts"] = time.time()
+            return
+
+        with _BACKUP_JOBS_LOCK:
+            job = _BACKUP_JOBS.get(job_id)
+            if job is None:
+                try:
+                    backup_path.unlink()
+                except OSError:
+                    pass
+                return
+            job["status"] = "ready"
+            job["backup_size"] = int(backup_size)
+            job["backup_path"] = str(backup_path)
+            job["ready_ts"] = time.time()
+
+    threading.Thread(target=worker, daemon=True, name=f"backup-job-{job_id[:8]}").start()
+    return job_id, filename
+
+
+def get_database_backup_job(job_id: str) -> dict[str, object] | None:
+    cleanup_backup_jobs()
+    with _BACKUP_JOBS_LOCK:
+        job = _BACKUP_JOBS.get(job_id)
+        return dict(job) if job is not None else None
+
+
+def mark_database_backup_job_downloaded(job_id: str) -> None:
+    with _BACKUP_JOBS_LOCK:
+        job = _BACKUP_JOBS.get(job_id)
+        if job is not None:
+            job["status"] = "downloaded"
+            job["ready_ts"] = time.time()
+            job["backup_path"] = ""
+
+
 def restore_sqlite_from_bytes(dest_path: Path, data: bytes) -> None:
     """Validate data is a SQLite file, then atomically replace dest_path."""
     if not data.startswith(b"SQLite format 3\x00"):
@@ -5451,6 +5544,88 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 settings = oauth_settings_public_view(get_oauth_settings(conn))
             self._send_json(HTTPStatus.OK, settings)
+            return
+
+        if parsed.path == "/api/v1/backup/database/start":
+            if not self._require_admin_session():
+                return
+            job_id, filename = start_database_backup_job()
+            self._send_json(
+                HTTPStatus.ACCEPTED,
+                {
+                    "job_id": job_id,
+                    "status": "running",
+                    "filename": filename,
+                },
+            )
+            return
+
+        if parsed.path == "/api/v1/backup/database/status":
+            if not self._require_admin_session():
+                return
+            query = parse_qs(parsed.query)
+            job_id = str(query.get("job_id", [""])[0] or "").strip()
+            if not job_id:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "job_id required"})
+                return
+            job = get_database_backup_job(job_id)
+            if job is None:
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup job not found"})
+                return
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "job_id": job_id,
+                    "status": str(job.get("status", "unknown")),
+                    "filename": str(job.get("filename", "") or ""),
+                    "backup_size": int(job.get("backup_size", 0) or 0),
+                    "error": str(job.get("error", "") or ""),
+                },
+            )
+            return
+
+        if parsed.path == "/api/v1/backup/database/download":
+            if not self._require_admin_session():
+                return
+            query = parse_qs(parsed.query)
+            job_id = str(query.get("job_id", [""])[0] or "").strip()
+            if not job_id:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "job_id required"})
+                return
+            job = get_database_backup_job(job_id)
+            if job is None:
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup job not found"})
+                return
+            if str(job.get("status", "")) != "ready":
+                self._send_json(HTTPStatus.CONFLICT, {"error": "backup not ready"})
+                return
+
+            backup_path = Path(str(job.get("backup_path", "") or ""))
+            if not backup_path.exists():
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup file missing"})
+                return
+
+            backup_size = int(job.get("backup_size", 0) or 0)
+            filename = str(job.get("filename", "monitoring-backup.db") or "monitoring-backup.db")
+            try:
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "application/x-sqlite3")
+                self.send_header("Content-Length", str(backup_size))
+                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                with backup_path.open("rb") as handle:
+                    while True:
+                        chunk = handle.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                mark_database_backup_job_downloaded(job_id)
+            finally:
+                try:
+                    backup_path.unlink()
+                except OSError:
+                    pass
             return
 
         if parsed.path == "/api/v1/backup/database":

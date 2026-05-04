@@ -3939,11 +3939,53 @@ async function triggerFileDownload(requestUrl, fallbackFilename) {
   return filename;
 }
 
+function waitMs(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 async function downloadDatabaseBackup() {
-  return triggerFileDownload(
-    "/api/v1/backup/database",
-    `monitoring-backup-${new Date().toISOString().replace(/[.:]/g, "-")}.db`,
-  );
+  const fallbackFilename = `monitoring-backup-${new Date().toISOString().replace(/[.:]/g, "-")}.db`;
+  const startResponse = await fetch("/api/v1/backup/database/start", {
+    method: "GET",
+    credentials: "same-origin",
+  });
+  const startData = await startResponse.json().catch(() => ({}));
+  if (!startResponse.ok) {
+    throw new Error(startData.error || ("HTTP " + startResponse.status));
+  }
+
+  const jobId = String(startData.job_id || "").trim();
+  if (!jobId) {
+    throw new Error("backup job start failed");
+  }
+
+  const startTs = Date.now();
+  const timeoutMs = 180000;
+  while (Date.now() - startTs < timeoutMs) {
+    await waitMs(1200);
+    const statusResponse = await fetch(`/api/v1/backup/database/status?job_id=${encodeURIComponent(jobId)}`, {
+      method: "GET",
+      credentials: "same-origin",
+    });
+    const statusData = await statusResponse.json().catch(() => ({}));
+    if (!statusResponse.ok) {
+      throw new Error(statusData.error || ("HTTP " + statusResponse.status));
+    }
+    const status = String(statusData.status || "");
+    if (status === "ready") {
+      return triggerFileDownload(
+        `/api/v1/backup/database/download?job_id=${encodeURIComponent(jobId)}`,
+        fallbackFilename,
+      );
+    }
+    if (status === "error") {
+      throw new Error(String(statusData.error || "database backup failed"));
+    }
+  }
+
+  throw new Error("backup timeout");
 }
 
 async function restoreDatabaseFromFile(file) {
