@@ -3564,6 +3564,7 @@ def check_inactive_host_alerts(conn: sqlite3.Connection) -> None:
             (hostname, INACTIVE_HOST_ALERT_MOUNTPOINT, hours_inactive, now_utc_iso, now_utc_iso),
         )
         _new_alert_id = int(_cur.lastrowid)
+        conn.commit()  # commit before sending notification so the alert is visible when ack button is clicked
 
         display_name = get_display_name_override(conn, hostname) or hostname
         maybe_send_alert_message(
@@ -4889,6 +4890,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
                 """,
                 (hostname, mountpoint, severity, used_percent, now_utc, now_utc, report_id),
             )
+            conn.commit()  # commit before sending notification so the alert is visible when ack button is clicked
             maybe_send_alert_message(alarm_settings, "opened", hostname, mountpoint, severity, used_percent, conn=conn, display_name=display_name, alert_id=int(_cur.lastrowid))
             continue
 
@@ -5030,6 +5032,7 @@ def update_cpu_alerts_for_report(
             """,
             (hostname, CPU_ALERT_MOUNTPOINT, severity, avg_cpu, now_utc, now_utc, report_id),
         )
+        conn.commit()  # commit before sending notification so the alert is visible when ack button is clicked
         maybe_send_alert_message(
             alarm_settings, "opened", hostname, CPU_ALERT_MOUNTPOINT, severity, avg_cpu,
             conn=conn, display_name=display_name, alert_id=int(_cur.lastrowid),
@@ -5149,6 +5152,7 @@ def update_ram_alerts_for_report(
             """,
             (hostname, RAM_ALERT_MOUNTPOINT, severity, avg_ram, now_utc, now_utc, report_id),
         )
+        conn.commit()  # commit before sending notification so the alert is visible when ack button is clicked
         maybe_send_alert_message(
             alarm_settings, "opened", hostname, RAM_ALERT_MOUNTPOINT, severity, avg_ram,
             conn=conn, display_name=display_name, alert_id=int(_cur.lastrowid),
