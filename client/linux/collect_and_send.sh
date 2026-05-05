@@ -293,9 +293,13 @@ collect_dir_deep_listings_json() {
 
         # Single find pass: get mtime, size, type, name — tab-separated.
         # %T@ = mtime epoch (float), %s = size bytes, %y = type (f/d/l), %P = name only (no path).
-        # This eliminates separate stat calls and the extra find|wc -l for total_count.
+        # Scan recursively (default depth 2) so nested backup ZIP files are visible.
         local scan_timeout="${DIR_SCAN_DEEP_TIMEOUT_SEC:-15}"
-        local find_cmd=(find "$subdir_path" -maxdepth 1 -mindepth 1 -printf '%T@\t%s\t%y\t%P\n')
+        local item_maxdepth="${DIR_SCAN_DEEP_ITEM_MAX_DEPTH:-2}"
+        if ! [[ "$item_maxdepth" =~ ^[0-9]+$ ]] || [[ "$item_maxdepth" -lt 1 ]]; then
+          item_maxdepth=2
+        fi
+        local find_cmd=(find "$subdir_path" -maxdepth "$item_maxdepth" -mindepth 1 -printf '%T@\t%s\t%y\t%P\n')
         local find_raw
         if command -v timeout >/dev/null 2>&1 && [[ "$scan_timeout" =~ ^[0-9]+$ ]] && [[ "$scan_timeout" -gt 0 ]]; then
           find_raw="$(timeout "$scan_timeout" "${find_cmd[@]}" 2>/dev/null | sort -t$'\t' -k1 -rn || true)"
