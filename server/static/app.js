@@ -59,6 +59,7 @@ const state = {
   globalAlertsTotal: 0,
   globalAlertsPageSize: 100,
   globalShowAcknowledged: false,
+  globalShowClosed: false,
   hostAlertsCollapsed: false,
   globalSeverityFilter: "all",
   globalOpenAlertsCount: 0,
@@ -5007,6 +5008,25 @@ async function acknowledgeAlert(hostname, mountpoint, currentNote = "", isAcknow
   await loadHosts();
 }
 
+async function closeAlert(hostname, mountpoint, isClosed) {
+  try {
+    const url = isClosed ? "/api/v1/alert-unclose" : "/api/v1/alert-close";
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hostname, mountpoint }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || ("HTTP " + response.status));
+  } catch (err) {
+    alert(`Fehler: ${err.message}`);
+    return;
+  }
+  await loadAlertsForHost();
+  await loadGlobalAlertsOverview();
+  await loadHosts();
+}
+
 async function loadAlertsForHost() {
   const alertsSummary = document.getElementById("alertsSummary");
   const alertsRows = document.getElementById("alertsRows");
@@ -5058,23 +5078,31 @@ async function loadAlertsForHost() {
         const severityClass = item.severity === "critical" ? "severity-critical" : "severity-warning";
         const isMuted = Boolean(item.is_muted);
         const isAcknowledged = Boolean(item.is_acknowledged);
+        const isClosed = Boolean(item.is_closed);
         const ackNote = asText(item.ack_note);
         const ackTitle = isAcknowledged
           ? `Quittiert von ${asText(item.ack_by, "-")} am ${formatUtcPlus2(item.ack_at_utc)}${ackNote ? ` | Notiz: ${ackNote}` : ""}`
           : "Alert quittieren";
+        const closeTitle = isClosed
+          ? `Abgeschlossen von ${asText(item.closed_by, "-")} am ${formatUtcPlus2(item.closed_at_utc)} – klicken zum Wiederöffnen`
+          : "Alert abschliessen (stoppt Heads-Up)";
         const muteBtn = `<button class="alert-mute-btn${isMuted ? " muted" : ""}" type="button" data-action="toggle-mute" data-hostname="${escapeHtml(asText(item.hostname))}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-muted="${isMuted ? "1" : "0"}" title="${isMuted ? "Stummschaltung aufheben" : "Alert stummschalten"}">${isMuted ? "🔔" : "🔇"}</button>`;
         const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-acknowledged="${isAcknowledged ? "1" : "0"}" data-hostname="${escapeHtml(asText(item.hostname))}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
+        const closeBtn = `<button class="alert-close-btn${isClosed ? " closed" : ""}" type="button" data-action="close" data-hostname="${escapeHtml(asText(item.hostname))}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-closed="${isClosed ? "1" : "0"}" title="${escapeHtml(closeTitle)}">${isClosed ? "🔓" : "🔒"}</button>`;
         const ackMeta = isAcknowledged
           ? `<div class="count compact">✅ ${escapeHtml(asText(item.ack_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.ack_at_utc))}</div>`
           : "";
+        const closeMeta = isClosed
+          ? `<div class="count compact alert-closed-meta">🔒 ${escapeHtml(asText(item.closed_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.closed_at_utc))}</div>`
+          : "";
         return `
-          <tr class="${isMuted ? "alert-row-muted" : ""}">
+          <tr class="${isMuted ? "alert-row-muted" : ""}${isClosed ? " alert-row-closed" : ""}">
             <td><span class="badge ${statusClass}">${escapeHtml(asText(item.status))}</span></td>
             <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
             <td>${renderAlertMountpointLabel(item.mountpoint, 60)}</td>
             <td>${formatPercent(item.used_percent)}</td>
-            <td title="Zuletzt gesehen: ${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}">${escapeHtml(formatUtcPlus2(item.created_at_utc))}${ackMeta}</td>
-            <td><div class="alert-action-buttons">${muteBtn}${ackBtn}</div></td>
+            <td title="Zuletzt gesehen: ${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}">${escapeHtml(formatUtcPlus2(item.created_at_utc))}${ackMeta}${closeMeta}</td>
+            <td><div class="alert-action-buttons">${muteBtn}${ackBtn}${closeBtn}</div></td>
           </tr>
         `;
       })
@@ -5097,6 +5125,15 @@ async function loadAlertsForHost() {
         const currentNote = decodeURIComponent(btn.getAttribute("data-ack-note") || "");
         const isAlreadyAcknowledged = btn.getAttribute("data-acknowledged") === "1";
         await acknowledgeAlert(hostname, mountpoint, currentNote, isAlreadyAcknowledged);
+      });
+    });
+    alertsRows.querySelectorAll("[data-action='close']").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const hostname = btn.getAttribute("data-hostname");
+        const mountpoint = btn.getAttribute("data-mountpoint");
+        const isClosed = btn.getAttribute("data-closed") === "1";
+        await closeAlert(hostname, mountpoint, isClosed);
       });
     });
   } catch (error) {
@@ -5358,6 +5395,7 @@ async function loadGlobalAlertsOverview(options = {}) {
     ? `&severity=${encodeURIComponent(state.globalSeverityFilter)}`
     : "";
   const acknowledgedQuery = state.globalShowAcknowledged ? "" : "&acknowledged=no";
+  const closedQuery = state.globalShowClosed ? "" : "&closed=no";
 
   if (updateList && rowsEl && !append) {
     rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Lade globale Alerts...</td></tr>";
@@ -5395,7 +5433,7 @@ async function loadGlobalAlertsOverview(options = {}) {
       return;
     }
 
-    const listResp = await fetch(`/api/v1/alerts?status=open&limit=${requestLimit}&offset=${requestOffset}${severityQuery}${acknowledgedQuery}`, {
+    const listResp = await fetch(`/api/v1/alerts?status=open&limit=${requestLimit}&offset=${requestOffset}${severityQuery}${acknowledgedQuery}${closedQuery}`, {
       credentials: "same-origin",
       cache: "no-store",
     });
@@ -5422,17 +5460,25 @@ async function loadGlobalAlertsOverview(options = {}) {
         const hostName = asText(item.hostname);
         const isMuted = Boolean(item.is_muted);
         const isAcknowledged = Boolean(item.is_acknowledged);
+        const isClosed = Boolean(item.is_closed);
         const ackNote = asText(item.ack_note);
         const ackTitle = isAcknowledged
           ? `Quittiert von ${asText(item.ack_by, "-")} am ${formatUtcPlus2(item.ack_at_utc)}${ackNote ? ` | Notiz: ${ackNote}` : ""}`
           : "Alert quittieren";
+        const closeTitle = isClosed
+          ? `Abgeschlossen von ${asText(item.closed_by, "-")} am ${formatUtcPlus2(item.closed_at_utc)} – klicken zum Wiederöffnen`
+          : "Alert abschliessen (stoppt Heads-Up)";
         const muteBtn = `<button class="alert-mute-btn${isMuted ? " muted" : ""}" type="button" data-action="toggle-mute" data-hostname="${escapeHtml(hostName)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-muted="${isMuted ? "1" : "0"}" title="${isMuted ? "Stummschaltung aufheben" : "Alert stummschalten"}">${isMuted ? "🔔" : "🔇"}</button>`;
         const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-acknowledged="${isAcknowledged ? "1" : "0"}" data-hostname="${escapeHtml(hostName)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
+        const closeBtn = `<button class="alert-close-btn${isClosed ? " closed" : ""}" type="button" data-action="close" data-hostname="${escapeHtml(hostName)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-closed="${isClosed ? "1" : "0"}" title="${escapeHtml(closeTitle)}">${isClosed ? "🔓" : "🔒"}</button>`;
         const ackMeta = isAcknowledged
           ? `<div class="count compact">✅ ${escapeHtml(asText(item.ack_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.ack_at_utc))}</div>`
           : "";
+        const closeMeta = isClosed
+          ? `<div class="count compact alert-closed-meta">🔒 ${escapeHtml(asText(item.closed_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.closed_at_utc))}</div>`
+          : "";
         return `
-          <tr class="${isMuted ? "alert-row-muted" : ""}">
+          <tr class="${isMuted ? "alert-row-muted" : ""}${isClosed ? " alert-row-closed" : ""}">
             <td>
               <div class="global-host-cell">
                 <span class="global-host-label">${escapeHtml(hostDisplayName)}</span>
@@ -5443,8 +5489,8 @@ async function loadGlobalAlertsOverview(options = {}) {
             <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
             <td>${renderAlertMountpointLabel(item.mountpoint, 56)}</td>
             <td>${formatPercent(item.used_percent)}</td>
-            <td title="Zuletzt gesehen: ${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}">${escapeHtml(formatUtcPlus2(item.created_at_utc))}${ackMeta}</td>
-            <td><div class="alert-action-buttons">${muteBtn}${ackBtn}</div></td>
+            <td title="Zuletzt gesehen: ${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}">${escapeHtml(formatUtcPlus2(item.created_at_utc))}${ackMeta}${closeMeta}</td>
+            <td><div class="alert-action-buttons">${muteBtn}${ackBtn}${closeBtn}</div></td>
           </tr>
         `;
       })
@@ -5484,6 +5530,15 @@ async function loadGlobalAlertsOverview(options = {}) {
         const currentNote = decodeURIComponent(btn.getAttribute("data-ack-note") || "");
         const isAlreadyAcknowledged = btn.getAttribute("data-acknowledged") === "1";
         await acknowledgeAlert(hostname, mountpoint, currentNote, isAlreadyAcknowledged);
+      });
+    });
+    rowsEl.querySelectorAll("[data-action='close']").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const hostname = btn.getAttribute("data-hostname");
+        const mountpoint = btn.getAttribute("data-mountpoint");
+        const isClosed = btn.getAttribute("data-closed") === "1";
+        await closeAlert(hostname, mountpoint, isClosed);
       });
     });
   } catch (error) {
@@ -5930,6 +5985,16 @@ function wireEvents() {
     globalShowAcknowledgedCheckbox.checked = state.globalShowAcknowledged;
     globalShowAcknowledgedCheckbox.addEventListener("change", async (event) => {
       state.globalShowAcknowledged = event.target.checked;
+      state.globalAlertsOffset = 0;
+      await loadGlobalAlertsOverview({ append: false });
+    });
+  }
+
+  const globalShowClosedCheckbox = document.getElementById("globalShowClosedCheckbox");
+  if (globalShowClosedCheckbox) {
+    globalShowClosedCheckbox.checked = state.globalShowClosed;
+    globalShowClosedCheckbox.addEventListener("change", async (event) => {
+      state.globalShowClosed = event.target.checked;
       state.globalAlertsOffset = 0;
       await loadGlobalAlertsOverview({ append: false });
     });

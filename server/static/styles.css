@@ -2325,6 +2325,37 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   color: #16a34a;
 }
 
+/* Close button (Abschliessen) */
+.alert-close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: #64748b;
+  opacity: 0.65;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.alert-close-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.alert-close-btn.closed {
+  opacity: 1;
+  color: #b45309;
+}
+
+.alert-row-closed td {
+  opacity: 0.55;
+}
+
+.alert-closed-meta {
+  color: #b45309 !important;
+}
+
 .alert-row-muted td:last-child,
 .alert-row-muted .alert-action-buttons,
 .alert-row-muted .alert-mute-btn,

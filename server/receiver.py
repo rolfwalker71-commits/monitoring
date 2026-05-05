@@ -226,6 +226,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE alerts ADD COLUMN ack_by TEXT")
         if "ack_at_utc" not in existing_alert_columns:
             conn.execute("ALTER TABLE alerts ADD COLUMN ack_at_utc TEXT")
+        if "closed_at_utc" not in existing_alert_columns:
+            conn.execute("ALTER TABLE alerts ADD COLUMN closed_at_utc TEXT")
+        if "closed_by" not in existing_alert_columns:
+            conn.execute("ALTER TABLE alerts ADD COLUMN closed_by TEXT")
 
         conn.execute(
             """
@@ -2094,6 +2098,7 @@ def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
         SELECT id, hostname, mountpoint, severity, used_percent, created_at_utc, last_seen_at_utc
         FROM alerts
         WHERE status = 'open'
+          AND (closed_at_utc IS NULL OR closed_at_utc = '')
           AND COALESCE((SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0
           AND NOT EXISTS (
               SELECT 1 FROM muted_alert_rules m
@@ -3455,6 +3460,7 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
         SELECT id, hostname, mountpoint, severity, used_percent
         FROM alerts
         WHERE status = 'open'
+          AND (closed_at_utc IS NULL OR closed_at_utc = '')
           AND created_at_utc <= ?
           AND (last_reminder_sent_utc IS NULL OR last_reminder_sent_utc <= ?)
         ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, used_percent DESC
@@ -6518,6 +6524,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if acknowledged_filter not in {"all", "yes", "no"}:
                 acknowledged_filter = "all"
 
+            closed_filter = query.get("closed", ["all"])[0].strip().lower()
+            if closed_filter not in {"all", "yes", "no"}:
+                closed_filter = "all"
+
             hostname_filter = query.get("hostname", [""])[0].strip()
             limit = parse_int(query, "limit", default=50, min_value=1, max_value=500)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
@@ -6535,6 +6545,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 where_parts.append("(ack_at_utc IS NULL OR ack_at_utc = '')")
             elif acknowledged_filter == "yes":
                 where_parts.append("(ack_at_utc IS NOT NULL AND ack_at_utc != '')")
+            if closed_filter == "no":
+                where_parts.append("(closed_at_utc IS NULL OR closed_at_utc = '')")
+            elif closed_filter == "yes":
+                where_parts.append("(closed_at_utc IS NOT NULL AND closed_at_utc != '')")
             if hostname_filter:
                 where_parts.append("hostname = ?")
                 args.append(hostname_filter)
@@ -6553,7 +6567,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     f"""
                       SELECT id, hostname, mountpoint, severity, used_percent, status,
                           created_at_utc, last_seen_at_utc, resolved_at_utc, report_id,
-                          COALESCE(ack_note, ''), COALESCE(ack_by, ''), COALESCE(ack_at_utc, '')
+                          COALESCE(ack_note, ''), COALESCE(ack_by, ''), COALESCE(ack_at_utc, ''),
+                          COALESCE(closed_at_utc, ''), COALESCE(closed_by, '')
                     FROM alerts
                     {where_clause}
                     ORDER BY id DESC
@@ -6624,6 +6639,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "ack_by": str(row[11] or ""),
                         "ack_at_utc": str(row[12] or ""),
                         "is_acknowledged": bool(str(row[12] or "").strip()),
+                        "closed_at_utc": str(row[13] or ""),
+                        "closed_by": str(row[14] or ""),
+                        "is_closed": bool(str(row[13] or "").strip()),
                         "is_muted": (hostname, mountpoint) in muted_pairs,
                     }
                 )
@@ -7788,6 +7806,97 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     SET ack_note = NULL, ack_by = NULL, ack_at_utc = NULL
                     WHERE id = ?
                     """,
+                    (int(target[0]),),
+                )
+                conn.commit()
+
+            self._send_json(
+                HTTPStatus.OK,
+                {"ok": True, "hostname": hostname, "mountpoint": mountpoint},
+            )
+            return
+
+        if path == "/api/v1/alert-close":
+            if not self._require_web_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            hostname = str(payload.get("hostname", "")).strip()
+            mountpoint = str(payload.get("mountpoint", "")).strip()
+            if not hostname or not mountpoint:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
+                return
+
+            closed_by = self._web_session_username() or "webclient"
+            closed_at_utc = utc_now_iso()
+
+            with sqlite3.connect(DB_PATH) as conn:
+                target = conn.execute(
+                    """
+                    SELECT id FROM alerts
+                    WHERE hostname = ? AND mountpoint = ? AND status = 'open'
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (hostname, mountpoint),
+                ).fetchone()
+                if not target:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "open alert not found"})
+                    return
+                conn.execute(
+                    "UPDATE alerts SET closed_at_utc = ?, closed_by = ? WHERE id = ?",
+                    (closed_at_utc, closed_by, int(target[0])),
+                )
+                conn.commit()
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "ok": True,
+                    "hostname": hostname,
+                    "mountpoint": mountpoint,
+                    "closed_by": closed_by,
+                    "closed_at_utc": closed_at_utc,
+                },
+            )
+            return
+
+        if path == "/api/v1/alert-unclose":
+            if not self._require_web_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            hostname = str(payload.get("hostname", "")).strip()
+            mountpoint = str(payload.get("mountpoint", "")).strip()
+            if not hostname or not mountpoint:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                target = conn.execute(
+                    """
+                    SELECT id FROM alerts
+                    WHERE hostname = ? AND mountpoint = ? AND status = 'open'
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (hostname, mountpoint),
+                ).fetchone()
+                if not target:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "open alert not found"})
+                    return
+                conn.execute(
+                    "UPDATE alerts SET closed_at_utc = NULL, closed_by = NULL WHERE id = ?",
                     (int(target[0]),),
                 )
                 conn.commit()
