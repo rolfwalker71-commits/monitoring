@@ -7629,7 +7629,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 if not recipients_raw:
                     # fall back to generic recipient
                     recipients_raw = str(settings.get("email_recipient", "") or "").strip()
-                if not recipients_raw:
+                recipients = parse_email_recipients(recipients_raw)
+                if not recipients:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "Kein Empfänger konfiguriert (Backup-Empfänger oder allg. Empfänger)"})
                     return
                 ok, access_token, details = ensure_microsoft_access_token(conn, username)
@@ -7640,7 +7641,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 backup_hosts = get_backup_status_overview(conn)
                 mail_ok, mail_details = send_microsoft_mail_multi(
                     access_token,
-                    recipients_raw,
+                    recipients,
                     backup_digest_subject(backup_hosts, today_local) + " [TEST]",
                     backup_digest_html(username, backup_hosts, today_local),
                     content_type="HTML",
