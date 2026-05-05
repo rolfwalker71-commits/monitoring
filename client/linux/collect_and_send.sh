@@ -233,8 +233,22 @@ collect_dir_deep_listings_json() {
   if [[ -z "$effective_paths" ]]; then
     local auto_paths=""
     # SAP HANA backup_service standard path
+    # Find directories at any depth (up to 4 levels) whose name contains the
+    # hostname (case-insensitive), then scan one level inside each match.
     if [[ -d "/hana/shared/backup_service/backups" ]]; then
-      auto_paths="/hana/shared/backup_service/backups/*/*"
+      local _hn_lc
+      _hn_lc="$(echo "${HOSTNAME_VALUE:-$(hostname -f 2>/dev/null || hostname)}" | tr '[:upper:]' '[:lower:]')"
+      while IFS= read -r -d '' _candidate; do
+        local _dir_lc
+        _dir_lc="$(basename "$_candidate" | tr '[:upper:]' '[:lower:]')"
+        if [[ "$_dir_lc" == *"$_hn_lc"* ]]; then
+          if [[ -n "$auto_paths" ]]; then
+            auto_paths="${auto_paths}:${_candidate}/*"
+          else
+            auto_paths="${_candidate}/*"
+          fi
+        fi
+      done < <(find "/hana/shared/backup_service/backups" -mindepth 1 -maxdepth 4 -type d -print0 2>/dev/null)
     fi
     if [[ -n "$auto_paths" ]]; then
       # Persist to agent.conf so it shows up in the dashboard config view
