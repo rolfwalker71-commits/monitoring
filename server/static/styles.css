@@ -4826,6 +4826,22 @@ body[data-theme="dark"] .dir-deep-subdir-title::before {
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.backup-status-newest-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backup-status-newest-path {
+  display: block;
+  margin-bottom: 1px;
+  color: #94a3b8;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

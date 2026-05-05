@@ -5632,12 +5632,17 @@ function renderBackupStatus(data) {
       const badgeClass = ok ? "dir-status-badge ok" : "dir-status-badge missing";
       const badgeText = ok ? "✓ Backup aktuell (<24h)" : "✗ kein aktuelles Backup";
       const subdirName = escapeHtml(asText(d.subdir_name || d.subdir_path, "-"));
-      const newestName = escapeHtml(asText(d.newest_item_name, "-"));
+      const newestRaw = asText(d.newest_item_name, "-");
+      const newestSlashIndex = newestRaw.lastIndexOf("/");
+      const newestLeaf = newestSlashIndex >= 0 ? newestRaw.slice(newestSlashIndex + 1) : newestRaw;
+      const newestParent = newestSlashIndex >= 0 ? newestRaw.slice(0, newestSlashIndex) : "";
+      const newestName = escapeHtml(newestLeaf || newestRaw || "-");
+      const newestPath = newestParent ? `<div class="backup-status-newest-path" title="${escapeHtml(newestRaw)}">${escapeHtml(newestParent)}</div>` : "";
       const newestMod = d.newest_item_modified ? formatUtcPlus2Short(d.newest_item_modified) : "-";
       return `
         <tr>
           <td class="backup-status-dir-name" title="${escapeHtml(asText(d.subdir_path, ""))}">${subdirName}</td>
-          <td class="backup-status-newest">${newestName}</td>
+          <td class="backup-status-newest" title="${escapeHtml(newestRaw)}">${newestPath}<span class="backup-status-newest-name">${newestName}</span></td>
           <td class="backup-status-mod">${escapeHtml(newestMod)}</td>
           <td class="backup-status-badge-cell"><span class="${badgeClass}">${badgeText}</span></td>
         </tr>`;
