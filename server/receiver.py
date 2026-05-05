@@ -35,6 +35,7 @@ DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "monitoring.db"
 APP_LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
 ANG_LOGO_PATH = STATIC_DIR / "icons" / "ANG.png"
+BACKUP_ICON_PATH = STATIC_DIR / "icons" / "backup.png"
 LINUX_LOGO_PATH = STATIC_DIR / "icons" / "linux.png"
 WINDOWS_LOGO_PATH = STATIC_DIR / "icons" / "windows.png"
 BUILD_VERSION_PATH = BASE_DIR.parent / "BUILD_VERSION"
@@ -2793,6 +2794,7 @@ def backup_digest_subject(hosts: list[dict], local_date: str) -> str:
 def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str:
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
+    backup_icon_uri = backup_icon_data_uri()
     build_version = html.escape(read_build_version())
 
     rows_html_parts = []
@@ -2857,7 +2859,10 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
         f"<div style='margin-top:4px;font-size:12px;color:#5f7590;'>powered by Rolf Walker &nbsp;&middot;&nbsp; v{build_version}</div>"
         "</div>"
         "</div>"
-        "<h2 style='margin:0 0 6px 0;font-size:22px;color:#17324d;'>Backup-Statusbericht</h2>"
+        "<div style='display:flex;align-items:center;gap:10px;'>"
+        f"{'<img src=' + repr(backup_icon_uri) + ' alt=\"Backup\" width=\"32\" height=\"32\" style=\"display:block;width:32px;height:32px;\">' if backup_icon_uri else ''}"
+        "<h2 style='margin:0;font-size:22px;color:#17324d;'>Backup-Statusbericht</h2>"
+        "</div>"
         f"<div style='font-size:13px;color:#5f7590;'>Benutzer: {html.escape(username)} | Datum: {html.escape(local_date)} | Zeit: {html.escape(format_mail_datetime())}</div>"
         "</div>"
         "<div style='padding:18px 20px;'>"
@@ -4688,6 +4693,14 @@ def app_logo_data_uri() -> str:
 def ang_logo_data_uri() -> str:
     try:
         encoded = base64.b64encode(ANG_LOGO_PATH.read_bytes()).decode("ascii")
+        return f"data:image/png;base64,{encoded}"
+    except OSError:
+        return ""
+
+
+def backup_icon_data_uri() -> str:
+    try:
+        encoded = base64.b64encode(BACKUP_ICON_PATH.read_bytes()).decode("ascii")
         return f"data:image/png;base64,{encoded}"
     except OSError:
         return ""
@@ -7577,6 +7590,42 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 conn.commit()
                 payload = current_user_payload(conn, username)
             self._send_json(HTTPStatus.OK, payload)
+            return
+
+        if path == "/api/v1/mail-test/backup":
+            username = self._web_session_username()
+            with sqlite3.connect(DB_PATH) as conn:
+                settings = get_web_user_settings(conn, username)
+                recipients_raw = str(settings.get("backup_email_recipients", "") or "").strip()
+                if not recipients_raw:
+                    # fall back to generic recipient
+                    recipients_raw = str(settings.get("email_recipient", "") or "").strip()
+                if not recipients_raw:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "Kein Empfänger konfiguriert (Backup-Empfänger oder allg. Empfänger)"})
+                    return
+                ok, access_token, details = ensure_microsoft_access_token(conn, username)
+                if not ok:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": details or "oauth unavailable"})
+                    return
+                today_local = datetime.now(SCHEDULE_TIMEZONE).date().isoformat()
+                backup_hosts = get_backup_status_overview(conn)
+                mail_ok, mail_details = send_microsoft_mail_multi(
+                    access_token,
+                    recipients_raw,
+                    backup_digest_subject(backup_hosts, today_local) + " [TEST]",
+                    backup_digest_html(username, backup_hosts, today_local),
+                    content_type="HTML",
+                    sender=settings.get("email_sender", ""),
+                )
+                conn.commit()
+            self._send_json(
+                HTTPStatus.OK if mail_ok else HTTPStatus.BAD_REQUEST,
+                {
+                    "status": "sent" if mail_ok else "failed",
+                    "mode": "backup",
+                    "details": mail_details,
+                },
+            )
             return
 
         if path in {"/api/v1/mail-test", "/api/v1/mail-test/trends", "/api/v1/mail-test/alerts"}:

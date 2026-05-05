@@ -1749,6 +1749,17 @@ async function sendAlertDigestMailTest() {
   setUserMailSettingsStatus("Alarm-Testmail versendet.");
 }
 
+async function sendBackupDigestMailTest() {
+  const response = await fetch("/api/v1/mail-test/backup", {
+    method: "POST",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || data.details || ("HTTP " + response.status));
+  }
+  setUserMailSettingsStatus("Backup-Testmail versendet.");
+}
+
 function setAdminAlertSubscriptionsStatus(message, isError = false) {
   const statusEl = document.getElementById("adminAlertSubscriptionsStatus");
   if (!statusEl) return;
@@ -6564,6 +6575,14 @@ function wireEvents() {
   document.getElementById("testAlertDigestMailButton").addEventListener("click", async () => {
     try {
       await sendAlertDigestMailTest();
+    } catch (error) {
+      setUserMailSettingsStatus(error.message, true);
+    }
+  });
+
+  document.getElementById("testBackupDigestMailButton").addEventListener("click", async () => {
+    try {
+      await sendBackupDigestMailTest();
     } catch (error) {
       setUserMailSettingsStatus(error.message, true);
     }
