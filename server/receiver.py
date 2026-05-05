@@ -2649,7 +2649,7 @@ def _today_tokens(local_date: str) -> list[str]:
     ]
 
 
-def _item_matches_date(item: dict, tokens: list[str], local_date: str) -> bool:
+def _item_matches_current(item: dict, tokens: list[str], now_local: datetime) -> bool:
     name = str(item.get("name") or "").lower()
     if any(t.lower() in name for t in tokens):
         return True
@@ -2657,10 +2657,10 @@ def _item_matches_date(item: dict, tokens: list[str], local_date: str) -> bool:
     if not mod_raw:
         return False
     try:
-        from datetime import timezone as _tz
         parsed = datetime.fromisoformat(mod_raw.replace("Z", "+00:00"))
         local_dt = parsed.astimezone(SCHEDULE_TIMEZONE)
-        return local_dt.date().isoformat() == local_date
+        age = now_local - local_dt
+        return timedelta(0) <= age <= timedelta(hours=24)
     except Exception:
         return False
 
@@ -2757,12 +2757,12 @@ def get_backup_status_overview(conn: sqlite3.Connection) -> list[dict]:
                 subdir_name = str(subdir.get("name") or "")
                 subdir_path = str(subdir.get("path") or "")
                 items = subdir.get("items") or []
-                has_today = any(_item_matches_date(item, tokens, today_local) for item in items)
+                has_current = any(_item_matches_current(item, tokens, now_local) for item in items)
                 dirs.append({
                     "subdir_name": subdir_name,
                     "subdir_path": subdir_path,
                     "parent_path": path,
-                    "has_today_backup": has_today,
+                    "has_today_backup": has_current,
                     "item_count": int(subdir.get("item_count_total") or len(items)),
                     "newest_item_name": str(items[0].get("name") or "") if items else "",
                     "newest_item_modified": str(items[0].get("modified_utc") or "") if items else "",
@@ -2788,7 +2788,7 @@ def get_backup_status_overview(conn: sqlite3.Connection) -> list[dict]:
 def backup_digest_subject(hosts: list[dict], local_date: str) -> str:
     missing = sum(1 for h in hosts if h.get("has_missing_backup"))
     level = "WARNUNG" if missing > 0 else "OK"
-    return f"[Monitoring] [{level}] Backup-Statusbericht {local_date} (fehlend: {missing})"
+    return f"[Monitoring] [{level}] Backup-Statusbericht {local_date} (nicht aktuell <24h: {missing})"
 
 
 def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str:
@@ -2818,7 +2818,7 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
             ok = d.get("has_today_backup", False)
             badge_bg = "#dcfce7" if ok else "#fee2e2"
             badge_color = "#166534" if ok else "#991b1b"
-            badge_text = "✓ Backup heute" if ok else "✗ kein Backup"
+            badge_text = "✓ Backup aktuell (<24h)" if ok else "✗ kein aktuelles Backup"
             subdir_name = html.escape(str(d.get("subdir_name") or d.get("subdir_path") or "-"))
             newest = html.escape(str(d.get("newest_item_name") or "-"))
             dir_rows += (
@@ -2846,7 +2846,7 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
 
     missing_count = sum(1 for h in hosts if h.get("has_missing_backup"))
     summary_color = "#991b1b" if missing_count > 0 else "#166534"
-    summary_text = f"{missing_count} Host(s) ohne heutiges Backup" if missing_count > 0 else "Alle Backups vorhanden"
+    summary_text = f"{missing_count} Host(s) ohne aktuelles Backup (<24h)" if missing_count > 0 else "Alle Backups aktuell (<24h)"
 
     return (
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
@@ -2871,7 +2871,7 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
         "<thead><tr style='background:#f1f5f9;'>"
         "<th style='text-align:left;padding:8px;border:1px solid #dbe3ef;'>Verzeichnis</th>"
         "<th style='text-align:left;padding:8px;border:1px solid #dbe3ef;'>Neuester Eintrag</th>"
-        "<th style='text-align:center;padding:8px;border:1px solid #dbe3ef;'>Status</th>"
+        "<th style='text-align:center;padding:8px;border:1px solid #dbe3ef;'>Status (&lt;24h)</th>"
         "</tr></thead>"
         f"<tbody>{rows_html}</tbody>"
         "</table>"

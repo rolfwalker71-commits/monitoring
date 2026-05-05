@@ -5607,7 +5607,6 @@ function renderBackupStatus(data) {
   if (hosts.length === 0) {
     return "<p class=\"muted\">Keine Hosts mit Backup-Konfiguration gefunden. (DIR_SCAN_DEEP_PATHS oder auto-erkannter HANA-Pfad in agent.conf)</p>";
   }
-  const todayInfo = getTodaySearchInfo();
   return hosts.map((host) => {
     const displayName = asText(host.display_name || host.hostname, "-");
     const hostname = asText(host.hostname, "-");
@@ -5628,7 +5627,7 @@ function renderBackupStatus(data) {
     const dirRows = dirs.map((d) => {
       const ok = d.has_today_backup;
       const badgeClass = ok ? "dir-status-badge ok" : "dir-status-badge missing";
-      const badgeText = ok ? "✓ Backup heute" : "✗ kein Backup";
+      const badgeText = ok ? "✓ Backup aktuell (<24h)" : "✗ kein aktuelles Backup";
       const subdirName = escapeHtml(asText(d.subdir_name || d.subdir_path, "-"));
       const newestName = escapeHtml(asText(d.newest_item_name, "-"));
       const newestMod = d.newest_item_modified ? formatUtcPlus2Short(d.newest_item_modified) : "-";
@@ -5654,7 +5653,7 @@ function renderBackupStatus(data) {
               <th>Verzeichnis</th>
               <th>Neuester Eintrag</th>
               <th>Geändert (UTC+2)</th>
-              <th>Status</th>
+              <th>Status (&lt;24h)</th>
             </tr></thead>
             <tbody>${dirRows}</tbody>
           </table>
@@ -5678,8 +5677,8 @@ async function loadBackupStatus() {
     const total = data.total || 0;
     if (summaryEl) {
       summaryEl.textContent = missing > 0
-        ? `${missing} von ${total} Host(s) ohne heutiges Backup`
-        : `${total} Host(s) — alle Backups vorhanden`;
+        ? `${missing} von ${total} Host(s) ohne aktuelles Backup (<24h)`
+        : `${total} Host(s) — alle Backups aktuell (<24h)`;
     }
     if (tabButton) {
       if (missing > 0) {
