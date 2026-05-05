@@ -235,6 +235,12 @@ collect_dir_deep_listings_json() {
     if [[ -d "/hana/shared/backup_service/backups" ]]; then
       auto_paths="/hana/shared/backup_service/backups/*/*"
     fi
+    if [[ -n "$auto_paths" ]]; then
+      # Persist to agent.conf so it shows up in the dashboard config view
+      # and can be overridden manually from there on
+      upsert_config_value "DIR_SCAN_DEEP_PATHS" "$auto_paths"
+      DIR_SCAN_DEEP_PATHS="$auto_paths"
+    fi
     effective_paths="$auto_paths"
   fi
 
