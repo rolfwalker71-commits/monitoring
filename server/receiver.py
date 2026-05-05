@@ -348,6 +348,8 @@ def init_db() -> None:
                 alert_email_last_sent_local_date TEXT NOT NULL DEFAULT '',
                 alert_instant_mail_enabled INTEGER NOT NULL DEFAULT 0,
                 alert_instant_min_severity TEXT NOT NULL DEFAULT 'warning',
+                host_interest_mode TEXT NOT NULL DEFAULT 'all',
+                host_interest_hosts TEXT NOT NULL DEFAULT '',
                 updated_at_utc TEXT NOT NULL,
                 FOREIGN KEY(username) REFERENCES web_users(username)
             )
@@ -446,6 +448,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN critical_trends_metrics TEXT NOT NULL DEFAULT 'filesystem'")
         if "digest_trend_metrics" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN digest_trend_metrics TEXT NOT NULL DEFAULT 'cpu,memory,swap,filesystem'")
+        if "host_interest_mode" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN host_interest_mode TEXT NOT NULL DEFAULT 'all'")
+        if "host_interest_hosts" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN host_interest_hosts TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS web_user_alert_subscriptions (
@@ -1220,7 +1226,9 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
                COALESCE(email_sender, ''),
                COALESCE(updated_at_utc, ''),
                COALESCE(critical_trends_metrics, 'filesystem'),
-               COALESCE(digest_trend_metrics, 'cpu,memory,swap,filesystem')
+             COALESCE(digest_trend_metrics, 'cpu,memory,swap,filesystem'),
+             COALESCE(host_interest_mode, 'all'),
+             COALESCE(host_interest_hosts, '')
         FROM web_user_settings
         WHERE username = ?
         """,
@@ -1247,6 +1255,8 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
             "updated_at_utc": "",
             "critical_trends_metrics": "filesystem",
             "digest_trend_metrics": "cpu,memory,swap,filesystem",
+            "host_interest_mode": "all",
+            "host_interest_hosts": "",
         }
     return {
         "email_enabled": bool(int(row[0] or 0)),
@@ -1268,6 +1278,8 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
         "updated_at_utc": str(row[16] or ""),
         "critical_trends_metrics": str(row[17] or "filesystem"),
         "digest_trend_metrics": str(row[18] or "cpu,memory,swap,filesystem"),
+        "host_interest_mode": str(row[19] or "all"),
+        "host_interest_hosts": str(row[20] or ""),
     }
 
 
@@ -1318,6 +1330,13 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
     digest_trend_metrics = str(
         payload.get("digest_trend_metrics", existing.get("digest_trend_metrics", "cpu,memory,swap,filesystem")) or "cpu,memory,swap,filesystem"
     ).strip()
+    raw_host_interest_mode = str(
+        payload.get("host_interest_mode", existing.get("host_interest_mode", "all")) or "all"
+    ).strip().lower()
+    host_interest_mode = raw_host_interest_mode if raw_host_interest_mode in {"all", "interested_first", "interested_only"} else "all"
+    host_interest_hosts = str(
+        payload.get("host_interest_hosts", existing.get("host_interest_hosts", "")) or ""
+    ).strip()
     now_utc = utc_now_iso()
     conn.execute(
         """
@@ -1341,9 +1360,11 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             email_sender,
             critical_trends_metrics,
             digest_trend_metrics,
+            host_interest_mode,
+            host_interest_hosts,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             email_enabled = excluded.email_enabled,
             email_recipient = excluded.email_recipient,
@@ -1363,6 +1384,8 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             email_sender = excluded.email_sender,
             critical_trends_metrics = excluded.critical_trends_metrics,
             digest_trend_metrics = excluded.digest_trend_metrics,
+            host_interest_mode = excluded.host_interest_mode,
+            host_interest_hosts = excluded.host_interest_hosts,
             updated_at_utc = excluded.updated_at_utc
         """,
         (
@@ -1385,6 +1408,8 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             email_sender,
             critical_trends_metrics,
             digest_trend_metrics,
+            host_interest_mode,
+            host_interest_hosts,
             now_utc,
         ),
     )
@@ -1407,6 +1432,8 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
         "email_sender": email_sender,
         "critical_trends_metrics": critical_trends_metrics,
         "digest_trend_metrics": digest_trend_metrics,
+        "host_interest_mode": host_interest_mode,
+        "host_interest_hosts": host_interest_hosts,
         "updated_at_utc": now_utc,
     }
 
@@ -3166,6 +3193,8 @@ def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
         "alert_telegram_chat_id": settings["alert_telegram_chat_id"],
         "email_sender": settings["email_sender"],
         "digest_trend_metrics": settings.get("digest_trend_metrics", "cpu,memory,swap,filesystem"),
+        "host_interest_mode": settings.get("host_interest_mode", "all"),
+        "host_interest_hosts": settings.get("host_interest_hosts", ""),
         "mail_oauth_available": oauth_is_configured(oauth_settings),
         "microsoft_oauth": {
             "connected": connection is not None,

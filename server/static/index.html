@@ -102,6 +102,7 @@
             <span id="headerAlertChip" class="header-stat-chip header-stat-chip-alert hidden" title="Globale offene Alerts (Alle)">🚨 <span id="headerAlertCount">0</span> <span class="header-chip-scope">Alle</span></span>
             <span id="headerTrendsChip" class="header-stat-chip header-stat-chip-warn hidden" title="Kritische Trends (24h)">📈 <span id="headerTrendsCount">0</span> <span class="header-chip-scope">24h</span></span>
             <span id="headerInactiveChip" class="header-stat-chip header-stat-chip-inactive hidden" title="Inaktive Hosts (1h)">💤 <span id="headerInactiveCount">0</span> <span class="header-chip-scope">1h</span></span>
+            <button id="openUserSettingsButton" class="btn-secondary" type="button" title="Benutzereinstellungen">Benutzereinstellungen</button>
             <button id="globalViewButton" class="btn-emoji-pill" type="button" title="Globale Ansichten">🌐</button>
             <button id="openAlarmSettingsButton" class="btn-emoji-pill" type="button" title="Einstellungen">⚙️</button>
             <button id="refreshButton" class="btn-emoji-pill" title="Neu laden">↻</button>
@@ -273,14 +274,24 @@
         <section id="settingsView" class="view-section hidden settings-view">
           <div class="settings-page">
             <div class="settings-page-header">
-              <h3>⚙️ Einstellungen</h3>
-              <p class="count">Benutzer, OAuth, Mail-Digests und globale Alarmregeln</p>
+              <h3>👤 Benutzereinstellungen</h3>
+              <p class="count">Persoenliche Sicherheit, Benachrichtigungen, Digests und Host-Interessen</p>
               <div>
                 <button id="settingsBackToOverviewButton" class="btn-secondary" type="button">Zur Hauptansicht</button>
               </div>
             </div>
 
-            <section class="settings-subsection">
+            <div class="subview-tabs-shell">
+              <div class="subview-tabs" role="tablist" aria-label="Benutzereinstellungen Register">
+                <button id="userSettingsProfileTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="userSettingsProfilePanel">🔐 Profil</button>
+                <button id="userSettingsChannelsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="userSettingsChannelsPanel">📨 Kanaele</button>
+                <button id="userSettingsDigestsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="userSettingsDigestsPanel">📬 Digests</button>
+                <button id="userSettingsHostsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="userSettingsHostsPanel">🖥️ Host-Interessen</button>
+                <button id="userSettingsAdminTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="adminOauthSettingsSection">🛠️ Admin</button>
+              </div>
+            </div>
+
+            <section class="settings-subsection" id="userSettingsProfilePanel" data-user-settings-panel="profile">
               <div class="settings-subsection-head">
                 <h5>🔑 Passwort aendern</h5>
                 <p class="count compact">Eigenes Web-Passwort aktualisieren</p>
@@ -305,7 +316,7 @@
               </div>
             </section>
 
-            <section class="settings-subsection">
+            <section class="settings-subsection hidden" id="userSettingsChannelsPanel" data-user-settings-panel="channels">
               <div class="settings-subsection-head">
                 <h5>Mein Mailversand per OAuth</h5>
                 <p id="userMailSettingsSummary" class="count compact"></p>
@@ -332,7 +343,7 @@
               </div>
             </section>
 
-            <section class="settings-subsection">
+            <section class="settings-subsection hidden" id="userSettingsDigestsPanel" data-user-settings-panel="digests">
               <div class="settings-subsection-head">
                 <h5>Trend Mail (Daily Digest)</h5>
                 <p class="count compact">Uebersendet die kritischen Trends aus dem Dashboard als HTML Mail</p>
@@ -361,11 +372,12 @@
                 </div>
               </div>
               <div class="alarm-settings-actions">
+                <button id="saveDigestSettingsButton" type="button">Digest-Einstellungen speichern</button>
                 <button id="testTrendDigestMailButton" type="button">Trend-Testmail senden</button>
               </div>
             </section>
 
-            <section class="settings-subsection">
+            <section class="settings-subsection hidden" data-user-settings-panel="digests">
               <div class="settings-subsection-head">
                 <h5>Alarm Mail (Open Alerts Digest)</h5>
                 <p class="count compact">Uebersendet die aktuell offenen Alarme als HTML Mail</p>
@@ -397,7 +409,7 @@
               </div>
             </section>
 
-            <section class="settings-subsection">
+            <section class="settings-subsection hidden" data-user-settings-panel="channels">
               <div class="settings-subsection-head">
                 <h5>Sofort-Alarmmail (Event-getriggert)</h5>
                 <p class="count compact">Sendet sofort eine Mail wenn ein Alarm ausgelöst, eskaliert oder behoben wird</p>
@@ -425,7 +437,37 @@
               </div>
             </section>
 
-            <section id="adminOauthSettingsSection" class="settings-subsection hidden">
+            <section class="settings-subsection hidden" id="userSettingsHostsPanel" data-user-settings-panel="hosts">
+              <div class="settings-subsection-head">
+                <h5>Meine Host-Interessen</h5>
+                <p id="hostInterestsSummary" class="count compact">Definiert, welche Hosts in der linken Liste priorisiert oder angezeigt werden.</p>
+              </div>
+              <div class="alarm-settings-grid">
+                <label>
+                  Anzeige-Modus in der linken Hostliste
+                  <select id="hostInterestModeSelect">
+                    <option value="all">Alle Hosts</option>
+                    <option value="interested_first">Interessante Hosts zuerst</option>
+                    <option value="interested_only">Nur interessante Hosts</option>
+                  </select>
+                </label>
+                <label>
+                  Host-Suche
+                  <input id="hostInterestSearchInput" type="text" placeholder="Host oder Titel suchen..." />
+                </label>
+              </div>
+              <div class="alarm-settings-actions">
+                <button id="hostInterestsSelectAllButton" type="button">Alle markieren</button>
+                <button id="hostInterestsClearButton" type="button">Alle abwaehlen</button>
+                <button id="saveHostInterestsButton" type="button">Host-Interessen speichern</button>
+                <p id="hostInterestsStatus" class="count compact"></p>
+              </div>
+              <div id="hostInterestsList" class="host-interests-list">
+                <p class="muted">Lade Hosts...</p>
+              </div>
+            </section>
+
+            <section id="adminOauthSettingsSection" class="settings-subsection hidden" data-user-settings-panel="admin">
               <div class="settings-subsection-head">
                 <h5>Microsoft OAuth App</h5>
                 <p class="count compact">Globale App-Registrierung fuer den Webserver</p>
@@ -454,7 +496,7 @@
               </div>
             </section>
 
-            <section id="adminUserManagementSection" class="settings-subsection hidden">
+            <section id="adminUserManagementSection" class="settings-subsection hidden" data-user-settings-panel="admin">
               <div class="settings-subsection-head">
                 <h5>Benutzerverwaltung</h5>
                 <p class="count compact">Einfache Web-Benutzer mit Passwort und Admin-Flag</p>
@@ -505,7 +547,7 @@
 
 
 
-            <section class="settings-subsection">
+            <section class="settings-subsection hidden" data-user-settings-panel="admin">
               <div class="settings-subsection-head">
                 <h5>Globale Alarm Einstellungen</h5>
                 <p class="count compact">Systemweite Schwellwerte und Telegram Kanal</p>

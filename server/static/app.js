@@ -39,6 +39,7 @@ const state = {
   hostOsFilter: "all",
   hostCountryFilter: "all",
   viewMode: "overview",
+  userSettingsSubMode: "profile",
   overviewSection: "main",
   globalSubMode: "global-alerts",
   criticalTrendsHours: 24,
@@ -78,6 +79,9 @@ const state = {
   oauthSettingsLoaded: false,
   userManagementLoaded: false,
   hostFilterNoMatches: false,
+  hostInterestMode: "all",
+  hostInterestHosts: new Set(),
+  hostInterestSearchQuery: "",
   adminAlertSubscriptionsLoaded: false,
   adminAlertSubscriptionsUsers: [],
   adminAlertAvailableHosts: [],
@@ -92,6 +96,14 @@ const state = {
   deliveryCountsLoading: false,
   analysisLatestDeliveryLabel: "LIVE",
 };
+
+function normalizeHostInterestMode(value) {
+  const mode = String(value || "all").trim().toLowerCase();
+  if (mode === "interested_first" || mode === "interested_only") {
+    return mode;
+  }
+  return "all";
+}
 
 const ANALYSIS_RANGE_OPTIONS = new Map([
   [6, "Letzte 6 Std."],
@@ -195,7 +207,15 @@ async function loadUserPreferences() {
       const metricsStr = String(prefs.critical_trends_metrics || "filesystem").trim();
       state.criticalTrendsMetrics = metricsStr.split(",").map((m) => m.trim()).filter((m) => m.length > 0);
     }
+    state.hostInterestMode = normalizeHostInterestMode(prefs.host_interest_mode || "all");
+    state.hostInterestHosts = new Set(
+      String(prefs.host_interest_hosts || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0)
+    );
     updateCriticalTrendsMetricsCheckboxes();
+    renderHostInterestsEditor();
   } catch (_error) {
     // Ignore
   }
@@ -769,6 +789,9 @@ function updateViewMode() {
   reportsTabButton.setAttribute("aria-selected", reportsActive ? "true" : "false");
   if (settingsTabButton) settingsTabButton.setAttribute("aria-selected", settingsActive ? "true" : "false");
   updateReportSectionUi();
+  if (settingsActive) {
+    updateUserSettingsSubMode();
+  }
 }
 
 function updateGlobalSubMode() {
@@ -794,6 +817,105 @@ function updateGlobalSubMode() {
   if (criticalTrendsTabButton) { criticalTrendsTabButton.classList.toggle("active", trendsActive); criticalTrendsTabButton.setAttribute("aria-selected", trendsActive ? "true" : "false"); }
   if (inactiveHostsTabButton) { inactiveHostsTabButton.classList.toggle("active", inactiveActive); inactiveHostsTabButton.setAttribute("aria-selected", inactiveActive ? "true" : "false"); }
   if (globalAdminAlertSubsTabButton) { globalAdminAlertSubsTabButton.classList.toggle("active", adminAlertSubsActive); globalAdminAlertSubsTabButton.setAttribute("aria-selected", adminAlertSubsActive ? "true" : "false"); }
+}
+
+function updateUserSettingsSubMode() {
+  const panels = {
+    profile: document.querySelectorAll("[data-user-settings-panel='profile']"),
+    channels: document.querySelectorAll("[data-user-settings-panel='channels']"),
+    digests: document.querySelectorAll("[data-user-settings-panel='digests']"),
+    hosts: document.querySelectorAll("[data-user-settings-panel='hosts']"),
+    admin: document.querySelectorAll("[data-user-settings-panel='admin']"),
+  };
+  const buttons = {
+    profile: document.getElementById("userSettingsProfileTabButton"),
+    channels: document.getElementById("userSettingsChannelsTabButton"),
+    digests: document.getElementById("userSettingsDigestsTabButton"),
+    hosts: document.getElementById("userSettingsHostsTabButton"),
+    admin: document.getElementById("userSettingsAdminTabButton"),
+  };
+
+  const activeMode = String(state.userSettingsSubMode || "profile");
+  for (const [mode, nodeList] of Object.entries(panels)) {
+    const active = mode === activeMode;
+    nodeList.forEach((node) => {
+      node.classList.toggle("hidden", !active);
+    });
+    const button = buttons[mode];
+    if (button) {
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    }
+  }
+}
+
+function renderHostInterestsEditor() {
+  const listEl = document.getElementById("hostInterestsList");
+  const summaryEl = document.getElementById("hostInterestsSummary");
+  const modeSelect = document.getElementById("hostInterestModeSelect");
+  if (!listEl) {
+    return;
+  }
+
+  if (modeSelect) {
+    modeSelect.value = normalizeHostInterestMode(state.hostInterestMode);
+  }
+
+  const allHosts = [...(state.hosts || [])].sort((a, b) => {
+    const nameA = String(a.display_name || a.hostname || "").toLowerCase();
+    const nameB = String(b.display_name || b.hostname || "").toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+  const query = String(state.hostInterestSearchQuery || "").toLowerCase().trim();
+  const visibleHosts = query
+    ? allHosts.filter((host) => {
+      const hostname = String(host.hostname || "").toLowerCase();
+      const displayName = String(host.display_name || host.hostname || "").toLowerCase();
+      return hostname.includes(query) || displayName.includes(query);
+    })
+    : allHosts;
+
+  if (summaryEl) {
+    const modeLabel = normalizeHostInterestMode(state.hostInterestMode).replaceAll("_", " ");
+    summaryEl.textContent = `${state.hostInterestHosts.size} markiert | Modus: ${modeLabel}`;
+  }
+
+  if (allHosts.length === 0) {
+    listEl.innerHTML = '<p class="muted">Noch keine Hosts geladen.</p>';
+    return;
+  }
+  if (visibleHosts.length === 0) {
+    listEl.innerHTML = '<p class="muted">Keine Treffer fuer die Suche.</p>';
+    return;
+  }
+
+  listEl.innerHTML = visibleHosts.map((host) => {
+    const hostname = String(host.hostname || "");
+    const displayName = String(host.display_name || hostname || "");
+    const checked = state.hostInterestHosts.has(hostname) ? "checked" : "";
+    return `
+      <label class="host-interest-item">
+        <input type="checkbox" data-host-interest-host="${escapeHtml(hostname)}" ${checked} />
+        <span class="host-interest-name">${escapeHtml(displayName)}</span>
+        <span class="host-interest-hostname">(${escapeHtml(hostname)})</span>
+      </label>
+    `;
+  }).join("");
+
+  listEl.querySelectorAll("[data-host-interest-host]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const hostname = String(checkbox.getAttribute("data-host-interest-host") || "");
+      if (!hostname) {
+        return;
+      }
+      if (checkbox.checked) {
+        state.hostInterestHosts.add(hostname);
+      } else {
+        state.hostInterestHosts.delete(hostname);
+      }
+      renderHostInterestsEditor();
+    });
+  });
 }
 
 function updateOverviewSection() {
@@ -829,6 +951,15 @@ function setAlarmSettingsStatus(message, isError = false) {
 
 function setUserMailSettingsStatus(message, isError = false) {
   const statusEl = document.getElementById("userMailSettingsStatus");
+  if (!statusEl) {
+    return;
+  }
+  statusEl.textContent = message;
+  statusEl.classList.toggle("status-error", isError);
+}
+
+function setHostInterestsStatus(message, isError = false) {
+  const statusEl = document.getElementById("hostInterestsStatus");
   if (!statusEl) {
     return;
   }
@@ -912,6 +1043,7 @@ function updateAdminSettingsVisibility() {
   const adminUserSection = document.getElementById("adminUserManagementSection");
   const globalAdminAlertSubsTab = document.getElementById("globalAdminAlertSubsTabButton");
   const globalAdminOpsSection = document.getElementById("globalAdminOpsSection");
+  const userSettingsAdminTab = document.getElementById("userSettingsAdminTabButton");
   if (adminOauthSection) {
     adminOauthSection.classList.toggle("hidden", !state.isAdmin);
   }
@@ -924,9 +1056,16 @@ function updateAdminSettingsVisibility() {
   if (globalAdminOpsSection) {
     globalAdminOpsSection.classList.toggle("hidden", !state.isAdmin);
   }
+  if (userSettingsAdminTab) {
+    userSettingsAdminTab.classList.toggle("hidden", !state.isAdmin);
+  }
   if (!state.isAdmin && state.globalSubMode === "admin-alert-subs") {
     state.globalSubMode = "global-alerts";
     updateGlobalSubMode();
+  }
+  if (!state.isAdmin && state.userSettingsSubMode === "admin") {
+    state.userSettingsSubMode = "profile";
+    updateUserSettingsSubMode();
   }
 }
 
@@ -947,7 +1086,7 @@ async function ensureAuthenticatedSession() {
     setAuthUiState(session.authenticated === true);
     if (session.authenticated === true) {
       loadHostFilterPreferences();
-      loadUserPreferences();
+      await loadUserPreferences();
     }
     return session.authenticated === true;
   } catch {
@@ -1218,6 +1357,14 @@ async function loadUserProfile(force = false) {
     if (alertTelegramChatIdInput) alertTelegramChatIdInput.value = asText(profile.alert_telegram_chat_id, "") === "-" ? "" : asText(profile.alert_telegram_chat_id, "");
     const senderInput = document.getElementById("userEmailSenderInput");
     if (senderInput) senderInput.value = asText(profile.email_sender, "") === "-" ? "" : asText(profile.email_sender, "");
+    state.hostInterestMode = normalizeHostInterestMode(profile.host_interest_mode || "all");
+    state.hostInterestHosts = new Set(
+      String(profile.host_interest_hosts || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0)
+    );
+    renderHostInterestsEditor();
 
     const oauth = profile.microsoft_oauth || {};
     const oauthConnected = oauth.connected === true;
@@ -1277,6 +1424,8 @@ async function saveUserProfile() {
     alert_instant_telegram_enabled: document.getElementById("alertInstantTelegramEnabledInput")?.checked ?? false,
     alert_telegram_chat_id: document.getElementById("alertTelegramChatIdInput")?.value.trim() || "",
     email_sender: document.getElementById("userEmailSenderInput")?.value.trim() || "",
+    host_interest_mode: normalizeHostInterestMode(document.getElementById("hostInterestModeSelect")?.value || state.hostInterestMode),
+    host_interest_hosts: [...state.hostInterestHosts].sort().join(","),
   };
 
   if (payload.email_enabled && !payload.email_recipient) {
@@ -1298,6 +1447,7 @@ async function saveUserProfile() {
   setUserMailSettingsStatus("Mail-Einstellungen gespeichert.");
   state.userProfileLoaded = false;
   await loadUserProfile(true);
+  await loadHosts({ preserveScroll: true });
 }
 
 async function loadOauthSettings(force = false) {
@@ -3663,7 +3813,21 @@ function filterAndSortHosts(hosts) {
     filtered = filtered.filter((host) => normalizeHostCountryCode(host) === countryFilter);
   }
 
+  const interestMode = normalizeHostInterestMode(state.hostInterestMode);
+  const interestSet = state.hostInterestHosts;
+  if (interestMode === "interested_only" && interestSet.size > 0) {
+    filtered = filtered.filter((host) => interestSet.has(String(host.hostname || "")));
+  }
+
   filtered.sort((a, b) => {
+    if (interestMode === "interested_first" && interestSet.size > 0) {
+      const interestedA = interestSet.has(String(a.hostname || "")) ? 1 : 0;
+      const interestedB = interestSet.has(String(b.hostname || "")) ? 1 : 0;
+      if (interestedA !== interestedB) {
+        return interestedB - interestedA;
+      }
+    }
+
     const favoriteA = Boolean(a.is_favorite) ? 1 : 0;
     const favoriteB = Boolean(b.is_favorite) ? 1 : 0;
     if (favoriteA !== favoriteB) {
@@ -4363,6 +4527,7 @@ async function loadHosts(options = {}) {
     state.totalHosts = Number(data.total_hosts || 0);
     const hosts = data.hosts || [];
     state.hosts = hosts;
+    renderHostInterestsEditor();
     const { visibleHosts, hiddenHosts } = splitHosts(hosts);
     state.visibleHosts = Number(data.visible_hosts || visibleHosts.length || 0);
     state.hiddenHosts = Number(data.hidden_hosts || hiddenHosts.length || 0);
@@ -5527,6 +5692,56 @@ function wireEvents() {
     });
   }
 
+  const openUserSettingsButton = document.getElementById("openUserSettingsButton");
+  if (openUserSettingsButton) {
+    openUserSettingsButton.addEventListener("click", async () => {
+      state.viewMode = "settings";
+      state.userSettingsSubMode = "profile";
+      updateViewMode();
+      await loadSettingsPanel(true);
+    });
+  }
+
+  const userSettingsProfileTabButton = document.getElementById("userSettingsProfileTabButton");
+  if (userSettingsProfileTabButton) {
+    userSettingsProfileTabButton.addEventListener("click", () => {
+      state.userSettingsSubMode = "profile";
+      updateUserSettingsSubMode();
+    });
+  }
+  const userSettingsChannelsTabButton = document.getElementById("userSettingsChannelsTabButton");
+  if (userSettingsChannelsTabButton) {
+    userSettingsChannelsTabButton.addEventListener("click", () => {
+      state.userSettingsSubMode = "channels";
+      updateUserSettingsSubMode();
+    });
+  }
+  const userSettingsDigestsTabButton = document.getElementById("userSettingsDigestsTabButton");
+  if (userSettingsDigestsTabButton) {
+    userSettingsDigestsTabButton.addEventListener("click", () => {
+      state.userSettingsSubMode = "digests";
+      updateUserSettingsSubMode();
+    });
+  }
+  const userSettingsHostsTabButton = document.getElementById("userSettingsHostsTabButton");
+  if (userSettingsHostsTabButton) {
+    userSettingsHostsTabButton.addEventListener("click", () => {
+      state.userSettingsSubMode = "hosts";
+      updateUserSettingsSubMode();
+      renderHostInterestsEditor();
+    });
+  }
+  const userSettingsAdminTabButton = document.getElementById("userSettingsAdminTabButton");
+  if (userSettingsAdminTabButton) {
+    userSettingsAdminTabButton.addEventListener("click", () => {
+      if (!state.isAdmin) {
+        return;
+      }
+      state.userSettingsSubMode = "admin";
+      updateUserSettingsSubMode();
+    });
+  }
+
   const globalViewBackButton = document.getElementById("globalViewBackButton");
   if (globalViewBackButton) {
     globalViewBackButton.addEventListener("click", () => {
@@ -5775,6 +5990,7 @@ function wireEvents() {
 
   document.getElementById("openAlarmSettingsButton").addEventListener("click", async () => {
     state.viewMode = "settings";
+    state.userSettingsSubMode = state.isAdmin ? "admin" : "profile";
     updateViewMode();
     await loadSettingsPanel(true);
   });
@@ -5802,6 +6018,58 @@ function wireEvents() {
       setUserMailSettingsStatus(error.message, true);
     }
   });
+
+  const saveDigestSettingsButton = document.getElementById("saveDigestSettingsButton");
+  if (saveDigestSettingsButton) {
+    saveDigestSettingsButton.addEventListener("click", async () => {
+      try {
+        await saveUserProfile();
+      } catch (error) {
+        setUserMailSettingsStatus(error.message, true);
+      }
+    });
+  }
+
+  const hostInterestModeSelect = document.getElementById("hostInterestModeSelect");
+  if (hostInterestModeSelect) {
+    hostInterestModeSelect.addEventListener("change", async (event) => {
+      state.hostInterestMode = normalizeHostInterestMode(event.target?.value || "all");
+      renderHostInterestsEditor();
+      await loadHosts({ preserveScroll: true });
+    });
+  }
+  const hostInterestSearchInput = document.getElementById("hostInterestSearchInput");
+  if (hostInterestSearchInput) {
+    hostInterestSearchInput.addEventListener("input", () => {
+      state.hostInterestSearchQuery = String(hostInterestSearchInput.value || "");
+      renderHostInterestsEditor();
+    });
+  }
+  const hostInterestsSelectAllButton = document.getElementById("hostInterestsSelectAllButton");
+  if (hostInterestsSelectAllButton) {
+    hostInterestsSelectAllButton.addEventListener("click", () => {
+      state.hostInterestHosts = new Set((state.hosts || []).map((host) => String(host.hostname || "")).filter((item) => item));
+      renderHostInterestsEditor();
+    });
+  }
+  const hostInterestsClearButton = document.getElementById("hostInterestsClearButton");
+  if (hostInterestsClearButton) {
+    hostInterestsClearButton.addEventListener("click", () => {
+      state.hostInterestHosts = new Set();
+      renderHostInterestsEditor();
+    });
+  }
+  const saveHostInterestsButton = document.getElementById("saveHostInterestsButton");
+  if (saveHostInterestsButton) {
+    saveHostInterestsButton.addEventListener("click", async () => {
+      try {
+        await saveUserProfile();
+        setHostInterestsStatus("Host-Interessen gespeichert.");
+      } catch (error) {
+        setHostInterestsStatus(error.message, true);
+      }
+    });
+  }
 
   const reloadAdminAlertSubBtn = document.getElementById("reloadAdminAlertSubscriptionsButton");
   if (reloadAdminAlertSubBtn) {
@@ -5971,6 +6239,7 @@ async function init() {
   document.getElementById("hostSearchInput").value = state.hostSearchQuery;
   if (oauthResult) {
     state.viewMode = "settings";
+    state.userSettingsSubMode = "channels";
     updateViewMode();
     setUserMailSettingsStatus(
       oauthResult.status === "success"

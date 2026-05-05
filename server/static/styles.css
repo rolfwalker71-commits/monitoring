@@ -849,6 +849,38 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   gap: 6px;
 }
 
+.host-interests-list {
+  margin-top: 10px;
+  border: 1px solid #d7e4f2;
+  border-radius: 10px;
+  background: #f8fbff;
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.host-interest-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.host-interest-item:hover {
+  background: #eef5ff;
+}
+
+.host-interest-name {
+  font-weight: 600;
+  color: #183b66;
+}
+
+.host-interest-hostname {
+  color: #64748b;
+  font-size: 12px;
+}
+
 .settings-fieldset-label {
   font-size: 12px;
   font-weight: 600;
@@ -4361,6 +4393,23 @@ body[data-theme="dark"] .alarm-settings-card {
 
 body[data-theme="dark"] .alarm-settings-card-title {
   color: #93c5fd;
+}
+
+body[data-theme="dark"] .host-interests-list {
+  border-color: #2a3c59;
+  background: #111b2c;
+}
+
+body[data-theme="dark"] .host-interest-item:hover {
+  background: #1a2a42;
+}
+
+body[data-theme="dark"] .host-interest-name {
+  color: #d9e8ff;
+}
+
+body[data-theme="dark"] .host-interest-hostname {
+  color: #8fa8c4;
 }
 
 body[data-theme="dark"] .agent-update-status-row {
