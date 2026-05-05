@@ -2891,7 +2891,7 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
         f"<div style='font-size:13px;color:#5f7590;'>Benutzer: {html.escape(username)} | Datum: {html.escape(local_date)} | Zeit: {html.escape(format_mail_datetime())}</div>"
         "</div>"
         "<div style='padding:18px 20px;'>"
-        f"{('<div style=\'margin:0 0 12px 0;\'><img src=\'' + backup_icon_uri + '\' alt=\'Backup\' width=\'32\' height=\'32\' style=\'display:block;width:32px;height:32px;\'></div>') if backup_icon_uri else ''}"
+        f"{('<div style=\'margin:0 0 12px 0;\'><img src=\'' + backup_icon_uri + '\' alt=\'Backup\' width=\'48\' height=\'48\' style=\'display:block;width:48px;height:48px;\'></div>') if backup_icon_uri else ''}"
         f"<p style='margin:0 0 14px 0;font-size:14px;'><strong style='color:{summary_color};'>{html.escape(summary_text)}</strong> | {len(hosts)} Host(s) mit Backup-Konfiguration</p>"
         "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
         "<thead><tr style='background:#f1f5f9;'>"
