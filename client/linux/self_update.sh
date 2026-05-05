@@ -71,3 +71,11 @@ if version_is_newer "$remote_version" "$local_version"; then
   ts="$(date +"%d.%m.%Y %H:%M" 2>/dev/null || true)"
   echo "${ts} Monitoring agent updated from $local_version to $remote_version"
 fi
+
+# Migration: remove old static DIR_SCAN_DEEP_PATHS that was auto-written by a
+# previous agent version. The new agent performs a hostname-aware search and
+# will re-write the correct value on the next run.
+if grep -qE '^DIR_SCAN_DEEP_PATHS=/hana/shared/backup_service/backups/\*\/\*' "$CONFIG_FILE" 2>/dev/null; then
+  sed -i '/^DIR_SCAN_DEEP_PATHS=\/hana\/shared\/backup_service\/backups\/\*\/\*/d' "$CONFIG_FILE"
+  echo "Migration: removed stale DIR_SCAN_DEEP_PATHS from $CONFIG_FILE (will be re-detected on next run)"
+fi
