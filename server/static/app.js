@@ -3197,11 +3197,17 @@ function renderDirItemTable(items, todayInfo) {
   return `
     <div class="table-wrap">
       <table class="report-subtable dir-listing-table">
+        <colgroup>
+          <col style="width:28px;">
+          <col>
+          <col style="width:120px;">
+          <col style="width:230px;">
+        </colgroup>
         <thead>
           <tr>
             <th style="width:28px;"></th>
             <th>📝 Name</th>
-            <th>📦 Grösse</th>
+            <th class="dir-item-size-head">📦 Grösse</th>
             <th>🕒 Geändert (UTC+2)</th>
           </tr>
         </thead>

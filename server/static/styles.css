@@ -4545,12 +4545,20 @@ body[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   padding-right: 0;
 }
 
+.dir-listing-table {
+  table-layout: auto;
+  width: 100%;
+}
+
 .dir-listing-table td.dir-item-name {
   font-family: monospace;
   font-size: 12px;
-  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+.dir-listing-table th.dir-item-size-head,
 .dir-listing-table td.dir-item-size {
   text-align: right;
   white-space: nowrap;

@@ -2689,6 +2689,46 @@ def _item_matches_current(item: dict, tokens: list[str], now_local: datetime) ->
         return False
 
 
+def _select_best_backup_item(items: list[dict]) -> dict:
+    if not items:
+        return {}
+
+    def rank(item: dict) -> tuple[int, float]:
+        item_type = str(item.get("type") or "").strip().lower()
+        if item_type == "file":
+            priority = 0
+        elif item_type == "link":
+            priority = 1
+        else:
+            priority = 2
+        modified_raw = str(item.get("modified_utc") or "").strip()
+        modified_ts = 0.0
+        if modified_raw:
+            try:
+                modified_ts = datetime.fromisoformat(modified_raw.replace("Z", "+00:00")).timestamp()
+            except Exception:
+                modified_ts = 0.0
+        return (priority, -modified_ts)
+
+    return min(items, key=rank)
+
+
+def format_size_bytes(value: object) -> str:
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return "-"
+    if amount < 0:
+        return "-"
+    units = ["B", "KiB", "MiB", "GiB", "TiB"]
+    unit_index = 0
+    while amount >= 1024 and unit_index < len(units) - 1:
+        amount /= 1024.0
+        unit_index += 1
+    digits = 0 if amount >= 100 else 1 if amount >= 10 else 2
+    return f"{amount:.{digits}f} {units[unit_index]}"
+
+
 def get_backup_status_overview(conn: sqlite3.Connection) -> list[dict]:
     """Return backup status for all hosts that have dir_deep_listings data.
 
@@ -2786,14 +2826,16 @@ def get_backup_status_overview(conn: sqlite3.Connection) -> list[dict]:
                     continue
                 items = subdir.get("items") or []
                 has_current = any(_item_matches_current(item, tokens, now_local) for item in items)
+                best_item = _select_best_backup_item(items)
                 dirs.append({
                     "subdir_name": subdir_name,
                     "subdir_path": subdir_path,
                     "parent_path": path,
                     "has_today_backup": has_current,
                     "item_count": int(subdir.get("item_count_total") or len(items)),
-                    "newest_item_name": str(items[0].get("name") or "") if items else "",
-                    "newest_item_modified": str(items[0].get("modified_utc") or "") if items else "",
+                    "newest_item_name": str(best_item.get("name") or "") if best_item else "",
+                    "newest_item_modified": str(best_item.get("modified_utc") or "") if best_item else "",
+                    "newest_item_size_bytes": int(best_item.get("size_bytes") or 0) if best_item else 0,
                 })
 
         if not dirs:
@@ -2848,7 +2890,11 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
             badge_color = "#166534" if ok else "#991b1b"
             badge_text = "✓ Backup aktuell (<24h)" if ok else "✗ kein aktuelles Backup"
             subdir_name = html.escape(str(d.get("subdir_name") or d.get("subdir_path") or "-"))
-            newest = html.escape(str(d.get("newest_item_name") or "-"))
+            newest_raw = str(d.get("newest_item_name") or "-")
+            newest_leaf = Path(newest_raw).name if newest_raw not in {"", "-"} else newest_raw
+            newest_parent = str(Path(newest_raw).parent).strip() if newest_raw not in {"", "-"} and "/" in newest_raw else ""
+            newest = html.escape(newest_leaf or newest_raw or "-")
+            newest_size = format_size_bytes(d.get("newest_item_size_bytes", 0))
             newest_modified_raw = str(d.get("newest_item_modified") or "").strip()
             newest_modified_fmt = ""
             if newest_modified_raw:
@@ -2858,6 +2904,9 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
                 except Exception:
                     newest_modified_fmt = newest_modified_raw[:16]
             newest_cell = newest
+            if newest_parent:
+                newest_cell += f"<div style='margin-top:2px;font-size:11px;color:#94a3b8;'>{html.escape(newest_parent)}</div>"
+            newest_cell += f"<div style='margin-top:2px;font-size:11px;color:#94a3b8;'>Grösse: {html.escape(newest_size)}</div>"
             if newest_modified_fmt:
                 newest_cell += f"<div style='margin-top:2px;font-size:11px;color:#94a3b8;'>Datei: {html.escape(newest_modified_fmt)}</div>"
             dir_rows += (
