@@ -696,8 +696,10 @@
                   <button id="editDisplayNameButton" class="btn-icon" type="button" title="Titel bearbeiten">✏️</button>
                 </div>
               </div>
-              <p id="reportCount" class="count"></p>
-              <p id="deliveryStats" class="count compact"></p>
+              <div class="report-meta-row">
+                <p id="reportCount" class="count"></p>
+                <p id="deliveryStats" class="count compact"></p>
+              </div>
             </div>
 
             <div class="view-tabs-shell">
@@ -708,14 +710,13 @@
             </div>
 
             <div id="overviewView" class="view-section" role="tabpanel" aria-labelledby="overviewTabButton">
-              <div class="subview-tabs-shell">
-                <div class="subview-tabs" role="tablist" aria-label="Uebersichts-Register">
-                  <button id="overviewMainTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="overviewMainSection"> Alerts + Analyse</button>
-                  <button id="overviewFilesystemTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="overviewFilesystemSection">💾 Filesystem Fokus</button>
+              <div class="subview-controls-row">
+                <div class="subview-tabs-shell">
+                  <div class="subview-tabs" role="tablist" aria-label="Uebersichts-Register">
+                    <button id="overviewMainTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="overviewMainSection"> Alerts + Analyse</button>
+                    <button id="overviewFilesystemTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="overviewFilesystemSection">💾 Filesystem Fokus</button>
+                  </div>
                 </div>
-              </div>
-
-              <div class="overview-controls">
                 <label class="chart-range-control" for="analysisRangeSelect">
                   <span>Chart-Zeitraum</span>
                   <select id="analysisRangeSelect">

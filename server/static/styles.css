@@ -1113,14 +1113,16 @@ button:disabled {
 }
 .title-row-tools {
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
 }
 
 .title-row h3 {
   margin: 0;
+  font-size: 20px;
+  font-weight: 700;
 }
 
 button {
@@ -1217,7 +1219,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  margin-top: 10px;
+  margin-top: 0;
 }
 
 .stat-chip {
@@ -1286,7 +1288,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 }
 
 .view-tabs-shell {
-  margin: 14px 0 14px;
+  margin: 8px 0 8px;
   padding: 6px;
   border: 1px solid #d9e3f1;
   border-radius: 999px;
@@ -1315,6 +1317,32 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 
 .report-subview-tabs {
   gap: 5px;
+}
+
+/* reportCount + deliveryStats in one row */
+.report-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 4px;
+}
+.report-meta-row .count {
+  margin: 0;
+}
+
+/* subview-tabs + chart-range-control in one row */
+.subview-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+}
+.subview-controls-row .subview-tabs-shell {
+  margin: 0;
+  flex: 1 1 auto;
 }
 
 .overview-controls {

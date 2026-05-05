@@ -4637,7 +4637,7 @@ async function loadReportsForHost(options = {}) {
   }
 
   const selectedLabel = state.selectedDisplayName || state.selectedHost;
-  selectedHostTitle.textContent = `🗂️ Meldungen fuer ${selectedLabel}`;
+  selectedHostTitle.textContent = `🗂️ ${selectedLabel}`;
   list.innerHTML = "<p class=\"muted\">Lade Daten...</p>";
   count.textContent = "";
 
@@ -4695,7 +4695,7 @@ async function loadReportsForHost(options = {}) {
     const shownIndex = state.reportOffset + 1;
     count.textContent = `Meldung ${shownIndex} von ${state.totalReports}`;
     state.selectedDisplayName = String(reports[0].display_name || reports[0].hostname || state.selectedHost);
-    selectedHostTitle.textContent = `🗂️ Meldungen fuer ${state.selectedDisplayName}`;
+    selectedHostTitle.textContent = `🗂️ ${state.selectedDisplayName}`;
     state.currentReport = reports[0];
     list.innerHTML = renderReportCard(state.currentReport);
     updatePagerButtons();
