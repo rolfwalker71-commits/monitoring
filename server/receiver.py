@@ -2713,6 +2713,15 @@ def _select_best_backup_item(items: list[dict]) -> dict:
     return min(items, key=rank)
 
 
+def _is_backup_zip_item(item: dict) -> bool:
+    item_type = str(item.get("type") or "").strip().lower()
+    if item_type != "file":
+        return False
+    name = str(item.get("name") or "").strip()
+    leaf_name = Path(name).name if name else ""
+    return bool(re.fullmatch(r"bck_.*\.zip", leaf_name, flags=re.IGNORECASE))
+
+
 def format_size_bytes(value: object) -> str:
     try:
         amount = float(value)
@@ -2825,14 +2834,15 @@ def get_backup_status_overview(conn: sqlite3.Connection) -> list[dict]:
                 if normalized_name == "_instancebackup" or normalized_path_name == "_instancebackup":
                     continue
                 items = subdir.get("items") or []
-                has_current = any(_item_matches_current(item, tokens, now_local) for item in items)
-                best_item = _select_best_backup_item(items)
+                zip_items = [item for item in items if isinstance(item, dict) and _is_backup_zip_item(item)]
+                has_current = any(_item_matches_current(item, tokens, now_local) for item in zip_items)
+                best_item = _select_best_backup_item(zip_items)
                 dirs.append({
                     "subdir_name": subdir_name,
                     "subdir_path": subdir_path,
                     "parent_path": path,
                     "has_today_backup": has_current,
-                    "item_count": int(subdir.get("item_count_total") or len(items)),
+                    "item_count": len(zip_items),
                     "newest_item_name": str(best_item.get("name") or "") if best_item else "",
                     "newest_item_modified": str(best_item.get("modified_utc") or "") if best_item else "",
                     "newest_item_size_bytes": int(best_item.get("size_bytes") or 0) if best_item else 0,

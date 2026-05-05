@@ -3117,7 +3117,7 @@ function renderSapBusinessOneCard(payload) {
   `;
 }
 
-function getTodaySearchInfo() {
+function getBackupCurrentInfo() {
   const now = new Date();
   const yyyy = String(now.getFullYear());
   const mm = String(now.getMonth() + 1).padStart(2, "0");
@@ -3128,7 +3128,7 @@ function getTodaySearchInfo() {
     year: yyyy,
     month: mm,
     day: dd,
-    localKey: `${yyyy}-${mm}-${dd}`,
+    nowMs: now.getTime(),
     tokens: [
       `${yyyy}${mm}${dd}`,
       `${yyyy}-${mm}-${dd}`,
@@ -3143,9 +3143,9 @@ function getTodaySearchInfo() {
   };
 }
 
-function itemMatchesToday(item, todayInfo) {
+function itemMatchesCurrent(item, currentInfo) {
   const name = asText(item && item.name, "").toLowerCase();
-  const nameMatch = todayInfo.tokens.some((token) => name.includes(token.toLowerCase()));
+  const nameMatch = currentInfo.tokens.some((token) => name.includes(token.toLowerCase()));
   if (nameMatch) {
     return true;
   }
@@ -3160,15 +3160,15 @@ function itemMatchesToday(item, todayInfo) {
     return false;
   }
 
-  const modKey = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
-  return modKey === todayInfo.localKey;
+  const ageMs = currentInfo.nowMs - parsed.getTime();
+  return ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
 }
 
-function renderTodayStatusBadge(hasToday) {
-  if (hasToday) {
-    return '<span class="dir-status-badge ok">Heute: Backup gefunden</span>';
+function renderCurrentStatusBadge(hasCurrent) {
+  if (hasCurrent) {
+    return '<span class="dir-status-badge ok">Backup gefunden (&lt;24h)</span>';
   }
-  return '<span class="dir-status-badge missing">Heute: kein Backup</span>';
+  return '<span class="dir-status-badge missing">kein Backup (&gt;24h)</span>';
 }
 
 function isBackupZipItem(item) {
@@ -3178,30 +3178,33 @@ function isBackupZipItem(item) {
   return type === "file" && /^bck_.*\.zip$/i.test(leafName);
 }
 
-function renderDirItemRows(items, todayInfo) {
+function renderDirItemRows(items, currentInfo) {
   return items.map((item) => {
     const name = asText(item.name, "-");
-    const isZipFile = name.toLowerCase().endsWith(".zip");
+    const slashIndex = name.lastIndexOf("/");
+    const namePath = slashIndex >= 0 ? name.slice(0, slashIndex) : "";
+    const leafName = slashIndex >= 0 ? name.slice(slashIndex + 1) : name;
+    const isZipFile = leafName.toLowerCase().endsWith(".zip");
     const type = asText(item.type, "file");
     const sizeBytes = Number(item.size_bytes);
     const sizeText = Number.isFinite(sizeBytes) && sizeBytes >= 0 ? formatBytes(sizeBytes) : "-";
     const modRaw = asText(item.modified_utc, "");
     const modText = modRaw ? formatUtcPlus2Short(modRaw) : "-";
     const typeIcon = type === "dir" ? "📁" : type === "link" ? "🔗" : "📄";
-    const isToday = itemMatchesToday(item, todayInfo);
-    const rowClass = isToday ? " class=\"dir-item-today\"" : "";
+    const isCurrent = itemMatchesCurrent(item, currentInfo);
+    const rowClass = isCurrent ? " class=\"dir-item-today\"" : "";
     return `
       <tr${rowClass}>
         <td class="dir-item-icon">${typeIcon}</td>
-        <td class="dir-item-name${isZipFile ? " dir-item-name--zip" : ""}" title="${escapeHtml(name)}">${escapeHtml(name)}</td>
+        <td class="dir-item-name${isZipFile ? " dir-item-name--zip" : ""}" title="${escapeHtml(name)}">${namePath ? `<span class="dir-item-name-path">${escapeHtml(namePath)}/</span>` : ""}<span class="dir-item-name-leaf${isZipFile ? " dir-item-name-leaf--zip" : ""}">${escapeHtml(leafName)}</span></td>
         <td class="dir-item-size">${escapeHtml(sizeText)}</td>
-        <td class="dir-item-date">${escapeHtml(modText)}${isToday ? ' <span class="dir-item-today-chip">HEUTE</span>' : ""}</td>
+        <td class="dir-item-date">${escapeHtml(modText)}${isCurrent ? ' <span class="dir-item-today-chip">&lt;24H</span>' : ""}</td>
       </tr>
     `;
   }).join("");
 }
 
-function renderDirItemTable(items, todayInfo) {
+function renderDirItemTable(items, currentInfo) {
   return `
     <div class="table-wrap">
       <table class="report-subtable dir-listing-table">
@@ -3219,7 +3222,7 @@ function renderDirItemTable(items, todayInfo) {
             <th class="dir-item-date-head">🕒 Geändert (UTC+2)</th>
           </tr>
         </thead>
-        <tbody>${renderDirItemRows(items, todayInfo)}</tbody>
+        <tbody>${renderDirItemRows(items, currentInfo)}</tbody>
       </table>
     </div>
   `;
@@ -3228,7 +3231,7 @@ function renderDirItemTable(items, todayInfo) {
 function renderDirListingsCard(payload) {
   const block = payload && typeof payload.dir_listings === "object" ? payload.dir_listings : null;
   const deepBlock = payload && typeof payload.dir_deep_listings === "object" ? payload.dir_deep_listings : null;
-  const todayInfo = getTodaySearchInfo();
+  const currentInfo = getBackupCurrentInfo();
 
   const hasRegular = block && block.available && Array.isArray(block.entries) && block.entries.length > 0;
   const hasDeep = deepBlock && deepBlock.available && Array.isArray(deepBlock.entries) && deepBlock.entries.length > 0;
@@ -3251,7 +3254,7 @@ function renderDirListingsCard(payload) {
       const path = asText(entry.path, pattern);
       const items = Array.isArray(entry.items) ? entry.items : [];
       const truncated = entry.truncated === true;
-      const hasToday = items.some((item) => itemMatchesToday(item, todayInfo));
+      const hasToday = items.some((item) => itemMatchesCurrent(item, currentInfo));
 
       if (items.length === 0) {
         return `
@@ -3276,8 +3279,8 @@ function renderDirListingsCard(payload) {
             <span class="dir-listing-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
             <span class="dir-listing-pattern muted">${escapeHtml(pattern)}</span>
           </div>
-          ${renderTodayStatusBadge(hasToday)}
-          ${renderDirItemTable(items, todayInfo)}
+          ${renderCurrentStatusBadge(hasToday)}
+          ${renderDirItemTable(items, currentInfo)}
           ${truncatedNote}
         </div>
       `;
@@ -3309,7 +3312,7 @@ function renderDirListingsCard(payload) {
         const subdirPath = asText(subdir.path, subdirName);
         const rawItems = Array.isArray(subdir.items) ? subdir.items : [];
         const items = rawItems.filter((item) => isBackupZipItem(item));
-        const hasToday = items.some((item) => itemMatchesToday(item, todayInfo));
+        const hasToday = items.some((item) => itemMatchesCurrent(item, currentInfo));
         const total = Number(subdir.item_count_total || 0);
         const totalNote = Number.isFinite(total) && total > items.length
           ? ` <span class="muted">(${items.length} ZIP von ${total} gezeigt)</span>`
@@ -3318,11 +3321,11 @@ function renderDirListingsCard(payload) {
         return `
           <details class="dir-deep-subdir">
             <summary class="dir-deep-subdir-title">
-              📁 <span title="${escapeHtml(subdirPath)}">${escapeHtml(subdirName)}</span>${totalNote} ${renderTodayStatusBadge(hasToday)}
+              📁 <span title="${escapeHtml(subdirPath)}">${escapeHtml(subdirName)}</span>${totalNote} ${renderCurrentStatusBadge(hasToday)}
             </summary>
             ${items.length === 0
               ? `<p class="muted" style="margin:4px 0 0 0;">Keine bck_*.zip-Dateien gefunden.</p>`
-              : renderDirItemTable(items, todayInfo)
+              : renderDirItemTable(items, currentInfo)
             }
           </details>
         `;
