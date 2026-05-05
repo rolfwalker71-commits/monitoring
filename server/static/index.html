@@ -128,6 +128,7 @@
                 <button id="criticalTrendsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="criticalTrendsView">📈 Kritische Trends</button>
                 <button id="inactiveHostsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="inactiveHostsView">💤 Inaktive Hosts</button>
                 <button id="globalAdminAlertSubsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminAlertSubsView">🔔 Alert Abos</button>
+                <button id="globalAdminSettingsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminSettingsView">🛠️ Admin Settings</button>
               </div>
             </div>
 
@@ -255,6 +256,10 @@
               </section>
             </div>
 
+            <div id="globalAdminSettingsView" class="hidden" role="tabpanel" aria-labelledby="globalAdminSettingsTabButton">
+              <div id="globalAdminSettingsContainer"></div>
+            </div>
+
             <section id="globalAdminOpsSection" class="settings-subsection hidden">
               <div class="settings-subsection-head">
                 <h5>Admin Aktionen</h5>
@@ -283,15 +288,14 @@
 
             <div class="subview-tabs-shell">
               <div class="subview-tabs" role="tablist" aria-label="Benutzereinstellungen Register">
-                <button id="userSettingsProfileTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="userSettingsProfilePanel">🔐 Profil</button>
+                <button id="userSettingsPasswordTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="userSettingsPasswordPanel">🔑 Passwort</button>
                 <button id="userSettingsChannelsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="userSettingsChannelsPanel">📨 Kanaele</button>
                 <button id="userSettingsDigestsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="userSettingsDigestsPanel">📬 Digests</button>
                 <button id="userSettingsHostsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="userSettingsHostsPanel">🖥️ Host-Interessen</button>
-                <button id="userSettingsAdminTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="adminOauthSettingsSection">🛠️ Admin</button>
               </div>
             </div>
 
-            <section class="settings-subsection" id="userSettingsProfilePanel" data-user-settings-panel="profile">
+            <section class="settings-subsection" id="userSettingsPasswordPanel" data-user-settings-panel="password">
               <div class="settings-subsection-head">
                 <h5>🔑 Passwort aendern</h5>
                 <p class="count compact">Eigenes Web-Passwort aktualisieren</p>
@@ -547,7 +551,7 @@
 
 
 
-            <section class="settings-subsection hidden" data-user-settings-panel="admin">
+            <section id="globalAlarmSettingsSection" class="settings-subsection hidden" data-user-settings-panel="admin">
               <div class="settings-subsection-head">
                 <h5>Globale Alarm Einstellungen</h5>
                 <p class="count compact">Systemweite Schwellwerte und Telegram Kanal</p>

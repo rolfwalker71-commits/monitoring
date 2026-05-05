@@ -39,7 +39,7 @@ const state = {
   hostOsFilter: "all",
   hostCountryFilter: "all",
   viewMode: "overview",
-  userSettingsSubMode: "profile",
+  userSettingsSubMode: "password",
   overviewSection: "main",
   globalSubMode: "global-alerts",
   criticalTrendsHours: 24,
@@ -799,43 +799,46 @@ function updateGlobalSubMode() {
   const criticalTrendsView = document.getElementById("criticalTrendsView");
   const inactiveHostsView = document.getElementById("inactiveHostsView");
   const globalAdminAlertSubsView = document.getElementById("globalAdminAlertSubsView");
+  const globalAdminSettingsView = document.getElementById("globalAdminSettingsView");
   const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
   const criticalTrendsTabButton = document.getElementById("criticalTrendsTabButton");
   const inactiveHostsTabButton = document.getElementById("inactiveHostsTabButton");
   const globalAdminAlertSubsTabButton = document.getElementById("globalAdminAlertSubsTabButton");
+  const globalAdminSettingsTabButton = document.getElementById("globalAdminSettingsTabButton");
 
   const alertsActive = state.globalSubMode === "global-alerts";
   const trendsActive = state.globalSubMode === "critical-trends";
   const inactiveActive = state.globalSubMode === "inactive-hosts";
   const adminAlertSubsActive = state.globalSubMode === "admin-alert-subs";
+  const adminSettingsActive = state.globalSubMode === "admin-settings";
 
   if (globalAlertsView) globalAlertsView.classList.toggle("hidden", !alertsActive);
   if (criticalTrendsView) criticalTrendsView.classList.toggle("hidden", !trendsActive);
   if (inactiveHostsView) inactiveHostsView.classList.toggle("hidden", !inactiveActive);
   if (globalAdminAlertSubsView) globalAdminAlertSubsView.classList.toggle("hidden", !adminAlertSubsActive);
+  if (globalAdminSettingsView) globalAdminSettingsView.classList.toggle("hidden", !adminSettingsActive);
   if (globalAlertsTabButton) { globalAlertsTabButton.classList.toggle("active", alertsActive); globalAlertsTabButton.setAttribute("aria-selected", alertsActive ? "true" : "false"); }
   if (criticalTrendsTabButton) { criticalTrendsTabButton.classList.toggle("active", trendsActive); criticalTrendsTabButton.setAttribute("aria-selected", trendsActive ? "true" : "false"); }
   if (inactiveHostsTabButton) { inactiveHostsTabButton.classList.toggle("active", inactiveActive); inactiveHostsTabButton.setAttribute("aria-selected", inactiveActive ? "true" : "false"); }
   if (globalAdminAlertSubsTabButton) { globalAdminAlertSubsTabButton.classList.toggle("active", adminAlertSubsActive); globalAdminAlertSubsTabButton.setAttribute("aria-selected", adminAlertSubsActive ? "true" : "false"); }
+  if (globalAdminSettingsTabButton) { globalAdminSettingsTabButton.classList.toggle("active", adminSettingsActive); globalAdminSettingsTabButton.setAttribute("aria-selected", adminSettingsActive ? "true" : "false"); }
 }
 
 function updateUserSettingsSubMode() {
   const panels = {
-    profile: document.querySelectorAll("[data-user-settings-panel='profile']"),
+    password: document.querySelectorAll("[data-user-settings-panel='password']"),
     channels: document.querySelectorAll("[data-user-settings-panel='channels']"),
     digests: document.querySelectorAll("[data-user-settings-panel='digests']"),
     hosts: document.querySelectorAll("[data-user-settings-panel='hosts']"),
-    admin: document.querySelectorAll("[data-user-settings-panel='admin']"),
   };
   const buttons = {
-    profile: document.getElementById("userSettingsProfileTabButton"),
+    password: document.getElementById("userSettingsPasswordTabButton"),
     channels: document.getElementById("userSettingsChannelsTabButton"),
     digests: document.getElementById("userSettingsDigestsTabButton"),
     hosts: document.getElementById("userSettingsHostsTabButton"),
-    admin: document.getElementById("userSettingsAdminTabButton"),
   };
 
-  const activeMode = String(state.userSettingsSubMode || "profile");
+  const activeMode = String(state.userSettingsSubMode || "password");
   for (const [mode, nodeList] of Object.entries(panels)) {
     const active = mode === activeMode;
     nodeList.forEach((node) => {
@@ -1041,30 +1044,38 @@ function setAuthUiState(authenticated) {
 function updateAdminSettingsVisibility() {
   const adminOauthSection = document.getElementById("adminOauthSettingsSection");
   const adminUserSection = document.getElementById("adminUserManagementSection");
+  const globalAlarmSettingsSection = document.getElementById("globalAlarmSettingsSection");
   const globalAdminAlertSubsTab = document.getElementById("globalAdminAlertSubsTabButton");
+  const globalAdminSettingsTab = document.getElementById("globalAdminSettingsTabButton");
   const globalAdminOpsSection = document.getElementById("globalAdminOpsSection");
-  const userSettingsAdminTab = document.getElementById("userSettingsAdminTabButton");
   if (adminOauthSection) {
     adminOauthSection.classList.toggle("hidden", !state.isAdmin);
   }
   if (adminUserSection) {
     adminUserSection.classList.toggle("hidden", !state.isAdmin);
   }
+  if (globalAlarmSettingsSection) {
+    globalAlarmSettingsSection.classList.toggle("hidden", !state.isAdmin);
+  }
   if (globalAdminAlertSubsTab) {
     globalAdminAlertSubsTab.classList.toggle("hidden", !state.isAdmin);
   }
+  if (globalAdminSettingsTab) {
+    globalAdminSettingsTab.classList.toggle("hidden", !state.isAdmin);
+  }
   if (globalAdminOpsSection) {
     globalAdminOpsSection.classList.toggle("hidden", !state.isAdmin);
-  }
-  if (userSettingsAdminTab) {
-    userSettingsAdminTab.classList.toggle("hidden", !state.isAdmin);
   }
   if (!state.isAdmin && state.globalSubMode === "admin-alert-subs") {
     state.globalSubMode = "global-alerts";
     updateGlobalSubMode();
   }
-  if (!state.isAdmin && state.userSettingsSubMode === "admin") {
-    state.userSettingsSubMode = "profile";
+  if (!state.isAdmin && state.globalSubMode === "admin-settings") {
+    state.globalSubMode = "global-alerts";
+    updateGlobalSubMode();
+  }
+  if (state.userSettingsSubMode !== "password" && state.userSettingsSubMode !== "channels" && state.userSettingsSubMode !== "digests" && state.userSettingsSubMode !== "hosts") {
+    state.userSettingsSubMode = "password";
     updateUserSettingsSubMode();
   }
 }
@@ -1885,14 +1896,39 @@ async function loadAdminAlertSubscriptions(force = false) {
   }
 }
 
+function mountAdminSettingsIntoGlobalView() {
+  const container = document.getElementById("globalAdminSettingsContainer");
+  if (!container) {
+    return;
+  }
+  const sections = [
+    document.getElementById("adminOauthSettingsSection"),
+    document.getElementById("adminUserManagementSection"),
+    document.getElementById("globalAlarmSettingsSection"),
+  ];
+  for (const section of sections) {
+    if (!section) {
+      continue;
+    }
+    if (section.parentElement !== container) {
+      container.appendChild(section);
+    }
+  }
+}
+
+async function loadGlobalAdminSettingsPanel(force = false) {
+  updateAdminSettingsVisibility();
+  if (!state.isAdmin) {
+    return;
+  }
+  await loadAlarmSettings(force);
+  await loadOauthSettings(force);
+  await loadWebUsers(force);
+}
+
 async function loadSettingsPanel(force = false) {
   updateAdminSettingsVisibility();
-  await loadAlarmSettings(force);
   await loadUserProfile(force);
-  if (state.isAdmin) {
-    await loadOauthSettings(force);
-    await loadWebUsers(force);
-  }
 }
 
 function consumeOauthStatusFromUrl() {
@@ -5622,6 +5658,17 @@ function wireEvents() {
       await loadAdminAlertSubscriptions();
     });
   }
+  const globalAdminSettingsTabButton = document.getElementById("globalAdminSettingsTabButton");
+  if (globalAdminSettingsTabButton) {
+    globalAdminSettingsTabButton.addEventListener("click", async () => {
+      if (!state.isAdmin) {
+        return;
+      }
+      state.globalSubMode = "admin-settings";
+      updateGlobalSubMode();
+      await loadGlobalAdminSettingsPanel();
+    });
+  }
 
   document.getElementById("globalViewButton").addEventListener("click", async () => {
     state.viewMode = "global";
@@ -5635,6 +5682,7 @@ function wireEvents() {
     else if (state.globalSubMode === "critical-trends") await loadCriticalTrends();
     else if (state.globalSubMode === "inactive-hosts") await loadInactiveHosts();
     else if (state.globalSubMode === "admin-alert-subs") await loadAdminAlertSubscriptions();
+    else if (state.globalSubMode === "admin-settings") await loadGlobalAdminSettingsPanel();
   });
 
   document.getElementById("headerAlertChip").addEventListener("click", async () => {
@@ -5696,16 +5744,16 @@ function wireEvents() {
   if (openUserSettingsButton) {
     openUserSettingsButton.addEventListener("click", async () => {
       state.viewMode = "settings";
-      state.userSettingsSubMode = "profile";
+      state.userSettingsSubMode = "password";
       updateViewMode();
       await loadSettingsPanel(true);
     });
   }
 
-  const userSettingsProfileTabButton = document.getElementById("userSettingsProfileTabButton");
-  if (userSettingsProfileTabButton) {
-    userSettingsProfileTabButton.addEventListener("click", () => {
-      state.userSettingsSubMode = "profile";
+  const userSettingsPasswordTabButton = document.getElementById("userSettingsPasswordTabButton");
+  if (userSettingsPasswordTabButton) {
+    userSettingsPasswordTabButton.addEventListener("click", () => {
+      state.userSettingsSubMode = "password";
       updateUserSettingsSubMode();
     });
   }
@@ -5731,17 +5779,6 @@ function wireEvents() {
       renderHostInterestsEditor();
     });
   }
-  const userSettingsAdminTabButton = document.getElementById("userSettingsAdminTabButton");
-  if (userSettingsAdminTabButton) {
-    userSettingsAdminTabButton.addEventListener("click", () => {
-      if (!state.isAdmin) {
-        return;
-      }
-      state.userSettingsSubMode = "admin";
-      updateUserSettingsSubMode();
-    });
-  }
-
   const globalViewBackButton = document.getElementById("globalViewBackButton");
   if (globalViewBackButton) {
     globalViewBackButton.addEventListener("click", () => {
@@ -5989,8 +6026,16 @@ function wireEvents() {
   });
 
   document.getElementById("openAlarmSettingsButton").addEventListener("click", async () => {
+    if (state.isAdmin) {
+      state.viewMode = "global";
+      state.globalSubMode = "admin-settings";
+      updateViewMode();
+      updateGlobalSubMode();
+      await loadGlobalAdminSettingsPanel(true);
+      return;
+    }
     state.viewMode = "settings";
-    state.userSettingsSubMode = state.isAdmin ? "admin" : "profile";
+    state.userSettingsSubMode = "password";
     updateViewMode();
     await loadSettingsPanel(true);
   });
@@ -6217,6 +6262,7 @@ async function init() {
     console.warn("initial loadWebclientVersion failed:", error);
   }
   wireEvents();
+  mountAdminSettingsIntoGlobalView();
   updateViewMode();
   updateOverviewSection();
   updateAnalysisRangeUi();
