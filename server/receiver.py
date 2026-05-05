@@ -3536,6 +3536,9 @@ def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
         "digest_trend_metrics": settings.get("digest_trend_metrics", "cpu,memory,swap,filesystem"),
         "host_interest_mode": settings.get("host_interest_mode", "all"),
         "host_interest_hosts": settings.get("host_interest_hosts", ""),
+        "backup_email_enabled": settings.get("backup_email_enabled", False),
+        "backup_email_time_hhmm": settings.get("backup_email_time_hhmm", DEFAULT_BACKUP_DIGEST_TIME),
+        "backup_email_recipients": settings.get("backup_email_recipients", ""),
         "mail_oauth_available": oauth_is_configured(oauth_settings),
         "microsoft_oauth": {
             "connected": connection is not None,
