@@ -2922,8 +2922,6 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
                 except Exception:
                     newest_modified_fmt = newest_modified_raw[:16]
             newest_cell = f"<strong>{newest}</strong>" if newest_is_zip else newest
-            if newest_parent:
-                newest_cell += f"<div style='margin-top:2px;font-size:11px;color:#94a3b8;'>{html.escape(newest_parent)}</div>"
             newest_cell += f"<div style='margin-top:2px;font-size:11px;color:#94a3b8;'>Grösse: {html.escape(newest_size)}</div>"
             if newest_modified_fmt:
                 newest_cell += f"<div style='margin-top:2px;font-size:11px;color:#94a3b8;'>Datei: {html.escape(newest_modified_fmt)}</div>"
