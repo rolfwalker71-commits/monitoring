@@ -3174,6 +3174,7 @@ function renderTodayStatusBadge(hasToday) {
 function renderDirItemRows(items, todayInfo) {
   return items.map((item) => {
     const name = asText(item.name, "-");
+    const isZipFile = name.toLowerCase().endsWith(".zip");
     const type = asText(item.type, "file");
     const sizeBytes = Number(item.size_bytes);
     const sizeText = Number.isFinite(sizeBytes) && sizeBytes >= 0 ? formatBytes(sizeBytes) : "-";
@@ -3185,7 +3186,7 @@ function renderDirItemRows(items, todayInfo) {
     return `
       <tr${rowClass}>
         <td class="dir-item-icon">${typeIcon}</td>
-        <td class="dir-item-name" title="${escapeHtml(name)}">${escapeHtml(name)}</td>
+        <td class="dir-item-name${isZipFile ? " dir-item-name--zip" : ""}" title="${escapeHtml(name)}">${escapeHtml(name)}</td>
         <td class="dir-item-size">${escapeHtml(sizeText)}</td>
         <td class="dir-item-date">${escapeHtml(modText)}${isToday ? ' <span class="dir-item-today-chip">HEUTE</span>' : ""}</td>
       </tr>

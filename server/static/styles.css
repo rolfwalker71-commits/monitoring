@@ -4558,6 +4558,10 @@ body[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   text-overflow: ellipsis;
 }
 
+.dir-listing-table td.dir-item-name.dir-item-name--zip {
+  font-weight: 700;
+}
+
 .dir-listing-table th.dir-item-size-head,
 .dir-listing-table td.dir-item-size {
   text-align: right;

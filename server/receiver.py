@@ -2893,7 +2893,9 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
             newest_raw = str(d.get("newest_item_name") or "-")
             newest_leaf = Path(newest_raw).name if newest_raw not in {"", "-"} else newest_raw
             newest_parent = str(Path(newest_raw).parent).strip() if newest_raw not in {"", "-"} and "/" in newest_raw else ""
-            newest = html.escape(newest_leaf or newest_raw or "-")
+            newest_text = newest_leaf or newest_raw or "-"
+            newest = html.escape(newest_text)
+            newest_is_zip = newest_text.strip().lower().endswith(".zip")
             newest_size = format_size_bytes(d.get("newest_item_size_bytes", 0))
             newest_modified_raw = str(d.get("newest_item_modified") or "").strip()
             newest_modified_fmt = ""
@@ -2903,7 +2905,7 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
                     newest_modified_fmt = newest_modified_dt.astimezone(SCHEDULE_TIMEZONE).strftime("%d.%m.%Y %H:%M")
                 except Exception:
                     newest_modified_fmt = newest_modified_raw[:16]
-            newest_cell = newest
+            newest_cell = f"<strong>{newest}</strong>" if newest_is_zip else newest
             if newest_parent:
                 newest_cell += f"<div style='margin-top:2px;font-size:11px;color:#94a3b8;'>{html.escape(newest_parent)}</div>"
             newest_cell += f"<div style='margin-top:2px;font-size:11px;color:#94a3b8;'>Grösse: {html.escape(newest_size)}</div>"
