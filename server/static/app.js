@@ -5694,6 +5694,8 @@ async function loadBackupStatus() {
     listEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
   }
 }
+
+function updateHeaderStatChips() {
   const alertChip = document.getElementById("headerAlertChip");
   const alertCount = document.getElementById("headerAlertCount");
   const trendsChip = document.getElementById("headerTrendsChip");
