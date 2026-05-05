@@ -25,6 +25,8 @@ LARGE_FILES_SCAN_FORCE="${LARGE_FILES_SCAN_FORCE:-0}"
 SAP_B1_CATALINA_OUT_PATH="${SAP_B1_CATALINA_OUT_PATH:-/usr/sap/SAPBusinessOne/Common/tomcat/logs/catalina.out}"
 SAP_B1_BUSINESSONE_LOG_DIR="${SAP_B1_BUSINESSONE_LOG_DIR:-/usr/sap/SAPBusinessOne/home/b1service0/SAP/SAP Business One/Log/BusinessOne}"
 SAP_B1_SIZE_TIMEOUT_SEC="${SAP_B1_SIZE_TIMEOUT_SEC:-20}"
+DIR_SCAN_PATHS="${DIR_SCAN_PATHS:-}"
+DIR_SCAN_MAX_ITEMS="${DIR_SCAN_MAX_ITEMS:-50}"
 CURL_CONNECT_TIMEOUT_SEC="${CURL_CONNECT_TIMEOUT_SEC:-10}"
 CURL_MAX_TIME_SEC="${CURL_MAX_TIME_SEC:-45}"
 SEND_JITTER_MAX_SEC="${SEND_JITTER_MAX_SEC:-300}"
@@ -136,6 +138,89 @@ collect_sap_business_one_json() {
     "$businessone_exists" \
     "$(json_number_or_null "$businessone_size")" \
     "$(json_escape "$businessone_error")"
+}
+
+collect_dir_listings_json() {
+  if [[ -z "${DIR_SCAN_PATHS:-}" ]]; then
+    printf '{"available":false,"entries":[]}'
+    return
+  fi
+
+  local all_entries=""
+  local max_items="${DIR_SCAN_MAX_ITEMS:-50}"
+  if ! [[ "$max_items" =~ ^[0-9]+$ ]] || [[ "$max_items" -lt 1 ]]; then
+    max_items=50
+  fi
+
+  local pattern
+  while IFS= read -r -d ':' pattern; do
+    [[ -n "$pattern" ]] || continue
+
+    local old_nullglob
+    old_nullglob="$(shopt -p nullglob 2>/dev/null || echo 'shopt -u nullglob')"
+    shopt -s nullglob
+    local expanded_paths=()
+    for expanded in $pattern; do
+      [[ -d "$expanded" ]] && expanded_paths+=("$expanded")
+    done
+    eval "$old_nullglob" 2>/dev/null || true
+
+    for dir_path in "${expanded_paths[@]}"; do
+      local items_json=""
+      local item_count=0
+      local truncated=false
+
+      while IFS= read -r item_path; do
+        if [[ "$item_count" -ge "$max_items" ]]; then
+          truncated=true
+          break
+        fi
+
+        local item_name item_type size_bytes mtime_epoch mtime_iso
+        item_name="$(basename "$item_path")"
+        item_type="file"
+        if [[ -L "$item_path" ]]; then
+          item_type="link"
+        elif [[ -d "$item_path" ]]; then
+          item_type="dir"
+        fi
+
+        size_bytes="$(stat -c '%s' "$item_path" 2>/dev/null || echo 0)"
+        [[ "$size_bytes" =~ ^[0-9]+$ ]] || size_bytes=0
+        mtime_epoch="$(stat -c '%Y' "$item_path" 2>/dev/null || echo 0)"
+        mtime_iso=""
+        if [[ "$mtime_epoch" =~ ^[0-9]+$ ]] && [[ "$mtime_epoch" -gt 0 ]]; then
+          mtime_iso="$(date -u -d "@$mtime_epoch" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")"
+        fi
+
+        local item_entry
+        item_entry="$(printf '{"name":"%s","type":"%s","size_bytes":%s,"modified_utc":"%s"}' \
+          "$(json_escape "$item_name")" \
+          "$(json_escape "$item_type")" \
+          "$size_bytes" \
+          "$(json_escape "$mtime_iso")")"
+
+        items_json="$(append_json_entry "$items_json" "$item_entry")"
+        item_count=$((item_count + 1))
+      done < <(find "$dir_path" -maxdepth 1 -mindepth 1 2>/dev/null | sort)
+
+      local dir_entry
+      dir_entry="$(printf '{"pattern":"%s","path":"%s","item_count":%s,"truncated":%s,"items":[%s]}' \
+        "$(json_escape "$pattern")" \
+        "$(json_escape "$dir_path")" \
+        "$item_count" \
+        "$truncated" \
+        "$items_json")"
+
+      all_entries="$(append_json_entry "$all_entries" "$dir_entry")"
+    done
+  done <<< "${DIR_SCAN_PATHS}:"
+
+  if [[ -z "$all_entries" ]]; then
+    printf '{"available":false,"entries":[]}'
+  else
+    printf '{"available":true,"entries":[%s]}' "$all_entries"
+  fi
 }
 
 upsert_config_value() {
@@ -960,6 +1045,7 @@ AGENT_UPDATE_JSON="$(collect_update_log_json)"
 AGENT_CONFIG_JSON="$(collect_agent_config_json)"
 LARGE_FILES_JSON="$(collect_large_files_json)"
 SAP_BUSINESS_ONE_JSON="$(collect_sap_business_one_json)"
+DIR_LISTINGS_JSON="$(collect_dir_listings_json)"
 SEND_STARTED_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 DOCKER_AVAILABLE=false
@@ -1031,7 +1117,8 @@ PAYLOAD=$(cat <<EOF
   "agent_update": ${AGENT_UPDATE_JSON},
   "agent_config": ${AGENT_CONFIG_JSON},
   "large_files": ${LARGE_FILES_JSON},
-  "sap_business_one": ${SAP_BUSINESS_ONE_JSON}
+  "sap_business_one": ${SAP_BUSINESS_ONE_JSON},
+  "dir_listings": ${DIR_LISTINGS_JSON}
 }
 EOF
 )

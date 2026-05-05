@@ -18,7 +18,7 @@ const AUTO_REFRESH_INTERVAL_OPTIONS = new Map([
   [480, "8 Min."],
   [0, "Aus"],
 ]);
-const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "agent-update"]);
+const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "agent-update", "dir-listings"]);
 
 let autoRefreshTimerId = null;
 let autoRefreshInProgress = false;
@@ -3092,6 +3092,89 @@ function renderSapBusinessOneCard(payload) {
   `;
 }
 
+function renderDirListingsCard(payload) {
+  const block = payload && typeof payload.dir_listings === "object" ? payload.dir_listings : null;
+  if (!block || !block.available || !Array.isArray(block.entries) || block.entries.length === 0) {
+    return `
+      <section class="detail-card dir-listings-card">
+        <h4>📂 Verzeichnis-Listings</h4>
+        <p class="muted">Keine Verzeichnis-Listings vorhanden. (DIR_SCAN_PATHS in agent.conf konfigurieren)</p>
+      </section>
+    `;
+  }
+
+  const scanSections = block.entries.map((entry) => {
+    const pattern = asText(entry.pattern, "-");
+    const path = asText(entry.path, pattern);
+    const items = Array.isArray(entry.items) ? entry.items : [];
+    const truncated = entry.truncated === true;
+
+    if (items.length === 0) {
+      return `
+        <div class="dir-listing-entry">
+          <div class="dir-listing-header">
+            <span class="dir-listing-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
+            <span class="dir-listing-pattern muted">${escapeHtml(pattern)}</span>
+          </div>
+          <p class="muted">Verzeichnis ist leer.</p>
+        </div>
+      `;
+    }
+
+    const rows = items.map((item) => {
+      const name = asText(item.name, "-");
+      const type = asText(item.type, "file");
+      const sizeBytes = Number(item.size_bytes);
+      const sizeText = Number.isFinite(sizeBytes) && sizeBytes >= 0 ? formatBytes(sizeBytes) : "-";
+      const modRaw = asText(item.modified_utc, "");
+      const modText = modRaw ? formatUtcPlus2Short(modRaw) : "-";
+      const typeIcon = type === "dir" ? "📁" : type === "link" ? "🔗" : "📄";
+      return `
+        <tr>
+          <td class="dir-item-icon">${typeIcon}</td>
+          <td class="dir-item-name" title="${escapeHtml(name)}">${escapeHtml(name)}</td>
+          <td class="dir-item-size">${escapeHtml(sizeText)}</td>
+          <td class="dir-item-date">${escapeHtml(modText)}</td>
+        </tr>
+      `;
+    }).join("");
+
+    const truncatedNote = truncated
+      ? `<p class="muted" style="margin-top:4px;">Liste gekürzt (max. ${items.length} Einträge)</p>`
+      : "";
+
+    return `
+      <div class="dir-listing-entry">
+        <div class="dir-listing-header">
+          <span class="dir-listing-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
+          <span class="dir-listing-pattern muted">${escapeHtml(pattern)}</span>
+        </div>
+        <div class="table-wrap">
+          <table class="report-subtable dir-listing-table">
+            <thead>
+              <tr>
+                <th style="width:28px;"></th>
+                <th>📝 Name</th>
+                <th>📦 Grösse</th>
+                <th>🕒 Geändert (UTC+2)</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        ${truncatedNote}
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <section class="detail-card dir-listings-card">
+      <h4>📂 Verzeichnis-Listings</h4>
+      ${scanSections}
+    </section>
+  `;
+}
+
 function deliveryLabel(modeValue, isDelayedValue) {
   const mode = asText(modeValue, "live").toLowerCase();
   return mode === "delayed" || isDelayedValue === true ? "DELAYED" : "LIVE";
@@ -3647,6 +3730,12 @@ function renderReportCard(report) {
           <h4>🗂️ agent.conf</h4>
           ${renderAgentConfig(payload.agent_config)}
         </section>
+      </div>
+    `;
+  } else if (section === "dir-listings") {
+    detailContent = `
+      <div class="detail-cards">
+        ${renderDirListingsCard(payload)}
       </div>
     `;
   } else {
