@@ -4704,3 +4704,109 @@ body[data-theme="dark"] .dir-deep-subdir-title {
 body[data-theme="dark"] .dir-deep-subdir-title::before {
   color: #4a6080;
 }
+
+/* Backup Status View */
+.backup-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.backup-host-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.backup-host-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.backup-host-header--ok {
+  background: #f0fdf4;
+  border-bottom: 1px solid #bbf7d0;
+}
+
+.backup-host-header--missing {
+  background: #fff7ed;
+  border-bottom: 1px solid #fed7aa;
+}
+
+.backup-host-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.backup-host-hostname {
+  font-size: 12px;
+}
+
+.backup-status-stale {
+  font-size: 11px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: 4px;
+}
+
+.backup-status-table td {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.backup-status-dir-name {
+  font-weight: 500;
+  color: #334155;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backup-status-newest {
+  color: #475569;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backup-status-mod {
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.backup-status-badge-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+body[data-theme="dark"] .backup-host-card {
+  border-color: #2d3e55;
+}
+
+body[data-theme="dark"] .backup-host-header--ok {
+  background: #0d2d1a;
+  border-bottom-color: #166534;
+}
+
+body[data-theme="dark"] .backup-host-header--missing {
+  background: #2d1a0d;
+  border-bottom-color: #92400e;
+}
+
+body[data-theme="dark"] .backup-host-name {
+  color: #e2e8f0;
+}
+
+body[data-theme="dark"] .backup-status-stale {
+  background: #3d2a00;
+  color: #fbbf24;
+}

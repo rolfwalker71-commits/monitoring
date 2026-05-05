@@ -78,6 +78,7 @@ MICROSOFT_OAUTH_SCOPES = [
 ]
 DEFAULT_TREND_DIGEST_TIME = "08:00"
 DEFAULT_ALERT_DIGEST_TIME = "08:05"
+DEFAULT_BACKUP_DIGEST_TIME = "08:15"
 SCHEDULE_TIMEZONE_NAME = os.getenv("MONITORING_SCHEDULE_TIMEZONE", "Europe/Zurich").strip() or "Europe/Zurich"
 try:
     SCHEDULE_TIMEZONE = ZoneInfo(SCHEDULE_TIMEZONE_NAME)
@@ -354,6 +355,10 @@ def init_db() -> None:
                 alert_instant_min_severity TEXT NOT NULL DEFAULT 'warning',
                 host_interest_mode TEXT NOT NULL DEFAULT 'all',
                 host_interest_hosts TEXT NOT NULL DEFAULT '',
+                backup_email_enabled INTEGER NOT NULL DEFAULT 0,
+                backup_email_time_hhmm TEXT NOT NULL DEFAULT '08:15',
+                backup_email_recipients TEXT NOT NULL DEFAULT '',
+                backup_email_last_sent_local_date TEXT NOT NULL DEFAULT '',
                 updated_at_utc TEXT NOT NULL,
                 FOREIGN KEY(username) REFERENCES web_users(username)
             )
@@ -456,6 +461,14 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN host_interest_mode TEXT NOT NULL DEFAULT 'all'")
         if "host_interest_hosts" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN host_interest_hosts TEXT NOT NULL DEFAULT ''")
+        if "backup_email_enabled" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN backup_email_enabled INTEGER NOT NULL DEFAULT 0")
+        if "backup_email_time_hhmm" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN backup_email_time_hhmm TEXT NOT NULL DEFAULT '08:15'")
+        if "backup_email_recipients" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN backup_email_recipients TEXT NOT NULL DEFAULT ''")
+        if "backup_email_last_sent_local_date" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN backup_email_last_sent_local_date TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS web_user_alert_subscriptions (
@@ -1232,7 +1245,11 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
                COALESCE(critical_trends_metrics, 'filesystem'),
              COALESCE(digest_trend_metrics, 'cpu,memory,swap,filesystem'),
              COALESCE(host_interest_mode, 'all'),
-             COALESCE(host_interest_hosts, '')
+             COALESCE(host_interest_hosts, ''),
+             COALESCE(backup_email_enabled, 0),
+             COALESCE(backup_email_time_hhmm, ''),
+             COALESCE(backup_email_recipients, ''),
+             COALESCE(backup_email_last_sent_local_date, '')
         FROM web_user_settings
         WHERE username = ?
         """,
@@ -1261,6 +1278,10 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
             "digest_trend_metrics": "cpu,memory,swap,filesystem",
             "host_interest_mode": "all",
             "host_interest_hosts": "",
+            "backup_email_enabled": False,
+            "backup_email_time_hhmm": DEFAULT_BACKUP_DIGEST_TIME,
+            "backup_email_recipients": "",
+            "backup_email_last_sent_local_date": "",
         }
     return {
         "email_enabled": bool(int(row[0] or 0)),
@@ -1284,6 +1305,10 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
         "digest_trend_metrics": str(row[18] or "cpu,memory,swap,filesystem"),
         "host_interest_mode": str(row[19] or "all"),
         "host_interest_hosts": str(row[20] or ""),
+        "backup_email_enabled": bool(int(row[21] or 0)),
+        "backup_email_time_hhmm": normalize_hhmm(row[22], DEFAULT_BACKUP_DIGEST_TIME),
+        "backup_email_recipients": str(row[23] or ""),
+        "backup_email_last_sent_local_date": str(row[24] or ""),
     }
 
 
@@ -1341,6 +1366,17 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
     host_interest_hosts = str(
         payload.get("host_interest_hosts", existing.get("host_interest_hosts", "")) or ""
     ).strip()
+    backup_email_enabled = coerce_bool(payload.get("backup_email_enabled", existing.get("backup_email_enabled", False)))
+    backup_email_time_hhmm = normalize_hhmm(
+        payload.get("backup_email_time_hhmm", existing.get("backup_email_time_hhmm", DEFAULT_BACKUP_DIGEST_TIME)),
+        DEFAULT_BACKUP_DIGEST_TIME,
+    )
+    backup_email_recipients = str(
+        payload.get("backup_email_recipients", existing.get("backup_email_recipients", "")) or ""
+    ).strip()
+    backup_email_last_sent_local_date = str(
+        payload.get("backup_email_last_sent_local_date", existing.get("backup_email_last_sent_local_date", "")) or ""
+    ).strip()
     now_utc = utc_now_iso()
     conn.execute(
         """
@@ -1366,9 +1402,13 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             digest_trend_metrics,
             host_interest_mode,
             host_interest_hosts,
+            backup_email_enabled,
+            backup_email_time_hhmm,
+            backup_email_recipients,
+            backup_email_last_sent_local_date,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             email_enabled = excluded.email_enabled,
             email_recipient = excluded.email_recipient,
@@ -1390,6 +1430,10 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             digest_trend_metrics = excluded.digest_trend_metrics,
             host_interest_mode = excluded.host_interest_mode,
             host_interest_hosts = excluded.host_interest_hosts,
+            backup_email_enabled = excluded.backup_email_enabled,
+            backup_email_time_hhmm = excluded.backup_email_time_hhmm,
+            backup_email_recipients = excluded.backup_email_recipients,
+            backup_email_last_sent_local_date = excluded.backup_email_last_sent_local_date,
             updated_at_utc = excluded.updated_at_utc
         """,
         (
@@ -1414,6 +1458,10 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             digest_trend_metrics,
             host_interest_mode,
             host_interest_hosts,
+            1 if backup_email_enabled else 0,
+            backup_email_time_hhmm,
+            backup_email_recipients,
+            backup_email_last_sent_local_date,
             now_utc,
         ),
     )
@@ -1438,6 +1486,10 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
         "digest_trend_metrics": digest_trend_metrics,
         "host_interest_mode": host_interest_mode,
         "host_interest_hosts": host_interest_hosts,
+        "backup_email_enabled": backup_email_enabled,
+        "backup_email_time_hhmm": backup_email_time_hhmm,
+        "backup_email_recipients": backup_email_recipients,
+        "backup_email_last_sent_local_date": backup_email_last_sent_local_date,
         "updated_at_utc": now_utc,
     }
 
@@ -2572,6 +2624,259 @@ def alert_digest_subject(alerts: list[dict], local_date: str) -> str:
     return f"[Monitoring] [{level}] Alert Digest {local_date} (C:{critical_count} W:{warning_count})"
 
 
+# ---------------------------------------------------------------------------
+# Backup status overview helpers
+# ---------------------------------------------------------------------------
+
+def _today_tokens(local_date: str) -> list[str]:
+    """Return filename date tokens for a given YYYY-MM-DD local date."""
+    parts = local_date.split("-")
+    if len(parts) != 3:
+        return []
+    yyyy, mm, dd = parts
+    yy = yyyy[2:]
+    return [
+        f"{yyyy}{mm}{dd}",
+        f"{yyyy}-{mm}-{dd}",
+        f"{yyyy}_{mm}_{dd}",
+        f"{dd}{mm}{yyyy}",
+        f"{dd}-{mm}-{yyyy}",
+        f"{dd}_{mm}_{yyyy}",
+        f"{dd}{mm}{yy}",
+        f"{dd}-{mm}-{yy}",
+        f"{dd}_{mm}_{yy}",
+    ]
+
+
+def _item_matches_date(item: dict, tokens: list[str], local_date: str) -> bool:
+    name = str(item.get("name") or "").lower()
+    if any(t.lower() in name for t in tokens):
+        return True
+    mod_raw = str(item.get("modified_utc") or "")
+    if not mod_raw:
+        return False
+    try:
+        from datetime import timezone as _tz
+        parsed = datetime.fromisoformat(mod_raw.replace("Z", "+00:00"))
+        local_dt = parsed.astimezone(SCHEDULE_TIMEZONE)
+        return local_dt.date().isoformat() == local_date
+    except Exception:
+        return False
+
+
+def get_backup_status_overview(conn: sqlite3.Connection) -> list[dict]:
+    """Return backup status for all hosts that have dir_deep_listings data.
+
+    Uses the latest report received today (Option A). Falls back to most recent
+    report if no report exists for today yet (shows stale indicator).
+    """
+    now_local = datetime.now(SCHEDULE_TIMEZONE)
+    today_local = now_local.date().isoformat()
+    tokens = _today_tokens(today_local)
+
+    # Get latest report per host (today preferred, else most recent)
+    rows = conn.execute(
+        """
+        SELECT r.hostname,
+               r.received_at_utc,
+               r.payload_json,
+               COALESCE(h.display_name_override, '')
+        FROM reports r
+        LEFT JOIN host_settings h ON h.hostname = r.hostname
+        WHERE r.id IN (
+            SELECT MAX(id) FROM reports
+            WHERE COALESCE(hostname, '') != ''
+            GROUP BY hostname
+        )
+        ORDER BY LOWER(COALESCE(NULLIF(h.display_name_override,''), r.hostname))
+        """
+    ).fetchall()
+
+    # Also get best today-report per host (received after midnight local)
+    today_midnight_utc = datetime(
+        now_local.year, now_local.month, now_local.day,
+        tzinfo=SCHEDULE_TIMEZONE
+    ).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    today_rows = conn.execute(
+        """
+        SELECT hostname, MAX(id), MAX(received_at_utc)
+        FROM reports
+        WHERE received_at_utc >= ?
+          AND COALESCE(hostname, '') != ''
+        GROUP BY hostname
+        """,
+        (today_midnight_utc,),
+    ).fetchall()
+    today_latest_id: dict[str, int] = {str(r[0]): int(r[1]) for r in today_rows}
+
+    # Build id -> row lookup for today-preferred fetch
+    today_payload_rows: dict[str, tuple] = {}
+    if today_latest_id:
+        placeholders = ",".join("?" * len(today_latest_id))
+        ids = list(today_latest_id.values())
+        for r in conn.execute(
+            f"SELECT hostname, received_at_utc, payload_json FROM reports WHERE id IN ({placeholders})",
+            ids,
+        ).fetchall():
+            today_payload_rows[str(r[0])] = r
+
+    result: list[dict] = []
+    for row in rows:
+        hostname = str(row[0] or "")
+        if not hostname:
+            continue
+        display_name = str(row[3] or "").strip() or hostname
+
+        # Prefer today's report
+        if hostname in today_payload_rows:
+            use_row = today_payload_rows[hostname]
+            report_time_utc = str(use_row[1] or "")
+            payload_json_str = str(use_row[2] or "{}")
+            is_today_report = True
+        else:
+            report_time_utc = str(row[1] or "")
+            payload_json_str = str(row[2] or "{}")
+            is_today_report = False
+
+        try:
+            payload = json.loads(payload_json_str)
+        except Exception:
+            payload = {}
+
+        deep = payload.get("dir_deep_listings") or {}
+        if not (isinstance(deep, dict) and deep.get("available") and deep.get("entries")):
+            continue  # Host hat keine Backup-Listings → überspringen
+
+        dirs: list[dict] = []
+        for entry in deep.get("entries") or []:
+            path = str(entry.get("path") or entry.get("pattern") or "")
+            subdirs = entry.get("subdirs") or []
+            for subdir in subdirs:
+                subdir_name = str(subdir.get("name") or "")
+                subdir_path = str(subdir.get("path") or "")
+                items = subdir.get("items") or []
+                has_today = any(_item_matches_date(item, tokens, today_local) for item in items)
+                dirs.append({
+                    "subdir_name": subdir_name,
+                    "subdir_path": subdir_path,
+                    "parent_path": path,
+                    "has_today_backup": has_today,
+                    "item_count": int(subdir.get("item_count_total") or len(items)),
+                    "newest_item_name": str(items[0].get("name") or "") if items else "",
+                    "newest_item_modified": str(items[0].get("modified_utc") or "") if items else "",
+                })
+
+        if not dirs:
+            continue
+
+        any_missing = any(not d["has_today_backup"] for d in dirs)
+        result.append({
+            "hostname": hostname,
+            "display_name": display_name,
+            "report_time_utc": report_time_utc,
+            "is_today_report": is_today_report,
+            "today_local": today_local,
+            "dirs": dirs,
+            "has_missing_backup": any_missing,
+        })
+
+    return result
+
+
+def backup_digest_subject(hosts: list[dict], local_date: str) -> str:
+    missing = sum(1 for h in hosts if h.get("has_missing_backup"))
+    level = "WARNUNG" if missing > 0 else "OK"
+    return f"[Monitoring] [{level}] Backup-Statusbericht {local_date} (fehlend: {missing})"
+
+
+def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str:
+    app_logo_uri = app_logo_data_uri()
+    ang_logo_uri = ang_logo_data_uri()
+    build_version = html.escape(read_build_version())
+
+    rows_html_parts = []
+    for host in hosts:
+        display_name = html.escape(str(host.get("display_name") or host.get("hostname") or "-"))
+        hostname = html.escape(str(host.get("hostname") or "-"))
+        is_today = host.get("is_today_report", False)
+        report_time = str(host.get("report_time_utc") or "")
+        try:
+            parsed_rt = datetime.fromisoformat(report_time.replace("Z", "+00:00"))
+            local_rt = parsed_rt.astimezone(SCHEDULE_TIMEZONE)
+            report_time_fmt = local_rt.strftime("%d.%m. %H:%M")
+        except Exception:
+            report_time_fmt = report_time[:16] if report_time else "-"
+
+        stale_note = "" if is_today else f" <span style='color:#92400e;font-size:11px;'>(Stand: {html.escape(report_time_fmt)})</span>"
+
+        dirs = host.get("dirs") or []
+        dir_rows = ""
+        for d in dirs:
+            ok = d.get("has_today_backup", False)
+            badge_bg = "#dcfce7" if ok else "#fee2e2"
+            badge_color = "#166534" if ok else "#991b1b"
+            badge_text = "✓ Backup heute" if ok else "✗ kein Backup"
+            subdir_name = html.escape(str(d.get("subdir_name") or d.get("subdir_path") or "-"))
+            newest = html.escape(str(d.get("newest_item_name") or "-"))
+            dir_rows += (
+                f"<tr>"
+                f"<td style='padding:6px 8px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#334155;'>{subdir_name}</td>"
+                f"<td style='padding:6px 8px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#64748b;'>{newest}</td>"
+                f"<td style='padding:6px 8px;border-bottom:1px solid #f1f5f9;text-align:center;'>"
+                f"<span style='display:inline-block;padding:2px 8px;border-radius:999px;background:{badge_bg};color:{badge_color};font-weight:600;font-size:11px;'>{badge_text}</span>"
+                f"</td>"
+                f"</tr>"
+            )
+
+        host_bg = "#fff7ed" if host.get("has_missing_backup") else "#f0fdf4"
+        rows_html_parts.append(
+            f"<tr><td colspan='3' style='padding:10px 8px 4px 8px;background:{host_bg};border-top:2px solid #e2e8f0;'>"
+            f"<strong style='font-size:14px;'>{display_name}</strong>"
+            f"<span style='font-size:12px;color:#64748b;margin-left:8px;'>{hostname}</span>{stale_note}"
+            f"</td></tr>"
+            + dir_rows
+        )
+
+    rows_html = "".join(rows_html_parts)
+    if not rows_html:
+        rows_html = "<tr><td colspan='3' style='padding:12px 8px;color:#475569;'>Keine Backup-Daten vorhanden.</td></tr>"
+
+    missing_count = sum(1 for h in hosts if h.get("has_missing_backup"))
+    summary_color = "#991b1b" if missing_count > 0 else "#166534"
+    summary_text = f"{missing_count} Host(s) ohne heutiges Backup" if missing_count > 0 else "Alle Backups vorhanden"
+
+    return (
+        "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
+        "<div style='max-width:900px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;'>"
+        "<div style='padding:18px 20px;background-color:#eaf4ff;background-image:linear-gradient(180deg,#f4faff,#e6f1ff);color:#17324d;border-bottom:1px solid #cfe0f5;'>"
+        "<div style='display:flex;align-items:center;gap:22px;margin-bottom:12px;'>"
+        f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;'>"
+        "<div>"
+        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>MONITORING</div>"
+        f"<div style='margin-top:4px;font-size:12px;color:#5f7590;'>powered by Rolf Walker &nbsp;&middot;&nbsp; v{build_version}</div>"
+        "</div>"
+        "</div>"
+        "<h2 style='margin:0 0 6px 0;font-size:22px;color:#17324d;'>Backup-Statusbericht</h2>"
+        f"<div style='font-size:13px;color:#5f7590;'>Benutzer: {html.escape(username)} | Datum: {html.escape(local_date)} | Zeit: {html.escape(format_mail_datetime())}</div>"
+        "</div>"
+        "<div style='padding:18px 20px;'>"
+        f"<p style='margin:0 0 14px 0;font-size:14px;'><strong style='color:{summary_color};'>{html.escape(summary_text)}</strong> | {len(hosts)} Host(s) mit Backup-Konfiguration</p>"
+        "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
+        "<thead><tr style='background:#f1f5f9;'>"
+        "<th style='text-align:left;padding:8px;border:1px solid #dbe3ef;'>Verzeichnis</th>"
+        "<th style='text-align:left;padding:8px;border:1px solid #dbe3ef;'>Neuester Eintrag</th>"
+        "<th style='text-align:center;padding:8px;border:1px solid #dbe3ef;'>Status</th>"
+        "</tr></thead>"
+        f"<tbody>{rows_html}</tbody>"
+        "</table>"
+        f"<div style='margin-top:18px;padding-top:14px;border-top:1px solid #e2e8f0;text-align:right;'><img src='{ang_logo_uri}' alt='ANG' width='110' style='display:inline-block;max-width:110px;height:auto;'></div>"
+        "</div>"
+        "</div>"
+        "</body></html>"
+    )
+
+
 def alert_instant_mail_subject(event_type: str, hostname: str, severity: str, display_name: str = "") -> str:
     sev_label = "KRITISCH" if severity == "critical" else "WARNUNG"
     event_label = {
@@ -3701,7 +4006,13 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
 
         send_trend = trend_enabled and bool(recipient) and scheduled_digest_due(now_local, trend_time, trend_last_sent)
         send_alert = alert_enabled and (bool(warning_recipients) or bool(critical_recipients)) and scheduled_digest_due(now_local, alert_time, alert_last_sent)
-        if not send_trend and not send_alert:
+        backup_enabled = settings.get("backup_email_enabled", False)
+        backup_time = normalize_hhmm(settings.get("backup_email_time_hhmm", DEFAULT_BACKUP_DIGEST_TIME), DEFAULT_BACKUP_DIGEST_TIME)
+        backup_recipients_raw = str(settings.get("backup_email_recipients", "") or "").strip()
+        backup_recipients = [r.strip() for r in backup_recipients_raw.replace(";", ",").split(",") if r.strip()]
+        backup_last_sent = str(settings.get("backup_email_last_sent_local_date", "") or "").strip()
+        send_backup = backup_enabled and bool(backup_recipients) and scheduled_digest_due(now_local, backup_time, backup_last_sent)
+        if not send_trend and not send_alert and not send_backup:
             continue
 
         ok_token, access_token, _details = ensure_microsoft_access_token(conn, username)
@@ -3767,6 +4078,28 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
                     """
                     UPDATE web_user_settings
                     SET alert_email_last_sent_local_date = ?, updated_at_utc = ?
+                    WHERE username = ?
+                    """,
+                    (today_local, utc_now_iso(), username),
+                )
+
+        if send_backup:
+            backup_hosts = get_backup_status_overview(conn)
+            missing_only = [h for h in backup_hosts if h.get("has_missing_backup")]
+            # Send only when there are missing backups; if all OK send informational mail too
+            backup_ok, _backup_details = send_microsoft_mail_multi(
+                access_token,
+                backup_recipients,
+                backup_digest_subject(backup_hosts, today_local),
+                backup_digest_html(username, backup_hosts, today_local),
+                content_type="HTML",
+                sender=settings.get("email_sender", ""),
+            )
+            if backup_ok:
+                conn.execute(
+                    """
+                    UPDATE web_user_settings
+                    SET backup_email_last_sent_local_date = ?, updated_at_utc = ?
                     WHERE username = ?
                     """,
                     (today_local, utc_now_iso(), username),
@@ -6240,6 +6573,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "hours": hours,
                 "inactive_hosts": inactive,
                 "total": len(inactive),
+            })
+            return
+
+        if parsed.path == "/api/v1/backup-status-overview":
+            with sqlite3.connect(DB_PATH) as conn:
+                overview = get_backup_status_overview(conn)
+            self._send_json(HTTPStatus.OK, {
+                "hosts": overview,
+                "total": len(overview),
+                "missing_count": sum(1 for h in overview if h.get("has_missing_backup")),
             })
             return
 

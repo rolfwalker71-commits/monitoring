@@ -127,6 +127,7 @@
                 <button id="globalAlertsTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="globalAlertsView">🌍 Globale Alerts</button>
                 <button id="criticalTrendsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="criticalTrendsView">📈 Kritische Trends</button>
                 <button id="inactiveHostsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="inactiveHostsView">💤 Inaktive Hosts</button>
+                <button id="backupStatusTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="backupStatusView">💾 Backup Stati</button>
                 <button id="globalAdminAlertSubsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminAlertSubsView">🔔 Alert Abos</button>
                 <button id="globalAdminSettingsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminSettingsView">🛠️ Admin Settings</button>
               </div>
@@ -239,6 +240,16 @@
                 <button id="refreshInactiveHostsButton" type="button" class="btn-secondary">Neu laden</button>
               </div>
               <div id="inactiveHostsList" class="inactive-hosts-list">
+                <p class="muted">Lade Daten…</p>
+              </div>
+            </div>
+
+            <div id="backupStatusView" class="hidden" role="tabpanel" aria-labelledby="backupStatusTabButton">
+              <div class="inactive-hosts-toolbar">
+                <span id="backupStatusSummary" class="count compact"></span>
+                <button id="refreshBackupStatusButton" type="button" class="btn-secondary">Neu laden</button>
+              </div>
+              <div id="backupStatusList" class="backup-status-list">
                 <p class="muted">Lade Daten…</p>
               </div>
             </div>
@@ -414,6 +425,27 @@
               </div>
               <div class="alarm-settings-actions">
                 <button id="testAlertDigestMailButton" type="button">Alarm-Testmail senden</button>
+              </div>
+            </section>
+
+            <section class="settings-subsection hidden" data-user-settings-panel="digests">
+              <div class="settings-subsection-head">
+                <h5>Backup-Statusbericht Mail</h5>
+                <p class="count compact">Tägliche Mail mit Backup-Status aller Hosts (default 08:15)</p>
+              </div>
+              <div class="alarm-settings-grid">
+                <label class="checkbox-line">
+                  <input id="backupEmailEnabledInput" type="checkbox" />
+                  Backup-Statusbericht aktivieren
+                </label>
+                <label>
+                  Versandzeit (feste Zeitzone: Europe/Zurich)
+                  <input id="backupEmailTimeInput" type="time" />
+                </label>
+                <label>
+                  Empfaenger (comma/semicolon getrennt)
+                  <input id="backupEmailRecipientsInput" type="text" placeholder="backup-team@example.com; ops@example.com" />
+                </label>
               </div>
             </section>
 

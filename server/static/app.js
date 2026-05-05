@@ -799,28 +799,33 @@ function updateGlobalSubMode() {
   const globalAlertsView = document.getElementById("globalAlertsView");
   const criticalTrendsView = document.getElementById("criticalTrendsView");
   const inactiveHostsView = document.getElementById("inactiveHostsView");
+  const backupStatusView = document.getElementById("backupStatusView");
   const globalAdminAlertSubsView = document.getElementById("globalAdminAlertSubsView");
   const globalAdminSettingsView = document.getElementById("globalAdminSettingsView");
   const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
   const criticalTrendsTabButton = document.getElementById("criticalTrendsTabButton");
   const inactiveHostsTabButton = document.getElementById("inactiveHostsTabButton");
+  const backupStatusTabButton = document.getElementById("backupStatusTabButton");
   const globalAdminAlertSubsTabButton = document.getElementById("globalAdminAlertSubsTabButton");
   const globalAdminSettingsTabButton = document.getElementById("globalAdminSettingsTabButton");
 
   const alertsActive = state.globalSubMode === "global-alerts";
   const trendsActive = state.globalSubMode === "critical-trends";
   const inactiveActive = state.globalSubMode === "inactive-hosts";
+  const backupActive = state.globalSubMode === "backup-status";
   const adminAlertSubsActive = state.globalSubMode === "admin-alert-subs";
   const adminSettingsActive = state.globalSubMode === "admin-settings";
 
   if (globalAlertsView) globalAlertsView.classList.toggle("hidden", !alertsActive);
   if (criticalTrendsView) criticalTrendsView.classList.toggle("hidden", !trendsActive);
   if (inactiveHostsView) inactiveHostsView.classList.toggle("hidden", !inactiveActive);
+  if (backupStatusView) backupStatusView.classList.toggle("hidden", !backupActive);
   if (globalAdminAlertSubsView) globalAdminAlertSubsView.classList.toggle("hidden", !adminAlertSubsActive);
   if (globalAdminSettingsView) globalAdminSettingsView.classList.toggle("hidden", !adminSettingsActive);
   if (globalAlertsTabButton) { globalAlertsTabButton.classList.toggle("active", alertsActive); globalAlertsTabButton.setAttribute("aria-selected", alertsActive ? "true" : "false"); }
   if (criticalTrendsTabButton) { criticalTrendsTabButton.classList.toggle("active", trendsActive); criticalTrendsTabButton.setAttribute("aria-selected", trendsActive ? "true" : "false"); }
   if (inactiveHostsTabButton) { inactiveHostsTabButton.classList.toggle("active", inactiveActive); inactiveHostsTabButton.setAttribute("aria-selected", inactiveActive ? "true" : "false"); }
+  if (backupStatusTabButton) { backupStatusTabButton.classList.toggle("active", backupActive); backupStatusTabButton.setAttribute("aria-selected", backupActive ? "true" : "false"); }
   if (globalAdminAlertSubsTabButton) { globalAdminAlertSubsTabButton.classList.toggle("active", adminAlertSubsActive); globalAdminAlertSubsTabButton.setAttribute("aria-selected", adminAlertSubsActive ? "true" : "false"); }
   if (globalAdminSettingsTabButton) { globalAdminSettingsTabButton.classList.toggle("active", adminSettingsActive); globalAdminSettingsTabButton.setAttribute("aria-selected", adminSettingsActive ? "true" : "false"); }
 }
@@ -1369,6 +1374,12 @@ async function loadUserProfile(force = false) {
     if (alertTelegramChatIdInput) alertTelegramChatIdInput.value = asText(profile.alert_telegram_chat_id, "") === "-" ? "" : asText(profile.alert_telegram_chat_id, "");
     const senderInput = document.getElementById("userEmailSenderInput");
     if (senderInput) senderInput.value = asText(profile.email_sender, "") === "-" ? "" : asText(profile.email_sender, "");
+    const backupEmailEnabledInput = document.getElementById("backupEmailEnabledInput");
+    const backupEmailTimeInput = document.getElementById("backupEmailTimeInput");
+    const backupEmailRecipientsInput = document.getElementById("backupEmailRecipientsInput");
+    if (backupEmailEnabledInput) backupEmailEnabledInput.checked = profile.backup_email_enabled === true;
+    if (backupEmailTimeInput) backupEmailTimeInput.value = asText(profile.backup_email_time_hhmm, "08:15");
+    if (backupEmailRecipientsInput) backupEmailRecipientsInput.value = asText(profile.backup_email_recipients, "") === "-" ? "" : asText(profile.backup_email_recipients, "");
     state.hostInterestMode = normalizeHostInterestMode(profile.host_interest_mode || "all");
     state.hostInterestHosts = new Set(
       String(profile.host_interest_hosts || "")
@@ -1436,6 +1447,9 @@ async function saveUserProfile() {
     alert_instant_telegram_enabled: document.getElementById("alertInstantTelegramEnabledInput")?.checked ?? false,
     alert_telegram_chat_id: document.getElementById("alertTelegramChatIdInput")?.value.trim() || "",
     email_sender: document.getElementById("userEmailSenderInput")?.value.trim() || "",
+    backup_email_enabled: document.getElementById("backupEmailEnabledInput")?.checked ?? false,
+    backup_email_time_hhmm: document.getElementById("backupEmailTimeInput")?.value || "08:15",
+    backup_email_recipients: document.getElementById("backupEmailRecipientsInput")?.value.trim() || "",
     host_interest_mode: normalizeHostInterestMode(document.getElementById("hostInterestModeSelect")?.value || state.hostInterestMode),
     host_interest_hosts: [...state.hostInterestHosts].sort().join(","),
   };
@@ -5577,7 +5591,98 @@ async function loadInactiveHosts(options = {}) {
   }
 }
 
-function updateHeaderStatChips() {
+function renderBackupStatus(data) {
+  const hosts = data.hosts || [];
+  if (hosts.length === 0) {
+    return "<p class=\"muted\">Keine Hosts mit Backup-Konfiguration gefunden. (DIR_SCAN_DEEP_PATHS oder auto-erkannter HANA-Pfad in agent.conf)</p>";
+  }
+  const todayInfo = getTodaySearchInfo();
+  return hosts.map((host) => {
+    const displayName = asText(host.display_name || host.hostname, "-");
+    const hostname = asText(host.hostname, "-");
+    const isToday = host.is_today_report !== false;
+    const reportTimeUtc = asText(host.report_time_utc, "");
+    let reportTimeFmt = "-";
+    if (reportTimeUtc) {
+      try {
+        const d = new Date(reportTimeUtc);
+        reportTimeFmt = d.toLocaleString("de-CH", { timeZone: "Europe/Zurich", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      } catch (_) { reportTimeFmt = reportTimeUtc.slice(0, 16); }
+    }
+    const staleNote = isToday ? "" : ` <span class="backup-status-stale" title="Kein heutiger Report vorhanden">Stand: ${escapeHtml(reportTimeFmt)}</span>`;
+    const hasMissing = host.has_missing_backup;
+    const headerClass = hasMissing ? "backup-host-header backup-host-header--missing" : "backup-host-header backup-host-header--ok";
+
+    const dirs = host.dirs || [];
+    const dirRows = dirs.map((d) => {
+      const ok = d.has_today_backup;
+      const badgeClass = ok ? "dir-status-badge ok" : "dir-status-badge missing";
+      const badgeText = ok ? "✓ Backup heute" : "✗ kein Backup";
+      const subdirName = escapeHtml(asText(d.subdir_name || d.subdir_path, "-"));
+      const newestName = escapeHtml(asText(d.newest_item_name, "-"));
+      const newestMod = d.newest_item_modified ? formatUtcPlus2Short(d.newest_item_modified) : "-";
+      return `
+        <tr>
+          <td class="backup-status-dir-name" title="${escapeHtml(asText(d.subdir_path, ""))}">${subdirName}</td>
+          <td class="backup-status-newest">${newestName}</td>
+          <td class="backup-status-mod">${escapeHtml(newestMod)}</td>
+          <td class="backup-status-badge-cell"><span class="${badgeClass}">${badgeText}</span></td>
+        </tr>`;
+    }).join("");
+
+    return `
+      <div class="backup-host-card">
+        <div class="${headerClass}">
+          <span class="backup-host-name">${escapeHtml(displayName)}</span>
+          <span class="backup-host-hostname muted">${escapeHtml(hostname)}</span>
+          ${staleNote}
+        </div>
+        <div class="table-wrap">
+          <table class="report-subtable backup-status-table">
+            <thead><tr>
+              <th>Verzeichnis</th>
+              <th>Neuester Eintrag</th>
+              <th>Geändert (UTC+2)</th>
+              <th>Status</th>
+            </tr></thead>
+            <tbody>${dirRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+async function loadBackupStatus() {
+  const listEl = document.getElementById("backupStatusList");
+  const summaryEl = document.getElementById("backupStatusSummary");
+  const tabButton = document.getElementById("backupStatusTabButton");
+  if (!listEl) return;
+  listEl.innerHTML = "<p class=\"muted\">Lade Daten…</p>";
+  try {
+    const response = await fetch("/api/v1/backup-status-overview", { credentials: "same-origin" });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    listEl.innerHTML = renderBackupStatus(data);
+    const missing = data.missing_count || 0;
+    const total = data.total || 0;
+    if (summaryEl) {
+      summaryEl.textContent = missing > 0
+        ? `${missing} von ${total} Host(s) ohne heutiges Backup`
+        : `${total} Host(s) — alle Backups vorhanden`;
+    }
+    if (tabButton) {
+      if (missing > 0) {
+        tabButton.dataset.alertBadge = String(missing);
+        tabButton.classList.add("tab-has-warn");
+      } else {
+        delete tabButton.dataset.alertBadge;
+        tabButton.classList.remove("tab-has-warn");
+      }
+    }
+  } catch (error) {
+    listEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
+  }
+}
   const alertChip = document.getElementById("headerAlertChip");
   const alertCount = document.getElementById("headerAlertCount");
   const trendsChip = document.getElementById("headerTrendsChip");
@@ -5924,6 +6029,21 @@ function wireEvents() {
     await loadInactiveHosts();
   });
 
+  const backupStatusTabButton = document.getElementById("backupStatusTabButton");
+  if (backupStatusTabButton) {
+    backupStatusTabButton.addEventListener("click", async () => {
+      state.globalSubMode = "backup-status";
+      updateGlobalSubMode();
+      await loadBackupStatus();
+    });
+  }
+  const refreshBackupStatusButton = document.getElementById("refreshBackupStatusButton");
+  if (refreshBackupStatusButton) {
+    refreshBackupStatusButton.addEventListener("click", async () => {
+      await loadBackupStatus();
+    });
+  }
+
   const globalAdminAlertSubsTabButton = document.getElementById("globalAdminAlertSubsTabButton");
   if (globalAdminAlertSubsTabButton) {
     globalAdminAlertSubsTabButton.addEventListener("click", async () => {
@@ -5955,6 +6075,7 @@ function wireEvents() {
     if (state.globalSubMode === "global-alerts") await loadGlobalAlertsOverview();
     else if (state.globalSubMode === "critical-trends") await loadCriticalTrends();
     else if (state.globalSubMode === "inactive-hosts") await loadInactiveHosts();
+    else if (state.globalSubMode === "backup-status") await loadBackupStatus();
     else if (state.globalSubMode === "admin-alert-subs") await loadAdminAlertSubscriptions();
     else if (state.globalSubMode === "admin-settings") await loadGlobalAdminSettingsPanel();
   });
