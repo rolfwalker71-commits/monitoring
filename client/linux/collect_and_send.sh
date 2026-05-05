@@ -227,7 +227,18 @@ collect_dir_listings_json() {
 
 collect_dir_deep_listings_json() {
   # For each glob-expanded path: list subdirs, show N newest items per subdir
-  if [[ -z "${DIR_SCAN_DEEP_PATHS:-}" ]]; then
+  # Auto-detect known backup structures if DIR_SCAN_DEEP_PATHS is not configured
+  local effective_paths="${DIR_SCAN_DEEP_PATHS:-}"
+  if [[ -z "$effective_paths" ]]; then
+    local auto_paths=""
+    # SAP HANA backup_service standard path
+    if [[ -d "/hana/shared/backup_service/backups" ]]; then
+      auto_paths="/hana/shared/backup_service/backups/*/*"
+    fi
+    effective_paths="$auto_paths"
+  fi
+
+  if [[ -z "$effective_paths" ]]; then
     printf '{"available":false,"entries":[]}'
     return
   fi
@@ -303,7 +314,7 @@ collect_dir_deep_listings_json() {
         "$subdirs_json")"
       all_entries="$(append_json_entry "$all_entries" "$dir_entry")"
     done
-  done <<< "${DIR_SCAN_DEEP_PATHS}:"
+  done <<< "${effective_paths}:"
 
   if [[ -z "$all_entries" ]]; then
     printf '{"available":false,"entries":[]}'
