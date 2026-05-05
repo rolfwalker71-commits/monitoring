@@ -5624,6 +5624,9 @@ function renderBackupStatus(data) {
     const headerClass = hasMissing ? "backup-host-header backup-host-header--missing" : "backup-host-header backup-host-header--ok";
 
     const dirs = host.dirs || [];
+    const currentCount = dirs.filter((d) => d.has_today_backup === true).length;
+    const missingCount = Math.max(0, dirs.length - currentCount);
+    const detailsOpenAttr = hasMissing ? " open" : "";
     const dirRows = dirs.map((d) => {
       const ok = d.has_today_backup;
       const badgeClass = ok ? "dir-status-badge ok" : "dir-status-badge missing";
@@ -5641,13 +5644,17 @@ function renderBackupStatus(data) {
     }).join("");
 
     return `
-      <div class="backup-host-card">
-        <div class="${headerClass}">
+      <details class="backup-host-card backup-host-details"${detailsOpenAttr}>
+        <summary class="${headerClass}">
           <span class="backup-host-name">${escapeHtml(displayName)}</span>
           <span class="backup-host-hostname muted">${escapeHtml(hostname)}</span>
+          <span class="backup-host-stats">
+            <span class="backup-host-count backup-host-count--ok">Aktuelles Backup: ${currentCount}</span>
+            <span class="backup-host-count backup-host-count--missing">kein aktuelles Backup: ${missingCount}</span>
+          </span>
           ${staleNote}
-        </div>
-        <div class="table-wrap">
+        </summary>
+        <div class="table-wrap backup-host-body">
           <table class="report-subtable backup-status-table">
             <thead><tr>
               <th>Verzeichnis</th>
@@ -5658,7 +5665,7 @@ function renderBackupStatus(data) {
             <tbody>${dirRows}</tbody>
           </table>
         </div>
-      </div>`;
+      </details>`;
   }).join("");
 }
 

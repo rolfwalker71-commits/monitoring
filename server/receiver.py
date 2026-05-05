@@ -2756,6 +2756,10 @@ def get_backup_status_overview(conn: sqlite3.Connection) -> list[dict]:
             for subdir in subdirs:
                 subdir_name = str(subdir.get("name") or "")
                 subdir_path = str(subdir.get("path") or "")
+                normalized_name = subdir_name.strip().lower()
+                normalized_path_name = Path(subdir_path).name.strip().lower() if subdir_path else ""
+                if normalized_name == "_instancebackup" or normalized_path_name == "_instancebackup":
+                    continue
                 items = subdir.get("items") or []
                 has_current = any(_item_matches_current(item, tokens, now_local) for item in items)
                 dirs.append({
