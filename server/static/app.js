@@ -3092,7 +3092,61 @@ function renderSapBusinessOneCard(payload) {
   `;
 }
 
-function renderDirItemRows(items) {
+function getTodaySearchInfo() {
+  const now = new Date();
+  const yyyy = String(now.getFullYear());
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const yearShort = yyyy.slice(2);
+
+  return {
+    year: yyyy,
+    month: mm,
+    day: dd,
+    localKey: `${yyyy}-${mm}-${dd}`,
+    tokens: [
+      `${yyyy}${mm}${dd}`,
+      `${yyyy}-${mm}-${dd}`,
+      `${yyyy}_${mm}_${dd}`,
+      `${dd}${mm}${yyyy}`,
+      `${dd}-${mm}-${yyyy}`,
+      `${dd}_${mm}_${yyyy}`,
+      `${dd}${mm}${yearShort}`,
+      `${dd}-${mm}-${yearShort}`,
+      `${dd}_${mm}_${yearShort}`,
+    ],
+  };
+}
+
+function itemMatchesToday(item, todayInfo) {
+  const name = asText(item && item.name, "").toLowerCase();
+  const nameMatch = todayInfo.tokens.some((token) => name.includes(token.toLowerCase()));
+  if (nameMatch) {
+    return true;
+  }
+
+  const modRaw = asText(item && item.modified_utc, "");
+  if (!modRaw) {
+    return false;
+  }
+
+  const parsed = new Date(modRaw);
+  if (Number.isNaN(parsed.getTime())) {
+    return false;
+  }
+
+  const modKey = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+  return modKey === todayInfo.localKey;
+}
+
+function renderTodayStatusBadge(hasToday) {
+  if (hasToday) {
+    return '<span class="dir-status-badge ok">Heute: Backup gefunden</span>';
+  }
+  return '<span class="dir-status-badge missing">Heute: kein Backup</span>';
+}
+
+function renderDirItemRows(items, todayInfo) {
   return items.map((item) => {
     const name = asText(item.name, "-");
     const type = asText(item.type, "file");
@@ -3101,18 +3155,20 @@ function renderDirItemRows(items) {
     const modRaw = asText(item.modified_utc, "");
     const modText = modRaw ? formatUtcPlus2Short(modRaw) : "-";
     const typeIcon = type === "dir" ? "📁" : type === "link" ? "🔗" : "📄";
+    const isToday = itemMatchesToday(item, todayInfo);
+    const rowClass = isToday ? " class=\"dir-item-today\"" : "";
     return `
-      <tr>
+      <tr${rowClass}>
         <td class="dir-item-icon">${typeIcon}</td>
         <td class="dir-item-name" title="${escapeHtml(name)}">${escapeHtml(name)}</td>
         <td class="dir-item-size">${escapeHtml(sizeText)}</td>
-        <td class="dir-item-date">${escapeHtml(modText)}</td>
+        <td class="dir-item-date">${escapeHtml(modText)}${isToday ? ' <span class="dir-item-today-chip">HEUTE</span>' : ""}</td>
       </tr>
     `;
   }).join("");
 }
 
-function renderDirItemTable(items) {
+function renderDirItemTable(items, todayInfo) {
   return `
     <div class="table-wrap">
       <table class="report-subtable dir-listing-table">
@@ -3124,7 +3180,7 @@ function renderDirItemTable(items) {
             <th>🕒 Geändert (UTC+2)</th>
           </tr>
         </thead>
-        <tbody>${renderDirItemRows(items)}</tbody>
+        <tbody>${renderDirItemRows(items, todayInfo)}</tbody>
       </table>
     </div>
   `;
@@ -3133,6 +3189,7 @@ function renderDirItemTable(items) {
 function renderDirListingsCard(payload) {
   const block = payload && typeof payload.dir_listings === "object" ? payload.dir_listings : null;
   const deepBlock = payload && typeof payload.dir_deep_listings === "object" ? payload.dir_deep_listings : null;
+  const todayInfo = getTodaySearchInfo();
 
   const hasRegular = block && block.available && Array.isArray(block.entries) && block.entries.length > 0;
   const hasDeep = deepBlock && deepBlock.available && Array.isArray(deepBlock.entries) && deepBlock.entries.length > 0;
@@ -3155,6 +3212,7 @@ function renderDirListingsCard(payload) {
       const path = asText(entry.path, pattern);
       const items = Array.isArray(entry.items) ? entry.items : [];
       const truncated = entry.truncated === true;
+      const hasToday = items.some((item) => itemMatchesToday(item, todayInfo));
 
       if (items.length === 0) {
         return `
@@ -3163,6 +3221,7 @@ function renderDirListingsCard(payload) {
               <span class="dir-listing-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
               <span class="dir-listing-pattern muted">${escapeHtml(pattern)}</span>
             </div>
+            ${renderTodayStatusBadge(false)}
             <p class="muted">Verzeichnis ist leer.</p>
           </div>
         `;
@@ -3178,7 +3237,8 @@ function renderDirListingsCard(payload) {
             <span class="dir-listing-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
             <span class="dir-listing-pattern muted">${escapeHtml(pattern)}</span>
           </div>
-          ${renderDirItemTable(items)}
+          ${renderTodayStatusBadge(hasToday)}
+          ${renderDirItemTable(items, todayInfo)}
           ${truncatedNote}
         </div>
       `;
@@ -3209,6 +3269,7 @@ function renderDirListingsCard(payload) {
         const subdirName = asText(subdir.name, "-");
         const subdirPath = asText(subdir.path, subdirName);
         const items = Array.isArray(subdir.items) ? subdir.items : [];
+        const hasToday = items.some((item) => itemMatchesToday(item, todayInfo));
         const total = Number(subdir.item_count_total || 0);
         const totalNote = Number.isFinite(total) && total > items.length
           ? ` <span class="muted">(${items.length} von ${total} gezeigt)</span>`
@@ -3217,11 +3278,11 @@ function renderDirListingsCard(payload) {
         return `
           <div class="dir-deep-subdir">
             <div class="dir-deep-subdir-title">
-              📁 <span title="${escapeHtml(subdirPath)}">${escapeHtml(subdirName)}</span>${totalNote}
+              📁 <span title="${escapeHtml(subdirPath)}">${escapeHtml(subdirName)}</span>${totalNote} ${renderTodayStatusBadge(hasToday)}
             </div>
             ${items.length === 0
               ? `<p class="muted" style="margin:4px 0 0 0;">Leer</p>`
-              : renderDirItemTable(items)
+              : renderDirItemTable(items, todayInfo)
             }
           </div>
         `;
