@@ -3276,15 +3276,15 @@ function renderDirListingsCard(payload) {
           : "";
 
         return `
-          <div class="dir-deep-subdir">
-            <div class="dir-deep-subdir-title">
+          <details class="dir-deep-subdir">
+            <summary class="dir-deep-subdir-title">
               📁 <span title="${escapeHtml(subdirPath)}">${escapeHtml(subdirName)}</span>${totalNote} ${renderTodayStatusBadge(hasToday)}
-            </div>
+            </summary>
             ${items.length === 0
               ? `<p class="muted" style="margin:4px 0 0 0;">Leer</p>`
               : renderDirItemTable(items, todayInfo)
             }
-          </div>
+          </details>
         `;
       }).join("");
 

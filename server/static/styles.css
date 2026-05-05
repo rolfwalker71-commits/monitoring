@@ -4662,11 +4662,35 @@ body[data-theme="dark"] .dir-status-badge.missing {
   margin-top: 6px;
 }
 
+.dir-deep-subdir > summary {
+  list-style: none;
+}
+.dir-deep-subdir > summary::-webkit-details-marker {
+  display: none;
+}
+
 .dir-deep-subdir-title {
   font-size: 13px;
   font-weight: 600;
   color: #334155;
   margin-bottom: 4px;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dir-deep-subdir-title::before {
+  content: "▶";
+  font-size: 10px;
+  color: #94a3b8;
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+
+.dir-deep-subdir[open] > .dir-deep-subdir-title::before {
+  transform: rotate(90deg);
 }
 
 body[data-theme="dark"] .dir-deep-subdir {
@@ -4675,4 +4699,8 @@ body[data-theme="dark"] .dir-deep-subdir {
 
 body[data-theme="dark"] .dir-deep-subdir-title {
   color: #94a3b8;
+}
+
+body[data-theme="dark"] .dir-deep-subdir-title::before {
+  color: #4a6080;
 }
