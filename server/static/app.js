@@ -3092,87 +3092,156 @@ function renderSapBusinessOneCard(payload) {
   `;
 }
 
+function renderDirItemRows(items) {
+  return items.map((item) => {
+    const name = asText(item.name, "-");
+    const type = asText(item.type, "file");
+    const sizeBytes = Number(item.size_bytes);
+    const sizeText = Number.isFinite(sizeBytes) && sizeBytes >= 0 ? formatBytes(sizeBytes) : "-";
+    const modRaw = asText(item.modified_utc, "");
+    const modText = modRaw ? formatUtcPlus2Short(modRaw) : "-";
+    const typeIcon = type === "dir" ? "📁" : type === "link" ? "🔗" : "📄";
+    return `
+      <tr>
+        <td class="dir-item-icon">${typeIcon}</td>
+        <td class="dir-item-name" title="${escapeHtml(name)}">${escapeHtml(name)}</td>
+        <td class="dir-item-size">${escapeHtml(sizeText)}</td>
+        <td class="dir-item-date">${escapeHtml(modText)}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderDirItemTable(items) {
+  return `
+    <div class="table-wrap">
+      <table class="report-subtable dir-listing-table">
+        <thead>
+          <tr>
+            <th style="width:28px;"></th>
+            <th>📝 Name</th>
+            <th>📦 Grösse</th>
+            <th>🕒 Geändert (UTC+2)</th>
+          </tr>
+        </thead>
+        <tbody>${renderDirItemRows(items)}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderDirListingsCard(payload) {
   const block = payload && typeof payload.dir_listings === "object" ? payload.dir_listings : null;
-  if (!block || !block.available || !Array.isArray(block.entries) || block.entries.length === 0) {
+  const deepBlock = payload && typeof payload.dir_deep_listings === "object" ? payload.dir_deep_listings : null;
+
+  const hasRegular = block && block.available && Array.isArray(block.entries) && block.entries.length > 0;
+  const hasDeep = deepBlock && deepBlock.available && Array.isArray(deepBlock.entries) && deepBlock.entries.length > 0;
+
+  if (!hasRegular && !hasDeep) {
     return `
       <section class="detail-card dir-listings-card">
         <h4>📂 Verzeichnis-Listings</h4>
-        <p class="muted">Keine Verzeichnis-Listings vorhanden. (DIR_SCAN_PATHS in agent.conf konfigurieren)</p>
+        <p class="muted">Keine Verzeichnis-Listings vorhanden. (DIR_SCAN_PATHS oder DIR_SCAN_DEEP_PATHS in agent.conf konfigurieren)</p>
       </section>
     `;
   }
 
-  const scanSections = block.entries.map((entry) => {
-    const pattern = asText(entry.pattern, "-");
-    const path = asText(entry.path, pattern);
-    const items = Array.isArray(entry.items) ? entry.items : [];
-    const truncated = entry.truncated === true;
+  let html = `<section class="detail-card dir-listings-card"><h4>📂 Verzeichnis-Listings</h4>`;
 
-    if (items.length === 0) {
+  // Regular flat listings
+  if (hasRegular) {
+    const scanSections = block.entries.map((entry) => {
+      const pattern = asText(entry.pattern, "-");
+      const path = asText(entry.path, pattern);
+      const items = Array.isArray(entry.items) ? entry.items : [];
+      const truncated = entry.truncated === true;
+
+      if (items.length === 0) {
+        return `
+          <div class="dir-listing-entry">
+            <div class="dir-listing-header">
+              <span class="dir-listing-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
+              <span class="dir-listing-pattern muted">${escapeHtml(pattern)}</span>
+            </div>
+            <p class="muted">Verzeichnis ist leer.</p>
+          </div>
+        `;
+      }
+
+      const truncatedNote = truncated
+        ? `<p class="muted" style="margin-top:4px;">Liste gekürzt (max. ${items.length} Einträge)</p>`
+        : "";
+
       return `
         <div class="dir-listing-entry">
           <div class="dir-listing-header">
             <span class="dir-listing-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
             <span class="dir-listing-pattern muted">${escapeHtml(pattern)}</span>
           </div>
-          <p class="muted">Verzeichnis ist leer.</p>
+          ${renderDirItemTable(items)}
+          ${truncatedNote}
         </div>
-      `;
-    }
-
-    const rows = items.map((item) => {
-      const name = asText(item.name, "-");
-      const type = asText(item.type, "file");
-      const sizeBytes = Number(item.size_bytes);
-      const sizeText = Number.isFinite(sizeBytes) && sizeBytes >= 0 ? formatBytes(sizeBytes) : "-";
-      const modRaw = asText(item.modified_utc, "");
-      const modText = modRaw ? formatUtcPlus2Short(modRaw) : "-";
-      const typeIcon = type === "dir" ? "📁" : type === "link" ? "🔗" : "📄";
-      return `
-        <tr>
-          <td class="dir-item-icon">${typeIcon}</td>
-          <td class="dir-item-name" title="${escapeHtml(name)}">${escapeHtml(name)}</td>
-          <td class="dir-item-size">${escapeHtml(sizeText)}</td>
-          <td class="dir-item-date">${escapeHtml(modText)}</td>
-        </tr>
       `;
     }).join("");
+    html += scanSections;
+  }
 
-    const truncatedNote = truncated
-      ? `<p class="muted" style="margin-top:4px;">Liste gekürzt (max. ${items.length} Einträge)</p>`
-      : "";
+  // Deep listings (subdirs with newest N items each)
+  if (hasDeep) {
+    const deepSections = deepBlock.entries.map((entry) => {
+      const pattern = asText(entry.pattern, "-");
+      const path = asText(entry.path, pattern);
+      const subdirs = Array.isArray(entry.subdirs) ? entry.subdirs : [];
 
-    return `
-      <div class="dir-listing-entry">
-        <div class="dir-listing-header">
-          <span class="dir-listing-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
-          <span class="dir-listing-pattern muted">${escapeHtml(pattern)}</span>
+      if (subdirs.length === 0) {
+        return `
+          <div class="dir-listing-entry">
+            <div class="dir-listing-header">
+              <span class="dir-listing-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
+              <span class="dir-listing-pattern muted">${escapeHtml(pattern)}</span>
+            </div>
+            <p class="muted">Keine Unterordner gefunden.</p>
+          </div>
+        `;
+      }
+
+      const subdirBlocks = subdirs.map((subdir) => {
+        const subdirName = asText(subdir.name, "-");
+        const subdirPath = asText(subdir.path, subdirName);
+        const items = Array.isArray(subdir.items) ? subdir.items : [];
+        const total = Number(subdir.item_count_total || 0);
+        const totalNote = Number.isFinite(total) && total > items.length
+          ? ` <span class="muted">(${items.length} von ${total} gezeigt)</span>`
+          : "";
+
+        return `
+          <div class="dir-deep-subdir">
+            <div class="dir-deep-subdir-title">
+              📁 <span title="${escapeHtml(subdirPath)}">${escapeHtml(subdirName)}</span>${totalNote}
+            </div>
+            ${items.length === 0
+              ? `<p class="muted" style="margin:4px 0 0 0;">Leer</p>`
+              : renderDirItemTable(items)
+            }
+          </div>
+        `;
+      }).join("");
+
+      return `
+        <div class="dir-listing-entry">
+          <div class="dir-listing-header">
+            <span class="dir-listing-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
+            <span class="dir-listing-pattern muted">${escapeHtml(pattern)}</span>
+          </div>
+          ${subdirBlocks}
         </div>
-        <div class="table-wrap">
-          <table class="report-subtable dir-listing-table">
-            <thead>
-              <tr>
-                <th style="width:28px;"></th>
-                <th>📝 Name</th>
-                <th>📦 Grösse</th>
-                <th>🕒 Geändert (UTC+2)</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-        ${truncatedNote}
-      </div>
-    `;
-  }).join("");
+      `;
+    }).join("");
+    html += deepSections;
+  }
 
-  return `
-    <section class="detail-card dir-listings-card">
-      <h4>📂 Verzeichnis-Listings</h4>
-      ${scanSections}
-    </section>
-  `;
+  html += `</section>`;
+  return html;
 }
 
 function deliveryLabel(modeValue, isDelayedValue) {

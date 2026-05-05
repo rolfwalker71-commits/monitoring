@@ -27,6 +27,8 @@ SAP_B1_BUSINESSONE_LOG_DIR="${SAP_B1_BUSINESSONE_LOG_DIR:-/usr/sap/SAPBusinessOn
 SAP_B1_SIZE_TIMEOUT_SEC="${SAP_B1_SIZE_TIMEOUT_SEC:-20}"
 DIR_SCAN_PATHS="${DIR_SCAN_PATHS:-}"
 DIR_SCAN_MAX_ITEMS="${DIR_SCAN_MAX_ITEMS:-50}"
+DIR_SCAN_DEEP_PATHS="${DIR_SCAN_DEEP_PATHS:-}"
+DIR_SCAN_DEEP_MAX_ITEMS="${DIR_SCAN_DEEP_MAX_ITEMS:-5}"
 CURL_CONNECT_TIMEOUT_SEC="${CURL_CONNECT_TIMEOUT_SEC:-10}"
 CURL_MAX_TIME_SEC="${CURL_MAX_TIME_SEC:-45}"
 SEND_JITTER_MAX_SEC="${SEND_JITTER_MAX_SEC:-300}"
@@ -215,6 +217,93 @@ collect_dir_listings_json() {
       all_entries="$(append_json_entry "$all_entries" "$dir_entry")"
     done
   done <<< "${DIR_SCAN_PATHS}:"
+
+  if [[ -z "$all_entries" ]]; then
+    printf '{"available":false,"entries":[]}'
+  else
+    printf '{"available":true,"entries":[%s]}' "$all_entries"
+  fi
+}
+
+collect_dir_deep_listings_json() {
+  # For each glob-expanded path: list subdirs, show N newest items per subdir
+  if [[ -z "${DIR_SCAN_DEEP_PATHS:-}" ]]; then
+    printf '{"available":false,"entries":[]}'
+    return
+  fi
+
+  local all_entries=""
+  local max_items="${DIR_SCAN_DEEP_MAX_ITEMS:-5}"
+  if ! [[  "$max_items" =~ ^[0-9]+$ ]] || [[ "$max_items" -lt 1 ]]; then
+    max_items=5
+  fi
+
+  local pattern
+  while IFS= read -r -d ':' pattern; do
+    [[ -n "$pattern" ]] || continue
+
+    local old_nullglob
+    old_nullglob="$(shopt -p nullglob 2>/dev/null || echo 'shopt -u nullglob')"
+    shopt -s nullglob
+    local expanded_paths=()
+    for expanded in $pattern; do
+      [[ -d "$expanded" ]] && expanded_paths+=("$expanded")
+    done
+    eval "$old_nullglob" 2>/dev/null || true
+
+    for dir_path in "${expanded_paths[@]}"; do
+      local subdirs_json=""
+
+      while IFS= read -r subdir_path; do
+        local subdir_name total_count items_json
+        subdir_name="$(basename "$subdir_path")"
+        total_count="$(find "$subdir_path" -maxdepth 1 -mindepth 1 2>/dev/null | wc -l || echo 0)"
+        [[ "$total_count" =~ ^[0-9]+$ ]] || total_count=0
+        items_json=""
+
+        while IFS= read -r item_path; do
+          [[ -n "$item_path" ]] || continue
+          local item_name item_type size_bytes mtime_epoch mtime_iso
+          item_name="$(basename "$item_path")"
+          item_type="file"
+          if [[ -L "$item_path" ]]; then
+            item_type="link"
+          elif [[ -d "$item_path" ]]; then
+            item_type="dir"
+          fi
+          size_bytes="$(stat -c '%s' "$item_path" 2>/dev/null || echo 0)"
+          [[ "$size_bytes" =~ ^[0-9]+$ ]] || size_bytes=0
+          mtime_epoch="$(stat -c '%Y' "$item_path" 2>/dev/null || echo 0)"
+          mtime_iso=""
+          if [[ "$mtime_epoch" =~ ^[0-9]+$ ]] && [[ "$mtime_epoch" -gt 0 ]]; then
+            mtime_iso="$(date -u -d "@$mtime_epoch" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")"
+          fi
+          local item_entry
+          item_entry="$(printf '{"name":"%s","type":"%s","size_bytes":%s,"modified_utc":"%s"}' \
+            "$(json_escape "$item_name")" \
+            "$(json_escape "$item_type")" \
+            "$size_bytes" \
+            "$(json_escape "$mtime_iso")")"
+          items_json="$(append_json_entry "$items_json" "$item_entry")"
+        done < <(find "$subdir_path" -maxdepth 1 -mindepth 1 -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -"$max_items" | awk '{$1=""; print substr($0,2)}')
+
+        local subdir_entry
+        subdir_entry="$(printf '{"name":"%s","path":"%s","item_count_total":%s,"items":[%s]}' \
+          "$(json_escape "$subdir_name")" \
+          "$(json_escape "$subdir_path")" \
+          "$total_count" \
+          "$items_json")"
+        subdirs_json="$(append_json_entry "$subdirs_json" "$subdir_entry")"
+      done < <(find "$dir_path" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort)
+
+      local dir_entry
+      dir_entry="$(printf '{"pattern":"%s","path":"%s","subdirs":[%s]}' \
+        "$(json_escape "$pattern")" \
+        "$(json_escape "$dir_path")" \
+        "$subdirs_json")"
+      all_entries="$(append_json_entry "$all_entries" "$dir_entry")"
+    done
+  done <<< "${DIR_SCAN_DEEP_PATHS}:"
 
   if [[ -z "$all_entries" ]]; then
     printf '{"available":false,"entries":[]}'
@@ -1046,6 +1135,7 @@ AGENT_CONFIG_JSON="$(collect_agent_config_json)"
 LARGE_FILES_JSON="$(collect_large_files_json)"
 SAP_BUSINESS_ONE_JSON="$(collect_sap_business_one_json)"
 DIR_LISTINGS_JSON="$(collect_dir_listings_json)"
+DIR_DEEP_LISTINGS_JSON="$(collect_dir_deep_listings_json)"
 SEND_STARTED_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 DOCKER_AVAILABLE=false
@@ -1118,7 +1208,8 @@ PAYLOAD=$(cat <<EOF
   "agent_config": ${AGENT_CONFIG_JSON},
   "large_files": ${LARGE_FILES_JSON},
   "sap_business_one": ${SAP_BUSINESS_ONE_JSON},
-  "dir_listings": ${DIR_LISTINGS_JSON}
+  "dir_listings": ${DIR_LISTINGS_JSON},
+  "dir_deep_listings": ${DIR_DEEP_LISTINGS_JSON}
 }
 EOF
 )

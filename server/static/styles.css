@@ -4579,3 +4579,28 @@ body[data-theme="dark"] .dir-listing-table td.dir-item-size {
 body[data-theme="dark"] .dir-listing-table td.dir-item-date {
   color: #64748b;
 }
+
+.dir-deep-subdir {
+  margin-top: 12px;
+  border-left: 3px solid #e2e8f0;
+  padding-left: 10px;
+}
+
+.dir-deep-subdir:first-child {
+  margin-top: 6px;
+}
+
+.dir-deep-subdir-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 4px;
+}
+
+body[data-theme="dark"] .dir-deep-subdir {
+  border-left-color: #2d3e55;
+}
+
+body[data-theme="dark"] .dir-deep-subdir-title {
+  color: #94a3b8;
+}
