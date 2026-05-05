@@ -381,6 +381,13 @@ upsert_config_value() {
   chmod 0600 "$CONFIG_FILE" 2>/dev/null || true
 }
 
+# Migration fallback: clear old static backup glob so hostname-aware
+# auto-detection can rebuild DIR_SCAN_DEEP_PATHS.
+if [[ "${DIR_SCAN_DEEP_PATHS:-}" == "/hana/shared/backup_service/backups/*/*" ]]; then
+  DIR_SCAN_DEEP_PATHS=""
+  upsert_config_value "DIR_SCAN_DEEP_PATHS" ""
+fi
+
 apply_api_key_update() {
   local next_api_key="$1"
 

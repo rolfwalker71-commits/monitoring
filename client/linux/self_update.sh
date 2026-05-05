@@ -75,7 +75,7 @@ fi
 # Migration: remove old static DIR_SCAN_DEEP_PATHS that was auto-written by a
 # previous agent version. The new agent performs a hostname-aware search and
 # will re-write the correct value on the next run.
-if grep -qE '^DIR_SCAN_DEEP_PATHS=/hana/shared/backup_service/backups/\*\/\*' "$CONFIG_FILE" 2>/dev/null; then
-  sed -i '/^DIR_SCAN_DEEP_PATHS=\/hana\/shared\/backup_service\/backups\/\*\/\*/d' "$CONFIG_FILE"
-  echo "Migration: removed stale DIR_SCAN_DEEP_PATHS from $CONFIG_FILE (will be re-detected on next run)"
+if grep -qE '^[[:space:]]*DIR_SCAN_DEEP_PATHS[[:space:]]*=[[:space:]]*"?/hana/shared/backup_service/backups/\*/\*"?[[:space:]]*$' "$CONFIG_FILE" 2>/dev/null; then
+  sed -i -E 's|^[[:space:]]*DIR_SCAN_DEEP_PATHS[[:space:]]*=.*$|DIR_SCAN_DEEP_PATHS=""|' "$CONFIG_FILE"
+  echo "Migration: reset stale DIR_SCAN_DEEP_PATHS in $CONFIG_FILE (will be re-detected on next run)"
 fi
