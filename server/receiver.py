@@ -2868,6 +2868,8 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
     build_version = html.escape(read_build_version())
 
     rows_html_parts = []
+    displayed_missing_count = 0
+    displayed_host_count = 0
     for host in hosts:
         display_name = html.escape(str(host.get("display_name") or host.get("hostname") or "-"))
         hostname = html.escape(str(host.get("hostname") or "-"))
@@ -2884,6 +2886,8 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
 
         dirs = host.get("dirs") or []
         dir_rows = ""
+        visible_dir_count = 0
+        visible_missing_count = 0
         for d in dirs:
             ok = d.get("has_today_backup", False)
             badge_bg = "#dcfce7" if ok else "#fee2e2"
@@ -2896,6 +2900,8 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
             newest_text = newest_leaf or newest_raw or "-"
             newest = html.escape(newest_text)
             newest_is_zip = newest_text.strip().lower().endswith(".zip")
+            if not newest_is_zip:
+                continue
             newest_size = format_size_bytes(d.get("newest_item_size_bytes", 0))
             newest_modified_raw = str(d.get("newest_item_modified") or "").strip()
             newest_modified_fmt = ""
@@ -2911,6 +2917,9 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
             newest_cell += f"<div style='margin-top:2px;font-size:11px;color:#94a3b8;'>Grösse: {html.escape(newest_size)}</div>"
             if newest_modified_fmt:
                 newest_cell += f"<div style='margin-top:2px;font-size:11px;color:#94a3b8;'>Datei: {html.escape(newest_modified_fmt)}</div>"
+            visible_dir_count += 1
+            if not ok:
+                visible_missing_count += 1
             dir_rows += (
                 f"<tr>"
                 f"<td style='padding:6px 8px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#334155;'>{subdir_name}</td>"
@@ -2921,7 +2930,13 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
                 f"</tr>"
             )
 
-        host_bg = "#fff7ed" if host.get("has_missing_backup") else "#f0fdf4"
+        if visible_dir_count == 0:
+            continue
+
+        displayed_host_count += 1
+        if visible_missing_count > 0:
+            displayed_missing_count += 1
+        host_bg = "#fff7ed" if visible_missing_count > 0 else "#f0fdf4"
         rows_html_parts.append(
             f"<tr><td colspan='3' style='padding:10px 8px 4px 8px;background:{host_bg};border-top:2px solid #e2e8f0;'>"
             f"<strong style='font-size:14px;'>{display_name}</strong>"
@@ -2934,7 +2949,7 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
     if not rows_html:
         rows_html = "<tr><td colspan='3' style='padding:12px 8px;color:#475569;'>Keine Backup-Daten vorhanden.</td></tr>"
 
-    missing_count = sum(1 for h in hosts if h.get("has_missing_backup"))
+    missing_count = displayed_missing_count
     summary_color = "#991b1b" if missing_count > 0 else "#166534"
     summary_text = f"{missing_count} Host(s) ohne aktuelles Backup (<24h)" if missing_count > 0 else "Alle Backups aktuell (<24h)"
 
@@ -2954,7 +2969,7 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
         "</div>"
         "<div style='padding:18px 20px;'>"
         f"{('<div style=\'margin:0 0 12px 0;\'><img src=\'' + backup_icon_uri + '\' alt=\'Backup\' width=\'48\' height=\'48\' style=\'display:block;width:48px;height:48px;\'></div>') if backup_icon_uri else ''}"
-        f"<p style='margin:0 0 14px 0;font-size:14px;'><strong style='color:{summary_color};'>{html.escape(summary_text)}</strong> | {len(hosts)} Host(s) mit Backup-Konfiguration</p>"
+        f"<p style='margin:0 0 14px 0;font-size:14px;'><strong style='color:{summary_color};'>{html.escape(summary_text)}</strong> | {displayed_host_count} Host(s) mit ZIP-Backup</p>"
         "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
         "<thead><tr style='background:#f1f5f9;'>"
         "<th style='text-align:left;padding:8px;border:1px solid #dbe3ef;'>Verzeichnis</th>"
