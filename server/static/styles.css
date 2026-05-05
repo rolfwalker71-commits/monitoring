@@ -4560,6 +4560,7 @@ body[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
 
 .dir-listing-table td.dir-item-name.dir-item-name--zip {
   font-weight: 700;
+  padding-left: 18px;
 }
 
 .dir-listing-table th.dir-item-size-head,
@@ -4574,6 +4575,11 @@ body[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
   white-space: nowrap;
   font-size: 12px;
   color: #64748b;
+  text-align: right;
+}
+
+.dir-listing-table th.dir-item-date-head {
+  text-align: right;
 }
 
 .dir-item-today {

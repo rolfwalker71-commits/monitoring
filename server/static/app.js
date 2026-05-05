@@ -3171,6 +3171,13 @@ function renderTodayStatusBadge(hasToday) {
   return '<span class="dir-status-badge missing">Heute: kein Backup</span>';
 }
 
+function isBackupZipItem(item) {
+  const type = asText(item && item.type, "").toLowerCase();
+  const name = asText(item && item.name, "");
+  const leafName = name.includes("/") ? name.slice(name.lastIndexOf("/") + 1) : name;
+  return type === "file" && /^bck_.*\.zip$/i.test(leafName);
+}
+
 function renderDirItemRows(items, todayInfo) {
   return items.map((item) => {
     const name = asText(item.name, "-");
@@ -3202,14 +3209,14 @@ function renderDirItemTable(items, todayInfo) {
           <col style="width:28px;">
           <col>
           <col style="width:120px;">
-          <col style="width:230px;">
+          <col style="width:250px;">
         </colgroup>
         <thead>
           <tr>
             <th style="width:28px;"></th>
             <th>📝 Name</th>
             <th class="dir-item-size-head">📦 Grösse</th>
-            <th>🕒 Geändert (UTC+2)</th>
+            <th class="dir-item-date-head">🕒 Geändert (UTC+2)</th>
           </tr>
         </thead>
         <tbody>${renderDirItemRows(items, todayInfo)}</tbody>
@@ -3300,11 +3307,12 @@ function renderDirListingsCard(payload) {
       const subdirBlocks = subdirs.map((subdir) => {
         const subdirName = asText(subdir.name, "-");
         const subdirPath = asText(subdir.path, subdirName);
-        const items = Array.isArray(subdir.items) ? subdir.items : [];
+        const rawItems = Array.isArray(subdir.items) ? subdir.items : [];
+        const items = rawItems.filter((item) => isBackupZipItem(item));
         const hasToday = items.some((item) => itemMatchesToday(item, todayInfo));
         const total = Number(subdir.item_count_total || 0);
         const totalNote = Number.isFinite(total) && total > items.length
-          ? ` <span class="muted">(${items.length} von ${total} gezeigt)</span>`
+          ? ` <span class="muted">(${items.length} ZIP von ${total} gezeigt)</span>`
           : "";
 
         return `
@@ -3313,7 +3321,7 @@ function renderDirListingsCard(payload) {
               📁 <span title="${escapeHtml(subdirPath)}">${escapeHtml(subdirName)}</span>${totalNote} ${renderTodayStatusBadge(hasToday)}
             </summary>
             ${items.length === 0
-              ? `<p class="muted" style="margin:4px 0 0 0;">Leer</p>`
+              ? `<p class="muted" style="margin:4px 0 0 0;">Keine bck_*.zip-Dateien gefunden.</p>`
               : renderDirItemTable(items, todayInfo)
             }
           </details>
