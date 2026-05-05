@@ -29,6 +29,7 @@ DIR_SCAN_PATHS="${DIR_SCAN_PATHS:-}"
 DIR_SCAN_MAX_ITEMS="${DIR_SCAN_MAX_ITEMS:-50}"
 DIR_SCAN_DEEP_PATHS="${DIR_SCAN_DEEP_PATHS:-}"
 DIR_SCAN_DEEP_MAX_ITEMS="${DIR_SCAN_DEEP_MAX_ITEMS:-5}"
+DIR_SCAN_DEEP_TIMEOUT_SEC="${DIR_SCAN_DEEP_TIMEOUT_SEC:-15}"
 CURL_CONNECT_TIMEOUT_SEC="${CURL_CONNECT_TIMEOUT_SEC:-10}"
 CURL_MAX_TIME_SEC="${CURL_MAX_TIME_SEC:-45}"
 SEND_JITTER_MAX_SEC="${SEND_JITTER_MAX_SEC:-300}"
@@ -274,35 +275,48 @@ collect_dir_deep_listings_json() {
       while IFS= read -r subdir_path; do
         local subdir_name total_count items_json
         subdir_name="$(basename "$subdir_path")"
-        total_count="$(find "$subdir_path" -maxdepth 1 -mindepth 1 2>/dev/null | wc -l || echo 0)"
-        [[ "$total_count" =~ ^[0-9]+$ ]] || total_count=0
         items_json=""
 
-        while IFS= read -r item_path; do
-          [[ -n "$item_path" ]] || continue
-          local item_name item_type size_bytes mtime_epoch mtime_iso
-          item_name="$(basename "$item_path")"
-          item_type="file"
-          if [[ -L "$item_path" ]]; then
-            item_type="link"
-          elif [[ -d "$item_path" ]]; then
-            item_type="dir"
-          fi
-          size_bytes="$(stat -c '%s' "$item_path" 2>/dev/null || echo 0)"
+        # Single find pass: get mtime, size, type, name — tab-separated.
+        # %T@ = mtime epoch (float), %s = size bytes, %y = type (f/d/l), %P = name only (no path).
+        # This eliminates separate stat calls and the extra find|wc -l for total_count.
+        local scan_timeout="${DIR_SCAN_DEEP_TIMEOUT_SEC:-15}"
+        local find_cmd=(find "$subdir_path" -maxdepth 1 -mindepth 1 -printf '%T@\t%s\t%y\t%P\n')
+        local find_raw
+        if command -v timeout >/dev/null 2>&1 && [[ "$scan_timeout" =~ ^[0-9]+$ ]] && [[ "$scan_timeout" -gt 0 ]]; then
+          find_raw="$(timeout "$scan_timeout" "${find_cmd[@]}" 2>/dev/null | sort -t$'\t' -k1 -rn || true)"
+        else
+          find_raw="$(${find_cmd[*]} 2>/dev/null | sort -t$'\t' -k1 -rn || true)"
+        fi
+
+        if [[ -z "$find_raw" ]]; then
+          total_count=0
+        else
+          total_count="$(printf '%s\n' "$find_raw" | grep -c . || echo 0)"
+          [[ "$total_count" =~ ^[0-9]+$ ]] || total_count=0
+        fi
+
+        while IFS=$'\t' read -r mtime_raw size_bytes ftype fname; do
+          [[ -n "$fname" ]] || continue
+          local item_type mtime_epoch_int mtime_iso item_entry
+          case "$ftype" in
+            d) item_type="dir" ;;
+            l) item_type="link" ;;
+            *) item_type="file" ;;
+          esac
           [[ "$size_bytes" =~ ^[0-9]+$ ]] || size_bytes=0
-          mtime_epoch="$(stat -c '%Y' "$item_path" 2>/dev/null || echo 0)"
+          mtime_epoch_int="${mtime_raw%%.*}"
           mtime_iso=""
-          if [[ "$mtime_epoch" =~ ^[0-9]+$ ]] && [[ "$mtime_epoch" -gt 0 ]]; then
-            mtime_iso="$(date -u -d "@$mtime_epoch" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")"
+          if [[ "$mtime_epoch_int" =~ ^[0-9]+$ ]] && [[ "$mtime_epoch_int" -gt 0 ]]; then
+            mtime_iso="$(date -u -d "@$mtime_epoch_int" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")"
           fi
-          local item_entry
           item_entry="$(printf '{"name":"%s","type":"%s","size_bytes":%s,"modified_utc":"%s"}' \
-            "$(json_escape "$item_name")" \
+            "$(json_escape "$fname")" \
             "$(json_escape "$item_type")" \
             "$size_bytes" \
             "$(json_escape "$mtime_iso")")"
           items_json="$(append_json_entry "$items_json" "$item_entry")"
-        done < <(find "$subdir_path" -maxdepth 1 -mindepth 1 -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -"$max_items" | awk '{$1=""; print substr($0,2)}')
+        done < <(printf '%s\n' "$find_raw" | head -"$max_items")
 
         local subdir_entry
         subdir_entry="$(printf '{"name":"%s","path":"%s","item_count_total":%s,"items":[%s]}' \
