@@ -2849,10 +2849,21 @@ def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str
             badge_text = "✓ Backup aktuell (<24h)" if ok else "✗ kein aktuelles Backup"
             subdir_name = html.escape(str(d.get("subdir_name") or d.get("subdir_path") or "-"))
             newest = html.escape(str(d.get("newest_item_name") or "-"))
+            newest_modified_raw = str(d.get("newest_item_modified") or "").strip()
+            newest_modified_fmt = ""
+            if newest_modified_raw:
+                try:
+                    newest_modified_dt = datetime.fromisoformat(newest_modified_raw.replace("Z", "+00:00"))
+                    newest_modified_fmt = newest_modified_dt.astimezone(SCHEDULE_TIMEZONE).strftime("%d.%m.%Y %H:%M")
+                except Exception:
+                    newest_modified_fmt = newest_modified_raw[:16]
+            newest_cell = newest
+            if newest_modified_fmt:
+                newest_cell += f"<div style='margin-top:2px;font-size:11px;color:#94a3b8;'>Datei: {html.escape(newest_modified_fmt)}</div>"
             dir_rows += (
                 f"<tr>"
                 f"<td style='padding:6px 8px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#334155;'>{subdir_name}</td>"
-                f"<td style='padding:6px 8px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#64748b;'>{newest}</td>"
+                f"<td style='padding:6px 8px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#64748b;'>{newest_cell}</td>"
                 f"<td style='padding:6px 8px;border-bottom:1px solid #f1f5f9;text-align:center;'>"
                 f"<span style='display:inline-block;padding:2px 8px;border-radius:999px;background:{badge_bg};color:{badge_color};font-weight:600;font-size:11px;'>{badge_text}</span>"
                 f"</td>"
