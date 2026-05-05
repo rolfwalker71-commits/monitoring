@@ -328,6 +328,30 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE INDEX IF NOT EXISTS idx_reports_hostname_id
+            ON reports(hostname, id)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_reports_hostname_received
+            ON reports(hostname, received_at_utc)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_alerts_hostname_status
+            ON alerts(hostname, status)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_alerts_hostname_status_severity
+            ON alerts(hostname, status, severity)
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS muted_alert_rules (
                 hostname TEXT NOT NULL,
                 mountpoint TEXT NOT NULL,
