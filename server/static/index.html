@@ -64,38 +64,7 @@
         </div>
       </div>
 
-      <section id="hostToolsHeader" class="brand-tools hidden">
-        <div class="host-filters host-filters-header">
-          <div class="host-search-box">
-            <input id="hostSearchInput" type="text" placeholder="Nach Titel suchen..." class="search-input" />
-          </div>
-          <label class="host-filter-control" for="hostAlertFilterSelect">
-            <span>Alerts</span>
-            <select id="hostAlertFilterSelect">
-              <option value="all" selected>Alle</option>
-              <option value="with-alerts">Mit Alerts</option>
-              <option value="without-alerts">Ohne Alerts</option>
-            </select>
-          </label>
-          <label class="host-filter-control" for="hostMutedFilterSelect">
-            <span>Muted</span>
-            <select id="hostMutedFilterSelect">
-              <option value="all" selected>Alle</option>
-              <option value="with-muted">Mit muted Alerts</option>
-              <option value="without-muted">Ohne muted Alerts</option>
-            </select>
-          </label>
-          <div class="host-filter-control host-filter-control-icons">
-            <span>OS</span>
-            <div id="hostOsFilterChips" class="icon-filter-chips"></div>
-          </div>
-          <div class="host-filter-control host-filter-control-icons">
-            <span>Land</span>
-            <div id="hostCountryFilterChips" class="icon-filter-chips"></div>
-          </div>
-          <button id="hostFiltersResetButton" class="btn-secondary" type="button" title="Alle Filter zurücksetzen">✕</button>
-        </div>
-      </section>
+
 
       <section id="appPanel" class="panel hidden">
         <div class="panel-header">
@@ -739,6 +708,42 @@
                 <h3>🖥️ Hosts</h3>
                 <p id="hostCount" class="count"></p>
               </div>
+              <section id="hostToolsHeader" class="sidebar-filters hidden">
+                <div class="host-filters host-filters-header">
+                  <div class="host-search-box">
+                    <input id="hostSearchInput" type="text" placeholder="Suchen..." class="search-input" />
+                  </div>
+                  <div class="sidebar-filter-row">
+                    <label class="host-filter-control" for="hostAlertFilterSelect">
+                      <span>Alerts</span>
+                      <select id="hostAlertFilterSelect">
+                        <option value="all" selected>Alle</option>
+                        <option value="with-alerts">Mit Alerts</option>
+                        <option value="without-alerts">Ohne Alerts</option>
+                      </select>
+                    </label>
+                    <label class="host-filter-control" for="hostMutedFilterSelect">
+                      <span>Muted</span>
+                      <select id="hostMutedFilterSelect">
+                        <option value="all" selected>Alle</option>
+                        <option value="with-muted">Mit muted Alerts</option>
+                        <option value="without-muted">Ohne muted Alerts</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="sidebar-filter-row">
+                    <div class="host-filter-control host-filter-control-icons">
+                      <span>OS</span>
+                      <div id="hostOsFilterChips" class="icon-filter-chips"></div>
+                    </div>
+                    <div class="host-filter-control host-filter-control-icons">
+                      <span>Land</span>
+                      <div id="hostCountryFilterChips" class="icon-filter-chips"></div>
+                    </div>
+                    <button id="hostFiltersResetButton" class="btn-secondary" type="button" title="Alle Filter zurücksetzen">✕</button>
+                  </div>
+                </div>
+              </section>
               <div class="host-list-shell">
                 <div id="hostListHeader" class="host-list-header"></div>
                 <div id="hostList" class="host-list"></div>
@@ -771,6 +776,25 @@
               <div class="report-meta-row">
                 <p id="reportCount" class="count"></p>
                 <p id="deliveryStats" class="count compact"></p>
+              </div>
+            </div>
+
+            <div id="hostSummaryBand" class="host-summary-band hidden">
+              <div class="summary-tile" id="summaryTileCpu">
+                <span class="summary-tile-label">CPU</span>
+                <span class="summary-tile-value" id="summaryValCpu">—</span>
+              </div>
+              <div class="summary-tile" id="summaryTileRam">
+                <span class="summary-tile-label">RAM</span>
+                <span class="summary-tile-value" id="summaryValRam">—</span>
+              </div>
+              <div class="summary-tile" id="summaryTileSwap">
+                <span class="summary-tile-label">Swap</span>
+                <span class="summary-tile-value" id="summaryValSwap">—</span>
+              </div>
+              <div class="summary-tile" id="summaryTileStatus">
+                <span class="summary-tile-label">Status</span>
+                <span class="summary-tile-value" id="summaryValStatus">—</span>
               </div>
             </div>
 
