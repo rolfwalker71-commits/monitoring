@@ -457,6 +457,60 @@ collect_dir_deep_listings_json() {
 
     for dir_path in "${expanded_paths[@]}"; do
       local subdirs_json=""
+      local scan_timeout="${DIR_SCAN_DEEP_TIMEOUT_SEC:-15}"
+      local item_maxdepth="${DIR_SCAN_DEEP_ITEM_MAX_DEPTH:-2}"
+      if ! [[ "$item_maxdepth" =~ ^[0-9]+$ ]] || [[ "$item_maxdepth" -lt 1 ]]; then
+        item_maxdepth=2
+      fi
+
+      # Also include files directly inside the matched directory so
+      # flat backup layouts (without per-run subdirectories) are visible.
+      local root_items_json=""
+      local root_find_cmd=(find "$dir_path" -maxdepth 1 -mindepth 1 ! -type d -printf '%T@\t%s\t%y\t%P\n')
+      local root_find_raw
+      if command -v timeout >/dev/null 2>&1 && [[ "$scan_timeout" =~ ^[0-9]+$ ]] && [[ "$scan_timeout" -gt 0 ]]; then
+        root_find_raw="$(timeout "$scan_timeout" "${root_find_cmd[@]}" 2>/dev/null | sort -t$'\t' -k1 -rn || true)"
+      else
+        root_find_raw="$(${root_find_cmd[*]} 2>/dev/null | sort -t$'\t' -k1 -rn || true)"
+      fi
+
+      local root_total_count
+      if [[ -z "$root_find_raw" ]]; then
+        root_total_count=0
+      else
+        root_total_count="$(printf '%s\n' "$root_find_raw" | grep -c . || echo 0)"
+        [[ "$root_total_count" =~ ^[0-9]+$ ]] || root_total_count=0
+      fi
+
+      while IFS=$'\t' read -r mtime_raw size_bytes ftype fname; do
+        [[ -n "$fname" ]] || continue
+        local item_type mtime_epoch_int mtime_iso item_entry
+        case "$ftype" in
+          l) item_type="link" ;;
+          *) item_type="file" ;;
+        esac
+        [[ "$size_bytes" =~ ^[0-9]+$ ]] || size_bytes=0
+        mtime_epoch_int="${mtime_raw%%.*}"
+        mtime_iso=""
+        if [[ "$mtime_epoch_int" =~ ^[0-9]+$ ]] && [[ "$mtime_epoch_int" -gt 0 ]]; then
+          mtime_iso="$(date -u -d "@$mtime_epoch_int" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")"
+        fi
+        item_entry="$(printf '{"name":"%s","type":"%s","size_bytes":%s,"modified_utc":"%s"}' \
+          "$(json_escape "$fname")" \
+          "$(json_escape "$item_type")" \
+          "$size_bytes" \
+          "$(json_escape "$mtime_iso")")"
+        root_items_json="$(append_json_entry "$root_items_json" "$item_entry")"
+      done < <(printf '%s\n' "$root_find_raw" | head -"$max_items")
+
+      if [[ "$root_total_count" -gt 0 ]]; then
+        local root_entry
+        root_entry="$(printf '{"name":"_root_files","path":"%s","item_count_total":%s,"items":[%s]}' \
+          "$(json_escape "$dir_path")" \
+          "$root_total_count" \
+          "$root_items_json")"
+        subdirs_json="$(append_json_entry "$subdirs_json" "$root_entry")"
+      fi
 
       while IFS= read -r subdir_path; do
         local subdir_name total_count items_json
@@ -466,11 +520,6 @@ collect_dir_deep_listings_json() {
         # Single find pass: get mtime, size, type, name — tab-separated.
         # %T@ = mtime epoch (float), %s = size bytes, %y = type (f/d/l), %P = name only (no path).
         # Scan recursively (default depth 2) so nested backup ZIP files are visible.
-        local scan_timeout="${DIR_SCAN_DEEP_TIMEOUT_SEC:-15}"
-        local item_maxdepth="${DIR_SCAN_DEEP_ITEM_MAX_DEPTH:-2}"
-        if ! [[ "$item_maxdepth" =~ ^[0-9]+$ ]] || [[ "$item_maxdepth" -lt 1 ]]; then
-          item_maxdepth=2
-        fi
         local find_cmd=(find "$subdir_path" -maxdepth "$item_maxdepth" -mindepth 1 -printf '%T@\t%s\t%y\t%P\n')
         local find_raw
         if command -v timeout >/dev/null 2>&1 && [[ "$scan_timeout" =~ ^[0-9]+$ ]] && [[ "$scan_timeout" -gt 0 ]]; then
