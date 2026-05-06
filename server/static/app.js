@@ -437,7 +437,7 @@ function formatDnsServers(value) {
     const cleaned = value
       .map((entry) => String(entry || "").trim())
       .filter((entry) => entry.length > 0);
-    return cleaned.length > 0 ? cleaned.join(" ") : "-";
+    return cleaned.length > 0 ? cleaned.join("<br>") : "-";
   }
   return asText(value);
 }
@@ -4217,7 +4217,7 @@ function renderReportCard(report) {
         ${renderMetaItem("🔌", "Std. NIC IP", defaultNicIpv4 || "-")}
         ${renderMetaItem("🌍", "Default NIC", network.default_interface)}
         ${renderMetaItem("🛣️", "Default GW", network.default_gateway)}
-        ${renderMetaItem("🧭", "DNS", formatDnsServers(network.dns_servers))}
+        ${renderMetaItemHtml("🧭", "DNS", formatDnsServers(network.dns_servers))}
       </div>
     </div>
   `;
