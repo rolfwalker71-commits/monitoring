@@ -530,17 +530,17 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 .host-status-bar {
   display: block;
   position: absolute;
-  top: 0;
-  left: 0;
   bottom: 0;
-  width: 3px;
-  border-radius: 8px 0 0 8px;
+  left: 6px;
+  right: 6px;
+  height: 3px;
+  border-radius: 0 0 4px 4px;
   transition: opacity 200ms ease;
 }
 
 .host-status-bar--ok {
-  background: #2a7a4a;
-  opacity: 0.7;
+  background: #22c55e;
+  opacity: 0.6;
 }
 
 .host-status-bar--warning {
@@ -2172,17 +2172,16 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 
 .host-item {
   text-align: left;
-  border: 1px solid #3a5c8a;
-  border-left: 3px solid #4a80c8;
-  background: linear-gradient(180deg, #243e62 0%, #1c3255 100%);
-  color: #d4e4f7;
+  border: 1px solid #4a7ab8;
+  background: linear-gradient(180deg, #2a5080 0%, #224470 100%);
+  color: #e0eefa;
   border-radius: 8px;
-  padding: 6px 10px 6px 14px;
+  padding: 6px 10px 8px 10px;
   display: grid;
   gap: 2px;
   position: relative;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
@@ -2195,22 +2194,25 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 
 .host-os-icon {
   position: absolute;
-  top: 8px;
-  right: 10px;
-  width: 28px;
-  height: 28px;
+  top: 6px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
   object-fit: contain;
-  opacity: 0.75;
+  opacity: 1;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
   pointer-events: none;
 }
 
 .host-flag-icon {
   position: absolute;
-  bottom: 10px;
-  right: 10px;
-  width: 28px;
-  height: 28px;
+  bottom: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
   object-fit: contain;
+  opacity: 1;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
   background: transparent;
   pointer-events: none;
 }
@@ -4288,8 +4290,8 @@ body[data-theme="dark"] .ih-host-card {
 
 /* ── Dark Mode: Host list items ───────────────────────────── */
 body[data-theme="dark"] .host-item {
-  border-color: #334d6e;
-  background: linear-gradient(180deg, #1e3050 0%, #172543 100%);
+  border-color: #4a7ab8;
+  background: linear-gradient(180deg, #2a5080 0%, #224470 100%);
 }
 
 body[data-theme="dark"] .host-item-hidden {
@@ -5444,11 +5446,10 @@ body[data-theme="dark"] .view-tabs .tab-button.active {
 
 /* ── Redesign: Dark mode fixes for existing dark host-item overrides ── */
 body[data-theme="dark"] .host-item {
-  border-color: #3a5c8a;
-  border-left-color: #4a80c8;
-  background: linear-gradient(180deg, #243e62 0%, #1c3255 100%);
-  color: #d4e4f7;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.3);
+  border-color: #4a7ab8;
+  background: linear-gradient(180deg, #2a5080 0%, #224470 100%);
+  color: #e0eefa;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
 body[data-theme="dark"] .host-item:hover {
