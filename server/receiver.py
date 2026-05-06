@@ -6801,6 +6801,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 ).fetchone()
 
             fs_by_mountpoint = {}
+            fs_total_kb_by_mountpoint: dict[str, float] = {}
             report_count = 0
             latest_report_time = ""
             latest_max_used_percent = None
@@ -6881,6 +6882,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     except (TypeError, ValueError):
                         continue
 
+                    total_kb_value = fs.get("total_kb", fs.get("size_total_kb"))
+                    try:
+                        total_kb = float(total_kb_value)
+                    except (TypeError, ValueError):
+                        total_kb = None
+                    if total_kb is not None and total_kb >= 0:
+                        fs_total_kb_by_mountpoint[mountpoint] = total_kb
+
                     latest_fs_entries.append({
                         "mountpoint": mountpoint,
                         "used_percent": used_percent,
@@ -6915,6 +6924,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     {
                         "mountpoint": mountpoint,
                         "sample_count": len(values),
+                        "total_kb": fs_total_kb_by_mountpoint.get(mountpoint),
                         "current_used_percent": last_value,
                         "min_used_percent": min(values),
                         "max_used_percent": max(values),
