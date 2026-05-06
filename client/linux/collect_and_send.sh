@@ -254,7 +254,12 @@ collect_hana_version_json() {
     hdb_path="$(command -v HDB 2>/dev/null || true)"
   fi
 
-  if [[ -n "$hdb_path" ]]; then
+  # Last resort: resolve HDB from <sid>adm login shell PATH.
+  if [[ -z "$hdb_path" ]] && [[ -n "$sid_user" ]] && id "$sid_user" >/dev/null 2>&1; then
+    hdb_path="$(su - "$sid_user" -c 'command -v HDB' 2>/dev/null | head -1 || true)"
+  fi
+
+  if [[ -n "$hdb_path" ]] || ([[ -n "$sid_user" ]] && id "$sid_user" >/dev/null 2>&1); then
     local timeout_sec="$HANA_VERSION_TIMEOUT_SEC"
     if ! [[ "$timeout_sec" =~ ^[0-9]+$ ]] || [[ "$timeout_sec" -lt 1 ]]; then
       timeout_sec=10
@@ -263,9 +268,17 @@ collect_hana_version_json() {
     if [[ -n "$sid_user" ]] && id "$sid_user" >/dev/null 2>&1; then
       # Run as <sid>adm
       if command -v timeout >/dev/null 2>&1; then
-        version_raw="$(timeout "${timeout_sec}s" su - "$sid_user" -c "\"${hdb_path}\" version" 2>&1 | head -20 || true)"
+        if [[ -n "$hdb_path" ]]; then
+          version_raw="$(timeout "${timeout_sec}s" su - "$sid_user" -c "\"${hdb_path}\" version" 2>&1 | head -20 || true)"
+        else
+          version_raw="$(timeout "${timeout_sec}s" su - "$sid_user" -c "HDB version" 2>&1 | head -20 || true)"
+        fi
       else
-        version_raw="$(su - "$sid_user" -c "\"${hdb_path}\" version" 2>&1 | head -20 || true)"
+        if [[ -n "$hdb_path" ]]; then
+          version_raw="$(su - "$sid_user" -c "\"${hdb_path}\" version" 2>&1 | head -20 || true)"
+        else
+          version_raw="$(su - "$sid_user" -c "HDB version" 2>&1 | head -20 || true)"
+        fi
       fi
     else
       # Fallback: run directly (may fail if permissions are restricted)
@@ -292,7 +305,7 @@ collect_hana_version_json() {
   fi
 
   printf '{"available":%s,"sid":"%s","sid_user":"%s","path":"%s","version":"%s","branch":"%s","raw_output":"%s","error":"%s"}' \
-    "$([ -n "$hdb_path" ] && echo true || echo false)" \
+    "$([ -n "$hdb_path" ] && echo true || ([[ -n "$sid_user" ]] && id "$sid_user" >/dev/null 2>&1 && echo true || echo false))" \
     "$(json_escape "$sid")" \
     "$(json_escape "$sid_user")" \
     "$(json_escape "$hdb_path")" \
