@@ -243,16 +243,16 @@ collect_hana_version_json() {
     if [[ -n "$sid_user" ]] && id "$sid_user" >/dev/null 2>&1; then
       # Run as <sid>adm
       if command -v timeout >/dev/null 2>&1; then
-        version_raw="$(timeout "${timeout_sec}s" su - "$sid_user" -c "\"${hdb_path}\" -v" 2>&1 | head -20 || true)"
+        version_raw="$(timeout "${timeout_sec}s" su - "$sid_user" -c "\"${hdb_path}\" -V" 2>&1 | head -20 || true)"
       else
-        version_raw="$(su - "$sid_user" -c "\"${hdb_path}\" -v" 2>&1 | head -20 || true)"
+        version_raw="$(su - "$sid_user" -c "\"${hdb_path}\" -V" 2>&1 | head -20 || true)"
       fi
     else
       # Fallback: run directly (may fail if permissions are restricted)
       if command -v timeout >/dev/null 2>&1; then
-        version_raw="$(timeout "${timeout_sec}s" "$hdb_path" -v 2>&1 | head -20 || true)"
+        version_raw="$(timeout "${timeout_sec}s" "$hdb_path" -V 2>&1 | head -20 || true)"
       else
-        version_raw="$("$hdb_path" -v 2>&1 | head -20 || true)"
+        version_raw="$("$hdb_path" -V 2>&1 | head -20 || true)"
       fi
       if [[ -n "$sid_user" ]] && ! id "$sid_user" >/dev/null 2>&1; then
         version_error="User ${sid_user} nicht gefunden"
@@ -260,7 +260,7 @@ collect_hana_version_json() {
     fi
 
     version_raw="$(printf '%s' "$version_raw" | sed -e 's/[[:space:]]*$//')"
-    version_text="$(printf '%s\n' "$version_raw" | awk '/version:/ { gsub(/^[[:space:]]+version:[[:space:]]+/, ""); print; exit }')"
+    version_text="$(printf '%s\n' "$version_raw" | awk 'BEGIN { IGNORECASE=1 } /version:/ { gsub(/^[[:space:]]*[Vv]ersion:[[:space:]]+/, ""); print; exit }')"
     if [[ -z "$version_text" ]] && [[ -n "$version_raw" ]] && [[ -z "$version_error" ]]; then
       version_error="version nicht parsebar"
     elif [[ -z "$version_raw" ]] && [[ -z "$version_error" ]]; then
