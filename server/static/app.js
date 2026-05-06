@@ -3833,16 +3833,15 @@ function formatUtcPlus2(value) {
 
   const shifted = new Date(parsed.getTime() + 2 * 60 * 60 * 1000);
 
-  return `${shifted.toLocaleString("de-DE", {
+  return shifted.toLocaleString("de-DE", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
     hour12: false,
     timeZone: "UTC",
-  })} UTC+2`;
+  });
 }
 
 function formatUtcPlus2Short(isoUtc) {
@@ -4678,7 +4677,7 @@ function renderSingleHostCard(host) {
         <span>${escapeHtml(displayName)}</span>
       </strong>
       <span>🖥️ ${escapeHtml(hostname)}</span>
-      <span>🌐 ${escapeHtml(asText(host.primary_ip))} &nbsp;·&nbsp; 📬 ${hostDelivery}</span>
+      <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
       <span>⏱️ Zustellung: ${escapeHtml(hostDeliveryLag)}</span>
       <span>🧷 ${escapeHtml(asText(host.agent_version))} &nbsp;·&nbsp; 📦 ${Number(host.report_count || 0).toLocaleString("de-DE")}</span>
       <span>🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
