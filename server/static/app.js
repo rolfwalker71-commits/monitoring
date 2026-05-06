@@ -3844,6 +3844,14 @@ function formatUtcPlus2(value) {
   });
 }
 
+function formatFileSize(bytes) {
+  if (!bytes || bytes <= 0) return "-";
+  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + " GB";
+  if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + " MB";
+  if (bytes >= 1024) return (bytes / 1024).toFixed(0) + " KB";
+  return bytes + " B";
+}
+
 function formatUtcPlus2Short(isoUtc) {
   // Returns "DD.MM. HH:MM" (no year, no seconds) for compact inline display
   const parsed = new Date(isoUtc);
@@ -6060,11 +6068,14 @@ function renderBackupStatus(data) {
       const newestName = escapeHtml(newestLeaf || newestRaw || "-");
       const newestPath = newestParent ? `<div class="backup-status-newest-path" title="${escapeHtml(newestRaw)}">${escapeHtml(newestParent)}</div>` : "";
       const newestMod = d.newest_item_modified ? formatUtcPlus2Short(d.newest_item_modified) : "-";
+      const sizeBytes = d.newest_item_size_bytes || 0;
+      const sizeText = sizeBytes > 0 ? formatFileSize(sizeBytes) : "-";
       return `
         <tr>
           <td class="backup-status-dir-name" title="${escapeHtml(asText(d.subdir_path, ""))}">${subdirName}</td>
           <td class="backup-status-newest" title="${escapeHtml(newestRaw)}">${newestPath}<span class="backup-status-newest-name">${newestName}</span></td>
           <td class="backup-status-mod">${escapeHtml(newestMod)}</td>
+          <td class="backup-status-size">${escapeHtml(sizeText)}</td>
           <td class="backup-status-badge-cell"><span class="${badgeClass}">${badgeText}</span></td>
         </tr>`;
     }).join("");
@@ -6086,6 +6097,7 @@ function renderBackupStatus(data) {
               <th>Verzeichnis</th>
               <th>Neuester Eintrag</th>
               <th>Geändert (UTC+2)</th>
+              <th>Grösse</th>
               <th>Status (&lt;24h)</th>
             </tr></thead>
             <tbody>${dirRows}</tbody>
