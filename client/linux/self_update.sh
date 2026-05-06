@@ -67,9 +67,11 @@ version_is_newer() {
   [[ "$lowest" == "$older" ]]
 }
 
-if version_is_newer "$remote_version" "$local_version"; then
-  ts="$(date +"%d.%m.%Y %H:%M" 2>/dev/null || true)"
-  echo "${ts} Monitoring agent updated from $local_version to $remote_version"
+ts="$(date +"%d.%m.%Y %H:%M" 2>/dev/null || true)"
+if [[ "$remote_version" == "$local_version" ]]; then
+  echo "${ts} Monitoring agent already at ${local_version}, files refreshed"
+else
+  echo "${ts} Monitoring agent updated from ${local_version} to ${remote_version}"
 fi
 
 # Migration: remove old static DIR_SCAN_DEEP_PATHS that was auto-written by a
