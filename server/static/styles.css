@@ -4936,6 +4936,17 @@ body[data-theme="dark"] .dir-status-badge.missing {
   display: flex;
   align-items: center;
   gap: 6px;
+  line-height: 1.25;
+}
+
+.dir-deep-subdir-title .muted {
+  display: inline-flex;
+  align-items: center;
+}
+
+.dir-deep-subdir-title .dir-status-badge {
+  margin: 0 0 0 6px;
+  align-self: center;
 }
 
 .dir-deep-subdir-title::before {
