@@ -28,6 +28,7 @@ SAP_B1_SETUP_PATH="${SAP_B1_SETUP_PATH:-/usr/sap/SAPBusinessOne/setup}"
 SAP_B1_SIZE_TIMEOUT_SEC="${SAP_B1_SIZE_TIMEOUT_SEC:-20}"
 SAP_B1_VERSION_TIMEOUT_SEC="${SAP_B1_VERSION_TIMEOUT_SEC:-15}"
 HANA_VERSION_TIMEOUT_SEC="${HANA_VERSION_TIMEOUT_SEC:-10}"
+HANA_SID="${HANA_SID:-}"
 DIR_SCAN_PATHS="${DIR_SCAN_PATHS:-}"
 DIR_SCAN_MAX_ITEMS="${DIR_SCAN_MAX_ITEMS:-50}"
 DIR_SCAN_DEEP_PATHS="${DIR_SCAN_DEEP_PATHS:-}"
@@ -186,44 +187,93 @@ collect_sap_business_one_json() {
 }
 
 collect_hana_version_json() {
+  local sid="${HANA_SID:-}"
+  local sid_user=""
   local hdb_path=""
   local version_raw=""
   local version_text=""
   local version_error=""
 
-  local hdb_search_result=""
-  hdb_search_result="$(find /usr/sap -maxdepth 6 -name "hdbnsutil" -type f 2>/dev/null | head -1 || true)"
-  if [[ -n "$hdb_search_result" ]] && [[ -x "$hdb_search_result" ]]; then
-    hdb_path="$hdb_search_result"
+  # Auto-detect SID from /hana/shared/<SID> if not set in config
+  if [[ -z "$sid" ]] && [[ -d /hana/shared ]]; then
+    local detected_sid
+    detected_sid="$(find /hana/shared -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+      | awk -F/ '{print $NF}' \
+      | grep -E '^[A-Z][A-Z0-9]{2}$' \
+      | head -1 || true)"
+    if [[ -n "$detected_sid" ]]; then
+      sid="$detected_sid"
+      # Write detected SID back to agent.conf for future runs
+      if [[ -f "${CONFIG_FILE:-/etc/monitoring-agent/agent.conf}" ]] \
+         && ! grep -q '^HANA_SID=' "${CONFIG_FILE:-/etc/monitoring-agent/agent.conf}" 2>/dev/null; then
+        printf '\nHANA_SID="%s"\n' "$sid" >> "${CONFIG_FILE:-/etc/monitoring-agent/agent.conf}" 2>/dev/null || true
+      fi
+    fi
   fi
 
+  if [[ -n "$sid" ]]; then
+    sid_user="$(printf '%s' "$sid" | tr '[:upper:]' '[:lower:]')adm"
+  fi
+
+  # Find hdbnsutil under /usr/sap (prefer SID-specific path)
+  if [[ -n "$sid" ]]; then
+    local sid_search
+    sid_search="$(find "/usr/sap/${sid}" -maxdepth 5 -name "hdbnsutil" -type f 2>/dev/null | head -1 || true)"
+    if [[ -n "$sid_search" ]] && [[ -x "$sid_search" ]]; then
+      hdb_path="$sid_search"
+    fi
+  fi
+  if [[ -z "$hdb_path" ]]; then
+    local generic_search
+    generic_search="$(find /usr/sap -maxdepth 6 -name "hdbnsutil" -type f 2>/dev/null | head -1 || true)"
+    if [[ -n "$generic_search" ]] && [[ -x "$generic_search" ]]; then
+      hdb_path="$generic_search"
+    fi
+  fi
   if [[ -z "$hdb_path" ]]; then
     hdb_path="$(command -v hdbnsutil 2>/dev/null || true)"
   fi
 
   if [[ -n "$hdb_path" ]]; then
     local timeout_sec="$HANA_VERSION_TIMEOUT_SEC"
-    if ! [[  "$timeout_sec" =~ ^[0-9]+$ ]] || [[ "$timeout_sec" -lt 1 ]]; then
+    if ! [[ "$timeout_sec" =~ ^[0-9]+$ ]] || [[ "$timeout_sec" -lt 1 ]]; then
       timeout_sec=10
     fi
-    if command -v timeout >/dev/null 2>&1; then
-      version_raw="$(timeout "${timeout_sec}s" "$hdb_path" -v 2>&1 | head -20 || true)"
+
+    if [[ -n "$sid_user" ]] && id "$sid_user" >/dev/null 2>&1; then
+      # Run as <sid>adm
+      if command -v timeout >/dev/null 2>&1; then
+        version_raw="$(timeout "${timeout_sec}s" su - "$sid_user" -c "\"${hdb_path}\" -v" 2>&1 | head -20 || true)"
+      else
+        version_raw="$(su - "$sid_user" -c "\"${hdb_path}\" -v" 2>&1 | head -20 || true)"
+      fi
     else
-      version_raw="$("$hdb_path" -v 2>&1 | head -20 || true)"
+      # Fallback: run directly (may fail if permissions are restricted)
+      if command -v timeout >/dev/null 2>&1; then
+        version_raw="$(timeout "${timeout_sec}s" "$hdb_path" -v 2>&1 | head -20 || true)"
+      else
+        version_raw="$("$hdb_path" -v 2>&1 | head -20 || true)"
+      fi
+      if [[ -n "$sid_user" ]] && ! id "$sid_user" >/dev/null 2>&1; then
+        version_error="User ${sid_user} nicht gefunden"
+      fi
     fi
+
     version_raw="$(printf '%s' "$version_raw" | sed -e 's/[[:space:]]*$//')"
     version_text="$(printf '%s\n' "$version_raw" | awk '/version:/ { gsub(/^[[:space:]]+version:[[:space:]]+/, ""); print; exit }')"
-    if [[ -z "$version_text" ]] && [[ -n "$version_raw" ]]; then
+    if [[ -z "$version_text" ]] && [[ -n "$version_raw" ]] && [[ -z "$version_error" ]]; then
       version_error="version nicht parsebar"
-    elif [[ -z "$version_raw" ]]; then
+    elif [[ -z "$version_raw" ]] && [[ -z "$version_error" ]]; then
       version_error="hdbnsutil lieferte keine Ausgabe"
     fi
   else
     version_error="hdbnsutil nicht gefunden"
   fi
 
-  printf '{"available":%s,"path":"%s","version":"%s","error":"%s"}' \
+  printf '{"available":%s,"sid":"%s","sid_user":"%s","path":"%s","version":"%s","error":"%s"}' \
     "$([ -n "$hdb_path" ] && echo true || echo false)" \
+    "$(json_escape "$sid")" \
+    "$(json_escape "$sid_user")" \
     "$(json_escape "$hdb_path")" \
     "$(json_escape "$version_text")" \
     "$(json_escape "$version_error")"

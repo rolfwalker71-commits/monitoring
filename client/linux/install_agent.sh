@@ -195,6 +195,15 @@ if [[ -z "$DISPLAY_NAME" ]]; then
   DISPLAY_NAME="${DISPLAY_NAME:-$AGENT_ID}"
 fi
 
+# Auto-detect HANA SID from /hana/shared/<SID>
+DETECTED_HANA_SID=""
+if [[ -d /hana/shared ]]; then
+  DETECTED_HANA_SID="$(find /hana/shared -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+    | awk -F/ '{print $NF}' \
+    | grep -E '^[A-Z][A-Z0-9]{2}$' \
+    | head -1 || true)"
+fi
+
 cat > "$CONFIG_FILE" <<EOF
 SERVER_URL="$SERVER_URL"
 API_KEY="$API_KEY"
@@ -208,6 +217,7 @@ UPDATE_HOURS="$UPDATE_HOURS"
 PRIORITY_UPDATE_CHECK_MINUTES="60"
 UPDATE_LOG_FILE="$UPDATE_LOG_FILE"
 TLS_INSECURE="$CURL_INSECURE"
+HANA_SID="$DETECTED_HANA_SID"
 EOF
 
 chmod 0600 "$CONFIG_FILE"
