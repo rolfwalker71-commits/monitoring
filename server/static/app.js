@@ -3521,7 +3521,7 @@ function isBackupZipItem(item) {
   const type = asText(item && item.type, "").toLowerCase();
   const name = asText(item && item.name, "");
   const leafName = name.includes("/") ? name.slice(name.lastIndexOf("/") + 1) : name;
-  return type === "file" && /^bck_.*\.zip$/i.test(leafName);
+  return type === "file" && /\.zip$/i.test(leafName);
 }
 
 function renderDirItemRows(items, currentInfo) {
@@ -3659,9 +3659,11 @@ function renderDirListingsCard(payload) {
         const rawItems = Array.isArray(subdir.items) ? subdir.items : [];
         const items = rawItems.filter((item) => isBackupZipItem(item));
         const hasToday = items.some((item) => itemMatchesCurrent(item, currentInfo));
-        const total = Number(subdir.item_count_total || 0);
-        const totalNote = Number.isFinite(total) && total > items.length
-          ? ` <span class="muted">(${items.length} ZIP von ${total} gezeigt)</span>`
+        const zipTotal = Number(subdir.zip_item_count_total || 0);
+        const totalNote = Number.isFinite(zipTotal) && zipTotal > items.length
+          ? ` <span class="muted">(${items.length} ZIP von ${zipTotal} gezeigt)</span>`
+          : Number.isFinite(zipTotal) && zipTotal === items.length && zipTotal > 0
+          ? ` <span class="muted">(${items.length} ZIP)</span>`
           : "";
 
         return `
@@ -3670,7 +3672,7 @@ function renderDirListingsCard(payload) {
               📁 <span title="${escapeHtml(subdirPath)}">${escapeHtml(subdirName)}</span>${totalNote} ${renderCurrentStatusBadge(hasToday)}
             </summary>
             ${items.length === 0
-              ? `<p class="muted" style="margin:4px 0 0 0;">Keine bck_*.zip-Dateien gefunden.</p>`
+              ? `<p class="muted" style="margin:4px 0 0 0;">Keine *.zip-Dateien gefunden.</p>`
               : renderDirItemTable(items, currentInfo)
             }
           </details>

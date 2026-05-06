@@ -474,12 +474,15 @@ collect_dir_deep_listings_json() {
         root_find_raw="$(${root_find_cmd[*]} 2>/dev/null | sort -t$'\t' -k1 -rn || true)"
       fi
 
-      local root_total_count
+      local root_total_count root_zip_total_count
       if [[ -z "$root_find_raw" ]]; then
         root_total_count=0
+        root_zip_total_count=0
       else
         root_total_count="$(printf '%s\n' "$root_find_raw" | grep -c . || echo 0)"
         [[ "$root_total_count" =~ ^[0-9]+$ ]] || root_total_count=0
+        root_zip_total_count="$(printf '%s\n' "$root_find_raw" | awk -F'\t' 'tolower($4) ~ /\.zip$/ { c++ } END { print c+0 }' 2>/dev/null || echo 0)"
+        [[ "$root_zip_total_count" =~ ^[0-9]+$ ]] || root_zip_total_count=0
       fi
 
       while IFS=$'\t' read -r mtime_raw size_bytes ftype fname; do
@@ -505,15 +508,16 @@ collect_dir_deep_listings_json() {
 
       if [[ "$root_total_count" -gt 0 ]]; then
         local root_entry
-        root_entry="$(printf '{"name":"_root_files","path":"%s","item_count_total":%s,"items":[%s]}' \
+        root_entry="$(printf '{"name":"_root_files","path":"%s","item_count_total":%s,"zip_item_count_total":%s,"items":[%s]}' \
           "$(json_escape "$dir_path")" \
           "$root_total_count" \
+          "$root_zip_total_count" \
           "$root_items_json")"
         subdirs_json="$(append_json_entry "$subdirs_json" "$root_entry")"
       fi
 
       while IFS= read -r subdir_path; do
-        local subdir_name total_count items_json
+        local subdir_name total_count zip_total_count items_json
         subdir_name="$(basename "$subdir_path")"
         items_json=""
 
@@ -530,9 +534,12 @@ collect_dir_deep_listings_json() {
 
         if [[ -z "$find_raw" ]]; then
           total_count=0
+          zip_total_count=0
         else
           total_count="$(printf '%s\n' "$find_raw" | grep -c . || echo 0)"
           [[ "$total_count" =~ ^[0-9]+$ ]] || total_count=0
+          zip_total_count="$(printf '%s\n' "$find_raw" | awk -F'\t' 'tolower($4) ~ /\.zip$/ { c++ } END { print c+0 }' 2>/dev/null || echo 0)"
+          [[ "$zip_total_count" =~ ^[0-9]+$ ]] || zip_total_count=0
         fi
 
         while IFS=$'\t' read -r mtime_raw size_bytes ftype fname; do
@@ -558,10 +565,11 @@ collect_dir_deep_listings_json() {
         done < <(printf '%s\n' "$find_raw" | head -"$max_items")
 
         local subdir_entry
-        subdir_entry="$(printf '{"name":"%s","path":"%s","item_count_total":%s,"items":[%s]}' \
+        subdir_entry="$(printf '{"name":"%s","path":"%s","item_count_total":%s,"zip_item_count_total":%s,"items":[%s]}' \
           "$(json_escape "$subdir_name")" \
           "$(json_escape "$subdir_path")" \
           "$total_count" \
+          "$zip_total_count" \
           "$items_json")"
         subdirs_json="$(append_json_entry "$subdirs_json" "$subdir_entry")"
       done < <(find "$dir_path" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort)
