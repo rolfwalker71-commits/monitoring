@@ -5276,62 +5276,6 @@ async function loadHosts(options = {}) {
   }
 }
 
-function updateSummaryBand(report) {
-  const band = document.getElementById("hostSummaryBand");
-  if (!band) return;
-  if (!report) {
-    band.classList.add("hidden");
-    return;
-  }
-  const payload = report.payload || {};
-  const cpu = payload.cpu || {};
-  const memory = payload.memory || {};
-  const swap = payload.swap || {};
-  const openAlerts = Number(report.open_alert_count || 0);
-  const openCrit = Number(report.open_critical_alert_count || 0);
-
-  function pctClass(val) {
-    if (val >= 90) return "crit";
-    if (val >= 75) return "warn";
-    return "ok";
-  }
-
-  const cpuVal = Number(cpu.usage_percent || 0);
-  const ramVal = Number(memory.used_percent || 0);
-  const swapVal = Number(swap.used_percent || 0);
-
-  const cpuEl = document.getElementById("summaryValCpu");
-  const ramEl = document.getElementById("summaryValRam");
-  const swapEl = document.getElementById("summaryValSwap");
-  const statusEl = document.getElementById("summaryValStatus");
-
-  if (cpuEl) {
-    cpuEl.textContent = `${Math.round(cpuVal)}%`;
-    cpuEl.className = `summary-tile-value ${pctClass(cpuVal)}`;
-  }
-  if (ramEl) {
-    ramEl.textContent = `${Math.round(ramVal)}%`;
-    ramEl.className = `summary-tile-value ${pctClass(ramVal)}`;
-  }
-  if (swapEl) {
-    swapEl.textContent = `${Math.round(swapVal)}%`;
-    swapEl.className = `summary-tile-value ${pctClass(swapVal)}`;
-  }
-  if (statusEl) {
-    if (openCrit > 0) {
-      statusEl.textContent = `🔴 ${openCrit}`;
-      statusEl.className = "summary-tile-value crit";
-    } else if (openAlerts > 0) {
-      statusEl.textContent = `🟡 ${openAlerts}`;
-      statusEl.className = "summary-tile-value warn";
-    } else {
-      statusEl.textContent = "✅";
-      statusEl.className = "summary-tile-value ok";
-    }
-  }
-  band.classList.remove("hidden");
-}
-
 async function loadReportsForHost(options = {}) {
   const jumpToUtc = typeof options?.jumpToUtc === "string" ? options.jumpToUtc.trim() : "";
   const list = document.getElementById("reportList");
@@ -5342,7 +5286,6 @@ async function loadReportsForHost(options = {}) {
 
   if (!state.selectedHost) {
     state.currentReport = null;
-    updateSummaryBand(null);
     selectedHostTitle.textContent = "🗂️ Meldungen";
     count.textContent = "";
     if (reportJumpDateInput) {
@@ -5422,11 +5365,9 @@ async function loadReportsForHost(options = {}) {
     selectedHostTitle.textContent = `🗂️ ${state.selectedDisplayName}`;
     state.currentReport = reports[0];
     list.innerHTML = renderReportCard(state.currentReport);
-    updateSummaryBand(state.currentReport);
     updatePagerButtons();
   } catch (error) {
     state.currentReport = null;
-    updateSummaryBand(null);
     list.innerHTML = `<p class=\"muted\">Fehler: ${escapeHtml(error.message)}</p>`;
   }
 }
