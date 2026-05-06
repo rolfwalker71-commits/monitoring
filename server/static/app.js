@@ -6066,7 +6066,7 @@ function renderBackupStatus(data) {
       const newestLeaf = newestSlashIndex >= 0 ? newestRaw.slice(newestSlashIndex + 1) : newestRaw;
       const newestParent = newestSlashIndex >= 0 ? newestRaw.slice(0, newestSlashIndex) : "";
       const newestName = escapeHtml(newestLeaf || newestRaw || "-");
-      const newestPath = newestParent ? `<div class="backup-status-newest-path" title="${escapeHtml(newestRaw)}">${escapeHtml(newestParent)}</div>` : "";
+      const newestPath = newestParent ? `<div class="backup-status-newest-path" title="${escapeHtml(newestRaw)}">📁 ${escapeHtml(newestParent)}</div>` : "";
       const newestMod = d.newest_item_modified ? formatUtcPlus2Short(d.newest_item_modified) : "-";
       const sizeBytes = d.newest_item_size_bytes || 0;
       const sizeText = sizeBytes > 0 ? formatFileSize(sizeBytes) : "-";
