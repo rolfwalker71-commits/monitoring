@@ -517,14 +517,13 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 /* Host item enhancements */
 .host-item-favorite {
-  border-color: #c4830a;
-  border-left-color: #e09020;
-  background: linear-gradient(180deg, #332510 0%, #26190a 100%);
+  border-color: #e09a30;
+  background: linear-gradient(180deg, #7a4e10 0%, #6a3e08 100%);
 }
 
 .host-item-favorite:hover {
-  border-color: #d97706;
-  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.35);
+  border-color: #f0b040;
+  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.4);
 }
 
 .host-status-bar {
@@ -1117,14 +1116,14 @@ button:disabled {
 .hosts-column {
   align-self: start;
   overflow: hidden;
-  background: #0f1e35;
+  background: #1e3a5c;
   border-radius: 14px;
   padding: 10px 10px 12px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
 }
 
 body[data-theme="dark"] .hosts-column {
-  background: #080f1c;
+  background: #162e4a;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
 }
 
@@ -2186,40 +2185,39 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 }
 
 .host-item-hidden {
-  background: linear-gradient(180deg, #111e30 0%, #0d1826 100%);
+  background: linear-gradient(180deg, #2a4e72 0%, #223f60 100%);
   border-style: dashed;
-  border-color: #1a2f4a;
+  border-color: #4a7aaa;
   opacity: 0.7;
 }
 
 .host-os-icon {
   position: absolute;
-  top: 6px;
+  top: 7px;
   right: 8px;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   object-fit: contain;
   opacity: 1;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
   pointer-events: none;
 }
 
 .host-flag-icon {
   position: absolute;
-  bottom: 8px;
+  bottom: 7px;
   right: 8px;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   object-fit: contain;
   opacity: 1;
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
   background: transparent;
   pointer-events: none;
 }
 
 .host-item:hover {
-  border-color: #5a8ec8;
-  box-shadow: 0 4px 14px rgba(59, 110, 168, 0.45);
+  border-color: #90c0f0;
+  background: linear-gradient(180deg, #4a80b8 0%, #3a6aa8 100%);
+  box-shadow: 0 4px 14px rgba(59, 110, 168, 0.4);
   transform: translateY(-1px);
 }
 
@@ -2229,7 +2227,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   font-size: 14px;
   font-weight: 800;
   line-height: 1.1;
-  color: #d4e4f7;
+  color: #ffffff;
 }
 
 .host-title-line {
@@ -4290,8 +4288,8 @@ body[data-theme="dark"] .ih-host-card {
 
 /* ── Dark Mode: Host list items ───────────────────────────── */
 body[data-theme="dark"] .host-item {
-  border-color: #4a7ab8;
-  background: linear-gradient(180deg, #2a5080 0%, #224470 100%);
+  border-color: #6a9acc;
+  background: linear-gradient(180deg, #3a6ea0 0%, #2e5e8e 100%);
 }
 
 body[data-theme="dark"] .host-item-hidden {
@@ -5193,9 +5191,9 @@ body[data-theme="dark"] .backup-status-stale {
 /* ── Redesign: Sidebar Filters ───────────────────────────── */
 .sidebar-filters {
   margin: 8px 0 6px;
-  border: 1px solid #2a4a6e;
+  border: 1px solid #4a7aaa;
   border-radius: 8px;
-  background: #112030;
+  background: #163050;
   padding: 8px;
 }
 
@@ -5446,10 +5444,10 @@ body[data-theme="dark"] .view-tabs .tab-button.active {
 
 /* ── Redesign: Dark mode fixes for existing dark host-item overrides ── */
 body[data-theme="dark"] .host-item {
-  border-color: #4a7ab8;
-  background: linear-gradient(180deg, #2a5080 0%, #224470 100%);
-  color: #e0eefa;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  border-color: #6a9acc;
+  background: linear-gradient(180deg, #3a6ea0 0%, #2e5e8e 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 body[data-theme="dark"] .host-item:hover {
