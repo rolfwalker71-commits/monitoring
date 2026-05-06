@@ -6882,7 +6882,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     except (TypeError, ValueError):
                         continue
 
-                    total_kb_value = fs.get("total_kb", fs.get("size_total_kb"))
+                    total_kb_value = fs.get("blocks", fs.get("total_kb", fs.get("size_total_kb")))
                     try:
                         total_kb = float(total_kb_value)
                     except (TypeError, ValueError):

@@ -2983,7 +2983,7 @@ function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
         <article class="fs-chart-card${alertLevel ? ` trend-alert-card-${alertLevel}` : ""}">
           <header>
             <strong>${mountpoint}</strong>
-            <span>${Number(item.sample_count || 0).toLocaleString("de-DE")} Samples | Größe: ${escapeHtml(fsTotalLabel)}</span>
+            <span>${Number(item.sample_count || 0).toLocaleString("de-DE")} Samples | Grösse: ${escapeHtml(fsTotalLabel)}</span>
           </header>
           ${buildSparklineSvg(points, color, 520, 150, { suffix: "%", minValue: 0, maxValue: 100, trendColor: usedTrendColor })}
           <footer>
