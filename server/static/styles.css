@@ -91,7 +91,7 @@ body[data-theme="dark"] {
 }
 
 .login-product-title {
-  margin: 6px 0 2px;
+  margin: 6px 0 10px;
   font-size: 26px;
   line-height: 1.1;
   font-weight: 700;
