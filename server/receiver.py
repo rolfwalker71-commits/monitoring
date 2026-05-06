@@ -1274,6 +1274,67 @@ def _compact_ai_context_for_prompt(context_payload: dict) -> dict:
     return compact
 
 
+def _mini_ai_context_for_prompt(context_payload: dict) -> dict:
+    """Emergency context for timeout retry: keep only highest-signal fields."""
+    metric = str(context_payload.get("metric", "") or "")
+    compact: dict = {
+        "hostname": context_payload.get("hostname", ""),
+        "metric": metric,
+        "metric_label": context_payload.get("metric_label", ""),
+        "window_hours": context_payload.get("window_hours", 24),
+        "latest_report_time_utc": context_payload.get("latest_report_time_utc", ""),
+        "os_family": context_payload.get("os_family", "linux"),
+        "has_hana_processes": context_payload.get("has_hana_processes", False),
+        "metric_summary": context_payload.get("metric_summary", {}),
+        "hana_processes": list(context_payload.get("hana_processes", []))[:8],
+        "top_processes": list(context_payload.get("top_processes", []))[:5],
+        "open_alerts": list(context_payload.get("open_alerts", []))[:5],
+    }
+
+    if metric == "filesystem":
+        fs_all = context_payload.get("filesystem_trends", [])
+        if not isinstance(fs_all, list):
+            fs_all = []
+        by_full = sorted(fs_all, key=lambda item: float((item or {}).get("current_used_percent", 0.0) or 0.0), reverse=True)
+        by_growth = sorted(fs_all, key=lambda item: float((item or {}).get("delta_used_percent", 0.0) or 0.0), reverse=True)
+        hana_related = [
+            item for item in fs_all
+            if isinstance(item, dict) and str(item.get("mountpoint", "") or "").lower().startswith("/hana/")
+        ]
+        merged: list[dict] = []
+        seen_mounts: set[str] = set()
+        for bucket in (hana_related, by_full[:8], by_growth[:8]):
+            for item in bucket:
+                if not isinstance(item, dict):
+                    continue
+                mount = str(item.get("mountpoint", "") or "")
+                if not mount or mount in seen_mounts:
+                    continue
+                seen_mounts.add(mount)
+                merged.append(item)
+                if len(merged) >= 12:
+                    break
+            if len(merged) >= 12:
+                break
+        compact["filesystem_trends"] = _compact_filesystem_for_prompt(merged, limit=12)
+    else:
+        compact["metric_series"] = _safe_sample_series(list(context_payload.get("metric_series", [])), max_points=10)
+        correlated = context_payload.get("correlated_series", {})
+        if isinstance(correlated, dict):
+            compact["correlated_series"] = {
+                "cpu_usage_percent": _safe_sample_series(list(correlated.get("cpu_usage_percent", [])), max_points=10),
+                "memory_used_percent": _safe_sample_series(list(correlated.get("memory_used_percent", [])), max_points=10),
+                "swap_used_percent": _safe_sample_series(list(correlated.get("swap_used_percent", [])), max_points=10),
+            }
+
+    return compact
+
+
+def _is_timeout_exception(exc: Exception) -> bool:
+    text = str(exc or "").lower()
+    return "timed out" in text or "timeout" in text
+
+
 def _collect_ai_metric_context(conn: sqlite3.Connection, hostname: str, metric: str, hours: int) -> dict:
     metric_map = {
         "cpu_usage_percent": ("CPU", ("cpu", "usage_percent")),
@@ -1529,31 +1590,35 @@ def _openai_troubleshoot(context_payload: dict, ai_settings: dict | None = None)
         "   aktuelle Groesse (total_kb) und Auslastung je Mountpoint. Beruecksichtige besonders /hana/data und /hana/log, "
         "   nenne proaktive HANA-Massnahmen, bevor ein Filesystem voll laeuft."
     )
-    prompt_user = (
-        "Analysiere diese Host-Metrik fuer Troubleshooting. "
-        "Fokussiere auf die Zielmetrik, nutze korrelierte Metriken, top_processes, hana_processes und offene Alerts. "
-        "Kontext JSON:\n" + context_json
-    )
-
-    body = {
-        "model": ai_settings["model"],
-        "temperature": 0.2,
-        "max_tokens": ai_settings["max_tokens"],
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {"role": "system", "content": prompt_system},
-            {"role": "user", "content": prompt_user},
-        ],
-    }
-    req = request.Request(
-        "https://api.openai.com/v1/chat/completions",
-        data=json.dumps(body).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {ai_settings['api_key']}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
+    def _perform_request(context_text: str, *, max_tokens: int, timeout_sec: int) -> str:
+        body = {
+            "model": ai_settings["model"],
+            "temperature": 0.2,
+            "max_tokens": max_tokens,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": prompt_system},
+                {
+                    "role": "user",
+                    "content": (
+                        "Analysiere diese Host-Metrik fuer Troubleshooting. "
+                        "Fokussiere auf die Zielmetrik, nutze korrelierte Metriken, top_processes, hana_processes und offene Alerts. "
+                        "Kontext JSON:\n" + context_text
+                    ),
+                },
+            ],
+        }
+        req = request.Request(
+            "https://api.openai.com/v1/chat/completions",
+            data=json.dumps(body).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {ai_settings['api_key']}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with request.urlopen(req, timeout=timeout_sec) as response:
+            return response.read().decode("utf-8", errors="replace")
 
     request_timeout = max(3, int(ai_settings["timeout_sec"] or 12))
     if str(context_payload.get("metric", "") or "") == "filesystem":
@@ -1561,13 +1626,26 @@ def _openai_troubleshoot(context_payload: dict, ai_settings: dict | None = None)
         request_timeout = max(request_timeout, 25)
 
     try:
-        with request.urlopen(req, timeout=request_timeout) as response:
-            raw = response.read().decode("utf-8", errors="replace")
+        raw = _perform_request(context_json, max_tokens=int(ai_settings["max_tokens"]), timeout_sec=request_timeout)
     except error.HTTPError as exc:
         details = exc.read().decode("utf-8", errors="replace")[:400]
         raise RuntimeError(f"OpenAI HTTP {exc.code}: {details}")
     except Exception as exc:
-        raise RuntimeError(f"OpenAI request failed: {exc}")
+        if _is_timeout_exception(exc):
+            try:
+                mini_context_json = json.dumps(_mini_ai_context_for_prompt(context_payload), ensure_ascii=False)
+                raw = _perform_request(
+                    mini_context_json,
+                    max_tokens=max(512, min(int(ai_settings["max_tokens"]), 900)),
+                    timeout_sec=max(request_timeout, 35),
+                )
+            except error.HTTPError as retry_exc:
+                details = retry_exc.read().decode("utf-8", errors="replace")[:400]
+                raise RuntimeError(f"OpenAI HTTP {retry_exc.code} (mini-context retry): {details}")
+            except Exception as retry_exc:
+                raise RuntimeError(f"OpenAI request failed after mini-context retry: {retry_exc}")
+        else:
+            raise RuntimeError(f"OpenAI request failed: {exc}")
 
     try:
         parsed = json.loads(raw)
