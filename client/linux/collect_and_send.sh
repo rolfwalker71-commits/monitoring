@@ -218,16 +218,17 @@ collect_hana_version_json() {
   fi
 
   # Find HDB under /usr/sap (prefer SID-specific path)
+  # Use -not -type d to also match symlinks (HDB is often a symlink in HANA)
   if [[ -n "$sid" ]]; then
     local sid_search
-    sid_search="$(find "/usr/sap/${sid}" -maxdepth 5 -name "HDB" -type f 2>/dev/null | head -1 || true)"
+    sid_search="$(find "/usr/sap/${sid}" -maxdepth 5 -name "HDB" -not -type d 2>/dev/null | head -1 || true)"
     if [[ -n "$sid_search" ]] && [[ -x "$sid_search" ]]; then
       hdb_path="$sid_search"
     fi
   fi
   if [[ -z "$hdb_path" ]]; then
     local generic_search
-    generic_search="$(find /usr/sap -maxdepth 6 -name "HDB" -type f 2>/dev/null | head -1 || true)"
+    generic_search="$(find /usr/sap -maxdepth 6 -name "HDB" -not -type d 2>/dev/null | head -1 || true)"
     if [[ -n "$generic_search" ]] && [[ -x "$generic_search" ]]; then
       hdb_path="$generic_search"
     fi
@@ -236,10 +237,10 @@ collect_hana_version_json() {
   # Fallback: derive HDB path from hdbnsutil directory
   if [[ -z "$hdb_path" ]]; then
     if [[ -n "$sid" ]]; then
-      hdbnsutil_path="$(find "/usr/sap/${sid}" -maxdepth 5 -name "hdbnsutil" -type f 2>/dev/null | head -1 || true)"
+      hdbnsutil_path="$(find "/usr/sap/${sid}" -maxdepth 5 -name "hdbnsutil" -not -type d 2>/dev/null | head -1 || true)"
     fi
     if [[ -z "$hdbnsutil_path" ]]; then
-      hdbnsutil_path="$(find /usr/sap -maxdepth 6 -name "hdbnsutil" -type f 2>/dev/null | head -1 || true)"
+      hdbnsutil_path="$(find /usr/sap -maxdepth 6 -name "hdbnsutil" -not -type d 2>/dev/null | head -1 || true)"
     fi
     if [[ -n "$hdbnsutil_path" ]] && [[ -x "$hdbnsutil_path" ]]; then
       local sibling_hdb
