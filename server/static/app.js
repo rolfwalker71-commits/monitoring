@@ -3414,6 +3414,28 @@ function renderSapB1SystemInfoCard(payload) {
   const rawOutput = asText(versionBlock.raw_output, "");
   const hanaInfo = payload && typeof payload.hana_info === "object" ? payload.hana_info : null;
   const hanaRawOutput = asText(hanaInfo?.raw_output, "");
+  const hanaVersion = asText(hanaInfo?.version, "");
+  const hanaBranch = asText(hanaInfo?.branch, "");
+  const hanaSid = asText(hanaInfo?.sid, "");
+  const hanaAvailable = hanaInfo?.available === true;
+  const hanaError = asText(hanaInfo?.error, "");
+
+  let hanaInfoRows = "";
+  if (!hanaInfo) {
+    hanaInfoRows = `<p class="muted">Kein HANA-Scan im Payload (Agent-Update erforderlich)</p>`;
+  } else if (!hanaAvailable) {
+    hanaInfoRows = `<p class="muted">HANA nicht gefunden${hanaError ? " — " + escapeHtml(hanaError) : ""}</p>`;
+  } else {
+    hanaInfoRows = `
+      <table class="sap-b1-info-table">
+        <tbody>
+          ${hanaSid ? `<tr><th>SID</th><td>${escapeHtml(hanaSid)}</td></tr>` : ""}
+          ${hanaVersion ? `<tr><th>Version</th><td>${escapeHtml(hanaVersion)}</td></tr>` : ""}
+          ${hanaBranch ? `<tr><th>Branch</th><td>${escapeHtml(hanaBranch)}</td></tr>` : ""}
+        </tbody>
+      </table>
+    `;
+  }
 
   return `
     <section class="detail-card sap-b1-card">
@@ -3424,8 +3446,9 @@ function renderSapB1SystemInfoCard(payload) {
           <pre class="sap-b1-raw-output">${escapeHtml(rawOutput || "-")}</pre>
         </details>
         <details class="sap-b1-raw-details">
-          <summary class="sap-b1-raw-summary">HANA Versions-Scan Roh-Output</summary>
-          <pre class="sap-b1-raw-output">${escapeHtml(hanaRawOutput || "nicht verfügbar")}</pre>
+          <summary class="sap-b1-raw-summary">HANA Versions-Scan</summary>
+          ${hanaInfoRows}
+          ${hanaRawOutput ? `<pre class="sap-b1-raw-output">${escapeHtml(hanaRawOutput)}</pre>` : ""}
         </details>
       </div>
     </section>
@@ -4131,6 +4154,14 @@ function renderReportCard(report) {
   const queueDepth = queueDepthLabel(payload.queue_depth);
   const section = normalizeReportSection(state.reportSection);
   const sapB1Summary = renderSapB1SystemSummary(payload);
+  const hanaInfoMeta = (function() {
+    const hi = payload && typeof payload.hana_info === "object" ? payload.hana_info : null;
+    if (!hi || !hi.available) return "-";
+    const v = asText(hi.version, "");
+    const b = asText(hi.branch, "");
+    if (v && b) return `${v} (${b})`;
+    return v || b || "-";
+  })();
 
   // Helper function to render meta-group items
   function renderMetaItem(icon, label, value) {
@@ -4162,6 +4193,7 @@ function renderReportCard(report) {
         ${renderMetaItem("⏱️", "Uptime", formatUptime(payload.uptime_seconds))}
         ${renderMetaItem("🗃️", "Queue", queueDepth + " Dateien")}
         ${renderMetaItem("🧾", "SAP B1", sapB1Summary)}
+        ${renderMetaItem("🟢", "HANA", hanaInfoMeta)}
       </div>
     </div>
   `;
