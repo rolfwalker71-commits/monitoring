@@ -1114,21 +1114,21 @@ button:disabled {
 
 .hosts-column {
   align-self: start;
-  background: linear-gradient(180deg, #3a3f4b 0%, #2d3240 100%);
-  border: 1px solid #4e5668;
+  background: linear-gradient(180deg, #7e8896 0%, #6a7585 100%);
+  border: 1px solid #8e99a8;
   border-radius: 14px;
   padding: 12px 10px 12px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    0 8px 28px rgba(0, 0, 0, 0.28);
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 6px 20px rgba(0, 0, 0, 0.18);
 }
 
 body[data-theme="dark"] .hosts-column {
-  background: linear-gradient(180deg, #2a2f3a 0%, #1e2330 100%);
-  border-color: #3a4255;
+  background: linear-gradient(180deg, #5a636f 0%, #4a5360 100%);
+  border-color: #6a7585;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 8px 28px rgba(0, 0, 0, 0.5);
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 6px 20px rgba(0, 0, 0, 0.35);
 }
 
 .hosts-column-scroll {
@@ -1149,21 +1149,22 @@ body[data-theme="dark"] .hosts-column {
   gap: 8px;
   margin-bottom: 8px;
   padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.22);
 }
 
 .sidebar-card-header h3 {
   margin: 0;
   font-size: 13px;
   font-weight: 800;
-  color: #c8d8ee;
+  color: #ffffff;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
 .sidebar-card-header .count {
   font-size: 10px;
-  color: #8a9ab8;
+  color: #dce8f5;
   text-align: right;
   flex-shrink: 1;
   min-width: 0;
@@ -1173,7 +1174,7 @@ body[data-theme="dark"] .hosts-column {
 .sidebar-tools {
   margin-bottom: 8px;
   padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .sidebar-tools .host-filters {
@@ -1188,37 +1189,39 @@ body[data-theme="dark"] .hosts-column {
 }
 
 .sidebar-tools .search-input {
-  background: rgba(0, 0, 0, 0.25);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: #d0ddef;
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
   border-radius: 6px;
   font-size: 12px;
 }
 
 .sidebar-tools .search-input::placeholder {
-  color: #6a7a98;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .sidebar-tools .search-input:focus {
-  border-color: #6a9ae8;
-  background: rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.25);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(106, 154, 232, 0.25);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
 }
 
 .sidebar-tools .host-filter-control {
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
   min-width: 0;
   font-size: 11px;
   font-weight: 600;
-  color: #8a9ab8;
+  color: #e8edf3;
 }
 
 .sidebar-tools .host-filter-control > span:first-child {
-  flex: 0 0 36px;
-  color: #8a9ab8;
+  flex: 0 0 40px;
+  text-align: left;
+  color: #dce4ee;
 }
 
 .sidebar-tools .host-filter-control select {
@@ -1226,10 +1229,10 @@ body[data-theme="dark"] .hosts-column {
   min-width: 0;
   font-size: 11px;
   padding: 3px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 5px;
-  background: rgba(0, 0, 0, 0.25);
-  color: #c8d8ee;
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
   cursor: pointer;
 }
 
@@ -1250,9 +1253,9 @@ body[data-theme="dark"] .hosts-column {
   min-width: 26px;
   padding: 0 7px;
   font-size: 11px;
-  background: rgba(0, 0, 0, 0.25);
-  border-color: rgba(255, 255, 255, 0.15);
-  color: #c0d0e8;
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #ffffff;
 }
 
 .sidebar-tools .icon-filter-chip:hover {
@@ -1281,9 +1284,9 @@ body[data-theme="dark"] .hosts-column {
   min-height: 26px;
   padding: 0 10px;
   font-size: 11px;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #8a9ab8;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.8);
   border-radius: 5px;
 }
 
@@ -1296,7 +1299,7 @@ body[data-theme="dark"] .hosts-column {
 
 /* Host group titles in sidebar */
 .hosts-column .host-group-title {
-  color: #8a9ab8;
+  color: #b8c8dc;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
@@ -1304,7 +1307,7 @@ body[data-theme="dark"] .hosts-column {
 }
 
 .hosts-column .count {
-  color: #8a9ab8;
+  color: #dce8f5;
 }
 
 .title-row {
