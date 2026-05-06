@@ -70,9 +70,17 @@ body[data-theme="dark"] {
   margin: 2px 0 0;
 }
 
+.login-brand {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 4px;
+}
+
 .login-logo {
   width: 112px;
   height: 112px;
+  margin: 0 auto;
 }
 
 .login-logo img {
@@ -80,6 +88,24 @@ body[data-theme="dark"] {
   height: 100%;
   object-fit: contain;
   display: block;
+}
+
+.login-product-title {
+  margin: 6px 0 2px;
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 700;
+  color: #1e3a5f;
+}
+
+.login-card h2 {
+  margin: 0;
+  text-align: center;
+}
+
+.login-card .muted {
+  margin: 0 0 4px;
+  text-align: center;
 }
 
   .login-ang-logo {
