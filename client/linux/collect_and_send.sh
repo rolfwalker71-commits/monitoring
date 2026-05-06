@@ -474,19 +474,35 @@ collect_dir_deep_listings_json() {
         root_find_raw="$(${root_find_cmd[*]} 2>/dev/null | sort -t$'\t' -k1 -rn || true)"
       fi
 
-      local root_total_count root_zip_total_count
+      local root_total_count root_zip_total_count root_zip_latest_modified_utc
       if [[ -z "$root_find_raw" ]]; then
         root_total_count=0
         root_zip_total_count=0
+        root_zip_latest_modified_utc=""
       else
         root_total_count="$(printf '%s\n' "$root_find_raw" | grep -c . || echo 0)"
         [[ "$root_total_count" =~ ^[0-9]+$ ]] || root_total_count=0
         root_zip_total_count="$(printf '%s\n' "$root_find_raw" | awk -F'\t' 'tolower($4) ~ /\.zip$/ { c++ } END { print c+0 }' 2>/dev/null || echo 0)"
         [[ "$root_zip_total_count" =~ ^[0-9]+$ ]] || root_zip_total_count=0
+        root_zip_latest_modified_utc="$(printf '%s\n' "$root_find_raw" | awk -F'\t' 'tolower($4) ~ /\.zip$/ { print $1; exit }' 2>/dev/null || echo "")"
+        if [[ -n "$root_zip_latest_modified_utc" ]]; then
+          local _root_zip_epoch
+          _root_zip_epoch="${root_zip_latest_modified_utc%%.*}"
+          if [[ "$_root_zip_epoch" =~ ^[0-9]+$ ]] && [[ "$_root_zip_epoch" -gt 0 ]]; then
+            root_zip_latest_modified_utc="$(date -u -d "@$_root_zip_epoch" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")"
+          else
+            root_zip_latest_modified_utc=""
+          fi
+        fi
       fi
 
+      local root_zip_shown=0
       while IFS=$'\t' read -r mtime_raw size_bytes ftype fname; do
         [[ -n "$fname" ]] || continue
+        [[ "${fname,,}" == *.zip ]] || continue
+        if [[ "$root_zip_shown" -ge "$max_items" ]]; then
+          break
+        fi
         local item_type mtime_epoch_int mtime_iso item_entry
         case "$ftype" in
           l) item_type="link" ;;
@@ -504,20 +520,22 @@ collect_dir_deep_listings_json() {
           "$size_bytes" \
           "$(json_escape "$mtime_iso")")"
         root_items_json="$(append_json_entry "$root_items_json" "$item_entry")"
-      done < <(printf '%s\n' "$root_find_raw" | head -"$max_items")
+        root_zip_shown=$((root_zip_shown + 1))
+      done < <(printf '%s\n' "$root_find_raw")
 
       if [[ "$root_total_count" -gt 0 ]]; then
         local root_entry
-        root_entry="$(printf '{"name":"_root_files","path":"%s","item_count_total":%s,"zip_item_count_total":%s,"items":[%s]}' \
+        root_entry="$(printf '{"name":"_root_files","path":"%s","item_count_total":%s,"zip_item_count_total":%s,"zip_latest_modified_utc":"%s","items":[%s]}' \
           "$(json_escape "$dir_path")" \
           "$root_total_count" \
           "$root_zip_total_count" \
+          "$(json_escape "$root_zip_latest_modified_utc")" \
           "$root_items_json")"
         subdirs_json="$(append_json_entry "$subdirs_json" "$root_entry")"
       fi
 
       while IFS= read -r subdir_path; do
-        local subdir_name total_count zip_total_count items_json
+        local subdir_name total_count zip_total_count zip_latest_modified_utc items_json
         subdir_name="$(basename "$subdir_path")"
         items_json=""
 
@@ -535,15 +553,31 @@ collect_dir_deep_listings_json() {
         if [[ -z "$find_raw" ]]; then
           total_count=0
           zip_total_count=0
+          zip_latest_modified_utc=""
         else
           total_count="$(printf '%s\n' "$find_raw" | grep -c . || echo 0)"
           [[ "$total_count" =~ ^[0-9]+$ ]] || total_count=0
           zip_total_count="$(printf '%s\n' "$find_raw" | awk -F'\t' 'tolower($4) ~ /\.zip$/ { c++ } END { print c+0 }' 2>/dev/null || echo 0)"
           [[ "$zip_total_count" =~ ^[0-9]+$ ]] || zip_total_count=0
+          zip_latest_modified_utc="$(printf '%s\n' "$find_raw" | awk -F'\t' 'tolower($4) ~ /\.zip$/ { print $1; exit }' 2>/dev/null || echo "")"
+          if [[ -n "$zip_latest_modified_utc" ]]; then
+            local _zip_epoch
+            _zip_epoch="${zip_latest_modified_utc%%.*}"
+            if [[ "$_zip_epoch" =~ ^[0-9]+$ ]] && [[ "$_zip_epoch" -gt 0 ]]; then
+              zip_latest_modified_utc="$(date -u -d "@$_zip_epoch" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")"
+            else
+              zip_latest_modified_utc=""
+            fi
+          fi
         fi
 
+        local zip_shown=0
         while IFS=$'\t' read -r mtime_raw size_bytes ftype fname; do
           [[ -n "$fname" ]] || continue
+          [[ "${fname,,}" == *.zip ]] || continue
+          if [[ "$zip_shown" -ge "$max_items" ]]; then
+            break
+          fi
           local item_type mtime_epoch_int mtime_iso item_entry
           case "$ftype" in
             d) item_type="dir" ;;
@@ -562,14 +596,16 @@ collect_dir_deep_listings_json() {
             "$size_bytes" \
             "$(json_escape "$mtime_iso")")"
           items_json="$(append_json_entry "$items_json" "$item_entry")"
-        done < <(printf '%s\n' "$find_raw" | head -"$max_items")
+          zip_shown=$((zip_shown + 1))
+        done < <(printf '%s\n' "$find_raw")
 
         local subdir_entry
-        subdir_entry="$(printf '{"name":"%s","path":"%s","item_count_total":%s,"zip_item_count_total":%s,"items":[%s]}' \
+        subdir_entry="$(printf '{"name":"%s","path":"%s","item_count_total":%s,"zip_item_count_total":%s,"zip_latest_modified_utc":"%s","items":[%s]}' \
           "$(json_escape "$subdir_name")" \
           "$(json_escape "$subdir_path")" \
           "$total_count" \
           "$zip_total_count" \
+          "$(json_escape "$zip_latest_modified_utc")" \
           "$items_json")"
         subdirs_json="$(append_json_entry "$subdirs_json" "$subdir_entry")"
       done < <(find "$dir_path" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort)

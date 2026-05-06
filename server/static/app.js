@@ -3510,6 +3510,19 @@ function itemMatchesCurrent(item, currentInfo) {
   return ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
 }
 
+function timestampIsCurrent(modRaw, currentInfo) {
+  const raw = asText(modRaw, "");
+  if (!raw) {
+    return false;
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return false;
+  }
+  const ageMs = currentInfo.nowMs - parsed.getTime();
+  return ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
+}
+
 function renderCurrentStatusBadge(hasCurrent) {
   if (hasCurrent) {
     return '<span class="dir-status-badge ok">Backup gefunden (&lt;24h)</span>';
@@ -3658,7 +3671,10 @@ function renderDirListingsCard(payload) {
         const subdirPath = asText(subdir.path, subdirName);
         const rawItems = Array.isArray(subdir.items) ? subdir.items : [];
         const items = rawItems.filter((item) => isBackupZipItem(item));
-        const hasToday = items.some((item) => itemMatchesCurrent(item, currentInfo));
+        const latestZipTs = asText(subdir.zip_latest_modified_utc, "");
+        const hasToday = latestZipTs
+          ? timestampIsCurrent(latestZipTs, currentInfo)
+          : items.some((item) => itemMatchesCurrent(item, currentInfo));
         const zipTotal = Number(subdir.zip_item_count_total || 0);
         const totalNote = Number.isFinite(zipTotal) && zipTotal > items.length
           ? ` <span class="muted">(${items.length} ZIP von ${zipTotal} gezeigt)</span>`
