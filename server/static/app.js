@@ -96,6 +96,7 @@ const state = {
   deliveryCountsCache: {},
   deliveryCountsLoading: false,
   analysisLatestDeliveryLabel: "LIVE",
+  alertMutesRefreshInFlight: false,
 };
 
 function normalizeHostInterestMode(value) {
@@ -4814,10 +4815,7 @@ async function loadHosts(options = {}) {
 
   try {
     const url = `/api/v1/hosts?limit=${state.hostLimit}&offset=${state.hostOffset}`;
-    const [response] = await Promise.all([
-      fetch(url),
-      loadAlertMutes(),
-    ]);
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error("HTTP " + response.status);
     }
@@ -4867,6 +4865,22 @@ async function loadHosts(options = {}) {
       hostList.scrollTop = previousScrollTop;
     }
     updatePagerButtons();
+
+    // Refresh muted-alert metadata in the background so host cards appear fast.
+    if (!state.alertMutesRefreshInFlight) {
+      state.alertMutesRefreshInFlight = true;
+      loadAlertMutes()
+        .then(() => {
+          const currentScrollTop = hostList ? hostList.scrollTop : 0;
+          renderHosts(state.hosts || []);
+          if (hostList) {
+            hostList.scrollTop = currentScrollTop;
+          }
+        })
+        .finally(() => {
+          state.alertMutesRefreshInFlight = false;
+        });
+    }
   } catch (error) {
     hostList.innerHTML = `<p class=\"muted\">Fehler: ${escapeHtml(error.message)}</p>`;
   }
