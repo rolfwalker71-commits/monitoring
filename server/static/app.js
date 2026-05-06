@@ -2098,7 +2098,7 @@ async function saveAlarmSettings() {
   // Refresh the "API key is set" hint from the server response
   const hint = document.getElementById("openaiApiKeyIsSetHint");
   if (hint) {
-    hint.textContent = data.openai_api_key_is_set ? "API Key ist gesetzt." : "Kein API Key gespeichert.";
+    hint.textContent = data.settings?.openai_api_key_is_set ? "API Key ist gesetzt." : "Kein API Key gespeichert.";
   }
   // Clear the API key input after save
   const keyInput = document.getElementById("openaiApiKeyInput");
