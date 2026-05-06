@@ -190,6 +190,7 @@ collect_hana_version_json() {
   local sid="${HANA_SID:-}"
   local sid_user=""
   local hdb_path=""
+  local hdbnsutil_path=""
   local version_raw=""
   local version_text=""
   local version_error=""
@@ -215,23 +216,40 @@ collect_hana_version_json() {
     sid_user="$(printf '%s' "$sid" | tr '[:upper:]' '[:lower:]')adm"
   fi
 
-  # Find hdbnsutil under /usr/sap (prefer SID-specific path)
+  # Find HDB under /usr/sap (prefer SID-specific path)
   if [[ -n "$sid" ]]; then
     local sid_search
-    sid_search="$(find "/usr/sap/${sid}" -maxdepth 5 -name "hdbnsutil" -type f 2>/dev/null | head -1 || true)"
+    sid_search="$(find "/usr/sap/${sid}" -maxdepth 5 -name "HDB" -type f 2>/dev/null | head -1 || true)"
     if [[ -n "$sid_search" ]] && [[ -x "$sid_search" ]]; then
       hdb_path="$sid_search"
     fi
   fi
   if [[ -z "$hdb_path" ]]; then
     local generic_search
-    generic_search="$(find /usr/sap -maxdepth 6 -name "hdbnsutil" -type f 2>/dev/null | head -1 || true)"
+    generic_search="$(find /usr/sap -maxdepth 6 -name "HDB" -type f 2>/dev/null | head -1 || true)"
     if [[ -n "$generic_search" ]] && [[ -x "$generic_search" ]]; then
       hdb_path="$generic_search"
     fi
   fi
+
+  # Fallback: derive HDB path from hdbnsutil directory
   if [[ -z "$hdb_path" ]]; then
-    hdb_path="$(command -v hdbnsutil 2>/dev/null || true)"
+    if [[ -n "$sid" ]]; then
+      hdbnsutil_path="$(find "/usr/sap/${sid}" -maxdepth 5 -name "hdbnsutil" -type f 2>/dev/null | head -1 || true)"
+    fi
+    if [[ -z "$hdbnsutil_path" ]]; then
+      hdbnsutil_path="$(find /usr/sap -maxdepth 6 -name "hdbnsutil" -type f 2>/dev/null | head -1 || true)"
+    fi
+    if [[ -n "$hdbnsutil_path" ]] && [[ -x "$hdbnsutil_path" ]]; then
+      local sibling_hdb
+      sibling_hdb="$(dirname "$hdbnsutil_path")/HDB"
+      if [[ -x "$sibling_hdb" ]]; then
+        hdb_path="$sibling_hdb"
+      fi
+    fi
+  fi
+  if [[ -z "$hdb_path" ]]; then
+    hdb_path="$(command -v HDB 2>/dev/null || true)"
   fi
 
   if [[ -n "$hdb_path" ]]; then
@@ -243,16 +261,16 @@ collect_hana_version_json() {
     if [[ -n "$sid_user" ]] && id "$sid_user" >/dev/null 2>&1; then
       # Run as <sid>adm
       if command -v timeout >/dev/null 2>&1; then
-        version_raw="$(timeout "${timeout_sec}s" su - "$sid_user" -c "\"${hdb_path}\" -V" 2>&1 | head -20 || true)"
+        version_raw="$(timeout "${timeout_sec}s" su - "$sid_user" -c "\"${hdb_path}\" version" 2>&1 | head -20 || true)"
       else
-        version_raw="$(su - "$sid_user" -c "\"${hdb_path}\" -V" 2>&1 | head -20 || true)"
+        version_raw="$(su - "$sid_user" -c "\"${hdb_path}\" version" 2>&1 | head -20 || true)"
       fi
     else
       # Fallback: run directly (may fail if permissions are restricted)
       if command -v timeout >/dev/null 2>&1; then
-        version_raw="$(timeout "${timeout_sec}s" "$hdb_path" -V 2>&1 | head -20 || true)"
+        version_raw="$(timeout "${timeout_sec}s" "$hdb_path" version 2>&1 | head -20 || true)"
       else
-        version_raw="$("$hdb_path" -V 2>&1 | head -20 || true)"
+        version_raw="$("$hdb_path" version 2>&1 | head -20 || true)"
       fi
       if [[ -n "$sid_user" ]] && ! id "$sid_user" >/dev/null 2>&1; then
         version_error="User ${sid_user} nicht gefunden"
@@ -264,10 +282,10 @@ collect_hana_version_json() {
     if [[ -z "$version_text" ]] && [[ -n "$version_raw" ]] && [[ -z "$version_error" ]]; then
       version_error="version nicht parsebar"
     elif [[ -z "$version_raw" ]] && [[ -z "$version_error" ]]; then
-      version_error="hdbnsutil lieferte keine Ausgabe"
+      version_error="HDB lieferte keine Ausgabe"
     fi
   else
-    version_error="hdbnsutil nicht gefunden"
+    version_error="HDB nicht gefunden"
   fi
 
   printf '{"available":%s,"sid":"%s","sid_user":"%s","path":"%s","version":"%s","error":"%s"}' \
