@@ -1496,7 +1496,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 /* Second-level subview tabs: subtler */
 .subview-tabs .tab-button {
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   padding: 6px 14px;
   background: transparent;

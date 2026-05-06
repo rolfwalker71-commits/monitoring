@@ -3389,7 +3389,7 @@ function renderSapB1SystemInfoCard(payload) {
   if (!versionBlock) {
     return `
       <section class="detail-card sap-b1-card">
-        <h4>🧾 SAP B1 One Systeminfos</h4>
+        <h4>🧾 SAP B1</h4>
         <p class="muted">Keine SAP Business One Versionsdaten im Payload vorhanden.</p>
       </section>
     `;
@@ -3406,7 +3406,7 @@ function renderSapB1SystemInfoCard(payload) {
 
   return `
     <section class="detail-card sap-b1-card">
-      <h4>🧾 SAP B1 One Systeminfos</h4>
+      <h4>🧾 SAP B1</h4>
       <div class="sap-b1-grid">
         <article class="sap-b1-item">
           <header>Server Components Version</header>
@@ -3551,13 +3551,13 @@ function renderDirListingsCard(payload) {
   if (!hasRegular && !hasDeep) {
     return `
       <section class="detail-card dir-listings-card">
-        <h4>📂 Backup (Exports) Übersicht</h4>
-        <p class="muted">Keine Backup (Exports) Übersicht vorhanden. (DIR_SCAN_PATHS oder DIR_SCAN_DEEP_PATHS in agent.conf konfigurieren)</p>
+        <h4>📂 SAP Exports</h4>
+        <p class="muted">Keine SAP Exports Daten vorhanden. (DIR_SCAN_PATHS oder DIR_SCAN_DEEP_PATHS in agent.conf konfigurieren)</p>
       </section>
     `;
   }
 
-  let html = `<section class="detail-card dir-listings-card"><h4>📂 Backup (Exports) Übersicht</h4>`;
+  let html = `<section class="detail-card dir-listings-card"><h4>📂 SAP Exports</h4>`;
 
   // Regular flat listings
   if (hasRegular) {
