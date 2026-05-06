@@ -290,13 +290,14 @@ collect_hana_version_json() {
     version_error="HDB nicht gefunden"
   fi
 
-  printf '{"available":%s,"sid":"%s","sid_user":"%s","path":"%s","version":"%s","branch":"%s","error":"%s"}' \
+  printf '{"available":%s,"sid":"%s","sid_user":"%s","path":"%s","version":"%s","branch":"%s","raw_output":"%s","error":"%s"}' \
     "$([ -n "$hdb_path" ] && echo true || echo false)" \
     "$(json_escape "$sid")" \
     "$(json_escape "$sid_user")" \
     "$(json_escape "$hdb_path")" \
     "$(json_escape "$version_text")" \
     "$(json_escape "$branch_text")" \
+    "$(json_escape "$version_raw")" \
     "$(json_escape "$version_error")"
 }
 
