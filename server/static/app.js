@@ -746,7 +746,7 @@ function renderAgentUpdateStatusRows(hosts) {
         <div class="agent-update-status-row">
           <strong>${escapeHtml(displayName)} <span class="agent-update-status-badge ${escapeHtml(status)}">${escapeHtml(updateStatusBadgeLabel(status))}</span></strong>
           <span>🖥️ ${escapeHtml(hostname)} | Letzte Ausfuehrung: ${escapeHtml(executedAt)}</span>
-          <span>⏭️ Naechster priorisierter Check: ${escapeHtml(nextPriority)}</span>
+          <span>⏭️ Nächster priorisierter Check: ${escapeHtml(nextPriority)}</span>
           <span>🕒 ${escapeHtml(recurringHint || "Kein Scheduler-Hinweis vom Agenten vorhanden.")}</span>
           <span>${escapeHtml(resultMessage || "Kein Rueckkanal-Ergebnis gespeichert.")}</span>
         </div>
@@ -2448,7 +2448,7 @@ function renderLargeFilesPanel(largeFiles, hiddenMountpoints = []) {
 
   if (filesystems.length === 0) {
     const statusText = scanStatus === "scheduled"
-      ? "Naechster geplanter Scan steht noch aus (taeglicher Lauf)."
+      ? "Nächster geplanter Scan steht noch aus (taeglicher Lauf)."
       : scanStatus === "unavailable"
         ? "Large-File-Scan nicht verfuegbar auf diesem Host."
         : scanStatus === "ok"
@@ -4141,7 +4141,7 @@ function formatAgentApiKeyStatus(agentApiKeyBlock, agentConfigBlock) {
     return "fehlt | Server erwartet API-Key";
   }
   if (hasConfiguredApiKey) {
-    return "konfiguriert | Status ab naechstem Report exakt sichtbar";
+    return "konfiguriert | Status ab nächstem Report exakt sichtbar";
   }
   return "aus | Server verlangt aktuell keinen API-Key";
 }

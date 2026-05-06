@@ -7,7 +7,7 @@
 - Agent fuehrt zusaetzlich priorisierte Self-Update-Checks im Sammellauf aus (Default 60 Minuten), damit neue Versionen schneller ankommen
 - Agent kann zusaetzliche Remote-Befehle vom Server pollen (`update-now`) und Ergebnis zurueckmelden
 - Agent liefert zusaetzlich die letzten Zeilen des lokalen Update-Logs mit, damit Remote-Update-Probleme direkt im Webclient sichtbar sind
-- Falls Senden fehlschlaegt, werden Meldungen lokal gequeued und beim naechsten erfolgreichen Lauf nachgeliefert
+- Falls Senden fehlschlaegt, werden Meldungen lokal gequeued und beim nächsten erfolgreichen Lauf nachgeliefert
 - Webservice nimmt Daten entgegen, speichert sie in SQLite und zeigt eine einfache Uebersicht
 
 ## Struktur
@@ -53,7 +53,7 @@ Dashboard-Funktionen:
 - Host-Gruppierung links zeigt zusaetzlich die aktuell zur Verteilung bereitstehende Agent-Version aus `AGENT_VERSION` an
 - Host-Karten markieren mit Badge `Update verfuegbar`, wenn Host-Agent-Version kleiner als aktuelles Agent-Release ist
 - Globaler Trigger `Update fuer alle Hosts` queued den Agent-Update-Befehl fuer alle bekannten Hosts auf einmal
-- Globaler Update-Status unter dem Trigger zeigt Rueckkanal-Status je Host sowie den naechsten erwarteten priorisierten Check
+- Globaler Update-Status unter dem Trigger zeigt Rueckkanal-Status je Host sowie den nächsten erwarteten priorisierten Check
 - Blaettern durch Hosts und Host-Meldungen
 - Analysebereich mit 24h-Trends je Mountpoint fuer den ausgewaehlten Host
 - Analysebereich mit CPU/RAM/Swap-Trends im Zeitfenster
@@ -161,7 +161,7 @@ Queue-Verhalten:
 
 - Queue-Verzeichnis: `/var/lib/monitoring-agent/queue`
 - Fehlgeschlagene Reports werden dort als JSON gespeichert
-- Beim naechsten Lauf versucht der Agent zuerst die Queue zu flushen
+- Beim nächsten Lauf versucht der Agent zuerst die Queue zu flushen
 - Erfolgreich nachgelieferte Reports erscheinen im Dashboard als `DELAYED`
 
 Mit API-Key:
@@ -179,7 +179,7 @@ curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/mai
   Zusätzlich kann im Dashboard ein serverseitiger Titel-Override gesetzt werden.
   Dieser hat Vorrang vor dem vom Agent gelieferten `display_name`, ohne dass der Agent neu installiert werden muss.
 
-## Was als naechstes sinnvoll ist
+## Was als nächstes sinnvoll ist
 
 - Token-basierte Agent-Authentifizierung pro Host
 - Signierte Payloads (HMAC)

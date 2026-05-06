@@ -166,6 +166,6 @@ fi
 echo ""
 echo "systemd Service installiert: $SERVICE_FILE"
 echo ""
-echo "Naechste Schritte:"
+echo "Nächste Schritte:"
 echo "  1. API-Key eintragen:  nano $ENV_FILE"
 echo "  2. Dienst starten:     systemctl restart monitoring"
