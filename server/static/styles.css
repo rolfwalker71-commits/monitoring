@@ -1115,7 +1115,7 @@ button:disabled {
 .hosts-column {
   align-self: start;
   background: linear-gradient(180deg, #a0aab6 0%, #8e99a8 100%);
-  border: 1px solid #1a1a1a;
+  border: 1px solid #6a7585;
   border-radius: 14px;
   padding: 12px 10px 12px;
   box-shadow:
