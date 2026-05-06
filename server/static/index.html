@@ -64,38 +64,6 @@
         </div>
       </div>
 
-      <section id="hostToolsHeader" class="brand-tools hidden">
-        <div class="host-filters host-filters-header">
-          <div class="host-search-box">
-            <input id="hostSearchInput" type="text" placeholder="Nach Titel suchen..." class="search-input" />
-          </div>
-          <label class="host-filter-control" for="hostAlertFilterSelect">
-            <span>Alerts</span>
-            <select id="hostAlertFilterSelect">
-              <option value="all" selected>Alle</option>
-              <option value="with-alerts">Mit Alerts</option>
-              <option value="without-alerts">Ohne Alerts</option>
-            </select>
-          </label>
-          <label class="host-filter-control" for="hostMutedFilterSelect">
-            <span>Muted</span>
-            <select id="hostMutedFilterSelect">
-              <option value="all" selected>Alle</option>
-              <option value="with-muted">Mit muted Alerts</option>
-              <option value="without-muted">Ohne muted Alerts</option>
-            </select>
-          </label>
-          <div class="host-filter-control host-filter-control-icons">
-            <span>OS</span>
-            <div id="hostOsFilterChips" class="icon-filter-chips"></div>
-          </div>
-          <div class="host-filter-control host-filter-control-icons">
-            <span>Land</span>
-            <div id="hostCountryFilterChips" class="icon-filter-chips"></div>
-          </div>
-          <button id="hostFiltersResetButton" class="btn-secondary" type="button" title="Alle Filter zurücksetzen">✕</button>
-        </div>
-      </section>
 
       <section id="appPanel" class="panel hidden">
         <div class="panel-header">
@@ -735,10 +703,42 @@
         <div id="layout" class="layout">
           <aside class="hosts-column">
             <div class="hosts-column-scroll">
-              <div class="section-head">
+              <div class="sidebar-card-header">
                 <h3>🖥️ Hosts</h3>
                 <p id="hostCount" class="count"></p>
               </div>
+              <section id="hostToolsHeader" class="sidebar-tools hidden">
+                <div class="host-filters host-filters-header">
+                  <div class="host-search-box">
+                    <input id="hostSearchInput" type="text" placeholder="Suchen..." class="search-input" />
+                  </div>
+                  <label class="host-filter-control" for="hostAlertFilterSelect">
+                    <span>Alerts</span>
+                    <select id="hostAlertFilterSelect">
+                      <option value="all" selected>Alle</option>
+                      <option value="with-alerts">Mit Alerts</option>
+                      <option value="without-alerts">Ohne Alerts</option>
+                    </select>
+                  </label>
+                  <label class="host-filter-control" for="hostMutedFilterSelect">
+                    <span>Muted</span>
+                    <select id="hostMutedFilterSelect">
+                      <option value="all" selected>Alle</option>
+                      <option value="with-muted">Mit muted Alerts</option>
+                      <option value="without-muted">Ohne muted Alerts</option>
+                    </select>
+                  </label>
+                  <div class="host-filter-control host-filter-control-icons">
+                    <span>OS</span>
+                    <div id="hostOsFilterChips" class="icon-filter-chips"></div>
+                  </div>
+                  <div class="host-filter-control host-filter-control-icons">
+                    <span>Land</span>
+                    <div id="hostCountryFilterChips" class="icon-filter-chips"></div>
+                  </div>
+                  <button id="hostFiltersResetButton" class="btn-secondary" type="button" title="Alle Filter zurücksetzen">✕</button>
+                </div>
+              </section>
               <div class="host-list-shell">
                 <div id="hostListHeader" class="host-list-header"></div>
                 <div id="hostList" class="host-list"></div>
