@@ -3402,9 +3402,9 @@ function renderSapB1SystemSummary(payload) {
     return "-";
   }
   if (fp && releaseDate) {
-    return `<strong>${escHtml(fp)}</strong> | ${escHtml(releaseDate)}`;
+    return `<strong>${escapeHtml(fp)}</strong> | ${escapeHtml(releaseDate)}`;
   }
-  return fp ? `<strong>${escHtml(fp)}</strong>` : escHtml(releaseDate);
+  return fp ? `<strong>${escapeHtml(fp)}</strong>` : escapeHtml(releaseDate);
 }
 
 function renderSapB1SystemInfoCard(payload) {
