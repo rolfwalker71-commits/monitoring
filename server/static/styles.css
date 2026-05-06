@@ -3514,6 +3514,38 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   word-break: break-word;
 }
 
+.sap-b1-inline-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.sap-b1-inline-badge.ok {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.sap-b1-inline-badge.warn {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.sap-b1-inline-badge.muted {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #64748b;
+}
+
 .sap-path-full {
   white-space: normal;
 }

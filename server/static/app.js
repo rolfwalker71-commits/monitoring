@@ -36,6 +36,8 @@ const SAP_B1_VERSION_MAP = new Map([
   ["10.00.180", { featurePack: "FP 2208", patchLevel: "PL 08", releaseDate: "Aug 2022" }],
 ]);
 
+const SAP_B1_HANA_PROCESS_RE = /\b(hdbindexserver|hdbnameserver|hdbscriptserver|hdbxsengine|hdbcompileserver|hdbpreprocessor|hdbwebdispatcher|hdbdaemon|hdbrsutil|sapstartsrv|hdb[a-z0-9_-]+)\b/i;
+
 let autoRefreshTimerId = null;
 let autoRefreshInProgress = false;
 let autoRefreshCurrentIntervalSec = 480;
@@ -3325,6 +3327,62 @@ function parseSapB1Version(versionText) {
   return { build, patchLevel, mapping };
 }
 
+function payloadHasHanaProcesses(payload) {
+  const topProcesses = payload && payload.top_processes && Array.isArray(payload.top_processes.entries)
+    ? payload.top_processes.entries
+    : [];
+  return topProcesses.some((entry) => {
+    const name = asText(entry?.name, "");
+    const command = asText(entry?.command, "");
+    return SAP_B1_HANA_PROCESS_RE.test(name) || SAP_B1_HANA_PROCESS_RE.test(command);
+  });
+}
+
+function getSapB1LandscapeStatus(payload) {
+  const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
+  const versionBlock = sap && typeof sap.server_components_version === "object" ? sap.server_components_version : null;
+  const versionText = asText(versionBlock?.version, "");
+  const versionInfo = parseSapB1Version(versionText);
+  const hasVersion = Boolean(versionInfo.build || versionText);
+  const hasHana = payloadHasHanaProcesses(payload);
+
+  if (hasHana && hasVersion) {
+    return {
+      label: `SAP B1 ${versionText || versionInfo.build}`.trim(),
+      detail: `${versionInfo.mapping?.featurePack || "Version erkannt"} | HANA erkannt`,
+      stateClass: "ok",
+      compatible: true,
+    };
+  }
+  if (hasHana) {
+    return {
+      label: "HANA erkannt",
+      detail: "SAP B1 Version nicht erkannt",
+      stateClass: "warn",
+      compatible: false,
+    };
+  }
+  if (hasVersion) {
+    return {
+      label: `SAP B1 ${versionText || versionInfo.build}`.trim(),
+      detail: "keine HANA Prozesse erkannt",
+      stateClass: "warn",
+      compatible: false,
+    };
+  }
+  return {
+    label: "Keine SAP B1/HANA Info",
+    detail: "weder B1 Version noch HANA Prozesse erkannt",
+    stateClass: "muted",
+    compatible: false,
+  };
+}
+
+function renderSapB1LandscapeBadge(payload) {
+  const info = getSapB1LandscapeStatus(payload);
+  return `<span class="sap-b1-inline-badge ${escapeHtml(info.stateClass)}" title="${escapeHtml(info.detail)}">${escapeHtml(info.label)}</span>`;
+}
+
 function renderSapB1SystemInfoCard(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const versionBlock = sap && typeof sap.server_components_version === "object" ? sap.server_components_version : null;
@@ -3344,6 +3402,7 @@ function renderSapB1SystemInfoCard(payload) {
   const versionInfo = parseSapB1Version(versionText);
   const mapping = versionInfo.mapping;
   const errorText = asText(versionBlock.error, "");
+  const landscapeInfo = getSapB1LandscapeStatus(payload);
 
   return `
     <section class="detail-card sap-b1-card">
@@ -3351,6 +3410,7 @@ function renderSapB1SystemInfoCard(payload) {
       <div class="sap-b1-grid">
         <article class="sap-b1-item">
           <header>Server Components Version</header>
+          <div class="sap-b1-size-row"><span class="sap-b1-size-label">HANA Landscape</span><strong class="sap-b1-size-value">${escapeHtml(landscapeInfo.compatible ? "passt zu HANA-Landschaft" : landscapeInfo.detail)}</strong></div>
           <div class="sap-b1-size-row"><span class="sap-b1-size-label">Status</span><strong class="sap-b1-size-value">${available ? "verfuegbar" : "nicht verfuegbar"}</strong></div>
           <div class="sap-b1-size-row"><span class="sap-b1-size-label">Version</span><strong class="sap-b1-size-value">${escapeHtml(versionText || "-")}</strong></div>
           <div class="sap-b1-size-row"><span class="sap-b1-size-label">Build</span><strong class="sap-b1-size-value">${escapeHtml(versionInfo.build || "-")}</strong></div>
@@ -4067,10 +4127,15 @@ function renderReportCard(report) {
   const chipText = isDelayed ? "DELAYED" : "LIVE";
   const queueDepth = queueDepthLabel(payload.queue_depth);
   const section = normalizeReportSection(state.reportSection);
+  const sapLandscapeInfo = getSapB1LandscapeStatus(payload);
 
   // Helper function to render meta-group items
   function renderMetaItem(icon, label, value) {
     return `<p class="meta-group-item"><strong>${icon} ${label}</strong><span>${escapeHtml(asText(value || "-"))}</span></p>`;
+  }
+
+  function renderMetaItemHtml(icon, label, html) {
+    return `<p class="meta-group-item"><strong>${icon} ${label}</strong><span>${html}</span></p>`;
   }
 
   // Build grouped meta sections
@@ -4093,6 +4158,7 @@ function renderReportCard(report) {
         ${renderMetaItem("⚙️", "Kernel", payload.kernel)}
         ${renderMetaItem("⏱️", "Uptime", formatUptime(payload.uptime_seconds))}
         ${renderMetaItem("🗃️", "Queue", queueDepth + " Dateien")}
+        ${renderMetaItemHtml("🧾", "SAP B1", renderSapB1LandscapeBadge(payload))}
       </div>
     </div>
   `;
@@ -4191,7 +4257,7 @@ function renderReportCard(report) {
       <div class="report-header">
         <div>
           <h3>${escapeHtml(title)}</h3>
-          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)} <span class="${chipClass}">${chipText}</span></p>
+          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)} <span class="${chipClass}">${chipText}</span> ${renderSapB1LandscapeBadge(payload)}</p>
         </div>
         <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
       </div>

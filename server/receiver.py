@@ -1006,6 +1006,22 @@ _HANA_PROCESS_RE = re.compile(
     r"|hdb[a-z0-9_-]+)\b"
 )
 
+_SAP_B1_BUILD_TO_FP: dict[str, dict[str, str]] = {
+    "10.00.320": {"feature_pack": "FP 2602", "patch_level": "PL 22", "release_date": "Feb 2026"},
+    "10.00.310": {"feature_pack": "FP 2511", "patch_level": "PL 21", "release_date": "Nov 2025"},
+    "10.00.300": {"feature_pack": "FP 2508", "patch_level": "PL 20", "release_date": "Aug 2025"},
+    "10.00.290": {"feature_pack": "FP 2505", "patch_level": "PL 19", "release_date": "May 2025"},
+    "10.00.280": {"feature_pack": "FP 2502", "patch_level": "PL 18", "release_date": "Feb 2025"},
+    "10.00.270": {"feature_pack": "FP 2411", "patch_level": "PL 17", "release_date": "Nov 2024"},
+    "10.00.260": {"feature_pack": "FP 2408", "patch_level": "PL 16", "release_date": "Aug 2024"},
+    "10.00.250": {"feature_pack": "FP 2405", "patch_level": "PL 15", "release_date": "May 2024"},
+    "10.00.240": {"feature_pack": "FP 2402", "patch_level": "PL 14", "release_date": "Feb 2024"},
+    "10.00.230": {"feature_pack": "FP 2311", "patch_level": "PL 13", "release_date": "Nov 2023"},
+    "10.00.220": {"feature_pack": "FP 2308", "patch_level": "PL 12", "release_date": "Aug 2023"},
+    "10.00.210": {"feature_pack": "FP 2305", "patch_level": "PL 11", "release_date": "May 2023"},
+    "10.00.180": {"feature_pack": "FP 2208", "patch_level": "PL 08", "release_date": "Aug 2022"},
+}
+
 
 def _detect_hana_processes(payload: dict) -> bool:
     top_block = payload.get("top_processes", {})
@@ -1021,6 +1037,41 @@ def _detect_hana_processes(payload: dict) -> bool:
     # Fallback: scan entire serialized payload (catches any nested structure)
     serialized = json.dumps(payload, ensure_ascii=False).lower()
     return bool(_HANA_PROCESS_RE.search(serialized))
+
+
+def _extract_sap_b1_info(payload: dict, has_hana: bool) -> dict:
+    sap_block = payload.get("sap_business_one", {})
+    if not isinstance(sap_block, dict):
+        return {}
+    version_block = sap_block.get("server_components_version", {})
+    if not isinstance(version_block, dict):
+        return {}
+
+    version_text = str(version_block.get("version", "") or "").strip()
+    raw_output = str(version_block.get("raw_output", "") or "").strip()
+    match = re.search(r"(10\.00\.\d{3})\s+(PL\s*\d{1,2})", version_text, re.IGNORECASE)
+    build = match.group(1) if match else ""
+    patch_level = re.sub(r"\s+", " ", match.group(2)).upper() if match else ""
+    mapping = _SAP_B1_BUILD_TO_FP.get(build, {})
+
+    if has_hana and build:
+        landscape_status = "fits_hana_landscape"
+    elif has_hana:
+        landscape_status = "hana_detected_b1_version_missing"
+    elif build:
+        landscape_status = "b1_version_present_no_hana_processes"
+    else:
+        landscape_status = "not_detected"
+
+    return {
+        "version": version_text,
+        "raw_output": raw_output,
+        "build": build,
+        "patch_level": patch_level or str(mapping.get("patch_level", "") or ""),
+        "feature_pack": str(mapping.get("feature_pack", "") or ""),
+        "release_date": str(mapping.get("release_date", "") or ""),
+        "landscape_status": landscape_status,
+    }
 
 
 def _collect_top_commands(payload: dict, limit: int = 5) -> list[str]:
@@ -1227,6 +1278,7 @@ def _compact_ai_context_for_prompt(context_payload: dict) -> dict:
         "open_alerts": list(context_payload.get("open_alerts", []))[:8],
         "top_processes": list(context_payload.get("top_processes", []))[:8],
         "hana_processes": list(context_payload.get("hana_processes", []))[:12],
+        "sap_business_one": context_payload.get("sap_business_one", {}),
     }
 
     correlated = context_payload.get("correlated_series", {})
@@ -1287,6 +1339,7 @@ def _mini_ai_context_for_prompt(context_payload: dict) -> dict:
         "has_hana_processes": context_payload.get("has_hana_processes", False),
         "metric_summary": context_payload.get("metric_summary", {}),
         "hana_processes": list(context_payload.get("hana_processes", []))[:8],
+        "sap_business_one": context_payload.get("sap_business_one", {}),
         "top_processes": list(context_payload.get("top_processes", []))[:5],
         "open_alerts": list(context_payload.get("open_alerts", []))[:5],
     }
@@ -1437,6 +1490,7 @@ def _collect_ai_metric_context(conn: sqlite3.Connection, hostname: str, metric: 
     has_hana = _detect_hana_processes(latest_payload)
     top_processes = _collect_top_processes_detail(latest_payload, limit=10)
     hana_processes = _collect_hana_process_details(latest_payload) if has_hana else []
+    sap_b1_info = _extract_sap_b1_info(latest_payload, has_hana)
 
     open_alerts_rows = conn.execute(
         """
@@ -1471,6 +1525,7 @@ def _collect_ai_metric_context(conn: sqlite3.Connection, hostname: str, metric: 
         "has_hana_processes": has_hana,
         "top_processes": top_processes,
         "hana_processes": hana_processes,
+        "sap_business_one": sap_b1_info,
         "metric_summary": metric_summary,
         "metric_series": _safe_sample_series(series),
         "filesystem_trends": filesystem_trends,
@@ -1586,6 +1641,7 @@ def _openai_troubleshoot(context_payload: dict, ai_settings: dict | None = None)
         "   Liefere mindestens 3 HANA-spezifische Codeschnipsel (z.B. hdbcons, hdbsql, sapcontrol, HDB info). "
         "   Erklaere welche HANA-Prozesse auffaellig viel Ressourcen verbrauchen. "
         "5. Wenn top_processes vorhanden: Benenne die Top-Verursacher namentlich in probable_causes. "
+        "   Wenn sap_business_one.version vorhanden ist, beruecksichtige Build, Patch Level, Feature Pack und Release Date in der Analyse. "
         "6. Wenn metric=filesystem: Bewerte alle filesystem_trends inkl. Wachstum (delta/growth_percent_per_day), "
         "   aktuelle Groesse (total_kb) und Auslastung je Mountpoint. Beruecksichtige besonders /hana/data und /hana/log, "
         "   nenne proaktive HANA-Massnahmen, bevor ein Filesystem voll laeuft."
