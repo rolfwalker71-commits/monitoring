@@ -3093,7 +3093,7 @@ def alert_instant_mail_html(
         "<div style='display:flex;align-items:center;gap:22px;margin-bottom:12px;'>"
         f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;'>"
         "<div>"
-        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>Proaktives Monitoring</div>"
+        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>Health Monitoring</div>"
         f"{platform_row}"
         "</div>"
         "</div>"
