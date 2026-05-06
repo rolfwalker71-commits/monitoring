@@ -4171,6 +4171,11 @@ function renderReportCard(report) {
     return v || b || "-";
   })();
 
+  const hanaSid = (function() {
+    const hi = payload && typeof payload.hana_info === "object" ? payload.hana_info : null;
+    return hi && hi.available ? asText(hi.sid, "") : "";
+  })();
+
   // Helper function to render meta-group items
   function renderMetaItem(icon, label, value) {
     return `<p class="meta-group-item"><strong>${icon} ${label}</strong><span>${escapeHtml(asText(value || "-"))}</span></p>`;
@@ -4202,6 +4207,7 @@ function renderReportCard(report) {
         ${renderMetaItem("🗃️", "Queue", queueDepth + " Dateien")}
         ${renderMetaItemHtml("🧾", "SAP B1", sapB1Summary)}
         ${renderMetaItem("🟢", "HANA", hanaInfoMeta)}
+        ${hanaSid ? renderMetaItem("🏷️", "HANA SID", hanaSid) : ""}
       </div>
     </div>
   `;
