@@ -3430,15 +3430,24 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   margin: 0;
   display: flex;
   gap: 8px;
+  align-items: center;
   line-height: 1.25;
   font-size: 13px;
 }
 
 .meta-group-item strong {
+  display: inline-flex;
+  align-items: center;
   min-width: 80px;
   color: var(--muted);
   font-size: 11px;
   flex-shrink: 0;
+}
+
+.meta-group-item span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
 }
 
 .detail-cards {
