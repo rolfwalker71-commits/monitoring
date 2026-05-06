@@ -67,9 +67,23 @@ function Download-RepoFile {
 # ---- Version check ----
 $remoteVersion = ''
 try {
-    $remoteVersion = ($wc.DownloadString("$ApiBaseUrl/BUILD_VERSION")).Trim()
+    $remoteVersion = ($wc.DownloadString("$ApiBaseUrl/AGENT_VERSION")).Trim()
 } catch {
     $remoteVersion = ''
+}
+if (-not $remoteVersion) {
+    try {
+        $remoteVersion = ($wc.DownloadString("$RawBaseUrl/AGENT_VERSION")).Trim()
+    } catch {
+        $remoteVersion = ''
+    }
+}
+if (-not $remoteVersion) {
+    try {
+        $remoteVersion = ($wc.DownloadString("$ApiBaseUrl/BUILD_VERSION")).Trim()
+    } catch {
+        $remoteVersion = ''
+    }
 }
 if (-not $remoteVersion) {
     try {

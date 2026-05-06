@@ -5,8 +5,8 @@
 
 .DESCRIPTION
     For each target host, this script:
-    - Downloads latest collect_and_send.ps1, self_update.ps1, and BUILD_VERSION from GitHub
-    - Writes BUILD_VERSION into AGENT_VERSION
+    - Downloads latest collect_and_send.ps1, self_update.ps1, and AGENT_VERSION from GitHub
+    - Writes AGENT_VERSION into AGENT_VERSION (fallback BUILD_VERSION for compatibility)
     - Verifies EmbeddedAgentVersion in collect_and_send.ps1
     - Optionally executes one immediate collect run
     - Returns a per-host result summary
@@ -74,16 +74,23 @@ $remoteScript = {
     $wc.DownloadFile("$RemoteRawBaseUrl/client/windows/collect_and_send.ps1", $collectPath)
     $wc.DownloadFile("$RemoteRawBaseUrl/client/windows/self_update.ps1", $selfUpdatePath)
 
-    $buildVersion = ''
+    $agentVersion = ''
     try {
-        $buildVersion = ($wc.DownloadString("$RemoteRawBaseUrl/BUILD_VERSION")).Trim()
+        $agentVersion = ($wc.DownloadString("$RemoteRawBaseUrl/AGENT_VERSION")).Trim()
     } catch {
-        $buildVersion = ''
+        $agentVersion = ''
     }
-    if (-not $buildVersion) {
-        throw 'Could not download BUILD_VERSION from remote source.'
+    if (-not $agentVersion) {
+        try {
+            $agentVersion = ($wc.DownloadString("$RemoteRawBaseUrl/BUILD_VERSION")).Trim()
+        } catch {
+            $agentVersion = ''
+        }
     }
-    [System.IO.File]::WriteAllText($versionPath, "$buildVersion`n", [System.Text.Encoding]::ASCII)
+    if (-not $agentVersion) {
+        throw 'Could not download AGENT_VERSION or BUILD_VERSION from remote source.'
+    }
+    [System.IO.File]::WriteAllText($versionPath, "$agentVersion`n", [System.Text.Encoding]::ASCII)
 
     $collectContent = Get-Content -Path $collectPath -Raw -Encoding UTF8
     $embeddedVersion = ''
@@ -118,7 +125,7 @@ $remoteScript = {
         embedded_version = $embeddedVersion
         version_file_path = $versionPath
         version_file_value = $agentVersionFileValue
-        build_version_downloaded = $buildVersion
+        agent_version_downloaded = $agentVersion
         collect_run = $collectRunStatus
         collect_exit_code = $collectExitCode
         collect_log_path = $collectLogPath
@@ -149,7 +156,7 @@ foreach ($host in $ComputerName) {
             embedded_version = ''
             version_file_path = 'C:\ProgramData\monitoring-agent\AGENT_VERSION'
             version_file_value = ''
-            build_version_downloaded = ''
+            agent_version_downloaded = ''
             collect_run = 'failed'
             collect_exit_code = -1
             collect_log_path = 'C:\ProgramData\monitoring-agent\monitoring-agent.log'

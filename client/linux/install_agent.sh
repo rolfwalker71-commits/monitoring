@@ -19,7 +19,7 @@ RAW_BASE_URL="https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/
 AGENT_QUEUE_DIR="/var/lib/monitoring-agent/queue"
 COLLECT_SCRIPT_URL=""
 SELF_UPDATE_SCRIPT_URL=""
-BUILD_VERSION_URL=""
+AGENT_VERSION_URL=""
 SELF_TEST_STATUS="ok"
 CURL_INSECURE="0"
 
@@ -114,8 +114,8 @@ fi
 if [[ -z "$SELF_UPDATE_SCRIPT_URL" ]]; then
   SELF_UPDATE_SCRIPT_URL="$RAW_BASE_URL/client/linux/self_update.sh"
 fi
-if [[ -z "$BUILD_VERSION_URL" ]]; then
-  BUILD_VERSION_URL="$RAW_BASE_URL/BUILD_VERSION"
+if [[ -z "$AGENT_VERSION_URL" ]]; then
+  AGENT_VERSION_URL="$RAW_BASE_URL/AGENT_VERSION"
 fi
 
 CURL_BASE_ARGS=(--fail --silent --show-error --location)
@@ -178,8 +178,10 @@ curl "${CURL_BASE_ARGS[@]}" "$SELF_UPDATE_SCRIPT_URL" -o "$INSTALL_DIR/self_upda
 chmod 0755 "$INSTALL_DIR/collect_and_send.sh"
 chmod 0755 "$INSTALL_DIR/self_update.sh"
 
-if ! curl "${CURL_BASE_ARGS[@]}" "$BUILD_VERSION_URL" -o "$INSTALL_DIR/AGENT_VERSION"; then
-  printf '%s\n' "unknown" > "$INSTALL_DIR/AGENT_VERSION"
+if ! curl "${CURL_BASE_ARGS[@]}" "$AGENT_VERSION_URL" -o "$INSTALL_DIR/AGENT_VERSION"; then
+  if ! curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/BUILD_VERSION" -o "$INSTALL_DIR/AGENT_VERSION"; then
+    printf '%s\n' "unknown" > "$INSTALL_DIR/AGENT_VERSION"
+  fi
 fi
 chmod 0644 "$INSTALL_DIR/AGENT_VERSION"
 
