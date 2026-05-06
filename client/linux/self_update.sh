@@ -33,9 +33,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-remote_version="$(curl "${CURL_BASE_ARGS[@]}" "${API_ACCEPT[@]}" "$API_BASE_URL/BUILD_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+remote_version="$(curl "${CURL_BASE_ARGS[@]}" "${API_ACCEPT[@]}" "$API_BASE_URL/AGENT_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
 if [[ -z "$remote_version" ]]; then
-  remote_version="$(curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/BUILD_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+  remote_version="$(curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/AGENT_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
 fi
 local_version="unknown"
 if [[ -f "$AGENT_VERSION_FILE" ]]; then
