@@ -1115,6 +1115,7 @@ button:disabled {
 
 .hosts-column {
   align-self: start;
+  overflow: hidden;
   background: #0f1e35;
   border-radius: 14px;
   padding: 10px 10px 12px;
@@ -5194,8 +5195,34 @@ body[data-theme="dark"] .backup-status-stale {
   padding: 8px;
 }
 
+/* Force filter layout into vertical column inside narrow sidebar */
+.sidebar-filters .host-filters {
+  flex-direction: column;
+  align-items: stretch;
+  margin-top: 0;
+  gap: 4px;
+}
+
 .sidebar-filters .host-search-box {
-  margin-bottom: 6px;
+  min-width: 0;
+  width: 100%;
+  margin-bottom: 2px;
+}
+
+.sidebar-filters .host-filter-control-icons {
+  min-width: 0;
+}
+
+.sidebar-filters .icon-filter-chips {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sidebar-filters .icon-filter-chip {
+  height: 26px;
+  min-width: 26px;
+  padding: 0 6px;
+  font-size: 11px;
 }
 
 .sidebar-filters .search-input {
