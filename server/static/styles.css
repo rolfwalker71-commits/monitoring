@@ -141,7 +141,7 @@ body[data-theme="dark"] {
 
 .container {
   max-width: 1420px;
-  margin: 32px auto;
+  margin: 12px auto;
   padding: 0 16px;
 }
 
@@ -1331,8 +1331,8 @@ body[data-theme="dark"] .hosts-column {
 
 .title-row h3 {
   margin: 0;
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 26px;
+  font-weight: 800;
 }
 
 button {
