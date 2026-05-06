@@ -1185,17 +1185,93 @@ def _collect_filesystem_trends_for_ai(rows: list[tuple], hours: int) -> list[dic
                 "avg_used_percent": (sum(values) / len(values)) if values else 0.0,
                 "delta_used_percent": delta_value,
                 "growth_percent_per_day": delta_value * 24.0 / hours_safe,
-                "series": _safe_sample_series(
-                    [
-                        {"time_utc": point.get("time_utc", ""), "value": point.get("used_percent", 0.0)}
-                        for point in points
-                    ]
-                ),
             }
         )
 
     trends.sort(key=lambda item: float(item.get("current_used_percent", 0.0) or 0.0), reverse=True)
     return trends
+
+
+def _compact_filesystem_for_prompt(items: list[dict], limit: int = 36) -> list[dict]:
+    compacted: list[dict] = []
+    for item in items[:limit]:
+        if not isinstance(item, dict):
+            continue
+        compacted.append(
+            {
+                "mountpoint": str(item.get("mountpoint", "") or "")[:80],
+                "current_used_percent": round(float(item.get("current_used_percent", 0.0) or 0.0), 1),
+                "delta_used_percent": round(float(item.get("delta_used_percent", 0.0) or 0.0), 1),
+                "growth_percent_per_day": round(float(item.get("growth_percent_per_day", 0.0) or 0.0), 1),
+                "total_kb": float(item.get("total_kb", 0.0) or 0.0),
+                "used_kb": float(item.get("used_kb", 0.0) or 0.0),
+                "sample_count": int(item.get("sample_count", 0) or 0),
+            }
+        )
+    return compacted
+
+
+def _compact_ai_context_for_prompt(context_payload: dict) -> dict:
+    """Shrink large context payloads to avoid OpenAI timeout on oversized requests."""
+    compact: dict = {
+        "hostname": context_payload.get("hostname", ""),
+        "metric": context_payload.get("metric", ""),
+        "metric_label": context_payload.get("metric_label", ""),
+        "window_hours": context_payload.get("window_hours", 24),
+        "report_count": context_payload.get("report_count", 0),
+        "latest_report_time_utc": context_payload.get("latest_report_time_utc", ""),
+        "operating_system": context_payload.get("operating_system", ""),
+        "os_family": context_payload.get("os_family", "linux"),
+        "has_hana_processes": context_payload.get("has_hana_processes", False),
+        "metric_summary": context_payload.get("metric_summary", {}),
+        "open_alerts": list(context_payload.get("open_alerts", []))[:8],
+        "top_processes": list(context_payload.get("top_processes", []))[:8],
+        "hana_processes": list(context_payload.get("hana_processes", []))[:12],
+    }
+
+    correlated = context_payload.get("correlated_series", {})
+    if isinstance(correlated, dict):
+        compact["correlated_series"] = {
+            "cpu_usage_percent": _safe_sample_series(list(correlated.get("cpu_usage_percent", [])), max_points=18),
+            "load_avg_1": _safe_sample_series(list(correlated.get("load_avg_1", [])), max_points=18),
+            "memory_used_percent": _safe_sample_series(list(correlated.get("memory_used_percent", [])), max_points=18),
+            "swap_used_percent": _safe_sample_series(list(correlated.get("swap_used_percent", [])), max_points=18),
+        }
+
+    metric = str(context_payload.get("metric", "") or "")
+    if metric == "filesystem":
+        fs_all = context_payload.get("filesystem_trends", [])
+        if not isinstance(fs_all, list):
+            fs_all = []
+        # Keep the prompt compact but still broad: top-full + top-growth + HANA mountpoints.
+        by_full = sorted(fs_all, key=lambda item: float((item or {}).get("current_used_percent", 0.0) or 0.0), reverse=True)
+        by_growth = sorted(fs_all, key=lambda item: float((item or {}).get("delta_used_percent", 0.0) or 0.0), reverse=True)
+        hana_related = [
+            item for item in fs_all
+            if isinstance(item, dict) and str(item.get("mountpoint", "") or "").lower().startswith("/hana/")
+        ]
+        merged: list[dict] = []
+        seen_mounts: set[str] = set()
+        for bucket in (hana_related, by_full[:18], by_growth[:18]):
+            for item in bucket:
+                if not isinstance(item, dict):
+                    continue
+                mount = str(item.get("mountpoint", "") or "")
+                if not mount or mount in seen_mounts:
+                    continue
+                seen_mounts.add(mount)
+                merged.append(item)
+                if len(merged) >= 36:
+                    break
+            if len(merged) >= 36:
+                break
+        compact["filesystem_trends"] = _compact_filesystem_for_prompt(merged, limit=36)
+        compact["top_full_filesystems"] = _compact_filesystem_for_prompt(by_full, limit=12)
+        compact["top_growth_filesystems"] = _compact_filesystem_for_prompt(by_growth, limit=12)
+    else:
+        compact["metric_series"] = _safe_sample_series(list(context_payload.get("metric_series", [])), max_points=24)
+
+    return compact
 
 
 def _collect_ai_metric_context(conn: sqlite3.Connection, hostname: str, metric: str, hours: int) -> dict:
@@ -1425,7 +1501,8 @@ def _openai_troubleshoot(context_payload: dict, ai_settings: dict | None = None)
             "timeout_sec": OPENAI_TIMEOUT_SEC,
             "max_tokens": OPENAI_MAX_TOKENS,
         }
-    context_json = json.dumps(context_payload, ensure_ascii=False)
+    prompt_context = _compact_ai_context_for_prompt(context_payload)
+    context_json = json.dumps(prompt_context, ensure_ascii=False)
     prompt_system = (
         "Du bist ein erfahrener SRE fuer Monitoring-Troubleshooting. "
         "Antwort ausschliesslich als JSON-Objekt ohne Markdown-Formatierung. "
@@ -1478,8 +1555,13 @@ def _openai_troubleshoot(context_payload: dict, ai_settings: dict | None = None)
         method="POST",
     )
 
+    request_timeout = max(3, int(ai_settings["timeout_sec"] or 12))
+    if str(context_payload.get("metric", "") or "") == "filesystem":
+        # Filesystem AI prompt is larger; use a higher floor to avoid read timeouts.
+        request_timeout = max(request_timeout, 25)
+
     try:
-        with request.urlopen(req, timeout=ai_settings["timeout_sec"]) as response:
+        with request.urlopen(req, timeout=request_timeout) as response:
             raw = response.read().decode("utf-8", errors="replace")
     except error.HTTPError as exc:
         details = exc.read().decode("utf-8", errors="replace")[:400]
