@@ -6616,6 +6616,7 @@ def update_ram_alerts_for_report(
 
 class MonitoringHandler(BaseHTTPRequestHandler):
     server_version = "MonitoringReceiver/0.1"
+    protocol_version = "HTTP/1.1"
 
     def _swagger_ui_html(self) -> str:
         return """<!doctype html>
