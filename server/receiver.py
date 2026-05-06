@@ -1000,6 +1000,13 @@ def _safe_sample_series(points: list[dict], max_points: int = 36) -> list[dict]:
     return sampled
 
 
+_HANA_PROCESS_RE = re.compile(
+    r"\b(hdbindexserver|hdbnameserver|hdbscriptserver|hdbxsengine|hdbcompileserver"
+    r"|hdbpreprocessor|hdbwebdispatcher|hdbdaemon|hdbrsutil|sapstartsrv"
+    r"|hdb[a-z0-9_-]+)\b"
+)
+
+
 def _detect_hana_processes(payload: dict) -> bool:
     top_block = payload.get("top_processes", {})
     if isinstance(top_block, dict):
@@ -1009,10 +1016,11 @@ def _detect_hana_processes(payload: dict) -> bool:
                 if not isinstance(entry, dict):
                     continue
                 cmd = str(entry.get("command", "") or entry.get("name", "") or "").lower()
-                if re.search(r"\\bhdb[a-z0-9_\\-]*\\b", cmd):
+                if _HANA_PROCESS_RE.search(cmd):
                     return True
+    # Fallback: scan entire serialized payload (catches any nested structure)
     serialized = json.dumps(payload, ensure_ascii=False).lower()
-    return bool(re.search(r"\\bhdb[a-z0-9_\\-]*\\b", serialized))
+    return bool(_HANA_PROCESS_RE.search(serialized))
 
 
 def _collect_top_commands(payload: dict, limit: int = 5) -> list[str]:
