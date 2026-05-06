@@ -1043,6 +1043,86 @@ def _collect_top_commands(payload: dict, limit: int = 5) -> list[str]:
     return commands
 
 
+def _collect_top_processes_detail(payload: dict, limit: int = 10) -> list[dict]:
+    """Return structured top-process list with cpu/mem for the AI context."""
+    top_block = payload.get("top_processes", {})
+    if not isinstance(top_block, dict):
+        return []
+    entries = top_block.get("entries", [])
+    if not isinstance(entries, list):
+        return []
+    result: list[dict] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name", "") or entry.get("command", "") or "").strip()
+        cmd = str(entry.get("command", "") or name).strip()
+        # Truncate long command lines for token efficiency
+        if len(cmd) > 120:
+            cmd = cmd[:120] + "…"
+        try:
+            cpu = round(float(entry.get("cpu_percent", 0) or 0), 1)
+        except (TypeError, ValueError):
+            cpu = 0.0
+        try:
+            mem = round(float(entry.get("memory_percent", 0) or 0), 1)
+        except (TypeError, ValueError):
+            mem = 0.0
+        try:
+            rss_mb = round(int(entry.get("rss_kb", 0) or 0) / 1024, 1)
+        except (TypeError, ValueError):
+            rss_mb = 0.0
+        if not name and not cmd:
+            continue
+        result.append({
+            "name": name[:80],
+            "command": cmd,
+            "cpu_percent": cpu,
+            "mem_percent": mem,
+            "rss_mb": rss_mb,
+        })
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _collect_hana_process_details(payload: dict) -> list[dict]:
+    """Return HANA-specific processes with their resource usage."""
+    top_block = payload.get("top_processes", {})
+    if not isinstance(top_block, dict):
+        return []
+    entries = top_block.get("entries", [])
+    if not isinstance(entries, list):
+        return []
+    hana_procs: list[dict] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name", "") or "").lower()
+        cmd = str(entry.get("command", "") or "").lower()
+        if not (_HANA_PROCESS_RE.search(name) or _HANA_PROCESS_RE.search(cmd)):
+            continue
+        try:
+            cpu = round(float(entry.get("cpu_percent", 0) or 0), 1)
+        except (TypeError, ValueError):
+            cpu = 0.0
+        try:
+            mem = round(float(entry.get("memory_percent", 0) or 0), 1)
+        except (TypeError, ValueError):
+            mem = 0.0
+        try:
+            rss_mb = round(int(entry.get("rss_kb", 0) or 0) / 1024, 1)
+        except (TypeError, ValueError):
+            rss_mb = 0.0
+        hana_procs.append({
+            "name": str(entry.get("name", "") or "").strip()[:80],
+            "cpu_percent": cpu,
+            "mem_percent": mem,
+            "rss_mb": rss_mb,
+        })
+    return hana_procs
+
+
 def _collect_ai_metric_context(conn: sqlite3.Connection, hostname: str, metric: str, hours: int) -> dict:
     metric_map = {
         "cpu_usage_percent": ("CPU", ("cpu", "usage_percent")),
@@ -1117,6 +1197,8 @@ def _collect_ai_metric_context(conn: sqlite3.Connection, hostname: str, metric: 
     os_family = normalize_os_family(os_name)
     has_hana = _detect_hana_processes(latest_payload)
     top_commands = _collect_top_commands(latest_payload)
+    top_processes = _collect_top_processes_detail(latest_payload, limit=10)
+    hana_processes = _collect_hana_process_details(latest_payload) if has_hana else []
 
     open_alerts_rows = conn.execute(
         """
@@ -1149,7 +1231,8 @@ def _collect_ai_metric_context(conn: sqlite3.Connection, hostname: str, metric: 
         "operating_system": os_name,
         "os_family": os_family,
         "has_hana_processes": has_hana,
-        "top_commands": top_commands,
+        "top_processes": top_processes,
+        "hana_processes": hana_processes,
         "metric_summary": metric_summary,
         "metric_series": _safe_sample_series(series),
         "correlated_series": {
@@ -1241,7 +1324,7 @@ def _openai_troubleshoot(context_payload: dict, ai_settings: dict | None = None)
     context_json = json.dumps(context_payload, ensure_ascii=False)
     prompt_system = (
         "Du bist ein erfahrener SRE fuer Monitoring-Troubleshooting. "
-        "Antwort ausschliesslich als JSON-Objekt ohne Markdown. "
+        "Antwort ausschliesslich als JSON-Objekt ohne Markdown-Formatierung. "
         "Ausgabeformat: "
         "{"
         "\"summary\": string,"
@@ -1250,17 +1333,21 @@ def _openai_troubleshoot(context_payload: dict, ai_settings: dict | None = None)
         "\"probable_causes\": string[],"
         "\"recommended_steps\": string[],"
         "\"quick_checks\": string[],"
-        "\"code_snippets\": [{\"title\": string, \"shell\": string, \"command\": string, \"description\": string}],"
+        "\"code_snippets\": [{\"title\": string, \"shell\": \"bash\"|\"powershell\", \"command\": string, \"description\": string}],"
         "\"notes\": string[]"
         "}. "
-        "Die Antwort muss kurz, konkret und operations-tauglich sein. "
-        "Codeschnipsel muessen direkt kopierbar sein. "
-        "Beruecksichtige das Betriebssystem. Nutze fuer Linux bash, fuer Windows powershell. "
-        "Wenn has_hana_processes=true und Linux, liefere mindestens einen HANA-bezogenen Troubleshooting-Befehl."
+        "Regeln: "
+        "1. Antwort kurz, konkret und operations-tauglich. "
+        "2. Codeschnipsel muessen direkt kopierbar sein. Liefere 4-8 Codeschnipsel. "
+        "3. Betriebssystem beachten: Linux=bash, Windows=powershell. "
+        "4. Wenn has_hana_processes=true: Analysiere die hana_processes-Liste mit cpu_percent/mem_percent/rss_mb. "
+        "   Liefere mindestens 3 HANA-spezifische Codeschnipsel (z.B. hdbcons, hdbsql, sapcontrol, HDB info). "
+        "   Erklaere welche HANA-Prozesse auffaellig viel Ressourcen verbrauchen. "
+        "5. Wenn top_processes vorhanden: Benenne die Top-Verursacher namentlich in probable_causes."
     )
     prompt_user = (
         "Analysiere diese Host-Metrik fuer Troubleshooting. "
-        "Fokussiere auf die angegebene Zielmetrik, nutze aber die korrelierten Metriken und offene Alerts. "
+        "Fokussiere auf die Zielmetrik, nutze korrrelierte Metriken, top_processes, hana_processes und offene Alerts. "
         "Kontext JSON:\n" + context_json
     )
 
