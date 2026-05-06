@@ -3402,9 +3402,9 @@ function renderSapB1SystemSummary(payload) {
     return "-";
   }
   if (fp && releaseDate) {
-    return `${fp} | ${releaseDate}`;
+    return `<strong>${escHtml(fp)}</strong> | ${escHtml(releaseDate)}`;
   }
-  return fp || releaseDate;
+  return fp ? `<strong>${escHtml(fp)}</strong>` : escHtml(releaseDate);
 }
 
 function renderSapB1SystemInfoCard(payload) {
@@ -4200,7 +4200,7 @@ function renderReportCard(report) {
         ${renderMetaItem("⚙️", "Kernel", payload.kernel)}
         ${renderMetaItem("⏱️", "Uptime", formatUptime(payload.uptime_seconds))}
         ${renderMetaItem("🗃️", "Queue", queueDepth + " Dateien")}
-        ${renderMetaItem("🧾", "SAP B1", sapB1Summary)}
+        ${renderMetaItemHtml("🧾", "SAP B1", sapB1Summary)}
         ${renderMetaItem("🟢", "HANA", hanaInfoMeta)}
       </div>
     </div>
