@@ -1,10 +1,10 @@
 :root {
-  --bg: #edf2f7;
-  --panel: #ffffff;
+  --bg: #e8f0f9;
+  --panel: #f5f9ff;
   --text: #1f2937;
   --muted: #64748b;
   --accent: #1e40af;
-  --line: #d5dee9;
+  --line: #c9d8ec;
   --ok: #16a34a;
   --ok-bg: #dcfce7;
   --ok-border: #86efac;
@@ -23,7 +23,8 @@
 body {
   margin: 0;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  background: radial-gradient(circle at top left, #dfe9f5 0%, var(--bg) 46%);
+  background: linear-gradient(180deg, #ffffff 0%, #e8f0f9 100%);
+  min-height: 100vh;
   color: var(--text);
   font-size: 14px;
 }
