@@ -23,7 +23,7 @@
 body {
   margin: 0;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  background: radial-gradient(circle at top left, #dfe9f5 0%, var(--bg) 46%);
+  background: linear-gradient(180deg, #ffffff 0%, #eef4fd 100%) fixed;
   color: var(--text);
   font-size: 14px;
 }
@@ -36,7 +36,7 @@ body[data-theme="dark"] {
   --line: #24344d;
   --accent: #3b82f6;
   color-scheme: dark;
-  background: radial-gradient(circle at top left, #1b2b45 0%, var(--bg) 48%);
+  background: linear-gradient(180deg, #111b2f 0%, #0d1728 100%) fixed;
 }
 
 .login-overlay {
