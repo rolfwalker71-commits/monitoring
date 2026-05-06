@@ -3450,6 +3450,11 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   min-height: 20px;
 }
 
+.meta-group-item span strong {
+  font-size: inherit;
+  color: inherit;
+}
+
 .detail-cards {
   display: grid;
   gap: 12px;
