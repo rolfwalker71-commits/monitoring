@@ -3575,9 +3575,60 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   color: #64748b;
 }
 
+.sap-b1-size-label--bold {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+}
+
 .sap-b1-size-value {
   font-size: 13px;
   color: #0f172a;
+}
+
+.sap-b1-size-value--bold {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.sap-b1-raw-details {
+  border: 1px solid #d4e4f7;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.sap-b1-raw-summary {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e3a5f;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sap-b1-raw-summary::before {
+  content: "▶";
+  font-size: 10px;
+  color: #64748b;
+  transition: transform 0.18s ease;
+  display: inline-block;
+}
+
+.sap-b1-raw-details[open] .sap-b1-raw-summary::before {
+  transform: rotate(90deg);
+}
+
+.sap-b1-raw-details .sap-b1-raw-output {
+  margin: 0;
+  border: none;
+  border-top: 1px solid #d4e4f7;
+  border-radius: 0 0 8px 8px;
 }
 
 .fs-table {

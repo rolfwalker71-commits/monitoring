@@ -3403,6 +3403,8 @@ function renderSapB1SystemInfoCard(payload) {
   const mapping = versionInfo.mapping;
   const errorText = asText(versionBlock.error, "");
   const landscapeInfo = getSapB1LandscapeStatus(payload);
+  const hanaInfo = payload && typeof payload.hana_info === "object" ? payload.hana_info : null;
+  const hanaVersion = asText(hanaInfo?.version, "");
 
   return `
     <section class="detail-card sap-b1-card">
@@ -3411,19 +3413,20 @@ function renderSapB1SystemInfoCard(payload) {
         <article class="sap-b1-item">
           <header>Server Components Version</header>
           <div class="sap-b1-size-row"><span class="sap-b1-size-label">HANA Landscape</span><strong class="sap-b1-size-value">${escapeHtml(landscapeInfo.compatible ? "passt zu HANA-Landschaft" : landscapeInfo.detail)}</strong></div>
-          <div class="sap-b1-size-row"><span class="sap-b1-size-label">Status</span><strong class="sap-b1-size-value">${available ? "verfuegbar" : "nicht verfuegbar"}</strong></div>
+          <div class="sap-b1-size-row"><span class="sap-b1-size-label">HANA Version</span><strong class="sap-b1-size-value">${escapeHtml(hanaVersion || "nicht erkannt")}</strong></div>
+          <div class="sap-b1-size-row"><span class="sap-b1-size-label">Status</span><strong class="sap-b1-size-value">${available ? "Verfügbar" : "nicht verfügbar"}</strong></div>
           <div class="sap-b1-size-row"><span class="sap-b1-size-label">Version</span><strong class="sap-b1-size-value">${escapeHtml(versionText || "-")}</strong></div>
           <div class="sap-b1-size-row"><span class="sap-b1-size-label">Build</span><strong class="sap-b1-size-value">${escapeHtml(versionInfo.build || "-")}</strong></div>
           <div class="sap-b1-size-row"><span class="sap-b1-size-label">Patch Level</span><strong class="sap-b1-size-value">${escapeHtml(versionInfo.patchLevel || (mapping?.patchLevel || "-"))}</strong></div>
-          <div class="sap-b1-size-row"><span class="sap-b1-size-label">Feature Pack</span><strong class="sap-b1-size-value">${escapeHtml(mapping?.featurePack || "unbekannt")}</strong></div>
-          <div class="sap-b1-size-row"><span class="sap-b1-size-label">Release Date</span><strong class="sap-b1-size-value">${escapeHtml(mapping?.releaseDate || "unbekannt")}</strong></div>
+          <div class="sap-b1-size-row"><span class="sap-b1-size-label sap-b1-size-label--bold">Feature Pack</span><strong class="sap-b1-size-value sap-b1-size-value--bold">${escapeHtml(mapping?.featurePack || "unbekannt")}</strong></div>
+          <div class="sap-b1-size-row"><span class="sap-b1-size-label sap-b1-size-label--bold">Release Date</span><strong class="sap-b1-size-value sap-b1-size-value--bold">${escapeHtml(mapping?.releaseDate || "unbekannt")}</strong></div>
           <div class="sap-b1-path" title="${escapeHtml(setupPath)}">${renderPathWithNameHighlight(setupPath)}</div>
           ${errorText && errorText !== "-" ? `<p class="muted" style="margin-top:8px">Fehler: ${escapeHtml(errorText)}</p>` : ""}
         </article>
-        <article class="sap-b1-item">
-          <header>Roh-Output</header>
+        <details class="sap-b1-raw-details">
+          <summary class="sap-b1-raw-summary">Roh-Output</summary>
           <pre class="sap-b1-raw-output">${escapeHtml(rawOutput || "-")}</pre>
-        </article>
+        </details>
       </div>
     </section>
   `;

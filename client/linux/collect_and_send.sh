@@ -27,6 +27,7 @@ SAP_B1_BUSINESSONE_LOG_DIR="${SAP_B1_BUSINESSONE_LOG_DIR:-/usr/sap/SAPBusinessOn
 SAP_B1_SETUP_PATH="${SAP_B1_SETUP_PATH:-/usr/sap/SAPBusinessOne/setup}"
 SAP_B1_SIZE_TIMEOUT_SEC="${SAP_B1_SIZE_TIMEOUT_SEC:-20}"
 SAP_B1_VERSION_TIMEOUT_SEC="${SAP_B1_VERSION_TIMEOUT_SEC:-15}"
+HANA_VERSION_TIMEOUT_SEC="${HANA_VERSION_TIMEOUT_SEC:-10}"
 DIR_SCAN_PATHS="${DIR_SCAN_PATHS:-}"
 DIR_SCAN_MAX_ITEMS="${DIR_SCAN_MAX_ITEMS:-50}"
 DIR_SCAN_DEEP_PATHS="${DIR_SCAN_DEEP_PATHS:-}"
@@ -180,6 +181,50 @@ collect_sap_business_one_json() {
     "$(json_escape "$setup_path")" \
     "$setup_exists" \
     "$(json_escape "$version_raw")" \
+    "$(json_escape "$version_text")" \
+    "$(json_escape "$version_error")"
+}
+
+collect_hana_version_json() {
+  local hdb_path=""
+  local version_raw=""
+  local version_text=""
+  local version_error=""
+
+  local hdb_search_result=""
+  hdb_search_result="$(find /usr/sap -maxdepth 6 -name "hdbnsutil" -type f 2>/dev/null | head -1 || true)"
+  if [[ -n "$hdb_search_result" ]] && [[ -x "$hdb_search_result" ]]; then
+    hdb_path="$hdb_search_result"
+  fi
+
+  if [[ -z "$hdb_path" ]]; then
+    hdb_path="$(command -v hdbnsutil 2>/dev/null || true)"
+  fi
+
+  if [[ -n "$hdb_path" ]]; then
+    local timeout_sec="$HANA_VERSION_TIMEOUT_SEC"
+    if ! [[  "$timeout_sec" =~ ^[0-9]+$ ]] || [[ "$timeout_sec" -lt 1 ]]; then
+      timeout_sec=10
+    fi
+    if command -v timeout >/dev/null 2>&1; then
+      version_raw="$(timeout "${timeout_sec}s" "$hdb_path" -v 2>&1 | head -20 || true)"
+    else
+      version_raw="$("$hdb_path" -v 2>&1 | head -20 || true)"
+    fi
+    version_raw="$(printf '%s' "$version_raw" | sed -e 's/[[:space:]]*$//')"
+    version_text="$(printf '%s\n' "$version_raw" | awk '/version:/ { gsub(/^[[:space:]]+version:[[:space:]]+/, ""); print; exit }')"
+    if [[ -z "$version_text" ]] && [[ -n "$version_raw" ]]; then
+      version_error="version nicht parsebar"
+    elif [[ -z "$version_raw" ]]; then
+      version_error="hdbnsutil lieferte keine Ausgabe"
+    fi
+  else
+    version_error="hdbnsutil nicht gefunden"
+  fi
+
+  printf '{"available":%s,"path":"%s","version":"%s","error":"%s"}' \
+    "$([ -n "$hdb_path" ] && echo true || echo false)" \
+    "$(json_escape "$hdb_path")" \
     "$(json_escape "$version_text")" \
     "$(json_escape "$version_error")"
 }
@@ -1231,6 +1276,7 @@ AGENT_UPDATE_JSON="$(collect_update_log_json)"
 AGENT_CONFIG_JSON="$(collect_agent_config_json)"
 LARGE_FILES_JSON="$(collect_large_files_json)"
 SAP_BUSINESS_ONE_JSON="$(collect_sap_business_one_json)"
+HANA_INFO_JSON="$(collect_hana_version_json)"
 DIR_LISTINGS_JSON="$(collect_dir_listings_json)"
 DIR_DEEP_LISTINGS_JSON="$(collect_dir_deep_listings_json)"
 SEND_STARTED_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
@@ -1305,6 +1351,7 @@ PAYLOAD=$(cat <<EOF
   "agent_config": ${AGENT_CONFIG_JSON},
   "large_files": ${LARGE_FILES_JSON},
   "sap_business_one": ${SAP_BUSINESS_ONE_JSON},
+  "hana_info": ${HANA_INFO_JSON},
   "dir_listings": ${DIR_LISTINGS_JSON},
   "dir_deep_listings": ${DIR_DEEP_LISTINGS_JSON}
 }
