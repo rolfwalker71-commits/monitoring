@@ -3046,6 +3046,7 @@ async function openAiTroubleshootModal(metricKey, metricLabel) {
     const analysis = data.analysis || {};
     const osFamily = String(context.os_family || "linux");
     const hanaHint = context.has_hana_processes ? "HANA erkannt" : "kein HANA Prozess erkannt";
+    const windowHours = Number(context.window_hours || state.analysisHours || 24);
     const latest = formatUtcPlus2(context.latest_report_time_utc || "");
 
     bodyEl.innerHTML = `
@@ -3053,6 +3054,7 @@ async function openAiTroubleshootModal(metricKey, metricLabel) {
         <span class="stat-chip">Severity: ${escapeHtml(aiSeverityLabel(analysis.severity))}</span>
         <span class="stat-chip">Confidence: ${escapeHtml(aiConfidenceLabel(analysis.confidence))}</span>
         <span class="stat-chip">OS: ${escapeHtml(osFamily)}</span>
+        <span class="stat-chip">Zeitraum: ${escapeHtml(String(windowHours))}h</span>
         <span class="stat-chip">${escapeHtml(hanaHint)}</span>
         <span class="stat-chip muted">Stand: ${escapeHtml(latest)}</span>
       </div>
@@ -6173,6 +6175,13 @@ function wireEvents() {
         return;
       }
       await openAiTroubleshootModal(metricKey, metricLabel);
+    });
+  }
+
+  const filesystemAiTroubleshootButton = document.getElementById("filesystemAiTroubleshootButton");
+  if (filesystemAiTroubleshootButton) {
+    filesystemAiTroubleshootButton.addEventListener("click", async () => {
+      await openAiTroubleshootModal("filesystem", "Filesystem (alle Mountpoints)");
     });
   }
 

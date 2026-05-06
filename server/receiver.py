@@ -1123,11 +1123,87 @@ def _collect_hana_process_details(payload: dict) -> list[dict]:
     return hana_procs
 
 
+def _collect_filesystem_trends_for_ai(rows: list[tuple], hours: int) -> list[dict]:
+    fs_by_mountpoint: dict[str, list[dict]] = {}
+    fs_total_kb_by_mountpoint: dict[str, float] = {}
+
+    for row in rows:
+        ts = str(row[0] or "")
+        payload = parse_payload_json(str(row[1] or "{}"))
+        filesystems = payload.get("filesystems", [])
+        if not isinstance(filesystems, list):
+            continue
+
+        for fs in filesystems:
+            if not isinstance(fs, dict):
+                continue
+            mountpoint = str(fs.get("mountpoint", "") or "").strip()
+            if not mountpoint:
+                continue
+            try:
+                used_percent = float(fs.get("used_percent"))
+            except (TypeError, ValueError):
+                continue
+            used_percent = max(0.0, min(used_percent, 100.0))
+
+            total_kb_value = fs.get("blocks", fs.get("total_kb", fs.get("size_total_kb")))
+            try:
+                total_kb = float(total_kb_value)
+            except (TypeError, ValueError):
+                total_kb = None
+            if total_kb is not None and total_kb >= 0:
+                fs_total_kb_by_mountpoint[mountpoint] = total_kb
+
+            fs_by_mountpoint.setdefault(mountpoint, []).append(
+                {
+                    "time_utc": ts,
+                    "used_percent": used_percent,
+                }
+            )
+
+    trends: list[dict] = []
+    hours_safe = max(1, int(hours or 1))
+    for mountpoint, points in fs_by_mountpoint.items():
+        if not points:
+            continue
+        values = [float(point.get("used_percent", 0.0) or 0.0) for point in points]
+        first_value = values[0]
+        last_value = values[-1]
+        delta_value = last_value - first_value
+        total_kb = fs_total_kb_by_mountpoint.get(mountpoint)
+        used_kb = (total_kb * last_value / 100.0) if total_kb is not None else None
+
+        trends.append(
+            {
+                "mountpoint": mountpoint,
+                "sample_count": len(values),
+                "total_kb": total_kb,
+                "used_kb": used_kb,
+                "current_used_percent": last_value,
+                "min_used_percent": min(values),
+                "max_used_percent": max(values),
+                "avg_used_percent": (sum(values) / len(values)) if values else 0.0,
+                "delta_used_percent": delta_value,
+                "growth_percent_per_day": delta_value * 24.0 / hours_safe,
+                "series": _safe_sample_series(
+                    [
+                        {"time_utc": point.get("time_utc", ""), "value": point.get("used_percent", 0.0)}
+                        for point in points
+                    ]
+                ),
+            }
+        )
+
+    trends.sort(key=lambda item: float(item.get("current_used_percent", 0.0) or 0.0), reverse=True)
+    return trends
+
+
 def _collect_ai_metric_context(conn: sqlite3.Connection, hostname: str, metric: str, hours: int) -> dict:
     metric_map = {
         "cpu_usage_percent": ("CPU", ("cpu", "usage_percent")),
         "memory_used_percent": ("RAM", ("memory", "used_percent")),
         "swap_used_percent": ("SWAP", ("swap", "used_percent")),
+        "filesystem": ("Filesystem (alle Mountpoints)", None),
     }
     metric_entry = metric_map.get(metric)
     if metric_entry is None:
@@ -1170,11 +1246,12 @@ def _collect_ai_metric_context(conn: sqlite3.Connection, hostname: str, metric: 
     for row in rows:
         payload = parse_payload_json(str(row[1] or "{}"))
         ts = str(row[0] or "")
-        current_value = get_nested_number(payload, metric_path[0], metric_path[1])
-        if current_value is not None:
-            numeric = float(current_value)
-            values.append(numeric)
-            series.append({"time_utc": ts, "value": numeric})
+        if metric_path:
+            current_value = get_nested_number(payload, metric_path[0], metric_path[1])
+            if current_value is not None:
+                numeric = float(current_value)
+                values.append(numeric)
+                series.append({"time_utc": ts, "value": numeric})
 
         cpu_value = get_nested_number(payload, "cpu", "usage_percent")
         if cpu_value is not None:
@@ -1189,14 +1266,38 @@ def _collect_ai_metric_context(conn: sqlite3.Connection, hostname: str, metric: 
         if swap_value is not None:
             swap_series.append({"time_utc": ts, "value": float(swap_value)})
 
-    metric_summary = summarize_numeric_series(values)
-    if not metric_summary:
-        raise ValueError("metric has no usable points")
+    filesystem_trends: list[dict] = []
+    top_growth_filesystems: list[dict] = []
+    top_full_filesystems: list[dict] = []
+
+    if metric == "filesystem":
+        filesystem_trends = _collect_filesystem_trends_for_ai(rows, hours)
+        if not filesystem_trends:
+            raise ValueError("filesystem metric has no usable points")
+        top_growth_filesystems = sorted(
+            filesystem_trends,
+            key=lambda item: float(item.get("delta_used_percent", 0.0) or 0.0),
+            reverse=True,
+        )[:12]
+        top_full_filesystems = sorted(
+            filesystem_trends,
+            key=lambda item: float(item.get("current_used_percent", 0.0) or 0.0),
+            reverse=True,
+        )[:12]
+        metric_summary = {
+            "mountpoint_count": len(filesystem_trends),
+            "highest_used_percent": max(float(item.get("current_used_percent", 0.0) or 0.0) for item in filesystem_trends),
+            "largest_growth_percent": max(float(item.get("delta_used_percent", 0.0) or 0.0) for item in filesystem_trends),
+            "critical_mountpoints": sum(1 for item in filesystem_trends if float(item.get("current_used_percent", 0.0) or 0.0) >= 90.0),
+        }
+    else:
+        metric_summary = summarize_numeric_series(values)
+        if not metric_summary:
+            raise ValueError("metric has no usable points")
 
     os_name = str(latest_payload.get("os", "") or "")
     os_family = normalize_os_family(os_name)
     has_hana = _detect_hana_processes(latest_payload)
-    top_commands = _collect_top_commands(latest_payload)
     top_processes = _collect_top_processes_detail(latest_payload, limit=10)
     hana_processes = _collect_hana_process_details(latest_payload) if has_hana else []
 
@@ -1235,6 +1336,9 @@ def _collect_ai_metric_context(conn: sqlite3.Connection, hostname: str, metric: 
         "hana_processes": hana_processes,
         "metric_summary": metric_summary,
         "metric_series": _safe_sample_series(series),
+        "filesystem_trends": filesystem_trends,
+        "top_growth_filesystems": top_growth_filesystems,
+        "top_full_filesystems": top_full_filesystems,
         "correlated_series": {
             "cpu_usage_percent": _safe_sample_series(cpu_series),
             "load_avg_1": _safe_sample_series(load_series),
@@ -1343,11 +1447,14 @@ def _openai_troubleshoot(context_payload: dict, ai_settings: dict | None = None)
         "4. Wenn has_hana_processes=true: Analysiere die hana_processes-Liste mit cpu_percent/mem_percent/rss_mb. "
         "   Liefere mindestens 3 HANA-spezifische Codeschnipsel (z.B. hdbcons, hdbsql, sapcontrol, HDB info). "
         "   Erklaere welche HANA-Prozesse auffaellig viel Ressourcen verbrauchen. "
-        "5. Wenn top_processes vorhanden: Benenne die Top-Verursacher namentlich in probable_causes."
+        "5. Wenn top_processes vorhanden: Benenne die Top-Verursacher namentlich in probable_causes. "
+        "6. Wenn metric=filesystem: Bewerte alle filesystem_trends inkl. Wachstum (delta/growth_percent_per_day), "
+        "   aktuelle Groesse (total_kb) und Auslastung je Mountpoint. Beruecksichtige besonders /hana/data und /hana/log, "
+        "   nenne proaktive HANA-Massnahmen, bevor ein Filesystem voll laeuft."
     )
     prompt_user = (
         "Analysiere diese Host-Metrik fuer Troubleshooting. "
-        "Fokussiere auf die Zielmetrik, nutze korrrelierte Metriken, top_processes, hana_processes und offene Alerts. "
+        "Fokussiere auf die Zielmetrik, nutze korrelierte Metriken, top_processes, hana_processes und offene Alerts. "
         "Kontext JSON:\n" + context_json
     )
 
@@ -8144,7 +8251,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             except (TypeError, ValueError):
                 window_hours_int = 24
 
-            allowed_metrics = {"cpu_usage_percent", "memory_used_percent", "swap_used_percent"}
+            allowed_metrics = {"cpu_usage_percent", "memory_used_percent", "swap_used_percent", "filesystem"}
             if not hostname:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname required"})
                 return
