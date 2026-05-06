@@ -2463,17 +2463,61 @@ function resourceTroubleshootingHint(label, value, suffix) {
   return `<span class="trend-hint">💡 ${hint}</span>`;
 }
 
+function aiSeverityLabel(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized === "critical") return "Kritisch";
+  if (normalized === "warning") return "Warnung";
+  return "Info";
+}
+
+function aiConfidenceLabel(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized === "hoch") return "hoch";
+  if (normalized === "niedrig") return "niedrig";
+  return "mittel";
+}
+
+function renderAiList(items) {
+  const list = Array.isArray(items) ? items.filter((item) => String(item || "").trim()) : [];
+  if (list.length === 0) {
+    return "<p class=\"muted\">Keine Eintraege.</p>";
+  }
+  return `<ul>${list.map((item) => `<li>${escapeHtml(String(item))}</li>`).join("")}</ul>`;
+}
+
+function renderAiCodeBlocks(blocks) {
+  const snippets = Array.isArray(blocks) ? blocks : [];
+  if (snippets.length === 0) {
+    return "<p class=\"muted\">Keine Codeschnipsel vorhanden.</p>";
+  }
+  return snippets
+    .map((item) => {
+      const shell = String(item?.shell || "bash");
+      const title = String(item?.title || "Befehl");
+      const command = String(item?.command || "").trim();
+      const description = String(item?.description || "").trim();
+      return `
+        <article class="ai-code-card">
+          <header><strong>${escapeHtml(title)}</strong><span>${escapeHtml(shell)}</span></header>
+          ${description ? `<p>${escapeHtml(description)}</p>` : ""}
+          <pre><code>${escapeHtml(command)}</code></pre>
+        </article>
+      `;
+    })
+    .join("");
+}
+
 function renderResourceTrendCards(resourceTrends, latestReportTimeUtc, swapTotalKb) {
   const standText = formatUtcPlus2(latestReportTimeUtc);
   const entries = [
-    ["🧠 CPU", resourceTrends.cpu_usage_percent, "%"],
-    ["📉 Load 1m", resourceTrends.load_avg_1, ""],
-    ["🧮 RAM", resourceTrends.memory_used_percent, "%"],
-    ["💤 Swap", resourceTrends.swap_used_percent, "%"],
+    ["🧠 CPU", resourceTrends.cpu_usage_percent, "%", "cpu_usage_percent"],
+    ["📉 Load 1m", resourceTrends.load_avg_1, "", ""],
+    ["🧮 RAM", resourceTrends.memory_used_percent, "%", "memory_used_percent"],
+    ["💤 Swap", resourceTrends.swap_used_percent, "%", "swap_used_percent"],
   ];
 
   return entries
-    .map(([label, value, suffix]) => {
+    .map(([label, value, suffix, metricKey]) => {
       if (!value) {
         return `
           <article class="trend-card muted">
@@ -2487,9 +2531,16 @@ function renderResourceTrendCards(resourceTrends, latestReportTimeUtc, swapTotal
         ? `<span>Gesamt: ${formatKilobytes(swapTotalKb)}</span>`
         : "";
 
+      const aiButton = metricKey
+        ? `<button class="btn-secondary btn-secondary--compact trend-ai-btn" type="button" data-ai-metric="${escapeHtml(metricKey)}" data-ai-label="${escapeHtml(label)}">🤖 KI Analyse</button>`
+        : "";
+
       return `
         <article class="trend-card">
-          <strong>${label}</strong>
+          <div class="trend-card-head">
+            <strong>${label}</strong>
+            ${aiButton}
+          </div>
           <span class="trend-current">Aktuell: ${formatNumber(value.current)}${suffix} <span class="trend-stand">(${standText})</span></span>
           <span>Min/Max: ${formatNumber(value.min)}${suffix} / ${formatNumber(value.max)}${suffix}</span>
           <span>Avg: ${formatNumber(value.avg)}${suffix}</span>
@@ -2907,6 +2958,88 @@ function openChartDrillModal(item, latestReportTimeUtc) {
     </div>
   `;
   modal.classList.remove("hidden");
+}
+
+function closeAiTroubleshootModal() {
+  const modal = document.getElementById("aiTroubleshootModal");
+  if (modal) {
+    modal.classList.add("hidden");
+  }
+}
+
+async function openAiTroubleshootModal(metricKey, metricLabel) {
+  const modal = document.getElementById("aiTroubleshootModal");
+  const titleEl = document.getElementById("aiTroubleshootTitle");
+  const bodyEl = document.getElementById("aiTroubleshootBody");
+  const statusEl = document.getElementById("aiTroubleshootStatus");
+  if (!modal || !titleEl || !bodyEl || !statusEl) {
+    return;
+  }
+  if (!state.selectedHost) {
+    window.alert("Kein Host ausgewaehlt.");
+    return;
+  }
+
+  titleEl.textContent = `🤖 KI Analyse: ${metricLabel}`;
+  statusEl.textContent = "Analyse wird erstellt...";
+  bodyEl.innerHTML = "<p class=\"muted\">Bitte warten...</p>";
+  modal.classList.remove("hidden");
+
+  try {
+    const response = await fetch("/api/v1/ai-troubleshoot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        hostname: state.selectedHost,
+        metric: metricKey,
+        window_hours: state.analysisHours,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.details || data.error || ("HTTP " + response.status));
+    }
+
+    const context = data.context || {};
+    const analysis = data.analysis || {};
+    const osFamily = String(context.os_family || "linux");
+    const hanaHint = context.has_hana_processes ? "HANA erkannt" : "kein HANA Prozess erkannt";
+    const latest = formatUtcPlus2(context.latest_report_time_utc || "");
+
+    bodyEl.innerHTML = `
+      <div class="ai-summary-row">
+        <span class="stat-chip">Severity: ${escapeHtml(aiSeverityLabel(analysis.severity))}</span>
+        <span class="stat-chip">Confidence: ${escapeHtml(aiConfidenceLabel(analysis.confidence))}</span>
+        <span class="stat-chip">OS: ${escapeHtml(osFamily)}</span>
+        <span class="stat-chip">${escapeHtml(hanaHint)}</span>
+        <span class="stat-chip muted">Stand: ${escapeHtml(latest)}</span>
+      </div>
+      <section class="ai-block">
+        <h5>Zusammenfassung</h5>
+        <p>${escapeHtml(String(analysis.summary || "Keine Zusammenfassung"))}</p>
+      </section>
+      <section class="ai-block">
+        <h5>Wahrscheinliche Ursachen</h5>
+        ${renderAiList(analysis.probable_causes)}
+      </section>
+      <section class="ai-block">
+        <h5>Empfohlene Schritte</h5>
+        ${renderAiList(analysis.recommended_steps)}
+      </section>
+      <section class="ai-block">
+        <h5>Quick Checks</h5>
+        ${renderAiList(analysis.quick_checks)}
+      </section>
+      <section class="ai-block">
+        <h5>Codeschnipsel</h5>
+        <div class="ai-code-grid">${renderAiCodeBlocks(analysis.code_snippets)}</div>
+      </section>
+    `;
+    statusEl.textContent = data.cached ? `Aus Cache (${escapeHtml(String(data.model || ""))})` : `Live Analyse (${escapeHtml(String(data.model || ""))})`;
+  } catch (error) {
+    bodyEl.innerHTML = `<p class=\"muted\">Fehler bei der KI-Analyse: ${escapeHtml(error.message)}</p>`;
+    statusEl.textContent = "Fehler";
+  }
 }
 
 function filesystemLineColor(currentUsedPercent) {
@@ -5970,6 +6103,37 @@ function wireEvents() {
     });
   }
 
+  const aiModalCloseBtn = document.getElementById("aiTroubleshootCloseBtn");
+  if (aiModalCloseBtn) {
+    aiModalCloseBtn.addEventListener("click", () => {
+      closeAiTroubleshootModal();
+    });
+  }
+  const aiModalBackdrop = document.getElementById("aiTroubleshootBackdrop");
+  if (aiModalBackdrop) {
+    aiModalBackdrop.addEventListener("click", () => {
+      closeAiTroubleshootModal();
+    });
+  }
+
+  const resourceTrendCards = document.getElementById("resourceTrendCards");
+  if (resourceTrendCards) {
+    resourceTrendCards.addEventListener("click", async (event) => {
+      const button = event.target instanceof Element ? event.target.closest(".trend-ai-btn") : null;
+      if (!button) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const metricKey = String(button.getAttribute("data-ai-metric") || "").trim();
+      const metricLabel = String(button.getAttribute("data-ai-label") || metricKey || "Metrik");
+      if (!metricKey) {
+        return;
+      }
+      await openAiTroubleshootModal(metricKey, metricLabel);
+    });
+  }
+
   const filesystemVisibilityBackdrop = document.getElementById("filesystemVisibilityBackdrop");
   if (filesystemVisibilityBackdrop) {
     filesystemVisibilityBackdrop.addEventListener("click", () => {
@@ -6023,6 +6187,10 @@ function wireEvents() {
       const modal = document.getElementById("chartDrillModal");
       if (modal && !modal.classList.contains("hidden")) {
         modal.classList.add("hidden");
+      }
+      const aiModal = document.getElementById("aiTroubleshootModal");
+      if (aiModal && !aiModal.classList.contains("hidden")) {
+        closeAiTroubleshootModal();
       }
     }
   });

@@ -3006,6 +3006,13 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   gap: 4px;
 }
 
+.trend-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .trend-card strong {
   font-size: 12px;
 }
@@ -3013,6 +3020,13 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 .trend-card span {
   font-size: 11px;
   color: var(--muted);
+}
+
+.trend-ai-btn {
+  min-height: 24px;
+  padding: 0 10px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .trend-current {
@@ -3044,6 +3058,79 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   padding: 1px 3px;
   font-size: 9.5px;
   font-family: monospace;
+}
+
+.ai-troubleshoot-inner {
+  width: min(980px, 100%);
+}
+
+.ai-troubleshoot-body {
+  display: grid;
+  gap: 10px;
+}
+
+.ai-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ai-block h5 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.ai-block p,
+.ai-block li {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ai-block ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.ai-code-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-code-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  padding: 8px;
+}
+
+.ai-code-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.ai-code-card header span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ai-code-card p {
+  margin: 0 0 6px;
+}
+
+.ai-code-card pre {
+  margin: 0;
+  border-radius: 6px;
+  padding: 8px;
+  overflow: auto;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.ai-code-card code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
 }
 
 .alerts-panel {

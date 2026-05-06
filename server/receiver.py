@@ -69,6 +69,13 @@ MICROSOFT_TENANT_ID_DEFAULT = os.getenv("MONITORING_MS_TENANT_ID", "organization
 MICROSOFT_CLIENT_ID_DEFAULT = os.getenv("MONITORING_MS_CLIENT_ID", "").strip()
 MICROSOFT_CLIENT_SECRET_DEFAULT = os.getenv("MONITORING_MS_CLIENT_SECRET", "").strip()
 MICROSOFT_OAUTH_ENABLED_DEFAULT = os.getenv("MONITORING_MS_OAUTH_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+OPENAI_API_KEY = os.getenv("MONITORING_OPENAI_API_KEY", "").strip()
+OPENAI_MODEL = os.getenv("MONITORING_OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
+OPENAI_TIMEOUT_SEC = max(3, min(int(os.getenv("MONITORING_OPENAI_TIMEOUT_SEC", "12") or "12"), 60))
+OPENAI_MAX_TOKENS = max(256, min(int(os.getenv("MONITORING_OPENAI_MAX_TOKENS", "1200") or "1200"), 4000))
+AI_TROUBLESHOOT_ENABLED_DEFAULT = os.getenv("MONITORING_AI_TROUBLESHOOT_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
+AI_TROUBLESHOOT_CACHE_TTL_SEC = max(30, min(int(os.getenv("MONITORING_AI_TROUBLESHOOT_CACHE_TTL_SEC", "600") or "600"), 3600))
+AI_TROUBLESHOOT_CACHE_MAX_ITEMS = max(20, min(int(os.getenv("MONITORING_AI_TROUBLESHOOT_CACHE_MAX_ITEMS", "300") or "300"), 2000))
 MICROSOFT_OAUTH_SCOPES = [
     "offline_access",
     "openid",
@@ -96,6 +103,9 @@ DEFAULT_VISIBLE_FILESYSTEM_MOUNTPOINTS = {
     "/hana/shared",
     "/hana/shared/backup_service",
 }
+
+_AI_TROUBLESHOOT_CACHE_LOCK = threading.Lock()
+_AI_TROUBLESHOOT_CACHE: dict[str, tuple[float, dict]] = {}
 
 
 def parse_int(query: dict, key: str, default: int, min_value: int, max_value: int) -> int:
@@ -899,6 +909,349 @@ def parse_payload_json(payload_json: str) -> dict:
     except json.JSONDecodeError:
         return {}
     return {}
+
+
+def ai_troubleshoot_enabled() -> bool:
+    return AI_TROUBLESHOOT_ENABLED_DEFAULT and bool(OPENAI_API_KEY)
+
+
+def _ai_cache_get(cache_key: str) -> dict | None:
+    now_ts = time.time()
+    with _AI_TROUBLESHOOT_CACHE_LOCK:
+        hit = _AI_TROUBLESHOOT_CACHE.get(cache_key)
+        if not hit:
+            return None
+        expires_at, payload = hit
+        if expires_at <= now_ts:
+            _AI_TROUBLESHOOT_CACHE.pop(cache_key, None)
+            return None
+        return payload
+
+
+def _ai_cache_set(cache_key: str, payload: dict) -> None:
+    now_ts = time.time()
+    with _AI_TROUBLESHOOT_CACHE_LOCK:
+        _AI_TROUBLESHOOT_CACHE[cache_key] = (now_ts + AI_TROUBLESHOOT_CACHE_TTL_SEC, payload)
+        if len(_AI_TROUBLESHOOT_CACHE) <= AI_TROUBLESHOOT_CACHE_MAX_ITEMS:
+            return
+        expired_keys = [key for key, value in _AI_TROUBLESHOOT_CACHE.items() if value[0] <= now_ts]
+        for key in expired_keys:
+            _AI_TROUBLESHOOT_CACHE.pop(key, None)
+        if len(_AI_TROUBLESHOOT_CACHE) <= AI_TROUBLESHOOT_CACHE_MAX_ITEMS:
+            return
+        for key, _value in sorted(_AI_TROUBLESHOOT_CACHE.items(), key=lambda item: item[1][0])[: max(1, len(_AI_TROUBLESHOOT_CACHE) - AI_TROUBLESHOOT_CACHE_MAX_ITEMS)]:
+            _AI_TROUBLESHOOT_CACHE.pop(key, None)
+
+
+def _safe_sample_series(points: list[dict], max_points: int = 36) -> list[dict]:
+    if len(points) <= max_points:
+        return points
+    if max_points <= 2:
+        return [points[0], points[-1]]
+    step = (len(points) - 1) / float(max_points - 1)
+    sampled: list[dict] = []
+    for idx in range(max_points):
+        source_idx = int(round(idx * step))
+        source_idx = max(0, min(source_idx, len(points) - 1))
+        sampled.append(points[source_idx])
+    return sampled
+
+
+def _detect_hana_processes(payload: dict) -> bool:
+    top_block = payload.get("top_processes", {})
+    if isinstance(top_block, dict):
+        entries = top_block.get("entries", [])
+        if isinstance(entries, list):
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                cmd = str(entry.get("command", "") or entry.get("name", "") or "").lower()
+                if re.search(r"\\bhdb[a-z0-9_\\-]*\\b", cmd):
+                    return True
+    serialized = json.dumps(payload, ensure_ascii=False).lower()
+    return bool(re.search(r"\\bhdb[a-z0-9_\\-]*\\b", serialized))
+
+
+def _collect_top_commands(payload: dict, limit: int = 5) -> list[str]:
+    top_block = payload.get("top_processes", {})
+    if not isinstance(top_block, dict):
+        return []
+    entries = top_block.get("entries", [])
+    if not isinstance(entries, list):
+        return []
+    commands: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        cmd = str(entry.get("command", "") or entry.get("name", "") or "").strip()
+        if not cmd:
+            continue
+        commands.append(cmd)
+        if len(commands) >= limit:
+            break
+    return commands
+
+
+def _collect_ai_metric_context(conn: sqlite3.Connection, hostname: str, metric: str, hours: int) -> dict:
+    metric_map = {
+        "cpu_usage_percent": ("CPU", ("cpu", "usage_percent")),
+        "memory_used_percent": ("RAM", ("memory", "used_percent")),
+        "swap_used_percent": ("SWAP", ("swap", "used_percent")),
+    }
+    metric_entry = metric_map.get(metric)
+    if metric_entry is None:
+        raise ValueError("unsupported metric")
+
+    cutoff_iso = utc_hours_ago_iso(hours)
+    rows = conn.execute(
+        """
+        SELECT received_at_utc, payload_json
+        FROM reports
+        WHERE hostname = ? AND received_at_utc >= ?
+        ORDER BY id ASC
+        """,
+        (hostname, cutoff_iso),
+    ).fetchall()
+
+    latest_row = conn.execute(
+        """
+        SELECT received_at_utc, payload_json
+        FROM reports
+        WHERE hostname = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (hostname,),
+    ).fetchone()
+
+    if not latest_row:
+        raise ValueError("host has no reports")
+
+    latest_payload = parse_payload_json(str(latest_row[1] or "{}"))
+    metric_label, metric_path = metric_entry
+    values: list[float] = []
+    series: list[dict] = []
+    cpu_series: list[dict] = []
+    load_series: list[dict] = []
+    memory_series: list[dict] = []
+    swap_series: list[dict] = []
+
+    for row in rows:
+        payload = parse_payload_json(str(row[1] or "{}"))
+        ts = str(row[0] or "")
+        current_value = get_nested_number(payload, metric_path[0], metric_path[1])
+        if current_value is not None:
+            numeric = float(current_value)
+            values.append(numeric)
+            series.append({"time_utc": ts, "value": numeric})
+
+        cpu_value = get_nested_number(payload, "cpu", "usage_percent")
+        if cpu_value is not None:
+            cpu_series.append({"time_utc": ts, "value": float(cpu_value)})
+        load_value = get_nested_number(payload, "cpu", "load_avg_1")
+        if load_value is not None:
+            load_series.append({"time_utc": ts, "value": float(load_value)})
+        mem_value = get_nested_number(payload, "memory", "used_percent")
+        if mem_value is not None:
+            memory_series.append({"time_utc": ts, "value": float(mem_value)})
+        swap_value = get_nested_number(payload, "swap", "used_percent")
+        if swap_value is not None:
+            swap_series.append({"time_utc": ts, "value": float(swap_value)})
+
+    metric_summary = summarize_numeric_series(values)
+    if not metric_summary:
+        raise ValueError("metric has no usable points")
+
+    os_name = str(latest_payload.get("os", "") or "")
+    os_family = normalize_os_family(os_name)
+    has_hana = _detect_hana_processes(latest_payload)
+    top_commands = _collect_top_commands(latest_payload)
+
+    open_alerts_rows = conn.execute(
+        """
+        SELECT mountpoint, severity, used_percent, created_at_utc
+        FROM alerts
+        WHERE hostname = ? AND status = 'open'
+        ORDER BY id DESC
+        LIMIT 8
+        """,
+        (hostname,),
+    ).fetchall()
+    open_alerts = [
+        {
+            "mountpoint": str(row[0] or ""),
+            "severity": str(row[1] or ""),
+            "used_percent": float(row[2] or 0.0),
+            "created_at_utc": str(row[3] or ""),
+        }
+        for row in open_alerts_rows
+    ]
+
+    return {
+        "hostname": hostname,
+        "metric": metric,
+        "metric_label": metric_label,
+        "window_hours": hours,
+        "cutoff_utc": cutoff_iso,
+        "report_count": len(rows),
+        "latest_report_time_utc": str(latest_row[0] or ""),
+        "operating_system": os_name,
+        "os_family": os_family,
+        "has_hana_processes": has_hana,
+        "top_commands": top_commands,
+        "metric_summary": metric_summary,
+        "metric_series": _safe_sample_series(series),
+        "correlated_series": {
+            "cpu_usage_percent": _safe_sample_series(cpu_series),
+            "load_avg_1": _safe_sample_series(load_series),
+            "memory_used_percent": _safe_sample_series(memory_series),
+            "swap_used_percent": _safe_sample_series(swap_series),
+        },
+        "open_alerts": open_alerts,
+    }
+
+
+def _normalize_ai_response(value: dict, fallback_text: str = "") -> dict:
+    summary = str(value.get("summary", "") or "").strip()
+    if not summary and fallback_text:
+        summary = fallback_text.strip()
+    if not summary:
+        summary = "Keine KI-Analyse verfuegbar."
+
+    probable_causes = value.get("probable_causes", [])
+    if not isinstance(probable_causes, list):
+        probable_causes = []
+    probable_causes = [str(item).strip() for item in probable_causes if str(item).strip()][:8]
+
+    recommended_steps = value.get("recommended_steps", [])
+    if not isinstance(recommended_steps, list):
+        recommended_steps = []
+    recommended_steps = [str(item).strip() for item in recommended_steps if str(item).strip()][:10]
+
+    quick_checks = value.get("quick_checks", [])
+    if not isinstance(quick_checks, list):
+        quick_checks = []
+    quick_checks = [str(item).strip() for item in quick_checks if str(item).strip()][:8]
+
+    code_snippets_raw = value.get("code_snippets", [])
+    if not isinstance(code_snippets_raw, list):
+        code_snippets_raw = []
+    code_snippets: list[dict] = []
+    for item in code_snippets_raw:
+        if not isinstance(item, dict):
+            continue
+        command = str(item.get("command", "") or "").strip()
+        if not command:
+            continue
+        code_snippets.append(
+            {
+                "title": str(item.get("title", "Befehl") or "Befehl").strip()[:120],
+                "shell": str(item.get("shell", "bash") or "bash").strip()[:32],
+                "command": command[:3000],
+                "description": str(item.get("description", "") or "").strip()[:500],
+            }
+        )
+        if len(code_snippets) >= 8:
+            break
+
+    severity = str(value.get("severity", "info") or "info").strip().lower()
+    if severity not in {"info", "warning", "critical"}:
+        severity = "info"
+
+    confidence = str(value.get("confidence", "mittel") or "mittel").strip().lower()
+    if confidence not in {"niedrig", "mittel", "hoch"}:
+        confidence = "mittel"
+
+    notes = value.get("notes", [])
+    if not isinstance(notes, list):
+        notes = []
+    notes = [str(item).strip() for item in notes if str(item).strip()][:6]
+
+    return {
+        "summary": summary,
+        "severity": severity,
+        "confidence": confidence,
+        "probable_causes": probable_causes,
+        "recommended_steps": recommended_steps,
+        "quick_checks": quick_checks,
+        "code_snippets": code_snippets,
+        "notes": notes,
+    }
+
+
+def _openai_troubleshoot(context_payload: dict) -> dict:
+    context_json = json.dumps(context_payload, ensure_ascii=False)
+    prompt_system = (
+        "Du bist ein erfahrener SRE fuer Monitoring-Troubleshooting. "
+        "Antwort ausschliesslich als JSON-Objekt ohne Markdown. "
+        "Ausgabeformat: "
+        "{"
+        "\"summary\": string,"
+        "\"severity\": \"info\"|\"warning\"|\"critical\","
+        "\"confidence\": \"niedrig\"|\"mittel\"|\"hoch\","
+        "\"probable_causes\": string[],"
+        "\"recommended_steps\": string[],"
+        "\"quick_checks\": string[],"
+        "\"code_snippets\": [{\"title\": string, \"shell\": string, \"command\": string, \"description\": string}],"
+        "\"notes\": string[]"
+        "}. "
+        "Die Antwort muss kurz, konkret und operations-tauglich sein. "
+        "Codeschnipsel muessen direkt kopierbar sein. "
+        "Beruecksichtige das Betriebssystem. Nutze fuer Linux bash, fuer Windows powershell. "
+        "Wenn has_hana_processes=true und Linux, liefere mindestens einen HANA-bezogenen Troubleshooting-Befehl."
+    )
+    prompt_user = (
+        "Analysiere diese Host-Metrik fuer Troubleshooting. "
+        "Fokussiere auf die angegebene Zielmetrik, nutze aber die korrelierten Metriken und offene Alerts. "
+        "Kontext JSON:\n" + context_json
+    )
+
+    body = {
+        "model": OPENAI_MODEL,
+        "temperature": 0.2,
+        "max_tokens": OPENAI_MAX_TOKENS,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": prompt_system},
+            {"role": "user", "content": prompt_user},
+        ],
+    }
+    req = request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with request.urlopen(req, timeout=OPENAI_TIMEOUT_SEC) as response:
+            raw = response.read().decode("utf-8", errors="replace")
+    except error.HTTPError as exc:
+        details = exc.read().decode("utf-8", errors="replace")[:400]
+        raise RuntimeError(f"OpenAI HTTP {exc.code}: {details}")
+    except Exception as exc:
+        raise RuntimeError(f"OpenAI request failed: {exc}")
+
+    try:
+        parsed = json.loads(raw)
+        content = str(parsed.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()
+    except Exception:
+        content = ""
+
+    if not content:
+        raise RuntimeError("OpenAI returned empty content")
+
+    try:
+        structured = json.loads(content)
+        if not isinstance(structured, dict):
+            structured = {}
+    except Exception:
+        structured = {"summary": content}
+
+    return _normalize_ai_response(structured, fallback_text=content)
 
 
 def hash_password(password: str, salt_hex: str) -> str:
@@ -7540,6 +7893,111 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 {
                     "status": "stored",
                     "settings": stored,
+                },
+            )
+            return
+
+        if path == "/api/v1/ai-troubleshoot":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            try:
+                payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
+            except (json.JSONDecodeError, ValueError):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            hostname = str(payload.get("hostname", "") or "").strip()
+            metric = str(payload.get("metric", "") or "").strip()
+            window_hours = payload.get("window_hours", 24)
+            try:
+                window_hours_int = max(1, min(int(window_hours), 24 * 30))
+            except (TypeError, ValueError):
+                window_hours_int = 24
+
+            allowed_metrics = {"cpu_usage_percent", "memory_used_percent", "swap_used_percent"}
+            if not hostname:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname required"})
+                return
+            if metric not in allowed_metrics:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "unsupported metric"})
+                return
+            if not ai_troubleshoot_enabled():
+                self._send_json(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    {
+                        "error": "ai troubleshoot unavailable",
+                        "details": "Set MONITORING_OPENAI_API_KEY and enable MONITORING_AI_TROUBLESHOOT_ENABLED=1",
+                    },
+                )
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                try:
+                    context_payload = _collect_ai_metric_context(conn, hostname, metric, window_hours_int)
+                except ValueError as exc:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                    return
+
+            cache_key_material = {
+                "host": hostname,
+                "metric": metric,
+                "hours": window_hours_int,
+                "model": OPENAI_MODEL,
+                "context": context_payload,
+            }
+            cache_key = hashlib.sha256(json.dumps(cache_key_material, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+            cached_result = _ai_cache_get(cache_key)
+            if cached_result is not None:
+                self._send_json(
+                    HTTPStatus.OK,
+                    {
+                        "cached": True,
+                        "model": OPENAI_MODEL,
+                        "context": {
+                            "hostname": context_payload.get("hostname", ""),
+                            "metric": context_payload.get("metric", ""),
+                            "metric_label": context_payload.get("metric_label", ""),
+                            "window_hours": context_payload.get("window_hours", 24),
+                            "os_family": context_payload.get("os_family", "linux"),
+                            "has_hana_processes": bool(context_payload.get("has_hana_processes", False)),
+                            "latest_report_time_utc": context_payload.get("latest_report_time_utc", ""),
+                        },
+                        "analysis": cached_result,
+                    },
+                )
+                return
+
+            try:
+                analysis = _openai_troubleshoot(context_payload)
+            except RuntimeError as exc:
+                self._send_json(
+                    HTTPStatus.BAD_GATEWAY,
+                    {
+                        "error": "ai request failed",
+                        "details": str(exc),
+                    },
+                )
+                return
+
+            _ai_cache_set(cache_key, analysis)
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "cached": False,
+                    "model": OPENAI_MODEL,
+                    "context": {
+                        "hostname": context_payload.get("hostname", ""),
+                        "metric": context_payload.get("metric", ""),
+                        "metric_label": context_payload.get("metric_label", ""),
+                        "window_hours": context_payload.get("window_hours", 24),
+                        "os_family": context_payload.get("os_family", "linux"),
+                        "has_hana_processes": bool(context_payload.get("has_hana_processes", False)),
+                        "latest_report_time_utc": context_payload.get("latest_report_time_utc", ""),
+                    },
+                    "analysis": analysis,
                 },
             )
             return
