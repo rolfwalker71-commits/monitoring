@@ -3501,6 +3501,19 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   word-break: break-word;
 }
 
+.sap-b1-raw-output {
+  margin: 0;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #d4e4f7;
+  background: #f8fbff;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .sap-path-full {
   white-space: normal;
 }

@@ -18,7 +18,23 @@ const AUTO_REFRESH_INTERVAL_OPTIONS = new Map([
   [480, "8 Min."],
   [0, "Aus"],
 ]);
-const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "agent-update", "dir-listings"]);
+const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "sap-b1-systeminfo", "agent-update", "dir-listings"]);
+
+const SAP_B1_VERSION_MAP = new Map([
+  ["10.00.320", { featurePack: "FP 2602", patchLevel: "PL 22", releaseDate: "Feb 2026" }],
+  ["10.00.310", { featurePack: "FP 2511", patchLevel: "PL 21", releaseDate: "Nov 2025" }],
+  ["10.00.300", { featurePack: "FP 2508", patchLevel: "PL 20", releaseDate: "Aug 2025" }],
+  ["10.00.290", { featurePack: "FP 2505", patchLevel: "PL 19", releaseDate: "May 2025" }],
+  ["10.00.280", { featurePack: "FP 2502", patchLevel: "PL 18", releaseDate: "Feb 2025" }],
+  ["10.00.270", { featurePack: "FP 2411", patchLevel: "PL 17", releaseDate: "Nov 2024" }],
+  ["10.00.260", { featurePack: "FP 2408", patchLevel: "PL 16", releaseDate: "Aug 2024" }],
+  ["10.00.250", { featurePack: "FP 2405", patchLevel: "PL 15", releaseDate: "May 2024" }],
+  ["10.00.240", { featurePack: "FP 2402", patchLevel: "PL 14", releaseDate: "Feb 2024" }],
+  ["10.00.230", { featurePack: "FP 2311", patchLevel: "PL 13", releaseDate: "Nov 2023" }],
+  ["10.00.220", { featurePack: "FP 2308", patchLevel: "PL 12", releaseDate: "Aug 2023" }],
+  ["10.00.210", { featurePack: "FP 2305", patchLevel: "PL 11", releaseDate: "May 2023" }],
+  ["10.00.180", { featurePack: "FP 2208", patchLevel: "PL 08", releaseDate: "Aug 2022" }],
+]);
 
 let autoRefreshTimerId = null;
 let autoRefreshInProgress = false;
@@ -3297,6 +3313,62 @@ function renderSapBusinessOneCard(payload) {
   `;
 }
 
+function parseSapB1Version(versionText) {
+  const text = String(versionText || "").trim();
+  const match = text.match(/(10\.00\.\d{3})\s+(PL\s*\d{1,2})/i);
+  if (!match) {
+    return { build: "", patchLevel: "", mapping: null };
+  }
+  const build = match[1];
+  const patchLevel = match[2].replace(/\s+/g, " ").toUpperCase();
+  const mapping = SAP_B1_VERSION_MAP.get(build) || null;
+  return { build, patchLevel, mapping };
+}
+
+function renderSapB1SystemInfoCard(payload) {
+  const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
+  const versionBlock = sap && typeof sap.server_components_version === "object" ? sap.server_components_version : null;
+  if (!versionBlock) {
+    return `
+      <section class="detail-card sap-b1-card">
+        <h4>🧾 SAP B1 One Systeminfos</h4>
+        <p class="muted">Keine SAP Business One Versionsdaten im Payload vorhanden.</p>
+      </section>
+    `;
+  }
+
+  const versionText = asText(versionBlock.version, "");
+  const rawOutput = asText(versionBlock.raw_output, "");
+  const setupPath = asText(versionBlock.setup_path, "-");
+  const available = versionBlock.available === true;
+  const versionInfo = parseSapB1Version(versionText);
+  const mapping = versionInfo.mapping;
+  const errorText = asText(versionBlock.error, "");
+
+  return `
+    <section class="detail-card sap-b1-card">
+      <h4>🧾 SAP B1 One Systeminfos</h4>
+      <div class="sap-b1-grid">
+        <article class="sap-b1-item">
+          <header>Server Components Version</header>
+          <div class="sap-b1-size-row"><span class="sap-b1-size-label">Status</span><strong class="sap-b1-size-value">${available ? "verfuegbar" : "nicht verfuegbar"}</strong></div>
+          <div class="sap-b1-size-row"><span class="sap-b1-size-label">Version</span><strong class="sap-b1-size-value">${escapeHtml(versionText || "-")}</strong></div>
+          <div class="sap-b1-size-row"><span class="sap-b1-size-label">Build</span><strong class="sap-b1-size-value">${escapeHtml(versionInfo.build || "-")}</strong></div>
+          <div class="sap-b1-size-row"><span class="sap-b1-size-label">Patch Level</span><strong class="sap-b1-size-value">${escapeHtml(versionInfo.patchLevel || (mapping?.patchLevel || "-"))}</strong></div>
+          <div class="sap-b1-size-row"><span class="sap-b1-size-label">Feature Pack</span><strong class="sap-b1-size-value">${escapeHtml(mapping?.featurePack || "unbekannt")}</strong></div>
+          <div class="sap-b1-size-row"><span class="sap-b1-size-label">Release Date</span><strong class="sap-b1-size-value">${escapeHtml(mapping?.releaseDate || "unbekannt")}</strong></div>
+          <div class="sap-b1-path" title="${escapeHtml(setupPath)}">${renderPathWithNameHighlight(setupPath)}</div>
+          ${errorText && errorText !== "-" ? `<p class="muted" style="margin-top:8px">Fehler: ${escapeHtml(errorText)}</p>` : ""}
+        </article>
+        <article class="sap-b1-item">
+          <header>Roh-Output</header>
+          <pre class="sap-b1-raw-output">${escapeHtml(rawOutput || "-")}</pre>
+        </article>
+      </div>
+    </section>
+  `;
+}
+
 function getBackupCurrentInfo() {
   const now = new Date();
   const yyyy = String(now.getFullYear());
@@ -4070,6 +4142,12 @@ function renderReportCard(report) {
         <h4>🐳 Container Status</h4>
         ${renderContainersTable(payload.containers)}
       </section>
+    `;
+  } else if (section === "sap-b1-systeminfo") {
+    detailContent = `
+      <div class="detail-cards">
+        ${renderSapB1SystemInfoCard(payload)}
+      </div>
     `;
   } else if (section === "agent-update") {
     detailContent = `

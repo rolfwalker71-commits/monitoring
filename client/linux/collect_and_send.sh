@@ -24,7 +24,9 @@ LARGE_FILES_EXCLUDE_PATHS="${LARGE_FILES_EXCLUDE_PATHS:-/hana/data/.snapshot}"
 LARGE_FILES_SCAN_FORCE="${LARGE_FILES_SCAN_FORCE:-0}"
 SAP_B1_CATALINA_OUT_PATH="${SAP_B1_CATALINA_OUT_PATH:-/usr/sap/SAPBusinessOne/Common/tomcat/logs/catalina.out}"
 SAP_B1_BUSINESSONE_LOG_DIR="${SAP_B1_BUSINESSONE_LOG_DIR:-/usr/sap/SAPBusinessOne/home/b1service0/SAP/SAP Business One/Log/BusinessOne}"
+SAP_B1_SETUP_PATH="${SAP_B1_SETUP_PATH:-/usr/sap/SAPBusinessOne/setup}"
 SAP_B1_SIZE_TIMEOUT_SEC="${SAP_B1_SIZE_TIMEOUT_SEC:-20}"
+SAP_B1_VERSION_TIMEOUT_SEC="${SAP_B1_VERSION_TIMEOUT_SEC:-15}"
 DIR_SCAN_PATHS="${DIR_SCAN_PATHS:-}"
 DIR_SCAN_MAX_ITEMS="${DIR_SCAN_MAX_ITEMS:-50}"
 DIR_SCAN_DEEP_PATHS="${DIR_SCAN_DEEP_PATHS:-}"
@@ -83,7 +85,13 @@ count_queue_files() {
 }
 
 json_escape() {
-  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+  local value="${1-}"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//$'\r'/\\r}"
+  value="${value//$'\t'/\\t}"
+  printf '%s' "$value"
 }
 
 json_number_or_null() {
@@ -98,6 +106,7 @@ json_number_or_null() {
 collect_sap_business_one_json() {
   local catalina_path="$SAP_B1_CATALINA_OUT_PATH"
   local businessone_dir="$SAP_B1_BUSINESSONE_LOG_DIR"
+  local setup_path="$SAP_B1_SETUP_PATH"
   local catalina_exists=false
   local catalina_size=""
   local catalina_error=""
@@ -105,9 +114,17 @@ collect_sap_business_one_json() {
   local businessone_size=""
   local businessone_error=""
   local timeout_sec="$SAP_B1_SIZE_TIMEOUT_SEC"
+  local version_timeout_sec="$SAP_B1_VERSION_TIMEOUT_SEC"
+  local setup_exists=false
+  local version_raw=""
+  local version_text=""
+  local version_error=""
 
   if ! [[ "$timeout_sec" =~ ^[0-9]+$ ]] || [[ "$timeout_sec" -lt 1 ]]; then
     timeout_sec=20
+  fi
+  if ! [[ "$version_timeout_sec" =~ ^[0-9]+$ ]] || [[ "$version_timeout_sec" -lt 1 ]]; then
+    version_timeout_sec=15
   fi
 
   if [[ -f "$catalina_path" ]]; then
@@ -132,7 +149,25 @@ collect_sap_business_one_json() {
     fi
   fi
 
-  printf '{"catalina_out":{"path":"%s","exists":%s,"size_bytes":%s,"error":"%s"},"businessone_log_dir":{"path":"%s","exists":%s,"size_bytes":%s,"error":"%s"}}' \
+  if [[ -x "$setup_path" ]]; then
+    setup_exists=true
+    if command -v timeout >/dev/null 2>&1; then
+      version_raw="$(timeout "${version_timeout_sec}s" "$setup_path" --version 2>&1 || true)"
+    else
+      version_raw="$("$setup_path" --version 2>&1 || true)"
+    fi
+    version_raw="$(printf '%s' "$version_raw" | sed -e 's/[[:space:]]*$//')"
+    version_text="$(printf '%s\n' "$version_raw" | awk -F'Version: ' '/Version: / {print $2; exit}')"
+    if [[ -z "$version_raw" ]]; then
+      version_error="setup --version returned empty output"
+    elif [[ -z "$version_text" ]]; then
+      version_error="version line not found"
+    fi
+  else
+    version_error="setup not found or not executable"
+  fi
+
+  printf '{"catalina_out":{"path":"%s","exists":%s,"size_bytes":%s,"error":"%s"},"businessone_log_dir":{"path":"%s","exists":%s,"size_bytes":%s,"error":"%s"},"server_components_version":{"command":"%s --version","setup_path":"%s","available":%s,"raw_output":"%s","version":"%s","error":"%s"}}' \
     "$(json_escape "$catalina_path")" \
     "$catalina_exists" \
     "$(json_number_or_null "$catalina_size")" \
@@ -140,7 +175,13 @@ collect_sap_business_one_json() {
     "$(json_escape "$businessone_dir")" \
     "$businessone_exists" \
     "$(json_number_or_null "$businessone_size")" \
-    "$(json_escape "$businessone_error")"
+    "$(json_escape "$businessone_error")" \
+    "$(json_escape "$setup_path")" \
+    "$(json_escape "$setup_path")" \
+    "$setup_exists" \
+    "$(json_escape "$version_raw")" \
+    "$(json_escape "$version_text")" \
+    "$(json_escape "$version_error")"
 }
 
 collect_dir_listings_json() {
