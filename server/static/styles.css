@@ -2172,9 +2172,9 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 
 .host-item {
   text-align: left;
-  border: 1px solid #2a4a72;
-  border-left: 3px solid #3a6aaa;
-  background: linear-gradient(180deg, #1e3d62 0%, #192f50 100%);
+  border: 1px solid #3a5c8a;
+  border-left: 3px solid #4a80c8;
+  background: linear-gradient(180deg, #243e62 0%, #1c3255 100%);
   color: #d4e4f7;
   border-radius: 8px;
   padding: 6px 10px 6px 14px;
@@ -2182,7 +2182,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   gap: 2px;
   position: relative;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
@@ -5191,45 +5191,32 @@ body[data-theme="dark"] .backup-status-stale {
 /* ── Redesign: Sidebar Filters ───────────────────────────── */
 .sidebar-filters {
   margin: 8px 0 6px;
-  border: 1px solid #1e3658;
+  border: 1px solid #2a4a6e;
   border-radius: 8px;
-  background: #0d1a2e;
+  background: #112030;
   padding: 8px;
 }
 
-/* Force filter layout into vertical column inside narrow sidebar */
+/* Use display:block to fully prevent the flex overflow problem */
 .sidebar-filters .host-filters {
-  flex-direction: column;
-  align-items: stretch;
+  display: block !important;
   margin-top: 0;
-  gap: 4px;
 }
 
 .sidebar-filters .host-search-box {
+  display: block;
   min-width: 0;
   width: 100%;
-  margin-bottom: 2px;
-}
-
-.sidebar-filters .host-filter-control-icons {
-  min-width: 0;
-}
-
-.sidebar-filters .icon-filter-chips {
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.sidebar-filters .icon-filter-chip {
-  height: 26px;
-  min-width: 26px;
-  padding: 0 6px;
-  font-size: 11px;
+  margin-bottom: 6px;
 }
 
 .sidebar-filters .search-input {
-  background: #0f1e35;
-  border-color: #1e3658;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  background: #0a1828;
+  border: 1px solid #2a4a6e;
   color: #b8d4ee;
   border-radius: 6px;
   font-size: 12px;
@@ -5246,11 +5233,9 @@ body[data-theme="dark"] .backup-status-stale {
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
+/* Each filter row is a block — children stack vertically */
 .sidebar-filter-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  display: block;
   margin-bottom: 4px;
 }
 
@@ -5258,31 +5243,94 @@ body[data-theme="dark"] .backup-status-stale {
   margin-bottom: 0;
 }
 
+/* Each filter control: flex row → label on left, control on right */
 .sidebar-filters .host-filter-control {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+  margin-bottom: 4px;
   font-size: 11px;
-  color: #6a8fb8;
   font-weight: 600;
+  color: #7aabce;
+}
+
+.sidebar-filters .host-filter-control:last-of-type {
+  margin-bottom: 0;
+}
+
+.sidebar-filters .host-filter-control > span:first-child {
+  flex: 0 0 auto;
+  min-width: 34px;
+  color: #7aabce;
 }
 
 .sidebar-filters .host-filter-control select {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 11px;
-  padding: 2px 4px;
-  border: 1px solid #1e3658;
+  padding: 2px 6px;
+  border: 1px solid #2a4a6e;
   border-radius: 4px;
-  background: #0f1e35;
+  background: #0a1828;
   color: #b8d4ee;
   cursor: pointer;
 }
 
+/* Chip group: label links, chips rechts (wrapping) */
+.sidebar-filters .host-filter-control-icons {
+  align-items: flex-start;
+  min-width: 0;
+  width: 100%;
+}
+
+.sidebar-filters .icon-filter-chips {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* Dark-themed chips für Sidebar */
+.sidebar-filters .icon-filter-chip {
+  height: 24px;
+  min-width: 24px;
+  padding: 0 6px;
+  font-size: 11px;
+  background: #0a1e36;
+  border-color: #2a4a6e;
+  color: #7aabce;
+}
+
+.sidebar-filters .icon-filter-chip:hover {
+  background: #14305a;
+  border-color: #4a7ab0;
+  color: #c0d8f0;
+}
+
+.sidebar-filters .icon-filter-chip.active {
+  background: #1e40af;
+  border-color: #3b82f6;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.sidebar-filters .icon-filter-chip img {
+  width: 14px;
+  height: 14px;
+}
+
 .sidebar-filters .btn-secondary {
+  display: block;
+  width: 100%;
   min-height: 24px;
+  margin-top: 6px;
   padding: 0 10px;
   font-size: 11px;
   background: #1a2f4a;
-  border-color: #2a3e5c;
+  border-color: #2a4a6e;
   color: #8ab3d8;
   border-radius: 6px;
 }
@@ -5396,11 +5444,11 @@ body[data-theme="dark"] .view-tabs .tab-button.active {
 
 /* ── Redesign: Dark mode fixes for existing dark host-item overrides ── */
 body[data-theme="dark"] .host-item {
-  border-color: #2a4a72;
-  border-left-color: #3a6aaa;
-  background: linear-gradient(180deg, #1e3d62 0%, #192f50 100%);
+  border-color: #3a5c8a;
+  border-left-color: #4a80c8;
+  background: linear-gradient(180deg, #243e62 0%, #1c3255 100%);
   color: #d4e4f7;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 body[data-theme="dark"] .host-item:hover {
