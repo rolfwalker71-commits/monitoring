@@ -225,6 +225,18 @@ def init_db() -> None:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN inactive_host_alert_enabled INTEGER NOT NULL DEFAULT 0")
         if "inactive_host_alert_hours" not in existing_alarm_columns:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN inactive_host_alert_hours INTEGER NOT NULL DEFAULT 3")
+        if "openai_api_key" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN openai_api_key TEXT NOT NULL DEFAULT ''")
+        if "openai_model" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN openai_model TEXT NOT NULL DEFAULT 'gpt-4o-mini'")
+        if "openai_timeout_sec" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN openai_timeout_sec INTEGER NOT NULL DEFAULT 12")
+        if "openai_max_tokens" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN openai_max_tokens INTEGER NOT NULL DEFAULT 1200")
+        if "ai_troubleshoot_enabled" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN ai_troubleshoot_enabled INTEGER NOT NULL DEFAULT 1")
+        if "ai_troubleshoot_cache_ttl_sec" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN ai_troubleshoot_cache_ttl_sec INTEGER NOT NULL DEFAULT 600")
 
         existing_alert_columns = {
             str(row[1])
@@ -915,6 +927,37 @@ def ai_troubleshoot_enabled() -> bool:
     return AI_TROUBLESHOOT_ENABLED_DEFAULT and bool(OPENAI_API_KEY)
 
 
+def _get_ai_settings_from_db(conn: sqlite3.Connection) -> dict:
+    """Return effective AI settings, preferring DB values over env-var defaults."""
+    row = conn.execute(
+        """
+        SELECT COALESCE(openai_api_key, ''), COALESCE(openai_model, ''),
+               COALESCE(openai_timeout_sec, 12), COALESCE(openai_max_tokens, 1200),
+               COALESCE(ai_troubleshoot_enabled, 1), COALESCE(ai_troubleshoot_cache_ttl_sec, 600)
+        FROM alarm_settings WHERE id = 1
+        """
+    ).fetchone()
+    if not row:
+        return {
+            "api_key": OPENAI_API_KEY,
+            "model": OPENAI_MODEL,
+            "timeout_sec": OPENAI_TIMEOUT_SEC,
+            "max_tokens": OPENAI_MAX_TOKENS,
+            "enabled": AI_TROUBLESHOOT_ENABLED_DEFAULT,
+            "cache_ttl_sec": AI_TROUBLESHOOT_CACHE_TTL_SEC,
+        }
+    db_key = str(row[0] or "").strip()
+    db_model = str(row[1] or "").strip()
+    return {
+        "api_key": db_key or OPENAI_API_KEY,
+        "model": db_model or OPENAI_MODEL,
+        "timeout_sec": max(3, min(int(row[2] or OPENAI_TIMEOUT_SEC), 60)),
+        "max_tokens": max(256, min(int(row[3] or OPENAI_MAX_TOKENS), 4000)),
+        "enabled": bool(row[4]) if row[4] is not None else AI_TROUBLESHOOT_ENABLED_DEFAULT,
+        "cache_ttl_sec": max(30, min(int(row[5] or AI_TROUBLESHOOT_CACHE_TTL_SEC), 3600)),
+    }
+
+
 def _ai_cache_get(cache_key: str) -> dict | None:
     now_ts = time.time()
     with _AI_TROUBLESHOOT_CACHE_LOCK:
@@ -1179,7 +1222,14 @@ def _normalize_ai_response(value: dict, fallback_text: str = "") -> dict:
     }
 
 
-def _openai_troubleshoot(context_payload: dict) -> dict:
+def _openai_troubleshoot(context_payload: dict, ai_settings: dict | None = None) -> dict:
+    if ai_settings is None:
+        ai_settings = {
+            "api_key": OPENAI_API_KEY,
+            "model": OPENAI_MODEL,
+            "timeout_sec": OPENAI_TIMEOUT_SEC,
+            "max_tokens": OPENAI_MAX_TOKENS,
+        }
     context_json = json.dumps(context_payload, ensure_ascii=False)
     prompt_system = (
         "Du bist ein erfahrener SRE fuer Monitoring-Troubleshooting. "
@@ -1207,9 +1257,9 @@ def _openai_troubleshoot(context_payload: dict) -> dict:
     )
 
     body = {
-        "model": OPENAI_MODEL,
+        "model": ai_settings["model"],
         "temperature": 0.2,
-        "max_tokens": OPENAI_MAX_TOKENS,
+        "max_tokens": ai_settings["max_tokens"],
         "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": prompt_system},
@@ -1220,14 +1270,14 @@ def _openai_troubleshoot(context_payload: dict) -> dict:
         "https://api.openai.com/v1/chat/completions",
         data=json.dumps(body).encode("utf-8"),
         headers={
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Authorization": f"Bearer {ai_settings['api_key']}",
             "Content-Type": "application/json",
         },
         method="POST",
     )
 
     try:
-        with request.urlopen(req, timeout=OPENAI_TIMEOUT_SEC) as response:
+        with request.urlopen(req, timeout=ai_settings["timeout_sec"]) as response:
             raw = response.read().decode("utf-8", errors="replace")
     except error.HTTPError as exc:
         details = exc.read().decode("utf-8", errors="replace")[:400]
@@ -4614,7 +4664,13 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
                telegram_enabled, telegram_bot_token, telegram_chat_id, updated_at_utc,
                COALESCE(alert_reminder_interval_hours, 0),
                COALESCE(inactive_host_alert_enabled, 0),
-               COALESCE(inactive_host_alert_hours, 3)
+               COALESCE(inactive_host_alert_hours, 3),
+               COALESCE(openai_api_key, ''),
+               COALESCE(openai_model, ''),
+               COALESCE(openai_timeout_sec, 12),
+               COALESCE(openai_max_tokens, 1200),
+               COALESCE(ai_troubleshoot_enabled, 1),
+               COALESCE(ai_troubleshoot_cache_ttl_sec, 600)
         FROM alarm_settings
         WHERE id = 1
         """
@@ -4640,7 +4696,18 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
             "alert_reminder_interval_hours": 0,
             "inactive_host_alert_enabled": False,
             "inactive_host_alert_hours": INACTIVE_HOST_ALERT_HOURS_DEFAULT,
+            "openai_api_key_is_set": bool(OPENAI_API_KEY),
+            "openai_model": OPENAI_MODEL,
+            "openai_timeout_sec": OPENAI_TIMEOUT_SEC,
+            "openai_max_tokens": OPENAI_MAX_TOKENS,
+            "ai_troubleshoot_enabled": AI_TROUBLESHOOT_ENABLED_DEFAULT,
+            "ai_troubleshoot_cache_ttl_sec": AI_TROUBLESHOOT_CACHE_TTL_SEC,
         }
+
+    db_openai_key = str(row[18] or "").strip()
+    # Fall back to env-var key if DB has no key stored
+    effective_key = db_openai_key or OPENAI_API_KEY
+    db_model = str(row[19] or "").strip() or OPENAI_MODEL
 
     return {
         "warning_threshold_percent": clamp_threshold(row[0], 1, 99, WARNING_THRESHOLD_PERCENT),
@@ -4661,6 +4728,13 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
         "alert_reminder_interval_hours": max(0, int(row[15] or 0)) if row[15] is not None else 0,
         "inactive_host_alert_enabled": coerce_bool(row[16]) if len(row) > 16 else False,
         "inactive_host_alert_hours": max(1, min(int(row[17] or INACTIVE_HOST_ALERT_HOURS_DEFAULT), 168)) if len(row) > 17 else INACTIVE_HOST_ALERT_HOURS_DEFAULT,
+        # API key is never returned to the client — only a flag indicating whether one is set
+        "openai_api_key_is_set": bool(effective_key),
+        "openai_model": db_model,
+        "openai_timeout_sec": max(3, min(int(row[20] or OPENAI_TIMEOUT_SEC), 60)),
+        "openai_max_tokens": max(256, min(int(row[21] or OPENAI_MAX_TOKENS), 4000)),
+        "ai_troubleshoot_enabled": coerce_bool(row[22]) if row[22] is not None else AI_TROUBLESHOOT_ENABLED_DEFAULT,
+        "ai_troubleshoot_cache_ttl_sec": max(30, min(int(row[23] or AI_TROUBLESHOOT_CACHE_TTL_SEC), 3600)),
     }
 
 
@@ -4742,6 +4816,30 @@ def normalize_alarm_settings_payload(payload: dict, existing: dict | None = None
         inactive_hours = INACTIVE_HOST_ALERT_HOURS_DEFAULT
     inactive_hours = max(1, min(inactive_hours, 168))
 
+    # OpenAI / AI Troubleshoot settings
+    raw_api_key = str(payload.get("openai_api_key", "") or "").strip()
+    # If the sent key is the masked placeholder or empty, keep the existing stored key (do not overwrite)
+    existing_api_key = str(base.get("_openai_api_key_raw", "") or "").strip()
+    if raw_api_key and not all(c == "\u2022" for c in raw_api_key):
+        new_api_key = raw_api_key
+    else:
+        new_api_key = existing_api_key
+
+    new_model = str(payload.get("openai_model", base.get("openai_model", OPENAI_MODEL)) or "").strip() or OPENAI_MODEL
+    try:
+        new_timeout = max(3, min(int(payload.get("openai_timeout_sec", base.get("openai_timeout_sec", OPENAI_TIMEOUT_SEC)) or OPENAI_TIMEOUT_SEC), 60))
+    except (TypeError, ValueError):
+        new_timeout = OPENAI_TIMEOUT_SEC
+    try:
+        new_max_tokens = max(256, min(int(payload.get("openai_max_tokens", base.get("openai_max_tokens", OPENAI_MAX_TOKENS)) or OPENAI_MAX_TOKENS), 4000))
+    except (TypeError, ValueError):
+        new_max_tokens = OPENAI_MAX_TOKENS
+    new_ai_enabled = coerce_bool(payload.get("ai_troubleshoot_enabled", base.get("ai_troubleshoot_enabled", AI_TROUBLESHOOT_ENABLED_DEFAULT)))
+    try:
+        new_cache_ttl = max(30, min(int(payload.get("ai_troubleshoot_cache_ttl_sec", base.get("ai_troubleshoot_cache_ttl_sec", AI_TROUBLESHOOT_CACHE_TTL_SEC)) or AI_TROUBLESHOOT_CACHE_TTL_SEC), 3600))
+    except (TypeError, ValueError):
+        new_cache_ttl = AI_TROUBLESHOOT_CACHE_TTL_SEC
+
     return {
         "warning_threshold_percent": warning,
         "critical_threshold_percent": critical,
@@ -4760,11 +4858,24 @@ def normalize_alarm_settings_payload(payload: dict, existing: dict | None = None
         "alert_reminder_interval_hours": max(0, min(int(payload.get("alert_reminder_interval_hours", base.get("alert_reminder_interval_hours", 0)) or 0), 168)),
         "inactive_host_alert_enabled": coerce_bool(payload.get("inactive_host_alert_enabled", base.get("inactive_host_alert_enabled", False))),
         "inactive_host_alert_hours": inactive_hours,
+        # Internal raw key (never sent to client, only used within save_alarm_settings)
+        "_openai_api_key_raw": new_api_key,
+        "openai_model": new_model,
+        "openai_timeout_sec": new_timeout,
+        "openai_max_tokens": new_max_tokens,
+        "ai_troubleshoot_enabled": new_ai_enabled,
+        "ai_troubleshoot_cache_ttl_sec": new_cache_ttl,
     }
 
 
 def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
     current = get_alarm_settings(conn)
+    # Fetch existing raw API key from DB so normalize can preserve it when placeholder is sent
+    existing_raw_key_row = conn.execute(
+        "SELECT COALESCE(openai_api_key, '') FROM alarm_settings WHERE id = 1"
+    ).fetchone()
+    existing_raw_key = str(existing_raw_key_row[0] if existing_raw_key_row else "") or OPENAI_API_KEY
+    current["_openai_api_key_raw"] = existing_raw_key
     normalized = normalize_alarm_settings_payload(payload, current)
     now_utc = utc_now_iso()
 
@@ -4789,9 +4900,15 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             updated_at_utc,
             alert_reminder_interval_hours,
             inactive_host_alert_enabled,
-            inactive_host_alert_hours
+            inactive_host_alert_hours,
+            openai_api_key,
+            openai_model,
+            openai_timeout_sec,
+            openai_max_tokens,
+            ai_troubleshoot_enabled,
+            ai_troubleshoot_cache_ttl_sec
         )
-        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             warning_threshold_percent = excluded.warning_threshold_percent,
             critical_threshold_percent = excluded.critical_threshold_percent,
@@ -4810,7 +4927,13 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             updated_at_utc = excluded.updated_at_utc,
             alert_reminder_interval_hours = excluded.alert_reminder_interval_hours,
             inactive_host_alert_enabled = excluded.inactive_host_alert_enabled,
-            inactive_host_alert_hours = excluded.inactive_host_alert_hours
+            inactive_host_alert_hours = excluded.inactive_host_alert_hours,
+            openai_api_key = excluded.openai_api_key,
+            openai_model = excluded.openai_model,
+            openai_timeout_sec = excluded.openai_timeout_sec,
+            openai_max_tokens = excluded.openai_max_tokens,
+            ai_troubleshoot_enabled = excluded.ai_troubleshoot_enabled,
+            ai_troubleshoot_cache_ttl_sec = excluded.ai_troubleshoot_cache_ttl_sec
         """,
         (
             normalized["warning_threshold_percent"],
@@ -4831,10 +4954,19 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             normalized["alert_reminder_interval_hours"],
             1 if normalized["inactive_host_alert_enabled"] else 0,
             normalized["inactive_host_alert_hours"],
+            normalized["_openai_api_key_raw"],
+            normalized["openai_model"],
+            normalized["openai_timeout_sec"],
+            normalized["openai_max_tokens"],
+            1 if normalized["ai_troubleshoot_enabled"] else 0,
+            normalized["ai_troubleshoot_cache_ttl_sec"],
         ),
     )
 
     normalized["updated_at_utc"] = now_utc
+    # Remove internal key from returned dict; add public flag instead
+    raw_key_stored = normalized.pop("_openai_api_key_raw", "")
+    normalized["openai_api_key_is_set"] = bool(raw_key_stored)
     return normalized
 
 
@@ -7924,17 +8056,18 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if metric not in allowed_metrics:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "unsupported metric"})
                 return
-            if not ai_troubleshoot_enabled():
-                self._send_json(
-                    HTTPStatus.SERVICE_UNAVAILABLE,
-                    {
-                        "error": "ai troubleshoot unavailable",
-                        "details": "Set MONITORING_OPENAI_API_KEY and enable MONITORING_AI_TROUBLESHOOT_ENABLED=1",
-                    },
-                )
-                return
 
             with sqlite3.connect(DB_PATH) as conn:
+                ai_settings = _get_ai_settings_from_db(conn)
+                if not ai_settings["enabled"] or not ai_settings["api_key"]:
+                    self._send_json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {
+                            "error": "ai troubleshoot unavailable",
+                            "details": "OpenAI API-Key und KI-Analyse in den Globalen Admin-Einstellungen konfigurieren.",
+                        },
+                    )
+                    return
                 try:
                     context_payload = _collect_ai_metric_context(conn, hostname, metric, window_hours_int)
                 except ValueError as exc:
@@ -7945,7 +8078,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "host": hostname,
                 "metric": metric,
                 "hours": window_hours_int,
-                "model": OPENAI_MODEL,
+                "model": ai_settings["model"],
                 "context": context_payload,
             }
             cache_key = hashlib.sha256(json.dumps(cache_key_material, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
@@ -7955,7 +8088,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     HTTPStatus.OK,
                     {
                         "cached": True,
-                        "model": OPENAI_MODEL,
+                        "model": ai_settings["model"],
                         "context": {
                             "hostname": context_payload.get("hostname", ""),
                             "metric": context_payload.get("metric", ""),
@@ -7971,7 +8104,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                analysis = _openai_troubleshoot(context_payload)
+                analysis = _openai_troubleshoot(context_payload, ai_settings)
             except RuntimeError as exc:
                 self._send_json(
                     HTTPStatus.BAD_GATEWAY,
@@ -7987,7 +8120,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "cached": False,
-                    "model": OPENAI_MODEL,
+                    "model": ai_settings["model"],
                     "context": {
                         "hostname": context_payload.get("hostname", ""),
                         "metric": context_payload.get("metric", ""),

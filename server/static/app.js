@@ -1280,6 +1280,13 @@ async function loadAlarmSettings(force = false) {
   const alertReminderIntervalHoursInput = document.getElementById("alertReminderIntervalHoursInput");
   const inactiveHostAlertEnabledInput = document.getElementById("inactiveHostAlertEnabledInput");
   const inactiveHostAlertHoursInput = document.getElementById("inactiveHostAlertHoursInput");
+  const aiTroubleshootEnabledInput = document.getElementById("aiTroubleshootEnabledInput");
+  const openaiApiKeyInput = document.getElementById("openaiApiKeyInput");
+  const openaiApiKeyIsSetHint = document.getElementById("openaiApiKeyIsSetHint");
+  const openaiModelInput = document.getElementById("openaiModelInput");
+  const openaiTimeoutSecInput = document.getElementById("openaiTimeoutSecInput");
+  const openaiMaxTokensInput = document.getElementById("openaiMaxTokensInput");
+  const openaiCacheTtlSecInput = document.getElementById("openaiCacheTtlSecInput");
 
   try {
     const response = await fetch("/api/v1/alarm-settings");
@@ -1310,6 +1317,28 @@ async function loadAlarmSettings(force = false) {
       const configuredHours = Number(settings.inactive_host_alert_hours || 3);
       const clampedHours = Number.isFinite(configuredHours) ? Math.max(1, Math.min(168, Math.floor(configuredHours))) : 3;
       inactiveHostAlertHoursInput.value = String(clampedHours);
+    }
+    if (aiTroubleshootEnabledInput) {
+      aiTroubleshootEnabledInput.checked = settings.ai_troubleshoot_enabled !== false;
+    }
+    if (openaiApiKeyInput) {
+      // Never show the real key — leave blank so user must re-enter to change
+      openaiApiKeyInput.value = "";
+    }
+    if (openaiApiKeyIsSetHint) {
+      openaiApiKeyIsSetHint.textContent = settings.openai_api_key_is_set ? "API Key ist gesetzt." : "Kein API Key gespeichert.";
+    }
+    if (openaiModelInput) {
+      openaiModelInput.value = String(settings.openai_model || "gpt-4o-mini");
+    }
+    if (openaiTimeoutSecInput) {
+      openaiTimeoutSecInput.value = String(Number(settings.openai_timeout_sec || 12));
+    }
+    if (openaiMaxTokensInput) {
+      openaiMaxTokensInput.value = String(Number(settings.openai_max_tokens || 1200));
+    }
+    if (openaiCacheTtlSecInput) {
+      openaiCacheTtlSecInput.value = String(Number(settings.ai_troubleshoot_cache_ttl_sec || 600));
     }
 
     state.alarmSettingsLoaded = true;
@@ -1992,8 +2021,7 @@ async function saveAlarmSettings() {
   const inactiveHostAlertEnabledInput = document.getElementById("inactiveHostAlertEnabledInput");
   const inactiveHostAlertHoursInput = document.getElementById("inactiveHostAlertHoursInput");
 
-  const warning = Number(warningInput.value);
-  const critical = Number(criticalInput.value);
+  const warning = Number(warningInput.value);  const critical = Number(criticalInput.value);
   const cpuWarning = Number(cpuWarningThresholdInput.value);
   const cpuCritical = Number(cpuCriticalThresholdInput.value);
   const cpuWindowReports = Number(cpuAlertWindowReportsInput.value);
@@ -2045,6 +2073,12 @@ async function saveAlarmSettings() {
     alert_reminder_interval_hours: Number.isFinite(alertReminderIntervalHours) ? Math.max(0, Math.min(168, Math.floor(alertReminderIntervalHours))) : 0,
     inactive_host_alert_enabled: inactiveHostAlertEnabledInput?.checked === true,
     inactive_host_alert_hours: Number.isFinite(inactiveHostAlertHours) ? Math.max(1, Math.min(168, Math.floor(inactiveHostAlertHours))) : 3,
+    ai_troubleshoot_enabled: document.getElementById("aiTroubleshootEnabledInput")?.checked === true,
+    openai_api_key: document.getElementById("openaiApiKeyInput")?.value.trim() || "",
+    openai_model: (document.getElementById("openaiModelInput")?.value.trim() || "gpt-4o-mini"),
+    openai_timeout_sec: Math.max(3, Math.min(60, Math.floor(Number(document.getElementById("openaiTimeoutSecInput")?.value || 12)))),
+    openai_max_tokens: Math.max(256, Math.min(4000, Math.floor(Number(document.getElementById("openaiMaxTokensInput")?.value || 1200)))),
+    ai_troubleshoot_cache_ttl_sec: Math.max(30, Math.min(3600, Math.floor(Number(document.getElementById("openaiCacheTtlSecInput")?.value || 600)))),
   };
 
   const response = await fetch("/api/v1/alarm-settings", {
@@ -2061,6 +2095,14 @@ async function saveAlarmSettings() {
   }
 
   setAlarmSettingsStatus("Einstellungen gespeichert.");
+  // Refresh the "API key is set" hint from the server response
+  const hint = document.getElementById("openaiApiKeyIsSetHint");
+  if (hint) {
+    hint.textContent = data.openai_api_key_is_set ? "API Key ist gesetzt." : "Kein API Key gespeichert.";
+  }
+  // Clear the API key input after save
+  const keyInput = document.getElementById("openaiApiKeyInput");
+  if (keyInput) keyInput.value = "";
   await loadAlertsForHost();
   await loadAnalysisForHost();
 }

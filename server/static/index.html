@@ -691,6 +691,37 @@
                   </div>
                 </div>
 
+                <div class="alarm-settings-card alarm-settings-card--wide">
+                  <div class="alarm-settings-card-title">&#x1F916; KI Analyse (OpenAI)</div>
+                  <div class="alarm-settings-grid">
+                    <label class="checkbox-line alarm-settings-grid-span2">
+                      <input id="aiTroubleshootEnabledInput" type="checkbox" />
+                      KI Analyse aktivieren
+                    </label>
+                    <label class="alarm-settings-grid-span2">
+                      OpenAI API Key
+                      <input id="openaiApiKeyInput" type="password" placeholder="sk-... (leer lassen um bestehenden zu behalten)" autocomplete="new-password" />
+                      <span id="openaiApiKeyIsSetHint" class="count compact" style="margin-top:2px"></span>
+                    </label>
+                    <label>
+                      Modell
+                      <input id="openaiModelInput" type="text" placeholder="gpt-4o-mini" />
+                    </label>
+                    <label>
+                      Cache TTL (Sekunden)
+                      <input id="openaiCacheTtlSecInput" type="number" min="30" max="3600" step="30" />
+                    </label>
+                    <label>
+                      Timeout (Sekunden)
+                      <input id="openaiTimeoutSecInput" type="number" min="3" max="60" step="1" />
+                    </label>
+                    <label>
+                      Max Tokens
+                      <input id="openaiMaxTokensInput" type="number" min="256" max="4000" step="50" />
+                    </label>
+                  </div>
+                </div>
+
               </div>
               <div class="alarm-settings-actions">
                 <button id="saveAlarmSettingsButton" type="button">Globale Alarmwerte speichern</button>
