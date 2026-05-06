@@ -34,6 +34,14 @@ const SAP_B1_VERSION_MAP = new Map([
   ["10.00.220", { featurePack: "FP 2308", patchLevel: "PL 12", releaseDate: "Aug 2023" }],
   ["10.00.210", { featurePack: "FP 2305", patchLevel: "PL 11", releaseDate: "May 2023" }],
   ["10.00.180", { featurePack: "FP 2208", patchLevel: "PL 08", releaseDate: "Aug 2022" }],
+  ["10.00.170", { featurePack: "FP 2205", patchLevel: "PL 07", releaseDate: "May 2022" }],
+  ["10.00.160", { featurePack: "FP 2202", patchLevel: "PL 06", releaseDate: "Feb 2022" }],
+  ["10.00.150", { featurePack: "FP 2111", patchLevel: "PL 05", releaseDate: "Nov 2021" }],
+  ["10.00.140", { featurePack: "FP 2108", patchLevel: "PL 04", releaseDate: "Aug 2021" }],
+  ["10.00.130", { featurePack: "FP 2105", patchLevel: "PL 03", releaseDate: "May 2021" }],
+  ["10.00.120", { featurePack: "FP 2102", patchLevel: "PL 02", releaseDate: "Feb 2021" }],
+  ["10.00.110", { featurePack: "FP 2008", patchLevel: "PL 01", releaseDate: "Aug 2020" }],
+  ["10.00.100", { featurePack: "FP 2005", patchLevel: "PL 00", releaseDate: "May 2020" }],
 ]);
 
 const SAP_B1_HANA_PROCESS_RE = /\b(hdbindexserver|hdbnameserver|hdbscriptserver|hdbxsengine|hdbcompileserver|hdbpreprocessor|hdbwebdispatcher|hdbdaemon|hdbrsutil|sapstartsrv|hdb[a-z0-9_-]+)\b/i;
