@@ -193,6 +193,7 @@ collect_hana_version_json() {
   local hdbnsutil_path=""
   local version_raw=""
   local version_text=""
+  local branch_text=""
   local version_error=""
 
   # Auto-detect SID from /hana/shared/<SID> if not set in config
@@ -279,6 +280,7 @@ collect_hana_version_json() {
 
     version_raw="$(printf '%s' "$version_raw" | sed -e 's/[[:space:]]*$//')"
     version_text="$(printf '%s\n' "$version_raw" | awk 'BEGIN { IGNORECASE=1 } /version:/ { gsub(/^[[:space:]]*[Vv]ersion:[[:space:]]+/, ""); print; exit }')"
+    branch_text="$(printf '%s\n' "$version_raw" | awk 'BEGIN { IGNORECASE=1 } /branch:/ { gsub(/^[[:space:]]*[Bb]ranch:[[:space:]]+/, ""); print; exit }')"
     if [[ -z "$version_text" ]] && [[ -n "$version_raw" ]] && [[ -z "$version_error" ]]; then
       version_error="version nicht parsebar"
     elif [[ -z "$version_raw" ]] && [[ -z "$version_error" ]]; then
@@ -288,12 +290,13 @@ collect_hana_version_json() {
     version_error="HDB nicht gefunden"
   fi
 
-  printf '{"available":%s,"sid":"%s","sid_user":"%s","path":"%s","version":"%s","error":"%s"}' \
+  printf '{"available":%s,"sid":"%s","sid_user":"%s","path":"%s","version":"%s","branch":"%s","error":"%s"}' \
     "$([ -n "$hdb_path" ] && echo true || echo false)" \
     "$(json_escape "$sid")" \
     "$(json_escape "$sid_user")" \
     "$(json_escape "$hdb_path")" \
     "$(json_escape "$version_text")" \
+    "$(json_escape "$branch_text")" \
     "$(json_escape "$version_error")"
 }
 

@@ -3383,6 +3383,22 @@ function renderSapB1LandscapeBadge(payload) {
   return `<span class="sap-b1-inline-badge ${escapeHtml(info.stateClass)}" title="${escapeHtml(info.detail)}">${escapeHtml(info.label)}</span>`;
 }
 
+function renderSapB1SystemSummary(payload) {
+  const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
+  const versionBlock = sap && typeof sap.server_components_version === "object" ? sap.server_components_version : null;
+  const versionText = asText(versionBlock?.version, "");
+  const versionInfo = parseSapB1Version(versionText);
+  const fp = asText(versionInfo.mapping?.featurePack, "");
+  const releaseDate = asText(versionInfo.mapping?.releaseDate, "");
+  if (!fp && !releaseDate) {
+    return "-";
+  }
+  if (fp && releaseDate) {
+    return `${fp} | ${releaseDate}`;
+  }
+  return fp || releaseDate;
+}
+
 function renderSapB1SystemInfoCard(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const versionBlock = sap && typeof sap.server_components_version === "object" ? sap.server_components_version : null;
@@ -3405,6 +3421,7 @@ function renderSapB1SystemInfoCard(payload) {
   const landscapeInfo = getSapB1LandscapeStatus(payload);
   const hanaInfo = payload && typeof payload.hana_info === "object" ? payload.hana_info : null;
   const hanaVersion = asText(hanaInfo?.version, "");
+  const hanaBranch = asText(hanaInfo?.branch, "");
 
   return `
     <section class="detail-card sap-b1-card">
@@ -3414,6 +3431,7 @@ function renderSapB1SystemInfoCard(payload) {
           <header>Server Components Version</header>
           <div class="sap-b1-size-row"><span class="sap-b1-size-label">HANA Landscape</span><strong class="sap-b1-size-value">${escapeHtml(landscapeInfo.compatible ? "passt zu HANA-Landschaft" : landscapeInfo.detail)}</strong></div>
           <div class="sap-b1-size-row"><span class="sap-b1-size-label">HANA Version</span><strong class="sap-b1-size-value">${escapeHtml(hanaVersion || "nicht erkannt")}</strong></div>
+          <div class="sap-b1-size-row"><span class="sap-b1-size-label">HANA Branch</span><strong class="sap-b1-size-value">${escapeHtml(hanaBranch || "nicht erkannt")}</strong></div>
           <div class="sap-b1-size-row"><span class="sap-b1-size-label">Status</span><strong class="sap-b1-size-value">${available ? "Verfügbar" : "nicht verfügbar"}</strong></div>
           <div class="sap-b1-size-row"><span class="sap-b1-size-label">Version</span><strong class="sap-b1-size-value">${escapeHtml(versionText || "-")}</strong></div>
           <div class="sap-b1-size-row"><span class="sap-b1-size-label">Build</span><strong class="sap-b1-size-value">${escapeHtml(versionInfo.build || "-")}</strong></div>
@@ -4130,7 +4148,7 @@ function renderReportCard(report) {
   const chipText = isDelayed ? "DELAYED" : "LIVE";
   const queueDepth = queueDepthLabel(payload.queue_depth);
   const section = normalizeReportSection(state.reportSection);
-  const sapLandscapeInfo = getSapB1LandscapeStatus(payload);
+  const sapB1Summary = renderSapB1SystemSummary(payload);
 
   // Helper function to render meta-group items
   function renderMetaItem(icon, label, value) {
@@ -4161,7 +4179,7 @@ function renderReportCard(report) {
         ${renderMetaItem("⚙️", "Kernel", payload.kernel)}
         ${renderMetaItem("⏱️", "Uptime", formatUptime(payload.uptime_seconds))}
         ${renderMetaItem("🗃️", "Queue", queueDepth + " Dateien")}
-        ${renderMetaItemHtml("🧾", "SAP B1", renderSapB1LandscapeBadge(payload))}
+        ${renderMetaItem("🧾", "SAP B1", sapB1Summary)}
       </div>
     </div>
   `;
@@ -4260,7 +4278,7 @@ function renderReportCard(report) {
       <div class="report-header">
         <div>
           <h3>${escapeHtml(title)}</h3>
-          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)} <span class="${chipClass}">${chipText}</span> ${renderSapB1LandscapeBadge(payload)}</p>
+          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)} <span class="${chipClass}">${chipText}</span></p>
         </div>
         <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
       </div>
