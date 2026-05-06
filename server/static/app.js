@@ -3402,7 +3402,7 @@ function renderSapB1SystemSummary(payload) {
     return "-";
   }
   if (fp && releaseDate) {
-    return `<strong>${escapeHtml(fp)}</strong> | ${escapeHtml(releaseDate)}`;
+    return `<strong>${escapeHtml(fp)}</strong> ${escapeHtml(releaseDate)}`;
   }
   return fp ? `<strong>${escapeHtml(fp)}</strong>` : escapeHtml(releaseDate);
 }
