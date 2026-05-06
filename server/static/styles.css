@@ -263,8 +263,8 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .brand-platform-icon {
-  width: 18px;
-  height: 18px;
+  width: calc(18px * 1.3);
+  height: calc(18px * 1.3);
   display: block;
   object-fit: contain;
 }
