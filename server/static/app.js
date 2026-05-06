@@ -3418,8 +3418,8 @@ function renderSapB1SystemInfoCard(payload) {
           <div class="sap-b1-size-row"><span class="sap-b1-size-label">Version</span><strong class="sap-b1-size-value">${escapeHtml(versionText || "-")}</strong></div>
           <div class="sap-b1-size-row"><span class="sap-b1-size-label">Build</span><strong class="sap-b1-size-value">${escapeHtml(versionInfo.build || "-")}</strong></div>
           <div class="sap-b1-size-row"><span class="sap-b1-size-label">Patch Level</span><strong class="sap-b1-size-value">${escapeHtml(versionInfo.patchLevel || (mapping?.patchLevel || "-"))}</strong></div>
-          <div class="sap-b1-size-row"><span class="sap-b1-size-label sap-b1-size-label--bold">Feature Pack</span><strong class="sap-b1-size-value sap-b1-size-value--bold">${escapeHtml(mapping?.featurePack || "unbekannt")}</strong></div>
-          <div class="sap-b1-size-row"><span class="sap-b1-size-label sap-b1-size-label--bold">Release Date</span><strong class="sap-b1-size-value sap-b1-size-value--bold">${escapeHtml(mapping?.releaseDate || "unbekannt")}</strong></div>
+          <div class="sap-b1-size-row"><span class="sap-b1-size-label">Feature Pack</span><strong class="sap-b1-size-value sap-b1-size-value--bold">${escapeHtml(mapping?.featurePack || "unbekannt")}</strong></div>
+          <div class="sap-b1-size-row"><span class="sap-b1-size-label">Release Date</span><strong class="sap-b1-size-value sap-b1-size-value--bold">${escapeHtml(mapping?.releaseDate || "unbekannt")}</strong></div>
           <div class="sap-b1-path" title="${escapeHtml(setupPath)}">${renderPathWithNameHighlight(setupPath)}</div>
           ${errorText && errorText !== "-" ? `<p class="muted" style="margin-top:8px">Fehler: ${escapeHtml(errorText)}</p>` : ""}
         </article>
