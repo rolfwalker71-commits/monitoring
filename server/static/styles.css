@@ -2351,7 +2351,6 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  min-height: 170px;
   position: relative;
   cursor: pointer;
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
@@ -2466,9 +2465,8 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: auto;
+  margin-top: 4px;
   padding-right: 42px;
-  min-height: 28px;
 }
 
 .host-alert-chip {
