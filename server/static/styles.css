@@ -2470,7 +2470,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 .host-item strong,
 .host-item .host-title-line,
 .host-item .host-title-line span {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
   line-height: 1.1;
 }
