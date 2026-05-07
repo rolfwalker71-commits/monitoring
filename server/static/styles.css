@@ -3731,11 +3731,18 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   border: 1px solid #bfdcff;
 }
 
+.report-sap-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 4px 0 0 0;
+}
+
 .sap-hana-chip {
   display: inline-block;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 1px 7px;
+  padding: 1px 8px;
   border-radius: 20px;
   white-space: nowrap;
 }

@@ -4718,7 +4718,8 @@ function renderReportCard(report) {
       <div class="report-header">
         <div>
           <h3>${escapeHtml(title)}</h3>
-          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}${reportDeliveryLag !== "-" ? ` <span class="report-detail-chip report-delivery-chip">⏱️ ${escapeHtml(reportDeliveryLag)}</span>` : ""}${sapB1Summary !== "-" ? ` <span class="sap-hana-chip sap-b1-chip">🧾 ${escapeHtml(sapB1Summary.replace(/<[^>]+>/g, ""))}</span>` : ""}${hanaInfoMeta !== "-" ? ` <span class="sap-hana-chip hana-chip">🗄️ ${escapeHtml(hanaInfoMeta)}</span>` : ""}${hanaSid ? ` <span class="sap-hana-chip hana-sid-chip">🏷️ ${escapeHtml(hanaSid)}</span>` : ""}</p>
+          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}${reportDeliveryLag !== "-" ? ` <span class="report-detail-chip report-delivery-chip">⏱️ ${escapeHtml(reportDeliveryLag)}</span>` : ""}</p>
+          ${(sapB1Summary !== "-" || hanaInfoMeta !== "-" || hanaSid) ? `<p class="report-sap-meta">${sapB1Summary !== "-" ? `<span class="sap-hana-chip sap-b1-chip" title="SAP Feature Pack">${escapeHtml(sapB1Summary.replace(/<[^>]+>/g, ""))}</span>` : ""}${hanaInfoMeta !== "-" ? (() => { const short = hanaInfoMeta.split(".").slice(0, 3).join("."); return `<span class="sap-hana-chip hana-chip" title="${escapeHtml(hanaInfoMeta)}">${escapeHtml(short)}</span>`; })() : ""}${hanaSid ? `<span class="sap-hana-chip hana-sid-chip" title="HANA SID">${escapeHtml(hanaSid)}</span>` : ""}</p>` : ""}
         </div>
         <div class="report-header-meta">
           <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
