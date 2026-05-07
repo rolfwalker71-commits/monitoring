@@ -2141,7 +2141,7 @@ function renderCustomerNotificationPanel(hostname, settings) {
   const mountpoints = settings.customer_alert_mountpoints || "";
   const minSeverity = settings.customer_alert_min_severity || "critical";
   return `<details class="customer-notif-panel detail-card" id="customerNotificationDetails" open>
-    <summary style="font-weight:700;font-size:14px;cursor:pointer;padding:4px 0;">📢 Kunden-Benachrichtigung (Admin)</summary>
+    <summary style="font-weight:700;font-size:14px;cursor:pointer;padding:4px 0;">Kunden-Benachrichtigung (Admin)</summary>
     <div style="padding:10px 0 4px 0;">
       <p style="font-size:12px;color:#64748b;margin:0 0 10px 0;">E-Mail-Benachrichtigung bei neuen Filesystem-Alerts für diesen Host.</p>
       <div class="alarm-settings-group">
@@ -2215,7 +2215,7 @@ async function loadAndRenderCustomerNotificationPanel(hostname) {
 
 function renderCustomerAlertTestSection() {
   return `<section id="customerAlertTestSection" class="settings-subsection">
-    <h3>📢 Kunden-Benachrichtigung Testmail</h3>
+    <h3>Kunden-Benachrichtigung Testmail</h3>
     <div class="alarm-settings-group">
       <label for="custTestHostSelect" class="settings-label">Host auswählen</label>
       <select id="custTestHostSelect" class="settings-input">
@@ -3591,7 +3591,7 @@ function renderSapBusinessOneCard(payload) {
   if (!sap) {
     return `
       <section class="detail-card sap-b1-card">
-        <h4>📦 SAP Business One Files / Ordner</h4>
+        <h4>SAP Business One Files / Ordner</h4>
         <p class="muted">Keine SAP-Business-One-Daten im Payload vorhanden.</p>
       </section>
     `;
@@ -3599,7 +3599,7 @@ function renderSapBusinessOneCard(payload) {
 
   return `
     <section class="detail-card sap-b1-card">
-      <h4>📦 SAP Business One Files / Ordner</h4>
+      <h4>SAP Business One Files / Ordner</h4>
       <div class="sap-b1-grid">
         ${renderSapPathSizeItem("catalina.out", sap.catalina_out, "Datei nicht vorhanden")}
         ${renderSapPathSizeItem("BusinessOne Log Ordner", sap.businessone_log_dir, "Ordner nicht vorhanden")}
@@ -3805,10 +3805,10 @@ function renderSapB1CombinedCard(payload) {
 
   return `
     <section class="detail-card sap-b1-card sap-b1-combined-card">
-      <h4>🧾 SAP B1</h4>
+      <h4>SAP B1</h4>
 
       <details class="sap-b1-raw-details" open>
-        <summary class="sap-b1-raw-summary">📦 SAP Business One Files / Ordner</summary>
+        <summary class="sap-b1-raw-summary">SAP Business One Files / Ordner</summary>
         ${filesContent}
       </details>
 
@@ -3847,7 +3847,7 @@ function renderSapB1SystemInfoCard(payload) {
   if (!versionBlock) {
     return `
       <section class="detail-card sap-b1-card">
-        <h4>🧾 SAP B1</h4>
+        <h4>SAP B1</h4>
         <p class="muted">Keine SAP Business One Versionsdaten im Payload vorhanden.</p>
       </section>
     `;
@@ -3881,7 +3881,7 @@ function renderSapB1SystemInfoCard(payload) {
 
   return `
     <section class="detail-card sap-b1-card">
-      <h4>🧾 SAP B1</h4>
+      <h4>SAP B1</h4>
       <div class="sap-b1-grid">
         <details class="sap-b1-raw-details">
           <summary class="sap-b1-raw-summary">SAP B1 Setup Roh-Output</summary>
@@ -4010,9 +4010,9 @@ function renderDirItemTable(items, currentInfo) {
         <thead>
           <tr>
             <th style="width:28px;"></th>
-            <th>📝 Name</th>
-            <th class="dir-item-size-head">📦 Grösse</th>
-            <th class="dir-item-date-head">🕒 Geändert (UTC+2)</th>
+            <th>Name</th>
+            <th class="dir-item-size-head">Grösse</th>
+            <th class="dir-item-date-head">Geändert (UTC+2)</th>
           </tr>
         </thead>
         <tbody>${renderDirItemRows(items, currentInfo)}</tbody>
@@ -4032,13 +4032,13 @@ function renderDirListingsCard(payload) {
   if (!hasRegular && !hasDeep) {
     return `
       <section class="detail-card dir-listings-card">
-        <h4>📂 SAP Exports</h4>
+        <h4>SAP Exports</h4>
         <p class="muted">Keine SAP Exports Daten vorhanden. (DIR_SCAN_PATHS oder DIR_SCAN_DEEP_PATHS in agent.conf konfigurieren)</p>
       </section>
     `;
   }
 
-  let html = `<section class="detail-card dir-listings-card"><h4>📂 SAP Exports</h4>`;
+  let html = `<section class="detail-card dir-listings-card"><h4>SAP Exports</h4>`;
 
   // Regular flat listings
   if (hasRegular) {
@@ -4295,13 +4295,13 @@ function renderFilesystemTable(filesystems) {
       <table class="fs-table">
         <thead>
           <tr>
-            <th class="fs-col-mountpoint">📁 Mountpoint</th>
-            <th class="fs-col-filesystem">💽 Filesystem</th>
-            <th class="fs-col-type">🧩 Typ</th>
-            <th class="fs-col-size">📦 Gesamt</th>
-            <th class="fs-col-size">📊 Belegt</th>
-            <th class="fs-col-size">✅ Frei</th>
-            <th class="fs-col-usage">📈 Auslastung</th>
+            <th class="fs-col-mountpoint">Mountpoint</th>
+            <th class="fs-col-filesystem">Filesystem</th>
+            <th class="fs-col-type">Typ</th>
+            <th class="fs-col-size">Gesamt</th>
+            <th class="fs-col-size">Belegt</th>
+            <th class="fs-col-size">Frei</th>
+            <th class="fs-col-usage">Auslastung</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -4345,10 +4345,10 @@ function renderJournalErrorsTable(journalErrors) {
       <table class="report-subtable">
         <thead>
           <tr>
-            <th>🕒 Zeit</th>
-            <th>⚠️ Prio</th>
-            <th>🧩 Unit</th>
-            <th>📝 Meldung</th>
+            <th>Zeit</th>
+            <th>Prio</th>
+            <th>Unit</th>
+            <th>Meldung</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -4391,12 +4391,12 @@ function renderTopProcessesTable(topProcesses) {
       <table class="report-subtable">
         <thead>
           <tr>
-            <th>🆔 PID</th>
-            <th>👤 User</th>
-            <th>🧠 CPU</th>
-            <th>🧮 RAM</th>
-            <th>💾 RSS</th>
-            <th>⚙️ Command</th>
+            <th>PID</th>
+            <th>User</th>
+            <th>CPU</th>
+            <th>RAM</th>
+            <th>RSS</th>
+            <th>Command</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -4440,12 +4440,12 @@ function renderContainersTable(containersBlock) {
       <table class="report-subtable">
         <thead>
           <tr>
-            <th>📦 Name</th>
-            <th>🖼️ Image</th>
-            <th>📌 State</th>
-            <th>❤️ Health</th>
-            <th>🔁 Restarts</th>
-            <th>📝 Status</th>
+            <th>Name</th>
+            <th>Image</th>
+            <th>State</th>
+            <th>Health</th>
+            <th>Restarts</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
