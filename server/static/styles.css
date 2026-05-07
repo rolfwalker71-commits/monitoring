@@ -1583,6 +1583,15 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   margin: 0;
 }
 
+.selected-host-controls {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
 /* subview-tabs + chart-range-control in one row */
 .subview-controls-row {
   display: flex;
@@ -2384,41 +2393,13 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
   color: var(--text);
   border-radius: 10px;
-  padding: 5px 92px 5px 8px;
+  padding: 5px 46px 5px 8px;
   display: flex;
   flex-direction: column;
   gap: 1px;
   position: relative;
   cursor: pointer;
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
-}
-
-.host-value-chip-stack {
-  position: absolute;
-  right: 8px;
-  top: 40px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
-  pointer-events: none;
-}
-
-.host-right-actions {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
-  pointer-events: auto;
-}
-
-/* When API chip is in the chip-stack (top-right), keep same style */
-.host-value-chip-stack .host-apikey-chip {
-  pointer-events: auto;
-}
-
-.host-value-chip-stack .host-mini-action {
-  pointer-events: auto;
 }
 
 /* SAP/HANA chips in the bottom actions row: inline flow */

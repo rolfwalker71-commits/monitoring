@@ -4901,18 +4901,6 @@ function renderSingleHostCard(host) {
     : "host-status-bar host-status-bar--ok";
   const chipClass = openCriticalAlertCount > 0 ? "host-alert-chip critical" : "host-alert-chip";
   const alertChip = hasOpenAlerts ? `<span class="${chipClass}">🔔 ${openAlertCount}</span>` : "";
-  const apiKeyStatus = asText(host.agent_api_key_status || "off").toLowerCase();
-  const apiKeyChipMod = apiKeyStatus === "key-auth" ? "ok"
-    : apiKeyStatus === "grace" ? "grace"
-    : apiKeyStatus === "configured" ? "configured"
-    : apiKeyStatus === "missing" ? "missing"
-    : "off";
-  const apiKeyChipTitle = apiKeyStatus === "key-auth" ? "API-Key: aktiv"
-    : apiKeyStatus === "grace" ? "API-Key: Grace (noch kein Key)"
-    : apiKeyStatus === "configured" ? "API-Key: konfiguriert"
-    : apiKeyStatus === "missing" ? "API-Key: fehlt"
-    : "API-Key: nicht konfiguriert";
-  const apiKeyChip = `<span class="host-apikey-chip ${apiKeyChipMod}" title="${escapeHtml(apiKeyChipTitle)}">API</span>`;
 
   const osRaw = asText(host.os || "").toLowerCase();
   const countryCode = asText(host.country_code || "", "").toUpperCase();
@@ -4974,26 +4962,104 @@ function renderSingleHostCard(host) {
       <strong class="host-title-line">
         <span>${escapeHtml(displayName)}</span>
       </strong>
-      <div class="host-value-chip-stack">
-        ${apiKeyChip}
-        <div class="host-right-actions">
-          <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👀" : "🫣"}</button>
-          <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
-        </div>
-      </div>
       <span>🖥️ ${escapeHtml(hostname)}</span>
       <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
       <span>⏱️ Zustellung: ${escapeHtml(hostDeliveryLag)}</span>
       <span>🧷 ${escapeHtml(asText(host.agent_version))} &nbsp;·&nbsp; 📦 ${Number(host.report_count || 0).toLocaleString("de-DE")}</span>
       <span>🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
-      <span class="host-card-actions">
-        ${valueChipStack}
-      </span>
+      ${valueChipStack ? `<span class="host-card-actions">${valueChipStack}</span>` : ""}
       ${alertChip}
       ${mutedAlertsSection}
       ${osIcon}
     </article>
   `;
+}
+
+function renderApiKeyChip(host) {
+  const apiKeyStatus = asText(host?.agent_api_key_status || "off").toLowerCase();
+  const apiKeyChipMod = apiKeyStatus === "key-auth" ? "ok"
+    : apiKeyStatus === "grace" ? "grace"
+    : apiKeyStatus === "configured" ? "configured"
+    : apiKeyStatus === "missing" ? "missing"
+    : "off";
+  const apiKeyChipTitle = apiKeyStatus === "key-auth" ? "API-Key: aktiv"
+    : apiKeyStatus === "grace" ? "API-Key: Grace (noch kein Key)"
+    : apiKeyStatus === "configured" ? "API-Key: konfiguriert"
+    : apiKeyStatus === "missing" ? "API-Key: fehlt"
+    : "API-Key: nicht konfiguriert";
+  return `<span class="host-apikey-chip ${apiKeyChipMod}" title="${escapeHtml(apiKeyChipTitle)}">API</span>`;
+}
+
+function renderSelectedHostControls(host) {
+  if (!host) {
+    return "";
+  }
+
+  const hostname = asText(host.hostname);
+  const isFavorite = Boolean(host.is_favorite);
+  const isHidden = Boolean(host.is_hidden);
+
+  return `
+    ${renderApiKeyChip(host)}
+    <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👀" : "🫣"}</button>
+    <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
+  `;
+}
+
+function wireHostActionButtons(root) {
+  if (!root) {
+    return;
+  }
+
+  for (const button of root.querySelectorAll(".host-mini-action[data-action]")) {
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const hostname = button.getAttribute("data-host") || "";
+      const action = button.getAttribute("data-action") || "";
+      const current = button.getAttribute("data-current") === "1";
+      if (!hostname || !action) {
+        return;
+      }
+
+      try {
+        if (action === "favorite") {
+          await saveHostSettings(hostname, { is_favorite: !current });
+        } else if (action === "hidden") {
+          await saveHostSettings(hostname, { is_hidden: !current });
+        }
+
+        await loadHosts();
+        await loadReportsForHost();
+        await loadAnalysisForHost();
+        await loadAlertsForHost();
+      } catch (error) {
+        window.alert(`Host-Einstellung konnte nicht gespeichert werden: ${error.message}`);
+      }
+    });
+  }
+}
+
+function updateSelectedHostControls() {
+  const controls = document.getElementById("selectedHostControls");
+  if (!controls) {
+    return;
+  }
+
+  const selectedHost = Array.isArray(state.hosts)
+    ? state.hosts.find((host) => asText(host.hostname) === state.selectedHost)
+    : null;
+
+  if (!state.selectedHost || !selectedHost) {
+    controls.innerHTML = "";
+    controls.classList.add("hidden");
+    return;
+  }
+
+  controls.innerHTML = renderSelectedHostControls(selectedHost);
+  controls.classList.remove("hidden");
+  wireHostActionButtons(controls);
 }
 
 async function saveHostSettings(hostname, partialSettings) {
@@ -5386,34 +5452,7 @@ function wireHostListInteractions() {
     });
   }
 
-  for (const button of hostList.querySelectorAll(".host-mini-action")) {
-    button.addEventListener("click", async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-
-      const hostname = button.getAttribute("data-host") || "";
-      const action = button.getAttribute("data-action") || "";
-      const current = button.getAttribute("data-current") === "1";
-      if (!hostname || !action) {
-        return;
-      }
-
-      try {
-        if (action === "favorite") {
-          await saveHostSettings(hostname, { is_favorite: !current });
-        } else if (action === "hidden") {
-          await saveHostSettings(hostname, { is_hidden: !current });
-        }
-
-        await loadHosts();
-        await loadReportsForHost();
-        await loadAnalysisForHost();
-        await loadAlertsForHost();
-      } catch (error) {
-        window.alert(`Host-Einstellung konnte nicht gespeichert werden: ${error.message}`);
-      }
-    });
-  }
+  wireHostActionButtons(hostList);
 
   const hiddenToggle = hostList.querySelector("#hiddenHostsToggleButton");
   if (hiddenToggle) {
@@ -5628,6 +5667,7 @@ async function loadReportsForHost(options = {}) {
     state.currentReport = null;
     selectedHostTitle.textContent = "🗂️ Meldungen";
     count.textContent = "";
+    updateSelectedHostControls();
     if (reportJumpDateInput) {
       reportJumpDateInput.value = "";
       reportJumpDateInput.removeAttribute("min");
@@ -5647,6 +5687,7 @@ async function loadReportsForHost(options = {}) {
   selectedHostTitle.textContent = `🗂️ ${selectedLabel}`;
   list.innerHTML = "<p class=\"muted\">Lade Daten...</p>";
   count.textContent = "";
+  updateSelectedHostControls();
 
   try {
     const hostNameParam = encodeURIComponent(state.selectedHost);
