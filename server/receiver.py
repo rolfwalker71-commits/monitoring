@@ -4187,6 +4187,9 @@ def customer_alert_mail_html(
     severity: str,
     used_percent: float,
     display_name: str = "",
+    primary_ip: str = "",
+    country_code: str = "",
+    os_family: str = "linux",
     reported_at_utc: str = "",
 ) -> str:
     normalized_severity = str(severity or "").strip().lower()
@@ -4198,6 +4201,27 @@ def customer_alert_mail_html(
     reported_at = format_mail_datetime(reported_at_utc)
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
+    event_icon_uri = alert_event_icon_data_uri("escalated")
+    normalized_country_code = normalize_country_code(country_code)
+    country_badge = normalized_country_code if normalized_country_code else "--"
+    normalized_os_family = normalize_os_family(os_family)
+    os_label = os_family_label(normalized_os_family)
+    os_logo_uri = os_logo_data_uri(normalized_os_family)
+    country_flag_uri = country_flag_data_uri(normalized_country_code)
+    os_icon_html = (
+        f"<img src='{html.escape(os_logo_uri)}' alt='{html.escape(os_label)}' width='24' height='24' style='display:block;'>"
+        if os_logo_uri
+        else ""
+    )
+    country_icon_html = (
+        f"<img src='{html.escape(country_flag_uri)}' alt='{html.escape(country_badge)}' width='24' height='24' style='display:block;'>"
+        if country_flag_uri
+        else ""
+    )
+    event_icon_block = (
+        f"<div style='margin:0 0 12px 0;'><img src='{html.escape(event_icon_uri)}' alt='Alert' width='52' height='52' style='display:block;'></div>"
+        if event_icon_uri else ""
+    )
     used_display = f"{used_percent:.1f}%"
     return (
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
@@ -4217,9 +4241,15 @@ def customer_alert_mail_html(
         f"&#128226; Kundeninfo &mdash; Monitoring Alert &mdash; {sev_label}"
         "</div>"
         f"<h1 style='margin:8px 0 0 0;font-size:28px;font-weight:800;color:#17324d;'>{html.escape(title)}</h1>"
+        f"<div style='margin-top:8px;display:flex;align-items:center;gap:6px;'>"
+        f"<span style='display:inline-flex;align-items:center;padding:3px 4px;'>{os_icon_html}</span>"
+        f"<span style='display:inline-flex;align-items:center;padding:3px 4px;'>{country_icon_html}</span>"
+        f"<span style='font-size:12px;color:#5f7590;'>{html.escape(os_label)} | {html.escape(country_badge)}</span>"
+        "</div>"
         "</div>"
         # Body
         "<div style='padding:22px 20px;'>"
+        f"{event_icon_block}"
         "<p style='margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#334155;'>"
         "Auf dem folgenden System wurde ein Filesystem-Alert ausgelöst. "
         "Bitte prüfen Sie den Füllstand und ergreifen Sie gegebenenfalls Massnahmen."
@@ -4227,6 +4257,12 @@ def customer_alert_mail_html(
         "<table style='width:100%;border-collapse:collapse;font-size:14px;background:#f8fafc;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;'>"
         "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;width:140px;'>System</td>"
         f"<td style='padding:10px 14px;font-weight:600;border-bottom:1px solid #e2e8f0;'>{html.escape(title)}</td></tr>"
+        "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;'>IP-Adresse</td>"
+        f"<td style='padding:10px 14px;font-weight:600;border-bottom:1px solid #e2e8f0;'>{html.escape(primary_ip or '-')}</td></tr>"
+        "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;'>OS-Typ</td>"
+        f"<td style='padding:10px 14px;font-weight:600;border-bottom:1px solid #e2e8f0;'>{html.escape(os_label)}</td></tr>"
+        "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;'>Land</td>"
+        f"<td style='padding:10px 14px;font-weight:600;border-bottom:1px solid #e2e8f0;'>{html.escape(country_badge)}</td></tr>"
         "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;'>Mountpoint</td>"
         f"<td style='padding:10px 14px;font-weight:600;border-bottom:1px solid #e2e8f0;font-family:monospace;'>{html.escape(mountpoint)}</td></tr>"
         "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;'>Auslastung</td>"
@@ -4278,8 +4314,20 @@ def send_customer_alert_mail(
         if min_severity == "critical" and severity != "critical":
             return
 
-        subject = customer_alert_mail_subject(hostname, mountpoint, severity, display_name)
-        body = customer_alert_mail_html(hostname, mountpoint, severity, used_percent, display_name, reported_at_utc)
+        host_context = collect_host_mail_context(conn, hostname)
+        effective_display_name = str(host_context.get("display_name", "") or "").strip() or display_name
+        subject = customer_alert_mail_subject(hostname, mountpoint, severity, effective_display_name)
+        body = customer_alert_mail_html(
+            hostname,
+            mountpoint,
+            severity,
+            used_percent,
+            effective_display_name,
+            str(host_context.get("primary_ip", "") or ""),
+            str(host_context.get("country_code", "") or ""),
+            str(host_context.get("os_family", "linux") or "linux"),
+            reported_at_utc,
+        )
 
         # Find an admin user with a valid Microsoft OAuth token to send via
         try:
@@ -9420,8 +9468,20 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 host_settings_data = get_host_settings(conn, test_hostname)
                 display_name = host_settings_data.get("display_name_override") or test_hostname
+                host_context = collect_host_mail_context(conn, test_hostname)
+                effective_display_name = str(host_context.get("display_name", "") or "").strip() or str(display_name)
                 test_subject = customer_alert_mail_subject(test_hostname, "/test/mountpoint", "critical", display_name)
-                test_body = customer_alert_mail_html(test_hostname, "/test/mountpoint", "critical", 95.0, display_name, utc_now_iso())
+                test_body = customer_alert_mail_html(
+                    test_hostname,
+                    "/test/mountpoint",
+                    "critical",
+                    95.0,
+                    effective_display_name,
+                    str(host_context.get("primary_ip", "") or ""),
+                    str(host_context.get("country_code", "") or ""),
+                    str(host_context.get("os_family", "linux") or "linux"),
+                    utc_now_iso(),
+                )
 
                 ok, access_token, err_msg = ensure_microsoft_access_token(conn, username)
                 if not ok or not access_token:
