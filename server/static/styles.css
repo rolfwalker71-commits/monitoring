@@ -4174,6 +4174,23 @@ body[data-theme="dark"] .hana-sid-chip {
   overflow: hidden;
 }
 
+/* Inside the combined card: flush dividers, no inner card borders */
+.sap-b1-combined-card .sap-b1-raw-details {
+  border: none;
+  border-top: 1px solid #e2ecf8;
+  border-radius: 0;
+  background: transparent;
+}
+
+.sap-b1-combined-card .sap-b1-raw-details:first-of-type {
+  margin-top: 8px;
+}
+
+.sap-b1-combined-card .sap-b1-raw-details .sap-b1-raw-output {
+  border-top: 1px solid #e2ecf8;
+  border-radius: 0;
+}
+
 .sap-b1-raw-summary {
   font-size: 12px;
   font-weight: 700;

@@ -3748,6 +3748,99 @@ function wireSapVersionMapCopyButtons(container) {
   }
 }
 
+function renderSapB1CombinedCard(payload) {
+  const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
+  const versionBlock = sap && typeof sap.server_components_version === "object" ? sap.server_components_version : null;
+  const rawOutput = asText(versionBlock?.raw_output, "");
+
+  // Files / Ordner section
+  let filesContent;
+  if (!sap) {
+    filesContent = `<p class="muted">Keine SAP-Business-One-Daten im Payload vorhanden.</p>`;
+  } else {
+    filesContent = `
+      <div class="sap-b1-grid">
+        ${renderSapPathSizeItem("catalina.out", sap.catalina_out, "Datei nicht vorhanden")}
+        ${renderSapPathSizeItem("BusinessOne Log Ordner", sap.businessone_log_dir, "Ordner nicht vorhanden")}
+      </div>`;
+  }
+
+  // HANA section
+  const hanaInfo = payload && typeof payload.hana_info === "object" ? payload.hana_info : null;
+  const hanaRawOutput = asText(hanaInfo?.raw_output, "");
+  const hanaVersion = asText(hanaInfo?.version, "");
+  const hanaBranch = asText(hanaInfo?.branch, "");
+  const hanaSid = asText(hanaInfo?.sid, "");
+  const hanaAvailable = hanaInfo?.available === true;
+  const hanaError = asText(hanaInfo?.error, "");
+
+  let hanaInfoRows;
+  if (!hanaInfo) {
+    hanaInfoRows = `<p class="muted">Kein HANA-Scan im Payload (Agent-Update erforderlich)</p>`;
+  } else if (!hanaAvailable) {
+    hanaInfoRows = `<p class="muted">HANA nicht gefunden${hanaError ? " — " + escapeHtml(hanaError) : ""}</p>`;
+  } else {
+    hanaInfoRows = `
+      <table class="sap-b1-info-table">
+        <tbody>
+          ${hanaSid ? `<tr><th>SID</th><td>${escapeHtml(hanaSid)}</td></tr>` : ""}
+          ${hanaVersion ? `<tr><th>Version</th><td>${escapeHtml(hanaVersion)}</td></tr>` : ""}
+          ${hanaBranch ? `<tr><th>Branch</th><td>${escapeHtml(hanaBranch)}</td></tr>` : ""}
+        </tbody>
+      </table>`;
+  }
+
+  // Version map section
+  const sortedEntries = Array.from(SAP_B1_VERSION_MAP.entries()).sort(([a], [b]) => b.localeCompare(a));
+  const vmapRows = sortedEntries.map(([build, info]) => `
+    <tr>
+      <td class="sap-vmap-build">${escapeHtml(build)}</td>
+      <td>${escapeHtml(info.featurePack)}</td>
+      <td>${escapeHtml(info.patchLevel)}</td>
+      <td class="sap-vmap-date">${escapeHtml(info.releaseDate)}</td>
+    </tr>`).join("");
+  const copyText = sortedEntries
+    .map(([build, info]) => `${build}\t${info.featurePack}\t${info.patchLevel}\t${info.releaseDate}`)
+    .join("\n");
+
+  return `
+    <section class="detail-card sap-b1-card sap-b1-combined-card">
+      <h4>🧾 SAP B1</h4>
+
+      <details class="sap-b1-raw-details" open>
+        <summary class="sap-b1-raw-summary">📦 SAP Business One Files / Ordner</summary>
+        ${filesContent}
+      </details>
+
+      <details class="sap-b1-raw-details">
+        <summary class="sap-b1-raw-summary">SAP B1 Setup Roh-Output</summary>
+        <pre class="sap-b1-raw-output">${escapeHtml(rawOutput || "-")}</pre>
+      </details>
+
+      <details class="sap-b1-raw-details">
+        <summary class="sap-b1-raw-summary">HANA Versions-Scan</summary>
+        ${hanaInfoRows}
+        ${hanaRawOutput ? `<pre class="sap-b1-raw-output">${escapeHtml(hanaRawOutput)}</pre>` : ""}
+      </details>
+
+      <details class="sap-b1-raw-details">
+        <summary class="sap-b1-raw-summary">
+          📋 SAP B1 Version-Referenztabelle (${SAP_B1_VERSION_MAP.size} Einträge)
+          <button class="sap-vmap-copy-btn" type="button" title="In Zwischenablage kopieren" data-copy="${escapeHtml(copyText)}">📋 Kopieren</button>
+        </summary>
+        <div class="table-wrap" style="margin-top:8px;">
+          <table class="report-subtable sap-vmap-table">
+            <thead>
+              <tr><th>Build</th><th>Feature Pack</th><th>Patch Level</th><th>Release</th></tr>
+            </thead>
+            <tbody>${vmapRows}</tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+  `;
+}
+
 function renderSapB1SystemInfoCard(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const versionBlock = sap && typeof sap.server_components_version === "object" ? sap.server_components_version : null;
@@ -4570,9 +4663,7 @@ function renderReportCard(report) {
   } else if (section === "sap-b1-systeminfo") {
     detailContent = `
       <div class="detail-cards">
-        ${renderSapB1SystemInfoCard(payload)}
-        ${renderSapBusinessOneCard(payload)}
-        ${renderSapB1VersionMapCard()}
+        ${renderSapB1CombinedCard(payload)}
       </div>
     `;
   } else if (section === "agent-update") {
