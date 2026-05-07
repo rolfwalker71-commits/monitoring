@@ -5611,6 +5611,7 @@ async function loadHosts(options = {}) {
       state.selectedHost = "";
       state.selectedDisplayName = "";
       state.reportOffset = 0;
+      loadAndRenderCustomerNotificationPanel("");
     } else if (!state.selectedHost) {
       state.selectedHost = String(orderedHosts[0].hostname || "");
       state.selectedDisplayName = String(orderedHosts[0].display_name || orderedHosts[0].hostname || "");
@@ -5628,6 +5629,7 @@ async function loadHosts(options = {}) {
       loadReportsForHost();
       loadAnalysisForHost();
       loadAlertsForHost();
+      loadAndRenderCustomerNotificationPanel(state.selectedHost);
       return;
     }
 
@@ -5641,6 +5643,7 @@ async function loadHosts(options = {}) {
       hostList.scrollTop = previousScrollTop;
     }
     updatePagerButtons();
+    loadAndRenderCustomerNotificationPanel(state.selectedHost || "");
 
     // Refresh muted-alert metadata in the background so host cards appear fast.
     if (!state.alertMutesRefreshInFlight) {
