@@ -1457,9 +1457,11 @@ button:hover:not(.host-item) {
 }
 
 .btn-secondary--compact {
-  min-height: 30px;
-  padding: 0 14px;
+  min-height: unset;
+  height: 26px;
+  padding: 0 12px;
   font-size: 12px;
+  line-height: 24px;
 }
 
 /* Icon-only button (e.g. pencil) */
