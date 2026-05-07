@@ -1029,8 +1029,9 @@ def _load_sap_b1_version_map() -> dict[str, dict[str, str]]:
 def _save_sap_b1_version_map(entries: list[dict]) -> None:
     """Persist SAP B1 version map to JSON file and reload the in-memory dict."""
     global _SAP_B1_BUILD_TO_FP
-    _SAP_B1_VERSION_MAP_PATH.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
-    _SAP_B1_BUILD_TO_FP = {str(e["build"]): {k: str(v) for k, v in e.items() if k != "build"} for e in entries if "build" in e}
+    sorted_entries = sorted(entries, key=lambda e: str(e.get("build", "")), reverse=True)
+    _SAP_B1_VERSION_MAP_PATH.write_text(json.dumps(sorted_entries, ensure_ascii=False, indent=2), encoding="utf-8")
+    _SAP_B1_BUILD_TO_FP = {str(e["build"]): {k: str(v) for k, v in e.items() if k != "build"} for e in sorted_entries if "build" in e}
 
 
 _SAP_B1_BUILD_TO_FP: dict[str, dict[str, str]] = {

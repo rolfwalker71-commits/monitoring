@@ -3541,7 +3541,9 @@ function renderSapB1SystemSummary(payload) {
 }
 
 function renderSapB1VersionMapCard() {
-  const rows = Array.from(SAP_B1_VERSION_MAP.entries()).map(([build, info]) => `
+  const sortedEntries = Array.from(SAP_B1_VERSION_MAP.entries())
+    .sort(([a], [b]) => b.localeCompare(a));
+  const rows = sortedEntries.map(([build, info]) => `
     <tr>
       <td class="sap-vmap-build">${escapeHtml(build)}</td>
       <td>${escapeHtml(info.featurePack)}</td>
@@ -3549,7 +3551,7 @@ function renderSapB1VersionMapCard() {
       <td class="sap-vmap-date">${escapeHtml(info.releaseDate)}</td>
     </tr>`).join("");
 
-  const copyText = Array.from(SAP_B1_VERSION_MAP.entries())
+  const copyText = sortedEntries
     .map(([build, info]) => `${build}\t${info.featurePack}\t${info.patchLevel}\t${info.releaseDate}`)
     .join("\n");
 
