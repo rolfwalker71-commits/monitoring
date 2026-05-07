@@ -24,6 +24,7 @@ const SAP_B1_VERSION_MAP = new Map([
   ["10.00.320", { featurePack: "FP 2602", patchLevel: "PL 22", releaseDate: "Feb 2026" }],
   ["10.00.310", { featurePack: "FP 2511", patchLevel: "PL 21", releaseDate: "Nov 2025" }],
   ["10.00.300", { featurePack: "FP 2508", patchLevel: "PL 20", releaseDate: "Aug 2025" }],
+  ["10.00.291", { featurePack: "FP 2505 HF1", patchLevel: "PL 19", releaseDate: "Jun 2025" }],
   ["10.00.290", { featurePack: "FP 2505", patchLevel: "PL 19", releaseDate: "May 2025" }],
   ["10.00.280", { featurePack: "FP 2502", patchLevel: "PL 18", releaseDate: "Feb 2025" }],
   ["10.00.270", { featurePack: "FP 2411", patchLevel: "PL 17", releaseDate: "Nov 2024" }],

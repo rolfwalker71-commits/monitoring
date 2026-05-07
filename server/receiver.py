@@ -1012,6 +1012,7 @@ _SAP_B1_BUILD_TO_FP: dict[str, dict[str, str]] = {
     "10.00.320": {"feature_pack": "FP 2602", "patch_level": "PL 22", "release_date": "Feb 2026"},
     "10.00.310": {"feature_pack": "FP 2511", "patch_level": "PL 21", "release_date": "Nov 2025"},
     "10.00.300": {"feature_pack": "FP 2508", "patch_level": "PL 20", "release_date": "Aug 2025"},
+    "10.00.291": {"feature_pack": "FP 2505 HF1", "patch_level": "PL 19", "release_date": "Jun 2025"},
     "10.00.290": {"feature_pack": "FP 2505", "patch_level": "PL 19", "release_date": "May 2025"},
     "10.00.280": {"feature_pack": "FP 2502", "patch_level": "PL 18", "release_date": "Feb 2025"},
     "10.00.270": {"feature_pack": "FP 2411", "patch_level": "PL 17", "release_date": "Nov 2024"},
