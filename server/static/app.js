@@ -4437,7 +4437,7 @@ function renderContainersTable(containersBlock) {
   return `
     <p class="count compact">Runtime: ${escapeHtml(runtime)} | Container: ${entries.length}</p>
     <div class="table-wrap">
-      <table class="report-subtable">
+      <table class="report-subtable containers-table">
         <thead>
           <tr>
             <th>Name</th>
