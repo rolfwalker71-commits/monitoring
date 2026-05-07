@@ -744,7 +744,12 @@ def init_db() -> None:
 
 
 def create_sqlite_backup_file(source_path: Path) -> tuple[Path, int]:
-    with tempfile.NamedTemporaryFile(prefix="monitoring-backup-", suffix=".db", delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(
+        prefix="monitoring-backup-",
+        suffix=".db",
+        dir=source_path.parent,
+        delete=False,
+    ) as tmp:
         temp_path = Path(tmp.name)
 
     try:
