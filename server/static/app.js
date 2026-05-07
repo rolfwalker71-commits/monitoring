@@ -3409,6 +3409,60 @@ function renderSapB1SystemSummary(payload) {
   return fp ? `<strong>${escapeHtml(fp)}</strong>` : escapeHtml(releaseDate);
 }
 
+function renderSapB1VersionMapCard() {
+  const rows = Array.from(SAP_B1_VERSION_MAP.entries()).map(([build, info]) => `
+    <tr>
+      <td class="sap-vmap-build">${escapeHtml(build)}</td>
+      <td>${escapeHtml(info.featurePack)}</td>
+      <td>${escapeHtml(info.patchLevel)}</td>
+      <td class="sap-vmap-date">${escapeHtml(info.releaseDate)}</td>
+    </tr>`).join("");
+
+  const copyText = Array.from(SAP_B1_VERSION_MAP.entries())
+    .map(([build, info]) => `${build}\t${info.featurePack}\t${info.patchLevel}\t${info.releaseDate}`)
+    .join("\n");
+
+  return `
+    <details class="sap-b1-raw-details">
+      <summary class="sap-b1-raw-summary">
+        📋 SAP B1 Version-Referenztabelle (${SAP_B1_VERSION_MAP.size} Einträge)
+        <button class="sap-vmap-copy-btn" type="button" title="In Zwischenablage kopieren" data-copy="${escapeHtml(copyText)}">📋 Kopieren</button>
+      </summary>
+      <div class="table-wrap" style="margin-top:8px;">
+        <table class="report-subtable sap-vmap-table">
+          <thead>
+            <tr>
+              <th>Build</th>
+              <th>Feature Pack</th>
+              <th>Patch Level</th>
+              <th>Release</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </details>
+  `;
+}
+
+function wireSapVersionMapCopyButtons(container) {
+  for (const btn of (container || document).querySelectorAll(".sap-vmap-copy-btn")) {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const text = btn.getAttribute("data-copy") || "";
+      try {
+        await navigator.clipboard.writeText(text);
+        const orig = btn.textContent;
+        btn.textContent = "✅ Kopiert!";
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      } catch {
+        btn.textContent = "❌ Fehler";
+        setTimeout(() => { btn.textContent = "📋 Kopieren"; }, 1500);
+      }
+    });
+  }
+}
+
 function renderSapB1SystemInfoCard(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const versionBlock = sap && typeof sap.server_components_version === "object" ? sap.server_components_version : null;
@@ -4315,6 +4369,7 @@ function renderReportCard(report) {
       <div class="detail-cards">
         ${renderSapB1SystemInfoCard(payload)}
         ${renderSapBusinessOneCard(payload)}
+        ${renderSapB1VersionMapCard()}
       </div>
     `;
   } else if (section === "agent-update") {
@@ -5421,6 +5476,7 @@ async function loadReportsForHost(options = {}) {
     selectedHostTitle.textContent = `🗂️ ${state.selectedDisplayName}`;
     state.currentReport = reports[0];
     list.innerHTML = renderReportCard(state.currentReport);
+    wireSapVersionMapCopyButtons(list);
     updatePagerButtons();
   } catch (error) {
     state.currentReport = null;
@@ -5468,6 +5524,7 @@ function renderCurrentReportInView() {
     return;
   }
   list.innerHTML = renderReportCard(state.currentReport);
+  wireSapVersionMapCopyButtons(list);
 }
 
 async function editDisplayName() {
