@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '0.8.12'
+$EmbeddedAgentVersion = '1.1.47'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -218,6 +218,35 @@ function Get-AgentConfigBlock {
         }
     }
     return '{"available":true,"path":"' + $configPathJson + '","entries":[' + ($entries -join ',') + ']}'
+}
+
+function Get-SapB1InfoBlock {
+    # Reads C:\Program Files\SAP\SAP Business One DI API\Conf\InstallationConfigMSSQL.xml
+    # and converts the Windows build format (e.g. "1000180 SP:00 PL:08")
+    # to the standard format ("10.00.180 PL 08") used by the monitoring backend.
+    $xmlPath = 'C:\Program Files\SAP\SAP Business One DI API\Conf\InstallationConfigMSSQL.xml'
+    $empty = '{"server_components_version":{"version":"","raw_output":""}}'
+    if (-not (Test-Path $xmlPath)) {
+        return $empty
+    }
+    try {
+        [xml]$xml = Get-Content -Path $xmlPath -Encoding UTF8 -ErrorAction Stop
+        $verVal = $xml.Installation.Version.val
+        if ($verVal -match '^(\d{7})\s+SP:\d+\s+PL:(\d+)') {
+            $winBuild = $Matches[1]
+            $pl       = $Matches[2].TrimStart('0')
+            if (-not $pl) { $pl = '0' }
+            # 1000180 -> 10.00.180
+            $build   = "$($winBuild.Substring(0,2)).$($winBuild.Substring(2,2)).$($winBuild.Substring(4,3))"
+            $version = "$build PL $pl"
+            $versionEsc = ConvertTo-JsonString $version
+            $rawEsc     = ConvertTo-JsonString $verVal
+            return "{`"server_components_version`":{`"version`":`"$versionEsc`",`"raw_output`":`"$rawEsc`"}}"
+        }
+    } catch {
+        # XML unreadable — return empty block
+    }
+    return $empty
 }
 
 function Send-Payload([string]$body) {
@@ -712,6 +741,7 @@ $containersStr = [string]$containerData.entries
 $dockerAvailable = if ($containerData.available) { 'true' } else { 'false' }
 $updateLogJson  = Get-UpdateLogBlock
 $agentConfigJson = Get-AgentConfigBlock
+$sapB1Json      = Get-SapB1InfoBlock
 $largeFilesJson = '{"enabled":false,"status":"unsupported","filesystems":[]}'
 
 Invoke-RemoteCommands
@@ -812,6 +842,7 @@ $payload = @"
     },
     "agent_update": $updateLogJson,
     "agent_config": $agentConfigJson,
+    "sap_business_one": $sapB1Json,
     "large_files": $largeFilesJson
 }
 "@
