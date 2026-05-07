@@ -4238,8 +4238,8 @@ function renderReportCard(report) {
         ${renderMetaItem("🆔", "Agent ID", report.agent_id || payload.agent_id)}
         ${renderMetaItem("🧷", "Version", payload.agent_version)}
         ${renderMetaItem("🔐", "API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}
-        ${renderMetaItemHtml("🕐", "Root Crontab", formatCronTabSummary(payload.cron_info))}
-        ${renderMetaItemHtml("📅", "cron.d", formatCronDSummary(payload.cron_info))}
+        ${payload.cron_info ? renderMetaItemHtml("🕐", "Root Crontab", formatCronTabSummary(payload.cron_info)) : ""}
+        ${payload.cron_info ? renderMetaItemHtml("📅", "cron.d", formatCronDSummary(payload.cron_info)) : ""}
       </div>
     </div>
   `;
