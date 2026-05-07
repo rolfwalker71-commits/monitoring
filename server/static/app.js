@@ -2140,7 +2140,7 @@ function renderCustomerNotificationPanel(hostname, settings) {
   const emails = settings.customer_alert_emails || "";
   const mountpoints = settings.customer_alert_mountpoints || "";
   const minSeverity = settings.customer_alert_min_severity || "critical";
-  return `<details class="customer-notif-panel detail-card" id="customerNotificationDetails">
+  return `<details class="customer-notif-panel detail-card" id="customerNotificationDetails" open>
     <summary style="font-weight:700;font-size:14px;cursor:pointer;padding:4px 0;">📢 Kunden-Benachrichtigung (Admin)</summary>
     <div style="padding:10px 0 4px 0;">
       <p style="font-size:12px;color:#64748b;margin:0 0 10px 0;">E-Mail-Benachrichtigung bei neuen Filesystem-Alerts für diesen Host.</p>

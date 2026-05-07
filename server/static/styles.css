@@ -4303,6 +4303,31 @@ body[data-theme="dark"] .hana-sid-chip {
   display: none;
 }
 
+.alarm-settings-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.alarm-settings-group .settings-label {
+  flex: 0 0 260px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.alarm-settings-group .settings-input {
+  flex: 1;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+  color: #1e293b;
+  box-sizing: border-box;
+}
+
 .fs-table {
   margin-top: 0;
   table-layout: auto;
