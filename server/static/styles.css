@@ -2512,10 +2512,8 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 6px;
   margin-top: 4px;
-  padding-right: 38px;
-  min-width: 0;
 }
 
 .host-alert-chip {
