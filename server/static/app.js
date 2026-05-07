@@ -4582,58 +4582,58 @@ function renderReportCard(report) {
   })();
 
   // Helper function to render meta-group items
-  function renderMetaItem(icon, label, value) {
-    return `<p class="meta-group-item"><strong>${icon} ${label}</strong><span>${escapeHtml(asText(value || "-"))}</span></p>`;
+  function renderMetaItem(tag, label, value) {
+    return `<p class="meta-group-item"><strong><span class="meta-label-tag">${tag}</span> ${label}</strong><span>${escapeHtml(asText(value || "-"))}</span></p>`;
   }
 
-  function renderMetaItemHtml(icon, label, html) {
-    return `<p class="meta-group-item"><strong>${icon} ${label}</strong><span>${html}</span></p>`;
+  function renderMetaItemHtml(tag, label, html) {
+    return `<p class="meta-group-item"><strong><span class="meta-label-tag">${tag}</span> ${label}</strong><span>${html}</span></p>`;
   }
 
   // Build grouped meta sections
   const agentGroup = `
     <div class="meta-group">
-      <div class="meta-group-title">🤖 Agent-Info</div>
+      <div class="meta-group-title">Agent-Info</div>
       <div class="meta-group-content">
-        ${renderMetaItem("🆔", "Agent ID", report.agent_id || payload.agent_id)}
-        ${renderMetaItem("🧷", "Version", payload.agent_version)}
-        ${renderMetaItem("🔐", "API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}
+        ${renderMetaItem("ID", "Agent ID", report.agent_id || payload.agent_id)}
+        ${renderMetaItem("Ver", "Version", payload.agent_version)}
+        ${renderMetaItem("Key", "API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}
       </div>
     </div>
   `;
 
   const systemGroup = `
     <div class="meta-group">
-      <div class="meta-group-title">🖥️ System</div>
+      <div class="meta-group-title">System</div>
       <div class="meta-group-content">
-        ${renderMetaItem("🐧", "OS", payload.os)}
-        ${renderMetaItem("⚙️", "Kernel", payload.kernel)}
-        ${renderMetaItem("⏱️", "Uptime", formatUptime(payload.uptime_seconds))}
-        ${renderMetaItem("🗃️", "Queue", queueDepth + " Dateien")}
+        ${renderMetaItem("OS", "OS", payload.os)}
+        ${renderMetaItem("Ker", "Kernel", payload.kernel)}
+        ${renderMetaItem("Up", "Uptime", formatUptime(payload.uptime_seconds))}
+        ${renderMetaItem("Q", "Queue", queueDepth + " Dateien")}
       </div>
     </div>
   `;
 
   const resourcesGroup = `
     <div class="meta-group">
-      <div class="meta-group-title">📊 Ressourcen</div>
+      <div class="meta-group-title">Ressourcen</div>
       <div class="meta-group-content">
-        ${renderMetaItem("🧠", "CPU", formatPercent(cpu.usage_percent) + " | load " + formatNumber(cpu.load_avg_1, 2) + " / " + formatNumber(cpu.load_avg_5, 2) + " / " + formatNumber(cpu.load_avg_15, 2))}
-        ${renderMetaItem("🧮", "RAM", formatPercent(memory.used_percent) + " | " + formatKilobytes(memory.used_kb) + " / " + formatKilobytes(memory.total_kb))}
-        ${renderMetaItem("💤", "Swap", formatPercent(swap.used_percent) + " | " + formatKilobytes(swap.used_kb) + " / " + formatKilobytes(swap.total_kb))}
+        ${renderMetaItem("CPU", "CPU", formatPercent(cpu.usage_percent) + " | load " + formatNumber(cpu.load_avg_1, 2) + " / " + formatNumber(cpu.load_avg_5, 2) + " / " + formatNumber(cpu.load_avg_15, 2))}
+        ${renderMetaItem("RAM", "RAM", formatPercent(memory.used_percent) + " | " + formatKilobytes(memory.used_kb) + " / " + formatKilobytes(memory.total_kb))}
+        ${renderMetaItem("Swap", "Swap", formatPercent(swap.used_percent) + " | " + formatKilobytes(swap.used_kb) + " / " + formatKilobytes(swap.total_kb))}
       </div>
     </div>
   `;
 
   const networkGroup = `
     <div class="meta-group">
-      <div class="meta-group-title">🌐 Netzwerk</div>
+      <div class="meta-group-title">Netzwerk</div>
       <div class="meta-group-content">
-        ${renderMetaItem("🌍", "Primary IP", report.primary_ip || payload.primary_ip)}
-        ${renderMetaItem("🔌", "Std. NIC IP", defaultNicIpv4 || "-")}
-        ${renderMetaItem("🌍", "Default NIC", network.default_interface)}
-        ${renderMetaItem("🛣️", "Default GW", network.default_gateway)}
-        ${renderMetaItemHtml("🧭", "DNS", formatDnsServers(network.dns_servers))}
+        ${renderMetaItem("IP", "Primary IP", report.primary_ip || payload.primary_ip)}
+        ${renderMetaItem("NIC", "Std. NIC IP", defaultNicIpv4 || "-")}
+        ${renderMetaItem("IF", "Default NIC", network.default_interface)}
+        ${renderMetaItem("GW", "Default GW", network.default_gateway)}
+        ${renderMetaItemHtml("DNS", "DNS", formatDnsServers(network.dns_servers))}
       </div>
     </div>
   `;

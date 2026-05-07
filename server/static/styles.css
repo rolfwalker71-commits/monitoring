@@ -3917,10 +3917,30 @@ body[data-theme="dark"] .hana-sid-chip {
 .meta-group-item strong {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   min-width: 80px;
   color: var(--muted);
   font-size: 11px;
   flex-shrink: 0;
+}
+
+.meta-label-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: ui-monospace, "SF Mono", monospace;
+  letter-spacing: 0.02em;
+  background: #e8edf5;
+  color: #4a5568;
+  border-radius: 3px;
+  padding: 0 4px;
+  line-height: 16px;
+  flex-shrink: 0;
+}
+
+body[data-theme="dark"] .meta-label-tag {
+  background: #1e293b;
+  color: #94a3b8;
 }
 
 .meta-group-item span {
