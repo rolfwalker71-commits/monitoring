@@ -1357,6 +1357,51 @@ body[data-theme="dark"] .hosts-column {
   color: #dce8f5;
 }
 
+/* Detail header card — same palette as the sidebar */
+.section-head {
+  background: linear-gradient(180deg, #a0aab6 0%, #8e99a8 100%);
+  border: 1px solid #6a7585;
+  border-radius: 14px;
+  padding: 12px 16px 10px;
+  margin-bottom: 10px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    2px 3px 0 #909090,
+    3px 5px 8px rgba(0, 0, 0, 0.08);
+  color: #1a2233;
+}
+.section-head .title-row h3 {
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.section-head .auto-refresh-status,
+.section-head .auto-refresh-last-update {
+  color: #dce8f5;
+}
+.section-head .report-meta-row .count {
+  color: #dce8f5;
+}
+body[data-theme="dark"] .section-head {
+  background: linear-gradient(180deg, #6b7480 0%, #5a636f 100%);
+  border-color: #0a0a0a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    2px 3px 0 #3a3a3a,
+    3px 5px 8px rgba(0, 0, 0, 0.2);
+  color: #e2e8f0;
+}
+body[data-theme="dark"] .section-head .title-row h3 {
+  color: #f0f4ff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+body[data-theme="dark"] .section-head .auto-refresh-status,
+body[data-theme="dark"] .section-head .auto-refresh-last-update {
+  color: #c8d8ee;
+}
+body[data-theme="dark"] .section-head .report-meta-row .count {
+  color: #c8d8ee;
+}
+
 .title-row {
   display: flex;
   align-items: center;
