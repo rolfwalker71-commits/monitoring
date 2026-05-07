@@ -5062,6 +5062,8 @@ function renderSingleHostCard(host) {
     `;
   }
 
+  const shortHostname = hostname.split(".")[0];
+
   return `
     <article class="${selectedClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">
       <div class="${statusBarClass}"></div>
@@ -5069,7 +5071,7 @@ function renderSingleHostCard(host) {
       <strong class="host-title-line">
         <span>${escapeHtml(displayName)}</span>
       </strong>
-      <span>🖥️ ${escapeHtml(hostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))}</span>
+      <span>🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))}</span>
       <span>🧷 ${escapeHtml(asText(host.agent_version))} &nbsp;·&nbsp; 🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
       ${valueChipStack ? `<span class="host-card-actions">${valueChipStack}</span>` : ""}
       ${alertChip}
