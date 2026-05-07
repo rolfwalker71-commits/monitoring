@@ -4313,6 +4313,7 @@ function renderReportCard(report) {
     detailContent = `
       <div class="detail-cards">
         ${renderSapB1SystemInfoCard(payload)}
+        ${renderSapBusinessOneCard(payload)}
       </div>
     `;
   } else if (section === "agent-update") {
@@ -4349,7 +4350,6 @@ function renderReportCard(report) {
   } else {
     detailContent = `
       <div class="detail-cards">
-        ${renderSapBusinessOneCard(payload)}
         <section class="detail-card">
           <h4>🌐 Netzwerk-Details</h4>
           ${renderNetworkTable(network)}
