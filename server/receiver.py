@@ -119,9 +119,10 @@ def parse_int(query: dict, key: str, default: int, min_value: int, max_value: in
 
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA busy_timeout=5000")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS reports (
@@ -5812,7 +5813,7 @@ def build_agent_api_key_status(payload: dict, request_key: str, hostname: str) -
     grace_allowed = False
 
     if server_requires_api_key and not request_authenticated and not request_key and hostname and API_KEY_GRACE_ALLOW_KNOWN_HOSTS:
-        with sqlite3.connect(DB_PATH) as conn:
+        with sqlite3.connect(DB_PATH, timeout=10) as conn:
             grace_allowed = is_known_hostname(conn, hostname)
 
     status = "off"
@@ -6617,6 +6618,9 @@ def update_ram_alerts_for_report(
 class MonitoringHandler(BaseHTTPRequestHandler):
     server_version = "MonitoringReceiver/0.1"
     protocol_version = "HTTP/1.1"
+    # Close idle keep-alive connections after 30 s so the Synology reverse
+    # proxy never tries to reuse a stale backend connection (→ 502 on auto-refresh).
+    timeout = 30
 
     def _swagger_ui_html(self) -> str:
         return """<!doctype html>
@@ -6723,7 +6727,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return False
 
         if not request_key and hostname and API_KEY_GRACE_ALLOW_KNOWN_HOSTS:
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 if is_known_hostname(conn, hostname):
                     return False
 
@@ -6745,7 +6749,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if not token:
             return ""
 
-        with sqlite3.connect(DB_PATH) as conn:
+        with sqlite3.connect(DB_PATH, timeout=10) as conn:
             session_cutoff_iso = utc_hours_ago_iso(1)
             conn.execute(
                 "DELETE FROM web_sessions WHERE last_activity_at_utc <= ?",
@@ -6777,7 +6781,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         username = self._require_web_session()
         if not username:
             return ""
-        with sqlite3.connect(DB_PATH) as conn:
+        with sqlite3.connect(DB_PATH, timeout=10) as conn:
             user = get_web_user(conn, username)
         if not user or not user.get("is_admin"):
             self._send_json(HTTPStatus.FORBIDDEN, {"error": "admin required"})
@@ -6822,7 +6826,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_html(HTTPStatus.BAD_REQUEST, self._oauth_callback_html("/?oauth_status=error&oauth_message=missing_state"))
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 state_row = consume_oauth_state(conn, state_token, MICROSOFT_PROVIDER)
                 conn.commit()
 
@@ -6842,7 +6846,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_html(HTTPStatus.BAD_REQUEST, self._oauth_callback_html(target))
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 oauth_settings = get_oauth_settings(conn)
 
             redirect_uri = self._absolute_url("/oauth/microsoft/callback")
@@ -6852,7 +6856,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_html(HTTPStatus.OK, self._oauth_callback_html(target))
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 upsert_oauth_connection(conn, state_row["username"], MICROSOFT_PROVIDER, token_payload)
                 conn.commit()
 
@@ -6868,7 +6872,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             username = self._web_session_username()
             is_admin = False
             if username:
-                with sqlite3.connect(DB_PATH) as conn:
+                with sqlite3.connect(DB_PATH, timeout=10) as conn:
                     user = get_web_user(conn, username)
                     is_admin = bool(user and user.get("is_admin"))
             self._send_json(
@@ -6889,7 +6893,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             if self.command == "GET":
-                with sqlite3.connect(DB_PATH) as conn:
+                with sqlite3.connect(DB_PATH, timeout=10) as conn:
                     prefs = get_web_user_settings(conn, username)
                 self._send_json(HTTPStatus.OK, prefs)
                 return
@@ -6901,7 +6905,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid JSON"})
                     return
 
-                with sqlite3.connect(DB_PATH) as conn:
+                with sqlite3.connect(DB_PATH, timeout=10) as conn:
                     result = save_web_user_settings(conn, username, payload)
                     conn.commit()
 
@@ -6921,7 +6925,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if self._unauthorized_if_needed(hostname):
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 expire_old_agent_commands(conn)
                 rows = conn.execute(
                     """
@@ -6966,7 +6970,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/v1/user-profile":
             username = self._web_session_username()
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 payload = current_user_payload(conn, username)
             self._send_json(HTTPStatus.OK, payload)
             return
@@ -6982,7 +6986,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             now_iso = utc_now_iso()
             expires_iso = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 conn.execute(
                     "UPDATE web_sessions SET last_activity_at_utc = ?, expires_at_utc = ? WHERE session_token = ?",
                     (now_iso, expires_iso, session_token),
@@ -6999,7 +7003,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/v1/active-users":
             username = self._web_session_username()
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 users = list_active_web_sessions(conn)
                 conn.commit()
             self._send_json(
@@ -7014,7 +7018,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/v1/user-alert-subscriptions":
             username = self._web_session_username()
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 user_settings = get_web_user_settings(conn, username)
                 oauth_connection = get_oauth_connection(conn, username, MICROSOFT_PROVIDER)
                 alarm_settings = get_alarm_settings(conn)
@@ -7035,14 +7039,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/web-users":
             if not self._require_admin_session():
                 return
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 self._send_json(HTTPStatus.OK, {"users": list_web_users(conn)})
             return
 
         if parsed.path == "/api/v1/admin/user-alert-subscriptions":
             if not self._require_admin_session():
                 return
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 alarm_settings = get_alarm_settings(conn)
                 self._send_json(
                     HTTPStatus.OK,
@@ -7057,7 +7061,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/oauth-settings":
             if not self._require_admin_session():
                 return
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 settings = oauth_settings_public_view(get_oauth_settings(conn))
             self._send_json(HTTPStatus.OK, settings)
             return
@@ -7179,7 +7183,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/v1/oauth/microsoft/start":
             username = self._web_session_username()
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 settings = get_oauth_settings(conn)
                 if not oauth_is_configured(settings):
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "microsoft oauth not configured"})
@@ -7196,7 +7200,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 rows = conn.execute(
                     """
                     SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json
@@ -7250,7 +7254,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 total_hosts = conn.execute(
                     "SELECT COUNT(DISTINCT hostname) FROM reports"
                 ).fetchone()[0]
@@ -7416,7 +7420,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "jump_to_utc must be ISO datetime"})
                     return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 total_reports = conn.execute(
                     "SELECT COUNT(*) FROM reports WHERE hostname = ?",
                     (hostname,),
@@ -7499,7 +7503,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 host_settings = get_host_settings(conn, hostname)
 
             self._send_json(
@@ -7515,7 +7519,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/agent-update-status":
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 expire_old_agent_commands(conn)
                 host_settings_rows = conn.execute(
                     "SELECT hostname, display_name_override FROM host_settings"
@@ -7583,7 +7587,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=72, min_value=1, max_value=24 * 30)
             project_hours = parse_int(query, "project_hours", default=8, min_value=1, max_value=24 * 7)
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 warnings = collect_critical_trends(conn, hours, project_hours)
 
             self._send_json(HTTPStatus.OK, {
@@ -7597,7 +7601,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/inactive-hosts":
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=3, min_value=1, max_value=24 * 30)
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 inactive = collect_inactive_hosts(conn, hours)
 
             self._send_json(HTTPStatus.OK, {
@@ -7608,7 +7612,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/backup-status-overview":
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 overview = get_backup_status_overview(conn)
             self._send_json(HTTPStatus.OK, {
                 "hosts": overview,
@@ -7627,7 +7631,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
             cutoff_iso = utc_hours_ago_iso(hours)
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 counts_row = conn.execute(
                     """
                     SELECT
@@ -7683,7 +7687,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
             cutoff_iso = utc_hours_ago_iso(hours)
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 rows = conn.execute(
                     """
                     SELECT id, received_at_utc, payload_json
@@ -7848,7 +7852,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     for item in raw_large_filesystems
                     if isinstance(item, dict)
                 ]
-                with sqlite3.connect(DB_PATH) as conn:
+                with sqlite3.connect(DB_PATH, timeout=10) as conn:
                     fs_focus_hidden = ensure_default_user_filesystem_visibility(conn, username, hostname, "fs-focus", fs_mountpoints)
                     large_files_hidden = ensure_default_user_filesystem_visibility(conn, username, hostname, "large-files", lf_mountpoints)
                     conn.commit()
@@ -7941,7 +7945,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if where_parts:
                 where_clause = "WHERE " + " AND ".join(where_parts)
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 total = conn.execute(
                     f"SELECT COUNT(*) FROM alerts {where_clause}",
                     tuple(args),
@@ -7998,7 +8002,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         )
 
             alerts = []
-            with sqlite3.connect(DB_PATH) as conn_mute:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn_mute:
                 muted_pairs = {
                     (str(r[0]), str(r[1]))
                     for r in conn_mute.execute("SELECT hostname, mountpoint FROM muted_alert_rules").fetchall()
@@ -8058,7 +8062,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 where_clause += " AND hostname = ?"
                 args.append(hostname_filter)
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 alarm_settings = get_alarm_settings(conn)
                 total_open = conn.execute(
                     f"SELECT COUNT(*) FROM alerts {where_clause}",
@@ -8114,7 +8118,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 args.append(hostname_filter)
             where_clause = "WHERE " + " AND ".join(where_parts) if where_parts else ""
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 rows = conn.execute(
                     f"""
                     SELECT id, hostname, mountpoint, severity, used_percent, status,
@@ -8166,7 +8170,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             limit = parse_int(query, "limit", default=2000, min_value=1, max_value=50000)
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 rows = conn.execute(
                     """
                     SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json
@@ -8211,14 +8215,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/alarm-settings":
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 settings = get_alarm_settings(conn)
 
             self._send_json(HTTPStatus.OK, settings)
             return
 
         if parsed.path == "/api/v1/alert-mutes":
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 rows = conn.execute(
                     "SELECT hostname, mountpoint, muted_by, muted_at_utc FROM muted_alert_rules ORDER BY hostname, mountpoint"
                 ).fetchall()
@@ -8330,7 +8334,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "username/password required"})
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 user = get_web_user(conn, username)
                 if not user or user.get("is_disabled"):
                     self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid credentials"})
@@ -8358,7 +8362,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if path == "/api/v1/web-logout":
             token = self._cookie_value(WEB_SESSION_COOKIE)
             if token:
-                with sqlite3.connect(DB_PATH) as conn:
+                with sqlite3.connect(DB_PATH, timeout=10) as conn:
                     conn.execute("DELETE FROM web_sessions WHERE session_token = ?", (token,))
                     conn.commit()
 
@@ -8399,7 +8403,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": f"new password too short (min {MIN_PASSWORD_LENGTH})"})
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 user = get_web_user(conn, username)
                 if not user or not verify_password(current_password, str(user["password_hash"]), str(user["password_salt"])):
                     self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "current password invalid"})
@@ -8435,7 +8439,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 stored = save_alarm_settings(conn, payload)
                 conn.commit()
 
@@ -8476,7 +8480,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "unsupported metric"})
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 ai_settings = _get_ai_settings_from_db(conn)
                 if not ai_settings["enabled"] or not ai_settings["api_key"]:
                     self._send_json(
@@ -8567,7 +8571,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 settings = save_web_user_settings(conn, username, payload)
                 conn.commit()
             self._send_json(HTTPStatus.OK, settings)
@@ -8592,7 +8596,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                with sqlite3.connect(DB_PATH) as conn:
+                with sqlite3.connect(DB_PATH, timeout=10) as conn:
                     saved = replace_web_user_alert_subscriptions(conn, username, subscriptions)
                     conn.commit()
                 self._send_json(HTTPStatus.OK, {"status": "stored", "subscriptions": saved})
@@ -8622,7 +8626,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "channel must be mail or telegram"})
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 subscriptions = get_web_user_alert_subscriptions(conn, username)
                 matched = next((item for item in subscriptions if str(item.get("hostname", "")) == hostname), None)
                 if matched is None:
@@ -8711,7 +8715,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             except json.JSONDecodeError:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
                 return
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 settings = save_oauth_settings(conn, payload)
                 conn.commit()
             self._send_json(HTTPStatus.OK, oauth_settings_public_view(settings))
@@ -8719,7 +8723,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if path == "/api/v1/oauth/microsoft/disconnect":
             username = self._web_session_username()
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 delete_oauth_connection(conn, username, MICROSOFT_PROVIDER)
                 conn.commit()
                 payload = current_user_payload(conn, username)
@@ -8728,7 +8732,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if path == "/api/v1/mail-test/backup":
             username = self._web_session_username()
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 settings = get_web_user_settings(conn, username)
                 recipients_raw = str(settings.get("backup_email_recipients", "") or "").strip()
                 if not recipients_raw:
@@ -8771,7 +8775,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             elif path.endswith("/alerts"):
                 endpoint_mode = "alerts"
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 settings = get_web_user_settings(conn, username)
                 recipient = str(settings.get("email_recipient", "") or "").strip()
                 if endpoint_mode in {"generic", "trends"} and not recipient:
@@ -8914,7 +8918,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             action = str(payload.get("action", "") or "").strip().lower()
             target_username = normalize_username(payload.get("username", ""))
             try:
-                with sqlite3.connect(DB_PATH) as conn:
+                with sqlite3.connect(DB_PATH, timeout=10) as conn:
                     if action == "create":
                         create_web_user(
                             conn,
@@ -8983,7 +8987,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                with sqlite3.connect(DB_PATH) as conn:
+                with sqlite3.connect(DB_PATH, timeout=10) as conn:
                     saved = replace_web_user_alert_subscriptions(conn, target_username, subscriptions)
                     conn.commit()
                 self._send_json(HTTPStatus.OK, {"status": "stored", "username": target_username, "subscriptions": saved})
@@ -8992,7 +8996,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/v1/alarm-test":
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 settings = get_alarm_settings(conn)
 
             critical_threshold = float(settings.get("critical_threshold_percent", 90.0) or 90.0)
@@ -9048,7 +9052,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no host setting provided"})
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 current = get_host_settings(conn, hostname)
                 display_name_override = current["display_name_override"]
                 country_code_override = current["country_code_override"]
@@ -9142,7 +9146,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                with sqlite3.connect(DB_PATH) as conn:
+                with sqlite3.connect(DB_PATH, timeout=10) as conn:
                     stored = replace_user_hidden_filesystems(conn, username, hostname, section, hidden_mountpoints)
                     conn.commit()
                 self._send_json(
@@ -9177,7 +9181,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 deleted = delete_host_card_data(conn, hostname)
                 conn.commit()
 
@@ -9206,7 +9210,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
                 return
             muted_by = self._web_session_username() or "webclient"
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 conn.execute(
                     "INSERT OR REPLACE INTO muted_alert_rules (hostname, mountpoint, muted_by, muted_at_utc) VALUES (?, ?, ?, ?)",
                     (hostname, mountpoint, muted_by, utc_now_iso()),
@@ -9228,7 +9232,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not hostname or not mountpoint:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
                 return
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 conn.execute(
                     "DELETE FROM muted_alert_rules WHERE hostname = ? AND mountpoint = ?",
                     (hostname, mountpoint),
@@ -9259,7 +9263,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             ack_by = self._web_session_username() or "webclient"
             ack_at_utc = utc_now_iso()
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 target = conn.execute(
                     """
                     SELECT id
@@ -9312,7 +9316,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 target = conn.execute(
                     """
                     SELECT id
@@ -9363,7 +9367,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             closed_by = self._web_session_username() or "webclient"
             closed_at_utc = utc_now_iso()
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 target = conn.execute(
                     """
                     SELECT id FROM alerts
@@ -9410,7 +9414,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 target = conn.execute(
                     """
                     SELECT id FROM alerts
@@ -9456,7 +9460,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             # Re-run migrations so the restored DB is compatible with current schema
             try:
-                with sqlite3.connect(DB_PATH) as conn:
+                with sqlite3.connect(DB_PATH, timeout=10) as conn:
                     init_db(conn)
             except Exception:
                 pass
@@ -9501,7 +9505,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     return
                 command_payload = {"api_key": api_key_value}
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 expire_old_agent_commands(conn)
                 command_id, created = queue_agent_command_once(
                     conn,
@@ -9561,7 +9565,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             queued_count = 0
             already_queued_count = 0
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 expire_old_agent_commands(conn)
                 hostnames = get_known_hostnames(conn)
                 if not hostnames:
@@ -9628,7 +9632,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not isinstance(result_payload, dict):
                 result_payload = {"message": str(result_payload)}
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 row = conn.execute(
                     "SELECT id, status, command_type FROM agent_commands WHERE id = ? AND hostname = ?",
                     (command_id, hostname),
@@ -9695,7 +9699,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "filesystems must be an array"})
             return
 
-        with sqlite3.connect(DB_PATH) as conn:
+        with sqlite3.connect(DB_PATH, timeout=10) as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO reports (received_at_utc, agent_id, hostname, primary_ip, payload_json)
@@ -9789,7 +9793,7 @@ def _telegram_answer_callback(bot_token: str, callback_query_id: str) -> None:
 
 def _do_telegram_ack(bot_token: str, chat_id: str, alert_id: int) -> None:
     """Perform the actual acknowledgement for a given alert_id and send a reply."""
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         user_row = conn.execute(
             """
             SELECT u.username FROM web_users u
@@ -9848,7 +9852,7 @@ def _telegram_ack_poll_loop() -> None:
     current_token = ""
     while True:
         try:
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 alarm_settings = get_alarm_settings(conn)
             bot_token = str(alarm_settings.get("telegram_bot_token", "") or "").strip()
             if not alarm_settings.get("telegram_enabled") or not bot_token:
@@ -9893,7 +9897,7 @@ def main() -> None:
     def inactive_alert_loop() -> None:
         while not stop_event.is_set():
             try:
-                with sqlite3.connect(DB_PATH) as conn:
+                with sqlite3.connect(DB_PATH, timeout=10) as conn:
                     check_inactive_host_alerts(conn)
                     conn.commit()
             except Exception as exc:
