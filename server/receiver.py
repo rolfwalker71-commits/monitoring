@@ -8237,11 +8237,19 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/app.js":
-            self._send_file(STATIC_DIR / "app.js", "application/javascript; charset=utf-8")
+            self._send_file(
+                STATIC_DIR / "app.js",
+                "application/javascript; charset=utf-8",
+                extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+            )
             return
 
         if parsed.path == "/styles.css":
-            self._send_file(STATIC_DIR / "styles.css", "text/css; charset=utf-8")
+            self._send_file(
+                STATIC_DIR / "styles.css",
+                "text/css; charset=utf-8",
+                extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+            )
             return
 
         if parsed.path == "/manifest.json":
