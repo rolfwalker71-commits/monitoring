@@ -7,6 +7,7 @@ import hmac
 import html
 import io
 import json
+import logging
 import os
 import re
 import secrets
@@ -813,12 +814,13 @@ def start_database_backup_job() -> tuple[str, str]:
     def worker() -> None:
         try:
             backup_path, backup_size = create_sqlite_backup_file(DB_PATH)
-        except Exception:
+        except Exception as exc:
+            logging.exception("Database backup job failed")
             with _BACKUP_JOBS_LOCK:
                 job = _BACKUP_JOBS.get(job_id)
                 if job is not None:
                     job["status"] = "error"
-                    job["error"] = "database backup failed"
+                    job["error"] = str(exc).strip() or "database backup failed"
                     job["ready_ts"] = time.time()
             return
 
@@ -7169,8 +7171,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             try:
                 backup_path, backup_size = create_sqlite_backup_file(DB_PATH)
-            except Exception:
-                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "database backup failed"})
+            except Exception as exc:
+                logging.exception("Database backup endpoint failed")
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc).strip() or "database backup failed"})
                 return
 
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
