@@ -1585,11 +1585,12 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 }
 
 .view-tabs-shell {
-  margin: 8px 0 8px;
-  padding: 6px;
-  border: 1px solid #d9e3f1;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #f6faff 0%, #edf4fd 100%);
+  margin: 8px 0 0;
+  padding: 0;
+  border: none;
+  border-bottom: 2px solid #d4dff0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .subview-tabs-shell {
@@ -1784,11 +1785,34 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   background: linear-gradient(180deg, #b91c1c 0%, #991b1b 100%);
 }
 
-/* First-level view tabs: visually stronger */
+/* First-level view tabs: underline-register style */
 .view-tabs .tab-button {
   font-size: 13px;
   font-weight: 700;
-  min-height: 36px;
+  min-height: 38px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #5a7496;
+  padding: 8px 18px 7px;
+  box-shadow: none;
+  position: relative;
+  bottom: -2px; /* sits flush on the border-bottom of the shell */
+  transition: color 0.18s ease, border-color 0.18s ease;
+}
+.view-tabs .tab-button:hover:not(.active):not(.alert-active) {
+  background: transparent;
+  border-color: #a3b8d6;
+  color: #2d4f7a;
+  box-shadow: none;
+}
+.view-tabs .tab-button.active {
+  background: transparent;
+  color: #1a3a6e;
+  border-color: #2563eb;
+  box-shadow: none;
+  font-weight: 800;
 }
 
 /* Second-level subview tabs: subtler */
@@ -4640,7 +4664,6 @@ body[data-theme="dark"] .brand-tools,
 body[data-theme="dark"] .alarm-settings-panel,
 body[data-theme="dark"] .settings-page,
 body[data-theme="dark"] .subview-tabs-shell,
-body[data-theme="dark"] .view-tabs-shell,
 body[data-theme="dark"] .panel,
 body[data-theme="dark"] .report-card,
 body[data-theme="dark"] .meta-group,
@@ -4847,7 +4870,25 @@ body[data-theme="dark"] .oauth-state-pill.disconnected {
   color: #a9bfd9;
 }
 
-body[data-theme="dark"] .view-tabs-shell,
+body[data-theme="dark"] .view-tabs-shell {
+  background: transparent;
+  border-color: #2a3c59;
+}
+body[data-theme="dark"] .view-tabs .tab-button {
+  color: #6888a8;
+}
+body[data-theme="dark"] .view-tabs .tab-button:hover:not(.active):not(.alert-active) {
+  background: transparent;
+  border-color: #4a6f9f;
+  color: #9fb8d8;
+  box-shadow: none;
+}
+body[data-theme="dark"] .view-tabs .tab-button.active {
+  background: transparent;
+  color: #93c5fd;
+  border-color: #3b82f6;
+  box-shadow: none;
+}
 body[data-theme="dark"] .overview-scroll-panel .analysis-header,
 body[data-theme="dark"] .overview-scroll-panel .analysis-panel .analysis-header {
   background: #16253b;
