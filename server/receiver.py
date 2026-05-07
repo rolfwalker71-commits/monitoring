@@ -7613,6 +7613,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 country_code = normalize_country_code(host_settings.get("country_code_override", ""))
                 if not country_code:
                     country_code = extract_country_code_from_payload(latest_payload)
+                has_hana = _detect_hana_processes(latest_payload)
+                sap_info = _extract_sap_b1_info(latest_payload, has_hana)
+                host_id_value = str(
+                    latest_payload.get("host_id", "")
+                    or latest_payload.get("agent_id", "")
+                    or row[4]
+                    or ""
+                ).strip()
                 hosts.append(
                     {
                         "hostname": hostname,
@@ -7637,6 +7645,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "is_favorite": bool(host_settings.get("is_favorite", False)),
                         "is_hidden": bool(host_settings.get("is_hidden", False)),
                         "agent_api_key_status": str((latest_payload.get("agent_api_key") or {}).get("status", "off")),
+                        "sap_feature_pack": str(sap_info.get("feature_pack", "") or ""),
+                        "host_id": host_id_value,
                     }
                 )
 
@@ -7882,57 +7892,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "total": len(overview),
                 "missing_count": sum(1 for h in overview if h.get("has_missing_backup")),
             })
-            return
-
-        if parsed.path == "/api/v1/analysis-delivery":
-            query = parse_qs(parsed.query)
-            hostname = query.get("hostname", [""])[0].strip()
-            if not hostname:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
-                return
-
-            hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
-            cutoff_iso = utc_hours_ago_iso(hours)
-
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                counts_row = conn.execute(
-                    """
-                    SELECT
-                        SUM(
-                            CASE
-                                WHEN LOWER(COALESCE(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.delivery_mode') END, 'live')) = 'delayed'
-                                     OR CAST(COALESCE(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.is_delayed') END, 0) AS INTEGER) = 1
-                                THEN 1
-                                ELSE 0
-                            END
-                        ) AS delayed_reports,
-                        SUM(
-                            CASE
-                                WHEN LOWER(COALESCE(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.delivery_mode') END, 'live')) = 'delayed'
-                                     OR CAST(COALESCE(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.is_delayed') END, 0) AS INTEGER) = 1
-                                THEN 0
-                                ELSE 1
-                            END
-                        ) AS live_reports
-                    FROM reports
-                    WHERE hostname = ? AND received_at_utc >= ?
-                    """,
-                    (hostname, cutoff_iso),
-                ).fetchone()
-
-            delayed_reports = int(counts_row[0] or 0) if counts_row else 0
-            live_reports = int(counts_row[1] or 0) if counts_row else 0
-
-            self._send_json(
-                HTTPStatus.OK,
-                {
-                    "hostname": hostname,
-                    "window_hours": hours,
-                    "cutoff_utc": cutoff_iso,
-                    "delayed_report_count": delayed_reports,
-                    "live_report_count": live_reports,
-                },
-            )
             return
 
         if parsed.path == "/api/v1/analysis":

@@ -121,9 +121,6 @@ const state = {
   fsFocusAvailableMountpoints: [],
   largeFilesAvailableMountpoints: [],
   fsVisibilitySection: "",
-  deliveryCountsCache: {},
-  deliveryCountsLoading: false,
-  analysisLatestDeliveryLabel: "LIVE",
   alertMutesRefreshInFlight: false,
 };
 
@@ -4042,11 +4039,6 @@ function renderDirListingsCard(payload) {
   return html;
 }
 
-function deliveryLabel(modeValue, isDelayedValue) {
-  const mode = asText(modeValue, "live").toLowerCase();
-  return mode === "delayed" || isDelayedValue === true ? "DELAYED" : "LIVE";
-}
-
 function queueDepthLabel(value) {
   const depth = Number(value);
   if (!Number.isFinite(depth) || depth < 0) {
@@ -4061,84 +4053,6 @@ function deliveryLagLabel(value) {
     return "-";
   }
   return `${Math.floor(sec)}s`;
-}
-
-function getDeliveryCountsCacheKey(hostname = state.selectedHost, hours = state.analysisHours) {
-  return `${String(hostname || "").trim()}|${Number(hours || 24)}`;
-}
-
-function renderDeliveryStatsBar() {
-  const deliveryStats = document.getElementById("deliveryStats");
-  if (!deliveryStats) {
-    return;
-  }
-
-  if (!state.selectedHost) {
-    deliveryStats.textContent = "";
-    return;
-  }
-
-  const latestLabel = state.analysisLatestDeliveryLabel || "LIVE";
-  const cacheKey = getDeliveryCountsCacheKey();
-  const cached = state.deliveryCountsCache[cacheKey] || null;
-  const hasCounts = Boolean(cached);
-  const delayedRaw = hasCounts ? Number(cached.delayed_report_count || 0) : null;
-  const liveRaw = hasCounts ? Number(cached.live_report_count || 0) : null;
-  const delayedText = hasCounts ? delayedRaw.toLocaleString("de-DE") : "N/A";
-  const liveText = hasCounts ? liveRaw.toLocaleString("de-DE") : "N/A";
-  const delayedClass = hasCounts ? (delayedRaw > 0 ? " delayed" : " live") : "";
-  const liveClass = hasCounts ? " live" : "";
-  const buttonLabel = state.deliveryCountsLoading ? "Berechne..." : (hasCounts ? "Neu berechnen" : "Berechnen");
-  const disabledAttr = state.deliveryCountsLoading ? " disabled" : "";
-
-  deliveryStats.innerHTML = [
-    `<span class="stat-chip">📡 ${latestLabel}</span>`,
-    `<span class="stat-chip${delayedClass}">⏳ ${delayedText} Verzögert (Zeitraum)</span>`,
-    `<span class="stat-chip${liveClass}">⚡ ${liveText} LIVE (Zeitraum)</span>`,
-    `<button id="computeDeliveryCountsButton" class="btn-secondary delivery-calc-button" type="button"${disabledAttr}>${buttonLabel}</button>`,
-  ].join("");
-
-  const computeButton = document.getElementById("computeDeliveryCountsButton");
-  if (computeButton) {
-    computeButton.addEventListener("click", async () => {
-      await loadDeliveryCountsForHost(true);
-    });
-  }
-}
-
-async function loadDeliveryCountsForHost(force = false) {
-  if (!state.selectedHost) {
-    return;
-  }
-
-  const cacheKey = getDeliveryCountsCacheKey();
-  if (!force && state.deliveryCountsCache[cacheKey]) {
-    renderDeliveryStatsBar();
-    return;
-  }
-
-  state.deliveryCountsLoading = true;
-  renderDeliveryStatsBar();
-
-  try {
-    const hostNameParam = encodeURIComponent(state.selectedHost);
-    const url = `/api/v1/analysis-delivery?hostname=${hostNameParam}&hours=${state.analysisHours}`;
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error("HTTP " + response.status);
-    }
-
-    const data = await response.json();
-    state.deliveryCountsCache[cacheKey] = {
-      delayed_report_count: Number(data.delayed_report_count || 0),
-      live_report_count: Number(data.live_report_count || 0),
-    };
-  } catch (_error) {
-    delete state.deliveryCountsCache[cacheKey];
-  } finally {
-    state.deliveryCountsLoading = false;
-    renderDeliveryStatsBar();
-  }
 }
 
 function asText(value, fallback = "-") {
@@ -4973,7 +4887,6 @@ function renderSingleHostCard(host) {
   const hostname = asText(host.hostname);
   const displayName = asText(host.display_name || host.hostname);
   const selectedClass = hostname === state.selectedHost ? "host-item selected" : "host-item";
-  const hostDelivery = deliveryLabel(host.delivery_mode, host.is_delayed);
   const hostQueueDepth = queueDepthLabel(host.queue_depth);
   const hostDeliveryLag = deliveryLagLabel(host.delivery_lag_sec);
   const openAlertCount = Number(host.open_alert_count || 0);
@@ -5014,6 +4927,8 @@ function renderSingleHostCard(host) {
   const hasMutedAlerts = mutedAlerts.length > 0;
   const mutedCollapsed = state.hiddenHostMutedAlertsCollapsed[hostname] !== false;
   const mutedBodyClass = mutedCollapsed ? "hidden" : "";
+  const sapFeaturePack = asText(host.sap_feature_pack || "", "") || "-";
+  const hostIdChip = asText(host.host_id || host.agent_id || "", "") || "-";
 
   let mutedAlertsSection = "";
   if (isHidden && hasMutedAlerts) {
@@ -5051,6 +4966,10 @@ function renderSingleHostCard(host) {
       <strong class="host-title-line">
         <span>${escapeHtml(displayName)}</span>
       </strong>
+      <div class="host-value-chip-stack">
+        <span class="host-value-chip" title="SAP Feature Pack">${escapeHtml(sapFeaturePack)}</span>
+        <span class="host-value-chip" title="Host-ID">${escapeHtml(hostIdChip)}</span>
+      </div>
       <span>🖥️ ${escapeHtml(hostname)}</span>
       <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
       <span>⏱️ Zustellung: ${escapeHtml(hostDeliveryLag)}</span>
@@ -5851,7 +5770,6 @@ async function loadAnalysisForHost() {
   const filesystemStats = document.getElementById("filesystemStats");
   const filesystemCharts = document.getElementById("filesystemCharts");
   const resourceTrendCards = document.getElementById("resourceTrendCards");
-  const deliveryStats = document.getElementById("deliveryStats");
   const largeFilesPanel = document.getElementById("largeFilesPanel");
   const largeFilesBody = document.getElementById("largeFilesBody");
 
@@ -5863,9 +5781,6 @@ async function loadAnalysisForHost() {
     state.largeFilesAvailableMountpoints = [];
     updateFilesystemVisibilityButtons();
     analysisSummary.textContent = "";
-    state.analysisLatestDeliveryLabel = "LIVE";
-    state.deliveryCountsLoading = false;
-    deliveryStats.textContent = "";
     resourceCharts.innerHTML = "";
     filesystemStats.textContent = "";
     filesystemCharts.innerHTML = "";
@@ -5888,8 +5803,6 @@ async function loadAnalysisForHost() {
   if (largeFilesPanel) largeFilesPanel.classList.add("hidden");
   if (largeFilesBody) largeFilesBody.innerHTML = "";
   analysisSummary.textContent = "";
-  state.deliveryCountsLoading = false;
-  deliveryStats.textContent = "";
   filesystemStats.textContent = "";
   updateFilesystemVisibilityButtons();
 
@@ -5915,15 +5828,10 @@ async function loadAnalysisForHost() {
     const sortedTrendRows = sortFilesystemByMountpointAscending(visibleTrendRows);
     const resourceTrends = data.resource_trends || {};
     const resourceSeries = data.resource_series || {};
-    const delivery = data.delivery || {};
     const latestMax = formatPercent(data.latest_max_used_percent);
     const reportCount = Number(data.report_count || 0).toLocaleString("de-DE");
-    const latestDelivery = deliveryLabel(delivery.latest_mode, delivery.latest_is_delayed);
-    const latestDeliveryLabel = latestDelivery === "DELAYED" ? "Verzögert" : "LIVE";
 
     analysisSummary.textContent = `${reportCount} Reports, hoechste aktuelle FS-Auslastung: ${latestMax}`;
-    state.analysisLatestDeliveryLabel = latestDeliveryLabel;
-    renderDeliveryStatsBar();
     resourceCharts.innerHTML = renderResourceCharts(resourceSeries, data.latest_report_time_utc);
     resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc, data.latest_swap_total_kb);
     filesystemCharts.innerHTML = renderFilesystemTrendCharts(sortedTrendRows, data.latest_report_time_utc);

@@ -2347,12 +2347,41 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
   color: var(--text);
   border-radius: 10px;
-  padding: 5px 8px;
+  padding: 5px 92px 5px 8px;
   display: grid;
   gap: 1px;
   position: relative;
   cursor: pointer;
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.host-value-chip-stack {
+  position: absolute;
+  right: 8px;
+  top: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.host-value-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 11px;
+  font-weight: 800;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .host-item-hidden {
