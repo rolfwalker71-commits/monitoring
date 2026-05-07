@@ -315,6 +315,57 @@ collect_hana_version_json() {
     "$(json_escape "$version_error")"
 }
 
+collect_cron_json() {
+  local root_crontab_content="" root_crontab_lines=0 root_crontab_error="" root_crontab_available=false
+  local cron_d_files_json="" cron_d_file_count=0 cron_d_available=false cron_d_error=""
+
+  # root crontab
+  if command -v crontab >/dev/null 2>&1; then
+    local raw_crontab
+    raw_crontab="$(crontab -u root -l 2>&1 || true)"
+    if printf '%s\n' "$raw_crontab" | grep -qiE 'no crontab for|crontab: (no |cannot |usage)'; then
+      root_crontab_available=false
+      root_crontab_error="$(json_escape "$raw_crontab")"
+    else
+      root_crontab_available=true
+      root_crontab_content="$(json_escape "$raw_crontab")"
+      root_crontab_lines="$(printf '%s\n' "$raw_crontab" | grep -cE '^[^#[:space:]]' || echo 0)"
+      [[ "$root_crontab_lines" =~ ^[0-9]+$ ]] || root_crontab_lines=0
+    fi
+  else
+    root_crontab_error="crontab command not found"
+  fi
+
+  # /etc/cron.d
+  if [[ -d /etc/cron.d ]]; then
+    cron_d_available=true
+    local fname
+    while IFS= read -r -d $'\0' fpath; do
+      fname="$(basename "$fpath")"
+      local fcontent
+      fcontent="$(cat "$fpath" 2>/dev/null || true)"
+      local fentry
+      fentry="$(printf '{"name":"%s","content":"%s"}' \
+        "$(json_escape "$fname")" \
+        "$(json_escape "$fcontent")")"
+      cron_d_files_json="$(append_json_entry "$cron_d_files_json" "$fentry")"
+      cron_d_file_count=$((cron_d_file_count + 1))
+    done < <(find /etc/cron.d -maxdepth 1 -type f ! -name '.*' -print0 2>/dev/null | sort -z)
+  else
+    cron_d_error="\/etc\/cron.d not found"
+  fi
+
+  printf '{"root_crontab":{"available":%s,"active_lines":%s,"content":"%s","error":"%s"},"cron_d":{"available":%s,"file_count":%s,"files":[%s],"error":"%s"}}' \
+    "$root_crontab_available" \
+    "$root_crontab_lines" \
+    "$root_crontab_content" \
+    "${root_crontab_error:-}" \
+    "$cron_d_available" \
+    "$cron_d_file_count" \
+    "$cron_d_files_json" \
+    "${cron_d_error:-}"
+}
+
 collect_dir_listings_json() {
   if [[ -z "${DIR_SCAN_PATHS:-}" ]]; then
     printf '{"available":false,"entries":[]}'
@@ -1458,6 +1509,7 @@ SAP_BUSINESS_ONE_JSON="$(collect_sap_business_one_json)"
 HANA_INFO_JSON="$(collect_hana_version_json)"
 DIR_LISTINGS_JSON="$(collect_dir_listings_json)"
 DIR_DEEP_LISTINGS_JSON="$(collect_dir_deep_listings_json)"
+CRON_INFO_JSON="$(collect_cron_json)"
 SEND_STARTED_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 DOCKER_AVAILABLE=false
@@ -1532,7 +1584,8 @@ PAYLOAD=$(cat <<EOF
   "sap_business_one": ${SAP_BUSINESS_ONE_JSON},
   "hana_info": ${HANA_INFO_JSON},
   "dir_listings": ${DIR_LISTINGS_JSON},
-  "dir_deep_listings": ${DIR_DEEP_LISTINGS_JSON}
+  "dir_deep_listings": ${DIR_DEEP_LISTINGS_JSON},
+  "cron_info": ${CRON_INFO_JSON}
 }
 EOF
 )

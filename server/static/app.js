@@ -4171,6 +4171,26 @@ function formatAgentApiKeyStatus(agentApiKeyBlock, agentConfigBlock) {
   return "aus | Server verlangt aktuell keinen API-Key";
 }
 
+function formatCronTabSummary(cronInfo) {
+  if (!cronInfo || typeof cronInfo !== "object") return escapeHtml("-");
+  const rc = cronInfo.root_crontab;
+  if (!rc || typeof rc !== "object") return escapeHtml("-");
+  if (!rc.available) return `<span class="text-muted">${escapeHtml(rc.error || "nicht verfügbar")}</span>`;
+  const lines = typeof rc.active_lines === "number" ? rc.active_lines : 0;
+  return escapeHtml(lines === 0 ? "leer (keine aktiven Einträge)" : `${lines} aktive Einträge`);
+}
+
+function formatCronDSummary(cronInfo) {
+  if (!cronInfo || typeof cronInfo !== "object") return escapeHtml("-");
+  const cd = cronInfo.cron_d;
+  if (!cd || typeof cd !== "object") return escapeHtml("-");
+  if (!cd.available) return `<span class="text-muted">${escapeHtml(cd.error || "nicht verfügbar")}</span>`;
+  const count = typeof cd.file_count === "number" ? cd.file_count : 0;
+  if (count === 0) return escapeHtml("leer");
+  const names = Array.isArray(cd.files) ? cd.files.map((f) => f && f.name ? f.name : "").filter(Boolean) : [];
+  return escapeHtml(`${count} Datei${count !== 1 ? "en" : ""}`) + (names.length ? `: <span title="${escapeHtml(names.join(", "))}">${escapeHtml(names.join(", "))}</span>` : "");
+}
+
 function renderReportCard(report) {
   const payload = report && report.payload ? report.payload : {};
   const cpu = payload.cpu || {};
@@ -4218,6 +4238,8 @@ function renderReportCard(report) {
         ${renderMetaItem("🆔", "Agent ID", report.agent_id || payload.agent_id)}
         ${renderMetaItem("🧷", "Version", payload.agent_version)}
         ${renderMetaItem("🔐", "API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}
+        ${renderMetaItemHtml("🕐", "Root Crontab", formatCronTabSummary(payload.cron_info))}
+        ${renderMetaItemHtml("📅", "cron.d", formatCronDSummary(payload.cron_info))}
       </div>
     </div>
   `;
