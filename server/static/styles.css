@@ -4237,10 +4237,11 @@ body[data-theme="dark"] th {
   grid-template-columns: 1fr auto;
   gap: 12px;
   padding: 12px;
-  border: 1px solid #d5dee9;
+  border: 1px solid #c8d8e8;
   border-radius: 8px;
   background: var(--panel);
   align-items: start;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08), 0 6px 20px rgba(0, 0, 0, 0.05);
 }
 
 .ih-host-info {
@@ -4584,6 +4585,7 @@ body[data-theme="dark"] th,
 body[data-theme="dark"] td,
 body[data-theme="dark"] .ih-host-card {
   border-color: #2a3c59;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25), 0 6px 20px rgba(0, 0, 0, 0.18);
 }
 
 /* ── Dark Mode: Host list items ───────────────────────────── */
