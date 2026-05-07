@@ -20,7 +20,7 @@ const AUTO_REFRESH_INTERVAL_OPTIONS = new Map([
 ]);
 const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "sap-b1-systeminfo", "agent-update", "dir-listings"]);
 
-const SAP_B1_VERSION_MAP = new Map([
+let SAP_B1_VERSION_MAP = new Map([
   ["10.00.320", { featurePack: "FP 2602", patchLevel: "PL 22", releaseDate: "Feb 2026" }],
   ["10.00.310", { featurePack: "FP 2511", patchLevel: "PL 21", releaseDate: "Nov 2025" }],
   ["10.00.300", { featurePack: "FP 2508", patchLevel: "PL 20", releaseDate: "Aug 2025" }],
@@ -2000,6 +2000,131 @@ function mountAdminSettingsIntoGlobalView() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// SAP B1 Version Map — server-backed, editable by admins
+// ---------------------------------------------------------------------------
+
+async function loadSapB1VersionMap() {
+  try {
+    const resp = await fetch("api/v1/sap-b1-version-map", { credentials: "same-origin" });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (Array.isArray(data.entries)) {
+      SAP_B1_VERSION_MAP = new Map(
+        data.entries.map(e => [e.build, { featurePack: e.feature_pack, patchLevel: e.patch_level, releaseDate: e.release_date }])
+      );
+    }
+  } catch { /* keep built-in map on error */ }
+}
+
+function renderSapB1VersionMapAdminSection() {
+  const rows = Array.from(SAP_B1_VERSION_MAP.entries()).map(([build, info], idx) => `
+    <tr data-idx="${idx}">
+      <td><input class="vmap-input" data-field="build" value="${escapeHtml(build)}" style="width:90px;font-family:monospace"></td>
+      <td><input class="vmap-input" data-field="feature_pack" value="${escapeHtml(info.featurePack)}" style="width:115px"></td>
+      <td><input class="vmap-input" data-field="patch_level" value="${escapeHtml(info.patchLevel)}" style="width:90px"></td>
+      <td><input class="vmap-input" data-field="release_date" value="${escapeHtml(info.releaseDate)}" style="width:75px"></td>
+      <td><button type="button" class="vmap-del-btn" data-idx="${idx}" title="Zeile löschen">🗑</button></td>
+    </tr>`).join("");
+
+  return `
+    <section class="settings-subsection" id="sapB1VersionMapAdminSection">
+      <div class="settings-subsection-head">
+        <h5>🗂️ SAP B1 Version Map</h5>
+        <p class="count compact">Mapping von Build-Nummern zu Feature Packs — wird server-seitig gespeichert</p>
+      </div>
+      <div class="table-wrap" style="margin-bottom:8px;max-height:420px;overflow-y:auto;">
+        <table class="report-subtable sap-vmap-table" id="sapB1VmapAdminTable">
+          <thead>
+            <tr>
+              <th>Build</th>
+              <th>Feature Pack</th>
+              <th>Patch Level</th>
+              <th>Release</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="sapB1VmapAdminBody">${rows}</tbody>
+        </table>
+      </div>
+      <div class="alarm-settings-actions">
+        <button type="button" id="sapB1VmapAddRowBtn" class="btn-secondary">+ Zeile hinzufügen</button>
+        <button type="button" id="sapB1VmapSaveBtn">💾 Speichern</button>
+        <button type="button" id="sapB1VmapCopyBtn" class="btn-secondary">📋 Kopieren</button>
+        <span id="sapB1VmapStatus" class="count compact"></span>
+      </div>
+    </section>`;
+}
+
+function wireSapB1VersionMapAdminSection(container) {
+  const section = (container || document).querySelector("#sapB1VersionMapAdminSection");
+  if (!section) return;
+
+  function getTableEntries() {
+    return Array.from(section.querySelectorAll("#sapB1VmapAdminBody tr")).map(tr => ({
+      build: tr.querySelector('[data-field="build"]')?.value.trim() || "",
+      feature_pack: tr.querySelector('[data-field="feature_pack"]')?.value.trim() || "",
+      patch_level: tr.querySelector('[data-field="patch_level"]')?.value.trim() || "",
+      release_date: tr.querySelector('[data-field="release_date"]')?.value.trim() || "",
+    })).filter(e => e.build);
+  }
+
+  section.querySelector("#sapB1VmapAddRowBtn")?.addEventListener("click", () => {
+    const tbody = section.querySelector("#sapB1VmapAdminBody");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input class="vmap-input" data-field="build" value="" style="width:90px;font-family:monospace" placeholder="10.00.xxx"></td>
+      <td><input class="vmap-input" data-field="feature_pack" value="" style="width:115px" placeholder="FP 26xx"></td>
+      <td><input class="vmap-input" data-field="patch_level" value="" style="width:90px" placeholder="PL xx"></td>
+      <td><input class="vmap-input" data-field="release_date" value="" style="width:75px" placeholder="Mmm YYYY"></td>
+      <td><button type="button" class="vmap-del-btn" title="Zeile löschen">🗑</button></td>`;
+    tbody.insertBefore(tr, tbody.firstChild);
+    tr.querySelector("input").focus();
+  });
+
+  section.addEventListener("click", (e) => {
+    if (e.target.classList.contains("vmap-del-btn")) {
+      e.target.closest("tr")?.remove();
+    }
+  });
+
+  section.querySelector("#sapB1VmapSaveBtn")?.addEventListener("click", async () => {
+    const status = section.querySelector("#sapB1VmapStatus");
+    const entries = getTableEntries();
+    status.textContent = "Speichern…";
+    try {
+      const resp = await fetch("api/v1/sap-b1-version-map", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entries }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || resp.statusText);
+      // Update in-memory map
+      SAP_B1_VERSION_MAP = new Map(
+        entries.map(e => [e.build, { featurePack: e.feature_pack, patchLevel: e.patch_level, releaseDate: e.release_date }])
+      );
+      status.textContent = `✅ ${data.saved} Einträge gespeichert`;
+    } catch (err) {
+      status.textContent = `❌ ${err.message}`;
+    }
+    setTimeout(() => { status.textContent = ""; }, 3000);
+  });
+
+  section.querySelector("#sapB1VmapCopyBtn")?.addEventListener("click", async () => {
+    const entries = getTableEntries();
+    const text = entries.map(e => `${e.build}\t${e.feature_pack}\t${e.patch_level}\t${e.release_date}`).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      const btn = section.querySelector("#sapB1VmapCopyBtn");
+      const orig = btn.textContent;
+      btn.textContent = "✅ Kopiert!";
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    } catch { /* ignore */ }
+  });
+}
+
 async function loadGlobalAdminSettingsPanel(force = false) {
   updateAdminSettingsVisibility();
   if (!state.isAdmin) {
@@ -2008,6 +2133,12 @@ async function loadGlobalAdminSettingsPanel(force = false) {
   await loadAlarmSettings(force);
   await loadOauthSettings(force);
   await loadWebUsers(force);
+  // Render SAP B1 version map editor (idempotent — skip if already rendered)
+  const container = document.getElementById("globalAdminSettingsContainer");
+  if (container && !container.querySelector("#sapB1VersionMapAdminSection")) {
+    container.insertAdjacentHTML("beforeend", renderSapB1VersionMapAdminSection());
+    wireSapB1VersionMapAdminSection(container);
+  }
 }
 
 async function loadSettingsPanel(force = false) {
@@ -7298,6 +7429,7 @@ async function init() {
     setLoginStatus("Bitte anmelden, um den Webclient zu nutzen.");
     return;
   }
+  await loadSapB1VersionMap();
   document.getElementById("hostAlertFilterSelect").value = state.hostAlertFilter;
   document.getElementById("hostMutedFilterSelect").value = state.hostMutedFilter;
   document.getElementById("hostSearchInput").value = state.hostSearchQuery;

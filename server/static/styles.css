@@ -4012,6 +4012,34 @@ body[data-theme="dark"] .hana-sid-chip {
   white-space: nowrap;
 }
 
+.vmap-input {
+  border: 1px solid #c8d9ec;
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 12px;
+  background: #f8fbff;
+  color: #1a2e44;
+}
+
+.vmap-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: #fff;
+}
+
+.vmap-del-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.6;
+  padding: 0 4px;
+}
+
+.vmap-del-btn:hover {
+  opacity: 1;
+}
+
 .fs-table {
   margin-top: 0;
   table-layout: auto;

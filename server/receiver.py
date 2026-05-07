@@ -1015,6 +1015,24 @@ _HANA_PROCESS_RE = re.compile(
     r"|hdb[a-z0-9_-]+)\b"
 )
 
+_SAP_B1_VERSION_MAP_PATH = DATA_DIR / "sap_b1_version_map.json"
+
+def _load_sap_b1_version_map() -> dict[str, dict[str, str]]:
+    """Load SAP B1 version map from JSON file; fall back to built-in dict."""
+    try:
+        entries = json.loads(_SAP_B1_VERSION_MAP_PATH.read_text(encoding="utf-8"))
+        return {str(e["build"]): {k: str(v) for k, v in e.items() if k != "build"} for e in entries if "build" in e}
+    except Exception:
+        return dict(_SAP_B1_BUILD_TO_FP)
+
+
+def _save_sap_b1_version_map(entries: list[dict]) -> None:
+    """Persist SAP B1 version map to JSON file and reload the in-memory dict."""
+    global _SAP_B1_BUILD_TO_FP
+    _SAP_B1_VERSION_MAP_PATH.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
+    _SAP_B1_BUILD_TO_FP = {str(e["build"]): {k: str(v) for k, v in e.items() if k != "build"} for e in entries if "build" in e}
+
+
 _SAP_B1_BUILD_TO_FP: dict[str, dict[str, str]] = {
     "10.00.320": {"feature_pack": "FP 2602", "patch_level": "PL 22", "release_date": "Feb 2026"},
     "10.00.310": {"feature_pack": "FP 2511", "patch_level": "PL 21", "release_date": "Nov 2025"},
@@ -1032,6 +1050,9 @@ _SAP_B1_BUILD_TO_FP: dict[str, dict[str, str]] = {
     "10.00.210": {"feature_pack": "FP 2305", "patch_level": "PL 11", "release_date": "May 2023"},
     "10.00.180": {"feature_pack": "FP 2208", "patch_level": "PL 08", "release_date": "Aug 2022"},
 }
+
+# Overwrite with persisted version if the JSON file exists
+_SAP_B1_BUILD_TO_FP = _load_sap_b1_version_map()
 
 
 def _detect_hana_processes(payload: dict) -> bool:
@@ -8251,6 +8272,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, settings)
             return
 
+        if parsed.path == "/api/v1/sap-b1-version-map":
+            entries = [{"build": k, **v} for k, v in _SAP_B1_BUILD_TO_FP.items()]
+            self._send_json(HTTPStatus.OK, {"entries": entries})
+            return
+
         if parsed.path == "/api/v1/alert-mutes":
             with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 rows = conn.execute(
@@ -8759,7 +8785,37 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, oauth_settings_public_view(settings))
             return
 
-        if path == "/api/v1/oauth/microsoft/disconnect":
+        if path == "/api/v1/sap-b1-version-map":
+            if not self._require_admin_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0 or content_length > 65536:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid body"})
+                return
+            try:
+                body = json.loads(self.rfile.read(content_length))
+                entries = body.get("entries", [])
+                if not isinstance(entries, list):
+                    raise ValueError("entries must be a list")
+                clean = []
+                for e in entries:
+                    build = str(e.get("build", "") or "").strip()
+                    if not re.match(r"^\d{2}\.\d{2}\.\d{3}$", build):
+                        raise ValueError(f"invalid build: {build!r}")
+                    clean.append({
+                        "build": build,
+                        "feature_pack": str(e.get("feature_pack", "") or "").strip(),
+                        "patch_level": str(e.get("patch_level", "") or "").strip(),
+                        "release_date": str(e.get("release_date", "") or "").strip(),
+                    })
+            except (json.JSONDecodeError, ValueError, KeyError) as exc:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                return
+            _save_sap_b1_version_map(clean)
+            self._send_json(HTTPStatus.OK, {"saved": len(clean)})
+            return
+
+
             username = self._web_session_username()
             with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 delete_oauth_connection(conn, username, MICROSOFT_PROVIDER)
