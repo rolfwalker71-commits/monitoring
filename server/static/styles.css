@@ -1284,7 +1284,7 @@ body[data-theme="dark"] .hosts-column {
 }
 
 .sidebar-tools .host-filter-control-icons {
-  align-items: flex-start;
+  align-items: center;
 }
 
 .sidebar-tools .icon-filter-chips {
