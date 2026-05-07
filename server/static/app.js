@@ -4258,9 +4258,6 @@ function renderReportCard(report) {
         ${renderMetaItem("⚙️", "Kernel", payload.kernel)}
         ${renderMetaItem("⏱️", "Uptime", formatUptime(payload.uptime_seconds))}
         ${renderMetaItem("🗃️", "Queue", queueDepth + " Dateien")}
-        ${renderMetaItemHtml("🧾", "SAP B1", sapB1Summary)}
-        ${renderMetaItem("🟢", "HANA", hanaInfoMeta)}
-        ${hanaSid ? renderMetaItem("🏷️", "HANA SID", hanaSid) : ""}
       </div>
     </div>
   `;
@@ -4370,7 +4367,7 @@ function renderReportCard(report) {
       <div class="report-header">
         <div>
           <h3>${escapeHtml(title)}</h3>
-          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)} <span class="${chipClass}">${chipText}</span></p>
+          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)} <span class="${chipClass}">${chipText}</span>${sapB1Summary !== "-" ? ` <span class="sap-hana-chip sap-b1-chip">🧾 ${escapeHtml(sapB1Summary.replace(/<[^>]+>/g, ""))}</span>` : ""}${hanaInfoMeta !== "-" ? ` <span class="sap-hana-chip hana-chip">🟢 ${escapeHtml(hanaInfoMeta)}</span>` : ""}${hanaSid ? ` <span class="sap-hana-chip hana-sid-chip">🏷️ ${escapeHtml(hanaSid)}</span>` : ""}</p>
         </div>
         <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
       </div>

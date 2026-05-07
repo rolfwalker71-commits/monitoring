@@ -3486,6 +3486,55 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   margin: 2px 0 0;
   color: var(--muted);
   font-size: 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sap-hana-chip {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.sap-b1-chip {
+  background: #e0f0ff;
+  color: #1a5fa8;
+  border: 1px solid #b3d8f7;
+}
+
+.hana-chip {
+  background: #e6f9ee;
+  color: #1a7a44;
+  border: 1px solid #9de0bc;
+}
+
+.hana-sid-chip {
+  background: #f0eaff;
+  color: #5b2daa;
+  border: 1px solid #c9b0f0;
+}
+
+body[data-theme="dark"] .sap-b1-chip {
+  background: #0e2d4a;
+  color: #7cc4f5;
+  border-color: #1e5080;
+}
+
+body[data-theme="dark"] .hana-chip {
+  background: #0a2e1a;
+  color: #5cd68a;
+  border-color: #1a5c34;
+}
+
+body[data-theme="dark"] .hana-sid-chip {
+  background: #1e1040;
+  color: #c09af5;
+  border-color: #4a2888;
 }
 
 @media (max-width: 1100px) {
