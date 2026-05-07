@@ -4964,6 +4964,17 @@ async function triggerFileDownload(requestUrl, fallbackFilename) {
   return filename;
 }
 
+function triggerNativeDownload(requestUrl, fallbackFilename) {
+  const anchor = document.createElement("a");
+  anchor.href = requestUrl;
+  anchor.download = fallbackFilename;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  return fallbackFilename;
+}
+
 function waitMs(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -5000,7 +5011,7 @@ async function downloadDatabaseBackup() {
     }
     const status = String(statusData.status || "");
     if (status === "ready") {
-      return triggerFileDownload(
+      return triggerNativeDownload(
         `/api/v1/backup/database/download?job_id=${encodeURIComponent(jobId)}`,
         fallbackFilename,
       );
