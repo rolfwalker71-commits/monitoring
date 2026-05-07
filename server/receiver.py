@@ -868,8 +868,25 @@ def mark_database_backup_job_downloaded(job_id: str) -> None:
             job["backup_path"] = ""
 
 
+def _unlink_wal_files(db_path: Path) -> None:
+    """Remove the -shm and -wal sidecar files for a SQLite database path."""
+    for suffix in ("-shm", "-wal"):
+        sidecar = db_path.with_suffix(db_path.suffix + suffix)
+        try:
+            sidecar.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def restore_sqlite_from_bytes(dest_path: Path, data: bytes) -> None:
-    """Validate data is a SQLite file, then atomically replace dest_path."""
+    """Validate data is a SQLite file, then atomically replace dest_path.
+
+    WAL note: the integrity-check step opens the temp file and may create
+    <tmp>.db-shm / <tmp>.db-wal sidecars.  These are cleaned up before the
+    rename so they do not linger in the data directory.
+    After replacing the main .db file the old dest -shm/-wal files are also
+    removed so SQLite does not mistakenly replay a stale WAL on the new DB.
+    """
     if not data.startswith(b"SQLite format 3\x00"):
         raise ValueError("uploaded file is not a valid SQLite database")
     if len(data) < 100:
@@ -883,16 +900,27 @@ def restore_sqlite_from_bytes(dest_path: Path, data: bytes) -> None:
         tmp.write(data)
 
     try:
-        # Verify the uploaded DB can be opened and read
+        # Verify the uploaded DB can be opened and read.
+        # This may create <tmp_path>-shm / <tmp_path>-wal sidecars.
         with sqlite3.connect(tmp_path) as test_conn:
             test_conn.execute("PRAGMA integrity_check").fetchone()
-        # Atomic replace
+
+        # Clean up WAL sidecars created by the integrity check before rename.
+        _unlink_wal_files(tmp_path)
+
+        # Atomic replace of the main DB file.
         tmp_path.replace(dest_path)
+
+        # Remove stale WAL sidecars of the old database so SQLite does not
+        # try to replay the old WAL against the newly restored DB.
+        _unlink_wal_files(dest_path)
+
     except Exception:
         try:
             tmp_path.unlink()
         except OSError:
             pass
+        _unlink_wal_files(tmp_path)
         raise
 
 
