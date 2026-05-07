@@ -1241,6 +1241,11 @@ body[data-theme="dark"] .hosts-column {
   cursor: pointer;
 }
 
+.sidebar-tools .host-filter-control select option {
+  background: #1e3a5f;
+  color: #ffffff;
+}
+
 .sidebar-tools .host-filter-control-icons {
   align-items: flex-start;
 }
