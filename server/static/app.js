@@ -3672,10 +3672,10 @@ function renderSapB1SystemSummary(payload) {
   if (!fp && !releaseDate) {
     return "-";
   }
-  if (fp && releaseDate) {
-    return `<strong>${escapeHtml(fp)}</strong> ${escapeHtml(releaseDate)}`;
+  if (fp) {
+    return `<strong>${escapeHtml(fp)}</strong>`;
   }
-  return fp ? `<strong>${escapeHtml(fp)}</strong>` : escapeHtml(releaseDate);
+  return escapeHtml(releaseDate);
 }
 
 function renderSapB1VersionMapCard() {
