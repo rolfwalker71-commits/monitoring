@@ -2551,8 +2551,9 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 18px;
-  padding: 1px 9px;
+  width: 28px;
+  min-height: 22px;
+  padding: 1px 2px;
   border-radius: 999px;
   border: 1px solid;
   font-size: 11px;
