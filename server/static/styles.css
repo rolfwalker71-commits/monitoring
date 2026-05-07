@@ -2300,6 +2300,11 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   margin-top: 8px;
 }
 
+#hiddenHostsBody {
+  display: grid;
+  gap: 8px;
+}
+
 .host-group-title {
   margin: 0;
   font-size: 12px;
