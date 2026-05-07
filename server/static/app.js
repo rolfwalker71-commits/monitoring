@@ -4927,8 +4927,16 @@ function renderSingleHostCard(host) {
   const hasMutedAlerts = mutedAlerts.length > 0;
   const mutedCollapsed = state.hiddenHostMutedAlertsCollapsed[hostname] !== false;
   const mutedBodyClass = mutedCollapsed ? "hidden" : "";
-  const sapFeaturePack = asText(host.sap_feature_pack || "", "") || "-";
-  const hostIdChip = asText(host.host_id || host.agent_id || "", "") || "-";
+  const sapFeaturePack = asText(host.sap_feature_pack || "", "");
+  const hanaSidValue = asText(host.hana_sid || host.host_id || "", "");
+  const valueChipStack = [
+    sapFeaturePack
+      ? `<span class="host-value-chip host-value-chip--sap" title="SAP Feature Pack">${escapeHtml(sapFeaturePack)}</span>`
+      : "",
+    hanaSidValue
+      ? `<span class="host-value-chip host-value-chip--hana" title="HANA SID">${escapeHtml(hanaSidValue)}</span>`
+      : "",
+  ].filter(Boolean).join("");
 
   let mutedAlertsSection = "";
   if (isHidden && hasMutedAlerts) {
@@ -4966,10 +4974,7 @@ function renderSingleHostCard(host) {
       <strong class="host-title-line">
         <span>${escapeHtml(displayName)}</span>
       </strong>
-      <div class="host-value-chip-stack">
-        <span class="host-value-chip" title="SAP Feature Pack">${escapeHtml(sapFeaturePack)}</span>
-        <span class="host-value-chip" title="Host-ID">${escapeHtml(hostIdChip)}</span>
-      </div>
+      ${valueChipStack ? `<div class="host-value-chip-stack">${valueChipStack}</div>` : ""}
       <span>🖥️ ${escapeHtml(hostname)}</span>
       <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
       <span>⏱️ Zustellung: ${escapeHtml(hostDeliveryLag)}</span>

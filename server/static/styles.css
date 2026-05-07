@@ -2384,6 +2384,18 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   white-space: nowrap;
 }
 
+.host-value-chip--sap {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.host-value-chip--hana {
+  border-color: #86efac;
+  background: #ecfdf3;
+  color: #166534;
+}
+
 .host-item-hidden {
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border-style: dashed;

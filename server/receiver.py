@@ -6017,6 +6017,28 @@ def extract_country_code_from_payload(payload: dict) -> str:
     return ""
 
 
+def extract_hana_sid_from_payload(payload: dict) -> str:
+    direct = str(payload.get("hana_sid", "") or payload.get("HANA_SID", "") or "").strip()
+    if direct:
+        return direct
+
+    agent_config = payload.get("agent_config", {})
+    if not isinstance(agent_config, dict):
+        return ""
+
+    entries = agent_config.get("entries", [])
+    if not isinstance(entries, list):
+        return ""
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        key = str(entry.get("key", "") or "").strip().upper()
+        if key == "HANA_SID":
+            return str(entry.get("value", "") or "").strip()
+    return ""
+
+
 def payload_has_agent_api_key(payload: dict) -> bool:
     agent_config = payload.get("agent_config", {})
     if not isinstance(agent_config, dict):
@@ -7615,12 +7637,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     country_code = extract_country_code_from_payload(latest_payload)
                 has_hana = _detect_hana_processes(latest_payload)
                 sap_info = _extract_sap_b1_info(latest_payload, has_hana)
-                host_id_value = str(
-                    latest_payload.get("host_id", "")
-                    or latest_payload.get("agent_id", "")
-                    or row[4]
-                    or ""
-                ).strip()
+                hana_sid_value = extract_hana_sid_from_payload(latest_payload)
                 hosts.append(
                     {
                         "hostname": hostname,
@@ -7646,7 +7663,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "is_hidden": bool(host_settings.get("is_hidden", False)),
                         "agent_api_key_status": str((latest_payload.get("agent_api_key") or {}).get("status", "off")),
                         "sap_feature_pack": str(sap_info.get("feature_pack", "") or ""),
-                        "host_id": host_id_value,
+                        "hana_sid": hana_sid_value,
+                        "host_id": hana_sid_value,
                     }
                 )
 
