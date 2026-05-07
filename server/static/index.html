@@ -793,6 +793,7 @@
                   <div class="subview-tabs" role="tablist" aria-label="Übersichts-Register">
                     <button id="overviewMainTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="overviewMainSection"> Alerts + Analyse</button>
                     <button id="overviewFilesystemTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="overviewFilesystemSection">💾 Filesystem Fokus</button>
+                    <button id="overviewNotificationTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="overviewNotificationSection">📢 Benachrichtigung</button>
                   </div>
                 </div>
                 <label class="chart-range-control" for="analysisRangeSelect">
@@ -851,8 +852,11 @@
                   </div>
                   <div id="resourceTrendCards" class="resource-trend-grid"></div>
                   <div id="resourceCharts" class="resource-charts"></div>
-                  <div id="customerNotificationPanel" class="hidden"></div>
                 </section>
+              </section>
+
+              <section id="overviewNotificationSection" class="analysis-panel overview-subsection overview-scroll-panel hidden" role="tabpanel" aria-labelledby="overviewNotificationTabButton">
+                <div id="customerNotificationPanel"></div>
               </section>
 
               <section id="overviewFilesystemSection" class="analysis-panel overview-subsection overview-scroll-panel hidden" role="tabpanel" aria-labelledby="overviewFilesystemTabButton">

@@ -956,8 +956,10 @@ function renderHostInterestsEditor() {
 function updateOverviewSection() {
   const mainSection = document.getElementById("overviewMainSection");
   const filesystemSection = document.getElementById("overviewFilesystemSection");
+  const notificationSection = document.getElementById("overviewNotificationSection");
   const mainTabButton = document.getElementById("overviewMainTabButton");
   const filesystemTabButton = document.getElementById("overviewFilesystemTabButton");
+  const notificationTabButton = document.getElementById("overviewNotificationTabButton");
 
   if (!mainSection || !filesystemSection || !mainTabButton || !filesystemTabButton) {
     return;
@@ -965,14 +967,18 @@ function updateOverviewSection() {
 
   const showMain = state.overviewSection === "main";
   const showFilesystem = state.overviewSection === "filesystem";
+  const showNotification = state.overviewSection === "notification";
 
   mainSection.classList.toggle("hidden", !showMain);
   filesystemSection.classList.toggle("hidden", !showFilesystem);
+  if (notificationSection) notificationSection.classList.toggle("hidden", !showNotification);
 
   mainTabButton.classList.toggle("active", showMain);
   filesystemTabButton.classList.toggle("active", showFilesystem);
+  if (notificationTabButton) notificationTabButton.classList.toggle("active", showNotification);
   mainTabButton.setAttribute("aria-selected", showMain ? "true" : "false");
   filesystemTabButton.setAttribute("aria-selected", showFilesystem ? "true" : "false");
+  if (notificationTabButton) notificationTabButton.setAttribute("aria-selected", showNotification ? "true" : "false");
 }
 
 function setAlarmSettingsStatus(message, isError = false) {
@@ -1097,6 +1103,14 @@ function updateAdminSettingsVisibility() {
   }
   if (globalAdminOpsSection) {
     globalAdminOpsSection.classList.toggle("hidden", !state.isAdmin);
+  }
+  const overviewNotificationTab = document.getElementById("overviewNotificationTabButton");
+  if (overviewNotificationTab) {
+    overviewNotificationTab.classList.toggle("hidden", !state.isAdmin);
+    if (!state.isAdmin && state.overviewSection === "notification") {
+      state.overviewSection = "main";
+      updateOverviewSection();
+    }
   }
   if (!state.isAdmin && state.globalSubMode === "admin-alert-subs") {
     state.globalSubMode = "global-alerts";
@@ -7314,6 +7328,15 @@ function wireEvents() {
   document.getElementById("overviewFilesystemTabButton").addEventListener("click", () => {
     state.overviewSection = "filesystem";
     updateOverviewSection();
+  });
+
+  document.getElementById("overviewNotificationTabButton").addEventListener("click", () => {
+    state.overviewSection = "notification";
+    updateOverviewSection();
+    // Reload panel for current host when switching to this tab
+    if (state.selectedHost) {
+      loadAndRenderCustomerNotificationPanel(state.selectedHost);
+    }
   });
 
   document.getElementById("toggleHostAlertsPanelButton").addEventListener("click", async () => {
