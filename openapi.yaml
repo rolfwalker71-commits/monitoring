@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
   title: Monitoring Receiver API
-  version: 0.5.76
+  version: 1.1.100
   description: >-
-    Compact OpenAPI spec for the Monitoring server endpoints in receiver.py.
+    OpenAPI spec for the Monitoring server endpoints in receiver.py.
     Most /api/v1 endpoints require an authenticated web session cookie,
-    except the agent endpoints used by collectors.
+    except the agent endpoints used by collectors (X-Api-Key header).
 servers:
   - url: http://localhost:8080
 tags:
@@ -1227,8 +1227,535 @@ paths:
         '400':
           $ref: '#/components/responses/ErrorBadRequest'
 
+  /api/v1/session/refresh:
+    get:
+      tags: [Auth]
+      summary: Refresh session expiry
+      operationId: getSessionRefresh
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Session refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: refreshed }
+                  expires_at_utc: { type: string, format: date-time }
+
+  /api/v1/active-users:
+    get:
+      tags: [Auth]
+      summary: Get list of currently active web sessions (admin)
+      operationId: getActiveUsers
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Active users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active_users:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        username: { type: string }
+                        last_seen_utc: { type: string, format: date-time }
+
+  /api/v1/user-preferences:
+    get:
+      tags: [User]
+      summary: Get UI preferences for current user
+      operationId: getUserPreferences
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: User preferences
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/v1/alert-ack:
+    post:
+      tags: [Alerts]
+      summary: Acknowledge an open alert
+      operationId: postAlertAck
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [alert_id]
+              properties:
+                alert_id: { type: integer, example: 987 }
+      responses:
+        '200':
+          description: Alert acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  alert_id: { type: integer }
+
+  /api/v1/alert-unack:
+    post:
+      tags: [Alerts]
+      summary: Remove acknowledgement from an alert
+      operationId: postAlertUnack
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [alert_id]
+              properties:
+                alert_id: { type: integer, example: 987 }
+      responses:
+        '200':
+          description: Acknowledgement removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  alert_id: { type: integer }
+
+  /api/v1/alert-close:
+    post:
+      tags: [Alerts]
+      summary: Manually close/resolve an alert
+      operationId: postAlertClose
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [alert_id]
+              properties:
+                alert_id: { type: integer, example: 987 }
+      responses:
+        '200':
+          description: Alert closed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  alert_id: { type: integer }
+
+  /api/v1/alert-unclose:
+    post:
+      tags: [Alerts]
+      summary: Re-open a manually closed alert
+      operationId: postAlertUnclose
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [alert_id]
+              properties:
+                alert_id: { type: integer, example: 987 }
+      responses:
+        '200':
+          description: Alert re-opened
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  alert_id: { type: integer }
+
+  /api/v1/filesystem-visibility:
+    post:
+      tags: [Hosts]
+      summary: Show or hide a filesystem mountpoint for a host
+      operationId: postFilesystemVisibility
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hostname, mountpoint, hidden]
+              properties:
+                hostname: { type: string, example: support01 }
+                mountpoint: { type: string, example: /tmp }
+                hidden: { type: boolean, example: true }
+      responses:
+        '200':
+          description: Visibility updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+
+  /api/v1/sap-b1-version-map:
+    get:
+      tags: [Analysis]
+      summary: Get SAP Business One version map
+      operationId: getSapB1VersionMap
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Full SAP B1 version map
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      tags: [Admin]
+      summary: Update SAP B1 version map entry (admin)
+      operationId: postSapB1VersionMap
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action: { type: string, enum: [upsert, delete] }
+                build: { type: string, example: "10.00.180" }
+                feature_pack: { type: string, example: "FP 2208" }
+                patch_level: { type: string, example: "PL 08" }
+                release_date: { type: string, example: "Aug 2022" }
+      responses:
+        '200':
+          description: Version map updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+
+  /api/v1/backup-status-overview:
+    get:
+      tags: [Analysis]
+      summary: Backup status overview for all hosts
+      operationId: getBackupStatusOverview
+      security:
+        - CookieAuth: []
+      parameters:
+        - name: hours
+          in: query
+          required: false
+          schema: { type: integer, default: 24, minimum: 1, maximum: 720 }
+      responses:
+        '200':
+          description: Backup status by host
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hours: { type: integer }
+                  total: { type: integer }
+                  hosts:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /api/v1/backup/database/start:
+    get:
+      tags: [Admin]
+      summary: Start a database backup (admin)
+      operationId: getBackupDatabaseStart
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Backup started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: started }
+                  backup_id: { type: string }
+
+  /api/v1/backup/database/status:
+    get:
+      tags: [Admin]
+      summary: Poll database backup status (admin)
+      operationId: getBackupDatabaseStatus
+      security:
+        - CookieAuth: []
+      parameters:
+        - name: backup_id
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: Backup status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [running, done, failed] }
+                  backup_id: { type: string }
+                  size_bytes: { type: integer }
+                  finished_at_utc: { type: string, format: date-time }
+
+  /api/v1/backup/database/download:
+    get:
+      tags: [Admin]
+      summary: Download completed database backup file (admin)
+      operationId: getBackupDatabaseDownload
+      security:
+        - CookieAuth: []
+      parameters:
+        - name: backup_id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: SQLite database file download
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  /api/v1/backup/database:
+    get:
+      tags: [Admin]
+      summary: List available database backups (admin)
+      operationId: getBackupDatabase
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Backup file list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  backups:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /api/v1/restore/database:
+    post:
+      tags: [Admin]
+      summary: Restore database from uploaded backup (admin)
+      operationId: postRestoreDatabase
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Restore result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: restored }
+
+  /api/v1/export/alerts.csv:
+    get:
+      tags: [Alerts]
+      summary: Export alerts as CSV file
+      operationId: getExportAlertsCsv
+      security:
+        - CookieAuth: []
+      parameters:
+        - name: hostname
+          in: query
+          required: false
+          schema: { type: string }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [all, open, resolved], default: all }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, default: 500 }
+      responses:
+        '200':
+          description: CSV file download
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /api/v1/export/reports.json:
+    get:
+      tags: [Reports]
+      summary: Export host reports as JSON file
+      operationId: getExportReportsJson
+      security:
+        - CookieAuth: []
+      parameters:
+        - name: hostname
+          in: query
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, default: 100 }
+      responses:
+        '200':
+          description: JSON file download
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportListItem'
+
+  /api/v1/ai-troubleshoot:
+    post:
+      tags: [Analysis]
+      summary: Request AI-powered troubleshoot analysis for a metric
+      operationId: postAiTroubleshoot
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hostname, metric]
+              properties:
+                hostname: { type: string, example: support01 }
+                metric: { type: string, example: swap_percent }
+                hours: { type: integer, example: 24 }
+      responses:
+        '200':
+          description: AI analysis result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hostname: { type: string }
+                  metric: { type: string }
+                  analysis: { type: string }
+                  model: { type: string }
+                  cached: { type: boolean }
+
+  /api/v1/customer-alert/test:
+    post:
+      tags: [Notifications]
+      summary: Send customer alert test mail for a host (admin)
+      operationId: postCustomerAlertTest
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hostname, recipient_email]
+              properties:
+                hostname: { type: string, example: support01 }
+                recipient_email: { type: string, format: email, example: kunde@example.com }
+      responses:
+        '200':
+          description: Test mail result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: sent }
+                  details: { type: string }
+
+  /api/v1/mail-test/backup:
+    post:
+      tags: [Notifications]
+      summary: Send backup status test mail
+      operationId: postMailTestBackup
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Mail test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: sent }
+                  mode: { type: string, example: backup }
+                  details: { type: string }
+
+  /oauth/microsoft/callback:
+    get:
+      tags: [OAuth]
+      summary: Microsoft OAuth2 callback (redirect from Microsoft)
+      operationId: getOauthMicrosoftCallback
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema: { type: string }
+        - name: state
+          in: query
+          required: false
+          schema: { type: string }
+        - name: error
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '302':
+          description: Redirect to dashboard after login
+
 components:
-  securitySchemes:
     CookieAuth:
       type: apiKey
       in: cookie
@@ -1343,6 +1870,12 @@ components:
         resolved_at_utc: { type: string, format: date-time, nullable: true }
         report_id: { type: integer, example: 12345 }
         is_muted: { type: boolean, example: false }
+        is_acknowledged: { type: boolean, example: false }
+        is_closed: { type: boolean, example: false }
+        acknowledged_by: { type: string, nullable: true, example: admin }
+        closed_by: { type: string, nullable: true, example: admin }
+        acknowledged_at_utc: { type: string, format: date-time, nullable: true }
+        closed_at_utc: { type: string, format: date-time, nullable: true }
     AlertSubscription:
       type: object
       properties:
