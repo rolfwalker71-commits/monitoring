@@ -4612,10 +4612,13 @@ function renderReportCard(report) {
     <article class="report-card">
       <div class="report-header">
         <div>
-          <h3>${escapeHtml(title)} <span class="${chipClass}">${chipText}</span></h3>
+          <h3>${escapeHtml(title)}</h3>
           <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}${reportDeliveryLag !== "-" ? ` <span class="report-detail-chip report-delivery-chip">⏱️ ${escapeHtml(reportDeliveryLag)}</span>` : ""}${sapB1Summary !== "-" ? ` <span class="sap-hana-chip sap-b1-chip">🧾 ${escapeHtml(sapB1Summary.replace(/<[^>]+>/g, ""))}</span>` : ""}${hanaInfoMeta !== "-" ? ` <span class="sap-hana-chip hana-chip">🟢 ${escapeHtml(hanaInfoMeta)}</span>` : ""}${hanaSid ? ` <span class="sap-hana-chip hana-sid-chip">🏷️ ${escapeHtml(hanaSid)}</span>` : ""}</p>
         </div>
-        <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
+        <div class="report-header-meta">
+          <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
+          <span class="${chipClass}">${chipText}</span>
+        </div>
       </div>
 
       <div class="meta-groups">
