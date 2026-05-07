@@ -2404,6 +2404,16 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   pointer-events: none;
 }
 
+/* When API chip is in the chip-stack (top-right), keep same style */
+.host-value-chip-stack .host-apikey-chip {
+  pointer-events: auto;
+}
+
+/* SAP/HANA chips in the bottom actions row: inline flow */
+.host-card-actions .host-value-chip {
+  pointer-events: none;
+}
+
 .host-value-chip {
   display: inline-flex;
   align-items: center;

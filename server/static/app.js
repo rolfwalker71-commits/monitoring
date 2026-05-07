@@ -4974,7 +4974,7 @@ function renderSingleHostCard(host) {
       <strong class="host-title-line">
         <span>${escapeHtml(displayName)}</span>
       </strong>
-      ${valueChipStack ? `<div class="host-value-chip-stack">${valueChipStack}</div>` : ""}
+      ${apiKeyChip ? `<div class="host-value-chip-stack">${apiKeyChip}</div>` : ""}
       <span>🖥️ ${escapeHtml(hostname)}</span>
       <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
       <span>⏱️ Zustellung: ${escapeHtml(hostDeliveryLag)}</span>
@@ -4983,7 +4983,7 @@ function renderSingleHostCard(host) {
       <span class="host-card-actions">
         <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👀" : "🫣"}</button>
         <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
-        ${apiKeyChip}
+        ${valueChipStack}
         ${alertChip}
       </span>
       ${mutedAlertsSection}
