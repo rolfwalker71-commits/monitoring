@@ -14,6 +14,7 @@ import sqlite3
 import threading
 import time
 import tempfile
+import traceback
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -5993,12 +5994,12 @@ def get_latest_report_rows_by_hostname(conn: sqlite3.Connection) -> dict[str, di
         ORDER BY
             r.hostname,
             CASE
-                WHEN LOWER(COALESCE(json_extract(r.payload_json, '$.delivery_mode'), 'live')) = 'live' THEN 0
+                WHEN LOWER(COALESCE(CASE WHEN json_valid(r.payload_json) THEN json_extract(r.payload_json, '$.delivery_mode') END, 'live')) = 'live' THEN 0
                 ELSE 1
             END,
             COALESCE(
-                NULLIF(json_extract(r.payload_json, '$.send_started_utc'), ''),
-                NULLIF(json_extract(r.payload_json, '$.timestamp_utc'), ''),
+                NULLIF(CASE WHEN json_valid(r.payload_json) THEN json_extract(r.payload_json, '$.send_started_utc') END, ''),
+                NULLIF(CASE WHEN json_valid(r.payload_json) THEN json_extract(r.payload_json, '$.timestamp_utc') END, ''),
                 r.received_at_utc
             ) DESC,
             r.id DESC
@@ -7254,73 +7255,78 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                total_hosts = conn.execute(
-                    "SELECT COUNT(DISTINCT hostname) FROM reports"
-                ).fetchone()[0]
+            try:
+                with sqlite3.connect(DB_PATH, timeout=10) as conn:
+                    total_hosts = conn.execute(
+                        "SELECT COUNT(DISTINCT hostname) FROM reports"
+                    ).fetchone()[0]
 
-                rows = conn.execute(
-                    """
-                    SELECT
-                      r.hostname,
-                      MAX(r.received_at_utc) AS last_seen_utc,
-                      COUNT(*) AS report_count,
-                      (
-                        SELECT primary_ip
-                        FROM reports r2
-                        WHERE r2.hostname = r.hostname
-                        ORDER BY r2.id DESC
-                        LIMIT 1
-                      ) AS latest_primary_ip,
-                      (
-                        SELECT agent_id
-                        FROM reports r3
-                        WHERE r3.hostname = r.hostname
-                        ORDER BY r3.id DESC
-                        LIMIT 1
-                                            ) AS latest_agent_id,
-                                            (
-                                                SELECT payload_json
-                                                FROM reports r4
-                                                WHERE r4.hostname = r.hostname
-                                                ORDER BY
-                                                    CASE
-                                                        WHEN LOWER(COALESCE(json_extract(r4.payload_json, '$.delivery_mode'), 'live')) = 'live' THEN 0
-                                                        ELSE 1
-                                                    END,
-                                                    COALESCE(
-                                                        NULLIF(json_extract(r4.payload_json, '$.send_started_utc'), ''),
-                                                        NULLIF(json_extract(r4.payload_json, '$.timestamp_utc'), ''),
-                                                        r4.received_at_utc
-                                                    ) DESC,
-                                                    r4.id DESC
-                                                LIMIT 1
-                                            ) AS latest_payload_json,
-                                            (
-                                                SELECT COUNT(*)
-                                                FROM alerts a1
-                                                WHERE a1.hostname = r.hostname AND a1.status = 'open'
-                                                  AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a1.hostname AND m.mountpoint = a1.mountpoint)
-                                                  AND (a1.ack_at_utc IS NULL OR a1.ack_at_utc = '')
-                                            ) AS open_alert_count,
-                                            (
-                                                SELECT COUNT(*)
-                                                FROM alerts a2
-                                                WHERE a2.hostname = r.hostname AND a2.status = 'open' AND a2.severity = 'critical'
-                                                  AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a2.hostname AND m.mountpoint = a2.mountpoint)
-                                                  AND (a2.ack_at_utc IS NULL OR a2.ack_at_utc = '')
-                                            ) AS open_critical_alert_count
-                    FROM reports r
-                    GROUP BY r.hostname
-                    ORDER BY last_seen_utc DESC
-                    LIMIT ? OFFSET ?
-                    """,
-                    (limit, offset),
-                ).fetchall()
+                    rows = conn.execute(
+                        """
+                        SELECT
+                          r.hostname,
+                          MAX(r.received_at_utc) AS last_seen_utc,
+                          COUNT(*) AS report_count,
+                          (
+                            SELECT primary_ip
+                            FROM reports r2
+                            WHERE r2.hostname = r.hostname
+                            ORDER BY r2.id DESC
+                            LIMIT 1
+                          ) AS latest_primary_ip,
+                          (
+                            SELECT agent_id
+                            FROM reports r3
+                            WHERE r3.hostname = r.hostname
+                            ORDER BY r3.id DESC
+                            LIMIT 1
+                                                ) AS latest_agent_id,
+                                                (
+                                                    SELECT payload_json
+                                                    FROM reports r4
+                                                    WHERE r4.hostname = r.hostname
+                                                    ORDER BY
+                                                        CASE
+                                                            WHEN LOWER(COALESCE(CASE WHEN json_valid(r4.payload_json) THEN json_extract(r4.payload_json, '$.delivery_mode') END, 'live')) = 'live' THEN 0
+                                                            ELSE 1
+                                                        END,
+                                                        COALESCE(
+                                                            NULLIF(CASE WHEN json_valid(r4.payload_json) THEN json_extract(r4.payload_json, '$.send_started_utc') END, ''),
+                                                            NULLIF(CASE WHEN json_valid(r4.payload_json) THEN json_extract(r4.payload_json, '$.timestamp_utc') END, ''),
+                                                            r4.received_at_utc
+                                                        ) DESC,
+                                                        r4.id DESC
+                                                    LIMIT 1
+                                                ) AS latest_payload_json,
+                                                (
+                                                    SELECT COUNT(*)
+                                                    FROM alerts a1
+                                                    WHERE a1.hostname = r.hostname AND a1.status = 'open'
+                                                      AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a1.hostname AND m.mountpoint = a1.mountpoint)
+                                                      AND (a1.ack_at_utc IS NULL OR a1.ack_at_utc = '')
+                                                ) AS open_alert_count,
+                                                (
+                                                    SELECT COUNT(*)
+                                                    FROM alerts a2
+                                                    WHERE a2.hostname = r.hostname AND a2.status = 'open' AND a2.severity = 'critical'
+                                                      AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a2.hostname AND m.mountpoint = a2.mountpoint)
+                                                      AND (a2.ack_at_utc IS NULL OR a2.ack_at_utc = '')
+                                                ) AS open_critical_alert_count
+                        FROM reports r
+                        GROUP BY r.hostname
+                        ORDER BY last_seen_utc DESC
+                        LIMIT ? OFFSET ?
+                        """,
+                        (limit, offset),
+                    ).fetchall()
 
-                settings_rows = conn.execute(
-                    "SELECT hostname, display_name_override, COALESCE(country_code_override, ''), COALESCE(is_favorite, 0), COALESCE(is_hidden, 0) FROM host_settings"
-                ).fetchall()
+                    settings_rows = conn.execute(
+                        "SELECT hostname, display_name_override, COALESCE(country_code_override, ''), COALESCE(is_favorite, 0), COALESCE(is_hidden, 0) FROM host_settings"
+                    ).fetchall()
+            except Exception:
+                traceback.print_exc()
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "hosts query failed"})
+                return
 
             settings_map = {
                 str(row[0]): {
@@ -7447,12 +7453,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     WHERE hostname = ?
                     ORDER BY
                         CASE
-                            WHEN LOWER(COALESCE(json_extract(payload_json, '$.delivery_mode'), 'live')) = 'live' THEN 0
+                            WHEN LOWER(COALESCE(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.delivery_mode') END, 'live')) = 'live' THEN 0
                             ELSE 1
                         END,
                         COALESCE(
-                            NULLIF(json_extract(payload_json, '$.send_started_utc'), ''),
-                            NULLIF(json_extract(payload_json, '$.timestamp_utc'), ''),
+                            NULLIF(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.send_started_utc') END, ''),
+                            NULLIF(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.timestamp_utc') END, ''),
                             received_at_utc
                         ) DESC,
                         id DESC
@@ -7637,16 +7643,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     SELECT
                         SUM(
                             CASE
-                                WHEN LOWER(COALESCE(json_extract(payload_json, '$.delivery_mode'), 'live')) = 'delayed'
-                                     OR CAST(COALESCE(json_extract(payload_json, '$.is_delayed'), 0) AS INTEGER) = 1
+                                WHEN LOWER(COALESCE(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.delivery_mode') END, 'live')) = 'delayed'
+                                     OR CAST(COALESCE(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.is_delayed') END, 0) AS INTEGER) = 1
                                 THEN 1
                                 ELSE 0
                             END
                         ) AS delayed_reports,
                         SUM(
                             CASE
-                                WHEN LOWER(COALESCE(json_extract(payload_json, '$.delivery_mode'), 'live')) = 'delayed'
-                                     OR CAST(COALESCE(json_extract(payload_json, '$.is_delayed'), 0) AS INTEGER) = 1
+                                WHEN LOWER(COALESCE(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.delivery_mode') END, 'live')) = 'delayed'
+                                     OR CAST(COALESCE(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.is_delayed') END, 0) AS INTEGER) = 1
                                 THEN 0
                                 ELSE 1
                             END
