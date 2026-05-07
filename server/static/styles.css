@@ -161,7 +161,7 @@ body[data-theme="dark"] {
   margin-bottom: 10px;
   border: 1px solid #d7e1ef;
   border-radius: 12px;
-  background: #f8fbff;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
   padding: 6px 12px;
 }
 
@@ -917,7 +917,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   margin-top: 10px;
   border: 1px solid #d7e4f2;
   border-radius: 10px;
-  background: #f8fbff;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
   max-height: 320px;
   overflow: auto;
   padding: 8px;
@@ -2194,7 +2194,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   margin-top: 10px;
   border: 1px solid #d7e1ef;
   border-radius: 10px;
-  background: #f8fbff;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
   padding: 6px 8px 8px;
 }
 
@@ -2386,7 +2386,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 .agent-update-status-row {
   border: 1px solid #d6e0ec;
   border-radius: 10px;
-  background: #f8fbff;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
   padding: 8px 10px;
   display: grid;
   gap: 3px;
@@ -3394,7 +3394,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 .trend-card {
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
   padding: 10px;
   display: grid;
   gap: 4px;
@@ -3531,7 +3531,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 12px;
-  background: #f8fbff;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
   margin-bottom: 14px;
 }
 
@@ -3667,7 +3667,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 10px 12px;
-  background: #fcfdff;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
 }
 
 .report-subtable {
@@ -3876,7 +3876,7 @@ body[data-theme="dark"] .hana-sid-chip {
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 10px;
-  background: #fcfdff;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
 }
 
 .meta-group-title {
@@ -3932,7 +3932,7 @@ body[data-theme="dark"] .hana-sid-chip {
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 10px;
-  background: #fcfdff;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
   transition: box-shadow 200ms ease;
 }
@@ -4002,7 +4002,7 @@ body[data-theme="dark"] .hana-sid-chip {
   border: 1px solid #d4e4f7;
   border-radius: 8px;
   padding: 10px;
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
 }
 
 .sap-b1-item header {
@@ -4114,7 +4114,7 @@ body[data-theme="dark"] .hana-sid-chip {
 .cron-details {
   border: 1px solid #d4e4f7;
   border-radius: 6px;
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
   overflow: hidden;
   margin-top: 4px;
 }
@@ -4172,7 +4172,7 @@ body[data-theme="dark"] .hana-sid-chip {
 .sap-b1-raw-details {
   border: 1px solid #d4e4f7;
   border-radius: 8px;
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
   overflow: hidden;
 }
 
@@ -4703,8 +4703,16 @@ body[data-theme="dark"] .subview-tabs-shell,
 body[data-theme="dark"] .panel,
 body[data-theme="dark"] .report-card,
 body[data-theme="dark"] .meta-group,
-body[data-theme="dark"] .detail-card {
-  background: #111b2f;
+body[data-theme="dark"] .detail-card,
+body[data-theme="dark"] .trend-card,
+body[data-theme="dark"] .alerts-panel,
+body[data-theme="dark"] .brand-tools,
+body[data-theme="dark"] .host-tools,
+body[data-theme="dark"] .host-interests-list,
+body[data-theme="dark"] .agent-update-status-row,
+body[data-theme="dark"] .sap-b1-raw-details,
+body[data-theme="dark"] .cron-details {
+  background: linear-gradient(180deg, #152035 0%, #111b2f 100%);
   border-color: #2a3c59;
   color: var(--text);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.2);
@@ -4717,7 +4725,7 @@ body[data-theme="dark"] .sap-b1-card {
 
 body[data-theme="dark"] .sap-b1-item {
   border-color: #334155;
-  background: #0b1628;
+  background: linear-gradient(180deg, #152035 0%, #0b1628 100%);
 }
 
 body[data-theme="dark"] .sap-b1-item header {
