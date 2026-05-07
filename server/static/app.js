@@ -4974,18 +4974,22 @@ function renderSingleHostCard(host) {
       <strong class="host-title-line">
         <span>${escapeHtml(displayName)}</span>
       </strong>
-      ${apiKeyChip ? `<div class="host-value-chip-stack">${apiKeyChip}</div>` : ""}
+      <div class="host-value-chip-stack">
+        ${apiKeyChip}
+        <div class="host-right-actions">
+          <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👀" : "🫣"}</button>
+          <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
+        </div>
+      </div>
       <span>🖥️ ${escapeHtml(hostname)}</span>
       <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
       <span>⏱️ Zustellung: ${escapeHtml(hostDeliveryLag)}</span>
       <span>🧷 ${escapeHtml(asText(host.agent_version))} &nbsp;·&nbsp; 📦 ${Number(host.report_count || 0).toLocaleString("de-DE")}</span>
       <span>🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
       <span class="host-card-actions">
-        <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👀" : "🫣"}</button>
-        <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
         ${valueChipStack}
-        ${alertChip}
       </span>
+      ${alertChip}
       ${mutedAlertsSection}
       ${osIcon}
     </article>

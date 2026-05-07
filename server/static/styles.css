@@ -2404,8 +2404,20 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   pointer-events: none;
 }
 
+.host-right-actions {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  pointer-events: auto;
+}
+
 /* When API chip is in the chip-stack (top-right), keep same style */
 .host-value-chip-stack .host-apikey-chip {
+  pointer-events: auto;
+}
+
+.host-value-chip-stack .host-mini-action {
   pointer-events: auto;
 }
 
@@ -2514,6 +2526,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 4px;
+  min-height: 20px;
 }
 
 .host-alert-chip {
