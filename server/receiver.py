@@ -6813,6 +6813,20 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             "</body></html>"
         )
 
+    def handle_one_request(self) -> None:
+        try:
+            super().handle_one_request()
+        except Exception:
+            logging.exception(
+                "Unhandled exception in request handler: %s %s",
+                getattr(self, "command", "?"),
+                getattr(self, "path", "?"),
+            )
+            try:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "internal server error"})
+            except Exception:
+                pass
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
 
