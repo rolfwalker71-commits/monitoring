@@ -3472,7 +3472,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 .report-header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 12px;
   margin-bottom: 6px;
 }
@@ -3494,7 +3494,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 
 .sap-hana-chip {
   display: inline-block;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   padding: 1px 7px;
   border-radius: 20px;
@@ -3584,7 +3584,7 @@ body[data-theme="dark"] .hana-sid-chip {
 .delivery-chip {
   display: inline-block;
   margin-left: 8px;
-  padding: 3px 10px;
+  padding: 2px 9px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;

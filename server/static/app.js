@@ -4366,8 +4366,8 @@ function renderReportCard(report) {
     <article class="report-card">
       <div class="report-header">
         <div>
-          <h3>${escapeHtml(title)}</h3>
-          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)} <span class="${chipClass}">${chipText}</span>${sapB1Summary !== "-" ? ` <span class="sap-hana-chip sap-b1-chip">🧾 ${escapeHtml(sapB1Summary.replace(/<[^>]+>/g, ""))}</span>` : ""}${hanaInfoMeta !== "-" ? ` <span class="sap-hana-chip hana-chip">🟢 ${escapeHtml(hanaInfoMeta)}</span>` : ""}${hanaSid ? ` <span class="sap-hana-chip hana-sid-chip">🏷️ ${escapeHtml(hanaSid)}</span>` : ""}</p>
+          <h3>${escapeHtml(title)} <span class="${chipClass}">${chipText}</span></h3>
+          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}${sapB1Summary !== "-" ? ` <span class="sap-hana-chip sap-b1-chip">🧾 ${escapeHtml(sapB1Summary.replace(/<[^>]+>/g, ""))}</span>` : ""}${hanaInfoMeta !== "-" ? ` <span class="sap-hana-chip hana-chip">🟢 ${escapeHtml(hanaInfoMeta)}</span>` : ""}${hanaSid ? ` <span class="sap-hana-chip hana-sid-chip">🏷️ ${escapeHtml(hanaSid)}</span>` : ""}</p>
         </div>
         <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
       </div>
