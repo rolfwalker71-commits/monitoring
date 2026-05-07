@@ -3662,6 +3662,43 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   font-size: 13px;
 }
 
+.detail-card-collapsible {
+  padding: 0;
+  overflow: hidden;
+}
+
+.detail-card-collapsible > summary {
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-card-collapsible > summary::before {
+  content: "▶";
+  font-size: 10px;
+  color: #64748b;
+  transition: transform 0.18s ease;
+  display: inline-block;
+}
+
+.detail-card-collapsible[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.detail-card-collapsible[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.detail-card-collapsible > *:not(summary) {
+  padding: 10px;
+}
+
 .report-card h4 {
   margin: 6px 0 4px;
   font-size: 13px;

@@ -4320,26 +4320,26 @@ function renderReportCard(report) {
   } else if (section === "agent-update") {
     detailContent = `
       <div class="detail-cards">
-        <section class="detail-card">
-          <h4>⟳ Agent Update Log</h4>
+        <details class="detail-card detail-card-collapsible">
+          <summary>⟳ Agent Update Log</summary>
           ${renderAgentUpdateLog(payload.agent_update)}
-        </section>
+        </details>
 
-        <section class="detail-card">
-          <h4>🗂️ agent.conf</h4>
+        <details class="detail-card detail-card-collapsible">
+          <summary>🗂️ agent.conf</summary>
           ${renderAgentConfig(payload.agent_config)}
-        </section>
+        </details>
 
         ${payload.cron_info ? `
-        <section class="detail-card">
-          <h4>🕐 Root Crontab</h4>
+        <details class="detail-card detail-card-collapsible">
+          <summary>🕐 Root Crontab</summary>
           ${formatCronTabSummary(payload.cron_info)}
-        </section>
+        </details>
 
-        <section class="detail-card">
-          <h4>📅 cron.d</h4>
+        <details class="detail-card detail-card-collapsible">
+          <summary>📅 cron.d</summary>
           ${formatCronDSummary(payload.cron_info)}
-        </section>` : ""}
+        </details>` : ""}
       </div>
     `;
   } else if (section === "dir-listings") {
