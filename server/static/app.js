@@ -4246,8 +4246,6 @@ function renderReportCard(report) {
         ${renderMetaItem("🆔", "Agent ID", report.agent_id || payload.agent_id)}
         ${renderMetaItem("🧷", "Version", payload.agent_version)}
         ${renderMetaItem("🔐", "API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}
-        ${payload.cron_info ? renderMetaItemHtml("🕐", "Root Crontab", formatCronTabSummary(payload.cron_info)) : ""}
-        ${payload.cron_info ? renderMetaItemHtml("📅", "cron.d", formatCronDSummary(payload.cron_info)) : ""}
       </div>
     </div>
   `;
@@ -4331,6 +4329,17 @@ function renderReportCard(report) {
           <h4>🗂️ agent.conf</h4>
           ${renderAgentConfig(payload.agent_config)}
         </section>
+
+        ${payload.cron_info ? `
+        <section class="detail-card">
+          <h4>🕐 Root Crontab</h4>
+          ${formatCronTabSummary(payload.cron_info)}
+        </section>
+
+        <section class="detail-card">
+          <h4>📅 cron.d</h4>
+          ${formatCronDSummary(payload.cron_info)}
+        </section>` : ""}
       </div>
     `;
   } else if (section === "dir-listings") {
