@@ -2125,6 +2125,143 @@ function wireSapB1VersionMapAdminSection(container) {
   });
 }
 
+function renderCustomerNotificationPanel(hostname, settings) {
+  const emails = settings.customer_alert_emails || "";
+  const mountpoints = settings.customer_alert_mountpoints || "";
+  const minSeverity = settings.customer_alert_min_severity || "critical";
+  return `<details class="customer-notif-panel detail-card" id="customerNotificationDetails">
+    <summary style="font-weight:700;font-size:14px;cursor:pointer;padding:4px 0;">📢 Kunden-Benachrichtigung (Admin)</summary>
+    <div style="padding:10px 0 4px 0;">
+      <p style="font-size:12px;color:#64748b;margin:0 0 10px 0;">E-Mail-Benachrichtigung bei neuen Filesystem-Alerts für diesen Host.</p>
+      <div class="alarm-settings-group">
+        <label for="custNotifEmails" class="settings-label">E-Mail-Adressen (kommagetrennt)</label>
+        <input id="custNotifEmails" type="text" class="settings-input" placeholder="kunde@example.com, weitere@example.com" value="${escapeHtml(emails)}">
+      </div>
+      <div class="alarm-settings-group">
+        <label for="custNotifMountpoints" class="settings-label">Mountpoints (kommagetrennt, leer = alle)</label>
+        <input id="custNotifMountpoints" type="text" class="settings-input" placeholder="/data, /backup" value="${escapeHtml(mountpoints)}">
+      </div>
+      <div class="alarm-settings-group">
+        <label for="custNotifMinSeverity" class="settings-label">Minimaler Schweregrad</label>
+        <select id="custNotifMinSeverity" class="settings-input">
+          <option value="warning"${minSeverity === "warning" ? " selected" : ""}>Warnung + Kritisch</option>
+          <option value="critical"${minSeverity === "critical" ? " selected" : ""}>Nur Kritisch</option>
+        </select>
+      </div>
+      <div class="alarm-settings-actions">
+        <button id="saveCustomerNotifBtn" type="button" class="btn-primary btn-primary--compact">Speichern</button>
+        <span id="customerNotifStatus" class="settings-status"></span>
+      </div>
+    </div>
+  </details>`;
+}
+
+async function loadAndRenderCustomerNotificationPanel(hostname) {
+  const container = document.getElementById("customerNotificationPanel");
+  if (!container) return;
+  if (!state.isAdmin || !hostname) {
+    container.classList.add("hidden");
+    container.innerHTML = "";
+    return;
+  }
+  try {
+    const resp = await fetch(`/api/v1/host-settings?hostname=${encodeURIComponent(hostname)}`);
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+    container.innerHTML = renderCustomerNotificationPanel(hostname, data);
+    container.classList.remove("hidden");
+
+    container.querySelector("#saveCustomerNotifBtn")?.addEventListener("click", async () => {
+      const status = container.querySelector("#customerNotifStatus");
+      const emails = container.querySelector("#custNotifEmails")?.value.trim() || "";
+      const mountpoints = container.querySelector("#custNotifMountpoints")?.value.trim() || "";
+      const minSeverity = container.querySelector("#custNotifMinSeverity")?.value || "critical";
+      try {
+        const r = await fetch("/api/v1/host-settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            hostname,
+            customer_alert_emails: emails,
+            customer_alert_mountpoints: mountpoints,
+            customer_alert_min_severity: minSeverity,
+          }),
+        });
+        if (!r.ok) {
+          const d = await r.json().catch(() => ({}));
+          throw new Error(d.error || "HTTP " + r.status);
+        }
+        if (status) { status.textContent = "✅ Gespeichert"; setTimeout(() => { status.textContent = ""; }, 2500); }
+      } catch (err) {
+        if (status) { status.textContent = `❌ ${err.message}`; setTimeout(() => { status.textContent = ""; }, 3000); }
+      }
+    });
+  } catch {
+    container.classList.add("hidden");
+    container.innerHTML = "";
+  }
+}
+
+function renderCustomerAlertTestSection() {
+  return `<section id="customerAlertTestSection" class="settings-subsection">
+    <h3>📢 Kunden-Benachrichtigung Testmail</h3>
+    <div class="alarm-settings-group">
+      <label for="custTestHostSelect" class="settings-label">Host auswählen</label>
+      <select id="custTestHostSelect" class="settings-input">
+        <option value="">— Host wählen —</option>
+      </select>
+    </div>
+    <div class="alarm-settings-group">
+      <label for="custTestRecipient" class="settings-label">Empfänger-E-Mail</label>
+      <input id="custTestRecipient" type="email" class="settings-input" placeholder="test@example.com">
+    </div>
+    <div class="alarm-settings-actions">
+      <button id="custTestSendBtn" type="button" class="btn-primary btn-primary--compact">Testmail senden</button>
+      <span id="custTestStatus" class="settings-status"></span>
+    </div>
+  </section>`;
+}
+
+async function wireCustomerAlertTestSection(container) {
+  const section = container.querySelector("#customerAlertTestSection");
+  if (!section) return;
+
+  // Populate host dropdown from state.hosts
+  const select = section.querySelector("#custTestHostSelect");
+  if (select && Array.isArray(state.hosts)) {
+    for (const h of state.hosts) {
+      const hn = String(h.hostname || "");
+      const dn = String(h.display_name || h.hostname || "");
+      const opt = document.createElement("option");
+      opt.value = hn;
+      opt.textContent = dn !== hn ? `${dn} (${hn})` : hn;
+      select.appendChild(opt);
+    }
+  }
+
+  section.querySelector("#custTestSendBtn")?.addEventListener("click", async () => {
+    const status = section.querySelector("#custTestStatus");
+    const hostname = section.querySelector("#custTestHostSelect")?.value?.trim();
+    const recipient = section.querySelector("#custTestRecipient")?.value?.trim();
+    if (!hostname || !recipient) {
+      if (status) { status.textContent = "❌ Host und E-Mail erforderlich"; setTimeout(() => { status.textContent = ""; }, 3000); }
+      return;
+    }
+    try {
+      const r = await fetch("/api/v1/customer-alert/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hostname, recipient_email: recipient }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "HTTP " + r.status);
+      if (status) { status.textContent = `✅ Testmail gesendet an ${recipient}`; setTimeout(() => { status.textContent = ""; }, 3000); }
+    } catch (err) {
+      if (status) { status.textContent = `❌ ${err.message}`; setTimeout(() => { status.textContent = ""; }, 3000); }
+    }
+  });
+}
+
 async function loadGlobalAdminSettingsPanel(force = false) {
   updateAdminSettingsVisibility();
   if (!state.isAdmin) {
@@ -2138,6 +2275,10 @@ async function loadGlobalAdminSettingsPanel(force = false) {
   if (container && !container.querySelector("#sapB1VersionMapAdminSection")) {
     container.insertAdjacentHTML("beforeend", renderSapB1VersionMapAdminSection());
     wireSapB1VersionMapAdminSection(container);
+  }
+  if (container && !container.querySelector("#customerAlertTestSection")) {
+    container.insertAdjacentHTML("beforeend", renderCustomerAlertTestSection());
+    await wireCustomerAlertTestSection(container);
   }
 }
 
@@ -5272,6 +5413,7 @@ function wireHostListInteractions() {
       loadReportsForHost();
       loadAnalysisForHost();
       loadAlertsForHost();
+      loadAndRenderCustomerNotificationPanel(hostname);
     });
 
     item.addEventListener("keydown", (event) => {

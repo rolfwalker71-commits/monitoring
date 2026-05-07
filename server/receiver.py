@@ -176,6 +176,12 @@ def init_db() -> None:
             conn.execute("ALTER TABLE host_settings ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0")
         if "country_code_override" not in existing_host_columns:
             conn.execute("ALTER TABLE host_settings ADD COLUMN country_code_override TEXT NOT NULL DEFAULT ''")
+        if "customer_alert_emails" not in existing_host_columns:
+            conn.execute("ALTER TABLE host_settings ADD COLUMN customer_alert_emails TEXT NOT NULL DEFAULT ''")
+        if "customer_alert_mountpoints" not in existing_host_columns:
+            conn.execute("ALTER TABLE host_settings ADD COLUMN customer_alert_mountpoints TEXT NOT NULL DEFAULT ''")
+        if "customer_alert_min_severity" not in existing_host_columns:
+            conn.execute("ALTER TABLE host_settings ADD COLUMN customer_alert_min_severity TEXT NOT NULL DEFAULT 'critical'")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS alarm_settings (
@@ -4169,6 +4175,152 @@ def send_instant_alert_telegram_to_users(
         telegram_send_to_chat(bot_token, chat_id, text, image_path=icon_path, reply_markup=markup)
 
 
+def customer_alert_mail_subject(hostname: str, mountpoint: str, severity: str, display_name: str = "") -> str:
+    sev_label = "KRITISCH" if severity == "critical" else "WARNUNG"
+    title = display_name.strip() or hostname
+    return f"[Monitoring-Alert] [{sev_label}] Filesystem-Alert: {title} – {mountpoint}"
+
+
+def customer_alert_mail_html(
+    hostname: str,
+    mountpoint: str,
+    severity: str,
+    used_percent: float,
+    display_name: str = "",
+    reported_at_utc: str = "",
+) -> str:
+    normalized_severity = str(severity or "").strip().lower()
+    if normalized_severity == "critical":
+        sev_color, sev_bg, sev_text, sev_label = "#dc2626", "#fee2e2", "#991b1b", "KRITISCH"
+    else:
+        sev_color, sev_bg, sev_text, sev_label = "#d97706", "#fef3c7", "#92400e", "WARNUNG"
+    title = display_name.strip() or hostname
+    reported_at = format_mail_datetime(reported_at_utc)
+    app_logo_uri = app_logo_data_uri()
+    ang_logo_uri = ang_logo_data_uri()
+    used_display = f"{used_percent:.1f}%"
+    return (
+        "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
+        "<div style='max-width:680px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;'>"
+        # Header – Kundeninfo-Banner
+        f"<div style='padding:18px 20px;background-color:#fff7ed;background-image:linear-gradient(180deg,#fff7ed,#ffedd5);border-bottom:2px solid {sev_color};'>"
+        "<div style='display:flex;align-items:center;gap:16px;margin-bottom:10px;'>"
+        f"<img src='{app_logo_uri}' alt='Monitoring' width='40' height='40' style='display:block;'>"
+        "<div>"
+        "<div style='font-size:22px;font-weight:900;letter-spacing:.3px;color:#17324d;'>System Health Monitoring</div>"
+        "<div style='font-size:12px;color:#5f7590;margin-top:2px;'>Kundeninformation</div>"
+        "</div>"
+        "</div>"
+        # Grosser farbiger Banner
+        f"<div style='display:inline-flex;align-items:center;gap:8px;padding:8px 18px;border-radius:999px;"
+        f"background:{sev_bg};color:{sev_text};font-size:15px;font-weight:800;letter-spacing:.3px;margin-bottom:8px;'>"
+        f"&#128226; Kundeninfo &mdash; Monitoring Alert &mdash; {sev_label}"
+        "</div>"
+        f"<h1 style='margin:8px 0 0 0;font-size:28px;font-weight:800;color:#17324d;'>{html.escape(title)}</h1>"
+        "</div>"
+        # Body
+        "<div style='padding:22px 20px;'>"
+        "<p style='margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#334155;'>"
+        "Auf dem folgenden System wurde ein Filesystem-Alert ausgelöst. "
+        "Bitte prüfen Sie den Füllstand und ergreifen Sie gegebenenfalls Massnahmen."
+        "</p>"
+        "<table style='width:100%;border-collapse:collapse;font-size:14px;background:#f8fafc;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;'>"
+        "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;width:140px;'>System</td>"
+        f"<td style='padding:10px 14px;font-weight:600;border-bottom:1px solid #e2e8f0;'>{html.escape(title)}</td></tr>"
+        "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;'>Mountpoint</td>"
+        f"<td style='padding:10px 14px;font-weight:600;border-bottom:1px solid #e2e8f0;font-family:monospace;'>{html.escape(mountpoint)}</td></tr>"
+        "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;'>Auslastung</td>"
+        f"<td style='padding:10px 14px;font-weight:700;border-bottom:1px solid #e2e8f0;color:{sev_color};'>{html.escape(used_display)}</td></tr>"
+        "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;'>Schweregrad</td>"
+        f"<td style='padding:10px 14px;border-bottom:1px solid #e2e8f0;'>"
+        f"<span style='display:inline-block;padding:2px 10px;border-radius:999px;background:{sev_bg};color:{sev_text};font-weight:700;font-size:12px;'>{sev_label}</span>"
+        "</td></tr>"
+        "<tr><td style='padding:10px 14px;color:#64748b;'>Zeitpunkt</td>"
+        f"<td style='padding:10px 14px;font-weight:600;'>{html.escape(reported_at)}</td></tr>"
+        "</table>"
+        "<p style='margin:18px 0 0 0;font-size:13px;color:#94a3b8;'>Diese Meldung wurde automatisch durch das System Health Monitoring generiert.</p>"
+        f"<div style='margin-top:18px;padding-top:14px;border-top:1px solid #e2e8f0;text-align:right;'><img src='{ang_logo_uri}' alt='ANG' width='100' style='display:inline-block;max-width:100px;height:auto;'></div>"
+        "</div>"
+        "</div>"
+        "</body></html>"
+    )
+
+
+def send_customer_alert_mail(
+    conn: sqlite3.Connection,
+    hostname: str,
+    mountpoint: str,
+    severity: str,
+    used_percent: float,
+    display_name: str = "",
+    reported_at_utc: str = "",
+) -> None:
+    """Send customer-facing filesystem alert e-mail based on per-host settings."""
+    try:
+        host_settings = get_host_settings(conn, hostname)
+        raw_emails = str(host_settings.get("customer_alert_emails", "") or "").strip()
+        if not raw_emails:
+            return
+
+        customer_emails = parse_email_recipients(raw_emails)
+        if not customer_emails:
+            return
+
+        # Mountpoint filter (empty = all)
+        raw_mps = str(host_settings.get("customer_alert_mountpoints", "") or "").strip()
+        if raw_mps:
+            allowed_mps = {m.strip() for m in raw_mps.split(",") if m.strip()}
+            if mountpoint not in allowed_mps:
+                return
+
+        # Severity threshold
+        min_severity = str(host_settings.get("customer_alert_min_severity", "critical") or "critical").strip().lower()
+        if min_severity == "critical" and severity != "critical":
+            return
+
+        subject = customer_alert_mail_subject(hostname, mountpoint, severity, display_name)
+        body = customer_alert_mail_html(hostname, mountpoint, severity, used_percent, display_name, reported_at_utc)
+
+        # Find an admin user with a valid Microsoft OAuth token to send via
+        try:
+            admin_rows = conn.execute(
+                "SELECT username FROM web_users WHERE COALESCE(is_admin, 0) = 1 AND COALESCE(is_disabled, 0) = 0"
+            ).fetchall()
+        except Exception:
+            admin_rows = []
+
+        access_token = ""
+        sender_email = ""
+        for row in admin_rows:
+            uname = str(row[0] or "").strip()
+            if not uname:
+                continue
+            try:
+                ok, token, _err = ensure_microsoft_access_token(conn, uname)
+                if ok and token:
+                    user_settings = get_web_user_settings(conn, uname)
+                    access_token = token
+                    sender_email = str(user_settings.get("email_sender", "") or "").strip()
+                    break
+            except Exception:
+                continue
+
+        if not access_token:
+            return
+
+        send_microsoft_mail_multi(
+            access_token,
+            customer_emails,
+            subject,
+            body,
+            content_type="HTML",
+            attachments=[],
+            sender=sender_email,
+        )
+    except Exception:
+        pass
+
+
 def get_instant_alert_telegram_chat_ids(conn: sqlite3.Connection, hostname: str, severity: str) -> set[str]:
     alarm_settings = get_alarm_settings(conn)
     bot_token = str(alarm_settings.get("telegram_bot_token", "") or "").strip()
@@ -6054,7 +6206,8 @@ def get_latest_report_rows_by_hostname(conn: sqlite3.Connection) -> dict[str, di
 def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
     row = conn.execute(
         """
-        SELECT display_name_override, COALESCE(country_code_override, ''), COALESCE(is_favorite, 0), COALESCE(is_hidden, 0)
+        SELECT display_name_override, COALESCE(country_code_override, ''), COALESCE(is_favorite, 0), COALESCE(is_hidden, 0),
+               COALESCE(customer_alert_emails, ''), COALESCE(customer_alert_mountpoints, ''), COALESCE(customer_alert_min_severity, 'critical')
         FROM host_settings
         WHERE hostname = ?
         """,
@@ -6066,12 +6219,18 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
             "country_code_override": "",
             "is_favorite": False,
             "is_hidden": False,
+            "customer_alert_emails": "",
+            "customer_alert_mountpoints": "",
+            "customer_alert_min_severity": "critical",
         }
     return {
         "display_name_override": str(row[0] or "").strip(),
         "country_code_override": normalize_country_code(row[1]),
         "is_favorite": bool(int(row[2] or 0)),
         "is_hidden": bool(int(row[3] or 0)),
+        "customer_alert_emails": str(row[4] or "").strip(),
+        "customer_alert_mountpoints": str(row[5] or "").strip(),
+        "customer_alert_min_severity": str(row[6] or "critical").strip().lower() or "critical",
     }
 
 
@@ -6364,6 +6523,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
             )
             conn.commit()  # commit before sending notification so the alert is visible when ack button is clicked
             maybe_send_alert_message(alarm_settings, "opened", hostname, mountpoint, severity, used_percent, conn=conn, display_name=display_name, alert_id=int(_cur.lastrowid))
+            send_customer_alert_mail(conn, hostname, mountpoint, severity, used_percent, display_name=display_name, reported_at_utc=now_utc)
             continue
 
         previous_severity = str(open_alert[1] or "warning")
@@ -7566,6 +7726,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "country_code_override": host_settings["country_code_override"],
                     "is_favorite": host_settings["is_favorite"],
                     "is_hidden": host_settings["is_hidden"],
+                    "customer_alert_emails": host_settings["customer_alert_emails"],
+                    "customer_alert_mountpoints": host_settings["customer_alert_mountpoints"],
+                    "customer_alert_min_severity": host_settings["customer_alert_min_severity"],
                 },
             )
             return
@@ -9138,12 +9301,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             has_country_code = "country_code_override" in payload
             has_is_favorite = "is_favorite" in payload
             has_is_hidden = "is_hidden" in payload
+            has_customer_emails = "customer_alert_emails" in payload
+            has_customer_mountpoints = "customer_alert_mountpoints" in payload
+            has_customer_severity = "customer_alert_min_severity" in payload
 
             if not hostname:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
                 return
 
-            if not (has_display_name or has_country_code or has_is_favorite or has_is_hidden):
+            if not (has_display_name or has_country_code or has_is_favorite or has_is_hidden
+                    or has_customer_emails or has_customer_mountpoints or has_customer_severity):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no host setting provided"})
                 return
 
@@ -9153,6 +9320,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 country_code_override = current["country_code_override"]
                 is_favorite = bool(current["is_favorite"])
                 is_hidden = bool(current["is_hidden"])
+                customer_alert_emails = current["customer_alert_emails"]
+                customer_alert_mountpoints = current["customer_alert_mountpoints"]
+                customer_alert_min_severity = current["customer_alert_min_severity"]
 
                 if has_display_name:
                     display_name_override = str(payload.get("display_name_override", "")).strip()
@@ -9166,30 +9336,42 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     is_favorite = parse_bool(payload.get("is_favorite"), is_favorite)
                 if has_is_hidden:
                     is_hidden = parse_bool(payload.get("is_hidden"), is_hidden)
+                if has_customer_emails:
+                    customer_alert_emails = str(payload.get("customer_alert_emails", "") or "").strip()
+                if has_customer_mountpoints:
+                    customer_alert_mountpoints = str(payload.get("customer_alert_mountpoints", "") or "").strip()
+                if has_customer_severity:
+                    sev = str(payload.get("customer_alert_min_severity", "critical") or "critical").strip().lower()
+                    customer_alert_min_severity = sev if sev in {"warning", "critical"} else "critical"
 
-                if display_name_override or country_code_override or is_favorite or is_hidden:
-                    conn.execute(
-                        """
-                        INSERT INTO host_settings (hostname, display_name_override, country_code_override, is_favorite, is_hidden, updated_at_utc)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(hostname) DO UPDATE SET
-                          display_name_override = excluded.display_name_override,
-                          country_code_override = excluded.country_code_override,
-                          is_favorite = excluded.is_favorite,
-                          is_hidden = excluded.is_hidden,
-                          updated_at_utc = excluded.updated_at_utc
-                        """,
-                        (
-                            hostname,
-                            display_name_override,
-                            country_code_override,
-                            1 if is_favorite else 0,
-                            1 if is_hidden else 0,
-                            utc_now_iso(),
-                        ),
-                    )
-                else:
-                    conn.execute("DELETE FROM host_settings WHERE hostname = ?", (hostname,))
+                conn.execute(
+                    """
+                    INSERT INTO host_settings (hostname, display_name_override, country_code_override, is_favorite, is_hidden,
+                                               customer_alert_emails, customer_alert_mountpoints, customer_alert_min_severity,
+                                               updated_at_utc)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(hostname) DO UPDATE SET
+                      display_name_override = excluded.display_name_override,
+                      country_code_override = excluded.country_code_override,
+                      is_favorite = excluded.is_favorite,
+                      is_hidden = excluded.is_hidden,
+                      customer_alert_emails = excluded.customer_alert_emails,
+                      customer_alert_mountpoints = excluded.customer_alert_mountpoints,
+                      customer_alert_min_severity = excluded.customer_alert_min_severity,
+                      updated_at_utc = excluded.updated_at_utc
+                    """,
+                    (
+                        hostname,
+                        display_name_override,
+                        country_code_override,
+                        1 if is_favorite else 0,
+                        1 if is_hidden else 0,
+                        customer_alert_emails,
+                        customer_alert_mountpoints,
+                        customer_alert_min_severity,
+                        utc_now_iso(),
+                    ),
+                )
 
                 if is_hidden:
                     resolve_open_alerts_for_host(conn, hostname, None)
@@ -9205,8 +9387,65 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "country_code_override": country_code_override,
                     "is_favorite": is_favorite,
                     "is_hidden": is_hidden,
+                    "customer_alert_emails": customer_alert_emails,
+                    "customer_alert_mountpoints": customer_alert_mountpoints,
+                    "customer_alert_min_severity": customer_alert_min_severity,
                 },
             )
+            return
+
+        if path == "/api/v1/customer-alert/test":
+            username = self._require_admin_session()
+            if not username:
+                return
+
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            test_hostname = str(payload.get("hostname", "")).strip()
+            recipient_email = str(payload.get("recipient_email", "")).strip()
+            if not test_hostname or not recipient_email:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and recipient_email required"})
+                return
+
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+                host_settings_data = get_host_settings(conn, test_hostname)
+                display_name = host_settings_data.get("display_name_override") or test_hostname
+                test_subject = customer_alert_mail_subject(test_hostname, "/test/mountpoint", "critical", display_name)
+                test_body = customer_alert_mail_html(test_hostname, "/test/mountpoint", "critical", 95.0, display_name, utc_now_iso())
+
+                ok, access_token, err_msg = ensure_microsoft_access_token(conn, username)
+                if not ok or not access_token:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": f"Kein Microsoft-OAuth-Token: {err_msg}"})
+                    return
+
+                user_settings = get_web_user_settings(conn, username)
+                sender_email = str(user_settings.get("email_sender", "") or "").strip()
+
+            try:
+                send_microsoft_mail_multi(
+                    access_token,
+                    [recipient_email],
+                    test_subject,
+                    test_body,
+                    content_type="HTML",
+                    attachments=[],
+                    sender=sender_email,
+                )
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
+            self._send_json(HTTPStatus.OK, {"status": "sent", "recipient": recipient_email})
             return
 
         if path == "/api/v1/filesystem-visibility":

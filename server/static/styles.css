@@ -4040,6 +4040,23 @@ body[data-theme="dark"] .hana-sid-chip {
   opacity: 1;
 }
 
+.customer-notif-panel {
+  margin-top: 14px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #f8fafc;
+}
+
+.customer-notif-panel summary {
+  list-style: none;
+  user-select: none;
+}
+
+.customer-notif-panel summary::-webkit-details-marker {
+  display: none;
+}
+
 .fs-table {
   margin-top: 0;
   table-layout: auto;
