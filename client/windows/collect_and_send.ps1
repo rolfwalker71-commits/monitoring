@@ -223,28 +223,32 @@ function Get-AgentConfigBlock {
 function Get-SapB1InfoBlock {
     # Reads C:\Program Files\SAP\SAP Business One DI API\Conf\InstallationConfigMSSQL.xml
     # and converts the Windows build format (e.g. "1000180 SP:00 PL:08")
-    # to the standard format ("10.00.180 PL 08") used by the monitoring backend.
+    # to the standard format ("10.00.180 PL 8") used by the monitoring backend.
     $xmlPath = 'C:\Program Files\SAP\SAP Business One DI API\Conf\InstallationConfigMSSQL.xml'
     $empty = '{"server_components_version":{"version":"","raw_output":""}}'
     if (-not (Test-Path $xmlPath)) {
         return $empty
     }
     try {
-        [xml]$xml = Get-Content -Path $xmlPath -Encoding UTF8 -ErrorAction Stop
-        $verVal = $xml.Installation.Version.val
-        if ($verVal -match '^(\d{7})\s+SP:\d+\s+PL:(\d+)') {
-            $winBuild = $Matches[1]
-            $pl       = $Matches[2].TrimStart('0')
-            if (-not $pl) { $pl = '0' }
-            # 1000180 -> 10.00.180
-            $build   = "$($winBuild.Substring(0,2)).$($winBuild.Substring(2,2)).$($winBuild.Substring(4,3))"
-            $version = "$build PL $pl"
-            $versionEsc = ConvertTo-JsonString $version
-            $rawEsc     = ConvertTo-JsonString $verVal
-            return "{`"server_components_version`":{`"version`":`"$versionEsc`",`"raw_output`":`"$rawEsc`"}}"
+        # Read raw content and regex-match the Version val attribute directly —
+        # avoids PowerShell XML property navigation quirks.
+        $raw = [System.IO.File]::ReadAllText($xmlPath, [System.Text.Encoding]::UTF8)
+        if ($raw -match '<Version\s+val="(\d{7}\s+SP:\d+\s+PL:\d+)"') {
+            $verVal   = $Matches[1]
+            if ($verVal -match '^(\d{7})\s+SP:\d+\s+PL:(\d+)') {
+                $winBuild = $Matches[1]
+                $pl       = $Matches[2].TrimStart('0')
+                if (-not $pl) { $pl = '0' }
+                # 1000180 -> 10.00.180
+                $build   = "$($winBuild.Substring(0,2)).$($winBuild.Substring(2,2)).$($winBuild.Substring(4,3))"
+                $version = "$build PL $pl"
+                $versionEsc = ConvertTo-JsonString $version
+                $rawEsc     = ConvertTo-JsonString $verVal
+                return "{`"server_components_version`":{`"version`":`"$versionEsc`",`"raw_output`":`"$rawEsc`"}}"
+            }
         }
     } catch {
-        # XML unreadable — return empty block
+        # File unreadable — return empty block
     }
     return $empty
 }
