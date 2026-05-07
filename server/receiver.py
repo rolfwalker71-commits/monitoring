@@ -6108,22 +6108,22 @@ def _resolve_inactive_host_alert_if_open(
     alarm_settings: dict | None = None,
     send_notification: bool = True,
 ) -> bool:
-    row = conn.execute(
-        "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open' ORDER BY id DESC LIMIT 1",
+    rows = conn.execute(
+        "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open' ORDER BY id DESC",
         (hostname, INACTIVE_HOST_ALERT_MOUNTPOINT),
-    ).fetchone()
-    if not row:
+    ).fetchall()
+    if not rows:
         return False
 
     now_utc = utc_now_iso()
-    alert_id = int(row[0])
+    alert_ids = [int(r[0]) for r in rows]
     conn.execute(
-        """
+        f"""
         UPDATE alerts
         SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
-        WHERE id = ?
+        WHERE id IN ({','.join('?' * len(alert_ids))})
         """,
-        (now_utc, now_utc, report_id, alert_id),
+        (now_utc, now_utc, report_id, *alert_ids),
     )
 
     if send_notification and alarm_settings and alarm_settings.get("inactive_host_alert_enabled"):
@@ -9825,7 +9825,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 update_alerts_for_report(conn, hostname, report_id, filesystems, alarm_settings)
                 update_cpu_alerts_for_report(conn, hostname, report_id, payload, alarm_settings)
                 update_ram_alerts_for_report(conn, hostname, report_id, payload, alarm_settings)
-            check_inactive_host_alerts(conn)
             maybe_send_alert_reminders(conn)
             maybe_send_scheduled_user_mails(conn)
             conn.commit()
