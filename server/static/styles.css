@@ -3790,6 +3790,64 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   color: #0f172a;
 }
 
+.cron-details {
+  border: 1px solid #d4e4f7;
+  border-radius: 6px;
+  background: #ffffff;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.cron-details summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e3a5f;
+  padding: 4px 10px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cron-details summary::before {
+  content: "▶";
+  font-size: 10px;
+  color: #64748b;
+  transition: transform 0.18s ease;
+  display: inline-block;
+}
+
+.cron-details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.cron-content {
+  margin: 0;
+  padding: 8px 12px;
+  border-top: 1px solid #d4e4f7;
+  font-size: 11px;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: #f8fafc;
+  color: #1e3a5f;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+[data-theme="dark"] .cron-details {
+  border-color: #2d4a6e;
+  background: #1a2744;
+}
+
+[data-theme="dark"] .cron-content {
+  border-color: #2d4a6e;
+  background: #0f1c33;
+  color: #c8d8f0;
+}
+
 .sap-b1-raw-details {
   border: 1px solid #d4e4f7;
   border-radius: 8px;

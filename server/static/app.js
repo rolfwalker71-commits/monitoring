@@ -4175,20 +4175,28 @@ function formatCronTabSummary(cronInfo) {
   if (!cronInfo || typeof cronInfo !== "object") return escapeHtml("-");
   const rc = cronInfo.root_crontab;
   if (!rc || typeof rc !== "object") return escapeHtml("-");
-  if (!rc.available) return `<span class="text-muted">${escapeHtml(rc.error || "nicht verfügbar")}</span>`;
+  if (!rc.available) return `<span class="muted">${escapeHtml(rc.error || "nicht verfügbar")}</span>`;
   const lines = typeof rc.active_lines === "number" ? rc.active_lines : 0;
-  return escapeHtml(lines === 0 ? "leer (keine aktiven Einträge)" : `${lines} aktive Einträge`);
+  if (lines === 0) return escapeHtml("leer (keine aktiven Einträge)");
+  const content = typeof rc.content === "string" ? rc.content : "";
+  const activeLines = content.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#")).join("\n");
+  return `<details class="cron-details"><summary>${escapeHtml(lines + " aktive Einträge")}</summary><pre class="cron-content">${escapeHtml(activeLines || content)}</pre></details>`;
 }
 
 function formatCronDSummary(cronInfo) {
   if (!cronInfo || typeof cronInfo !== "object") return escapeHtml("-");
   const cd = cronInfo.cron_d;
   if (!cd || typeof cd !== "object") return escapeHtml("-");
-  if (!cd.available) return `<span class="text-muted">${escapeHtml(cd.error || "nicht verfügbar")}</span>`;
+  if (!cd.available) return `<span class="muted">${escapeHtml(cd.error || "nicht verfügbar")}</span>`;
   const count = typeof cd.file_count === "number" ? cd.file_count : 0;
   if (count === 0) return escapeHtml("leer");
-  const names = Array.isArray(cd.files) ? cd.files.map((f) => f && f.name ? f.name : "").filter(Boolean) : [];
-  return escapeHtml(`${count} Datei${count !== 1 ? "en" : ""}`) + (names.length ? `: <span title="${escapeHtml(names.join(", "))}">${escapeHtml(names.join(", "))}</span>` : "");
+  const files = Array.isArray(cd.files) ? cd.files : [];
+  const fileBlocks = files.map((f) => {
+    const name = escapeHtml(f && f.name ? f.name : "unbekannt");
+    const content = f && typeof f.content === "string" ? f.content : "";
+    return `<details class="cron-details"><summary>${name}</summary><pre class="cron-content">${escapeHtml(content)}</pre></details>`;
+  }).join("");
+  return `${escapeHtml(count + " Datei" + (count !== 1 ? "en" : ""))} ${fileBlocks}`;
 }
 
 function renderReportCard(report) {
