@@ -2462,6 +2462,10 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   gap: 8px;
 }
 
+#hiddenHostsBody.hidden {
+  display: none;
+}
+
 .host-group-title {
   margin: 0;
   font-size: 12px;
