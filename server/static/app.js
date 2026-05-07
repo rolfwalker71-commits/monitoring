@@ -4456,6 +4456,7 @@ function renderReportCard(report) {
   const isDelayed = deliveryMode === "delayed" || payload.is_delayed === true;
   const chipClass = isDelayed ? "delivery-chip delayed" : "delivery-chip live";
   const chipText = isDelayed ? "DELAYED" : "LIVE";
+  const reportDeliveryLag = deliveryLagLabel(report.delivery_lag_sec ?? payload.delivery_lag_sec);
   const queueDepth = queueDepthLabel(payload.queue_depth);
   const section = normalizeReportSection(state.reportSection);
   const sapB1Summary = renderSapB1SystemSummary(payload);
@@ -4612,7 +4613,7 @@ function renderReportCard(report) {
       <div class="report-header">
         <div>
           <h3>${escapeHtml(title)} <span class="${chipClass}">${chipText}</span></h3>
-          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}${sapB1Summary !== "-" ? ` <span class="sap-hana-chip sap-b1-chip">🧾 ${escapeHtml(sapB1Summary.replace(/<[^>]+>/g, ""))}</span>` : ""}${hanaInfoMeta !== "-" ? ` <span class="sap-hana-chip hana-chip">🟢 ${escapeHtml(hanaInfoMeta)}</span>` : ""}${hanaSid ? ` <span class="sap-hana-chip hana-sid-chip">🏷️ ${escapeHtml(hanaSid)}</span>` : ""}</p>
+          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}${reportDeliveryLag !== "-" ? ` <span class="report-detail-chip report-delivery-chip">⏱️ ${escapeHtml(reportDeliveryLag)}</span>` : ""}${sapB1Summary !== "-" ? ` <span class="sap-hana-chip sap-b1-chip">🧾 ${escapeHtml(sapB1Summary.replace(/<[^>]+>/g, ""))}</span>` : ""}${hanaInfoMeta !== "-" ? ` <span class="sap-hana-chip hana-chip">🟢 ${escapeHtml(hanaInfoMeta)}</span>` : ""}${hanaSid ? ` <span class="sap-hana-chip hana-sid-chip">🏷️ ${escapeHtml(hanaSid)}</span>` : ""}</p>
         </div>
         <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
       </div>
@@ -4887,8 +4888,6 @@ function renderSingleHostCard(host) {
   const hostname = asText(host.hostname);
   const displayName = asText(host.display_name || host.hostname);
   const selectedClass = hostname === state.selectedHost ? "host-item selected" : "host-item";
-  const hostQueueDepth = queueDepthLabel(host.queue_depth);
-  const hostDeliveryLag = deliveryLagLabel(host.delivery_lag_sec);
   const openAlertCount = Number(host.open_alert_count || 0);
   const openCriticalAlertCount = Number(host.open_critical_alert_count || 0);
   const hasOpenAlerts = openAlertCount > 0;
@@ -4964,8 +4963,7 @@ function renderSingleHostCard(host) {
       </strong>
       <span>🖥️ ${escapeHtml(hostname)}</span>
       <span>🌐 ${escapeHtml(asText(host.primary_ip))}</span>
-      <span>⏱️ Zustellung: ${escapeHtml(hostDeliveryLag)}</span>
-      <span>🧷 ${escapeHtml(asText(host.agent_version))} &nbsp;·&nbsp; 📦 ${Number(host.report_count || 0).toLocaleString("de-DE")}</span>
+      <span>🧷 ${escapeHtml(asText(host.agent_version))}</span>
       <span>🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
       ${valueChipStack ? `<span class="host-card-actions">${valueChipStack}</span>` : ""}
       ${alertChip}
@@ -4998,9 +4996,11 @@ function renderSelectedHostControls(host) {
   const hostname = asText(host.hostname);
   const isFavorite = Boolean(host.is_favorite);
   const isHidden = Boolean(host.is_hidden);
+  const reportCount = Number(host.report_count || 0).toLocaleString("de-DE");
 
   return `
     ${renderApiKeyChip(host)}
+    <span class="selected-host-meta-chip" title="Gesendete Meldungen">📦 ${reportCount}</span>
     <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👀" : "🫣"}</button>
     <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
   `;
