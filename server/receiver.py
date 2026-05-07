@@ -9989,6 +9989,9 @@ def main() -> None:
     stop_event = threading.Event()
 
     def inactive_alert_loop() -> None:
+        # Wait before first check so agents can check in after a server restart.
+        # Without this delay, all hosts appear inactive on startup and trigger mass false-positive alerts.
+        stop_event.wait(1800)  # 30-minute startup grace period
         while not stop_event.is_set():
             try:
                 with sqlite3.connect(DB_PATH, timeout=10) as conn:
