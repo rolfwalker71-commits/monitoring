@@ -683,6 +683,43 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   gap: 8px;
 }
 
+.db-ops-progress {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.db-ops-progress.hidden { display: none; }
+.db-ops-progress-bar-wrap {
+  width: 100%;
+  max-width: 400px;
+  height: 8px;
+  background: var(--border-color, #dde1e7);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.db-ops-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: #3b82f6;
+  border-radius: 4px;
+  transition: width 0.25s ease;
+}
+.db-ops-progress-bar--indeterminate {
+  width: 40% !important;
+  animation: db-ops-slide 1.2s ease-in-out infinite;
+}
+@keyframes db-ops-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+.db-ops-progress-label {
+  font-size: 0.8rem;
+  color: var(--text-muted, #6b7280);
+}
+.db-ops-progress-label.error { color: #dc2626; }
+.db-ops-progress-label.success { color: #16a34a; }
+
 .mountpoint-table-header h4 {
   margin: 0;
 }

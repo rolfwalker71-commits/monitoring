@@ -5236,8 +5236,9 @@ function waitMs(ms) {
   });
 }
 
-async function downloadDatabaseBackup() {
+async function downloadDatabaseBackup(onProgress) {
   const fallbackFilename = `monitoring-backup-${new Date().toISOString().replace(/[.:]/g, "-")}.db`;
+  onProgress?.({ pct: null, label: "Backup-Job wird gestartet..." });
   const startResponse = await fetch("/api/v1/backup/database/start", {
     method: "GET",
     credentials: "same-origin",
@@ -5254,6 +5255,7 @@ async function downloadDatabaseBackup() {
 
   const startTs = Date.now();
   const timeoutMs = 180000;
+  onProgress?.({ pct: null, label: "Datenbank wird gesichert..." });
   while (Date.now() - startTs < timeoutMs) {
     await waitMs(1200);
     const statusResponse = await fetch(`/api/v1/backup/database/status?job_id=${encodeURIComponent(jobId)}`, {
@@ -5266,6 +5268,7 @@ async function downloadDatabaseBackup() {
     }
     const status = String(statusData.status || "");
     if (status === "ready") {
+      onProgress?.({ pct: null, label: "Download wird gestartet..." });
       return triggerNativeDownload(
         `/api/v1/backup/database/download?job_id=${encodeURIComponent(jobId)}`,
         fallbackFilename,
@@ -5279,21 +5282,41 @@ async function downloadDatabaseBackup() {
   throw new Error("backup timeout");
 }
 
-async function restoreDatabaseFromFile(file) {
-  const data = await file.arrayBuffer();
-  const response = await fetch("/api/v1/restore/database", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/octet-stream",
-    },
-    body: data,
-    credentials: "same-origin",
+async function restoreDatabaseFromFile(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/v1/restore/database");
+    xhr.withCredentials = true;
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.responseType = "text";
+
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 90); // up to 90% for upload
+        onProgress?.({ pct, label: `Upload: ${pct}% (${(e.loaded / 1024).toFixed(0)} / ${(e.total / 1024).toFixed(0)} KB)` });
+      }
+    });
+
+    xhr.upload.addEventListener("load", () => {
+      onProgress?.({ pct: null, label: "Datenbank wird wiederhergestellt..." });
+    });
+
+    xhr.addEventListener("load", () => {
+      let json = {};
+      try { json = JSON.parse(xhr.responseText); } catch (_) { /* ignore */ }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.({ pct: 100, label: "Erfolgreich wiederhergestellt!" });
+        resolve(json);
+      } else {
+        reject(new Error(json.error || ("HTTP " + xhr.status)));
+      }
+    });
+
+    xhr.addEventListener("error", () => reject(new Error("Netzwerkfehler beim Upload")));
+    xhr.addEventListener("abort", () => reject(new Error("Upload abgebrochen")));
+
+    xhr.send(file);
   });
-  const json = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(json.error || ("HTTP " + response.status));
-  }
-  return json;
 }
 
 async function exportGlobalAlertsCsv() {
@@ -7023,11 +7046,37 @@ function wireEvents() {
   const backupButton = document.getElementById("downloadDatabaseBackupButton");
   if (backupButton) {
     backupButton.addEventListener("click", async () => {
+      const progressEl   = document.getElementById("dbOpsProgress");
+      const barEl        = document.getElementById("dbOpsProgressBar");
+      const labelEl      = document.getElementById("dbOpsProgressLabel");
+
+      function showProgress({ pct, label }) {
+        progressEl.classList.remove("hidden");
+        labelEl.className = "db-ops-progress-label";
+        labelEl.textContent = label || "";
+        if (pct === null) {
+          barEl.style.width = "40%";
+          barEl.classList.add("db-ops-progress-bar--indeterminate");
+        } else {
+          barEl.classList.remove("db-ops-progress-bar--indeterminate");
+          barEl.style.width = pct + "%";
+        }
+      }
+
+      backupButton.disabled = true;
       try {
-        const filename = await downloadDatabaseBackup();
-        window.alert(`Datenbank-Backup heruntergeladen: ${filename}`);
+        await downloadDatabaseBackup(showProgress);
+        barEl.classList.remove("db-ops-progress-bar--indeterminate");
+        barEl.style.width = "100%";
+        labelEl.className = "db-ops-progress-label success";
+        labelEl.textContent = "Backup heruntergeladen.";
+        setTimeout(() => progressEl.classList.add("hidden"), 4000);
       } catch (error) {
-        window.alert(`DB-Backup fehlgeschlagen: ${error.message}`);
+        barEl.classList.remove("db-ops-progress-bar--indeterminate");
+        labelEl.className = "db-ops-progress-label error";
+        labelEl.textContent = "Fehler: " + error.message;
+      } finally {
+        backupButton.disabled = false;
       }
     });
   }
@@ -7046,13 +7095,34 @@ function wireEvents() {
         `Datenbank wirklich aus "${file.name}" (${(file.size / 1024).toFixed(0)} KB) wiederherstellen?\n\nDie aktuelle Datenbank wird dabei UEBERSCHRIEBEN. Vorher ein Backup anlegen!`
       );
       if (!confirmed) return;
+
+      const progressEl = document.getElementById("dbOpsProgress");
+      const barEl      = document.getElementById("dbOpsProgressBar");
+      const labelEl    = document.getElementById("dbOpsProgressLabel");
+
+      function showProgress({ pct, label }) {
+        progressEl.classList.remove("hidden");
+        labelEl.textContent = label || "";
+        if (pct === null) {
+          barEl.style.width = "40%";
+          barEl.classList.add("db-ops-progress-bar--indeterminate");
+        } else {
+          barEl.classList.remove("db-ops-progress-bar--indeterminate");
+          barEl.style.width = pct + "%";
+        }
+      }
+
       restoreButton.disabled = true;
       restoreButton.textContent = "Wiederherstellen...";
       try {
-        await restoreDatabaseFromFile(file);
+        await restoreDatabaseFromFile(file, showProgress);
+        labelEl.className = "db-ops-progress-label success";
         window.alert(`Datenbank erfolgreich wiederhergestellt aus: ${file.name}\n\nBitte den Server neu starten, damit alle Aenderungen wirksam werden.`);
+        setTimeout(() => progressEl.classList.add("hidden"), 5000);
       } catch (error) {
-        window.alert(`DB-Restore fehlgeschlagen: ${error.message}`);
+        barEl.classList.remove("db-ops-progress-bar--indeterminate");
+        labelEl.className = "db-ops-progress-label error";
+        labelEl.textContent = "Fehler: " + error.message;
       } finally {
         restoreButton.disabled = false;
         restoreButton.innerHTML = "&#x267B;&#xFE0F; DB wiederherstellen";

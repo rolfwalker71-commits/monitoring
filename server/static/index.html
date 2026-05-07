@@ -257,6 +257,12 @@
                 <button id="restoreDatabaseButton" class="btn-secondary btn-danger-outline" type="button" title="Datenbank aus Backup-Datei wiederherstellen">&#x267B;&#xFE0F; DB wiederherstellen</button>
                 <input id="restoreDatabaseFileInput" type="file" accept=".db,application/x-sqlite3,application/octet-stream" style="display:none" />
               </div>
+              <div id="dbOpsProgress" class="db-ops-progress hidden">
+                <div class="db-ops-progress-bar-wrap">
+                  <div id="dbOpsProgressBar" class="db-ops-progress-bar"></div>
+                </div>
+                <span id="dbOpsProgressLabel" class="db-ops-progress-label"></span>
+              </div>
             </section>
           </div>
         </div>
