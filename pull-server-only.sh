@@ -6,7 +6,7 @@ OWNER_REPO="rolfwalker71-commits/monitoring"
 
 echo "Installiere Serverteil nach: $TARGET_DIR"
 
-mkdir -p "$TARGET_DIR/server/static/icons" "$TARGET_DIR/server/data" "$TARGET_DIR/client/windows"
+mkdir -p "$TARGET_DIR/server/static/icons" "$TARGET_DIR/server/data"
 
 SHA="$(curl -fsSL --retry 5 --retry-delay 1 "https://api.github.com/repos/$OWNER_REPO/commits/main" \
   | sed -n 's/.*"sha":[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' \
@@ -40,17 +40,13 @@ server/receiver.py
 server/static/index.html
 server/static/app.js
 server/static/styles.css
-client/windows/collect_and_send.ps1
-client/windows/self_update.ps1
-client/windows/install_agent.ps1
-client/windows/bulk_update_agents.ps1
 BUILD_VERSION
 AGENT_VERSION
 openapi.yaml
 "
 
 # Parallele downloads: bis zu 4 gleichzeitig
-echo "Lade 11 Dateien parallel (max 4 gleichzeitig)..."
+echo "Lade 7 Dateien parallel (max 4 gleichzeitig)..."
 if ! printf '%s\n' "$FILES_LIST" | sed '/^$/d' | xargs -P 4 -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"'; then
   echo "Fehler bei parallelen Downloads" >&2
   exit 1

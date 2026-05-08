@@ -33,10 +33,9 @@ foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
 }
 
 $InstallDir = if ($cfg.ContainsKey('INSTALL_DIR'))   { $cfg['INSTALL_DIR'] }   else { 'C:\ProgramData\monitoring-agent' }
-$RawBaseUrl = if ($cfg.ContainsKey('RAW_BASE_URL'))  { $cfg['RAW_BASE_URL'] }  else { 'https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main' }
 $GithubRepo = if ($cfg.ContainsKey('GITHUB_REPO'))   { $cfg['GITHUB_REPO'] }   else { 'rolfwalker71-commits/monitoring' }
+$RawBaseUrl = "https://raw.githubusercontent.com/$GithubRepo/main"
 $ApiBaseUrl = "https://api.github.com/repos/$GithubRepo/contents"
-$DirectRawBaseUrl = "https://raw.githubusercontent.com/$GithubRepo/main"
 
 $wc = New-Object System.Net.WebClient
 $wc.Headers['Accept'] = 'application/vnd.github.v3.raw'
@@ -67,20 +66,12 @@ function Download-RepoFile {
         $attemptErrors.Add("api-main-cb: $($_.Exception.Message)")
     }
 
-    # Fallback to raw URL (branch-pinned in RAW_BASE_URL), with cache-busting query.
+    # Fallback to raw URL on raw.githubusercontent.com with cache-busting query.
     try {
         $wc.DownloadFile("$RawBaseUrl/${RelativePath}?cb=$cacheBust", $DestinationPath)
         return $true
     } catch {
-        $attemptErrors.Add("raw-config-cb: $($_.Exception.Message)")
-    }
-
-    # Fallback to canonical raw.githubusercontent.com URL generated from GITHUB_REPO.
-    try {
-        $wc.DownloadFile("$DirectRawBaseUrl/${RelativePath}?cb=$cacheBust", $DestinationPath)
-        return $true
-    } catch {
-        $attemptErrors.Add("raw-direct-cb: $($_.Exception.Message)")
+        $attemptErrors.Add("raw-main-cb: $($_.Exception.Message)")
     }
 
     # Fallback to GitHub contents API pinned to main to avoid default-branch drift.
