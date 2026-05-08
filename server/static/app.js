@@ -7694,11 +7694,13 @@ async function init() {
     if (arSelect) arSelect.value = String(autoRefreshCurrentIntervalSec);
   updateAutoRefreshStatus(null);
   const oauthResult = consumeOauthStatusFromUrl();
-  try {
-    await loadWebclientVersion();
-  } catch (error) {
+
+  // Start version fetch and auth check in parallel — neither depends on the other
+  const webclientVersionPromise = loadWebclientVersion().catch((error) => {
     console.warn("initial loadWebclientVersion failed:", error);
-  }
+  });
+  const sapB1VersionMapPromise = loadSapB1VersionMap();
+
   wireEvents();
   mountAdminSettingsIntoGlobalView();
   updateViewMode();
@@ -7718,7 +7720,13 @@ async function init() {
     setLoginStatus("Bitte anmelden, um den Webclient zu nutzen.");
     return;
   }
-  await loadSapB1VersionMap();
+  // sapB1VersionMapPromise runs in background — hosts render immediately,
+  // SAP badges fill in once the map is ready
+  sapB1VersionMapPromise.then(() => {
+    if (state.hosts && state.hosts.length > 0) {
+      renderHosts(state.hosts);
+    }
+  });
   document.getElementById("hostAlertFilterSelect").value = state.hostAlertFilter;
   document.getElementById("hostMutedFilterSelect").value = state.hostMutedFilter;
   document.getElementById("hostSearchInput").value = state.hostSearchQuery;
