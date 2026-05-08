@@ -62,6 +62,49 @@ function Get-RepoUrlCandidates {
     )
 }
 
+function Test-DownloadedFileContent {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RelativePath,
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path $Path)) {
+        return $false
+    }
+
+    $text = ''
+    try {
+        $text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+    } catch {
+        return $false
+    }
+
+    if (-not $text) {
+        return $false
+    }
+
+    # Guard against GitHub/proxy HTML pages being saved as .ps1/.txt content.
+    if ($text -match '<!DOCTYPE\s+html|<html\b|<head\b|<body\b') {
+        return $false
+    }
+
+    if ($RelativePath -ieq 'client/windows/collect_and_send.ps1') {
+        return ($text -match '(?m)^\$EmbeddedAgentVersion\s*=\s*''[^'']+''')
+    }
+
+    if ($RelativePath -ieq 'client/windows/self_update.ps1') {
+        return ($text -match '(?m)^Set-StrictMode\s+-Version\s+Latest')
+    }
+
+    if ($RelativePath -ieq 'AGENT_VERSION' -or $RelativePath -ieq 'BUILD_VERSION') {
+        return ($text.Trim() -match '^\d+\.\d+\.\d+$')
+    }
+
+    return $true
+}
+
 function Download-RepoText {
     param(
         [Parameter(Mandatory = $true)]
@@ -119,14 +162,20 @@ function Download-RepoFile {
     foreach ($url in (Get-RepoUrlCandidates -RelativePath $RelativePath)) {
         try {
             $wc.DownloadFile($url, $DestinationPath)
-            return $true
+            if (Test-DownloadedFileContent -RelativePath $RelativePath -Path $DestinationPath) {
+                return $true
+            }
+            $attemptErrors.Add("webclient-invalid-content: $url")
         } catch {
             $attemptErrors.Add("webclient: $url => $($_.Exception.Message)")
         }
 
         try {
             Invoke-WebRequest -Uri $url -UseBasicParsing -Headers @{ 'User-Agent' = 'monitoring-agent-self-update'; 'Accept' = '*/*' } -OutFile $DestinationPath -ErrorAction Stop | Out-Null
-            return $true
+            if (Test-DownloadedFileContent -RelativePath $RelativePath -Path $DestinationPath) {
+                return $true
+            }
+            $attemptErrors.Add("iwr-invalid-content: $url")
         } catch {
             $attemptErrors.Add("iwr: $url => $($_.Exception.Message)")
         }
@@ -135,7 +184,10 @@ function Download-RepoFile {
             try {
                 $result = & $curl.Source '--silent' '--show-error' '--fail' '--location' '--output' $DestinationPath $url 2>&1
                 if ($LASTEXITCODE -eq 0) {
-                    return $true
+                    if (Test-DownloadedFileContent -RelativePath $RelativePath -Path $DestinationPath) {
+                        return $true
+                    }
+                    $attemptErrors.Add("curl-invalid-content: $url")
                 }
                 $attemptErrors.Add("curl($LASTEXITCODE): $url => $($result | Out-String)")
             } catch {
