@@ -4325,9 +4325,26 @@ function renderDatabasesSection(payload) {
         const edition  = asText(inst.edition, "");
         const svcStatus = asText(inst.service_status, "unknown");
         const connErr  = asText(inst.connection_error, "");
+        const sqlSystemUser = asText(inst.sql_system_user, "");
+        const sqlOriginalLogin = asText(inst.sql_original_login, "");
+        const sqlSuserSname = asText(inst.sql_suser_sname, "");
+        const masterFilesRows = Number(inst.master_files_rows || 0);
+        
         const svcBadge = svcStatus.toLowerCase() === "running"
           ? `<span class="db-status-badge db-status-ok">Running</span>`
           : `<span class="db-status-badge db-status-warn">${escapeHtml(svcStatus)}</span>`;
+
+        let diagHtml = "";
+        if (sqlSystemUser || sqlOriginalLogin || sqlSuserSname || masterFilesRows > 0) {
+          diagHtml = `
+            <div class="db-diag-info">
+              <p class="db-diag-label">🔐 SQL Authentifizierung (für Diag):</p>
+              ${sqlSystemUser ? `<span class="db-diag-item"><strong>SYSTEM_USER:</strong> <code>${escapeHtml(sqlSystemUser)}</code></span>` : ""}
+              ${sqlOriginalLogin ? `<span class="db-diag-item"><strong>ORIGINAL_LOGIN:</strong> <code>${escapeHtml(sqlOriginalLogin)}</code></span>` : ""}
+              ${sqlSuserSname ? `<span class="db-diag-item"><strong>SUSER_SNAME:</strong> <code>${escapeHtml(sqlSuserSname)}</code></span>` : ""}
+              ${masterFilesRows > 0 ? `<span class="db-diag-item"><strong>sys.master_files Zeilen:</strong> ${masterFilesRows}</span>` : ""}
+            </div>`;
+        }
 
         const metaHtml = `
           <div class="db-instance-meta">
@@ -4335,7 +4352,8 @@ function renderDatabasesSection(payload) {
             ${version ? `<span class="db-meta-item"><strong>Version:</strong> ${escapeHtml(version)}</span>` : ""}
             ${edition ? `<span class="db-meta-item"><strong>Edition:</strong> ${escapeHtml(edition)}</span>` : ""}
             <span class="db-meta-item"><strong>Dienst:</strong> ${svcBadge}</span>
-          </div>`;
+          </div>
+          ${diagHtml}`;
 
         let dbTableHtml = "";
         if (connErr) {

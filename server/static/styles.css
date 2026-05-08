@@ -4652,6 +4652,31 @@ body[data-theme="dark"] .fs-bar-wrap {
 .db-meta-item {
   color: var(--text);
 }
+.db-diag-info {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--bg-alt);
+  border-left: 3px solid #8b5cf6;
+  border-radius: 2px;
+  font-size: 11px;
+}
+.db-diag-label {
+  margin: 0 0 6px 0;
+  font-weight: 600;
+  color: #8b5cf6;
+}
+.db-diag-item {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text);
+}
+.db-diag-item code {
+  background: var(--bg);
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-family: "Monaco", "Courier New", monospace;
+  font-size: 10px;
+}
 .db-status-badge {
   display: inline-block;
   padding: 1px 8px;
