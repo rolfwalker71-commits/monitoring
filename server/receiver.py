@@ -7556,7 +7556,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/v1/hosts":
             query = parse_qs(parsed.query)
-            limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
+            limit = parse_int(query, "limit", default=20, min_value=1, max_value=500)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
 
             try:
