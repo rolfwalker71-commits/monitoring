@@ -6048,9 +6048,9 @@ async function loadAnalysisForHost() {
 
     const fsTabBtn = document.getElementById("overviewFilesystemTabButton");
     if (fsTabBtn) {
-      fsTabBtn.textContent = fsWarnOrCritical > 0
-        ? `Filesysteme ⚠ ${fsWarnOrCritical}`
-        : "Filesysteme";
+      fsTabBtn.innerHTML = fsWarnOrCritical > 0
+        ? `<span class="osi-icon">💾</span> Filesysteme ⚠ ${fsWarnOrCritical}`
+        : `<span class="osi-icon">💾</span> Filesysteme`;
     }
 
     filesystemCharts.querySelectorAll(".fs-chart-card").forEach((card, idx) => {
