@@ -35,14 +35,74 @@ foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
 $InstallDir = if ($cfg.ContainsKey('INSTALL_DIR'))   { $cfg['INSTALL_DIR'] }   else { 'C:\ProgramData\monitoring-agent' }
 $GithubRepo = if ($cfg.ContainsKey('GITHUB_REPO'))   { $cfg['GITHUB_REPO'] }   else { 'rolfwalker71-commits/monitoring' }
 $RawBaseUrl = "https://raw.githubusercontent.com/$GithubRepo/main"
-$ApiBaseUrl = "https://api.github.com/repos/$GithubRepo/contents"
+$GithubRawAltBaseUrl = "https://github.com/$GithubRepo/raw/refs/heads/main"
 
 $wc = New-Object System.Net.WebClient
-$wc.Headers['Accept'] = 'application/vnd.github.v3.raw'
+$wc.Headers['Accept'] = '*/*'
 $wc.Headers['User-Agent'] = 'monitoring-agent-self-update'
 $wc.Proxy = [System.Net.WebRequest]::DefaultWebProxy
 if ($wc.Proxy) {
     $wc.Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
+}
+
+function Get-RepoUrlCandidates {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RelativePath
+    )
+
+    $path = ($RelativePath -replace '\\', '/').TrimStart('/')
+    $cacheBust = [System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+
+    return @(
+        ("{0}/{1}?cb={2}" -f $RawBaseUrl, $path, $cacheBust),
+        ("{0}/{1}?raw=1&cb={2}" -f $GithubRawAltBaseUrl, $path, $cacheBust),
+        ("{0}/{1}" -f $RawBaseUrl, $path),
+        ("{0}/{1}?raw=1" -f $GithubRawAltBaseUrl, $path)
+    )
+}
+
+function Download-RepoText {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RelativePath
+    )
+
+    $attemptErrors = New-Object System.Collections.Generic.List[string]
+    $curl = Get-Command 'curl.exe' -ErrorAction SilentlyContinue
+
+    foreach ($url in (Get-RepoUrlCandidates -RelativePath $RelativePath)) {
+        try {
+            $txt = $wc.DownloadString($url)
+            if ($txt) { return [string]$txt }
+        } catch {
+            $attemptErrors.Add("webclient: $url => $($_.Exception.Message)")
+        }
+
+        try {
+            $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -Headers @{ 'User-Agent' = 'monitoring-agent-self-update'; 'Accept' = '*/*' } -ErrorAction Stop
+            $txt = [string]$resp.Content
+            if ($txt) { return $txt }
+        } catch {
+            $attemptErrors.Add("iwr: $url => $($_.Exception.Message)")
+        }
+
+        if ($curl) {
+            try {
+                $result = & $curl.Source '--silent' '--show-error' '--fail' '--location' $url 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    $txt = ($result | Out-String)
+                    if ($txt) { return [string]$txt }
+                }
+                $attemptErrors.Add("curl($LASTEXITCODE): $url => $($result | Out-String)")
+            } catch {
+                $attemptErrors.Add("curl-exception: $url => $($_.Exception.Message)")
+            }
+        }
+    }
+
+    $global:LastDownloadRepoTextError = ($attemptErrors -join ' | ')
+    return ''
 }
 
 function Download-RepoFile {
@@ -53,74 +113,57 @@ function Download-RepoFile {
         [string]$DestinationPath
     )
 
-    $cacheBust = [System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-
     $attemptErrors = New-Object System.Collections.Generic.List[string]
+    $curl = Get-Command 'curl.exe' -ErrorAction SilentlyContinue
 
-    # Prefer GitHub contents API first (pinned to main) to reduce stale CDN payload risk.
-    try {
-        $wc.Headers['Accept'] = 'application/vnd.github.v3.raw'
-        $wc.DownloadFile("$ApiBaseUrl/${RelativePath}?ref=main&cb=$cacheBust", $DestinationPath)
-        return $true
-    } catch {
-        $attemptErrors.Add("api-main-cb: $($_.Exception.Message)")
+    foreach ($url in (Get-RepoUrlCandidates -RelativePath $RelativePath)) {
+        try {
+            $wc.DownloadFile($url, $DestinationPath)
+            return $true
+        } catch {
+            $attemptErrors.Add("webclient: $url => $($_.Exception.Message)")
+        }
+
+        try {
+            Invoke-WebRequest -Uri $url -UseBasicParsing -Headers @{ 'User-Agent' = 'monitoring-agent-self-update'; 'Accept' = '*/*' } -OutFile $DestinationPath -ErrorAction Stop | Out-Null
+            return $true
+        } catch {
+            $attemptErrors.Add("iwr: $url => $($_.Exception.Message)")
+        }
+
+        if ($curl) {
+            try {
+                $result = & $curl.Source '--silent' '--show-error' '--fail' '--location' '--output' $DestinationPath $url 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    return $true
+                }
+                $attemptErrors.Add("curl($LASTEXITCODE): $url => $($result | Out-String)")
+            } catch {
+                $attemptErrors.Add("curl-exception: $url => $($_.Exception.Message)")
+            }
+        }
     }
 
-    # Fallback to raw URL on raw.githubusercontent.com with cache-busting query.
-    try {
-        $wc.DownloadFile("$RawBaseUrl/${RelativePath}?cb=$cacheBust", $DestinationPath)
-        return $true
-    } catch {
-        $attemptErrors.Add("raw-main-cb: $($_.Exception.Message)")
-    }
-
-    # Fallback to GitHub contents API pinned to main to avoid default-branch drift.
-    try {
-        $wc.Headers['Accept'] = 'application/vnd.github.v3.raw'
-        $wc.DownloadFile("$ApiBaseUrl/${RelativePath}?ref=main", $DestinationPath)
-        return $true
-    } catch {
-        $attemptErrors.Add("api-main: $($_.Exception.Message)")
-        $global:LastDownloadRepoFileError = ($attemptErrors -join ' | ')
-        return $false
-    }
+    $global:LastDownloadRepoFileError = ($attemptErrors -join ' | ')
+    return $false
 }
 
 # ---- Version check ----
 $remoteVersion = ''
 $remoteVersionSource = ''
-try {
-    $remoteVersion = ($wc.DownloadString("$RawBaseUrl/AGENT_VERSION?cb=$([System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())")).Trim()
-    if ($remoteVersion) { $remoteVersionSource = 'AGENT_VERSION' }
-} catch {
-    $remoteVersion = ''
+$remoteVersion = (Download-RepoText -RelativePath 'AGENT_VERSION').Trim()
+if ($remoteVersion) {
+    $remoteVersionSource = 'AGENT_VERSION'
+} else {
+    $remoteVersion = (Download-RepoText -RelativePath 'BUILD_VERSION').Trim()
+    if ($remoteVersion) { $remoteVersionSource = 'BUILD_VERSION' }
 }
 if (-not $remoteVersion) {
-    try {
-        $remoteVersion = ($wc.DownloadString("$ApiBaseUrl/AGENT_VERSION?ref=main")).Trim()
-        if ($remoteVersion) { $remoteVersionSource = 'AGENT_VERSION' }
-    } catch {
-        $remoteVersion = ''
+    $details = ''
+    if ($global:LastDownloadRepoTextError) {
+        $details = " Details: $($global:LastDownloadRepoTextError)"
     }
-}
-if (-not $remoteVersion) {
-    try {
-        $remoteVersion = ($wc.DownloadString("$RawBaseUrl/BUILD_VERSION?cb=$([System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())")).Trim()
-        if ($remoteVersion) { $remoteVersionSource = 'BUILD_VERSION' }
-    } catch {
-        $remoteVersion = ''
-    }
-}
-if (-not $remoteVersion) {
-    try {
-        $remoteVersion = ($wc.DownloadString("$ApiBaseUrl/BUILD_VERSION?ref=main")).Trim()
-        if ($remoteVersion) { $remoteVersionSource = 'BUILD_VERSION' }
-    } catch {
-        $remoteVersion = ''
-    }
-}
-if (-not $remoteVersion) {
-    Write-Error 'Remote version is empty; aborting update check.'
+    Write-Error ("Remote version is empty; aborting update check." + $details)
     exit 1
 }
 
