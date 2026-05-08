@@ -1124,7 +1124,13 @@ async function ensureAuthenticatedSession() {
     setAuthUiState(session.authenticated === true);
     if (session.authenticated === true) {
       loadHostFilterPreferences();
-      await loadUserPreferences();
+      // Load user preferences in background — does not block hosts from rendering.
+      // Re-render host list once prefs arrive so hostInterestMode filter is applied.
+      loadUserPreferences().then(() => {
+        if (state.hosts && state.hosts.length > 0) {
+          renderHosts(state.hosts);
+        }
+      });
     }
     return session.authenticated === true;
   } catch {

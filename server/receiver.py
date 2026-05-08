@@ -7567,35 +7567,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
                     rows = conn.execute(
                         """
-                        WITH ranked AS (
-                            SELECT
-                                hostname,
-                                id,
-                                received_at_utc,
-                                primary_ip,
-                                agent_id,
-                                payload_json,
-                                ROW_NUMBER() OVER (
-                                    PARTITION BY hostname
-                                    ORDER BY
-                                        CASE WHEN LOWER(COALESCE(
-                                            CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.delivery_mode') END,
-                                            'live')) = 'live' THEN 0 ELSE 1 END,
-                                        COALESCE(
-                                            NULLIF(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.send_started_utc') END, ''),
-                                            NULLIF(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.timestamp_utc') END, ''),
-                                            received_at_utc
-                                        ) DESC,
-                                        id DESC
-                                ) AS rn
-                            FROM reports
-                        ),
-                        latest AS (
-                            SELECT hostname, id, received_at_utc, primary_ip, agent_id, payload_json
-                            FROM ranked WHERE rn = 1
-                        ),
-                        host_stats AS (
-                            SELECT hostname, MAX(received_at_utc) AS last_seen_utc, COUNT(*) AS report_count
+                        WITH latest_ids AS (
+                            SELECT hostname,
+                                   MAX(id) AS latest_id,
+                                   MAX(received_at_utc) AS last_seen_utc,
+                                   COUNT(*) AS report_count
                             FROM reports
                             GROUP BY hostname
                         ),
@@ -7614,20 +7590,20 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             GROUP BY a.hostname
                         )
                         SELECT
-                            hs.hostname,
-                            hs.last_seen_utc,
-                            hs.report_count,
-                            l.primary_ip,
-                            l.agent_id,
-                            l.payload_json,
+                            li.hostname,
+                            li.last_seen_utc,
+                            li.report_count,
+                            r.primary_ip,
+                            r.agent_id,
+                            r.payload_json,
                             COALESCE(ac.open_alert_count, 0) AS open_alert_count,
                             COALESCE(ac.open_critical_alert_count, 0) AS open_critical_alert_count,
-                            COALESCE(CASE WHEN json_valid(l.payload_json)
-                                THEN json_extract(l.payload_json, '$.hana_info.version') END, '') AS latest_hana_release
-                        FROM host_stats hs
-                        JOIN latest l ON l.hostname = hs.hostname
-                        LEFT JOIN alert_counts ac ON ac.hostname = hs.hostname
-                        ORDER BY hs.last_seen_utc DESC
+                            COALESCE(CASE WHEN json_valid(r.payload_json)
+                                THEN json_extract(r.payload_json, '$.hana_info.version') END, '') AS latest_hana_release
+                        FROM latest_ids li
+                        JOIN reports r ON r.id = li.latest_id
+                        LEFT JOIN alert_counts ac ON ac.hostname = li.hostname
+                        ORDER BY li.last_seen_utc DESC
                         LIMIT ? OFFSET ?
                         """,
                         (limit, offset),
