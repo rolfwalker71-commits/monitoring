@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.66'
+$EmbeddedAgentVersion = '1.1.67'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -218,6 +218,42 @@ function Get-AgentConfigBlock {
         }
     }
     return '{"available":true,"path":"' + $configPathJson + '","entries":[' + ($entries -join ',') + ']}'
+}
+
+function Ensure-SelfUpdateCurrent {
+    # Quietly refresh self_update.ps1 from GitHub if local version exists but looks old/broken
+    param()
+
+    $selfUpdatePath = Join-Path (Split-Path $ConfigFile -Parent) 'self_update.ps1'
+    if (-not (Test-Path $selfUpdatePath)) {
+        return  # Nothing to update
+    }
+
+    try {
+        # Embedded known-good commit SHA; this prevents accidental rollback to stale default branch
+        $goodCommit = 'a672e97'
+        $rawUrl = "https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/$goodCommit/client/windows/self_update.ps1"
+
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers['User-Agent'] = 'monitoring-agent-collector'
+        $wc.Proxy = [System.Net.WebRequest]::DefaultWebProxy
+        if ($wc.Proxy) {
+            $wc.Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
+        }
+
+        $tmpPath = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
+        $wc.DownloadFile($rawUrl, $tmpPath)
+        
+        if (Test-Path $tmpPath) {
+            $newContent = [System.IO.File]::ReadAllText($tmpPath, [System.Text.Encoding]::UTF8)
+            if ($newContent -match 'Set-StrictMode\s+-Version\s+Latest') {
+                Copy-Item $tmpPath $selfUpdatePath -Force
+            }
+            Remove-Item $tmpPath -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+        # Silent fail; old self_update.ps1 will continue working even if refresh fails
+    }
 }
 
 function Get-SqlServerInfoBlock {
@@ -912,6 +948,7 @@ $largeFilesJson  = '{"enabled":false,"status":"unsupported","filesystems":[]}'
 
 Invoke-RemoteCommands
 Invoke-PrioritySelfUpdate
+Ensure-SelfUpdateCurrent
 
 # A self-update can replace AGENT_VERSION during this run.
 # Re-read it so the outgoing payload reflects the current installed version.
