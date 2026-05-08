@@ -4388,8 +4388,8 @@ function renderDatabasesSection(payload) {
                       <th>Recovery</th>
                       <th>Größe</th>
                       <th>Letztes Full-Backup</th>
-                      <th>Letztes Diff-Backup</th>
-                      <th>Letztes Log-Backup</th>
+                      <th>Diff</th>
+                      <th>Log</th>
                     </tr>
                   </thead>
                   <tbody>${rows}</tbody>
