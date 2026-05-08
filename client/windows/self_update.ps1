@@ -51,7 +51,15 @@ function Download-RepoFile {
 
     $cacheBust = [System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 
-    # Prefer raw URL first (branch-pinned in RAW_BASE_URL), with cache-busting query.
+    # Prefer GitHub contents API first (pinned to main) to reduce stale CDN payload risk.
+    try {
+        $wc.Headers['Accept'] = 'application/vnd.github.v3.raw'
+        $wc.DownloadFile("$ApiBaseUrl/$RelativePath?ref=main&cb=$cacheBust", $DestinationPath)
+        return $true
+    } catch {
+    }
+
+    # Fallback to raw URL (branch-pinned in RAW_BASE_URL), with cache-busting query.
     try {
         $wc.DownloadFile("$RawBaseUrl/$RelativePath?cb=$cacheBust", $DestinationPath)
         return $true
@@ -70,14 +78,17 @@ function Download-RepoFile {
 
 # ---- Version check ----
 $remoteVersion = ''
+$remoteVersionSource = ''
 try {
     $remoteVersion = ($wc.DownloadString("$RawBaseUrl/AGENT_VERSION?cb=$([System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())")).Trim()
+    if ($remoteVersion) { $remoteVersionSource = 'AGENT_VERSION' }
 } catch {
     $remoteVersion = ''
 }
 if (-not $remoteVersion) {
     try {
         $remoteVersion = ($wc.DownloadString("$ApiBaseUrl/AGENT_VERSION?ref=main")).Trim()
+        if ($remoteVersion) { $remoteVersionSource = 'AGENT_VERSION' }
     } catch {
         $remoteVersion = ''
     }
@@ -85,6 +96,7 @@ if (-not $remoteVersion) {
 if (-not $remoteVersion) {
     try {
         $remoteVersion = ($wc.DownloadString("$RawBaseUrl/BUILD_VERSION?cb=$([System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())")).Trim()
+        if ($remoteVersion) { $remoteVersionSource = 'BUILD_VERSION' }
     } catch {
         $remoteVersion = ''
     }
@@ -92,6 +104,7 @@ if (-not $remoteVersion) {
 if (-not $remoteVersion) {
     try {
         $remoteVersion = ($wc.DownloadString("$ApiBaseUrl/BUILD_VERSION?ref=main")).Trim()
+        if ($remoteVersion) { $remoteVersionSource = 'BUILD_VERSION' }
     } catch {
         $remoteVersion = ''
     }
@@ -134,6 +147,29 @@ try {
     $collectContent = [System.IO.File]::ReadAllText("$tmpDir\collect_and_send.ps1", [System.Text.Encoding]::UTF8)
     if ($collectContent -match '\$[A-Za-z_][A-Za-z0-9_]*\s*\?\s*') {
         throw 'Downloaded collect_and_send.ps1 contains unsupported ternary syntax for PowerShell 5.1.'
+    }
+
+    # If AGENT_VERSION was resolved, enforce that downloaded collect script carries the same embedded version.
+    if ($remoteVersionSource -eq 'AGENT_VERSION') {
+        $embeddedVersion = ''
+        if ($collectContent -match "\$EmbeddedAgentVersion\s*=\s*'([^']+)'") {
+            $embeddedVersion = $Matches[1]
+        }
+
+        if (-not $embeddedVersion -or $embeddedVersion -ne $remoteVersion) {
+            # Force one more refresh through the API path and validate again.
+            $wc.Headers['Accept'] = 'application/vnd.github.v3.raw'
+            $wc.DownloadFile("$ApiBaseUrl/client/windows/collect_and_send.ps1?ref=main&cb=$([System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())", "$tmpDir\collect_and_send.ps1")
+            $collectContent = [System.IO.File]::ReadAllText("$tmpDir\collect_and_send.ps1", [System.Text.Encoding]::UTF8)
+            $embeddedVersion = ''
+            if ($collectContent -match "\$EmbeddedAgentVersion\s*=\s*'([^']+)'") {
+                $embeddedVersion = $Matches[1]
+            }
+
+            if (-not $embeddedVersion -or $embeddedVersion -ne $remoteVersion) {
+                throw "Downloaded collect_and_send.ps1 embedded version '$embeddedVersion' does not match remote AGENT_VERSION '$remoteVersion'."
+            }
+        }
     }
 
     [System.IO.File]::WriteAllText("$tmpDir\AGENT_VERSION", "$remoteVersion`n", [System.Text.Encoding]::UTF8)
