@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.61'
+$EmbeddedAgentVersion = '1.1.62'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -261,11 +261,34 @@ function Get-SqlServerInfoBlock {
 
             $databases = @()
             $connError = ''
+            $sqlSystemUser = ''
+            $sqlOriginalLogin = ''
+            $sqlSuserSname = ''
+            $masterFilesRows = 0
             try {
                 # Database=master ensures sys.master_files is visible without USE statements
                 $cs = "Server=$serverInst;Database=master;Integrated Security=true;Connection Timeout=5;TrustServerCertificate=true"
                 $conn = New-Object System.Data.SqlClient.SqlConnection($cs)
                 $conn.Open()
+
+                # Capture effective SQL auth context seen by this process/task account.
+                $ctxCmd = $conn.CreateCommand()
+                $ctxCmd.CommandTimeout = 10
+                $ctxCmd.CommandText = @"
+SELECT
+    SYSTEM_USER,
+    ORIGINAL_LOGIN(),
+    SUSER_SNAME(),
+    (SELECT COUNT(*) FROM sys.master_files) AS master_files_rows
+"@
+                $ctxRdr = $ctxCmd.ExecuteReader()
+                if ($ctxRdr.Read()) {
+                    $sqlSystemUser = [string]$ctxRdr[0]
+                    $sqlOriginalLogin = [string]$ctxRdr[1]
+                    $sqlSuserSname = [string]$ctxRdr[2]
+                    $masterFilesRows = [int]$ctxRdr[3]
+                }
+                $ctxRdr.Close()
 
                 # Database list + sizes (all databases incl. system DBs except tempdb)
                 # size is in 8KB pages; MB = pages / 128
@@ -344,6 +367,10 @@ GROUP BY database_name, [type]
                         ',"version":"'        + (ConvertTo-JsonString $version)      + '"' +
                         ',"edition":"'        + (ConvertTo-JsonString $edition)      + '"' +
                         ',"service_status":"' + (ConvertTo-JsonString $svcStatus)    + '"' +
+                        ',"sql_system_user":"' + (ConvertTo-JsonString $sqlSystemUser) + '"' +
+                        ',"sql_original_login":"' + (ConvertTo-JsonString $sqlOriginalLogin) + '"' +
+                        ',"sql_suser_sname":"' + (ConvertTo-JsonString $sqlSuserSname) + '"' +
+                        ',"master_files_rows":' + $masterFilesRows +
                         ',"connection_error":"' + $connError                         + '"' +
                         ',"databases":['      + ($databases -join ',')               + ']}' 
             $instancesJson += $instJson
