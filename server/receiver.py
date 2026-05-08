@@ -7666,6 +7666,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 has_hana = _detect_hana_processes(latest_payload)
                 sap_info = _extract_sap_b1_info(latest_payload, has_hana)
                 hana_sid_value = extract_hana_sid_from_payload(latest_payload)
+                hana_info = latest_payload.get("hana_info") if isinstance(latest_payload, dict) else None
+                hana_release_value = ""
+                if isinstance(hana_info, dict):
+                    hana_release_value = str(hana_info.get("version", "") or "")
                 hosts.append(
                     {
                         "hostname": hostname,
@@ -7691,6 +7695,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "is_hidden": bool(host_settings.get("is_hidden", False)),
                         "agent_api_key_status": str((latest_payload.get("agent_api_key") or {}).get("status", "off")),
                         "sap_feature_pack": str(sap_info.get("feature_pack", "") or ""),
+                        "hana_release": hana_release_value,
                         "hana_sid": hana_sid_value,
                         "host_id": hana_sid_value,
                     }

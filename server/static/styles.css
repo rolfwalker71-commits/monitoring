@@ -2556,6 +2556,12 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   color: #166534;
 }
 
+.host-value-chip--sid {
+  border-color: #c4b5fd;
+  background: #f3e8ff;
+  color: #5b21b6;
+}
+
 .host-item-hidden {
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border-style: dashed;
