@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.162'
+$EmbeddedAgentVersion = '1.1.163'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -46,6 +46,17 @@ foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
 
 $ServerUrl = $cfg['SERVER_URL']
 $ApiKey    = if ($cfg.ContainsKey('API_KEY')) { $cfg['API_KEY'] } else { '' }
+$SendJitterMaxSec = 300
+
+if ($env:SEND_JITTER_MAX_SEC -match '^\d+$') {
+    $SendJitterMaxSec = [int]$env:SEND_JITTER_MAX_SEC
+} elseif ($cfg.ContainsKey('SEND_JITTER_MAX_SEC') -and ($cfg['SEND_JITTER_MAX_SEC'] -match '^\d+$')) {
+    $SendJitterMaxSec = [int]$cfg['SEND_JITTER_MAX_SEC']
+}
+
+if ($SendJitterMaxSec -lt 0) {
+    $SendJitterMaxSec = 0
+}
 
 if (-not $ServerUrl) {
     Write-Error 'SERVER_URL is not set in config'
@@ -113,6 +124,35 @@ function ConvertTo-JsonString([string]$s) {
         -replace "`t",   '\t'
 }
 
+function Select-AgentVersion {
+    param(
+        [string]$EmbeddedVersion,
+        [string]$FilePath
+    )
+
+    $fileVersion = ''
+    if (Test-Path $FilePath) {
+        $fileVersion = ((Get-Content $FilePath -TotalCount 1 -Encoding UTF8) -replace '\s', '')
+    }
+    if ($fileVersion) {
+        return $fileVersion
+    }
+    $selectedVersion = [string]$EmbeddedVersion
+    if ($selectedVersion) {
+        return $selectedVersion
+    }
+    return 'unknown'
+}
+
+function Get-VersionFileValue {
+    param([string]$FilePath)
+
+    if (-not (Test-Path $FilePath)) {
+        return ''
+    }
+    return ((Get-Content $FilePath -TotalCount 1 -Encoding UTF8) -replace '\s', '')
+}
+
 function Get-QueueCount {
     $files = @(Get-ChildItem -Path $QueueDir -Filter '*.json' -ErrorAction SilentlyContinue)
     return $files.Count
@@ -178,6 +218,200 @@ function Get-AgentConfigBlock {
         }
     }
     return '{"available":true,"path":"' + $configPathJson + '","entries":[' + ($entries -join ',') + ']}'
+}
+
+function Get-SqlServerInfoBlock {
+    # Discovers local SQL Server instances via Registry, then connects via Windows Auth
+    # (no SA or password needed) to collect version, service status, database list,
+    # sizes and last backup timestamps from msdb.
+    $instancesJson = @()
+    $regRoot = 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL'
+    if (-not (Test-Path $regRoot)) {
+        return '{"available":false,"instances":[]}'
+    }
+    try {
+        $instanceMap = Get-ItemProperty -Path $regRoot -ErrorAction Stop
+        foreach ($prop in $instanceMap.PSObject.Properties) {
+            if ($prop.Name -in @('PSPath','PSParentPath','PSChildName','PSDrive','PSProvider')) { continue }
+            $instanceName = $prop.Name   # e.g. MSSQLSERVER or SQLEXPRESS
+            $serviceKey   = $prop.Value  # e.g. MSSQL$SQLEXPRESS
+
+            # Version from Registry — works even when service is stopped
+            $version = ''
+            try {
+                $verPath = "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\$serviceKey\MSSQLServer\CurrentVersion"
+                $version = (Get-ItemProperty -Path $verPath -ErrorAction SilentlyContinue).CurrentVersion
+                if (-not $version) { $version = '' }
+            } catch { $version = '' }
+
+            # Edition from Registry
+            $edition = ''
+            try {
+                $setupPath = "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\$serviceKey\Setup"
+                $edition = (Get-ItemProperty -Path $setupPath -ErrorAction SilentlyContinue).Edition
+                if (-not $edition) { $edition = '' }
+            } catch { $edition = '' }
+
+            # Service status
+            $svcName = if ($instanceName -eq 'MSSQLSERVER') { 'MSSQLSERVER' } else { "MSSQL`$$instanceName" }
+            $svcStatus = 'unknown'
+            try { $svcStatus = (Get-Service -Name $svcName -ErrorAction SilentlyContinue).Status.ToString() } catch {}
+
+            $serverInst = if ($instanceName -eq 'MSSQLSERVER') { 'localhost' } else { "localhost\$instanceName" }
+
+            $databases = @()
+            $connError = ''
+            $sqlSystemUser = ''
+            $sqlOriginalLogin = ''
+            $sqlSuserSname = ''
+            $masterFilesRows = 0
+            try {
+                # Database=master ensures sys.master_files is visible without USE statements
+                $cs = "Server=$serverInst;Database=master;Integrated Security=true;Connection Timeout=5;TrustServerCertificate=true"
+                $conn = New-Object System.Data.SqlClient.SqlConnection($cs)
+                $conn.Open()
+
+                # Capture effective SQL auth context seen by this process/task account.
+                $ctxCmd = $conn.CreateCommand()
+                $ctxCmd.CommandTimeout = 10
+                $ctxCmd.CommandText = @"
+SELECT
+    SYSTEM_USER,
+    ORIGINAL_LOGIN(),
+    SUSER_SNAME(),
+    (SELECT COUNT(*) FROM sys.master_files) AS master_files_rows
+"@
+                $ctxRdr = $ctxCmd.ExecuteReader()
+                if ($ctxRdr.Read()) {
+                    $sqlSystemUser = [string]$ctxRdr[0]
+                    $sqlOriginalLogin = [string]$ctxRdr[1]
+                    $sqlSuserSname = [string]$ctxRdr[2]
+                    $masterFilesRows = [int]$ctxRdr[3]
+                }
+                $ctxRdr.Close()
+
+                # Database list + sizes (all databases incl. system DBs except tempdb)
+                # size is in 8KB pages; MB = pages / 128
+                $cmd = $conn.CreateCommand()
+                $cmd.CommandTimeout = 10
+                $cmd.CommandText = @"
+SELECT d.name, d.state_desc, d.recovery_model_desc,
+    COALESCE(SUM(CASE WHEN mf.type=0 THEN CAST(mf.size AS bigint) ELSE 0 END) / 128, 0) AS data_mb,
+    COALESCE(SUM(CASE WHEN mf.type=1 THEN CAST(mf.size AS bigint) ELSE 0 END) / 128, 0) AS log_mb
+FROM sys.databases d
+LEFT JOIN sys.master_files mf ON d.database_id = mf.database_id
+WHERE d.name <> 'tempdb'
+GROUP BY d.name, d.state_desc, d.recovery_model_desc
+ORDER BY
+    CASE WHEN d.name IN ('master','model','msdb') THEN 1 ELSE 0 END,
+    d.name
+"@
+                $rdr = $cmd.ExecuteReader()
+                $dbRows = @()
+                while ($rdr.Read()) {
+                    $dbRows += @{
+                        name           = [string]$rdr[0]
+                        state          = [string]$rdr[1]
+                        recovery_model = [string]$rdr[2]
+                        data_mb        = [long]$rdr[3]
+                        log_mb         = [long]$rdr[4]
+                    }
+                }
+                $rdr.Close()
+
+                # Last backup per database (Full=D, Differential=I, Log=L)
+                # Uses full msdb.dbo.backupset qualifier — no USE needed
+                $bkCmd = $conn.CreateCommand()
+                $bkCmd.CommandTimeout = 10
+                $bkCmd.CommandText = @"
+SELECT database_name, [type], MAX(backup_finish_date) AS last_backup
+FROM msdb.dbo.backupset
+GROUP BY database_name, [type]
+"@
+                $bkRdr = $bkCmd.ExecuteReader()
+                $backups = @{}
+                while ($bkRdr.Read()) {
+                    $n  = [string]$bkRdr[0]
+                    $t  = [string]$bkRdr[1]
+                    $dt = $bkRdr[2]
+                    if (-not $backups.ContainsKey($n)) { $backups[$n] = @{} }
+                    $backups[$n][$t] = if ($dt -is [DateTime]) { $dt.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC) } else { '' }
+                }
+                $bkRdr.Close()
+                $conn.Close()
+
+                foreach ($db in $dbRows) {
+                    $bk = if ($backups.ContainsKey($db.name)) { $backups[$db.name] } else { @{} }
+                    $isSystem = $db.name -in @('master','model','msdb')
+                    $isSystemText = if ($isSystem) { 'true' } else { 'false' }
+                    $lastFullBackup = if ($bk.ContainsKey('D')) { ConvertTo-JsonString $bk['D'] } else { '' }
+                    $lastDiffBackup = if ($bk.ContainsKey('I')) { ConvertTo-JsonString $bk['I'] } else { '' }
+                    $lastLogBackup = if ($bk.ContainsKey('L')) { ConvertTo-JsonString $bk['L'] } else { '' }
+                    $dbJson  = '{"name":' + (ConvertTo-JsonString $db.name | ForEach-Object { '"' + $_ + '"' }) +
+                               ',"system_db":' + $isSystemText +
+                               ',"state":"'          + (ConvertTo-JsonString $db.state)           + '"' +
+                               ',"recovery_model":"' + (ConvertTo-JsonString $db.recovery_model)  + '"' +
+                               ',"data_mb":'         + $db.data_mb +
+                               ',"log_mb":'          + $db.log_mb +
+                               ',"last_full_backup":"'  + $lastFullBackup + '"' +
+                               ',"last_diff_backup":"'  + $lastDiffBackup + '"' +
+                               ',"last_log_backup":"'   + $lastLogBackup + '"' +
+                               '}'
+                    $databases += $dbJson
+                }
+            } catch {
+                $connError = ConvertTo-JsonString ($_.Exception.Message -replace '[\r\n]+',' ')
+            }
+
+            $instJson = '{"name":"'           + (ConvertTo-JsonString $instanceName) + '"' +
+                        ',"version":"'        + (ConvertTo-JsonString $version)      + '"' +
+                        ',"edition":"'        + (ConvertTo-JsonString $edition)      + '"' +
+                        ',"service_status":"' + (ConvertTo-JsonString $svcStatus)    + '"' +
+                        ',"sql_system_user":"' + (ConvertTo-JsonString $sqlSystemUser) + '"' +
+                        ',"sql_original_login":"' + (ConvertTo-JsonString $sqlOriginalLogin) + '"' +
+                        ',"sql_suser_sname":"' + (ConvertTo-JsonString $sqlSuserSname) + '"' +
+                        ',"master_files_rows":' + $masterFilesRows +
+                        ',"connection_error":"' + $connError                         + '"' +
+                        ',"databases":['      + ($databases -join ',')               + ']}' 
+            $instancesJson += $instJson
+        }
+    } catch {
+        return '{"available":false,"instances":[],"error":"' + (ConvertTo-JsonString ($_.Exception.Message -replace '[\r\n]+',' ')) + '"}'
+    }
+    return '{"available":true,"instances":[' + ($instancesJson -join ',') + ']}'
+}
+
+function Get-SapB1InfoBlock {
+    # Reads C:\Program Files\SAP\SAP Business One DI API\Conf\InstallationConfigMSSQL.xml
+    # and converts the Windows build format (e.g. "1000180 SP:00 PL:08")
+    # to the standard format ("10.00.180 PL 8") used by the monitoring backend.
+    $xmlPath = 'C:\Program Files\SAP\SAP Business One DI API\Conf\InstallationConfigMSSQL.xml'
+    $empty = '{"server_components_version":{"version":"","raw_output":""}}'
+    if (-not (Test-Path $xmlPath)) {
+        return $empty
+    }
+    try {
+        # Read raw content and regex-match the Version val attribute directly —
+        # avoids PowerShell XML property navigation quirks.
+        $raw = [System.IO.File]::ReadAllText($xmlPath, [System.Text.Encoding]::UTF8)
+        if ($raw -match '<Version\s+val="(\d{7}\s+SP:\d+\s+PL:\d+)"') {
+            $verVal   = $Matches[1]
+            if ($verVal -match '^(\d{7})\s+SP:\d+\s+PL:(\d+)') {
+                $winBuild = $Matches[1]
+                $pl       = $Matches[2].TrimStart('0')
+                if (-not $pl) { $pl = '0' }
+                # 1000180 -> 10.00.180
+                $build   = "$($winBuild.Substring(0,2)).$($winBuild.Substring(2,2)).$($winBuild.Substring(4,3))"
+                $version = "$build PL $pl"
+                $versionEsc = ConvertTo-JsonString $version
+                $rawEsc     = ConvertTo-JsonString $verVal
+                return "{`"server_components_version`":{`"version`":`"$versionEsc`",`"raw_output`":`"$rawEsc`"}}"
+            }
+        }
+    } catch {
+        # File unreadable — return empty block
+    }
+    return $empty
 }
 
 function Send-Payload([string]$body) {
@@ -337,6 +571,20 @@ function Send-CommandResult {
 }
 
 function Invoke-AgentSelfUpdate {
+    $selfUpdateScript = Join-Path (Split-Path $ConfigFile -Parent) 'self_update.ps1'
+    if (-not (Test-Path $selfUpdateScript)) {
+        $selfUpdateScript = 'C:\ProgramData\monitoring-agent\self_update.ps1'
+    }
+
+    if (Test-Path $selfUpdateScript) {
+        try {
+            & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $selfUpdateScript *>> $UpdateLogFile
+            if ($LASTEXITCODE -eq 0) {
+                return $true
+            }
+        } catch { }
+    }
+
     $tmpScript = $null
     try {
         if ($cfg.ContainsKey('RAW_BASE_URL') -and $cfg['RAW_BASE_URL']) {
@@ -344,31 +592,17 @@ function Invoke-AgentSelfUpdate {
             $wc = New-Object System.Net.WebClient
             $wc.DownloadFile(($cfg['RAW_BASE_URL'].TrimEnd('/')) + '/client/windows/self_update.ps1', $tmpScript)
             & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $tmpScript *>> $UpdateLogFile
-            if ($LASTEXITCODE -eq 0) {
-                return $true
-            }
+            return ($LASTEXITCODE -eq 0)
         }
-    } catch { }
-    finally {
+    } catch {
+        return $false
+    } finally {
         if ($tmpScript -and (Test-Path $tmpScript)) {
             Remove-Item $tmpScript -Force -ErrorAction SilentlyContinue
         }
     }
 
-    $selfUpdateScript = Join-Path (Split-Path $ConfigFile -Parent) 'self_update.ps1'
-    if (-not (Test-Path $selfUpdateScript)) {
-        $selfUpdateScript = 'C:\ProgramData\monitoring-agent\self_update.ps1'
-    }
-    if (-not (Test-Path $selfUpdateScript)) {
-        return $false
-    }
-
-    try {
-        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $selfUpdateScript *>> $UpdateLogFile
-        return ($LASTEXITCODE -eq 0)
-    } catch {
-        return $false
-    }
+    return $false
 }
 
 function Invoke-RemoteCommands {
@@ -524,10 +758,22 @@ $cpuInfoList = @(Get-CimInstance -ClassName Win32_Processor)
 $agentId     = if ($cfg.ContainsKey('AGENT_ID')      -and $cfg['AGENT_ID'])      { $cfg['AGENT_ID'] }      else { $hostnameValue }
 $displayName = if ($cfg.ContainsKey('DISPLAY_NAME')  -and $cfg['DISPLAY_NAME'])  { $cfg['DISPLAY_NAME'] }  else { $hostnameValue }
 
-$agentVersion = $EmbeddedAgentVersion
-if (Test-Path $VersionFile) {
-    $agentVersion = ((Get-Content $VersionFile -TotalCount 1 -Encoding UTF8) -replace '\s', '')
+if ($SendJitterMaxSec -gt 0) {
+    $jitterIdentity = "$hostnameValue$agentId"
+    $hashProvider = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = $hashProvider.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($jitterIdentity))
+    } finally {
+        $hashProvider.Dispose()
+    }
+    $jitterSec = [int]([System.BitConverter]::ToUInt32($hash, 0) % ($SendJitterMaxSec + 1))
+    if ($jitterSec -gt 0) {
+        Write-Host ("Applying deterministic send jitter: {0}s (max {1}s)" -f $jitterSec, $SendJitterMaxSec)
+        Start-Sleep -Seconds $jitterSec
+    }
 }
+
+$agentVersion = Select-AgentVersion -EmbeddedVersion $EmbeddedAgentVersion -FilePath $VersionFile
 
 # Timestamps / uptime
 $timestampUtc  = [System.DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ', $IC)
@@ -658,11 +904,25 @@ $topProcStr = Get-TopProcessEntries
 $containerData = Get-ContainerEntries
 $containersStr = [string]$containerData.entries
 $dockerAvailable = if ($containerData.available) { 'true' } else { 'false' }
-$updateLogJson  = Get-UpdateLogBlock
+$updateLogJson   = Get-UpdateLogBlock
 $agentConfigJson = Get-AgentConfigBlock
+$sapB1Json       = Get-SapB1InfoBlock
+$sqlServerJson   = Get-SqlServerInfoBlock
+$largeFilesJson  = '{"enabled":false,"status":"unsupported","filesystems":[]}'
 
 Invoke-RemoteCommands
 Invoke-PrioritySelfUpdate
+
+# A self-update can replace AGENT_VERSION during this run.
+# Re-read it so the outgoing payload reflects the current installed version.
+$agentVersion = Select-AgentVersion -EmbeddedVersion $EmbeddedAgentVersion -FilePath $VersionFile
+$versionFileValue = Get-VersionFileValue -FilePath $VersionFile
+$scriptPath = ''
+if ($PSCommandPath) {
+    $scriptPath = $PSCommandPath
+} elseif ($MyInvocation.MyCommand.Path) {
+    $scriptPath = $MyInvocation.MyCommand.Path
+}
 
 # ---- Flush queued reports ----
 Invoke-FlushQueue | Out-Null
@@ -680,6 +940,10 @@ $kernelEsc       = ConvertTo-JsonString $kernelVersion
 $osNameEsc       = ConvertTo-JsonString $osName
 $defaultIfaceEsc = ConvertTo-JsonString $defaultInterface
 $defaultGwEsc    = ConvertTo-JsonString $defaultGateway
+$scriptPathEsc   = ConvertTo-JsonString $scriptPath
+$embeddedVerEsc  = ConvertTo-JsonString $EmbeddedAgentVersion
+$fileVerEsc      = ConvertTo-JsonString $versionFileValue
+$versionFilePathEsc = ConvertTo-JsonString $VersionFile
 
 $payload = @"
 {
@@ -697,6 +961,13 @@ $payload = @"
   "is_delayed": false,
   "queued_at_utc": "",
   "queue_depth": $queueDepth,
+    "agent_runtime": {
+        "script_path": "$scriptPathEsc",
+        "embedded_version": "$embeddedVerEsc",
+        "version_file_value": "$fileVerEsc",
+        "version_file_path": "$versionFilePathEsc",
+        "selected_version": "$agentVerEsc"
+    },
   "cpu": {
     "usage_percent": $cpuUsagePctStr,
     "load_avg_1": $loadAvgStr,
@@ -736,7 +1007,10 @@ $payload = @"
         "entries": [$containersStr]
     },
     "agent_update": $updateLogJson,
-    "agent_config": $agentConfigJson
+    "agent_config": $agentConfigJson,
+    "sap_business_one": $sapB1Json,
+    "sql_server_info": $sqlServerJson,
+    "large_files": $largeFilesJson
 }
 "@
 
