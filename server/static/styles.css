@@ -3968,8 +3968,8 @@ body[data-theme="dark"] .hana-sid-chip {
 .meta-group-item {
   margin: 0;
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  column-gap: 10px;
+  grid-template-columns: 136px minmax(0, 1fr);
+  column-gap: 6px;
   align-items: start;
   line-height: 1.25;
   font-size: 13px;
@@ -4024,7 +4024,7 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
 
 @media (max-width: 1100px) {
   .meta-group-item {
-    grid-template-columns: 160px minmax(0, 1fr);
+    grid-template-columns: 124px minmax(0, 1fr);
   }
 }
 
