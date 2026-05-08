@@ -61,7 +61,7 @@ function Download-RepoFile {
     # Prefer GitHub contents API first (pinned to main) to reduce stale CDN payload risk.
     try {
         $wc.Headers['Accept'] = 'application/vnd.github.v3.raw'
-        $wc.DownloadFile("$ApiBaseUrl/$RelativePath?ref=main&cb=$cacheBust", $DestinationPath)
+        $wc.DownloadFile("$ApiBaseUrl/${RelativePath}?ref=main&cb=$cacheBust", $DestinationPath)
         return $true
     } catch {
         $attemptErrors.Add("api-main-cb: $($_.Exception.Message)")
@@ -69,7 +69,7 @@ function Download-RepoFile {
 
     # Fallback to raw URL (branch-pinned in RAW_BASE_URL), with cache-busting query.
     try {
-        $wc.DownloadFile("$RawBaseUrl/$RelativePath?cb=$cacheBust", $DestinationPath)
+        $wc.DownloadFile("$RawBaseUrl/${RelativePath}?cb=$cacheBust", $DestinationPath)
         return $true
     } catch {
         $attemptErrors.Add("raw-config-cb: $($_.Exception.Message)")
@@ -77,7 +77,7 @@ function Download-RepoFile {
 
     # Fallback to canonical raw.githubusercontent.com URL generated from GITHUB_REPO.
     try {
-        $wc.DownloadFile("$DirectRawBaseUrl/$RelativePath?cb=$cacheBust", $DestinationPath)
+        $wc.DownloadFile("$DirectRawBaseUrl/${RelativePath}?cb=$cacheBust", $DestinationPath)
         return $true
     } catch {
         $attemptErrors.Add("raw-direct-cb: $($_.Exception.Message)")
@@ -86,7 +86,7 @@ function Download-RepoFile {
     # Fallback to GitHub contents API pinned to main to avoid default-branch drift.
     try {
         $wc.Headers['Accept'] = 'application/vnd.github.v3.raw'
-        $wc.DownloadFile("$ApiBaseUrl/$RelativePath?ref=main", $DestinationPath)
+        $wc.DownloadFile("$ApiBaseUrl/${RelativePath}?ref=main", $DestinationPath)
         return $true
     } catch {
         $attemptErrors.Add("api-main: $($_.Exception.Message)")
