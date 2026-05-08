@@ -245,12 +245,6 @@ try {
     if (-not (Download-RepoFile -RelativePath 'client/windows/collect_and_send.ps1' -DestinationPath "$tmpDir\collect_and_send.ps1")) {
         throw "Failed to download collect_and_send.ps1 from GitHub sources. Details: $global:LastDownloadRepoFileError"
     }
-    $selfUpdateDownloaded = $false
-    if (Download-RepoFile -RelativePath 'client/windows/self_update.ps1' -DestinationPath "$tmpDir\self_update.ps1") {
-        $selfUpdateDownloaded = $true
-    } else {
-        Write-Warning ("Skipping self_update.ps1 refresh; keeping local updater. Details: " + $global:LastDownloadRepoFileError)
-    }
     # Guard against stale or incompatible script payloads before replacing local files.
     $collectContent = [System.IO.File]::ReadAllText("$tmpDir\collect_and_send.ps1", [System.Text.Encoding]::UTF8)
     if ($collectContent -match '\$[A-Za-z_][A-Za-z0-9_]*\s*\?\s*') {
@@ -284,9 +278,6 @@ try {
     [System.IO.File]::WriteAllText("$tmpDir\AGENT_VERSION", "$remoteVersion`n", [System.Text.Encoding]::UTF8)
 
     Copy-Item "$tmpDir\collect_and_send.ps1" "$InstallDir\collect_and_send.ps1" -Force
-    if ($selfUpdateDownloaded -and (Test-Path "$tmpDir\self_update.ps1")) {
-        Copy-Item "$tmpDir\self_update.ps1" "$InstallDir\self_update.ps1" -Force
-    }
     Copy-Item "$tmpDir\AGENT_VERSION"        $VersionFile                       -Force
 } finally {
     Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
