@@ -7567,72 +7567,67 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
                     rows = conn.execute(
                         """
+                        WITH ranked AS (
+                            SELECT
+                                hostname,
+                                id,
+                                received_at_utc,
+                                primary_ip,
+                                agent_id,
+                                payload_json,
+                                ROW_NUMBER() OVER (
+                                    PARTITION BY hostname
+                                    ORDER BY
+                                        CASE WHEN LOWER(COALESCE(
+                                            CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.delivery_mode') END,
+                                            'live')) = 'live' THEN 0 ELSE 1 END,
+                                        COALESCE(
+                                            NULLIF(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.send_started_utc') END, ''),
+                                            NULLIF(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.timestamp_utc') END, ''),
+                                            received_at_utc
+                                        ) DESC,
+                                        id DESC
+                                ) AS rn
+                            FROM reports
+                        ),
+                        latest AS (
+                            SELECT hostname, id, received_at_utc, primary_ip, agent_id, payload_json
+                            FROM ranked WHERE rn = 1
+                        ),
+                        host_stats AS (
+                            SELECT hostname, MAX(received_at_utc) AS last_seen_utc, COUNT(*) AS report_count
+                            FROM reports
+                            GROUP BY hostname
+                        ),
+                        alert_counts AS (
+                            SELECT
+                                a.hostname,
+                                SUM(CASE WHEN a.status = 'open'
+                                    AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a.hostname AND m.mountpoint = a.mountpoint)
+                                    AND (a.ack_at_utc IS NULL OR a.ack_at_utc = '')
+                                    THEN 1 ELSE 0 END) AS open_alert_count,
+                                SUM(CASE WHEN a.status = 'open' AND a.severity = 'critical'
+                                    AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a.hostname AND m.mountpoint = a.mountpoint)
+                                    AND (a.ack_at_utc IS NULL OR a.ack_at_utc = '')
+                                    THEN 1 ELSE 0 END) AS open_critical_alert_count
+                            FROM alerts a
+                            GROUP BY a.hostname
+                        )
                         SELECT
-                          r.hostname,
-                          MAX(r.received_at_utc) AS last_seen_utc,
-                          COUNT(*) AS report_count,
-                          (
-                            SELECT primary_ip
-                            FROM reports r2
-                            WHERE r2.hostname = r.hostname
-                            ORDER BY r2.id DESC
-                            LIMIT 1
-                          ) AS latest_primary_ip,
-                          (
-                            SELECT agent_id
-                            FROM reports r3
-                            WHERE r3.hostname = r.hostname
-                            ORDER BY r3.id DESC
-                            LIMIT 1
-                                                ) AS latest_agent_id,
-                                                (
-                                                    SELECT payload_json
-                                                    FROM reports r4
-                                                    WHERE r4.hostname = r.hostname
-                                                    ORDER BY
-                                                        CASE
-                                                            WHEN LOWER(COALESCE(CASE WHEN json_valid(r4.payload_json) THEN json_extract(r4.payload_json, '$.delivery_mode') END, 'live')) = 'live' THEN 0
-                                                            ELSE 1
-                                                        END,
-                                                        COALESCE(
-                                                            NULLIF(CASE WHEN json_valid(r4.payload_json) THEN json_extract(r4.payload_json, '$.send_started_utc') END, ''),
-                                                            NULLIF(CASE WHEN json_valid(r4.payload_json) THEN json_extract(r4.payload_json, '$.timestamp_utc') END, ''),
-                                                            r4.received_at_utc
-                                                        ) DESC,
-                                                        r4.id DESC
-                                                    LIMIT 1
-                                                ) AS latest_payload_json,
-                                                (
-                                                    SELECT COUNT(*)
-                                                    FROM alerts a1
-                                                    WHERE a1.hostname = r.hostname AND a1.status = 'open'
-                                                      AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a1.hostname AND m.mountpoint = a1.mountpoint)
-                                                      AND (a1.ack_at_utc IS NULL OR a1.ack_at_utc = '')
-                                                ) AS open_alert_count,
-                                                (
-                                                    SELECT COUNT(*)
-                                                    FROM alerts a2
-                                                    WHERE a2.hostname = r.hostname AND a2.status = 'open' AND a2.severity = 'critical'
-                                                      AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a2.hostname AND m.mountpoint = a2.mountpoint)
-                                                      AND (a2.ack_at_utc IS NULL OR a2.ack_at_utc = '')
-                                                ) AS open_critical_alert_count,
-                                                (
-                                                    SELECT COALESCE(CASE WHEN json_valid(r5.payload_json) THEN json_extract(r5.payload_json, '$.hana_info.version') END, '')
-                                                    FROM reports r5
-                                                    WHERE r5.hostname = r.hostname
-                                                      AND NULLIF(COALESCE(CASE WHEN json_valid(r5.payload_json) THEN json_extract(r5.payload_json, '$.hana_info.version') END, ''), '') IS NOT NULL
-                                                    ORDER BY
-                                                        COALESCE(
-                                                            NULLIF(CASE WHEN json_valid(r5.payload_json) THEN json_extract(r5.payload_json, '$.send_started_utc') END, ''),
-                                                            NULLIF(CASE WHEN json_valid(r5.payload_json) THEN json_extract(r5.payload_json, '$.timestamp_utc') END, ''),
-                                                            r5.received_at_utc
-                                                        ) DESC,
-                                                        r5.id DESC
-                                                    LIMIT 1
-                                                ) AS latest_hana_release
-                        FROM reports r
-                        GROUP BY r.hostname
-                        ORDER BY last_seen_utc DESC
+                            hs.hostname,
+                            hs.last_seen_utc,
+                            hs.report_count,
+                            l.primary_ip,
+                            l.agent_id,
+                            l.payload_json,
+                            COALESCE(ac.open_alert_count, 0) AS open_alert_count,
+                            COALESCE(ac.open_critical_alert_count, 0) AS open_critical_alert_count,
+                            COALESCE(CASE WHEN json_valid(l.payload_json)
+                                THEN json_extract(l.payload_json, '$.hana_info.version') END, '') AS latest_hana_release
+                        FROM host_stats hs
+                        JOIN latest l ON l.hostname = hs.hostname
+                        LEFT JOIN alert_counts ac ON ac.hostname = hs.hostname
+                        ORDER BY hs.last_seen_utc DESC
                         LIMIT ? OFFSET ?
                         """,
                         (limit, offset),
