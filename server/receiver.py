@@ -43,6 +43,7 @@ WINDOWS_LOGO_PATH = STATIC_DIR / "icons" / "windows.png"
 BUILD_VERSION_PATH = BASE_DIR.parent / "BUILD_VERSION"
 AGENT_VERSION_PATH = BASE_DIR.parent / "AGENT_VERSION"
 OPENAPI_SPEC_PATH = BASE_DIR.parent / "openapi.yaml"
+WINDOWS_CLIENT_DIR = BASE_DIR.parent / "client" / "windows"
 API_KEY = os.getenv("MONITORING_API_KEY", "")
 API_KEY_GRACE_ALLOW_KNOWN_HOSTS = os.getenv("MONITORING_API_KEY_GRACE_ALLOW_KNOWN_HOSTS", "1").strip().lower() in {"1", "true", "yes", "on"}
 MAX_REPORTS_PER_HOST = int(os.getenv("MONITORING_MAX_REPORTS_PER_HOST", "2880"))
@@ -8543,6 +8544,26 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 },
             )
             return
+
+        if parsed.path.startswith("/client/windows/"):
+            file_name = Path(parsed.path).name
+            allowed = {
+                "collect_and_send.ps1",
+                "self_update.ps1",
+                "install_agent.ps1",
+                "bulk_update_agents.ps1",
+            }
+            if file_name in allowed:
+                self._send_file(
+                    WINDOWS_CLIENT_DIR / file_name,
+                    "text/plain; charset=utf-8",
+                    extra_headers={
+                        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                        "Pragma": "no-cache",
+                        "Expires": "0",
+                    },
+                )
+                return
 
         if parsed.path in {"/swagger", "/swagger/", "/docs", "/docs/"}:
             self._send_html(HTTPStatus.OK, self._swagger_ui_html())
