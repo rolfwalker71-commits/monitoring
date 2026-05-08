@@ -49,15 +49,19 @@ function Download-RepoFile {
         [string]$DestinationPath
     )
 
+    $cacheBust = [System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+
+    # Prefer raw URL first (branch-pinned in RAW_BASE_URL), with cache-busting query.
     try {
-        $wc.Headers['Accept'] = 'application/vnd.github.v3.raw'
-        $wc.DownloadFile("$ApiBaseUrl/$RelativePath", $DestinationPath)
+        $wc.DownloadFile("$RawBaseUrl/$RelativePath?cb=$cacheBust", $DestinationPath)
         return $true
     } catch {
     }
 
+    # Fallback to GitHub contents API pinned to main to avoid default-branch drift.
     try {
-        $wc.DownloadFile("$RawBaseUrl/$RelativePath", $DestinationPath)
+        $wc.Headers['Accept'] = 'application/vnd.github.v3.raw'
+        $wc.DownloadFile("$ApiBaseUrl/$RelativePath?ref=main", $DestinationPath)
         return $true
     } catch {
         return $false
@@ -67,27 +71,27 @@ function Download-RepoFile {
 # ---- Version check ----
 $remoteVersion = ''
 try {
-    $remoteVersion = ($wc.DownloadString("$ApiBaseUrl/AGENT_VERSION")).Trim()
+    $remoteVersion = ($wc.DownloadString("$RawBaseUrl/AGENT_VERSION?cb=$([System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())")).Trim()
 } catch {
     $remoteVersion = ''
 }
 if (-not $remoteVersion) {
     try {
-        $remoteVersion = ($wc.DownloadString("$RawBaseUrl/AGENT_VERSION")).Trim()
+        $remoteVersion = ($wc.DownloadString("$ApiBaseUrl/AGENT_VERSION?ref=main")).Trim()
     } catch {
         $remoteVersion = ''
     }
 }
 if (-not $remoteVersion) {
     try {
-        $remoteVersion = ($wc.DownloadString("$ApiBaseUrl/BUILD_VERSION")).Trim()
+        $remoteVersion = ($wc.DownloadString("$RawBaseUrl/BUILD_VERSION?cb=$([System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())")).Trim()
     } catch {
         $remoteVersion = ''
     }
 }
 if (-not $remoteVersion) {
     try {
-        $remoteVersion = ($wc.DownloadString("$RawBaseUrl/BUILD_VERSION")).Trim()
+        $remoteVersion = ($wc.DownloadString("$ApiBaseUrl/BUILD_VERSION?ref=main")).Trim()
     } catch {
         $remoteVersion = ''
     }
@@ -126,6 +130,12 @@ try {
     if (-not (Download-RepoFile -RelativePath 'client/windows/self_update.ps1' -DestinationPath "$tmpDir\self_update.ps1")) {
         throw 'Failed to download self_update.ps1 from API and raw sources.'
     }
+    # Guard against stale or incompatible script payloads before replacing local files.
+    $collectContent = [System.IO.File]::ReadAllText("$tmpDir\collect_and_send.ps1", [System.Text.Encoding]::UTF8)
+    if ($collectContent -match '\$[A-Za-z_][A-Za-z0-9_]*\s*\?\s*') {
+        throw 'Downloaded collect_and_send.ps1 contains unsupported ternary syntax for PowerShell 5.1.'
+    }
+
     [System.IO.File]::WriteAllText("$tmpDir\AGENT_VERSION", "$remoteVersion`n", [System.Text.Encoding]::UTF8)
 
     Copy-Item "$tmpDir\collect_and_send.ps1" "$InstallDir\collect_and_send.ps1" -Force
