@@ -561,37 +561,19 @@ async function refreshDashboard(options = {}) {
   autoRefreshInProgress = true;
   try {
     const shouldRefreshGlobalAlertsList = state.viewMode === "global" && state.globalSubMode === "global-alerts";
-    try {
-      await loadWebclientVersion();
-    } catch (error) {
-      console.warn("loadWebclientVersion failed:", error);
-    }
-    try {
-      await loadActiveUsers();
-    } catch (error) {
-      console.warn("loadActiveUsers failed:", error);
-    }
     await Promise.allSettled([
+      loadWebclientVersion(),
+      loadActiveUsers(),
       loadGlobalAlertsOverview({ updateList: shouldRefreshGlobalAlertsList }),
       loadCriticalTrends({ updateList: false }),
       loadInactiveHosts({ updateList: false }),
       loadHosts({ preserveScroll }),
     ]);
-    try {
-      await loadReportsForHost();
-    } catch (error) {
-      console.warn("loadReportsForHost failed:", error);
-    }
-    try {
-      await loadAnalysisForHost();
-    } catch (error) {
-      console.warn("loadAnalysisForHost failed:", error);
-    }
-    try {
-      await loadAlertsForHost();
-    } catch (error) {
-      console.warn("loadAlertsForHost failed:", error);
-    }
+    await Promise.allSettled([
+      loadReportsForHost(),
+      loadAnalysisForHost(),
+      loadAlertsForHost(),
+    ]);
     if (state.viewMode === "settings") {
       try {
         await loadSettingsPanel(true);
@@ -678,11 +660,6 @@ async function loadWebclientVersion() {
       agentVersionEl.textContent = agentValue;
     }
     state.latestAgentRelease = agentValue;
-
-    // Re-render host cards so update badges reflect the latest release value immediately.
-    if (state.isAuthenticated && state.selectedHost) {
-      await loadHosts();
-    }
   } catch (_error) {
     if (versionEl) {
       versionEl.textContent = "-";
