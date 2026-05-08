@@ -5079,8 +5079,8 @@ function renderSingleHostCard(host) {
       <strong class="host-title-line">
         <span>${escapeHtml(displayName)}</span>
       </strong>
-      <span>🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))}</span>
-      <span>🧷 ${escapeHtml(asText(host.agent_version))} &nbsp;·&nbsp; 🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
+      <span class="host-meta-line">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))}</span>
+      <span class="host-meta-line">🧷 ${escapeHtml(asText(host.agent_version))} &nbsp;·&nbsp; 🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
       ${valueChipStack ? `<span class="host-card-actions">${valueChipStack}</span>` : ""}
       ${alertChip}
       ${mutedAlertsSection}

@@ -2996,6 +2996,11 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   font-size: 11px;
 }
 
+.host-item .host-meta-line {
+  font-size: 10px;
+  line-height: 1.15;
+}
+
 
 
 .host-item.selected {
