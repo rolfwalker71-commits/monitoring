@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.52'
+$EmbeddedAgentVersion = '1.1.53'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -262,19 +262,19 @@ function Get-SqlServerInfoBlock {
             $databases = @()
             $connError = ''
             try {
-                $cs = "Server=$serverInst;Integrated Security=true;Connection Timeout=5;TrustServerCertificate=true"
+                # Database=master ensures sys.master_files is visible without USE statements
+                $cs = "Server=$serverInst;Database=master;Integrated Security=true;Connection Timeout=5;TrustServerCertificate=true"
                 $conn = New-Object System.Data.SqlClient.SqlConnection($cs)
                 $conn.Open()
 
                 # Database list + sizes (all databases incl. system DBs except tempdb)
-                # Must run in master DB context to see sys.master_files data
+                # size is in 8KB pages; multiply by 8.0 (not 8) to avoid integer-division rounding to 0
                 $cmd = $conn.CreateCommand()
                 $cmd.CommandTimeout = 10
                 $cmd.CommandText = @"
-USE master;
 SELECT d.name, d.state_desc, d.recovery_model_desc,
-    COALESCE(SUM(CASE WHEN mf.type=0 THEN CAST(mf.size AS bigint) ELSE 0 END)*8/1024, 0) AS data_mb,
-    COALESCE(SUM(CASE WHEN mf.type=1 THEN CAST(mf.size AS bigint) ELSE 0 END)*8/1024, 0) AS log_mb
+    COALESCE(CAST(SUM(CASE WHEN mf.type=0 THEN CAST(mf.size AS bigint) ELSE 0 END)*8.0/1024 AS bigint), 0) AS data_mb,
+    COALESCE(CAST(SUM(CASE WHEN mf.type=1 THEN CAST(mf.size AS bigint) ELSE 0 END)*8.0/1024 AS bigint), 0) AS log_mb
 FROM sys.databases d
 LEFT JOIN sys.master_files mf ON d.database_id = mf.database_id
 WHERE d.name <> 'tempdb'
@@ -297,11 +297,10 @@ ORDER BY
                 $rdr.Close()
 
                 # Last backup per database (Full=D, Differential=I, Log=L)
-                # Must run in msdb DB context to see backupset table
+                # Uses full msdb.dbo.backupset qualifier — no USE needed
                 $bkCmd = $conn.CreateCommand()
                 $bkCmd.CommandTimeout = 10
                 $bkCmd.CommandText = @"
-USE msdb;
 SELECT database_name, [type], MAX(backup_finish_date) AS last_backup
 FROM msdb.dbo.backupset
 GROUP BY database_name, [type]
