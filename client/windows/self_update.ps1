@@ -91,7 +91,7 @@ function Test-DownloadedFileContent {
     }
 
     if ($RelativePath -ieq 'client/windows/collect_and_send.ps1') {
-        return ($text -match '(?m)^\$EmbeddedAgentVersion\s*=\s*''[^'']+''')
+        return ($text -match '(?m)^#Requires\s+-Version\s+5\.1' -and $text -match '(?m)^Set-StrictMode\s+-Version\s+Latest')
     }
 
     if ($RelativePath -ieq 'client/windows/self_update.ps1') {
@@ -249,30 +249,6 @@ try {
     $collectContent = [System.IO.File]::ReadAllText("$tmpDir\collect_and_send.ps1", [System.Text.Encoding]::UTF8)
     if ($collectContent -match '\$[A-Za-z_][A-Za-z0-9_]*\s*\?\s*') {
         throw 'Downloaded collect_and_send.ps1 contains unsupported ternary syntax for PowerShell 5.1.'
-    }
-
-    # If AGENT_VERSION was resolved, enforce that downloaded collect script carries the same embedded version.
-    if ($remoteVersionSource -eq 'AGENT_VERSION') {
-        $embeddedVersion = ''
-        if ($collectContent -match "`$EmbeddedAgentVersion\s*=\s*'([^']+)'") {
-            $embeddedVersion = $Matches[1]
-        }
-
-        if (-not $embeddedVersion -or $embeddedVersion -ne $remoteVersion) {
-            # Force one more refresh through the normal fallback chain and validate again.
-            if (-not (Download-RepoFile -RelativePath 'client/windows/collect_and_send.ps1' -DestinationPath "$tmpDir\collect_and_send.ps1")) {
-                throw "Failed to refresh collect_and_send.ps1 while validating embedded version. Details: $global:LastDownloadRepoFileError"
-            }
-            $collectContent = [System.IO.File]::ReadAllText("$tmpDir\collect_and_send.ps1", [System.Text.Encoding]::UTF8)
-            $embeddedVersion = ''
-            if ($collectContent -match "`$EmbeddedAgentVersion\s*=\s*'([^']+)'") {
-                $embeddedVersion = $Matches[1]
-            }
-
-            if (-not $embeddedVersion -or $embeddedVersion -ne $remoteVersion) {
-                throw "Downloaded collect_and_send.ps1 embedded version '$embeddedVersion' does not match remote AGENT_VERSION '$remoteVersion'."
-            }
-        }
     }
 
     [System.IO.File]::WriteAllText("$tmpDir\AGENT_VERSION", "$remoteVersion`n", [System.Text.Encoding]::UTF8)
