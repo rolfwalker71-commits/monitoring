@@ -6220,10 +6220,30 @@ function openAckModal(hostname, mountpoint, currentNote, isAcknowledged) {
     const noteInput = document.getElementById("ackModalNoteInput");
     const confirmBtn = document.getElementById("ackModalConfirmBtn");
     const unackBtn = document.getElementById("ackModalUnackBtn");
+    const closeBtn = document.getElementById("ackModalCloseBtn");
+    const cancelBtn = document.getElementById("ackModalCancelBtn");
+    const backdrop = document.getElementById("ackModalBackdrop");
     const statusEl = document.getElementById("ackModalStatus");
-    if (!modal) { resolve(null); return; }
+
+    if (!modal || !titleEl || !subtitleEl || !noteInput || !confirmBtn || !unackBtn || !statusEl) {
+      resolve(null);
+      return;
+    }
+
+    // Bind modal actions on every open to avoid stale or missing listeners.
+    confirmBtn.onclick = () => {
+      const note = String(noteInput.value || "").trim();
+      closeAckModal({ note });
+    };
+    unackBtn.onclick = () => {
+      closeAckModal({ unack: true });
+    };
+    if (closeBtn) closeBtn.onclick = () => closeAckModal(null);
+    if (cancelBtn) cancelBtn.onclick = () => closeAckModal(null);
+    if (backdrop) backdrop.onclick = () => closeAckModal(null);
+
     titleEl.textContent = isAcknowledged ? "Quittierung bearbeiten" : "Alert quittieren";
-    subtitleEl.textContent = `${hostname} – ${mountpoint}`;
+    subtitleEl.textContent = `${hostname} - ${mountpoint}`;
     noteInput.value = String(currentNote || "");
     statusEl.textContent = "";
     confirmBtn.textContent = isAcknowledged ? "Aktualisieren" : "Quittieren";
@@ -6232,7 +6252,6 @@ function openAckModal(hostname, mountpoint, currentNote, isAcknowledged) {
     noteInput.focus();
   });
 }
-
 function closeAckModal(result) {
   const modal = document.getElementById("ackModal");
   if (modal) modal.classList.add("hidden");
