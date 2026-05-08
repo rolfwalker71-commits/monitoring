@@ -163,7 +163,7 @@ function updateAnalysisRangeUi() {
     analysisTitle.textContent = `📊 Analyse (${label})`;
   }
   if (filesystemTitle) {
-    filesystemTitle.textContent = `💾 Filesystem Fokus (${label})`;
+    filesystemTitle.textContent = `Filesysteme (${label})`;
   }
 }
 
@@ -2589,7 +2589,7 @@ function renderFilesystemVisibilityModalContent() {
 
   titleEl.textContent = section === "large-files"
     ? "⚙️ Top-Dateien: Filesystem-Auswahl"
-    : "⚙️ Filesystem Fokus: Filesystem-Auswahl";
+    : "⚙️ Filesysteme: Filesystem-Auswahl";
   summaryEl.textContent = `Host: ${state.selectedDisplayName || state.selectedHost} | Sichtbar: ${visibleCount}/${available.length}`;
 
   if (available.length === 0) {
@@ -6037,8 +6037,8 @@ async function loadAnalysisForHost() {
     const fsTabBtn = document.getElementById("overviewFilesystemTabButton");
     if (fsTabBtn) {
       fsTabBtn.textContent = fsWarnOrCritical > 0
-        ? `💾 Filesystem Fokus ⚠ ${fsWarnOrCritical}`
-        : "💾 Filesystem Fokus";
+        ? `Filesysteme ⚠ ${fsWarnOrCritical}`
+        : "Filesysteme";
     }
 
     filesystemCharts.querySelectorAll(".fs-chart-card").forEach((card, idx) => {
