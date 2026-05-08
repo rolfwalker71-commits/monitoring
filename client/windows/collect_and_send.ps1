@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.51'
+$EmbeddedAgentVersion = '1.1.52'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -267,9 +267,11 @@ function Get-SqlServerInfoBlock {
                 $conn.Open()
 
                 # Database list + sizes (all databases incl. system DBs except tempdb)
+                # Must run in master DB context to see sys.master_files data
                 $cmd = $conn.CreateCommand()
                 $cmd.CommandTimeout = 10
                 $cmd.CommandText = @"
+USE master;
 SELECT d.name, d.state_desc, d.recovery_model_desc,
     COALESCE(SUM(CASE WHEN mf.type=0 THEN CAST(mf.size AS bigint) ELSE 0 END)*8/1024, 0) AS data_mb,
     COALESCE(SUM(CASE WHEN mf.type=1 THEN CAST(mf.size AS bigint) ELSE 0 END)*8/1024, 0) AS log_mb
@@ -295,9 +297,11 @@ ORDER BY
                 $rdr.Close()
 
                 # Last backup per database (Full=D, Differential=I, Log=L)
+                # Must run in msdb DB context to see backupset table
                 $bkCmd = $conn.CreateCommand()
                 $bkCmd.CommandTimeout = 10
                 $bkCmd.CommandText = @"
+USE msdb;
 SELECT database_name, [type], MAX(backup_finish_date) AS last_backup
 FROM msdb.dbo.backupset
 GROUP BY database_name, [type]
