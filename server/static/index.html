@@ -914,33 +914,35 @@
             </div>
 
             <div id="reportsView" class="view-section hidden" role="tabpanel" aria-labelledby="reportsTabButton">
-              <div class="subview-tabs-shell">
-                <div class="subview-tabs report-subview-tabs" role="tablist" aria-label="Einzelmeldungs-Register">
-                  <button type="button" class="tab-button active" role="tab" aria-selected="true" data-report-section="overview">Übersicht</button>
-                  <button type="button" class="tab-button" role="tab" aria-selected="false" data-report-section="journal">Journal</button>
-                  <button type="button" class="tab-button" role="tab" aria-selected="false" data-report-section="processes">Prozesse</button>
-                  <button type="button" class="tab-button" role="tab" aria-selected="false" data-report-section="sap-b1-systeminfo">SAP B1</button>
-                  <button type="button" class="tab-button" role="tab" aria-selected="false" data-report-section="containers">Container</button>
-                  <button type="button" class="tab-button" role="tab" aria-selected="false" data-report-section="dir-listings">Export</button>
-                  <button type="button" class="tab-button" role="tab" aria-selected="false" data-report-section="agent-update">Agent</button>
-                </div>
-              </div>
-              <div class="pager pager-top">
-                <button id="reportsPrevButtonTop" type="button">Vorherige Meldung</button>
-                <button id="reportsNextButtonTop" type="button">Nächste Meldung</button>
-              </div>
-              <div class="pager report-jump-row">
-                <label class="report-jump-control" for="reportJumpDateTimeInput">
-                  <input id="reportJumpDateTimeInput" type="datetime-local" step="60" />
-                </label>
-                <button id="reportJumpLatestButton" type="button">Aktuellste Meldung</button>
-                <p id="reportJumpBounds" class="count compact"></p>
-              </div>
-              <div id="reportList" class="report-list"></div>
-              <div class="pager">
-                <button id="reportsPrevButton" type="button">Vorherige Meldung</button>
-                <button id="reportsNextButton" type="button">Nächste Meldung</button>
-              </div>
+              <div class="overview-layout">
+                <nav class="overview-sidebar" role="tablist" aria-label="Einzelmeldungs-Register">
+                  <button type="button" class="overview-sidebar-item active" role="tab" aria-selected="true" data-report-section="overview"><span class="osi-icon">📋</span> Übersicht</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="journal"><span class="osi-icon">📓</span> Journal</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="processes"><span class="osi-icon">⚙️</span> Prozesse</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="sap-b1-systeminfo"><span class="osi-icon">🔷</span> SAP B1</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="containers"><span class="osi-icon">📦</span> Container</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="dir-listings"><span class="osi-icon">📤</span> Export</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="agent-update"><span class="osi-icon">🤖</span> Agent</button>
+                </nav>
+                <div class="overview-content">
+                  <div class="pager pager-top">
+                    <button id="reportsPrevButtonTop" type="button">Vorherige Meldung</button>
+                    <button id="reportsNextButtonTop" type="button">Nächste Meldung</button>
+                  </div>
+                  <div class="pager report-jump-row">
+                    <label class="report-jump-control" for="reportJumpDateTimeInput">
+                      <input id="reportJumpDateTimeInput" type="datetime-local" step="60" />
+                    </label>
+                    <button id="reportJumpLatestButton" type="button">Aktuellste Meldung</button>
+                    <p id="reportJumpBounds" class="count compact"></p>
+                  </div>
+                  <div id="reportList" class="report-list"></div>
+                  <div class="pager">
+                    <button id="reportsPrevButton" type="button">Vorherige Meldung</button>
+                    <button id="reportsNextButton" type="button">Nächste Meldung</button>
+                  </div>
+                </div><!-- /.overview-content -->
+              </div><!-- /.overview-layout -->
             </div>
           </section>
         </div>
