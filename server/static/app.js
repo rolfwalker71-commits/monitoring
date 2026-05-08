@@ -4360,8 +4360,6 @@ function renderDatabasesSection(payload) {
               const logSizeStr  = logMb  >= 1024 ? `${(logMb /1024).toFixed(1)} GB` : `${logMb} MB`;
 
               const fullBk  = asText(db.last_full_backup, "");
-              const diffBk  = asText(db.last_diff_backup, "");
-              const logBk   = asText(db.last_log_backup,  "");
 
               const fmtBk = (utc) => utc ? formatUtcPlus2(utc) : '<span class="muted">—</span>';
 
@@ -4374,8 +4372,6 @@ function renderDatabasesSection(payload) {
                   <td>${escapeHtml(recovery)}</td>
                   <td class="db-size-cell" title="Data: ${escapeHtml(dataSizeStr)} · Log: ${escapeHtml(logSizeStr)}">${escapeHtml(sizeStr)}</td>
                   <td class="db-bk-cell">${fmtBk(fullBk)}</td>
-                  <td class="db-bk-cell">${fmtBk(diffBk)}</td>
-                  <td class="db-bk-cell">${fmtBk(logBk)}</td>
                 </tr>`;
             }).join("");
             dbTableHtml = `
@@ -4386,10 +4382,8 @@ function renderDatabasesSection(payload) {
                       <th>Datenbank</th>
                       <th>Status</th>
                       <th>Recovery</th>
-                      <th>Größe</th>
+                      <th class="db-size-cell">Grösse</th>
                       <th>Letztes Full-Backup</th>
-                      <th>Diff</th>
-                      <th>Log</th>
                     </tr>
                   </thead>
                   <tbody>${rows}</tbody>
