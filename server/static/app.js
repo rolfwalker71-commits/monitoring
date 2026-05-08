@@ -18,7 +18,7 @@ const AUTO_REFRESH_INTERVAL_OPTIONS = new Map([
   [480, "8 Min."],
   [0, "Aus"],
 ]);
-const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "sap-b1-systeminfo", "agent-update", "dir-listings"]);
+const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "sap-b1-systeminfo", "agent-update", "dir-listings", "network", "filesystems"]);
 
 let SAP_B1_VERSION_MAP = new Map([
   ["10.00.320", { featurePack: "FP 2602", patchLevel: "PL 22", releaseDate: "Feb 2026" }],
@@ -4707,21 +4707,23 @@ function renderReportCard(report) {
         ${renderDirListingsCard(payload)}
       </div>
     `;
-  } else {
+  } else if (section === "network") {
     detailContent = `
-      <div class="detail-cards">
-        <section class="detail-card">
-          <h4>🌐 Netzwerk-Details</h4>
-          ${renderNetworkTable(network)}
-        </section>
-
-        <section class="detail-card">
-          <h4>💾 Filesysteme</h4>
-          ${renderFilesystemTable(payload.filesystems)}
-        </section>
-      </div>
+      <section class="detail-card">
+        <h4>🌐 Netzwerk-Details</h4>
+        ${renderNetworkTable(network)}
+      </section>
+    `;
+  } else if (section === "filesystems") {
+    detailContent = `
+      <section class="detail-card">
+        <h4>💾 Filesysteme</h4>
+        ${renderFilesystemTable(payload.filesystems)}
+      </section>
     `;
   }
+
+  const showMetaGroups = section === "overview";
 
   return `
     <article class="report-card">
@@ -4737,12 +4739,12 @@ function renderReportCard(report) {
         </div>
       </div>
 
-      <div class="meta-groups">
+      ${showMetaGroups ? `<div class="meta-groups">
         ${agentGroup}
         ${systemGroup}
         ${resourcesGroup}
         ${networkGroup}
-      </div>
+      </div>` : ""}
       ${detailContent}
     </article>
   `;
