@@ -7615,7 +7615,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                                                     WHERE a2.hostname = r.hostname AND a2.status = 'open' AND a2.severity = 'critical'
                                                       AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a2.hostname AND m.mountpoint = a2.mountpoint)
                                                       AND (a2.ack_at_utc IS NULL OR a2.ack_at_utc = '')
-                                                ) AS open_critical_alert_count
+                                                ) AS open_critical_alert_count,
+                                                (
+                                                    SELECT COALESCE(CASE WHEN json_valid(r5.payload_json) THEN json_extract(r5.payload_json, '$.hana_info.version') END, '')
+                                                    FROM reports r5
+                                                    WHERE r5.hostname = r.hostname
+                                                      AND NULLIF(COALESCE(CASE WHEN json_valid(r5.payload_json) THEN json_extract(r5.payload_json, '$.hana_info.version') END, ''), '') IS NOT NULL
+                                                    ORDER BY
+                                                        COALESCE(
+                                                            NULLIF(CASE WHEN json_valid(r5.payload_json) THEN json_extract(r5.payload_json, '$.send_started_utc') END, ''),
+                                                            NULLIF(CASE WHEN json_valid(r5.payload_json) THEN json_extract(r5.payload_json, '$.timestamp_utc') END, ''),
+                                                            r5.received_at_utc
+                                                        ) DESC,
+                                                        r5.id DESC
+                                                    LIMIT 1
+                                                ) AS latest_hana_release
                         FROM reports r
                         GROUP BY r.hostname
                         ORDER BY last_seen_utc DESC
@@ -7670,6 +7684,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 hana_release_value = ""
                 if isinstance(hana_info, dict):
                     hana_release_value = str(hana_info.get("version", "") or "")
+                if not hana_release_value:
+                    hana_release_value = str(row[8] or "")
                 hosts.append(
                     {
                         "hostname": hostname,
