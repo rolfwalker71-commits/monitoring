@@ -569,11 +569,13 @@ async function refreshDashboard(options = {}) {
       loadInactiveHosts({ updateList: false }),
       loadHosts({ preserveScroll }),
     ]);
-    await Promise.allSettled([
-      loadReportsForHost(),
-      loadAnalysisForHost(),
-      loadAlertsForHost(),
-    ]);
+    if (state.selectedHost) {
+      await Promise.allSettled([
+        loadReportsForHost(),
+        loadAnalysisForHost(),
+        loadAlertsForHost(),
+      ]);
+    }
     if (state.viewMode === "settings") {
       try {
         await loadSettingsPanel(true);
@@ -5707,24 +5709,18 @@ async function loadHosts(options = {}) {
       state.selectedDisplayName = "";
       state.reportOffset = 0;
       loadAndRenderCustomerNotificationPanel("");
-    } else if (!state.selectedHost) {
-      state.selectedHost = String(orderedHosts[0].hostname || "");
-      state.selectedDisplayName = String(orderedHosts[0].display_name || orderedHosts[0].hostname || "");
-      state.reportOffset = 0;
     }
+    // No auto-selection: user picks a host explicitly
 
-    const selectedStillVisible = orderedHosts.some((host) => String(host.hostname || "") === state.selectedHost);
+    const selectedStillVisible = !state.selectedHost || orderedHosts.some((host) => String(host.hostname || "") === state.selectedHost);
     if (!selectedStillVisible && orderedHosts.length > 0) {
-      state.selectedHost = String(orderedHosts[0].hostname || "");
-      state.selectedDisplayName = String(orderedHosts[0].display_name || orderedHosts[0].hostname || "");
+      // Previously selected host disappeared (e.g. hidden/deleted) — deselect instead of jumping
+      state.selectedHost = "";
+      state.selectedDisplayName = "";
       state.reportOffset = 0;
       renderHosts(hosts);
       if (preserveScroll && hostList) hostList.scrollTop = previousScrollTop;
       updatePagerButtons();
-      loadReportsForHost();
-      loadAnalysisForHost();
-      loadAlertsForHost();
-      loadAndRenderCustomerNotificationPanel(state.selectedHost);
       return;
     }
 
@@ -5783,7 +5779,7 @@ async function loadReportsForHost(options = {}) {
     }
     list.innerHTML = state.hostFilterNoMatches
       ? "<p class=\"muted\">Keine Daten zum Suchfilter vorhanden.</p>"
-      : "<p class=\"muted\">Kein Host ausgewaehlt.</p>";
+      : "<p class=\"muted\">Bitte einen Host auswählen, um Daten zu laden.</p>";
     updatePagerButtons();
     return;
   }
