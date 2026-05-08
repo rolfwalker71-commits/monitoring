@@ -167,9 +167,10 @@ try {
         }
 
         if (-not $embeddedVersion -or $embeddedVersion -ne $remoteVersion) {
-            # Force one more refresh through the API path and validate again.
-            $wc.Headers['Accept'] = 'application/vnd.github.v3.raw'
-            $wc.DownloadFile("$ApiBaseUrl/client/windows/collect_and_send.ps1?ref=main&cb=$([System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())", "$tmpDir\collect_and_send.ps1")
+            # Force one more refresh through the normal fallback chain and validate again.
+            if (-not (Download-RepoFile -RelativePath 'client/windows/collect_and_send.ps1' -DestinationPath "$tmpDir\collect_and_send.ps1")) {
+                throw "Failed to refresh collect_and_send.ps1 while validating embedded version. Details: $global:LastDownloadRepoFileError"
+            }
             $collectContent = [System.IO.File]::ReadAllText("$tmpDir\collect_and_send.ps1", [System.Text.Encoding]::UTF8)
             $embeddedVersion = ''
             if ($collectContent -match "`$EmbeddedAgentVersion\s*=\s*'([^']+)'") {
