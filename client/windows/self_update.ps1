@@ -171,7 +171,7 @@ try {
     # If AGENT_VERSION was resolved, enforce that downloaded collect script carries the same embedded version.
     if ($remoteVersionSource -eq 'AGENT_VERSION') {
         $embeddedVersion = ''
-        if ($collectContent -match "\$EmbeddedAgentVersion\s*=\s*'([^']+)'") {
+        if ($collectContent -match "`$EmbeddedAgentVersion\s*=\s*'([^']+)'") {
             $embeddedVersion = $Matches[1]
         }
 
@@ -181,7 +181,7 @@ try {
             $wc.DownloadFile("$ApiBaseUrl/client/windows/collect_and_send.ps1?ref=main&cb=$([System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())", "$tmpDir\collect_and_send.ps1")
             $collectContent = [System.IO.File]::ReadAllText("$tmpDir\collect_and_send.ps1", [System.Text.Encoding]::UTF8)
             $embeddedVersion = ''
-            if ($collectContent -match "\$EmbeddedAgentVersion\s*=\s*'([^']+)'") {
+            if ($collectContent -match "`$EmbeddedAgentVersion\s*=\s*'([^']+)'") {
                 $embeddedVersion = $Matches[1]
             }
 
