@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Option D – Anker-Scroll Navigation (Prototyp)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+    font-size: 14px;
+    color: #1f2937;
+    background: linear-gradient(180deg, #ffffff 0%, #e8f0f9 100%);
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── App Shell ── */
+  .app-shell {
+    display: grid;
+    grid-template-rows: 52px 1fr;
+    grid-template-columns: 280px 1fr;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Top Bar ── */
+  .topbar {
+    grid-column: 1 / -1;
+    background: #1e3a6e;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 16px;
+    color: white;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: .3px;
+  }
+  .topbar-logo {
+    width: 28px; height: 28px;
+    background: #3b82f6;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .topbar-title { flex: 1; }
+  .topbar-version { font-size: 11px; font-weight: 400; opacity: .6; }
+  .topbar-main-tabs { display: flex; gap: 2px; }
+  .topbar-tab {
+    padding: 6px 16px;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255,255,255,.65);
+    border: none; background: transparent;
+  }
+  .topbar-tab.active {
+    background: rgba(255,255,255,.18);
+    color: white;
+    border-bottom: 2px solid #60a5fa;
+  }
+
+  /* ── Host Column ── */
+  .host-column {
+    background: #f5f9ff;
+    border-right: 1px solid #c9d8ec;
+    overflow-y: auto;
+    padding: 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: 4px 0 10px rgba(148,163,184,0.18);
+  }
+  .host-card {
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: white;
+    border: 1px solid #dde6f0;
+    cursor: pointer;
+    transition: border-color .15s;
+  }
+  .host-card.selected { border-color: #1e40af; box-shadow: 0 2px 10px rgba(30,64,175,.18); }
+  .host-card-name { font-weight: 600; font-size: 13px; }
+  .host-card-meta { font-size: 11px; color: #64748b; margin-top: 2px; }
+  .host-card-chips { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+  .chip { font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 600; }
+  .chip-ok { background: #dcfce7; color: #16a34a; border: 1px solid #86efac; }
+  .chip-warn { background: #fef3c7; color: #d97706; border: 1px solid #fcd34d; }
+  .chip-crit { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
+  .chip-blue { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+
+  /* ── Main Content ── */
+  .main-content {
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    background: #f1f5fb;
+  }
+
+  /* ── Sticky Section Nav ── */
+  .section-nav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: rgba(255,255,255,.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid #c9d8ec;
+    padding: 0 24px;
+    display: flex;
+    gap: 0;
+    align-items: stretch;
+  }
+  .section-nav-item {
+    padding: 11px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #64748b;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color .15s, border-color .15s;
+    white-space: nowrap;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .section-nav-item:hover { color: #1e40af; border-bottom-color: #93c5fd; }
+  .section-nav-item.active { color: #1e40af; border-bottom-color: #1e40af; font-weight: 600; }
+  .section-nav-badge {
+    background: #dc2626;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 20px;
+    padding: 1px 6px;
+  }
+
+  /* ── Sections ── */
+  .scroll-section {
+    padding: 24px 24px 8px;
+  }
+
+  .section-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: white;
+    border-radius: 10px;
+    border: 1px solid #dde6f0;
+    margin-bottom: 14px;
+    position: sticky;
+    top: 44px; /* height of section-nav */
+    z-index: 5;
+    box-shadow: 0 2px 8px rgba(148,163,184,.15);
+  }
+  .section-head h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1e3a6e;
+    flex: 1;
+  }
+  .section-head .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: #fee2e2;
+    color: #dc2626;
+    font-weight: 700;
+  }
+  .section-head .count {
+    font-size: 11px;
+    color: #64748b;
+  }
+  .section-divider {
+    height: 1px;
+    background: #c9d8ec;
+    margin: 20px 24px;
+  }
+
+  /* Demo cards */
+  .demo-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .demo-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .demo-card h4 { font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .5px; }
+  .demo-card .value { font-size: 22px; font-weight: 800; color: #1e3a6e; }
+  .demo-card .sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+  .demo-bar { height: 6px; border-radius: 3px; background: #e2e8f0; margin-top: 8px; overflow: hidden; }
+  .demo-bar-fill { height: 100%; border-radius: 3px; background: #22c55e; }
+  .demo-bar-fill.warn { background: #f59e0b; }
+  .demo-bar-fill.crit { background: #ef4444; }
+
+  .fs-row {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .fs-row-label { font-weight: 600; font-size: 12px; min-width: 120px; font-family: monospace; }
+  .fs-row-bar { flex: 1; height: 8px; border-radius: 4px; background: #e2e8f0; overflow: hidden; }
+  .fs-row-bar-fill { height: 100%; border-radius: 4px; }
+  .fs-row-pct { font-size: 12px; font-weight: 700; min-width: 36px; text-align: right; }
+
+  .notification-form {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 480px;
+  }
+  .notification-form label { font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 4px; }
+  .notification-form input {
+    width: 100%; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;
+  }
+  .notification-form .btn {
+    padding: 8px 18px; background: #1e40af; color: white; border: none; border-radius: 6px;
+    font-size: 13px; font-weight: 600; cursor: pointer; align-self: flex-start;
+  }
+
+  .proto-note {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    background: #1e3a6e;
+    color: white;
+    font-size: 11px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    opacity: .85;
+  }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- Top Bar -->
+  <header class="topbar">
+    <div class="topbar-logo">📊</div>
+    <span class="topbar-title">Monitoring</span>
+    <span class="topbar-version">v1.1.123</span>
+    <nav class="topbar-main-tabs">
+      <button class="topbar-tab active">Übersicht</button>
+      <button class="topbar-tab">Einzelmeldungen</button>
+    </nav>
+  </header>
+
+  <!-- Host Column -->
+  <div class="host-column">
+    <div class="host-card selected">
+      <div class="host-card-name">srv-prod-01</div>
+      <div class="host-card-meta">192.168.1.10 · v1.1.48</div>
+      <div class="host-card-chips">
+        <span class="chip chip-crit">🔔 2</span>
+        <span class="chip chip-blue">FP2405</span>
+      </div>
+    </div>
+    <div class="host-card">
+      <div class="host-card-name">srv-backup-02</div>
+      <div class="host-card-meta">192.168.1.11 · v1.1.48</div>
+      <div class="host-card-chips"><span class="chip chip-ok">OK</span></div>
+    </div>
+    <div class="host-card">
+      <div class="host-card-name">db-hana-01</div>
+      <div class="host-card-meta">192.168.1.20 · v1.1.48</div>
+      <div class="host-card-chips">
+        <span class="chip chip-warn">🔔 1</span>
+        <span class="chip chip-blue">2.0.067</span>
+      </div>
+    </div>
+    <div class="host-card">
+      <div class="host-card-name">ws-office-05</div>
+      <div class="host-card-meta">192.168.5.5 · v1.1.47</div>
+      <div class="host-card-chips"><span class="chip chip-ok">OK</span></div>
+    </div>
+  </div>
+
+  <!-- Main Content with Sticky Nav + Sections -->
+  <main class="main-content" id="mainScroll">
+
+    <!-- Sticky pill nav -->
+    <nav class="section-nav">
+      <a class="section-nav-item active" href="#sec-alarme" onclick="setActive(this)">
+        🔔 Alarme &amp; Infos <span class="section-nav-badge">3</span>
+      </a>
+      <a class="section-nav-item" href="#sec-filesysteme" onclick="setActive(this)">
+        💽 Filesysteme
+      </a>
+      <a class="section-nav-item" href="#sec-benachrichtigung" onclick="setActive(this)">
+        ✉️ Benachrichtigung
+      </a>
+    </nav>
+
+    <!-- Section: Alarme -->
+    <div class="scroll-section" id="sec-alarme">
+      <div class="section-head">
+        <h3>Alarme &amp; Infos</h3>
+        <span class="badge">3 offen</span>
+        <span class="count">letzte 24h | 757 Reports</span>
+      </div>
+      <div class="demo-grid">
+        <div class="demo-card">
+          <h4>CPU</h4>
+          <div class="value">87%</div>
+          <div class="sub">load 3.2 / 2.8 / 2.1</div>
+          <div class="demo-bar"><div class="demo-bar-fill warn" style="width:87%"></div></div>
+        </div>
+        <div class="demo-card">
+          <h4>RAM</h4>
+          <div class="value">62%</div>
+          <div class="sub">12.4 GB / 20 GB</div>
+          <div class="demo-bar"><div class="demo-bar-fill" style="width:62%"></div></div>
+        </div>
+        <div class="demo-card">
+          <h4>Swap</h4>
+          <div class="value">94%</div>
+          <div class="sub">7.5 GB / 8 GB</div>
+          <div class="demo-bar"><div class="demo-bar-fill crit" style="width:94%"></div></div>
+        </div>
+        <div class="demo-card">
+          <h4>Load 1m</h4>
+          <div class="value">3.2</div>
+          <div class="sub">letzte Meldung: 14:22</div>
+          <div class="demo-bar"><div class="demo-bar-fill warn" style="width:55%"></div></div>
+        </div>
+        <div class="demo-card">
+          <h4>Offene Alerts</h4>
+          <div class="value" style="color:#dc2626">3</div>
+          <div class="sub">kritisch: 1 | warnung: 2</div>
+        </div>
+        <div class="demo-card">
+          <h4>Letzter Report</h4>
+          <div class="value" style="font-size:16px">14:22</div>
+          <div class="sub">08.05.2026</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Section: Filesysteme -->
+    <div class="scroll-section" id="sec-filesysteme">
+      <div class="section-head">
+        <h3>Filesysteme</h3>
+        <span class="count">4 Einträge | avg 62%</span>
+      </div>
+
+      <div class="fs-row">
+        <span class="fs-row-label">/</span>
+        <div class="fs-row-bar"><div class="fs-row-bar-fill" style="width:45%;background:#22c55e;"></div></div>
+        <span class="fs-row-pct" style="color:#16a34a;">45%</span>
+      </div>
+      <div class="fs-row">
+        <span class="fs-row-label">/hana/data</span>
+        <div class="fs-row-bar"><div class="fs-row-bar-fill" style="width:82%;background:#f59e0b;"></div></div>
+        <span class="fs-row-pct" style="color:#d97706;">82%</span>
+      </div>
+      <div class="fs-row">
+        <span class="fs-row-label">/usr/sap</span>
+        <div class="fs-row-bar"><div class="fs-row-bar-fill" style="width:31%;background:#22c55e;"></div></div>
+        <span class="fs-row-pct" style="color:#16a34a;">31%</span>
+      </div>
+      <div class="fs-row">
+        <span class="fs-row-label">/hana/log</span>
+        <div class="fs-row-bar"><div class="fs-row-bar-fill" style="width:91%;background:#ef4444;"></div></div>
+        <span class="fs-row-pct" style="color:#dc2626;">91%</span>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Section: Benachrichtigung -->
+    <div class="scroll-section" id="sec-benachrichtigung">
+      <div class="section-head">
+        <h3>Benachrichtigung</h3>
+      </div>
+      <div class="notification-form">
+        <div>
+          <label>E-Mail Empfänger</label>
+          <input type="email" placeholder="admin@example.com" value="rolf@walker.ch">
+        </div>
+        <div>
+          <label>Schwellwert</label>
+          <input type="text" placeholder="z.B. 80%" value="80%">
+        </div>
+        <button class="btn">Speichern</button>
+      </div>
+    </div>
+
+    <!-- spacer so last section can scroll to top -->
+    <div style="height: 40vh;"></div>
+
+  </main>
+</div>
+
+<div class="proto-note">Option D – Anker-Scroll · Prototyp</div>
+
+<script>
+function setActive(el) {
+  document.querySelectorAll('.section-nav-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// Update active nav item on scroll
+const mainScroll = document.getElementById('mainScroll');
+const sections = ['alarme', 'filesysteme', 'benachrichtigung'];
+mainScroll.addEventListener('scroll', () => {
+  const scrollTop = mainScroll.scrollTop;
+  let current = sections[0];
+  for (const id of sections) {
+    const el = document.getElementById('sec-' + id);
+    if (el && el.offsetTop - mainScroll.offsetTop - 100 <= scrollTop) {
+      current = id;
+    }
+  }
+  document.querySelectorAll('.section-nav-item').forEach(i => i.classList.remove('active'));
+  const activeLink = document.querySelector(`.section-nav-item[href="#sec-${current}"]`);
+  if (activeLink) activeLink.classList.add('active');
+});
+</script>
+</body>
+</html>

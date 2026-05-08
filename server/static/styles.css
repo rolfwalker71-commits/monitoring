@@ -1742,6 +1742,136 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   height: 14px;
 }
 
+/* ── Overview Sidebar Layout ── */
+.overview-layout {
+  display: flex;
+  gap: 0;
+  align-items: flex-start;
+  min-height: 0;
+}
+
+.overview-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 172px;
+  flex-shrink: 0;
+  padding: 6px 0 12px;
+  gap: 2px;
+  border-right: 1px solid #c9d8ec;
+  margin-right: 14px;
+  align-self: stretch;
+}
+
+.overview-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: none;
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 0 6px 6px 0;
+  text-align: left;
+  transition: background .12s, color .12s, border-color .12s;
+  white-space: nowrap;
+}
+.overview-sidebar-item:hover {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.overview-sidebar-item.active {
+  background: #dbeafe;
+  border-left-color: #1e40af;
+  color: #1e40af;
+  font-weight: 600;
+}
+.osi-icon {
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.overview-sidebar-divider {
+  height: 1px;
+  background: #c9d8ec;
+  margin: 8px 14px 6px;
+}
+
+.overview-sidebar-range {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 14px 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+}
+.overview-sidebar-range select {
+  font-size: 11px;
+  padding: 4px 6px;
+  border: 1px solid #c9d8ec;
+  border-radius: 6px;
+  background: white;
+  color: #1f2937;
+  cursor: pointer;
+  width: 100%;
+}
+
+.overview-content {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Overview Sidebar Dark Mode ── */
+body[data-theme="dark"] .overview-sidebar {
+  border-right-color: #24344d;
+}
+body[data-theme="dark"] .overview-sidebar-item {
+  color: #c8d8ec;
+}
+body[data-theme="dark"] .overview-sidebar-item:hover,
+body[data-theme="dark"] .overview-sidebar-item.active {
+  background: #1a2f4a;
+  color: #60a5fa;
+}
+body[data-theme="dark"] .overview-sidebar-item.active {
+  border-left-color: #3b82f6;
+}
+body[data-theme="dark"] .overview-sidebar-divider {
+  background: #24344d;
+}
+body[data-theme="dark"] .overview-sidebar-range {
+  color: #9fb3cc;
+}
+body[data-theme="dark"] .overview-sidebar-range select {
+  background: #111b2f;
+  border-color: #24344d;
+  color: #e6edf7;
+}
+
+/* ── Trend Card Progress Bar ── */
+.trend-progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: #e2e8f0;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.trend-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width .3s ease;
+}
+
+body[data-theme="dark"] .trend-progress-bar {
+  background: #1e2f45;
+}
+
 .overview-subsection {
   margin-bottom: 12px;
 }

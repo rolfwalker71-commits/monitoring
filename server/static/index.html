@@ -788,26 +788,32 @@
             </div>
 
             <div id="overviewView" class="view-section" role="tabpanel" aria-labelledby="overviewTabButton">
-              <div class="subview-controls-row">
-                <div class="subview-tabs-shell">
-                  <div class="subview-tabs" role="tablist" aria-label="Übersichts-Register">
-                    <button id="overviewMainTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="overviewMainSection">Alarme &amp; Infos</button>
-                    <button id="overviewFilesystemTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="overviewFilesystemSection">Filesysteme</button>
-                    <button id="overviewNotificationTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="overviewNotificationSection">Benachrichtigung</button>
-                  </div>
-                </div>
-                <label class="chart-range-control" for="analysisRangeSelect">
-                  <span>Chart-Zeitraum</span>
-                  <select id="analysisRangeSelect">
-                    <option value="6">Letzte 6 Std.</option>
-                    <option value="24" selected>Letzte 24 Std.</option>
-                    <option value="72">Letzte 3 Tage</option>
-                    <option value="168">Letzte 7 Tage</option>
-                    <option value="336">Letzte 14 Tage</option>
-                    <option value="720">Letzte 30 Tage</option>
-                  </select>
-                </label>
-              </div>
+              <div class="overview-layout">
+                <nav class="overview-sidebar" role="tablist" aria-label="Übersichts-Register">
+                  <button id="overviewMainTabButton" type="button" class="overview-sidebar-item active" role="tab" aria-selected="true" aria-controls="overviewMainSection">
+                    <span class="osi-icon">🔔</span> Alarme &amp; Infos
+                  </button>
+                  <button id="overviewFilesystemTabButton" type="button" class="overview-sidebar-item" role="tab" aria-selected="false" aria-controls="overviewFilesystemSection">
+                    <span class="osi-icon">💽</span> Filesysteme
+                  </button>
+                  <button id="overviewNotificationTabButton" type="button" class="overview-sidebar-item hidden" role="tab" aria-selected="false" aria-controls="overviewNotificationSection">
+                    <span class="osi-icon">✉️</span> Benachrichtigung
+                  </button>
+                  <div class="overview-sidebar-divider"></div>
+                  <label class="overview-sidebar-range" for="analysisRangeSelect">
+                    <span>Zeitraum</span>
+                    <select id="analysisRangeSelect">
+                      <option value="6">Letzte 6 Std.</option>
+                      <option value="24" selected>Letzte 24 Std.</option>
+                      <option value="72">Letzte 3 Tage</option>
+                      <option value="168">Letzte 7 Tage</option>
+                      <option value="336">Letzte 14 Tage</option>
+                      <option value="720">Letzte 30 Tage</option>
+                    </select>
+                  </label>
+                </nav>
+
+                <div class="overview-content">
 
               <section id="overviewMainSection" class="overview-subsection overview-scroll-panel" role="tabpanel" aria-labelledby="overviewMainTabButton">
                 <section class="alerts-panel">
@@ -902,6 +908,9 @@
                   </div>
                 </div>
               </section>
+
+                </div><!-- /.overview-content -->
+              </div><!-- /.overview-layout -->
             </div>
 
             <div id="reportsView" class="view-section hidden" role="tabpanel" aria-labelledby="reportsTabButton">

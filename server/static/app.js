@@ -2888,6 +2888,15 @@ function renderResourceTrendCards(resourceTrends, latestReportTimeUtc, swapTotal
         ? `<button class="btn-secondary btn-secondary--compact trend-ai-btn" type="button" data-ai-metric="${escapeHtml(metricKey)}" data-ai-label="${escapeHtml(label)}">🤖 KI Analyse</button>`
         : "";
 
+      const pct = suffix === "%" ? Math.min(100, Math.max(0, Number(value.current) || 0)) : null;
+      const barColor = pct === null ? null
+        : pct >= 90 ? "#ef4444"
+        : pct >= 70 ? "#f59e0b"
+        : "#22c55e";
+      const progressBar = pct !== null
+        ? `<div class="trend-progress-bar"><div class="trend-progress-fill" style="width:${pct}%;background:${barColor};"></div></div>`
+        : "";
+
       return `
         <article class="trend-card">
           <div class="trend-card-head">
@@ -2895,6 +2904,7 @@ function renderResourceTrendCards(resourceTrends, latestReportTimeUtc, swapTotal
             ${aiButton}
           </div>
           <span class="trend-current">Aktuell: ${formatNumber(value.current)}${suffix} <span class="trend-stand">(${standText})</span></span>
+          ${progressBar}
           <span>Min/Max: ${formatNumber(value.min)}${suffix} / ${formatNumber(value.max)}${suffix}</span>
           <span>Avg: ${formatNumber(value.avg)}${suffix}</span>
           <span>Delta: ${formatSignedPercent(value.delta)}${suffix === "%" ? "" : ""}</span>
