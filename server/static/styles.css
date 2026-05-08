@@ -3920,6 +3920,28 @@ body[data-theme="dark"] .hana-sid-chip {
   border-radius: 6px;
   padding: 10px;
   background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
+  --meta-chip-bg: #e8edf5;
+  --meta-chip-text: #4a5568;
+}
+
+.meta-groups .meta-group:nth-child(1) {
+  --meta-chip-bg: #dbeafe;
+  --meta-chip-text: #1e40af;
+}
+
+.meta-groups .meta-group:nth-child(2) {
+  --meta-chip-bg: #d1fae5;
+  --meta-chip-text: #065f46;
+}
+
+.meta-groups .meta-group:nth-child(3) {
+  --meta-chip-bg: #dcfce7;
+  --meta-chip-text: #166534;
+}
+
+.meta-groups .meta-group:nth-child(4) {
+  --meta-chip-bg: #ede9fe;
+  --meta-chip-text: #5b21b6;
 }
 
 .meta-group-title {
@@ -3939,9 +3961,10 @@ body[data-theme="dark"] .hana-sid-chip {
 
 .meta-group-item {
   margin: 0;
-  display: flex;
-  gap: 8px;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: start;
   line-height: 1.25;
   font-size: 13px;
 }
@@ -3950,10 +3973,9 @@ body[data-theme="dark"] .hana-sid-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-width: 80px;
   color: var(--muted);
   font-size: 11px;
-  flex-shrink: 0;
+  min-width: 0;
 }
 
 .meta-label-tag {
@@ -3962,17 +3984,42 @@ body[data-theme="dark"] .hana-sid-chip {
   font-weight: 700;
   font-family: ui-monospace, "SF Mono", monospace;
   letter-spacing: 0.02em;
-  background: #e8edf5;
-  color: #4a5568;
+  background: var(--meta-chip-bg);
+  color: var(--meta-chip-text);
   border-radius: 3px;
   padding: 0 4px;
   line-height: 16px;
   flex-shrink: 0;
 }
 
-body[data-theme="dark"] .meta-label-tag {
-  background: #1e293b;
-  color: #94a3b8;
+body[data-theme="dark"] .meta-groups .meta-group:nth-child(1) {
+  --meta-chip-bg: #1e3a8a;
+  --meta-chip-text: #bfdbfe;
+}
+
+body[data-theme="dark"] .meta-groups .meta-group:nth-child(2) {
+  --meta-chip-bg: #064e3b;
+  --meta-chip-text: #a7f3d0;
+}
+
+body[data-theme="dark"] .meta-groups .meta-group:nth-child(3) {
+  --meta-chip-bg: #14532d;
+  --meta-chip-text: #bbf7d0;
+}
+
+body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
+  --meta-chip-bg: #4c1d95;
+  --meta-chip-text: #ddd6fe;
+}
+
+.meta-group-item > span {
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .meta-group-item {
+    grid-template-columns: 160px minmax(0, 1fr);
+  }
 }
 
 .meta-group-item span {
