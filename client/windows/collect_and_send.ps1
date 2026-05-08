@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.47'
+$EmbeddedAgentVersion = '1.1.49'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -218,6 +218,133 @@ function Get-AgentConfigBlock {
         }
     }
     return '{"available":true,"path":"' + $configPathJson + '","entries":[' + ($entries -join ',') + ']}'
+}
+
+function Get-SqlServerInfoBlock {
+    # Discovers local SQL Server instances via Registry, then connects via Windows Auth
+    # (no SA or password needed) to collect version, service status, database list,
+    # sizes and last backup timestamps from msdb.
+    $instancesJson = @()
+    $regRoot = 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL'
+    if (-not (Test-Path $regRoot)) {
+        return '{"available":false,"instances":[]}'
+    }
+    try {
+        $instanceMap = Get-ItemProperty -Path $regRoot -ErrorAction Stop
+        foreach ($prop in $instanceMap.PSObject.Properties) {
+            if ($prop.Name -in @('PSPath','PSParentPath','PSChildName','PSDrive','PSProvider')) { continue }
+            $instanceName = $prop.Name   # e.g. MSSQLSERVER or SQLEXPRESS
+            $serviceKey   = $prop.Value  # e.g. MSSQL$SQLEXPRESS
+
+            # Version from Registry — works even when service is stopped
+            $version = ''
+            try {
+                $verPath = "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\$serviceKey\MSSQLServer\CurrentVersion"
+                $version = (Get-ItemProperty -Path $verPath -ErrorAction SilentlyContinue).CurrentVersion
+                if (-not $version) { $version = '' }
+            } catch { $version = '' }
+
+            # Edition from Registry
+            $edition = ''
+            try {
+                $setupPath = "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\$serviceKey\Setup"
+                $edition = (Get-ItemProperty -Path $setupPath -ErrorAction SilentlyContinue).Edition
+                if (-not $edition) { $edition = '' }
+            } catch { $edition = '' }
+
+            # Service status
+            $svcName = if ($instanceName -eq 'MSSQLSERVER') { 'MSSQLSERVER' } else { "MSSQL`$$instanceName" }
+            $svcStatus = 'unknown'
+            try { $svcStatus = (Get-Service -Name $svcName -ErrorAction SilentlyContinue).Status.ToString() } catch {}
+
+            $serverInst = if ($instanceName -eq 'MSSQLSERVER') { 'localhost' } else { "localhost\$instanceName" }
+
+            $databases = @()
+            $connError = ''
+            try {
+                $cs = "Server=$serverInst;Integrated Security=true;Connection Timeout=5;TrustServerCertificate=true"
+                $conn = New-Object System.Data.SqlClient.SqlConnection($cs)
+                $conn.Open()
+
+                # Database list + sizes (all databases incl. system DBs except tempdb)
+                $cmd = $conn.CreateCommand()
+                $cmd.CommandTimeout = 10
+                $cmd.CommandText = @"
+SELECT d.name, d.state_desc, d.recovery_model_desc,
+    COALESCE(SUM(CASE WHEN mf.type=0 THEN CAST(mf.size AS bigint) ELSE 0 END)*8/1024, 0) AS data_mb,
+    COALESCE(SUM(CASE WHEN mf.type=1 THEN CAST(mf.size AS bigint) ELSE 0 END)*8/1024, 0) AS log_mb
+FROM sys.databases d
+LEFT JOIN sys.master_files mf ON d.database_id = mf.database_id
+WHERE d.name <> 'tempdb'
+GROUP BY d.name, d.state_desc, d.recovery_model_desc
+ORDER BY
+    CASE WHEN d.name IN ('master','model','msdb') THEN 1 ELSE 0 END,
+    d.name
+"@
+                $rdr = $cmd.ExecuteReader()
+                $dbRows = @()
+                while ($rdr.Read()) {
+                    $dbRows += @{
+                        name           = [string]$rdr[0]
+                        state          = [string]$rdr[1]
+                        recovery_model = [string]$rdr[2]
+                        data_mb        = [long]$rdr[3]
+                        log_mb         = [long]$rdr[4]
+                    }
+                }
+                $rdr.Close()
+
+                # Last backup per database (Full=D, Differential=I, Log=L)
+                $bkCmd = $conn.CreateCommand()
+                $bkCmd.CommandTimeout = 10
+                $bkCmd.CommandText = @"
+SELECT database_name, [type], MAX(backup_finish_date) AS last_backup
+FROM msdb.dbo.backupset
+GROUP BY database_name, [type]
+"@
+                $bkRdr = $bkCmd.ExecuteReader()
+                $backups = @{}
+                while ($bkRdr.Read()) {
+                    $n  = [string]$bkRdr[0]
+                    $t  = [string]$bkRdr[1]
+                    $dt = $bkRdr[2]
+                    if (-not $backups.ContainsKey($n)) { $backups[$n] = @{} }
+                    $backups[$n][$t] = if ($dt -is [DateTime]) { $dt.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC) } else { '' }
+                }
+                $bkRdr.Close()
+                $conn.Close()
+
+                foreach ($db in $dbRows) {
+                    $bk = if ($backups.ContainsKey($db.name)) { $backups[$db.name] } else { @{} }
+                    $isSystem = $db.name -in @('master','model','msdb')
+                    $dbJson  = '{"name":' + (ConvertTo-JsonString $db.name | ForEach-Object { '"' + $_ + '"' }) +
+                               ',"system_db":' + ($isSystem ? 'true' : 'false') +
+                               ',"state":"'          + (ConvertTo-JsonString $db.state)           + '"' +
+                               ',"recovery_model":"' + (ConvertTo-JsonString $db.recovery_model)  + '"' +
+                               ',"data_mb":'         + $db.data_mb +
+                               ',"log_mb":'          + $db.log_mb +
+                               ',"last_full_backup":"'  + (if ($bk.ContainsKey('D')) { ConvertTo-JsonString $bk['D'] } else { '' }) + '"' +
+                               ',"last_diff_backup":"'  + (if ($bk.ContainsKey('I')) { ConvertTo-JsonString $bk['I'] } else { '' }) + '"' +
+                               ',"last_log_backup":"'   + (if ($bk.ContainsKey('L')) { ConvertTo-JsonString $bk['L'] } else { '' }) + '"' +
+                               '}'
+                    $databases += $dbJson
+                }
+            } catch {
+                $connError = ConvertTo-JsonString ($_.Exception.Message -replace '[\r\n]+',' ')
+            }
+
+            $instJson = '{"name":"'           + (ConvertTo-JsonString $instanceName) + '"' +
+                        ',"version":"'        + (ConvertTo-JsonString $version)      + '"' +
+                        ',"edition":"'        + (ConvertTo-JsonString $edition)      + '"' +
+                        ',"service_status":"' + (ConvertTo-JsonString $svcStatus)    + '"' +
+                        ',"connection_error":"' + $connError                         + '"' +
+                        ',"databases":['      + ($databases -join ',')               + ']}' 
+            $instancesJson += $instJson
+        }
+    } catch {
+        return '{"available":false,"instances":[],"error":"' + (ConvertTo-JsonString ($_.Exception.Message -replace '[\r\n]+',' ')) + '"}'
+    }
+    return '{"available":true,"instances":[' + ($instancesJson -join ',') + ']}'
 }
 
 function Get-SapB1InfoBlock {
@@ -743,10 +870,11 @@ $topProcStr = Get-TopProcessEntries
 $containerData = Get-ContainerEntries
 $containersStr = [string]$containerData.entries
 $dockerAvailable = if ($containerData.available) { 'true' } else { 'false' }
-$updateLogJson  = Get-UpdateLogBlock
+$updateLogJson   = Get-UpdateLogBlock
 $agentConfigJson = Get-AgentConfigBlock
-$sapB1Json      = Get-SapB1InfoBlock
-$largeFilesJson = '{"enabled":false,"status":"unsupported","filesystems":[]}'
+$sapB1Json       = Get-SapB1InfoBlock
+$sqlServerJson   = Get-SqlServerInfoBlock
+$largeFilesJson  = '{"enabled":false,"status":"unsupported","filesystems":[]}'
 
 Invoke-RemoteCommands
 Invoke-PrioritySelfUpdate
@@ -847,6 +975,7 @@ $payload = @"
     "agent_update": $updateLogJson,
     "agent_config": $agentConfigJson,
     "sap_business_one": $sapB1Json,
+    "sql_server_info": $sqlServerJson,
     "large_files": $largeFilesJson
 }
 "@

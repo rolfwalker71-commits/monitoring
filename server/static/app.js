@@ -18,7 +18,7 @@ const AUTO_REFRESH_INTERVAL_OPTIONS = new Map([
   [480, "8 Min."],
   [0, "Aus"],
 ]);
-const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "sap-b1-systeminfo", "agent-update", "dir-listings", "network", "filesystems"]);
+const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "sap-b1-systeminfo", "agent-update", "dir-listings", "network", "filesystems", "databases"]);
 
 let SAP_B1_VERSION_MAP = new Map([
   ["10.00.320", { featurePack: "FP 2602", patchLevel: "PL 22", releaseDate: "Feb 2026" }],
@@ -4307,6 +4307,119 @@ function renderFilesystemTable(filesystems) {
   `;
 }
 
+function renderDatabasesSection(payload) {
+  const sqlInfo = payload.sql_server_info;
+  const hanaInfo = payload.hana_db_info; // reserved for future HANA DB user data
+
+  const parts = [];
+
+  // ---- SQL Server (Windows) ----
+  if (sqlInfo && typeof sqlInfo === "object") {
+    if (sqlInfo.available === false) {
+      parts.push(`<section class="detail-card"><h4>🗃️ SQL Server</h4><p class="muted">SQL Server nicht gefunden (Registry-Schlüssel fehlt).</p></section>`);
+    } else {
+      const instances = Array.isArray(sqlInfo.instances) ? sqlInfo.instances : [];
+      for (const inst of instances) {
+        const instName = asText(inst.name, "MSSQLSERVER");
+        const version  = asText(inst.version, "");
+        const edition  = asText(inst.edition, "");
+        const svcStatus = asText(inst.service_status, "unknown");
+        const connErr  = asText(inst.connection_error, "");
+        const svcBadge = svcStatus.toLowerCase() === "running"
+          ? `<span class="db-status-badge db-status-ok">Running</span>`
+          : `<span class="db-status-badge db-status-warn">${escapeHtml(svcStatus)}</span>`;
+
+        const metaHtml = `
+          <div class="db-instance-meta">
+            <span class="db-meta-item"><strong>Instanz:</strong> ${escapeHtml(instName)}</span>
+            ${version ? `<span class="db-meta-item"><strong>Version:</strong> ${escapeHtml(version)}</span>` : ""}
+            ${edition ? `<span class="db-meta-item"><strong>Edition:</strong> ${escapeHtml(edition)}</span>` : ""}
+            <span class="db-meta-item"><strong>Dienst:</strong> ${svcBadge}</span>
+          </div>`;
+
+        let dbTableHtml = "";
+        if (connErr) {
+          dbTableHtml = `<p class="muted db-conn-error">⚠️ Kein DB-Zugriff (Windows Auth): ${escapeHtml(connErr)}</p>`;
+        } else {
+          const dbs = Array.isArray(inst.databases) ? inst.databases : [];
+          if (dbs.length === 0) {
+            dbTableHtml = `<p class="muted">Keine Datenbanken gefunden.</p>`;
+          } else {
+            const rows = dbs.map((db) => {
+              const name = asText(db.name, "-");
+              const isSystem = db.system_db === true;
+              const state = asText(db.state, "-");
+              const recovery = asText(db.recovery_model, "-");
+              const dataMb = Number(db.data_mb || 0);
+              const logMb  = Number(db.log_mb  || 0);
+              const totalMb = dataMb + logMb;
+              const sizeStr = totalMb >= 1024
+                ? `${(totalMb / 1024).toFixed(1)} GB`
+                : `${totalMb} MB`;
+              const dataSizeStr = dataMb >= 1024 ? `${(dataMb/1024).toFixed(1)} GB` : `${dataMb} MB`;
+              const logSizeStr  = logMb  >= 1024 ? `${(logMb /1024).toFixed(1)} GB` : `${logMb} MB`;
+
+              const fullBk  = asText(db.last_full_backup, "");
+              const diffBk  = asText(db.last_diff_backup, "");
+              const logBk   = asText(db.last_log_backup,  "");
+
+              const fmtBk = (utc) => utc ? formatUtcPlus2(utc) : '<span class="muted">—</span>';
+
+              const stateClass = state.toLowerCase() === "online" ? "" : " db-state-warn";
+              const systemClass = isSystem ? " db-row-system" : "";
+              return `
+                <tr class="${stateClass}${systemClass}">
+                  <td>${escapeHtml(name)}${isSystem ? ' <span class="db-sys-badge">sys</span>' : ""}</td>
+                  <td>${escapeHtml(state)}</td>
+                  <td>${escapeHtml(recovery)}</td>
+                  <td class="db-size-cell" title="Data: ${escapeHtml(dataSizeStr)} · Log: ${escapeHtml(logSizeStr)}">${escapeHtml(sizeStr)}</td>
+                  <td class="db-bk-cell">${fmtBk(fullBk)}</td>
+                  <td class="db-bk-cell">${fmtBk(diffBk)}</td>
+                  <td class="db-bk-cell">${fmtBk(logBk)}</td>
+                </tr>`;
+            }).join("");
+            dbTableHtml = `
+              <div class="table-wrap">
+                <table class="db-table">
+                  <thead>
+                    <tr>
+                      <th>Datenbank</th>
+                      <th>Status</th>
+                      <th>Recovery</th>
+                      <th>Größe</th>
+                      <th>Letztes Full-Backup</th>
+                      <th>Letztes Diff-Backup</th>
+                      <th>Letztes Log-Backup</th>
+                    </tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>`;
+          }
+        }
+
+        parts.push(`
+          <section class="detail-card">
+            <h4>🗃️ SQL Server${instances.length > 1 ? ` — ${escapeHtml(instName)}` : ""}</h4>
+            ${metaHtml}
+            ${dbTableHtml}
+          </section>`);
+      }
+    }
+  }
+
+  // ---- HANA DB (placeholder — populated once hana_db_info is available) ----
+  if (hanaInfo && typeof hanaInfo === "object" && hanaInfo.available === true) {
+    // Future: render HANA schema/database info here
+    parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Datenbanken</h4><p class="muted">HANA DB-Daten werden hier angezeigt sobald der Agent einen Read-Only-User konfiguriert hat.</p></section>`);
+  }
+
+  if (parts.length === 0) {
+    return `<section class="detail-card"><h4>🗃️ Datenbanken</h4><p class="muted">Keine Datenbankdaten in diesem Report vorhanden.</p></section>`;
+  }
+  return `<div class="detail-cards">${parts.join("")}</div>`;
+}
+
 function renderJournalErrorsTable(journalErrors) {
   const block = journalErrors && typeof journalErrors === "object" ? journalErrors : {};
   const entries = Array.isArray(block.entries) ? block.entries : [];
@@ -4708,6 +4821,8 @@ function renderReportCard(report) {
         ${renderFilesystemTable(payload.filesystems)}
       </section>
     `;
+  } else if (section === "databases") {
+    detailContent = renderDatabasesSection(payload);
   }
 
   const showMetaGroups = section === "overview";

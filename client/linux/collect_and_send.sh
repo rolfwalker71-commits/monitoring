@@ -316,6 +316,129 @@ collect_hana_version_json() {
 }
 
 collect_cron_json() {
+  # Collects additional HANA runtime info without requiring DB credentials:
+  #   - Service status via "HDB info" (as <sid>adm)
+  #   - Last backup timestamps from backup directory modification times
+  # Designed to be forward-compatible: hdbsql-based schema info can be added later.
+  local sid="${HANA_SID:-}"
+  local sid_user=""
+  local services_json="[]"
+  local backup_json="{}"
+  local volumes_json="{}"
+
+  # Auto-detect SID (same logic as collect_hana_version_json)
+  if [[ -z "$sid" ]] && [[ -d /hana/shared ]]; then
+    local detected_sid
+    detected_sid="$(find /hana/shared -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+      | awk -F/ '{print $NF}' \
+      | grep -E '^[A-Z][A-Z0-9]{2}$' \
+      | head -1 || true)"
+    [[ -n "$detected_sid" ]] && sid="$detected_sid"
+  fi
+
+  if [[ -z "$sid" ]]; then
+    printf '{"available":false,"sid":"","services":[],"backup":{},"volumes":{}}'
+    return
+  fi
+
+  sid_user="$(printf '%s' "$sid" | tr '[:upper:]' '[:lower:]')adm"
+  local timeout_sec="${HANA_VERSION_TIMEOUT_SEC:-10}"
+  [[ "$timeout_sec" =~ ^[0-9]+$ ]] || timeout_sec=10
+
+  # --- Services via "HDB info" ---
+  local hdb_info_raw=""
+  if id "$sid_user" >/dev/null 2>&1; then
+    if command -v timeout >/dev/null 2>&1; then
+      hdb_info_raw="$(timeout "${timeout_sec}s" su - "$sid_user" -c 'HDB info' 2>/dev/null || true)"
+    else
+      hdb_info_raw="$(su - "$sid_user" -c 'HDB info' 2>/dev/null || true)"
+    fi
+  fi
+
+  if [[ -n "$hdb_info_raw" ]]; then
+    local svc_entries=""
+    while IFS= read -r line; do
+      # "HDB info" format: "  hdbindexserver      31001   30101  running"
+      # Skip header line and empty lines
+      local svc_name pid ppid status
+      if [[ "$line" =~ ^[[:space:]]*(hdb[a-z]+)[[:space:]]+([0-9]+)[[:space:]]+([0-9]+)[[:space:]]+([a-z]+) ]]; then
+        svc_name="${BASH_REMATCH[1]}"
+        pid="${BASH_REMATCH[2]}"
+        ppid="${BASH_REMATCH[3]}"
+        status="${BASH_REMATCH[4]}"
+        local entry
+        entry="$(printf '{"name":"%s","pid":%s,"ppid":%s,"status":"%s"}' \
+          "$(json_escape "$svc_name")" "$pid" "$ppid" "$(json_escape "$status")")"
+        svc_entries="${svc_entries:+$svc_entries,}$entry"
+      fi
+    done <<< "$hdb_info_raw"
+    [[ -n "$svc_entries" ]] && services_json="[$svc_entries]"
+  fi
+
+  # --- Backup info from filesystem ---
+  # HANA stores backups under /hana/shared/<SID>/HDB<instance>/backup/
+  # We look for the most recent data and log backup by directory mtime.
+  local backup_base=""
+  if [[ -d "/hana/shared/${sid}" ]]; then
+    backup_base="$(find "/hana/shared/${sid}" -maxdepth 2 -type d -name "backup" 2>/dev/null | head -1 || true)"
+  fi
+
+  local last_data_backup="" last_log_backup="" backup_data_dir="" backup_log_dir=""
+  if [[ -n "$backup_base" ]]; then
+    backup_data_dir="${backup_base}/data"
+    backup_log_dir="${backup_base}/log"
+
+    if [[ -d "$backup_data_dir" ]]; then
+      local newest_data
+      newest_data="$(find "$backup_data_dir" -maxdepth 3 \( -name "*.bak" -o -name "*.complete" -o -name "COMPLETE_DATA_BACKUP*" \) \
+        -newer /proc/1/cmdline -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | awk '{print $1}' || true)"
+      if [[ -z "$newest_data" ]]; then
+        # fallback: just mtime of the directory itself
+        newest_data="$(stat -c '%Y' "$backup_data_dir" 2>/dev/null || true)"
+      fi
+      if [[ "$newest_data" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+        last_data_backup="$(date -u -d "@${newest_data%%.*}" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || true)"
+      fi
+    fi
+
+    if [[ -d "$backup_log_dir" ]]; then
+      local newest_log
+      newest_log="$(find "$backup_log_dir" -maxdepth 3 -type f \
+        -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | awk '{print $1}' || true)"
+      if [[ "$newest_log" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+        last_log_backup="$(date -u -d "@${newest_log%%.*}" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || true)"
+      fi
+    fi
+  fi
+
+  backup_json="$(printf '{"data_backup_dir":"%s","log_backup_dir":"%s","last_data_backup":"%s","last_log_backup":"%s"}' \
+    "$(json_escape "$backup_data_dir")" \
+    "$(json_escape "$backup_log_dir")" \
+    "$(json_escape "$last_data_backup")" \
+    "$(json_escape "$last_log_backup")")"
+
+  # --- Volume sizes from /hana mountpoints ---
+  local data_size_gb=0 log_size_gb=0 shared_size_gb=0
+  if command -v df >/dev/null 2>&1; then
+    local df_data df_log df_shared
+    df_data="$(df -BG "/hana/data" 2>/dev/null | awk 'NR==2{gsub(/G/,"",$2); print $2}' || echo 0)"
+    df_log="$(df -BG "/hana/log" 2>/dev/null | awk 'NR==2{gsub(/G/,"",$2); print $2}' || echo 0)"
+    df_shared="$(df -BG "/hana/shared" 2>/dev/null | awk 'NR==2{gsub(/G/,"",$2); print $2}' || echo 0)"
+    [[ "$df_data" =~ ^[0-9]+$ ]] && data_size_gb=$df_data
+    [[ "$df_log" =~ ^[0-9]+$ ]] && log_size_gb=$df_log
+    [[ "$df_shared" =~ ^[0-9]+$ ]] && shared_size_gb=$df_shared
+  fi
+  volumes_json="$(printf '{"hana_data_gb":%s,"hana_log_gb":%s,"hana_shared_gb":%s}' \
+    "$data_size_gb" "$log_size_gb" "$shared_size_gb")"
+
+  printf '{"available":true,"sid":"%s","services":%s,"backup":%s,"volumes":%s}' \
+    "$(json_escape "$sid")" \
+    "$services_json" \
+    "$backup_json" \
+    "$volumes_json"
+}
+
+collect_cron_json() {
   local root_crontab_content="" root_crontab_lines=0 root_crontab_error="" root_crontab_available=false
   local cron_d_files_json="" cron_d_file_count=0 cron_d_available=false cron_d_error=""
 

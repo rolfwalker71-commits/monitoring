@@ -4641,6 +4641,50 @@ body[data-theme="dark"] .fs-bar-wrap {
   white-space: nowrap;
 }
 
+/* ---- Database section ---- */
+.db-instance-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+.db-meta-item {
+  color: var(--text);
+}
+.db-status-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.db-status-ok   { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+.db-status-warn { background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; }
+.db-conn-error  { font-size: 12px; color: var(--muted); }
+.db-sys-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  background: #e0e7ff;
+  color: #3730a3;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.db-table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 12px; }
+.db-table th { padding: 6px 10px; border-bottom: 2px solid var(--line); white-space: nowrap; }
+.db-table td { padding: 5px 10px; border-bottom: 1px solid var(--line); }
+.db-table .db-row-system td { color: var(--muted); }
+.db-table .db-state-warn td { color: #b45309; }
+.db-size-cell { white-space: nowrap; text-align: right; }
+.db-bk-cell   { white-space: nowrap; font-size: 11px; }
+
+body[data-theme="dark"] .db-status-ok   { background: #14532d; color: #86efac; border-color: #166534; }
+body[data-theme="dark"] .db-status-warn { background: #451a03; color: #fcd34d; border-color: #78350f; }
+body[data-theme="dark"] .db-sys-badge   { background: #1e1b4b; color: #a5b4fc; }
+
 .muted {
   color: var(--muted);
 }
