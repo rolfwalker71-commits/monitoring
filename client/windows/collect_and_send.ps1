@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.49'
+$EmbeddedAgentVersion = '1.1.50'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -317,15 +317,19 @@ GROUP BY database_name, [type]
                 foreach ($db in $dbRows) {
                     $bk = if ($backups.ContainsKey($db.name)) { $backups[$db.name] } else { @{} }
                     $isSystem = $db.name -in @('master','model','msdb')
+                    $isSystemText = if ($isSystem) { 'true' } else { 'false' }
+                    $lastFullBackup = if ($bk.ContainsKey('D')) { ConvertTo-JsonString $bk['D'] } else { '' }
+                    $lastDiffBackup = if ($bk.ContainsKey('I')) { ConvertTo-JsonString $bk['I'] } else { '' }
+                    $lastLogBackup = if ($bk.ContainsKey('L')) { ConvertTo-JsonString $bk['L'] } else { '' }
                     $dbJson  = '{"name":' + (ConvertTo-JsonString $db.name | ForEach-Object { '"' + $_ + '"' }) +
-                               ',"system_db":' + ($isSystem ? 'true' : 'false') +
+                               ',"system_db":' + $isSystemText +
                                ',"state":"'          + (ConvertTo-JsonString $db.state)           + '"' +
                                ',"recovery_model":"' + (ConvertTo-JsonString $db.recovery_model)  + '"' +
                                ',"data_mb":'         + $db.data_mb +
                                ',"log_mb":'          + $db.log_mb +
-                               ',"last_full_backup":"'  + (if ($bk.ContainsKey('D')) { ConvertTo-JsonString $bk['D'] } else { '' }) + '"' +
-                               ',"last_diff_backup":"'  + (if ($bk.ContainsKey('I')) { ConvertTo-JsonString $bk['I'] } else { '' }) + '"' +
-                               ',"last_log_backup":"'   + (if ($bk.ContainsKey('L')) { ConvertTo-JsonString $bk['L'] } else { '' }) + '"' +
+                               ',"last_full_backup":"'  + $lastFullBackup + '"' +
+                               ',"last_diff_backup":"'  + $lastDiffBackup + '"' +
+                               ',"last_log_backup":"'   + $lastLogBackup + '"' +
                                '}'
                     $databases += $dbJson
                 }
