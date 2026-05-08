@@ -561,14 +561,15 @@ async function refreshDashboard(options = {}) {
   autoRefreshInProgress = true;
   try {
     const shouldRefreshGlobalAlertsList = state.viewMode === "global" && state.globalSubMode === "global-alerts";
-    await Promise.allSettled([
+    // Load hosts first so the list appears immediately, fire background tasks in parallel
+    const backgroundTasks = Promise.allSettled([
       loadWebclientVersion(),
       loadActiveUsers(),
       loadGlobalAlertsOverview({ updateList: shouldRefreshGlobalAlertsList }),
       loadCriticalTrends({ updateList: false }),
       loadInactiveHosts({ updateList: false }),
-      loadHosts({ preserveScroll }),
     ]);
+    await loadHosts({ preserveScroll });
     if (state.selectedHost) {
       await Promise.allSettled([
         loadReportsForHost(),
@@ -576,6 +577,7 @@ async function refreshDashboard(options = {}) {
         loadAlertsForHost(),
       ]);
     }
+    await backgroundTasks;
     if (state.viewMode === "settings") {
       try {
         await loadSettingsPanel(true);
