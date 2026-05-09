@@ -1401,6 +1401,13 @@ def get_filesystem_visibility_hidden(
     return [str(row[0] or "") for row in rows if str(row[0] or "").strip()]
 
 
+def normalize_mountpoint_key(value: object) -> str:
+    mountpoint = str(value or "").strip()
+    if mountpoint != "/":
+        mountpoint = mountpoint.rstrip("/")
+    return mountpoint.lower()
+
+
 def save_filesystem_visibility_hidden(
     conn: sqlite3.Connection,
     username: str,
@@ -1546,6 +1553,17 @@ def replace_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str
 def collect_critical_trends(conn: sqlite3.Connection, hours: int, hidden_mountpoints_by_host: dict[str, set[str]] | None = None) -> list[dict]:
     cutoff_iso = utc_hours_ago_iso(hours)
 
+    hidden_normalized_by_host: dict[str, set[str]] = {}
+    if hidden_mountpoints_by_host:
+        for host, mountpoints in hidden_mountpoints_by_host.items():
+            keys = {
+                normalize_mountpoint_key(item)
+                for item in (mountpoints or [])
+                if normalize_mountpoint_key(item)
+            }
+            if keys:
+                hidden_normalized_by_host[host] = keys
+
     resource_metrics = [
         ("cpu_usage_percent", "CPU %"),
         ("memory_used_percent", "RAM %"),
@@ -1678,9 +1696,10 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, hidden_mountpo
         for mountpoint, values in fs_series.items():
             if mountpoint in muted_mountpoints:
                 continue
+            mountpoint_key = normalize_mountpoint_key(mountpoint)
             # Skip filesystem if it's hidden in user's visibility settings
-            if hidden_mountpoints_by_host and hostname in hidden_mountpoints_by_host:
-                if mountpoint in hidden_mountpoints_by_host[hostname]:
+            if hidden_normalized_by_host and hostname in hidden_normalized_by_host:
+                if mountpoint_key in hidden_normalized_by_host[hostname]:
                     continue
             projected = linear_regression_projected(values)
             level = trend_level(projected)
@@ -4177,7 +4196,9 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
             }
             hidden_mountpoints_by_host = {}
             for hostname in all_hostnames:
-                hidden = get_filesystem_visibility_hidden(conn, username, hostname, "critical-trends")
+                hidden_critical = get_filesystem_visibility_hidden(conn, username, hostname, "critical-trends")
+                hidden_fs_focus = get_filesystem_visibility_hidden(conn, username, hostname, "fs-focus")
+                hidden = sorted({*(hidden_critical or []), *(hidden_fs_focus or [])}, key=lambda item: str(item).lower())
                 if hidden:
                     hidden_mountpoints_by_host[hostname] = hidden
             
@@ -5980,7 +6001,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 }
                 hidden_mountpoints_by_host = {}
                 for hostname in all_hostnames:
-                    hidden = get_filesystem_visibility_hidden(conn, username, hostname, "critical-trends")
+                    hidden_critical = get_filesystem_visibility_hidden(conn, username, hostname, "critical-trends")
+                    hidden_fs_focus = get_filesystem_visibility_hidden(conn, username, hostname, "fs-focus")
+                    hidden = sorted({*(hidden_critical or []), *(hidden_fs_focus or [])}, key=lambda item: str(item).lower())
                     if hidden:
                         hidden_mountpoints_by_host[hostname] = hidden
                 
