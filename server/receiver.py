@@ -7675,7 +7675,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     return
 
                 conn.execute(
-                    "UPDATE alerts SET closed_at_utc = ?, closed_by = ? WHERE id = ?",
+                    "UPDATE alerts SET status = 'resolved', closed_at_utc = ?, closed_by = ? WHERE id = ?",
                     (closed_at_utc, closed_by, int(target[0])),
                 )
                 conn.commit()
@@ -7723,7 +7723,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     return
 
                 conn.execute(
-                    "UPDATE alerts SET closed_at_utc = NULL, closed_by = NULL WHERE id = ?",
+                    "UPDATE alerts SET status = 'open', closed_at_utc = NULL, closed_by = NULL WHERE id = ?",
                     (int(target[0]),),
                 )
                 conn.commit()
