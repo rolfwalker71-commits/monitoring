@@ -4375,6 +4375,49 @@ function renderDatabasesSection(payload) {
   const sqlInfo = payload.sql_server_info;
   const hanaInfo = payload.hana_db_info; // reserved for future HANA DB user data
 
+  const sqlReleaseMap = [
+    { major: 16, label: "SQL Server 2022" },
+    { major: 15, label: "SQL Server 2019" },
+    { major: 14, label: "SQL Server 2017" },
+    { major: 13, label: "SQL Server 2016" },
+    { major: 12, label: "SQL Server 2014" },
+    { major: 11, label: "SQL Server 2012" },
+    { major: 10, label: "SQL Server 2008 / 2008 R2" },
+    { major: 9, label: "SQL Server 2005" },
+    { major: 8, label: "SQL Server 2000" },
+  ];
+
+  const resolveSqlRelease = (versionText) => {
+    const raw = asText(versionText, "");
+    if (!raw) {
+      return { label: "unbekannt", detail: "Keine Versionsnummer vorhanden" };
+    }
+
+    const versionParts = raw.split(".");
+    const major = Number(versionParts[0]);
+    const minor = Number(versionParts[1] || "0");
+    if (!Number.isFinite(major)) {
+      return { label: "unbekannt", detail: `Nicht parsebar: ${raw}` };
+    }
+
+    if (major === 10) {
+      if (minor >= 50) {
+        return { label: "SQL Server 2008 R2", detail: `${major}.${minor}x` };
+      }
+      return { label: "SQL Server 2008", detail: `${major}.${minor}x` };
+    }
+
+    const mapped = sqlReleaseMap.find((entry) => entry.major === major);
+    if (mapped) {
+      return { label: mapped.label, detail: `${major}.x` };
+    }
+    return { label: "Unbekannte SQL-Generation", detail: `${major}.x` };
+  };
+
+  const sqlReleaseMapText = sqlReleaseMap
+    .map((entry) => `${entry.major}.x -> ${entry.label}`)
+    .join(" | ");
+
   const parts = [];
 
   // ---- SQL Server (Windows) ----
@@ -4387,6 +4430,7 @@ function renderDatabasesSection(payload) {
         const instName = asText(inst.name, "MSSQLSERVER");
         const version  = asText(inst.version, "");
         const edition  = asText(inst.edition, "");
+        const releaseInfo = resolveSqlRelease(version);
         const svcStatus = asText(inst.service_status, "unknown");
         const connErr  = asText(inst.connection_error, "");
         const sqlSystemUser = asText(inst.sql_system_user, "");
@@ -4425,14 +4469,16 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
               </details>`;
         }
 
-        const metaHtml = `
-          <div class="db-instance-meta">
-            <span class="db-meta-item"><strong>Instanz:</strong> ${escapeHtml(instName)}</span>
-            ${version ? `<span class="db-meta-item"><strong>Version:</strong> ${escapeHtml(version)}</span>` : ""}
-            ${edition ? `<span class="db-meta-item"><strong>Edition:</strong> ${escapeHtml(edition)}</span>` : ""}
-            <span class="db-meta-item"><strong>Dienst:</strong> ${svcBadge}</span>
-          </div>
-          ${diagHtml}`;
+          const metaHtml = `
+            <div class="db-instance-meta">
+              <span class="db-meta-item"><strong>Instanz:</strong> ${escapeHtml(instName)}</span>
+              ${version ? `<span class="db-meta-item"><strong>Version:</strong> ${escapeHtml(version)}</span>` : ""}
+              <span class="db-meta-item"><strong>Release:</strong> ${escapeHtml(releaseInfo.label)}${releaseInfo.detail ? ` <span class="count compact">(${escapeHtml(releaseInfo.detail)})</span>` : ""}</span>
+              ${edition ? `<span class="db-meta-item"><strong>Edition:</strong> ${escapeHtml(edition)}</span>` : ""}
+              <span class="db-meta-item"><strong>Dienst:</strong> ${svcBadge}</span>
+            </div>
+            <p class="count compact">Version-Mapping: ${escapeHtml(sqlReleaseMapText)}. Spezialfall: 10.50.x = SQL Server 2008 R2.</p>
+            ${diagHtml}`;
 
         let dbTableHtml = "";
         if (connErr) {
