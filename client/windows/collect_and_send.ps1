@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.166'
+$EmbeddedAgentVersion = '1.1.167'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -323,9 +323,9 @@ ORDER BY
                 $rdr = $cmd.ExecuteReader()
                 $dbRows = @()
                 while ($rdr.Read()) {
-                    $fullBkTime = if ($rdr[14] -is [DateTime]) { $rdr[14].ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC) } else { '' }
-                    $diffBkTime = if ($rdr[15] -is [DateTime]) { $rdr[15].ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC) } else { '' }
-                    $logBkTime = if ($rdr[16] -is [DateTime]) { $rdr[16].ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC) } else { '' }
+                    $fullBkTime = if ($rdr[13] -is [DateTime]) { $rdr[13].ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC) } else { '' }
+                    $diffBkTime = if ($rdr[14] -is [DateTime]) { $rdr[14].ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC) } else { '' }
+                    $logBkTime = if ($rdr[15] -is [DateTime]) { $rdr[15].ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC) } else { '' }
                     $dbRows += @{
                         name                     = [string]$rdr[0]
                         state                    = [string]$rdr[1]
