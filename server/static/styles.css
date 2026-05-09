@@ -6314,6 +6314,10 @@ body[data-theme="dark"] .backup-status-stale {
   margin-left: 12px;
 }
 
+.system-overview-customer-list.hidden {
+  display: none !important;
+}
+
 .system-overview-customer-block {
   border: 1px solid #d7e3f2;
   border-radius: 10px;

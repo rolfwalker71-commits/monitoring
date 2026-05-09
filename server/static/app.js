@@ -8100,7 +8100,7 @@ async function loadSystemOverview() {
                     if (host?.sap_release) {
                       const versionInfo = SAP_B1_VERSION_MAP.get(host.sap_release);
                       if (versionInfo) {
-                        sapReleaseDisplay = `${versionInfo.featurePack} ${versionInfo.patchLevel}`;
+                        sapReleaseDisplay = versionInfo.featurePack;
                       } else {
                         sapReleaseDisplay = host.sap_release;
                       }
