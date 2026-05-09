@@ -1674,6 +1674,37 @@ def _extract_sap_hana_ram(payload: dict) -> dict:
     }
 
 
+def _extract_cpu_overview(payload: dict) -> dict:
+    cpu = payload.get("cpu") if isinstance(payload.get("cpu"), dict) else {}
+
+    cores_raw = cpu.get("cores")
+    if cores_raw is None:
+        cores_raw = cpu.get("core_count")
+    if cores_raw is None:
+        cores_raw = cpu.get("logical_cores")
+
+    cpu_cores = "-"
+    try:
+        if cores_raw is not None:
+            cpu_cores_num = int(float(str(cores_raw).strip()))
+            if cpu_cores_num > 0:
+                cpu_cores = cpu_cores_num
+    except (TypeError, ValueError):
+        cpu_cores = "-"
+
+    cpu_model_name = str(
+        cpu.get("model_name")
+        or cpu.get("model")
+        or cpu.get("name")
+        or "-"
+    ).strip() or "-"
+
+    return {
+        "cpu_cores": cpu_cores,
+        "cpu_model_name": cpu_model_name,
+    }
+
+
 def collect_system_overview(conn: sqlite3.Connection) -> dict:
     hostnames = get_known_hostnames(conn)
     if not hostnames:
@@ -1721,6 +1752,7 @@ def collect_system_overview(conn: sqlite3.Connection) -> dict:
         customer = effective_display_name(payload, override_names.get(hostname, ""), hostname)
 
         release_info = _extract_sap_hana_ram(payload)
+        cpu_info = _extract_cpu_overview(payload)
 
         sql_release = "-"
         sql_block = payload.get("sql_server_info")
@@ -1751,6 +1783,8 @@ def collect_system_overview(conn: sqlite3.Connection) -> dict:
                 "hana_sid": release_info["hana_sid"],
                 "sql_release": sql_release,
                 "ram_gb": release_info["ram_gb"],
+                "cpu_cores": cpu_info["cpu_cores"],
+                "cpu_model_name": cpu_info["cpu_model_name"],
                 "last_update": received_at_utc or "-",
             }
         )

@@ -4814,6 +4814,8 @@ function renderReportCard(report) {
   const memory = payload.memory || {};
   const swap = payload.swap || {};
   const network = payload.network || {};
+  const cpuCores = Number(cpu.cores ?? cpu.core_count ?? cpu.logical_cores ?? payload.cpu_cores);
+  const cpuModelName = asText(cpu.model_name || cpu.model || cpu.name || payload.cpu_model_name || "-");
   const defaultNicIpv4 = resolveDefaultNicIpv4(report, payload, network);
   const title = asText(report.display_name || payload.display_name || report.hostname || payload.hostname);
   const technicalHostname = asText(report.hostname || payload.hostname);
@@ -4877,7 +4879,8 @@ function renderReportCard(report) {
       <div class="meta-group-title">Ressourcen</div>
       <div class="meta-group-content">
         ${renderMetaItem("CPU", "CPU", formatPercent(cpu.usage_percent) + " | load " + formatNumber(cpu.load_avg_1, 2) + " / " + formatNumber(cpu.load_avg_5, 2) + " / " + formatNumber(cpu.load_avg_15, 2))}
-        ${cpu.model_name ? renderMetaItem("CPU", "Modell", cpu.model_name) : ""}
+        ${renderMetaItem("CPU", "Kerne", Number.isFinite(cpuCores) && cpuCores > 0 ? String(Math.floor(cpuCores)) : "-")}
+        ${renderMetaItem("CPU", "Modell", cpuModelName)}
         ${renderMetaItem("RAM", "RAM", formatPercent(memory.used_percent) + " | " + formatKilobytes(memory.used_kb) + " / " + formatKilobytes(memory.total_kb))}
         ${renderMetaItem("Swap", "Swap", formatPercent(swap.used_percent) + " | " + formatKilobytes(swap.used_kb) + " / " + formatKilobytes(swap.total_kb))}
       </div>

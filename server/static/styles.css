@@ -6385,7 +6385,13 @@ body[data-theme="dark"] .backup-status-stale {
 .system-overview-table td:nth-child(7) { width: 10%; text-align: right; min-width: 80px; }
 
 .system-overview-table th:nth-child(8),
-.system-overview-table td:nth-child(8) { width: 18%; min-width: 150px; }
+.system-overview-table td:nth-child(8) { width: 8%; min-width: 70px; text-align: center; }
+
+.system-overview-table th:nth-child(9),
+.system-overview-table td:nth-child(9) { width: 18%; min-width: 160px; }
+
+.system-overview-table th:nth-child(10),
+.system-overview-table td:nth-child(10) { width: 12%; min-width: 140px; }
 
 .so-center {
   text-align: center;
