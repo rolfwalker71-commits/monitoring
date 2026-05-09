@@ -2234,6 +2234,133 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
     }
 
 
+def backfill_host_config_changes(conn: sqlite3.Connection, days: int = 7) -> dict:
+    window_days = max(1, int(days or 7))
+    cutoff_iso = (datetime.now(timezone.utc) - timedelta(days=window_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    rows = conn.execute(
+        """
+        SELECT id, received_at_utc, hostname, payload_json
+        FROM reports
+        WHERE received_at_utc >= ?
+        ORDER BY hostname COLLATE NOCASE ASC, id ASC
+        """,
+        (cutoff_iso,),
+    ).fetchall()
+
+    last_snapshot_by_host: dict[str, dict[str, str]] = {}
+    last_seen_at_by_host: dict[str, str] = {}
+    report_count = 0
+    inserted_changes = 0
+
+    for row in rows:
+        report_id = int(row[0] or 0)
+        detected_at_utc = str(row[1] or "").strip()
+        hostname = str(row[2] or "").strip()
+        if not hostname:
+            continue
+        payload = parse_payload_json(str(row[3] or "{}"))
+        report_count += 1
+
+        current_snapshot = {
+            key: _normalize_config_value(key, value)
+            for key, value in _extract_host_config_snapshot(payload).items()
+        }
+        previous_snapshot = last_snapshot_by_host.get(hostname)
+
+        if previous_snapshot is not None:
+            for field_key in HOST_CONFIG_TRACKED_FIELDS:
+                old_value = previous_snapshot.get(field_key, "-")
+                new_value = current_snapshot.get(field_key, "-")
+                if not _is_significant_config_change(field_key, old_value, new_value):
+                    continue
+
+                existing = conn.execute(
+                    """
+                    SELECT 1
+                    FROM host_config_changes
+                    WHERE hostname = ?
+                      AND field_key = ?
+                      AND report_id = ?
+                      AND old_value = ?
+                      AND new_value = ?
+                    LIMIT 1
+                    """,
+                    (hostname, field_key, report_id, old_value, new_value),
+                ).fetchone()
+                if existing:
+                    continue
+
+                conn.execute(
+                    """
+                    INSERT INTO host_config_changes (
+                        detected_at_utc,
+                        hostname,
+                        field_key,
+                        old_value,
+                        new_value,
+                        report_id,
+                        source
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, 'backfill')
+                    """,
+                    (detected_at_utc or utc_now_iso(), hostname, field_key, old_value, new_value, report_id),
+                )
+                inserted_changes += 1
+
+        last_snapshot_by_host[hostname] = current_snapshot
+        last_seen_at_by_host[hostname] = detected_at_utc or utc_now_iso()
+
+    for hostname, snapshot in last_snapshot_by_host.items():
+        updated_at_utc = last_seen_at_by_host.get(hostname, utc_now_iso())
+        conn.execute(
+            """
+            INSERT INTO host_config_snapshot (
+                hostname,
+                os_release,
+                cpu_cores,
+                cpu_model_name,
+                ram_gb,
+                sap_release,
+                hana_release,
+                hana_sid,
+                sql_release,
+                updated_at_utc
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(hostname) DO UPDATE SET
+                os_release = excluded.os_release,
+                cpu_cores = excluded.cpu_cores,
+                cpu_model_name = excluded.cpu_model_name,
+                ram_gb = excluded.ram_gb,
+                sap_release = excluded.sap_release,
+                hana_release = excluded.hana_release,
+                hana_sid = excluded.hana_sid,
+                sql_release = excluded.sql_release,
+                updated_at_utc = excluded.updated_at_utc
+            """,
+            (
+                hostname,
+                snapshot["os_release"],
+                snapshot["cpu_cores"],
+                snapshot["cpu_model_name"],
+                snapshot["ram_gb"],
+                snapshot["sap_release"],
+                snapshot["hana_release"],
+                snapshot["hana_sid"],
+                snapshot["sql_release"],
+                updated_at_utc,
+            ),
+        )
+
+    return {
+        "days": window_days,
+        "reports_scanned": report_count,
+        "hosts_touched": len(last_snapshot_by_host),
+        "inserted_changes": inserted_changes,
+    }
+
+
 def collect_system_overview(conn: sqlite3.Connection) -> dict:
     hostnames = get_known_hostnames(conn)
     if not hostnames:
@@ -7045,6 +7172,38 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.OK, {"status": "stored", "username": target_username, "subscriptions": saved})
             except ValueError as exc:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            return
+
+        if path == "/api/v1/host-config-changes/backfill":
+            if not self._require_admin_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            days = 7
+            if isinstance(payload, dict) and "days" in payload:
+                try:
+                    days = max(1, min(int(payload.get("days", 7)), 30))
+                except (TypeError, ValueError):
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "days must be an integer between 1 and 30"})
+                    return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                result = backfill_host_config_changes(conn, days=days)
+                conn.commit()
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "result": result,
+                },
+            )
             return
 
         if path == "/api/v1/alarm-test":
