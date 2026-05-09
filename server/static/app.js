@@ -75,6 +75,7 @@ const state = {
   criticalTrendsProjectHours: 8,
   criticalTrendsMetrics: ["filesystem"],
   inactiveHostsHours: 1,
+  hostConfigChangesHours: 720,
   inactiveHosts: [],
   reportLimit: 1,
   reportOffset: 0,
@@ -6929,13 +6930,16 @@ async function loadBackupStatus() {
 async function loadHostConfigChanges() {
   const groupsEl = document.getElementById("hostConfigChangesGroups");
   const summaryEl = document.getElementById("hostConfigChangesSummary");
+  const filterEl = document.getElementById("hostConfigChangesHoursFilter");
   if (!groupsEl) return;
 
   groupsEl.innerHTML = '<p class="muted">Lade Daten…</p>';
   if (summaryEl) summaryEl.textContent = "";
 
   try {
-    const response = await fetch("/api/v1/host-config-changes?hours=24&limit=500", {
+    const hours = state.hostConfigChangesHours || 720;
+    if (filterEl) filterEl.value = hours;
+    const response = await fetch(`/api/v1/host-config-changes?hours=${hours}&limit=500`, {
       credentials: "same-origin",
       cache: "no-store",
     });
@@ -6943,7 +6947,6 @@ async function loadHostConfigChanges() {
 
     const data = await response.json();
     const items = Array.isArray(data.items) ? data.items : [];
-    const hours = Number(data.hours || 24);
     if (summaryEl) {
       summaryEl.textContent = `${items.length} Aenderung(en) in den letzten ${hours}h`;
     }
@@ -6986,13 +6989,11 @@ async function loadHostConfigChanges() {
 
           let sapFeaturePackInfo = "";
           if (fieldKey === "sap_release") {
-            const oldFp = resolveSapReleaseDisplay(oldValue, SAP_B1_VERSION_MAP);
             const newFp = resolveSapReleaseDisplay(newValue, SAP_B1_VERSION_MAP);
-            const oldFpSafe = escapeHtml(asText(oldFp, "-"));
             const newFpSafe = escapeHtml(asText(newFp, "-"));
             sapFeaturePackInfo = `
               <div class="host-config-change-subline">
-                Feature Pack: ${oldFpSafe} -> <strong>${newFpSafe}</strong>
+                ${newFpSafe}
               </div>
             `;
           }
@@ -7013,7 +7014,7 @@ async function loadHostConfigChanges() {
         }).join("");
 
         return `
-          <details class="host-config-change-group" open>
+          <details class="host-config-change-group">
             <summary class="host-config-change-summary">
               <span class="global-host-label">${escapeHtml(group.displayName)}</span>
               ${showHost ? `<span class="global-hostname-sub">(${escapeHtml(group.hostname)})</span>` : ""}
@@ -7529,6 +7530,13 @@ function wireEvents() {
   if (backfillHostConfigChangesButton) {
     backfillHostConfigChangesButton.addEventListener("click", async () => {
       await runHostConfigChangesBackfill(7);
+    });
+  }
+  const hostConfigChangesHoursFilter = document.getElementById("hostConfigChangesHoursFilter");
+  if (hostConfigChangesHoursFilter) {
+    hostConfigChangesHoursFilter.addEventListener("change", async () => {
+      state.hostConfigChangesHours = Number(hostConfigChangesHoursFilter.value);
+      await loadHostConfigChanges();
     });
   }
 

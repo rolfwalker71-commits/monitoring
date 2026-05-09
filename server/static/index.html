@@ -241,6 +241,15 @@
               <div class="inactive-hosts-toolbar">
                 <span id="hostConfigChangesSummary" class="count compact"></span>
                 <span id="hostConfigChangesBackfillStatus" class="count compact"></span>
+                <select id="hostConfigChangesHoursFilter" class="btn-secondary" title="Zeitraum für Aenderungen">
+                  <option value="24">24h</option>
+                  <option value="168">7 Tage</option>
+                  <option value="720" selected>30 Tage</option>
+                  <option value="4320">6 Monate</option>
+                  <option value="8760">1 Jahr</option>
+                  <option value="17520">2 Jahre</option>
+                  <option value="26280">3 Jahre</option>
+                </select>
                 <button id="backfillHostConfigChangesButton" type="button" class="btn-secondary" title="Einmaliger Backfill aus den letzten 7 Tagen">Backfill 7 Tage</button>
                 <button id="refreshHostConfigChangesButton" type="button" class="btn-secondary">Neu laden</button>
               </div>

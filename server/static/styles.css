@@ -3780,6 +3780,15 @@ body[data-theme="dark"] .trend-progress-bar {
   word-break: break-word;
 }
 
+.host-config-changes-wrap table tbody tr {
+  height: auto;
+}
+
+.host-config-changes-wrap table td {
+  padding: 4px 8px;
+  vertical-align: top;
+}
+
 .host-config-changes-groups {
   display: grid;
   gap: 10px;
@@ -3794,10 +3803,24 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-config-change-summary {
   list-style: none;
   cursor: pointer;
-  padding: 10px 12px;
+  padding: 8px 12px;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.host-config-change-summary::before {
+  content: "▶";
+  display: inline-block;
+  width: 16px;
+  font-size: 10px;
+  text-align: center;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.host-config-change-group[open] > .host-config-change-summary::before {
+  transform: rotate(90deg);
 }
 
 .host-config-change-summary::-webkit-details-marker {
