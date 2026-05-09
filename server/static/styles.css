@@ -6344,6 +6344,51 @@ body[data-theme="dark"] .backup-status-stale {
   table-layout: fixed;
 }
 
+.system-overview-country-filter {
+  display: flex;
+  align-items: center;
+}
+
+.so-country-filter-list {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.so-country-filter-btn {
+  border: 1px solid #cfd9e6;
+  background: #f8fbff;
+  color: #1f3b63;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.so-country-filter-btn:hover {
+  border-color: #9fb8d8;
+  background: #eef5ff;
+}
+
+.so-country-filter-btn.active {
+  border-color: #1d4ed8;
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+.so-country-filter-flag {
+  width: 16px;
+  height: 12px;
+  object-fit: cover;
+  border-radius: 2px;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+}
+
 .system-overview-table th,
 .system-overview-table td {
   padding: 7px 6px;
@@ -6470,6 +6515,23 @@ body[data-theme="dark"] .system-overview-customer-block {
 
 body[data-theme="dark"] .system-overview-customer-title {
   color: #bfd3ea;
+}
+
+body[data-theme="dark"] .so-country-filter-btn {
+  border-color: #2a3c59;
+  background: #142339;
+  color: #c7dbf5;
+}
+
+body[data-theme="dark"] .so-country-filter-btn:hover {
+  border-color: #4a6f9f;
+  background: #17304d;
+}
+
+body[data-theme="dark"] .so-country-filter-btn.active {
+  border-color: #60a5fa;
+  background: #1e3a5f;
+  color: #dbeafe;
 }
 
 body[data-theme="dark"] .so-host-title {

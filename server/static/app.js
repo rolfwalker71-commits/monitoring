@@ -66,6 +66,7 @@ const state = {
   hostMutedFilter: "all",
   hostOsFilter: "all",
   hostCountryFilter: "all",
+  systemOverviewCountryFilter: "all",
   viewMode: "overview",
   userSettingsSubMode: "password",
   overviewSection: "main",
@@ -8149,6 +8150,45 @@ function formatShortHostname(hostname) {
   return raw.split(".")[0] || raw;
 }
 
+function renderSystemOverviewCountryFilter(countryCodes) {
+  const filterEl = document.getElementById("systemOverviewCountryFilter");
+  if (!filterEl) return;
+
+  const normalized = Array.from(new Set((Array.isArray(countryCodes) ? countryCodes : [])
+    .map((code) => String(code || "").trim().toUpperCase())
+    .filter((code) => code)));
+
+  if (!normalized.length) {
+    filterEl.innerHTML = "";
+    return;
+  }
+
+  if (state.systemOverviewCountryFilter !== "all" && !normalized.includes(state.systemOverviewCountryFilter)) {
+    state.systemOverviewCountryFilter = "all";
+  }
+
+  const buttons = [
+    `<button type="button" class="so-country-filter-btn ${state.systemOverviewCountryFilter === "all" ? "active" : ""}" data-country-filter="all">Alle</button>`,
+    ...normalized.map((code) => {
+      const iconPath = getCountryFlagIconPath(code);
+      const icon = iconPath
+        ? `<img src="${iconPath}" alt="${escapeHtml(code)}" class="so-country-filter-flag" />`
+        : "";
+      return `<button type="button" class="so-country-filter-btn ${state.systemOverviewCountryFilter === code ? "active" : ""}" data-country-filter="${escapeHtml(code)}">${icon}<span>${escapeHtml(code)}</span></button>`;
+    }),
+  ].join("");
+
+  filterEl.innerHTML = `<div class="so-country-filter-list">${buttons}</div>`;
+  filterEl.querySelectorAll(".so-country-filter-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const nextFilter = String(button.getAttribute("data-country-filter") || "all");
+      if (state.systemOverviewCountryFilter === nextFilter) return;
+      state.systemOverviewCountryFilter = nextFilter;
+      loadSystemOverview();
+    });
+  });
+}
+
 function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap, onRowClick) {
   if (!host) return "";
 
@@ -8209,26 +8249,44 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
 async function loadSystemOverview() {
   const container = document.getElementById("systemOverviewContainer");
   const statsEl = document.getElementById("systemOverviewStats");
+  const filterEl = document.getElementById("systemOverviewCountryFilter");
   if (!container) return;
 
   container.innerHTML = '<p class="muted">Lade Systemdaten...</p>';
   if (statsEl) statsEl.textContent = "";
+  if (filterEl) filterEl.innerHTML = "";
 
   try {
     const response = await fetch("/api/v1/system-overview", { credentials: "same-origin" });
     if (!response.ok) throw new Error("HTTP " + response.status);
     const data = await response.json();
     const byCountry = data && typeof data === "object" ? (data.by_country || {}) : {};
-    const total = Number(data?.total || 0);
+    const allCountries = Object.keys(byCountry || {}).sort((a, b) => String(a).localeCompare(String(b)));
+    renderSystemOverviewCountryFilter(allCountries);
 
-    if (statsEl) statsEl.textContent = `${total} Systeme`;
+    const activeCountryFilter = String(state.systemOverviewCountryFilter || "all");
+    const filteredEntries = Object.entries(byCountry)
+      .filter(([country]) => activeCountryFilter === "all" || String(country).toUpperCase() === activeCountryFilter)
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+
+    const total = filteredEntries.reduce((sum, [, osMap]) => {
+      return sum + Object.values(osMap || {}).reduce((osSum, customerMap) => {
+        return osSum + Object.values(customerMap || {}).reduce((customerSum, hosts) => {
+          return customerSum + (Array.isArray(hosts) ? hosts.length : 0);
+        }, 0);
+      }, 0);
+    }, 0);
+
+    if (statsEl) {
+      const scope = activeCountryFilter === "all" ? "Alle Laender" : activeCountryFilter;
+      statsEl.textContent = `${total} Systeme (${scope})`;
+    }
     if (!total) {
       container.innerHTML = '<p class="muted">Keine Systeme vorhanden.</p>';
       return;
     }
 
-    const countrySections = Object.entries(byCountry)
-      .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+    const countrySections = filteredEntries
       .map(([country, osMap], countryIndex) => {
         const countryCode = country;
         const flagIconPath = getCountryFlagIconPath(countryCode);
@@ -8274,11 +8332,11 @@ async function loadSystemOverview() {
             const osId = `so-os-${countryIndex}-${osIndex}`;
             return `
               <section class="system-overview-os-group">
-                <button class="system-overview-toggle" type="button" data-target-id="${osId}" aria-expanded="false">
-                  <span class="system-overview-chevron">▶</span>
+                <button class="system-overview-toggle" type="button" data-target-id="${osId}" aria-expanded="true">
+                  <span class="system-overview-chevron">▼</span>
                   <span class="so-os-header">${osImg} ${escapeHtml(osName)} (${osHostCount})</span>
                 </button>
-                <div id="${osId}" class="system-overview-customer-list hidden">${customers}</div>
+                <div id="${osId}" class="system-overview-customer-list">${customers}</div>
               </section>
             `;
           })
