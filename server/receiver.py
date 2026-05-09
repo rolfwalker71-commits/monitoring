@@ -2554,9 +2554,9 @@ def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) ->
             {
                 "hostname": hostname,
                 "display_name": display_name,
-                "last_report_utc": received_at,
-                "is_recent_report": is_recent_report,
-                "directories": directory_items,
+                "report_time_utc": received_at,
+                "is_today_report": is_recent_report,
+                "dirs": directory_items,
                 "has_missing_backup": has_missing_backup,
             }
         )
@@ -2567,7 +2567,7 @@ def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) ->
         "hours": max(1, int(hours or 24)),
         "total": len(items),
         "missing_count": missing_count,
-        "items": items,
+        "hosts": items,
     }
 
 
