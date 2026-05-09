@@ -809,6 +809,7 @@ function updateGlobalSubMode() {
   const inactiveHostsView = document.getElementById("inactiveHostsView");
   const systemOverviewView = document.getElementById("systemOverviewView");
   const backupStatusView = document.getElementById("backupStatusView");
+  const hostConfigChangesView = document.getElementById("hostConfigChangesView");
   const globalAdminAlertSubsView = document.getElementById("globalAdminAlertSubsView");
   const globalAdminSettingsView = document.getElementById("globalAdminSettingsView");
   const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
@@ -816,6 +817,7 @@ function updateGlobalSubMode() {
   const inactiveHostsTabButton = document.getElementById("inactiveHostsTabButton");
   const systemOverviewTabButton = document.getElementById("systemOverviewTabButton");
   const backupStatusTabButton = document.getElementById("backupStatusTabButton");
+  const hostConfigChangesTabButton = document.getElementById("hostConfigChangesTabButton");
   const globalAdminAlertSubsTabButton = document.getElementById("globalAdminAlertSubsTabButton");
   const globalAdminSettingsTabButton = document.getElementById("globalAdminSettingsTabButton");
 
@@ -824,6 +826,7 @@ function updateGlobalSubMode() {
   const inactiveActive = state.globalSubMode === "inactive-hosts";
   const systemOverviewActive = state.globalSubMode === "system-overview";
   const backupActive = state.globalSubMode === "backup-status";
+  const hostConfigChangesActive = state.globalSubMode === "host-config-changes";
   const adminAlertSubsActive = state.globalSubMode === "admin-alert-subs";
   const adminSettingsActive = state.globalSubMode === "admin-settings";
 
@@ -832,6 +835,7 @@ function updateGlobalSubMode() {
   if (inactiveHostsView) inactiveHostsView.classList.toggle("hidden", !inactiveActive);
   if (systemOverviewView) systemOverviewView.classList.toggle("hidden", !systemOverviewActive);
   if (backupStatusView) backupStatusView.classList.toggle("hidden", !backupActive);
+  if (hostConfigChangesView) hostConfigChangesView.classList.toggle("hidden", !hostConfigChangesActive);
   if (globalAdminAlertSubsView) globalAdminAlertSubsView.classList.toggle("hidden", !adminAlertSubsActive);
   if (globalAdminSettingsView) globalAdminSettingsView.classList.toggle("hidden", !adminSettingsActive);
   if (globalAlertsTabButton) { globalAlertsTabButton.classList.toggle("active", alertsActive); globalAlertsTabButton.setAttribute("aria-selected", alertsActive ? "true" : "false"); }
@@ -839,6 +843,7 @@ function updateGlobalSubMode() {
   if (inactiveHostsTabButton) { inactiveHostsTabButton.classList.toggle("active", inactiveActive); inactiveHostsTabButton.setAttribute("aria-selected", inactiveActive ? "true" : "false"); }
   if (systemOverviewTabButton) { systemOverviewTabButton.classList.toggle("active", systemOverviewActive); systemOverviewTabButton.setAttribute("aria-selected", systemOverviewActive ? "true" : "false"); }
   if (backupStatusTabButton) { backupStatusTabButton.classList.toggle("active", backupActive); backupStatusTabButton.setAttribute("aria-selected", backupActive ? "true" : "false"); }
+  if (hostConfigChangesTabButton) { hostConfigChangesTabButton.classList.toggle("active", hostConfigChangesActive); hostConfigChangesTabButton.setAttribute("aria-selected", hostConfigChangesActive ? "true" : "false"); }
   if (globalAdminAlertSubsTabButton) { globalAdminAlertSubsTabButton.classList.toggle("active", adminAlertSubsActive); globalAdminAlertSubsTabButton.setAttribute("aria-selected", adminAlertSubsActive ? "true" : "false"); }
   if (globalAdminSettingsTabButton) { globalAdminSettingsTabButton.classList.toggle("active", adminSettingsActive); globalAdminSettingsTabButton.setAttribute("aria-selected", adminSettingsActive ? "true" : "false"); }
 }
@@ -2923,7 +2928,7 @@ function renderAiCodeBlocks(blocks) {
     .join("");
 }
 
-function renderResourceTrendCards(resourceTrends, latestReportTimeUtc, swapTotalKb) {
+function renderResourceTrendCards(resourceTrends, latestReportTimeUtc, swapTotalKb, memoryTotalKb) {
   const standText = formatUtcPlus2(latestReportTimeUtc);
   const entries = [
     ["🧠 CPU", resourceTrends.cpu_usage_percent, "%", "cpu_usage_percent"],
@@ -2945,6 +2950,9 @@ function renderResourceTrendCards(resourceTrends, latestReportTimeUtc, swapTotal
 
       const swapSizeLine = label.includes("Swap") && swapTotalKb != null && swapTotalKb > 0
         ? `<span>Gesamt: ${formatKilobytes(swapTotalKb)}</span>`
+        : "";
+      const memorySizeLine = label.includes("RAM") && memoryTotalKb != null && memoryTotalKb > 0
+        ? `<span>Gesamt: ${formatKilobytes(memoryTotalKb)}</span>`
         : "";
 
       const aiButton = metricKey
@@ -2971,6 +2979,7 @@ function renderResourceTrendCards(resourceTrends, latestReportTimeUtc, swapTotal
           <span>Min/Max: ${formatNumber(value.min)}${suffix} / ${formatNumber(value.max)}${suffix}</span>
           <span>Avg: ${formatNumber(value.avg)}${suffix}</span>
           <span>Delta: ${formatSignedPercent(value.delta)}${suffix === "%" ? "" : ""}</span>
+          ${memorySizeLine}
           ${swapSizeLine}
           ${resourceTroubleshootingHint(label, value, suffix)}
         </article>
@@ -6295,7 +6304,12 @@ async function loadAnalysisForHost() {
 
     analysisSummary.textContent = `${reportCount} Reports, hoechste aktuelle FS-Auslastung: ${latestMax}`;
     resourceCharts.innerHTML = renderResourceCharts(resourceSeries, data.latest_report_time_utc);
-    resourceTrendCards.innerHTML = renderResourceTrendCards(resourceTrends, data.latest_report_time_utc, data.latest_swap_total_kb);
+    resourceTrendCards.innerHTML = renderResourceTrendCards(
+      resourceTrends,
+      data.latest_report_time_utc,
+      data.latest_swap_total_kb,
+      data.latest_memory_total_kb,
+    );
     filesystemCharts.innerHTML = renderFilesystemTrendCharts(sortedTrendRows, data.latest_report_time_utc);
     renderLargeFilesPanel(data.large_files || {}, state.largeFilesHiddenMountpoints);
 
@@ -6912,6 +6926,59 @@ async function loadBackupStatus() {
   }
 }
 
+async function loadHostConfigChanges() {
+  const rowsEl = document.getElementById("hostConfigChangesRows");
+  const summaryEl = document.getElementById("hostConfigChangesSummary");
+  if (!rowsEl) return;
+
+  rowsEl.innerHTML = '<tr><td colspan="5" class="muted">Lade Daten…</td></tr>';
+  if (summaryEl) summaryEl.textContent = "";
+
+  try {
+    const response = await fetch("/api/v1/host-config-changes?hours=24&limit=500", {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+
+    const data = await response.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+    const hours = Number(data.hours || 24);
+    if (summaryEl) {
+      summaryEl.textContent = `${items.length} Aenderung(en) in den letzten ${hours}h`;
+    }
+
+    if (!items.length) {
+      rowsEl.innerHTML = '<tr><td colspan="5" class="muted">Keine Aenderungen im gewaehlten Zeitraum.</td></tr>';
+      return;
+    }
+
+    rowsEl.innerHTML = items
+      .map((item) => {
+        const displayName = asText(item.display_name || item.hostname, "-");
+        const hostname = asText(item.hostname, "-");
+        const showHost = displayName !== hostname;
+        return `
+          <tr>
+            <td>${escapeHtml(formatUtcPlus2(item.detected_at_utc))}</td>
+            <td>
+              <div class="global-host-cell">
+                <span class="global-host-label">${escapeHtml(displayName)}</span>
+                ${showHost ? `<span class="global-hostname-sub">(${escapeHtml(hostname)})</span>` : ""}
+              </div>
+            </td>
+            <td>${escapeHtml(asText(item.field_label || item.field_key, "-"))}</td>
+            <td>${escapeHtml(asText(item.old_value, "-"))}</td>
+            <td>${escapeHtml(asText(item.new_value, "-"))}</td>
+          </tr>
+        `;
+      })
+      .join("");
+  } catch (error) {
+    rowsEl.innerHTML = `<tr><td colspan="5" class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
 function updateHeaderStatChips() {
   const alertChip = document.getElementById("headerAlertChip");
   const alertCount = document.getElementById("headerAlertCount");
@@ -7344,6 +7411,20 @@ function wireEvents() {
       await loadSystemOverview();
     });
   }
+  const hostConfigChangesTabButton = document.getElementById("hostConfigChangesTabButton");
+  if (hostConfigChangesTabButton) {
+    hostConfigChangesTabButton.addEventListener("click", async () => {
+      state.globalSubMode = "host-config-changes";
+      updateGlobalSubMode();
+      await loadHostConfigChanges();
+    });
+  }
+  const refreshHostConfigChangesButton = document.getElementById("refreshHostConfigChangesButton");
+  if (refreshHostConfigChangesButton) {
+    refreshHostConfigChangesButton.addEventListener("click", async () => {
+      await loadHostConfigChanges();
+    });
+  }
 
   document.getElementById("globalViewButton").addEventListener("click", async () => {
     state.viewMode = "global";
@@ -7358,6 +7439,7 @@ function wireEvents() {
     else if (state.globalSubMode === "inactive-hosts") await loadInactiveHosts();
     else if (state.globalSubMode === "system-overview") await loadSystemOverview();
     else if (state.globalSubMode === "backup-status") await loadBackupStatus();
+    else if (state.globalSubMode === "host-config-changes") await loadHostConfigChanges();
     else if (state.globalSubMode === "admin-alert-subs") await loadAdminAlertSubscriptions();
     else if (state.globalSubMode === "admin-settings") await loadGlobalAdminSettingsPanel();
   });

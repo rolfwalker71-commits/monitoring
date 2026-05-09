@@ -203,6 +203,48 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS host_config_snapshot (
+                hostname TEXT PRIMARY KEY,
+                os_release TEXT NOT NULL DEFAULT '-',
+                cpu_cores TEXT NOT NULL DEFAULT '-',
+                cpu_model_name TEXT NOT NULL DEFAULT '-',
+                ram_gb TEXT NOT NULL DEFAULT '-',
+                sap_release TEXT NOT NULL DEFAULT '-',
+                hana_release TEXT NOT NULL DEFAULT '-',
+                hana_sid TEXT NOT NULL DEFAULT '-',
+                sql_release TEXT NOT NULL DEFAULT '-',
+                updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS host_config_changes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                detected_at_utc TEXT NOT NULL,
+                hostname TEXT NOT NULL,
+                field_key TEXT NOT NULL,
+                old_value TEXT NOT NULL,
+                new_value TEXT NOT NULL,
+                report_id INTEGER,
+                source TEXT NOT NULL DEFAULT 'agent-report'
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_host_config_changes_time
+            ON host_config_changes(detected_at_utc DESC)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_host_config_changes_host_time
+            ON host_config_changes(hostname, detected_at_utc DESC)
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS web_users (
                 username TEXT PRIMARY KEY,
                 password_hash TEXT NOT NULL,
@@ -1923,6 +1965,275 @@ def _extract_cpu_overview(payload: dict) -> dict:
     }
 
 
+HOST_CONFIG_TRACKED_FIELDS = (
+    "os_release",
+    "cpu_cores",
+    "cpu_model_name",
+    "ram_gb",
+    "sap_release",
+    "hana_release",
+    "hana_sid",
+    "sql_release",
+)
+
+HOST_CONFIG_FIELD_LABELS = {
+    "os_release": "OS Release",
+    "cpu_cores": "CPU Cores",
+    "cpu_model_name": "CPU Modell",
+    "ram_gb": "RAM (GB)",
+    "sap_release": "SAP Release",
+    "hana_release": "HANA Release",
+    "hana_sid": "HANA SID",
+    "sql_release": "SQL Release",
+}
+
+
+def _normalize_config_value(field_key: str, value: object) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return "-"
+
+    lowered = raw.lower()
+    if lowered in {"-", "na", "n/a", "none", "null", "unknown", "unbekannt", "not available"}:
+        return "-"
+
+    if field_key in {"ram_gb", "cpu_cores"}:
+        try:
+            parsed = int(float(raw))
+            return str(parsed) if parsed > 0 else "-"
+        except (TypeError, ValueError):
+            return "-"
+
+    normalized = re.sub(r"\s+", " ", raw)
+    if field_key == "hana_sid":
+        return normalized.upper()
+    return normalized
+
+
+def _canonical_config_value(field_key: str, value: str) -> str:
+    if field_key in {"ram_gb", "cpu_cores"}:
+        return value
+    return value.lower()
+
+
+def _is_significant_config_change(field_key: str, old_value: str, new_value: str) -> bool:
+    if old_value == new_value:
+        return False
+
+    old_canonical = _canonical_config_value(field_key, old_value)
+    new_canonical = _canonical_config_value(field_key, new_value)
+    if old_canonical == new_canonical:
+        return False
+
+    if field_key == "ram_gb" and old_value != "-" and new_value != "-":
+        try:
+            return abs(int(new_value) - int(old_value)) >= 1
+        except (TypeError, ValueError):
+            return True
+
+    return True
+
+
+def _extract_os_release(payload: dict) -> str:
+    os_value = payload.get("os") if isinstance(payload, dict) else ""
+    return str(os_value or "").strip() or "-"
+
+
+def _extract_sql_release(payload: dict) -> str:
+    sql_release = "-"
+    sql_block = payload.get("sql_server_info")
+    if isinstance(sql_block, dict) and sql_block.get("available") is True:
+        instances = sql_block.get("instances")
+        if isinstance(instances, list) and instances:
+            first = instances[0]
+            if isinstance(first, dict):
+                sql_release = _map_sql_release(str(first.get("version", "")).strip())
+    return str(sql_release or "-").strip() or "-"
+
+
+def _extract_host_config_snapshot(payload: dict) -> dict[str, str]:
+    release_info = _extract_sap_hana_ram(payload)
+    cpu_info = _extract_cpu_overview(payload)
+    return {
+        "os_release": _extract_os_release(payload),
+        "cpu_cores": str(cpu_info["cpu_cores"]),
+        "cpu_model_name": str(cpu_info["cpu_model_name"]),
+        "ram_gb": str(release_info["ram_gb"]),
+        "sap_release": str(release_info["sap_release"]),
+        "hana_release": str(release_info["hana_version"]),
+        "hana_sid": str(release_info["hana_sid"]),
+        "sql_release": _extract_sql_release(payload),
+    }
+
+
+def _track_host_config_changes(
+    conn: sqlite3.Connection,
+    hostname: str,
+    payload: dict,
+    report_id: int,
+    detected_at_utc: str,
+) -> None:
+    if not hostname:
+        return
+
+    new_snapshot_raw = _extract_host_config_snapshot(payload)
+    new_snapshot = {
+        key: _normalize_config_value(key, new_snapshot_raw.get(key, "-"))
+        for key in HOST_CONFIG_TRACKED_FIELDS
+    }
+
+    existing_row = conn.execute(
+        """
+        SELECT os_release, cpu_cores, cpu_model_name, ram_gb, sap_release, hana_release, hana_sid, sql_release
+        FROM host_config_snapshot
+        WHERE hostname = ?
+        """,
+        (hostname,),
+    ).fetchone()
+
+    if existing_row:
+        old_snapshot = {
+            "os_release": _normalize_config_value("os_release", existing_row[0]),
+            "cpu_cores": _normalize_config_value("cpu_cores", existing_row[1]),
+            "cpu_model_name": _normalize_config_value("cpu_model_name", existing_row[2]),
+            "ram_gb": _normalize_config_value("ram_gb", existing_row[3]),
+            "sap_release": _normalize_config_value("sap_release", existing_row[4]),
+            "hana_release": _normalize_config_value("hana_release", existing_row[5]),
+            "hana_sid": _normalize_config_value("hana_sid", existing_row[6]),
+            "sql_release": _normalize_config_value("sql_release", existing_row[7]),
+        }
+
+        dedupe_cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        for field_key in HOST_CONFIG_TRACKED_FIELDS:
+            old_value = old_snapshot.get(field_key, "-")
+            new_value = new_snapshot.get(field_key, "-")
+            if not _is_significant_config_change(field_key, old_value, new_value):
+                continue
+
+            duplicate = conn.execute(
+                """
+                SELECT 1
+                FROM host_config_changes
+                WHERE hostname = ?
+                  AND field_key = ?
+                  AND old_value = ?
+                  AND new_value = ?
+                  AND detected_at_utc >= ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (hostname, field_key, old_value, new_value, dedupe_cutoff),
+            ).fetchone()
+            if duplicate:
+                continue
+
+            conn.execute(
+                """
+                INSERT INTO host_config_changes (
+                    detected_at_utc,
+                    hostname,
+                    field_key,
+                    old_value,
+                    new_value,
+                    report_id,
+                    source
+                )
+                VALUES (?, ?, ?, ?, ?, ?, 'agent-report')
+                """,
+                (detected_at_utc, hostname, field_key, old_value, new_value, report_id),
+            )
+
+    conn.execute(
+        """
+        INSERT INTO host_config_snapshot (
+            hostname,
+            os_release,
+            cpu_cores,
+            cpu_model_name,
+            ram_gb,
+            sap_release,
+            hana_release,
+            hana_sid,
+            sql_release,
+            updated_at_utc
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(hostname) DO UPDATE SET
+            os_release = excluded.os_release,
+            cpu_cores = excluded.cpu_cores,
+            cpu_model_name = excluded.cpu_model_name,
+            ram_gb = excluded.ram_gb,
+            sap_release = excluded.sap_release,
+            hana_release = excluded.hana_release,
+            hana_sid = excluded.hana_sid,
+            sql_release = excluded.sql_release,
+            updated_at_utc = excluded.updated_at_utc
+        """,
+        (
+            hostname,
+            new_snapshot["os_release"],
+            new_snapshot["cpu_cores"],
+            new_snapshot["cpu_model_name"],
+            new_snapshot["ram_gb"],
+            new_snapshot["sap_release"],
+            new_snapshot["hana_release"],
+            new_snapshot["hana_sid"],
+            new_snapshot["sql_release"],
+            detected_at_utc,
+        ),
+    )
+
+
+def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit: int = 300) -> dict:
+    window_hours = max(1, int(hours or 24))
+    row_limit = max(1, min(int(limit or 300), 1000))
+    cutoff_iso = (datetime.now(timezone.utc) - timedelta(hours=window_hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    rows = conn.execute(
+        """
+        SELECT c.id,
+               c.detected_at_utc,
+               c.hostname,
+               COALESCE(h.display_name_override, ''),
+               c.field_key,
+               c.old_value,
+               c.new_value,
+               COALESCE(c.source, 'agent-report')
+        FROM host_config_changes c
+        LEFT JOIN host_settings h ON h.hostname = c.hostname
+        WHERE c.detected_at_utc >= ?
+        ORDER BY c.detected_at_utc DESC, c.id DESC
+        LIMIT ?
+        """,
+        (cutoff_iso, row_limit),
+    ).fetchall()
+
+    items = []
+    for row in rows:
+        hostname = str(row[2] or "")
+        display_override = str(row[3] or "").strip()
+        items.append(
+            {
+                "id": int(row[0] or 0),
+                "detected_at_utc": str(row[1] or ""),
+                "hostname": hostname,
+                "display_name": display_override or hostname,
+                "field_key": str(row[4] or ""),
+                "field_label": HOST_CONFIG_FIELD_LABELS.get(str(row[4] or ""), str(row[4] or "")),
+                "old_value": str(row[5] or "-"),
+                "new_value": str(row[6] or "-"),
+                "source": str(row[7] or "agent-report"),
+            }
+        )
+
+    return {
+        "hours": window_hours,
+        "limit": row_limit,
+        "count": len(items),
+        "items": items,
+    }
+
+
 def collect_system_overview(conn: sqlite3.Connection) -> dict:
     hostnames = get_known_hostnames(conn)
     if not hostnames:
@@ -1972,14 +2283,7 @@ def collect_system_overview(conn: sqlite3.Connection) -> dict:
         release_info = _extract_sap_hana_ram(payload)
         cpu_info = _extract_cpu_overview(payload)
 
-        sql_release = "-"
-        sql_block = payload.get("sql_server_info")
-        if isinstance(sql_block, dict) and sql_block.get("available") is True:
-            instances = sql_block.get("instances")
-            if isinstance(instances, list) and instances:
-                first = instances[0]
-                if isinstance(first, dict):
-                    sql_release = _map_sql_release(str(first.get("version", "")).strip())
+        sql_release = _extract_sql_release(payload)
 
         online = False
         if received_at_utc:
@@ -5528,6 +5832,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             load_avg_1_series: list[dict] = []
             memory_used_series: list[dict] = []
             swap_used_series: list[dict] = []
+            latest_memory_total_kb = 0
             delayed_report_count = 0
             live_report_count = 0
             latest_delivery_mode = "live"
@@ -5562,6 +5867,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 if memory_used is not None:
                     memory_used_values.append(memory_used)
                     memory_used_series.append({"time_utc": row[1], "value": memory_used})
+
+                memory_block = payload.get("memory")
+                if isinstance(memory_block, dict):
+                    total_kb = int(memory_block.get("total_kb") or 0)
+                    if total_kb > 0:
+                        latest_memory_total_kb = total_kb
+                if latest_memory_total_kb <= 0:
+                    memory_mb = payload_int(payload, "memory_mb", 0)
+                    if memory_mb > 0:
+                        latest_memory_total_kb = int(memory_mb * 1024)
 
                 swap_used = get_nested_number(payload, "swap", "used_percent")
                 if swap_used is not None:
@@ -5651,6 +5966,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "memory_used_percent": memory_used_series,
                         "swap_used_percent": swap_used_series,
                     },
+                    "latest_memory_total_kb": latest_memory_total_kb,
                     "delivery": {
                         "latest_mode": latest_delivery_mode,
                         "latest_is_delayed": latest_is_delayed,
@@ -5672,6 +5988,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
             with sqlite3.connect(DB_PATH) as conn:
                 data = collect_backup_status_overview(conn, hours)
+            self._send_json(HTTPStatus.OK, data)
+            return
+
+        if parsed.path == "/api/v1/host-config-changes":
+            query = parse_qs(parsed.query)
+            hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
+            limit = parse_int(query, "limit", default=300, min_value=1, max_value=1000)
+            with sqlite3.connect(DB_PATH) as conn:
+                data = collect_host_config_changes(conn, hours=hours, limit=limit)
             self._send_json(HTTPStatus.OK, data)
             return
 
@@ -7405,6 +7730,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "filesystems must be an array"})
             return
 
+        report_received_at_utc = utc_now_iso()
+
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.execute(
                 """
@@ -7412,7 +7739,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 VALUES (?, ?, ?, ?, ?)
                 """,
                 (
-                    utc_now_iso(),
+                    report_received_at_utc,
                     str(payload.get("agent_id", "")),
                     hostname,
                     str(payload.get("primary_ip", "")),
@@ -7420,6 +7747,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 ),
             )
             report_id = int(cursor.lastrowid)
+            _track_host_config_changes(conn, hostname, payload, report_id, report_received_at_utc)
             prune_reports_for_host(conn, hostname, MAX_REPORTS_PER_HOST)
             alarm_settings = get_alarm_settings(conn)
             host_settings = get_host_settings(conn, hostname)

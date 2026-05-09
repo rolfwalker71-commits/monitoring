@@ -3749,6 +3749,31 @@ body[data-theme="dark"] .trend-progress-bar {
   line-height: 1.1;
 }
 
+.host-config-changes-wrap table th:nth-child(1),
+.host-config-changes-wrap table td:nth-child(1) {
+  width: 18%;
+  min-width: 130px;
+}
+
+.host-config-changes-wrap table th:nth-child(2),
+.host-config-changes-wrap table td:nth-child(2) {
+  width: 24%;
+  min-width: 180px;
+}
+
+.host-config-changes-wrap table th:nth-child(3),
+.host-config-changes-wrap table td:nth-child(3) {
+  width: 14%;
+  min-width: 120px;
+}
+
+.host-config-changes-wrap table td:nth-child(4),
+.host-config-changes-wrap table td:nth-child(5) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .alert-id-sub {
   color: #94a3b8;
   font-style: italic;
@@ -5807,6 +5832,10 @@ body[data-theme="dark"] .agent-update-status-row span {
 }
 
 body[data-theme="dark"] .global-host-label {
+  color: #d9e8ff;
+}
+
+body[data-theme="dark"] .host-config-changes-wrap table td {
   color: #d9e8ff;
 }
 

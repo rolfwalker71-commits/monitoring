@@ -99,6 +99,7 @@
                 <button id="inactiveHostsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="inactiveHostsView">Inaktive Hosts</button>
                 <button id="backupStatusTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="backupStatusView">Backup Stati</button>
                 <button id="systemOverviewTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="systemOverviewView">Systemübersicht</button>
+                <button id="hostConfigChangesTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="hostConfigChangesView">Änderungen 24h</button>
                 <button id="globalAdminAlertSubsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminAlertSubsView">Alert Abos</button>
                 <button id="globalAdminSettingsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminSettingsView">Admin Settings</button>
               </div>
@@ -233,6 +234,29 @@
               </div>
               <div id="systemOverviewContainer" class="system-overview-host-list">
                 <p class="muted">Lade Daten…</p>
+              </div>
+            </div>
+
+            <div id="hostConfigChangesView" class="hidden" role="tabpanel" aria-labelledby="hostConfigChangesTabButton">
+              <div class="inactive-hosts-toolbar">
+                <span id="hostConfigChangesSummary" class="count compact"></span>
+                <button id="refreshHostConfigChangesButton" type="button" class="btn-secondary">Neu laden</button>
+              </div>
+              <div class="table-wrap host-config-changes-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Zeit</th>
+                      <th>Host</th>
+                      <th>Feld</th>
+                      <th>Vorher</th>
+                      <th>Neu</th>
+                    </tr>
+                  </thead>
+                  <tbody id="hostConfigChangesRows">
+                    <tr><td colspan="5" class="muted">Lade Daten…</td></tr>
+                  </tbody>
+                </table>
               </div>
             </div>
 
