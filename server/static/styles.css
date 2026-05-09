@@ -3751,27 +3751,74 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-config-changes-wrap table th:nth-child(1),
 .host-config-changes-wrap table td:nth-child(1) {
-  width: 18%;
+  width: 20%;
   min-width: 130px;
 }
 
 .host-config-changes-wrap table th:nth-child(2),
 .host-config-changes-wrap table td:nth-child(2) {
-  width: 24%;
-  min-width: 180px;
+  width: 20%;
+  min-width: 150px;
 }
 
 .host-config-changes-wrap table th:nth-child(3),
 .host-config-changes-wrap table td:nth-child(3) {
-  width: 14%;
-  min-width: 120px;
+  width: 30%;
+  min-width: 200px;
 }
 
-.host-config-changes-wrap table td:nth-child(4),
-.host-config-changes-wrap table td:nth-child(5) {
+.host-config-changes-wrap table th:nth-child(4),
+.host-config-changes-wrap table td:nth-child(4) {
+  width: 30%;
+  min-width: 200px;
+}
+
+.host-config-changes-wrap table td:nth-child(3),
+.host-config-changes-wrap table td:nth-child(4) {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.host-config-changes-groups {
+  display: grid;
+  gap: 10px;
+}
+
+.host-config-change-group {
+  border: 1px solid #d9e5f2;
+  border-radius: 10px;
+  background: #f9fbff;
+}
+
+.host-config-change-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.host-config-change-summary::-webkit-details-marker {
+  display: none;
+}
+
+.host-config-change-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.host-config-change-group .host-config-changes-wrap {
+  padding: 0 8px 8px;
+}
+
+.host-config-change-subline {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #64748b;
 }
 
 .alert-id-sub {
@@ -5837,6 +5884,19 @@ body[data-theme="dark"] .global-host-label {
 
 body[data-theme="dark"] .host-config-changes-wrap table td {
   color: #d9e8ff;
+}
+
+body[data-theme="dark"] .host-config-change-group {
+  border-color: #2a3c59;
+  background: #0f1829;
+}
+
+body[data-theme="dark"] .host-config-change-count {
+  color: #9fb8d8;
+}
+
+body[data-theme="dark"] .host-config-change-subline {
+  color: #8fa8c4;
 }
 
 body[data-theme="dark"] .host-filter-control select,

@@ -6927,11 +6927,11 @@ async function loadBackupStatus() {
 }
 
 async function loadHostConfigChanges() {
-  const rowsEl = document.getElementById("hostConfigChangesRows");
+  const groupsEl = document.getElementById("hostConfigChangesGroups");
   const summaryEl = document.getElementById("hostConfigChangesSummary");
-  if (!rowsEl) return;
+  if (!groupsEl) return;
 
-  rowsEl.innerHTML = '<tr><td colspan="5" class="muted">Lade Daten…</td></tr>';
+  groupsEl.innerHTML = '<p class="muted">Lade Daten…</p>';
   if (summaryEl) summaryEl.textContent = "";
 
   try {
@@ -6949,33 +6949,95 @@ async function loadHostConfigChanges() {
     }
 
     if (!items.length) {
-      rowsEl.innerHTML = '<tr><td colspan="5" class="muted">Keine Aenderungen im gewaehlten Zeitraum.</td></tr>';
+      groupsEl.innerHTML = '<p class="muted">Keine Aenderungen im gewaehlten Zeitraum.</p>';
       return;
     }
 
-    rowsEl.innerHTML = items
-      .map((item) => {
-        const displayName = asText(item.display_name || item.hostname, "-");
-        const hostname = asText(item.hostname, "-");
-        const showHost = displayName !== hostname;
-        return `
-          <tr>
-            <td>${escapeHtml(formatUtcPlus2(item.detected_at_utc))}</td>
-            <td>
-              <div class="global-host-cell">
-                <span class="global-host-label">${escapeHtml(displayName)}</span>
-                ${showHost ? `<span class="global-hostname-sub">(${escapeHtml(hostname)})</span>` : ""}
+    const byHost = new Map();
+    items.forEach((item) => {
+      const hostname = asText(item.hostname, "-");
+      const displayName = asText(item.display_name || hostname, "-");
+      const key = `${displayName}\u0000${hostname}`;
+      if (!byHost.has(key)) {
+        byHost.set(key, { displayName, hostname, items: [] });
+      }
+      byHost.get(key).items.push(item);
+    });
+
+    const groups = [...byHost.values()].sort((a, b) => {
+      const nameA = String(a.displayName || a.hostname).toLowerCase();
+      const nameB = String(b.displayName || b.hostname).toLowerCase();
+      const byName = nameA.localeCompare(nameB);
+      if (byName !== 0) return byName;
+      return String(a.hostname).toLowerCase().localeCompare(String(b.hostname).toLowerCase());
+    });
+
+    groupsEl.innerHTML = groups
+      .map((group) => {
+        const showHost = group.displayName !== group.hostname;
+        const sortedItems = [...group.items].sort((left, right) => {
+          return String(right.detected_at_utc || "").localeCompare(String(left.detected_at_utc || ""));
+        });
+
+        const rows = sortedItems.map((item) => {
+          const fieldKey = String(item.field_key || "");
+          const oldValue = asText(item.old_value, "-");
+          const newValue = asText(item.new_value, "-");
+
+          let sapFeaturePackInfo = "";
+          if (fieldKey === "sap_release") {
+            const oldFp = resolveSapReleaseDisplay(oldValue, SAP_B1_VERSION_MAP);
+            const newFp = resolveSapReleaseDisplay(newValue, SAP_B1_VERSION_MAP);
+            const oldFpSafe = escapeHtml(asText(oldFp, "-"));
+            const newFpSafe = escapeHtml(asText(newFp, "-"));
+            sapFeaturePackInfo = `
+              <div class="host-config-change-subline">
+                Feature Pack: ${oldFpSafe} -> ${newFpSafe}
               </div>
-            </td>
-            <td>${escapeHtml(asText(item.field_label || item.field_key, "-"))}</td>
-            <td>${escapeHtml(asText(item.old_value, "-"))}</td>
-            <td>${escapeHtml(asText(item.new_value, "-"))}</td>
-          </tr>
+            `;
+          }
+
+          return `
+            <tr>
+              <td>${escapeHtml(formatUtcPlus2(item.detected_at_utc))}</td>
+              <td>${escapeHtml(asText(item.field_label || item.field_key, "-"))}</td>
+              <td>
+                <div>${escapeHtml(oldValue)}</div>
+                ${sapFeaturePackInfo}
+              </td>
+              <td>
+                <div>${escapeHtml(newValue)}</div>
+              </td>
+            </tr>
+          `;
+        }).join("");
+
+        return `
+          <details class="host-config-change-group" open>
+            <summary class="host-config-change-summary">
+              <span class="global-host-label">${escapeHtml(group.displayName)}</span>
+              ${showHost ? `<span class="global-hostname-sub">(${escapeHtml(group.hostname)})</span>` : ""}
+              <span class="host-config-change-count">${sortedItems.length} Aenderung(en)</span>
+            </summary>
+            <div class="table-wrap host-config-changes-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Zeit</th>
+                    <th>Feld</th>
+                    <th>Vorher</th>
+                    <th>Neu</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          </details>
         `;
       })
       .join("");
   } catch (error) {
-    rowsEl.innerHTML = `<tr><td colspan="5" class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</td></tr>`;
+    groupsEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
   }
 }
 

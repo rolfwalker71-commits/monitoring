@@ -244,21 +244,8 @@
                 <button id="backfillHostConfigChangesButton" type="button" class="btn-secondary" title="Einmaliger Backfill aus den letzten 7 Tagen">Backfill 7 Tage</button>
                 <button id="refreshHostConfigChangesButton" type="button" class="btn-secondary">Neu laden</button>
               </div>
-              <div class="table-wrap host-config-changes-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Zeit</th>
-                      <th>Host</th>
-                      <th>Feld</th>
-                      <th>Vorher</th>
-                      <th>Neu</th>
-                    </tr>
-                  </thead>
-                  <tbody id="hostConfigChangesRows">
-                    <tr><td colspan="5" class="muted">Lade Daten…</td></tr>
-                  </tbody>
-                </table>
+              <div id="hostConfigChangesGroups" class="host-config-changes-groups">
+                <p class="muted">Lade Daten…</p>
               </div>
             </div>
 
