@@ -6165,6 +6165,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 large_files_hidden = get_filesystem_visibility_hidden(conn, username, hostname, "large-files")
 
             fs_by_mountpoint = {}
+            fs_total_kb_by_mountpoint = {}
             report_count = 0
             latest_report_time = ""
             latest_max_used_percent = None
@@ -6255,6 +6256,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     except (TypeError, ValueError):
                         continue
 
+                    total_kb_raw = fs.get("blocks", fs.get("total_kb", 0))
+                    try:
+                        total_kb = int(float(total_kb_raw or 0))
+                    except (TypeError, ValueError):
+                        total_kb = 0
+                    if total_kb > 0:
+                        fs_total_kb_by_mountpoint[mountpoint] = total_kb
+
                     latest_fs_entries.append({
                         "mountpoint": mountpoint,
                         "used_percent": used_percent,
@@ -6288,6 +6297,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 trends.append(
                     {
                         "mountpoint": mountpoint,
+                        "total_kb": int(fs_total_kb_by_mountpoint.get(mountpoint, 0) or 0),
                         "sample_count": len(values),
                         "current_used_percent": last_value,
                         "min_used_percent": min(values),
