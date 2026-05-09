@@ -6833,20 +6833,14 @@ function renderBackupStatus(data) {
     const countries = [...new Set(allHosts
       .map((host) => String(host?.country_code || "").trim().toUpperCase())
       .filter((code) => /^[A-Z]{2}$/.test(code)))].sort();
-    const current = String(state.backupStatusCountryFilter || "all").toUpperCase() === "ALL"
-      ? "all"
-      : String(state.backupStatusCountryFilter || "all").toUpperCase();
-    const options = ["<option value=\"all\">Alle</option>"]
-      .concat(countries.map((code) => `<option value="${escapeHtml(code)}">${escapeHtml(code)}</option>`))
-      .join("");
-    countryFilterEl.innerHTML = options;
-    if (countries.includes(current)) {
-      countryFilterEl.value = current;
-      state.backupStatusCountryFilter = current;
-    } else {
-      countryFilterEl.value = "all";
-      state.backupStatusCountryFilter = "all";
-    }
+    const selected = countries.includes(String(state.backupStatusCountryFilter || "").toUpperCase())
+      ? String(state.backupStatusCountryFilter || "").toUpperCase()
+      : "all";
+    state.backupStatusCountryFilter = selected;
+    renderCountryFlagFilter(countryFilterEl, countries, selected, (nextFilter) => {
+      state.backupStatusCountryFilter = nextFilter;
+      loadBackupStatus();
+    });
   }
   if (sqlFilterEl) sqlFilterEl.checked = state.backupStatusFilterSql === true;
   if (hanaFilterEl) hanaFilterEl.checked = state.backupStatusFilterHana === true;
@@ -6890,8 +6884,10 @@ function renderBackupStatus(data) {
     const headerClass = hasMissing ? "backup-host-header backup-host-header--missing" : "backup-host-header backup-host-header--ok";
     const hostTagSql = host.has_sql ? `<span class="backup-host-tag backup-host-tag--sql">SQL</span>` : "";
     const hostTagHana = host.has_hana ? `<span class="backup-host-tag backup-host-tag--hana">HANA</span>` : "";
-    const hostCountry = /^[A-Z]{2}$/.test(String(host.country_code || "").toUpperCase())
-      ? `<span class="backup-host-tag backup-host-tag--country">${escapeHtml(String(host.country_code || "").toUpperCase())}</span>`
+    const hostCountryCode = String(host.country_code || "").trim().toUpperCase();
+    const hostCountryFlagPath = getCountryFlagIconPath(hostCountryCode);
+    const hostCountry = hostCountryFlagPath
+      ? `<span class="backup-host-tag backup-host-tag--country" title="Land: ${escapeHtml(hostCountryCode)}"><img src="${hostCountryFlagPath}" class="backup-country-flag" alt="${escapeHtml(hostCountryCode)}" /></span>`
       : "";
 
     const dirs = host.dirs || [];
@@ -7054,6 +7050,43 @@ function groupByDateAndHost(items) {
   return sortedDateGroups;
 }
 
+function renderCountryFlagFilter(filterEl, countryCodes, selectedCountryCode, onSelect) {
+  if (!filterEl) return;
+  const normalized = Array.from(new Set((Array.isArray(countryCodes) ? countryCodes : [])
+    .map((code) => String(code || "").trim().toUpperCase())
+    .filter((code) => /^[A-Z]{2}$/.test(code))))
+    .sort();
+
+  if (!normalized.length) {
+    filterEl.innerHTML = "";
+    return;
+  }
+
+  const current = normalized.includes(String(selectedCountryCode || "").toUpperCase())
+    ? String(selectedCountryCode || "").toUpperCase()
+    : "all";
+
+  const buttons = [
+    `<button type="button" class="so-country-filter-btn ${current === "all" ? "active" : ""}" data-country-filter="all">Alle</button>`,
+    ...normalized.map((code) => {
+      const iconPath = getCountryFlagIconPath(code);
+      const icon = iconPath
+        ? `<img src="${iconPath}" alt="${escapeHtml(code)}" class="so-country-filter-flag" />`
+        : "";
+      return `<button type="button" class="so-country-filter-btn ${current === code ? "active" : ""}" data-country-filter="${escapeHtml(code)}">${icon}<span>${escapeHtml(code)}</span></button>`;
+    }),
+  ].join("");
+
+  filterEl.innerHTML = `<div class="so-country-filter-list">${buttons}</div>`;
+  filterEl.querySelectorAll(".so-country-filter-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      const nextFilter = String(button.getAttribute("data-country-filter") || "all");
+      if (nextFilter === String(selectedCountryCode || "all")) return;
+      if (typeof onSelect === "function") onSelect(nextFilter);
+    });
+  });
+}
+
 async function loadHostConfigChanges() {
   const groupsEl = document.getElementById("hostConfigChangesGroups");
   const summaryEl = document.getElementById("hostConfigChangesSummary");
@@ -7062,7 +7095,6 @@ async function loadHostConfigChanges() {
   if (!groupsEl) return;
   const searchEl = document.getElementById("hostConfigChangesSearchInput");
   if (searchEl) searchEl.value = state.hostConfigChangesSearchQuery;
-  if (countryFilterEl) countryFilterEl.value = state.hostConfigChangesCountryFilter;
 
   groupsEl.innerHTML = '<p class="muted">Lade Daten…</p>';
   if (summaryEl) summaryEl.textContent = "";
@@ -7086,12 +7118,12 @@ async function loadHostConfigChanges() {
       groupsEl.innerHTML = '<p class="muted">Keine Aenderungen im gewaehlten Zeitraum.</p>';
       // Reset country filter dropdown
       if (countryFilterEl) {
-        countryFilterEl.innerHTML = '<option value="all">Alle Länder</option>';
+        countryFilterEl.innerHTML = "";
       }
       return;
     }
 
-    // Collect unique country codes and populate dropdown
+    // Collect unique country codes and render icon filter
     const countries = new Set();
     items.forEach((item) => {
       const cc = asText(item.country_code, "").toUpperCase();
@@ -7101,14 +7133,14 @@ async function loadHostConfigChanges() {
     });
     if (countryFilterEl) {
       const sortedCountries = [...countries].sort();
-      countryFilterEl.innerHTML = '<option value="all">Alle Länder</option>';
-      sortedCountries.forEach((cc) => {
-        const option = document.createElement("option");
-        option.value = cc;
-        option.textContent = cc;
-        countryFilterEl.appendChild(option);
+      const selected = sortedCountries.includes(String(state.hostConfigChangesCountryFilter || "").toUpperCase())
+        ? String(state.hostConfigChangesCountryFilter || "").toUpperCase()
+        : "all";
+      state.hostConfigChangesCountryFilter = selected;
+      renderCountryFlagFilter(countryFilterEl, sortedCountries, selected, (nextFilter) => {
+        state.hostConfigChangesCountryFilter = nextFilter;
+        loadHostConfigChanges();
       });
-      countryFilterEl.value = state.hostConfigChangesCountryFilter;
     }
 
     // Apply country filter
@@ -7233,7 +7265,9 @@ async function loadHostConfigChanges() {
                 <summary class="host-config-change-summary">
                   <span class="global-host-label">${escapeHtml(hostGroup.displayName)}</span>
                   ${showHost ? `<span class="global-hostname-sub">(${escapeHtml(hostGroup.hostname)})</span>` : ""}
-                  ${hostGroup.country_code ? `<span class="host-config-country-badge">${escapeHtml(hostGroup.country_code)}</span>` : ""}
+                  ${hostGroup.country_code && getCountryFlagIconPath(hostGroup.country_code)
+                    ? `<span class="host-config-country-badge" title="Land: ${escapeHtml(hostGroup.country_code)}"><img src="${getCountryFlagIconPath(hostGroup.country_code)}" class="host-config-country-flag" alt="${escapeHtml(hostGroup.country_code)}" /></span>`
+                    : ""}
                   <span class="host-config-change-count">${sortedItems.length} Aenderung(en)</span>
                 </summary>
                 <div class="table-wrap host-config-changes-wrap">
@@ -7727,15 +7761,6 @@ function wireEvents() {
       await loadBackupStatus();
     });
   }
-  const backupStatusCountryFilter = document.getElementById("backupStatusCountryFilter");
-  if (backupStatusCountryFilter) {
-    backupStatusCountryFilter.addEventListener("change", async () => {
-      const value = String(backupStatusCountryFilter.value || "all").toUpperCase();
-      state.backupStatusCountryFilter = value === "ALL" ? "all" : value;
-      await loadBackupStatus();
-    });
-  }
-
   const globalAdminAlertSubsTabButton = document.getElementById("globalAdminAlertSubsTabButton");
   if (globalAdminAlertSubsTabButton) {
     globalAdminAlertSubsTabButton.addEventListener("click", async () => {
@@ -7792,14 +7817,6 @@ function wireEvents() {
       await loadHostConfigChanges();
     });
   }
-  const hostConfigChangesCountryFilter = document.getElementById("hostConfigChangesCountryFilter");
-  if (hostConfigChangesCountryFilter) {
-    hostConfigChangesCountryFilter.addEventListener("change", async () => {
-      state.hostConfigChangesCountryFilter = hostConfigChangesCountryFilter.value;
-      await loadHostConfigChanges();
-    });
-  }
-
   document.getElementById("globalViewButton").addEventListener("click", async () => {
     const previousViewMode = state.viewMode;
     state.viewMode = "global";

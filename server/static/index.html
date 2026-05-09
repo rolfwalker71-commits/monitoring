@@ -226,12 +226,7 @@
                   <label class="backup-filter-checkbox" title="Nur Hosts mit HANA anzeigen">
                     <input id="backupStatusFilterHana" type="checkbox" /> HANA
                   </label>
-                  <label class="backup-filter-country" for="backupStatusCountryFilter">
-                    <span>Land</span>
-                    <select id="backupStatusCountryFilter">
-                      <option value="all">Alle</option>
-                    </select>
-                  </label>
+                  <div id="backupStatusCountryFilter" class="system-overview-country-filter" aria-label="Land Filter"></div>
                 </div>
                 <button id="refreshBackupStatusButton" type="button" class="btn-secondary">Neu laden</button>
               </div>
@@ -255,9 +250,7 @@
               <div class="inactive-hosts-toolbar">
                 <span id="hostConfigChangesSummary" class="count compact"></span>
                 <input id="hostConfigChangesSearchInput" type="text" class="search-input-compact" placeholder="Nach Host oder Feld suchen..." />
-                <select id="hostConfigChangesCountryFilter" class="btn-secondary-compact" title="Nach Land filtern">
-                  <option value="all">Alle Länder</option>
-                </select>
+                <div id="hostConfigChangesCountryFilter" class="system-overview-country-filter" aria-label="Land Filter"></div>
                 <select id="hostConfigChangesHoursFilter" class="btn-secondary-compact" title="Zeitraum für Aenderungen">
                   <option value="24">24h</option>
                   <option value="168">7 Tage</option>
