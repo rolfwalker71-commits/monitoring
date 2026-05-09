@@ -2818,10 +2818,35 @@ def build_ai_troubleshoot_response(conn: sqlite3.Connection, hostname: str, metr
     host = str(hostname or "").strip()
     metric_key = str(metric or "").strip().lower()
     window_hours = max(1, min(int(hours or 24), 168))
+
+    def build_analysis_payload(
+        *,
+        severity: str,
+        confidence: str,
+        summary: str,
+        probable_causes: list[str] | None = None,
+        recommended_steps: list[str] | None = None,
+        quick_checks: list[str] | None = None,
+        code_snippets: list[dict] | None = None,
+    ) -> dict:
+        return {
+            "severity": severity,
+            "confidence": confidence,
+            "summary": summary,
+            "probable_causes": probable_causes or [],
+            "recommended_steps": recommended_steps or [],
+            "quick_checks": quick_checks or [],
+            "code_snippets": code_snippets or [],
+        }
+
     if not host:
         return {
-            "context": {"hostname": host, "metric": metric_key, "hours": window_hours, "samples": 0},
-            "analysis": "Kein Hostname angegeben.",
+            "context": {"hostname": host, "metric": metric_key, "window_hours": window_hours, "samples": 0},
+            "analysis": build_analysis_payload(
+                severity="info",
+                confidence="hoch",
+                summary="Kein Hostname angegeben.",
+            ),
             "model": "local-rules-v1",
             "cached": False,
         }
@@ -2838,8 +2863,11 @@ def build_ai_troubleshoot_response(conn: sqlite3.Connection, hostname: str, metr
     ).fetchall()
 
     values: list[float] = []
+    last_payload: dict = {}
+    latest_report_time_utc = ""
     for row in rows:
         payload = parse_payload_json(str(row[0] or "{}"))
+        last_payload = payload
         value = None
         if metric_key == "cpu_usage_percent":
             value = extract_cpu_usage(payload)
@@ -2864,10 +2892,48 @@ def build_ai_troubleshoot_response(conn: sqlite3.Connection, hostname: str, metr
             continue
         values.append(max(0.0, min(float(value), 100.0 if metric_key != "load_avg_1" else float(value))))
 
+    last_row = conn.execute(
+        """
+        SELECT received_at_utc, payload_json
+        FROM reports
+        WHERE hostname = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (host,),
+    ).fetchone()
+    if last_row:
+        latest_report_time_utc = str(last_row[0] or "")
+        if not last_payload:
+            last_payload = parse_payload_json(str(last_row[1] or "{}"))
+
+    os_family = normalize_os_family(last_payload.get("os", "linux"))
+    process_names = []
+    for proc in last_payload.get("processes", []):
+        if isinstance(proc, dict):
+            process_names.append(str(proc.get("name") or proc.get("process_name") or ""))
+        else:
+            process_names.append(str(proc or ""))
+    has_hana_processes = any(re.search(r"\bhdb(indexserver|nameserver|scriptserver|xsengine|daemon|webdispatcher)\b", name, re.IGNORECASE) for name in process_names)
+
     if not values:
         return {
-            "context": {"hostname": host, "metric": metric_key, "hours": window_hours, "samples": 0},
-            "analysis": "Keine ausreichenden Messdaten im gewaehlten Zeitraum.",
+            "context": {
+                "hostname": host,
+                "metric": metric_key,
+                "window_hours": window_hours,
+                "samples": 0,
+                "latest_report_time_utc": latest_report_time_utc,
+                "os_family": os_family,
+                "has_hana_processes": has_hana_processes,
+            },
+            "analysis": build_analysis_payload(
+                severity="info",
+                confidence="hoch",
+                summary="Keine ausreichenden Messdaten im gewaehlten Zeitraum.",
+                probable_causes=["Im gewaehlten Zeitfenster liegen keine verwertbaren Werte fuer diese Kennzahl vor."],
+                recommended_steps=["Zeitraum vergroessern oder pruefen, ob der Agent aktuelle Reports liefert."],
+            ),
             "model": "local-rules-v1",
             "cached": False,
         }
@@ -2882,37 +2948,102 @@ def build_ai_troubleshoot_response(conn: sqlite3.Connection, hostname: str, metr
     else:
         trend = 0.0
 
+    severity = "info"
+    confidence = "mittel"
+    summary = ""
+    probable_causes: list[str] = []
+    recommended_steps: list[str] = []
+    quick_checks: list[str] = []
+    code_snippets: list[dict] = []
+
     if metric_key == "filesystem":
-        level = "kritisch" if peak >= CRITICAL_THRESHOLD_PERCENT else ("auffaellig" if peak >= WARNING_THRESHOLD_PERCENT else "stabil")
-        analysis = (
-            f"Filesystem-Analyse fuer {host}: aktuell {latest:.1f}%, Mittelwert {avg:.1f}%, Spitze {peak:.1f}%. "
-            f"Bewertung: {level}."
+        severity = "critical" if peak >= CRITICAL_THRESHOLD_PERCENT else ("warning" if peak >= WARNING_THRESHOLD_PERCENT else "info")
+        confidence = "hoch" if len(values) >= 12 else "mittel"
+        summary = (
+            f"Filesystem-Analyse fuer {host}: aktuell {latest:.1f}%, Mittelwert {avg:.1f}%, Spitze {peak:.1f}%."
         )
+        probable_causes = [
+            "Ein oder mehrere Mountpoints laufen in eine hohe Belegung hinein.",
+            "Alte Logs, Backups oder Snapshots belegen mehr Platz als erwartet.",
+        ]
+        if trend > 3.0:
+            probable_causes.append("Die Auslastung steigt im betrachteten Zeitraum sichtbar an.")
+        recommended_steps = [
+            "Betroffene Mountpoints in der Filesystem-Ansicht nach aktueller Auslastung und Delta sortieren.",
+            "Groesste Verzeichnisse/Dateien pruefen und mit den Backup- bzw. Snapshot-Routinen abgleichen.",
+        ]
+        quick_checks = [
+            f"Aktuell: {latest:.1f}% | Peak: {peak:.1f}% | Samples: {len(values)}",
+            "Pruefen, ob hohe Werte von Snapshot- oder Backup-Mountpoints stammen.",
+        ]
+        code_snippets = [
+            {
+                "shell": "bash",
+                "title": "Groesste Verzeichnisse finden",
+                "command": "du -xhd1 / | sort -h | tail -20",
+                "description": "Zeigt die groessten Verzeichnisse auf dem betroffenen Mountpoint.",
+            }
+        ]
     elif metric_key == "load_avg_1":
-        level = "hoch" if peak >= 4.0 else ("erhoeht" if peak >= 2.0 else "normal")
-        analysis = (
-            f"Load-Analyse fuer {host}: aktuell {latest:.2f}, Mittelwert {avg:.2f}, Spitze {peak:.2f}. "
-            f"Bewertung: {level}."
-        )
+        severity = "critical" if peak >= 4.0 else ("warning" if peak >= 2.0 else "info")
+        confidence = "mittel"
+        summary = f"Load-Analyse fuer {host}: aktuell {latest:.2f}, Mittelwert {avg:.2f}, Spitze {peak:.2f}."
+        probable_causes = [
+            "CPU-intensive Prozesse oder I/O-Wartezeiten treiben den Load Average hoch.",
+            "Kurzfristige Jobs oder Backups koennen Lastspitzen ausloesen.",
+        ]
+        recommended_steps = [
+            "Top CPU/IO Prozesse im gleichen Zeitfenster pruefen.",
+            "Mit CPU-, Memory- und Filesystem-Trends gegenpruefen.",
+        ]
+        quick_checks = [f"Aktuell: {latest:.2f} | Peak: {peak:.2f} | Samples: {len(values)}"]
+        code_snippets = [
+            {
+                "shell": "bash",
+                "title": "Last live pruefen",
+                "command": "uptime && top -b -n1 | head -30",
+                "description": "Zeigt aktuellen Load Average und die aktivsten Prozesse.",
+            }
+        ]
     else:
-        level = "kritisch" if peak >= CRITICAL_THRESHOLD_PERCENT else ("auffaellig" if peak >= WARNING_THRESHOLD_PERCENT else "stabil")
+        severity = "critical" if peak >= CRITICAL_THRESHOLD_PERCENT else ("warning" if peak >= WARNING_THRESHOLD_PERCENT else "info")
+        confidence = "hoch" if len(values) >= 12 else "mittel"
         direction = "steigend" if trend > 3.0 else ("fallend" if trend < -3.0 else "seitwaerts")
-        analysis = (
-            f"Trend-Analyse fuer {host}: aktuell {latest:.1f}%, Mittelwert {avg:.1f}%, Spitze {peak:.1f}%. "
-            f"Trend: {direction}. Bewertung: {level}."
+        summary = (
+            f"Trend-Analyse fuer {host}: aktuell {latest:.1f}%, Mittelwert {avg:.1f}%, Spitze {peak:.1f}%. Trend: {direction}."
         )
+        probable_causes = [
+            "Die Kennzahl zeigt ueber das Zeitfenster eine anhaltende Last oder wiederkehrende Peaks.",
+            "Parallele Jobs, Speicherdruck oder Hintergrundprozesse koennen den Verlauf erklaeren.",
+        ]
+        recommended_steps = [
+            "Benachbarte Metriken im gleichen Zeitraum vergleichen, um CPU/Memory/FS-Korrelationen zu sehen.",
+            "Bei wiederkehrenden Peaks geplante Jobs oder Backups zeitlich abgleichen.",
+        ]
+        quick_checks = [f"Aktuell: {latest:.1f}% | Peak: {peak:.1f}% | Trend: {direction}"]
 
     return {
         "context": {
             "hostname": host,
             "metric": metric_key,
-            "hours": window_hours,
+            "window_hours": window_hours,
             "samples": len(values),
             "latest": round(latest, 2),
             "average": round(avg, 2),
             "peak": round(peak, 2),
+            "latest_report_time_utc": latest_report_time_utc,
+            "os_family": os_family,
+            "has_hana_processes": has_hana_processes,
         },
-        "analysis": analysis,
+        "analysis": build_analysis_payload(
+            severity=severity,
+            confidence=confidence,
+            summary=summary,
+            probable_causes=probable_causes,
+            recommended_steps=recommended_steps,
+            quick_checks=quick_checks,
+            code_snippets=code_snippets,
+        ),
         "model": "local-rules-v1",
         "cached": False,
     }
@@ -7339,7 +7470,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             hostname = str(payload.get("hostname", "") or "").strip()
             metric = str(payload.get("metric", "") or "").strip()
-            hours = int(payload.get("hours") or 24)
+            hours = int(payload.get("window_hours") or payload.get("hours") or 24)
             with sqlite3.connect(DB_PATH) as conn:
                 response_payload = build_ai_troubleshoot_response(conn, hostname, metric, hours)
             self._send_json(HTTPStatus.OK, response_payload)
