@@ -1545,6 +1545,89 @@ def _map_sql_release(version_str: str) -> str:
     return f"{major}.x"
 
 
+def _extract_sap_hana_ram(payload: dict) -> dict:
+    sap_release = "-"
+    hana_version = "-"
+    hana_sid = "-"
+    ram_gb = "-"
+
+    # Newer payload key used by current agents.
+    sap_block = payload.get("sap_b1_info")
+    if isinstance(sap_block, dict):
+        components = sap_block.get("server_components_version")
+        if isinstance(components, dict):
+            sap_candidate = str(components.get("version", "")).strip()
+            if sap_candidate:
+                sap_release = sap_candidate
+
+    # Backward-compatible key used by existing deployed agents.
+    if sap_release == "-":
+        legacy_sap_block = payload.get("sap_business_one")
+        if isinstance(legacy_sap_block, dict):
+            components = legacy_sap_block.get("server_components_version")
+            if isinstance(components, dict):
+                sap_candidate = str(components.get("version", "")).strip()
+                if sap_candidate:
+                    sap_release = sap_candidate
+
+    if sap_release == "-":
+        top_level_sap = str(payload.get("sap_release", "")).strip()
+        if top_level_sap:
+            sap_release = top_level_sap
+
+    hana_block = payload.get("hana_db_info")
+    if isinstance(hana_block, dict) and hana_block.get("available") is True:
+        instances = hana_block.get("instances")
+        if isinstance(instances, list) and instances:
+            first = instances[0]
+            if isinstance(first, dict):
+                raw_hana = str(first.get("version", "")).strip()
+                if raw_hana:
+                    parts = raw_hana.split(".")
+                    hana_version = ".".join(parts[:2]) if len(parts) >= 2 else raw_hana
+                sid_value = str(first.get("sid", "")).strip()
+                if sid_value:
+                    hana_sid = sid_value
+
+    if hana_version == "-" or hana_sid == "-":
+        legacy_hana_block = payload.get("hana_info")
+        if isinstance(legacy_hana_block, dict):
+            if legacy_hana_block.get("available") is True:
+                raw_hana = str(legacy_hana_block.get("version", "")).strip()
+                if raw_hana and hana_version == "-":
+                    parts = raw_hana.split(".")
+                    hana_version = ".".join(parts[:2]) if len(parts) >= 2 else raw_hana
+                sid_value = str(legacy_hana_block.get("sid", "")).strip()
+                if sid_value and hana_sid == "-":
+                    hana_sid = sid_value
+
+    if hana_version == "-":
+        top_level_hana = str(payload.get("hana_version", "")).strip()
+        if top_level_hana:
+            hana_version = top_level_hana
+    if hana_sid == "-":
+        top_level_sid = str(payload.get("hana_sid", "")).strip()
+        if top_level_sid:
+            hana_sid = top_level_sid
+
+    memory_mb = payload_int(payload, "memory_mb", 0)
+    if memory_mb > 0:
+        ram_gb = str(int(round(memory_mb / 1024)))
+    else:
+        memory_block = payload.get("memory")
+        if isinstance(memory_block, dict):
+            total_kb = int(memory_block.get("total_kb") or 0)
+            if total_kb > 0:
+                ram_gb = str(int(round(total_kb / (1024 * 1024))))
+
+    return {
+        "sap_release": sap_release,
+        "hana_version": hana_version,
+        "hana_sid": hana_sid,
+        "ram_gb": ram_gb,
+    }
+
+
 def collect_system_overview(conn: sqlite3.Connection) -> dict:
     hostnames = get_known_hostnames(conn)
     if not hostnames:
@@ -1591,30 +1674,7 @@ def collect_system_overview(conn: sqlite3.Connection) -> dict:
         os_family = normalize_os_family(payload.get("os", ""))
         customer = effective_display_name(payload, override_names.get(hostname, ""), hostname)
 
-        sap_release = "-"
-        sap_block = payload.get("sap_b1_info")
-        if isinstance(sap_block, dict):
-            components = sap_block.get("server_components_version")
-            if isinstance(components, dict):
-                sap_candidate = str(components.get("version", "")).strip()
-                if sap_candidate:
-                    sap_release = sap_candidate
-
-        hana_version = "-"
-        hana_sid = "-"
-        hana_block = payload.get("hana_db_info")
-        if isinstance(hana_block, dict) and hana_block.get("available") is True:
-            instances = hana_block.get("instances")
-            if isinstance(instances, list) and instances:
-                first = instances[0]
-                if isinstance(first, dict):
-                    raw_hana = str(first.get("version", "")).strip()
-                    if raw_hana:
-                        parts = raw_hana.split(".")
-                        hana_version = ".".join(parts[:2]) if len(parts) >= 2 else raw_hana
-                    sid_value = str(first.get("sid", "")).strip()
-                    if sid_value:
-                        hana_sid = sid_value
+        release_info = _extract_sap_hana_ram(payload)
 
         sql_release = "-"
         sql_block = payload.get("sql_server_info")
@@ -1624,11 +1684,6 @@ def collect_system_overview(conn: sqlite3.Connection) -> dict:
                 first = instances[0]
                 if isinstance(first, dict):
                     sql_release = _map_sql_release(str(first.get("version", "")).strip())
-
-        ram_gb = "-"
-        memory_mb = payload_int(payload, "memory_mb", 0)
-        if memory_mb > 0:
-            ram_gb = str(int(round(memory_mb / 1024)))
 
         online = False
         if received_at_utc:
@@ -1645,11 +1700,11 @@ def collect_system_overview(conn: sqlite3.Connection) -> dict:
             {
                 "hostname": hostname,
                 "online": online,
-                "sap_release": sap_release,
-                "hana_version": hana_version,
-                "hana_sid": hana_sid,
+                "sap_release": release_info["sap_release"],
+                "hana_version": release_info["hana_version"],
+                "hana_sid": release_info["hana_sid"],
                 "sql_release": sql_release,
-                "ram_gb": ram_gb,
+                "ram_gb": release_info["ram_gb"],
                 "last_update": received_at_utc or "-",
             }
         )
@@ -4591,30 +4646,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 if not country_code:
                     country_code = extract_country_code_from_payload(latest_payload)
 
-                sap_release = "-"
-                sap_block = latest_payload.get("sap_b1_info")
-                if isinstance(sap_block, dict):
-                    components = sap_block.get("server_components_version")
-                    if isinstance(components, dict):
-                        sap_candidate = str(components.get("version", "")).strip()
-                        if sap_candidate:
-                            sap_release = sap_candidate
-
-                hana_version = "-"
-                hana_sid = "-"
-                hana_block = latest_payload.get("hana_db_info")
-                if isinstance(hana_block, dict) and hana_block.get("available") is True:
-                    instances = hana_block.get("instances")
-                    if isinstance(instances, list) and instances:
-                        first = instances[0]
-                        if isinstance(first, dict):
-                            raw_hana = str(first.get("version", "")).strip()
-                            if raw_hana:
-                                parts = raw_hana.split(".")
-                                hana_version = ".".join(parts[:2]) if len(parts) >= 2 else raw_hana
-                            sid_value = str(first.get("sid", "")).strip()
-                            if sid_value:
-                                hana_sid = sid_value
+                release_info = _extract_sap_hana_ram(latest_payload)
 
                 hosts.append(
                     {
@@ -4636,9 +4668,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "open_critical_alert_count": int(row[7] or 0),
                         "os": str(latest_payload.get("os", "")),
                         "country_code": country_code,
-                        "sap_release": sap_release,
-                        "hana_version": hana_version,
-                        "hana_sid": hana_sid,
+                        "sap_release": release_info["sap_release"],
+                        "sap_feature_pack": release_info["sap_release"],
+                        "hana_release": release_info["hana_version"],
+                        "hana_version": release_info["hana_version"],
+                        "hana_sid": release_info["hana_sid"],
+                        "ram_gb": release_info["ram_gb"],
                         "is_favorite": bool(host_settings.get("is_favorite", False)),
                         "is_hidden": bool(host_settings.get("is_hidden", False)),
                         "agent_api_key_status": str((latest_payload.get("agent_api_key") or {}).get("status", "off")),

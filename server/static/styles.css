@@ -6251,3 +6251,108 @@ body[data-theme="dark"] .backup-status-stale {
   background: #3d2a00;
   color: #fbbf24;
 }
+
+/* System overview hierarchy layout */
+.system-overview-tree {
+  display: grid;
+  gap: 12px;
+}
+
+.system-overview-country-group,
+.system-overview-os-group {
+  display: grid;
+  gap: 8px;
+}
+
+.system-overview-toggle {
+  width: 100%;
+  border: 1px solid #c7d9f0;
+  background: linear-gradient(180deg, #f8fbff 0%, #edf4ff 100%);
+  color: #1f3b63;
+  border-radius: 10px;
+  min-height: 34px;
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+}
+
+.system-overview-toggle:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ffffff 0%, #edf5ff 100%);
+  border-color: #9fb8d8;
+}
+
+.system-overview-toggle .system-overview-chevron {
+  width: 12px;
+  text-align: center;
+  color: #1e40af;
+  flex: 0 0 12px;
+}
+
+.system-overview-os-list,
+.system-overview-customer-list {
+  display: grid;
+  gap: 10px;
+}
+
+.system-overview-os-list {
+  margin-left: 8px;
+}
+
+.system-overview-customer-list {
+  margin-left: 12px;
+}
+
+.system-overview-customer-block {
+  border: 1px solid #d7e3f2;
+  border-radius: 10px;
+  background: #f9fbff;
+  padding: 8px;
+}
+
+.system-overview-customer-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+  margin: 0 0 6px;
+}
+
+.system-overview-table {
+  margin-top: 0;
+}
+
+.so-center {
+  text-align: center;
+}
+
+.so-right {
+  text-align: right;
+}
+
+body[data-theme="dark"] .system-overview-toggle {
+  border-color: #2a3c59;
+  background: linear-gradient(180deg, #1a2b42 0%, #142339 100%);
+  color: #dbeafe;
+}
+
+body[data-theme="dark"] .system-overview-toggle:hover:not(:disabled) {
+  border-color: #4a6f9f;
+  background: linear-gradient(180deg, #203550 0%, #17304d 100%);
+}
+
+body[data-theme="dark"] .system-overview-toggle .system-overview-chevron {
+  color: #93c5fd;
+}
+
+body[data-theme="dark"] .system-overview-customer-block {
+  border-color: #2a3c59;
+  background: #0f1829;
+}
+
+body[data-theme="dark"] .system-overview-customer-title {
+  color: #bfd3ea;
+}

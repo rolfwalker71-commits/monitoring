@@ -5279,12 +5279,16 @@ function renderSingleHostCard(host) {
   const hasMutedAlerts = mutedAlerts.length > 0;
   const mutedCollapsed = state.hiddenHostMutedAlertsCollapsed[hostname] !== false;
   const mutedBodyClass = mutedCollapsed ? "hidden" : "";
-  const sapFeaturePack = asText(host.sap_feature_pack || "", "");
-  const hanaReleaseRaw = asText(host.hana_release || host.hana_version || "", "");
+  const cleanHostValue = (value) => {
+    const text = asText(value, "").trim();
+    return text === "-" ? "" : text;
+  };
+  const sapFeaturePack = cleanHostValue(host.sap_feature_pack || host.sap_release || "");
+  const hanaReleaseRaw = cleanHostValue(host.hana_release || host.hana_version || "");
   const hanaReleaseValue = hanaReleaseRaw
     ? hanaReleaseRaw.split(".").slice(0, 3).join(".") || hanaReleaseRaw
     : "";
-  const hanaSidValue = asText(host.hana_sid || host.host_id || "", "");
+  const hanaSidValue = cleanHostValue(host.hana_sid || "");
   const valueChipStack = [
     sapFeaturePack
       ? `<span class="host-value-chip host-value-chip--sap" title="SAP Feature Pack">${escapeHtml(sapFeaturePack)}</span>`
