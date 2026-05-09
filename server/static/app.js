@@ -6928,6 +6928,8 @@ async function loadHostConfigChanges() {
   const summaryEl = document.getElementById("hostConfigChangesSummary");
   const filterEl = document.getElementById("hostConfigChangesHoursFilter");
   if (!groupsEl) return;
+  const searchEl = document.getElementById("hostConfigChangesSearchInput");
+  if (searchEl) searchEl.value = state.hostConfigChangesSearchQuery;
 
   groupsEl.innerHTML = '<p class="muted">Lade Daten…</p>';
   if (summaryEl) summaryEl.textContent = "";
@@ -7000,27 +7002,43 @@ async function loadHostConfigChanges() {
       groups = groups.filter((group) => {
         const displayMatch = String(group.displayName).toLowerCase().includes(q);
         const hostMatch = String(group.hostname).toLowerCase().includes(q);
-        const fieldMatch = group.items.some((item) =>
+        const hostNameMatches = displayMatch || hostMatch;
+        // If host name matches, keep ALL items. Otherwise filter items by field.
+        if (hostNameMatches) {
+          return true;
+        }
+        // Host name doesn't match, so only keep group if it has field-matching items
+        return group.items.some((item) =>
           String(item.field_key || item.field_label || "").toLowerCase().includes(q)
         );
-        return displayMatch || hostMatch || fieldMatch;
-      }).map((group) => ({
-        ...group,
-        items: state.hostConfigChangesSearchQuery
-          ? group.items.filter(
-              (item) =>
-                String(item.field_key || item.field_label || "")
-                  .toLowerCase()
-                  .includes(q)
-            )
-          : group.items,
-      })).filter((group) => group.items.length > 0);
+      }).map((group) => {
+        const displayMatch = String(group.displayName).toLowerCase().includes(q);
+        const hostMatch = String(group.hostname).toLowerCase().includes(q);
+        const hostNameMatches = displayMatch || hostMatch;
+        // If host name matches, show all items. Otherwise filter by field.
+        const filteredItems = hostNameMatches
+          ? group.items
+          : group.items.filter((item) =>
+              String(item.field_key || item.field_label || "")
+                .toLowerCase()
+                .includes(q)
+            );
+        return { ...group, items: filteredItems };
+      }).filter((group) => group.items.length > 0);
     }
 
     // Update summary with filtered count
     if (summaryEl) {
       const filteredCount = groups.reduce((sum, group) => sum + group.items.length, 0);
       summaryEl.textContent = `${filteredCount} Aenderung(en) in den letzten ${hours}h`;
+    }
+
+    if (!groups.length) {
+      const searchMsg = state.hostConfigChangesSearchQuery
+        ? `Keine Aenderungen gefunden fuer "${state.hostConfigChangesSearchQuery}"`
+        : "Keine Aenderungen im gewaehlten Zeitraum.";
+      groupsEl.innerHTML = `<p class="muted">${escapeHtml(searchMsg)}</p>`;
+      return;
     }
 
     groupsEl.innerHTML = groups
