@@ -6436,23 +6436,23 @@ body[data-theme="dark"] .dir-deep-subdir-title::before {
 }
 
 .backup-status-table--sql .backup-col-dir {
-  width: 34%;
+  width: 38%;
 }
 
 .backup-status-table--sql .backup-col-newest {
-  width: 24%;
+  width: 26%;
 }
 
 .backup-status-table--sql .backup-col-mod {
-  width: 14%;
+  width: 12%;
 }
 
 .backup-status-table--sql .backup-col-size {
-  width: 10%;
+  width: 8%;
 }
 
 .backup-status-table--sql .backup-col-status {
-  width: 18%;
+  width: 16%;
 }
 
 .backup-status-dir-name {
@@ -6497,6 +6497,26 @@ body[data-theme="dark"] .dir-deep-subdir-title::before {
   overflow: visible;
   text-overflow: clip;
   word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.backup-status-table--sql td {
+  padding: 7px 10px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.backup-status-table--sql .backup-status-dir-name {
+  display: block;
+}
+
+.backup-status-table--sql .backup-status-dir-name .backup-source-chip {
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.backup-status-table--sql .backup-status-badge-cell {
+  text-align: left;
 }
 
 .backup-status-mod {
