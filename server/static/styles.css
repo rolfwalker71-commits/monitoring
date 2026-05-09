@@ -6428,20 +6428,21 @@ body[data-theme="dark"] .system-overview-customer-title {
 /* System Overview Card Styles */
 .so-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 380px));
   gap: 16px;
   padding: 12px 0;
+  justify-content: start;
 }
 
 @media (max-width: 1200px) {
   .so-card-grid {
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(320px, 360px));
   }
 }
 
 @media (max-width: 900px) {
   .so-card-grid {
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(300px, 340px));
   }
 }
 
