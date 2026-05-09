@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 $IC = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile = if ($env:CONFIG_FILE) { $env:CONFIG_FILE } else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
-$EmbeddedAgentVersion = '1.1.170'
+$EmbeddedAgentVersion = '1.1.171'
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -148,7 +148,7 @@ function Invoke-SqlTable {
     $da = New-Object System.Data.SqlClient.SqlDataAdapter($cmd)
     $dt = New-Object System.Data.DataTable
     [void]$da.Fill($dt)
-    return $dt
+    Write-Output -NoEnumerate $dt
 }
 
 function Convert-DataTableRowsToObjectArray {
