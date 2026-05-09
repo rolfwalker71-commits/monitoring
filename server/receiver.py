@@ -356,6 +356,37 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS user_preferences (
+                username TEXT PRIMARY KEY,
+                critical_trends_metrics TEXT NOT NULL DEFAULT 'filesystem',
+                host_interest_mode TEXT NOT NULL DEFAULT 'all',
+                host_interest_hosts TEXT NOT NULL DEFAULT '',
+                updated_at_utc TEXT NOT NULL,
+                FOREIGN KEY(username) REFERENCES web_users(username)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS filesystem_visibility (
+                username TEXT NOT NULL,
+                hostname TEXT NOT NULL,
+                section TEXT NOT NULL,
+                mountpoint TEXT NOT NULL,
+                updated_at_utc TEXT NOT NULL,
+                PRIMARY KEY(username, hostname, section, mountpoint),
+                FOREIGN KEY(username) REFERENCES web_users(username)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_filesystem_visibility_host_section
+            ON filesystem_visibility(hostname, section)
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS oauth_settings (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 microsoft_enabled INTEGER NOT NULL DEFAULT 0,
@@ -1212,6 +1243,108 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
     }
 
 
+def get_user_preferences(conn: sqlite3.Connection, username: str) -> dict:
+    row = conn.execute(
+        """
+        SELECT COALESCE(critical_trends_metrics, 'filesystem'),
+               COALESCE(host_interest_mode, 'all'),
+               COALESCE(host_interest_hosts, ''),
+               COALESCE(updated_at_utc, '')
+        FROM user_preferences
+        WHERE username = ?
+        """,
+        (username,),
+    ).fetchone()
+    if not row:
+        return {
+            "critical_trends_metrics": "filesystem",
+            "host_interest_mode": "all",
+            "host_interest_hosts": "",
+            "updated_at_utc": "",
+        }
+    mode = str(row[1] or "all").strip().lower()
+    if mode not in {"all", "interested_first", "interested_only"}:
+        mode = "all"
+    return {
+        "critical_trends_metrics": str(row[0] or "filesystem").strip() or "filesystem",
+        "host_interest_mode": mode,
+        "host_interest_hosts": str(row[2] or ""),
+        "updated_at_utc": str(row[3] or ""),
+    }
+
+
+def save_user_preferences(conn: sqlite3.Connection, username: str, payload: dict) -> dict:
+    existing = get_user_preferences(conn, username)
+    metrics = str(payload.get("critical_trends_metrics", existing.get("critical_trends_metrics", "filesystem")) or "filesystem").strip()
+    mode = str(payload.get("host_interest_mode", existing.get("host_interest_mode", "all")) or "all").strip().lower()
+    hosts = str(payload.get("host_interest_hosts", existing.get("host_interest_hosts", "")) or "").strip()
+    if mode not in {"all", "interested_first", "interested_only"}:
+        mode = "all"
+    now_utc = utc_now_iso()
+    conn.execute(
+        """
+        INSERT INTO user_preferences (username, critical_trends_metrics, host_interest_mode, host_interest_hosts, updated_at_utc)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(username) DO UPDATE SET
+            critical_trends_metrics = excluded.critical_trends_metrics,
+            host_interest_mode = excluded.host_interest_mode,
+            host_interest_hosts = excluded.host_interest_hosts,
+            updated_at_utc = excluded.updated_at_utc
+        """,
+        (username, metrics or "filesystem", mode, hosts, now_utc),
+    )
+    return get_user_preferences(conn, username)
+
+
+def get_filesystem_visibility_hidden(
+    conn: sqlite3.Connection,
+    username: str,
+    hostname: str,
+    section: str,
+) -> list[str]:
+    rows = conn.execute(
+        """
+        SELECT mountpoint
+        FROM filesystem_visibility
+        WHERE username = ? AND hostname = ? AND section = ?
+        ORDER BY mountpoint COLLATE NOCASE ASC
+        """,
+        (username, hostname, section),
+    ).fetchall()
+    return [str(row[0] or "") for row in rows if str(row[0] or "").strip()]
+
+
+def save_filesystem_visibility_hidden(
+    conn: sqlite3.Connection,
+    username: str,
+    hostname: str,
+    section: str,
+    hidden_mountpoints: list[str],
+) -> list[str]:
+    normalized = sorted(
+        {
+            str(item or "").strip()
+            for item in hidden_mountpoints
+            if str(item or "").strip()
+        },
+        key=lambda item: item.lower(),
+    )
+    conn.execute(
+        "DELETE FROM filesystem_visibility WHERE username = ? AND hostname = ? AND section = ?",
+        (username, hostname, section),
+    )
+    now_utc = utc_now_iso()
+    for mountpoint in normalized:
+        conn.execute(
+            """
+            INSERT INTO filesystem_visibility (username, hostname, section, mountpoint, updated_at_utc)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (username, hostname, section, mountpoint, now_utc),
+        )
+    return normalized
+
+
 def list_available_alert_hosts(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         """
@@ -1882,6 +2015,324 @@ def collect_system_overview(conn: sqlite3.Connection) -> dict:
             for customer_bucket in os_bucket.values()
             for hosts in customer_bucket.values()
         ),
+    }
+
+
+def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) -> dict:
+    known_hosts = get_known_hostnames(conn)
+    if not known_hosts:
+        return {"generated_at": utc_now_iso(), "hours": max(1, int(hours or 24)), "total": 0, "missing_count": 0, "items": []}
+
+    placeholders = ",".join("?" for _ in known_hosts)
+    latest_rows = conn.execute(
+        f"""
+        SELECT r.hostname, r.received_at_utc, r.payload_json, COALESCE(h.display_name_override, '')
+        FROM reports r
+        LEFT JOIN host_settings h ON h.hostname = r.hostname
+        JOIN (
+            SELECT hostname, MAX(id) AS latest_id
+            FROM reports
+            WHERE hostname IN ({placeholders})
+            GROUP BY hostname
+        ) latest ON latest.latest_id = r.id
+        ORDER BY LOWER(COALESCE(NULLIF(h.display_name_override, ''), r.hostname)), LOWER(r.hostname)
+        """,
+        tuple(known_hosts),
+    ).fetchall()
+
+    now_utc = datetime.now(timezone.utc)
+    age_limit = timedelta(hours=max(1, int(hours or 24)))
+    items: list[dict] = []
+
+    for row in latest_rows:
+        hostname = str(row[0] or "").strip()
+        if not hostname:
+            continue
+        received_at = str(row[1] or "").strip()
+        payload = parse_payload_json(str(row[2] or "{}"))
+        display_name = str(row[3] or "").strip() or hostname
+
+        last_dt = None
+        if received_at:
+            try:
+                last_dt = datetime.fromisoformat(received_at.replace("Z", "+00:00"))
+            except ValueError:
+                last_dt = None
+        is_recent_report = bool(last_dt and ((now_utc - last_dt) <= age_limit))
+
+        dir_block = payload.get("dir_deep_listings") if isinstance(payload.get("dir_deep_listings"), dict) else {}
+        directories = dir_block.get("directories") if isinstance(dir_block.get("directories"), list) else []
+
+        directory_items: list[dict] = []
+        for directory in directories:
+            if not isinstance(directory, dict):
+                continue
+            subdirs = directory.get("subdirs") if isinstance(directory.get("subdirs"), list) else []
+            for subdir in subdirs:
+                if not isinstance(subdir, dict):
+                    continue
+                subdir_name = str(subdir.get("name") or "").strip()
+                subdir_path = str(subdir.get("path") or "").strip() or subdir_name or "-"
+                latest_mod = str(subdir.get("zip_latest_modified_utc") or "").strip()
+                latest_dt = None
+                if latest_mod:
+                    try:
+                        latest_dt = datetime.fromisoformat(latest_mod.replace("Z", "+00:00"))
+                    except ValueError:
+                        latest_dt = None
+                has_today_backup = bool(latest_dt and ((now_utc - latest_dt) <= age_limit))
+
+                newest_name = ""
+                newest_modified = ""
+                newest_size_bytes = 0
+                newest_dt = None
+                entries = subdir.get("items") if isinstance(subdir.get("items"), list) else []
+                for entry in entries:
+                    if not isinstance(entry, dict):
+                        continue
+                    mod = str(entry.get("modified_utc") or "").strip()
+                    mod_dt = None
+                    if mod:
+                        try:
+                            mod_dt = datetime.fromisoformat(mod.replace("Z", "+00:00"))
+                        except ValueError:
+                            mod_dt = None
+                    if newest_dt is None or (mod_dt is not None and mod_dt > newest_dt):
+                        newest_dt = mod_dt
+                        newest_name = str(entry.get("name") or entry.get("path") or "").strip()
+                        newest_modified = mod
+                        try:
+                            newest_size_bytes = int(entry.get("size_bytes") or 0)
+                        except (TypeError, ValueError):
+                            newest_size_bytes = 0
+
+                directory_items.append(
+                    {
+                        "subdir_name": subdir_name or "-",
+                        "subdir_path": subdir_path,
+                        "has_today_backup": has_today_backup,
+                        "newest_item_name": newest_name,
+                        "newest_item_modified": newest_modified,
+                        "newest_item_size_bytes": max(0, newest_size_bytes),
+                    }
+                )
+
+        has_missing_backup = bool(directory_items) and any(not bool(item.get("has_today_backup")) for item in directory_items)
+        items.append(
+            {
+                "hostname": hostname,
+                "display_name": display_name,
+                "last_report_utc": received_at,
+                "is_recent_report": is_recent_report,
+                "directories": directory_items,
+                "has_missing_backup": has_missing_backup,
+            }
+        )
+
+    missing_count = sum(1 for item in items if bool(item.get("has_missing_backup")))
+    return {
+        "generated_at": utc_now_iso(),
+        "hours": max(1, int(hours or 24)),
+        "total": len(items),
+        "missing_count": missing_count,
+        "items": items,
+    }
+
+
+def export_alerts_rows(conn: sqlite3.Connection, *, status: str | None = None, severity: str | None = None) -> list[dict]:
+    status_filter = str(status or "").strip().lower()
+    if status_filter not in {"active", "resolved", "all"}:
+        status_filter = "active"
+    severity_filter = str(severity or "").strip().lower()
+    if severity_filter not in {"warning", "critical", "all"}:
+        severity_filter = "all"
+
+    clauses = []
+    params: list[object] = []
+    if status_filter == "active":
+        clauses.append("a.resolved_at_utc IS NULL")
+    elif status_filter == "resolved":
+        clauses.append("a.resolved_at_utc IS NOT NULL")
+    if severity_filter != "all":
+        clauses.append("a.severity = ?")
+        params.append(severity_filter)
+
+    where_sql = ""
+    if clauses:
+        where_sql = "WHERE " + " AND ".join(clauses)
+
+    rows = conn.execute(
+        f"""
+        SELECT a.id,
+               a.hostname,
+               a.mountpoint,
+               a.severity,
+               a.used_percent,
+               a.created_at_utc,
+               COALESCE(a.last_seen_at_utc, ''),
+               COALESCE(a.resolved_at_utc, '')
+        FROM alerts a
+        {where_sql}
+        ORDER BY a.created_at_utc DESC, a.id DESC
+        """,
+        tuple(params),
+    ).fetchall()
+
+    result: list[dict] = []
+    for row in rows:
+        result.append(
+            {
+                "id": int(row[0] or 0),
+                "hostname": str(row[1] or ""),
+                "mountpoint": str(row[2] or ""),
+                "severity": str(row[3] or "warning"),
+                "used_percent": float(row[4] or 0.0),
+                "created_at_utc": str(row[5] or ""),
+                "last_seen_at_utc": str(row[6] or ""),
+                "resolved_at_utc": str(row[7] or ""),
+            }
+        )
+    return result
+
+
+def export_reports_rows(conn: sqlite3.Connection, hostname: str = "", limit: int = 500) -> list[dict]:
+    host = str(hostname or "").strip()
+    limited = max(1, min(int(limit or 500), 2000))
+    if host:
+        rows = conn.execute(
+            """
+            SELECT id, hostname, received_at_utc, payload_json
+            FROM reports
+            WHERE hostname = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (host, limited),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT id, hostname, received_at_utc, payload_json
+            FROM reports
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limited,),
+        ).fetchall()
+    data: list[dict] = []
+    for row in rows:
+        data.append(
+            {
+                "id": int(row[0] or 0),
+                "hostname": str(row[1] or ""),
+                "received_at_utc": str(row[2] or ""),
+                "payload": parse_payload_json(str(row[3] or "{}")),
+            }
+        )
+    return data
+
+
+def build_ai_troubleshoot_response(conn: sqlite3.Connection, hostname: str, metric: str, hours: int) -> dict:
+    host = str(hostname or "").strip()
+    metric_key = str(metric or "").strip().lower()
+    window_hours = max(1, min(int(hours or 24), 168))
+    if not host:
+        return {
+            "context": {"hostname": host, "metric": metric_key, "hours": window_hours, "samples": 0},
+            "analysis": "Kein Hostname angegeben.",
+            "model": "local-rules-v1",
+            "cached": False,
+        }
+
+    cutoff_iso = utc_hours_ago_iso(window_hours)
+    rows = conn.execute(
+        """
+        SELECT payload_json
+        FROM reports
+        WHERE hostname = ? AND received_at_utc >= ?
+        ORDER BY id ASC
+        """,
+        (host, cutoff_iso),
+    ).fetchall()
+
+    values: list[float] = []
+    for row in rows:
+        payload = parse_payload_json(str(row[0] or "{}"))
+        value = None
+        if metric_key == "cpu_usage_percent":
+            value = extract_cpu_usage(payload)
+        elif metric_key == "load_avg_1":
+            value = extract_load1(payload)
+        elif metric_key == "memory_used_percent":
+            value = extract_memory_used_percent(payload)
+        elif metric_key == "swap_used_percent":
+            value = extract_swap_used_percent(payload)
+        elif metric_key == "filesystem":
+            fs_values: list[float] = []
+            for item in payload.get("filesystems", []):
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    fs_values.append(float(item.get("used_percent")))
+                except (TypeError, ValueError):
+                    continue
+            if fs_values:
+                value = max(fs_values)
+        if value is None:
+            continue
+        values.append(max(0.0, min(float(value), 100.0 if metric_key != "load_avg_1" else float(value))))
+
+    if not values:
+        return {
+            "context": {"hostname": host, "metric": metric_key, "hours": window_hours, "samples": 0},
+            "analysis": "Keine ausreichenden Messdaten im gewaehlten Zeitraum.",
+            "model": "local-rules-v1",
+            "cached": False,
+        }
+
+    latest = values[-1]
+    avg = sum(values) / len(values)
+    peak = max(values)
+    if len(values) >= 4:
+        recent = values[-max(2, len(values) // 3):]
+        baseline = values[: max(2, len(values) // 3)]
+        trend = (sum(recent) / len(recent)) - (sum(baseline) / len(baseline))
+    else:
+        trend = 0.0
+
+    if metric_key == "filesystem":
+        level = "kritisch" if peak >= CRITICAL_THRESHOLD_PERCENT else ("auffaellig" if peak >= WARNING_THRESHOLD_PERCENT else "stabil")
+        analysis = (
+            f"Filesystem-Analyse fuer {host}: aktuell {latest:.1f}%, Mittelwert {avg:.1f}%, Spitze {peak:.1f}%. "
+            f"Bewertung: {level}."
+        )
+    elif metric_key == "load_avg_1":
+        level = "hoch" if peak >= 4.0 else ("erhoeht" if peak >= 2.0 else "normal")
+        analysis = (
+            f"Load-Analyse fuer {host}: aktuell {latest:.2f}, Mittelwert {avg:.2f}, Spitze {peak:.2f}. "
+            f"Bewertung: {level}."
+        )
+    else:
+        level = "kritisch" if peak >= CRITICAL_THRESHOLD_PERCENT else ("auffaellig" if peak >= WARNING_THRESHOLD_PERCENT else "stabil")
+        direction = "steigend" if trend > 3.0 else ("fallend" if trend < -3.0 else "seitwaerts")
+        analysis = (
+            f"Trend-Analyse fuer {host}: aktuell {latest:.1f}%, Mittelwert {avg:.1f}%, Spitze {peak:.1f}%. "
+            f"Trend: {direction}. Bewertung: {level}."
+        )
+
+    return {
+        "context": {
+            "hostname": host,
+            "metric": metric_key,
+            "hours": window_hours,
+            "samples": len(values),
+            "latest": round(latest, 2),
+            "average": round(avg, 2),
+            "peak": round(peak, 2),
+        },
+        "analysis": analysis,
+        "model": "local-rules-v1",
+        "cached": False,
     }
 
 
@@ -4568,6 +5019,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, payload)
             return
 
+        if parsed.path == "/api/v1/user-preferences":
+            username = self._web_session_username()
+            with sqlite3.connect(DB_PATH) as conn:
+                payload = get_user_preferences(conn, username)
+            self._send_json(HTTPStatus.OK, payload)
+            return
+
         if parsed.path == "/api/v1/session/refresh":
             username = self._web_session_username()
             if not username:
@@ -5043,6 +5501,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
             cutoff_iso = utc_hours_ago_iso(hours)
+            username = self._web_session_username()
 
             with sqlite3.connect(DB_PATH) as conn:
                 rows = conn.execute(
@@ -5054,6 +5513,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     """,
                     (hostname, cutoff_iso),
                 ).fetchall()
+                hidden_mountpoints = get_filesystem_visibility_hidden(conn, username, hostname, "analysis")
 
             fs_by_mountpoint = {}
             report_count = 0
@@ -5198,9 +5658,74 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "delayed_report_count": delayed_report_count,
                         "live_report_count": live_report_count,
                     },
+                    "filesystem_visibility": {
+                        "section": "analysis",
+                        "hidden_mountpoints": hidden_mountpoints,
+                    },
                     "filesystem_trends": trends,
                 },
             )
+            return
+
+        if parsed.path == "/api/v1/backup-status-overview":
+            query = parse_qs(parsed.query)
+            hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
+            with sqlite3.connect(DB_PATH) as conn:
+                data = collect_backup_status_overview(conn, hours)
+            self._send_json(HTTPStatus.OK, data)
+            return
+
+        if parsed.path == "/api/v1/export/alerts.csv":
+            query = parse_qs(parsed.query)
+            status = str(query.get("status", ["active"])[0] or "active").strip().lower()
+            severity = str(query.get("severity", ["all"])[0] or "all").strip().lower()
+            with sqlite3.connect(DB_PATH) as conn:
+                rows = export_alerts_rows(conn, status=status, severity=severity)
+
+            header = "id,hostname,mountpoint,severity,used_percent,created_at_utc,last_seen_at_utc,resolved_at_utc\n"
+            lines = [header]
+            for item in rows:
+                line = (
+                    f"{int(item.get('id', 0))},"
+                    f"\"{str(item.get('hostname', '')).replace('"', '""')}\","
+                    f"\"{str(item.get('mountpoint', '')).replace('"', '""')}\","
+                    f"{str(item.get('severity', 'warning'))},"
+                    f"{float(item.get('used_percent', 0.0)):.2f},"
+                    f"{str(item.get('created_at_utc', ''))},"
+                    f"{str(item.get('last_seen_at_utc', ''))},"
+                    f"{str(item.get('resolved_at_utc', ''))}\n"
+                )
+                lines.append(line)
+            data = "".join(lines).encode("utf-8")
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Disposition", 'attachment; filename="alerts-export.csv"')
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
+        if parsed.path == "/api/v1/export/reports.json":
+            query = parse_qs(parsed.query)
+            hostname = str(query.get("hostname", [""])[0] or "").strip()
+            limit = parse_int(query, "limit", default=500, min_value=1, max_value=2000)
+            with sqlite3.connect(DB_PATH) as conn:
+                rows = export_reports_rows(conn, hostname=hostname, limit=limit)
+            payload = {
+                "count": len(rows),
+                "hostname": hostname,
+                "limit": limit,
+                "reports": rows,
+            }
+            data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Disposition", 'attachment; filename="reports-export.json"')
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
             return
 
         if parsed.path == "/api/v1/alerts":
@@ -5469,6 +5994,26 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "Cache-Control": "no-store",
                 },
             )
+            return
+
+        if parsed.path == "/api/v1/backup/database":
+            if not self._require_admin_session():
+                return
+            _cleanup_backup_jobs()
+            jobs: list[dict] = []
+            with _backup_jobs_lock:
+                for job_id, job in _backup_jobs.items():
+                    jobs.append(
+                        {
+                            "job_id": job_id,
+                            "status": str(job.get("status") or "unknown"),
+                            "filename": str(job.get("filename") or ""),
+                            "created_at_utc": str(job.get("created_at_utc") or ""),
+                            "updated_at_utc": str(job.get("updated_at_utc") or ""),
+                        }
+                    )
+            jobs.sort(key=lambda item: str(item.get("updated_at_utc") or ""), reverse=True)
+            self._send_json(HTTPStatus.OK, {"count": len(jobs), "jobs": jobs})
             return
 
         if parsed.path == "/api/v1/sap-b1-version-map":
@@ -5761,6 +6306,78 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, settings)
             return
 
+        if path == "/api/v1/user-preferences":
+            username = self._web_session_username()
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid payload"})
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                saved = save_user_preferences(conn, username, payload)
+                conn.commit()
+            self._send_json(HTTPStatus.OK, saved)
+            return
+
+        if path == "/api/v1/filesystem-visibility":
+            username = self._web_session_username()
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid payload"})
+                return
+
+            hostname = str(payload.get("hostname", "") or "").strip()
+            section = str(payload.get("section", "analysis") or "analysis").strip().lower()
+            hidden_mountpoints_raw = payload.get("hidden_mountpoints", [])
+            if not hostname:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
+                return
+            if section not in {"analysis", "critical-trends"}:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid section"})
+                return
+            if not isinstance(hidden_mountpoints_raw, list):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hidden_mountpoints must be a list"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                saved_hidden = save_filesystem_visibility_hidden(
+                    conn,
+                    username,
+                    hostname,
+                    section,
+                    [str(item or "") for item in hidden_mountpoints_raw],
+                )
+                conn.commit()
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "stored",
+                    "username": username,
+                    "hostname": hostname,
+                    "section": section,
+                    "hidden_mountpoints": saved_hidden,
+                },
+            )
+            return
+
         if path == "/api/v1/user-alert-subscriptions":
             username = self._web_session_username()
             content_length = int(self.headers.get("Content-Length", "0"))
@@ -5907,13 +6524,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, payload)
             return
 
-        if path in {"/api/v1/mail-test", "/api/v1/mail-test/trends", "/api/v1/mail-test/alerts"}:
+        if path in {"/api/v1/mail-test", "/api/v1/mail-test/trends", "/api/v1/mail-test/alerts", "/api/v1/mail-test/backup"}:
             username = self._web_session_username()
             endpoint_mode = "generic"
             if path.endswith("/trends"):
                 endpoint_mode = "trends"
             elif path.endswith("/alerts"):
                 endpoint_mode = "alerts"
+            elif path.endswith("/backup"):
+                endpoint_mode = "backup"
 
             with sqlite3.connect(DB_PATH) as conn:
                 settings = get_web_user_settings(conn, username)
@@ -5950,6 +6569,28 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         content_type="HTML",
                         attachments=graph_attachments,
                     )
+                elif endpoint_mode == "backup":
+                    overview = collect_backup_status_overview(conn, 24)
+                    missing = int(overview.get("missing_count") or 0)
+                    total = int(overview.get("total") or 0)
+                    lines = [
+                        "[TEST] Backup-Status Uebersicht",
+                        f"Benutzer: {username}",
+                        f"Zeit: {utc_now_iso()}",
+                        f"Hosts mit fehlendem Backup: {missing} von {total}",
+                    ]
+                    for item in overview.get("items", [])[:20]:
+                        if not isinstance(item, dict):
+                            continue
+                        if not bool(item.get("has_missing_backup")):
+                            continue
+                        lines.append(f"- {str(item.get('display_name') or item.get('hostname') or '?')}")
+                    mail_ok, mail_details = send_microsoft_mail(
+                        access_token,
+                        recipient,
+                        f"[TEST] Backup Status: {missing}/{total} mit Luecken",
+                        "\n".join(lines),
+                    )
                 else:
                     mail_ok, mail_details = send_microsoft_mail(
                         access_token,
@@ -5971,6 +6612,29 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "details": mail_details,
                 },
             )
+            return
+
+        if path == "/api/v1/ai-troubleshoot":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid payload"})
+                return
+
+            hostname = str(payload.get("hostname", "") or "").strip()
+            metric = str(payload.get("metric", "") or "").strip()
+            hours = int(payload.get("hours") or 24)
+            with sqlite3.connect(DB_PATH) as conn:
+                response_payload = build_ai_troubleshoot_response(conn, hostname, metric, hours)
+            self._send_json(HTTPStatus.OK, response_payload)
             return
 
         if path == "/api/v1/web-users":
@@ -6076,6 +6740,65 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 {
                     "status": "sent" if ok else "failed",
                     "details": details,
+                },
+            )
+            return
+
+        if path == "/api/v1/customer-alert/test":
+            if not self._require_admin_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid payload"})
+                return
+
+            username = self._web_session_username()
+            hostname = str(payload.get("hostname", "") or "").strip()
+            recipients = parse_email_recipients(payload.get("recipients") or payload.get("recipient") or "")
+            if not recipients:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no recipients"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                ok_token, access_token, details = ensure_microsoft_access_token(conn, username)
+                if not ok_token:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": details or "oauth unavailable"})
+                    return
+
+                host_context = collect_host_mail_context(conn, hostname) if hostname else {"display_name": "(ohne Host)", "hostname": ""}
+                subject = f"[TEST] Kundenalarm {str(host_context.get('display_name') or hostname or '')}"
+                body = (
+                    "<html><body>"
+                    "<p>Dies ist ein Test fuer den Kundenalarm.</p>"
+                    f"<p>Host: <strong>{html.escape(str(host_context.get('display_name') or hostname or '-'))}</strong></p>"
+                    f"<p>Ausgeloest von: {html.escape(username)}</p>"
+                    f"<p>Zeit: {html.escape(format_mail_datetime())}</p>"
+                    "</body></html>"
+                )
+                ok_send, send_details = send_microsoft_mail_multi(
+                    access_token,
+                    recipients,
+                    subject,
+                    body,
+                    content_type="HTML",
+                )
+                conn.commit()
+
+            self._send_json(
+                HTTPStatus.OK if ok_send else HTTPStatus.BAD_REQUEST,
+                {
+                    "status": "sent" if ok_send else "failed",
+                    "details": send_details,
+                    "recipients": recipients,
                 },
             )
             return
