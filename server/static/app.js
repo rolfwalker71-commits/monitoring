@@ -6979,6 +6979,44 @@ async function loadHostConfigChanges() {
   }
 }
 
+function setHostConfigChangesBackfillStatus(message, isError = false) {
+  const statusEl = document.getElementById("hostConfigChangesBackfillStatus");
+  if (!statusEl) return;
+  statusEl.textContent = String(message || "");
+  statusEl.classList.toggle("status-error", Boolean(isError));
+}
+
+async function runHostConfigChangesBackfill(days = 7) {
+  const button = document.getElementById("backfillHostConfigChangesButton");
+  const targetDays = Math.max(1, Math.min(30, Number(days) || 7));
+  const confirmed = window.confirm(`Backfill fuer die letzten ${targetDays} Tage jetzt starten?`);
+  if (!confirmed) return;
+
+  if (button) button.disabled = true;
+  setHostConfigChangesBackfillStatus("Backfill laeuft...");
+
+  try {
+    const response = await fetch("/api/v1/host-config-changes/backfill", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ days: targetDays }),
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    const result = data?.result || {};
+    setHostConfigChangesBackfillStatus(
+      `Backfill OK: ${Number(result.inserted_changes || 0)} Aenderungen aus ${Number(result.reports_scanned || 0)} Reports.`,
+      false,
+    );
+    await loadHostConfigChanges();
+  } catch (error) {
+    setHostConfigChangesBackfillStatus(`Backfill Fehler: ${error.message}`, true);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function updateHeaderStatChips() {
   const alertChip = document.getElementById("headerAlertChip");
   const alertCount = document.getElementById("headerAlertCount");
@@ -7423,6 +7461,12 @@ function wireEvents() {
   if (refreshHostConfigChangesButton) {
     refreshHostConfigChangesButton.addEventListener("click", async () => {
       await loadHostConfigChanges();
+    });
+  }
+  const backfillHostConfigChangesButton = document.getElementById("backfillHostConfigChangesButton");
+  if (backfillHostConfigChangesButton) {
+    backfillHostConfigChangesButton.addEventListener("click", async () => {
+      await runHostConfigChangesBackfill(7);
     });
   }
 
