@@ -993,6 +993,36 @@ function setUserMailSettingsStatus(message, isError = false) {
   statusEl.classList.toggle("status-error", isError);
 }
 
+function renderSettingsLogicHelp(targetId, helpBlock) {
+  const container = document.getElementById(targetId);
+  if (!container) {
+    return;
+  }
+
+  const title = asText(helpBlock?.title, "");
+  const items = Array.isArray(helpBlock?.items)
+    ? helpBlock.items.map((item) => asText(item, "")).filter((item) => item && item !== "-")
+    : [];
+
+  if (!title && items.length === 0) {
+    container.innerHTML = "";
+    container.classList.add("hidden");
+    return;
+  }
+
+  const listHtml = items.length > 0
+    ? `<ul class="settings-logic-help-list">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+    : "";
+
+  container.innerHTML = `
+    <div class="settings-logic-help-card">
+      ${title ? `<h6>${escapeHtml(title)}</h6>` : ""}
+      ${listHtml}
+    </div>
+  `;
+  container.classList.remove("hidden");
+}
+
 function setHostInterestsStatus(message, isError = false) {
   const statusEl = document.getElementById("hostInterestsStatus");
   if (!statusEl) {
@@ -1417,6 +1447,7 @@ async function loadUserProfile(force = false) {
       throw new Error("HTTP " + response.status);
     }
     const profile = await response.json();
+    const logicHelp = profile.mail_logic_help || {};
     enabledInput.checked = profile.email_enabled === true;
     recipientInput.value = asText(profile.email_recipient, "") === "-" ? "" : asText(profile.email_recipient, "");
     trendEnabledInput.checked = profile.trend_email_enabled === true;
@@ -1469,6 +1500,10 @@ async function loadUserProfile(force = false) {
     if (summaryEl) {
       summaryEl.textContent = `${oauthLabel} | ${availabilityLabel}`;
     }
+    renderSettingsLogicHelp("mailChannelsLogicHelp", logicHelp.channels);
+    renderSettingsLogicHelp("trendDigestLogicHelp", logicHelp.trend_digest);
+    renderSettingsLogicHelp("alertDigestLogicHelp", logicHelp.alert_digest);
+    renderSettingsLogicHelp("instantAlertsLogicHelp", logicHelp.instant_alerts);
     if (connectButton) {
       connectButton.disabled = profile.mail_oauth_available !== true;
     }

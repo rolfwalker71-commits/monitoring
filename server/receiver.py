@@ -3856,6 +3856,49 @@ def oauth_is_configured(settings: dict) -> bool:
         and str(settings.get("microsoft_client_secret", "")).strip()
     )
 
+    
+def build_user_mail_logic_help() -> dict:
+    return {
+        "channels": {
+            "title": "Mailversand ueber Microsoft OAuth",
+            "items": [
+                "Global muss zuerst die Microsoft OAuth App im Admin-Bereich konfiguriert und aktiviert sein.",
+                "Zusaetzlich muss jeder Benutzer sein eigenes Microsoft-Konto verbinden. Gesendet wird ueber dieses Benutzerkonto via Microsoft Graph.",
+                "Mailversand fuer mich aktivieren schaltet nur die persoenliche Versandfreigabe ein. Ohne Mail-Empfaenger und ohne OAuth-Verbindung wird nichts versendet.",
+                "Die Empfaenger-Adresse hier ist die Basisadresse fuer Trend-Mail, Alert-Digest und Instant-Alert-Mail.",
+            ],
+        },
+        "trend_digest": {
+            "title": "Trend Mail Logik",
+            "items": [
+                "Der Versand laeuft einmal pro Tag zur eingestellten Zeit in der festen Zeitzone Europe/Zurich.",
+                "Voraussetzungen: persoenlicher Mailversand aktiv, Mail-Empfaenger gesetzt, Trend-Mail aktiv und Microsoft-OAuth verbunden.",
+                "Hidden Mountpoints aus Kritische Trends und FS-Focus werden im Digest nicht gezeigt.",
+                "Die Host-Auswahl folgt den gespeicherten Host-Interessen: Alle Hosts, Interessante Hosts zuerst oder Nur interessante Hosts.",
+                "Interessante Hosts zuerst priorisiert nur die Sortierung. Nur interessante Hosts filtert den Digest inhaltlich auf diese Hosts ein.",
+            ],
+        },
+        "alert_digest": {
+            "title": "Alarm Digest Logik",
+            "items": [
+                "Der Alarm-Digest laeuft einmal pro Tag zur eingestellten Zeit in Europe/Zurich.",
+                "Voraussetzungen: persoenlicher Mailversand aktiv, Basis-Empfaenger gesetzt, Alarm-Mail aktiv und Microsoft-OAuth verbunden.",
+                "Weitere Alarm Empfaenger erweitern die Versandliste fuer diesen Digest zusaetzlich zur Basisadresse.",
+                "Der Inhalt respektiert jetzt die Mail-Host-Abos des Benutzers: nur Hosts mit aktiviertem Mail-Abo erscheinen im Alert-Digest.",
+                "Die Felder Empfaenger nur fuer Warnung und Empfaenger nur fuer Kritisch sind aktuell reine UI-Felder und werden backendseitig noch nicht ausgewertet.",
+            ],
+        },
+        "instant_alerts": {
+            "title": "Sofort-Alerts per Mail und Telegram",
+            "items": [
+                "Sofort-Alerts reagieren auf einzelne Events: Alarm ausgeloest, eskaliert oder behoben.",
+                "Mail respektiert pro Benutzer: Mailversand aktiv, Basis-Empfaenger vorhanden, Instant-Mail aktiv, Mindest-Schweregrad passend und Mail-Host-Abo fuer den betroffenen Host gesetzt.",
+                "Telegram respektiert pro Benutzer: Instant-Telegram aktiv, persoenliche Chat-ID gesetzt, Mindest-Schweregrad passend und Telegram-Host-Abo fuer den betroffenen Host gesetzt.",
+                "Telegram braucht zusaetzlich global aktiviertes Telegram und einen global hinterlegten Bot-Token im Alarm-Setup.",
+                "Die persoenliche Chat-ID ist benutzerspezifisch. Bot-Token und Telegram global an/aus sind systemweit.",
+            ],
+        },
+    }
 
 def get_oauth_connection(conn: sqlite3.Connection, username: str, provider: str = MICROSOFT_PROVIDER) -> dict | None:
     row = conn.execute(
@@ -4043,6 +4086,7 @@ def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
             "expires_at_utc": connection["expires_at_utc"] if connection else "",
             "updated_at_utc": connection["updated_at_utc"] if connection else "",
         },
+        "mail_logic_help": build_user_mail_logic_help(),
     }
 
 
