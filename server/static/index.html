@@ -219,6 +219,20 @@
             <div id="backupStatusView" class="hidden" role="tabpanel" aria-labelledby="backupStatusTabButton">
               <div class="inactive-hosts-toolbar">
                 <span id="backupStatusSummary" class="count compact"></span>
+                <div class="backup-status-filters" aria-label="Backup Filter">
+                  <label class="backup-filter-checkbox" title="Nur Hosts mit SQL-Backups anzeigen">
+                    <input id="backupStatusFilterSql" type="checkbox" /> SQL
+                  </label>
+                  <label class="backup-filter-checkbox" title="Nur Hosts mit HANA anzeigen">
+                    <input id="backupStatusFilterHana" type="checkbox" /> HANA
+                  </label>
+                  <label class="backup-filter-country" for="backupStatusCountryFilter">
+                    <span>Land</span>
+                    <select id="backupStatusCountryFilter">
+                      <option value="all">Alle</option>
+                    </select>
+                  </label>
+                </div>
                 <button id="refreshBackupStatusButton" type="button" class="btn-secondary">Neu laden</button>
               </div>
               <div id="backupStatusList" class="backup-status-list">

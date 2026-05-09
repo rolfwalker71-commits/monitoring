@@ -6381,6 +6381,97 @@ body[data-theme="dark"] .dir-deep-subdir-title::before {
   white-space: nowrap;
 }
 
+.backup-status-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.backup-filter-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.backup-filter-country {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.backup-filter-country select {
+  min-width: 84px;
+}
+
+.backup-host-tag {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.backup-host-tag--sql {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.backup-host-tag--hana {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.backup-host-tag--country {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.backup-status-dir-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.backup-source-chip {
+  display: inline-block;
+  min-width: 38px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.backup-source-chip--sql {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.backup-source-chip--hana {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.backup-source-chip--fs {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.backup-row--sql td {
+  background: #f8fbff;
+}
+
+.backup-row--hana td {
+  background: #faf5ff;
+}
+
 body[data-theme="dark"] .backup-host-card {
   border-color: #2d3e55;
 }
@@ -6416,6 +6507,37 @@ body[data-theme="dark"] .backup-host-count--missing {
 body[data-theme="dark"] .backup-status-stale {
   background: #3d2a00;
   color: #fbbf24;
+}
+
+body[data-theme="dark"] .backup-filter-checkbox,
+body[data-theme="dark"] .backup-filter-country {
+  color: #cbd5e1;
+}
+
+body[data-theme="dark"] .backup-host-tag--sql,
+body[data-theme="dark"] .backup-source-chip--sql {
+  background: #1e3a8a;
+  color: #bfdbfe;
+}
+
+body[data-theme="dark"] .backup-host-tag--hana,
+body[data-theme="dark"] .backup-source-chip--hana {
+  background: #4c1d95;
+  color: #ddd6fe;
+}
+
+body[data-theme="dark"] .backup-host-tag--country,
+body[data-theme="dark"] .backup-source-chip--fs {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+body[data-theme="dark"] .backup-row--sql td {
+  background: #0d1d38;
+}
+
+body[data-theme="dark"] .backup-row--hana td {
+  background: #24113a;
 }
 
 /* System overview hierarchy layout */

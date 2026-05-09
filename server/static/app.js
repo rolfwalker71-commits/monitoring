@@ -120,6 +120,10 @@ const state = {
   largeFilesAvailableMountpoints: [],
   fsVisibilitySection: "",
   alertMutesRefreshInFlight: false,
+  backupStatusData: null,
+  backupStatusFilterSql: false,
+  backupStatusFilterHana: false,
+  backupStatusCountryFilter: "all",
 };
 
 function normalizeHostInterestMode(value) {
@@ -6819,9 +6823,54 @@ async function loadInactiveHosts(options = {}) {
 }
 
 function renderBackupStatus(data) {
-  const hosts = data.hosts || [];
-  if (hosts.length === 0) {
+  const allHosts = Array.isArray(data.hosts) ? data.hosts : [];
+  const countryFilterEl = document.getElementById("backupStatusCountryFilter");
+  const sqlFilterEl = document.getElementById("backupStatusFilterSql");
+  const hanaFilterEl = document.getElementById("backupStatusFilterHana");
+
+  if (countryFilterEl) {
+    const countries = [...new Set(allHosts
+      .map((host) => String(host?.country_code || "").trim().toUpperCase())
+      .filter((code) => /^[A-Z]{2}$/.test(code)))].sort();
+    const current = String(state.backupStatusCountryFilter || "all").toUpperCase() === "ALL"
+      ? "all"
+      : String(state.backupStatusCountryFilter || "all").toUpperCase();
+    const options = ["<option value=\"all\">Alle</option>"]
+      .concat(countries.map((code) => `<option value="${escapeHtml(code)}">${escapeHtml(code)}</option>`))
+      .join("");
+    countryFilterEl.innerHTML = options;
+    if (countries.includes(current)) {
+      countryFilterEl.value = current;
+      state.backupStatusCountryFilter = current;
+    } else {
+      countryFilterEl.value = "all";
+      state.backupStatusCountryFilter = "all";
+    }
+  }
+  if (sqlFilterEl) sqlFilterEl.checked = state.backupStatusFilterSql === true;
+  if (hanaFilterEl) hanaFilterEl.checked = state.backupStatusFilterHana === true;
+
+  const hosts = allHosts.filter((host) => {
+    const hostCountry = String(host?.country_code || "").trim().toUpperCase();
+    const countryFilter = String(state.backupStatusCountryFilter || "all").toUpperCase();
+    if (countryFilter !== "ALL" && hostCountry !== countryFilter) {
+      return false;
+    }
+    const wantSql = state.backupStatusFilterSql === true;
+    const wantHana = state.backupStatusFilterHana === true;
+    if (!wantSql && !wantHana) {
+      return true;
+    }
+    const hasSql = Boolean(host?.has_sql);
+    const hasHana = Boolean(host?.has_hana);
+    return (wantSql && hasSql) || (wantHana && hasHana);
+  });
+
+  if (allHosts.length === 0) {
     return "<p class=\"muted\">Keine Hosts mit Backup-Konfiguration gefunden. (DIR_SCAN_DEEP_PATHS oder auto-erkannter HANA-Pfad in agent.conf)</p>";
+  }
+  if (hosts.length === 0) {
+    return "<p class=\"muted\">Keine Hosts im aktuellen Filter.</p>";
   }
   return hosts.map((host) => {
     const displayName = asText(host.display_name || host.hostname, "-");
@@ -6838,15 +6887,28 @@ function renderBackupStatus(data) {
     const staleNote = isToday ? "" : ` <span class="backup-status-stale" title="Kein heutiger Report vorhanden">Stand: ${escapeHtml(reportTimeFmt)}</span>`;
     const hasMissing = host.has_missing_backup;
     const headerClass = hasMissing ? "backup-host-header backup-host-header--missing" : "backup-host-header backup-host-header--ok";
+    const hostTagSql = host.has_sql ? `<span class="backup-host-tag backup-host-tag--sql">SQL</span>` : "";
+    const hostTagHana = host.has_hana ? `<span class="backup-host-tag backup-host-tag--hana">HANA</span>` : "";
+    const hostCountry = /^[A-Z]{2}$/.test(String(host.country_code || "").toUpperCase())
+      ? `<span class="backup-host-tag backup-host-tag--country">${escapeHtml(String(host.country_code || "").toUpperCase())}</span>`
+      : "";
 
     const dirs = host.dirs || [];
     const currentCount = dirs.filter((d) => d.has_today_backup === true).length;
     const missingCount = Math.max(0, dirs.length - currentCount);
     const detailsOpenAttr = hasMissing ? " open" : "";
     const dirRows = dirs.map((d) => {
+      const sourceType = asText(d.source_type || "filesystem", "filesystem").toLowerCase();
+      const isSql = sourceType === "sql";
+      const isHana = !isSql && /\/hana\//i.test(asText(d.subdir_path, ""));
       const ok = d.has_today_backup;
       const badgeClass = ok ? "dir-status-badge ok" : "dir-status-badge missing";
       const badgeText = ok ? "✓ Backup aktuell (<24h)" : "✗ kein aktuelles Backup";
+      const sourceChip = isSql
+        ? '<span class="backup-source-chip backup-source-chip--sql">SQL</span>'
+        : isHana
+          ? '<span class="backup-source-chip backup-source-chip--hana">HANA</span>'
+          : '<span class="backup-source-chip backup-source-chip--fs">FS</span>';
       const subdirName = escapeHtml(asText(d.subdir_name || d.subdir_path, "-"));
       const newestRaw = asText(d.newest_item_name, "-");
       const newestSlashIndex = newestRaw.lastIndexOf("/");
@@ -6857,9 +6919,10 @@ function renderBackupStatus(data) {
       const newestMod = d.newest_item_modified ? formatUtcPlus2Short(d.newest_item_modified) : "-";
       const sizeBytes = d.newest_item_size_bytes || 0;
       const sizeText = sizeBytes > 0 ? formatFileSize(sizeBytes) : "-";
+      const rowClass = isSql ? "backup-row backup-row--sql" : isHana ? "backup-row backup-row--hana" : "backup-row backup-row--fs";
       return `
-        <tr>
-          <td class="backup-status-dir-name" title="${escapeHtml(asText(d.subdir_path, ""))}">${subdirName}</td>
+        <tr class="${rowClass}">
+          <td class="backup-status-dir-name" title="${escapeHtml(asText(d.subdir_path, ""))}">${sourceChip}<span>${subdirName}</span></td>
           <td class="backup-status-newest" title="${escapeHtml(newestRaw)}">${newestPath}<span class="backup-status-newest-name">${newestName}</span></td>
           <td class="backup-status-mod">${escapeHtml(newestMod)}</td>
           <td class="backup-status-size">${escapeHtml(sizeText)}</td>
@@ -6872,6 +6935,9 @@ function renderBackupStatus(data) {
         <summary class="${headerClass}">
           <span class="backup-host-name">${escapeHtml(displayName)}</span>
           <span class="backup-host-hostname muted">${escapeHtml(hostname)}</span>
+          ${hostTagSql}
+          ${hostTagHana}
+          ${hostCountry}
           <span class="backup-host-stats">
             <span class="backup-host-count backup-host-count--ok">Aktuelles Backup: ${currentCount}</span>
             <span class="backup-host-count backup-host-count--missing">kein aktuelles Backup: ${missingCount}</span>
@@ -6904,13 +6970,26 @@ async function loadBackupStatus() {
     const response = await fetch("/api/v1/backup-status-overview", { credentials: "same-origin" });
     if (!response.ok) throw new Error("HTTP " + response.status);
     const data = await response.json();
+    state.backupStatusData = data;
     listEl.innerHTML = renderBackupStatus(data);
-    const missing = data.missing_count || 0;
-    const total = data.total || 0;
+    const allHosts = Array.isArray(data.hosts) ? data.hosts : [];
+    const filteredHosts = allHosts.filter((host) => {
+      const hostCountry = String(host?.country_code || "").trim().toUpperCase();
+      const countryFilter = String(state.backupStatusCountryFilter || "all").toUpperCase();
+      if (countryFilter !== "ALL" && hostCountry !== countryFilter) return false;
+      const wantSql = state.backupStatusFilterSql === true;
+      const wantHana = state.backupStatusFilterHana === true;
+      if (!wantSql && !wantHana) return true;
+      return (wantSql && Boolean(host?.has_sql)) || (wantHana && Boolean(host?.has_hana));
+    });
+    const missing = filteredHosts.filter((host) => Boolean(host?.has_missing_backup)).length;
+    const total = filteredHosts.length;
+    const totalAll = Number(data.total || allHosts.length || 0);
     if (summaryEl) {
-      summaryEl.textContent = missing > 0
+      const baseText = missing > 0
         ? `${missing} von ${total} Host(s) ohne aktuelles Backup (<24h)`
         : `${total} Host(s) — alle Backups aktuell (<24h)`;
+      summaryEl.textContent = total !== totalAll ? `${baseText} · gefiltert aus ${totalAll}` : baseText;
     }
     if (tabButton) {
       if (missing > 0) {
@@ -7535,6 +7614,28 @@ function wireEvents() {
   const refreshBackupStatusButton = document.getElementById("refreshBackupStatusButton");
   if (refreshBackupStatusButton) {
     refreshBackupStatusButton.addEventListener("click", async () => {
+      await loadBackupStatus();
+    });
+  }
+  const backupStatusFilterSql = document.getElementById("backupStatusFilterSql");
+  if (backupStatusFilterSql) {
+    backupStatusFilterSql.addEventListener("change", async () => {
+      state.backupStatusFilterSql = backupStatusFilterSql.checked;
+      await loadBackupStatus();
+    });
+  }
+  const backupStatusFilterHana = document.getElementById("backupStatusFilterHana");
+  if (backupStatusFilterHana) {
+    backupStatusFilterHana.addEventListener("change", async () => {
+      state.backupStatusFilterHana = backupStatusFilterHana.checked;
+      await loadBackupStatus();
+    });
+  }
+  const backupStatusCountryFilter = document.getElementById("backupStatusCountryFilter");
+  if (backupStatusCountryFilter) {
+    backupStatusCountryFilter.addEventListener("change", async () => {
+      const value = String(backupStatusCountryFilter.value || "all").toUpperCase();
+      state.backupStatusCountryFilter = value === "ALL" ? "all" : value;
       await loadBackupStatus();
     });
   }

@@ -2526,7 +2526,9 @@ def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) ->
     placeholders = ",".join("?" for _ in known_hosts)
     latest_rows = conn.execute(
         f"""
-        SELECT r.hostname, r.received_at_utc, r.payload_json, COALESCE(h.display_name_override, '')
+        SELECT r.hostname, r.received_at_utc, r.payload_json,
+               COALESCE(h.display_name_override, ''),
+               COALESCE(h.country_code_override, '')
         FROM reports r
         LEFT JOIN host_settings h ON h.hostname = r.hostname
         JOIN (
@@ -2551,6 +2553,9 @@ def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) ->
         received_at = str(row[1] or "").strip()
         payload = parse_payload_json(str(row[2] or "{}"))
         display_name = str(row[3] or "").strip() or hostname
+        country_override = normalize_country_code(str(row[4] or ""))
+        country_code = country_override or extract_country_code_from_payload(payload) or ""
+        country_code = normalize_country_code(country_code)
 
         last_dt = None
         if received_at:
@@ -2617,6 +2622,7 @@ def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) ->
                         "newest_item_name": newest_name,
                         "newest_item_modified": newest_modified,
                         "newest_item_size_bytes": max(0, newest_size_bytes),
+                        "source_type": "filesystem",
                     }
                 )
 
@@ -2624,6 +2630,7 @@ def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) ->
         sql_info = payload.get("sql_server_info") if isinstance(payload.get("sql_server_info"), dict) else {}
         sql_instances = sql_info.get("instances") if isinstance(sql_info.get("instances"), list) else []
         system_db_names = {"master", "model", "msdb", "tempdb"}
+        sql_user_db_count = 0
 
         for instance in sql_instances:
             if not isinstance(instance, dict):
@@ -2639,6 +2646,7 @@ def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) ->
                     continue
                 if bool(db.get("system_db")) or db_name.lower() in system_db_names:
                     continue
+                sql_user_db_count += 1
 
                 backup_candidates = [
                     str(db.get("last_full_backup") or "").strip(),
@@ -2677,14 +2685,22 @@ def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) ->
                         "newest_item_name": f"{instance_name} · {db_state or '-'} · {recovery_model or '-'}",
                         "newest_item_modified": latest_backup_text,
                         "newest_item_size_bytes": db_size_bytes,
+                        "source_type": "sql",
                     }
                 )
+
+        hana_info = payload.get("hana_info") if isinstance(payload.get("hana_info"), dict) else {}
+        has_hana = bool(hana_info.get("available")) or bool(str(hana_info.get("sid") or "").strip())
 
         has_missing_backup = bool(directory_items) and any(not bool(item.get("has_today_backup")) for item in directory_items)
         items.append(
             {
                 "hostname": hostname,
                 "display_name": display_name,
+                "country_code": country_code,
+                "has_hana": has_hana,
+                "has_sql": sql_user_db_count > 0,
+                "sql_user_db_count": sql_user_db_count,
                 "report_time_utc": received_at,
                 "is_today_report": is_recent_report,
                 "dirs": directory_items,
