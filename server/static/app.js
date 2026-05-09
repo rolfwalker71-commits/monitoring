@@ -3858,6 +3858,48 @@ function formatSapScanCellValue(value) {
   return escapeHtml(asText(value, ""));
 }
 
+function renderSapB1FirstRowDetails(rows, expectedColumns = []) {
+  const entries = normalizeSapScanRows(rows);
+  if (entries.length === 0) {
+    return "<p class=\"muted\">Keine Ergebniszeile vorhanden.</p>";
+  }
+
+  const firstRow = entries[0] && typeof entries[0] === "object" ? entries[0] : null;
+  if (!firstRow) {
+    return "<p class=\"muted\">Ergebniszeile konnte nicht gelesen werden.</p>";
+  }
+
+  const expected = Array.isArray(expectedColumns)
+    ? expectedColumns.filter((value) => typeof value === "string" && value.trim() !== "")
+    : [];
+  const keys = expected.length > 0
+    ? expected
+    : Object.keys(firstRow);
+
+  if (keys.length === 0) {
+    return "<p class=\"muted\">Ergebniszeile ist leer.</p>";
+  }
+
+  const bodyHtml = keys
+    .map((key) => {
+      const raw = firstRow[key];
+      const display = raw === null || raw === undefined || String(raw).trim() === ""
+        ? '<span class="muted">(leer)</span>'
+        : formatSapScanCellValue(raw);
+      return `<tr><th>${escapeHtml(key)}</th><td>${display}</td></tr>`;
+    })
+    .join("");
+
+  return `
+    <div class="table-wrap">
+      <table class="report-subtable">
+        <thead><tr><th>Feld</th><th>Wert (erste Ergebniszeile)</th></tr></thead>
+        <tbody>${bodyHtml}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderSapB1TableScanRows(rows, expectedColumns = []) {
   const entries = normalizeSapScanRows(rows);
   if (entries.length === 0) {
@@ -3941,7 +3983,8 @@ function renderSapB1TableScanSection(payload) {
           <summary class="sap-b1-raw-summary">${escapeHtml(heading)} (${Number.isFinite(rowCount) ? rowCount : rows.length})</summary>
           ${available ? `<p class="muted">Spalten: ${Number.isFinite(columnCount) ? columnCount : columns.length}${columns.length > 0 ? ` (${escapeHtml(columns.join(", "))})` : ""}</p>` : ""}
           ${!available ? `<p class="muted">Nicht verfuegbar${error ? `: ${escapeHtml(error)}` : "."}</p>` : ""}
-          ${available ? renderSapB1TableScanRows(rawRows, columns) : ""}
+          ${available ? renderSapB1FirstRowDetails(rawRows, columns) : ""}
+          ${available ? `<details class="sap-b1-raw-details"><summary class="sap-b1-raw-summary">Roh-Tabellenansicht</summary>${renderSapB1TableScanRows(rawRows, columns)}</details>` : ""}
         </details>`;
     })
     .join("");
