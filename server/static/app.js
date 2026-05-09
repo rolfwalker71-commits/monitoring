@@ -4393,6 +4393,18 @@ function renderDatabasesSection(payload) {
         const sqlOriginalLogin = asText(inst.sql_original_login, "");
         const sqlSuserSname = asText(inst.sql_suser_sname, "");
         const masterFilesRows = Number(inst.master_files_rows || 0);
+        const effectiveSqlLogin = (sqlSuserSname || sqlSystemUser || sqlOriginalLogin || "").trim();
+        const sqlLoginLiteral = effectiveSqlLogin.replaceAll("'", "''");
+        const sqlGrantSnippet = effectiveSqlLogin
+          ? [
+              "-- Minimal: nur effektiv genutztes Login berechtigen",
+              "DECLARE @login sysname = N'" + sqlLoginLiteral + "';",
+              "IF SUSER_ID(@login) IS NULL",
+              "    EXEC('CREATE LOGIN [' + REPLACE(@login, ']', ']]') + '] FROM WINDOWS;');",
+              "EXEC('GRANT VIEW SERVER STATE TO [' + REPLACE(@login, ']', ']]') + '];');",
+              "EXEC('GRANT VIEW ANY DEFINITION TO [' + REPLACE(@login, ']', ']]') + '];');",
+            ].join("\\n")
+          : "";
         
         const svcBadge = svcStatus.toLowerCase() === "running"
           ? `<span class="db-status-badge db-status-ok">Running</span>`
@@ -4401,13 +4413,14 @@ function renderDatabasesSection(payload) {
         let diagHtml = "";
         if (sqlSystemUser || sqlOriginalLogin || sqlSuserSname || masterFilesRows > 0) {
           diagHtml = `
-            <div class="db-diag-info">
-              <p class="db-diag-label">🔐 SQL Authentifizierung (für Diag):</p>
+              <details class="db-diag-info db-diag-collapsible">
+                <summary class="db-diag-label">🔐 SQL Authentifizierung (für Diag):</summary>
               ${sqlSystemUser ? `<span class="db-diag-item"><strong>SYSTEM_USER:</strong> <code>${escapeHtml(sqlSystemUser)}</code></span>` : ""}
               ${sqlOriginalLogin ? `<span class="db-diag-item"><strong>ORIGINAL_LOGIN:</strong> <code>${escapeHtml(sqlOriginalLogin)}</code></span>` : ""}
               ${sqlSuserSname ? `<span class="db-diag-item"><strong>SUSER_SNAME:</strong> <code>${escapeHtml(sqlSuserSname)}</code></span>` : ""}
               ${masterFilesRows > 0 ? `<span class="db-diag-item"><strong>sys.master_files Zeilen:</strong> ${masterFilesRows}</span>` : ""}
-            </div>`;
+                ${sqlGrantSnippet ? `<p class="db-diag-snippet-label">SQL Script (minimal, nur effektives Login):</p><pre class="db-diag-sql"><code>${escapeHtml(sqlGrantSnippet)}</code></pre>` : ""}
+              </details>`;
         }
 
         const metaHtml = `
