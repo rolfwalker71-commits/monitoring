@@ -8113,109 +8113,98 @@ function extractOpenAlertCount(payload) {
   }
 }
 
-function formatSystemOverviewCard(host, osName, sapVersionMap, onCardClick) {
-  if (!host) return "";
-  
-  const hostname = escapeHtml(String(host.hostname || "-"));
-  const online = host.online === true;
-  const statusEmoji = online ? "✅" : "🔴";
-  const osEmoji = getOsEmoji(osName);
-  const osRelease = parseOsRelease(host.payload || {}, osName);
-  const osReleaseDisplay = osRelease ? escapeHtml(osRelease) : "";
-  
-  // SAP Release
-  let sapReleaseDisplay = "-";
-  if (host.sap_release) {
-    const buildMatch = String(host.sap_release).match(/\d+\.\d+\.\d+/);
-    const buildKey = buildMatch ? buildMatch[0] : host.sap_release;
-    const versionInfo = sapVersionMap.get(buildKey);
-    if (versionInfo) {
-      sapReleaseDisplay = versionInfo.featurePack;
-    } else {
-      sapReleaseDisplay = escapeHtml(host.sap_release);
-    }
+function formatSystemOverviewStatus(host) {
+  const online = host?.online === true;
+  if (!online) {
+    return `<span class="so-status-badge so-status-offline">Offline</span>`;
   }
-  
+
+  const openAlerts = extractOpenAlertCount(host?.payload || {});
+  if (openAlerts <= 0) {
+    return `<span class="so-status-badge so-status-ok">OK</span>`;
+  }
+
+  const criticalCount = Array.isArray(host?.payload?.alerts)
+    ? host.payload.alerts.filter((a) => a?.severity === "critical" && a?.status !== "resolved" && a?.status !== "closed").length
+    : 0;
+  const warningCount = Math.max(0, openAlerts - criticalCount);
+  if (criticalCount > 0) {
+    return `<span class="so-status-badge so-status-critical">${criticalCount} Critical</span>`;
+  }
+  return `<span class="so-status-badge so-status-warning">${warningCount} Warning</span>`;
+}
+
+function resolveSapReleaseDisplay(sapRelease, sapVersionMap) {
+  if (!sapRelease) return "-";
+  const releaseText = String(sapRelease);
+  const buildMatch = releaseText.match(/\d+\.\d+\.\d+/);
+  const buildKey = buildMatch ? buildMatch[0] : releaseText;
+  const versionInfo = sapVersionMap.get(buildKey);
+  return versionInfo?.featurePack || releaseText;
+}
+
+function formatShortHostname(hostname) {
+  const raw = String(hostname || "").trim();
+  if (!raw) return "-";
+  return raw.split(".")[0] || raw;
+}
+
+function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap, onRowClick) {
+  if (!host) return "";
+
+  const hostnameRaw = String(host.hostname || "-");
+  const hostname = escapeHtml(hostnameRaw);
+  const shortHostname = escapeHtml(formatShortHostname(hostnameRaw));
+  const hostTitle = escapeHtml(String(customerName || host.display_name || "-").trim() || "-");
+  const osEmoji = getOsEmoji(osName);
+  const osType = escapeHtml(String(osName || "-").trim() || "-");
+  const osRelease = parseOsRelease(host.payload || {}, osName);
+  const osReleaseDisplay = escapeHtml(osRelease || "-");
+
+  const sapReleaseDisplay = escapeHtml(resolveSapReleaseDisplay(host.sap_release, sapVersionMap));
   const hanaVersion = escapeHtml(String(host.hana_version || "-"));
   const hanaSid = escapeHtml(String(host.hana_sid || "-"));
   const sqlRelease = escapeHtml(String(host.sql_release || "-"));
-  const ramGb = escapeHtml(String(host.ram_gb || "-"));
+  const ramGbRaw = Number.isFinite(host.ram_gb) ? String(host.ram_gb) : String(host.ram_gb || "-");
+  const ramGb = escapeHtml(ramGbRaw === "-" ? "-" : `${ramGbRaw} GB`);
   const cpuCores = Number.isFinite(host.cpu_cores) ? host.cpu_cores : "-";
-  let cpuModel = String(host.cpu_model_name || "-");
-  if (cpuModel.length > 45) cpuModel = cpuModel.slice(0, 44) + "…";
-  cpuModel = escapeHtml(cpuModel);
-  
+  const cpuModel = escapeHtml(String(host.cpu_model_name || "-"));
+  const systemModel = escapeHtml(String(host.model || host.system_model || host.payload?.model || "-"));
   const lastUpdate = formatSystemOverviewLastUpdate(host.last_update);
-  
-  // Alert badge
-  const openAlerts = extractOpenAlertCount(host.payload);
-  let alertBadge = "<span class='so-card-alert-badge-ok'>✓ OK</span>";
-  if (openAlerts > 0) {
-    const criticalCount = (Array.isArray(host.payload?.alerts) ? host.payload.alerts.filter((a) => a?.severity === "critical").length : 0);
-    const warningCount = openAlerts - criticalCount;
-    const badgeText = criticalCount > 0 ? `🚨 ${criticalCount} krit.` : `⚠️ ${warningCount} warn.`;
-    const badgeClass = criticalCount > 0 ? "so-card-alert-badge-critical" : "so-card-alert-badge-warning";
-    alertBadge = `<span class='so-card-alert-badge ${badgeClass}'>${badgeText}</span>`;
-  }
-  
-  const cardClickAttr = onCardClick ? `data-hostname="${hostname}" class="so-card-clickable"` : "";
-  const cursor = onCardClick ? "cursor: pointer;" : "";
-  
+  const statusBadge = formatSystemOverviewStatus(host);
+
+  const rowClickClass = onRowClick ? "so-row-clickable" : "";
+  const rowClickAttr = onRowClick ? `data-hostname="${hostname}"` : "";
+
   return `
-    <article class="so-card" style="${cursor}" ${cardClickAttr}>
-      <div class="so-card-header">
-        <div class="so-card-title-row">
-          <span class="so-card-status">${statusEmoji}</span>
-          <span class="so-card-hostname">${hostname}</span>
-        </div>
-        <div class="so-card-os-row">
-          <span class="so-card-os-label">${osEmoji} ${osReleaseDisplay}</span>
-        </div>
-      </div>
-      
-      <div class="so-card-body">
-        <div class="so-card-section">
-          <div class="so-card-section-title">💾 System</div>
-          <div class="so-card-line">
-            <span class="so-card-label">RAM:</span>
-            <span class="so-card-value">${ramGb} GB</span>
-          </div>
-          <div class="so-card-line">
-            <span class="so-card-label">CPUs:</span>
-            <span class="so-card-value">${cpuCores}</span>
-          </div>
-          <div class="so-card-line so-card-line-model">
-            <span class="so-card-label">Model:</span>
-            <span class="so-card-value">${cpuModel}</span>
-          </div>
-        </div>
-        
-        <div class="so-card-section">
-          <div class="so-card-section-title">📦 SAP/DB</div>
-          <div class="so-card-line">
-            <span class="so-card-label">SAP:</span>
-            <span class="so-card-value">${sapReleaseDisplay}</span>
-          </div>
-          <div class="so-card-line">
-            <span class="so-card-label">HANA:</span>
-            <span class="so-card-value">${hanaVersion}</span>
-          </div>
-          <div class="so-card-line">
-            <span class="so-card-label">HANA SID:</span>
-            <span class="so-card-value">${hanaSid}</span>
-          </div>
-          <div class="so-card-line">
-            <span class="so-card-label">SQL:</span>
-            <span class="so-card-value">${sqlRelease}</span>
-          </div>
-        </div>
-      </div>
-      
-      <div class="so-card-footer">
-        <div class="so-card-timestamp">🕐 ${escapeHtml(lastUpdate)}</div>
-        <div class="so-card-alert">${alertBadge}</div>
-      </div>
-    </article>
+    <tr class="${rowClickClass}" ${rowClickAttr}>
+      <td>
+        <div class="so-host-title">${hostTitle}</div>
+        <div class="so-host-short">${osEmoji} ${shortHostname}</div>
+      </td>
+      <td>
+        <div class="so-cell-main">${osReleaseDisplay}</div>
+        <div class="so-cell-sub">OS Type: ${osType}</div>
+      </td>
+      <td>
+        <div class="so-cell-main">${cpuCores} vCPU</div>
+        <div class="so-cell-sub">${cpuModel}</div>
+      </td>
+      <td>
+        <div class="so-cell-main">${ramGb}</div>
+        <div class="so-cell-sub">${systemModel}</div>
+      </td>
+      <td>
+        <div class="so-cell-main">SQL: ${sqlRelease}</div>
+        <div class="so-cell-sub">SAP Release: ${sapReleaseDisplay}</div>
+        <div class="so-cell-sub">HANA Release: ${hanaVersion}</div>
+        <div class="so-cell-sub">HANA SID: ${hanaSid}</div>
+      </td>
+      <td>
+        <div class="so-cell-main">${statusBadge}</div>
+        <div class="so-cell-sub">${escapeHtml(lastUpdate)}</div>
+      </td>
+    </tr>
   `;
 }
 
@@ -8257,14 +8246,28 @@ async function loadSystemOverview() {
             const customers = Object.entries(customerMap || {})
               .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
               .map(([customer, hosts]) => {
-                const cardHtml = (Array.isArray(hosts) ? hosts : [])
-                  .map((host) => formatSystemOverviewCard(host, osName, SAP_B1_VERSION_MAP, true))
+                const rowHtml = (Array.isArray(hosts) ? hosts : [])
+                  .map((host) => formatSystemOverviewTableRow(host, osName, customer, SAP_B1_VERSION_MAP, true))
                   .join("");
-                
+
                 return `
-                  <div class="so-customer-section">
+                  <div class="system-overview-customer-block">
                     <div class="so-customer-title">👥 ${escapeHtml(customer)} (${Array.isArray(hosts) ? hosts.length : 0})</div>
-                    <div class="so-card-grid">${cardHtml}</div>
+                    <div class="system-overview-table-wrap">
+                      <table class="system-overview-table">
+                        <thead>
+                          <tr>
+                            <th>Host</th>
+                            <th>OS</th>
+                            <th>CPU</th>
+                            <th>RAM / Modell</th>
+                            <th>SAP / DB</th>
+                            <th>Status / Update</th>
+                          </tr>
+                        </thead>
+                        <tbody>${rowHtml}</tbody>
+                      </table>
+                    </div>
                   </div>
                 `;
               })
@@ -8313,10 +8316,10 @@ async function loadSystemOverview() {
       });
     });
     
-    // Card click handlers
-    container.querySelectorAll(".so-card-clickable").forEach((card) => {
-      card.addEventListener("click", () => {
-        const hostAttr = card.getAttribute("data-hostname");
+    // Row click handlers
+    container.querySelectorAll(".so-row-clickable").forEach((row) => {
+      row.addEventListener("click", () => {
+        const hostAttr = row.getAttribute("data-hostname");
         if (hostAttr) {
           state.selectedHost = hostAttr;
           state.viewMode = "overview";

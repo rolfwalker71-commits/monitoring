@@ -6363,6 +6363,65 @@ body[data-theme="dark"] .backup-status-stale {
   color: #1e293b;
 }
 
+.so-host-title {
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.so-host-short {
+  margin-top: 3px;
+  font-size: 12px;
+  color: #334155;
+  line-height: 1.3;
+}
+
+.so-cell-main {
+  line-height: 1.35;
+}
+
+.so-cell-sub {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #475569;
+  line-height: 1.35;
+}
+
+.so-row-clickable {
+  cursor: pointer;
+}
+
+.so-row-clickable:hover td {
+  background: #f8fbff;
+}
+
+.so-status-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.so-status-ok {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.so-status-warning {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeaa7;
+}
+
+.so-status-critical,
+.so-status-offline {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
 .system-overview-table th:nth-child(1),
 .system-overview-table td:nth-child(1) { width: 15%; min-width: 120px; }
 
@@ -6423,6 +6482,45 @@ body[data-theme="dark"] .system-overview-customer-block {
 
 body[data-theme="dark"] .system-overview-customer-title {
   color: #bfd3ea;
+}
+
+body[data-theme="dark"] .so-host-title {
+  color: #e2e8f0;
+}
+
+body[data-theme="dark"] .so-host-short {
+  color: #cbd5e1;
+}
+
+body[data-theme="dark"] .so-cell-main {
+  color: #e2e8f0;
+}
+
+body[data-theme="dark"] .so-cell-sub {
+  color: #94a3b8;
+}
+
+body[data-theme="dark"] .so-row-clickable:hover td {
+  background: #13233a;
+}
+
+body[data-theme="dark"] .so-status-ok {
+  background: #2b5d3b;
+  color: #a8e6b8;
+  border-color: #4a8a5f;
+}
+
+body[data-theme="dark"] .so-status-warning {
+  background: #5d4d1f;
+  color: #ffd966;
+  border-color: #8a7a3d;
+}
+
+body[data-theme="dark"] .so-status-critical,
+body[data-theme="dark"] .so-status-offline {
+  background: #7a3e3e;
+  color: #ffb3b3;
+  border-color: #a85c5c;
 }
 
 /* System Overview Card Styles */
