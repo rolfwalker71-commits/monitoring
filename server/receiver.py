@@ -6029,6 +6029,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     (hostname, cutoff_iso),
                 ).fetchall()
                 hidden_mountpoints = get_filesystem_visibility_hidden(conn, username, hostname, "analysis")
+                fs_focus_hidden = get_filesystem_visibility_hidden(conn, username, hostname, "fs-focus")
+                large_files_hidden = get_filesystem_visibility_hidden(conn, username, hostname, "large-files")
 
             fs_by_mountpoint = {}
             report_count = 0
@@ -6188,6 +6190,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "filesystem_visibility": {
                         "section": "analysis",
                         "hidden_mountpoints": hidden_mountpoints,
+                        "fs_focus_hidden": fs_focus_hidden,
+                        "large_files_hidden": large_files_hidden,
                     },
                     "filesystem_trends": trends,
                 },
@@ -6885,7 +6889,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not hostname:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
                 return
-            if section not in {"analysis", "critical-trends"}:
+            if section not in {"analysis", "critical-trends", "large-files"}:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid section"})
                 return
             if not isinstance(hidden_mountpoints_raw, list):
