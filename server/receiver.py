@@ -367,6 +367,10 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_email_time_hhmm TEXT NOT NULL DEFAULT '08:05'")
         if "alert_email_recipients" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_email_recipients TEXT NOT NULL DEFAULT ''")
+        if "alert_warning_email_recipients" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_warning_email_recipients TEXT NOT NULL DEFAULT ''")
+        if "alert_critical_email_recipients" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_critical_email_recipients TEXT NOT NULL DEFAULT ''")
         if "alert_email_last_sent_local_date" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_email_last_sent_local_date TEXT NOT NULL DEFAULT ''")
         if "alert_instant_mail_enabled" not in existing_web_user_settings_columns:
@@ -941,6 +945,40 @@ def parse_email_recipients(value: object) -> list[str]:
     return unique
 
 
+def alert_mail_severity_bucket(severity: object) -> str:
+    normalized = str(severity or "").strip().lower()
+    if normalized == "critical":
+        return "critical"
+    if normalized == "warning":
+        return "warning"
+    return ""
+
+
+def resolve_user_alert_mail_recipients(user_settings: dict, severity: object = "") -> list[str]:
+    recipient = str(user_settings.get("email_recipient", "") or "").strip()
+    extra = parse_email_recipients(user_settings.get("alert_email_recipients", ""))
+    default_recipients = parse_email_recipients(",".join([recipient] + extra))
+
+    bucket = alert_mail_severity_bucket(severity)
+    if bucket == "warning":
+        override = parse_email_recipients(user_settings.get("alert_warning_email_recipients", ""))
+        if override:
+            return override
+    if bucket == "critical":
+        override = parse_email_recipients(user_settings.get("alert_critical_email_recipients", ""))
+        if override:
+            return override
+    return default_recipients
+
+
+def alert_digest_recipient_severity(alerts: list[dict]) -> str:
+    if any(str(item.get("severity") or "").strip().lower() == "critical" for item in alerts):
+        return "critical"
+    if any(str(item.get("severity") or "").strip().lower() == "warning" for item in alerts):
+        return "warning"
+    return ""
+
+
 def scheduled_digest_due(now_local: datetime, scheduled_hhmm: str, last_sent_local_date: str) -> bool:
     if not scheduled_hhmm:
         return False
@@ -1179,6 +1217,8 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
                COALESCE(alert_email_enabled, 0),
                COALESCE(alert_email_time_hhmm, ''),
                COALESCE(alert_email_recipients, ''),
+             COALESCE(alert_warning_email_recipients, ''),
+             COALESCE(alert_critical_email_recipients, ''),
                COALESCE(alert_email_last_sent_local_date, ''),
                COALESCE(alert_instant_mail_enabled, 0),
                COALESCE(alert_instant_min_severity, 'warning'),
@@ -1200,6 +1240,8 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
             "alert_email_enabled": False,
             "alert_email_time_hhmm": DEFAULT_ALERT_DIGEST_TIME,
             "alert_email_recipients": "",
+            "alert_warning_email_recipients": "",
+            "alert_critical_email_recipients": "",
             "alert_email_last_sent_local_date": "",
             "alert_instant_mail_enabled": False,
             "alert_instant_min_severity": "warning",
@@ -1216,12 +1258,14 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
         "alert_email_enabled": bool(int(row[5] or 0)),
         "alert_email_time_hhmm": normalize_hhmm(row[6], DEFAULT_ALERT_DIGEST_TIME),
         "alert_email_recipients": str(row[7] or ""),
-        "alert_email_last_sent_local_date": str(row[8] or ""),
-        "alert_instant_mail_enabled": bool(int(row[9] or 0)),
-        "alert_instant_min_severity": str(row[10] or "warning"),
-        "alert_instant_telegram_enabled": bool(int(row[11] or 0)),
-        "alert_telegram_chat_id": str(row[12] or ""),
-        "updated_at_utc": str(row[13] or ""),
+        "alert_warning_email_recipients": str(row[8] or ""),
+        "alert_critical_email_recipients": str(row[9] or ""),
+        "alert_email_last_sent_local_date": str(row[10] or ""),
+        "alert_instant_mail_enabled": bool(int(row[11] or 0)),
+        "alert_instant_min_severity": str(row[12] or "warning"),
+        "alert_instant_telegram_enabled": bool(int(row[13] or 0)),
+        "alert_telegram_chat_id": str(row[14] or ""),
+        "updated_at_utc": str(row[15] or ""),
     }
 
 
@@ -1241,6 +1285,12 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
     )
     alert_email_recipients = str(
         payload.get("alert_email_recipients", existing.get("alert_email_recipients", "")) or ""
+    ).strip()
+    alert_warning_email_recipients = str(
+        payload.get("alert_warning_email_recipients", existing.get("alert_warning_email_recipients", "")) or ""
+    ).strip()
+    alert_critical_email_recipients = str(
+        payload.get("alert_critical_email_recipients", existing.get("alert_critical_email_recipients", "")) or ""
     ).strip()
     trend_email_last_sent_local_date = str(
         payload.get("trend_email_last_sent_local_date", existing.get("trend_email_last_sent_local_date", "")) or ""
@@ -1270,6 +1320,8 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_email_enabled,
             alert_email_time_hhmm,
             alert_email_recipients,
+            alert_warning_email_recipients,
+            alert_critical_email_recipients,
             alert_email_last_sent_local_date,
             alert_instant_mail_enabled,
             alert_instant_min_severity,
@@ -1277,7 +1329,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_telegram_chat_id,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             email_enabled = excluded.email_enabled,
             email_recipient = excluded.email_recipient,
@@ -1287,6 +1339,8 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_email_enabled = excluded.alert_email_enabled,
             alert_email_time_hhmm = excluded.alert_email_time_hhmm,
             alert_email_recipients = excluded.alert_email_recipients,
+            alert_warning_email_recipients = excluded.alert_warning_email_recipients,
+            alert_critical_email_recipients = excluded.alert_critical_email_recipients,
             alert_email_last_sent_local_date = excluded.alert_email_last_sent_local_date,
             alert_instant_mail_enabled = excluded.alert_instant_mail_enabled,
             alert_instant_min_severity = excluded.alert_instant_min_severity,
@@ -1304,6 +1358,8 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             1 if alert_email_enabled else 0,
             alert_email_time_hhmm,
             alert_email_recipients,
+            alert_warning_email_recipients,
+            alert_critical_email_recipients,
             alert_email_last_sent_local_date,
             1 if alert_instant_mail_enabled else 0,
             alert_instant_min_severity,
@@ -1321,6 +1377,8 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
         "alert_email_enabled": alert_email_enabled,
         "alert_email_time_hhmm": alert_email_time_hhmm,
         "alert_email_recipients": alert_email_recipients,
+        "alert_warning_email_recipients": alert_warning_email_recipients,
+        "alert_critical_email_recipients": alert_critical_email_recipients,
         "alert_email_last_sent_local_date": alert_email_last_sent_local_date,
         "alert_instant_mail_enabled": alert_instant_mail_enabled,
         "alert_instant_min_severity": alert_instant_min_severity,
@@ -3657,8 +3715,7 @@ def send_instant_alert_mails_to_users(
         recipient = user_settings.get("email_recipient", "").strip()
         if not recipient:
             continue
-        extra = parse_email_recipients(user_settings.get("alert_email_recipients", ""))
-        all_recipients = parse_email_recipients(",".join([recipient] + extra))
+        all_recipients = resolve_user_alert_mail_recipients(user_settings, severity)
         if not all_recipients:
             continue
         try:
@@ -3885,7 +3942,7 @@ def build_user_mail_logic_help() -> dict:
                 "Voraussetzungen: persoenlicher Mailversand aktiv, Basis-Empfaenger gesetzt, Alarm-Mail aktiv und Microsoft-OAuth verbunden.",
                 "Weitere Alarm Empfaenger erweitern die Versandliste fuer diesen Digest zusaetzlich zur Basisadresse.",
                 "Der Inhalt respektiert jetzt die Mail-Host-Abos des Benutzers: nur Hosts mit aktiviertem Mail-Abo erscheinen im Alert-Digest.",
-                "Die Felder Empfaenger nur fuer Warnung und Empfaenger nur fuer Kritisch sind aktuell reine UI-Felder und werden backendseitig noch nicht ausgewertet.",
+                "Wenn Empfaenger nur fuer Warnung oder nur fuer Kritisch gesetzt sind, ersetzen diese Listen fuer den entsprechenden Schweregrad die Standard-Empfaenger vollstaendig.",
             ],
         },
         "instant_alerts": {
@@ -3893,6 +3950,7 @@ def build_user_mail_logic_help() -> dict:
             "items": [
                 "Sofort-Alerts reagieren auf einzelne Events: Alarm ausgeloest, eskaliert oder behoben.",
                 "Mail respektiert pro Benutzer: Mailversand aktiv, Basis-Empfaenger vorhanden, Instant-Mail aktiv, Mindest-Schweregrad passend und Mail-Host-Abo fuer den betroffenen Host gesetzt.",
+                "Wenn fuer Warnung oder Kritisch eigene Empfaengerlisten hinterlegt sind, ersetzen diese fuer Sofort-Mails die Standard-Empfaenger des jeweiligen Schweregrads.",
                 "Telegram respektiert pro Benutzer: Instant-Telegram aktiv, persoenliche Chat-ID gesetzt, Mindest-Schweregrad passend und Telegram-Host-Abo fuer den betroffenen Host gesetzt.",
                 "Telegram braucht zusaetzlich global aktiviertes Telegram und einen global hinterlegten Bot-Token im Alarm-Setup.",
                 "Die persoenliche Chat-ID ist benutzerspezifisch. Bot-Token und Telegram global an/aus sind systemweit.",
@@ -4074,6 +4132,8 @@ def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
         "alert_email_enabled": settings["alert_email_enabled"],
         "alert_email_time_hhmm": settings["alert_email_time_hhmm"],
         "alert_email_recipients": settings["alert_email_recipients"],
+        "alert_warning_email_recipients": settings["alert_warning_email_recipients"],
+        "alert_critical_email_recipients": settings["alert_critical_email_recipients"],
         "alert_instant_mail_enabled": settings["alert_instant_mail_enabled"],
         "alert_instant_min_severity": settings["alert_instant_min_severity"],
         "alert_instant_telegram_enabled": settings["alert_instant_telegram_enabled"],
@@ -4398,8 +4458,7 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
             recipient = user_settings.get("email_recipient", "").strip()
             if not recipient:
                 continue
-            extra = parse_email_recipients(user_settings.get("alert_email_recipients", ""))
-            all_recipients = parse_email_recipients(",".join([recipient] + extra))
+            all_recipients = resolve_user_alert_mail_recipients(user_settings, severity)
             if not all_recipients:
                 continue
 
@@ -4482,8 +4541,7 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
         alert_time = normalize_hhmm(row[8], DEFAULT_ALERT_DIGEST_TIME)
         alert_last_sent = str(row[9] or "").strip()
         settings = get_web_user_settings(conn, username)
-        extra_alert_recipients = parse_email_recipients(settings.get("alert_email_recipients", ""))
-        all_alert_recipients = parse_email_recipients(",".join([recipient] + extra_alert_recipients))
+        all_alert_recipients = resolve_user_alert_mail_recipients(settings)
 
         if not email_enabled:
             continue
@@ -4543,10 +4601,16 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
         if send_alert:
             alert_allowed_hosts = get_user_alert_mail_host_scope(conn, username)
             alerts = collect_open_alerts(conn, allowed_hostnames=alert_allowed_hosts)
+            alert_recipients = resolve_user_alert_mail_recipients(
+                settings,
+                alert_digest_recipient_severity(alerts),
+            )
+            if not alert_recipients:
+                continue
             graph_cids, graph_attachments = build_alert_digest_graph_bundle(conn, alerts, hours=24)
             alert_ok, _alert_details = send_microsoft_mail_multi(
                 access_token,
-                all_alert_recipients,
+                alert_recipients,
                 alert_digest_subject(alerts, today_local),
                 alert_digest_html(username, alerts, graph_cids=graph_cids, graph_hours=24),
                 content_type="HTML",
@@ -7503,8 +7567,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 elif endpoint_mode == "alerts":
                     alerts = collect_open_alerts(conn)
                     graph_cids, graph_attachments = build_alert_digest_graph_bundle(conn, alerts, hours=24)
-                    extra_alert_recipients = parse_email_recipients(settings.get("alert_email_recipients", ""))
-                    all_alert_recipients = parse_email_recipients(",".join([recipient] + extra_alert_recipients))
+                    all_alert_recipients = resolve_user_alert_mail_recipients(
+                        settings,
+                        alert_digest_recipient_severity(alerts),
+                    )
                     if not all_alert_recipients:
                         self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no alert recipients configured"})
                         return
