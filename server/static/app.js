@@ -2626,8 +2626,27 @@ function openFilesystemVisibilityModal(section) {
   if (!state.selectedHost || !state.fsVisibilityEditable) return;
   state.fsVisibilitySection = section;
   setFilesystemVisibilityStatus("");
+  setFilesystemVisibilityModalSaving(false);
   renderFilesystemVisibilityModalContent();
   const modal = document.getElementById("filesystemVisibilityModal");
+  const backdrop = document.getElementById("filesystemVisibilityBackdrop");
+  const closeButton = document.getElementById("filesystemVisibilityCloseButton");
+  const cancelButton = document.getElementById("filesystemVisibilityCancelButton");
+  const saveButton = document.getElementById("filesystemVisibilitySaveButton");
+
+  if (backdrop) backdrop.onclick = () => closeFilesystemVisibilityModal();
+  if (closeButton) closeButton.onclick = () => closeFilesystemVisibilityModal();
+  if (cancelButton) cancelButton.onclick = () => closeFilesystemVisibilityModal();
+  if (saveButton) {
+    saveButton.onclick = async () => {
+      try {
+        await saveFilesystemVisibilityFromModal();
+      } catch (error) {
+        setFilesystemVisibilityStatus(`Fehler: `, true);
+      }
+    };
+  }
+
   if (modal) modal.classList.remove("hidden");
 }
 
