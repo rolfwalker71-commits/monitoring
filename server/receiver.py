@@ -6338,7 +6338,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             hostname_filter = query.get("hostname", [""])[0].strip()
 
-            where_clause = "WHERE status = 'open'"
+            where_clause = "WHERE status = 'open' AND (ack_by IS NULL OR ack_by = '')"
             args = []
             where_clause += " AND COALESCE((SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0"
             where_clause += " AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = alerts.hostname AND m.mountpoint = alerts.mountpoint)"
