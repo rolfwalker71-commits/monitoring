@@ -7951,6 +7951,30 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/v1/admin/fix-alert-status":
+            if not self._require_admin_session():
+                return
+
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    # Fix alerts that are closed but still have status='open'
+                    conn.execute(
+                        "UPDATE alerts SET status = 'resolved' WHERE closed_at_utc IS NOT NULL AND closed_at_utc != '' AND status = 'open'"
+                    )
+                    conn.commit()
+                    affected = conn.total_changes
+                result = {
+                    "status": "ok",
+                    "message": f"Fixed {affected} alerts with closed_at_utc but status='open'",
+                    "affected_count": affected,
+                }
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
+            self._send_json(HTTPStatus.OK, result)
+            return
+
         if path != "/api/v1/agent-report":
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
             return

@@ -7851,6 +7851,38 @@ function wireEvents() {
     });
   }
 
+  const fixAlertStatusButton = document.getElementById("fixAlertStatusButton");
+  if (fixAlertStatusButton) {
+    fixAlertStatusButton.addEventListener("click", async () => {
+      const confirmed = window.confirm(
+        "Alle Alerts mit closed_at_utc aber status='open' auf status='resolved' setzen?\n\nDies behebt verwaiste geschlossene Alerts."
+      );
+      if (!confirmed) return;
+
+      fixAlertStatusButton.disabled = true;
+      fixAlertStatusButton.textContent = "Werden korrigiert...";
+      try {
+        const resp = await fetch("/api/v1/admin/fix-alert-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({}),
+        });
+        if (!resp.ok) {
+          const errorData = await resp.json();
+          throw new Error(errorData.error || `HTTP ${resp.status}`);
+        }
+        const result = await resp.json();
+        window.alert(`✓ Erfolgreich!\n\n${result.message}`);
+      } catch (error) {
+        window.alert(`✗ Fehler bei der Korrektur:\n\n${error.message}`);
+      } finally {
+        fixAlertStatusButton.disabled = false;
+        fixAlertStatusButton.textContent = "🔧 Alert-Status korrigieren";
+      }
+    });
+  }
+
   for (const button of document.querySelectorAll("[data-report-section]")) {
     button.addEventListener("click", () => {
       state.reportSection = normalizeReportSection(button.getAttribute("data-report-section"));
