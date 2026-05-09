@@ -8413,7 +8413,7 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
     <tr class="${rowClickClass}" ${rowClickAttr}>
       <td>
         <div class="so-host-title">${hostTitle}</div>
-        <div class="so-host-short">${osEmoji} ${shortHostname}</div>
+        <div class="so-host-short">${shortHostname}</div>
       </td>
       <td>
         <div class="so-cell-main">${osReleaseDisplay}</div>
