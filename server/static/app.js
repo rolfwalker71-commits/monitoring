@@ -4871,6 +4871,7 @@ function renderReportCard(report) {
       <div class="meta-group-title">Ressourcen</div>
       <div class="meta-group-content">
         ${renderMetaItem("CPU", "CPU", formatPercent(cpu.usage_percent) + " | load " + formatNumber(cpu.load_avg_1, 2) + " / " + formatNumber(cpu.load_avg_5, 2) + " / " + formatNumber(cpu.load_avg_15, 2))}
+        ${cpu.model_name ? renderMetaItem("CPU", "Modell", cpu.model_name) : ""}
         ${renderMetaItem("RAM", "RAM", formatPercent(memory.used_percent) + " | " + formatKilobytes(memory.used_kb) + " / " + formatKilobytes(memory.total_kb))}
         ${renderMetaItem("Swap", "Swap", formatPercent(swap.used_percent) + " | " + formatKilobytes(swap.used_kb) + " / " + formatKilobytes(swap.total_kb))}
       </div>
