@@ -3879,8 +3879,11 @@ function renderSapB1TableScanSection(payload) {
 
       const available = item.available === true;
       const error = asText(item.error, "");
-      const rows = Array.isArray(item.rows) ? item.rows : [];
-      const rowCount = Number(item.row_count || rows.length || 0);
+      const rawRows = item.rows;
+      const normalizedRows = Array.isArray(rawRows)
+        ? rawRows
+        : (rawRows && typeof rawRows === "object" ? [rawRows] : []);
+      const rowCount = Number(item.row_count || normalizedRows.length || 0);
       const effectiveDb = asText(item.database, "");
       const heading = effectiveDb ? `${effectiveDb}.dbo.${asText(item.table, "")}` : block.title;
 
@@ -3888,7 +3891,7 @@ function renderSapB1TableScanSection(payload) {
         <details class="sap-b1-raw-details">
           <summary class="sap-b1-raw-summary">${escapeHtml(heading)} (${Number.isFinite(rowCount) ? rowCount : rows.length})</summary>
           ${!available ? `<p class="muted">Nicht verfuegbar${error ? `: ${escapeHtml(error)}` : "."}</p>` : ""}
-          ${available ? renderSapB1TableScanRows(rows) : ""}
+          ${available ? renderSapB1TableScanRows(rawRows) : ""}
         </details>`;
     })
     .join("");
