@@ -6302,7 +6302,7 @@ body[data-theme="dark"] .backup-status-stale {
 
 .system-overview-os-list,
 .system-overview-customer-list {
-  display: grid;
+  display: block;
   gap: 10px;
 }
 
