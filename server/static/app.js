@@ -6988,11 +6988,19 @@ async function loadHostConfigChanges() {
           const oldValue = asText(item.old_value, "-");
           const newValue = asText(item.new_value, "-");
 
-          let sapFeaturePackInfo = "";
+          let oldFpInfo = "";
+          let newFpInfo = "";
           if (fieldKey === "sap_release") {
+            const oldFp = resolveSapReleaseDisplay(oldValue, SAP_B1_VERSION_MAP);
+            const oldFpSafe = escapeHtml(asText(oldFp, "-"));
+            oldFpInfo = `
+              <div class="host-config-change-subline">
+                ${oldFpSafe}
+              </div>
+            `;
             const newFp = resolveSapReleaseDisplay(newValue, SAP_B1_VERSION_MAP);
             const newFpSafe = escapeHtml(asText(newFp, "-"));
-            sapFeaturePackInfo = `
+            newFpInfo = `
               <div class="host-config-change-subline">
                 ${newFpSafe}
               </div>
@@ -7003,10 +7011,13 @@ async function loadHostConfigChanges() {
             <tr>
               <td>${escapeHtml(formatUtcPlus2(item.detected_at_utc))}</td>
               <td>${escapeHtml(asText(item.field_label || item.field_key, "-"))}</td>
-              <td>${escapeHtml(oldValue)}</td>
+              <td>
+                ${escapeHtml(oldValue)}
+                ${oldFpInfo}
+              </td>
               <td>
                 <strong>${escapeHtml(newValue)}</strong>
-                ${sapFeaturePackInfo}
+                ${newFpInfo}
               </td>
             </tr>
           `;
