@@ -5,21 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Monitoring Dashboard</title>
     <link rel="stylesheet" href="/styles.css?v=__ASSET_VERSION__" />
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#1e3a5f" />
-    <link rel="apple-touch-icon" href="/icons/pwa-icon-192.png" />
   </head>
   <body>
     <div id="loginOverlay" class="login-overlay hidden">
       <div class="login-card">
-        <div class="login-brand">
-          <div class="login-logo" aria-hidden="true">
-            <img src="icons/logo.png" alt="Monitoring" />
-          </div>
-          <p class="login-product-title">System Health Dashboard</p>
-          <h2>Webclient Anmeldung</h2>
-          <p class="muted">Monitoring Zugang mit Session-Schutz</p>
+        <div class="login-logo" aria-hidden="true">
+          <img src="icons/logo.png" alt="Monitoring" />
         </div>
+        <h2>Webclient Anmeldung</h2>
+        <p class="muted">Monitoring Zugang mit Session-Schutz</p>
         <label>
           Benutzername
           <input id="loginUsernameInput" type="text" autocomplete="username" />
@@ -36,20 +30,37 @@
       </div>
     </div>
 
+    <div id="changePasswordModal" class="login-overlay hidden">
+      <div class="login-card change-password-card">
+        <h3>Passwort aendern</h3>
+        <label>
+          Aktuelles Passwort
+          <input id="currentPasswordInput" type="password" autocomplete="current-password" />
+        </label>
+        <label>
+          Neues Passwort
+          <input id="newPasswordInput" type="password" autocomplete="new-password" />
+        </label>
+        <label>
+          Neues Passwort bestaetigen
+          <input id="confirmPasswordInput" type="password" autocomplete="new-password" />
+        </label>
+        <div class="panel-actions">
+          <button id="savePasswordButton" type="button">Speichern</button>
+          <button id="cancelPasswordButton" type="button">Abbrechen</button>
+        </div>
+        <p id="passwordChangeStatus" class="count compact"></p>
+      </div>
+    </div>
+
     <main class="container">
       <div class="brand-header">
         <div class="app-logo" aria-hidden="true">
           <img src="icons/logo.png" alt="Monitoring" />
         </div>
         <div class="brand-text">
-          <h1>System Health Dashboard</h1>
-          <p class="subtitle-meta">
-            <span class="brand-platforms" aria-label="Linux und Windows">
-              <img class="brand-platform-icon" src="icons/linux.png" alt="Linux" />
-              <img class="brand-platform-icon" src="icons/windows.png" alt="Windows" />
-            </span>
-            <span class="brand-version">v<span id="webclientVersion">-</span></span>
-          </p>
+          <h1>MONITORING</h1>
+          <p class="subtitle-meta">powered by Rolf Walker &nbsp;&middot;&nbsp; v<span id="webclientVersion">-</span></p>
         </div>
         <div class="brand-user">
           <button id="themeToggleButton" class="theme-toggle" type="button" title="Darkmode umschalten" aria-pressed="false">
@@ -57,22 +68,55 @@
             <span class="theme-toggle-label">Dark</span>
           </button>
           <span id="brandUserBadge" class="brand-user-badge hidden"></span>
-          <button id="logoutButton" class="brand-user-badge brand-logout-btn hidden" type="button" title="Abmelden">&#x1F6AA; Abmelden</button>
+          <button id="logoutButton" class="brand-user-badge brand-logout-btn hidden" type="button" title="Abmelden">&#x2192; Abmelden</button>
         </div>
         <div class="brand-partner-logo" aria-hidden="true">
           <img src="icons/ANG.png" alt="ANG" />
         </div>
       </div>
 
+      <section id="hostToolsHeader" class="brand-tools hidden">
+        <div class="host-filters host-filters-header">
+          <div class="host-search-box">
+            <input id="hostSearchInput" type="text" placeholder="Nach Titel suchen..." class="search-input" />
+          </div>
+          <label class="host-filter-control" for="hostAlertFilterSelect">
+            <span>Alerts</span>
+            <select id="hostAlertFilterSelect">
+              <option value="all" selected>Alle</option>
+              <option value="with-alerts">Mit Alerts</option>
+              <option value="without-alerts">Ohne Alerts</option>
+            </select>
+          </label>
+          <label class="host-filter-control" for="hostMutedFilterSelect">
+            <span>Muted</span>
+            <select id="hostMutedFilterSelect">
+              <option value="all" selected>Alle</option>
+              <option value="with-muted">Mit muted Alerts</option>
+              <option value="without-muted">Ohne muted Alerts</option>
+            </select>
+          </label>
+          <div class="host-filter-control host-filter-control-icons">
+            <span>OS</span>
+            <div id="hostOsFilterChips" class="icon-filter-chips"></div>
+          </div>
+          <div class="host-filter-control host-filter-control-icons">
+            <span>Land</span>
+            <div id="hostCountryFilterChips" class="icon-filter-chips"></div>
+          </div>
+          <button id="hostFiltersResetButton" class="btn-secondary" type="button" title="Alle Filter zurücksetzen">✕</button>
+        </div>
+      </section>
 
       <section id="appPanel" class="panel hidden">
         <div class="panel-header">
           <h2>Hosts und Historie</h2>
           <div class="panel-actions">
-            <span id="headerAlertChip" class="header-stat-chip header-stat-chip-alert hidden" title="Globale offene Alerts (Alle)">🚨 <span id="headerAlertCount">0</span> <span class="header-chip-scope">Alle</span></span>
-            <span id="headerTrendsChip" class="header-stat-chip header-stat-chip-warn hidden" title="Kritische Trends (24h)">📈 <span id="headerTrendsCount">0</span> <span class="header-chip-scope">24h</span></span>
-            <span id="headerInactiveChip" class="header-stat-chip header-stat-chip-inactive hidden" title="Inaktive Hosts (1h)">💤 <span id="headerInactiveCount">0</span> <span class="header-chip-scope">1h</span></span>
-            <button id="openUserSettingsButton" class="btn-emoji-pill" type="button" title="Benutzereinstellungen">👤</button>
+            <span id="headerAlertChip" class="header-stat-chip header-stat-chip-alert hidden" title="Globale offene Alerts">🚨 <span id="headerAlertCount">0</span></span>
+            <span id="headerTrendsChip" class="header-stat-chip header-stat-chip-warn hidden" title="Kritische Trends">📈 <span id="headerTrendsCount">0</span></span>
+            <button id="triggerAllAgentsUpdateButton" class="global-update-chip global-update-chip-inline" type="button" title="Update fuer alle Hosts">⟳ Update (alle)</button>
+            <button id="rolloutApiKeyButton" class="btn-emoji-pill" type="button" title="API-Key verteilen">🔐</button>
+            <button id="openChangePasswordButton" class="btn-emoji-pill" type="button" title="Passwort ändern">🔑</button>
             <button id="globalViewButton" class="btn-emoji-pill" type="button" title="Globale Ansichten">🌐</button>
             <button id="openAlarmSettingsButton" class="btn-emoji-pill" type="button" title="Einstellungen">⚙️</button>
             <button id="refreshButton" class="btn-emoji-pill" title="Neu laden">↻</button>
@@ -94,12 +138,11 @@
             </div>
             <div class="subview-tabs-shell">
               <div class="subview-tabs" role="tablist" aria-label="Global-Register">
-                <button id="globalAlertsTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="globalAlertsView">Globale Alerts</button>
-                <button id="criticalTrendsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="criticalTrendsView">Kritische Trends</button>
-                <button id="inactiveHostsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="inactiveHostsView">Inaktive Hosts</button>
-                <button id="backupStatusTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="backupStatusView">Backup Stati</button>
-                <button id="globalAdminAlertSubsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminAlertSubsView">Alert Abos</button>
-                <button id="globalAdminSettingsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminSettingsView">Admin Settings</button>
+                <button id="globalAlertsTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="globalAlertsView">🌍 Globale Alerts</button>
+                <button id="criticalTrendsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="criticalTrendsView">📈 Kritische Trends</button>
+                <button id="inactiveHostsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="inactiveHostsView">💤 Inaktive Hosts</button>
+                <button id="systemOverviewTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="systemOverviewView">📋 Systeme</button>
+                <button id="globalAdminAlertSubsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminAlertSubsView">🔔 Alert Abos</button>
               </div>
             </div>
 
@@ -118,44 +161,31 @@
                       <option value="warning">Nur warning</option>
                     </select>
                   </label>
-                  <label class="checkbox-label">
-                    <input type="checkbox" id="globalShowAcknowledgedCheckbox">
-                    Quittierte anzeigen
-                  </label>
-                  <label class="checkbox-label">
-                    <input type="checkbox" id="globalShowClosedCheckbox">
-                    Abgeschlossene anzeigen
-                  </label>
-                  <button id="exportGlobalAlertsButton" type="button" class="btn-secondary" title="Alerts als CSV exportieren">Export CSV</button>
                   <button id="toggleGlobalAlertsPanelButton" type="button" class="host-group-toggle">▾</button>
                 </div>
                 <div id="globalAlertsPanelBody">
                   <div class="table-wrap">
                     <table>
-                        <colgroup>
-                          <col style="width:30%">
-                          <col style="width:12%">
-                          <col style="width:24%">
-                          <col style="width:9%">
-                          <col style="width:17%">
-                          <col style="width:8%">
-                        </colgroup>
+                      <colgroup>
+                        <col style="width:30%">
+                        <col style="width:12%">
+                        <col style="width:28%">
+                        <col style="width:9%">
+                        <col style="width:17%">
+                        <col style="width:4%">
+                      </colgroup>
                       <thead>
                         <tr>
                           <th>Host</th>
                           <th>Severity</th>
                           <th>Mountpoint</th>
                           <th>Used</th>
-                          <th title="Zeitpunkt der ersten Auslösung">Aktiv seit</th>
-                          <th>Aktion</th>
+                          <th>Transfer</th>
+                          <th>🔇</th>
                         </tr>
                       </thead>
                       <tbody id="globalAlertsRows"></tbody>
                     </table>
-                  </div>
-                  <div class="alarm-settings-actions">
-                    <button id="globalAlertsLoadMoreButton" type="button" class="btn-secondary hidden">Mehr laden</button>
-                    <p id="globalAlertsPagingStatus" class="count compact"></p>
                   </div>
                 </div>
               </section>
@@ -172,22 +202,6 @@
                     <option value="168">Letzte 7 Tage</option>
                   </select>
                 </label>
-                <label class="chart-range-control" for="criticalTrendsProjectSelect">
-                  <span>Projektion auf</span>
-                  <select id="criticalTrendsProjectSelect">
-                    <option value="8" selected>8 Stunden</option>
-                    <option value="24">1 Tag</option>
-                    <option value="72">3 Tage</option>
-                    <option value="168">7 Tage</option>
-                  </select>
-                </label>
-                <fieldset class="chart-metrics-control">
-                  <legend>Metriken</legend>
-                  <label><input type="checkbox" id="ctMetricCpu" /> ⚙️ CPU</label>
-                  <label><input type="checkbox" id="ctMetricMemory" /> 🧠 RAM</label>
-                  <label><input type="checkbox" id="ctMetricSwap" /> 🔃 SWAP</label>
-                  <label><input type="checkbox" id="ctMetricFilesystem" checked /> 💾 Filesystem</label>
-                </fieldset>
                 <button id="refreshCriticalTrendsButton" type="button" class="btn-secondary">Neu laden</button>
               </div>
               <div id="criticalTrendsList" class="critical-trends-list">
@@ -200,8 +214,8 @@
                 <label class="chart-range-control" for="inactiveHostsRangeSelect">
                   <span>Inaktiv seit</span>
                   <select id="inactiveHostsRangeSelect">
-                    <option value="1" selected>1 Stunde</option>
-                    <option value="3">3 Stunden</option>
+                    <option value="1">1 Stunde</option>
+                    <option value="3" selected>3 Stunden</option>
                     <option value="6">6 Stunden</option>
                     <option value="12">12 Stunden</option>
                     <option value="24">24 Stunden</option>
@@ -214,14 +228,16 @@
               </div>
             </div>
 
-            <div id="backupStatusView" class="hidden" role="tabpanel" aria-labelledby="backupStatusTabButton">
-              <div class="inactive-hosts-toolbar">
-                <span id="backupStatusSummary" class="count compact"></span>
-                <button id="refreshBackupStatusButton" type="button" class="btn-secondary">Neu laden</button>
-              </div>
-              <div id="backupStatusList" class="backup-status-list">
-                <p class="muted">Lade Daten…</p>
-              </div>
+            <div id="systemOverviewView" class="hidden" role="tabpanel" aria-labelledby="systemOverviewTabButton">
+              <section class="settings-subsection">
+                <div class="settings-subsection-head">
+                  <h5>📋 Systemübersicht</h5>
+                  <p id="systemOverviewStats" class="count compact"></p>
+                </div>
+                <div id="systemOverviewContainer">
+                  <p class="muted">Lade Systemdaten…</p>
+                </div>
+              </section>
             </div>
 
             <div id="globalAdminAlertSubsView" class="hidden" role="tabpanel" aria-labelledby="globalAdminAlertSubsTabButton">
@@ -240,78 +256,20 @@
                 </div>
               </section>
             </div>
-
-            <div id="globalAdminSettingsView" class="hidden" role="tabpanel" aria-labelledby="globalAdminSettingsTabButton">
-              <div id="globalAdminSettingsContainer"></div>
-            </div>
-
-            <section id="globalAdminOpsSection" class="settings-subsection hidden">
-              <div class="settings-subsection-head">
-                <h5>Admin Aktionen</h5>
-                <p class="count compact">Systemweite Agent-Aktionen</p>
-              </div>
-              <div class="global-admin-ops-actions">
-                <button id="triggerAllAgentsUpdateButton" class="global-update-chip" type="button" title="Update fuer alle Hosts">⟳ Update fuer alle Hosts</button>
-                <button id="rolloutApiKeyButton" class="btn-secondary" type="button" title="Neuen API-Key auf alle Agenten ausrollen">🔐 API-Key verteilen</button>
-                <button id="downloadDatabaseBackupButton" class="btn-secondary" type="button" title="SQLite Datenbank lokal sichern">💾 DB sichern</button>
-                <button id="restoreDatabaseButton" class="btn-secondary btn-danger-outline" type="button" title="Datenbank aus Backup-Datei wiederherstellen">&#x267B;&#xFE0F; DB wiederherstellen</button>
-                <input id="restoreDatabaseFileInput" type="file" accept=".db,application/x-sqlite3,application/octet-stream" style="display:none" />
-              </div>
-              <div id="dbOpsProgress" class="db-ops-progress hidden">
-                <div class="db-ops-progress-bar-wrap">
-                  <div id="dbOpsProgressBar" class="db-ops-progress-bar"></div>
-                </div>
-                <span id="dbOpsProgressLabel" class="db-ops-progress-label"></span>
-              </div>
-            </section>
           </div>
         </div>
 
         <section id="settingsView" class="view-section hidden settings-view">
           <div class="settings-page">
             <div class="settings-page-header">
-              <h3>👤 Benutzereinstellungen</h3>
-              <p class="count">Persoenliche Sicherheit, Benachrichtigungen, Digests und Host-Interessen</p>
+              <h3>⚙️ Einstellungen</h3>
+              <p class="count">Benutzer, OAuth, Mail-Digests und globale Alarmregeln</p>
               <div>
                 <button id="settingsBackToOverviewButton" class="btn-secondary" type="button">Zur Hauptansicht</button>
               </div>
             </div>
 
-            <div class="subview-tabs-shell">
-              <div class="subview-tabs" role="tablist" aria-label="Benutzereinstellungen Register">
-                <button id="userSettingsPasswordTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="userSettingsPasswordPanel">Passwort</button>
-                <button id="userSettingsChannelsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="userSettingsChannelsPanel">Kanäle</button>
-                <button id="userSettingsDigestsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="userSettingsDigestsPanel">Digests</button>
-                <button id="userSettingsHostsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="userSettingsHostsPanel">Host-Interessen</button>
-              </div>
-            </div>
-
-            <section class="settings-subsection" id="userSettingsPasswordPanel" data-user-settings-panel="password">
-              <div class="settings-subsection-head">
-                <h5>🔑 Passwort aendern</h5>
-                <p class="count compact">Eigenes Web-Passwort aktualisieren</p>
-              </div>
-              <div class="alarm-settings-grid">
-                <label>
-                  Aktuelles Passwort
-                  <input id="currentPasswordInput" type="password" autocomplete="current-password" />
-                </label>
-                <label>
-                  Neues Passwort
-                  <input id="newPasswordInput" type="password" autocomplete="new-password" />
-                </label>
-                <label>
-                  Neues Passwort bestaetigen
-                  <input id="confirmPasswordInput" type="password" autocomplete="new-password" />
-                </label>
-              </div>
-              <div class="alarm-settings-actions">
-                <button id="savePasswordButton" type="button">🔑 Passwort speichern</button>
-                <p id="passwordChangeStatus" class="count compact"></p>
-              </div>
-            </section>
-
-            <section class="settings-subsection hidden" id="userSettingsChannelsPanel" data-user-settings-panel="channels">
+            <section class="settings-subsection">
               <div class="settings-subsection-head">
                 <h5>Mein Mailversand per OAuth</h5>
                 <p id="userMailSettingsSummary" class="count compact"></p>
@@ -325,10 +283,6 @@
                   Mail Empfaenger
                   <input id="userEmailRecipientInput" type="email" placeholder="alerts@example.com" />
                 </label>
-                <label>
-                  Absender / Shared Mailbox (optional)
-                  <input id="userEmailSenderInput" type="email" placeholder="monitoring@example.com" />
-                </label>
               </div>
               <div class="alarm-settings-actions">
                 <button id="saveUserMailSettingsButton" type="button">Mail Einstellungen speichern</button>
@@ -338,7 +292,7 @@
               </div>
             </section>
 
-            <section class="settings-subsection hidden" id="userSettingsDigestsPanel" data-user-settings-panel="digests">
+            <section class="settings-subsection">
               <div class="settings-subsection-head">
                 <h5>Trend Mail (Daily Digest)</h5>
                 <p class="count compact">Uebersendet die kritischen Trends aus dem Dashboard als HTML Mail</p>
@@ -352,27 +306,13 @@
                   Versandzeit (feste Zeitzone: Europe/Zurich)
                   <input id="trendEmailTimeInput" type="time" />
                 </label>
-                <label>
-                  Empfaenger Mail-Adresse
-                  <input id="trendDigestRecipientInput" type="email" placeholder="alerts@example.com" />
-                </label>
-                <div class="settings-fieldset-row">
-                  <span class="settings-fieldset-label">Metriken im Digest</span>
-                  <div class="settings-checkbox-group">
-                    <label><input type="checkbox" id="digestMetricCpu" /> ⚙️ CPU</label>
-                    <label><input type="checkbox" id="digestMetricMemory" /> 🧠 RAM</label>
-                    <label><input type="checkbox" id="digestMetricSwap" /> 🔃 SWAP</label>
-                    <label><input type="checkbox" id="digestMetricFilesystem" /> 💾 Filesystem</label>
-                  </div>
-                </div>
               </div>
               <div class="alarm-settings-actions">
-                <button id="saveDigestSettingsButton" type="button">Digest-Einstellungen speichern</button>
                 <button id="testTrendDigestMailButton" type="button">Trend-Testmail senden</button>
               </div>
             </section>
 
-            <section class="settings-subsection hidden" data-user-settings-panel="digests">
+            <section class="settings-subsection">
               <div class="settings-subsection-head">
                 <h5>Alarm Mail (Open Alerts Digest)</h5>
                 <p class="count compact">Uebersendet die aktuell offenen Alarme als HTML Mail</p>
@@ -390,45 +330,13 @@
                   Weitere Alarm Empfaenger (optional, comma/semicolon getrennt)
                   <input id="alertEmailRecipientsInput" type="text" placeholder="ops@example.com; noc@example.com" />
                 </label>
-                <label>
-                  Empfaenger nur fuer Warnung (optional, ueberschreibt Standard)
-                  <input id="alertWarningEmailRecipientsInput" type="text" placeholder="warn@example.com; team-warning@example.com" />
-                </label>
-                <label>
-                  Empfaenger nur fuer Kritisch (optional, ueberschreibt Standard)
-                  <input id="alertCriticalEmailRecipientsInput" type="text" placeholder="critical@example.com; team-critical@example.com" />
-                </label>
               </div>
               <div class="alarm-settings-actions">
                 <button id="testAlertDigestMailButton" type="button">Alarm-Testmail senden</button>
               </div>
             </section>
 
-            <section class="settings-subsection hidden" data-user-settings-panel="digests">
-              <div class="settings-subsection-head">
-                <h5>Backup-Statusbericht Mail</h5>
-                <p class="count compact">Tägliche Mail mit Backup-Status aller Hosts (default 08:15)</p>
-              </div>
-              <div class="alarm-settings-grid">
-                <label class="checkbox-line">
-                  <input id="backupEmailEnabledInput" type="checkbox" />
-                  Backup-Statusbericht aktivieren
-                </label>
-                <label>
-                  Versandzeit (feste Zeitzone: Europe/Zurich)
-                  <input id="backupEmailTimeInput" type="time" />
-                </label>
-                <label>
-                  Empfaenger (comma/semicolon getrennt)
-                  <input id="backupEmailRecipientsInput" type="text" placeholder="backup-team@example.com; ops@example.com" />
-                </label>
-              </div>
-              <div class="alarm-settings-actions">
-                <button id="testBackupDigestMailButton" type="button">Backup-Testmail senden</button>
-              </div>
-            </section>
-
-            <section class="settings-subsection hidden" data-user-settings-panel="channels">
+            <section class="settings-subsection">
               <div class="settings-subsection-head">
                 <h5>Sofort-Alarmmail (Event-getriggert)</h5>
                 <p class="count compact">Sendet sofort eine Mail wenn ein Alarm ausgelöst, eskaliert oder behoben wird</p>
@@ -456,37 +364,7 @@
               </div>
             </section>
 
-            <section class="settings-subsection hidden" id="userSettingsHostsPanel" data-user-settings-panel="hosts">
-              <div class="settings-subsection-head">
-                <h5>Meine Host-Interessen</h5>
-                <p id="hostInterestsSummary" class="count compact">Definiert, welche Hosts in der linken Liste priorisiert oder angezeigt werden.</p>
-              </div>
-              <div class="alarm-settings-grid">
-                <label>
-                  Anzeige-Modus in der linken Hostliste
-                  <select id="hostInterestModeSelect">
-                    <option value="all">Alle Hosts</option>
-                    <option value="interested_first">Interessante Hosts zuerst</option>
-                    <option value="interested_only">Nur interessante Hosts</option>
-                  </select>
-                </label>
-                <label>
-                  Host-Suche
-                  <input id="hostInterestSearchInput" type="text" placeholder="Host oder Titel suchen..." />
-                </label>
-              </div>
-              <div class="alarm-settings-actions">
-                <button id="hostInterestsSelectAllButton" type="button">Alle markieren</button>
-                <button id="hostInterestsClearButton" type="button">Alle abwaehlen</button>
-                <button id="saveHostInterestsButton" type="button">Host-Interessen speichern</button>
-                <p id="hostInterestsStatus" class="count compact"></p>
-              </div>
-              <div id="hostInterestsList" class="host-interests-list">
-                <p class="muted">Lade Hosts...</p>
-              </div>
-            </section>
-
-            <section id="adminOauthSettingsSection" class="settings-subsection hidden" data-user-settings-panel="admin">
+            <section id="adminOauthSettingsSection" class="settings-subsection hidden">
               <div class="settings-subsection-head">
                 <h5>Microsoft OAuth App</h5>
                 <p class="count compact">Globale App-Registrierung fuer den Webserver</p>
@@ -515,7 +393,7 @@
               </div>
             </section>
 
-            <section id="adminUserManagementSection" class="settings-subsection hidden" data-user-settings-panel="admin">
+            <section id="adminUserManagementSection" class="settings-subsection hidden">
               <div class="settings-subsection-head">
                 <h5>Benutzerverwaltung</h5>
                 <p class="count compact">Einfache Web-Benutzer mit Passwort und Admin-Flag</p>
@@ -524,10 +402,6 @@
                 <label>
                   Neuer Benutzername
                   <input id="newUserUsernameInput" type="text" autocomplete="off" />
-                </label>
-                <label>
-                  Anzeigename (optional)
-                  <input id="newUserDisplayNameInput" type="text" autocomplete="off" placeholder="z.B. Max Muster" />
                 </label>
                 <label>
                   Startpasswort
@@ -547,7 +421,6 @@
                   <thead>
                     <tr>
                       <th>Benutzer</th>
-                      <th>Anzeigename</th>
                       <th>Admin</th>
                       <th>Aktiv</th>
                       <th>Mail Empfaenger</th>
@@ -557,7 +430,7 @@
                   </thead>
                   <tbody id="userManagementRows">
                     <tr>
-                      <td colspan="7" class="muted">Noch keine Daten geladen.</td>
+                      <td colspan="6" class="muted">Noch keine Daten geladen.</td>
                     </tr>
                   </tbody>
                 </table>
@@ -566,136 +439,48 @@
 
 
 
-            <section id="globalAlarmSettingsSection" class="settings-subsection hidden" data-user-settings-panel="admin">
+            <section class="settings-subsection">
               <div class="settings-subsection-head">
                 <h5>Globale Alarm Einstellungen</h5>
                 <p class="count compact">Systemweite Schwellwerte und Telegram Kanal</p>
               </div>
-              <div class="alarm-settings-cards">
-
-                <div class="alarm-settings-card">
-                  <div class="alarm-settings-card-title">&#x1F4BE; Festplatte</div>
-                  <div class="alarm-settings-grid">
-                    <label>
-                      Warnung ab (%)
-                      <input id="warningThresholdInput" type="number" min="1" max="99" step="0.1" />
-                    </label>
-                    <label>
-                      Kritisch ab (%)
-                      <input id="criticalThresholdInput" type="number" min="2" max="100" step="0.1" />
-                    </label>
-                    <label>
-                      Entprellung: Treffer
-                      <input id="warningConsecutiveHitsInput" type="number" min="1" max="10" step="1" />
-                    </label>
-                    <label>
-                      Entprellung: Fenster (Minuten)
-                      <input id="warningWindowMinutesInput" type="number" min="1" max="240" step="1" />
-                    </label>
-                    <label class="checkbox-line alarm-settings-grid-span2">
-                      <input id="criticalImmediateInput" type="checkbox" />
-                      Kritisch sofort ausloesen
-                    </label>
-                  </div>
-                </div>
-
-                <div class="alarm-settings-card">
-                  <div class="alarm-settings-card-title">&#x1F5A5;&#xFE0F; CPU</div>
-                  <div class="alarm-settings-grid">
-                    <label>
-                      Warnung ab (%)
-                      <input id="cpuWarningThresholdInput" type="number" min="1" max="99" step="0.1" />
-                    </label>
-                    <label>
-                      Kritisch ab (%)
-                      <input id="cpuCriticalThresholdInput" type="number" min="2" max="100" step="0.1" />
-                    </label>
-                    <label class="alarm-settings-grid-span2">
-                      Fenster (Meldungen)
-                      <input id="cpuAlertWindowReportsInput" type="number" min="2" max="24" step="1" />
-                    </label>
-                  </div>
-                </div>
-
-                <div class="alarm-settings-card">
-                  <div class="alarm-settings-card-title">&#x1F9E0; RAM</div>
-                  <div class="alarm-settings-grid">
-                    <label>
-                      Warnung ab (%)
-                      <input id="ramWarningThresholdInput" type="number" min="1" max="99" step="0.1" />
-                    </label>
-                    <label>
-                      Kritisch ab (%)
-                      <input id="ramCriticalThresholdInput" type="number" min="2" max="100" step="0.1" />
-                    </label>
-                    <label class="alarm-settings-grid-span2">
-                      Fenster (Meldungen)
-                      <input id="ramAlertWindowReportsInput" type="number" min="2" max="24" step="1" />
-                    </label>
-                  </div>
-                </div>
-
-                <div class="alarm-settings-card alarm-settings-card--wide">
-                  <div class="alarm-settings-card-title">&#x1F514; Benachrichtigungen</div>
-                  <div class="alarm-settings-grid">
-                    <label class="checkbox-line">
-                      <input id="telegramEnabledInput" type="checkbox" />
-                      Telegram aktivieren
-                    </label>
-                    <label class="checkbox-line">
-                      <input id="inactiveHostAlertEnabledInput" type="checkbox" />
-                      Inaktive Hosts alarmieren
-                    </label>
-                    <label>
-                      Heads-Up Interval (Stunden, 0=aus)
-                      <input id="alertReminderIntervalHoursInput" type="number" min="0" max="168" step="1" />
-                    </label>
-                    <label>
-                      Inaktiv ab (Stunden)
-                      <input id="inactiveHostAlertHoursInput" type="number" min="1" max="168" step="1" />
-                    </label>
-                    <label>
-                      Telegram Bot Token
-                      <input id="telegramBotTokenInput" type="text" placeholder="123456:ABC..." />
-                    </label>
-                    <label>
-                      Telegram Chat ID
-                      <input id="telegramChatIdInput" type="text" placeholder="-1001234567890" />
-                    </label>
-                  </div>
-                </div>
-
-                <div class="alarm-settings-card alarm-settings-card--wide">
-                  <div class="alarm-settings-card-title">&#x1F916; KI Analyse (OpenAI)</div>
-                  <div class="alarm-settings-grid">
-                    <label class="checkbox-line alarm-settings-grid-span2">
-                      <input id="aiTroubleshootEnabledInput" type="checkbox" />
-                      KI Analyse aktivieren
-                    </label>
-                    <label class="alarm-settings-grid-span2">
-                      OpenAI API Key
-                      <input id="openaiApiKeyInput" type="password" placeholder="sk-... (leer lassen um bestehenden zu behalten)" autocomplete="new-password" />
-                      <span id="openaiApiKeyIsSetHint" class="count compact" style="margin-top:2px"></span>
-                    </label>
-                    <label>
-                      Modell
-                      <input id="openaiModelInput" type="text" placeholder="gpt-4o-mini" />
-                    </label>
-                    <label>
-                      Cache TTL (Sekunden)
-                      <input id="openaiCacheTtlSecInput" type="number" min="30" max="3600" step="30" />
-                    </label>
-                    <label>
-                      Timeout (Sekunden)
-                      <input id="openaiTimeoutSecInput" type="number" min="3" max="60" step="1" />
-                    </label>
-                    <label>
-                      Max Tokens
-                      <input id="openaiMaxTokensInput" type="number" min="256" max="4000" step="50" />
-                    </label>
-                  </div>
-                </div>
-
+              <div class="alarm-settings-grid">
+                <label>
+                  Warnung ab (%)
+                  <input id="warningThresholdInput" type="number" min="1" max="99" step="0.1" />
+                </label>
+                <label>
+                  Kritisch ab (%)
+                  <input id="criticalThresholdInput" type="number" min="2" max="100" step="0.1" />
+                </label>
+                <label>
+                  Entprellung: Treffer
+                  <input id="warningConsecutiveHitsInput" type="number" min="1" max="10" step="1" />
+                </label>
+                <label>
+                  Entprellung: Fenster (Minuten)
+                  <input id="warningWindowMinutesInput" type="number" min="1" max="240" step="1" />
+                </label>
+                <label class="checkbox-line">
+                  <input id="criticalImmediateInput" type="checkbox" />
+                  Kritisch sofort ausloesen
+                </label>
+                <label class="checkbox-line">
+                  <input id="telegramEnabledInput" type="checkbox" />
+                  Telegram aktivieren
+                </label>
+                <label>
+                  Telegram Bot Token
+                  <input id="telegramBotTokenInput" type="text" placeholder="123456:ABC..." />
+                </label>
+                <label>
+                  Telegram Chat ID
+                  <input id="telegramChatIdInput" type="text" placeholder="-1001234567890" />
+                </label>
+                <label>
+                  Heads-Up Interval (Stunden, 0=aus)
+                  <input id="alertReminderIntervalHoursInput" type="number" min="0" max="168" step="1" />
+                </label>
               </div>
               <div class="alarm-settings-actions">
                 <button id="saveAlarmSettingsButton" type="button">Globale Alarmwerte speichern</button>
@@ -709,42 +494,10 @@
         <div id="layout" class="layout">
           <aside class="hosts-column">
             <div class="hosts-column-scroll">
-              <div class="sidebar-card-header">
-                <h3>🖥️ Hosts</h3>
+              <div class="section-head">
+                <h3>🖥️ Host-Gruppen</h3>
                 <p id="hostCount" class="count"></p>
               </div>
-              <section id="hostToolsHeader" class="sidebar-tools hidden">
-                <div class="host-filters host-filters-header">
-                  <div class="host-search-box">
-                    <input id="hostSearchInput" type="text" placeholder="Suchen..." class="search-input" />
-                  </div>
-                  <label class="host-filter-control" for="hostAlertFilterSelect">
-                    <span>Alerts</span>
-                    <select id="hostAlertFilterSelect">
-                      <option value="all" selected>Alle</option>
-                      <option value="with-alerts">Mit Alerts</option>
-                      <option value="without-alerts">Ohne Alerts</option>
-                    </select>
-                  </label>
-                  <label class="host-filter-control" for="hostMutedFilterSelect">
-                    <span>Muted</span>
-                    <select id="hostMutedFilterSelect">
-                      <option value="all" selected>Alle</option>
-                      <option value="with-muted">Mit muted Alerts</option>
-                      <option value="without-muted">Ohne muted Alerts</option>
-                    </select>
-                  </label>
-                  <div class="host-filter-control host-filter-control-icons">
-                    <span>OS</span>
-                    <div id="hostOsFilterChips" class="icon-filter-chips"></div>
-                  </div>
-                  <div class="host-filter-control host-filter-control-icons">
-                    <span>Land</span>
-                    <div id="hostCountryFilterChips" class="icon-filter-chips"></div>
-                  </div>
-                  <button id="hostFiltersResetButton" class="btn-secondary" type="button" title="Alle Filter zurücksetzen">✕</button>
-                </div>
-              </section>
               <div class="host-list-shell">
                 <div id="hostListHeader" class="host-list-header"></div>
                 <div id="hostList" class="host-list"></div>
@@ -759,66 +512,46 @@
               <div class="title-row">
                 <h3 id="selectedHostTitle">Meldungen</h3>
                 <div class="title-row-tools">
-                  <label class="auto-refresh-interval-label" for="autoRefreshIntervalSelect" title="Auto-Refresh Intervall">
-                    <select id="autoRefreshIntervalSelect" class="auto-refresh-interval-select">
-                      <option value="30">⟳ 30s</option>
-                      <option value="60">⟳ 1 Min.</option>
-                      <option value="300">⟳ 5 Min.</option>
-                      <option value="480" selected>⟳ 8 Min.</option>
-                      <option value="0">⟳ Aus</option>
-                    </select>
-                  </label>
-                  <span id="autoRefreshStatus" class="auto-refresh-status">-</span>
-                  <span id="summaryLastUpdate" class="stat-chip auto-refresh-last-update hidden">🕒 -</span>
-                  <button id="exportHostReportsButton" class="btn-secondary btn-secondary--compact" type="button" title="Meldungen des gewaehlten Hosts als JSON exportieren">Export JSON</button>
+                  <span id="autoRefreshStatus" class="auto-refresh-status">Letzte automatische Aktualisierung: -</span>
                   <button id="editDisplayNameButton" class="btn-icon" type="button" title="Titel bearbeiten">✏️</button>
                 </div>
               </div>
-              <div class="report-meta-row">
-                <p id="reportCount" class="count"></p>
-                <div id="selectedHostControls" class="selected-host-controls hidden"></div>
-              </div>
+              <p id="reportCount" class="count"></p>
+              <p id="deliveryStats" class="count compact"></p>
             </div>
 
             <div class="view-tabs-shell">
               <div class="view-tabs" role="tablist" aria-label="Hauptansichten">
-                <button id="overviewTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="overviewView">Übersicht</button>
-                <button id="reportsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="reportsView">Einzelmeldungen</button>
+                <button id="overviewTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="overviewView">🧭 Uebersicht</button>
+                <button id="reportsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="reportsView">🧾 Einzelmeldungen</button>
               </div>
             </div>
 
             <div id="overviewView" class="view-section" role="tabpanel" aria-labelledby="overviewTabButton">
-              <div class="overview-layout">
-                <nav class="overview-sidebar" role="tablist" aria-label="Übersichts-Register">
-                  <button id="overviewMainTabButton" type="button" class="overview-sidebar-item active" role="tab" aria-selected="true" aria-controls="overviewMainSection">
-                    <span class="osi-icon">🔔</span> Alarme &amp; Infos
-                  </button>
-                  <button id="overviewFilesystemTabButton" type="button" class="overview-sidebar-item" role="tab" aria-selected="false" aria-controls="overviewFilesystemSection">
-                    <span class="osi-icon">💾</span> Filesysteme
-                  </button>
-                  <button id="overviewNotificationTabButton" type="button" class="overview-sidebar-item hidden" role="tab" aria-selected="false" aria-controls="overviewNotificationSection">
-                    <span class="osi-icon">✉️</span> Benachrichtigung
-                  </button>
-                  <div class="overview-sidebar-divider"></div>
-                  <label class="overview-sidebar-range" for="analysisRangeSelect">
-                    <span>Zeitraum</span>
-                    <select id="analysisRangeSelect">
-                      <option value="6">Letzte 6 Std.</option>
-                      <option value="24" selected>Letzte 24 Std.</option>
-                      <option value="72">Letzte 3 Tage</option>
-                      <option value="168">Letzte 7 Tage</option>
-                      <option value="336">Letzte 14 Tage</option>
-                      <option value="720">Letzte 30 Tage</option>
-                    </select>
-                  </label>
-                </nav>
+              <div class="subview-tabs-shell">
+                <div class="subview-tabs" role="tablist" aria-label="Uebersichts-Register">
+                  <button id="overviewMainTabButton" type="button" class="tab-button active" role="tab" aria-selected="true" aria-controls="overviewMainSection"> Alerts + Analyse</button>
+                  <button id="overviewFilesystemTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="overviewFilesystemSection">💾 Filesystem Fokus</button>
+                </div>
+              </div>
 
-                <div class="overview-content">
+              <div class="overview-controls">
+                <label class="chart-range-control" for="analysisRangeSelect">
+                  <span>Chart-Zeitraum</span>
+                  <select id="analysisRangeSelect">
+                    <option value="6">Letzte 6 Std.</option>
+                    <option value="24" selected>Letzte 24 Std.</option>
+                    <option value="72">Letzte 3 Tage</option>
+                    <option value="168">Letzte 7 Tage</option>
+                    <option value="336">Letzte 14 Tage</option>
+                  </select>
+                </label>
+              </div>
 
               <section id="overviewMainSection" class="overview-subsection overview-scroll-panel" role="tabpanel" aria-labelledby="overviewMainTabButton">
                 <section class="alerts-panel">
                   <div class="analysis-header">
-                    <h4>Alerts</h4>
+                    <h4>🚨 Alerts</h4>
                     <div class="alerts-panel-actions">
                       <p id="alertsSummary" class="count"></p>
                     <button id="toggleHostAlertsPanelButton" type="button" class="host-group-toggle">▾</button>
@@ -830,10 +563,10 @@
                         <colgroup>
                           <col style="width:10%">
                           <col style="width:12%">
-                          <col style="width:34%">
+                          <col style="width:38%">
                           <col style="width:10%">
                           <col style="width:24%">
-                          <col style="width:10%">
+                          <col style="width:6%">
                         </colgroup>
                         <thead>
                           <tr>
@@ -841,8 +574,8 @@
                             <th>Severity</th>
                             <th>Mountpoint</th>
                             <th>Used</th>
-                            <th title="Zeitpunkt der ersten Auslösung">Aktiv seit</th>
-                            <th>Aktion</th>
+                            <th>Transfer</th>
+                            <th>🔇</th>
                           </tr>
                         </thead>
                         <tbody id="alertsRows"></tbody>
@@ -853,7 +586,7 @@
 
                 <section class="analysis-panel">
                   <div class="analysis-header">
-                    <h4 id="analysisSectionTitle">Analyse (letzte 24 Std.)</h4>
+                    <h4 id="analysisSectionTitle">📊 Analyse (letzte 24 Std.)</h4>
                     <p id="analysisSummary" class="count"></p>
                   </div>
                   <div id="resourceTrendCards" class="resource-trend-grid"></div>
@@ -861,36 +594,15 @@
                 </section>
               </section>
 
-              <section id="overviewNotificationSection" class="analysis-panel overview-subsection overview-scroll-panel hidden" role="tabpanel" aria-labelledby="overviewNotificationTabButton">
-                <div id="customerNotificationPanel"></div>
-              </section>
-
               <section id="overviewFilesystemSection" class="analysis-panel overview-subsection overview-scroll-panel hidden" role="tabpanel" aria-labelledby="overviewFilesystemTabButton">
                 <div class="analysis-header fs-focus-header">
-                  <h4 id="filesystemSectionTitle">Filesysteme (letzte 24 Std.)</h4>
-                  <div class="fs-focus-actions">
-                    <p id="filesystemStats" class="count"></p>
-                    <button id="filesystemAiTroubleshootButton" class="btn-secondary btn-secondary--compact" type="button" title="KI Analyse fuer alle Filesysteme">🤖 KI Analyse</button>
-                    <button id="filesystemFocusSettingsButton" class="btn-emoji-pill hidden" type="button" title="Filesysteme konfigurieren">⚙️</button>
-                  </div>
+                  <h4 id="filesystemSectionTitle">💾 Filesystem Fokus (letzte 24 Std.)</h4>
+                  <p id="filesystemStats" class="count"></p>
                 </div>
                 <div id="filesystemCharts" class="filesystem-charts"></div>
-                <div id="largeFilesPanel" class="detail-card large-files-panel hidden">
-                  <div class="mountpoint-table-header">
-                    <h4>Grösste Dateien (Top 10 je Filesystem)</h4>
-                    <div class="large-files-head-actions">
-                      <span id="largeFilesMeta" class="count compact"></span>
-                      <button id="largeFilesSettingsButton" class="btn-emoji-pill hidden" type="button" title="Top-Dateien konfigurieren">⚙️</button>
-                    </div>
-                  </div>
-                  <div id="largeFilesBody" class="large-files-body"></div>
-                </div>
                 <div class="detail-card">
-                  <div class="mountpoint-table-header">
-                    <h4>Mountpoint-Übersicht</h4>
-                    <button id="toggleMountpointTableButton" class="host-group-toggle mountpoint-toggle-btn" type="button" aria-expanded="true" title="Tabelle ein-/ausklappen">▾</button>
-                  </div>
-                  <div id="mountpointTableWrap" class="table-wrap">
+                  <h4>📊 Mountpoint-Übersicht</h4>
+                  <div class="table-wrap">
                     <table>
                       <thead>
                         <tr>
@@ -908,118 +620,32 @@
                   </div>
                 </div>
               </section>
-
-                </div><!-- /.overview-content -->
-              </div><!-- /.overview-layout -->
             </div>
 
             <div id="reportsView" class="view-section hidden" role="tabpanel" aria-labelledby="reportsTabButton">
-              <div class="overview-layout">
-                <nav class="overview-sidebar" role="tablist" aria-label="Einzelmeldungs-Register">
-                  <button type="button" class="overview-sidebar-item active" role="tab" aria-selected="true" data-report-section="overview"><span class="osi-icon">📋</span> System</button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="journal"><span class="osi-icon">📓</span> Journal</button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="processes"><span class="osi-icon">⚙️</span> Prozesse</button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="sap-b1-systeminfo"><span class="osi-icon">🔷</span> SAP B1</button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="containers"><span class="osi-icon">📦</span> Container</button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="dir-listings"><span class="osi-icon">📤</span> Export</button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="agent-update"><span class="osi-icon">🤖</span> Agent</button>
-                  <div class="overview-sidebar-divider"></div>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="network"><span class="osi-icon">🌐</span> Netzwerk</button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="filesystems"><span class="osi-icon">🗄️</span> Filesysteme</button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="databases"><span class="osi-icon">🗃️</span> Datenbanken</button>
-                </nav>
-                <div class="overview-content">
-                  <div class="pager pager-top">
-                    <button id="reportsPrevButtonTop" type="button">Vorherige Meldung</button>
-                    <button id="reportsNextButtonTop" type="button">Nächste Meldung</button>
-                  </div>
-                  <div class="pager report-jump-row">
-                    <label class="report-jump-control" for="reportJumpDateTimeInput">
-                      <input id="reportJumpDateTimeInput" type="datetime-local" step="60" />
-                    </label>
-                    <button id="reportJumpLatestButton" type="button">Aktuellste Meldung</button>
-                    <p id="reportJumpBounds" class="count compact"></p>
-                  </div>
-                  <div id="reportList" class="report-list"></div>
-                  <div class="pager">
-                    <button id="reportsPrevButton" type="button">Vorherige Meldung</button>
-                    <button id="reportsNextButton" type="button">Nächste Meldung</button>
-                  </div>
-                </div><!-- /.overview-content -->
-              </div><!-- /.overview-layout -->
+              <div class="subview-tabs-shell">
+                <div class="subview-tabs report-subview-tabs" role="tablist" aria-label="Einzelmeldungs-Register">
+                  <button type="button" class="tab-button active" role="tab" aria-selected="true" data-report-section="overview">🧭 Uebersicht</button>
+                  <button type="button" class="tab-button" role="tab" aria-selected="false" data-report-section="journal">📕 Journal Fehler</button>
+                  <button type="button" class="tab-button" role="tab" aria-selected="false" data-report-section="processes">🔥 Top Prozesse</button>
+                  <button type="button" class="tab-button" role="tab" aria-selected="false" data-report-section="containers">📦 Container</button>
+                  <button type="button" class="tab-button" role="tab" aria-selected="false" data-report-section="agent-update">🔄 Agent Update</button>
+                </div>
+              </div>
+              <div class="pager pager-top">
+                <button id="reportsPrevButtonTop" type="button">Vorherige Meldung</button>
+                <button id="reportsNextButtonTop" type="button">Naechste Meldung</button>
+              </div>
+              <div id="reportList" class="report-list"></div>
+              <div class="pager">
+                <button id="reportsPrevButton" type="button">Vorherige Meldung</button>
+                <button id="reportsNextButton" type="button">Naechste Meldung</button>
+              </div>
             </div>
           </section>
         </div>
       </section>
     </main>
     <script src="/app.js?v=__ASSET_VERSION__"></script>
-      <div id="chartDrillModal" class="chart-drill-modal hidden" role="dialog" aria-modal="true" aria-labelledby="chartDrillTitle">
-        <div class="chart-drill-backdrop"></div>
-        <div class="chart-drill-inner">
-          <div class="chart-drill-header">
-            <strong id="chartDrillTitle" class="chart-drill-title"></strong>
-            <button id="chartDrillCloseBtn" class="btn-icon chart-drill-close" type="button" title="Schliessen">✕</button>
-          </div>
-          <div id="chartDrillBody" class="chart-drill-body"></div>
-        </div>
-      </div>
-      <div id="aiTroubleshootModal" class="chart-drill-modal hidden" role="dialog" aria-modal="true" aria-labelledby="aiTroubleshootTitle">
-        <div id="aiTroubleshootBackdrop" class="chart-drill-backdrop"></div>
-        <div class="chart-drill-inner ai-troubleshoot-inner">
-          <div class="chart-drill-header">
-            <strong id="aiTroubleshootTitle" class="chart-drill-title">🤖 KI Analyse</strong>
-            <button id="aiTroubleshootCloseBtn" class="btn-icon chart-drill-close" type="button" title="Schliessen">✕</button>
-          </div>
-          <div class="chart-drill-body">
-            <p id="aiTroubleshootStatus" class="count compact"></p>
-            <div id="aiTroubleshootBody" class="ai-troubleshoot-body"></div>
-          </div>
-        </div>
-      </div>
-      <div id="filesystemVisibilityModal" class="chart-drill-modal hidden" role="dialog" aria-modal="true" aria-labelledby="filesystemVisibilityTitle">
-        <div id="filesystemVisibilityBackdrop" class="chart-drill-backdrop"></div>
-        <div class="chart-drill-inner filesystem-visibility-inner">
-          <div class="chart-drill-header">
-            <strong id="filesystemVisibilityTitle" class="chart-drill-title">⚙️ Filesystem-Auswahl</strong>
-            <button id="filesystemVisibilityCloseButton" class="btn-icon chart-drill-close" type="button" title="Schliessen">✕</button>
-          </div>
-          <div class="chart-drill-body">
-            <p id="filesystemVisibilitySummary" class="count compact"></p>
-            <div id="filesystemVisibilityList" class="filesystem-visibility-list"></div>
-            <div class="filesystem-visibility-actions">
-              <button id="filesystemVisibilitySaveButton" type="button">Speichern</button>
-              <button id="filesystemVisibilityCancelButton" class="btn-secondary" type="button">Abbrechen</button>
-            </div>
-            <p id="filesystemVisibilityStatus" class="count compact"></p>
-          </div>
-        </div>
-      </div>
-      <div id="ackModal" class="chart-drill-modal hidden" role="dialog" aria-modal="true" aria-labelledby="ackModalTitle">
-        <div id="ackModalBackdrop" class="chart-drill-backdrop"></div>
-        <div class="chart-drill-inner ack-modal-inner">
-          <div class="chart-drill-header">
-            <strong id="ackModalTitle" class="chart-drill-title">Alert quittieren</strong>
-            <button id="ackModalCloseBtn" class="btn-icon chart-drill-close" type="button" title="Schliessen">✕</button>
-          </div>
-          <div class="chart-drill-body">
-            <p id="ackModalSubtitle" class="count compact"></p>
-            <label for="ackModalNoteInput" class="ack-modal-note-label">Notiz (optional, max. 500 Zeichen)</label>
-            <textarea id="ackModalNoteInput" class="ack-modal-textarea" maxlength="500" rows="3" placeholder="z. B. geplante Wartung, wird beobachtet …"></textarea>
-            <div class="filesystem-visibility-actions">
-              <button id="ackModalConfirmBtn" type="button">Quittieren</button>
-              <button id="ackModalUnackBtn" type="button" class="btn-secondary hidden">Quittierung aufheben</button>
-              <button id="ackModalCancelBtn" type="button" class="btn-secondary">Abbrechen</button>
-            </div>
-            <p id="ackModalStatus" class="count compact"></p>
-          </div>
-        </div>
-      </div>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(function(err) {
-        console.warn('Service Worker registration failed:', err);
-      });
-    }
-  </script>
   </body>
   </html>

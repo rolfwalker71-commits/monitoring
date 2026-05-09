@@ -1,21 +1,14 @@
 #!/usr/bin/env python3
 import argparse
 import base64
-import csv
 import hashlib
 import hmac
 import html
-import io
 import json
-import logging
 import os
 import re
 import secrets
 import sqlite3
-import threading
-import time
-import tempfile
-import traceback
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -37,7 +30,6 @@ DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "monitoring.db"
 APP_LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
 ANG_LOGO_PATH = STATIC_DIR / "icons" / "ANG.png"
-BACKUP_ICON_PATH = STATIC_DIR / "icons" / "backup.png"
 LINUX_LOGO_PATH = STATIC_DIR / "icons" / "linux.png"
 WINDOWS_LOGO_PATH = STATIC_DIR / "icons" / "windows.png"
 BUILD_VERSION_PATH = BASE_DIR.parent / "BUILD_VERSION"
@@ -45,19 +37,9 @@ AGENT_VERSION_PATH = BASE_DIR.parent / "AGENT_VERSION"
 OPENAPI_SPEC_PATH = BASE_DIR.parent / "openapi.yaml"
 API_KEY = os.getenv("MONITORING_API_KEY", "")
 API_KEY_GRACE_ALLOW_KNOWN_HOSTS = os.getenv("MONITORING_API_KEY_GRACE_ALLOW_KNOWN_HOSTS", "1").strip().lower() in {"1", "true", "yes", "on"}
-MAX_REPORTS_PER_HOST = int(os.getenv("MONITORING_MAX_REPORTS_PER_HOST", "2880"))
+MAX_REPORTS_PER_HOST = int(os.getenv("MONITORING_MAX_REPORTS_PER_HOST", "1344"))
 WARNING_THRESHOLD_PERCENT = float(os.getenv("MONITORING_WARNING_THRESHOLD", "80"))
 CRITICAL_THRESHOLD_PERCENT = float(os.getenv("MONITORING_CRITICAL_THRESHOLD", "90"))
-CPU_WARNING_THRESHOLD_PERCENT = 80.0
-CPU_CRITICAL_THRESHOLD_PERCENT = 95.0
-CPU_ALERT_WINDOW_REPORTS = 4
-CPU_ALERT_MOUNTPOINT = "cpu"
-RAM_WARNING_THRESHOLD_PERCENT = 85.0
-RAM_CRITICAL_THRESHOLD_PERCENT = 95.0
-RAM_ALERT_WINDOW_REPORTS = 4
-RAM_ALERT_MOUNTPOINT = "ram"
-INACTIVE_HOST_ALERT_MOUNTPOINT = "__inactive_host__"
-INACTIVE_HOST_ALERT_HOURS_DEFAULT = 3
 TELEGRAM_ENABLED_DEFAULT = os.getenv("MONITORING_TELEGRAM_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
 TELEGRAM_BOT_TOKEN_DEFAULT = os.getenv("MONITORING_TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID_DEFAULT = os.getenv("MONITORING_TELEGRAM_CHAT_ID", "")
@@ -71,43 +53,21 @@ MICROSOFT_TENANT_ID_DEFAULT = os.getenv("MONITORING_MS_TENANT_ID", "organization
 MICROSOFT_CLIENT_ID_DEFAULT = os.getenv("MONITORING_MS_CLIENT_ID", "").strip()
 MICROSOFT_CLIENT_SECRET_DEFAULT = os.getenv("MONITORING_MS_CLIENT_SECRET", "").strip()
 MICROSOFT_OAUTH_ENABLED_DEFAULT = os.getenv("MONITORING_MS_OAUTH_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
-OPENAI_API_KEY = os.getenv("MONITORING_OPENAI_API_KEY", "").strip()
-OPENAI_MODEL = os.getenv("MONITORING_OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
-OPENAI_TIMEOUT_SEC = max(3, min(int(os.getenv("MONITORING_OPENAI_TIMEOUT_SEC", "12") or "12"), 60))
-OPENAI_MAX_TOKENS = max(256, min(int(os.getenv("MONITORING_OPENAI_MAX_TOKENS", "1200") or "1200"), 4000))
-AI_TROUBLESHOOT_ENABLED_DEFAULT = os.getenv("MONITORING_AI_TROUBLESHOOT_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
-AI_TROUBLESHOOT_CACHE_TTL_SEC = max(30, min(int(os.getenv("MONITORING_AI_TROUBLESHOOT_CACHE_TTL_SEC", "600") or "600"), 3600))
-AI_TROUBLESHOOT_CACHE_MAX_ITEMS = max(20, min(int(os.getenv("MONITORING_AI_TROUBLESHOOT_CACHE_MAX_ITEMS", "300") or "300"), 2000))
 MICROSOFT_OAUTH_SCOPES = [
     "offline_access",
     "openid",
     "profile",
     "email",
     "https://graph.microsoft.com/Mail.Send",
-    "https://graph.microsoft.com/Mail.Send.Shared",
 ]
 DEFAULT_TREND_DIGEST_TIME = "08:00"
 DEFAULT_ALERT_DIGEST_TIME = "08:05"
-DEFAULT_BACKUP_DIGEST_TIME = "08:15"
 SCHEDULE_TIMEZONE_NAME = os.getenv("MONITORING_SCHEDULE_TIMEZONE", "Europe/Zurich").strip() or "Europe/Zurich"
 try:
     SCHEDULE_TIMEZONE = ZoneInfo(SCHEDULE_TIMEZONE_NAME)
 except ZoneInfoNotFoundError:
     SCHEDULE_TIMEZONE = datetime.now().astimezone().tzinfo
     SCHEDULE_TIMEZONE_NAME = str(SCHEDULE_TIMEZONE) if SCHEDULE_TIMEZONE else "local"
-
-DEFAULT_VISIBLE_FILESYSTEM_MOUNTPOINTS = {
-    "/",
-    "/usr/sap",
-    "/hana",
-    "/hana/log",
-    "/hana/data",
-    "/hana/shared",
-    "/hana/shared/backup_service",
-}
-
-_AI_TROUBLESHOOT_CACHE_LOCK = threading.Lock()
-_AI_TROUBLESHOOT_CACHE: dict[str, tuple[float, dict]] = {}
 
 
 def parse_int(query: dict, key: str, default: int, min_value: int, max_value: int) -> int:
@@ -121,10 +81,7 @@ def parse_int(query: dict, key: str, default: int, min_value: int, max_value: in
 
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
-        conn.execute("PRAGMA busy_timeout=5000")
+    with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS reports (
@@ -176,12 +133,6 @@ def init_db() -> None:
             conn.execute("ALTER TABLE host_settings ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0")
         if "country_code_override" not in existing_host_columns:
             conn.execute("ALTER TABLE host_settings ADD COLUMN country_code_override TEXT NOT NULL DEFAULT ''")
-        if "customer_alert_emails" not in existing_host_columns:
-            conn.execute("ALTER TABLE host_settings ADD COLUMN customer_alert_emails TEXT NOT NULL DEFAULT ''")
-        if "customer_alert_mountpoints" not in existing_host_columns:
-            conn.execute("ALTER TABLE host_settings ADD COLUMN customer_alert_mountpoints TEXT NOT NULL DEFAULT ''")
-        if "customer_alert_min_severity" not in existing_host_columns:
-            conn.execute("ALTER TABLE host_settings ADD COLUMN customer_alert_min_severity TEXT NOT NULL DEFAULT 'critical'")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS alarm_settings (
@@ -191,17 +142,9 @@ def init_db() -> None:
                 warning_consecutive_hits INTEGER NOT NULL,
                 warning_window_minutes INTEGER NOT NULL,
                 critical_trigger_immediate INTEGER NOT NULL,
-                cpu_warning_threshold_percent REAL NOT NULL,
-                cpu_critical_threshold_percent REAL NOT NULL,
-                cpu_alert_window_reports INTEGER NOT NULL,
-                ram_warning_threshold_percent REAL NOT NULL,
-                ram_critical_threshold_percent REAL NOT NULL,
-                ram_alert_window_reports INTEGER NOT NULL,
                 telegram_enabled INTEGER NOT NULL,
                 telegram_bot_token TEXT NOT NULL,
                 telegram_chat_id TEXT NOT NULL,
-                inactive_host_alert_enabled INTEGER NOT NULL DEFAULT 0,
-                inactive_host_alert_hours INTEGER NOT NULL DEFAULT 3,
                 updated_at_utc TEXT NOT NULL
             )
             """
@@ -216,36 +159,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN warning_window_minutes INTEGER NOT NULL DEFAULT 15")
         if "critical_trigger_immediate" not in existing_alarm_columns:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN critical_trigger_immediate INTEGER NOT NULL DEFAULT 1")
-        if "cpu_warning_threshold_percent" not in existing_alarm_columns:
-            conn.execute("ALTER TABLE alarm_settings ADD COLUMN cpu_warning_threshold_percent REAL NOT NULL DEFAULT 80")
-        if "cpu_critical_threshold_percent" not in existing_alarm_columns:
-            conn.execute("ALTER TABLE alarm_settings ADD COLUMN cpu_critical_threshold_percent REAL NOT NULL DEFAULT 95")
-        if "cpu_alert_window_reports" not in existing_alarm_columns:
-            conn.execute("ALTER TABLE alarm_settings ADD COLUMN cpu_alert_window_reports INTEGER NOT NULL DEFAULT 4")
-        if "ram_warning_threshold_percent" not in existing_alarm_columns:
-            conn.execute("ALTER TABLE alarm_settings ADD COLUMN ram_warning_threshold_percent REAL NOT NULL DEFAULT 85")
-        if "ram_critical_threshold_percent" not in existing_alarm_columns:
-            conn.execute("ALTER TABLE alarm_settings ADD COLUMN ram_critical_threshold_percent REAL NOT NULL DEFAULT 95")
-        if "ram_alert_window_reports" not in existing_alarm_columns:
-            conn.execute("ALTER TABLE alarm_settings ADD COLUMN ram_alert_window_reports INTEGER NOT NULL DEFAULT 4")
         if "alert_reminder_interval_hours" not in existing_alarm_columns:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN alert_reminder_interval_hours INTEGER NOT NULL DEFAULT 0")
-        if "inactive_host_alert_enabled" not in existing_alarm_columns:
-            conn.execute("ALTER TABLE alarm_settings ADD COLUMN inactive_host_alert_enabled INTEGER NOT NULL DEFAULT 0")
-        if "inactive_host_alert_hours" not in existing_alarm_columns:
-            conn.execute("ALTER TABLE alarm_settings ADD COLUMN inactive_host_alert_hours INTEGER NOT NULL DEFAULT 3")
-        if "openai_api_key" not in existing_alarm_columns:
-            conn.execute("ALTER TABLE alarm_settings ADD COLUMN openai_api_key TEXT NOT NULL DEFAULT ''")
-        if "openai_model" not in existing_alarm_columns:
-            conn.execute("ALTER TABLE alarm_settings ADD COLUMN openai_model TEXT NOT NULL DEFAULT 'gpt-4o-mini'")
-        if "openai_timeout_sec" not in existing_alarm_columns:
-            conn.execute("ALTER TABLE alarm_settings ADD COLUMN openai_timeout_sec INTEGER NOT NULL DEFAULT 12")
-        if "openai_max_tokens" not in existing_alarm_columns:
-            conn.execute("ALTER TABLE alarm_settings ADD COLUMN openai_max_tokens INTEGER NOT NULL DEFAULT 1200")
-        if "ai_troubleshoot_enabled" not in existing_alarm_columns:
-            conn.execute("ALTER TABLE alarm_settings ADD COLUMN ai_troubleshoot_enabled INTEGER NOT NULL DEFAULT 1")
-        if "ai_troubleshoot_cache_ttl_sec" not in existing_alarm_columns:
-            conn.execute("ALTER TABLE alarm_settings ADD COLUMN ai_troubleshoot_cache_ttl_sec INTEGER NOT NULL DEFAULT 600")
 
         existing_alert_columns = {
             str(row[1])
@@ -253,16 +168,6 @@ def init_db() -> None:
         }
         if "last_reminder_sent_utc" not in existing_alert_columns:
             conn.execute("ALTER TABLE alerts ADD COLUMN last_reminder_sent_utc TEXT")
-        if "ack_note" not in existing_alert_columns:
-            conn.execute("ALTER TABLE alerts ADD COLUMN ack_note TEXT")
-        if "ack_by" not in existing_alert_columns:
-            conn.execute("ALTER TABLE alerts ADD COLUMN ack_by TEXT")
-        if "ack_at_utc" not in existing_alert_columns:
-            conn.execute("ALTER TABLE alerts ADD COLUMN ack_at_utc TEXT")
-        if "closed_at_utc" not in existing_alert_columns:
-            conn.execute("ALTER TABLE alerts ADD COLUMN closed_at_utc TEXT")
-        if "closed_by" not in existing_alert_columns:
-            conn.execute("ALTER TABLE alerts ADD COLUMN closed_by TEXT")
 
         conn.execute(
             """
@@ -301,8 +206,6 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_users ADD COLUMN is_disabled INTEGER NOT NULL DEFAULT 0")
         if "created_at_utc" not in existing_web_user_columns:
             conn.execute("ALTER TABLE web_users ADD COLUMN created_at_utc TEXT NOT NULL DEFAULT ''")
-        if "display_name" not in existing_web_user_columns:
-            conn.execute("ALTER TABLE web_users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS web_sessions (
@@ -359,30 +262,6 @@ def init_db() -> None:
         )
         conn.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_reports_hostname_id
-            ON reports(hostname, id)
-            """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_reports_hostname_received
-            ON reports(hostname, received_at_utc)
-            """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_alerts_hostname_status
-            ON alerts(hostname, status)
-            """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_alerts_hostname_status_severity
-            ON alerts(hostname, status, severity)
-            """
-        )
-        conn.execute(
-            """
             CREATE TABLE IF NOT EXISTS muted_alert_rules (
                 hostname TEXT NOT NULL,
                 mountpoint TEXT NOT NULL,
@@ -404,79 +283,14 @@ def init_db() -> None:
                 alert_email_enabled INTEGER NOT NULL DEFAULT 0,
                 alert_email_time_hhmm TEXT NOT NULL DEFAULT '08:05',
                 alert_email_recipients TEXT NOT NULL DEFAULT '',
-                alert_warning_email_recipients TEXT NOT NULL DEFAULT '',
-                alert_critical_email_recipients TEXT NOT NULL DEFAULT '',
                 alert_email_last_sent_local_date TEXT NOT NULL DEFAULT '',
                 alert_instant_mail_enabled INTEGER NOT NULL DEFAULT 0,
                 alert_instant_min_severity TEXT NOT NULL DEFAULT 'warning',
-                host_interest_mode TEXT NOT NULL DEFAULT 'all',
-                host_interest_hosts TEXT NOT NULL DEFAULT '',
-                backup_email_enabled INTEGER NOT NULL DEFAULT 0,
-                backup_email_time_hhmm TEXT NOT NULL DEFAULT '08:15',
-                backup_email_recipients TEXT NOT NULL DEFAULT '',
-                backup_email_last_sent_local_date TEXT NOT NULL DEFAULT '',
                 updated_at_utc TEXT NOT NULL,
                 FOREIGN KEY(username) REFERENCES web_users(username)
             )
             """
         )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS web_user_filesystem_visibility_hidden (
-                username TEXT NOT NULL,
-                hostname TEXT NOT NULL,
-                section TEXT NOT NULL,
-                mountpoint TEXT NOT NULL,
-                updated_at_utc TEXT NOT NULL,
-                PRIMARY KEY(username, hostname, section, mountpoint),
-                FOREIGN KEY(username) REFERENCES web_users(username)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS web_user_filesystem_visibility_config (
-                username TEXT NOT NULL,
-                hostname TEXT NOT NULL,
-                section TEXT NOT NULL,
-                configured_at_utc TEXT NOT NULL,
-                PRIMARY KEY(username, hostname, section),
-                FOREIGN KEY(username) REFERENCES web_users(username)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS app_meta (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                updated_at_utc TEXT NOT NULL
-            )
-            """
-        )
-        backup_service_migration_key = "fs_visibility_default_backup_service_v1"
-        backup_service_migration_done = conn.execute(
-            "SELECT 1 FROM app_meta WHERE key = ? LIMIT 1",
-            (backup_service_migration_key,),
-        ).fetchone()
-        if not backup_service_migration_done:
-            conn.execute(
-                """
-                DELETE FROM web_user_filesystem_visibility_hidden
-                WHERE LOWER(mountpoint) = '/hana/shared/backup_service'
-                  AND section IN ('fs-focus', 'large-files')
-                """
-            )
-            conn.execute(
-                """
-                INSERT INTO app_meta (key, value, updated_at_utc)
-                VALUES (?, '1', ?)
-                ON CONFLICT(key) DO UPDATE SET
-                    value = excluded.value,
-                    updated_at_utc = excluded.updated_at_utc
-                """,
-                (backup_service_migration_key, utc_now_iso()),
-            )
         existing_web_user_settings_columns = {
             str(row[1])
             for row in conn.execute("PRAGMA table_info(web_user_settings)").fetchall()
@@ -493,10 +307,6 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_email_time_hhmm TEXT NOT NULL DEFAULT '08:05'")
         if "alert_email_recipients" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_email_recipients TEXT NOT NULL DEFAULT ''")
-        if "alert_warning_email_recipients" not in existing_web_user_settings_columns:
-            conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_warning_email_recipients TEXT NOT NULL DEFAULT ''")
-        if "alert_critical_email_recipients" not in existing_web_user_settings_columns:
-            conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_critical_email_recipients TEXT NOT NULL DEFAULT ''")
         if "alert_email_last_sent_local_date" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_email_last_sent_local_date TEXT NOT NULL DEFAULT ''")
         if "alert_instant_mail_enabled" not in existing_web_user_settings_columns:
@@ -507,24 +317,6 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_instant_telegram_enabled INTEGER NOT NULL DEFAULT 0")
         if "alert_telegram_chat_id" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_telegram_chat_id TEXT NOT NULL DEFAULT ''")
-        if "email_sender" not in existing_web_user_settings_columns:
-            conn.execute("ALTER TABLE web_user_settings ADD COLUMN email_sender TEXT NOT NULL DEFAULT ''")
-        if "critical_trends_metrics" not in existing_web_user_settings_columns:
-            conn.execute("ALTER TABLE web_user_settings ADD COLUMN critical_trends_metrics TEXT NOT NULL DEFAULT 'filesystem'")
-        if "digest_trend_metrics" not in existing_web_user_settings_columns:
-            conn.execute("ALTER TABLE web_user_settings ADD COLUMN digest_trend_metrics TEXT NOT NULL DEFAULT 'cpu,memory,swap,filesystem'")
-        if "host_interest_mode" not in existing_web_user_settings_columns:
-            conn.execute("ALTER TABLE web_user_settings ADD COLUMN host_interest_mode TEXT NOT NULL DEFAULT 'all'")
-        if "host_interest_hosts" not in existing_web_user_settings_columns:
-            conn.execute("ALTER TABLE web_user_settings ADD COLUMN host_interest_hosts TEXT NOT NULL DEFAULT ''")
-        if "backup_email_enabled" not in existing_web_user_settings_columns:
-            conn.execute("ALTER TABLE web_user_settings ADD COLUMN backup_email_enabled INTEGER NOT NULL DEFAULT 0")
-        if "backup_email_time_hhmm" not in existing_web_user_settings_columns:
-            conn.execute("ALTER TABLE web_user_settings ADD COLUMN backup_email_time_hhmm TEXT NOT NULL DEFAULT '08:15'")
-        if "backup_email_recipients" not in existing_web_user_settings_columns:
-            conn.execute("ALTER TABLE web_user_settings ADD COLUMN backup_email_recipients TEXT NOT NULL DEFAULT ''")
-        if "backup_email_last_sent_local_date" not in existing_web_user_settings_columns:
-            conn.execute("ALTER TABLE web_user_settings ADD COLUMN backup_email_last_sent_local_date TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS web_user_alert_subscriptions (
@@ -596,18 +388,12 @@ def init_db() -> None:
                 warning_consecutive_hits,
                 warning_window_minutes,
                 critical_trigger_immediate,
-                cpu_warning_threshold_percent,
-                cpu_critical_threshold_percent,
-                cpu_alert_window_reports,
-                ram_warning_threshold_percent,
-                ram_critical_threshold_percent,
-                ram_alert_window_reports,
                 telegram_enabled,
                 telegram_bot_token,
                 telegram_chat_id,
                 updated_at_utc
             )
-            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO NOTHING
             """,
             (
@@ -616,12 +402,6 @@ def init_db() -> None:
                 2,
                 15,
                 1,
-                CPU_WARNING_THRESHOLD_PERCENT,
-                CPU_CRITICAL_THRESHOLD_PERCENT,
-                CPU_ALERT_WINDOW_REPORTS,
-                RAM_WARNING_THRESHOLD_PERCENT,
-                RAM_CRITICAL_THRESHOLD_PERCENT,
-                RAM_ALERT_WINDOW_REPORTS,
                 1 if TELEGRAM_ENABLED_DEFAULT else 0,
                 TELEGRAM_BOT_TOKEN_DEFAULT,
                 TELEGRAM_CHAT_ID_DEFAULT,
@@ -749,181 +529,6 @@ def init_db() -> None:
         conn.commit()
 
 
-def create_sqlite_backup_file(source_path: Path) -> tuple[Path, int]:
-    with tempfile.NamedTemporaryFile(
-        prefix="monitoring-backup-",
-        suffix=".db",
-        dir=source_path.parent,
-        delete=False,
-    ) as tmp:
-        temp_path = Path(tmp.name)
-
-    try:
-        with sqlite3.connect(f"file:{source_path}?mode=ro", uri=True) as source_conn:
-            with sqlite3.connect(temp_path) as backup_conn:
-                # Use incremental page copy to behave better under write load.
-                source_conn.backup(backup_conn, pages=1024, sleep=0.01)
-                backup_conn.commit()
-        size = temp_path.stat().st_size
-        return temp_path, int(size)
-    except Exception:
-        try:
-            temp_path.unlink()
-        except OSError:
-            pass
-        raise
-
-
-BACKUP_JOB_TTL_SEC = 30 * 60
-_BACKUP_JOBS_LOCK = threading.Lock()
-_BACKUP_JOBS: dict[str, dict[str, object]] = {}
-
-
-def _cleanup_backup_jobs_unlocked(now_ts: float) -> None:
-    expired_ids: list[str] = []
-    for job_id, job in _BACKUP_JOBS.items():
-        status = str(job.get("status", ""))
-        created_ts = float(job.get("created_ts", now_ts))
-        reference_ts = float(job.get("ready_ts", created_ts)) if status in {"ready", "error", "downloaded"} else created_ts
-        if now_ts - reference_ts <= BACKUP_JOB_TTL_SEC:
-            continue
-        backup_path = str(job.get("backup_path", "") or "")
-        if backup_path:
-            try:
-                Path(backup_path).unlink()
-            except OSError:
-                pass
-        expired_ids.append(job_id)
-
-    for job_id in expired_ids:
-        _BACKUP_JOBS.pop(job_id, None)
-
-
-def cleanup_backup_jobs() -> None:
-    with _BACKUP_JOBS_LOCK:
-        _cleanup_backup_jobs_unlocked(time.time())
-
-
-def start_database_backup_job() -> tuple[str, str]:
-    cleanup_backup_jobs()
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
-    version = re.sub(r"[^0-9A-Za-z._-]", "-", read_build_version())
-    filename = f"monitoring-backup-v{version}-{timestamp}.db"
-    job_id = secrets.token_urlsafe(16)
-
-    with _BACKUP_JOBS_LOCK:
-        _BACKUP_JOBS[job_id] = {
-            "job_id": job_id,
-            "status": "running",
-            "created_ts": time.time(),
-            "filename": filename,
-            "backup_size": 0,
-            "backup_path": "",
-            "error": "",
-        }
-
-    def worker() -> None:
-        try:
-            backup_path, backup_size = create_sqlite_backup_file(DB_PATH)
-        except Exception as exc:
-            logging.exception("Database backup job failed")
-            with _BACKUP_JOBS_LOCK:
-                job = _BACKUP_JOBS.get(job_id)
-                if job is not None:
-                    job["status"] = "error"
-                    job["error"] = str(exc).strip() or "database backup failed"
-                    job["ready_ts"] = time.time()
-            return
-
-        with _BACKUP_JOBS_LOCK:
-            job = _BACKUP_JOBS.get(job_id)
-            if job is None:
-                try:
-                    backup_path.unlink()
-                except OSError:
-                    pass
-                return
-            job["status"] = "ready"
-            job["backup_size"] = int(backup_size)
-            job["backup_path"] = str(backup_path)
-            job["ready_ts"] = time.time()
-
-    threading.Thread(target=worker, daemon=True, name=f"backup-job-{job_id[:8]}").start()
-    return job_id, filename
-
-
-def get_database_backup_job(job_id: str) -> dict[str, object] | None:
-    cleanup_backup_jobs()
-    with _BACKUP_JOBS_LOCK:
-        job = _BACKUP_JOBS.get(job_id)
-        return dict(job) if job is not None else None
-
-
-def mark_database_backup_job_downloaded(job_id: str) -> None:
-    with _BACKUP_JOBS_LOCK:
-        job = _BACKUP_JOBS.get(job_id)
-        if job is not None:
-            job["status"] = "downloaded"
-            job["ready_ts"] = time.time()
-            job["backup_path"] = ""
-
-
-def _unlink_wal_files(db_path: Path) -> None:
-    """Remove the -shm and -wal sidecar files for a SQLite database path."""
-    for suffix in ("-shm", "-wal"):
-        sidecar = db_path.with_suffix(db_path.suffix + suffix)
-        try:
-            sidecar.unlink()
-        except FileNotFoundError:
-            pass
-
-
-def restore_sqlite_from_bytes(dest_path: Path, data: bytes) -> None:
-    """Validate data is a SQLite file, then atomically replace dest_path.
-
-    WAL note: the integrity-check step opens the temp file and may create
-    <tmp>.db-shm / <tmp>.db-wal sidecars.  These are cleaned up before the
-    rename so they do not linger in the data directory.
-    After replacing the main .db file the old dest -shm/-wal files are also
-    removed so SQLite does not mistakenly replay a stale WAL on the new DB.
-    """
-    if not data.startswith(b"SQLite format 3\x00"):
-        raise ValueError("uploaded file is not a valid SQLite database")
-    if len(data) < 100:
-        raise ValueError("uploaded file is too small to be a valid database")
-
-    with tempfile.NamedTemporaryFile(
-        prefix="monitoring-restore-", suffix=".db",
-        dir=dest_path.parent, delete=False
-    ) as tmp:
-        tmp_path = Path(tmp.name)
-        tmp.write(data)
-
-    try:
-        # Verify the uploaded DB can be opened and read.
-        # This may create <tmp_path>-shm / <tmp_path>-wal sidecars.
-        with sqlite3.connect(tmp_path) as test_conn:
-            test_conn.execute("PRAGMA integrity_check").fetchone()
-
-        # Clean up WAL sidecars created by the integrity check before rename.
-        _unlink_wal_files(tmp_path)
-
-        # Atomic replace of the main DB file.
-        tmp_path.replace(dest_path)
-
-        # Remove stale WAL sidecars of the old database so SQLite does not
-        # try to replay the old WAL against the newly restored DB.
-        _unlink_wal_files(dest_path)
-
-    except Exception:
-        try:
-            tmp_path.unlink()
-        except OSError:
-            pass
-        _unlink_wal_files(tmp_path)
-        raise
-
-
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -964,829 +569,6 @@ def parse_payload_json(payload_json: str) -> dict:
     except json.JSONDecodeError:
         return {}
     return {}
-
-
-def ai_troubleshoot_enabled() -> bool:
-    return AI_TROUBLESHOOT_ENABLED_DEFAULT and bool(OPENAI_API_KEY)
-
-
-def _get_ai_settings_from_db(conn: sqlite3.Connection) -> dict:
-    """Return effective AI settings, preferring DB values over env-var defaults."""
-    row = conn.execute(
-        """
-        SELECT COALESCE(openai_api_key, ''), COALESCE(openai_model, ''),
-               COALESCE(openai_timeout_sec, 12), COALESCE(openai_max_tokens, 1200),
-               COALESCE(ai_troubleshoot_enabled, 1), COALESCE(ai_troubleshoot_cache_ttl_sec, 600)
-        FROM alarm_settings WHERE id = 1
-        """
-    ).fetchone()
-    if not row:
-        return {
-            "api_key": OPENAI_API_KEY,
-            "model": OPENAI_MODEL,
-            "timeout_sec": OPENAI_TIMEOUT_SEC,
-            "max_tokens": OPENAI_MAX_TOKENS,
-            "enabled": AI_TROUBLESHOOT_ENABLED_DEFAULT,
-            "cache_ttl_sec": AI_TROUBLESHOOT_CACHE_TTL_SEC,
-        }
-    db_key = str(row[0] or "").strip()
-    db_model = str(row[1] or "").strip()
-    return {
-        "api_key": db_key or OPENAI_API_KEY,
-        "model": db_model or OPENAI_MODEL,
-        "timeout_sec": max(3, min(int(row[2] or OPENAI_TIMEOUT_SEC), 60)),
-        "max_tokens": max(256, min(int(row[3] or OPENAI_MAX_TOKENS), 4000)),
-        "enabled": bool(row[4]) if row[4] is not None else AI_TROUBLESHOOT_ENABLED_DEFAULT,
-        "cache_ttl_sec": max(30, min(int(row[5] or AI_TROUBLESHOOT_CACHE_TTL_SEC), 3600)),
-    }
-
-
-def _ai_cache_get(cache_key: str) -> dict | None:
-    now_ts = time.time()
-    with _AI_TROUBLESHOOT_CACHE_LOCK:
-        hit = _AI_TROUBLESHOOT_CACHE.get(cache_key)
-        if not hit:
-            return None
-        expires_at, payload = hit
-        if expires_at <= now_ts:
-            _AI_TROUBLESHOOT_CACHE.pop(cache_key, None)
-            return None
-        return payload
-
-
-def _ai_cache_set(cache_key: str, payload: dict) -> None:
-    now_ts = time.time()
-    with _AI_TROUBLESHOOT_CACHE_LOCK:
-        _AI_TROUBLESHOOT_CACHE[cache_key] = (now_ts + AI_TROUBLESHOOT_CACHE_TTL_SEC, payload)
-        if len(_AI_TROUBLESHOOT_CACHE) <= AI_TROUBLESHOOT_CACHE_MAX_ITEMS:
-            return
-        expired_keys = [key for key, value in _AI_TROUBLESHOOT_CACHE.items() if value[0] <= now_ts]
-        for key in expired_keys:
-            _AI_TROUBLESHOOT_CACHE.pop(key, None)
-        if len(_AI_TROUBLESHOOT_CACHE) <= AI_TROUBLESHOOT_CACHE_MAX_ITEMS:
-            return
-        for key, _value in sorted(_AI_TROUBLESHOOT_CACHE.items(), key=lambda item: item[1][0])[: max(1, len(_AI_TROUBLESHOOT_CACHE) - AI_TROUBLESHOOT_CACHE_MAX_ITEMS)]:
-            _AI_TROUBLESHOOT_CACHE.pop(key, None)
-
-
-def _safe_sample_series(points: list[dict], max_points: int = 36) -> list[dict]:
-    if len(points) <= max_points:
-        return points
-    if max_points <= 2:
-        return [points[0], points[-1]]
-    step = (len(points) - 1) / float(max_points - 1)
-    sampled: list[dict] = []
-    for idx in range(max_points):
-        source_idx = int(round(idx * step))
-        source_idx = max(0, min(source_idx, len(points) - 1))
-        sampled.append(points[source_idx])
-    return sampled
-
-
-_HANA_PROCESS_RE = re.compile(
-    r"\b(hdbindexserver|hdbnameserver|hdbscriptserver|hdbxsengine|hdbcompileserver"
-    r"|hdbpreprocessor|hdbwebdispatcher|hdbdaemon|hdbrsutil|sapstartsrv"
-    r"|hdb[a-z0-9_-]+)\b"
-)
-
-_SAP_B1_VERSION_MAP_PATH = DATA_DIR / "sap_b1_version_map.json"
-
-def _load_sap_b1_version_map() -> dict[str, dict[str, str]]:
-    """Load SAP B1 version map from JSON file; fall back to built-in dict."""
-    try:
-        entries = json.loads(_SAP_B1_VERSION_MAP_PATH.read_text(encoding="utf-8"))
-        return {str(e["build"]): {k: str(v) for k, v in e.items() if k != "build"} for e in entries if "build" in e}
-    except Exception:
-        return dict(_SAP_B1_BUILD_TO_FP)
-
-
-def _save_sap_b1_version_map(entries: list[dict]) -> None:
-    """Persist SAP B1 version map to JSON file and reload the in-memory dict."""
-    global _SAP_B1_BUILD_TO_FP
-    sorted_entries = sorted(entries, key=lambda e: str(e.get("build", "")), reverse=True)
-    _SAP_B1_VERSION_MAP_PATH.write_text(json.dumps(sorted_entries, ensure_ascii=False, indent=2), encoding="utf-8")
-    _SAP_B1_BUILD_TO_FP = {str(e["build"]): {k: str(v) for k, v in e.items() if k != "build"} for e in sorted_entries if "build" in e}
-
-
-_SAP_B1_BUILD_TO_FP: dict[str, dict[str, str]] = {
-    "10.00.320": {"feature_pack": "FP 2602", "patch_level": "PL 22", "release_date": "Feb 2026"},
-    "10.00.310": {"feature_pack": "FP 2511", "patch_level": "PL 21", "release_date": "Nov 2025"},
-    "10.00.300": {"feature_pack": "FP 2508", "patch_level": "PL 20", "release_date": "Aug 2025"},
-    "10.00.291": {"feature_pack": "FP 2505 HF1", "patch_level": "PL 19", "release_date": "Jun 2025"},
-    "10.00.290": {"feature_pack": "FP 2505", "patch_level": "PL 19", "release_date": "May 2025"},
-    "10.00.280": {"feature_pack": "FP 2502", "patch_level": "PL 18", "release_date": "Feb 2025"},
-    "10.00.270": {"feature_pack": "FP 2411", "patch_level": "PL 17", "release_date": "Nov 2024"},
-    "10.00.261": {"feature_pack": "FP 2408 HF1", "patch_level": "PL 16 HF1", "release_date": "Okt 2024"},
-    "10.00.260": {"feature_pack": "FP 2408", "patch_level": "PL 16", "release_date": "Aug 2024"},
-    "10.00.250": {"feature_pack": "FP 2405", "patch_level": "PL 15", "release_date": "May 2024"},
-    "10.00.240": {"feature_pack": "FP 2402", "patch_level": "PL 14", "release_date": "Feb 2024"},
-    "10.00.230": {"feature_pack": "FP 2311", "patch_level": "PL 13", "release_date": "Nov 2023"},
-    "10.00.220": {"feature_pack": "FP 2308", "patch_level": "PL 12", "release_date": "Aug 2023"},
-    "10.00.210": {"feature_pack": "FP 2305", "patch_level": "PL 11", "release_date": "May 2023"},
-    "10.00.180": {"feature_pack": "FP 2208", "patch_level": "PL 08", "release_date": "Aug 2022"},
-}
-
-# Overwrite with persisted version if the JSON file exists
-_SAP_B1_BUILD_TO_FP = _load_sap_b1_version_map()
-
-
-def _detect_hana_processes(payload: dict) -> bool:
-    top_block = payload.get("top_processes", {})
-    if isinstance(top_block, dict):
-        entries = top_block.get("entries", [])
-        if isinstance(entries, list):
-            for entry in entries:
-                if not isinstance(entry, dict):
-                    continue
-                cmd = str(entry.get("command", "") or entry.get("name", "") or "").lower()
-                if _HANA_PROCESS_RE.search(cmd):
-                    return True
-    # Fallback: scan entire serialized payload (catches any nested structure)
-    serialized = json.dumps(payload, ensure_ascii=False).lower()
-    return bool(_HANA_PROCESS_RE.search(serialized))
-
-
-def _extract_sap_b1_info(payload: dict, has_hana: bool) -> dict:
-    sap_block = payload.get("sap_business_one", {})
-    if not isinstance(sap_block, dict):
-        return {}
-    version_block = sap_block.get("server_components_version", {})
-    if not isinstance(version_block, dict):
-        return {}
-
-    version_text = str(version_block.get("version", "") or "").strip()
-    raw_output = str(version_block.get("raw_output", "") or "").strip()
-    match = re.search(r"(10\.00\.\d{3})\s+(PL\s*\d{1,2})", version_text, re.IGNORECASE)
-    build = match.group(1) if match else ""
-    patch_level = re.sub(r"\s+", " ", match.group(2)).upper() if match else ""
-    mapping = _SAP_B1_BUILD_TO_FP.get(build, {})
-
-    if has_hana and build:
-        landscape_status = "fits_hana_landscape"
-    elif has_hana:
-        landscape_status = "hana_detected_b1_version_missing"
-    elif build:
-        landscape_status = "b1_version_present_no_hana_processes"
-    else:
-        landscape_status = "not_detected"
-
-    return {
-        "version": version_text,
-        "raw_output": raw_output,
-        "build": build,
-        "patch_level": patch_level or str(mapping.get("patch_level", "") or ""),
-        "feature_pack": str(mapping.get("feature_pack", "") or ""),
-        "release_date": str(mapping.get("release_date", "") or ""),
-        "landscape_status": landscape_status,
-    }
-
-
-def _collect_top_commands(payload: dict, limit: int = 5) -> list[str]:
-    top_block = payload.get("top_processes", {})
-    if not isinstance(top_block, dict):
-        return []
-    entries = top_block.get("entries", [])
-    if not isinstance(entries, list):
-        return []
-    commands: list[str] = []
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        cmd = str(entry.get("command", "") or entry.get("name", "") or "").strip()
-        if not cmd:
-            continue
-        commands.append(cmd)
-        if len(commands) >= limit:
-            break
-    return commands
-
-
-def _collect_top_processes_detail(payload: dict, limit: int = 10) -> list[dict]:
-    """Return structured top-process list with cpu/mem for the AI context."""
-    top_block = payload.get("top_processes", {})
-    if not isinstance(top_block, dict):
-        return []
-    entries = top_block.get("entries", [])
-    if not isinstance(entries, list):
-        return []
-    result: list[dict] = []
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        name = str(entry.get("name", "") or entry.get("command", "") or "").strip()
-        cmd = str(entry.get("command", "") or name).strip()
-        # Truncate long command lines for token efficiency
-        if len(cmd) > 120:
-            cmd = cmd[:120] + "…"
-        try:
-            cpu = round(float(entry.get("cpu_percent", 0) or 0), 1)
-        except (TypeError, ValueError):
-            cpu = 0.0
-        try:
-            mem = round(float(entry.get("memory_percent", 0) or 0), 1)
-        except (TypeError, ValueError):
-            mem = 0.0
-        try:
-            rss_mb = round(int(entry.get("rss_kb", 0) or 0) / 1024, 1)
-        except (TypeError, ValueError):
-            rss_mb = 0.0
-        if not name and not cmd:
-            continue
-        result.append({
-            "name": name[:80],
-            "command": cmd,
-            "cpu_percent": cpu,
-            "mem_percent": mem,
-            "rss_mb": rss_mb,
-        })
-        if len(result) >= limit:
-            break
-    return result
-
-
-def _collect_hana_process_details(payload: dict) -> list[dict]:
-    """Return HANA-specific processes with their resource usage."""
-    top_block = payload.get("top_processes", {})
-    if not isinstance(top_block, dict):
-        return []
-    entries = top_block.get("entries", [])
-    if not isinstance(entries, list):
-        return []
-    hana_procs: list[dict] = []
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        name = str(entry.get("name", "") or "").lower()
-        cmd = str(entry.get("command", "") or "").lower()
-        if not (_HANA_PROCESS_RE.search(name) or _HANA_PROCESS_RE.search(cmd)):
-            continue
-        try:
-            cpu = round(float(entry.get("cpu_percent", 0) or 0), 1)
-        except (TypeError, ValueError):
-            cpu = 0.0
-        try:
-            mem = round(float(entry.get("memory_percent", 0) or 0), 1)
-        except (TypeError, ValueError):
-            mem = 0.0
-        try:
-            rss_mb = round(int(entry.get("rss_kb", 0) or 0) / 1024, 1)
-        except (TypeError, ValueError):
-            rss_mb = 0.0
-        hana_procs.append({
-            "name": str(entry.get("name", "") or "").strip()[:80],
-            "cpu_percent": cpu,
-            "mem_percent": mem,
-            "rss_mb": rss_mb,
-        })
-    return hana_procs
-
-
-def _collect_filesystem_trends_for_ai(rows: list[tuple], hours: int) -> list[dict]:
-    fs_by_mountpoint: dict[str, list[dict]] = {}
-    fs_total_kb_by_mountpoint: dict[str, float] = {}
-
-    for row in rows:
-        ts = str(row[0] or "")
-        payload = parse_payload_json(str(row[1] or "{}"))
-        filesystems = payload.get("filesystems", [])
-        if not isinstance(filesystems, list):
-            continue
-
-        for fs in filesystems:
-            if not isinstance(fs, dict):
-                continue
-            mountpoint = str(fs.get("mountpoint", "") or "").strip()
-            if not mountpoint:
-                continue
-            try:
-                used_percent = float(fs.get("used_percent"))
-            except (TypeError, ValueError):
-                continue
-            used_percent = max(0.0, min(used_percent, 100.0))
-
-            total_kb_value = fs.get("blocks", fs.get("total_kb", fs.get("size_total_kb")))
-            try:
-                total_kb = float(total_kb_value)
-            except (TypeError, ValueError):
-                total_kb = None
-            if total_kb is not None and total_kb >= 0:
-                fs_total_kb_by_mountpoint[mountpoint] = total_kb
-
-            fs_by_mountpoint.setdefault(mountpoint, []).append(
-                {
-                    "time_utc": ts,
-                    "used_percent": used_percent,
-                }
-            )
-
-    trends: list[dict] = []
-    hours_safe = max(1, int(hours or 1))
-    for mountpoint, points in fs_by_mountpoint.items():
-        if not points:
-            continue
-        values = [float(point.get("used_percent", 0.0) or 0.0) for point in points]
-        first_value = values[0]
-        last_value = values[-1]
-        delta_value = last_value - first_value
-        total_kb = fs_total_kb_by_mountpoint.get(mountpoint)
-        used_kb = (total_kb * last_value / 100.0) if total_kb is not None else None
-
-        trends.append(
-            {
-                "mountpoint": mountpoint,
-                "sample_count": len(values),
-                "total_kb": total_kb,
-                "used_kb": used_kb,
-                "current_used_percent": last_value,
-                "min_used_percent": min(values),
-                "max_used_percent": max(values),
-                "avg_used_percent": (sum(values) / len(values)) if values else 0.0,
-                "delta_used_percent": delta_value,
-                "growth_percent_per_day": delta_value * 24.0 / hours_safe,
-            }
-        )
-
-    trends.sort(key=lambda item: float(item.get("current_used_percent", 0.0) or 0.0), reverse=True)
-    return trends
-
-
-def _compact_filesystem_for_prompt(items: list[dict], limit: int = 36) -> list[dict]:
-    compacted: list[dict] = []
-    for item in items[:limit]:
-        if not isinstance(item, dict):
-            continue
-        compacted.append(
-            {
-                "mountpoint": str(item.get("mountpoint", "") or "")[:80],
-                "current_used_percent": round(float(item.get("current_used_percent", 0.0) or 0.0), 1),
-                "delta_used_percent": round(float(item.get("delta_used_percent", 0.0) or 0.0), 1),
-                "growth_percent_per_day": round(float(item.get("growth_percent_per_day", 0.0) or 0.0), 1),
-                "total_kb": float(item.get("total_kb", 0.0) or 0.0),
-                "used_kb": float(item.get("used_kb", 0.0) or 0.0),
-                "sample_count": int(item.get("sample_count", 0) or 0),
-            }
-        )
-    return compacted
-
-
-def _compact_ai_context_for_prompt(context_payload: dict) -> dict:
-    """Shrink large context payloads to avoid OpenAI timeout on oversized requests."""
-    compact: dict = {
-        "hostname": context_payload.get("hostname", ""),
-        "metric": context_payload.get("metric", ""),
-        "metric_label": context_payload.get("metric_label", ""),
-        "window_hours": context_payload.get("window_hours", 24),
-        "report_count": context_payload.get("report_count", 0),
-        "latest_report_time_utc": context_payload.get("latest_report_time_utc", ""),
-        "operating_system": context_payload.get("operating_system", ""),
-        "os_family": context_payload.get("os_family", "linux"),
-        "has_hana_processes": context_payload.get("has_hana_processes", False),
-        "metric_summary": context_payload.get("metric_summary", {}),
-        "open_alerts": list(context_payload.get("open_alerts", []))[:8],
-        "top_processes": list(context_payload.get("top_processes", []))[:8],
-        "hana_processes": list(context_payload.get("hana_processes", []))[:12],
-        "sap_business_one": context_payload.get("sap_business_one", {}),
-    }
-
-    correlated = context_payload.get("correlated_series", {})
-    if isinstance(correlated, dict):
-        compact["correlated_series"] = {
-            "cpu_usage_percent": _safe_sample_series(list(correlated.get("cpu_usage_percent", [])), max_points=18),
-            "load_avg_1": _safe_sample_series(list(correlated.get("load_avg_1", [])), max_points=18),
-            "memory_used_percent": _safe_sample_series(list(correlated.get("memory_used_percent", [])), max_points=18),
-            "swap_used_percent": _safe_sample_series(list(correlated.get("swap_used_percent", [])), max_points=18),
-        }
-
-    metric = str(context_payload.get("metric", "") or "")
-    if metric == "filesystem":
-        fs_all = context_payload.get("filesystem_trends", [])
-        if not isinstance(fs_all, list):
-            fs_all = []
-        # Keep the prompt compact but still broad: top-full + top-growth + HANA mountpoints.
-        by_full = sorted(fs_all, key=lambda item: float((item or {}).get("current_used_percent", 0.0) or 0.0), reverse=True)
-        by_growth = sorted(fs_all, key=lambda item: float((item or {}).get("delta_used_percent", 0.0) or 0.0), reverse=True)
-        hana_related = [
-            item for item in fs_all
-            if isinstance(item, dict) and str(item.get("mountpoint", "") or "").lower().startswith("/hana/")
-        ]
-        merged: list[dict] = []
-        seen_mounts: set[str] = set()
-        for bucket in (hana_related, by_full[:18], by_growth[:18]):
-            for item in bucket:
-                if not isinstance(item, dict):
-                    continue
-                mount = str(item.get("mountpoint", "") or "")
-                if not mount or mount in seen_mounts:
-                    continue
-                seen_mounts.add(mount)
-                merged.append(item)
-                if len(merged) >= 36:
-                    break
-            if len(merged) >= 36:
-                break
-        compact["filesystem_trends"] = _compact_filesystem_for_prompt(merged, limit=36)
-        compact["top_full_filesystems"] = _compact_filesystem_for_prompt(by_full, limit=12)
-        compact["top_growth_filesystems"] = _compact_filesystem_for_prompt(by_growth, limit=12)
-    else:
-        compact["metric_series"] = _safe_sample_series(list(context_payload.get("metric_series", [])), max_points=24)
-
-    return compact
-
-
-def _mini_ai_context_for_prompt(context_payload: dict) -> dict:
-    """Emergency context for timeout retry: keep only highest-signal fields."""
-    metric = str(context_payload.get("metric", "") or "")
-    compact: dict = {
-        "hostname": context_payload.get("hostname", ""),
-        "metric": metric,
-        "metric_label": context_payload.get("metric_label", ""),
-        "window_hours": context_payload.get("window_hours", 24),
-        "latest_report_time_utc": context_payload.get("latest_report_time_utc", ""),
-        "os_family": context_payload.get("os_family", "linux"),
-        "has_hana_processes": context_payload.get("has_hana_processes", False),
-        "metric_summary": context_payload.get("metric_summary", {}),
-        "hana_processes": list(context_payload.get("hana_processes", []))[:8],
-        "sap_business_one": context_payload.get("sap_business_one", {}),
-        "top_processes": list(context_payload.get("top_processes", []))[:5],
-        "open_alerts": list(context_payload.get("open_alerts", []))[:5],
-    }
-
-    if metric == "filesystem":
-        fs_all = context_payload.get("filesystem_trends", [])
-        if not isinstance(fs_all, list):
-            fs_all = []
-        by_full = sorted(fs_all, key=lambda item: float((item or {}).get("current_used_percent", 0.0) or 0.0), reverse=True)
-        by_growth = sorted(fs_all, key=lambda item: float((item or {}).get("delta_used_percent", 0.0) or 0.0), reverse=True)
-        hana_related = [
-            item for item in fs_all
-            if isinstance(item, dict) and str(item.get("mountpoint", "") or "").lower().startswith("/hana/")
-        ]
-        merged: list[dict] = []
-        seen_mounts: set[str] = set()
-        for bucket in (hana_related, by_full[:8], by_growth[:8]):
-            for item in bucket:
-                if not isinstance(item, dict):
-                    continue
-                mount = str(item.get("mountpoint", "") or "")
-                if not mount or mount in seen_mounts:
-                    continue
-                seen_mounts.add(mount)
-                merged.append(item)
-                if len(merged) >= 12:
-                    break
-            if len(merged) >= 12:
-                break
-        compact["filesystem_trends"] = _compact_filesystem_for_prompt(merged, limit=12)
-    else:
-        compact["metric_series"] = _safe_sample_series(list(context_payload.get("metric_series", [])), max_points=10)
-        correlated = context_payload.get("correlated_series", {})
-        if isinstance(correlated, dict):
-            compact["correlated_series"] = {
-                "cpu_usage_percent": _safe_sample_series(list(correlated.get("cpu_usage_percent", [])), max_points=10),
-                "memory_used_percent": _safe_sample_series(list(correlated.get("memory_used_percent", [])), max_points=10),
-                "swap_used_percent": _safe_sample_series(list(correlated.get("swap_used_percent", [])), max_points=10),
-            }
-
-    return compact
-
-
-def _is_timeout_exception(exc: Exception) -> bool:
-    text = str(exc or "").lower()
-    return "timed out" in text or "timeout" in text
-
-
-def _collect_ai_metric_context(conn: sqlite3.Connection, hostname: str, metric: str, hours: int) -> dict:
-    metric_map = {
-        "cpu_usage_percent": ("CPU", ("cpu", "usage_percent")),
-        "memory_used_percent": ("RAM", ("memory", "used_percent")),
-        "swap_used_percent": ("SWAP", ("swap", "used_percent")),
-        "filesystem": ("Filesystem (alle Mountpoints)", None),
-    }
-    metric_entry = metric_map.get(metric)
-    if metric_entry is None:
-        raise ValueError("unsupported metric")
-
-    cutoff_iso = utc_hours_ago_iso(hours)
-    rows = conn.execute(
-        """
-        SELECT received_at_utc, payload_json
-        FROM reports
-        WHERE hostname = ? AND received_at_utc >= ?
-        ORDER BY id ASC
-        """,
-        (hostname, cutoff_iso),
-    ).fetchall()
-
-    latest_row = conn.execute(
-        """
-        SELECT received_at_utc, payload_json
-        FROM reports
-        WHERE hostname = ?
-        ORDER BY id DESC
-        LIMIT 1
-        """,
-        (hostname,),
-    ).fetchone()
-
-    if not latest_row:
-        raise ValueError("host has no reports")
-
-    latest_payload = parse_payload_json(str(latest_row[1] or "{}"))
-    metric_label, metric_path = metric_entry
-    values: list[float] = []
-    series: list[dict] = []
-    cpu_series: list[dict] = []
-    load_series: list[dict] = []
-    memory_series: list[dict] = []
-    swap_series: list[dict] = []
-
-    for row in rows:
-        payload = parse_payload_json(str(row[1] or "{}"))
-        ts = str(row[0] or "")
-        if metric_path:
-            current_value = get_nested_number(payload, metric_path[0], metric_path[1])
-            if current_value is not None:
-                numeric = float(current_value)
-                values.append(numeric)
-                series.append({"time_utc": ts, "value": numeric})
-
-        cpu_value = get_nested_number(payload, "cpu", "usage_percent")
-        if cpu_value is not None:
-            cpu_series.append({"time_utc": ts, "value": float(cpu_value)})
-        load_value = get_nested_number(payload, "cpu", "load_avg_1")
-        if load_value is not None:
-            load_series.append({"time_utc": ts, "value": float(load_value)})
-        mem_value = get_nested_number(payload, "memory", "used_percent")
-        if mem_value is not None:
-            memory_series.append({"time_utc": ts, "value": float(mem_value)})
-        swap_value = get_nested_number(payload, "swap", "used_percent")
-        if swap_value is not None:
-            swap_series.append({"time_utc": ts, "value": float(swap_value)})
-
-    filesystem_trends: list[dict] = []
-    top_growth_filesystems: list[dict] = []
-    top_full_filesystems: list[dict] = []
-
-    if metric == "filesystem":
-        filesystem_trends = _collect_filesystem_trends_for_ai(rows, hours)
-        if not filesystem_trends:
-            raise ValueError("filesystem metric has no usable points")
-        top_growth_filesystems = sorted(
-            filesystem_trends,
-            key=lambda item: float(item.get("delta_used_percent", 0.0) or 0.0),
-            reverse=True,
-        )[:12]
-        top_full_filesystems = sorted(
-            filesystem_trends,
-            key=lambda item: float(item.get("current_used_percent", 0.0) or 0.0),
-            reverse=True,
-        )[:12]
-        metric_summary = {
-            "mountpoint_count": len(filesystem_trends),
-            "highest_used_percent": max(float(item.get("current_used_percent", 0.0) or 0.0) for item in filesystem_trends),
-            "largest_growth_percent": max(float(item.get("delta_used_percent", 0.0) or 0.0) for item in filesystem_trends),
-            "critical_mountpoints": sum(1 for item in filesystem_trends if float(item.get("current_used_percent", 0.0) or 0.0) >= 90.0),
-        }
-    else:
-        metric_summary = summarize_numeric_series(values)
-        if not metric_summary:
-            raise ValueError("metric has no usable points")
-
-    os_name = str(latest_payload.get("os", "") or "")
-    os_family = normalize_os_family(os_name)
-    has_hana = _detect_hana_processes(latest_payload)
-    top_processes = _collect_top_processes_detail(latest_payload, limit=10)
-    hana_processes = _collect_hana_process_details(latest_payload) if has_hana else []
-    sap_b1_info = _extract_sap_b1_info(latest_payload, has_hana)
-
-    open_alerts_rows = conn.execute(
-        """
-        SELECT mountpoint, severity, used_percent, created_at_utc
-        FROM alerts
-        WHERE hostname = ? AND status = 'open'
-        ORDER BY id DESC
-        LIMIT 8
-        """,
-        (hostname,),
-    ).fetchall()
-    open_alerts = [
-        {
-            "mountpoint": str(row[0] or ""),
-            "severity": str(row[1] or ""),
-            "used_percent": float(row[2] or 0.0),
-            "created_at_utc": str(row[3] or ""),
-        }
-        for row in open_alerts_rows
-    ]
-
-    return {
-        "hostname": hostname,
-        "metric": metric,
-        "metric_label": metric_label,
-        "window_hours": hours,
-        "cutoff_utc": cutoff_iso,
-        "report_count": len(rows),
-        "latest_report_time_utc": str(latest_row[0] or ""),
-        "operating_system": os_name,
-        "os_family": os_family,
-        "has_hana_processes": has_hana,
-        "top_processes": top_processes,
-        "hana_processes": hana_processes,
-        "sap_business_one": sap_b1_info,
-        "metric_summary": metric_summary,
-        "metric_series": _safe_sample_series(series),
-        "filesystem_trends": filesystem_trends,
-        "top_growth_filesystems": top_growth_filesystems,
-        "top_full_filesystems": top_full_filesystems,
-        "correlated_series": {
-            "cpu_usage_percent": _safe_sample_series(cpu_series),
-            "load_avg_1": _safe_sample_series(load_series),
-            "memory_used_percent": _safe_sample_series(memory_series),
-            "swap_used_percent": _safe_sample_series(swap_series),
-        },
-        "open_alerts": open_alerts,
-    }
-
-
-def _normalize_ai_response(value: dict, fallback_text: str = "") -> dict:
-    summary = str(value.get("summary", "") or "").strip()
-    if not summary and fallback_text:
-        summary = fallback_text.strip()
-    if not summary:
-        summary = "Keine KI-Analyse verfuegbar."
-
-    probable_causes = value.get("probable_causes", [])
-    if not isinstance(probable_causes, list):
-        probable_causes = []
-    probable_causes = [str(item).strip() for item in probable_causes if str(item).strip()][:8]
-
-    recommended_steps = value.get("recommended_steps", [])
-    if not isinstance(recommended_steps, list):
-        recommended_steps = []
-    recommended_steps = [str(item).strip() for item in recommended_steps if str(item).strip()][:10]
-
-    quick_checks = value.get("quick_checks", [])
-    if not isinstance(quick_checks, list):
-        quick_checks = []
-    quick_checks = [str(item).strip() for item in quick_checks if str(item).strip()][:8]
-
-    code_snippets_raw = value.get("code_snippets", [])
-    if not isinstance(code_snippets_raw, list):
-        code_snippets_raw = []
-    code_snippets: list[dict] = []
-    for item in code_snippets_raw:
-        if not isinstance(item, dict):
-            continue
-        command = str(item.get("command", "") or "").strip()
-        if not command:
-            continue
-        code_snippets.append(
-            {
-                "title": str(item.get("title", "Befehl") or "Befehl").strip()[:120],
-                "shell": str(item.get("shell", "bash") or "bash").strip()[:32],
-                "command": command[:3000],
-                "description": str(item.get("description", "") or "").strip()[:500],
-            }
-        )
-        if len(code_snippets) >= 8:
-            break
-
-    severity = str(value.get("severity", "info") or "info").strip().lower()
-    if severity not in {"info", "warning", "critical"}:
-        severity = "info"
-
-    confidence = str(value.get("confidence", "mittel") or "mittel").strip().lower()
-    if confidence not in {"niedrig", "mittel", "hoch"}:
-        confidence = "mittel"
-
-    notes = value.get("notes", [])
-    if not isinstance(notes, list):
-        notes = []
-    notes = [str(item).strip() for item in notes if str(item).strip()][:6]
-
-    return {
-        "summary": summary,
-        "severity": severity,
-        "confidence": confidence,
-        "probable_causes": probable_causes,
-        "recommended_steps": recommended_steps,
-        "quick_checks": quick_checks,
-        "code_snippets": code_snippets,
-        "notes": notes,
-    }
-
-
-def _openai_troubleshoot(context_payload: dict, ai_settings: dict | None = None) -> dict:
-    if ai_settings is None:
-        ai_settings = {
-            "api_key": OPENAI_API_KEY,
-            "model": OPENAI_MODEL,
-            "timeout_sec": OPENAI_TIMEOUT_SEC,
-            "max_tokens": OPENAI_MAX_TOKENS,
-        }
-    prompt_context = _compact_ai_context_for_prompt(context_payload)
-    context_json = json.dumps(prompt_context, ensure_ascii=False)
-    prompt_system = (
-        "Du bist ein erfahrener SRE fuer Monitoring-Troubleshooting. "
-        "Antwort ausschliesslich als JSON-Objekt ohne Markdown-Formatierung. "
-        "Ausgabeformat: "
-        "{"
-        "\"summary\": string,"
-        "\"severity\": \"info\"|\"warning\"|\"critical\","
-        "\"confidence\": \"niedrig\"|\"mittel\"|\"hoch\","
-        "\"probable_causes\": string[],"
-        "\"recommended_steps\": string[],"
-        "\"quick_checks\": string[],"
-        "\"code_snippets\": [{\"title\": string, \"shell\": \"bash\"|\"powershell\", \"command\": string, \"description\": string}],"
-        "\"notes\": string[]"
-        "}. "
-        "Regeln: "
-        "1. Antwort kurz, konkret und operations-tauglich. "
-        "2. Codeschnipsel muessen direkt kopierbar sein. Liefere 4-8 Codeschnipsel. "
-        "3. Betriebssystem beachten: Linux=bash, Windows=powershell. "
-        "4. Wenn has_hana_processes=true: Analysiere die hana_processes-Liste mit cpu_percent/mem_percent/rss_mb. "
-        "   Liefere mindestens 3 HANA-spezifische Codeschnipsel (z.B. hdbcons, hdbsql, sapcontrol, HDB info). "
-        "   Erklaere welche HANA-Prozesse auffaellig viel Ressourcen verbrauchen. "
-        "5. Wenn top_processes vorhanden: Benenne die Top-Verursacher namentlich in probable_causes. "
-        "   Wenn sap_business_one.version vorhanden ist, beruecksichtige Build, Patch Level, Feature Pack und Release Date in der Analyse. "
-        "6. Wenn metric=filesystem: Bewerte alle filesystem_trends inkl. Wachstum (delta/growth_percent_per_day), "
-        "   aktuelle Groesse (total_kb) und Auslastung je Mountpoint. Beruecksichtige besonders /hana/data und /hana/log, "
-        "   nenne proaktive HANA-Massnahmen, bevor ein Filesystem voll laeuft."
-    )
-    def _perform_request(context_text: str, *, max_tokens: int, timeout_sec: int) -> str:
-        body = {
-            "model": ai_settings["model"],
-            "temperature": 0.2,
-            "max_tokens": max_tokens,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {"role": "system", "content": prompt_system},
-                {
-                    "role": "user",
-                    "content": (
-                        "Analysiere diese Host-Metrik fuer Troubleshooting. "
-                        "Fokussiere auf die Zielmetrik, nutze korrelierte Metriken, top_processes, hana_processes und offene Alerts. "
-                        "Kontext JSON:\n" + context_text
-                    ),
-                },
-            ],
-        }
-        req = request.Request(
-            "https://api.openai.com/v1/chat/completions",
-            data=json.dumps(body).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {ai_settings['api_key']}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-        with request.urlopen(req, timeout=timeout_sec) as response:
-            return response.read().decode("utf-8", errors="replace")
-
-    request_timeout = max(3, int(ai_settings["timeout_sec"] or 12))
-    if str(context_payload.get("metric", "") or "") == "filesystem":
-        # Filesystem AI prompt is larger; use a higher floor to avoid read timeouts.
-        request_timeout = max(request_timeout, 25)
-
-    try:
-        raw = _perform_request(context_json, max_tokens=int(ai_settings["max_tokens"]), timeout_sec=request_timeout)
-    except error.HTTPError as exc:
-        details = exc.read().decode("utf-8", errors="replace")[:400]
-        raise RuntimeError(f"OpenAI HTTP {exc.code}: {details}")
-    except Exception as exc:
-        if _is_timeout_exception(exc):
-            try:
-                mini_context_json = json.dumps(_mini_ai_context_for_prompt(context_payload), ensure_ascii=False)
-                raw = _perform_request(
-                    mini_context_json,
-                    max_tokens=max(512, min(int(ai_settings["max_tokens"]), 900)),
-                    timeout_sec=max(request_timeout, 35),
-                )
-            except error.HTTPError as retry_exc:
-                details = retry_exc.read().decode("utf-8", errors="replace")[:400]
-                raise RuntimeError(f"OpenAI HTTP {retry_exc.code} (mini-context retry): {details}")
-            except Exception as retry_exc:
-                raise RuntimeError(f"OpenAI request failed after mini-context retry: {retry_exc}")
-        else:
-            raise RuntimeError(f"OpenAI request failed: {exc}")
-
-    try:
-        parsed = json.loads(raw)
-        content = str(parsed.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()
-    except Exception:
-        content = ""
-
-    if not content:
-        raise RuntimeError("OpenAI returned empty content")
-
-    try:
-        structured = json.loads(content)
-        if not isinstance(structured, dict):
-            structured = {}
-    except Exception:
-        structured = {"summary": content}
-
-    return _normalize_ai_response(structured, fallback_text=content)
 
 
 def hash_password(password: str, salt_hex: str) -> str:
@@ -1835,13 +617,11 @@ def list_active_web_sessions(conn: sqlite3.Connection) -> list[dict]:
     )
     rows = conn.execute(
         """
-        SELECT s.username, COUNT(*) AS session_count, MAX(s.last_activity_at_utc) AS latest_activity_at_utc,
-               COALESCE(u.display_name, '')
-        FROM web_sessions s
-        LEFT JOIN web_users u ON u.username = s.username
-        WHERE s.last_activity_at_utc > ?
-        GROUP BY s.username
-        ORDER BY s.username COLLATE NOCASE ASC
+        SELECT username, COUNT(*) AS session_count, MAX(last_activity_at_utc) AS latest_activity_at_utc
+        FROM web_sessions
+        WHERE last_activity_at_utc > ?
+        GROUP BY username
+        ORDER BY username COLLATE NOCASE ASC
         """,
         (one_hour_ago_iso,),
     ).fetchall()
@@ -1850,7 +630,6 @@ def list_active_web_sessions(conn: sqlite3.Connection) -> list[dict]:
             "username": str(row[0] or ""),
             "session_count": int(row[1] or 0),
             "latest_activity_at_utc": str(row[2] or ""),
-            "display_name": str(row[3] or ""),
         }
         for row in rows
         if str(row[0] or "").strip()
@@ -1952,7 +731,7 @@ def get_web_user(conn: sqlite3.Connection, username: str) -> dict | None:
     row = conn.execute(
         """
         SELECT username, password_hash, password_salt, COALESCE(is_admin, 0), COALESCE(is_disabled, 0),
-               COALESCE(created_at_utc, ''), updated_at_utc, COALESCE(display_name, '')
+               COALESCE(created_at_utc, ''), updated_at_utc
         FROM web_users
         WHERE username = ?
         """,
@@ -1968,7 +747,6 @@ def get_web_user(conn: sqlite3.Connection, username: str) -> dict | None:
         "is_disabled": bool(int(row[4] or 0)),
         "created_at_utc": str(row[5] or ""),
         "updated_at_utc": str(row[6] or ""),
-        "display_name": str(row[7] or ""),
     }
 
 
@@ -1987,8 +765,7 @@ def list_web_users(conn: sqlite3.Connection) -> list[dict]:
              COALESCE(s.alert_email_enabled, 0),
              COALESCE(s.alert_email_time_hhmm, ''),
                COALESCE(c.external_email, ''),
-               COALESCE(c.updated_at_utc, ''),
-               COALESCE(u.display_name, '')
+               COALESCE(c.updated_at_utc, '')
         FROM web_users u
         LEFT JOIN web_user_settings s ON s.username = u.username
         LEFT JOIN oauth_connections c ON c.username = u.username AND c.provider = ?
@@ -2012,13 +789,12 @@ def list_web_users(conn: sqlite3.Connection) -> list[dict]:
             "microsoft_connected_email": str(row[11] or ""),
             "microsoft_connected_at_utc": str(row[12] or ""),
             "has_microsoft_oauth": bool(str(row[11] or "").strip()),
-            "display_name": str(row[13] or ""),
         }
         for row in rows
     ]
 
 
-def create_web_user(conn: sqlite3.Connection, username: str, password: str, is_admin: bool = False, display_name: str = "") -> dict:
+def create_web_user(conn: sqlite3.Connection, username: str, password: str, is_admin: bool = False) -> dict:
     normalized_username = normalize_username(username)
     if not normalized_username:
         raise ValueError("username required")
@@ -2038,10 +814,9 @@ def create_web_user(conn: sqlite3.Connection, username: str, password: str, is_a
             is_admin,
             is_disabled,
             created_at_utc,
-            updated_at_utc,
-            display_name
+            updated_at_utc
         )
-        VALUES (?, ?, ?, ?, 0, ?, ?, ?)
+        VALUES (?, ?, ?, ?, 0, ?, ?)
         """,
         (
             normalized_username,
@@ -2050,7 +825,6 @@ def create_web_user(conn: sqlite3.Connection, username: str, password: str, is_a
             1 if is_admin else 0,
             now_utc,
             now_utc,
-            display_name.strip(),
         ),
     )
     conn.execute(
@@ -2146,23 +920,12 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
                COALESCE(alert_email_enabled, 0),
                COALESCE(alert_email_time_hhmm, ''),
                COALESCE(alert_email_recipients, ''),
-             COALESCE(alert_warning_email_recipients, ''),
-             COALESCE(alert_critical_email_recipients, ''),
                COALESCE(alert_email_last_sent_local_date, ''),
                COALESCE(alert_instant_mail_enabled, 0),
                COALESCE(alert_instant_min_severity, 'warning'),
-               COALESCE(alert_instant_telegram_enabled, 0),
-               COALESCE(alert_telegram_chat_id, ''),
-               COALESCE(email_sender, ''),
-               COALESCE(updated_at_utc, ''),
-               COALESCE(critical_trends_metrics, 'filesystem'),
-             COALESCE(digest_trend_metrics, 'cpu,memory,swap,filesystem'),
-             COALESCE(host_interest_mode, 'all'),
-             COALESCE(host_interest_hosts, ''),
-             COALESCE(backup_email_enabled, 0),
-             COALESCE(backup_email_time_hhmm, ''),
-             COALESCE(backup_email_recipients, ''),
-             COALESCE(backup_email_last_sent_local_date, '')
+             COALESCE(alert_instant_telegram_enabled, 0),
+             COALESCE(alert_telegram_chat_id, ''),
+               COALESCE(updated_at_utc, '')
         FROM web_user_settings
         WHERE username = ?
         """,
@@ -2178,23 +941,12 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
             "alert_email_enabled": False,
             "alert_email_time_hhmm": DEFAULT_ALERT_DIGEST_TIME,
             "alert_email_recipients": "",
-            "alert_warning_email_recipients": "",
-            "alert_critical_email_recipients": "",
             "alert_email_last_sent_local_date": "",
             "alert_instant_mail_enabled": False,
             "alert_instant_min_severity": "warning",
             "alert_instant_telegram_enabled": False,
             "alert_telegram_chat_id": "",
-            "email_sender": "",
             "updated_at_utc": "",
-            "critical_trends_metrics": "filesystem",
-            "digest_trend_metrics": "cpu,memory,swap,filesystem",
-            "host_interest_mode": "all",
-            "host_interest_hosts": "",
-            "backup_email_enabled": False,
-            "backup_email_time_hhmm": DEFAULT_BACKUP_DIGEST_TIME,
-            "backup_email_recipients": "",
-            "backup_email_last_sent_local_date": "",
         }
     return {
         "email_enabled": bool(int(row[0] or 0)),
@@ -2205,23 +957,12 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
         "alert_email_enabled": bool(int(row[5] or 0)),
         "alert_email_time_hhmm": normalize_hhmm(row[6], DEFAULT_ALERT_DIGEST_TIME),
         "alert_email_recipients": str(row[7] or ""),
-        "alert_warning_email_recipients": str(row[8] or ""),
-        "alert_critical_email_recipients": str(row[9] or ""),
-        "alert_email_last_sent_local_date": str(row[10] or ""),
-        "alert_instant_mail_enabled": bool(int(row[11] or 0)),
-        "alert_instant_min_severity": str(row[12] or "warning"),
-        "alert_instant_telegram_enabled": bool(int(row[13] or 0)),
-        "alert_telegram_chat_id": str(row[14] or ""),
-        "email_sender": str(row[15] or ""),
-        "updated_at_utc": str(row[16] or ""),
-        "critical_trends_metrics": str(row[17] or "filesystem"),
-        "digest_trend_metrics": str(row[18] or "cpu,memory,swap,filesystem"),
-        "host_interest_mode": str(row[19] or "all"),
-        "host_interest_hosts": str(row[20] or ""),
-        "backup_email_enabled": bool(int(row[21] or 0)),
-        "backup_email_time_hhmm": normalize_hhmm(row[22], DEFAULT_BACKUP_DIGEST_TIME),
-        "backup_email_recipients": str(row[23] or ""),
-        "backup_email_last_sent_local_date": str(row[24] or ""),
+        "alert_email_last_sent_local_date": str(row[8] or ""),
+        "alert_instant_mail_enabled": bool(int(row[9] or 0)),
+        "alert_instant_min_severity": str(row[10] or "warning"),
+        "alert_instant_telegram_enabled": bool(int(row[11] or 0)),
+        "alert_telegram_chat_id": str(row[12] or ""),
+        "updated_at_utc": str(row[13] or ""),
     }
 
 
@@ -2242,12 +983,6 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
     alert_email_recipients = str(
         payload.get("alert_email_recipients", existing.get("alert_email_recipients", "")) or ""
     ).strip()
-    alert_warning_email_recipients = str(
-        payload.get("alert_warning_email_recipients", existing.get("alert_warning_email_recipients", "")) or ""
-    ).strip()
-    alert_critical_email_recipients = str(
-        payload.get("alert_critical_email_recipients", existing.get("alert_critical_email_recipients", "")) or ""
-    ).strip()
     trend_email_last_sent_local_date = str(
         payload.get("trend_email_last_sent_local_date", existing.get("trend_email_last_sent_local_date", "")) or ""
     ).strip()
@@ -2263,33 +998,6 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
     alert_telegram_chat_id = str(
         payload.get("alert_telegram_chat_id", existing.get("alert_telegram_chat_id", "")) or ""
     ).strip()
-    email_sender = str(
-        payload.get("email_sender", existing.get("email_sender", "")) or ""
-    ).strip()
-    critical_trends_metrics = str(
-        payload.get("critical_trends_metrics", existing.get("critical_trends_metrics", "filesystem")) or "filesystem"
-    ).strip()
-    digest_trend_metrics = str(
-        payload.get("digest_trend_metrics", existing.get("digest_trend_metrics", "cpu,memory,swap,filesystem")) or "cpu,memory,swap,filesystem"
-    ).strip()
-    raw_host_interest_mode = str(
-        payload.get("host_interest_mode", existing.get("host_interest_mode", "all")) or "all"
-    ).strip().lower()
-    host_interest_mode = raw_host_interest_mode if raw_host_interest_mode in {"all", "interested_first", "interested_only"} else "all"
-    host_interest_hosts = str(
-        payload.get("host_interest_hosts", existing.get("host_interest_hosts", "")) or ""
-    ).strip()
-    backup_email_enabled = coerce_bool(payload.get("backup_email_enabled", existing.get("backup_email_enabled", False)))
-    backup_email_time_hhmm = normalize_hhmm(
-        payload.get("backup_email_time_hhmm", existing.get("backup_email_time_hhmm", DEFAULT_BACKUP_DIGEST_TIME)),
-        DEFAULT_BACKUP_DIGEST_TIME,
-    )
-    backup_email_recipients = str(
-        payload.get("backup_email_recipients", existing.get("backup_email_recipients", "")) or ""
-    ).strip()
-    backup_email_last_sent_local_date = str(
-        payload.get("backup_email_last_sent_local_date", existing.get("backup_email_last_sent_local_date", "")) or ""
-    ).strip()
     now_utc = utc_now_iso()
     conn.execute(
         """
@@ -2303,25 +1011,14 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_email_enabled,
             alert_email_time_hhmm,
             alert_email_recipients,
-            alert_warning_email_recipients,
-            alert_critical_email_recipients,
             alert_email_last_sent_local_date,
             alert_instant_mail_enabled,
             alert_instant_min_severity,
             alert_instant_telegram_enabled,
             alert_telegram_chat_id,
-            email_sender,
-            critical_trends_metrics,
-            digest_trend_metrics,
-            host_interest_mode,
-            host_interest_hosts,
-            backup_email_enabled,
-            backup_email_time_hhmm,
-            backup_email_recipients,
-            backup_email_last_sent_local_date,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             email_enabled = excluded.email_enabled,
             email_recipient = excluded.email_recipient,
@@ -2331,22 +1028,11 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_email_enabled = excluded.alert_email_enabled,
             alert_email_time_hhmm = excluded.alert_email_time_hhmm,
             alert_email_recipients = excluded.alert_email_recipients,
-            alert_warning_email_recipients = excluded.alert_warning_email_recipients,
-            alert_critical_email_recipients = excluded.alert_critical_email_recipients,
             alert_email_last_sent_local_date = excluded.alert_email_last_sent_local_date,
             alert_instant_mail_enabled = excluded.alert_instant_mail_enabled,
             alert_instant_min_severity = excluded.alert_instant_min_severity,
             alert_instant_telegram_enabled = excluded.alert_instant_telegram_enabled,
             alert_telegram_chat_id = excluded.alert_telegram_chat_id,
-            email_sender = excluded.email_sender,
-            critical_trends_metrics = excluded.critical_trends_metrics,
-            digest_trend_metrics = excluded.digest_trend_metrics,
-            host_interest_mode = excluded.host_interest_mode,
-            host_interest_hosts = excluded.host_interest_hosts,
-            backup_email_enabled = excluded.backup_email_enabled,
-            backup_email_time_hhmm = excluded.backup_email_time_hhmm,
-            backup_email_recipients = excluded.backup_email_recipients,
-            backup_email_last_sent_local_date = excluded.backup_email_last_sent_local_date,
             updated_at_utc = excluded.updated_at_utc
         """,
         (
@@ -2359,22 +1045,11 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             1 if alert_email_enabled else 0,
             alert_email_time_hhmm,
             alert_email_recipients,
-            alert_warning_email_recipients,
-            alert_critical_email_recipients,
             alert_email_last_sent_local_date,
             1 if alert_instant_mail_enabled else 0,
             alert_instant_min_severity,
             1 if alert_instant_telegram_enabled else 0,
             alert_telegram_chat_id,
-            email_sender,
-            critical_trends_metrics,
-            digest_trend_metrics,
-            host_interest_mode,
-            host_interest_hosts,
-            1 if backup_email_enabled else 0,
-            backup_email_time_hhmm,
-            backup_email_recipients,
-            backup_email_last_sent_local_date,
             now_utc,
         ),
     )
@@ -2387,22 +1062,11 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
         "alert_email_enabled": alert_email_enabled,
         "alert_email_time_hhmm": alert_email_time_hhmm,
         "alert_email_recipients": alert_email_recipients,
-        "alert_warning_email_recipients": alert_warning_email_recipients,
-        "alert_critical_email_recipients": alert_critical_email_recipients,
         "alert_email_last_sent_local_date": alert_email_last_sent_local_date,
         "alert_instant_mail_enabled": alert_instant_mail_enabled,
         "alert_instant_min_severity": alert_instant_min_severity,
         "alert_instant_telegram_enabled": alert_instant_telegram_enabled,
         "alert_telegram_chat_id": alert_telegram_chat_id,
-        "email_sender": email_sender,
-        "critical_trends_metrics": critical_trends_metrics,
-        "digest_trend_metrics": digest_trend_metrics,
-        "host_interest_mode": host_interest_mode,
-        "host_interest_hosts": host_interest_hosts,
-        "backup_email_enabled": backup_email_enabled,
-        "backup_email_time_hhmm": backup_email_time_hhmm,
-        "backup_email_recipients": backup_email_recipients,
-        "backup_email_last_sent_local_date": backup_email_last_sent_local_date,
         "updated_at_utc": now_utc,
     }
 
@@ -2518,228 +1182,8 @@ def replace_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str
     return get_web_user_alert_subscriptions(conn, username)
 
 
-def normalize_filesystem_visibility_section(value: object) -> str:
-    section = str(value or "").strip().lower()
-    return section if section in {"fs-focus", "large-files"} else ""
-
-
-def normalize_mountpoint_for_visibility(value: object) -> str:
-    mountpoint = str(value or "").strip()
-    if not mountpoint:
-        return ""
-    return mountpoint[:512]
-
-
-def normalize_mountpoint_key(value: object) -> str:
-    return normalize_mountpoint_for_visibility(value).lower()
-
-
-def normalize_alert_mountpoint(value: object) -> str:
-    mountpoint = str(value or "").strip()
-    if not mountpoint:
-        return ""
-    if mountpoint != "/":
-        mountpoint = mountpoint.rstrip("/")
-    return mountpoint[:512]
-
-
-def alert_mountpoint_variants(value: object) -> list[str]:
-    normalized = normalize_alert_mountpoint(value)
-    if not normalized:
-        return []
-    variants = {normalized}
-    if normalized != "/":
-        variants.add(normalized + "/")
-    return sorted(variants)
-
-
-def find_open_alert_for_mountpoint(conn: sqlite3.Connection, hostname: str, mountpoint: str) -> tuple[int, str, str] | None:
-    variants = alert_mountpoint_variants(mountpoint)
-    if not variants:
-        return None
-    placeholders = ",".join("?" for _ in variants)
-    row = conn.execute(
-        f"""
-        SELECT id, severity, mountpoint
-        FROM alerts
-        WHERE hostname = ?
-          AND status = 'open'
-          AND mountpoint IN ({placeholders})
-        ORDER BY id DESC
-        LIMIT 1
-        """,
-        (hostname, *variants),
-    ).fetchone()
-    if not row:
-        return None
-    return int(row[0]), str(row[1] or "warning"), str(row[2] or "")
-
-
-def is_default_visible_mountpoint(value: object) -> bool:
-    return normalize_mountpoint_key(value) in DEFAULT_VISIBLE_FILESYSTEM_MOUNTPOINTS
-
-
-def get_user_hidden_filesystems(conn: sqlite3.Connection, username: str, hostname: str, section: str) -> list[str]:
-    rows = conn.execute(
-        """
-        SELECT mountpoint
-        FROM web_user_filesystem_visibility_hidden
-        WHERE username = ? AND hostname = ? AND section = ?
-        ORDER BY LOWER(mountpoint), mountpoint
-        """,
-        (username, hostname, section),
-    ).fetchall()
-    return [str(row[0] or "") for row in rows if str(row[0] or "").strip()]
-
-
-def is_user_filesystem_visibility_configured(conn: sqlite3.Connection, username: str, hostname: str, section: str) -> bool:
-    row = conn.execute(
-        """
-        SELECT 1
-        FROM web_user_filesystem_visibility_config
-        WHERE username = ? AND hostname = ? AND section = ?
-        LIMIT 1
-        """,
-        (username, hostname, section),
-    ).fetchone()
-    if row:
-        return True
-
-    legacy_row = conn.execute(
-        """
-        SELECT 1
-        FROM web_user_filesystem_visibility_hidden
-        WHERE username = ? AND hostname = ? AND section = ?
-        LIMIT 1
-        """,
-        (username, hostname, section),
-    ).fetchone()
-    return bool(legacy_row)
-
-
-def replace_user_hidden_filesystems(
-    conn: sqlite3.Connection,
-    username: str,
-    hostname: str,
-    section: str,
-    hidden_mountpoints: list[object],
-) -> list[str]:
-    section_normalized = normalize_filesystem_visibility_section(section)
-    if not section_normalized:
-        raise ValueError("section must be fs-focus or large-files")
-
-    hostname_normalized = str(hostname or "").strip()
-    if not hostname_normalized:
-        raise ValueError("hostname missing")
-
-    unique_mountpoints: list[str] = []
-    seen = set()
-    for item in hidden_mountpoints:
-        mountpoint = normalize_mountpoint_for_visibility(item)
-        if not mountpoint:
-            continue
-        key = mountpoint.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        unique_mountpoints.append(mountpoint)
-
-    now_utc = utc_now_iso()
-    conn.execute(
-        """
-        DELETE FROM web_user_filesystem_visibility_hidden
-        WHERE username = ? AND hostname = ? AND section = ?
-        """,
-        (username, hostname_normalized, section_normalized),
-    )
-    for mountpoint in unique_mountpoints:
-        conn.execute(
-            """
-            INSERT INTO web_user_filesystem_visibility_hidden (
-                username,
-                hostname,
-                section,
-                mountpoint,
-                updated_at_utc
-            )
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (username, hostname_normalized, section_normalized, mountpoint, now_utc),
-        )
-
-    conn.execute(
-        """
-        INSERT INTO web_user_filesystem_visibility_config (
-            username,
-            hostname,
-            section,
-            configured_at_utc
-        )
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(username, hostname, section) DO UPDATE SET
-            configured_at_utc = excluded.configured_at_utc
-        """,
-        (username, hostname_normalized, section_normalized, now_utc),
-    )
-
-    return get_user_hidden_filesystems(conn, username, hostname_normalized, section_normalized)
-
-
-def unique_mountpoints(values: list[object]) -> list[str]:
-    result: list[str] = []
-    seen: set[str] = set()
-    for value in values:
-        mountpoint = normalize_mountpoint_for_visibility(value)
-        if not mountpoint:
-            continue
-        key = mountpoint.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        result.append(mountpoint)
-    result.sort(key=lambda item: item.lower())
-    return result
-
-
-def ensure_default_user_filesystem_visibility(
-    conn: sqlite3.Connection,
-    username: str,
-    hostname: str,
-    section: str,
-    available_mountpoints: list[object],
-) -> list[str]:
-    section_normalized = normalize_filesystem_visibility_section(section)
-    if not section_normalized:
-        return []
-
-    hostname_normalized = str(hostname or "").strip()
-    if not username or not hostname_normalized:
-        return []
-
-    candidates = unique_mountpoints(list(available_mountpoints or []))
-    if is_user_filesystem_visibility_configured(conn, username, hostname_normalized, section_normalized):
-        current_hidden = get_user_hidden_filesystems(conn, username, hostname_normalized, section_normalized)
-        candidate_keys = {normalize_mountpoint_key(item) for item in candidates if normalize_mountpoint_key(item)}
-        hidden_keys = {normalize_mountpoint_key(item) for item in current_hidden if normalize_mountpoint_key(item)}
-
-        # Safety net: never keep a config that hides all currently available filesystems.
-        if candidate_keys and candidate_keys.issubset(hidden_keys):
-            if "/" in candidates:
-                repaired_hidden = [item for item in current_hidden if normalize_mountpoint_key(item) != "/"]
-            else:
-                keep_visible_key = normalize_mountpoint_key(candidates[0])
-                repaired_hidden = [item for item in current_hidden if normalize_mountpoint_key(item) != keep_visible_key]
-            return replace_user_hidden_filesystems(conn, username, hostname_normalized, section_normalized, repaired_hidden)
-
-        return current_hidden
-
-    hidden_defaults = [mountpoint for mountpoint in candidates if not is_default_visible_mountpoint(mountpoint)]
-    return replace_user_hidden_filesystems(conn, username, hostname_normalized, section_normalized, hidden_defaults)
-
-
-def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours: int = 8) -> list[dict]:
+def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
     cutoff_iso = utc_hours_ago_iso(hours)
-    alarm_settings = get_alarm_settings(conn)
 
     resource_metrics = [
         ("cpu_usage_percent", "CPU %"),
@@ -2747,63 +1191,20 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours:
         ("swap_used_percent", "Swap %"),
     ]
 
-    # Critical thresholds from alarm settings
-    fs_crit_threshold = float(alarm_settings.get("critical_threshold_percent", CRITICAL_THRESHOLD_PERCENT))
-    cpu_crit_threshold = float(alarm_settings.get("cpu_critical_threshold_percent", CPU_CRITICAL_THRESHOLD_PERCENT))
-    ram_crit_threshold = float(alarm_settings.get("ram_critical_threshold_percent", RAM_CRITICAL_THRESHOLD_PERCENT))
-
-    # Minimum requirements for a reliable trend prediction
-    TREND_MIN_POINTS = 8                           # at least 8 data points
-    TREND_MIN_SPAN_SEC = 7200                      # data must span at least 2 hours
-    TREND_PROJECT_SEC = project_hours * 3600       # configurable projection horizon
-
-    def linear_regression_fit(timestamps_sec: list[float], values: list[float]) -> tuple[float, float, float, float] | None:
-        """Fit a linear regression on (timestamp, value) pairs.
-
-        Returns (slope, intercept, t0, last_x) where x = seconds since t0.
-        Returns None when there is insufficient data for a reliable estimate.
-        """
+    def linear_regression_projected(values: list[float]) -> float | None:
         n = len(values)
-        if n < TREND_MIN_POINTS:
+        if n < 3:
             return None
-        t0 = timestamps_sec[0]
-        xs = [t - t0 for t in timestamps_sec]
-        if xs[-1] < TREND_MIN_SPAN_SEC:
-            return None
-        sum_x = sum(xs)
-        sum_x2 = sum(x * x for x in xs)
+        sum_x = n * (n - 1) // 2
+        sum_x2 = (n - 1) * n * (2 * n - 1) // 6
         sum_y = sum(values)
-        sum_xy = sum(x * v for x, v in zip(xs, values))
+        sum_xy = sum(i * v for i, v in enumerate(values))
         denom = n * sum_x2 - sum_x * sum_x
         if denom == 0:
             return None
         slope = (n * sum_xy - sum_x * sum_y) / denom
         intercept = (sum_y - slope * sum_x) / n
-        return slope, intercept, t0, xs[-1]
-
-    def linear_regression_projected(timestamps_sec: list[float], values: list[float]) -> float | None:
-        fit = linear_regression_fit(timestamps_sec, values)
-        if fit is None:
-            return None
-        slope, intercept, _t0, last_x = fit
-        project_x = last_x + TREND_PROJECT_SEC
-        return slope * project_x + intercept
-
-    def compute_critical_eta(timestamps_sec: list[float], values: list[float], threshold: float) -> str | None:
-        """Return ISO UTC timestamp when the trend line is expected to cross `threshold`,
-        or None if it cannot be determined or the crossing is in the past."""
-        fit = linear_regression_fit(timestamps_sec, values)
-        if fit is None:
-            return None
-        slope, intercept, t0, _last_x = fit
-        if slope <= 0:
-            return None
-        x_crit = (threshold - intercept) / slope
-        eta_utc = t0 + x_crit
-        now_ts = datetime.now(timezone.utc).timestamp()
-        if eta_utc <= now_ts:
-            return None
-        return datetime.fromtimestamp(eta_utc, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return slope * (2 * (n - 1)) + intercept
 
     def trend_level(projected: float | None) -> str | None:
         if projected is None:
@@ -2826,7 +1227,7 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours:
     for hostname in hostnames:
         rows = conn.execute(
             """
-            SELECT received_at_utc, payload_json
+            SELECT payload_json
             FROM reports
             WHERE hostname = ? AND received_at_utc >= ?
             ORDER BY id ASC
@@ -2837,7 +1238,7 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours:
         if not rows:
             continue
 
-        last_payload = parse_payload_json(rows[-1][1])
+        last_payload = parse_payload_json(rows[-1][0])
         host_settings = conn.execute(
             "SELECT COALESCE(display_name_override, ''), COALESCE(country_code_override, '') FROM host_settings WHERE hostname = ?",
             (hostname,),
@@ -2861,34 +1262,22 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours:
             "memory_used_percent": [],
             "swap_used_percent": [],
         }
-        resource_ts: dict[str, list[float]] = {
-            "cpu_usage_percent": [],
-            "memory_used_percent": [],
-            "swap_used_percent": [],
-        }
         fs_series: dict[str, list[float]] = {}
-        fs_ts: dict[str, list[float]] = {}
 
         for row in rows:
-            ts_str = str(row[0] or "")
-            ts_dt = parse_utc_iso(ts_str)
-            ts_sec = ts_dt.timestamp() if ts_dt is not None else None
-            payload = parse_payload_json(row[1])
+            payload = parse_payload_json(row[0])
 
             cpu = get_nested_number(payload, "cpu", "usage_percent")
-            if cpu is not None and ts_sec is not None:
+            if cpu is not None:
                 resource_series["cpu_usage_percent"].append(cpu)
-                resource_ts["cpu_usage_percent"].append(ts_sec)
 
             mem = get_nested_number(payload, "memory", "used_percent")
-            if mem is not None and ts_sec is not None:
+            if mem is not None:
                 resource_series["memory_used_percent"].append(mem)
-                resource_ts["memory_used_percent"].append(ts_sec)
 
             swap = get_nested_number(payload, "swap", "used_percent")
-            if swap is not None and ts_sec is not None:
+            if swap is not None:
                 resource_series["swap_used_percent"].append(swap)
-                resource_ts["swap_used_percent"].append(ts_sec)
 
             for fs in payload.get("filesystems", []):
                 if not isinstance(fs, dict):
@@ -2898,35 +1287,17 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours:
                     used_percent = float(fs["used_percent"])
                 except (KeyError, TypeError, ValueError):
                     continue
-                if ts_sec is None:
-                    continue
                 if mountpoint not in fs_series:
                     fs_series[mountpoint] = []
-                    fs_ts[mountpoint] = []
                 fs_series[mountpoint].append(used_percent)
-                fs_ts[mountpoint].append(ts_sec)
 
         for key, label in resource_metrics:
             values = resource_series[key]
-            timestamps = resource_ts[key]
-            projected = linear_regression_projected(timestamps, values)
+            projected = linear_regression_projected(values)
             level = trend_level(projected)
             if not level:
                 continue
             current = values[-1] if values else None
-            if key == "cpu_usage_percent":
-                metric_type = "cpu"
-                crit_threshold = cpu_crit_threshold
-            elif key == "memory_used_percent":
-                metric_type = "memory"
-                crit_threshold = ram_crit_threshold
-            elif key == "swap_used_percent":
-                metric_type = "swap"
-                crit_threshold = fs_crit_threshold
-            else:
-                metric_type = "resource"
-                crit_threshold = fs_crit_threshold
-            critical_eta_utc = compute_critical_eta(timestamps, values, crit_threshold) if level == "warn" else None
             warnings.append(
                 {
                     "hostname": hostname,
@@ -2934,27 +1305,23 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours:
                     "primary_ip": host_primary_ip,
                     "metric": label,
                     "metric_key": key,
-                    "type": metric_type,
+                    "type": "resource",
                     "current": round(current, 1) if current is not None else None,
                     "projected": round(float(projected), 1),
                     "level": level,
                     "country_code": host_country_code,
                     "os_family": host_os_family,
-                    "critical_eta_utc": critical_eta_utc,
-                    "critical_threshold": crit_threshold,
                 }
             )
 
         for mountpoint, values in fs_series.items():
             if mountpoint in muted_mountpoints:
                 continue
-            timestamps = fs_ts[mountpoint]
-            projected = linear_regression_projected(timestamps, values)
+            projected = linear_regression_projected(values)
             level = trend_level(projected)
             if not level:
                 continue
             current = values[-1] if values else None
-            critical_eta_utc = compute_critical_eta(timestamps, values, fs_crit_threshold) if level == "warn" else None
             warnings.append(
                 {
                     "hostname": hostname,
@@ -2968,8 +1335,6 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, project_hours:
                     "level": level,
                     "country_code": host_country_code,
                     "os_family": host_os_family,
-                    "critical_eta_utc": critical_eta_utc,
-                    "critical_threshold": fs_crit_threshold,
                 }
             )
 
@@ -3029,7 +1394,7 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
             country_code = ""
 
         open_alerts = conn.execute(
-            "SELECT COUNT(*) FROM alerts WHERE hostname = ? AND status = 'open' AND (ack_at_utc IS NULL OR ack_at_utc = '')",
+            "SELECT COUNT(*) FROM alerts WHERE hostname = ? AND status = 'open'",
             (hostname,),
         ).fetchone()
         open_alert_count = open_alerts[0] if open_alerts else 0
@@ -3063,7 +1428,6 @@ def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
         SELECT id, hostname, mountpoint, severity, used_percent, created_at_utc, last_seen_at_utc
         FROM alerts
         WHERE status = 'open'
-          AND (closed_at_utc IS NULL OR closed_at_utc = '')
           AND COALESCE((SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0
           AND NOT EXISTS (
               SELECT 1 FROM muted_alert_rules m
@@ -3137,6 +1501,158 @@ def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
 def _safe_attachment_token(value: str, fallback: str) -> str:
     token = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value or "")).strip("-._")
     return token or fallback
+
+
+def _map_sql_release(version_str: str) -> str:
+    value = str(version_str or "").strip()
+    if not value:
+        return "-"
+    try:
+        parts = value.split(".")
+        major = int(parts[0])
+        minor = int(parts[1]) if len(parts) > 1 else 0
+    except (TypeError, ValueError, IndexError):
+        return value
+
+    if major == 16:
+        return "SQL Server 2022"
+    if major == 15:
+        return "SQL Server 2019"
+    if major == 14:
+        return "SQL Server 2017"
+    if major == 13:
+        return "SQL Server 2016"
+    if major == 12:
+        return "SQL Server 2014"
+    if major == 11:
+        return "SQL Server 2012"
+    if major == 10:
+        return "SQL Server 2008 R2" if minor >= 50 else "SQL Server 2008"
+    if major == 9:
+        return "SQL Server 2005"
+    if major == 8:
+        return "SQL Server 2000"
+    return f"{major}.x"
+
+
+def collect_system_overview(conn: sqlite3.Connection) -> dict:
+    hostnames = get_known_hostnames(conn)
+    if not hostnames:
+        return {"by_country": {}, "total": 0}
+
+    placeholders = ",".join("?" for _ in hostnames)
+    settings_rows = conn.execute(
+        f"""
+        SELECT hostname, display_name_override, COALESCE(country_code_override, '')
+        FROM host_settings
+        WHERE hostname IN ({placeholders})
+        """,
+        tuple(hostnames),
+    ).fetchall()
+    override_names = {str(row[0] or ""): str(row[1] or "") for row in settings_rows}
+    override_countries = {str(row[0] or ""): normalize_country_code(str(row[2] or "")) for row in settings_rows}
+
+    latest_rows = conn.execute(
+        f"""
+        SELECT r.hostname, r.received_at_utc, r.payload_json
+        FROM reports r
+        JOIN (
+            SELECT hostname, MAX(id) AS latest_id
+            FROM reports
+            WHERE hostname IN ({placeholders})
+            GROUP BY hostname
+        ) latest ON latest.latest_id = r.id
+        ORDER BY r.hostname COLLATE NOCASE
+        """,
+        tuple(hostnames),
+    ).fetchall()
+
+    now_utc = datetime.now(timezone.utc)
+    by_country: dict[str, dict[str, dict[str, list[dict]]]] = {}
+
+    for row in latest_rows:
+        hostname = str(row[0] or "").strip()
+        if not hostname:
+            continue
+        received_at_utc = str(row[1] or "").strip()
+        payload = parse_payload_json(str(row[2] or "{}"))
+
+        country = override_countries.get(hostname, "") or extract_country_code_from_payload(payload) or "XX"
+        os_family = normalize_os_family(payload.get("os", ""))
+        customer = effective_display_name(payload, override_names.get(hostname, ""), hostname)
+
+        sap_release = "-"
+        sap_block = payload.get("sap_b1_info")
+        if isinstance(sap_block, dict):
+            components = sap_block.get("server_components_version")
+            if isinstance(components, dict):
+                sap_candidate = str(components.get("version", "")).strip()
+                if sap_candidate:
+                    sap_release = sap_candidate
+
+        hana_version = "-"
+        hana_sid = "-"
+        hana_block = payload.get("hana_db_info")
+        if isinstance(hana_block, dict) and hana_block.get("available") is True:
+            instances = hana_block.get("instances")
+            if isinstance(instances, list) and instances:
+                first = instances[0]
+                if isinstance(first, dict):
+                    raw_hana = str(first.get("version", "")).strip()
+                    if raw_hana:
+                        parts = raw_hana.split(".")
+                        hana_version = ".".join(parts[:2]) if len(parts) >= 2 else raw_hana
+                    sid_value = str(first.get("sid", "")).strip()
+                    if sid_value:
+                        hana_sid = sid_value
+
+        sql_release = "-"
+        sql_block = payload.get("sql_server_info")
+        if isinstance(sql_block, dict) and sql_block.get("available") is True:
+            instances = sql_block.get("instances")
+            if isinstance(instances, list) and instances:
+                first = instances[0]
+                if isinstance(first, dict):
+                    sql_release = _map_sql_release(str(first.get("version", "")).strip())
+
+        ram_gb = "-"
+        memory_mb = payload_int(payload, "memory_mb", 0)
+        if memory_mb > 0:
+            ram_gb = str(int(round(memory_mb / 1024)))
+
+        online = False
+        if received_at_utc:
+            try:
+                last_dt = datetime.fromisoformat(received_at_utc.replace("Z", "+00:00"))
+                online = (now_utc - last_dt) <= timedelta(minutes=20)
+            except ValueError:
+                online = False
+
+        country_bucket = by_country.setdefault(country, {})
+        os_bucket = country_bucket.setdefault(os_family, {})
+        customer_bucket = os_bucket.setdefault(customer, [])
+        customer_bucket.append(
+            {
+                "hostname": hostname,
+                "online": online,
+                "sap_release": sap_release,
+                "hana_version": hana_version,
+                "hana_sid": hana_sid,
+                "sql_release": sql_release,
+                "ram_gb": ram_gb,
+                "last_update": received_at_utc or "-",
+            }
+        )
+
+    return {
+        "by_country": by_country,
+        "total": sum(
+            len(hosts)
+            for os_bucket in by_country.values()
+            for customer_bucket in os_bucket.values()
+            for hosts in customer_bucket.values()
+        ),
+    }
 
 
 def _filesystem_usage_from_payload(payload: dict, mountpoint: str) -> float | None:
@@ -3367,12 +1883,12 @@ def host_badges_html(country_code: object, os_family: object) -> str:
     os_logo_uri = os_logo_data_uri(normalized_os_family)
     country_flag_uri = country_flag_data_uri(normalized_country_code)
     os_icon_html = (
-        f"<img src='{html.escape(os_logo_uri)}' alt='{html.escape(os_label)}' width='26' height='26' style='display:block;'>"
+        f"<img src='{html.escape(os_logo_uri)}' alt='{html.escape(os_label)}' width='13' height='13' style='display:block;'>"
         if os_logo_uri
         else ""
     )
     country_icon_html = (
-        f"<img src='{html.escape(country_flag_uri)}' alt='{html.escape(country_badge)}' width='26' height='26' style='display:block;'>"
+        f"<img src='{html.escape(country_flag_uri)}' alt='{html.escape(country_badge)}' width='13' height='13' style='display:block;'>"
         if country_flag_uri
         else ""
     )
@@ -3415,10 +1931,10 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
         "<div style='max-width:900px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;'>"
         "<div style='padding:18px 20px;background-color:#eaf4ff;background-image:linear-gradient(180deg,#f4faff,#e6f1ff);color:#17324d;border-bottom:1px solid #cfe0f5;'>"
         "<div style='display:flex;align-items:center;gap:22px;margin-bottom:12px;'>"
-        f"<img src='{app_logo_uri}' alt='System Health Information' width='44' height='44' style='display:block;width:44px;height:44px;'>"
+        f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;'>"
         "<div>"
-        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>System Health Information</div>"
-        f"<div style='margin-top:4px;font-size:12px;color:#5f7590;'>v{build_version}</div>"
+        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>MONITORING</div>"
+        f"<div style='margin-top:4px;font-size:12px;color:#5f7590;'>powered by Rolf Walker &nbsp;&middot;&nbsp; v{build_version}</div>"
         "</div>"
         "</div>"
         "<h2 style='margin:0 0 6px 0;font-size:22px;color:#17324d;'>Daily Trend Digest</h2>"
@@ -3471,7 +1987,6 @@ def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int
         row_parts.append(
             f"<tr style='background:{'#fff1f2' if severity == 'critical' else '#fffaf0'};'>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><div style='font-weight:600;'>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</div><div style='margin-top:3px;font-size:12px;color:#64748b;'>IP: {html.escape(str(item.get('primary_ip') or '-'))}</div>{host_badges_html(item.get('country_code', ''), item.get('os_family', 'linux'))}</td>"
-            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;font-variant-numeric:tabular-nums;'>#{alert_id if alert_id > 0 else '-'}</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'>{html.escape(str(item.get('mountpoint') or '-'))}</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><strong style='color:{'#991b1b' if severity == 'critical' else '#9a3412'};'>{html.escape(str(item.get('severity') or '-').upper())}</strong></td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums;'>{html.escape('{:.1f}'.format(float(item.get('used_percent') or 0)))}%</td>"
@@ -3481,7 +1996,7 @@ def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int
         if graph_cid:
             row_parts.append(
                 "<tr>"
-                "<td colspan='6' style='padding:10px 8px 14px;border-bottom:1px solid #fde2e2;background:#ffffff;'>"
+                "<td colspan='5' style='padding:10px 8px 14px;border-bottom:1px solid #fde2e2;background:#ffffff;'>"
                 f"<div style='margin:0 0 6px 0;font-size:12px;color:#64748b;'>Verlauf {graph_hours}h (Mountpoint-Auslastung)</div>"
                 f"<img src='cid:{html.escape(graph_cid)}' alt='{graph_alt}' style='display:block;width:100%;max-width:620px;height:auto;border:1px solid #dbe3ef;border-radius:10px;background:#ffffff;'>"
                 "</td>"
@@ -3489,17 +2004,17 @@ def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int
             )
     rows_html = "".join(row_parts)
     if not rows_html:
-        rows_html = "<tr><td colspan='6' style='padding:12px 8px;text-align:left;color:#7f1d1d;'>Keine offenen Alarme vorhanden.</td></tr>"
+        rows_html = "<tr><td colspan='5' style='padding:12px 8px;text-align:left;color:#7f1d1d;'>Keine offenen Alarme vorhanden.</td></tr>"
 
     return (
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:900px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;'>"
         "<div style='padding:18px 20px;background-color:#eaf4ff;background-image:linear-gradient(180deg,#f4faff,#e6f1ff);color:#17324d;border-bottom:1px solid #cfe0f5;'>"
         "<div style='display:flex;align-items:center;gap:22px;margin-bottom:12px;'>"
-        f"<img src='{app_logo_uri}' alt='System Health Information' width='44' height='44' style='display:block;width:44px;height:44px;'>"
+        f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;'>"
         "<div>"
-        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>System Health Information</div>"
-        f"<div style='margin-top:4px;font-size:12px;color:#5f7590;'>v{build_version}</div>"
+        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>MONITORING</div>"
+        f"<div style='margin-top:4px;font-size:12px;color:#5f7590;'>powered by Rolf Walker &nbsp;&middot;&nbsp; v{build_version}</div>"
         "</div>"
         "</div>"
         "<h2 style='margin:0 0 6px 0;font-size:22px;color:#17324d;'>Open Alert Digest</h2>"
@@ -3510,7 +2025,6 @@ def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int
         "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
         "<thead><tr style='background:#fee2e2;'>"
         "<th style='text-align:left;padding:8px;border:1px solid #fecaca;'>Host</th>"
-        "<th style='text-align:left;padding:8px;border:1px solid #fecaca;'>Alert ID</th>"
         "<th style='text-align:left;padding:8px;border:1px solid #fecaca;'>Mountpoint</th>"
         "<th style='text-align:left;padding:8px;border:1px solid #fecaca;'>Severity</th>"
         "<th style='text-align:right;padding:8px;border:1px solid #fecaca;'>Used</th>"
@@ -3537,350 +2051,6 @@ def alert_digest_subject(alerts: list[dict], local_date: str) -> str:
     return f"[Monitoring] [{level}] Alert Digest {local_date} (C:{critical_count} W:{warning_count})"
 
 
-# ---------------------------------------------------------------------------
-# Backup status overview helpers
-# ---------------------------------------------------------------------------
-
-def _today_tokens(local_date: str) -> list[str]:
-    """Return filename date tokens for a given YYYY-MM-DD local date."""
-    parts = local_date.split("-")
-    if len(parts) != 3:
-        return []
-    yyyy, mm, dd = parts
-    yy = yyyy[2:]
-    return [
-        f"{yyyy}{mm}{dd}",
-        f"{yyyy}-{mm}-{dd}",
-        f"{yyyy}_{mm}_{dd}",
-        f"{dd}{mm}{yyyy}",
-        f"{dd}-{mm}-{yyyy}",
-        f"{dd}_{mm}_{yyyy}",
-        f"{dd}{mm}{yy}",
-        f"{dd}-{mm}-{yy}",
-        f"{dd}_{mm}_{yy}",
-    ]
-
-
-def _item_matches_current(item: dict, tokens: list[str], now_local: datetime) -> bool:
-    name = str(item.get("name") or "").lower()
-    if any(t.lower() in name for t in tokens):
-        return True
-    mod_raw = str(item.get("modified_utc") or "")
-    if not mod_raw:
-        return False
-    try:
-        parsed = datetime.fromisoformat(mod_raw.replace("Z", "+00:00"))
-        local_dt = parsed.astimezone(SCHEDULE_TIMEZONE)
-        age = now_local - local_dt
-        return timedelta(0) <= age <= timedelta(hours=24)
-    except Exception:
-        return False
-
-
-def _select_best_backup_item(items: list[dict]) -> dict:
-    if not items:
-        return {}
-
-    def rank(item: dict) -> tuple[int, float]:
-        item_type = str(item.get("type") or "").strip().lower()
-        if item_type == "file":
-            priority = 0
-        elif item_type == "link":
-            priority = 1
-        else:
-            priority = 2
-        modified_raw = str(item.get("modified_utc") or "").strip()
-        modified_ts = 0.0
-        if modified_raw:
-            try:
-                modified_ts = datetime.fromisoformat(modified_raw.replace("Z", "+00:00")).timestamp()
-            except Exception:
-                modified_ts = 0.0
-        return (priority, -modified_ts)
-
-    return min(items, key=rank)
-
-
-def _is_backup_zip_item(item: dict) -> bool:
-    item_type = str(item.get("type") or "").strip().lower()
-    if item_type != "file":
-        return False
-    name = str(item.get("name") or "").strip()
-    leaf_name = Path(name).name if name else ""
-    return bool(re.fullmatch(r"bck_.*\.zip", leaf_name, flags=re.IGNORECASE))
-
-
-def format_size_bytes(value: object) -> str:
-    try:
-        amount = float(value)
-    except (TypeError, ValueError):
-        return "-"
-    if amount < 0:
-        return "-"
-    units = ["B", "KiB", "MiB", "GiB", "TiB"]
-    unit_index = 0
-    while amount >= 1024 and unit_index < len(units) - 1:
-        amount /= 1024.0
-        unit_index += 1
-    digits = 0 if amount >= 100 else 1 if amount >= 10 else 2
-    return f"{amount:.{digits}f} {units[unit_index]}"
-
-
-def get_backup_status_overview(conn: sqlite3.Connection) -> list[dict]:
-    """Return backup status for all hosts that have dir_deep_listings data.
-
-    Uses the latest report received today (Option A). Falls back to most recent
-    report if no report exists for today yet (shows stale indicator).
-    """
-    now_local = datetime.now(SCHEDULE_TIMEZONE)
-    today_local = now_local.date().isoformat()
-    tokens = _today_tokens(today_local)
-
-    # Get latest report per host (today preferred, else most recent)
-    rows = conn.execute(
-        """
-        SELECT r.hostname,
-               r.received_at_utc,
-               r.payload_json,
-               COALESCE(h.display_name_override, '')
-        FROM reports r
-        LEFT JOIN host_settings h ON h.hostname = r.hostname
-        WHERE r.id IN (
-            SELECT MAX(id) FROM reports
-            WHERE COALESCE(hostname, '') != ''
-            GROUP BY hostname
-        )
-        ORDER BY LOWER(COALESCE(NULLIF(h.display_name_override,''), r.hostname))
-        """
-    ).fetchall()
-
-    # Also get best today-report per host (received after midnight local)
-    today_midnight_utc = datetime(
-        now_local.year, now_local.month, now_local.day,
-        tzinfo=SCHEDULE_TIMEZONE
-    ).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    today_rows = conn.execute(
-        """
-        SELECT hostname, MAX(id), MAX(received_at_utc)
-        FROM reports
-        WHERE received_at_utc >= ?
-          AND COALESCE(hostname, '') != ''
-        GROUP BY hostname
-        """,
-        (today_midnight_utc,),
-    ).fetchall()
-    today_latest_id: dict[str, int] = {str(r[0]): int(r[1]) for r in today_rows}
-
-    # Build id -> row lookup for today-preferred fetch
-    today_payload_rows: dict[str, tuple] = {}
-    if today_latest_id:
-        placeholders = ",".join("?" * len(today_latest_id))
-        ids = list(today_latest_id.values())
-        for r in conn.execute(
-            f"SELECT hostname, received_at_utc, payload_json FROM reports WHERE id IN ({placeholders})",
-            ids,
-        ).fetchall():
-            today_payload_rows[str(r[0])] = r
-
-    result: list[dict] = []
-    for row in rows:
-        hostname = str(row[0] or "")
-        if not hostname:
-            continue
-        display_name = str(row[3] or "").strip() or hostname
-
-        # Prefer today's report
-        if hostname in today_payload_rows:
-            use_row = today_payload_rows[hostname]
-            report_time_utc = str(use_row[1] or "")
-            payload_json_str = str(use_row[2] or "{}")
-            is_today_report = True
-        else:
-            report_time_utc = str(row[1] or "")
-            payload_json_str = str(row[2] or "{}")
-            is_today_report = False
-
-        try:
-            payload = json.loads(payload_json_str)
-        except Exception:
-            payload = {}
-
-        deep = payload.get("dir_deep_listings") or {}
-        if not (isinstance(deep, dict) and deep.get("available") and deep.get("entries")):
-            continue  # Host hat keine Backup-Listings → überspringen
-
-        dirs: list[dict] = []
-        for entry in deep.get("entries") or []:
-            path = str(entry.get("path") or entry.get("pattern") or "")
-            subdirs = entry.get("subdirs") or []
-            for subdir in subdirs:
-                subdir_name = str(subdir.get("name") or "")
-                subdir_path = str(subdir.get("path") or "")
-                normalized_name = subdir_name.strip().lower()
-                normalized_path_name = Path(subdir_path).name.strip().lower() if subdir_path else ""
-                if normalized_name == "_instancebackup" or normalized_path_name == "_instancebackup":
-                    continue
-                items = subdir.get("items") or []
-                zip_items = [item for item in items if isinstance(item, dict) and _is_backup_zip_item(item)]
-                has_current = any(_item_matches_current(item, tokens, now_local) for item in zip_items)
-                best_item = _select_best_backup_item(zip_items)
-                dirs.append({
-                    "subdir_name": subdir_name,
-                    "subdir_path": subdir_path,
-                    "parent_path": path,
-                    "has_today_backup": has_current,
-                    "item_count": len(zip_items),
-                    "newest_item_name": str(best_item.get("name") or "") if best_item else "",
-                    "newest_item_modified": str(best_item.get("modified_utc") or "") if best_item else "",
-                    "newest_item_size_bytes": int(best_item.get("size_bytes") or 0) if best_item else 0,
-                })
-
-        if not dirs:
-            continue
-
-        any_missing = any(not d["has_today_backup"] for d in dirs)
-        result.append({
-            "hostname": hostname,
-            "display_name": display_name,
-            "report_time_utc": report_time_utc,
-            "is_today_report": is_today_report,
-            "today_local": today_local,
-            "dirs": dirs,
-            "has_missing_backup": any_missing,
-        })
-
-    return result
-
-
-def backup_digest_subject(hosts: list[dict], local_date: str) -> str:
-    missing = sum(1 for h in hosts if h.get("has_missing_backup"))
-    level = "WARNUNG" if missing > 0 else "OK"
-    return f"[Monitoring] [{level}] Backup-Statusbericht {local_date} (nicht aktuell <24h: {missing})"
-
-
-def backup_digest_html(username: str, hosts: list[dict], local_date: str) -> str:
-    app_logo_uri = app_logo_data_uri()
-    ang_logo_uri = ang_logo_data_uri()
-    backup_icon_uri = backup_icon_data_uri()
-    build_version = html.escape(read_build_version())
-
-    rows_html_parts = []
-    displayed_missing_count = 0
-    displayed_host_count = 0
-    for host in hosts:
-        display_name = html.escape(str(host.get("display_name") or host.get("hostname") or "-"))
-        hostname = html.escape(str(host.get("hostname") or "-"))
-        is_today = host.get("is_today_report", False)
-        report_time = str(host.get("report_time_utc") or "")
-        try:
-            parsed_rt = datetime.fromisoformat(report_time.replace("Z", "+00:00"))
-            local_rt = parsed_rt.astimezone(SCHEDULE_TIMEZONE)
-            report_time_fmt = local_rt.strftime("%d.%m. %H:%M")
-        except Exception:
-            report_time_fmt = report_time[:16] if report_time else "-"
-
-        stale_note = "" if is_today else f" <span style='color:#92400e;font-size:11px;'>(Stand: {html.escape(report_time_fmt)})</span>"
-
-        dirs = host.get("dirs") or []
-        dir_rows = ""
-        visible_dir_count = 0
-        visible_missing_count = 0
-        for d in dirs:
-            ok = d.get("has_today_backup", False)
-            badge_bg = "#dcfce7" if ok else "#fee2e2"
-            badge_color = "#166534" if ok else "#991b1b"
-            badge_text = "✓ Backup aktuell (<24h)" if ok else "✗ kein aktuelles Backup"
-            subdir_name = html.escape(str(d.get("subdir_name") or d.get("subdir_path") or "-"))
-            newest_raw = str(d.get("newest_item_name") or "-")
-            newest_leaf = Path(newest_raw).name if newest_raw not in {"", "-"} else newest_raw
-            newest_parent = str(Path(newest_raw).parent).strip() if newest_raw not in {"", "-"} and "/" in newest_raw else ""
-            newest_text = newest_leaf or newest_raw or "-"
-            newest = html.escape(newest_text)
-            newest_is_zip = newest_text.strip().lower().endswith(".zip")
-            if not newest_is_zip:
-                continue
-            newest_size = format_size_bytes(d.get("newest_item_size_bytes", 0))
-            newest_modified_raw = str(d.get("newest_item_modified") or "").strip()
-            newest_modified_fmt = ""
-            if newest_modified_raw:
-                try:
-                    newest_modified_dt = datetime.fromisoformat(newest_modified_raw.replace("Z", "+00:00"))
-                    newest_modified_fmt = newest_modified_dt.astimezone(SCHEDULE_TIMEZONE).strftime("%d.%m.%Y %H:%M")
-                except Exception:
-                    newest_modified_fmt = newest_modified_raw[:16]
-            newest_cell = f"<strong>{newest}</strong>" if newest_is_zip else newest
-            newest_cell += f"<div style='margin-top:2px;font-size:11px;color:#94a3b8;'>Grösse: {html.escape(newest_size)}</div>"
-            if newest_modified_fmt:
-                newest_cell += f"<div style='margin-top:2px;font-size:11px;color:#94a3b8;'>Datei: {html.escape(newest_modified_fmt)}</div>"
-            visible_dir_count += 1
-            if not ok:
-                visible_missing_count += 1
-            dir_rows += (
-                f"<tr>"
-                f"<td style='padding:6px 8px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#334155;'>{subdir_name}</td>"
-                f"<td style='padding:6px 8px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#64748b;'>{newest_cell}</td>"
-                f"<td style='padding:6px 8px;border-bottom:1px solid #f1f5f9;text-align:center;'>"
-                f"<span style='display:inline-block;padding:2px 8px;border-radius:999px;background:{badge_bg};color:{badge_color};font-weight:600;font-size:11px;'>{badge_text}</span>"
-                f"</td>"
-                f"</tr>"
-            )
-
-        if visible_dir_count == 0:
-            continue
-
-        displayed_host_count += 1
-        if visible_missing_count > 0:
-            displayed_missing_count += 1
-        host_bg = "#fff7ed" if visible_missing_count > 0 else "#f0fdf4"
-        rows_html_parts.append(
-            f"<tr><td colspan='3' style='padding:10px 8px 4px 8px;background:{host_bg};border-top:2px solid #e2e8f0;'>"
-            f"<strong style='font-size:14px;'>{display_name}</strong>"
-            f"<span style='font-size:12px;color:#64748b;margin-left:8px;'>{hostname}</span>{stale_note}"
-            f"</td></tr>"
-            + dir_rows
-        )
-
-    rows_html = "".join(rows_html_parts)
-    if not rows_html:
-        rows_html = "<tr><td colspan='3' style='padding:12px 8px;color:#475569;'>Keine Backup-Daten vorhanden.</td></tr>"
-
-    missing_count = displayed_missing_count
-    summary_color = "#991b1b" if missing_count > 0 else "#166534"
-    summary_text = f"{missing_count} Host(s) ohne aktuelles Backup (<24h)" if missing_count > 0 else "Alle Backups aktuell (<24h)"
-
-    return (
-        "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
-        "<div style='max-width:900px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;'>"
-        "<div style='padding:18px 20px;background-color:#eaf4ff;background-image:linear-gradient(180deg,#f4faff,#e6f1ff);color:#17324d;border-bottom:1px solid #cfe0f5;'>"
-        "<div style='display:flex;align-items:center;gap:22px;margin-bottom:12px;'>"
-        f"<img src='{app_logo_uri}' alt='System Health Information' width='44' height='44' style='display:block;width:44px;height:44px;'>"
-        "<div>"
-        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>System Health Information</div>"
-        f"<div style='margin-top:4px;font-size:12px;color:#5f7590;'>v{build_version}</div>"
-        "</div>"
-        "</div>"
-        "<h2 style='margin:0;font-size:22px;color:#17324d;'>Backup-Statusbericht</h2>"
-        f"<div style='font-size:13px;color:#5f7590;'>Benutzer: {html.escape(username)} | Datum: {html.escape(local_date)} | Zeit: {html.escape(format_mail_datetime())}</div>"
-        "</div>"
-        "<div style='padding:18px 20px;'>"
-        f"{('<div style=\'margin:0 0 12px 0;\'><img src=\'' + backup_icon_uri + '\' alt=\'Backup\' width=\'48\' height=\'48\' style=\'display:block;width:48px;height:48px;\'></div>') if backup_icon_uri else ''}"
-        f"<p style='margin:0 0 14px 0;font-size:14px;'><strong style='color:{summary_color};'>{html.escape(summary_text)}</strong> | {displayed_host_count} Host(s) mit ZIP-Backup</p>"
-        "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
-        "<thead><tr style='background:#f1f5f9;'>"
-        "<th style='text-align:left;padding:8px;border:1px solid #dbe3ef;'>Verzeichnis</th>"
-        "<th style='text-align:left;padding:8px;border:1px solid #dbe3ef;'>Neuester Eintrag</th>"
-        "<th style='text-align:center;padding:8px;border:1px solid #dbe3ef;'>Status (&lt;24h)</th>"
-        "</tr></thead>"
-        f"<tbody>{rows_html}</tbody>"
-        "</table>"
-        f"<div style='margin-top:18px;padding-top:14px;border-top:1px solid #e2e8f0;text-align:right;'><img src='{ang_logo_uri}' alt='ANG' width='110' style='display:inline-block;max-width:110px;height:auto;'></div>"
-        "</div>"
-        "</div>"
-        "</body></html>"
-    )
-
-
 def alert_instant_mail_subject(event_type: str, hostname: str, severity: str, display_name: str = "") -> str:
     sev_label = "KRITISCH" if severity == "critical" else "WARNUNG"
     event_label = {
@@ -3888,8 +2058,6 @@ def alert_instant_mail_subject(event_type: str, hostname: str, severity: str, di
         "escalated": "Alarm eskaliert",
         "resolved": "Alarm behoben",
         "reminder": "Heads-Up: Alert noch offen",
-        "inactive": "Host inaktiv",
-        "inactive_resolved": "Host wieder aktiv",
     }.get(event_type, "Alarm")
     title_target = display_name.strip() or hostname
     return f"[Monitoring] [{sev_label}] {event_label}: {title_target}"
@@ -3908,7 +2076,6 @@ def alert_instant_mail_html(
     os_family: str = "linux",
     reported_at_utc: str = "",
     graph_cid: str = "",
-    alert_id: int | None = None,
 ) -> str:
     normalized_severity = str(severity or "").strip().lower()
     if normalized_severity == "critical":
@@ -3922,9 +2089,8 @@ def alert_instant_mail_html(
         "escalated": "Alarm eskaliert",
         "resolved": "Alarm behoben",
         "reminder": "Heads-Up: Alert noch offen",
-        "inactive": "Host inaktiv",
-        "inactive_resolved": "Host wieder aktiv",
     }.get(event_type, "Alarm")
+    used_str = f"{used_percent:.1f}"
     customer_title = display_name.strip() or hostname
     normalized_country_code = normalize_country_code(country_code)
     country_badge = normalized_country_code if normalized_country_code else "--"
@@ -3933,46 +2099,28 @@ def alert_instant_mail_html(
     os_logo_uri = os_logo_data_uri(normalized_os_family)
     country_flag_uri = country_flag_data_uri(normalized_country_code)
     os_icon_html = (
-        f"<img src='{html.escape(os_logo_uri)}' alt='{html.escape(os_label)}' width='28' height='28' style='display:block;'>"
+        f"<img src='{html.escape(os_logo_uri)}' alt='{html.escape(os_label)}' width='14' height='14' style='display:block;'>"
         if os_logo_uri
         else ""
     )
     country_icon_html = (
-        f"<img src='{html.escape(country_flag_uri)}' alt='{html.escape(country_badge)}' width='28' height='28' style='display:block;'>"
+        f"<img src='{html.escape(country_flag_uri)}' alt='{html.escape(country_badge)}' width='14' height='14' style='display:block;'>"
         if country_flag_uri
         else ""
     )
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
-    event_icon_uri = alert_event_icon_data_uri(event_type)
-    linux_logo_uri = os_logo_data_uri("linux")
-    windows_logo_uri = os_logo_data_uri("windows")
-    event_icon_block = (
-        f"<div style='margin-bottom:12px;'><img src='{html.escape(event_icon_uri)}' alt='{html.escape(event_label)}' width='52' height='52' style='display:block;'></div>"
-        if event_icon_uri else ""
-    )
     build_version = html.escape(read_build_version())
     reported_at = format_mail_datetime(reported_at_utc)
     graph_alt = html.escape(f"Auslastungsverlauf {customer_title}: {mountpoint}")
-    is_cpu_alert = mountpoint == CPU_ALERT_MOUNTPOINT
-    is_ram_alert = mountpoint == RAM_ALERT_MOUNTPOINT
-    is_inactive_alert = mountpoint == INACTIVE_HOST_ALERT_MOUNTPOINT
-    is_resource_alert = is_resource_alert_mountpoint(mountpoint)
-    resource_row_label = "Ressource" if is_resource_alert else "Mountpoint"
-    resource_row_value = "CPU" if is_cpu_alert else ("RAM" if is_ram_alert else ("Host inaktiv" if is_inactive_alert else mountpoint))
-    value_row_label = "Inaktiv seit" if is_inactive_alert else "Auslastung"
-    used_value_display = f"{used_percent:.1f} h" if is_inactive_alert else f"{used_percent:.1f}%"
-    platform_row = f"<div style='margin-top:4px;color:#5f7590;font-size:13px;'>v{build_version}</div>"
-    graph_block = "" if is_resource_alert else (
-        (
-            "<div style='margin-top:14px;'>"
-            "<div style='margin:0 0 6px 0;font-size:12px;color:#64748b;'>Verlauf letzte 24h (Mountpoint-Auslastung)</div>"
-            f"<img src='cid:{html.escape(graph_cid)}' alt='{graph_alt}' style='display:block;width:100%;max-width:620px;height:auto;border:1px solid #dbe3ef;border-radius:10px;background:#ffffff;'>"
-            "</div>"
-        ) if graph_cid else (
-            "<div style='margin-top:14px;padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #dbe3ef;color:#64748b;font-size:12px;'>"
-            "Keine Verlaufsgrafik verfuegbar (zu wenig Datenpunkte).</div>"
-        )
+    graph_block = (
+        "<div style='margin-top:14px;'>"
+        "<div style='margin:0 0 6px 0;font-size:12px;color:#64748b;'>Verlauf letzte 24h (Mountpoint-Auslastung)</div>"
+        f"<img src='cid:{html.escape(graph_cid)}' alt='{graph_alt}' style='display:block;width:100%;max-width:620px;height:auto;border:1px solid #dbe3ef;border-radius:10px;background:#ffffff;'>"
+        "</div>"
+    ) if graph_cid else (
+        "<div style='margin-top:14px;padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #dbe3ef;color:#64748b;font-size:12px;'>"
+        "Keine Verlaufsgrafik verfuegbar (zu wenig Datenpunkte).</div>"
     )
     return (
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
@@ -3981,34 +2129,29 @@ def alert_instant_mail_html(
         "<div style='display:flex;align-items:center;gap:22px;margin-bottom:12px;'>"
         f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;'>"
         "<div>"
-        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>System Health Dashboard</div>"
-        f"{platform_row}"
+        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>MONITORING</div>"
+        f"<div style='margin-top:4px;font-size:12px;color:#5f7590;'>powered by Rolf Walker &nbsp;&middot;&nbsp; v{build_version}</div>"
         "</div>"
         "</div>"
         f"<div style='font-size:12px;color:#5f7590;margin-bottom:8px;'>Benutzer: {html.escape(username)} | {html.escape(format_mail_datetime())}</div>"
         f"<h1 style='margin:0;font-size:34px;line-height:1.05;font-weight:800;letter-spacing:.2px;color:#17324d;'>{html.escape(customer_title)}</h1>"
         f"<div style='margin-top:6px;font-size:14px;color:#5f7590;'>Host: {html.escape(hostname)}</div>"
         f"<div style='margin-top:4px;font-size:13px;color:#5f7590;'>IP: {html.escape(primary_ip or '-')}</div>"
-        "<div style='margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;'>"
-        f"<span style='display:inline-flex;align-items:center;padding:4px 14px;border-radius:999px;background:{sev_bg};color:{sev_text};font-size:13px;font-weight:800;letter-spacing:.3px;'>{sev_label}</span>"
-        "<div style='display:flex;align-items:center;gap:4px;'>"
-        f"<span style='display:inline-flex;align-items:center;padding:3px 4px;'>{os_icon_html}</span>"
-        f"<span style='display:inline-flex;align-items:center;padding:3px 4px;'>{country_icon_html}</span>"
-        "</div>"
+        "<div style='margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;'>"
+        f"<span style='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;background:transparent;'>{os_icon_html}</span>"
+        f"<span style='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;background:transparent;'>{country_icon_html}</span>"
+        f"<span style='display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:{sev_bg};color:{sev_text};font-size:12px;font-weight:800;'>{sev_label}</span>"
         "</div>"
         "</div>"
         "<div style='padding:20px;'>"
-        f"{event_icon_block}"
         f"<h2 style='margin:0 0 14px 0;font-size:20px;color:#0f172a;'>{html.escape(event_label)}</h2>"
         "<table style='width:100%;border-collapse:collapse;font-size:14px;'>"
-        f"<tr><td style='padding:8px 0;color:#64748b;'>{html.escape(resource_row_label)}</td>"
-        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(resource_row_value)}</td></tr>"
-        "<tr><td style='padding:8px 0;color:#64748b;'>Alert-ID</td>"
-        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(str(alert_id) if alert_id else '-')}</td></tr>"
+        "<tr><td style='padding:8px 0;color:#64748b;'>Mountpoint</td>"
+        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(mountpoint)}</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Gemeldet am</td>"
         f"<td style='padding:8px 0;font-weight:600;'>{html.escape(reported_at)}</td></tr>"
-        f"<tr><td style='padding:8px 0;color:#64748b;'>{html.escape(value_row_label)}</td>"
-        f"<td style='padding:8px 0;font-weight:600;'>{html.escape(used_value_display)}</td></tr>"
+        "<tr><td style='padding:8px 0;color:#64748b;'>Auslastung</td>"
+        f"<td style='padding:8px 0;font-weight:600;'>{used_str}%</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Schweregrad</td>"
         f"<td style='padding:8px 0;'><span style='display:inline-block;padding:2px 10px;border-radius:999px;background:{sev_bg};color:{sev_text};font-weight:700;font-size:12px;'>{sev_label}</span></td></tr>"
         "</table>"
@@ -4020,21 +2163,6 @@ def alert_instant_mail_html(
     )
 
 
-def resolve_alert_mail_recipients_for_severity(settings: dict, severity: str) -> list[str]:
-    base_recipient = str(settings.get("email_recipient", "") or "").strip()
-    base_extra = parse_email_recipients(settings.get("alert_email_recipients", ""))
-    base_all = parse_email_recipients(",".join(([base_recipient] if base_recipient else []) + base_extra))
-
-    severity_normalized = str(severity or "").strip().lower()
-    if severity_normalized == "critical":
-        specific = parse_email_recipients(settings.get("alert_critical_email_recipients", ""))
-        return specific if specific else base_all
-    if severity_normalized == "warning":
-        specific = parse_email_recipients(settings.get("alert_warning_email_recipients", ""))
-        return specific if specific else base_all
-    return base_all
-
-
 def send_instant_alert_mails_to_users(
     conn: sqlite3.Connection,
     event_type: str,
@@ -4042,30 +2170,15 @@ def send_instant_alert_mails_to_users(
     mountpoint: str,
     severity: str,
     used_percent: float,
-    alert_id: int | None = None,
 ) -> None:
-    if event_type not in {"opened", "escalated", "resolved", "inactive", "inactive_resolved"}:
+    if event_type not in {"opened", "escalated", "resolved"}:
         return
     host_context = collect_host_mail_context(conn, hostname)
-    selected_alert_row = None
-    if alert_id is not None and alert_id > 0:
-        selected_alert_row = conn.execute(
-            "SELECT id, created_at_utc FROM alerts WHERE id = ? LIMIT 1",
-            (int(alert_id),),
-        ).fetchone()
-    if selected_alert_row is None:
-        expected_status = "resolved" if event_type in {"resolved", "inactive_resolved"} else "open"
-        selected_alert_row = conn.execute(
-            "SELECT id, created_at_utc FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = ? ORDER BY id DESC LIMIT 1",
-            (hostname, mountpoint, expected_status),
-        ).fetchone()
-    if selected_alert_row is None:
-        selected_alert_row = conn.execute(
-            "SELECT id, created_at_utc FROM alerts WHERE hostname = ? AND mountpoint = ? ORDER BY id DESC LIMIT 1",
-            (hostname, mountpoint),
-        ).fetchone()
-    effective_alert_id = int(selected_alert_row[0]) if selected_alert_row and selected_alert_row[0] else (int(alert_id) if alert_id else None)
-    reported_at_utc = str(selected_alert_row[1] or "") if selected_alert_row else utc_now_iso()
+    reported_row = conn.execute(
+        "SELECT created_at_utc FROM alerts WHERE hostname = ? AND mountpoint = ? ORDER BY id DESC LIMIT 1",
+        (hostname, mountpoint),
+    ).fetchone()
+    reported_at_utc = str(reported_row[0] or "") if reported_row else utc_now_iso()
     try:
         rows = conn.execute(
             """
@@ -4076,6 +2189,7 @@ def send_instant_alert_mails_to_users(
             WHERE COALESCE(u.is_disabled, 0) = 0
               AND COALESCE(s.alert_instant_mail_enabled, 0) = 1
               AND COALESCE(s.email_enabled, 0) = 1
+              AND COALESCE(s.email_recipient, '') != ''
                             AND sub.hostname = ?
                             AND COALESCE(sub.notify_mail, 0) = 1
             """
@@ -4093,25 +2207,25 @@ def send_instant_alert_mails_to_users(
         if min_severity == "critical" and severity not in {"critical"}:
             continue
         user_settings = get_web_user_settings(conn, username)
-        all_recipients = resolve_alert_mail_recipients_for_severity(user_settings, severity)
+        recipient = user_settings.get("email_recipient", "").strip()
+        if not recipient:
+            continue
+        extra = parse_email_recipients(user_settings.get("alert_email_recipients", ""))
+        all_recipients = parse_email_recipients(",".join([recipient] + extra))
         if not all_recipients:
             continue
         try:
             ok_token, access_token, _err = ensure_microsoft_access_token(conn, username)
             if not ok_token:
                 continue
-            if is_resource_alert_mountpoint(mountpoint):
-                graph_cid = ""
-                graph_attachments = []
-            else:
-                graph_cid, graph_attachment = build_alert_usage_graph_attachment(
-                    conn,
-                    hostname,
-                    mountpoint,
-                    severity=severity,
-                    hours=24,
-                )
-                graph_attachments = [graph_attachment] if graph_attachment else []
+            graph_cid, graph_attachment = build_alert_usage_graph_attachment(
+                conn,
+                hostname,
+                mountpoint,
+                severity=severity,
+                hours=24,
+            )
+            graph_attachments = [graph_attachment] if graph_attachment else []
             subject = alert_instant_mail_subject(
                 event_type,
                 hostname,
@@ -4131,7 +2245,6 @@ def send_instant_alert_mails_to_users(
                 os_family=str(host_context.get("os_family", "linux") or "linux"),
                 reported_at_utc=reported_at_utc,
                 graph_cid=graph_cid or "",
-                alert_id=effective_alert_id,
             )
             send_microsoft_mail_multi(
                 access_token,
@@ -4140,7 +2253,6 @@ def send_instant_alert_mails_to_users(
                 body,
                 content_type="HTML",
                 attachments=graph_attachments,
-                sender=user_settings.get("email_sender", ""),
             )
         except Exception:
             pass
@@ -4154,9 +2266,8 @@ def send_instant_alert_telegram_to_users(
     severity: str,
     used_percent: float,
     display_name: str = "",
-    alert_id: int | None = None,
 ) -> None:
-    if event_type not in {"opened", "escalated", "resolved", "inactive", "inactive_resolved"}:
+    if event_type not in {"opened", "escalated", "resolved"}:
         return
 
     alarm_settings = get_alarm_settings(conn)
@@ -4184,8 +2295,13 @@ def send_instant_alert_telegram_to_users(
     except Exception:
         return
 
-    alert_text = build_telegram_alert_text(event_type, hostname, mountpoint, severity, used_percent, display_name=display_name, alert_id=alert_id)
-    icon_path = _ALERT_ICON_PATHS.get(event_type)
+    icon = {
+        "opened": "🚨 ALERT OPEN",
+        "escalated": "⬆️ ALERT ESCALATED",
+        "resolved": "✅ ALERT RESOLVED",
+    }.get(event_type, "⚠️ ALERT")
+    title = display_name.strip() if display_name.strip() else hostname
+    now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
 
     for row in rows:
         username = str(row[0] or "").strip()
@@ -4196,242 +2312,17 @@ def send_instant_alert_telegram_to_users(
         if min_severity == "critical" and severity not in {"critical"}:
             continue
 
-        text = f"👤 *{_mdv2(username)}*\n{alert_text}"
-        markup = None
-        if alert_id is not None and event_type not in {"resolved", "inactive_resolved"}:
-            markup = json.dumps({"inline_keyboard": [[{"text": "✅ Quittieren", "callback_data": f"ack:{alert_id}"}]]})
-        telegram_send_to_chat(bot_token, chat_id, text, image_path=icon_path, reply_markup=markup)
-
-
-def customer_alert_mail_subject(hostname: str, mountpoint: str, severity: str, display_name: str = "") -> str:
-    sev_label = "KRITISCH" if severity == "critical" else "WARNUNG"
-    title = display_name.strip() or hostname
-    return f"[Monitoring-Alert] [{sev_label}] Filesystem-Alert: {title} – {mountpoint}"
-
-
-def customer_alert_mail_html(
-    hostname: str,
-    mountpoint: str,
-    severity: str,
-    used_percent: float,
-    display_name: str = "",
-    primary_ip: str = "",
-    country_code: str = "",
-    os_family: str = "linux",
-    reported_at_utc: str = "",
-) -> str:
-    normalized_severity = str(severity or "").strip().lower()
-    if normalized_severity == "critical":
-        sev_color, sev_bg, sev_text, sev_label = "#dc2626", "#fee2e2", "#991b1b", "KRITISCH"
-    else:
-        sev_color, sev_bg, sev_text, sev_label = "#d97706", "#fef3c7", "#92400e", "WARNUNG"
-    title = display_name.strip() or hostname
-    reported_at = format_mail_datetime(reported_at_utc)
-    app_logo_uri = app_logo_data_uri()
-    ang_logo_uri = ang_logo_data_uri()
-    event_icon_uri = alert_event_icon_data_uri("escalated")
-    normalized_country_code = normalize_country_code(country_code)
-    country_badge = normalized_country_code if normalized_country_code else "--"
-    normalized_os_family = normalize_os_family(os_family)
-    os_label = os_family_label(normalized_os_family)
-    os_logo_uri = os_logo_data_uri(normalized_os_family)
-    country_flag_uri = country_flag_data_uri(normalized_country_code)
-    os_icon_html = (
-        f"<img src='{html.escape(os_logo_uri)}' alt='{html.escape(os_label)}' width='24' height='24' style='display:block;'>"
-        if os_logo_uri
-        else ""
-    )
-    country_icon_html = (
-        f"<img src='{html.escape(country_flag_uri)}' alt='{html.escape(country_badge)}' width='24' height='24' style='display:block;'>"
-        if country_flag_uri
-        else ""
-    )
-    event_icon_block = (
-        f"<div style='margin:0 0 12px 0;'><img src='{html.escape(event_icon_uri)}' alt='Alert' width='52' height='52' style='display:block;'></div>"
-        if event_icon_uri else ""
-    )
-    used_display = f"{used_percent:.1f}%"
-    return (
-        "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
-        "<div style='max-width:680px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;'>"
-        # Header – Kundeninfo-Banner
-        f"<div style='padding:18px 20px;background-color:#fff7ed;background-image:linear-gradient(180deg,#fff7ed,#ffedd5);border-bottom:2px solid {sev_color};'>"
-        "<div style='display:flex;align-items:center;gap:16px;margin-bottom:10px;'>"
-        f"<img src='{app_logo_uri}' alt='Monitoring' width='40' height='40' style='display:block;'>"
-        "<div>"
-        "<div style='font-size:22px;font-weight:900;letter-spacing:.3px;color:#17324d;'>System Health Monitoring</div>"
-        "<div style='font-size:12px;color:#5f7590;margin-top:2px;'>Kundeninformation</div>"
-        "</div>"
-        "</div>"
-        # Grosser farbiger Banner
-        f"<div style='display:inline-flex;align-items:center;gap:8px;padding:8px 18px;border-radius:999px;"
-        f"background:{sev_bg};color:{sev_text};font-size:15px;font-weight:800;letter-spacing:.3px;margin-bottom:8px;'>"
-        f"&#128226; Kundeninfo &mdash; Monitoring Alert &mdash; {sev_label}"
-        "</div>"
-        f"<h1 style='margin:8px 0 0 0;font-size:28px;font-weight:800;color:#17324d;'>{html.escape(title)}</h1>"
-        f"<div style='margin-top:8px;display:flex;align-items:center;gap:6px;'>"
-        f"<span style='display:inline-flex;align-items:center;padding:3px 4px;'>{os_icon_html}</span>"
-        f"<span style='display:inline-flex;align-items:center;padding:3px 4px;'>{country_icon_html}</span>"
-        f"<span style='font-size:12px;color:#5f7590;'>{html.escape(os_label)} | {html.escape(country_badge)}</span>"
-        "</div>"
-        "</div>"
-        # Body
-        "<div style='padding:22px 20px;'>"
-        f"{event_icon_block}"
-        "<p style='margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#334155;'>"
-        "Auf dem folgenden System wurde ein Filesystem-Alert ausgelöst. "
-        "Bitte prüfen Sie den Füllstand und ergreifen Sie gegebenenfalls Massnahmen."
-        "</p>"
-        "<table style='width:100%;border-collapse:collapse;font-size:14px;background:#f8fafc;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;'>"
-        "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;width:140px;'>System</td>"
-        f"<td style='padding:10px 14px;font-weight:600;border-bottom:1px solid #e2e8f0;'>{html.escape(title)}</td></tr>"
-        "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;'>IP-Adresse</td>"
-        f"<td style='padding:10px 14px;font-weight:600;border-bottom:1px solid #e2e8f0;'>{html.escape(primary_ip or '-')}</td></tr>"
-        "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;'>OS-Typ</td>"
-        f"<td style='padding:10px 14px;font-weight:600;border-bottom:1px solid #e2e8f0;'>{html.escape(os_label)}</td></tr>"
-        "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;'>Land</td>"
-        f"<td style='padding:10px 14px;font-weight:600;border-bottom:1px solid #e2e8f0;'>{html.escape(country_badge)}</td></tr>"
-        "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;'>Mountpoint</td>"
-        f"<td style='padding:10px 14px;font-weight:600;border-bottom:1px solid #e2e8f0;font-family:monospace;'>{html.escape(mountpoint)}</td></tr>"
-        "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;'>Auslastung</td>"
-        f"<td style='padding:10px 14px;font-weight:700;border-bottom:1px solid #e2e8f0;color:{sev_color};'>{html.escape(used_display)}</td></tr>"
-        "<tr><td style='padding:10px 14px;color:#64748b;border-bottom:1px solid #e2e8f0;'>Schweregrad</td>"
-        f"<td style='padding:10px 14px;border-bottom:1px solid #e2e8f0;'>"
-        f"<span style='display:inline-block;padding:2px 10px;border-radius:999px;background:{sev_bg};color:{sev_text};font-weight:700;font-size:12px;'>{sev_label}</span>"
-        "</td></tr>"
-        "<tr><td style='padding:10px 14px;color:#64748b;'>Zeitpunkt</td>"
-        f"<td style='padding:10px 14px;font-weight:600;'>{html.escape(reported_at)}</td></tr>"
-        "</table>"
-        "<p style='margin:18px 0 0 0;font-size:13px;color:#94a3b8;'>Diese Meldung wurde automatisch durch das System Health Monitoring generiert.</p>"
-        f"<div style='margin-top:18px;padding-top:14px;border-top:1px solid #e2e8f0;text-align:right;'><img src='{ang_logo_uri}' alt='ANG' width='100' style='display:inline-block;max-width:100px;height:auto;'></div>"
-        "</div>"
-        "</div>"
-        "</body></html>"
-    )
-
-
-def send_customer_alert_mail(
-    conn: sqlite3.Connection,
-    hostname: str,
-    mountpoint: str,
-    severity: str,
-    used_percent: float,
-    display_name: str = "",
-    reported_at_utc: str = "",
-) -> None:
-    """Send customer-facing filesystem alert e-mail based on per-host settings."""
-    try:
-        host_settings = get_host_settings(conn, hostname)
-        raw_emails = str(host_settings.get("customer_alert_emails", "") or "").strip()
-        if not raw_emails:
-            return
-
-        customer_emails = parse_email_recipients(raw_emails)
-        if not customer_emails:
-            return
-
-        # Mountpoint filter (empty = all)
-        raw_mps = str(host_settings.get("customer_alert_mountpoints", "") or "").strip()
-        if raw_mps:
-            allowed_mps = {m.strip() for m in raw_mps.split(",") if m.strip()}
-            if mountpoint not in allowed_mps:
-                return
-
-        # Severity threshold
-        min_severity = str(host_settings.get("customer_alert_min_severity", "critical") or "critical").strip().lower()
-        if min_severity == "critical" and severity != "critical":
-            return
-
-        host_context = collect_host_mail_context(conn, hostname)
-        effective_display_name = str(host_context.get("display_name", "") or "").strip() or display_name
-        subject = customer_alert_mail_subject(hostname, mountpoint, severity, effective_display_name)
-        body = customer_alert_mail_html(
-            hostname,
-            mountpoint,
-            severity,
-            used_percent,
-            effective_display_name,
-            str(host_context.get("primary_ip", "") or ""),
-            str(host_context.get("country_code", "") or ""),
-            str(host_context.get("os_family", "linux") or "linux"),
-            reported_at_utc,
+        sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
+        text = (
+            f"{icon}\n"
+            f"👤 {username}\n"
+            f"🖥️ {title} ({hostname})\n"
+            f"📂 {mountpoint}\n"
+            f"{sev_icon} {severity}\n"
+            f"📊 {used_percent:.1f}%\n"
+            f"🕐 {now_local}"
         )
-
-        # Find an admin user with a valid Microsoft OAuth token to send via
-        try:
-            admin_rows = conn.execute(
-                "SELECT username FROM web_users WHERE COALESCE(is_admin, 0) = 1 AND COALESCE(is_disabled, 0) = 0"
-            ).fetchall()
-        except Exception:
-            admin_rows = []
-
-        access_token = ""
-        sender_email = ""
-        for row in admin_rows:
-            uname = str(row[0] or "").strip()
-            if not uname:
-                continue
-            try:
-                ok, token, _err = ensure_microsoft_access_token(conn, uname)
-                if ok and token:
-                    user_settings = get_web_user_settings(conn, uname)
-                    access_token = token
-                    sender_email = str(user_settings.get("email_sender", "") or "").strip()
-                    break
-            except Exception:
-                continue
-
-        if not access_token:
-            return
-
-        send_microsoft_mail_multi(
-            access_token,
-            customer_emails,
-            subject,
-            body,
-            content_type="HTML",
-            attachments=[],
-            sender=sender_email,
-        )
-    except Exception:
-        pass
-
-
-def get_instant_alert_telegram_chat_ids(conn: sqlite3.Connection, hostname: str, severity: str) -> set[str]:
-    alarm_settings = get_alarm_settings(conn)
-    bot_token = str(alarm_settings.get("telegram_bot_token", "") or "").strip()
-    if not alarm_settings.get("telegram_enabled") or not bot_token:
-        return set()
-
-    try:
-        rows = conn.execute(
-            """
-            SELECT COALESCE(s.alert_instant_min_severity, 'warning'),
-                   COALESCE(s.alert_telegram_chat_id, '')
-            FROM web_users u
-            JOIN web_user_settings s ON s.username = u.username
-            JOIN web_user_alert_subscriptions sub ON sub.username = u.username
-            WHERE COALESCE(u.is_disabled, 0) = 0
-              AND COALESCE(s.alert_instant_telegram_enabled, 0) = 1
-              AND COALESCE(s.alert_telegram_chat_id, '') != ''
-              AND sub.hostname = ?
-              AND COALESCE(sub.notify_telegram, 0) = 1
-            """,
-            (hostname,),
-        ).fetchall()
-    except Exception:
-        return set()
-
-    chat_ids: set[str] = set()
-    for row in rows:
-        min_severity = str(row[0] or "warning").strip().lower()
-        chat_id = str(row[1] or "").strip()
-        if not chat_id:
-            continue
-        if min_severity == "critical" and severity not in {"critical"}:
-            continue
-        chat_ids.add(chat_id)
-    return chat_ids
+        telegram_send_to_chat(bot_token, chat_id, text)
 
 
 def get_oauth_settings(conn: sqlite3.Connection) -> dict:
@@ -4693,19 +2584,10 @@ def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
         "alert_email_enabled": settings["alert_email_enabled"],
         "alert_email_time_hhmm": settings["alert_email_time_hhmm"],
         "alert_email_recipients": settings["alert_email_recipients"],
-        "alert_warning_email_recipients": settings.get("alert_warning_email_recipients", ""),
-        "alert_critical_email_recipients": settings.get("alert_critical_email_recipients", ""),
         "alert_instant_mail_enabled": settings["alert_instant_mail_enabled"],
         "alert_instant_min_severity": settings["alert_instant_min_severity"],
         "alert_instant_telegram_enabled": settings["alert_instant_telegram_enabled"],
         "alert_telegram_chat_id": settings["alert_telegram_chat_id"],
-        "email_sender": settings["email_sender"],
-        "digest_trend_metrics": settings.get("digest_trend_metrics", "cpu,memory,swap,filesystem"),
-        "host_interest_mode": settings.get("host_interest_mode", "all"),
-        "host_interest_hosts": settings.get("host_interest_hosts", ""),
-        "backup_email_enabled": settings.get("backup_email_enabled", False),
-        "backup_email_time_hhmm": settings.get("backup_email_time_hhmm", DEFAULT_BACKUP_DIGEST_TIME),
-        "backup_email_recipients": settings.get("backup_email_recipients", ""),
         "mail_oauth_available": oauth_is_configured(oauth_settings),
         "microsoft_oauth": {
             "connected": connection is not None,
@@ -4876,7 +2758,6 @@ def send_microsoft_mail(
     *,
     content_type: str = "Text",
     attachments: list[dict] | None = None,
-    sender: str = "",
 ) -> tuple[bool, str]:
     message_payload = {
         "subject": subject,
@@ -4895,14 +2776,8 @@ def send_microsoft_mail(
     if attachments:
         message_payload["attachments"] = attachments
 
-    sender_id = parse.quote(sender, safe="") if sender else ""
-    send_url = (
-        f"https://graph.microsoft.com/v1.0/users/{sender_id}/sendMail"
-        if sender_id
-        else "https://graph.microsoft.com/v1.0/me/sendMail"
-    )
     status, payload, raw = request_json(
-        send_url,
+        "https://graph.microsoft.com/v1.0/me/sendMail",
         method="POST",
         payload={
             "message": message_payload,
@@ -4925,7 +2800,6 @@ def send_microsoft_mail_multi(
     *,
     content_type: str = "Text",
     attachments: list[dict] | None = None,
-    sender: str = "",
 ) -> tuple[bool, str]:
     if not recipients:
         return False, "no recipients"
@@ -4940,7 +2814,6 @@ def send_microsoft_mail_multi(
             content,
             content_type=content_type,
             attachments=attachments,
-            sender=sender,
         )
         if ok:
             sent_count += 1
@@ -4966,7 +2839,6 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
         SELECT id, hostname, mountpoint, severity, used_percent
         FROM alerts
         WHERE status = 'open'
-          AND (closed_at_utc IS NULL OR closed_at_utc = '')
           AND created_at_utc <= ?
           AND (last_reminder_sent_utc IS NULL OR last_reminder_sent_utc <= ?)
         ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, used_percent DESC
@@ -5032,7 +2904,11 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                 continue
 
             user_settings = get_web_user_settings(conn, username)
-            all_recipients = resolve_alert_mail_recipients_for_severity(user_settings, severity)
+            recipient = user_settings.get("email_recipient", "").strip()
+            if not recipient:
+                continue
+            extra = parse_email_recipients(user_settings.get("alert_email_recipients", ""))
+            all_recipients = parse_email_recipients(",".join([recipient] + extra))
             if not all_recipients:
                 continue
 
@@ -5058,7 +2934,6 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                     os_family=str(host_ctx.get("os_family", "linux") or "linux"),
                     reported_at_utc=reported_at_utc,
                     graph_cid=graph_cid or "",
-                    alert_id=alert_id,
                 )
                 send_microsoft_mail_multi(
                     access_token,
@@ -5067,7 +2942,6 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                     body,
                     content_type="HTML",
                     attachments=graph_attachments,
-                    sender=user_settings.get("email_sender", ""),
                 )
                 sent_to_anyone = True
             except Exception:
@@ -5078,88 +2952,6 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                 "UPDATE alerts SET last_reminder_sent_utc = ? WHERE id = ?",
                 (now_utc_iso, alert_id),
             )
-
-
-def check_inactive_host_alerts(conn: sqlite3.Connection) -> None:
-    alarm_settings = get_alarm_settings(conn)
-    if not alarm_settings.get("inactive_host_alert_enabled"):
-        return
-
-    inactive_hours = max(1, int(alarm_settings.get("inactive_host_alert_hours") or INACTIVE_HOST_ALERT_HOURS_DEFAULT))
-    cutoff_iso = utc_hours_ago_iso(inactive_hours)
-    now_utc_dt = datetime.now(timezone.utc)
-    now_utc_iso = now_utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    rows = conn.execute(
-        """
-        SELECT hostname, MAX(received_at_utc) AS last_seen_utc
-        FROM reports
-        GROUP BY hostname
-        """
-    ).fetchall()
-
-    for row in rows:
-        hostname = str(row[0] or "").strip()
-        last_seen_utc = str(row[1] or "").strip()
-        if not hostname or not last_seen_utc:
-            continue
-
-        host_settings = get_host_settings(conn, hostname)
-        if bool(host_settings.get("is_hidden", False)):
-            _resolve_inactive_host_alert_if_open(conn, hostname, None, alarm_settings=alarm_settings, send_notification=False)
-            continue
-
-        if is_alert_muted(conn, hostname, INACTIVE_HOST_ALERT_MOUNTPOINT):
-            _resolve_inactive_host_alert_if_open(conn, hostname, None, alarm_settings=alarm_settings, send_notification=False)
-            continue
-
-        is_inactive = last_seen_utc < cutoff_iso
-        if not is_inactive:
-            _resolve_inactive_host_alert_if_open(conn, hostname, None, alarm_settings=alarm_settings, send_notification=False)
-            continue
-
-        open_row = conn.execute(
-            "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open'",
-            (hostname, INACTIVE_HOST_ALERT_MOUNTPOINT),
-        ).fetchone()
-
-        try:
-            last_seen_dt = datetime.fromisoformat(last_seen_utc.replace("Z", "+00:00"))
-        except (ValueError, AttributeError):
-            last_seen_dt = now_utc_dt
-        hours_inactive = max(0.0, round((now_utc_dt - last_seen_dt).total_seconds() / 3600.0, 1))
-
-        if open_row:
-            conn.execute(
-                "UPDATE alerts SET used_percent = ?, last_seen_at_utc = ? WHERE id = ?",
-                (hours_inactive, now_utc_iso, int(open_row[0])),
-            )
-            continue
-
-        _cur = conn.execute(
-            """
-            INSERT INTO alerts (
-                hostname, mountpoint, severity, used_percent, status,
-                created_at_utc, last_seen_at_utc, resolved_at_utc, report_id
-            ) VALUES (?, ?, 'warning', ?, 'open', ?, ?, NULL, NULL)
-            """,
-            (hostname, INACTIVE_HOST_ALERT_MOUNTPOINT, hours_inactive, now_utc_iso, now_utc_iso),
-        )
-        _new_alert_id = int(_cur.lastrowid)
-        conn.commit()  # commit before sending notification so the alert is visible when ack button is clicked
-
-        display_name = get_display_name_override(conn, hostname) or hostname
-        maybe_send_alert_message(
-            alarm_settings,
-            "inactive",
-            hostname,
-            INACTIVE_HOST_ALERT_MOUNTPOINT,
-            "warning",
-            hours_inactive,
-            conn=conn,
-            display_name=display_name,
-            alert_id=_new_alert_id,
-        )
 
 
 def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
@@ -5199,21 +2991,15 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
         alert_time = normalize_hhmm(row[8], DEFAULT_ALERT_DIGEST_TIME)
         alert_last_sent = str(row[9] or "").strip()
         settings = get_web_user_settings(conn, username)
-        warning_recipients = resolve_alert_mail_recipients_for_severity(settings, "warning")
-        critical_recipients = resolve_alert_mail_recipients_for_severity(settings, "critical")
+        extra_alert_recipients = parse_email_recipients(settings.get("alert_email_recipients", ""))
+        all_alert_recipients = parse_email_recipients(",".join([recipient] + extra_alert_recipients))
 
         if not email_enabled:
             continue
 
         send_trend = trend_enabled and bool(recipient) and scheduled_digest_due(now_local, trend_time, trend_last_sent)
-        send_alert = alert_enabled and (bool(warning_recipients) or bool(critical_recipients)) and scheduled_digest_due(now_local, alert_time, alert_last_sent)
-        backup_enabled = settings.get("backup_email_enabled", False)
-        backup_time = normalize_hhmm(settings.get("backup_email_time_hhmm", DEFAULT_BACKUP_DIGEST_TIME), DEFAULT_BACKUP_DIGEST_TIME)
-        backup_recipients_raw = str(settings.get("backup_email_recipients", "") or "").strip()
-        backup_recipients = [r.strip() for r in backup_recipients_raw.replace(";", ",").split(",") if r.strip()]
-        backup_last_sent = str(settings.get("backup_email_last_sent_local_date", "") or "").strip()
-        send_backup = backup_enabled and bool(backup_recipients) and scheduled_digest_due(now_local, backup_time, backup_last_sent)
-        if not send_trend and not send_alert and not send_backup:
+        send_alert = alert_enabled and bool(all_alert_recipients) and scheduled_digest_due(now_local, alert_time, alert_last_sent)
+        if not send_trend and not send_alert:
             continue
 
         ok_token, access_token, _details = ensure_microsoft_access_token(conn, username)
@@ -5221,16 +3007,13 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
             continue
 
         if send_trend:
-            all_warnings = collect_critical_trends(conn, 72)
-            digest_metrics = [m.strip() for m in settings.get("digest_trend_metrics", "cpu,memory,swap,filesystem").split(",") if m.strip()]
-            warnings = [w for w in all_warnings if w.get("type") in digest_metrics] if digest_metrics else all_warnings
+            warnings = collect_critical_trends(conn, 72)
             trend_ok, _trend_details = send_microsoft_mail(
                 access_token,
                 recipient,
                 trend_digest_subject(warnings, today_local),
                 trend_digest_html(username, warnings, 72),
                 content_type="HTML",
-                sender=settings.get("email_sender", ""),
             )
             if trend_ok:
                 conn.execute(
@@ -5245,62 +3028,19 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
         if send_alert:
             alerts = collect_open_alerts(conn)
             graph_cids, graph_attachments = build_alert_digest_graph_bundle(conn, alerts, hours=24)
-            critical_alerts = [item for item in alerts if str(item.get("severity") or "").strip().lower() == "critical"]
-            warning_alerts = [item for item in alerts if str(item.get("severity") or "").strip().lower() == "warning"]
-
-            any_alert_sent = False
-            if critical_alerts and critical_recipients:
-                critical_ok, _critical_details = send_microsoft_mail_multi(
-                    access_token,
-                    critical_recipients,
-                    alert_digest_subject(critical_alerts, today_local),
-                    alert_digest_html(username, critical_alerts, graph_cids=graph_cids, graph_hours=24),
-                    content_type="HTML",
-                    attachments=graph_attachments,
-                    sender=settings.get("email_sender", ""),
-                )
-                any_alert_sent = any_alert_sent or critical_ok
-
-            if warning_alerts and warning_recipients:
-                warning_ok, _warning_details = send_microsoft_mail_multi(
-                    access_token,
-                    warning_recipients,
-                    alert_digest_subject(warning_alerts, today_local),
-                    alert_digest_html(username, warning_alerts, graph_cids=graph_cids, graph_hours=24),
-                    content_type="HTML",
-                    attachments=graph_attachments,
-                    sender=settings.get("email_sender", ""),
-                )
-                any_alert_sent = any_alert_sent or warning_ok
-
-            alert_ok = any_alert_sent
+            alert_ok, _alert_details = send_microsoft_mail_multi(
+                access_token,
+                all_alert_recipients,
+                alert_digest_subject(alerts, today_local),
+                alert_digest_html(username, alerts, graph_cids=graph_cids, graph_hours=24),
+                content_type="HTML",
+                attachments=graph_attachments,
+            )
             if alert_ok:
                 conn.execute(
                     """
                     UPDATE web_user_settings
                     SET alert_email_last_sent_local_date = ?, updated_at_utc = ?
-                    WHERE username = ?
-                    """,
-                    (today_local, utc_now_iso(), username),
-                )
-
-        if send_backup:
-            backup_hosts = get_backup_status_overview(conn)
-            missing_only = [h for h in backup_hosts if h.get("has_missing_backup")]
-            # Send only when there are missing backups; if all OK send informational mail too
-            backup_ok, _backup_details = send_microsoft_mail_multi(
-                access_token,
-                backup_recipients,
-                backup_digest_subject(backup_hosts, today_local),
-                backup_digest_html(username, backup_hosts, today_local),
-                content_type="HTML",
-                sender=settings.get("email_sender", ""),
-            )
-            if backup_ok:
-                conn.execute(
-                    """
-                    UPDATE web_user_settings
-                    SET backup_email_last_sent_local_date = ?, updated_at_utc = ?
                     WHERE username = ?
                     """,
                     (today_local, utc_now_iso(), username),
@@ -5334,22 +3074,8 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
         """
         SELECT warning_threshold_percent, critical_threshold_percent,
                warning_consecutive_hits, warning_window_minutes, critical_trigger_immediate,
-               COALESCE(cpu_warning_threshold_percent, 80),
-               COALESCE(cpu_critical_threshold_percent, 95),
-               COALESCE(cpu_alert_window_reports, 4),
-               COALESCE(ram_warning_threshold_percent, 85),
-               COALESCE(ram_critical_threshold_percent, 95),
-               COALESCE(ram_alert_window_reports, 4),
                telegram_enabled, telegram_bot_token, telegram_chat_id, updated_at_utc,
-               COALESCE(alert_reminder_interval_hours, 0),
-               COALESCE(inactive_host_alert_enabled, 0),
-               COALESCE(inactive_host_alert_hours, 3),
-               COALESCE(openai_api_key, ''),
-               COALESCE(openai_model, ''),
-               COALESCE(openai_timeout_sec, 12),
-               COALESCE(openai_max_tokens, 1200),
-               COALESCE(ai_troubleshoot_enabled, 1),
-               COALESCE(ai_troubleshoot_cache_ttl_sec, 600)
+               COALESCE(alert_reminder_interval_hours, 0)
         FROM alarm_settings
         WHERE id = 1
         """
@@ -5362,31 +3088,12 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
             "warning_consecutive_hits": 2,
             "warning_window_minutes": 15,
             "critical_trigger_immediate": True,
-            "cpu_warning_threshold_percent": CPU_WARNING_THRESHOLD_PERCENT,
-            "cpu_critical_threshold_percent": CPU_CRITICAL_THRESHOLD_PERCENT,
-            "cpu_alert_window_reports": CPU_ALERT_WINDOW_REPORTS,
-            "ram_warning_threshold_percent": RAM_WARNING_THRESHOLD_PERCENT,
-            "ram_critical_threshold_percent": RAM_CRITICAL_THRESHOLD_PERCENT,
-            "ram_alert_window_reports": RAM_ALERT_WINDOW_REPORTS,
             "telegram_enabled": TELEGRAM_ENABLED_DEFAULT,
             "telegram_bot_token": TELEGRAM_BOT_TOKEN_DEFAULT,
             "telegram_chat_id": TELEGRAM_CHAT_ID_DEFAULT,
             "updated_at_utc": "",
             "alert_reminder_interval_hours": 0,
-            "inactive_host_alert_enabled": False,
-            "inactive_host_alert_hours": INACTIVE_HOST_ALERT_HOURS_DEFAULT,
-            "openai_api_key_is_set": bool(OPENAI_API_KEY),
-            "openai_model": OPENAI_MODEL,
-            "openai_timeout_sec": OPENAI_TIMEOUT_SEC,
-            "openai_max_tokens": OPENAI_MAX_TOKENS,
-            "ai_troubleshoot_enabled": AI_TROUBLESHOOT_ENABLED_DEFAULT,
-            "ai_troubleshoot_cache_ttl_sec": AI_TROUBLESHOOT_CACHE_TTL_SEC,
         }
-
-    db_openai_key = str(row[18] or "").strip()
-    # Fall back to env-var key if DB has no key stored
-    effective_key = db_openai_key or OPENAI_API_KEY
-    db_model = str(row[19] or "").strip() or OPENAI_MODEL
 
     return {
         "warning_threshold_percent": clamp_threshold(row[0], 1, 99, WARNING_THRESHOLD_PERCENT),
@@ -5394,26 +3101,11 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
         "warning_consecutive_hits": max(1, int(row[2] or 2)),
         "warning_window_minutes": max(1, int(row[3] or 15)),
         "critical_trigger_immediate": coerce_bool(row[4]),
-        "cpu_warning_threshold_percent": clamp_threshold(row[5], 1, 99, CPU_WARNING_THRESHOLD_PERCENT),
-        "cpu_critical_threshold_percent": clamp_threshold(row[6], 1, 100, CPU_CRITICAL_THRESHOLD_PERCENT),
-        "cpu_alert_window_reports": max(2, min(int(row[7] or CPU_ALERT_WINDOW_REPORTS), 24)),
-        "ram_warning_threshold_percent": clamp_threshold(row[8], 1, 99, RAM_WARNING_THRESHOLD_PERCENT),
-        "ram_critical_threshold_percent": clamp_threshold(row[9], 1, 100, RAM_CRITICAL_THRESHOLD_PERCENT),
-        "ram_alert_window_reports": max(2, min(int(row[10] or RAM_ALERT_WINDOW_REPORTS), 24)),
-        "telegram_enabled": coerce_bool(row[11]),
-        "telegram_bot_token": str(row[12] or ""),
-        "telegram_chat_id": str(row[13] or ""),
-        "updated_at_utc": str(row[14] or ""),
-        "alert_reminder_interval_hours": max(0, int(row[15] or 0)) if row[15] is not None else 0,
-        "inactive_host_alert_enabled": coerce_bool(row[16]) if len(row) > 16 else False,
-        "inactive_host_alert_hours": max(1, min(int(row[17] or INACTIVE_HOST_ALERT_HOURS_DEFAULT), 168)) if len(row) > 17 else INACTIVE_HOST_ALERT_HOURS_DEFAULT,
-        # API key is never returned to the client — only a flag indicating whether one is set
-        "openai_api_key_is_set": bool(effective_key),
-        "openai_model": db_model,
-        "openai_timeout_sec": max(3, min(int(row[20] or OPENAI_TIMEOUT_SEC), 60)),
-        "openai_max_tokens": max(256, min(int(row[21] or OPENAI_MAX_TOKENS), 4000)),
-        "ai_troubleshoot_enabled": coerce_bool(row[22]) if row[22] is not None else AI_TROUBLESHOOT_ENABLED_DEFAULT,
-        "ai_troubleshoot_cache_ttl_sec": max(30, min(int(row[23] or AI_TROUBLESHOOT_CACHE_TTL_SEC), 3600)),
+        "telegram_enabled": coerce_bool(row[5]),
+        "telegram_bot_token": str(row[6] or ""),
+        "telegram_chat_id": str(row[7] or ""),
+        "updated_at_utc": str(row[8] or ""),
+        "alert_reminder_interval_hours": max(0, int(row[9] or 0)) if row[9] is not None else 0,
     }
 
 
@@ -5447,114 +3139,21 @@ def normalize_alarm_settings_payload(payload: dict, existing: dict | None = None
         warning_window = 15
     warning_window = max(1, min(warning_window, 240))
 
-    cpu_warning = clamp_threshold(
-        payload.get("cpu_warning_threshold_percent", base.get("cpu_warning_threshold_percent", CPU_WARNING_THRESHOLD_PERCENT)),
-        1,
-        99,
-        CPU_WARNING_THRESHOLD_PERCENT,
-    )
-    cpu_critical = clamp_threshold(
-        payload.get("cpu_critical_threshold_percent", base.get("cpu_critical_threshold_percent", CPU_CRITICAL_THRESHOLD_PERCENT)),
-        1,
-        100,
-        CPU_CRITICAL_THRESHOLD_PERCENT,
-    )
-    if cpu_critical <= cpu_warning:
-        cpu_critical = min(100.0, cpu_warning + 1.0)
-
-    ram_warning = clamp_threshold(
-        payload.get("ram_warning_threshold_percent", base.get("ram_warning_threshold_percent", RAM_WARNING_THRESHOLD_PERCENT)),
-        1,
-        99,
-        RAM_WARNING_THRESHOLD_PERCENT,
-    )
-    ram_critical = clamp_threshold(
-        payload.get("ram_critical_threshold_percent", base.get("ram_critical_threshold_percent", RAM_CRITICAL_THRESHOLD_PERCENT)),
-        1,
-        100,
-        RAM_CRITICAL_THRESHOLD_PERCENT,
-    )
-    if ram_critical <= ram_warning:
-        ram_critical = min(100.0, ram_warning + 1.0)
-
-    try:
-        cpu_window = int(payload.get("cpu_alert_window_reports", base.get("cpu_alert_window_reports", CPU_ALERT_WINDOW_REPORTS)))
-    except (TypeError, ValueError):
-        cpu_window = CPU_ALERT_WINDOW_REPORTS
-    cpu_window = max(2, min(cpu_window, 24))
-
-    try:
-        ram_window = int(payload.get("ram_alert_window_reports", base.get("ram_alert_window_reports", RAM_ALERT_WINDOW_REPORTS)))
-    except (TypeError, ValueError):
-        ram_window = RAM_ALERT_WINDOW_REPORTS
-    ram_window = max(2, min(ram_window, 24))
-
-    try:
-        inactive_hours = int(payload.get("inactive_host_alert_hours", base.get("inactive_host_alert_hours", INACTIVE_HOST_ALERT_HOURS_DEFAULT)))
-    except (TypeError, ValueError):
-        inactive_hours = INACTIVE_HOST_ALERT_HOURS_DEFAULT
-    inactive_hours = max(1, min(inactive_hours, 168))
-
-    # OpenAI / AI Troubleshoot settings
-    raw_api_key = str(payload.get("openai_api_key", "") or "").strip()
-    # If the sent key is the masked placeholder or empty, keep the existing stored key (do not overwrite)
-    existing_api_key = str(base.get("_openai_api_key_raw", "") or "").strip()
-    if raw_api_key and not all(c == "\u2022" for c in raw_api_key):
-        new_api_key = raw_api_key
-    else:
-        new_api_key = existing_api_key
-
-    new_model = str(payload.get("openai_model", base.get("openai_model", OPENAI_MODEL)) or "").strip() or OPENAI_MODEL
-    try:
-        new_timeout = max(3, min(int(payload.get("openai_timeout_sec", base.get("openai_timeout_sec", OPENAI_TIMEOUT_SEC)) or OPENAI_TIMEOUT_SEC), 60))
-    except (TypeError, ValueError):
-        new_timeout = OPENAI_TIMEOUT_SEC
-    try:
-        new_max_tokens = max(256, min(int(payload.get("openai_max_tokens", base.get("openai_max_tokens", OPENAI_MAX_TOKENS)) or OPENAI_MAX_TOKENS), 4000))
-    except (TypeError, ValueError):
-        new_max_tokens = OPENAI_MAX_TOKENS
-    new_ai_enabled = coerce_bool(payload.get("ai_troubleshoot_enabled", base.get("ai_troubleshoot_enabled", AI_TROUBLESHOOT_ENABLED_DEFAULT)))
-    try:
-        new_cache_ttl = max(30, min(int(payload.get("ai_troubleshoot_cache_ttl_sec", base.get("ai_troubleshoot_cache_ttl_sec", AI_TROUBLESHOOT_CACHE_TTL_SEC)) or AI_TROUBLESHOOT_CACHE_TTL_SEC), 3600))
-    except (TypeError, ValueError):
-        new_cache_ttl = AI_TROUBLESHOOT_CACHE_TTL_SEC
-
     return {
         "warning_threshold_percent": warning,
         "critical_threshold_percent": critical,
         "warning_consecutive_hits": warning_hits,
         "warning_window_minutes": warning_window,
         "critical_trigger_immediate": coerce_bool(payload.get("critical_trigger_immediate", base.get("critical_trigger_immediate", True))),
-        "cpu_warning_threshold_percent": cpu_warning,
-        "cpu_critical_threshold_percent": cpu_critical,
-        "cpu_alert_window_reports": cpu_window,
-        "ram_warning_threshold_percent": ram_warning,
-        "ram_critical_threshold_percent": ram_critical,
-        "ram_alert_window_reports": ram_window,
         "telegram_enabled": coerce_bool(payload.get("telegram_enabled", base.get("telegram_enabled", False))),
         "telegram_bot_token": str(payload.get("telegram_bot_token", base.get("telegram_bot_token", "")) or "").strip(),
         "telegram_chat_id": str(payload.get("telegram_chat_id", base.get("telegram_chat_id", "")) or "").strip(),
         "alert_reminder_interval_hours": max(0, min(int(payload.get("alert_reminder_interval_hours", base.get("alert_reminder_interval_hours", 0)) or 0), 168)),
-        "inactive_host_alert_enabled": coerce_bool(payload.get("inactive_host_alert_enabled", base.get("inactive_host_alert_enabled", False))),
-        "inactive_host_alert_hours": inactive_hours,
-        # Internal raw key (never sent to client, only used within save_alarm_settings)
-        "_openai_api_key_raw": new_api_key,
-        "openai_model": new_model,
-        "openai_timeout_sec": new_timeout,
-        "openai_max_tokens": new_max_tokens,
-        "ai_troubleshoot_enabled": new_ai_enabled,
-        "ai_troubleshoot_cache_ttl_sec": new_cache_ttl,
     }
 
 
 def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
     current = get_alarm_settings(conn)
-    # Fetch existing raw API key from DB so normalize can preserve it when placeholder is sent
-    existing_raw_key_row = conn.execute(
-        "SELECT COALESCE(openai_api_key, '') FROM alarm_settings WHERE id = 1"
-    ).fetchone()
-    existing_raw_key = str(existing_raw_key_row[0] if existing_raw_key_row else "") or OPENAI_API_KEY
-    current["_openai_api_key_raw"] = existing_raw_key
     normalized = normalize_alarm_settings_payload(payload, current)
     now_utc = utc_now_iso()
 
@@ -5567,52 +3166,24 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             warning_consecutive_hits,
             warning_window_minutes,
             critical_trigger_immediate,
-            cpu_warning_threshold_percent,
-            cpu_critical_threshold_percent,
-            cpu_alert_window_reports,
-            ram_warning_threshold_percent,
-            ram_critical_threshold_percent,
-            ram_alert_window_reports,
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,
             updated_at_utc,
-            alert_reminder_interval_hours,
-            inactive_host_alert_enabled,
-            inactive_host_alert_hours,
-            openai_api_key,
-            openai_model,
-            openai_timeout_sec,
-            openai_max_tokens,
-            ai_troubleshoot_enabled,
-            ai_troubleshoot_cache_ttl_sec
+            alert_reminder_interval_hours
         )
-        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             warning_threshold_percent = excluded.warning_threshold_percent,
             critical_threshold_percent = excluded.critical_threshold_percent,
             warning_consecutive_hits = excluded.warning_consecutive_hits,
             warning_window_minutes = excluded.warning_window_minutes,
             critical_trigger_immediate = excluded.critical_trigger_immediate,
-            cpu_warning_threshold_percent = excluded.cpu_warning_threshold_percent,
-            cpu_critical_threshold_percent = excluded.cpu_critical_threshold_percent,
-            cpu_alert_window_reports = excluded.cpu_alert_window_reports,
-            ram_warning_threshold_percent = excluded.ram_warning_threshold_percent,
-            ram_critical_threshold_percent = excluded.ram_critical_threshold_percent,
-            ram_alert_window_reports = excluded.ram_alert_window_reports,
             telegram_enabled = excluded.telegram_enabled,
             telegram_bot_token = excluded.telegram_bot_token,
             telegram_chat_id = excluded.telegram_chat_id,
             updated_at_utc = excluded.updated_at_utc,
-            alert_reminder_interval_hours = excluded.alert_reminder_interval_hours,
-            inactive_host_alert_enabled = excluded.inactive_host_alert_enabled,
-            inactive_host_alert_hours = excluded.inactive_host_alert_hours,
-            openai_api_key = excluded.openai_api_key,
-            openai_model = excluded.openai_model,
-            openai_timeout_sec = excluded.openai_timeout_sec,
-            openai_max_tokens = excluded.openai_max_tokens,
-            ai_troubleshoot_enabled = excluded.ai_troubleshoot_enabled,
-            ai_troubleshoot_cache_ttl_sec = excluded.ai_troubleshoot_cache_ttl_sec
+            alert_reminder_interval_hours = excluded.alert_reminder_interval_hours
         """,
         (
             normalized["warning_threshold_percent"],
@@ -5620,32 +3191,15 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             normalized["warning_consecutive_hits"],
             normalized["warning_window_minutes"],
             1 if normalized["critical_trigger_immediate"] else 0,
-            normalized["cpu_warning_threshold_percent"],
-            normalized["cpu_critical_threshold_percent"],
-            normalized["cpu_alert_window_reports"],
-            normalized["ram_warning_threshold_percent"],
-            normalized["ram_critical_threshold_percent"],
-            normalized["ram_alert_window_reports"],
             1 if normalized["telegram_enabled"] else 0,
             normalized["telegram_bot_token"],
             normalized["telegram_chat_id"],
             now_utc,
             normalized["alert_reminder_interval_hours"],
-            1 if normalized["inactive_host_alert_enabled"] else 0,
-            normalized["inactive_host_alert_hours"],
-            normalized["_openai_api_key_raw"],
-            normalized["openai_model"],
-            normalized["openai_timeout_sec"],
-            normalized["openai_max_tokens"],
-            1 if normalized["ai_troubleshoot_enabled"] else 0,
-            normalized["ai_troubleshoot_cache_ttl_sec"],
         ),
     )
 
     normalized["updated_at_utc"] = now_utc
-    # Remove internal key from returned dict; add public flag instead
-    raw_key_stored = normalized.pop("_openai_api_key_raw", "")
-    normalized["openai_api_key_is_set"] = bool(raw_key_stored)
     return normalized
 
 
@@ -5658,26 +3212,6 @@ def evaluate_severity_for_thresholds(used_percent: float, warning_threshold: flo
 
 
 _LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
-
-_ALERT_ICON_PATHS: dict[str, Path] = {
-    "opened": STATIC_DIR / "icons" / "alertopen.png",
-    "escalated": STATIC_DIR / "icons" / "alertescalated.png",
-    "resolved": STATIC_DIR / "icons" / "alertresolved.png",
-    "reminder": STATIC_DIR / "icons" / "alertreminder.png",
-    "inactive": STATIC_DIR / "icons" / "inactivehost.png",
-    "inactive_resolved": STATIC_DIR / "icons" / "inactivehost.png",
-}
-
-
-def is_resource_alert_mountpoint(mountpoint: str) -> bool:
-    return mountpoint in {CPU_ALERT_MOUNTPOINT, RAM_ALERT_MOUNTPOINT, INACTIVE_HOST_ALERT_MOUNTPOINT}
-
-# Characters that must be escaped in Telegram MarkdownV2
-_MDV2_RE = re.compile(r'([_*\[\]()~`>#+=|{}.!\\-])')
-
-
-def _mdv2(text: object) -> str:
-    return _MDV2_RE.sub(r'\\\1', str(text))
 
 
 def _build_multipart(fields: dict, files: dict) -> tuple[bytes, str]:
@@ -5696,16 +3230,13 @@ def _build_multipart(fields: dict, files: dict) -> tuple[bytes, str]:
     return body, f"multipart/form-data; boundary={boundary.decode()}"
 
 
-def telegram_send_to_chat(bot_token: str, chat_id: str, text: str, image_path: Path | None = None, reply_markup: str | None = None) -> tuple[bool, str]:
-    # Try sendPhoto with status icon; fall back to sendMessage on any error
-    photo_path = (image_path if image_path and image_path.is_file() else (_LOGO_PATH if _LOGO_PATH.is_file() else None))
-    if photo_path:
+def telegram_send_to_chat(bot_token: str, chat_id: str, text: str) -> tuple[bool, str]:
+    # Try sendPhoto with logo as thumbnail; fall back to sendMessage on any error
+    if _LOGO_PATH.is_file():
         try:
-            photo_data = photo_path.read_bytes()
-            fields: dict = {"chat_id": chat_id, "caption": text[:1024], "parse_mode": "MarkdownV2"}
-            if reply_markup:
-                fields["reply_markup"] = reply_markup
-            files = {"photo": (photo_path.name, photo_data, "image/png")}
+            photo_data = _LOGO_PATH.read_bytes()
+            fields = {"chat_id": chat_id, "caption": text[:1024]}
+            files = {"photo": (_LOGO_PATH.name, photo_data, "image/png")}
             body, content_type = _build_multipart(fields, files)
             endpoint = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
             req = request.Request(endpoint, data=body, method="POST")
@@ -5718,15 +3249,13 @@ def telegram_send_to_chat(bot_token: str, chat_id: str, text: str, image_path: P
             pass  # fall through to plain text
 
     endpoint = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    params: dict = {
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "MarkdownV2",
-        "disable_web_page_preview": "true",
-    }
-    if reply_markup:
-        params["reply_markup"] = reply_markup
-    payload = parse.urlencode(params).encode("utf-8")
+    payload = parse.urlencode(
+        {
+            "chat_id": chat_id,
+            "text": text,
+            "disable_web_page_preview": "true",
+        }
+    ).encode("utf-8")
 
     req = request.Request(endpoint, data=payload, method="POST")
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
@@ -5741,7 +3270,7 @@ def telegram_send_to_chat(bot_token: str, chat_id: str, text: str, image_path: P
         return False, str(exc)
 
 
-def telegram_send(settings: dict, text: str, image_path: Path | None = None, reply_markup: str | None = None) -> tuple[bool, str]:
+def telegram_send(settings: dict, text: str) -> tuple[bool, str]:
     if not settings.get("telegram_enabled"):
         return False, "telegram disabled"
 
@@ -5750,62 +3279,7 @@ def telegram_send(settings: dict, text: str, image_path: Path | None = None, rep
     if not bot_token or not chat_id:
         return False, "telegram bot token/chat id missing"
 
-    return telegram_send_to_chat(bot_token, chat_id, text, image_path=image_path, reply_markup=reply_markup)
-
-
-def build_telegram_alert_text(
-    event_type: str,
-    hostname: str,
-    mountpoint: str,
-    severity: str,
-    used_percent: float,
-    display_name: str = "",
-    alert_id: int | None = None,
-) -> str:
-    icon = {
-        "opened": "🚨 ALERT OPEN",
-        "escalated": "⬆️ ALERT ESCALATED",
-        "resolved": "✅ ALERT RESOLVED",
-        "inactive": "💤 HOST INAKTIV",
-        "inactive_resolved": "✅ HOST WIEDER AKTIV",
-    }.get(event_type, "⚠️ ALERT")
-    sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
-    title = display_name.strip() if display_name.strip() else hostname
-    now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
-    try:
-        used_text = f"{float(used_percent):.1f}%"
-    except (TypeError, ValueError):
-        used_text = "-"
-
-    # MarkdownV2: bold hostname/title, monospace usage
-    hostname_part = f"🖥️ *{_mdv2(title)}*" if title == hostname else f"🖥️ *{_mdv2(title)}* \\({_mdv2(hostname)}\\)"
-    if mountpoint == CPU_ALERT_MOUNTPOINT:
-        resource_line = "🖥️ CPU\\-Auslastung"
-    elif mountpoint == RAM_ALERT_MOUNTPOINT:
-        resource_line = "🧠 RAM\\-Auslastung"
-    elif mountpoint == INACTIVE_HOST_ALERT_MOUNTPOINT:
-        resource_line = "💤 Host inaktiv"
-    else:
-        resource_line = f"📂 {_mdv2(mountpoint)}"
-    if mountpoint == INACTIVE_HOST_ALERT_MOUNTPOINT:
-        try:
-            used_text = f"{float(used_percent):.1f}"
-        except (TypeError, ValueError):
-            used_text = "-"
-        value_line = f"⏱️ {_mdv2(used_text)} h"
-    else:
-        value_line = f"📊 `{_mdv2(used_text)}`"
-    msg = (
-        f"{_mdv2(icon)}\n"
-        f"{hostname_part}\n"
-        f"{resource_line}\n"
-        f"{sev_icon} *{_mdv2(severity)}*\n"
-        f"{value_line}\n"
-        f"🕐 {_mdv2(now_local)}"
-    )
-    if alert_id is not None and event_type not in {"resolved", "inactive_resolved"}:
-        msg += f"\n🆔 ID {alert_id}"
-    return msg
+    return telegram_send_to_chat(bot_token, chat_id, text)
 
 
 def maybe_send_alert_message(
@@ -5817,28 +3291,25 @@ def maybe_send_alert_message(
     used_percent: float,
     conn: sqlite3.Connection | None = None,
     display_name: str = "",
-    alert_id: int | None = None,
 ) -> None:
-    skip_global_chat = False
-    if conn is not None and settings.get("telegram_enabled"):
-        global_chat_id = str(settings.get("telegram_chat_id", "") or "").strip()
-        if global_chat_id:
-            skip_global_chat = global_chat_id in get_instant_alert_telegram_chat_ids(conn, hostname, severity)
-
-    if settings.get("telegram_enabled") and not skip_global_chat:
-        text = build_telegram_alert_text(
-            event_type,
-            hostname,
-            mountpoint,
-            severity,
-            used_percent,
-            display_name=display_name,
-            alert_id=alert_id,
+    if settings.get("telegram_enabled"):
+        icon = {
+            "opened": "🚨 ALERT OPEN",
+            "escalated": "⬆️ ALERT ESCALATED",
+            "resolved": "✅ ALERT RESOLVED",
+        }.get(event_type, "⚠️ ALERT")
+        sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
+        title = display_name.strip() if display_name.strip() else hostname
+        now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
+        text = (
+            f"{icon}\n"
+            f"🖥️ {title} ({hostname})\n"
+            f"📂 {mountpoint}\n"
+            f"{sev_icon} {severity}\n"
+            f"📊 {used_percent:.1f}%\n"
+            f"🕐 {now_local}"
         )
-        markup = None
-        if alert_id is not None and event_type not in {"resolved", "inactive_resolved"}:
-            markup = json.dumps({"inline_keyboard": [[{"text": "✅ Quittieren", "callback_data": f"ack:{alert_id}"}]]})
-        telegram_send(settings, text, image_path=_ALERT_ICON_PATHS.get(event_type), reply_markup=markup)
+        telegram_send(settings, text)
     if conn is not None:
         send_instant_alert_telegram_to_users(
             conn,
@@ -5848,9 +3319,8 @@ def maybe_send_alert_message(
             severity,
             used_percent,
             display_name=display_name,
-            alert_id=alert_id,
         )
-        send_instant_alert_mails_to_users(conn, event_type, hostname, mountpoint, severity, used_percent, alert_id=alert_id)
+        send_instant_alert_mails_to_users(conn, event_type, hostname, mountpoint, severity, used_percent)
 
 
 def get_nested_number(payload: dict, section: str, key: str) -> float | None:
@@ -5976,25 +3446,6 @@ def ang_logo_data_uri() -> str:
         return ""
 
 
-def backup_icon_data_uri() -> str:
-    try:
-        encoded = base64.b64encode(BACKUP_ICON_PATH.read_bytes()).decode("ascii")
-        return f"data:image/png;base64,{encoded}"
-    except OSError:
-        return ""
-
-
-def alert_event_icon_data_uri(event_type: str) -> str:
-    icon_path = _ALERT_ICON_PATHS.get(event_type)
-    if not icon_path:
-        return ""
-    try:
-        encoded = base64.b64encode(icon_path.read_bytes()).decode("ascii")
-        return f"data:image/png;base64,{encoded}"
-    except OSError:
-        return ""
-
-
 def collect_host_mail_context(conn: sqlite3.Connection, hostname: str) -> dict:
     settings_row = conn.execute(
         "SELECT COALESCE(display_name_override, ''), COALESCE(country_code_override, '') FROM host_settings WHERE hostname = ?",
@@ -6045,28 +3496,6 @@ def extract_country_code_from_payload(payload: dict) -> str:
     return ""
 
 
-def extract_hana_sid_from_payload(payload: dict) -> str:
-    direct = str(payload.get("hana_sid", "") or payload.get("HANA_SID", "") or "").strip()
-    if direct:
-        return direct
-
-    agent_config = payload.get("agent_config", {})
-    if not isinstance(agent_config, dict):
-        return ""
-
-    entries = agent_config.get("entries", [])
-    if not isinstance(entries, list):
-        return ""
-
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        key = str(entry.get("key", "") or "").strip().upper()
-        if key == "HANA_SID":
-            return str(entry.get("value", "") or "").strip()
-    return ""
-
-
 def payload_has_agent_api_key(payload: dict) -> bool:
     agent_config = payload.get("agent_config", {})
     if not isinstance(agent_config, dict):
@@ -6095,7 +3524,7 @@ def build_agent_api_key_status(payload: dict, request_key: str, hostname: str) -
     grace_allowed = False
 
     if server_requires_api_key and not request_authenticated and not request_key and hostname and API_KEY_GRACE_ALLOW_KNOWN_HOSTS:
-        with sqlite3.connect(DB_PATH, timeout=10) as conn:
+        with sqlite3.connect(DB_PATH) as conn:
             grace_allowed = is_known_hostname(conn, hostname)
 
     status = "off"
@@ -6272,18 +3701,11 @@ def get_latest_report_rows_by_hostname(conn: sqlite3.Connection) -> dict[str, di
         """
         SELECT r.hostname, r.received_at_utc, r.payload_json
         FROM reports r
-        ORDER BY
-            r.hostname,
-            CASE
-                WHEN LOWER(COALESCE(CASE WHEN json_valid(r.payload_json) THEN json_extract(r.payload_json, '$.delivery_mode') END, 'live')) = 'live' THEN 0
-                ELSE 1
-            END,
-            COALESCE(
-                NULLIF(CASE WHEN json_valid(r.payload_json) THEN json_extract(r.payload_json, '$.send_started_utc') END, ''),
-                NULLIF(CASE WHEN json_valid(r.payload_json) THEN json_extract(r.payload_json, '$.timestamp_utc') END, ''),
-                r.received_at_utc
-            ) DESC,
-            r.id DESC
+        WHERE r.id IN (
+            SELECT MAX(id)
+            FROM reports
+            GROUP BY hostname
+        )
         """
     ).fetchall()
 
@@ -6291,8 +3713,6 @@ def get_latest_report_rows_by_hostname(conn: sqlite3.Connection) -> dict[str, di
     for row in rows:
         hostname = str(row[0] or "").strip()
         if not hostname:
-            continue
-        if hostname in result:
             continue
         result[hostname] = {
             "received_at_utc": str(row[1] or ""),
@@ -6304,8 +3724,7 @@ def get_latest_report_rows_by_hostname(conn: sqlite3.Connection) -> dict[str, di
 def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
     row = conn.execute(
         """
-        SELECT display_name_override, COALESCE(country_code_override, ''), COALESCE(is_favorite, 0), COALESCE(is_hidden, 0),
-               COALESCE(customer_alert_emails, ''), COALESCE(customer_alert_mountpoints, ''), COALESCE(customer_alert_min_severity, 'critical')
+        SELECT display_name_override, COALESCE(country_code_override, ''), COALESCE(is_favorite, 0), COALESCE(is_hidden, 0)
         FROM host_settings
         WHERE hostname = ?
         """,
@@ -6317,31 +3736,21 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
             "country_code_override": "",
             "is_favorite": False,
             "is_hidden": False,
-            "customer_alert_emails": "",
-            "customer_alert_mountpoints": "",
-            "customer_alert_min_severity": "critical",
         }
     return {
         "display_name_override": str(row[0] or "").strip(),
         "country_code_override": normalize_country_code(row[1]),
         "is_favorite": bool(int(row[2] or 0)),
         "is_hidden": bool(int(row[3] or 0)),
-        "customer_alert_emails": str(row[4] or "").strip(),
-        "customer_alert_mountpoints": str(row[5] or "").strip(),
-        "customer_alert_min_severity": str(row[6] or "critical").strip().lower() or "critical",
     }
 
 
 def is_alert_muted(conn: sqlite3.Connection, hostname: str, mountpoint: str) -> bool:
-    variants = alert_mountpoint_variants(mountpoint)
-    if not variants:
-        return False
-    placeholders = ",".join("?" for _ in variants)
     row = conn.execute(
-        f"SELECT 1 FROM muted_alert_rules WHERE hostname = ? AND mountpoint IN ({placeholders}) LIMIT 1",
-        (hostname, *variants),
+        "SELECT 1 FROM muted_alert_rules WHERE hostname = ? AND mountpoint = ?",
+        (hostname, mountpoint),
     ).fetchone()
-    return bool(row)
+    return row is not None
 
 
 def resolve_open_alerts_for_host(conn: sqlite3.Connection, hostname: str, report_id: int | None) -> None:
@@ -6355,48 +3764,6 @@ def resolve_open_alerts_for_host(conn: sqlite3.Connection, hostname: str, report
         (now_utc, now_utc, report_id, hostname),
     )
     conn.execute("DELETE FROM alert_debounce WHERE hostname = ?", (hostname,))
-
-
-def _resolve_inactive_host_alert_if_open(
-    conn: sqlite3.Connection,
-    hostname: str,
-    report_id: int | None,
-    *,
-    alarm_settings: dict | None = None,
-    send_notification: bool = True,
-) -> bool:
-    rows = conn.execute(
-        "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open' ORDER BY id DESC",
-        (hostname, INACTIVE_HOST_ALERT_MOUNTPOINT),
-    ).fetchall()
-    if not rows:
-        return False
-
-    now_utc = utc_now_iso()
-    alert_ids = [int(r[0]) for r in rows]
-    conn.execute(
-        f"""
-        UPDATE alerts
-        SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
-        WHERE id IN ({','.join('?' * len(alert_ids))})
-        """,
-        (now_utc, now_utc, report_id, *alert_ids),
-    )
-
-    if send_notification and alarm_settings and alarm_settings.get("inactive_host_alert_enabled"):
-        display_name = get_display_name_override(conn, hostname) or hostname
-        maybe_send_alert_message(
-            alarm_settings,
-            "inactive_resolved",
-            hostname,
-            INACTIVE_HOST_ALERT_MOUNTPOINT,
-            "ok",
-            0.0,
-            conn=conn,
-            display_name=display_name,
-        )
-
-    return True
 
 
 def prune_reports_for_host(conn: sqlite3.Connection, hostname: str, keep_count: int) -> None:
@@ -6466,29 +3833,6 @@ def effective_display_name(payload: dict, override_value: str, hostname: str) ->
     return hostname
 
 
-def effective_agent_version(payload: dict) -> str:
-    runtime = payload.get("agent_runtime")
-    if isinstance(runtime, dict):
-        file_value = str(runtime.get("version_file_value", "") or "").strip()
-        if file_value:
-            return file_value
-
-    payload_value = str(payload.get("agent_version", "") or "").strip()
-    if payload_value:
-        return payload_value
-
-    if isinstance(runtime, dict):
-        selected_value = str(runtime.get("selected_version", "") or "").strip()
-        if selected_value:
-            return selected_value
-
-        embedded_value = str(runtime.get("embedded_version", "") or "").strip()
-        if embedded_value:
-            return embedded_value
-
-    return ""
-
-
 def evaluate_severity(used_percent: float) -> str:
     if used_percent >= CRITICAL_THRESHOLD_PERCENT:
         return "critical"
@@ -6509,13 +3853,16 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
         if not isinstance(fs, dict):
             continue
 
-        mountpoint = normalize_alert_mountpoint(fs.get("mountpoint", ""))
+        mountpoint = str(fs.get("mountpoint", "")).strip()
         if not mountpoint:
             continue
 
         mountpoints_seen.add(mountpoint)
         if is_alert_muted(conn, hostname, mountpoint):
-            muted_open = find_open_alert_for_mountpoint(conn, hostname, mountpoint)
+            muted_open = conn.execute(
+                "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open'",
+                (hostname, mountpoint),
+            ).fetchone()
             if muted_open:
                 conn.execute(
                     "UPDATE alerts SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ? WHERE id = ?",
@@ -6578,10 +3925,16 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
 
             alert_started = next_hit_count >= warning_hits_required
 
-        open_alert = find_open_alert_for_mountpoint(conn, hostname, mountpoint)
-        if open_alert and open_alert[2] != mountpoint:
-            # Canonicalize existing rows to keep one logical alert identity per mountpoint.
-            conn.execute("UPDATE alerts SET mountpoint = ? WHERE id = ?", (mountpoint, open_alert[0]))
+        open_alert = conn.execute(
+            """
+            SELECT id, severity
+            FROM alerts
+            WHERE hostname = ? AND mountpoint = ? AND status = 'open'
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (hostname, mountpoint),
+        ).fetchone()
 
         if severity == "ok":
             conn.execute(
@@ -6609,7 +3962,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
         )
 
         if not open_alert:
-            _cur = conn.execute(
+            conn.execute(
                 """
                 INSERT INTO alerts (
                     hostname, mountpoint, severity, used_percent, status,
@@ -6619,9 +3972,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
                 """,
                 (hostname, mountpoint, severity, used_percent, now_utc, now_utc, report_id),
             )
-            conn.commit()  # commit before sending notification so the alert is visible when ack button is clicked
-            maybe_send_alert_message(alarm_settings, "opened", hostname, mountpoint, severity, used_percent, conn=conn, display_name=display_name, alert_id=int(_cur.lastrowid))
-            send_customer_alert_mail(conn, hostname, mountpoint, severity, used_percent, display_name=display_name, reported_at_utc=now_utc)
+            maybe_send_alert_message(alarm_settings, "opened", hostname, mountpoint, severity, used_percent, conn=conn, display_name=display_name)
             continue
 
         previous_severity = str(open_alert[1] or "warning")
@@ -6644,12 +3995,6 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
             f"DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint NOT IN ({placeholders})",
             (hostname, *sorted(mountpoints_seen)),
         )
-        excluded_synthetic = (
-            CPU_ALERT_MOUNTPOINT,
-            RAM_ALERT_MOUNTPOINT,
-            INACTIVE_HOST_ALERT_MOUNTPOINT,
-        )
-        synthetic_placeholders = ",".join("?" for _ in excluded_synthetic)
         conn.execute(
             f"""
             UPDATE alerts
@@ -6657,260 +4002,15 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
             WHERE hostname = ?
               AND status = 'open'
               AND mountpoint NOT IN ({placeholders})
-              AND mountpoint NOT IN ({synthetic_placeholders})
             """,
-            (now_utc, now_utc, report_id, hostname, *sorted(mountpoints_seen), *excluded_synthetic),
+            (now_utc, now_utc, report_id, hostname, *sorted(mountpoints_seen)),
         )
     else:
         conn.execute("DELETE FROM alert_debounce WHERE hostname = ?", (hostname,))
 
 
-def update_cpu_alerts_for_report(
-    conn: sqlite3.Connection, hostname: str, report_id: int, payload: dict, alarm_settings: dict
-) -> None:
-    cpu_warning_threshold = clamp_threshold(
-        alarm_settings.get("cpu_warning_threshold_percent", CPU_WARNING_THRESHOLD_PERCENT),
-        1,
-        99,
-        CPU_WARNING_THRESHOLD_PERCENT,
-    )
-    cpu_critical_threshold = clamp_threshold(
-        alarm_settings.get("cpu_critical_threshold_percent", CPU_CRITICAL_THRESHOLD_PERCENT),
-        1,
-        100,
-        CPU_CRITICAL_THRESHOLD_PERCENT,
-    )
-    if cpu_critical_threshold <= cpu_warning_threshold:
-        cpu_critical_threshold = min(100.0, cpu_warning_threshold + 1.0)
-    cpu_window_reports = max(
-        2,
-        min(
-            int(alarm_settings.get("cpu_alert_window_reports", CPU_ALERT_WINDOW_REPORTS) or CPU_ALERT_WINDOW_REPORTS),
-            24,
-        ),
-    )
-
-    rows = conn.execute(
-        """
-        SELECT payload_json FROM reports
-        WHERE hostname = ?
-        ORDER BY id DESC
-        LIMIT ?
-        """,
-        (hostname, cpu_window_reports),
-    ).fetchall()
-
-    if len(rows) < cpu_window_reports:
-        return
-
-    cpu_values: list[float] = []
-    for row in rows:
-        try:
-            p = parse_payload_json(str(row[0] or "{}"))
-            v = get_nested_number(p, "cpu", "usage_percent")
-            if v is not None:
-                cpu_values.append(float(v))
-        except Exception:
-            pass
-
-    if len(cpu_values) < cpu_window_reports:
-        return
-
-    avg_cpu = sum(cpu_values) / len(cpu_values)
-    severity = evaluate_severity_for_thresholds(
-        avg_cpu, cpu_warning_threshold, cpu_critical_threshold
-    )
-
-    now_utc = utc_now_iso()
-    display_name = get_display_name_override(conn, hostname) or hostname
-
-    open_alert = conn.execute(
-        """
-        SELECT id, severity
-        FROM alerts
-        WHERE hostname = ? AND mountpoint = ? AND status = 'open'
-        ORDER BY id DESC
-        LIMIT 1
-        """,
-        (hostname, CPU_ALERT_MOUNTPOINT),
-    ).fetchone()
-
-    if severity == "ok":
-        if open_alert:
-            conn.execute(
-                """
-                UPDATE alerts
-                SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
-                WHERE id = ?
-                """,
-                (now_utc, now_utc, report_id, open_alert[0]),
-            )
-            maybe_send_alert_message(
-                alarm_settings, "resolved", hostname, CPU_ALERT_MOUNTPOINT, "ok", avg_cpu,
-                conn=conn, display_name=display_name,
-            )
-        return
-
-    if not open_alert:
-        _cur = conn.execute(
-            """
-            INSERT INTO alerts (
-                hostname, mountpoint, severity, used_percent, status,
-                created_at_utc, last_seen_at_utc, resolved_at_utc, report_id
-            )
-            VALUES (?, ?, ?, ?, 'open', ?, ?, NULL, ?)
-            """,
-            (hostname, CPU_ALERT_MOUNTPOINT, severity, avg_cpu, now_utc, now_utc, report_id),
-        )
-        conn.commit()  # commit before sending notification so the alert is visible when ack button is clicked
-        maybe_send_alert_message(
-            alarm_settings, "opened", hostname, CPU_ALERT_MOUNTPOINT, severity, avg_cpu,
-            conn=conn, display_name=display_name, alert_id=int(_cur.lastrowid),
-        )
-        return
-
-    previous_severity = str(open_alert[1] or "warning")
-    conn.execute(
-        """
-        UPDATE alerts
-        SET severity = ?, used_percent = ?, last_seen_at_utc = ?, report_id = ?
-        WHERE id = ?
-        """,
-        (severity, avg_cpu, now_utc, report_id, open_alert[0]),
-    )
-    if previous_severity != "critical" and severity == "critical":
-        maybe_send_alert_message(
-            alarm_settings, "escalated", hostname, CPU_ALERT_MOUNTPOINT, severity, avg_cpu,
-            conn=conn, display_name=display_name,
-        )
-
-
-def update_ram_alerts_for_report(
-    conn: sqlite3.Connection, hostname: str, report_id: int, payload: dict, alarm_settings: dict
-) -> None:
-    ram_warning_threshold = clamp_threshold(
-        alarm_settings.get("ram_warning_threshold_percent", RAM_WARNING_THRESHOLD_PERCENT),
-        1,
-        99,
-        RAM_WARNING_THRESHOLD_PERCENT,
-    )
-    ram_critical_threshold = clamp_threshold(
-        alarm_settings.get("ram_critical_threshold_percent", RAM_CRITICAL_THRESHOLD_PERCENT),
-        1,
-        100,
-        RAM_CRITICAL_THRESHOLD_PERCENT,
-    )
-    if ram_critical_threshold <= ram_warning_threshold:
-        ram_critical_threshold = min(100.0, ram_warning_threshold + 1.0)
-    ram_window_reports = max(
-        2,
-        min(
-            int(alarm_settings.get("ram_alert_window_reports", RAM_ALERT_WINDOW_REPORTS) or RAM_ALERT_WINDOW_REPORTS),
-            24,
-        ),
-    )
-
-    rows = conn.execute(
-        """
-        SELECT payload_json FROM reports
-        WHERE hostname = ?
-        ORDER BY id DESC
-        LIMIT ?
-        """,
-        (hostname, ram_window_reports),
-    ).fetchall()
-
-    if len(rows) < ram_window_reports:
-        return
-
-    ram_values: list[float] = []
-    for row in rows:
-        try:
-            p = parse_payload_json(str(row[0] or "{}"))
-            v = get_nested_number(p, "memory", "used_percent")
-            if v is not None:
-                ram_values.append(float(v))
-        except Exception:
-            pass
-
-    if len(ram_values) < ram_window_reports:
-        return
-
-    avg_ram = sum(ram_values) / len(ram_values)
-    severity = evaluate_severity_for_thresholds(
-        avg_ram, ram_warning_threshold, ram_critical_threshold
-    )
-
-    now_utc = utc_now_iso()
-    display_name = get_display_name_override(conn, hostname) or hostname
-
-    open_alert = conn.execute(
-        """
-        SELECT id, severity
-        FROM alerts
-        WHERE hostname = ? AND mountpoint = ? AND status = 'open'
-        ORDER BY id DESC
-        LIMIT 1
-        """,
-        (hostname, RAM_ALERT_MOUNTPOINT),
-    ).fetchone()
-
-    if severity == "ok":
-        if open_alert:
-            conn.execute(
-                """
-                UPDATE alerts
-                SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
-                WHERE id = ?
-                """,
-                (now_utc, now_utc, report_id, open_alert[0]),
-            )
-            maybe_send_alert_message(
-                alarm_settings, "resolved", hostname, RAM_ALERT_MOUNTPOINT, "ok", avg_ram,
-                conn=conn, display_name=display_name,
-            )
-        return
-
-    if not open_alert:
-        _cur = conn.execute(
-            """
-            INSERT INTO alerts (
-                hostname, mountpoint, severity, used_percent, status,
-                created_at_utc, last_seen_at_utc, resolved_at_utc, report_id
-            )
-            VALUES (?, ?, ?, ?, 'open', ?, ?, NULL, ?)
-            """,
-            (hostname, RAM_ALERT_MOUNTPOINT, severity, avg_ram, now_utc, now_utc, report_id),
-        )
-        conn.commit()  # commit before sending notification so the alert is visible when ack button is clicked
-        maybe_send_alert_message(
-            alarm_settings, "opened", hostname, RAM_ALERT_MOUNTPOINT, severity, avg_ram,
-            conn=conn, display_name=display_name, alert_id=int(_cur.lastrowid),
-        )
-        return
-
-    previous_severity = str(open_alert[1] or "warning")
-    conn.execute(
-        """
-        UPDATE alerts
-        SET severity = ?, used_percent = ?, last_seen_at_utc = ?, report_id = ?
-        WHERE id = ?
-        """,
-        (severity, avg_ram, now_utc, report_id, open_alert[0]),
-    )
-    if previous_severity != "critical" and severity == "critical":
-        maybe_send_alert_message(
-            alarm_settings, "escalated", hostname, RAM_ALERT_MOUNTPOINT, severity, avg_ram,
-            conn=conn, display_name=display_name,
-        )
-
-
 class MonitoringHandler(BaseHTTPRequestHandler):
     server_version = "MonitoringReceiver/0.1"
-    protocol_version = "HTTP/1.1"
-    # Close idle keep-alive connections after 30 s so the Synology reverse
-    # proxy never tries to reuse a stale backend connection (→ 502 on auto-refresh).
-    timeout = 30
 
     def _swagger_ui_html(self) -> str:
         return """<!doctype html>
@@ -7017,7 +4117,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return False
 
         if not request_key and hostname and API_KEY_GRACE_ALLOW_KNOWN_HOSTS:
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 if is_known_hostname(conn, hostname):
                     return False
 
@@ -7039,7 +4139,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if not token:
             return ""
 
-        with sqlite3.connect(DB_PATH, timeout=10) as conn:
+        with sqlite3.connect(DB_PATH) as conn:
             session_cutoff_iso = utc_hours_ago_iso(1)
             conn.execute(
                 "DELETE FROM web_sessions WHERE last_activity_at_utc <= ?",
@@ -7071,7 +4171,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         username = self._require_web_session()
         if not username:
             return ""
-        with sqlite3.connect(DB_PATH, timeout=10) as conn:
+        with sqlite3.connect(DB_PATH) as conn:
             user = get_web_user(conn, username)
         if not user or not user.get("is_admin"):
             self._send_json(HTTPStatus.FORBIDDEN, {"error": "admin required"})
@@ -7102,20 +4202,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             "</body></html>"
         )
 
-    def handle_one_request(self) -> None:
-        try:
-            super().handle_one_request()
-        except Exception:
-            logging.exception(
-                "Unhandled exception in request handler: %s %s",
-                getattr(self, "command", "?"),
-                getattr(self, "path", "?"),
-            )
-            try:
-                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "internal server error"})
-            except Exception:
-                pass
-
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
 
@@ -7130,7 +4216,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_html(HTTPStatus.BAD_REQUEST, self._oauth_callback_html("/?oauth_status=error&oauth_message=missing_state"))
                 return
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 state_row = consume_oauth_state(conn, state_token, MICROSOFT_PROVIDER)
                 conn.commit()
 
@@ -7150,7 +4236,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_html(HTTPStatus.BAD_REQUEST, self._oauth_callback_html(target))
                 return
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 oauth_settings = get_oauth_settings(conn)
 
             redirect_uri = self._absolute_url("/oauth/microsoft/callback")
@@ -7160,7 +4246,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_html(HTTPStatus.OK, self._oauth_callback_html(target))
                 return
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 upsert_oauth_connection(conn, state_row["username"], MICROSOFT_PROVIDER, token_payload)
                 conn.commit()
 
@@ -7176,7 +4262,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             username = self._web_session_username()
             is_admin = False
             if username:
-                with sqlite3.connect(DB_PATH, timeout=10) as conn:
+                with sqlite3.connect(DB_PATH) as conn:
                     user = get_web_user(conn, username)
                     is_admin = bool(user and user.get("is_admin"))
             self._send_json(
@@ -7185,36 +4271,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "authenticated": bool(username),
                     "username": username,
                     "is_admin": is_admin,
-                    "display_name": user["display_name"] if (username and user) else "",
                 },
             )
             return
-
-        if parsed.path == "/api/v1/user-preferences":
-            username = self._web_session_username()
-            if not username:
-                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "not authenticated"})
-                return
-
-            if self.command == "GET":
-                with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                    prefs = get_web_user_settings(conn, username)
-                self._send_json(HTTPStatus.OK, prefs)
-                return
-
-            if self.command == "POST":
-                try:
-                    payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
-                except (json.JSONDecodeError, ValueError):
-                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid JSON"})
-                    return
-
-                with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                    result = save_web_user_settings(conn, username, payload)
-                    conn.commit()
-
-                self._send_json(HTTPStatus.OK, {"updated": True, **result})
-                return
 
         if parsed.path == "/api/v1/agent-commands":
             query = parse_qs(parsed.query)
@@ -7229,7 +4288,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if self._unauthorized_if_needed(hostname):
                 return
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 expire_old_agent_commands(conn)
                 rows = conn.execute(
                     """
@@ -7274,7 +4333,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/v1/user-profile":
             username = self._web_session_username()
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 payload = current_user_payload(conn, username)
             self._send_json(HTTPStatus.OK, payload)
             return
@@ -7290,7 +4349,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             now_iso = utc_now_iso()
             expires_iso = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 conn.execute(
                     "UPDATE web_sessions SET last_activity_at_utc = ?, expires_at_utc = ? WHERE session_token = ?",
                     (now_iso, expires_iso, session_token),
@@ -7307,7 +4366,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/v1/active-users":
             username = self._web_session_username()
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 users = list_active_web_sessions(conn)
                 conn.commit()
             self._send_json(
@@ -7322,7 +4381,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/v1/user-alert-subscriptions":
             username = self._web_session_username()
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 user_settings = get_web_user_settings(conn, username)
                 oauth_connection = get_oauth_connection(conn, username, MICROSOFT_PROVIDER)
                 alarm_settings = get_alarm_settings(conn)
@@ -7343,14 +4402,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/web-users":
             if not self._require_admin_session():
                 return
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 self._send_json(HTTPStatus.OK, {"users": list_web_users(conn)})
             return
 
         if parsed.path == "/api/v1/admin/user-alert-subscriptions":
             if not self._require_admin_session():
                 return
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 alarm_settings = get_alarm_settings(conn)
                 self._send_json(
                     HTTPStatus.OK,
@@ -7365,130 +4424,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/oauth-settings":
             if not self._require_admin_session():
                 return
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 settings = oauth_settings_public_view(get_oauth_settings(conn))
             self._send_json(HTTPStatus.OK, settings)
             return
 
-        if parsed.path == "/api/v1/backup/database/start":
-            if not self._require_admin_session():
-                return
-            job_id, filename = start_database_backup_job()
-            self._send_json(
-                HTTPStatus.ACCEPTED,
-                {
-                    "job_id": job_id,
-                    "status": "running",
-                    "filename": filename,
-                },
-            )
-            return
-
-        if parsed.path == "/api/v1/backup/database/status":
-            if not self._require_admin_session():
-                return
-            query = parse_qs(parsed.query)
-            job_id = str(query.get("job_id", [""])[0] or "").strip()
-            if not job_id:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "job_id required"})
-                return
-            job = get_database_backup_job(job_id)
-            if job is None:
-                self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup job not found"})
-                return
-            self._send_json(
-                HTTPStatus.OK,
-                {
-                    "job_id": job_id,
-                    "status": str(job.get("status", "unknown")),
-                    "filename": str(job.get("filename", "") or ""),
-                    "backup_size": int(job.get("backup_size", 0) or 0),
-                    "error": str(job.get("error", "") or ""),
-                },
-            )
-            return
-
-        if parsed.path == "/api/v1/backup/database/download":
-            if not self._require_admin_session():
-                return
-            query = parse_qs(parsed.query)
-            job_id = str(query.get("job_id", [""])[0] or "").strip()
-            if not job_id:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "job_id required"})
-                return
-            job = get_database_backup_job(job_id)
-            if job is None:
-                self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup job not found"})
-                return
-            if str(job.get("status", "")) != "ready":
-                self._send_json(HTTPStatus.CONFLICT, {"error": "backup not ready"})
-                return
-
-            backup_path = Path(str(job.get("backup_path", "") or ""))
-            if not backup_path.exists():
-                self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup file missing"})
-                return
-
-            backup_size = int(job.get("backup_size", 0) or 0)
-            filename = str(job.get("filename", "monitoring-backup.db") or "monitoring-backup.db")
-            try:
-                self.send_response(HTTPStatus.OK)
-                self.send_header("Content-Type", "application/x-sqlite3")
-                self.send_header("Content-Length", str(backup_size))
-                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
-                self.send_header("Cache-Control", "no-store")
-                self.end_headers()
-                with backup_path.open("rb") as handle:
-                    while True:
-                        chunk = handle.read(1024 * 1024)
-                        if not chunk:
-                            break
-                        self.wfile.write(chunk)
-                mark_database_backup_job_downloaded(job_id)
-            finally:
-                try:
-                    backup_path.unlink()
-                except OSError:
-                    pass
-            return
-
-        if parsed.path == "/api/v1/backup/database":
-            if not self._require_admin_session():
-                return
-            try:
-                backup_path, backup_size = create_sqlite_backup_file(DB_PATH)
-            except Exception as exc:
-                logging.exception("Database backup endpoint failed")
-                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc).strip() or "database backup failed"})
-                return
-
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
-            version = re.sub(r"[^0-9A-Za-z._-]", "-", read_build_version())
-            filename = f"monitoring-backup-v{version}-{timestamp}.db"
-
-            try:
-                self.send_response(HTTPStatus.OK)
-                self.send_header("Content-Type", "application/x-sqlite3")
-                self.send_header("Content-Length", str(backup_size))
-                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
-                self.send_header("Cache-Control", "no-store")
-                self.end_headers()
-                with backup_path.open("rb") as handle:
-                    while True:
-                        chunk = handle.read(1024 * 1024)
-                        if not chunk:
-                            break
-                        self.wfile.write(chunk)
-            finally:
-                try:
-                    backup_path.unlink()
-                except OSError:
-                    pass
-            return
-
         if parsed.path == "/api/v1/oauth/microsoft/start":
             username = self._web_session_username()
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 settings = get_oauth_settings(conn)
                 if not oauth_is_configured(settings):
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "microsoft oauth not configured"})
@@ -7505,7 +4448,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 rows = conn.execute(
                     """
                     SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json
@@ -7556,66 +4499,64 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/v1/hosts":
             query = parse_qs(parsed.query)
-            limit = parse_int(query, "limit", default=20, min_value=1, max_value=500)
+            limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
 
-            try:
-                with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                    total_hosts = conn.execute(
-                        "SELECT COUNT(DISTINCT hostname) FROM reports"
-                    ).fetchone()[0]
+            with sqlite3.connect(DB_PATH) as conn:
+                total_hosts = conn.execute(
+                    "SELECT COUNT(DISTINCT hostname) FROM reports"
+                ).fetchone()[0]
 
-                    rows = conn.execute(
-                        """
-                        WITH latest_ids AS (
-                            SELECT hostname,
-                                   MAX(id) AS latest_id,
-                                   MAX(received_at_utc) AS last_seen_utc,
-                                   COUNT(*) AS report_count
-                            FROM reports
-                            GROUP BY hostname
-                        ),
-                        alert_counts AS (
-                            SELECT
-                                a.hostname,
-                                SUM(CASE WHEN a.status = 'open'
-                                    AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a.hostname AND m.mountpoint = a.mountpoint)
-                                    AND (a.ack_at_utc IS NULL OR a.ack_at_utc = '')
-                                    THEN 1 ELSE 0 END) AS open_alert_count,
-                                SUM(CASE WHEN a.status = 'open' AND a.severity = 'critical'
-                                    AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a.hostname AND m.mountpoint = a.mountpoint)
-                                    AND (a.ack_at_utc IS NULL OR a.ack_at_utc = '')
-                                    THEN 1 ELSE 0 END) AS open_critical_alert_count
-                            FROM alerts a
-                            GROUP BY a.hostname
-                        )
-                        SELECT
-                            li.hostname,
-                            li.last_seen_utc,
-                            li.report_count,
-                            r.primary_ip,
-                            r.agent_id,
-                            r.payload_json,
-                            COALESCE(ac.open_alert_count, 0) AS open_alert_count,
-                            COALESCE(ac.open_critical_alert_count, 0) AS open_critical_alert_count,
-                            COALESCE(CASE WHEN json_valid(r.payload_json)
-                                THEN json_extract(r.payload_json, '$.hana_info.version') END, '') AS latest_hana_release
-                        FROM latest_ids li
-                        JOIN reports r ON r.id = li.latest_id
-                        LEFT JOIN alert_counts ac ON ac.hostname = li.hostname
-                        ORDER BY li.last_seen_utc DESC
-                        LIMIT ? OFFSET ?
-                        """,
-                        (limit, offset),
-                    ).fetchall()
+                rows = conn.execute(
+                    """
+                    SELECT
+                      r.hostname,
+                      MAX(r.received_at_utc) AS last_seen_utc,
+                      COUNT(*) AS report_count,
+                      (
+                        SELECT primary_ip
+                        FROM reports r2
+                        WHERE r2.hostname = r.hostname
+                        ORDER BY r2.id DESC
+                        LIMIT 1
+                      ) AS latest_primary_ip,
+                      (
+                        SELECT agent_id
+                        FROM reports r3
+                        WHERE r3.hostname = r.hostname
+                        ORDER BY r3.id DESC
+                        LIMIT 1
+                                            ) AS latest_agent_id,
+                                            (
+                                                SELECT payload_json
+                                                FROM reports r4
+                                                WHERE r4.hostname = r.hostname
+                                                ORDER BY r4.id DESC
+                                                LIMIT 1
+                                            ) AS latest_payload_json,
+                                            (
+                                                SELECT COUNT(*)
+                                                FROM alerts a1
+                                                WHERE a1.hostname = r.hostname AND a1.status = 'open'
+                                                  AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a1.hostname AND m.mountpoint = a1.mountpoint)
+                                            ) AS open_alert_count,
+                                            (
+                                                SELECT COUNT(*)
+                                                FROM alerts a2
+                                                WHERE a2.hostname = r.hostname AND a2.status = 'open' AND a2.severity = 'critical'
+                                                  AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a2.hostname AND m.mountpoint = a2.mountpoint)
+                                            ) AS open_critical_alert_count
+                    FROM reports r
+                    GROUP BY r.hostname
+                    ORDER BY last_seen_utc DESC
+                    LIMIT ? OFFSET ?
+                    """,
+                    (limit, offset),
+                ).fetchall()
 
-                    settings_rows = conn.execute(
-                        "SELECT hostname, display_name_override, COALESCE(country_code_override, ''), COALESCE(is_favorite, 0), COALESCE(is_hidden, 0) FROM host_settings"
-                    ).fetchall()
-            except Exception:
-                traceback.print_exc()
-                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "hosts query failed"})
-                return
+                settings_rows = conn.execute(
+                    "SELECT hostname, display_name_override, COALESCE(country_code_override, ''), COALESCE(is_favorite, 0), COALESCE(is_hidden, 0) FROM host_settings"
+                ).fetchall()
 
             settings_map = {
                 str(row[0]): {
@@ -7630,15 +4571,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             for row in rows:
                 latest_payload = parse_payload_json(row[5] or "{}")
                 hostname = str(row[0])
-                last_seen_utc = str(row[1] or "")
-                received_at_dt = parse_utc_iso(last_seen_utc)
-                send_started_utc = str(latest_payload.get("send_started_utc", "") or "").strip()
-                timestamp_utc = str(latest_payload.get("timestamp_utc", "") or "").strip()
-                client_send_dt = parse_utc_iso(send_started_utc) or parse_utc_iso(timestamp_utc)
-                delivery_lag_sec = None
-                if received_at_dt and client_send_dt:
-                    lag_value = int((received_at_dt - client_send_dt).total_seconds())
-                    delivery_lag_sec = max(0, lag_value)
                 host_settings = settings_map.get(hostname, {
                     "display_name_override": "",
                     "country_code_override": "",
@@ -7648,15 +4580,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 country_code = normalize_country_code(host_settings.get("country_code_override", ""))
                 if not country_code:
                     country_code = extract_country_code_from_payload(latest_payload)
-                has_hana = _detect_hana_processes(latest_payload)
-                sap_info = _extract_sap_b1_info(latest_payload, has_hana)
-                hana_sid_value = extract_hana_sid_from_payload(latest_payload)
-                hana_info = latest_payload.get("hana_info") if isinstance(latest_payload, dict) else None
-                hana_release_value = ""
-                if isinstance(hana_info, dict):
-                    hana_release_value = str(hana_info.get("version", "") or "")
-                if not hana_release_value:
-                    hana_release_value = str(row[8] or "")
                 hosts.append(
                     {
                         "hostname": hostname,
@@ -7665,12 +4588,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             str(host_settings.get("display_name_override", "")),
                             hostname,
                         ),
-                        "last_seen_utc": last_seen_utc,
+                        "last_seen_utc": row[1],
                         "report_count": row[2],
                         "primary_ip": row[3] or "",
                         "agent_id": row[4] or "",
-                        "agent_version": effective_agent_version(latest_payload),
-                        "delivery_lag_sec": delivery_lag_sec,
+                        "agent_version": str(latest_payload.get("agent_version", "")),
                         "delivery_mode": str(latest_payload.get("delivery_mode", "live") or "live"),
                         "is_delayed": bool(latest_payload.get("is_delayed", False)),
                         "queue_depth": payload_int(latest_payload, "queue_depth", 0),
@@ -7681,10 +4603,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "is_favorite": bool(host_settings.get("is_favorite", False)),
                         "is_hidden": bool(host_settings.get("is_hidden", False)),
                         "agent_api_key_status": str((latest_payload.get("agent_api_key") or {}).get("status", "off")),
-                        "sap_feature_pack": str(sap_info.get("feature_pack", "") or ""),
-                        "hana_release": hana_release_value,
-                        "hana_sid": hana_sid_value,
-                        "host_id": hana_sid_value,
                     }
                 )
 
@@ -7714,59 +4632,22 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             limit = parse_int(query, "limit", default=10, min_value=1, max_value=200)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
-            jump_to_utc_raw = query.get("jump_to_utc", [""])[0].strip()
-            jump_to_utc = ""
-            jump_to_dt: datetime | None = None
-            if jump_to_utc_raw:
-                try:
-                    parsed_jump = datetime.fromisoformat(jump_to_utc_raw.replace("Z", "+00:00"))
-                    if parsed_jump.tzinfo is None:
-                        parsed_jump = parsed_jump.replace(tzinfo=timezone.utc)
-                    jump_to_dt = parsed_jump.astimezone(timezone.utc)
-                    jump_to_utc = jump_to_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-                except ValueError:
-                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "jump_to_utc must be ISO datetime"})
-                    return
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 total_reports = conn.execute(
                     "SELECT COUNT(*) FROM reports WHERE hostname = ?",
                     (hostname,),
                 ).fetchone()[0]
-                bounds_row = conn.execute(
-                    "SELECT MIN(received_at_utc), MAX(received_at_utc) FROM reports WHERE hostname = ?",
-                    (hostname,),
-                ).fetchone()
-                oldest_report_at_utc = str(bounds_row[0] or "") if bounds_row else ""
-                newest_report_at_utc = str(bounds_row[1] or "") if bounds_row else ""
-
-                resolved_offset = offset
-                if jump_to_dt is not None and total_reports > 0:
-                    newer_count = conn.execute(
-                        "SELECT COUNT(*) FROM reports WHERE hostname = ? AND received_at_utc > ?",
-                        (hostname, jump_to_utc),
-                    ).fetchone()[0]
-                    resolved_offset = min(max(0, int(newer_count or 0)), max(0, int(total_reports) - 1))
 
                 rows = conn.execute(
                     """
                     SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json
                     FROM reports
                     WHERE hostname = ?
-                    ORDER BY
-                        CASE
-                            WHEN LOWER(COALESCE(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.delivery_mode') END, 'live')) = 'live' THEN 0
-                            ELSE 1
-                        END,
-                        COALESCE(
-                            NULLIF(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.send_started_utc') END, ''),
-                            NULLIF(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.timestamp_utc') END, ''),
-                            received_at_utc
-                        ) DESC,
-                        id DESC
+                    ORDER BY id DESC
                     LIMIT ? OFFSET ?
                     """,
-                    (hostname, limit, resolved_offset),
+                    (hostname, limit, offset),
                 ).fetchall()
 
                 display_name_override = get_display_name_override(conn, hostname)
@@ -7793,12 +4674,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 {
                     "count": len(reports),
                     "limit": limit,
-                    "offset": resolved_offset,
+                    "offset": offset,
                     "total_reports": total_reports,
                     "hostname": hostname,
-                    "jump_to_utc": jump_to_utc,
-                    "oldest_report_at_utc": oldest_report_at_utc,
-                    "newest_report_at_utc": newest_report_at_utc,
                     "reports": reports,
                 },
             )
@@ -7811,7 +4689,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
                 return
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 host_settings = get_host_settings(conn, hostname)
 
             self._send_json(
@@ -7822,15 +4700,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "country_code_override": host_settings["country_code_override"],
                     "is_favorite": host_settings["is_favorite"],
                     "is_hidden": host_settings["is_hidden"],
-                    "customer_alert_emails": host_settings["customer_alert_emails"],
-                    "customer_alert_mountpoints": host_settings["customer_alert_mountpoints"],
-                    "customer_alert_min_severity": host_settings["customer_alert_min_severity"],
                 },
             )
             return
 
         if parsed.path == "/api/v1/agent-update-status":
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 expire_old_agent_commands(conn)
                 host_settings_rows = conn.execute(
                     "SELECT hostname, display_name_override FROM host_settings"
@@ -7867,7 +4742,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     {
                         "hostname": hostname,
                         "display_name": effective_display_name(payload, overrides.get(hostname, ""), hostname),
-                        "agent_version": effective_agent_version(payload),
+                        "agent_version": str(payload.get("agent_version", "")),
                         "last_report_utc": str(latest_report.get("received_at_utc", "")),
                         "command_status": command_status,
                         "command_created_at_utc": str(command.get("created_at_utc", "")),
@@ -7897,13 +4772,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/critical-trends":
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=72, min_value=1, max_value=24 * 30)
-            project_hours = parse_int(query, "project_hours", default=8, min_value=1, max_value=24 * 7)
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                warnings = collect_critical_trends(conn, hours, project_hours)
+            with sqlite3.connect(DB_PATH) as conn:
+                warnings = collect_critical_trends(conn, hours)
 
             self._send_json(HTTPStatus.OK, {
                 "hours": hours,
-                "project_hours": project_hours,
                 "warnings": warnings,
                 "total": len(warnings),
             })
@@ -7912,23 +4785,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/inactive-hosts":
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=3, min_value=1, max_value=24 * 30)
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 inactive = collect_inactive_hosts(conn, hours)
 
             self._send_json(HTTPStatus.OK, {
                 "hours": hours,
                 "inactive_hosts": inactive,
                 "total": len(inactive),
-            })
-            return
-
-        if parsed.path == "/api/v1/backup-status-overview":
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                overview = get_backup_status_overview(conn)
-            self._send_json(HTTPStatus.OK, {
-                "hosts": overview,
-                "total": len(overview),
-                "missing_count": sum(1 for h in overview if h.get("has_missing_backup")),
             })
             return
 
@@ -7939,15 +4802,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
                 return
 
-            username = self._web_session_username()
-            visibility_editable = bool(username)
-            fs_focus_hidden: list[str] = []
-            large_files_hidden: list[str] = []
-
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
             cutoff_iso = utc_hours_ago_iso(hours)
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 rows = conn.execute(
                     """
                     SELECT id, received_at_utc, payload_json
@@ -7957,19 +4815,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     """,
                     (hostname, cutoff_iso),
                 ).fetchall()
-                latest_total_payload_row = conn.execute(
-                    """
-                    SELECT payload_json
-                    FROM reports
-                    WHERE hostname = ?
-                    ORDER BY id DESC
-                    LIMIT 1
-                    """,
-                    (hostname,),
-                ).fetchone()
 
             fs_by_mountpoint = {}
-            fs_total_kb_by_mountpoint: dict[str, float] = {}
             report_count = 0
             latest_report_time = ""
             latest_max_used_percent = None
@@ -7982,21 +4829,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             load_avg_1_series: list[dict] = []
             memory_used_series: list[dict] = []
             swap_used_series: list[dict] = []
-            latest_swap_total_kb: float | None = None
-            delayed_report_count = None
-            live_report_count = None
+            delayed_report_count = 0
+            live_report_count = 0
             latest_delivery_mode = "live"
             latest_is_delayed = False
             latest_queue_depth = 0
-            latest_large_files: dict = {}
-
-            if latest_total_payload_row:
-                total_payload = parse_payload_json(latest_total_payload_row[0])
-                total_delivery_mode = str(total_payload.get("delivery_mode", "live") or "live").lower()
-                total_is_delayed = total_delivery_mode == "delayed" or bool(total_payload.get("is_delayed", False))
-                latest_delivery_mode = "delayed" if total_is_delayed else "live"
-                latest_is_delayed = total_is_delayed
-                latest_queue_depth = payload_int(total_payload, "queue_depth", 0)
 
             for row in rows:
                 report_count += 1
@@ -8004,12 +4841,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 payload = parse_payload_json(row[2])
                 delivery_mode = str(payload.get("delivery_mode", "live") or "live").lower()
                 is_delayed = delivery_mode == "delayed" or bool(payload.get("is_delayed", False))
+                if is_delayed:
+                    delayed_report_count += 1
+                else:
+                    live_report_count += 1
                 latest_delivery_mode = "delayed" if is_delayed else "live"
                 latest_is_delayed = is_delayed
                 latest_queue_depth = payload_int(payload, "queue_depth", 0)
-                raw_large_files = payload.get("large_files", {})
-                if isinstance(raw_large_files, dict):
-                    latest_large_files = raw_large_files
 
                 cpu_usage = get_nested_number(payload, "cpu", "usage_percent")
                 if cpu_usage is not None:
@@ -8030,9 +4868,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 if swap_used is not None:
                     swap_used_values.append(swap_used)
                     swap_used_series.append({"time_utc": row[1], "value": swap_used})
-                swap_total_kb = get_nested_number(payload, "swap", "total_kb")
-                if swap_total_kb is not None:
-                    latest_swap_total_kb = swap_total_kb
 
                 filesystems = payload.get("filesystems", [])
                 if not isinstance(filesystems, list):
@@ -8049,14 +4884,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         used_percent = float(used_percent_raw)
                     except (TypeError, ValueError):
                         continue
-
-                    total_kb_value = fs.get("blocks", fs.get("total_kb", fs.get("size_total_kb")))
-                    try:
-                        total_kb = float(total_kb_value)
-                    except (TypeError, ValueError):
-                        total_kb = None
-                    if total_kb is not None and total_kb >= 0:
-                        fs_total_kb_by_mountpoint[mountpoint] = total_kb
 
                     latest_fs_entries.append({
                         "mountpoint": mountpoint,
@@ -8092,7 +4919,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     {
                         "mountpoint": mountpoint,
                         "sample_count": len(values),
-                        "total_kb": fs_total_kb_by_mountpoint.get(mountpoint),
                         "current_used_percent": last_value,
                         "min_used_percent": min(values),
                         "max_used_percent": max(values),
@@ -8103,19 +4929,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 )
 
             trends.sort(key=lambda item: item["current_used_percent"], reverse=True)
-
-            if username:
-                fs_mountpoints = [item.get("mountpoint", "") for item in trends if isinstance(item, dict)]
-                raw_large_filesystems = latest_large_files.get("filesystems", []) if isinstance(latest_large_files, dict) else []
-                lf_mountpoints = [
-                    item.get("mountpoint", "")
-                    for item in raw_large_filesystems
-                    if isinstance(item, dict)
-                ]
-                with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                    fs_focus_hidden = ensure_default_user_filesystem_visibility(conn, username, hostname, "fs-focus", fs_mountpoints)
-                    large_files_hidden = ensure_default_user_filesystem_visibility(conn, username, hostname, "large-files", lf_mountpoints)
-                    conn.commit()
 
             self._send_json(
                 HTTPStatus.OK,
@@ -8133,7 +4946,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "memory_used_percent": summarize_numeric_series(memory_used_values),
                         "swap_used_percent": summarize_numeric_series(swap_used_values),
                     },
-                    "latest_swap_total_kb": latest_swap_total_kb,
                     "resource_series": {
                         "cpu_usage_percent": cpu_usage_series,
                         "load_avg_1": load_avg_1_series,
@@ -8147,13 +4959,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "delayed_report_count": delayed_report_count,
                         "live_report_count": live_report_count,
                     },
-                    "filesystem_visibility": {
-                        "editable": visibility_editable,
-                        "fs_focus_hidden": fs_focus_hidden,
-                        "large_files_hidden": large_files_hidden,
-                    },
                     "filesystem_trends": trends,
-                    "large_files": latest_large_files,
                 },
             )
             return
@@ -8163,18 +4969,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             status_filter = query.get("status", ["all"])[0].strip().lower()
             if status_filter not in {"all", "open", "resolved"}:
                 status_filter = "all"
-
-            severity_filter = query.get("severity", ["all"])[0].strip().lower()
-            if severity_filter not in {"all", "warning", "critical"}:
-                severity_filter = "all"
-
-            acknowledged_filter = query.get("acknowledged", ["all"])[0].strip().lower()
-            if acknowledged_filter not in {"all", "yes", "no"}:
-                acknowledged_filter = "all"
-
-            closed_filter = query.get("closed", ["all"])[0].strip().lower()
-            if closed_filter not in {"all", "yes", "no"}:
-                closed_filter = "all"
 
             hostname_filter = query.get("hostname", [""])[0].strip()
             limit = parse_int(query, "limit", default=50, min_value=1, max_value=500)
@@ -8186,17 +4980,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if status_filter != "all":
                 where_parts.append("status = ?")
                 args.append(status_filter)
-            if severity_filter != "all":
-                where_parts.append("severity = ?")
-                args.append(severity_filter)
-            if acknowledged_filter == "no":
-                where_parts.append("(ack_at_utc IS NULL OR ack_at_utc = '')")
-            elif acknowledged_filter == "yes":
-                where_parts.append("(ack_at_utc IS NOT NULL AND ack_at_utc != '')")
-            if closed_filter == "no":
-                where_parts.append("(closed_at_utc IS NULL OR closed_at_utc = '')")
-            elif closed_filter == "yes":
-                where_parts.append("(closed_at_utc IS NOT NULL AND closed_at_utc != '')")
             if hostname_filter:
                 where_parts.append("hostname = ?")
                 args.append(hostname_filter)
@@ -8205,7 +4988,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if where_parts:
                 where_clause = "WHERE " + " AND ".join(where_parts)
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 total = conn.execute(
                     f"SELECT COUNT(*) FROM alerts {where_clause}",
                     tuple(args),
@@ -8213,10 +4996,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
                 rows = conn.execute(
                     f"""
-                      SELECT id, hostname, mountpoint, severity, used_percent, status,
-                          created_at_utc, last_seen_at_utc, resolved_at_utc, report_id,
-                          COALESCE(ack_note, ''), COALESCE(ack_by, ''), COALESCE(ack_at_utc, ''),
-                          COALESCE(closed_at_utc, ''), COALESCE(closed_by, '')
+                    SELECT id, hostname, mountpoint, severity, used_percent, status,
+                           created_at_utc, last_seen_at_utc, resolved_at_utc, report_id
                     FROM alerts
                     {where_clause}
                     ORDER BY id DESC
@@ -8262,7 +5043,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         )
 
             alerts = []
-            with sqlite3.connect(DB_PATH, timeout=10) as conn_mute:
+            with sqlite3.connect(DB_PATH) as conn_mute:
                 muted_pairs = {
                     (str(r[0]), str(r[1]))
                     for r in conn_mute.execute("SELECT hostname, mountpoint FROM muted_alert_rules").fetchall()
@@ -8283,13 +5064,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "last_seen_at_utc": row[7],
                         "resolved_at_utc": row[8],
                         "report_id": row[9],
-                        "ack_note": str(row[10] or ""),
-                        "ack_by": str(row[11] or ""),
-                        "ack_at_utc": str(row[12] or ""),
-                        "is_acknowledged": bool(str(row[12] or "").strip()),
-                        "closed_at_utc": str(row[13] or ""),
-                        "closed_by": str(row[14] or ""),
-                        "is_closed": bool(str(row[13] or "").strip()),
                         "is_muted": (hostname, mountpoint) in muted_pairs,
                     }
                 )
@@ -8302,7 +5076,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "limit": limit,
                     "offset": offset,
                     "status": status_filter,
-                    "severity": severity_filter,
                     "hostname": hostname_filter,
                     "alerts": alerts,
                 },
@@ -8317,12 +5090,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             args = []
             where_clause += " AND COALESCE((SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0"
             where_clause += " AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = alerts.hostname AND m.mountpoint = alerts.mountpoint)"
-            where_clause += " AND (ack_at_utc IS NULL OR ack_at_utc = '')"
             if hostname_filter:
                 where_clause += " AND hostname = ?"
                 args.append(hostname_filter)
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 alarm_settings = get_alarm_settings(conn)
                 total_open = conn.execute(
                     f"SELECT COUNT(*) FROM alerts {where_clause}",
@@ -8354,140 +5126,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
-        if parsed.path == "/api/v1/export/alerts.csv":
-            query = parse_qs(parsed.query)
-            status_filter = query.get("status", ["all"])[0].strip().lower()
-            if status_filter not in {"all", "open", "resolved"}:
-                status_filter = "all"
-            severity_filter = query.get("severity", ["all"])[0].strip().lower()
-            if severity_filter not in {"all", "warning", "critical"}:
-                severity_filter = "all"
-            hostname_filter = query.get("hostname", [""])[0].strip()
-
-            where_parts = []
-            args: list[object] = []
-            where_parts.append("COALESCE((SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0")
-            if status_filter != "all":
-                where_parts.append("status = ?")
-                args.append(status_filter)
-            if severity_filter != "all":
-                where_parts.append("severity = ?")
-                args.append(severity_filter)
-            if hostname_filter:
-                where_parts.append("hostname = ?")
-                args.append(hostname_filter)
-            where_clause = "WHERE " + " AND ".join(where_parts) if where_parts else ""
-
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                rows = conn.execute(
-                    f"""
-                    SELECT id, hostname, mountpoint, severity, used_percent, status,
-                           created_at_utc, last_seen_at_utc, resolved_at_utc,
-                           COALESCE(ack_by, ''), COALESCE(ack_at_utc, ''), COALESCE(ack_note, '')
-                    FROM alerts
-                    {where_clause}
-                    ORDER BY id DESC
-                    """,
-                    tuple(args),
-                ).fetchall()
-
-            buffer = io.StringIO()
-            writer = csv.writer(buffer)
-            writer.writerow([
-                "id",
-                "hostname",
-                "mountpoint",
-                "severity",
-                "used_percent",
-                "status",
-                "created_at_utc",
-                "last_seen_at_utc",
-                "resolved_at_utc",
-                "ack_by",
-                "ack_at_utc",
-                "ack_note",
-            ])
-            for row in rows:
-                writer.writerow(row)
-
-            csv_bytes = buffer.getvalue().encode("utf-8")
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
-            filename = f"monitoring-alerts-{timestamp}.csv"
-            self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", "text/csv; charset=utf-8")
-            self.send_header("Content-Length", str(len(csv_bytes)))
-            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            self.wfile.write(csv_bytes)
-            return
-
-        if parsed.path == "/api/v1/export/reports.json":
-            query = parse_qs(parsed.query)
-            hostname = query.get("hostname", [""])[0].strip()
-            if not hostname:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
-                return
-            limit = parse_int(query, "limit", default=2000, min_value=1, max_value=50000)
-
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                rows = conn.execute(
-                    """
-                    SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json
-                    FROM reports
-                    WHERE hostname = ?
-                    ORDER BY id DESC
-                    LIMIT ?
-                    """,
-                    (hostname, limit),
-                ).fetchall()
-
-            reports = [
-                {
-                    "id": int(row[0]),
-                    "received_at_utc": str(row[1] or ""),
-                    "agent_id": str(row[2] or ""),
-                    "hostname": str(row[3] or ""),
-                    "primary_ip": str(row[4] or ""),
-                    "payload": parse_payload_json(str(row[5] or "{}")),
-                }
-                for row in rows
-            ]
-
-            payload = {
-                "hostname": hostname,
-                "count": len(reports),
-                "limit": limit,
-                "exported_at_utc": utc_now_iso(),
-                "reports": reports,
-            }
-            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
-            safe_hostname = re.sub(r"[^0-9A-Za-z._-]", "-", hostname) or "host"
-            filename = f"monitoring-reports-{safe_hostname}-{timestamp}.json"
-            self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            self.wfile.write(body)
+        if parsed.path == "/api/v1/system-overview":
+            with sqlite3.connect(DB_PATH) as conn:
+                data = collect_system_overview(conn)
+            self._send_json(HTTPStatus.OK, data)
             return
 
         if parsed.path == "/api/v1/alarm-settings":
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 settings = get_alarm_settings(conn)
 
             self._send_json(HTTPStatus.OK, settings)
             return
 
-        if parsed.path == "/api/v1/sap-b1-version-map":
-            entries = [{"build": k, **v} for k, v in _SAP_B1_BUILD_TO_FP.items()]
-            self._send_json(HTTPStatus.OK, {"entries": entries})
-            return
-
         if parsed.path == "/api/v1/alert-mutes":
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 rows = conn.execute(
                     "SELECT hostname, mountpoint, muted_by, muted_at_utc FROM muted_alert_rules ORDER BY hostname, mountpoint"
                 ).fetchall()
@@ -8502,34 +5155,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/app.js":
-            self._send_file(
-                STATIC_DIR / "app.js",
-                "application/javascript; charset=utf-8",
-                extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
-            )
+            self._send_file(STATIC_DIR / "app.js", "application/javascript; charset=utf-8")
             return
 
         if parsed.path == "/styles.css":
-            self._send_file(
-                STATIC_DIR / "styles.css",
-                "text/css; charset=utf-8",
-                extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
-            )
-            return
-
-        if parsed.path == "/manifest.json":
-            self._send_file(STATIC_DIR / "manifest.json", "application/manifest+json; charset=utf-8")
-            return
-
-        if parsed.path == "/sw.js":
-            self._send_file(
-                STATIC_DIR / "sw.js",
-                "application/javascript; charset=utf-8",
-                extra_headers={
-                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-                    "Service-Worker-Allowed": "/",
-                },
-            )
+            self._send_file(STATIC_DIR / "styles.css", "text/css; charset=utf-8")
             return
 
         if parsed.path == "/openapi.yaml":
@@ -8607,7 +5237,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "username/password required"})
                 return
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 user = get_web_user(conn, username)
                 if not user or user.get("is_disabled"):
                     self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid credentials"})
@@ -8635,7 +5265,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if path == "/api/v1/web-logout":
             token = self._cookie_value(WEB_SESSION_COOKIE)
             if token:
-                with sqlite3.connect(DB_PATH, timeout=10) as conn:
+                with sqlite3.connect(DB_PATH) as conn:
                     conn.execute("DELETE FROM web_sessions WHERE session_token = ?", (token,))
                     conn.commit()
 
@@ -8676,7 +5306,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": f"new password too short (min {MIN_PASSWORD_LENGTH})"})
                 return
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 user = get_web_user(conn, username)
                 if not user or not verify_password(current_password, str(user["password_hash"]), str(user["password_salt"])):
                     self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "current password invalid"})
@@ -8712,7 +5342,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
                 return
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 stored = save_alarm_settings(conn, payload)
                 conn.commit()
 
@@ -8721,112 +5351,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 {
                     "status": "stored",
                     "settings": stored,
-                },
-            )
-            return
-
-        if path == "/api/v1/ai-troubleshoot":
-            content_length = int(self.headers.get("Content-Length", "0"))
-            if content_length <= 0:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
-                return
-
-            try:
-                payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
-            except (json.JSONDecodeError, ValueError):
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
-                return
-
-            hostname = str(payload.get("hostname", "") or "").strip()
-            metric = str(payload.get("metric", "") or "").strip()
-            window_hours = payload.get("window_hours", 24)
-            try:
-                window_hours_int = max(1, min(int(window_hours), 24 * 30))
-            except (TypeError, ValueError):
-                window_hours_int = 24
-
-            allowed_metrics = {"cpu_usage_percent", "memory_used_percent", "swap_used_percent", "filesystem"}
-            if not hostname:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname required"})
-                return
-            if metric not in allowed_metrics:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "unsupported metric"})
-                return
-
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                ai_settings = _get_ai_settings_from_db(conn)
-                if not ai_settings["enabled"] or not ai_settings["api_key"]:
-                    self._send_json(
-                        HTTPStatus.SERVICE_UNAVAILABLE,
-                        {
-                            "error": "ai troubleshoot unavailable",
-                            "details": "OpenAI API-Key und KI-Analyse in den Globalen Admin-Einstellungen konfigurieren.",
-                        },
-                    )
-                    return
-                try:
-                    context_payload = _collect_ai_metric_context(conn, hostname, metric, window_hours_int)
-                except ValueError as exc:
-                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
-                    return
-
-            cache_key_material = {
-                "host": hostname,
-                "metric": metric,
-                "hours": window_hours_int,
-                "model": ai_settings["model"],
-                "context": context_payload,
-            }
-            cache_key = hashlib.sha256(json.dumps(cache_key_material, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
-            cached_result = _ai_cache_get(cache_key)
-            if cached_result is not None:
-                self._send_json(
-                    HTTPStatus.OK,
-                    {
-                        "cached": True,
-                        "model": ai_settings["model"],
-                        "context": {
-                            "hostname": context_payload.get("hostname", ""),
-                            "metric": context_payload.get("metric", ""),
-                            "metric_label": context_payload.get("metric_label", ""),
-                            "window_hours": context_payload.get("window_hours", 24),
-                            "os_family": context_payload.get("os_family", "linux"),
-                            "has_hana_processes": bool(context_payload.get("has_hana_processes", False)),
-                            "latest_report_time_utc": context_payload.get("latest_report_time_utc", ""),
-                        },
-                        "analysis": cached_result,
-                    },
-                )
-                return
-
-            try:
-                analysis = _openai_troubleshoot(context_payload, ai_settings)
-            except RuntimeError as exc:
-                self._send_json(
-                    HTTPStatus.BAD_GATEWAY,
-                    {
-                        "error": "ai request failed",
-                        "details": str(exc),
-                    },
-                )
-                return
-
-            _ai_cache_set(cache_key, analysis)
-            self._send_json(
-                HTTPStatus.OK,
-                {
-                    "cached": False,
-                    "model": ai_settings["model"],
-                    "context": {
-                        "hostname": context_payload.get("hostname", ""),
-                        "metric": context_payload.get("metric", ""),
-                        "metric_label": context_payload.get("metric_label", ""),
-                        "window_hours": context_payload.get("window_hours", 24),
-                        "os_family": context_payload.get("os_family", "linux"),
-                        "has_hana_processes": bool(context_payload.get("has_hana_processes", False)),
-                        "latest_report_time_utc": context_payload.get("latest_report_time_utc", ""),
-                    },
-                    "analysis": analysis,
                 },
             )
             return
@@ -8844,7 +5368,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
                 return
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 settings = save_web_user_settings(conn, username, payload)
                 conn.commit()
             self._send_json(HTTPStatus.OK, settings)
@@ -8869,7 +5393,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                with sqlite3.connect(DB_PATH, timeout=10) as conn:
+                with sqlite3.connect(DB_PATH) as conn:
                     saved = replace_web_user_alert_subscriptions(conn, username, subscriptions)
                     conn.commit()
                 self._send_json(HTTPStatus.OK, {"status": "stored", "subscriptions": saved})
@@ -8899,7 +5423,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "channel must be mail or telegram"})
                 return
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 subscriptions = get_web_user_alert_subscriptions(conn, username)
                 matched = next((item for item in subscriptions if str(item.get("hostname", "")) == hostname), None)
                 if matched is None:
@@ -8939,7 +5463,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         subject,
                         body,
                         content_type="HTML",
-                        sender=user_settings.get("email_sender", ""),
                     )
                     status = HTTPStatus.OK if mail_ok else HTTPStatus.BAD_REQUEST
                     self._send_json(status, {"status": "sent" if mail_ok else "failed", "channel": "mail", "details": mail_details})
@@ -8959,17 +5482,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     bot_token,
                     chat_id,
                     (
-                        f"{_mdv2('[TEST]')} Host Alert Abo\n"
-                        f"👤 *{_mdv2(username)}*\n"
-                    ) + build_telegram_alert_text(
-                        "opened",
-                        hostname,
-                        "/hana/data",
-                        "critical",
-                        min(100.0, float(alarm_settings.get("critical_threshold_percent", 90.0) or 90.0) + 2.0),
-                        display_name=str(host_context.get("display_name", "") or ""),
+                        "[TEST] Host Alert Abo\n"
+                        f"User: {username}\n"
+                        f"Host: {str(host_context.get('display_name', hostname))} ({hostname})\n"
+                        f"Zeit: {datetime.now().astimezone().strftime('%d.%m.%Y %H:%M')}"
                     ),
-                    image_path=_ALERT_ICON_PATHS.get("opened"),
                 )
                 status = HTTPStatus.OK if telegram_ok else HTTPStatus.BAD_REQUEST
                 self._send_json(status, {"status": "sent" if telegram_ok else "failed", "channel": "telegram", "details": telegram_details})
@@ -8988,86 +5505,19 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             except json.JSONDecodeError:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
                 return
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 settings = save_oauth_settings(conn, payload)
                 conn.commit()
             self._send_json(HTTPStatus.OK, oauth_settings_public_view(settings))
             return
 
-        if path == "/api/v1/sap-b1-version-map":
-            if not self._require_admin_session():
-                return
-            content_length = int(self.headers.get("Content-Length", "0"))
-            if content_length <= 0 or content_length > 65536:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid body"})
-                return
-            try:
-                body = json.loads(self.rfile.read(content_length))
-                entries = body.get("entries", [])
-                if not isinstance(entries, list):
-                    raise ValueError("entries must be a list")
-                clean = []
-                for e in entries:
-                    build = str(e.get("build", "") or "").strip()
-                    if not re.match(r"^\d{2}\.\d{2}\.\d{3}$", build):
-                        raise ValueError(f"invalid build: {build!r}")
-                    clean.append({
-                        "build": build,
-                        "feature_pack": str(e.get("feature_pack", "") or "").strip(),
-                        "patch_level": str(e.get("patch_level", "") or "").strip(),
-                        "release_date": str(e.get("release_date", "") or "").strip(),
-                    })
-            except (json.JSONDecodeError, ValueError, KeyError) as exc:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
-                return
-            _save_sap_b1_version_map(clean)
-            self._send_json(HTTPStatus.OK, {"saved": len(clean)})
-            return
-
-
+        if path == "/api/v1/oauth/microsoft/disconnect":
             username = self._web_session_username()
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 delete_oauth_connection(conn, username, MICROSOFT_PROVIDER)
                 conn.commit()
                 payload = current_user_payload(conn, username)
             self._send_json(HTTPStatus.OK, payload)
-            return
-
-        if path == "/api/v1/mail-test/backup":
-            username = self._web_session_username()
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                settings = get_web_user_settings(conn, username)
-                recipients_raw = str(settings.get("backup_email_recipients", "") or "").strip()
-                if not recipients_raw:
-                    # fall back to generic recipient
-                    recipients_raw = str(settings.get("email_recipient", "") or "").strip()
-                recipients = parse_email_recipients(recipients_raw)
-                if not recipients:
-                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "Kein Empfänger konfiguriert (Backup-Empfänger oder allg. Empfänger)"})
-                    return
-                ok, access_token, details = ensure_microsoft_access_token(conn, username)
-                if not ok:
-                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": details or "oauth unavailable"})
-                    return
-                today_local = datetime.now(SCHEDULE_TIMEZONE).date().isoformat()
-                backup_hosts = get_backup_status_overview(conn)
-                mail_ok, mail_details = send_microsoft_mail_multi(
-                    access_token,
-                    recipients,
-                    backup_digest_subject(backup_hosts, today_local) + " [TEST]",
-                    backup_digest_html(username, backup_hosts, today_local),
-                    content_type="HTML",
-                    sender=settings.get("email_sender", ""),
-                )
-                conn.commit()
-            self._send_json(
-                HTTPStatus.OK if mail_ok else HTTPStatus.BAD_REQUEST,
-                {
-                    "status": "sent" if mail_ok else "failed",
-                    "mode": "backup",
-                    "details": mail_details,
-                },
-            )
             return
 
         if path in {"/api/v1/mail-test", "/api/v1/mail-test/trends", "/api/v1/mail-test/alerts"}:
@@ -9078,10 +5528,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             elif path.endswith("/alerts"):
                 endpoint_mode = "alerts"
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 settings = get_web_user_settings(conn, username)
                 recipient = str(settings.get("email_recipient", "") or "").strip()
-                if endpoint_mode in {"generic", "trends"} and not recipient:
+                if not recipient:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "email recipient missing"})
                     return
                 ok, access_token, details = ensure_microsoft_access_token(conn, username)
@@ -9096,88 +5546,22 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         trend_digest_subject(warnings, datetime.now().astimezone().date().isoformat()) + " [TEST]",
                         trend_digest_html(username, warnings, 72),
                         content_type="HTML",
-                        sender=settings.get("email_sender", ""),
                     )
                 elif endpoint_mode == "alerts":
-                    alarm_settings = get_alarm_settings(conn)
-                    warning_threshold = float(alarm_settings.get("warning_threshold_percent", 80.0) or 80.0)
-                    critical_threshold = float(alarm_settings.get("critical_threshold_percent", 90.0) or 90.0)
-
-                    sample_row = conn.execute(
-                        "SELECT id, hostname, mountpoint, severity FROM alerts WHERE status = 'open' ORDER BY id DESC LIMIT 1"
-                    ).fetchone()
-                    if sample_row:
-                        sample_alert_id = int(sample_row[0] or 0)
-                        sample_hostname = str(sample_row[1] or "").strip() or "monitoring-testhost"
-                        sample_mountpoint = str(sample_row[2] or "").strip() or "/hana/data"
-                        sample_severity = str(sample_row[3] or "critical").strip().lower()
-                    else:
-                        sample_alert_id = 0
-                        host_row = conn.execute(
-                            "SELECT hostname FROM reports ORDER BY id DESC LIMIT 1"
-                        ).fetchone()
-                        sample_hostname = str(host_row[0] or "").strip() if host_row else ""
-                        if not sample_hostname:
-                            sample_hostname = "monitoring-testhost"
-                        sample_mountpoint = "/hana/data"
-                        sample_severity = "critical"
-
-                    if sample_severity not in {"warning", "critical"}:
-                        sample_severity = "critical"
-
-                    sample_used_percent = (critical_threshold + 1.0) if sample_severity == "critical" else (warning_threshold + 1.0)
-                    sample_used_percent = max(0.0, min(100.0, sample_used_percent))
-
-                    host_context = collect_host_mail_context(conn, sample_hostname)
-                    sample_display_name = str(host_context.get("display_name", "") or "")
-                    sample_primary_ip = str(host_context.get("primary_ip", "") or "")
-                    sample_country_code = str(host_context.get("country_code", "") or "")
-                    sample_os_family = str(host_context.get("os_family", "linux") or "linux")
-
-                    graph_cid, graph_attachment = build_alert_usage_graph_attachment(
-                        conn,
-                        sample_hostname,
-                        sample_mountpoint,
-                        severity=sample_severity,
-                        hours=24,
-                    )
-                    graph_attachments = [graph_attachment] if graph_attachment else []
-
-                    all_alert_recipients = resolve_alert_mail_recipients_for_severity(settings, sample_severity)
+                    alerts = collect_open_alerts(conn)
+                    graph_cids, graph_attachments = build_alert_digest_graph_bundle(conn, alerts, hours=24)
+                    extra_alert_recipients = parse_email_recipients(settings.get("alert_email_recipients", ""))
+                    all_alert_recipients = parse_email_recipients(",".join([recipient] + extra_alert_recipients))
                     if not all_alert_recipients:
                         self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no alert recipients configured"})
                         return
-
-                    subject = alert_instant_mail_subject(
-                        "opened",
-                        sample_hostname,
-                        sample_severity,
-                        sample_display_name,
-                    )
-                    body = alert_instant_mail_html(
-                        username,
-                        "opened",
-                        sample_hostname,
-                        sample_mountpoint,
-                        sample_severity,
-                        sample_used_percent,
-                        display_name=sample_display_name,
-                        primary_ip=sample_primary_ip,
-                        country_code=sample_country_code,
-                        os_family=sample_os_family,
-                        reported_at_utc=utc_now_iso(),
-                        graph_cid=graph_cid or "",
-                        alert_id=sample_alert_id if sample_alert_id > 0 else None,
-                    )
-
                     mail_ok, mail_details = send_microsoft_mail_multi(
                         access_token,
                         all_alert_recipients,
-                        subject,
-                        body,
+                        alert_digest_subject(alerts, datetime.now().astimezone().date().isoformat()) + " [TEST]",
+                        alert_digest_html(username, alerts, graph_cids=graph_cids, graph_hours=24),
                         content_type="HTML",
                         attachments=graph_attachments,
-                        sender=settings.get("email_sender", ""),
                     )
                 else:
                     mail_ok, mail_details = send_microsoft_mail(
@@ -9190,7 +5574,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             f"Zeit: {utc_now_iso()}\n"
                             "Wenn diese Mail ankommt, funktioniert Microsoft Graph OAuth."
                         ),
-                        sender=settings.get("email_sender", ""),
                     )
                 conn.commit()
             self._send_json(
@@ -9221,14 +5604,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             action = str(payload.get("action", "") or "").strip().lower()
             target_username = normalize_username(payload.get("username", ""))
             try:
-                with sqlite3.connect(DB_PATH, timeout=10) as conn:
+                with sqlite3.connect(DB_PATH) as conn:
                     if action == "create":
                         create_web_user(
                             conn,
                             target_username,
                             str(payload.get("password", "") or ""),
                             is_admin=coerce_bool(payload.get("is_admin", False)),
-                            display_name=str(payload.get("display_name", "") or ""),
                         )
                     elif action == "set-password":
                         update_web_user_password(conn, target_username, str(payload.get("password", "") or ""))
@@ -9245,15 +5627,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         if current_admin == target_username:
                             raise ValueError("current admin cannot delete self")
                         delete_web_user(conn, target_username)
-                    elif action == "update-display-name":
-                        user = get_web_user(conn, target_username)
-                        if user is None:
-                            raise ValueError("user not found")
-                        new_display_name = str(payload.get("display_name", "") or "").strip()
-                        conn.execute(
-                            "UPDATE web_users SET display_name = ?, updated_at_utc = ? WHERE username = ?",
-                            (new_display_name, utc_now_iso(), target_username),
-                        )
                     else:
                         self._send_json(HTTPStatus.BAD_REQUEST, {"error": "unsupported action"})
                         return
@@ -9290,7 +5663,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                with sqlite3.connect(DB_PATH, timeout=10) as conn:
+                with sqlite3.connect(DB_PATH) as conn:
                     saved = replace_web_user_alert_subscriptions(conn, target_username, subscriptions)
                     conn.commit()
                 self._send_json(HTTPStatus.OK, {"status": "stored", "username": target_username, "subscriptions": saved})
@@ -9299,24 +5672,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/v1/alarm-test":
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 settings = get_alarm_settings(conn)
-
-            critical_threshold = float(settings.get("critical_threshold_percent", 90.0) or 90.0)
-            sample_used_percent = min(100.0, critical_threshold + 2.0)
-            sample_text = build_telegram_alert_text(
-                "opened",
-                "monitoring-testhost",
-                "/hana/data",
-                "critical",
-                sample_used_percent,
-                display_name="Monitoring Testhost",
-            )
 
             ok, details = telegram_send(
                 settings,
-                sample_text,
-                image_path=_ALERT_ICON_PATHS.get("opened"),
+                (
+                    "[TEST] Monitoring Alarm-Kanal\n"
+                    f"Serverzeit: {utc_now_iso()}\n"
+                    "Wenn du diese Nachricht siehst, ist Telegram korrekt konfiguriert."
+                ),
             )
             status = HTTPStatus.OK if ok else HTTPStatus.BAD_REQUEST
             self._send_json(
@@ -9346,28 +5711,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             has_country_code = "country_code_override" in payload
             has_is_favorite = "is_favorite" in payload
             has_is_hidden = "is_hidden" in payload
-            has_customer_emails = "customer_alert_emails" in payload
-            has_customer_mountpoints = "customer_alert_mountpoints" in payload
-            has_customer_severity = "customer_alert_min_severity" in payload
 
             if not hostname:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
                 return
 
-            if not (has_display_name or has_country_code or has_is_favorite or has_is_hidden
-                    or has_customer_emails or has_customer_mountpoints or has_customer_severity):
+            if not (has_display_name or has_country_code or has_is_favorite or has_is_hidden):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no host setting provided"})
                 return
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 current = get_host_settings(conn, hostname)
                 display_name_override = current["display_name_override"]
                 country_code_override = current["country_code_override"]
                 is_favorite = bool(current["is_favorite"])
                 is_hidden = bool(current["is_hidden"])
-                customer_alert_emails = current["customer_alert_emails"]
-                customer_alert_mountpoints = current["customer_alert_mountpoints"]
-                customer_alert_min_severity = current["customer_alert_min_severity"]
 
                 if has_display_name:
                     display_name_override = str(payload.get("display_name_override", "")).strip()
@@ -9381,42 +5739,30 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     is_favorite = parse_bool(payload.get("is_favorite"), is_favorite)
                 if has_is_hidden:
                     is_hidden = parse_bool(payload.get("is_hidden"), is_hidden)
-                if has_customer_emails:
-                    customer_alert_emails = str(payload.get("customer_alert_emails", "") or "").strip()
-                if has_customer_mountpoints:
-                    customer_alert_mountpoints = str(payload.get("customer_alert_mountpoints", "") or "").strip()
-                if has_customer_severity:
-                    sev = str(payload.get("customer_alert_min_severity", "critical") or "critical").strip().lower()
-                    customer_alert_min_severity = sev if sev in {"warning", "critical"} else "critical"
 
-                conn.execute(
-                    """
-                    INSERT INTO host_settings (hostname, display_name_override, country_code_override, is_favorite, is_hidden,
-                                               customer_alert_emails, customer_alert_mountpoints, customer_alert_min_severity,
-                                               updated_at_utc)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(hostname) DO UPDATE SET
-                      display_name_override = excluded.display_name_override,
-                      country_code_override = excluded.country_code_override,
-                      is_favorite = excluded.is_favorite,
-                      is_hidden = excluded.is_hidden,
-                      customer_alert_emails = excluded.customer_alert_emails,
-                      customer_alert_mountpoints = excluded.customer_alert_mountpoints,
-                      customer_alert_min_severity = excluded.customer_alert_min_severity,
-                      updated_at_utc = excluded.updated_at_utc
-                    """,
-                    (
-                        hostname,
-                        display_name_override,
-                        country_code_override,
-                        1 if is_favorite else 0,
-                        1 if is_hidden else 0,
-                        customer_alert_emails,
-                        customer_alert_mountpoints,
-                        customer_alert_min_severity,
-                        utc_now_iso(),
-                    ),
-                )
+                if display_name_override or country_code_override or is_favorite or is_hidden:
+                    conn.execute(
+                        """
+                        INSERT INTO host_settings (hostname, display_name_override, country_code_override, is_favorite, is_hidden, updated_at_utc)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(hostname) DO UPDATE SET
+                          display_name_override = excluded.display_name_override,
+                          country_code_override = excluded.country_code_override,
+                          is_favorite = excluded.is_favorite,
+                          is_hidden = excluded.is_hidden,
+                          updated_at_utc = excluded.updated_at_utc
+                        """,
+                        (
+                            hostname,
+                            display_name_override,
+                            country_code_override,
+                            1 if is_favorite else 0,
+                            1 if is_hidden else 0,
+                            utc_now_iso(),
+                        ),
+                    )
+                else:
+                    conn.execute("DELETE FROM host_settings WHERE hostname = ?", (hostname,))
 
                 if is_hidden:
                     resolve_open_alerts_for_host(conn, hostname, None)
@@ -9432,126 +5778,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "country_code_override": country_code_override,
                     "is_favorite": is_favorite,
                     "is_hidden": is_hidden,
-                    "customer_alert_emails": customer_alert_emails,
-                    "customer_alert_mountpoints": customer_alert_mountpoints,
-                    "customer_alert_min_severity": customer_alert_min_severity,
                 },
             )
-            return
-
-        if path == "/api/v1/customer-alert/test":
-            username = self._require_admin_session()
-            if not username:
-                return
-
-            content_length = int(self.headers.get("Content-Length", "0"))
-            if content_length <= 0:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
-                return
-
-            raw_body = self.rfile.read(content_length)
-            try:
-                payload = json.loads(raw_body)
-            except json.JSONDecodeError:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
-                return
-
-            test_hostname = str(payload.get("hostname", "")).strip()
-            recipient_email = str(payload.get("recipient_email", "")).strip()
-            if not test_hostname or not recipient_email:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and recipient_email required"})
-                return
-
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                host_settings_data = get_host_settings(conn, test_hostname)
-                display_name = host_settings_data.get("display_name_override") or test_hostname
-                host_context = collect_host_mail_context(conn, test_hostname)
-                effective_display_name = str(host_context.get("display_name", "") or "").strip() or str(display_name)
-                test_subject = customer_alert_mail_subject(test_hostname, "/test/mountpoint", "critical", display_name)
-                test_body = customer_alert_mail_html(
-                    test_hostname,
-                    "/test/mountpoint",
-                    "critical",
-                    95.0,
-                    effective_display_name,
-                    str(host_context.get("primary_ip", "") or ""),
-                    str(host_context.get("country_code", "") or ""),
-                    str(host_context.get("os_family", "linux") or "linux"),
-                    utc_now_iso(),
-                )
-
-                ok, access_token, err_msg = ensure_microsoft_access_token(conn, username)
-                if not ok or not access_token:
-                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": f"Kein Microsoft-OAuth-Token: {err_msg}"})
-                    return
-
-                user_settings = get_web_user_settings(conn, username)
-                sender_email = str(user_settings.get("email_sender", "") or "").strip()
-
-            try:
-                send_microsoft_mail_multi(
-                    access_token,
-                    [recipient_email],
-                    test_subject,
-                    test_body,
-                    content_type="HTML",
-                    attachments=[],
-                    sender=sender_email,
-                )
-            except Exception as exc:
-                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
-                return
-
-            self._send_json(HTTPStatus.OK, {"status": "sent", "recipient": recipient_email})
-            return
-
-        if path == "/api/v1/filesystem-visibility":
-            username = self._require_web_session()
-            if not username:
-                return
-
-            content_length = int(self.headers.get("Content-Length", "0"))
-            if content_length <= 0:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
-                return
-
-            raw_body = self.rfile.read(content_length)
-            try:
-                payload = json.loads(raw_body)
-            except json.JSONDecodeError:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
-                return
-
-            hostname = str(payload.get("hostname", "") or "").strip()
-            section = normalize_filesystem_visibility_section(payload.get("section", ""))
-            hidden_mountpoints = payload.get("hidden_mountpoints", [])
-
-            if not hostname:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
-                return
-            if not section:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "section must be fs-focus or large-files"})
-                return
-            if not isinstance(hidden_mountpoints, list):
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hidden_mountpoints must be a list"})
-                return
-
-            try:
-                with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                    stored = replace_user_hidden_filesystems(conn, username, hostname, section, hidden_mountpoints)
-                    conn.commit()
-                self._send_json(
-                    HTTPStatus.OK,
-                    {
-                        "status": "stored",
-                        "username": username,
-                        "hostname": hostname,
-                        "section": section,
-                        "hidden_mountpoints": stored,
-                    },
-                )
-            except ValueError as exc:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             return
 
         if path == "/api/v1/host-delete":
@@ -9572,7 +5800,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
                 return
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 deleted = delete_host_card_data(conn, hostname)
                 conn.commit()
 
@@ -9601,7 +5829,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
                 return
             muted_by = self._web_session_username() or "webclient"
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 conn.execute(
                     "INSERT OR REPLACE INTO muted_alert_rules (hostname, mountpoint, muted_by, muted_at_utc) VALUES (?, ?, ?, ?)",
                     (hostname, mountpoint, muted_by, utc_now_iso()),
@@ -9623,239 +5851,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not hostname or not mountpoint:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
                 return
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 conn.execute(
                     "DELETE FROM muted_alert_rules WHERE hostname = ? AND mountpoint = ?",
                     (hostname, mountpoint),
                 )
                 conn.commit()
             self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "mountpoint": mountpoint})
-            return
-
-        if path == "/api/v1/alert-ack":
-            content_length = int(self.headers.get("Content-Length", "0"))
-            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
-            try:
-                payload = json.loads(raw_body)
-            except json.JSONDecodeError:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
-                return
-
-            hostname = str(payload.get("hostname", "")).strip()
-            mountpoint = str(payload.get("mountpoint", "")).strip()
-            note = str(payload.get("ack_note", "") or "").strip()
-            if not hostname or not mountpoint:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
-                return
-            if len(note) > 500:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "ack_note too long (max 500)"})
-                return
-
-            ack_by = self._web_session_username() or "webclient"
-            ack_at_utc = utc_now_iso()
-
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                target = conn.execute(
-                    """
-                    SELECT id
-                    FROM alerts
-                    WHERE hostname = ? AND mountpoint = ? AND status = 'open'
-                    ORDER BY id DESC
-                    LIMIT 1
-                    """,
-                    (hostname, mountpoint),
-                ).fetchone()
-                if not target:
-                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "open alert not found"})
-                    return
-
-                conn.execute(
-                    """
-                    UPDATE alerts
-                    SET ack_note = ?, ack_by = ?, ack_at_utc = ?
-                    WHERE id = ?
-                    """,
-                    (note, ack_by, ack_at_utc, int(target[0])),
-                )
-                conn.commit()
-
-            self._send_json(
-                HTTPStatus.OK,
-                {
-                    "ok": True,
-                    "hostname": hostname,
-                    "mountpoint": mountpoint,
-                    "ack_note": note,
-                    "ack_by": ack_by,
-                    "ack_at_utc": ack_at_utc,
-                },
-            )
-            return
-
-        if path == "/api/v1/alert-unack":
-            content_length = int(self.headers.get("Content-Length", "0"))
-            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
-            try:
-                payload = json.loads(raw_body)
-            except json.JSONDecodeError:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
-                return
-
-            hostname = str(payload.get("hostname", "")).strip()
-            mountpoint = str(payload.get("mountpoint", "")).strip()
-            if not hostname or not mountpoint:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
-                return
-
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                target = conn.execute(
-                    """
-                    SELECT id
-                    FROM alerts
-                    WHERE hostname = ? AND mountpoint = ? AND status = 'open'
-                    ORDER BY id DESC
-                    LIMIT 1
-                    """,
-                    (hostname, mountpoint),
-                ).fetchone()
-                if not target:
-                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "open alert not found"})
-                    return
-
-                conn.execute(
-                    """
-                    UPDATE alerts
-                    SET ack_note = NULL, ack_by = NULL, ack_at_utc = NULL
-                    WHERE id = ?
-                    """,
-                    (int(target[0]),),
-                )
-                conn.commit()
-
-            self._send_json(
-                HTTPStatus.OK,
-                {"ok": True, "hostname": hostname, "mountpoint": mountpoint},
-            )
-            return
-
-        if path == "/api/v1/alert-close":
-            if not self._require_web_session():
-                return
-            content_length = int(self.headers.get("Content-Length", "0"))
-            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
-            try:
-                payload = json.loads(raw_body)
-            except json.JSONDecodeError:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
-                return
-
-            hostname = str(payload.get("hostname", "")).strip()
-            mountpoint = str(payload.get("mountpoint", "")).strip()
-            if not hostname or not mountpoint:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
-                return
-
-            closed_by = self._web_session_username() or "webclient"
-            closed_at_utc = utc_now_iso()
-
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                target = conn.execute(
-                    """
-                    SELECT id FROM alerts
-                    WHERE hostname = ? AND mountpoint = ? AND status = 'open'
-                    ORDER BY id DESC LIMIT 1
-                    """,
-                    (hostname, mountpoint),
-                ).fetchone()
-                if not target:
-                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "open alert not found"})
-                    return
-                conn.execute(
-                    "UPDATE alerts SET closed_at_utc = ?, closed_by = ? WHERE id = ?",
-                    (closed_at_utc, closed_by, int(target[0])),
-                )
-                conn.commit()
-
-            self._send_json(
-                HTTPStatus.OK,
-                {
-                    "ok": True,
-                    "hostname": hostname,
-                    "mountpoint": mountpoint,
-                    "closed_by": closed_by,
-                    "closed_at_utc": closed_at_utc,
-                },
-            )
-            return
-
-        if path == "/api/v1/alert-unclose":
-            if not self._require_web_session():
-                return
-            content_length = int(self.headers.get("Content-Length", "0"))
-            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
-            try:
-                payload = json.loads(raw_body)
-            except json.JSONDecodeError:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
-                return
-
-            hostname = str(payload.get("hostname", "")).strip()
-            mountpoint = str(payload.get("mountpoint", "")).strip()
-            if not hostname or not mountpoint:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
-                return
-
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                target = conn.execute(
-                    """
-                    SELECT id FROM alerts
-                    WHERE hostname = ? AND mountpoint = ? AND status = 'open'
-                    ORDER BY id DESC LIMIT 1
-                    """,
-                    (hostname, mountpoint),
-                ).fetchone()
-                if not target:
-                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "open alert not found"})
-                    return
-                conn.execute(
-                    "UPDATE alerts SET closed_at_utc = NULL, closed_by = NULL WHERE id = ?",
-                    (int(target[0]),),
-                )
-                conn.commit()
-
-            self._send_json(
-                HTTPStatus.OK,
-                {"ok": True, "hostname": hostname, "mountpoint": mountpoint},
-            )
-            return
-
-        if path == "/api/v1/restore/database":
-            if not self._require_admin_session():
-                return
-            content_length = int(self.headers.get("Content-Length", "0"))
-            if content_length <= 0:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no data received"})
-                return
-            max_restore_bytes = 512 * 1024 * 1024  # 512 MB hard cap
-            if content_length > max_restore_bytes:
-                self._send_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "file too large (max 512 MB)"})
-                return
-            data = self.rfile.read(content_length)
-            try:
-                restore_sqlite_from_bytes(DB_PATH, data)
-            except ValueError as exc:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
-                return
-            except Exception:
-                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "restore failed – file may be corrupt"})
-                return
-            # Re-run migrations so the restored DB is compatible with current schema
-            try:
-                with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                    init_db(conn)
-            except Exception:
-                pass
-            self._send_json(HTTPStatus.OK, {"ok": True, "restored_bytes": len(data)})
             return
 
         if path == "/api/v1/agent-command":
@@ -9896,7 +5898,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     return
                 command_payload = {"api_key": api_key_value}
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 expire_old_agent_commands(conn)
                 command_id, created = queue_agent_command_once(
                     conn,
@@ -9956,7 +5958,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             queued_count = 0
             already_queued_count = 0
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 expire_old_agent_commands(conn)
                 hostnames = get_known_hostnames(conn)
                 if not hostnames:
@@ -10023,7 +6025,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not isinstance(result_payload, dict):
                 result_payload = {"message": str(result_payload)}
 
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 row = conn.execute(
                     "SELECT id, status, command_type FROM agent_commands WHERE id = ? AND hostname = ?",
                     (command_id, hostname),
@@ -10090,7 +6092,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "filesystems must be an array"})
             return
 
-        with sqlite3.connect(DB_PATH, timeout=10) as conn:
+        with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO reports (received_at_utc, agent_id, hostname, primary_ip, payload_json)
@@ -10108,171 +6110,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             prune_reports_for_host(conn, hostname, MAX_REPORTS_PER_HOST)
             alarm_settings = get_alarm_settings(conn)
             host_settings = get_host_settings(conn, hostname)
-            _resolve_inactive_host_alert_if_open(
-                conn,
-                hostname,
-                report_id,
-                alarm_settings=alarm_settings,
-                send_notification=not bool(host_settings.get("is_hidden", False)),
-            )
             if bool(host_settings.get("is_hidden", False)):
                 resolve_open_alerts_for_host(conn, hostname, report_id)
             else:
                 update_alerts_for_report(conn, hostname, report_id, filesystems, alarm_settings)
-                update_cpu_alerts_for_report(conn, hostname, report_id, payload, alarm_settings)
-                update_ram_alerts_for_report(conn, hostname, report_id, payload, alarm_settings)
             maybe_send_alert_reminders(conn)
             maybe_send_scheduled_user_mails(conn)
             conn.commit()
 
         self._send_json(HTTPStatus.CREATED, {"status": "stored"})
-
-
-def _handle_telegram_ack_update(bot_token: str, update: dict) -> None:
-    """Process a single Telegram update: handle /ack commands and inline keyboard callbacks."""
-    # --- Inline keyboard callback ---
-    callback = update.get("callback_query") or {}
-    if callback:
-        callback_id = str(callback.get("id", ""))
-        cb_data = str(callback.get("data", ""))
-        cb_chat_id = str(callback.get("message", {}).get("chat", {}).get("id", "") or callback.get("from", {}).get("id", ""))
-        # Answer callback immediately to remove loading spinner
-        if callback_id:
-            try:
-                _telegram_answer_callback(bot_token, callback_id)
-            except Exception:
-                pass
-        if cb_data.startswith("ack:") and cb_chat_id:
-            try:
-                alert_id = int(cb_data.split(":", 1)[1])
-            except (ValueError, IndexError):
-                return
-            _do_telegram_ack(bot_token, cb_chat_id, alert_id)
-        return
-
-    # --- Text command /ack <id> ---
-    message = update.get("message") or {}
-    text = (message.get("text") or "").strip()
-    chat_id = str(message.get("chat", {}).get("id", ""))
-    if not chat_id or not text.lower().startswith("/ack"):
-        return
-
-    parts = text.split()
-    if len(parts) < 2:
-        telegram_send_to_chat(bot_token, chat_id, "Verwendung: `/ack <Alert\\-ID>`")
-        return
-
-    try:
-        alert_id = int(parts[1])
-    except ValueError:
-        telegram_send_to_chat(bot_token, chat_id, _mdv2("Ungültige Alert-ID. Verwendung: /ack <Nummer>"))
-        return
-
-    _do_telegram_ack(bot_token, chat_id, alert_id)
-
-
-def _telegram_answer_callback(bot_token: str, callback_query_id: str) -> None:
-    """Acknowledge a Telegram callback_query to remove the loading spinner."""
-    endpoint = f"https://api.telegram.org/bot{bot_token}/answerCallbackQuery"
-    payload = parse.urlencode({"callback_query_id": callback_query_id}).encode("utf-8")
-    req = request.Request(endpoint, data=payload, method="POST")
-    req.add_header("Content-Type", "application/x-www-form-urlencoded")
-    with request.urlopen(req, timeout=10) as resp:
-        resp.read()
-
-
-def _do_telegram_ack(bot_token: str, chat_id: str, alert_id: int) -> None:
-    """Perform the actual acknowledgement for a given alert_id and send a reply."""
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
-        user_row = conn.execute(
-            """
-            SELECT u.username FROM web_users u
-            JOIN web_user_settings s ON s.username = u.username
-            WHERE COALESCE(s.alert_telegram_chat_id, '') = ?
-              AND COALESCE(u.is_disabled, 0) = 0
-            LIMIT 1
-            """,
-            (chat_id,),
-        ).fetchone()
-        if not user_row:
-            telegram_send_to_chat(
-                bot_token, chat_id,
-                _mdv2("Nicht autorisiert. Diese Chat-ID ist keinem Monitoring-Benutzer zugeordnet."),
-            )
-            return
-
-        username = str(user_row[0])
-
-        alert_row = conn.execute(
-            "SELECT id, hostname, mountpoint, status, ack_at_utc FROM alerts WHERE id = ?",
-            (alert_id,),
-        ).fetchone()
-        if not alert_row:
-            telegram_send_to_chat(bot_token, chat_id, _mdv2(f"Alert #{alert_id} nicht gefunden."))
-            return
-
-        _, a_hostname, a_mountpoint, a_status, a_ack_at = alert_row
-        if a_status != "open":
-            telegram_send_to_chat(
-                bot_token, chat_id,
-                _mdv2(f"Alert #{alert_id} ist bereits geschlossen (Status: {a_status})."),
-            )
-            return
-
-        if a_ack_at:
-            telegram_send_to_chat(bot_token, chat_id, _mdv2(f"Alert #{alert_id} wurde bereits quittiert."))
-            return
-
-        ack_at_utc = utc_now_iso()
-        conn.execute(
-            "UPDATE alerts SET ack_by = ?, ack_at_utc = ?, ack_note = ? WHERE id = ?",
-            (username, ack_at_utc, "Via Telegram quittiert", alert_id),
-        )
-        conn.commit()
-
-    reply = (
-        f"✅ Alert \\#{alert_id} wurde quittiert\\."
-    )
-    telegram_send_to_chat(bot_token, chat_id, reply)
-
-
-def _telegram_ack_poll_loop() -> None:
-    """Background thread: polls Telegram getUpdates for /ack commands."""
-    offset = 0
-    current_token = ""
-    while True:
-        try:
-            with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                alarm_settings = get_alarm_settings(conn)
-            bot_token = str(alarm_settings.get("telegram_bot_token", "") or "").strip()
-            if not alarm_settings.get("telegram_enabled") or not bot_token:
-                time.sleep(30)
-                continue
-            if bot_token != current_token:
-                current_token = bot_token
-                offset = 0
-        except Exception:
-            time.sleep(30)
-            continue
-
-        try:
-            url = (
-                f"https://api.telegram.org/bot{current_token}/getUpdates"
-                f"?offset={offset}&timeout=30&allowed_updates=%5B%22message%22%2C%22callback_query%22%5D"
-            )
-            req = request.Request(url)
-            with request.urlopen(req, timeout=35) as resp:
-                data = json.loads(resp.read().decode("utf-8", errors="replace"))
-        except Exception:
-            time.sleep(5)
-            continue
-
-        for update in data.get("result", []):
-            offset = int(update["update_id"]) + 1
-            try:
-                _handle_telegram_ack_update(current_token, update)
-            except Exception as exc:
-                print(f"[telegram-ack] update handling error: {exc}")
 
 
 def main() -> None:
@@ -10282,32 +6128,9 @@ def main() -> None:
     args = parser.parse_args()
 
     init_db()
-    stop_event = threading.Event()
-
-    def inactive_alert_loop() -> None:
-        # Wait before first check so agents can check in after a server restart.
-        # Without this delay, all hosts appear inactive on startup and trigger mass false-positive alerts.
-        stop_event.wait(1800)  # 30-minute startup grace period
-        while not stop_event.is_set():
-            try:
-                with sqlite3.connect(DB_PATH, timeout=10) as conn:
-                    check_inactive_host_alerts(conn)
-                    conn.commit()
-            except Exception as exc:
-                print(f"inactive alert check failed: {exc}")
-            stop_event.wait(600)
-
-    threading.Thread(target=inactive_alert_loop, name="inactive-alert-checker", daemon=True).start()
-    threading.Thread(target=_telegram_ack_poll_loop, name="telegram-ack-poller", daemon=True).start()
     server = ThreadingHTTPServer((args.host, args.port), MonitoringHandler)
     print(f"Monitoring receiver running on http://{args.host}:{args.port}")
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        stop_event.set()
-        server.server_close()
+    server.serve_forever()
 
 
 if __name__ == "__main__":
