@@ -8095,11 +8095,21 @@ async function loadSystemOverview() {
                 const rows = (Array.isArray(hosts) ? hosts : [])
                   .map((host) => {
                     const online = host?.online === true;
+                    // Format SAP release from version map
+                    let sapReleaseDisplay = "-";
+                    if (host?.sap_release) {
+                      const versionInfo = SAP_B1_VERSION_MAP.get(host.sap_release);
+                      if (versionInfo) {
+                        sapReleaseDisplay = `${versionInfo.featurePack} ${versionInfo.patchLevel}`;
+                      } else {
+                        sapReleaseDisplay = host.sap_release;
+                      }
+                    }
                     return `
                       <tr>
                         <td>${escapeHtml(asText(host?.hostname, "-"))}</td>
                         <td style="text-align:center;">${online ? "✅" : "🔴"}</td>
-                        <td>${escapeHtml(asText(host?.sap_release, "-"))}</td>
+                        <td>${escapeHtml(sapReleaseDisplay)}</td>
                         <td>${escapeHtml(asText(host?.hana_version, "-"))}</td>
                         <td>${escapeHtml(asText(host?.hana_sid, "-"))}</td>
                         <td>${escapeHtml(asText(host?.sql_release, "-"))}</td>
@@ -8138,10 +8148,10 @@ async function loadSystemOverview() {
             const osId = `so-os-${countryIndex}-${osIndex}`;
             return `
               <section class="system-overview-os-group">
-                <button class="system-overview-toggle" type="button" data-target-id="${osId}" aria-expanded="true">
-                  <span class="system-overview-chevron">▼</span> ${escapeHtml(osName)}
+                <button class="system-overview-toggle" type="button" data-target-id="${osId}" aria-expanded="false">
+                  <span class="system-overview-chevron">▶</span> ${escapeHtml(osName)}
                 </button>
-                <div id="${osId}" class="system-overview-customer-list">${customers}</div>
+                <div id="${osId}" class="system-overview-customer-list hidden">${customers}</div>
               </section>
             `;
           })
