@@ -6601,7 +6601,8 @@ async function loadAlertsForHost() {
 function renderCriticalTrends(data) {
   const { warnings, hours, project_hours: projectHours } = data;
   if (!warnings || warnings.length === 0) {
-    return `<div class="ct-empty"><span class="ct-empty-icon">✓</span><p>Keine kritischen Trends im Zeitraum der letzten ${hours} Std. erkannt (Projektion: ${projectHours} Std.).</p></div>`;
+    const safeProjectHoursEmpty = Number(projectHours) || 8;
+    return `<div class="ct-empty"><span class="ct-empty-icon">✓</span><p>Keine kritischen Trends im Zeitraum der letzten ${hours} Std. erkannt (Projektion: ${safeProjectHoursEmpty} Std.).</p></div>`;
   }
 
   // Filter by selected metrics
@@ -6621,7 +6622,8 @@ function renderCriticalTrends(data) {
   const warnCount = filteredWarnings.filter((w) => w.level === "warn").length;
 
   const dataEndTimeMs = Date.now();
-  const projectionTargetIso = new Date(dataEndTimeMs + projectHours * 3600 * 1000).toISOString();
+  const safeProjectHours = Number(projectHours) || 8;
+  const projectionTargetIso = new Date(dataEndTimeMs + safeProjectHours * 3600 * 1000).toISOString();
   const projectionTargetFormatted = formatUtcPlus2(projectionTargetIso);
 
   const summary = `

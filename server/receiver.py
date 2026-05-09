@@ -5901,11 +5901,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/critical-trends":
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=72, min_value=1, max_value=24 * 30)
+            project_hours = parse_int(query, "project_hours", default=8, min_value=1, max_value=24 * 7)
             with sqlite3.connect(DB_PATH) as conn:
                 warnings = collect_critical_trends(conn, hours)
 
             self._send_json(HTTPStatus.OK, {
                 "hours": hours,
+                "project_hours": project_hours,
                 "warnings": warnings,
                 "total": len(warnings),
             })
