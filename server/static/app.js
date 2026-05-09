@@ -8075,6 +8075,150 @@ function formatSystemOverviewLastUpdate(value) {
   });
 }
 
+function getCountryFlagIconPath(countryCode) {
+  const code = String(countryCode || "XX").toUpperCase().slice(0, 2);
+  const validCodes = ["CH", "DE", "FR", "AT", "ANG", "HO"];
+  return validCodes.includes(code) ? `/icons/${code}.png` : null;
+}
+
+function getOsIconPath(osName) {
+  const os = String(osName || "").toLowerCase();
+  if (os.includes("windows")) return "/icons/windows.png";
+  if (os.includes("linux")) return "/icons/linux.png";
+  return null;
+}
+
+function getOsEmoji(osName) {
+  const os = String(osName || "").toLowerCase();
+  if (os.includes("windows")) return "🪟";
+  if (os.includes("linux")) return "🐧";
+  return "🖥️";
+}
+
+function parseOsRelease(payload, osName) {
+  if (!payload || typeof payload !== "object") return "";
+  const osField = payload.os || "";
+  if (typeof osField === "string" && osField.trim()) return osField.trim();
+  return "";
+}
+
+function extractOpenAlertCount(payload) {
+  if (!payload || typeof payload !== "object") return 0;
+  try {
+    const alerts = payload.alerts || payload.active_alerts || [];
+    if (!Array.isArray(alerts)) return 0;
+    return alerts.filter((a) => a && a.status !== "resolved" && a.status !== "closed").length;
+  } catch {
+    return 0;
+  }
+}
+
+function formatSystemOverviewCard(host, osName, sapVersionMap, onCardClick) {
+  if (!host) return "";
+  
+  const hostname = escapeHtml(String(host.hostname || "-"));
+  const online = host.online === true;
+  const statusEmoji = online ? "✅" : "🔴";
+  const osEmoji = getOsEmoji(osName);
+  const osRelease = parseOsRelease(host.payload || {}, osName);
+  const osReleaseDisplay = osRelease ? escapeHtml(osRelease) : "";
+  
+  // SAP Release
+  let sapReleaseDisplay = "-";
+  if (host.sap_release) {
+    const buildMatch = String(host.sap_release).match(/\d+\.\d+\.\d+/);
+    const buildKey = buildMatch ? buildMatch[0] : host.sap_release;
+    const versionInfo = sapVersionMap.get(buildKey);
+    if (versionInfo) {
+      sapReleaseDisplay = versionInfo.featurePack;
+    } else {
+      sapReleaseDisplay = escapeHtml(host.sap_release);
+    }
+  }
+  
+  const hanaVersion = escapeHtml(String(host.hana_version || "-"));
+  const hanaSid = escapeHtml(String(host.hana_sid || "-"));
+  const sqlRelease = escapeHtml(String(host.sql_release || "-"));
+  const ramGb = escapeHtml(String(host.ram_gb || "-"));
+  const cpuCores = Number.isFinite(host.cpu_cores) ? host.cpu_cores : "-";
+  let cpuModel = String(host.cpu_model_name || "-");
+  if (cpuModel.length > 45) cpuModel = cpuModel.slice(0, 44) + "…";
+  cpuModel = escapeHtml(cpuModel);
+  
+  const lastUpdate = formatSystemOverviewLastUpdate(host.last_update);
+  
+  // Alert badge
+  const openAlerts = extractOpenAlertCount(host.payload);
+  let alertBadge = "<span class='so-card-alert-badge-ok'>✓ OK</span>";
+  if (openAlerts > 0) {
+    const criticalCount = (Array.isArray(host.payload?.alerts) ? host.payload.alerts.filter((a) => a?.severity === "critical").length : 0);
+    const warningCount = openAlerts - criticalCount;
+    const badgeText = criticalCount > 0 ? `🚨 ${criticalCount} krit.` : `⚠️ ${warningCount} warn.`;
+    const badgeClass = criticalCount > 0 ? "so-card-alert-badge-critical" : "so-card-alert-badge-warning";
+    alertBadge = `<span class='so-card-alert-badge ${badgeClass}'>${badgeText}</span>`;
+  }
+  
+  const cardClickAttr = onCardClick ? `data-hostname="${hostname}" class="so-card-clickable"` : "";
+  const cursor = onCardClick ? "cursor: pointer;" : "";
+  
+  return `
+    <article class="so-card" style="${cursor}" ${cardClickAttr}>
+      <div class="so-card-header">
+        <div class="so-card-title-row">
+          <span class="so-card-status">${statusEmoji}</span>
+          <span class="so-card-hostname">${hostname}</span>
+        </div>
+        <div class="so-card-os-row">
+          <span class="so-card-os-label">${osEmoji} ${osReleaseDisplay}</span>
+        </div>
+      </div>
+      
+      <div class="so-card-body">
+        <div class="so-card-section">
+          <div class="so-card-section-title">💾 System</div>
+          <div class="so-card-line">
+            <span class="so-card-label">RAM:</span>
+            <span class="so-card-value">${ramGb} GB</span>
+          </div>
+          <div class="so-card-line">
+            <span class="so-card-label">CPUs:</span>
+            <span class="so-card-value">${cpuCores}</span>
+          </div>
+          <div class="so-card-line so-card-line-model">
+            <span class="so-card-label">Model:</span>
+            <span class="so-card-value">${cpuModel}</span>
+          </div>
+        </div>
+        
+        <div class="so-card-section">
+          <div class="so-card-section-title">📦 SAP/DB</div>
+          <div class="so-card-line">
+            <span class="so-card-label">SAP:</span>
+            <span class="so-card-value">${sapReleaseDisplay}</span>
+          </div>
+          <div class="so-card-line">
+            <span class="so-card-label">HANA:</span>
+            <span class="so-card-value">${hanaVersion}</span>
+          </div>
+          <div class="so-card-line">
+            <span class="so-card-label">HANA SID:</span>
+            <span class="so-card-value">${hanaSid}</span>
+          </div>
+          <div class="so-card-line">
+            <span class="so-card-label">SQL:</span>
+            <span class="so-card-value">${sqlRelease}</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="so-card-footer">
+        <div class="so-card-timestamp">🕐 ${escapeHtml(lastUpdate)}</div>
+        <div class="so-card-alert">${alertBadge}</div>
+      </div>
+    </article>
+  `;
+}
+
 async function loadSystemOverview() {
   const container = document.getElementById("systemOverviewContainer");
   const statsEl = document.getElementById("systemOverviewStats");
@@ -8099,81 +8243,39 @@ async function loadSystemOverview() {
     const countrySections = Object.entries(byCountry)
       .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
       .map(([country, osMap], countryIndex) => {
+        const countryCode = country;
+        const flagIconPath = getCountryFlagIconPath(countryCode);
+        const flagImg = flagIconPath ? `<img src="${flagIconPath}" alt="${escapeHtml(country)}" class="so-country-flag" />` : "";
+        
         const osSections = Object.entries(osMap || {})
           .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
           .map(([osName, customerMap], osIndex) => {
+            const osIconPath = getOsIconPath(osName);
+            const osImg = osIconPath ? `<img src="${osIconPath}" alt="${escapeHtml(osName)}" class="so-os-icon" />` : `<span>${getOsEmoji(osName)}</span>`;
+            const osHostCount = Object.values(customerMap || {}).reduce((sum, hosts) => sum + (Array.isArray(hosts) ? hosts.length : 0), 0);
+            
             const customers = Object.entries(customerMap || {})
               .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
               .map(([customer, hosts]) => {
-                const rows = (Array.isArray(hosts) ? hosts : [])
-                  .map((host) => {
-                    const online = host?.online === true;
-                    // SAP Release: Nur Build-Nummer für Mapping verwenden
-                    let sapReleaseDisplay = "-";
-                    if (host?.sap_release) {
-                      // Extrahiere Build-Nummer (z.B. 10.00.320 aus "10.00.320 PL22")
-                      const buildMatch = String(host.sap_release).match(/\d+\.\d+\.\d+/);
-                      const buildKey = buildMatch ? buildMatch[0] : host.sap_release;
-                      const versionInfo = SAP_B1_VERSION_MAP.get(buildKey);
-                      if (versionInfo) {
-                        sapReleaseDisplay = versionInfo.featurePack;
-                      } else {
-                        sapReleaseDisplay = host.sap_release;
-                      }
-                    }
-                    // CPU core count and model name (shortened)
-                    const cpuCores = Number.isFinite(host?.cpu_cores) ? host.cpu_cores : (host?.payload?.cpu?.cores ?? "-");
-                    let cpuModel = host?.cpu_model_name || host?.payload?.cpu?.model_name || "-";
-                    if (typeof cpuModel === "string" && cpuModel.length > 32) cpuModel = cpuModel.slice(0, 31) + "…";
-                    return `
-                      <tr>
-                        <td>${escapeHtml(asText(host?.hostname, "-"))}</td>
-                        <td style="text-align:center;">${online ? "✅" : "🔴"}</td>
-                        <td>${escapeHtml(sapReleaseDisplay)}</td>
-                        <td>${escapeHtml(asText(host?.hana_version, "-"))}</td>
-                        <td>${escapeHtml(asText(host?.hana_sid, "-"))}</td>
-                        <td>${escapeHtml(asText(host?.sql_release, "-"))}</td>
-                        <td style="text-align:right;">${escapeHtml(asText(host?.ram_gb, "-"))}</td>
-                        <td class="so-center">${cpuCores}</td>
-                        <td>${escapeHtml(cpuModel)}</td>
-                        <td>${escapeHtml(formatSystemOverviewLastUpdate(host?.last_update))}</td>
-                      </tr>
-                    `;
-                  })
+                const cardHtml = (Array.isArray(hosts) ? hosts : [])
+                  .map((host) => formatSystemOverviewCard(host, osName, SAP_B1_VERSION_MAP, true))
                   .join("");
-
+                
                 return `
-                  <div class="system-overview-customer-block">
-                    <div class="system-overview-customer-title">${escapeHtml(customer)} (${Array.isArray(hosts) ? hosts.length : 0})</div>
-                    <div class="table-wrap">
-                      <table class="report-subtable system-overview-table">
-                        <thead>
-                          <tr>
-                            <th>Hostname</th>
-                            <th style="text-align:center;">Status</th>
-                            <th>SAP Release</th>
-                            <th>HANA Version</th>
-                            <th>HANA_SID</th>
-                            <th>SQL Release</th>
-                            <th style="text-align:right;">RAM (GB)</th>
-                            <th class="so-center">CPUs</th>
-                            <th>CPU-Modell</th>
-                            <th>Update</th>
-                          </tr>
-                        </thead>
-                        <tbody>${rows}</tbody>
-                      </table>
-                    </div>
+                  <div class="so-customer-section">
+                    <div class="so-customer-title">👥 ${escapeHtml(customer)} (${Array.isArray(hosts) ? hosts.length : 0})</div>
+                    <div class="so-card-grid">${cardHtml}</div>
                   </div>
                 `;
               })
               .join("");
-
+            
             const osId = `so-os-${countryIndex}-${osIndex}`;
             return `
               <section class="system-overview-os-group">
                 <button class="system-overview-toggle" type="button" data-target-id="${osId}" aria-expanded="false">
-                  <span class="system-overview-chevron">▶</span> ${escapeHtml(osName)}
+                  <span class="system-overview-chevron">▶</span>
+                  <span class="so-os-header">${osImg} ${escapeHtml(osName)} (${osHostCount})</span>
                 </button>
                 <div id="${osId}" class="system-overview-customer-list hidden">${customers}</div>
               </section>
@@ -8185,7 +8287,8 @@ async function loadSystemOverview() {
         return `
           <section class="system-overview-country-group">
             <button class="system-overview-toggle" type="button" data-target-id="${countryId}" aria-expanded="true">
-              <span class="system-overview-chevron">▼</span> ${escapeHtml(country)}
+              <span class="system-overview-chevron">▼</span>
+              <span class="so-country-header">${flagImg} ${escapeHtml(country)}</span>
             </button>
             <div id="${countryId}" class="system-overview-os-list">${osSections}</div>
           </section>
@@ -8194,6 +8297,8 @@ async function loadSystemOverview() {
       .join("");
 
     container.innerHTML = `<div class="system-overview-tree">${countrySections}</div>`;
+    
+    // Expand/Collapse handlers
     container.querySelectorAll(".system-overview-toggle").forEach((button) => {
       button.addEventListener("click", () => {
         const targetId = String(button.getAttribute("data-target-id") || "");
@@ -8205,6 +8310,21 @@ async function loadSystemOverview() {
         button.setAttribute("aria-expanded", expand ? "true" : "false");
         const chevron = button.querySelector(".system-overview-chevron");
         if (chevron) chevron.textContent = expand ? "▼" : "▶";
+      });
+    });
+    
+    // Card click handlers
+    container.querySelectorAll(".so-card-clickable").forEach((card) => {
+      card.addEventListener("click", () => {
+        const hostAttr = card.getAttribute("data-hostname");
+        if (hostAttr) {
+          state.selectedHost = hostAttr;
+          state.viewMode = "overview";
+          state.overviewSection = "main";
+          state.reportSection = "overview";
+          state.reportOffset = 0;
+          loadHostReport();
+        }
       });
     });
   } catch (error) {
