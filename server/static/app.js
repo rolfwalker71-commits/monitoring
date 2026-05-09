@@ -4398,6 +4398,7 @@ function renderDatabasesSection(payload) {
         const sqlGrantSnippet = effectiveSqlLogin
           ? [
               "-- Minimal: nur effektiv genutztes Login berechtigen",
+              "-- WICHTIG: Dieses Skript muss mit dem SA-User bzw. einem Sysadmin-Login ausgefuehrt werden.",
               "DECLARE @login sysname = N'" + sqlLoginLiteral + "';",
               "IF SUSER_ID(@login) IS NULL",
               "    EXEC('CREATE LOGIN [' + REPLACE(@login, ']', ']]') + '] FROM WINDOWS;');",
