@@ -2554,6 +2554,13 @@ function setFilesystemVisibilityStatus(message, isError = false) {
   statusEl.classList.toggle("status-error", isError);
 }
 
+let _filesystemVisibilitySaveAbortController = null;
+
+function setFilesystemVisibilityModalSaving(isSaving) {
+  const saveBtn = document.getElementById("filesystemVisibilitySaveButton");
+  if (saveBtn) saveBtn.disabled = Boolean(isSaving);
+}
+
 function updateFilesystemVisibilityButtons() {
   const fsButton = document.getElementById("filesystemFocusSettingsButton");
   const lfButton = document.getElementById("largeFilesSettingsButton");
@@ -2599,10 +2606,19 @@ function renderFilesystemVisibilityModalContent() {
 }
 
 function closeFilesystemVisibilityModal() {
+  if (_filesystemVisibilitySaveAbortController) {
+    try {
+      _filesystemVisibilitySaveAbortController.abort();
+    } catch (_) {
+      // Ignore abort errors while closing the modal.
+    }
+    _filesystemVisibilitySaveAbortController = null;
+  }
   const modal = document.getElementById("filesystemVisibilityModal");
   if (!modal) return;
   modal.classList.add("hidden");
   state.fsVisibilitySection = "";
+  setFilesystemVisibilityModalSaving(false);
   setFilesystemVisibilityStatus("");
 }
 
@@ -2618,6 +2634,7 @@ function openFilesystemVisibilityModal(section) {
 async function saveFilesystemVisibilityFromModal() {
   const section = state.fsVisibilitySection;
   if (!section || !state.selectedHost) return;
+  if (_filesystemVisibilitySaveAbortController) return;
   const listEl = document.getElementById("filesystemVisibilityList");
   if (!listEl) return;
 
@@ -2627,24 +2644,52 @@ async function saveFilesystemVisibilityFromModal() {
     .map((item) => normalizeMountpointValue(item.getAttribute("data-mountpoint")));
 
   setFilesystemVisibilityStatus("Speichere...");
-  const response = await fetch("/api/v1/filesystem-visibility", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      hostname: state.selectedHost,
-      section,
-      hidden_mountpoints: hiddenMountpoints,
-    }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || ("HTTP " + response.status));
-  }
+  setFilesystemVisibilityModalSaving(true);
 
-  setHiddenMountpointsForSection(section, payload.hidden_mountpoints || hiddenMountpoints);
-  setFilesystemVisibilityStatus("Gespeichert.");
-  await loadAnalysisForHost();
-  closeFilesystemVisibilityModal();
+  let timeoutId = null;
+  try {
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    _filesystemVisibilitySaveAbortController = controller;
+    if (controller) {
+      timeoutId = window.setTimeout(() => {
+        controller.abort();
+      }, 15000);
+    }
+
+    const response = await fetch("/api/v1/filesystem-visibility", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        hostname: state.selectedHost,
+        section,
+        hidden_mountpoints: hiddenMountpoints,
+      }),
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || ("HTTP " + response.status));
+    }
+
+    setHiddenMountpointsForSection(section, payload.hidden_mountpoints || hiddenMountpoints);
+    closeFilesystemVisibilityModal();
+    try {
+      await loadAnalysisForHost();
+    } catch (reloadError) {
+      console.warn("loadAnalysisForHost after filesystem visibility save failed:", reloadError);
+    }
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      throw new Error("Speichern abgebrochen oder Timeout (15s)");
+    }
+    throw error;
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+    }
+    _filesystemVisibilitySaveAbortController = null;
+    setFilesystemVisibilityModalSaving(false);
+  }
 }
 
 function renderLargeFilePathCell(value) {
