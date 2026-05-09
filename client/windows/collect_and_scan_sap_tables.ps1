@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 $IC = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile = if ($env:CONFIG_FILE) { $env:CONFIG_FILE } else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
-$EmbeddedAgentVersion = '1.1.172'
+$EmbeddedAgentVersion = '1.1.173'
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -171,7 +171,38 @@ function Convert-DataTableRowsToObjectArray {
         }
         $rows += [pscustomobject]$obj
     }
-    Write-Output -NoEnumerate $rows
+    return $rows
+}
+
+function Normalize-ScanRows {
+    param($Rows)
+
+    if ($null -eq $Rows) {
+        return @()
+    }
+
+    if ($Rows -is [System.Array]) {
+        return @($Rows)
+    }
+
+    if (($Rows -is [System.Collections.IEnumerable]) -and -not ($Rows -is [string])) {
+        # Some PowerShell collection wrappers expose a `value` + `Count` shape.
+        $hasValueProp = $Rows.PSObject.Properties.Name -contains 'value'
+        $hasCountProp = $Rows.PSObject.Properties.Name -contains 'Count'
+        if ($hasValueProp -and $hasCountProp) {
+            $inner = $Rows.value
+            if ($null -eq $inner) {
+                return @()
+            }
+            if (($inner -is [System.Collections.IEnumerable]) -and -not ($inner -is [string])) {
+                return @($inner)
+            }
+            return @($inner)
+        }
+        return @($Rows)
+    }
+
+    return @($Rows)
 }
 
 function Get-TableScanResult {
@@ -221,7 +252,7 @@ function Get-TableScanResult {
         }
 
         $result.available = $true
-        $result.rows = $rows
+        $result.rows = Normalize-ScanRows -Rows $rows
         $result.row_count = $rowCount
     } catch {
         $result.error = ($_.Exception.Message -replace '[\r\n]+', ' ')
