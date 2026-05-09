@@ -4580,6 +4580,32 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 country_code = normalize_country_code(host_settings.get("country_code_override", ""))
                 if not country_code:
                     country_code = extract_country_code_from_payload(latest_payload)
+
+                sap_release = "-"
+                sap_block = latest_payload.get("sap_b1_info")
+                if isinstance(sap_block, dict):
+                    components = sap_block.get("server_components_version")
+                    if isinstance(components, dict):
+                        sap_candidate = str(components.get("version", "")).strip()
+                        if sap_candidate:
+                            sap_release = sap_candidate
+
+                hana_version = "-"
+                hana_sid = "-"
+                hana_block = latest_payload.get("hana_db_info")
+                if isinstance(hana_block, dict) and hana_block.get("available") is True:
+                    instances = hana_block.get("instances")
+                    if isinstance(instances, list) and instances:
+                        first = instances[0]
+                        if isinstance(first, dict):
+                            raw_hana = str(first.get("version", "")).strip()
+                            if raw_hana:
+                                parts = raw_hana.split(".")
+                                hana_version = ".".join(parts[:2]) if len(parts) >= 2 else raw_hana
+                            sid_value = str(first.get("sid", "")).strip()
+                            if sid_value:
+                                hana_sid = sid_value
+
                 hosts.append(
                     {
                         "hostname": hostname,
@@ -4600,6 +4626,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "open_critical_alert_count": int(row[7] or 0),
                         "os": str(latest_payload.get("os", "")),
                         "country_code": country_code,
+                        "sap_release": sap_release,
+                        "hana_version": hana_version,
+                        "hana_sid": hana_sid,
                         "is_favorite": bool(host_settings.get("is_favorite", False)),
                         "is_hidden": bool(host_settings.get("is_hidden", False)),
                         "agent_api_key_status": str((latest_payload.get("agent_api_key") or {}).get("status", "off")),
