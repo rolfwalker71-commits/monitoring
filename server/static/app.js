@@ -5283,7 +5283,12 @@ function renderSingleHostCard(host) {
     const text = asText(value, "").trim();
     return text === "-" ? "" : text;
   };
-  const sapFeaturePack = cleanHostValue(host.sap_feature_pack || host.sap_release || "");
+  const sapReleaseRaw = cleanHostValue(host.sap_release || host.sap_feature_pack || "");
+  const sapVersionInfo = parseSapB1Version(sapReleaseRaw);
+  const sapFeaturePack = cleanHostValue(
+    sapVersionInfo.mapping?.featurePack
+      || (sapReleaseRaw.toUpperCase().startsWith("FP") ? sapReleaseRaw : "")
+  );
   const hanaReleaseRaw = cleanHostValue(host.hana_release || host.hana_version || "");
   const hanaReleaseValue = hanaReleaseRaw
     ? hanaReleaseRaw.split(".").slice(0, 3).join(".") || hanaReleaseRaw

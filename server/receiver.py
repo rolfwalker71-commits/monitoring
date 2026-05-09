@@ -1584,7 +1584,7 @@ def _extract_sap_hana_ram(payload: dict) -> dict:
                 raw_hana = str(first.get("version", "")).strip()
                 if raw_hana:
                     parts = raw_hana.split(".")
-                    hana_version = ".".join(parts[:2]) if len(parts) >= 2 else raw_hana
+                    hana_version = ".".join(parts[:3]) if len(parts) >= 3 else raw_hana
                 sid_value = str(first.get("sid", "")).strip()
                 if sid_value:
                     hana_sid = sid_value
@@ -1596,7 +1596,7 @@ def _extract_sap_hana_ram(payload: dict) -> dict:
                 raw_hana = str(legacy_hana_block.get("version", "")).strip()
                 if raw_hana and hana_version == "-":
                     parts = raw_hana.split(".")
-                    hana_version = ".".join(parts[:2]) if len(parts) >= 2 else raw_hana
+                    hana_version = ".".join(parts[:3]) if len(parts) >= 3 else raw_hana
                 sid_value = str(legacy_hana_block.get("sid", "")).strip()
                 if sid_value and hana_sid == "-":
                     hana_sid = sid_value
