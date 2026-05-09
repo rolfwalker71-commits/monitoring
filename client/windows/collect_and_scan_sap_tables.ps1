@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 $IC = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile = if ($env:CONFIG_FILE) { $env:CONFIG_FILE } else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
-$EmbeddedAgentVersion = '1.1.173'
+$EmbeddedAgentVersion = '1.1.174'
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -221,6 +221,8 @@ function Get-TableScanResult {
         database = $Database
         schema = $Schema
         table = $Table
+        columns = @()
+        column_count = 0
         row_count = 0
         error = ''
         rows = @()
@@ -233,6 +235,21 @@ function Get-TableScanResult {
 
         $safeSchema = $Schema.Replace(']', ']]')
         $safeTable = $Table.Replace(']', ']]')
+        $safeSchemaLiteral = $Schema.Replace("'", "''")
+        $safeTableLiteral = $Table.Replace("'", "''")
+
+        $columnsQuery = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = '$safeSchemaLiteral' AND TABLE_NAME = '$safeTableLiteral' ORDER BY ORDINAL_POSITION;"
+        $columnsDt = Invoke-SqlTable -Connection $conn -Query $columnsQuery -TimeoutSec 120
+        $columns = @()
+        if ($columnsDt) {
+            foreach ($colRow in $columnsDt.Rows) {
+                $colName = [string]$colRow['COLUMN_NAME']
+                if ($colName) {
+                    $columns += $colName
+                }
+            }
+        }
+
         $countQuery = "SELECT COUNT(*) AS cnt FROM [$safeSchema].[$safeTable];"
         $countDt = Invoke-SqlTable -Connection $conn -Query $countQuery -TimeoutSec 120
         $rowCount = 0
@@ -252,6 +269,8 @@ function Get-TableScanResult {
         }
 
         $result.available = $true
+        $result.columns = @($columns)
+        $result.column_count = $columns.Count
         $result.rows = Normalize-ScanRows -Rows $rows
         $result.row_count = $rowCount
     } catch {

@@ -3812,15 +3812,64 @@ function renderSapB1SystemSummary(payload) {
   return escapeHtml(releaseDate);
 }
 
-function renderSapB1TableScanRows(rows) {
-  const entries = Array.isArray(rows)
-    ? rows
-    : (rows && typeof rows === "object" ? [rows] : []);
+function normalizeSapScanRows(rows) {
+  let current = rows;
+  for (let depth = 0; depth < 5; depth += 1) {
+    if (Array.isArray(current)) {
+      if (current.length === 1 && current[0] && typeof current[0] === "object") {
+        const keys = Object.keys(current[0]);
+        const hasValue = keys.includes("value") || keys.includes("Value");
+        const hasCount = keys.includes("Count") || keys.includes("count");
+        if (hasValue && hasCount) {
+          current = current[0].value ?? current[0].Value;
+          continue;
+        }
+      }
+      return current.filter((entry) => entry && typeof entry === "object");
+    }
+
+    if (current && typeof current === "object") {
+      const keys = Object.keys(current);
+      const hasValue = keys.includes("value") || keys.includes("Value");
+      const hasCount = keys.includes("Count") || keys.includes("count");
+      if (hasValue && hasCount) {
+        current = current.value ?? current.Value;
+        continue;
+      }
+      return [current];
+    }
+
+    return [];
+  }
+  return [];
+}
+
+function formatSapScanCellValue(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "object") {
+    try {
+      return escapeHtml(JSON.stringify(value));
+    } catch (_error) {
+      return escapeHtml(String(value));
+    }
+  }
+  return escapeHtml(asText(value, ""));
+}
+
+function renderSapB1TableScanRows(rows, expectedColumns = []) {
+  const entries = normalizeSapScanRows(rows);
   if (entries.length === 0) {
     return "<p class=\"muted\">Keine Datensaetze gefunden.</p>";
   }
 
-  const headers = Object.keys(entries[0] || {});
+  const expected = Array.isArray(expectedColumns)
+    ? expectedColumns.filter((value) => typeof value === "string" && value.trim() !== "")
+    : [];
+  const headers = expected.length > 0
+    ? expected
+    : Array.from(new Set(entries.flatMap((entry) => Object.keys(entry || {}))));
   if (headers.length === 0) {
     return "<p class=\"muted\">Leere Datensaetze empfangen.</p>";
   }
@@ -3832,7 +3881,7 @@ function renderSapB1TableScanRows(rows) {
   const bodyHtml = entries
     .map((entry) => {
       const cols = headers
-        .map((key) => `<td>${escapeHtml(asText(entry[key], ""))}</td>`)
+        .map((key) => `<td>${formatSapScanCellValue(entry[key])}</td>`)
         .join("");
       return `<tr>${cols}</tr>`;
     })
@@ -3880,18 +3929,19 @@ function renderSapB1TableScanSection(payload) {
       const available = item.available === true;
       const error = asText(item.error, "");
       const rawRows = item.rows;
-      const normalizedRows = Array.isArray(rawRows)
-        ? rawRows
-        : (rawRows && typeof rawRows === "object" ? [rawRows] : []);
+      const normalizedRows = normalizeSapScanRows(rawRows);
       const rowCount = Number(item.row_count || normalizedRows.length || 0);
+      const columns = Array.isArray(item.columns) ? item.columns : [];
+      const columnCount = Number(item.column_count || columns.length || 0);
       const effectiveDb = asText(item.database, "");
       const heading = effectiveDb ? `${effectiveDb}.dbo.${asText(item.table, "")}` : block.title;
 
       return `
         <details class="sap-b1-raw-details">
           <summary class="sap-b1-raw-summary">${escapeHtml(heading)} (${Number.isFinite(rowCount) ? rowCount : rows.length})</summary>
+          ${available ? `<p class="muted">Spalten: ${Number.isFinite(columnCount) ? columnCount : columns.length}${columns.length > 0 ? ` (${escapeHtml(columns.join(", "))})` : ""}</p>` : ""}
           ${!available ? `<p class="muted">Nicht verfuegbar${error ? `: ${escapeHtml(error)}` : "."}</p>` : ""}
-          ${available ? renderSapB1TableScanRows(rawRows) : ""}
+          ${available ? renderSapB1TableScanRows(rawRows, columns) : ""}
         </details>`;
     })
     .join("");
