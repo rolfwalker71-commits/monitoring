@@ -8109,6 +8109,10 @@ async function loadSystemOverview() {
                         sapReleaseDisplay = host.sap_release;
                       }
                     }
+                    // CPU core count and model name (shortened)
+                    const cpuCores = Number.isFinite(host?.cpu_cores) ? host.cpu_cores : (host?.payload?.cpu?.cores ?? "-");
+                    let cpuModel = host?.cpu_model_name || host?.payload?.cpu?.model_name || "-";
+                    if (typeof cpuModel === "string" && cpuModel.length > 32) cpuModel = cpuModel.slice(0, 31) + "…";
                     return `
                       <tr>
                         <td>${escapeHtml(asText(host?.hostname, "-"))}</td>
@@ -8118,6 +8122,8 @@ async function loadSystemOverview() {
                         <td>${escapeHtml(asText(host?.hana_sid, "-"))}</td>
                         <td>${escapeHtml(asText(host?.sql_release, "-"))}</td>
                         <td style="text-align:right;">${escapeHtml(asText(host?.ram_gb, "-"))}</td>
+                        <td class="so-center">${cpuCores}</td>
+                        <td>${escapeHtml(cpuModel)}</td>
                         <td>${escapeHtml(formatSystemOverviewLastUpdate(host?.last_update))}</td>
                       </tr>
                     `;
@@ -8138,6 +8144,8 @@ async function loadSystemOverview() {
                             <th>HANA_SID</th>
                             <th>SQL Release</th>
                             <th style="text-align:right;">RAM (GB)</th>
+                            <th class="so-center">CPUs</th>
+                            <th>CPU-Modell</th>
                             <th>Letzte Aktualisierung</th>
                           </tr>
                         </thead>
