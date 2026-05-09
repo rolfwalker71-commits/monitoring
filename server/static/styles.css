@@ -5040,9 +5040,34 @@ body[data-theme="dark"] th {
 .inactive-hosts-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: 6px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
+  padding: 6px 8px;
+  background: #f5f9ff;
+  border-radius: 8px;
+}
+
+.search-input-compact {
+  flex: 1;
+  max-width: 300px;
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid #c9d8ec;
+  border-radius: 4px;
+  background: white;
+  color: #1f2937;
+}
+
+.search-input-compact::placeholder {
+  color: #94a3b8;
+}
+
+.btn-secondary-compact {
+  padding: 4px 10px;
+  font-size: 12px;
+  height: auto;
+  min-height: 24px;
 }
 
 .inactive-hosts-list {
@@ -6980,4 +7005,18 @@ body[data-theme="dark"] .so-card-alert-badge-critical {
 
 body[data-theme="dark"] .so-customer-title {
   color: #d0d0d0;
+}
+
+body[data-theme="dark"] .inactive-hosts-toolbar {
+  background: #1a2847;
+}
+
+body[data-theme="dark"] .search-input-compact {
+  background: #111b2f;
+  border-color: #24344d;
+  color: #e6edf7;
+}
+
+body[data-theme="dark"] .search-input-compact::placeholder {
+  color: #64748b;
 }

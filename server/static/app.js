@@ -77,13 +77,8 @@ const state = {
   criticalTrendsMetrics: ["filesystem"],
   inactiveHostsHours: 1,
   hostConfigChangesHours: 720,
+  hostConfigChangesSearchQuery: "",
   inactiveHosts: [],
-  reportLimit: 1,
-  reportOffset: 0,
-  totalReports: 0,
-  currentReport: null,
-  reportSection: "overview",
-  analysisHours: 24,
   alarmSettingsLoaded: false,
   globalAlertsCollapsed: false,
   globalAlertsOffset: 0,
@@ -6968,13 +6963,65 @@ async function loadHostConfigChanges() {
       byHost.get(key).items.push(item);
     });
 
-    const groups = [...byHost.values()].sort((a, b) => {
+    let groups = [...byHost.values()].sort((a, b) => {
       const nameA = String(a.displayName || a.hostname).toLowerCase();
       const nameB = String(b.displayName || b.hostname).toLowerCase();
       const byName = nameA.localeCompare(nameB);
       if (byName !== 0) return byName;
       return String(a.hostname).toLowerCase().localeCompare(String(b.hostname).toLowerCase());
     });
+
+    // Filter groups by search query
+    if (state.hostConfigChangesSearchQuery) {
+      const q = state.hostConfigChangesSearchQuery;
+      groups = groups.filter((group) => {
+        const displayMatch = String(group.displayName).toLowerCase().includes(q);
+        const hostMatch = String(group.hostname).toLowerCase().includes(q);
+        const fieldMatch = group.items.some((item) =>
+          String(item.field_key || item.field_label || "").toLowerCase().includes(q)
+        );
+        return displayMatch || hostMatch || fieldMatch;
+      }).map((group) => ({
+        ...group,
+        items: state.hostConfigChangesSearchQuery
+          ? group.items.filter(
+              (item) =>
+                String(item.field_key || item.field_label || "")
+                  .toLowerCase()
+                  .includes(q)
+            )
+          : group.items,
+      })).filter((group) => group.items.length > 0);
+    }
+
+    // Filter groups by search query
+    if (state.hostConfigChangesSearchQuery) {
+      const q = state.hostConfigChangesSearchQuery;
+      groups = groups.filter((group) => {
+        const displayMatch = String(group.displayName).toLowerCase().includes(q);
+        const hostMatch = String(group.hostname).toLowerCase().includes(q);
+        const fieldMatch = group.items.some((item) =>
+          String(item.field_key || item.field_label || "").toLowerCase().includes(q)
+        );
+        return displayMatch || hostMatch || fieldMatch;
+      }).map((group) => ({
+        ...group,
+        items: state.hostConfigChangesSearchQuery
+          ? group.items.filter(
+              (item) =>
+                String(item.field_key || item.field_label || "")
+                  .toLowerCase()
+                  .includes(q)
+            )
+          : group.items,
+      })).filter((group) => group.items.length > 0);
+    }
+
+    // Update summary with filtered count
+    if (summaryEl) {
+      const filteredCount = groups.reduce((sum, group) => sum + group.items.length, 0);
+      summaryEl.textContent = `${filteredCount} Aenderung(en) in den letzten ${hours}h`;
+    }
 
     groupsEl.innerHTML = groups
       .map((group) => {
@@ -7536,16 +7583,17 @@ function wireEvents() {
       await loadHostConfigChanges();
     });
   }
-  const backfillHostConfigChangesButton = document.getElementById("backfillHostConfigChangesButton");
-  if (backfillHostConfigChangesButton) {
-    backfillHostConfigChangesButton.addEventListener("click", async () => {
-      await runHostConfigChangesBackfill(7);
-    });
-  }
   const hostConfigChangesHoursFilter = document.getElementById("hostConfigChangesHoursFilter");
   if (hostConfigChangesHoursFilter) {
     hostConfigChangesHoursFilter.addEventListener("change", async () => {
       state.hostConfigChangesHours = Number(hostConfigChangesHoursFilter.value);
+      await loadHostConfigChanges();
+    });
+  }
+  const hostConfigChangesSearchInput = document.getElementById("hostConfigChangesSearchInput");
+  if (hostConfigChangesSearchInput) {
+    hostConfigChangesSearchInput.addEventListener("input", async () => {
+      state.hostConfigChangesSearchQuery = hostConfigChangesSearchInput.value.toLowerCase().trim();
       await loadHostConfigChanges();
     });
   }
