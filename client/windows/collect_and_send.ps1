@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.167'
+$EmbeddedAgentVersion = '1.1.163'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -290,32 +290,18 @@ SELECT
                 }
                 $ctxRdr.Close()
 
-                # Comprehensive database query: sizes, backups, config, file info, page verify, stats timestamp
+                # Database list + sizes (all databases incl. system DBs except tempdb)
+                # size is in 8KB pages; MB = pages / 128
                 $cmd = $conn.CreateCommand()
-                $cmd.CommandTimeout = 15
+                $cmd.CommandTimeout = 10
                 $cmd.CommandText = @"
-SELECT 
-    d.name,
-    d.state_desc,
-    d.recovery_model_desc,
-    COALESCE(d.collation_name,''),
-    COALESCE(d.compatibility_level,0),
+SELECT d.name, d.state_desc, d.recovery_model_desc,
     COALESCE(SUM(CASE WHEN mf.type=0 THEN CAST(mf.size AS bigint) ELSE 0 END) / 128, 0) AS data_mb,
-    COALESCE(SUM(CASE WHEN mf.type=1 THEN CAST(mf.size AS bigint) ELSE 0 END) / 128, 0) AS log_mb,
-    COALESCE(COUNT(CASE WHEN mf.type=0 THEN 1 END),0) AS data_files,
-    COALESCE(COUNT(CASE WHEN mf.type=1 THEN 1 END),0) AS log_files,
-    COALESCE(SUM(CASE WHEN mf.type=0 AND mf.is_percent_growth=0 THEN mf.growth ELSE 0 END),0) AS data_autogrowth_pages,
-    COALESCE(SUM(CASE WHEN mf.type=1 AND mf.is_percent_growth=0 THEN mf.growth ELSE 0 END),0) AS log_autogrowth_pages,
-    COALESCE(d.page_verify_option_desc,''),
-    CAST(COALESCE(DATABASEPROPERTYEX(d.name,'LastGoodCheckDBTime'),'') AS varchar(30)),
-    MAX(CASE WHEN bs.type='D' THEN bs.backup_finish_date END) AS last_full,
-    MAX(CASE WHEN bs.type='I' THEN bs.backup_finish_date END) AS last_diff,
-    MAX(CASE WHEN bs.type='L' THEN bs.backup_finish_date END) AS last_log
+    COALESCE(SUM(CASE WHEN mf.type=1 THEN CAST(mf.size AS bigint) ELSE 0 END) / 128, 0) AS log_mb
 FROM sys.databases d
 LEFT JOIN sys.master_files mf ON d.database_id = mf.database_id
-LEFT JOIN msdb.dbo.backupset bs ON bs.database_name = d.name
 WHERE d.name <> 'tempdb'
-GROUP BY d.name, d.state_desc, d.recovery_model_desc, d.collation_name, d.compatibility_level, d.page_verify_option_desc
+GROUP BY d.name, d.state_desc, d.recovery_model_desc
 ORDER BY
     CASE WHEN d.name IN ('master','model','msdb') THEN 1 ELSE 0 END,
     d.name
@@ -323,51 +309,53 @@ ORDER BY
                 $rdr = $cmd.ExecuteReader()
                 $dbRows = @()
                 while ($rdr.Read()) {
-                    $fullBkTime = if ($rdr[13] -is [DateTime]) { $rdr[13].ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC) } else { '' }
-                    $diffBkTime = if ($rdr[14] -is [DateTime]) { $rdr[14].ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC) } else { '' }
-                    $logBkTime = if ($rdr[15] -is [DateTime]) { $rdr[15].ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC) } else { '' }
                     $dbRows += @{
-                        name                     = [string]$rdr[0]
-                        state                    = [string]$rdr[1]
-                        recovery_model           = [string]$rdr[2]
-                        collation                = [string]$rdr[3]
-                        compatibility_level      = [int]$rdr[4]
-                        data_mb                  = [long]$rdr[5]
-                        log_mb                   = [long]$rdr[6]
-                        data_files               = [int]$rdr[7]
-                        log_files                = [int]$rdr[8]
-                        data_autogrowth_pages    = [long]$rdr[9]
-                        log_autogrowth_pages     = [long]$rdr[10]
-                        page_verify              = [string]$rdr[11]
-                        last_dbcc_time           = [string]$rdr[12]
-                        last_full_backup         = $fullBkTime
-                        last_diff_backup         = $diffBkTime
-                        last_log_backup          = $logBkTime
+                        name           = [string]$rdr[0]
+                        state          = [string]$rdr[1]
+                        recovery_model = [string]$rdr[2]
+                        data_mb        = [long]$rdr[3]
+                        log_mb         = [long]$rdr[4]
                     }
                 }
                 $rdr.Close()
+
+                # Last backup per database (Full=D, Differential=I, Log=L)
+                # Uses full msdb.dbo.backupset qualifier — no USE needed
+                $bkCmd = $conn.CreateCommand()
+                $bkCmd.CommandTimeout = 10
+                $bkCmd.CommandText = @"
+SELECT database_name, [type], MAX(backup_finish_date) AS last_backup
+FROM msdb.dbo.backupset
+GROUP BY database_name, [type]
+"@
+                $bkRdr = $bkCmd.ExecuteReader()
+                $backups = @{}
+                while ($bkRdr.Read()) {
+                    $n  = [string]$bkRdr[0]
+                    $t  = [string]$bkRdr[1]
+                    $dt = $bkRdr[2]
+                    if (-not $backups.ContainsKey($n)) { $backups[$n] = @{} }
+                    $backups[$n][$t] = if ($dt -is [DateTime]) { $dt.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC) } else { '' }
+                }
+                $bkRdr.Close()
                 $conn.Close()
 
                 foreach ($db in $dbRows) {
+                    $bk = if ($backups.ContainsKey($db.name)) { $backups[$db.name] } else { @{} }
                     $isSystem = $db.name -in @('master','model','msdb')
                     $isSystemText = if ($isSystem) { 'true' } else { 'false' }
+                    $lastFullBackup = if ($bk.ContainsKey('D')) { ConvertTo-JsonString $bk['D'] } else { '' }
+                    $lastDiffBackup = if ($bk.ContainsKey('I')) { ConvertTo-JsonString $bk['I'] } else { '' }
+                    $lastLogBackup = if ($bk.ContainsKey('L')) { ConvertTo-JsonString $bk['L'] } else { '' }
                     $dbJson  = '{"name":' + (ConvertTo-JsonString $db.name | ForEach-Object { '"' + $_ + '"' }) +
                                ',"system_db":' + $isSystemText +
                                ',"state":"'          + (ConvertTo-JsonString $db.state)           + '"' +
                                ',"recovery_model":"' + (ConvertTo-JsonString $db.recovery_model)  + '"' +
-                               ',"collation":"'      + (ConvertTo-JsonString $db.collation)      + '"' +
-                               ',"compatibility_level":' + $db.compatibility_level +
                                ',"data_mb":'         + $db.data_mb +
                                ',"log_mb":'          + $db.log_mb +
-                               ',"data_files":'      + $db.data_files +
-                               ',"log_files":'       + $db.log_files +
-                               ',"data_autogrowth_pages":' + $db.data_autogrowth_pages +
-                               ',"log_autogrowth_pages":' + $db.log_autogrowth_pages +
-                               ',"page_verify":"'    + (ConvertTo-JsonString $db.page_verify)    + '"' +
-                               ',"last_dbcc_time":"' + (ConvertTo-JsonString $db.last_dbcc_time) + '"' +
-                               ',"last_full_backup":"'  + (ConvertTo-JsonString $db.last_full_backup) + '"' +
-                               ',"last_diff_backup":"'  + (ConvertTo-JsonString $db.last_diff_backup) + '"' +
-                               ',"last_log_backup":"'   + (ConvertTo-JsonString $db.last_log_backup) + '"' +
+                               ',"last_full_backup":"'  + $lastFullBackup + '"' +
+                               ',"last_diff_backup":"'  + $lastDiffBackup + '"' +
+                               ',"last_log_backup":"'   + $lastLogBackup + '"' +
                                '}'
                     $databases += $dbJson
                 }

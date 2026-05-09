@@ -4511,14 +4511,8 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
               const isSystem = db.system_db === true;
               const state = asText(db.state, "-");
               const recovery = asText(db.recovery_model, "-");
-              const collation = asText(db.collation, "-");
-              const compatibility = Number(db.compatibility_level || 0);
               const dataMb = Number(db.data_mb || 0);
               const logMb  = Number(db.log_mb  || 0);
-              const dataFiles = Number(db.data_files || 0);
-              const logFiles = Number(db.log_files || 0);
-              const pageVerify = asText(db.page_verify, "-");
-              const lastDbcc = asText(db.last_dbcc_time, "-");
               const totalMb = dataMb + logMb;
               const sizeStr = totalMb >= 1024
                 ? `${(totalMb / 1024).toFixed(1)} GB`
@@ -4532,19 +4526,13 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
 
               const stateClass = state.toLowerCase() === "online" ? "" : " db-state-warn";
               const systemClass = isSystem ? " db-row-system" : "";
-              const filesStr = dataFiles > 0 || logFiles > 0 ? `${dataFiles}D / ${logFiles}L` : "-";
               return `
                 <tr class="${stateClass}${systemClass}">
                   <td>${escapeHtml(name)}${isSystem ? ' <span class="db-sys-badge">sys</span>' : ""}</td>
                   <td>${escapeHtml(state)}</td>
                   <td>${escapeHtml(recovery)}</td>
                   <td class="db-size-cell" title="Data: ${escapeHtml(dataSizeStr)} · Log: ${escapeHtml(logSizeStr)}">${escapeHtml(sizeStr)}</td>
-                  <td class="db-collation-cell" title="Collation">${escapeHtml(collation)}</td>
-                  <td>${compatibility > 0 ? compatibility : "-"}</td>
-                  <td>${escapeHtml(filesStr)}</td>
-                  <td class="db-verify-cell" title="Page Verify">${escapeHtml(pageVerify)}</td>
-                  <td class="db-dbcc-cell" title="Last DBCC CheckDB">${escapeHtml(lastDbcc === "-" ? "-" : formatUtcPlus2(lastDbcc))}</td>
-                  <td class="db-bk-cell">${fmtBk(asText(db.last_full_backup, ""))}</td>
+                  <td class="db-bk-cell">${fmtBk(fullBk)}</td>
                 </tr>`;
             }).join("");
             dbTableHtml = `
@@ -4556,11 +4544,6 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
                       <th>Status</th>
                       <th>Recovery</th>
                       <th class="db-size-cell">Grösse</th>
-                      <th class="db-collation-cell">Collation</th>
-                      <th>Compat.</th>
-                      <th>Dateien</th>
-                      <th>PageVerify</th>
-                      <th>Letztes DBCC</th>
                       <th>Letztes Full-Backup</th>
                     </tr>
                   </thead>
