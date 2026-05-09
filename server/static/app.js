@@ -8039,38 +8039,9 @@ async function init() {
 
 init();
 
-function systemOverviewCountryLabel(code) {
-  const normalized = String(code || "").trim().toUpperCase() || "XX";
-  const labels = { CH: "Schweiz", DE: "Deutschland", AT: "Oesterreich", FR: "Frankreich", IT: "Italien", XX: "Unbekannt" };
-  return labels[normalized] || normalized;
-}
-
-function systemOverviewCountryEmoji(code) {
-  const normalized = String(code || "").trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(normalized)) return "🌍";
-  const base = 127397;
-  return [...normalized].map((char) => String.fromCodePoint(base + char.charCodeAt(0))).join("");
-}
-
-function systemOverviewOsLabel(osFamily) {
-  const normalized = String(osFamily || "").toLowerCase();
-  if (normalized.includes("windows")) return "Windows";
-  if (normalized.includes("linux")) return "Linux";
-  if (normalized.includes("mac") || normalized.includes("darwin")) return "macOS";
-  return "Andere";
-}
-
-function systemOverviewOsEmoji(osFamily) {
-  const normalized = String(osFamily || "").toLowerCase();
-  if (normalized.includes("windows")) return "🖥️";
-  if (normalized.includes("linux")) return "🐧";
-  if (normalized.includes("mac") || normalized.includes("darwin")) return "🍎";
-  return "💻";
-}
-
-function formatSystemOverviewLastUpdate(utcValue) {
-  const raw = asText(utcValue, "-");
-  if (raw === "-") return "-";
+function formatSystemOverviewLastUpdate(value) {
+  const raw = asText(value, "-");
+  if (raw === "-") return raw;
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return raw;
   return parsed.toLocaleString("de-CH", {
@@ -8084,66 +8055,116 @@ function formatSystemOverviewLastUpdate(utcValue) {
 
 async function loadSystemOverview() {
   const container = document.getElementById("systemOverviewContainer");
-  const stats = document.getElementById("systemOverviewStats");
+  const statsEl = document.getElementById("systemOverviewStats");
   if (!container) return;
 
   container.innerHTML = '<p class="muted">Lade Systemdaten...</p>';
-  if (stats) stats.textContent = "";
+  if (statsEl) statsEl.textContent = "";
 
   try {
     const response = await fetch("/api/v1/system-overview", { credentials: "same-origin" });
     if (!response.ok) throw new Error("HTTP " + response.status);
-    const payload = await response.json();
-    const byCountry = payload && typeof payload === "object" ? (payload.by_country || {}) : {};
-    const total = Number(payload?.total || 0);
-    if (stats) stats.textContent = `${total} Systeme`;
-    if (total <= 0 || Object.keys(byCountry).length === 0) {
-      container.innerHTML = '<p class="muted">Keine Systemdaten vorhanden.</p>';
+    const data = await response.json();
+    const byCountry = data && typeof data === "object" ? (data.by_country || {}) : {};
+    const total = Number(data?.total || 0);
+
+    if (statsEl) statsEl.textContent = `${total} Systeme`;
+    if (!total) {
+      container.innerHTML = '<p class="muted">Keine Systeme vorhanden.</p>';
       return;
     }
 
-    const countryEntries = Object.entries(byCountry).sort((a, b) => String(a[0]).localeCompare(String(b[0])));
-    const countryHtml = countryEntries.map(([countryCode, osMap], countryIndex) => {
-      const osEntries = Object.entries(osMap || {}).sort((a, b) => systemOverviewOsLabel(a[0]).localeCompare(systemOverviewOsLabel(b[0])));
-      const countryCount = osEntries.reduce((sum, entry) => {
-        const customerMap = entry[1] || {};
-        return sum + Object.values(customerMap).reduce((acc, hosts) => acc + (Array.isArray(hosts) ? hosts.length : 0), 0);
-      }, 0);
+    const countrySections = Object.entries(byCountry)
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+      .map(([country, osMap], countryIndex) => {
+        const osSections = Object.entries(osMap || {})
+          .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+          .map(([osName, customerMap], osIndex) => {
+            const customers = Object.entries(customerMap || {})
+              .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+              .map(([customer, hosts]) => {
+                const rows = (Array.isArray(hosts) ? hosts : [])
+                  .map((host) => {
+                    const online = host?.online === true;
+                    return `
+                      <tr>
+                        <td>${escapeHtml(asText(host?.hostname, "-"))}</td>
+                        <td style="text-align:center;">${online ? "✅" : "🔴"}</td>
+                        <td>${escapeHtml(asText(host?.sap_release, "-"))}</td>
+                        <td>${escapeHtml(asText(host?.hana_version, "-"))}</td>
+                        <td>${escapeHtml(asText(host?.hana_sid, "-"))}</td>
+                        <td>${escapeHtml(asText(host?.sql_release, "-"))}</td>
+                        <td style="text-align:right;">${escapeHtml(asText(host?.ram_gb, "-"))}</td>
+                        <td>${escapeHtml(formatSystemOverviewLastUpdate(host?.last_update))}</td>
+                      </tr>
+                    `;
+                  })
+                  .join("");
 
-      const osHtml = osEntries.map(([osFamily, customerMap], osIndex) => {
-        const customers = Object.entries(customerMap || {}).sort((a, b) => String(a[0]).localeCompare(String(b[0])));
-        const osCount = customers.reduce((sum, entry) => sum + (Array.isArray(entry[1]) ? entry[1].length : 0), 0);
-        const customerHtml = customers.map(([customer, hosts]) => {
-          const rows = (Array.isArray(hosts) ? hosts : []).map((host) => {
-            const statusIcon = host?.online === true ? "✅" : "🔴";
-            return `<tr><td>${escapeHtml(asText(host?.hostname, "-"))}</td><td class="so-center">${statusIcon}</td><td>${escapeHtml(asText(host?.sap_release, "-"))}</td><td>${escapeHtml(asText(host?.hana_version, "-"))}</td><td>${escapeHtml(asText(host?.hana_sid, "-"))}</td><td>${escapeHtml(asText(host?.sql_release, "-"))}</td><td class="so-right">${escapeHtml(asText(host?.ram_gb, "-"))}</td><td>${escapeHtml(formatSystemOverviewLastUpdate(host?.last_update))}</td></tr>`;
-          }).join("");
-          return `<div class="system-overview-customer-block"><div class="system-overview-customer-title">${escapeHtml(customer)} (${Array.isArray(hosts) ? hosts.length : 0})</div><div class="table-wrap"><table class="report-subtable system-overview-table"><thead><tr><th>Hostname</th><th class="so-center">Status</th><th>SAP Release</th><th>HANA Version</th><th>HANA_SID</th><th>SQL Release</th><th class="so-right">RAM (GB)</th><th>Letzte Aktualisierung</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
-        }).join("");
+                return `
+                  <div class="system-overview-customer-block">
+                    <div class="system-overview-customer-title">${escapeHtml(customer)} (${Array.isArray(hosts) ? hosts.length : 0})</div>
+                    <div class="table-wrap">
+                      <table class="report-subtable system-overview-table">
+                        <thead>
+                          <tr>
+                            <th>Hostname</th>
+                            <th style="text-align:center;">Status</th>
+                            <th>SAP Release</th>
+                            <th>HANA Version</th>
+                            <th>HANA_SID</th>
+                            <th>SQL Release</th>
+                            <th style="text-align:right;">RAM (GB)</th>
+                            <th>Letzte Aktualisierung</th>
+                          </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                      </table>
+                    </div>
+                  </div>
+                `;
+              })
+              .join("");
 
-        const osId = `so-os-${countryIndex}-${osIndex}`;
-        return `<section class="system-overview-os-group"><button class="system-overview-toggle" type="button" data-target-id="${osId}" aria-expanded="false"><span class="system-overview-chevron">▶</span><span>${systemOverviewOsEmoji(osFamily)} ${escapeHtml(systemOverviewOsLabel(osFamily))} (${osCount})</span></button><div id="${osId}" class="system-overview-customer-list hidden">${customerHtml}</div></section>`;
-      }).join("");
+            const osId = `so-os-${countryIndex}-${osIndex}`;
+            return `
+              <section class="system-overview-os-group">
+                <button class="system-overview-toggle" type="button" data-target-id="${osId}" aria-expanded="false">
+                  <span class="system-overview-chevron">▶</span> ${escapeHtml(osName)}
+                </button>
+                <div id="${osId}" class="system-overview-customer-list hidden">${customers}</div>
+              </section>
+            `;
+          })
+          .join("");
 
-      const countryId = `so-country-${countryIndex}`;
-      return `<section class="system-overview-country-group"><button class="system-overview-toggle" type="button" data-target-id="${countryId}" aria-expanded="true"><span class="system-overview-chevron">▼</span><span>${systemOverviewCountryEmoji(countryCode)} ${escapeHtml(systemOverviewCountryLabel(countryCode))} (${countryCount})</span></button><div id="${countryId}" class="system-overview-os-list">${osHtml}</div></section>`;
-    }).join("");
+        const countryId = `so-country-${countryIndex}`;
+        return `
+          <section class="system-overview-country-group">
+            <button class="system-overview-toggle" type="button" data-target-id="${countryId}" aria-expanded="true">
+              <span class="system-overview-chevron">▼</span> ${escapeHtml(country)}
+            </button>
+            <div id="${countryId}" class="system-overview-os-list">${osSections}</div>
+          </section>
+        `;
+      })
+      .join("");
 
-    container.innerHTML = `<div class="system-overview-tree">${countryHtml}</div>`;
+    container.innerHTML = `<div class="system-overview-tree">${countrySections}</div>`;
     container.querySelectorAll(".system-overview-toggle").forEach((button) => {
       button.addEventListener("click", () => {
         const targetId = String(button.getAttribute("data-target-id") || "");
-        if (!targetId) return;
-        const target = document.getElementById(targetId);
+        const target = targetId ? document.getElementById(targetId) : null;
         if (!target) return;
-        const willExpand = target.classList.contains("hidden");
-        target.classList.toggle("hidden", !willExpand);
-        button.setAttribute("aria-expanded", willExpand ? "true" : "false");
+
+        const expand = target.classList.contains("hidden");
+        target.classList.toggle("hidden", !expand);
+        button.setAttribute("aria-expanded", expand ? "true" : "false");
         const chevron = button.querySelector(".system-overview-chevron");
-        if (chevron) chevron.textContent = willExpand ? "▼" : "▶";
+        if (chevron) chevron.textContent = expand ? "▼" : "▶";
       });
     });
   } catch (error) {
     container.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
-   }
- }
+  }
+}
