@@ -6341,15 +6341,33 @@ body[data-theme="dark"] .backup-status-stale {
   margin-top: 0;
   width: 100%;
   border-collapse: collapse;
-  table-layout: auto;
+  table-layout: fixed;
 }
 
 .system-overview-table th,
 .system-overview-table td {
-  padding: 7px 8px;
+  padding: 7px 6px;
   text-align: left;
   border-bottom: 1px solid #e5ecf5;
 }
+
+.system-overview-table th:nth-child(1),
+.system-overview-table td:nth-child(1) { width: 18%; min-width: 160px; padding-right: 3px; }
+
+.system-overview-table th:nth-child(2),
+.system-overview-table td:nth-child(2) { width: 19%; min-width: 180px; padding-left: 3px; }
+
+.system-overview-table th:nth-child(3),
+.system-overview-table td:nth-child(3) { width: 16%; min-width: 130px; }
+
+.system-overview-table th:nth-child(4),
+.system-overview-table td:nth-child(4) { width: 15%; min-width: 120px; }
+
+.system-overview-table th:nth-child(5),
+.system-overview-table td:nth-child(5) { width: 22%; min-width: 230px; }
+
+.system-overview-table th:nth-child(6),
+.system-overview-table td:nth-child(6) { width: 10%; min-width: 110px; }
 
 .system-overview-table th {
   background: #f0f5fa;
@@ -6421,36 +6439,6 @@ body[data-theme="dark"] .backup-status-stale {
   color: #721c24;
   border: 1px solid #f5c6cb;
 }
-
-.system-overview-table th:nth-child(1),
-.system-overview-table td:nth-child(1) { width: 15%; min-width: 120px; }
-
-.system-overview-table th:nth-child(2),
-.system-overview-table td:nth-child(2) { width: 5%; text-align: center; min-width: 40px; }
-
-.system-overview-table th:nth-child(3),
-.system-overview-table td:nth-child(3) { width: 9%; min-width: 88px; }
-
-.system-overview-table th:nth-child(4),
-.system-overview-table td:nth-child(4) { width: 10%; min-width: 100px; }
-
-.system-overview-table th:nth-child(5),
-.system-overview-table td:nth-child(5) { width: 7%; min-width: 72px; }
-
-.system-overview-table th:nth-child(6),
-.system-overview-table td:nth-child(6) { width: 9%; min-width: 88px; }
-
-.system-overview-table th:nth-child(7),
-.system-overview-table td:nth-child(7) { width: 7%; text-align: right; min-width: 64px; }
-
-.system-overview-table th:nth-child(8),
-.system-overview-table td:nth-child(8) { width: 5%; min-width: 52px; text-align: center; }
-
-.system-overview-table th:nth-child(9),
-.system-overview-table td:nth-child(9) { width: 20%; min-width: 190px; }
-
-.system-overview-table th:nth-child(10),
-.system-overview-table td:nth-child(10) { width: 10%; min-width: 105px; }
 
 .so-center {
   text-align: center;

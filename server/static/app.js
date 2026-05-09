@@ -8157,9 +8157,8 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
   const shortHostname = escapeHtml(formatShortHostname(hostnameRaw));
   const hostTitle = escapeHtml(String(customerName || host.display_name || "-").trim() || "-");
   const osEmoji = getOsEmoji(osName);
-  const osType = escapeHtml(String(osName || "-").trim() || "-");
   const osRelease = parseOsRelease(host.payload || {}, osName);
-  const osReleaseDisplay = escapeHtml(osRelease || "-");
+  const osReleaseDisplay = escapeHtml(osRelease || String(osName || "-").trim() || "-");
 
   const sapReleaseDisplay = escapeHtml(resolveSapReleaseDisplay(host.sap_release, sapVersionMap));
   const hanaVersion = escapeHtml(String(host.hana_version || "-"));
@@ -8184,7 +8183,6 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
       </td>
       <td>
         <div class="so-cell-main">${osReleaseDisplay}</div>
-        <div class="so-cell-sub">OS Type: ${osType}</div>
       </td>
       <td>
         <div class="so-cell-main">${cpuCores} vCPU</div>
