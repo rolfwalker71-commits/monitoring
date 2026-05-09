@@ -6046,6 +6046,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             memory_used_series: list[dict] = []
             swap_used_series: list[dict] = []
             latest_memory_total_kb = 0
+            latest_large_files = {}
             delayed_report_count = 0
             live_report_count = 0
             latest_delivery_mode = "live"
@@ -6056,6 +6057,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 report_count += 1
                 latest_report_time = row[1]
                 payload = parse_payload_json(row[2])
+                large_files_raw = payload.get("large_files") if isinstance(payload, dict) else None
+                if isinstance(large_files_raw, dict):
+                    latest_large_files = large_files_raw
+                elif isinstance(large_files_raw, str):
+                    try:
+                        parsed_large_files = json.loads(large_files_raw)
+                        if isinstance(parsed_large_files, dict):
+                            latest_large_files = parsed_large_files
+                    except Exception:
+                        pass
                 delivery_mode = str(payload.get("delivery_mode", "live") or "live").lower()
                 is_delayed = delivery_mode == "delayed" or bool(payload.get("is_delayed", False))
                 if is_delayed:
@@ -6193,6 +6204,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "fs_focus_hidden": fs_focus_hidden,
                         "large_files_hidden": large_files_hidden,
                     },
+                    "large_files": latest_large_files,
                     "filesystem_trends": trends,
                 },
             )
