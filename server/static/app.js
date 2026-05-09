@@ -8095,10 +8095,13 @@ async function loadSystemOverview() {
                 const rows = (Array.isArray(hosts) ? hosts : [])
                   .map((host) => {
                     const online = host?.online === true;
-                    // Format SAP release from version map
+                    // SAP Release: Nur Build-Nummer für Mapping verwenden
                     let sapReleaseDisplay = "-";
                     if (host?.sap_release) {
-                      const versionInfo = SAP_B1_VERSION_MAP.get(host.sap_release);
+                      // Extrahiere Build-Nummer (z.B. 10.00.320 aus "10.00.320 PL22")
+                      const buildMatch = String(host.sap_release).match(/\d+\.\d+\.\d+/);
+                      const buildKey = buildMatch ? buildMatch[0] : host.sap_release;
+                      const versionInfo = SAP_B1_VERSION_MAP.get(buildKey);
                       if (versionInfo) {
                         sapReleaseDisplay = versionInfo.featurePack;
                       } else {
