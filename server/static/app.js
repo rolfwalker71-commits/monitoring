@@ -8158,7 +8158,7 @@ async function loadSystemOverview() {
                             <th style="text-align:right;">RAM (GB)</th>
                             <th class="so-center">CPUs</th>
                             <th>CPU-Modell</th>
-                            <th>Letzte Aktualisierung</th>
+                            <th>Update</th>
                           </tr>
                         </thead>
                         <tbody>${rows}</tbody>
