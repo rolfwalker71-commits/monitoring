@@ -1543,7 +1543,7 @@ def replace_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str
     return get_web_user_alert_subscriptions(conn, username)
 
 
-def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
+def collect_critical_trends(conn: sqlite3.Connection, hours: int, hidden_mountpoints_by_host: dict[str, set[str]] | None = None) -> list[dict]:
     cutoff_iso = utc_hours_ago_iso(hours)
 
     resource_metrics = [
@@ -1678,6 +1678,10 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int) -> list[dict]:
         for mountpoint, values in fs_series.items():
             if mountpoint in muted_mountpoints:
                 continue
+            # Skip filesystem if it's hidden in user's visibility settings
+            if hidden_mountpoints_by_host and hostname in hidden_mountpoints_by_host:
+                if mountpoint in hidden_mountpoints_by_host[hostname]:
+                    continue
             projected = linear_regression_projected(values)
             level = trend_level(projected)
             if not level:
@@ -4165,7 +4169,21 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
             continue
 
         if send_trend:
-            warnings = collect_critical_trends(conn, 72)
+            # Build hidden mountpoints dict for this user
+            all_hostnames = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT hostname FROM reports WHERE received_at_utc >= ? ORDER BY hostname ASC",
+                    (utc_hours_ago_iso(72),),
+                ).fetchall()
+            }
+            hidden_mountpoints_by_host = {}
+            for hostname in all_hostnames:
+                hidden = get_filesystem_visibility_hidden(conn, username, hostname, "critical-trends")
+                if hidden:
+                    hidden_mountpoints_by_host[hostname] = hidden
+            
+            warnings = collect_critical_trends(conn, 72, hidden_mountpoints_by_host)
             trend_ok, _trend_details = send_microsoft_mail(
                 access_token,
                 recipient,
@@ -5944,11 +5962,31 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/critical-trends":
+            username = self._web_session_username()
+            if not username:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "authentication required"})
+                return
+            
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=72, min_value=1, max_value=24 * 30)
             project_hours = parse_int(query, "project_hours", default=72, min_value=1, max_value=24 * 7)
+            
             with sqlite3.connect(DB_PATH) as conn:
-                warnings = collect_critical_trends(conn, hours)
+                # Get all hosts and their hidden filesystems for this user
+                all_hostnames = {
+                    row[0]
+                    for row in conn.execute(
+                        "SELECT DISTINCT hostname FROM reports WHERE received_at_utc >= ? ORDER BY hostname ASC",
+                        (utc_hours_ago_iso(hours),),
+                    ).fetchall()
+                }
+                hidden_mountpoints_by_host = {}
+                for hostname in all_hostnames:
+                    hidden = get_filesystem_visibility_hidden(conn, username, hostname, "critical-trends")
+                    if hidden:
+                        hidden_mountpoints_by_host[hostname] = hidden
+                
+                warnings = collect_critical_trends(conn, hours, hidden_mountpoints_by_host)
 
             self._send_json(HTTPStatus.OK, {
                 "hours": hours,
@@ -7045,7 +7083,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": details or "oauth unavailable"})
                     return
                 if endpoint_mode == "trends":
-                    warnings = collect_critical_trends(conn, 72)
+                    # Build hidden mountpoints dict for this user
+                    all_hostnames = {
+                        row[0]
+                        for row in conn.execute(
+                            "SELECT DISTINCT hostname FROM reports WHERE received_at_utc >= ? ORDER BY hostname ASC",
+                            (utc_hours_ago_iso(72),),
+                        ).fetchall()
+                    }
+                    hidden_mountpoints_by_host = {}
+                    for hostname in all_hostnames:
+                        hidden = get_filesystem_visibility_hidden(conn, username, hostname, "critical-trends")
+                        if hidden:
+                            hidden_mountpoints_by_host[hostname] = hidden
+                    
+                    warnings = collect_critical_trends(conn, 72, hidden_mountpoints_by_host)
                     mail_ok, mail_details = send_microsoft_mail(
                         access_token,
                         recipient,
