@@ -6891,6 +6891,7 @@ function renderBackupStatus(data) {
       : "";
 
     const dirs = host.dirs || [];
+    const hasSqlEntries = dirs.some((d) => asText(d.source_type || "filesystem", "filesystem").toLowerCase() === "sql");
     const currentCount = dirs.filter((d) => d.has_today_backup === true).length;
     const missingCount = Math.max(0, dirs.length - currentCount);
     const detailsOpenAttr = hasMissing ? " open" : "";
@@ -6942,7 +6943,14 @@ function renderBackupStatus(data) {
           ${staleNote}
         </summary>
         <div class="table-wrap backup-host-body">
-          <table class="report-subtable backup-status-table">
+          <table class="report-subtable backup-status-table ${hasSqlEntries ? "backup-status-table--sql" : "backup-status-table--default"}">
+            <colgroup>
+              <col class="backup-col-dir" />
+              <col class="backup-col-newest" />
+              <col class="backup-col-mod" />
+              <col class="backup-col-size" />
+              <col class="backup-col-status" />
+            </colgroup>
             <thead><tr>
               <th>Verzeichnis</th>
               <th>Neuester Eintrag</th>

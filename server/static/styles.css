@@ -6407,6 +6407,52 @@ body[data-theme="dark"] .dir-deep-subdir-title::before {
 .backup-status-table td {
   padding: 5px 8px;
   font-size: 12px;
+  vertical-align: top;
+}
+
+.backup-status-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.backup-status-table--default .backup-col-dir {
+  width: 28%;
+}
+
+.backup-status-table--default .backup-col-newest {
+  width: 28%;
+}
+
+.backup-status-table--default .backup-col-mod {
+  width: 14%;
+}
+
+.backup-status-table--default .backup-col-size {
+  width: 10%;
+}
+
+.backup-status-table--default .backup-col-status {
+  width: 20%;
+}
+
+.backup-status-table--sql .backup-col-dir {
+  width: 34%;
+}
+
+.backup-status-table--sql .backup-col-newest {
+  width: 24%;
+}
+
+.backup-status-table--sql .backup-col-mod {
+  width: 14%;
+}
+
+.backup-status-table--sql .backup-col-size {
+  width: 10%;
+}
+
+.backup-status-table--sql .backup-col-status {
+  width: 18%;
 }
 
 .backup-status-dir-name {
@@ -6440,6 +6486,17 @@ body[data-theme="dark"] .dir-deep-subdir-title::before {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.backup-status-table--sql .backup-status-dir-name,
+.backup-status-table--sql .backup-status-newest,
+.backup-status-table--sql .backup-status-newest-name,
+.backup-status-table--sql .backup-status-newest-path {
+  max-width: none;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
 }
 
 .backup-status-mod {
