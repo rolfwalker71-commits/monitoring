@@ -5121,6 +5121,19 @@ def evaluate_severity(used_percent: float) -> str:
 def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id: int, filesystems: list, alarm_settings: dict) -> None:
     now_utc = utc_now_iso()
     mountpoints_seen = set()
+    hidden_mountpoint_keys = {
+        normalize_mountpoint_key(str(row[0] or ""))
+        for row in conn.execute(
+            """
+            SELECT DISTINCT mountpoint
+            FROM filesystem_visibility
+            WHERE hostname = ?
+              AND section IN ('analysis', 'fs-focus', 'critical-trends')
+            """,
+            (hostname,),
+        ).fetchall()
+        if str(row[0] or "").strip()
+    }
     warning_hits_required = max(1, int(alarm_settings.get("warning_consecutive_hits", 2)))
     warning_window_minutes = max(1, int(alarm_settings.get("warning_window_minutes", 15)))
     critical_trigger_immediate = bool(alarm_settings.get("critical_trigger_immediate", True))
@@ -5132,6 +5145,20 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
 
         mountpoint = str(fs.get("mountpoint", "")).strip()
         if not mountpoint:
+            continue
+
+        mountpoint_key = normalize_mountpoint_key(mountpoint)
+        if mountpoint_key in hidden_mountpoint_keys:
+            suppressed_open = conn.execute(
+                "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open'",
+                (hostname, mountpoint),
+            ).fetchone()
+            if suppressed_open:
+                conn.execute(
+                    "UPDATE alerts SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ? WHERE id = ?",
+                    (now_utc, now_utc, suppressed_open[0]),
+                )
+            conn.execute("DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?", (hostname, mountpoint))
             continue
 
         mountpoints_seen.add(mountpoint)
