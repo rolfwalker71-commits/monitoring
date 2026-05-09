@@ -5593,6 +5593,7 @@ function openHostContextMenu(hostname, clientX, clientY) {
 async function triggerAgentUpdate(hostname) {
   const response = await fetch("/api/v1/agent-command", {
     method: "POST",
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
     },
@@ -5613,6 +5614,7 @@ async function triggerAgentUpdate(hostname) {
 async function triggerAgentUpdateForAllHosts() {
   const response = await fetch("/api/v1/agent-command-bulk", {
     method: "POST",
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
     },
@@ -5632,6 +5634,7 @@ async function triggerAgentUpdateForAllHosts() {
 async function triggerAgentApiKeyRolloutForAllHosts(apiKey) {
   const response = await fetch("/api/v1/agent-command-bulk", {
     method: "POST",
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
     },

@@ -8,7 +8,9 @@ import json
 import os
 import re
 import secrets
+import shutil
 import sqlite3
+import threading
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -29,6 +31,7 @@ STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "monitoring.db"
 SAP_B1_VERSION_MAP_PATH = DATA_DIR / "sap_b1_version_map.json"
+BACKUP_TEMP_DIR = DATA_DIR / "backup_jobs"
 APP_LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
 ANG_LOGO_PATH = STATIC_DIR / "icons" / "ANG.png"
 LINUX_LOGO_PATH = STATIC_DIR / "icons" / "linux.png"
@@ -69,6 +72,10 @@ try:
 except ZoneInfoNotFoundError:
     SCHEDULE_TIMEZONE = datetime.now().astimezone().tzinfo
     SCHEDULE_TIMEZONE_NAME = str(SCHEDULE_TIMEZONE) if SCHEDULE_TIMEZONE else "local"
+
+
+_backup_jobs_lock = threading.Lock()
+_backup_jobs: dict[str, dict[str, str]] = {}
 
 
 def parse_int(query: dict, key: str, default: int, min_value: int, max_value: int) -> int:
@@ -625,6 +632,84 @@ def save_sap_b1_version_map_entries(entries_raw: object) -> list[dict[str, str]]
         encoding="utf-8",
     )
     return normalized
+
+
+def _cleanup_backup_jobs(max_age_minutes: int = 30) -> None:
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
+    remove_ids: list[str] = []
+    with _backup_jobs_lock:
+        for job_id, job in _backup_jobs.items():
+            created_raw = str(job.get("created_at_utc", "") or "").strip()
+            try:
+                created_at = datetime.fromisoformat(created_raw.replace("Z", "+00:00"))
+            except ValueError:
+                created_at = datetime.now(timezone.utc)
+            if created_at < cutoff:
+                remove_ids.append(job_id)
+
+        for job_id in remove_ids:
+            file_path = Path(str(_backup_jobs.get(job_id, {}).get("file_path", "") or ""))
+            if file_path.exists():
+                try:
+                    file_path.unlink()
+                except OSError:
+                    pass
+            _backup_jobs.pop(job_id, None)
+
+
+def _create_database_backup_job() -> dict:
+    _cleanup_backup_jobs()
+    BACKUP_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+    if not DB_PATH.exists() or not DB_PATH.is_file():
+        return {"status": "error", "error": "database file not found"}
+
+    now_utc = datetime.now(timezone.utc)
+    timestamp = now_utc.strftime("%Y%m%d-%H%M%S")
+    job_id = secrets.token_urlsafe(10)
+    backup_filename = f"monitoring-backup-{timestamp}.db"
+    backup_path = BACKUP_TEMP_DIR / f"{job_id}.db"
+
+    try:
+        shutil.copy2(DB_PATH, backup_path)
+    except OSError as exc:
+        return {"status": "error", "error": f"backup copy failed: {exc}"}
+
+    with _backup_jobs_lock:
+        _backup_jobs[job_id] = {
+            "status": "ready",
+            "created_at_utc": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "file_path": str(backup_path),
+            "filename": backup_filename,
+        }
+
+    return {"status": "ready", "job_id": job_id, "filename": backup_filename}
+
+
+def _restore_database_from_bytes(raw_bytes: bytes) -> tuple[bool, str]:
+    if not raw_bytes:
+        return False, "empty upload"
+    if not raw_bytes.startswith(b"SQLite format 3"):
+        return False, "uploaded file is not a valid SQLite database"
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    temp_restore_path = DATA_DIR / f"restore-{secrets.token_hex(8)}.db"
+    backup_current_path = DATA_DIR / f"monitoring.db.pre-restore-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.bak"
+
+    try:
+        temp_restore_path.write_bytes(raw_bytes)
+        if DB_PATH.exists():
+            shutil.copy2(DB_PATH, backup_current_path)
+        os.replace(temp_restore_path, DB_PATH)
+        return True, str(backup_current_path.name)
+    except OSError as exc:
+        return False, f"restore failed: {exc}"
+    finally:
+        if temp_restore_path.exists():
+            try:
+                temp_restore_path.unlink()
+            except OSError:
+                pass
 
 
 def hash_password(password: str, salt_hex: str) -> str:
@@ -5319,6 +5404,73 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, data)
             return
 
+        if parsed.path == "/api/v1/backup/database/start":
+            if not self._require_admin_session():
+                return
+            created = _create_database_backup_job()
+            if created.get("status") != "ready":
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(created.get("error") or "backup start failed")})
+                return
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "started",
+                    "job_id": created["job_id"],
+                    "filename": created["filename"],
+                },
+            )
+            return
+
+        if parsed.path == "/api/v1/backup/database/status":
+            if not self._require_admin_session():
+                return
+            query = parse_qs(parsed.query)
+            job_id = str(query.get("job_id", [""])[0] or "").strip()
+            if not job_id:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "job_id query parameter is required"})
+                return
+            _cleanup_backup_jobs()
+            with _backup_jobs_lock:
+                job = _backup_jobs.get(job_id)
+            if not job:
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup job not found"})
+                return
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "job_id": job_id,
+                    "status": str(job.get("status") or "error"),
+                    "filename": str(job.get("filename") or ""),
+                },
+            )
+            return
+
+        if parsed.path == "/api/v1/backup/database/download":
+            if not self._require_admin_session():
+                return
+            query = parse_qs(parsed.query)
+            job_id = str(query.get("job_id", [""])[0] or "").strip()
+            if not job_id:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "job_id query parameter is required"})
+                return
+            _cleanup_backup_jobs()
+            with _backup_jobs_lock:
+                job = _backup_jobs.get(job_id)
+            if not job:
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup job not found"})
+                return
+            file_path = Path(str(job.get("file_path") or ""))
+            filename = str(job.get("filename") or "monitoring-backup.db")
+            self._send_file(
+                file_path,
+                "application/octet-stream",
+                extra_headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Cache-Control": "no-store",
+                },
+            )
+            return
+
         if parsed.path == "/api/v1/sap-b1-version-map":
             entries = load_sap_b1_version_map_entries()
             self._send_json(
@@ -6468,6 +6620,30 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 conn.commit()
 
             self._send_json(HTTPStatus.OK, {"status": "stored", "command_id": command_id})
+            return
+
+        if path == "/api/v1/restore/database":
+            if not self._require_admin_session():
+                return
+
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            ok, details = _restore_database_from_bytes(raw_body)
+            if not ok:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": details})
+                return
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "restored",
+                    "backup_of_previous_db": details,
+                },
+            )
             return
 
         if path != "/api/v1/agent-report":
