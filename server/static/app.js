@@ -7594,12 +7594,18 @@ function wireEvents() {
   }
 
   document.getElementById("globalViewButton").addEventListener("click", async () => {
+    const previousViewMode = state.viewMode;
     state.viewMode = "global";
-    updateViewMode();
-    state.globalSubMode = state.globalSubMode || "global-alerts";
+    // From settings/admin-settings, the globe button should always return to the main global landing tab.
+    if (previousViewMode !== "global" || state.globalSubMode === "admin-settings") {
+      state.globalSubMode = "global-alerts";
+    } else {
+      state.globalSubMode = state.globalSubMode || "global-alerts";
+    }
     if (state.globalSubMode === "admin-alert-subs" && !state.isAdmin) {
       state.globalSubMode = "global-alerts";
     }
+    updateViewMode();
     updateGlobalSubMode();
     if (state.globalSubMode === "global-alerts") await loadGlobalAlertsOverview();
     else if (state.globalSubMode === "critical-trends") await loadCriticalTrends();
