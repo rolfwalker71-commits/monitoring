@@ -6992,7 +6992,7 @@ async function loadHostConfigChanges() {
             const newFpSafe = escapeHtml(asText(newFp, "-"));
             sapFeaturePackInfo = `
               <div class="host-config-change-subline">
-                Feature Pack: ${oldFpSafe} -> ${newFpSafe}
+                Feature Pack: ${oldFpSafe} -> <strong>${newFpSafe}</strong>
               </div>
             `;
           }
@@ -7006,7 +7006,7 @@ async function loadHostConfigChanges() {
                 ${sapFeaturePackInfo}
               </td>
               <td>
-                <div>${escapeHtml(newValue)}</div>
+                <div><strong>${escapeHtml(newValue)}</strong></div>
               </td>
             </tr>
           `;
