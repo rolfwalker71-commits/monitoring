@@ -245,6 +245,37 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS sql_database_details (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hostname TEXT NOT NULL,
+                instance_name TEXT NOT NULL,
+                database_name TEXT NOT NULL,
+                collation TEXT,
+                compatibility_level INTEGER,
+                data_files INTEGER,
+                log_files INTEGER,
+                data_mb INTEGER,
+                log_mb INTEGER,
+                data_autogrowth_pages INTEGER,
+                log_autogrowth_pages INTEGER,
+                page_verify TEXT,
+                last_dbcc_time TEXT,
+                last_full_backup TEXT,
+                last_diff_backup TEXT,
+                last_log_backup TEXT,
+                last_reported_at_utc TEXT NOT NULL,
+                UNIQUE(hostname, instance_name, database_name, last_reported_at_utc)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_sql_details_host_time
+            ON sql_database_details(hostname, last_reported_at_utc DESC)
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS web_users (
                 username TEXT PRIMARY KEY,
                 password_hash TEXT NOT NULL,
@@ -2066,6 +2097,121 @@ def _extract_host_config_snapshot(payload: dict) -> dict[str, str]:
     }
 
 
+def _store_sql_database_details(
+    conn: sqlite3.Connection,
+    hostname: str,
+    payload: dict,
+    detected_at_utc: str,
+) -> None:
+    """Store extended SQL database details in sql_database_details table."""
+    if not hostname:
+        return
+    
+    sql_block = payload.get("sql_server_info")
+    if not isinstance(sql_block, dict) or sql_block.get("available") is not True:
+        return
+    
+    instances = sql_block.get("instances")
+    if not isinstance(instances, list):
+        return
+    
+    for instance in instances:
+        if not isinstance(instance, dict):
+            continue
+        
+        instance_name = str(instance.get("name", "")).strip() or "MSSQLSERVER"
+        databases = instance.get("databases")
+        if not isinstance(databases, list):
+            continue
+        
+        for db in databases:
+            if not isinstance(db, dict):
+                continue
+            
+            db_name = str(db.get("name", "")).strip()
+            if not db_name:
+                continue
+            
+            # Extract and normalize values
+            collation = str(db.get("collation", "")).strip() or None
+            compatibility_level = db.get("compatibility_level")
+            if compatibility_level:
+                try:
+                    compatibility_level = int(compatibility_level)
+                except (ValueError, TypeError):
+                    compatibility_level = None
+            
+            data_files = db.get("data_files")
+            if data_files:
+                try:
+                    data_files = int(data_files)
+                except (ValueError, TypeError):
+                    data_files = None
+            
+            log_files = db.get("log_files")
+            if log_files:
+                try:
+                    log_files = int(log_files)
+                except (ValueError, TypeError):
+                    log_files = None
+            
+            data_mb = db.get("data_mb")
+            if data_mb:
+                try:
+                    data_mb = int(data_mb)
+                except (ValueError, TypeError):
+                    data_mb = None
+            
+            log_mb = db.get("log_mb")
+            if log_mb:
+                try:
+                    log_mb = int(log_mb)
+                except (ValueError, TypeError):
+                    log_mb = None
+            
+            data_autogrowth_pages = db.get("data_autogrowth_pages")
+            if data_autogrowth_pages:
+                try:
+                    data_autogrowth_pages = int(data_autogrowth_pages)
+                except (ValueError, TypeError):
+                    data_autogrowth_pages = None
+            
+            log_autogrowth_pages = db.get("log_autogrowth_pages")
+            if log_autogrowth_pages:
+                try:
+                    log_autogrowth_pages = int(log_autogrowth_pages)
+                except (ValueError, TypeError):
+                    log_autogrowth_pages = None
+            
+            page_verify = str(db.get("page_verify", "")).strip() or None
+            last_dbcc_time = str(db.get("last_dbcc_time", "")).strip() or None
+            last_full_backup = str(db.get("last_full_backup", "")).strip() or None
+            last_diff_backup = str(db.get("last_diff_backup", "")).strip() or None
+            last_log_backup = str(db.get("last_log_backup", "")).strip() or None
+            
+            # Insert or ignore (UNIQUE constraint prevents duplicates for same timestamp)
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO sql_database_details (
+                    hostname, instance_name, database_name, collation, compatibility_level,
+                    data_files, log_files, data_mb, log_mb,
+                    data_autogrowth_pages, log_autogrowth_pages,
+                    page_verify, last_dbcc_time,
+                    last_full_backup, last_diff_backup, last_log_backup,
+                    last_reported_at_utc
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    hostname, instance_name, db_name, collation, compatibility_level,
+                    data_files, log_files, data_mb, log_mb,
+                    data_autogrowth_pages, log_autogrowth_pages,
+                    page_verify, last_dbcc_time,
+                    last_full_backup, last_diff_backup, last_log_backup,
+                    detected_at_utc
+                )
+            )
+
+
 def _track_host_config_changes(
     conn: sqlite3.Connection,
     hostname: str,
@@ -2228,6 +2374,83 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
 
     return {
         "hours": window_hours,
+        "limit": row_limit,
+        "count": len(items),
+        "items": items,
+    }
+
+
+def collect_sql_database_details(conn: sqlite3.Connection, hours: int = 24, hostname: str = "", limit: int = 500) -> dict:
+    """Fetch latest SQL database details from sql_database_details table."""
+    window_hours = max(1, int(hours or 24))
+    row_limit = max(1, min(int(limit or 500), 2000))
+    cutoff_iso = (datetime.now(timezone.utc) - timedelta(hours=window_hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    
+    hostname_filter = str(hostname or "").strip()
+    
+    if hostname_filter:
+        rows = conn.execute(
+            """
+            SELECT s.id, s.hostname, s.instance_name, s.database_name,
+                   s.collation, s.compatibility_level,
+                   s.data_files, s.log_files, s.data_mb, s.log_mb,
+                   s.data_autogrowth_pages, s.log_autogrowth_pages,
+                   s.page_verify, s.last_dbcc_time,
+                   s.last_full_backup, s.last_diff_backup, s.last_log_backup,
+                   s.last_reported_at_utc
+            FROM sql_database_details s
+            WHERE s.hostname = ? AND s.last_reported_at_utc >= ?
+            ORDER BY s.last_reported_at_utc DESC, s.id DESC
+            LIMIT ?
+            """,
+            (hostname_filter, cutoff_iso, row_limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT s.id, s.hostname, s.instance_name, s.database_name,
+                   s.collation, s.compatibility_level,
+                   s.data_files, s.log_files, s.data_mb, s.log_mb,
+                   s.data_autogrowth_pages, s.log_autogrowth_pages,
+                   s.page_verify, s.last_dbcc_time,
+                   s.last_full_backup, s.last_diff_backup, s.last_log_backup,
+                   s.last_reported_at_utc
+            FROM sql_database_details s
+            WHERE s.last_reported_at_utc >= ?
+            ORDER BY s.last_reported_at_utc DESC, s.id DESC
+            LIMIT ?
+            """,
+            (cutoff_iso, row_limit),
+        ).fetchall()
+    
+    items = []
+    for row in rows:
+        items.append(
+            {
+                "id": int(row[0] or 0),
+                "hostname": str(row[1] or ""),
+                "instance_name": str(row[2] or ""),
+                "database_name": str(row[3] or ""),
+                "collation": str(row[4] or "-"),
+                "compatibility_level": int(row[5] or 0),
+                "data_files": int(row[6] or 0),
+                "log_files": int(row[7] or 0),
+                "data_mb": int(row[8] or 0),
+                "log_mb": int(row[9] or 0),
+                "data_autogrowth_pages": int(row[10] or 0),
+                "log_autogrowth_pages": int(row[11] or 0),
+                "page_verify": str(row[12] or "-"),
+                "last_dbcc_time": str(row[13] or "-"),
+                "last_full_backup": str(row[14] or "-"),
+                "last_diff_backup": str(row[15] or "-"),
+                "last_log_backup": str(row[16] or "-"),
+                "last_reported_at_utc": str(row[17] or ""),
+            }
+        )
+    
+    return {
+        "hours": window_hours,
+        "hostname": hostname_filter,
         "limit": row_limit,
         "count": len(items),
         "items": items,
@@ -6128,6 +6351,20 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, data)
             return
 
+        if parsed.path == "/api/v1/sql-database-details":
+            query = parse_qs(parsed.query)
+            hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
+            hostname = str(query.get("hostname", [""])[0] or "").strip()
+            limit = parse_int(query, "limit", default=500, min_value=1, max_value=2000)
+            
+            if hostname and self._unauthorized_if_needed(hostname):
+                return
+            
+            with sqlite3.connect(DB_PATH) as conn:
+                data = collect_sql_database_details(conn, hours=hours, hostname=hostname, limit=limit)
+            self._send_json(HTTPStatus.OK, data)
+            return
+
         if parsed.path == "/api/v1/export/alerts.csv":
             query = parse_qs(parsed.query)
             status = str(query.get("status", ["active"])[0] or "active").strip().lower()
@@ -7908,6 +8145,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             report_id = int(cursor.lastrowid)
             _track_host_config_changes(conn, hostname, payload, report_id, report_received_at_utc)
+            _store_sql_database_details(conn, hostname, payload, report_received_at_utc)
             prune_reports_for_host(conn, hostname, MAX_REPORTS_PER_HOST)
             alarm_settings = get_alarm_settings(conn)
             host_settings = get_host_settings(conn, hostname)
