@@ -4393,35 +4393,19 @@ function renderDatabasesSection(payload) {
         const sqlOriginalLogin = asText(inst.sql_original_login, "");
         const sqlSuserSname = asText(inst.sql_suser_sname, "");
         const masterFilesRows = Number(inst.master_files_rows || 0);
-        const sqlLoginsForGrant = [];
-        for (const candidate of [sqlSuserSname, sqlOriginalLogin, sqlSystemUser]) {
-          const login = String(candidate || "").trim();
-          if (!login) continue;
-          if (!sqlLoginsForGrant.some((existing) => existing.toLowerCase() === login.toLowerCase())) {
-            sqlLoginsForGrant.push(login);
-          }
-        }
-        const sqlGrantSnippet = sqlLoginsForGrant.length > 0
-          ? (() => {
-              const lines = [
-                "-- Diagnose-basiert: relevante SQL-Logins berechtigen (effektiv + original)",
-                "-- WICHTIG: Dieses Skript muss mit dem SA-User bzw. einem Sysadmin-Login ausgefuehrt werden.",
-              ];
-              for (const login of sqlLoginsForGrant) {
-                const sqlLoginLiteral = login.replaceAll("'", "''");
-                lines.push(
-                  "",
-                  "-- Login: " + login,
-                  "DECLARE @login sysname = N'" + sqlLoginLiteral + "';",
-                  "IF SUSER_ID(@login) IS NULL",
-                  "    EXEC('CREATE LOGIN [' + REPLACE(@login, ']', ']]') + '] FROM WINDOWS;');",
-                  "EXEC('GRANT VIEW SERVER STATE TO [' + REPLACE(@login, ']', ']]') + '];');",
-                  "EXEC('GRANT VIEW ANY DEFINITION TO [' + REPLACE(@login, ']', ']]') + '];');",
-                );
-              }
-              return lines.join("\n");
-            })()
-          : "";
+        const sqlGrantSnippet = String.raw`-- 1) Logins anlegen (falls noch nicht vorhanden)
+IF SUSER_ID(N'NT-AUTORITÄT\SYSTEM') IS NULL
+    CREATE LOGIN [NT-AUTORITÄT\SYSTEM] FROM WINDOWS;
+
+IF SUSER_ID(N'AD\LMS-AP01$') IS NULL
+    CREATE LOGIN [AD\LMS-AP01$] FROM WINDOWS;
+
+-- 2) Benötigte Server-Rechte vergeben
+GRANT VIEW SERVER STATE TO [NT-AUTORITÄT\SYSTEM];
+GRANT VIEW ANY DEFINITION TO [NT-AUTORITÄT\SYSTEM];
+
+GRANT VIEW SERVER STATE TO [AD\LMS-AP01$];
+GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
         
         const svcBadge = svcStatus.toLowerCase() === "running"
           ? `<span class="db-status-badge db-status-ok">Running</span>`
@@ -4436,7 +4420,7 @@ function renderDatabasesSection(payload) {
               ${sqlOriginalLogin ? `<span class="db-diag-item"><strong>ORIGINAL_LOGIN:</strong> <code>${escapeHtml(sqlOriginalLogin)}</code></span>` : ""}
               ${sqlSuserSname ? `<span class="db-diag-item"><strong>SUSER_SNAME:</strong> <code>${escapeHtml(sqlSuserSname)}</code></span>` : ""}
               ${masterFilesRows > 0 ? `<span class="db-diag-item"><strong>sys.master_files Zeilen:</strong> ${masterFilesRows}</span>` : ""}
-                ${sqlGrantSnippet ? `<p class="db-diag-snippet-label">SQL Script (diagnose-basiert: effektiv + original):</p><pre class="db-diag-sql"><code>${escapeHtml(sqlGrantSnippet)}</code></pre>` : ""}
+                ${sqlGrantSnippet ? `<p class="db-diag-snippet-label">SQL Script:</p><pre class="db-diag-sql"><code>${escapeHtml(sqlGrantSnippet)}</code></pre>` : ""}
               </details>`;
         }
 
