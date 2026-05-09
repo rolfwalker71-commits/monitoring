@@ -7187,10 +7187,14 @@ async function loadHostConfigChanges() {
     }
 
     // Group by date
-    const dateGroups = groupByDateAndHost(filteredItems);
+    let dateGroups = groupByDateAndHost(filteredItems);
+    if (!dateGroups.length && filteredItems.length) {
+      // Keep entries visible even if timestamps are malformed or missing.
+      dateGroups = [{ dateLabel: "Heute", items: filteredItems }];
+    }
 
-    // Determine if we should auto-expand (when search query is active)
-    const autoExpandGroupsByDate = !!state.hostConfigChangesSearchQuery;
+    // Auto-expand for active search and for 24h quick-review refresh workflow.
+    const autoExpandGroupsByDate = !!state.hostConfigChangesSearchQuery || Number(hours) <= 24;
 
     groupsEl.innerHTML = dateGroups
       .map((dateGroup) => {
