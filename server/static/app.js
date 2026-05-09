@@ -4404,7 +4404,7 @@ function renderDatabasesSection(payload) {
               "    EXEC('CREATE LOGIN [' + REPLACE(@login, ']', ']]') + '] FROM WINDOWS;');",
               "EXEC('GRANT VIEW SERVER STATE TO [' + REPLACE(@login, ']', ']]') + '];');",
               "EXEC('GRANT VIEW ANY DEFINITION TO [' + REPLACE(@login, ']', ']]') + '];');",
-            ].join("\\n")
+            ].join("\n")
           : "";
         
         const svcBadge = svcStatus.toLowerCase() === "running"

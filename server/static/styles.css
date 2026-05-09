@@ -4698,25 +4698,28 @@ body[data-theme="dark"] .fs-bar-wrap {
   font-family: "Monaco", "Courier New", monospace;
   font-size: 10px;
 }
- .db-diag-snippet-label {
-   margin: 8px 0 4px 0;
-   font-weight: 600;
-   color: var(--text);
- }
- .db-diag-sql {
-   margin: 0;
-   padding: 8px 10px;
-   border: 1px solid var(--line);
-   border-radius: 6px;
-   background: var(--bg);
-   overflow-x: auto;
- }
- .db-diag-sql code {
-   font-family: "IBM Plex Mono", "Consolas", monospace;
-   font-size: 11px;
-   white-space: pre;
-   color: var(--text);
- }
+.db-diag-snippet-label {
+  margin: 10px 0 5px 0;
+  font-weight: 600;
+  color: var(--text);
+}
+.db-diag-sql {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg) 86%, #000 14%);
+  overflow: auto;
+}
+.db-diag-sql code {
+  display: block;
+  font-family: "IBM Plex Mono", "Consolas", monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre;
+  tab-size: 2;
+  color: var(--text);
+}
 .db-status-badge {
   display: inline-block;
   padding: 1px 8px;
