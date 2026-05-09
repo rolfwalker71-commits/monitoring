@@ -2620,6 +2620,66 @@ def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) ->
                     }
                 )
 
+        # Include SQL database backup status for non-system databases.
+        sql_info = payload.get("sql_server_info") if isinstance(payload.get("sql_server_info"), dict) else {}
+        sql_instances = sql_info.get("instances") if isinstance(sql_info.get("instances"), list) else []
+        system_db_names = {"master", "model", "msdb", "tempdb"}
+
+        for instance in sql_instances:
+            if not isinstance(instance, dict):
+                continue
+            instance_name = str(instance.get("name") or "").strip() or "MSSQLSERVER"
+            databases = instance.get("databases") if isinstance(instance.get("databases"), list) else []
+
+            for db in databases:
+                if not isinstance(db, dict):
+                    continue
+                db_name = str(db.get("name") or "").strip()
+                if not db_name:
+                    continue
+                if bool(db.get("system_db")) or db_name.lower() in system_db_names:
+                    continue
+
+                backup_candidates = [
+                    str(db.get("last_full_backup") or "").strip(),
+                    str(db.get("last_diff_backup") or "").strip(),
+                    str(db.get("last_log_backup") or "").strip(),
+                    str(db.get("last_full_backup_utc") or "").strip(),
+                    str(db.get("last_diff_backup_utc") or "").strip(),
+                    str(db.get("last_log_backup_utc") or "").strip(),
+                ]
+                latest_backup_text = ""
+                latest_backup_dt = None
+                for candidate in backup_candidates:
+                    if not candidate:
+                        continue
+                    try:
+                        candidate_dt = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+                    except ValueError:
+                        continue
+                    if latest_backup_dt is None or candidate_dt > latest_backup_dt:
+                        latest_backup_dt = candidate_dt
+                        latest_backup_text = candidate
+
+                has_today_backup = bool(latest_backup_dt and ((now_utc - latest_backup_dt) <= age_limit))
+
+                data_mb = int(db.get("data_mb") or 0)
+                log_mb = int(db.get("log_mb") or 0)
+                db_size_bytes = max(0, (data_mb + log_mb) * 1024 * 1024)
+                recovery_model = str(db.get("recovery_model") or "").strip()
+                db_state = str(db.get("state") or "").strip()
+
+                directory_items.append(
+                    {
+                        "subdir_name": f"SQL DB: {db_name}",
+                        "subdir_path": f"{instance_name}/{db_name}",
+                        "has_today_backup": has_today_backup,
+                        "newest_item_name": f"{instance_name} · {db_state or '-'} · {recovery_model or '-'}",
+                        "newest_item_modified": latest_backup_text,
+                        "newest_item_size_bytes": db_size_bytes,
+                    }
+                )
+
         has_missing_backup = bool(directory_items) and any(not bool(item.get("has_today_backup")) for item in directory_items)
         items.append(
             {
