@@ -28,6 +28,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "monitoring.db"
+SAP_B1_VERSION_MAP_PATH = DATA_DIR / "sap_b1_version_map.json"
 APP_LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
 ANG_LOGO_PATH = STATIC_DIR / "icons" / "ANG.png"
 LINUX_LOGO_PATH = STATIC_DIR / "icons" / "linux.png"
@@ -579,6 +580,51 @@ def parse_payload_json(payload_json: str) -> dict:
     except json.JSONDecodeError:
         return {}
     return {}
+
+
+def normalize_sap_b1_version_map_entries(entries_raw: object) -> list[dict[str, str]]:
+    if not isinstance(entries_raw, list):
+        return []
+    normalized: list[dict[str, str]] = []
+    seen_builds: set[str] = set()
+    for item in entries_raw:
+        if not isinstance(item, dict):
+            continue
+        build = str(item.get("build", "") or "").strip()
+        if not build or build in seen_builds:
+            continue
+        seen_builds.add(build)
+        normalized.append(
+            {
+                "build": build,
+                "feature_pack": str(item.get("feature_pack", "") or "").strip(),
+                "patch_level": str(item.get("patch_level", "") or "").strip(),
+                "release_date": str(item.get("release_date", "") or "").strip(),
+            }
+        )
+    return normalized
+
+
+def load_sap_b1_version_map_entries() -> list[dict[str, str]]:
+    try:
+        raw = SAP_B1_VERSION_MAP_PATH.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    return normalize_sap_b1_version_map_entries(parsed)
+
+
+def save_sap_b1_version_map_entries(entries_raw: object) -> list[dict[str, str]]:
+    normalized = normalize_sap_b1_version_map_entries(entries_raw)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    SAP_B1_VERSION_MAP_PATH.write_text(
+        json.dumps(normalized, ensure_ascii=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return normalized
 
 
 def hash_password(password: str, salt_hex: str) -> str:
@@ -5239,6 +5285,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, data)
             return
 
+        if parsed.path == "/api/v1/sap-b1-version-map":
+            entries = load_sap_b1_version_map_entries()
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "count": len(entries),
+                    "entries": entries,
+                },
+            )
+            return
+
         if parsed.path == "/api/v1/alarm-settings":
             with sqlite3.connect(DB_PATH) as conn:
                 settings = get_alarm_settings(conn)
@@ -5458,6 +5515,43 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 {
                     "status": "stored",
                     "settings": stored,
+                },
+            )
+            return
+
+        if path == "/api/v1/sap-b1-version-map":
+            if not self._require_admin_session():
+                return
+
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            entries = payload.get("entries", []) if isinstance(payload, dict) else []
+            if not isinstance(entries, list):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "entries must be a list"})
+                return
+
+            try:
+                saved_entries = save_sap_b1_version_map_entries(entries)
+            except OSError as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"save failed: {exc}"})
+                return
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "saved": len(saved_entries),
+                    "entries": saved_entries,
                 },
             )
             return

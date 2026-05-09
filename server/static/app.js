@@ -2009,8 +2009,10 @@ function mountAdminSettingsIntoGlobalView() {
 
 async function loadSapB1VersionMap() {
   try {
-    const resp = await fetch("api/v1/sap-b1-version-map", { credentials: "same-origin" });
+    const resp = await fetch("/api/v1/sap-b1-version-map", { credentials: "same-origin" });
     if (!resp.ok) return;
+    const contentType = String(resp.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.includes("application/json")) return;
     const data = await resp.json();
     if (Array.isArray(data.entries)) {
       SAP_B1_VERSION_MAP = new Map(
@@ -2096,12 +2098,16 @@ function wireSapB1VersionMapAdminSection(container) {
     const entries = getTableEntries();
     status.textContent = "Speichern…";
     try {
-      const resp = await fetch("api/v1/sap-b1-version-map", {
+      const resp = await fetch("/api/v1/sap-b1-version-map", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ entries }),
       });
+      const contentType = String(resp.headers.get("content-type") || "").toLowerCase();
+      if (!contentType.includes("application/json")) {
+        throw new Error(`Ungueltige Server-Antwort (HTTP ${resp.status})`);
+      }
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || resp.statusText);
       // Update in-memory map
