@@ -3850,7 +3850,7 @@ function renderSapB1TableScanSection(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const scan = sap && typeof sap.table_scan === "object" ? sap.table_scan : null;
   if (!scan) {
-    return `<p class="muted">Kein SBOCOMMON/SLDData Tabellenscan im Payload vorhanden.</p>`;
+    return `<p class="muted">Kein SBO-COMMON/SLDData Tabellenscan im Payload vorhanden.</p>`;
   }
 
   const blocks = [
@@ -3879,10 +3879,12 @@ function renderSapB1TableScanSection(payload) {
       const error = asText(item.error, "");
       const rows = Array.isArray(item.rows) ? item.rows : [];
       const rowCount = Number(item.row_count || rows.length || 0);
+      const effectiveDb = asText(item.database, "");
+      const heading = effectiveDb ? `${effectiveDb}.dbo.${asText(item.table, "")}` : block.title;
 
       return `
         <details class="sap-b1-raw-details">
-          <summary class="sap-b1-raw-summary">${escapeHtml(block.title)} (${Number.isFinite(rowCount) ? rowCount : rows.length})</summary>
+          <summary class="sap-b1-raw-summary">${escapeHtml(heading)} (${Number.isFinite(rowCount) ? rowCount : rows.length})</summary>
           ${!available ? `<p class="muted">Nicht verfuegbar${error ? `: ${escapeHtml(error)}` : "."}</p>` : ""}
           ${available ? renderSapB1TableScanRows(rows) : ""}
         </details>`;

@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 $IC = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile = if ($env:CONFIG_FILE) { $env:CONFIG_FILE } else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
-$EmbeddedAgentVersion = '1.1.167'
+$EmbeddedAgentVersion = '1.1.168'
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -165,6 +165,40 @@ function Get-TableScanResult {
     return [pscustomobject]$result
 }
 
+function Get-FirstAvailableTableScanResult {
+    param(
+        [string]$SqlServer,
+        [string[]]$Databases,
+        [string]$Schema,
+        [string]$Table,
+        [string]$SqlUser,
+        [string]$SqlPassword
+    )
+
+    $errors = @()
+    foreach ($dbName in $Databases) {
+        $result = Get-TableScanResult -SqlServer $SqlServer -Database $dbName -Schema $Schema -Table $Table -SqlUser $SqlUser -SqlPassword $SqlPassword
+        if ($result.available -eq $true) {
+            return $result
+        }
+        if ($result.error) {
+            $errors += ("{0}: {1}" -f $dbName, $result.error)
+        }
+    }
+
+    $fallbackDb = if (@($Databases).Count -gt 0) { $Databases[0] } else { '' }
+    $fallback = [ordered]@{
+        available = $false
+        database = $fallbackDb
+        schema = $Schema
+        table = $Table
+        row_count = 0
+        error = if (@($errors).Count -gt 0) { ($errors -join ' | ') } else { 'No matching database candidate available.' }
+        rows = @()
+    }
+    return [pscustomobject]$fallback
+}
+
 # Collector settings (temporary scan)
 $SqlServerInstance = if ($cfg.ContainsKey('HARVEST_SQL_SERVER') -and $cfg['HARVEST_SQL_SERVER']) { $cfg['HARVEST_SQL_SERVER'] } else { '.' }
 $HarvestSqlUser = if ($cfg.ContainsKey('HARVEST_SQL_USER') -and $cfg['HARVEST_SQL_USER']) { $cfg['HARVEST_SQL_USER'] } else { 'harvest' }
@@ -176,7 +210,8 @@ $agentId = if ($cfg.ContainsKey('AGENT_ID') -and $cfg['AGENT_ID']) { $cfg['AGENT
 $displayName = if ($cfg.ContainsKey('DISPLAY_NAME') -and $cfg['DISPLAY_NAME']) { $cfg['DISPLAY_NAME'] } else { $hostnameValue }
 $agentVersion = Select-AgentVersion -EmbeddedVersion $EmbeddedAgentVersion -FilePath $VersionFile
 
-$sariResult = Get-TableScanResult -SqlServer $SqlServerInstance -Database 'SBOCOMMON' -Schema 'dbo' -Table 'SARI' -SqlUser $HarvestSqlUser -SqlPassword $HarvestSqlPassword
+$sariDbCandidates = @('SBO-COMMON', 'SBOCOMMON', 'sbo-commen')
+$sariResult = Get-FirstAvailableTableScanResult -SqlServer $SqlServerInstance -Databases $sariDbCandidates -Schema 'dbo' -Table 'SARI' -SqlUser $HarvestSqlUser -SqlPassword $HarvestSqlPassword
 $extensionsResult = Get-TableScanResult -SqlServer $SqlServerInstance -Database 'SLDModel.SLDData' -Schema 'dbo' -Table 'Extensions' -SqlUser $HarvestSqlUser -SqlPassword $HarvestSqlPassword
 
 $payloadObj = [ordered]@{
@@ -201,7 +236,7 @@ $uri = ($ServerUrl.TrimEnd('/')) + '/api/v1/agent-report'
 
 try {
     Invoke-ServerJsonPost -Uri $uri -Body $payloadJson | Out-Null
-    Write-Host "SAP table scan sent. SBOCOMMON.dbo.SARI rows: $($sariResult.row_count), SLDModel.SLDData.dbo.Extensions rows: $($extensionsResult.row_count)"
+    Write-Host "SAP table scan sent. $($sariResult.database).dbo.SARI rows: $($sariResult.row_count), SLDModel.SLDData.dbo.Extensions rows: $($extensionsResult.row_count)"
 } catch {
     Write-Error ("Failed to send SAP table scan payload: " + $_.Exception.Message)
     exit 1
