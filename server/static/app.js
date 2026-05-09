@@ -8138,10 +8138,10 @@ async function loadSystemOverview() {
             const osId = `so-os-${countryIndex}-${osIndex}`;
             return `
               <section class="system-overview-os-group">
-                <button class="system-overview-toggle" type="button" data-target-id="${osId}" aria-expanded="false">
-                  <span class="system-overview-chevron">▶</span> ${escapeHtml(osName)}
+                <button class="system-overview-toggle" type="button" data-target-id="${osId}" aria-expanded="true">
+                  <span class="system-overview-chevron">▼</span> ${escapeHtml(osName)}
                 </button>
-                <div id="${osId}" class="system-overview-customer-list hidden">${customers}</div>
+                <div id="${osId}" class="system-overview-customer-list">${customers}</div>
               </section>
             `;
           })
