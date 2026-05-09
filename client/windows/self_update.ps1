@@ -94,6 +94,10 @@ function Test-DownloadedFileContent {
         return ($text -match '(?m)^#Requires\s+-Version\s+5\.1' -and $text -match '(?m)^Set-StrictMode\s+-Version\s+Latest')
     }
 
+    if ($RelativePath -ieq 'client/windows/collect_and_scan_sap_tables.ps1') {
+        return ($text -match '(?m)^#Requires\s+-Version\s+5\.1' -and $text -match '(?m)^Set-StrictMode\s+-Version\s+Latest')
+    }
+
     if ($RelativePath -ieq 'client/windows/self_update.ps1') {
         return ($text -match '(?m)^Set-StrictMode\s+-Version\s+Latest')
     }
@@ -245,6 +249,9 @@ try {
     if (-not (Download-RepoFile -RelativePath 'client/windows/collect_and_send.ps1' -DestinationPath "$tmpDir\collect_and_send.ps1")) {
         throw "Failed to download collect_and_send.ps1 from GitHub sources. Details: $global:LastDownloadRepoFileError"
     }
+    if (-not (Download-RepoFile -RelativePath 'client/windows/collect_and_scan_sap_tables.ps1' -DestinationPath "$tmpDir\collect_and_scan_sap_tables.ps1")) {
+        throw "Failed to download collect_and_scan_sap_tables.ps1 from GitHub sources. Details: $global:LastDownloadRepoFileError"
+    }
     # Guard against stale or incompatible script payloads before replacing local files.
     $collectContent = [System.IO.File]::ReadAllText("$tmpDir\collect_and_send.ps1", [System.Text.Encoding]::UTF8)
     if ($collectContent -match '\$[A-Za-z_][A-Za-z0-9_]*\s*\?\s*') {
@@ -254,6 +261,7 @@ try {
     [System.IO.File]::WriteAllText("$tmpDir\AGENT_VERSION", "$remoteVersion`n", [System.Text.Encoding]::UTF8)
 
     Copy-Item "$tmpDir\collect_and_send.ps1" "$InstallDir\collect_and_send.ps1" -Force
+    Copy-Item "$tmpDir\collect_and_scan_sap_tables.ps1" "$InstallDir\collect_and_scan_sap_tables.ps1" -Force
     Copy-Item "$tmpDir\AGENT_VERSION"        $VersionFile                       -Force
 } finally {
     Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue

@@ -117,6 +117,9 @@ $wc = New-Object System.Net.WebClient
 Write-Host "Downloading collect_and_send.ps1..."
 $wc.DownloadFile("$RawBaseUrl/client/windows/collect_and_send.ps1", "$InstallDir\collect_and_send.ps1")
 
+Write-Host "Downloading collect_and_scan_sap_tables.ps1..."
+$wc.DownloadFile("$RawBaseUrl/client/windows/collect_and_scan_sap_tables.ps1", "$InstallDir\collect_and_scan_sap_tables.ps1")
+
 Write-Host "Downloading self_update.ps1..."
 $wc.DownloadFile("$RawBaseUrl/client/windows/self_update.ps1", "$InstallDir\self_update.ps1")
 

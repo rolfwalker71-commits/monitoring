@@ -3812,6 +3812,84 @@ function renderSapB1SystemSummary(payload) {
   return escapeHtml(releaseDate);
 }
 
+function renderSapB1TableScanRows(rows) {
+  const entries = Array.isArray(rows) ? rows : [];
+  if (entries.length === 0) {
+    return "<p class=\"muted\">Keine Datensaetze gefunden.</p>";
+  }
+
+  const headers = Object.keys(entries[0] || {});
+  if (headers.length === 0) {
+    return "<p class=\"muted\">Leere Datensaetze empfangen.</p>";
+  }
+
+  const headHtml = headers
+    .map((key) => `<th>${escapeHtml(key)}</th>`)
+    .join("");
+
+  const bodyHtml = entries
+    .map((entry) => {
+      const cols = headers
+        .map((key) => `<td>${escapeHtml(asText(entry[key], ""))}</td>`)
+        .join("");
+      return `<tr>${cols}</tr>`;
+    })
+    .join("");
+
+  return `
+    <div class="table-wrap">
+      <table class="report-subtable">
+        <thead><tr>${headHtml}</tr></thead>
+        <tbody>${bodyHtml}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderSapB1TableScanSection(payload) {
+  const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
+  const scan = sap && typeof sap.table_scan === "object" ? sap.table_scan : null;
+  if (!scan) {
+    return `<p class="muted">Kein SBOCOMMON/SLDData Tabellenscan im Payload vorhanden.</p>`;
+  }
+
+  const blocks = [
+    {
+      title: "SBOCOMMON.dbo.SARI",
+      item: scan.sbo_common_sari,
+    },
+    {
+      title: "SLDModel.SLDData.dbo.Extensions",
+      item: scan.sld_extensions,
+    },
+  ];
+
+  return blocks
+    .map((block) => {
+      const item = block.item && typeof block.item === "object" ? block.item : null;
+      if (!item) {
+        return `
+          <details class="sap-b1-raw-details">
+            <summary class="sap-b1-raw-summary">${escapeHtml(block.title)}</summary>
+            <p class="muted">Keine Daten empfangen.</p>
+          </details>`;
+      }
+
+      const available = item.available === true;
+      const error = asText(item.error, "");
+      const rows = Array.isArray(item.rows) ? item.rows : [];
+      const rowCount = Number(item.row_count || rows.length || 0);
+
+      return `
+        <details class="sap-b1-raw-details">
+          <summary class="sap-b1-raw-summary">${escapeHtml(block.title)} (${Number.isFinite(rowCount) ? rowCount : rows.length})</summary>
+          ${!available ? `<p class="muted">Nicht verfuegbar${error ? `: ${escapeHtml(error)}` : "."}</p>` : ""}
+          ${available ? renderSapB1TableScanRows(rows) : ""}
+        </details>`;
+    })
+    .join("");
+}
+
 function renderSapB1VersionMapCard() {
   const sortedEntries = Array.from(SAP_B1_VERSION_MAP.entries())
     .sort(([a], [b]) => b.localeCompare(a));
@@ -3941,6 +4019,11 @@ function renderSapB1CombinedCard(payload) {
         <summary class="sap-b1-raw-summary">HANA Versions-Scan</summary>
         ${hanaInfoRows}
         ${hanaRawOutput ? `<pre class="sap-b1-raw-output">${escapeHtml(hanaRawOutput)}</pre>` : ""}
+      </details>
+
+      <details class="sap-b1-raw-details">
+        <summary class="sap-b1-raw-summary">SBOCOMMON / SLDData Tabellenscan</summary>
+        ${renderSapB1TableScanSection(payload)}
       </details>
 
       <details class="sap-b1-raw-details">
