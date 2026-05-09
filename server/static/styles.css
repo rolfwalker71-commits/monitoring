@@ -3787,6 +3787,14 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-config-changes-wrap table td {
   padding: 4px 8px;
   vertical-align: top;
+  line-height: 1.3;
+}
+
+.host-config-change-subline {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: normal;
 }
 
 .host-config-changes-groups {

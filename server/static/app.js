@@ -7002,12 +7002,10 @@ async function loadHostConfigChanges() {
             <tr>
               <td>${escapeHtml(formatUtcPlus2(item.detected_at_utc))}</td>
               <td>${escapeHtml(asText(item.field_label || item.field_key, "-"))}</td>
+              <td>${escapeHtml(oldValue)}</td>
               <td>
-                <div>${escapeHtml(oldValue)}</div>
+                <strong>${escapeHtml(newValue)}</strong>
                 ${sapFeaturePackInfo}
-              </td>
-              <td>
-                <div><strong>${escapeHtml(newValue)}</strong></div>
               </td>
             </tr>
           `;
