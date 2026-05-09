@@ -4421,6 +4421,7 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
               ${sqlSuserSname ? `<span class="db-diag-item"><strong>SUSER_SNAME:</strong> <code>${escapeHtml(sqlSuserSname)}</code></span>` : ""}
               ${masterFilesRows > 0 ? `<span class="db-diag-item"><strong>sys.master_files Zeilen:</strong> ${masterFilesRows}</span>` : ""}
                 ${sqlGrantSnippet ? `<p class="db-diag-snippet-label">SQL Script:</p><pre class="db-diag-sql"><code>${escapeHtml(sqlGrantSnippet)}</code></pre>` : ""}
+                ${sqlGrantSnippet ? `<p class="count compact">Hinweis: Das Skript muss ggf. anhand der Diagnose-Werte angepasst werden. Basis: <code>AD\\LMS-AP01$</code> durch den Wert in <strong>ORIGINAL_LOGIN</strong> ersetzen und <code>NT-AUTORITÄT\\SYSTEM</code> durch den Wert in <strong>SYSTEM_USER</strong>.</p>` : ""}
               </details>`;
         }
 
