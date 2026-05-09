@@ -2266,7 +2266,8 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
                c.field_key,
                c.old_value,
                c.new_value,
-               COALESCE(c.source, 'agent-report')
+               COALESCE(c.source, 'agent-report'),
+               COALESCE(h.country_code_override, '')
         FROM host_config_changes c
         LEFT JOIN host_settings h ON h.hostname = c.hostname
         WHERE c.detected_at_utc >= ?
@@ -2280,6 +2281,7 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
     for row in rows:
         hostname = str(row[2] or "")
         display_override = str(row[3] or "").strip()
+        country_code = normalize_country_code(str(row[8] or ""))
         items.append(
             {
                 "id": int(row[0] or 0),
@@ -2291,6 +2293,7 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
                 "old_value": str(row[5] or "-"),
                 "new_value": str(row[6] or "-"),
                 "source": str(row[7] or "agent-report"),
+                "country_code": country_code,
             }
         )
 

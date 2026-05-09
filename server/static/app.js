@@ -78,6 +78,7 @@ const state = {
   inactiveHostsHours: 1,
   hostConfigChangesHours: 720,
   hostConfigChangesSearchQuery: "",
+  hostConfigChangesCountryFilter: "all",
   inactiveHosts: [],
   alarmSettingsLoaded: false,
   globalAlertsCollapsed: false,
@@ -7005,13 +7006,63 @@ async function loadBackupStatus() {
   }
 }
 
+function getDateGroupLabel(isoDateStr) {
+  if (!isoDateStr) return "Unbekannt";
+  const itemDate = new Date(isoDateStr + "Z");
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const normalizeDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const itemNorm = normalizeDay(itemDate);
+  const todayNorm = normalizeDay(today);
+  const yesterdayNorm = normalizeDay(yesterday);
+
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  if (itemNorm.getTime() === todayNorm.getTime()) return "Heute";
+  if (itemNorm.getTime() === yesterdayNorm.getTime()) return "Gestern";
+  if (itemDate >= sevenDaysAgo) return "Letzte 7 Tage";
+  if (itemDate >= thirtyDaysAgo) return "Letzte 30 Tage";
+  return "Älter";
+}
+
+function groupByDateAndHost(items) {
+  const dateGroups = new Map();
+  items.forEach((item) => {
+    const dateLabel = getDateGroupLabel(item.detected_at_utc);
+    if (!dateGroups.has(dateLabel)) {
+      dateGroups.set(dateLabel, []);
+    }
+    dateGroups.get(dateLabel).push(item);
+  });
+
+  const dateOrder = ["Heute", "Gestern", "Letzte 7 Tage", "Letzte 30 Tage", "Älter"];
+  const sortedDateGroups = [];
+  dateOrder.forEach((dateLabel) => {
+    if (dateGroups.has(dateLabel)) {
+      sortedDateGroups.push({
+        dateLabel,
+        items: dateGroups.get(dateLabel),
+      });
+    }
+  });
+
+  return sortedDateGroups;
+}
+
 async function loadHostConfigChanges() {
   const groupsEl = document.getElementById("hostConfigChangesGroups");
   const summaryEl = document.getElementById("hostConfigChangesSummary");
   const filterEl = document.getElementById("hostConfigChangesHoursFilter");
+  const countryFilterEl = document.getElementById("hostConfigChangesCountryFilter");
   if (!groupsEl) return;
   const searchEl = document.getElementById("hostConfigChangesSearchInput");
   if (searchEl) searchEl.value = state.hostConfigChangesSearchQuery;
+  if (countryFilterEl) countryFilterEl.value = state.hostConfigChangesCountryFilter;
 
   groupsEl.innerHTML = '<p class="muted">Lade Daten…</p>';
   if (summaryEl) summaryEl.textContent = "";
@@ -7033,139 +7084,184 @@ async function loadHostConfigChanges() {
 
     if (!items.length) {
       groupsEl.innerHTML = '<p class="muted">Keine Aenderungen im gewaehlten Zeitraum.</p>';
+      // Reset country filter dropdown
+      if (countryFilterEl) {
+        countryFilterEl.innerHTML = '<option value="all">Alle Länder</option>';
+      }
       return;
     }
 
-    const byHost = new Map();
+    // Collect unique country codes and populate dropdown
+    const countries = new Set();
     items.forEach((item) => {
-      const hostname = asText(item.hostname, "-");
-      const displayName = asText(item.display_name || hostname, "-");
-      const key = `${displayName}\u0000${hostname}`;
-      if (!byHost.has(key)) {
-        byHost.set(key, { displayName, hostname, items: [] });
+      const cc = asText(item.country_code, "").toUpperCase();
+      if (cc && cc !== "-") {
+        countries.add(cc);
       }
-      byHost.get(key).items.push(item);
     });
+    if (countryFilterEl) {
+      const sortedCountries = [...countries].sort();
+      countryFilterEl.innerHTML = '<option value="all">Alle Länder</option>';
+      sortedCountries.forEach((cc) => {
+        const option = document.createElement("option");
+        option.value = cc;
+        option.textContent = cc;
+        countryFilterEl.appendChild(option);
+      });
+      countryFilterEl.value = state.hostConfigChangesCountryFilter;
+    }
 
-    let groups = [...byHost.values()].sort((a, b) => {
-      const nameA = String(a.displayName || a.hostname).toLowerCase();
-      const nameB = String(b.displayName || b.hostname).toLowerCase();
-      const byName = nameA.localeCompare(nameB);
-      if (byName !== 0) return byName;
-      return String(a.hostname).toLowerCase().localeCompare(String(b.hostname).toLowerCase());
-    });
+    // Apply country filter
+    let filteredItems = items;
+    if (state.hostConfigChangesCountryFilter && state.hostConfigChangesCountryFilter !== "all") {
+      filteredItems = items.filter((item) => {
+        const itemCountry = asText(item.country_code, "").toUpperCase();
+        const filterCountry = String(state.hostConfigChangesCountryFilter).toUpperCase();
+        return itemCountry === filterCountry;
+      });
+    }
 
-    // Filter groups by search query
+    // Apply search query
     if (state.hostConfigChangesSearchQuery) {
       const q = String(state.hostConfigChangesSearchQuery).toLowerCase();
-      groups = groups.filter((group) => {
-        const displayMatch = String(group.displayName).toLowerCase().includes(q);
-        const hostMatch = String(group.hostname).toLowerCase().includes(q);
-        const hostNameMatches = displayMatch || hostMatch;
-        // If host name matches, keep ALL items. Otherwise filter items by field.
-        if (hostNameMatches) {
-          return true;
-        }
-        // Host name doesn't match, so only keep group if it has field-matching items
-        return group.items.some((item) =>
-          String(item.field_key || item.field_label || "").toLowerCase().includes(q)
-        );
-      }).map((group) => {
-        const displayMatch = String(group.displayName).toLowerCase().includes(q);
-        const hostMatch = String(group.hostname).toLowerCase().includes(q);
-        const hostNameMatches = displayMatch || hostMatch;
-        // If host name matches, show all items. Otherwise filter by field.
-        const filteredItems = hostNameMatches
-          ? group.items
-          : group.items.filter((item) =>
-              String(item.field_key || item.field_label || "")
-                .toLowerCase()
-                .includes(q)
-            );
-        return { ...group, items: filteredItems };
-      }).filter((group) => group.items.length > 0);
+      filteredItems = filteredItems.filter((item) => {
+        const hostMatch = String(item.hostname || "").toLowerCase().includes(q);
+        const displayMatch = String(item.display_name || "").toLowerCase().includes(q);
+        const fieldMatch = String(item.field_label || item.field_key || "").toLowerCase().includes(q);
+        const oldMatch = String(item.old_value || "").toLowerCase().includes(q);
+        const newMatch = String(item.new_value || "").toLowerCase().includes(q);
+        return hostMatch || displayMatch || fieldMatch || oldMatch || newMatch;
+      });
     }
 
     // Update summary with filtered count
     if (summaryEl) {
-      const filteredCount = groups.reduce((sum, group) => sum + group.items.length, 0);
-      summaryEl.textContent = `${filteredCount} Aenderung(en) in den letzten ${hours}h`;
+      const filteredCount = filteredItems.length;
+      const countryMsg = state.hostConfigChangesCountryFilter && state.hostConfigChangesCountryFilter !== "all"
+        ? ` (Land: ${state.hostConfigChangesCountryFilter})`
+        : "";
+      const searchMsg = state.hostConfigChangesSearchQuery ? ` - gefiltert` : "";
+      summaryEl.textContent = `${filteredCount} Aenderung(en) in den letzten ${hours}h${countryMsg}${searchMsg}`;
     }
 
-    if (!groups.length) {
-      const searchMsg = state.hostConfigChangesSearchQuery
+    if (!filteredItems.length) {
+      const reason = state.hostConfigChangesSearchQuery
         ? `Keine Aenderungen gefunden fuer "${state.hostConfigChangesSearchQuery}"`
-        : "Keine Aenderungen im gewaehlten Zeitraum.";
-      groupsEl.innerHTML = `<p class="muted">${escapeHtml(searchMsg)}</p>`;
+        : state.hostConfigChangesCountryFilter && state.hostConfigChangesCountryFilter !== "all"
+          ? `Keine Aenderungen fuer Land ${state.hostConfigChangesCountryFilter}`
+          : "Keine Aenderungen im gewaehlten Zeitraum.";
+      groupsEl.innerHTML = `<p class="muted">${escapeHtml(reason)}</p>`;
       return;
     }
 
-    groupsEl.innerHTML = groups
-      .map((group) => {
-        const showHost = group.displayName !== group.hostname;
-        const sortedItems = [...group.items].sort((left, right) => {
-          return String(right.detected_at_utc || "").localeCompare(String(left.detected_at_utc || ""));
+    // Group by date
+    const dateGroups = groupByDateAndHost(filteredItems);
+
+    // Determine if we should auto-expand (when search query is active)
+    const autoExpandGroupsByDate = !!state.hostConfigChangesSearchQuery;
+
+    groupsEl.innerHTML = dateGroups
+      .map((dateGroup) => {
+        const itemsByHost = new Map();
+        dateGroup.items.forEach((item) => {
+          const hostname = asText(item.hostname, "-");
+          const displayName = asText(item.display_name || hostname, "-");
+          const key = `${displayName}\u0000${hostname}`;
+          if (!itemsByHost.has(key)) {
+            itemsByHost.set(key, { displayName, hostname, items: [], country_code: asText(item.country_code, "") });
+          }
+          itemsByHost.get(key).items.push(item);
         });
 
-        const rows = sortedItems.map((item) => {
-          const fieldKey = String(item.field_key || "");
-          const oldValue = asText(item.old_value, "-");
-          const newValue = asText(item.new_value, "-");
+        const hostGroups = [...itemsByHost.values()].sort((a, b) => {
+          const nameA = String(a.displayName || a.hostname).toLowerCase();
+          const nameB = String(b.displayName || b.hostname).toLowerCase();
+          const byName = nameA.localeCompare(nameB);
+          if (byName !== 0) return byName;
+          return String(a.hostname).toLowerCase().localeCompare(String(b.hostname).toLowerCase());
+        });
 
-          let oldFpInfo = "";
-          let newFpInfo = "";
-          if (fieldKey === "sap_release") {
-            const oldFp = resolveSapReleaseDisplay(oldValue, SAP_B1_VERSION_MAP);
-            const oldFpSafe = escapeHtml(asText(oldFp, "-"));
-            oldFpInfo = `
-              <div class="host-config-change-subline">
-                ${oldFpSafe}
-              </div>
-            `;
-            const newFp = resolveSapReleaseDisplay(newValue, SAP_B1_VERSION_MAP);
-            const newFpSafe = escapeHtml(asText(newFp, "-"));
-            newFpInfo = `
-              <div class="host-config-change-subline">
-                ${newFpSafe}
-              </div>
-            `;
-          }
+        const hostRowsHtml = hostGroups
+          .map((hostGroup) => {
+            const showHost = hostGroup.displayName !== hostGroup.hostname;
+            const sortedItems = [...hostGroup.items].sort((left, right) => {
+              return String(right.detected_at_utc || "").localeCompare(String(left.detected_at_utc || ""));
+            });
 
-          return `
-            <tr>
-              <td>${escapeHtml(formatUtcPlus2(item.detected_at_utc))}</td>
-              <td>${escapeHtml(asText(item.field_label || item.field_key, "-"))}</td>
-              <td>
-                <div class="host-config-main-value">${escapeHtml(oldValue)}</div>
-                ${oldFpInfo}
-              </td>
-              <td>
-                <div class="host-config-main-value"><strong>${escapeHtml(newValue)}</strong></div>
-                ${newFpInfo}
-              </td>
-            </tr>
-          `;
-        }).join("");
+            const rows = sortedItems.map((item) => {
+              const fieldKey = String(item.field_key || "");
+              const oldValue = asText(item.old_value, "-");
+              const newValue = asText(item.new_value, "-");
+
+              let oldFpInfo = "";
+              let newFpInfo = "";
+              if (fieldKey === "sap_release") {
+                const oldFp = resolveSapReleaseDisplay(oldValue, SAP_B1_VERSION_MAP);
+                const oldFpSafe = escapeHtml(asText(oldFp, "-"));
+                oldFpInfo = `
+                  <div class="host-config-change-subline">
+                    ${oldFpSafe}
+                  </div>
+                `;
+                const newFp = resolveSapReleaseDisplay(newValue, SAP_B1_VERSION_MAP);
+                const newFpSafe = escapeHtml(asText(newFp, "-"));
+                newFpInfo = `
+                  <div class="host-config-change-subline">
+                    ${newFpSafe}
+                  </div>
+                `;
+              }
+
+              return `
+                <tr>
+                  <td>${escapeHtml(formatUtcPlus2(item.detected_at_utc))}</td>
+                  <td>${escapeHtml(asText(item.field_label || item.field_key, "-"))}</td>
+                  <td>
+                    <div class="host-config-main-value">${escapeHtml(oldValue)}</div>
+                    ${oldFpInfo}
+                  </td>
+                  <td>
+                    <div class="host-config-main-value"><strong>${escapeHtml(newValue)}</strong></div>
+                    ${newFpInfo}
+                  </td>
+                </tr>
+              `;
+            }).join("");
+
+            return `
+              <details class="host-config-change-group" ${autoExpandGroupsByDate ? "open" : ""}>
+                <summary class="host-config-change-summary">
+                  <span class="global-host-label">${escapeHtml(hostGroup.displayName)}</span>
+                  ${showHost ? `<span class="global-hostname-sub">(${escapeHtml(hostGroup.hostname)})</span>` : ""}
+                  ${hostGroup.country_code ? `<span class="host-config-country-badge">${escapeHtml(hostGroup.country_code)}</span>` : ""}
+                  <span class="host-config-change-count">${sortedItems.length} Aenderung(en)</span>
+                </summary>
+                <div class="table-wrap host-config-changes-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Zeit</th>
+                        <th>Feld</th>
+                        <th>Vorher</th>
+                        <th>Neu</th>
+                      </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                  </table>
+                </div>
+              </details>
+            `;
+          })
+          .join("");
 
         return `
-          <details class="host-config-change-group">
-            <summary class="host-config-change-summary">
-              <span class="global-host-label">${escapeHtml(group.displayName)}</span>
-              ${showHost ? `<span class="global-hostname-sub">(${escapeHtml(group.hostname)})</span>` : ""}
-              <span class="host-config-change-count">${sortedItems.length} Aenderung(en)</span>
+          <details class="host-config-change-date-group" ${autoExpandGroupsByDate ? "open" : ""}>
+            <summary class="host-config-change-date-summary">
+              <span class="host-config-date-label">${escapeHtml(dateGroup.dateLabel)}</span>
+              <span class="host-config-date-count">${dateGroup.items.length} Aenderung(en)</span>
             </summary>
-            <div class="table-wrap host-config-changes-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Zeit</th>
-                    <th>Feld</th>
-                    <th>Vorher</th>
-                    <th>Neu</th>
-                  </tr>
-                </thead>
-                <tbody>${rows}</tbody>
-              </table>
+            <div class="host-config-date-group-content">
+              ${hostRowsHtml}
             </div>
           </details>
         `;
@@ -7693,6 +7789,13 @@ function wireEvents() {
   if (hostConfigChangesSearchInput) {
     hostConfigChangesSearchInput.addEventListener("input", async () => {
       state.hostConfigChangesSearchQuery = hostConfigChangesSearchInput.value.trim();
+      await loadHostConfigChanges();
+    });
+  }
+  const hostConfigChangesCountryFilter = document.getElementById("hostConfigChangesCountryFilter");
+  if (hostConfigChangesCountryFilter) {
+    hostConfigChangesCountryFilter.addEventListener("change", async () => {
+      state.hostConfigChangesCountryFilter = hostConfigChangesCountryFilter.value;
       await loadHostConfigChanges();
     });
   }

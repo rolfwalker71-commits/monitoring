@@ -3866,6 +3866,70 @@ body[data-theme="dark"] .trend-progress-bar {
   color: #64748b;
 }
 
+.host-config-change-date-group {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f1f5f9;
+  margin-bottom: 12px;
+}
+
+.host-config-change-date-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  background: #e2e8f0;
+  border-radius: 8px;
+}
+
+.host-config-change-date-summary::before {
+  content: "▼";
+  display: inline-block;
+  width: 16px;
+  font-size: 10px;
+  text-align: center;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.host-config-change-date-group[open] > .host-config-change-date-summary::before {
+  transform: rotate(180deg);
+}
+
+.host-config-change-date-summary::-webkit-details-marker {
+  display: none;
+}
+
+.host-config-date-label {
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.host-config-date-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: #475569;
+}
+
+.host-config-date-group-content {
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.host-config-country-badge {
+  display: inline-block;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .alert-id-sub {
   color: #94a3b8;
   font-style: italic;
