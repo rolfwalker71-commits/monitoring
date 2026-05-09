@@ -744,7 +744,14 @@ def _create_database_backup_job() -> dict:
     backup_path = BACKUP_TEMP_DIR / f"{job_id}.db"
 
     try:
+        # Copy main database file
         shutil.copy2(DB_PATH, backup_path)
+        # Also copy WAL and SHM files if they exist (for WAL-mode databases)
+        for suffix in ("-wal", "-shm"):
+            wal_path = DB_PATH.parent / f"{DB_PATH.name}{suffix}"
+            if wal_path.exists():
+                backup_wal_path = backup_path.parent / f"{backup_path.name}{suffix}"
+                shutil.copy2(wal_path, backup_wal_path)
     except OSError as exc:
         return {"status": "error", "error": f"backup copy failed: {exc}"}
 
@@ -767,22 +774,60 @@ def _restore_database_from_bytes(raw_bytes: bytes) -> tuple[bool, str]:
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     temp_restore_path = DATA_DIR / f"restore-{secrets.token_hex(8)}.db"
+    final_restore_path = DATA_DIR / f"restore-final-{secrets.token_hex(8)}.db"
     backup_current_path = DATA_DIR / f"monitoring.db.pre-restore-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.bak"
 
     try:
+        # Write uploaded bytes to temp file
         temp_restore_path.write_bytes(raw_bytes)
+        
+        # Use VACUUM INTO to create a clean, non-WAL copy to avoid corruption
+        # when WAL files are missing or incomplete
+        try:
+            conn = sqlite3.connect(str(temp_restore_path))
+            conn.execute(f"VACUUM INTO '{final_restore_path}'")
+            conn.close()
+            cleaned_restore_path = final_restore_path
+        except (sqlite3.DatabaseError, sqlite3.OperationalError):
+            # If VACUUM INTO fails, use temp file directly (might still be valid)
+            cleaned_restore_path = temp_restore_path
+        
+        # Backup current database if it exists
         if DB_PATH.exists():
             shutil.copy2(DB_PATH, backup_current_path)
-        os.replace(temp_restore_path, DB_PATH)
+            # Also backup any WAL/SHM files that exist
+            for suffix in ("-wal", "-shm"):
+                wal_path = DB_PATH.parent / f"{DB_PATH.name}{suffix}"
+                if wal_path.exists():
+                    backup_wal_path = DATA_DIR / f"monitoring.db{suffix}.pre-restore-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.bak"
+                    try:
+                        shutil.copy2(wal_path, backup_wal_path)
+                    except OSError:
+                        pass
+        
+        # Replace old DB with cleaned one
+        os.replace(cleaned_restore_path, DB_PATH)
+        
+        # Clean up any old WAL/SHM files from the previous session
+        for suffix in ("-wal", "-shm"):
+            old_wal = DB_PATH.parent / f"{DB_PATH.name}{suffix}"
+            if old_wal.exists():
+                try:
+                    old_wal.unlink()
+                except OSError:
+                    pass
+        
         return True, str(backup_current_path.name)
     except OSError as exc:
         return False, f"restore failed: {exc}"
     finally:
-        if temp_restore_path.exists():
-            try:
-                temp_restore_path.unlink()
-            except OSError:
-                pass
+        # Clean up temp files
+        for path in (temp_restore_path, final_restore_path):
+            if path.exists():
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
 
 
 def hash_password(password: str, salt_hex: str) -> str:
