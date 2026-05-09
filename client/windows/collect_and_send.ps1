@@ -813,8 +813,11 @@ $dnsServersJson = $dnsServerEntries -join ','
 
 # CPU — measure over 1 second with Get-Counter (mirrors Linux /proc/stat approach);
 # fall back to WMI LoadPercentage if the performance counter is unavailable.
+
+# CPU cores and model name
 $cpuCores = ($cpuInfoList | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum
 if (-not $cpuCores -or $cpuCores -lt 1) { $cpuCores = 1 }
+$cpuModelName = if ($cpuInfoList.Count -gt 0 -and $cpuInfoList[0].Name) { $cpuInfoList[0].Name } else { 'unknown' }
 
 $cpuUsageRaw = 0.0
 try {
@@ -968,13 +971,14 @@ $payload = @"
         "version_file_path": "$versionFilePathEsc",
         "selected_version": "$agentVerEsc"
     },
-  "cpu": {
-    "usage_percent": $cpuUsagePctStr,
-    "load_avg_1": $loadAvgStr,
-    "load_avg_5": $loadAvgStr,
-    "load_avg_15": $loadAvgStr,
-    "cores": $cpuCores
-  },
+    "cpu": {
+        "usage_percent": $cpuUsagePctStr,
+        "load_avg_1": $loadAvgStr,
+        "load_avg_5": $loadAvgStr,
+        "load_avg_15": $loadAvgStr,
+        "cores": $cpuCores,
+        "model_name": "${cpuModelName}"
+    },
   "memory": {
     "total_kb": $memTotalKb,
     "available_kb": $memAvailableKb,

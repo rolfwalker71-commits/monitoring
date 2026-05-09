@@ -1561,6 +1561,8 @@ fi
 read -r LOAD_AVG_1 LOAD_AVG_5 LOAD_AVG_15 _ < /proc/loadavg
 CPU_USAGE_PERCENT="$(calc_cpu_usage_percent)"
 CPU_CORES="$(nproc 2>/dev/null || echo 1)"
+# CPU model name (first line from /proc/cpuinfo)
+CPU_MODEL_NAME="$(awk -F: '/^model name/ {gsub(/^ +/, "", $2); print $2; exit}' /proc/cpuinfo 2>/dev/null || echo unknown)"
 
 MEM_TOTAL_KB="$(read_meminfo_kb MemTotal)"
 MEM_AVAILABLE_KB="$(read_meminfo_kb MemAvailable)"
@@ -1668,7 +1670,8 @@ PAYLOAD=$(cat <<EOF
     "load_avg_1": $LOAD_AVG_1,
     "load_avg_5": $LOAD_AVG_5,
     "load_avg_15": $LOAD_AVG_15,
-    "cores": $CPU_CORES
+    "cores": $CPU_CORES,
+    "model_name": "$(json_escape "$CPU_MODEL_NAME")"
   },
   "memory": {
     "total_kb": $MEM_TOTAL_KB,
