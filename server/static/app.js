@@ -807,6 +807,7 @@ function updateGlobalSubMode() {
   const systemOverviewView = document.getElementById("systemOverviewView");
   const backupStatusView = document.getElementById("backupStatusView");
   const hostConfigChangesView = document.getElementById("hostConfigChangesView");
+  const sqlDetailsView = document.getElementById("sqlDetailsView");
   const globalAdminAlertSubsView = document.getElementById("globalAdminAlertSubsView");
   const globalAdminSettingsView = document.getElementById("globalAdminSettingsView");
   const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
@@ -815,6 +816,7 @@ function updateGlobalSubMode() {
   const systemOverviewTabButton = document.getElementById("systemOverviewTabButton");
   const backupStatusTabButton = document.getElementById("backupStatusTabButton");
   const hostConfigChangesTabButton = document.getElementById("hostConfigChangesTabButton");
+  const sqlDetailsTabButton = document.getElementById("sqlDetailsTabButton");
   const globalAdminAlertSubsTabButton = document.getElementById("globalAdminAlertSubsTabButton");
   const globalAdminSettingsTabButton = document.getElementById("globalAdminSettingsTabButton");
 
@@ -824,6 +826,7 @@ function updateGlobalSubMode() {
   const systemOverviewActive = state.globalSubMode === "system-overview";
   const backupActive = state.globalSubMode === "backup-status";
   const hostConfigChangesActive = state.globalSubMode === "host-config-changes";
+  const sqlDetailsActive = state.globalSubMode === "sql-details";
   const adminAlertSubsActive = state.globalSubMode === "admin-alert-subs";
   const adminSettingsActive = state.globalSubMode === "admin-settings";
 
@@ -833,6 +836,7 @@ function updateGlobalSubMode() {
   if (systemOverviewView) systemOverviewView.classList.toggle("hidden", !systemOverviewActive);
   if (backupStatusView) backupStatusView.classList.toggle("hidden", !backupActive);
   if (hostConfigChangesView) hostConfigChangesView.classList.toggle("hidden", !hostConfigChangesActive);
+  if (sqlDetailsView) sqlDetailsView.classList.toggle("hidden", !sqlDetailsActive);
   if (globalAdminAlertSubsView) globalAdminAlertSubsView.classList.toggle("hidden", !adminAlertSubsActive);
   if (globalAdminSettingsView) globalAdminSettingsView.classList.toggle("hidden", !adminSettingsActive);
   if (globalAlertsTabButton) { globalAlertsTabButton.classList.toggle("active", alertsActive); globalAlertsTabButton.setAttribute("aria-selected", alertsActive ? "true" : "false"); }
@@ -841,6 +845,7 @@ function updateGlobalSubMode() {
   if (systemOverviewTabButton) { systemOverviewTabButton.classList.toggle("active", systemOverviewActive); systemOverviewTabButton.setAttribute("aria-selected", systemOverviewActive ? "true" : "false"); }
   if (backupStatusTabButton) { backupStatusTabButton.classList.toggle("active", backupActive); backupStatusTabButton.setAttribute("aria-selected", backupActive ? "true" : "false"); }
   if (hostConfigChangesTabButton) { hostConfigChangesTabButton.classList.toggle("active", hostConfigChangesActive); hostConfigChangesTabButton.setAttribute("aria-selected", hostConfigChangesActive ? "true" : "false"); }
+  if (sqlDetailsTabButton) { sqlDetailsTabButton.classList.toggle("active", sqlDetailsActive); sqlDetailsTabButton.setAttribute("aria-selected", sqlDetailsActive ? "true" : "false"); }
   if (globalAdminAlertSubsTabButton) { globalAdminAlertSubsTabButton.classList.toggle("active", adminAlertSubsActive); globalAdminAlertSubsTabButton.setAttribute("aria-selected", adminAlertSubsActive ? "true" : "false"); }
   if (globalAdminSettingsTabButton) { globalAdminSettingsTabButton.classList.toggle("active", adminSettingsActive); globalAdminSettingsTabButton.setAttribute("aria-selected", adminSettingsActive ? "true" : "false"); }
 }
@@ -7132,6 +7137,144 @@ async function runHostConfigChangesBackfill(days = 7) {
   }
 }
 
+async function loadSqlDatabaseDetails() {
+  const containerEl = document.getElementById("sqlDetailsContainer");
+  const summaryEl = document.getElementById("sqlDetailsSummary");
+  const filterEl = document.getElementById("sqlDetailsHoursFilter");
+  if (!containerEl) return;
+
+  containerEl.innerHTML = '<p class="muted">Lade SQL-Details…</p>';
+  if (summaryEl) summaryEl.textContent = "";
+
+  try {
+    const hours = state.sqlDetailsHours || 720;
+    if (filterEl) filterEl.value = hours;
+    
+    const response = await fetch(`/api/v1/sql-database-details?hours=${hours}&limit=500`, {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+
+    const data = await response.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+    
+    if (summaryEl) {
+      summaryEl.textContent = `${items.length} Datenbank(en) in den letzten ${hours}h`;
+    }
+
+    if (!items.length) {
+      containerEl.innerHTML = '<p class="muted">Keine SQL-Datenbank-Details im gewaehlten Zeitraum.</p>';
+      return;
+    }
+
+    // Group by hostname
+    const byHost = new Map();
+    items.forEach((item) => {
+      const hostname = asText(item.hostname, "-");
+      if (!byHost.has(hostname)) {
+        byHost.set(hostname, []);
+      }
+      byHost.get(hostname).push(item);
+    });
+
+    let groups = [...byHost.entries()]
+      .map(([hostname, dbList]) => ({ hostname, databases: dbList }))
+      .sort((a, b) => String(a.hostname).toLowerCase().localeCompare(String(b.hostname).toLowerCase()));
+
+    // Apply search filter
+    let searchQuery = state.sqlDetailsSearchQuery || "";
+    if (searchQuery) {
+      const q = String(searchQuery).toLowerCase();
+      groups = groups.filter((group) => {
+        const hostMatch = String(group.hostname).toLowerCase().includes(q);
+        if (hostMatch) return true;
+        return group.databases.some((db) =>
+          String(db.database_name || "").toLowerCase().includes(q)
+        );
+      }).map((group) => {
+        const hostMatch = String(group.hostname).toLowerCase().includes(q);
+        const filteredDbs = hostMatch
+          ? group.databases
+          : group.databases.filter((db) =>
+              String(db.database_name || "").toLowerCase().includes(q)
+            );
+        return { ...group, databases: filteredDbs };
+      }).filter((group) => group.databases.length > 0);
+    }
+
+    if (summaryEl) {
+      const filteredCount = groups.reduce((sum, group) => sum + group.databases.length, 0);
+      summaryEl.textContent = `${filteredCount} Datenbank(en) in den letzten ${hours}h`;
+    }
+
+    if (!groups.length) {
+      const searchMsg = searchQuery
+        ? `Keine SQL-Details gefunden fuer "${searchQuery}"`
+        : "Keine SQL-Datenbank-Details im gewaehlten Zeitraum.";
+      containerEl.innerHTML = `<p class="muted">${escapeHtml(searchMsg)}</p>`;
+      return;
+    }
+
+    // Build HTML for all hosts and their databases
+    containerEl.innerHTML = groups.map((group) => {
+      const rows = group.databases.map((db) => {
+        return `
+          <tr class="sql-db-row">
+            <td class="sql-db-name">${escapeHtml(asText(db.database_name, "-"))}</td>
+            <td class="sql-db-instance">${escapeHtml(asText(db.instance_name, "-"))}</td>
+            <td class="sql-db-value">
+              <div>${asText(db.data_mb, 0)} MB</div>
+              <div class="sql-db-subline">${escapeHtml(asText(db.collation, "-"))}</div>
+            </td>
+            <td class="sql-db-value">
+              <div>${asText(db.compatibility_level, "-")}</div>
+              <div class="sql-db-subline">${asText(db.data_files, 0)}D/${asText(db.log_files, 0)}L files</div>
+            </td>
+            <td class="sql-db-value">
+              <div>${escapeHtml(asText(db.page_verify, "-"))}</div>
+              <div class="sql-db-subline">${escapeHtml(asText(db.last_dbcc_time, "-"))}</div>
+            </td>
+            <td class="sql-db-value">
+              <div class="sql-backup-line">${escapeHtml(asText(db.last_full_backup, "-"))}</div>
+              <div class="sql-backup-line">${escapeHtml(asText(db.last_diff_backup, "-"))}</div>
+              <div class="sql-backup-line">${escapeHtml(asText(db.last_log_backup, "-"))}</div>
+            </td>
+            <td class="sql-db-timestamp">${escapeHtml(asText(db.last_reported_at_utc, "-"))}</td>
+          </tr>
+        `;
+      }).join("");
+
+      return `
+        <div class="sql-host-group">
+          <h5 class="sql-host-name">${escapeHtml(asText(group.hostname, "-"))}</h5>
+          <div class="sql-table-wrap">
+            <table class="sql-details-table">
+              <thead>
+                <tr>
+                  <th>Database</th>
+                  <th>Instance</th>
+                  <th>Size / Collation</th>
+                  <th>Compatibility / Files</th>
+                  <th>PageVerify / LastDBCC</th>
+                  <th>Backups (Full / Diff / Log)</th>
+                  <th>Reported</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+  } catch (error) {
+    containerEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
 function updateHeaderStatChips() {
   const alertChip = document.getElementById("headerAlertChip");
   const alertCount = document.getElementById("headerAlertCount");
@@ -7593,6 +7736,36 @@ function wireEvents() {
     });
   }
 
+  // SQL Database Details Tab & Controls
+  const sqlDetailsTabButton = document.getElementById("sqlDetailsTabButton");
+  if (sqlDetailsTabButton) {
+    sqlDetailsTabButton.addEventListener("click", async () => {
+      state.globalSubMode = "sql-details";
+      updateGlobalSubMode();
+      await loadSqlDatabaseDetails();
+    });
+  }
+  const refreshSqlDetailsButton = document.getElementById("refreshSqlDetailsButton");
+  if (refreshSqlDetailsButton) {
+    refreshSqlDetailsButton.addEventListener("click", async () => {
+      await loadSqlDatabaseDetails();
+    });
+  }
+  const sqlDetailsHoursFilter = document.getElementById("sqlDetailsHoursFilter");
+  if (sqlDetailsHoursFilter) {
+    sqlDetailsHoursFilter.addEventListener("change", async () => {
+      state.sqlDetailsHours = Number(sqlDetailsHoursFilter.value);
+      await loadSqlDatabaseDetails();
+    });
+  }
+  const sqlDetailsSearchInput = document.getElementById("sqlDetailsSearchInput");
+  if (sqlDetailsSearchInput) {
+    sqlDetailsSearchInput.addEventListener("input", async () => {
+      state.sqlDetailsSearchQuery = sqlDetailsSearchInput.value.trim();
+      await loadSqlDatabaseDetails();
+    });
+  }
+
   document.getElementById("globalViewButton").addEventListener("click", async () => {
     state.viewMode = "global";
     updateViewMode();
@@ -7607,6 +7780,7 @@ function wireEvents() {
     else if (state.globalSubMode === "system-overview") await loadSystemOverview();
     else if (state.globalSubMode === "backup-status") await loadBackupStatus();
     else if (state.globalSubMode === "host-config-changes") await loadHostConfigChanges();
+    else if (state.globalSubMode === "sql-details") await loadSqlDatabaseDetails();
     else if (state.globalSubMode === "admin-alert-subs") await loadAdminAlertSubscriptions();
     else if (state.globalSubMode === "admin-settings") await loadGlobalAdminSettingsPanel();
   });
