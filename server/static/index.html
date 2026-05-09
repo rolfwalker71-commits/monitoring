@@ -100,7 +100,6 @@
                 <button id="backupStatusTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="backupStatusView">Backup Stati</button>
                 <button id="systemOverviewTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="systemOverviewView">Systemübersicht</button>
                 <button id="hostConfigChangesTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="hostConfigChangesView">Changelog</button>
-                <button id="sqlDetailsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="sqlDetailsView">SQL Details</button>
                 <button id="globalAdminAlertSubsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminAlertSubsView">Alert Abos</button>
                 <button id="globalAdminSettingsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminSettingsView">Admin Settings</button>
               </div>
@@ -255,24 +254,6 @@
               </div>
               <div id="hostConfigChangesGroups" class="host-config-changes-groups">
                 <p class="muted">Lade Daten…</p>
-              </div>
-            </div>
-
-            <div id="sqlDetailsView" class="hidden" role="tabpanel" aria-labelledby="sqlDetailsTabButton">
-              <div class="inactive-hosts-toolbar">
-                <span id="sqlDetailsSummary" class="count compact"></span>
-                <input id="sqlDetailsSearchInput" type="text" class="search-input-compact" placeholder="Nach Host oder DB suchen..." />
-                <select id="sqlDetailsHoursFilter" class="btn-secondary-compact" title="Zeitraum für Daten">
-                  <option value="24">24h</option>
-                  <option value="168">7 Tage</option>
-                  <option value="720" selected>30 Tage</option>
-                  <option value="4320">6 Monate</option>
-                  <option value="8760">1 Jahr</option>
-                </select>
-                <button id="refreshSqlDetailsButton" type="button" class="btn-secondary-compact">↻</button>
-              </div>
-              <div id="sqlDetailsContainer" class="sql-details-container">
-                <p class="muted">Lade SQL-Details…</p>
               </div>
             </div>
 
