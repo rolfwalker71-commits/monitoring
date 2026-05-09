@@ -21,6 +21,7 @@ const AUTO_REFRESH_INTERVAL_OPTIONS = new Map([
 const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "sap-b1-systeminfo", "agent-update", "dir-listings", "network", "filesystems", "databases"]);
 
 let SAP_B1_VERSION_MAP = new Map([
+  ["10.00.330", { featurePack: "FP 2605", patchLevel: "PL 23", releaseDate: "May 2026" }],
   ["10.00.320", { featurePack: "FP 2602", patchLevel: "PL 22", releaseDate: "Feb 2026" }],
   ["10.00.310", { featurePack: "FP 2511", patchLevel: "PL 21", releaseDate: "Nov 2025" }],
   ["10.00.300", { featurePack: "FP 2508", patchLevel: "PL 20", releaseDate: "Aug 2025" }],
@@ -8335,7 +8336,13 @@ function resolveSapReleaseDisplay(sapRelease, sapVersionMap) {
   const buildMatch = releaseText.match(/\d+\.\d+\.\d+/);
   const buildKey = buildMatch ? buildMatch[0] : releaseText;
   const versionInfo = sapVersionMap.get(buildKey);
-  return versionInfo?.featurePack || releaseText;
+  // Return Feature Pack if found, else return the release text for fallback display
+  // This ensures dynamically updated versions show current FP mapping at display time
+  if (versionInfo?.featurePack) {
+    return versionInfo.featurePack;
+  }
+  // If not found, return original release text (preserves old data for reference)
+  return releaseText;
 }
 
 function formatShortHostname(hostname) {
