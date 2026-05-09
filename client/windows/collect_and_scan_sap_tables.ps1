@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 $IC = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile = if ($env:CONFIG_FILE) { $env:CONFIG_FILE } else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
-$EmbeddedAgentVersion = '1.1.169'
+$EmbeddedAgentVersion = '1.1.170'
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -202,13 +202,27 @@ function Get-TableScanResult {
 
         $safeSchema = $Schema.Replace(']', ']]')
         $safeTable = $Table.Replace(']', ']]')
-        $query = "SELECT * FROM [$safeSchema].[$safeTable];"
-        $dt = Invoke-SqlTable -Connection $conn -Query $query -TimeoutSec 300
-        $rows = Convert-DataTableRowsToObjectArray -DataTable $dt
+        $countQuery = "SELECT COUNT(*) AS cnt FROM [$safeSchema].[$safeTable];"
+        $countDt = Invoke-SqlTable -Connection $conn -Query $countQuery -TimeoutSec 120
+        $rowCount = 0
+        if ($countDt -and $countDt.Rows.Count -gt 0) {
+            try {
+                $rowCount = [int]$countDt.Rows[0]['cnt']
+            } catch {
+                $rowCount = 0
+            }
+        }
+
+        $rows = @()
+        if ($rowCount -gt 0) {
+            $query = "SELECT * FROM [$safeSchema].[$safeTable];"
+            $dt = Invoke-SqlTable -Connection $conn -Query $query -TimeoutSec 300
+            $rows = Convert-DataTableRowsToObjectArray -DataTable $dt
+        }
 
         $result.available = $true
         $result.rows = $rows
-        $result.row_count = @($rows).Count
+        $result.row_count = $rowCount
     } catch {
         $result.error = ($_.Exception.Message -replace '[\r\n]+', ' ')
     } finally {
@@ -313,6 +327,12 @@ $uri = ($ServerUrl.TrimEnd('/')) + '/api/v1/agent-report'
 try {
     Invoke-ServerJsonPost -Uri $uri -Body $payloadJson | Out-Null
     Write-Host "SAP table scan sent. $($sariResult.sql_server)/$($sariResult.database).dbo.SARI rows: $($sariResult.row_count), $($extensionsResult.sql_server)/$($extensionsResult.database).dbo.Extensions rows: $($extensionsResult.row_count)"
+    if ($sariResult.error) {
+        Write-Host "SARI scan info: $($sariResult.error)" -ForegroundColor Yellow
+    }
+    if ($extensionsResult.error) {
+        Write-Host "Extensions scan info: $($extensionsResult.error)" -ForegroundColor Yellow
+    }
 } catch {
     Write-Error ("Failed to send SAP table scan payload: " + $_.Exception.Message)
     exit 1
