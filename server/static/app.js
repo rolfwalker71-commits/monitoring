@@ -73,7 +73,7 @@ const state = {
   overviewSection: "main",
   globalSubMode: "global-alerts",
   criticalTrendsHours: 24,
-  criticalTrendsProjectHours: 8,
+  criticalTrendsProjectHours: 72,
   criticalTrendsMetrics: ["filesystem"],
   inactiveHostsHours: 1,
   hostConfigChangesHours: 720,
@@ -6601,7 +6601,7 @@ async function loadAlertsForHost() {
 function renderCriticalTrends(data) {
   const { warnings, hours, project_hours: projectHours } = data;
   if (!warnings || warnings.length === 0) {
-    const safeProjectHoursEmpty = Number(projectHours) || 8;
+    const safeProjectHoursEmpty = Number(projectHours) || 72;
     return `<div class="ct-empty"><span class="ct-empty-icon">✓</span><p>Keine kritischen Trends im Zeitraum der letzten ${hours} Std. erkannt (Projektion: ${safeProjectHoursEmpty} Std.).</p></div>`;
   }
 
@@ -6622,7 +6622,7 @@ function renderCriticalTrends(data) {
   const warnCount = filteredWarnings.filter((w) => w.level === "warn").length;
 
   const dataEndTimeMs = Date.now();
-  const safeProjectHours = Number(projectHours) || 8;
+  const safeProjectHours = Number(projectHours) || 72;
   const projectionTargetIso = new Date(dataEndTimeMs + safeProjectHours * 3600 * 1000).toISOString();
   const projectionTargetFormatted = formatUtcPlus2(projectionTargetIso);
 
