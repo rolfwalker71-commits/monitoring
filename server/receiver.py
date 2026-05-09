@@ -2561,7 +2561,10 @@ def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) ->
         is_recent_report = bool(last_dt and ((now_utc - last_dt) <= age_limit))
 
         dir_block = payload.get("dir_deep_listings") if isinstance(payload.get("dir_deep_listings"), dict) else {}
-        directories = dir_block.get("directories") if isinstance(dir_block.get("directories"), list) else []
+        directories = dir_block.get("entries") if isinstance(dir_block.get("entries"), list) else []
+        if not directories:
+            # Backward compatibility with older payload shape.
+            directories = dir_block.get("directories") if isinstance(dir_block.get("directories"), list) else []
 
         directory_items: list[dict] = []
         for directory in directories:
