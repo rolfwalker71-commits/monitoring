@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 $IC = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile = if ($env:CONFIG_FILE) { $env:CONFIG_FILE } else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
-$EmbeddedAgentVersion = '1.1.174'
+$EmbeddedAgentVersion = '1.1.175'
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -211,6 +211,7 @@ function Get-TableScanResult {
         [string]$Database,
         [string]$Schema,
         [string]$Table,
+        [string[]]$PreferredColumns,
         [string]$SqlUser,
         [string]$SqlPassword
     )
@@ -250,6 +251,19 @@ function Get-TableScanResult {
             }
         }
 
+        $selectedColumns = @()
+        if ($PreferredColumns -and $PreferredColumns.Count -gt 0) {
+            foreach ($preferred in $PreferredColumns) {
+                $match = $columns | Where-Object { $_ -ieq $preferred } | Select-Object -First 1
+                if ($match -and -not ($selectedColumns -contains $match)) {
+                    $selectedColumns += $match
+                }
+            }
+        }
+        if ($selectedColumns.Count -eq 0) {
+            $selectedColumns = @($columns | Select-Object -First 8)
+        }
+
         $countQuery = "SELECT COUNT(*) AS cnt FROM [$safeSchema].[$safeTable];"
         $countDt = Invoke-SqlTable -Connection $conn -Query $countQuery -TimeoutSec 120
         $rowCount = 0
@@ -263,14 +277,19 @@ function Get-TableScanResult {
 
         $rows = @()
         if ($rowCount -gt 0) {
-            $query = "SELECT * FROM [$safeSchema].[$safeTable];"
+            $selectList = if ($selectedColumns.Count -gt 0) {
+                ($selectedColumns | ForEach-Object { '[' + ($_.Replace(']', ']]')) + ']' }) -join ', '
+            } else {
+                '*'
+            }
+            $query = "SELECT TOP (1) $selectList FROM [$safeSchema].[$safeTable];"
             $dt = Invoke-SqlTable -Connection $conn -Query $query -TimeoutSec 300
             $rows = Convert-DataTableRowsToObjectArray -DataTable $dt
         }
 
         $result.available = $true
-        $result.columns = @($columns)
-        $result.column_count = $columns.Count
+        $result.columns = @($selectedColumns)
+        $result.column_count = $selectedColumns.Count
         $result.rows = Normalize-ScanRows -Rows $rows
         $result.row_count = $rowCount
     } catch {
@@ -290,6 +309,7 @@ function Get-FirstAvailableTableScanResult {
         [string[]]$Databases,
         [string]$Schema,
         [string]$Table,
+        [string[]]$PreferredColumns,
         [string]$SqlUser,
         [string]$SqlPassword
     )
@@ -298,7 +318,7 @@ function Get-FirstAvailableTableScanResult {
     $firstEmpty = $null
     foreach ($serverName in $SqlServers) {
         foreach ($dbName in $Databases) {
-            $result = Get-TableScanResult -SqlServer $serverName -Database $dbName -Schema $Schema -Table $Table -SqlUser $SqlUser -SqlPassword $SqlPassword
+            $result = Get-TableScanResult -SqlServer $serverName -Database $dbName -Schema $Schema -Table $Table -PreferredColumns $PreferredColumns -SqlUser $SqlUser -SqlPassword $SqlPassword
             if ($result.available -eq $true) {
                 if ([int]$result.row_count -gt 0) {
                     return $result
@@ -331,6 +351,8 @@ function Get-FirstAvailableTableScanResult {
         database = $fallbackDb
         schema = $Schema
         table = $Table
+        columns = @()
+        column_count = 0
         row_count = 0
         error = if (@($errors).Count -gt 0) { ($errors -join ' | ') } else { 'No matching database candidate available.' }
         rows = @()
@@ -351,8 +373,10 @@ $agentVersion = Select-AgentVersion -EmbeddedVersion $EmbeddedAgentVersion -File
 
 $sariDbCandidates = @('SBO-COMMON', 'SBOCOMMON', 'sbo-commen')
 $extensionsDbCandidates = @('SLDModel.SLDData', 'SLDMODEL.SLDDATA')
-$sariResult = Get-FirstAvailableTableScanResult -SqlServers $SqlServerCandidates -Databases $sariDbCandidates -Schema 'dbo' -Table 'SARI' -SqlUser $HarvestSqlUser -SqlPassword $HarvestSqlPassword
-$extensionsResult = Get-FirstAvailableTableScanResult -SqlServers $SqlServerCandidates -Databases $extensionsDbCandidates -Schema 'dbo' -Table 'Extensions' -SqlUser $HarvestSqlUser -SqlPassword $HarvestSqlPassword
+$sariPreferredColumns = @('AddOnId', 'NameSpace', 'AName', 'AddOnVer', 'ClientType', 'UpgChkSumX')
+$extensionsPreferredColumns = @('Id', 'Name', 'Version', 'Vendor', 'Type', 'Status', 'ClientType', 'LastUpdated')
+$sariResult = Get-FirstAvailableTableScanResult -SqlServers $SqlServerCandidates -Databases $sariDbCandidates -Schema 'dbo' -Table 'SARI' -PreferredColumns $sariPreferredColumns -SqlUser $HarvestSqlUser -SqlPassword $HarvestSqlPassword
+$extensionsResult = Get-FirstAvailableTableScanResult -SqlServers $SqlServerCandidates -Databases $extensionsDbCandidates -Schema 'dbo' -Table 'Extensions' -PreferredColumns $extensionsPreferredColumns -SqlUser $HarvestSqlUser -SqlPassword $HarvestSqlPassword
 
 $payloadObj = [ordered]@{
     agent_id = $agentId
