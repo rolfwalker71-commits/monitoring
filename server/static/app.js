@@ -3813,7 +3813,9 @@ function renderSapB1SystemSummary(payload) {
 }
 
 function renderSapB1TableScanRows(rows) {
-  const entries = Array.isArray(rows) ? rows : [];
+  const entries = Array.isArray(rows)
+    ? rows
+    : (rows && typeof rows === "object" ? [rows] : []);
   if (entries.length === 0) {
     return "<p class=\"muted\">Keine Datensaetze gefunden.</p>";
   }

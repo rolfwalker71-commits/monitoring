@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 $IC = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile = if ($env:CONFIG_FILE) { $env:CONFIG_FILE } else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
-$EmbeddedAgentVersion = '1.1.171'
+$EmbeddedAgentVersion = '1.1.172'
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -171,7 +171,7 @@ function Convert-DataTableRowsToObjectArray {
         }
         $rows += [pscustomobject]$obj
     }
-    return $rows
+    Write-Output -NoEnumerate $rows
 }
 
 function Get-TableScanResult {
