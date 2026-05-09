@@ -2435,6 +2435,7 @@ def collect_system_overview(conn: sqlite3.Connection) -> dict:
                 "cpu_cores": cpu_info["cpu_cores"],
                 "cpu_model_name": cpu_info["cpu_model_name"],
                 "last_update": received_at_utc or "-",
+                "payload": payload,
             }
         )
 
