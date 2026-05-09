@@ -439,10 +439,12 @@
                 <label>
                   Empfaenger nur fuer Warnung (optional, ueberschreibt Standard)
                   <input id="alertWarningEmailRecipientsInput" type="text" placeholder="warn@example.com; team-warning@example.com" />
+                  <span class="settings-helper-text override-explanation">Wenn hier mindestens eine Adresse eingetragen ist, wird diese Liste bei Warnung-Alert-Mails als <b>vollständiger Empfängerersatz</b> verwendet. Die Standard-Empfängerliste wird <b>nicht</b> verwendet.</span>
                 </label>
                 <label>
                   Empfaenger nur fuer Kritisch (optional, ueberschreibt Standard)
                   <input id="alertCriticalEmailRecipientsInput" type="text" placeholder="critical@example.com; team-critical@example.com" />
+                  <span class="settings-helper-text override-explanation">Wenn hier mindestens eine Adresse eingetragen ist, wird diese Liste bei Kritisch-Alert-Mails als <b>vollständiger Empfängerersatz</b> verwendet. Die Standard-Empfängerliste wird <b>nicht</b> verwendet.</span>
                 </label>
               </div>
               <div id="alertDigestLogicHelp" class="settings-logic-help hidden"></div>

@@ -1114,6 +1114,15 @@ td.center {
   font-size: 12px;
 }
 
+/* Explanation for override recipient fields */
+.override-explanation {
+  display: block;
+  margin-top: 2px;
+  color: #b00;
+  font-size: 12px;
+  font-style: italic;
+}
+
 .settings-logic-help {
   margin-top: 12px;
 }
