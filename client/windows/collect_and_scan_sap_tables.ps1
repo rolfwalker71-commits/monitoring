@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 $IC = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile = if ($env:CONFIG_FILE) { $env:CONFIG_FILE } else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
-$EmbeddedAgentVersion = '1.1.168'
+$EmbeddedAgentVersion = '1.1.169'
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -82,6 +82,60 @@ function Get-SqlConnection {
     return $conn
 }
 
+function Get-SqlServerCandidates {
+    $candidates = New-Object System.Collections.Generic.List[string]
+
+    if ($cfg.ContainsKey('HARVEST_SQL_SERVER') -and $cfg['HARVEST_SQL_SERVER']) {
+        $parts = [string]$cfg['HARVEST_SQL_SERVER'] -split '[,;]'
+        foreach ($part in $parts) {
+            $v = ([string]$part).Trim()
+            if ($v -and -not $candidates.Contains($v)) {
+                $candidates.Add($v)
+            }
+        }
+    }
+
+    if ($candidates.Count -eq 0) {
+        foreach ($base in @('.', 'localhost')) {
+            if (-not $candidates.Contains($base)) {
+                $candidates.Add($base)
+            }
+        }
+
+        $regPath = 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL'
+        try {
+            if (Test-Path $regPath) {
+                $instanceMap = Get-ItemProperty -Path $regPath -ErrorAction Stop
+                foreach ($prop in $instanceMap.PSObject.Properties) {
+                    if ($prop.Name -in @('PSPath','PSParentPath','PSChildName','PSDrive','PSProvider')) { continue }
+                    $instanceName = [string]$prop.Name
+                    if (-not $instanceName) { continue }
+
+                    if ($instanceName -ieq 'MSSQLSERVER') {
+                        foreach ($base in @('.', 'localhost', $env:COMPUTERNAME)) {
+                            if ($base -and -not $candidates.Contains($base)) {
+                                $candidates.Add($base)
+                            }
+                        }
+                    } else {
+                        foreach ($base in @('.', 'localhost', $env:COMPUTERNAME)) {
+                            if (-not $base) { continue }
+                            $name = "$base\$instanceName"
+                            if (-not $candidates.Contains($name)) {
+                                $candidates.Add($name)
+                            }
+                        }
+                    }
+                }
+            }
+        } catch {
+            # Ignore registry discovery errors and keep defaults.
+        }
+    }
+
+    return @($candidates)
+}
+
 function Invoke-SqlTable {
     param(
         [System.Data.SqlClient.SqlConnection]$Connection,
@@ -132,6 +186,7 @@ function Get-TableScanResult {
 
     $result = [ordered]@{
         available = $false
+        sql_server = $SqlServer
         database = $Database
         schema = $Schema
         table = $Table
@@ -167,7 +222,7 @@ function Get-TableScanResult {
 
 function Get-FirstAvailableTableScanResult {
     param(
-        [string]$SqlServer,
+        [string[]]$SqlServers,
         [string[]]$Databases,
         [string]$Schema,
         [string]$Table,
@@ -176,19 +231,39 @@ function Get-FirstAvailableTableScanResult {
     )
 
     $errors = @()
-    foreach ($dbName in $Databases) {
-        $result = Get-TableScanResult -SqlServer $SqlServer -Database $dbName -Schema $Schema -Table $Table -SqlUser $SqlUser -SqlPassword $SqlPassword
-        if ($result.available -eq $true) {
-            return $result
-        }
-        if ($result.error) {
-            $errors += ("{0}: {1}" -f $dbName, $result.error)
+    $firstEmpty = $null
+    foreach ($serverName in $SqlServers) {
+        foreach ($dbName in $Databases) {
+            $result = Get-TableScanResult -SqlServer $serverName -Database $dbName -Schema $Schema -Table $Table -SqlUser $SqlUser -SqlPassword $SqlPassword
+            if ($result.available -eq $true) {
+                if ([int]$result.row_count -gt 0) {
+                    return $result
+                }
+                if ($null -eq $firstEmpty) {
+                    $firstEmpty = $result
+                }
+                continue
+            }
+            if ($result.error) {
+                $errors += ("{0}/{1}: {2}" -f $serverName, $dbName, $result.error)
+            }
         }
     }
 
+    if ($firstEmpty -ne $null) {
+        $firstEmpty.error = if (@($errors).Count -gt 0) {
+            ('No rows in scanned table. Attempts: ' + ($errors -join ' | '))
+        } else {
+            'No rows in scanned table.'
+        }
+        return $firstEmpty
+    }
+
     $fallbackDb = if (@($Databases).Count -gt 0) { $Databases[0] } else { '' }
+    $fallbackServer = if (@($SqlServers).Count -gt 0) { $SqlServers[0] } else { '' }
     $fallback = [ordered]@{
         available = $false
+        sql_server = $fallbackServer
         database = $fallbackDb
         schema = $Schema
         table = $Table
@@ -200,7 +275,7 @@ function Get-FirstAvailableTableScanResult {
 }
 
 # Collector settings (temporary scan)
-$SqlServerInstance = if ($cfg.ContainsKey('HARVEST_SQL_SERVER') -and $cfg['HARVEST_SQL_SERVER']) { $cfg['HARVEST_SQL_SERVER'] } else { '.' }
+$SqlServerCandidates = Get-SqlServerCandidates
 $HarvestSqlUser = if ($cfg.ContainsKey('HARVEST_SQL_USER') -and $cfg['HARVEST_SQL_USER']) { $cfg['HARVEST_SQL_USER'] } else { 'harvest' }
 $HarvestSqlPassword = if ($cfg.ContainsKey('HARVEST_SQL_PASSWORD') -and $cfg['HARVEST_SQL_PASSWORD']) { $cfg['HARVEST_SQL_PASSWORD'] } else { '0djKUt&xbLK0AYr' }
 
@@ -211,8 +286,9 @@ $displayName = if ($cfg.ContainsKey('DISPLAY_NAME') -and $cfg['DISPLAY_NAME']) {
 $agentVersion = Select-AgentVersion -EmbeddedVersion $EmbeddedAgentVersion -FilePath $VersionFile
 
 $sariDbCandidates = @('SBO-COMMON', 'SBOCOMMON', 'sbo-commen')
-$sariResult = Get-FirstAvailableTableScanResult -SqlServer $SqlServerInstance -Databases $sariDbCandidates -Schema 'dbo' -Table 'SARI' -SqlUser $HarvestSqlUser -SqlPassword $HarvestSqlPassword
-$extensionsResult = Get-TableScanResult -SqlServer $SqlServerInstance -Database 'SLDModel.SLDData' -Schema 'dbo' -Table 'Extensions' -SqlUser $HarvestSqlUser -SqlPassword $HarvestSqlPassword
+$extensionsDbCandidates = @('SLDModel.SLDData', 'SLDMODEL.SLDDATA')
+$sariResult = Get-FirstAvailableTableScanResult -SqlServers $SqlServerCandidates -Databases $sariDbCandidates -Schema 'dbo' -Table 'SARI' -SqlUser $HarvestSqlUser -SqlPassword $HarvestSqlPassword
+$extensionsResult = Get-FirstAvailableTableScanResult -SqlServers $SqlServerCandidates -Databases $extensionsDbCandidates -Schema 'dbo' -Table 'Extensions' -SqlUser $HarvestSqlUser -SqlPassword $HarvestSqlPassword
 
 $payloadObj = [ordered]@{
     agent_id = $agentId
@@ -236,7 +312,7 @@ $uri = ($ServerUrl.TrimEnd('/')) + '/api/v1/agent-report'
 
 try {
     Invoke-ServerJsonPost -Uri $uri -Body $payloadJson | Out-Null
-    Write-Host "SAP table scan sent. $($sariResult.database).dbo.SARI rows: $($sariResult.row_count), SLDModel.SLDData.dbo.Extensions rows: $($extensionsResult.row_count)"
+    Write-Host "SAP table scan sent. $($sariResult.sql_server)/$($sariResult.database).dbo.SARI rows: $($sariResult.row_count), $($extensionsResult.sql_server)/$($extensionsResult.database).dbo.Extensions rows: $($extensionsResult.row_count)"
 } catch {
     Write-Error ("Failed to send SAP table scan payload: " + $_.Exception.Message)
     exit 1
