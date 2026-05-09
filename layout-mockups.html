@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Overview Layout Options</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; padding: 20px; }
+        .mockup-container { background: white; border-radius: 8px; padding: 20px; margin-bottom: 40px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .mockup-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: #333; }
+        
+        /* OPTION 1: Kompakt zwei Zeilen */
+        .layout-option-1 .host-entry { margin-bottom: 16px; border-left: 3px solid #0084c8; padding-left: 12px; }
+        .layout-option-1 .entry-line-1 { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; font-weight: 500; }
+        .layout-option-1 .entry-line-1 .icon { font-size: 20px; }
+        .layout-option-1 .entry-line-1 .hostname { color: #0084c8; }
+        .layout-option-1 .entry-line-1 .country { font-size: 12px; color: #666; }
+        .layout-option-1 .entry-line-1 .status-badge { margin-left: auto; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .layout-option-1 .status-ok { background: #d4edda; color: #155724; }
+        .layout-option-1 .status-warning { background: #fff3cd; color: #856404; }
+        .layout-option-1 .entry-line-2 { display: flex; gap: 20px; font-size: 13px; color: #666; flex-wrap: wrap; }
+        .layout-option-1 .entry-line-2 .detail { display: flex; gap: 8px; }
+        .layout-option-1 .entry-line-2 .label { font-weight: 500; color: #333; }
+        
+        /* OPTION 2: Tabellen-artiges Format (vollstaendig) */
+        .layout-option-2 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .layout-option-2 thead { background: #f0f0f0; border-bottom: 2px solid #0084c8; }
+        .layout-option-2 th { text-align: left; padding: 10px; font-weight: 600; font-size: 12px; color: #333; vertical-align: top; }
+        .layout-option-2 td { padding: 10px; border-bottom: 1px solid #e0e0e0; font-size: 13px; vertical-align: top; }
+        .layout-option-2 .host-col { font-weight: 500; color: #0084c8; }
+        .layout-option-2 .host-meta { margin-top: 4px; font-size: 12px; color: #666; }
+        .layout-option-2 .cell-main { font-weight: 500; color: #2b2b2b; line-height: 1.35; }
+        .layout-option-2 .cell-sub { margin-top: 3px; font-size: 12px; color: #666; line-height: 1.35; }
+        .layout-option-2 .status { padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; display: inline-block; }
+        
+        /* OPTION 3: Zwei-Spalten mit Details */
+        .layout-option-3 .host-entry { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; padding: 12px; border: 1px solid #e0e0e0; border-radius: 6px; }
+        .layout-option-3 .entry-header { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; font-weight: 500; border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; }
+        .layout-option-3 .detail-column { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+        .layout-option-3 .detail-row { display: flex; gap: 8px; }
+        .layout-option-3 .detail-label { font-weight: 500; color: #333; min-width: 80px; }
+        .layout-option-3 .detail-value { color: #666; }
+        
+        .demo-data { background: #fafafa; padding: 10px; border-radius: 4px; margin-top: 4px; color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+<h1 style="margin-bottom: 30px; color: #333;">System Overview - Layout Optionen</h1>
+
+<!-- OPTION 1 -->
+<div class="mockup-container">
+    <div class="mockup-title">Option 1: Kompakt Zwei-Zeilen (Empfohlen)</div>
+    
+    <div class="layout-option-1">
+        <div class="host-entry">
+            <div class="entry-line-1">
+                <span class="icon">🪟</span>
+                <span class="hostname">prod-mssql-01.company.ch</span>
+                <span class="country">🇨🇭</span>
+                <span class="status-badge status-ok">✓ OK</span>
+            </div>
+            <div class="entry-line-2">
+                <div class="detail"><span class="label">OS:</span> <span>Windows Server 2022 Enterprise</span></div>
+                <div class="detail"><span class="label">SQL:</span> <span>2019 SP3</span></div>
+                <div class="detail"><span class="label">CPU:</span> <span>8 vCPU (Intel Xeon)</span></div>
+                <div class="detail"><span class="label">RAM:</span> <span>64 GB</span></div>
+            </div>
+        </div>
+        
+        <div class="host-entry">
+            <div class="entry-line-1">
+                <span class="icon">🐧</span>
+                <span class="hostname">sap-hana-prod-02.company.de</span>
+                <span class="country">🇩🇪</span>
+                <span class="status-badge status-warning">⚠ 2 Alerts</span>
+            </div>
+            <div class="entry-line-2">
+                <div class="detail"><span class="label">OS:</span> <span>Ubuntu 20.04 LTS</span></div>
+                <div class="detail"><span class="label">SAP:</span> <span>S/4HANA 2021 FPS03</span></div>
+                <div class="detail"><span class="label">HANA:</span> <span>2.0 SPS07</span></div>
+                <div class="detail"><span class="label">RAM:</span> <span>256 GB</span></div>
+            </div>
+        </div>
+
+        <div class="host-entry">
+            <div class="entry-line-1">
+                <span class="icon">🪟</span>
+                <span class="hostname">app-server-03.company.at</span>
+                <span class="country">🇦🇹</span>
+                <span class="status-badge status-ok">✓ OK</span>
+            </div>
+            <div class="entry-line-2">
+                <div class="detail"><span class="label">OS:</span> <span>Windows Server 2019 Standard</span></div>
+                <div class="detail"><span class="label">SAP:</span> <span>ECC 6.0</span></div>
+                <div class="detail"><span class="label">CPU:</span> <span>4 vCPU (AMD EPYC)</span></div>
+                <div class="detail"><span class="label">RAM:</span> <span>16 GB</span></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="demo-data">
+        <strong>Vorteile:</strong> Kompakt, sortierbar, gute Informationsdichte, schnell zu scannen. CPU/OS auf Linie 2 nebeneinander gruppierbar.
+    </div>
+</div>
+
+<!-- OPTION 2 -->
+<div class="mockup-container">
+    <div class="mockup-title">Option 2: Tabellarisches Format (vollstaendig, 2-zeilig pro Zelle)</div>
+    
+    <div class="layout-option-2">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 20%;">Host</th>
+                    <th style="width: 17%;">OS</th>
+                    <th style="width: 16%;">CPU</th>
+                    <th style="width: 14%;">RAM / Modell</th>
+                    <th style="width: 21%;">SAP / DB</th>
+                    <th style="width: 12%;">Status / Update</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="host-col">
+                        🪟 prod-mssql-01.company.ch
+                        <div class="host-meta">🇨🇭 CH | kundex-ag</div>
+                    </td>
+                    <td>
+                        <div class="cell-main">Windows Server 2022 Enterprise</div>
+                        <div class="cell-sub">OS Type: Windows</div>
+                    </td>
+                    <td>
+                        <div class="cell-main">8 vCPU</div>
+                        <div class="cell-sub">Intel Xeon Gold 6230</div>
+                    </td>
+                    <td>
+                        <div class="cell-main">64 GB RAM</div>
+                        <div class="cell-sub">VMware Virtual Platform</div>
+                    </td>
+                    <td>
+                        <div class="cell-main">SQL Server 2019 SP3 (15.0.4322)</div>
+                        <div class="cell-sub">SAP: B1 10.0 FP2405 | HANA: - | SID: -</div>
+                    </td>
+                    <td>
+                        <span class="status" style="background: #d4edda; color: #155724;">OK</span>
+                        <div class="cell-sub">10.05.2026 09:44</div>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="host-col">
+                        🐧 sap-hana-prod-02.company.de
+                        <div class="host-meta">🇩🇪 DE | kunde-y-gmbh</div>
+                    </td>
+                    <td>
+                        <div class="cell-main">SLES 15 SP5 (Kernel 5.14)</div>
+                        <div class="cell-sub">OS Type: Linux</div>
+                    </td>
+                    <td>
+                        <div class="cell-main">24 vCPU</div>
+                        <div class="cell-sub">Intel Xeon Platinum 8352Y</div>
+                    </td>
+                    <td>
+                        <div class="cell-main">256 GB RAM</div>
+                        <div class="cell-sub">Dell PowerEdge R750</div>
+                    </td>
+                    <td>
+                        <div class="cell-main">HANA 2.0 SPS07 (rev. 70)</div>
+                        <div class="cell-sub">SAP: S/4HANA 2021 FPS03 | SID: PRD | SQL: -</div>
+                    </td>
+                    <td>
+                        <span class="status" style="background: #fff3cd; color: #856404;">2 Alerts</span>
+                        <div class="cell-sub">10.05.2026 09:42</div>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="host-col">
+                        🪟 app-server-03.company.at
+                        <div class="host-meta">🇦🇹 AT | kunde-z-gmbh</div>
+                    </td>
+                    <td>
+                        <div class="cell-main">Windows Server 2019 Standard</div>
+                        <div class="cell-sub">OS Type: Windows</div>
+                    </td>
+                    <td>
+                        <div class="cell-main">4 vCPU</div>
+                        <div class="cell-sub">AMD EPYC 7543P</div>
+                    </td>
+                    <td>
+                        <div class="cell-main">32 GB RAM</div>
+                        <div class="cell-sub">Microsoft Hyper-V Gen2</div>
+                    </td>
+                    <td>
+                        <div class="cell-main">SQL Server 2022 CU10</div>
+                        <div class="cell-sub">SAP: ECC 6.0 EHP8 | HANA: - | SID: -</div>
+                    </td>
+                    <td>
+                        <span class="status" style="background: #f8d7da; color: #721c24;">1 Critical</span>
+                        <div class="cell-sub">10.05.2026 09:39</div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="demo-data">
+        <strong>Abgedeckte Daten:</strong> Hostname, Land/Kunde, OS Release + OS Type (Linux/Windows), CPU Anzahl + CPU Typ, RAM, System-Modell, SQL Version, SAP Version, HANA Version, HANA SID, Alert-Status, Last Update.<br>
+        <strong>Hinweis:</strong> In der echten UI koennen wir bei kleiner Breite horizontal scrollen oder Spalten einklappen.
+    </div>
+</div>
+
+<!-- OPTION 3 -->
+<div class="mockup-container">
+    <div class="mockup-title">Option 3: Zwei-Spalten Detail-View</div>
+    
+    <div class="layout-option-3">
+        <div class="host-entry">
+            <div class="entry-header">
+                <span style="font-size: 20px;">🪟</span>
+                <span style="color: #0084c8;">prod-mssql-01.company.ch</span>
+                <span style="font-size: 12px; color: #999;">🇨🇭</span>
+                <span style="margin-left: auto; padding: 2px 8px; background: #d4edda; color: #155724; border-radius: 4px; font-size: 11px;">✓ OK</span>
+            </div>
+            <div class="detail-column">
+                <div class="detail-row">
+                    <div class="detail-label">OS Release:</div>
+                    <div class="detail-value">Windows Server 2022 Enterprise</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">CPU:</div>
+                    <div class="detail-value">8 vCPU (Intel Xeon Gold)</div>
+                </div>
+            </div>
+            <div class="detail-column">
+                <div class="detail-row">
+                    <div class="detail-label">SQL Version:</div>
+                    <div class="detail-value">SQL Server 2019 SP3</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">RAM:</div>
+                    <div class="detail-value">64 GB</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="host-entry">
+            <div class="entry-header">
+                <span style="font-size: 20px;">🐧</span>
+                <span style="color: #0084c8;">sap-hana-prod-02.company.de</span>
+                <span style="font-size: 12px; color: #999;">🇩🇪</span>
+                <span style="margin-left: auto; padding: 2px 8px; background: #fff3cd; color: #856404; border-radius: 4px; font-size: 11px;">⚠ 2 Alerts</span>
+            </div>
+            <div class="detail-column">
+                <div class="detail-row">
+                    <div class="detail-label">OS Release:</div>
+                    <div class="detail-value">Ubuntu 20.04 LTS (Kernel 5.4)</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">CPU:</div>
+                    <div class="detail-value">24 vCPU (Intel Xeon Platinum)</div>
+                </div>
+            </div>
+            <div class="detail-column">
+                <div class="detail-row">
+                    <div class="detail-label">HANA Version:</div>
+                    <div class="detail-value">2.0 SPS07 (Rev 76)</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">RAM:</div>
+                    <div class="detail-value">256 GB</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="demo-data">
+        <strong>Vorteile:</strong> Strukturiert, leichter zu lesen, Label + Value klar getrennt.<br>
+        <strong>Nachteile:</strong> Nimmt mehr Platz weg als Option 1.
+    </div>
+</div>
+
+</body>
+</html>
