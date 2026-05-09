@@ -6889,7 +6889,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not hostname:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
                 return
-            if section not in {"analysis", "critical-trends", "large-files"}:
+            if section not in {"analysis", "critical-trends", "large-files", "fs-focus"}:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid section"})
                 return
             if not isinstance(hidden_mountpoints_raw, list):

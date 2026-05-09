@@ -2656,7 +2656,8 @@ function openFilesystemVisibilityModal(section) {
       try {
         await saveFilesystemVisibilityFromModal();
       } catch (error) {
-        setFilesystemVisibilityStatus(`Fehler: `, true);
+        const message = error && error.message ? error.message : "Unbekannter Fehler";
+        setFilesystemVisibilityStatus(`Fehler: ${message}`, true);
       }
     };
   }
