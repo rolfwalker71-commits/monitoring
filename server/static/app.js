@@ -4393,18 +4393,34 @@ function renderDatabasesSection(payload) {
         const sqlOriginalLogin = asText(inst.sql_original_login, "");
         const sqlSuserSname = asText(inst.sql_suser_sname, "");
         const masterFilesRows = Number(inst.master_files_rows || 0);
-        const effectiveSqlLogin = (sqlSuserSname || sqlSystemUser || sqlOriginalLogin || "").trim();
-        const sqlLoginLiteral = effectiveSqlLogin.replaceAll("'", "''");
-        const sqlGrantSnippet = effectiveSqlLogin
-          ? [
-              "-- Minimal: nur effektiv genutztes Login berechtigen",
-              "-- WICHTIG: Dieses Skript muss mit dem SA-User bzw. einem Sysadmin-Login ausgefuehrt werden.",
-              "DECLARE @login sysname = N'" + sqlLoginLiteral + "';",
-              "IF SUSER_ID(@login) IS NULL",
-              "    EXEC('CREATE LOGIN [' + REPLACE(@login, ']', ']]') + '] FROM WINDOWS;');",
-              "EXEC('GRANT VIEW SERVER STATE TO [' + REPLACE(@login, ']', ']]') + '];');",
-              "EXEC('GRANT VIEW ANY DEFINITION TO [' + REPLACE(@login, ']', ']]') + '];');",
-            ].join("\n")
+        const sqlLoginsForGrant = [];
+        for (const candidate of [sqlSuserSname, sqlOriginalLogin, sqlSystemUser]) {
+          const login = String(candidate || "").trim();
+          if (!login) continue;
+          if (!sqlLoginsForGrant.some((existing) => existing.toLowerCase() === login.toLowerCase())) {
+            sqlLoginsForGrant.push(login);
+          }
+        }
+        const sqlGrantSnippet = sqlLoginsForGrant.length > 0
+          ? (() => {
+              const lines = [
+                "-- Diagnose-basiert: relevante SQL-Logins berechtigen (effektiv + original)",
+                "-- WICHTIG: Dieses Skript muss mit dem SA-User bzw. einem Sysadmin-Login ausgefuehrt werden.",
+              ];
+              for (const login of sqlLoginsForGrant) {
+                const sqlLoginLiteral = login.replaceAll("'", "''");
+                lines.push(
+                  "",
+                  "-- Login: " + login,
+                  "DECLARE @login sysname = N'" + sqlLoginLiteral + "';",
+                  "IF SUSER_ID(@login) IS NULL",
+                  "    EXEC('CREATE LOGIN [' + REPLACE(@login, ']', ']]') + '] FROM WINDOWS;');",
+                  "EXEC('GRANT VIEW SERVER STATE TO [' + REPLACE(@login, ']', ']]') + '];');",
+                  "EXEC('GRANT VIEW ANY DEFINITION TO [' + REPLACE(@login, ']', ']]') + '];');",
+                );
+              }
+              return lines.join("\n");
+            })()
           : "";
         
         const svcBadge = svcStatus.toLowerCase() === "running"
@@ -4420,7 +4436,7 @@ function renderDatabasesSection(payload) {
               ${sqlOriginalLogin ? `<span class="db-diag-item"><strong>ORIGINAL_LOGIN:</strong> <code>${escapeHtml(sqlOriginalLogin)}</code></span>` : ""}
               ${sqlSuserSname ? `<span class="db-diag-item"><strong>SUSER_SNAME:</strong> <code>${escapeHtml(sqlSuserSname)}</code></span>` : ""}
               ${masterFilesRows > 0 ? `<span class="db-diag-item"><strong>sys.master_files Zeilen:</strong> ${masterFilesRows}</span>` : ""}
-                ${sqlGrantSnippet ? `<p class="db-diag-snippet-label">SQL Script (minimal, nur effektives Login):</p><pre class="db-diag-sql"><code>${escapeHtml(sqlGrantSnippet)}</code></pre>` : ""}
+                ${sqlGrantSnippet ? `<p class="db-diag-snippet-label">SQL Script (diagnose-basiert: effektiv + original):</p><pre class="db-diag-sql"><code>${escapeHtml(sqlGrantSnippet)}</code></pre>` : ""}
               </details>`;
         }
 
