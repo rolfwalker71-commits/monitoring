@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.166'
+$EmbeddedAgentVersion = '1.1.167'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -605,6 +605,42 @@ function Invoke-AgentSelfUpdate {
     return $false
 }
 
+function Ensure-OptionalSapScanScript {
+    $installDir = if ($cfg.ContainsKey('INSTALL_DIR') -and $cfg['INSTALL_DIR']) { $cfg['INSTALL_DIR'] } else { Split-Path -Parent $ConfigFile }
+    if (-not $installDir) { return }
+
+    $targetScript = Join-Path $installDir 'collect_and_scan_sap_tables.ps1'
+    if (Test-Path $targetScript) {
+        return
+    }
+
+    if (-not ($cfg.ContainsKey('RAW_BASE_URL') -and $cfg['RAW_BASE_URL'])) {
+        return
+    }
+
+    $tmpScript = $null
+    try {
+        $tmpScript = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + '.ps1')
+        $uri = ($cfg['RAW_BASE_URL'].TrimEnd('/')) + '/client/windows/collect_and_scan_sap_tables.ps1'
+        $wc = New-Object System.Net.WebClient
+        $wc.DownloadFile($uri, $tmpScript)
+
+        # Basic guard against HTML/proxy responses.
+        $text = [System.IO.File]::ReadAllText($tmpScript, [System.Text.Encoding]::UTF8)
+        if ($text -match '<!DOCTYPE\s+html|<html\b|<head\b|<body\b') {
+            throw 'Downloaded collect_and_scan_sap_tables.ps1 appears to be HTML content.'
+        }
+
+        Copy-Item $tmpScript $targetScript -Force
+    } catch {
+        # Optional bootstrap only; never block normal collect.
+    } finally {
+        if ($tmpScript -and (Test-Path $tmpScript)) {
+            Remove-Item $tmpScript -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 function Invoke-RemoteCommands {
     try {
         $uri = ($ServerUrl.TrimEnd('/')) + '/api/v1/agent-commands?hostname=' + [Uri]::EscapeDataString($hostnameValue) + '&agent_id=' + [Uri]::EscapeDataString($agentId) + '&limit=10'
@@ -915,6 +951,7 @@ $largeFilesJson  = '{"enabled":false,"status":"unsupported","filesystems":[]}'
 
 Invoke-RemoteCommands
 Invoke-PrioritySelfUpdate
+Ensure-OptionalSapScanScript
 
 # A self-update can replace AGENT_VERSION during this run.
 # Re-read it so the outgoing payload reflects the current installed version.
