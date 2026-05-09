@@ -6975,30 +6975,7 @@ async function loadHostConfigChanges() {
 
     // Filter groups by search query
     if (state.hostConfigChangesSearchQuery) {
-      const q = state.hostConfigChangesSearchQuery;
-      groups = groups.filter((group) => {
-        const displayMatch = String(group.displayName).toLowerCase().includes(q);
-        const hostMatch = String(group.hostname).toLowerCase().includes(q);
-        const fieldMatch = group.items.some((item) =>
-          String(item.field_key || item.field_label || "").toLowerCase().includes(q)
-        );
-        return displayMatch || hostMatch || fieldMatch;
-      }).map((group) => ({
-        ...group,
-        items: state.hostConfigChangesSearchQuery
-          ? group.items.filter(
-              (item) =>
-                String(item.field_key || item.field_label || "")
-                  .toLowerCase()
-                  .includes(q)
-            )
-          : group.items,
-      })).filter((group) => group.items.length > 0);
-    }
-
-    // Filter groups by search query
-    if (state.hostConfigChangesSearchQuery) {
-      const q = state.hostConfigChangesSearchQuery;
+      const q = String(state.hostConfigChangesSearchQuery).toLowerCase();
       groups = groups.filter((group) => {
         const displayMatch = String(group.displayName).toLowerCase().includes(q);
         const hostMatch = String(group.hostname).toLowerCase().includes(q);
@@ -7077,11 +7054,11 @@ async function loadHostConfigChanges() {
               <td>${escapeHtml(formatUtcPlus2(item.detected_at_utc))}</td>
               <td>${escapeHtml(asText(item.field_label || item.field_key, "-"))}</td>
               <td>
-                ${escapeHtml(oldValue)}
+                <div class="host-config-main-value">${escapeHtml(oldValue)}</div>
                 ${oldFpInfo}
               </td>
               <td>
-                <strong>${escapeHtml(newValue)}</strong>
+                <div class="host-config-main-value"><strong>${escapeHtml(newValue)}</strong></div>
                 ${newFpInfo}
               </td>
             </tr>
@@ -7611,7 +7588,7 @@ function wireEvents() {
   const hostConfigChangesSearchInput = document.getElementById("hostConfigChangesSearchInput");
   if (hostConfigChangesSearchInput) {
     hostConfigChangesSearchInput.addEventListener("input", async () => {
-      state.hostConfigChangesSearchQuery = hostConfigChangesSearchInput.value.toLowerCase().trim();
+      state.hostConfigChangesSearchQuery = hostConfigChangesSearchInput.value.trim();
       await loadHostConfigChanges();
     });
   }
