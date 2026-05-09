@@ -1550,7 +1550,50 @@ def replace_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str
     return get_web_user_alert_subscriptions(conn, username)
 
 
-def collect_critical_trends(conn: sqlite3.Connection, hours: int, hidden_mountpoints_by_host: dict[str, set[str]] | None = None) -> list[dict]:
+def parse_host_csv(value: object) -> set[str]:
+    return {
+        str(item or "").strip()
+        for item in str(value or "").split(",")
+        if str(item or "").strip()
+    }
+
+
+def get_user_trend_host_scope(conn: sqlite3.Connection, username: str) -> tuple[set[str] | None, set[str]]:
+    preferences = get_user_preferences(conn, username)
+    interested_hosts = parse_host_csv(preferences.get("host_interest_hosts", ""))
+    mode = str(preferences.get("host_interest_mode", "all") or "all").strip().lower()
+    if mode == "interested_only" and interested_hosts:
+        return interested_hosts, interested_hosts
+    if mode == "interested_first" and interested_hosts:
+        return None, interested_hosts
+    return None, set()
+
+
+def get_user_alert_mail_host_scope(conn: sqlite3.Connection, username: str) -> set[str] | None:
+    rows = conn.execute(
+        """
+        SELECT hostname, COALESCE(notify_mail, 0)
+        FROM web_user_alert_subscriptions
+        WHERE username = ?
+        """,
+        (username,),
+    ).fetchall()
+    if not rows:
+        return None
+    return {
+        str(row[0] or "").strip()
+        for row in rows
+        if str(row[0] or "").strip() and bool(int(row[1] or 0))
+    }
+
+
+def collect_critical_trends(
+    conn: sqlite3.Connection,
+    hours: int,
+    hidden_mountpoints_by_host: dict[str, set[str]] | None = None,
+    allowed_hostnames: set[str] | None = None,
+    prioritized_hostnames: set[str] | None = None,
+) -> list[dict]:
     cutoff_iso = utc_hours_ago_iso(hours)
 
     hidden_normalized_by_host: dict[str, set[str]] = {}
@@ -1602,6 +1645,10 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, hidden_mountpo
             (cutoff_iso,),
         ).fetchall()
     ]
+    if allowed_hostnames is not None:
+        hostnames = [hostname for hostname in hostnames if hostname in allowed_hostnames]
+
+    prioritized = prioritized_hostnames or set()
 
     for hostname in hostnames:
         rows = conn.execute(
@@ -1722,7 +1769,13 @@ def collect_critical_trends(conn: sqlite3.Connection, hours: int, hidden_mountpo
                 }
             )
 
-    warnings.sort(key=lambda item: (0 if item["level"] == "crit" else 1, -item["projected"]))
+    warnings.sort(
+        key=lambda item: (
+            0 if str(item.get("hostname") or "") in prioritized else 1,
+            0 if item["level"] == "crit" else 1,
+            -item["projected"],
+        )
+    )
     return warnings
 
 
@@ -1806,7 +1859,7 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
     return inactive_hosts
 
 
-def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
+def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | None = None) -> list[dict]:
     rows = conn.execute(
         """
         SELECT id, hostname, mountpoint, severity, used_percent, created_at_utc, last_seen_at_utc
@@ -1820,6 +1873,8 @@ def collect_open_alerts(conn: sqlite3.Connection) -> list[dict]:
         ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, used_percent DESC, id DESC
         """
     ).fetchall()
+    if allowed_hostnames is not None:
+        rows = [row for row in rows if str(row[1] or "") in allowed_hostnames]
 
     hostnames = sorted({str(row[1] or "") for row in rows if str(row[1] or "")})
     display_names: dict[str, str] = {}
@@ -4399,6 +4454,7 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
             continue
 
         if send_trend:
+            trend_allowed_hosts, trend_prioritized_hosts = get_user_trend_host_scope(conn, username)
             # Build hidden mountpoints dict for this user
             all_hostnames = {
                 row[0]
@@ -4407,15 +4463,22 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
                     (utc_hours_ago_iso(72),),
                 ).fetchall()
             }
+            relevant_hostnames = trend_allowed_hosts if trend_allowed_hosts is not None else all_hostnames
             hidden_mountpoints_by_host = {}
-            for hostname in all_hostnames:
+            for hostname in relevant_hostnames:
                 hidden_critical = get_filesystem_visibility_hidden(conn, username, hostname, "critical-trends")
                 hidden_fs_focus = get_filesystem_visibility_hidden(conn, username, hostname, "fs-focus")
                 hidden = sorted({*(hidden_critical or []), *(hidden_fs_focus or [])}, key=lambda item: str(item).lower())
                 if hidden:
                     hidden_mountpoints_by_host[hostname] = hidden
-            
-            warnings = collect_critical_trends(conn, 72, hidden_mountpoints_by_host)
+
+            warnings = collect_critical_trends(
+                conn,
+                72,
+                hidden_mountpoints_by_host,
+                allowed_hostnames=trend_allowed_hosts,
+                prioritized_hostnames=trend_prioritized_hosts,
+            )
             trend_ok, _trend_details = send_microsoft_mail(
                 access_token,
                 recipient,
@@ -4434,7 +4497,8 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
                 )
 
         if send_alert:
-            alerts = collect_open_alerts(conn)
+            alert_allowed_hosts = get_user_alert_mail_host_scope(conn, username)
+            alerts = collect_open_alerts(conn, allowed_hostnames=alert_allowed_hosts)
             graph_cids, graph_attachments = build_alert_digest_graph_bundle(conn, alerts, hours=24)
             alert_ok, _alert_details = send_microsoft_mail_multi(
                 access_token,
