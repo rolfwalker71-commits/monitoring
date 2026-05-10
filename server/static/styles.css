@@ -7108,14 +7108,18 @@ body[data-theme="dark"] .backup-row--hana td {
 }
 
 .so-addon-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  display: block;
   padding: 4px 6px 6px;
 }
 
 .so-addon-col {
   min-width: 0;
+}
+
+.so-addon-col + .so-addon-col {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #d8e2ef;
 }
 
 .so-addon-col h6 {
@@ -7161,6 +7165,10 @@ body[data-theme="dark"] .so-addon-details {
 
 body[data-theme="dark"] .so-addon-details > summary {
   color: #c8dbf7;
+}
+
+body[data-theme="dark"] .so-addon-col + .so-addon-col {
+  border-top-color: #304762;
 }
 
 body[data-theme="dark"] .so-addon-col h6,
