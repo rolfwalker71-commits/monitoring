@@ -99,42 +99,40 @@ function Get-SqlServerCandidates {
         }
     }
 
-    if ($candidates.Count -eq 0) {
-        foreach ($base in @('.', 'localhost')) {
-            if (-not $candidates.Contains($base)) {
-                $candidates.Add($base)
-            }
+    foreach ($base in @('.', 'localhost', $env:COMPUTERNAME)) {
+        if ($base -and -not $candidates.Contains($base)) {
+            $candidates.Add($base)
         }
+    }
 
-        $regPath = 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL'
-        try {
-            if (Test-Path $regPath) {
-                $instanceMap = Get-ItemProperty -Path $regPath -ErrorAction Stop
-                foreach ($prop in $instanceMap.PSObject.Properties) {
-                    if ($prop.Name -in @('PSPath','PSParentPath','PSChildName','PSDrive','PSProvider')) { continue }
-                    $instanceName = [string]$prop.Name
-                    if (-not $instanceName) { continue }
+    $regPath = 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL'
+    try {
+        if (Test-Path $regPath) {
+            $instanceMap = Get-ItemProperty -Path $regPath -ErrorAction Stop
+            foreach ($prop in $instanceMap.PSObject.Properties) {
+                if ($prop.Name -in @('PSPath','PSParentPath','PSChildName','PSDrive','PSProvider')) { continue }
+                $instanceName = [string]$prop.Name
+                if (-not $instanceName) { continue }
 
-                    if ($instanceName -ieq 'MSSQLSERVER') {
-                        foreach ($base in @('.', 'localhost', $env:COMPUTERNAME)) {
-                            if ($base -and -not $candidates.Contains($base)) {
-                                $candidates.Add($base)
-                            }
+                if ($instanceName -ieq 'MSSQLSERVER') {
+                    foreach ($base in @('.', 'localhost', $env:COMPUTERNAME)) {
+                        if ($base -and -not $candidates.Contains($base)) {
+                            $candidates.Add($base)
                         }
-                    } else {
-                        foreach ($base in @('.', 'localhost', $env:COMPUTERNAME)) {
-                            if (-not $base) { continue }
-                            $name = "$base\$instanceName"
-                            if (-not $candidates.Contains($name)) {
-                                $candidates.Add($name)
-                            }
+                    }
+                } else {
+                    foreach ($base in @('.', 'localhost', $env:COMPUTERNAME)) {
+                        if (-not $base) { continue }
+                        $name = "$base\$instanceName"
+                        if (-not $candidates.Contains($name)) {
+                            $candidates.Add($name)
                         }
                     }
                 }
             }
-        } catch {
-            # Ignore registry discovery errors
         }
+    } catch {
+        # Ignore registry discovery errors
     }
 
     return @($candidates)
@@ -281,12 +279,14 @@ $successResult = $null
 
 foreach ($server in $serverCandidates) {
     Write-Host "Attempting setup on: $server"
+    $attemptStart = Get-Date
     $result = Setup-HarvestUser -SqlServer $server -HarvestUser $HarvestUser -HarvestPassword $HarvestPassword
     $setupResults += $result
+    $attemptSeconds = [math]::Round(((Get-Date) - $attemptStart).TotalSeconds, 1)
 
     if ($result.success) {
         $successResult = $result
-        Write-Host "✅ Setup successful on $server"
+        Write-Host "[OK] Setup successful on $server (${attemptSeconds}s)"
         if ($result.user_created) {
             Write-Host "   - User created"
         } else {
@@ -298,17 +298,17 @@ foreach ($server in $serverCandidates) {
         Write-Host "   - Accessible databases: $($result.accessible_databases -join ', ')"
         break
     } else {
-        Write-Host "❌ Setup failed on $server : $($result.error)"
+        Write-Host "[ERROR] Setup failed on $server (${attemptSeconds}s): $($result.error)"
     }
 }
 
 if ($successResult) {
     Write-Host "Updating agent.conf with harvest settings..."
     Update-ConfigFile -ConfigPath $ConfigFile -SqlServer $successResult.server -HarvestUser $HarvestUser -HarvestPassword $HarvestPassword
-    Write-Host "✅ agent.conf updated"
+    Write-Host "[OK] agent.conf updated"
     Write-Host "Setup complete on server: $($successResult.server)"
     exit 0
 } else {
-    Write-Host "❌ Harvest user setup failed on all servers"
+    Write-Host "[ERROR] Harvest user setup failed on all servers"
     exit 1
 }
