@@ -4673,6 +4673,14 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   margin-top: 8px;
 }
 
+.sap-b1-combined-card .sap-b1-sub-details {
+  margin-left: 14px;
+}
+
+.sap-b1-combined-card .sap-b1-sub-details > .sap-b1-raw-summary {
+  padding-left: 10px;
+}
+
 .sap-b1-combined-card .sap-b1-raw-details .sap-b1-raw-output {
   border-top: 1px solid #e2ecf8;
   border-radius: 0;

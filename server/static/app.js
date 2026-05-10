@@ -4085,12 +4085,12 @@ function renderSapB1ExtensionsSection(payload) {
   }
 
   return `
-    <details class="sap-b1-raw-details" open>
-      <summary class="sap-b1-raw-summary">SLDModel.SLDData.dbo.Extensions (AddOnName / Version)</summary>
+    <details class="sap-b1-raw-details sap-b1-sub-details" open>
+      <summary class="sap-b1-raw-summary">Lightweight Extensions</summary>
       ${extContent}
     </details>
-    <details class="sap-b1-raw-details">
-      <summary class="sap-b1-raw-summary">SBO-COMMON/SBOCOMMON.dbo.SARI (AName / AddOnVer)</summary>
+    <details class="sap-b1-raw-details sap-b1-sub-details">
+      <summary class="sap-b1-raw-summary">Legacy AddOns</summary>
       ${sariContent}
     </details>
   `;
@@ -4213,7 +4213,7 @@ function renderSapB1CombinedCard(payload) {
       <h4>SAP B1</h4>
 
       <details class="sap-b1-raw-details" open>
-        <summary class="sap-b1-raw-summary">Lightweight Extensions</summary>
+        <summary class="sap-b1-raw-summary">AddOns</summary>
         ${renderSapB1ExtensionsSection(payload)}
       </details>
 
