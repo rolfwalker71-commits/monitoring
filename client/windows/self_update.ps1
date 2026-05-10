@@ -219,17 +219,6 @@ function Test-DownloadedFileContent {
         $preview = $preview.Substring(0, 180)
     }
 
-    # Guard against HTML pages being saved as scripts.
-    # Only inspect the leading chunk to avoid false positives from literal regex strings inside valid scripts.
-    $leadingChunk = $textNormalized
-    if ($leadingChunk.Length -gt 2048) {
-        $leadingChunk = $leadingChunk.Substring(0, 2048)
-    }
-    if ($leadingChunk -match '^\s*(<!DOCTYPE\s+html|<html\b|<head\b|<body\b)') {
-        $global:LastContentValidationHint = "html-like response preview='$preview'"
-        return $false
-    }
-
     if ($RelativePath -ieq 'client/windows/collect_and_send.ps1') {
         $strictHeaderOk = ($textNormalized -match '(?m)^#Requires\s+-Version\s+5\.1' -and $textNormalized -match '(?m)^Set-StrictMode\s+-Version\s+Latest')
         if ($strictHeaderOk) {
@@ -245,6 +234,17 @@ function Test-DownloadedFileContent {
             $global:LastContentValidationHint = "collect script markers missing; preview='$preview'"
         }
         return $fallbackMarkerOk
+    }
+
+    # Guard against HTML pages being saved as scripts.
+    # Only inspect the leading chunk to avoid false positives from literal regex strings inside valid scripts.
+    $leadingChunk = $textNormalized
+    if ($leadingChunk.Length -gt 2048) {
+        $leadingChunk = $leadingChunk.Substring(0, 2048)
+    }
+    if ($leadingChunk -match '^\s*(<!DOCTYPE\s+html|<html\b|<head\b|<body\b)') {
+        $global:LastContentValidationHint = "html-like response preview='$preview'"
+        return $false
     }
 
     if ($RelativePath -ieq 'client/windows/collect_and_scan_sap_tables.ps1') {
