@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.200'
+$EmbeddedAgentVersion = '1.1.201'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -828,6 +828,23 @@ function New-UpdateResult {
     return @{ ok = $Ok; message = [string]$Message }
 }
 
+function Should-TreatUpdateFailureAsSoftSuccess {
+    param([string]$FailureMessage)
+
+    $message = [string]$FailureMessage
+    if (-not $message) {
+        return $false
+    }
+
+    $looksLikeSourceReachabilityIssue = $message -match 'download|remote version is empty|no self-update source|timed out|name could not be resolved|unable to connect|could not|connection|proxy|forbidden|not found|404|503|502'
+    if (-not $looksLikeSourceReachabilityIssue) {
+        return $false
+    }
+
+    $localVersion = Select-AgentVersion -EmbeddedVersion $EmbeddedAgentVersion -FilePath $VersionFile
+    return ($localVersion -and $localVersion -ne 'unknown')
+}
+
 function Invoke-AgentSelfUpdate {
     $selfUpdateScript = Join-Path (Split-Path $ConfigFile -Parent) 'self_update.ps1'
     if (-not (Test-Path $selfUpdateScript)) {
@@ -1130,7 +1147,16 @@ function Invoke-RemoteCommands {
                 if ($isOk) {
                     Send-CommandResult -CommandId $cmdId -Status 'completed' -Message $resultMessage
                 } else {
-                    Send-CommandResult -CommandId $cmdId -Status 'failed' -Message $resultMessage
+                    if (Should-TreatUpdateFailureAsSoftSuccess -FailureMessage $resultMessage) {
+                        $localVersion = Select-AgentVersion -EmbeddedVersion $EmbeddedAgentVersion -FilePath $VersionFile
+                        $softMessage = "update source unreachable; agent stays on $localVersion"
+                        if ($resultMessage) {
+                            $softMessage = "$softMessage | $resultMessage"
+                        }
+                        Send-CommandResult -CommandId $cmdId -Status 'completed' -Message $softMessage
+                    } else {
+                        Send-CommandResult -CommandId $cmdId -Status 'failed' -Message $resultMessage
+                    }
                 }
                 continue
             }
