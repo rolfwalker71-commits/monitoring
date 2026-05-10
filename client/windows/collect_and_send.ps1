@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.177'
+$EmbeddedAgentVersion = '1.1.178'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -417,24 +417,6 @@ function Get-SapB1InfoBlock {
 function Get-HarvestHealthStatus {
     $status = @{
         harvest_enabled = $false
-    function Get-SapB1PayloadBlock {
-        $b1Block = Get-SapB1InfoBlock
-        $harvestStatus = Get-HarvestHealthStatus
-    
-        # Convert harvest status to JSON inline
-        $harvDbsJson = '"' + (($harvestStatus.databases_accessible | ForEach-Object { ConvertTo-JsonString $_ }) -join '","') + '"'
-        $harvErrorEsc = ConvertTo-JsonString $harvestStatus.error
-        $harvDiagsEsc = ConvertTo-JsonString $harvestStatus.diagnostics
-    
-        $harvJson = "{`"harvest_enabled`":$(if($harvestStatus.harvest_enabled){'true'}else{'false'}),`"user_exists`":$(if($harvestStatus.user_exists){'true'}else{'false'}),`"can_connect`":$(if($harvestStatus.can_connect){'true'}else{'false'}),`"databases_accessible`":[$harvDbsJson],`"error`":`"$harvErrorEsc`",`"diagnostics`":`"$harvDiagsEsc`"}"
-    
-        # Merge harvest status into B1 block (strip closing brace from b1Block, add harvest, close)
-        if ($b1Block.EndsWith('}')) {
-            return $b1Block.Substring(0, $b1Block.Length - 1) + ",`"harvest_status`":$harvJson}"
-        }
-        return $b1Block
-    }
-
         user_exists = $false
         can_connect = $false
         databases_accessible = @()
@@ -494,6 +476,23 @@ function Get-HarvestHealthStatus {
     }
 
     return $status
+}
+
+function Get-SapB1PayloadBlock {
+    $b1Block = Get-SapB1InfoBlock
+    $harvestStatus = Get-HarvestHealthStatus
+
+    $dbItems = @($harvestStatus.databases_accessible | ForEach-Object { '"' + (ConvertTo-JsonString $_) + '"' })
+    $harvDbsJson = ($dbItems -join ',')
+    $harvErrorEsc = ConvertTo-JsonString $harvestStatus.error
+    $harvDiagsEsc = ConvertTo-JsonString $harvestStatus.diagnostics
+
+    $harvJson = "{`"harvest_enabled`":$(if($harvestStatus.harvest_enabled){'true'}else{'false'}),`"user_exists`":$(if($harvestStatus.user_exists){'true'}else{'false'}),`"can_connect`":$(if($harvestStatus.can_connect){'true'}else{'false'}),`"databases_accessible`":[${harvDbsJson}],`"error`":`"$harvErrorEsc`",`"diagnostics`":`"$harvDiagsEsc`"}"
+
+    if ($b1Block.EndsWith('}')) {
+        return $b1Block.Substring(0, $b1Block.Length - 1) + ",`"harvest_status`":$harvJson}"
+    }
+    return $b1Block
 }
 
 function Send-Payload([string]$body) {
