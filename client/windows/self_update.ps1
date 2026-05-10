@@ -178,29 +178,37 @@ function Test-DownloadedFileContent {
         return $false
     }
 
+    # Normalize BOM at start to avoid false negatives with strict line-anchored regex checks.
+    $textNormalized = $text -replace '^[\uFEFF]+', ''
+
     # Guard against GitHub/proxy HTML pages being saved as .ps1/.txt content.
-    if ($text -match '<!DOCTYPE\s+html|<html\b|<head\b|<body\b') {
+    if ($textNormalized -match '<!DOCTYPE\s+html|<html\b|<head\b|<body\b') {
         return $false
     }
 
     if ($RelativePath -ieq 'client/windows/collect_and_send.ps1') {
-        return ($text -match '(?m)^#Requires\s+-Version\s+5\.1' -and $text -match '(?m)^Set-StrictMode\s+-Version\s+Latest')
+        $strictHeaderOk = ($textNormalized -match '(?m)^#Requires\s+-Version\s+5\.1' -and $textNormalized -match '(?m)^Set-StrictMode\s+-Version\s+Latest')
+        if ($strictHeaderOk) {
+            return $true
+        }
+        # Fallback guard: still reject HTML, but accept if core collector markers are present.
+        return ($textNormalized -match '\$EmbeddedAgentVersion\s*=\s*' -and $textNormalized -match '(?m)^function\s+Send-Payload' -and $textNormalized -match '(?m)^function\s+Invoke-ServerJsonPost')
     }
 
     if ($RelativePath -ieq 'client/windows/collect_and_scan_sap_tables.ps1') {
-        return ($text -match '(?m)^#Requires\s+-Version\s+5\.1' -and $text -match '(?m)^Set-StrictMode\s+-Version\s+Latest')
+        return ($textNormalized -match '(?m)^#Requires\s+-Version\s+5\.1' -and $textNormalized -match '(?m)^Set-StrictMode\s+-Version\s+Latest')
     }
 
     if ($RelativePath -ieq 'client/windows/self_update.ps1') {
-        return ($text -match '(?m)^Set-StrictMode\s+-Version\s+Latest')
+        return ($textNormalized -match '(?m)^Set-StrictMode\s+-Version\s+Latest' -and $textNormalized -match '(?m)^function\s+Download-RepoFile')
     }
 
-        if ($RelativePath -ieq 'client/windows/setup_harvest_sql_user.ps1') {
-            return ($text -match '(?m)^#Requires\s+-Version\s+5\.1' -and $text -match 'Find-SqlServers')
+    if ($RelativePath -ieq 'client/windows/setup_harvest_sql_user.ps1') {
+        return ($textNormalized -match '(?m)^#Requires\s+-Version\s+5\.1' -and $textNormalized -match 'Find-SqlServers')
         }
 
     if ($RelativePath -ieq 'AGENT_VERSION' -or $RelativePath -ieq 'BUILD_VERSION') {
-        return ($text.Trim() -match '^\d+\.\d+\.\d+$')
+        return ($textNormalized.Trim() -match '^\d+\.\d+\.\d+$')
     }
 
     return $true
