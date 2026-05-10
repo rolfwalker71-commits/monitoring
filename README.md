@@ -67,6 +67,14 @@ curl -sSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main
 irm https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/windows/install_agent.ps1 | iex
 ```
 
+**Windows repair/bootstrap für bestehende Hosts:**
+
+```powershell
+& .\bootstrap_agent.ps1 -ServerUrl https://monitoring.rolfwalker.ch -DisableJitter
+```
+
+Der Wrapper zieht die aktuellen Windows-Skripte von `/updates`, repariert eine bestehende Installation in place und schaltet Jitter nur für diesen Lauf aus.
+
 ### Self-Update
 
 Agents prüfen selbständig (alle ~6 Stunden, plus bei jedem Sammellauf wenn die Version veraltet ist) ob eine neue Version auf GitHub verfügbar ist und aktualisieren sich automatisch. Die aktuelle Agent-Version steht in `AGENT_VERSION`.
