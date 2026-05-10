@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import base64
+import fnmatch
 import hashlib
 import hmac
 import html
@@ -429,6 +430,17 @@ def init_db() -> None:
             """
             CREATE INDEX IF NOT EXISTS idx_filesystem_visibility_host_section
             ON filesystem_visibility(hostname, section)
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS filesystem_blacklist_patterns (
+                id INTEGER PRIMARY KEY,
+                pattern TEXT NOT NULL UNIQUE,
+                description TEXT NOT NULL DEFAULT '',
+                created_at_utc TEXT NOT NULL,
+                updated_at_utc TEXT NOT NULL
+            )
             """
         )
         conn.execute(
@@ -1495,6 +1507,69 @@ def save_filesystem_visibility_hidden(
             (username, hostname, section, mountpoint, now_utc),
         )
     return normalized
+
+
+def get_filesystem_blacklist_patterns(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT id, pattern, COALESCE(description, ''), created_at_utc, updated_at_utc
+        FROM filesystem_blacklist_patterns
+        ORDER BY pattern COLLATE NOCASE ASC
+        """
+    ).fetchall()
+    return [
+        {
+            "id": int(row[0] or 0),
+            "pattern": str(row[1] or ""),
+            "description": str(row[2] or ""),
+            "created_at_utc": str(row[3] or ""),
+            "updated_at_utc": str(row[4] or ""),
+        }
+        for row in rows
+    ]
+
+
+def is_filesystem_blacklisted(conn: sqlite3.Connection, mountpoint: str) -> bool:
+    if not mountpoint:
+        return False
+    patterns = conn.execute("SELECT pattern FROM filesystem_blacklist_patterns").fetchall()
+    for (pattern,) in patterns:
+        if fnmatch.fnmatch(mountpoint, str(pattern or "")):
+            return True
+    return False
+
+
+def add_filesystem_blacklist_pattern(
+    conn: sqlite3.Connection,
+    pattern: str,
+    description: str = "",
+) -> dict:
+    pattern_normalized = str(pattern or "").strip()
+    if not pattern_normalized:
+        raise ValueError("pattern required")
+    description_normalized = str(description or "").strip()
+    now_utc = utc_now_iso()
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO filesystem_blacklist_patterns (pattern, description, created_at_utc, updated_at_utc)
+            VALUES (?, ?, ?, ?)
+            """,
+            (pattern_normalized, description_normalized, now_utc, now_utc),
+        )
+        return {
+            "id": cursor.lastrowid,
+            "pattern": pattern_normalized,
+            "description": description_normalized,
+            "created_at_utc": now_utc,
+            "updated_at_utc": now_utc,
+        }
+    except sqlite3.IntegrityError:
+        raise ValueError("pattern already exists")
+
+
+def delete_filesystem_blacklist_pattern(conn: sqlite3.Connection, pattern_id: int) -> None:
+    conn.execute("DELETE FROM filesystem_blacklist_patterns WHERE id = ?", (int(pattern_id or 0),))
 
 
 def list_available_alert_hosts(conn: sqlite3.Connection) -> list[dict]:
@@ -6043,6 +6118,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, settings)
             return
 
+        if parsed.path == "/api/v1/filesystem-blacklist":
+            if not self._require_admin_session():
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                patterns = get_filesystem_blacklist_patterns(conn)
+            self._send_json(HTTPStatus.OK, {"patterns": patterns})
+            return
+
         if parsed.path == "/api/v1/oauth/microsoft/start":
             username = self._web_session_username()
             with sqlite3.connect(DB_PATH) as conn:
@@ -7373,6 +7456,57 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "hidden_mountpoints": saved_hidden,
                 },
             )
+            return
+
+        if path == "/api/v1/filesystem-blacklist":
+            if not self._require_admin_session():
+                return
+
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid payload"})
+                return
+
+            action = str(payload.get("action", "")).strip().lower()
+            pattern = str(payload.get("pattern", "")).strip()
+            description = str(payload.get("description", "")).strip()
+
+            if action == "add":
+                if not pattern:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "pattern required"})
+                    return
+                try:
+                    with sqlite3.connect(DB_PATH) as conn:
+                        result = add_filesystem_blacklist_pattern(conn, pattern, description)
+                        conn.commit()
+                    self._send_json(HTTPStatus.OK, {"status": "added", "entry": result})
+                except ValueError as exc:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                return
+
+            if action == "delete":
+                pattern_id = int(payload.get("id", 0))
+                if pattern_id <= 0:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "id required"})
+                    return
+                with sqlite3.connect(DB_PATH) as conn:
+                    delete_filesystem_blacklist_pattern(conn, pattern_id)
+                    conn.commit()
+                self._send_json(HTTPStatus.OK, {"status": "deleted"})
+                return
+
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid action"})
             return
 
         if path == "/api/v1/user-alert-subscriptions":

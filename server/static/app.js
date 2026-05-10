@@ -125,6 +125,8 @@ const state = {
   backupStatusFilterSql: false,
   backupStatusFilterHana: false,
   backupStatusCountryFilter: "all",
+  filesystemBlacklistPatterns: [],
+  showBlacklistedFilesystems: false,
 };
 
 function normalizeHostInterestMode(value) {
@@ -2035,6 +2037,7 @@ function mountAdminSettingsIntoGlobalView() {
     document.getElementById("adminOauthSettingsSection"),
     document.getElementById("adminUserManagementSection"),
     document.getElementById("globalAlarmSettingsSection"),
+    document.getElementById("filesystemBlacklistAdminSection"),
   ];
   for (const section of sections) {
     if (!section) {
@@ -2044,6 +2047,196 @@ function mountAdminSettingsIntoGlobalView() {
       container.appendChild(section);
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Filesystem Blacklist — Admin-verwaltete Wildcard-Patterns
+// ---------------------------------------------------------------------------
+
+async function loadFilesystemBlacklist() {
+  try {
+    const resp = await fetch("/api/v1/filesystem-blacklist", { credentials: "same-origin" });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (Array.isArray(data.patterns)) {
+      state.filesystemBlacklistPatterns = data.patterns;
+    }
+  } catch (err) {
+    console.error("Fehler beim Laden der Filesystem-Blacklist:", err);
+  }
+}
+
+function isFilesystemBlacklisted(mountpoint) {
+  if (!state.showBlacklistedFilesystems && state.filesystemBlacklistPatterns) {
+    for (const entry of state.filesystemBlacklistPatterns) {
+      const pattern = str(entry.pattern || "");
+      if (matchGlobPattern(pattern, mountpoint)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function matchGlobPattern(pattern, text) {
+  // Einfaches Wildcard-Matching: * = beliebig, ? = einzelnes Zeichen
+  const regexStr = "^" + pattern
+    .replace(/\./g, "\\.")
+    .replace(/\*/g, ".*")
+    .replace(/\?/g, ".")
+    + "$";
+  try {
+    return new RegExp(regexStr).test(text);
+  } catch {
+    return false;
+  }
+}
+
+function renderFilesystemBlacklistAdminSection() {
+  const patterns = state.filesystemBlacklistPatterns || [];
+  const rows = patterns.map((entry, idx) => `
+    <tr>
+      <td class="fs-bl-pattern" style="font-family:monospace;word-break:break-all;">${escapeHtml(entry.pattern)}</td>
+      <td>${escapeHtml(entry.description || "")}</td>
+      <td style="text-align:right;">
+        <button type="button" class="fs-bl-del-btn" data-id="${escapeHtml(entry.id)}" title="Löschen">🗑</button>
+      </td>
+    </tr>`).join("");
+
+  return `
+    <section class="settings-subsection" id="filesystemBlacklistAdminSection" style="display:none;">
+      <div class="settings-subsection-head">
+        <h5>🚫 Filesystem-Blacklist</h5>
+        <p class="count compact">Automatisch von Alerts, Trends und Filesystem-Listen ausschließen (es sei denn, "Geblacklistete anzeigen" ist aktiviert)</p>
+      </div>
+      <div class="alarm-settings-group">
+        <p style="font-size:12px;color:#64748b;margin:0 0 10px 0;">
+          <strong>Wildcard-Syntax:</strong> <code>*</code> = beliebig, <code>?</code> = einzelnes Zeichen. Beispiele: <code>/hana/shared/.snapshot/*</code>, <code>*/cache/*</code>, <code>/var/log/*</code>
+        </p>
+      </div>
+      <div class="table-wrap" style="margin-bottom:8px;max-height:300px;overflow-y:auto;">
+        <table class="report-subtable" id="filesystemBlacklistTable">
+          <thead>
+            <tr>
+              <th>Pattern</th>
+              <th>Beschreibung</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="filesystemBlacklistBody">${rows}</tbody>
+        </table>
+      </div>
+      <div class="alarm-settings-actions">
+        <label for="fsBlNewPattern" style="display:inline-block;margin-right:8px;">Neues Pattern:</label>
+        <input id="fsBlNewPattern" type="text" class="settings-input" placeholder="/hana/shared/.snapshot/*" style="width:200px;display:inline-block;">
+        <input id="fsBlNewDescription" type="text" class="settings-input" placeholder="Beschreibung (optional)" style="width:200px;display:inline-block;margin-left:8px;">
+        <button type="button" id="fsBlAddBtn" class="btn-secondary" style="display:inline-block;margin-left:8px;">+ Hinzufügen</button>
+        <span id="fsBlStatus" class="count compact" style="margin-left:16px;"></span>
+      </div>
+    </section>`;
+}
+
+function wireFilesystemBlacklistAdminSection(container) {
+  const section = (container || document).querySelector("#filesystemBlacklistAdminSection");
+  if (!section) return;
+
+  section.querySelector("#fsBlAddBtn")?.addEventListener("click", async () => {
+    const patternInput = section.querySelector("#fsBlNewPattern");
+    const descInput = section.querySelector("#fsBlNewDescription");
+    const pattern = (patternInput?.value || "").trim();
+    const description = (descInput?.value || "").trim();
+
+    if (!pattern) {
+      const status = section.querySelector("#fsBlStatus");
+      status.textContent = "❌ Pattern erforderlich";
+      setTimeout(() => { status.textContent = ""; }, 2000);
+      return;
+    }
+
+    const status = section.querySelector("#fsBlStatus");
+    status.textContent = "Speichern…";
+    try {
+      const resp = await fetch("/api/v1/filesystem-blacklist", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "add", pattern, description }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || resp.statusText);
+
+      // Reload list
+      await loadFilesystemBlacklist();
+      const container = section.querySelector("#filesystemBlacklistBody");
+      if (container) {
+        const newRows = (state.filesystemBlacklistPatterns || []).map((entry, idx) => `
+          <tr>
+            <td class="fs-bl-pattern" style="font-family:monospace;word-break:break-all;">${escapeHtml(entry.pattern)}</td>
+            <td>${escapeHtml(entry.description || "")}</td>
+            <td style="text-align:right;">
+              <button type="button" class="fs-bl-del-btn" data-id="${escapeHtml(entry.id)}" title="Löschen">🗑</button>
+            </td>
+          </tr>`).join("");
+        container.innerHTML = newRows;
+        wireDeleteButtons();
+      }
+
+      patternInput.value = "";
+      descInput.value = "";
+      status.textContent = "✅ Pattern hinzugefügt";
+    } catch (err) {
+      status.textContent = `❌ ${err.message}`;
+    }
+    setTimeout(() => { status.textContent = ""; }, 2500);
+  });
+
+  function wireDeleteButtons() {
+    section.querySelectorAll(".fs-bl-del-btn").forEach(btn => {
+      btn.removeEventListener("click", onDelete);
+      btn.addEventListener("click", onDelete);
+    });
+  }
+
+  const onDelete = async (e) => {
+    const btn = e.target;
+    const id = btn.dataset.id;
+    if (!confirm("Pattern wirklich löschen?")) return;
+
+    const status = section.querySelector("#fsBlStatus");
+    status.textContent = "Löschen…";
+    try {
+      const resp = await fetch("/api/v1/filesystem-blacklist", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", id: parseInt(id, 10) }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || resp.statusText);
+
+      // Reload list
+      await loadFilesystemBlacklist();
+      const container = section.querySelector("#filesystemBlacklistBody");
+      if (container) {
+        const newRows = (state.filesystemBlacklistPatterns || []).map((entry, idx) => `
+          <tr>
+            <td class="fs-bl-pattern" style="font-family:monospace;word-break:break-all;">${escapeHtml(entry.pattern)}</td>
+            <td>${escapeHtml(entry.description || "")}</td>
+            <td style="text-align:right;">
+              <button type="button" class="fs-bl-del-btn" data-id="${escapeHtml(entry.id)}" title="Löschen">🗑</button>
+            </td>
+          </tr>`).join("");
+        container.innerHTML = newRows;
+        wireDeleteButtons();
+      }
+      status.textContent = "✅ Pattern gelöscht";
+    } catch (err) {
+      status.textContent = `❌ ${err.message}`;
+    }
+    setTimeout(() => { status.textContent = ""; }, 2500);
+  };
+
+  wireDeleteButtons();
 }
 
 // ---------------------------------------------------------------------------
@@ -2322,11 +2515,16 @@ async function loadGlobalAdminSettingsPanel(force = false) {
   await loadAlarmSettings(force);
   await loadOauthSettings(force);
   await loadWebUsers(force);
+  await loadFilesystemBlacklist(force);
   // Render SAP B1 version map editor (idempotent — skip if already rendered)
   const container = document.getElementById("globalAdminSettingsContainer");
   if (container && !container.querySelector("#sapB1VersionMapAdminSection")) {
     container.insertAdjacentHTML("beforeend", renderSapB1VersionMapAdminSection());
     wireSapB1VersionMapAdminSection(container);
+  }
+  if (container && !container.querySelector("#filesystemBlacklistAdminSection")) {
+    container.insertAdjacentHTML("beforeend", renderFilesystemBlacklistAdminSection());
+    wireFilesystemBlacklistAdminSection(container);
   }
   if (container && !container.querySelector("#customerAlertTestSection")) {
     container.insertAdjacentHTML("beforeend", renderCustomerAlertTestSection());
