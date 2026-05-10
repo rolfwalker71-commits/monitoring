@@ -342,6 +342,29 @@ function Download-RepoFile {
     return $false
 }
 
+function Use-LocalScriptFallback {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RelativePath,
+        [Parameter(Mandatory = $true)]
+        [string]$DestinationPath
+    )
+
+    $leaf = [System.IO.Path]::GetFileName($RelativePath)
+    $installedPath = Join-Path $InstallDir $leaf
+    if (-not (Test-Path $installedPath)) {
+        return $false
+    }
+
+    if (-not (Test-DownloadedFileContent -RelativePath $RelativePath -Path $installedPath)) {
+        return $false
+    }
+
+    Copy-Item $installedPath $DestinationPath -Force
+    Write-Warning "Using local fallback for $leaf because remote download was blocked/invalid."
+    return $true
+}
+
 # ---- Version check ----
 $remoteVersion = ''
 $remoteVersionSource = ''
@@ -385,13 +408,19 @@ New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
 
 try {
     if (-not (Download-RepoFile -RelativePath 'client/windows/collect_and_send.ps1' -DestinationPath "$tmpDir\collect_and_send.ps1")) {
-        throw "Failed to download collect_and_send.ps1 from configured update sources. Details: $global:LastDownloadRepoFileError"
+        if (-not (Use-LocalScriptFallback -RelativePath 'client/windows/collect_and_send.ps1' -DestinationPath "$tmpDir\collect_and_send.ps1")) {
+            throw "Failed to download collect_and_send.ps1 from configured update sources. Details: $global:LastDownloadRepoFileError"
+        }
     }
     if (-not (Download-RepoFile -RelativePath 'client/windows/collect_and_scan_sap_tables.ps1' -DestinationPath "$tmpDir\collect_and_scan_sap_tables.ps1")) {
-        throw "Failed to download collect_and_scan_sap_tables.ps1 from configured update sources. Details: $global:LastDownloadRepoFileError"
+        if (-not (Use-LocalScriptFallback -RelativePath 'client/windows/collect_and_scan_sap_tables.ps1' -DestinationPath "$tmpDir\collect_and_scan_sap_tables.ps1")) {
+            throw "Failed to download collect_and_scan_sap_tables.ps1 from configured update sources. Details: $global:LastDownloadRepoFileError"
+        }
     }
     if (-not (Download-RepoFile -RelativePath 'client/windows/setup_harvest_sql_user.ps1' -DestinationPath "$tmpDir\setup_harvest_sql_user.ps1")) {
-        throw "Failed to download setup_harvest_sql_user.ps1 from configured update sources. Details: $global:LastDownloadRepoFileError"
+        if (-not (Use-LocalScriptFallback -RelativePath 'client/windows/setup_harvest_sql_user.ps1' -DestinationPath "$tmpDir\setup_harvest_sql_user.ps1")) {
+            throw "Failed to download setup_harvest_sql_user.ps1 from configured update sources. Details: $global:LastDownloadRepoFileError"
+        }
     }
     # Guard against stale or incompatible script payloads before replacing local files.
     $collectContent = [System.IO.File]::ReadAllText("$tmpDir\collect_and_send.ps1", [System.Text.Encoding]::UTF8)

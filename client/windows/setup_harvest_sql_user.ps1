@@ -71,6 +71,21 @@ function Invoke-SqlScalar {
     return $cmd.ExecuteScalar()
 }
 
+function Invoke-SqlQuery {
+    param(
+        [System.Data.SqlClient.SqlConnection]$Connection,
+        [string]$Query,
+        [int]$TimeoutSec = 30
+    )
+    $cmd = $Connection.CreateCommand()
+    $cmd.CommandText = $Query
+    $cmd.CommandTimeout = $TimeoutSec
+    $adapter = New-Object System.Data.SqlClient.SqlDataAdapter($cmd)
+    $table = New-Object System.Data.DataTable
+    [void]$adapter.Fill($table)
+    return $table
+}
+
 function Get-SqlServerCandidates {
     $candidates = New-Object System.Collections.Generic.List[string]
 
@@ -155,13 +170,13 @@ function Setup-HarvestUser {
         if (-not $result.user_exists) {
             # Create login with SQL auth
             $escapedPwd = $HarvestPassword.Replace("'", "''")
-            Invoke-SqlNonQuery -Connection $conn -Query "CREATE LOGIN [$HarvestUser] WITH PASSWORD = N'$escapedPwd'"
+            [void](Invoke-SqlNonQuery -Connection $conn -Query "CREATE LOGIN [$HarvestUser] WITH PASSWORD = N'$escapedPwd'")
             $result.user_created = $true
         }
 
         # Grant server-level permissions
-        Invoke-SqlNonQuery -Connection $conn -Query "GRANT VIEW SERVER STATE TO [$HarvestUser]"
-        Invoke-SqlNonQuery -Connection $conn -Query "GRANT VIEW ANY DEFINITION TO [$HarvestUser]"
+        [void](Invoke-SqlNonQuery -Connection $conn -Query "GRANT VIEW SERVER STATE TO [$HarvestUser]")
+        [void](Invoke-SqlNonQuery -Connection $conn -Query "GRANT VIEW ANY DEFINITION TO [$HarvestUser]")
         $result.permissions_granted = $true
 
         # Find accessible databases
@@ -169,8 +184,8 @@ function Setup-HarvestUser {
         $conn = Get-SqlConnection -Server $SqlServer -Database 'master' -User $HarvestUser -Password $HarvestPassword
         $conn.Open()
 
-        $dbRows = $conn.Execute("SELECT name FROM sys.databases WHERE state_desc = 'ONLINE' ORDER BY name").Rows
-        foreach ($row in $dbRows) {
+        $dbRows = Invoke-SqlQuery -Connection $conn -Query "SELECT name FROM sys.databases WHERE state_desc = 'ONLINE' ORDER BY name"
+        foreach ($row in $dbRows.Rows) {
             $dbName = [string]$row['name']
             if ($dbName -and $dbName -notin @('master', 'tempdb', 'model', 'msdb')) {
                 $result.accessible_databases += $dbName
