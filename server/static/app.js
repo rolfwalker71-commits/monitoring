@@ -9210,8 +9210,9 @@ function renderSystemOverviewAddons(payload) {
   const renderListItems = (rows, nameKey, versionKey) => {
     const listRows = rows.slice(0, 8).map((row) => {
       const name = escapeHtml(asText(row?.[nameKey], "-"));
-      const version = escapeHtml(asText(row?.[versionKey], "-"));
-      return `<li><span>${name}</span><span class="so-addon-version">${version}</span></li>`;
+      const versionRaw = asText(row?.[versionKey], "").trim();
+      const version = versionRaw ? escapeHtml(versionRaw) : "";
+      return `<li>${name}${version ? ` <span class="so-addon-version">${version}</span>` : ""}</li>`;
     }).join("");
     const rest = rows.length > 8 ? `<li class="so-addon-rest">+${rows.length - 8} weitere</li>` : "";
     return `${listRows}${rest}`;
@@ -9318,6 +9319,7 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
       <td>
         <div class="so-host-title">${hostTitle}</div>
         <div class="so-host-short">${shortHostname}</div>
+        ${addOnSection}
       </td>
       <td>
         <div class="so-cell-main">${osReleaseDisplay}</div>
@@ -9335,7 +9337,6 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
         <div class="so-cell-sub">SAP Release: ${sapReleaseDisplay}</div>
         <div class="so-cell-sub">HANA Release: ${hanaVersion}</div>
         <div class="so-cell-sub">HANA SID: ${hanaSid}</div>
-        ${addOnSection}
       </td>
       <td>
         <div class="so-cell-main">${statusBadge}</div>

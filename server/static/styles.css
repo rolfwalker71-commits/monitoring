@@ -7089,6 +7089,7 @@ body[data-theme="dark"] .backup-row--hana td {
   font-size: 11px;
   color: #475569;
   line-height: 1.35;
+}
 
 .so-addon-details {
   margin-top: 6px;
@@ -7135,9 +7136,7 @@ body[data-theme="dark"] .backup-row--hana td {
 }
 
 .so-addon-list li {
-  display: flex;
-  justify-content: space-between;
-  gap: 6px;
+  display: block;
   line-height: 1.2;
 }
 
@@ -7169,7 +7168,6 @@ body[data-theme="dark"] .so-addon-version,
 body[data-theme="dark"] .so-addon-empty,
 body[data-theme="dark"] .so-addon-rest {
   color: #9fb3cc;
-}
 }
 
 .so-row-clickable {
