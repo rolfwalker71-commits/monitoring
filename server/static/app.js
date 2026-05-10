@@ -4194,7 +4194,7 @@ function renderSapB1CombinedCard(payload) {
       <h4>SAP B1</h4>
 
       <details class="sap-b1-raw-details" open>
-        <summary class="sap-b1-raw-summary">SLDModel.SLDData.dbo.Extensions (AddOnName / Version)</summary>
+        <summary class="sap-b1-raw-summary">Lightweight Extensions</summary>
         ${renderSapB1ExtensionsSection(payload)}
       </details>
 
