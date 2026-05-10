@@ -80,6 +80,7 @@ const state = {
   hostConfigChangesHours: 720,
   hostConfigChangesSearchQuery: "",
   hostConfigChangesCountryFilter: "all",
+  hostConfigChangesAvailableCountries: [],
   inactiveHosts: [],
   alarmSettingsLoaded: false,
   globalAlertsCollapsed: false,
@@ -7606,9 +7607,18 @@ async function loadHostConfigChanges() {
 
     if (!items.length) {
       groupsEl.innerHTML = '<p class="muted">Keine Aenderungen im gewaehlten Zeitraum.</p>';
-      // Reset country filter dropdown
       if (countryFilterEl) {
-        countryFilterEl.innerHTML = "";
+        const cachedCountries = Array.isArray(state.hostConfigChangesAvailableCountries)
+          ? state.hostConfigChangesAvailableCountries
+          : [];
+        const selected = cachedCountries.includes(String(state.hostConfigChangesCountryFilter || "").toUpperCase())
+          ? String(state.hostConfigChangesCountryFilter || "").toUpperCase()
+          : "all";
+        state.hostConfigChangesCountryFilter = selected;
+        renderCountryFlagFilter(countryFilterEl, cachedCountries, selected, (nextFilter) => {
+          state.hostConfigChangesCountryFilter = nextFilter;
+          loadHostConfigChanges();
+        });
       }
       return;
     }
@@ -7623,11 +7633,15 @@ async function loadHostConfigChanges() {
     });
     if (countryFilterEl) {
       const sortedCountries = [...countries].sort();
-      const selected = sortedCountries.includes(String(state.hostConfigChangesCountryFilter || "").toUpperCase())
+      const countriesForFilter = sortedCountries.length
+        ? sortedCountries
+        : (Array.isArray(state.hostConfigChangesAvailableCountries) ? state.hostConfigChangesAvailableCountries : []);
+      state.hostConfigChangesAvailableCountries = countriesForFilter;
+      const selected = countriesForFilter.includes(String(state.hostConfigChangesCountryFilter || "").toUpperCase())
         ? String(state.hostConfigChangesCountryFilter || "").toUpperCase()
         : "all";
       state.hostConfigChangesCountryFilter = selected;
-      renderCountryFlagFilter(countryFilterEl, sortedCountries, selected, (nextFilter) => {
+      renderCountryFlagFilter(countryFilterEl, countriesForFilter, selected, (nextFilter) => {
         state.hostConfigChangesCountryFilter = nextFilter;
         loadHostConfigChanges();
       });
