@@ -102,7 +102,7 @@ function Get-RepoZipEntryText {
                     $AttemptErrors.Add("zip-entry-missing: $url => $entryPath")
                     continue
                 }
-                $reader = New-Object System.IO.StreamReader($entry.Open(), [System.Text.Encoding]::UTF8)
+                $reader = New-Object System.IO.StreamReader($entry.Open(), $true)
                 try {
                     $text = $reader.ReadToEnd()
                 } finally {
@@ -169,7 +169,12 @@ function Test-DownloadedFileContent {
 
     $text = ''
     try {
-        $text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+        $reader = New-Object System.IO.StreamReader($Path, $true)
+        try {
+            $text = $reader.ReadToEnd()
+        } finally {
+            $reader.Dispose()
+        }
     } catch {
         return $false
     }
@@ -177,6 +182,9 @@ function Test-DownloadedFileContent {
     if (-not $text) {
         return $false
     }
+
+    # Strip NUL characters that can appear when content was transcoded unexpectedly.
+    $text = $text -replace "`0", ''
 
     # Normalize BOM at start to avoid false negatives with strict line-anchored regex checks.
     $textNormalized = $text -replace '^[\uFEFF]+', ''
