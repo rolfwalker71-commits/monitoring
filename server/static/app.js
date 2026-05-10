@@ -4010,132 +4010,6 @@ function renderSapB1SystemSummary(payload) {
   return escapeHtml(releaseDate);
 }
 
-function normalizeSapScanRows(rows) {
-  let current = rows;
-  for (let depth = 0; depth < 5; depth += 1) {
-    if (Array.isArray(current)) {
-      if (current.length === 1 && current[0] && typeof current[0] === "object") {
-        const keys = Object.keys(current[0]);
-        const hasValue = keys.includes("value") || keys.includes("Value");
-        const hasCount = keys.includes("Count") || keys.includes("count");
-        if (hasValue && hasCount) {
-          current = current[0].value ?? current[0].Value;
-          continue;
-        }
-      }
-      return current.filter((entry) => entry && typeof entry === "object");
-    }
-
-    if (current && typeof current === "object") {
-      const keys = Object.keys(current);
-      const hasValue = keys.includes("value") || keys.includes("Value");
-      const hasCount = keys.includes("Count") || keys.includes("count");
-      if (hasValue && hasCount) {
-        current = current.value ?? current.Value;
-        continue;
-      }
-      return [current];
-    }
-
-    return [];
-  }
-  return [];
-}
-
-function formatSapScanCellValue(value) {
-  if (value === null || value === undefined) {
-    return "";
-  }
-  if (typeof value === "object") {
-    try {
-      return escapeHtml(JSON.stringify(value));
-    } catch (_error) {
-      return escapeHtml(String(value));
-    }
-  }
-  return escapeHtml(asText(value, ""));
-}
-
-function renderSapB1FirstRowDetails(rows, expectedColumns = []) {
-  const entries = normalizeSapScanRows(rows);
-  if (entries.length === 0) {
-    return "<p class=\"muted\">Keine Ergebniszeile vorhanden.</p>";
-  }
-
-  const firstRow = entries[0] && typeof entries[0] === "object" ? entries[0] : null;
-  if (!firstRow) {
-    return "<p class=\"muted\">Ergebniszeile konnte nicht gelesen werden.</p>";
-  }
-
-  const expected = Array.isArray(expectedColumns)
-    ? expectedColumns.filter((value) => typeof value === "string" && value.trim() !== "")
-    : [];
-  const keys = expected.length > 0
-    ? expected
-    : Object.keys(firstRow);
-
-  if (keys.length === 0) {
-    return "<p class=\"muted\">Ergebniszeile ist leer.</p>";
-  }
-
-  const bodyHtml = keys
-    .map((key) => {
-      const raw = firstRow[key];
-      const display = raw === null || raw === undefined || String(raw).trim() === ""
-        ? '<span class="muted">(leer)</span>'
-        : formatSapScanCellValue(raw);
-      return `<tr><th>${escapeHtml(key)}</th><td>${display}</td></tr>`;
-    })
-    .join("");
-
-  return `
-    <div class="table-wrap">
-      <table class="report-subtable">
-        <thead><tr><th>Feld</th><th>Wert (erste Ergebniszeile)</th></tr></thead>
-        <tbody>${bodyHtml}</tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderSapB1TableScanRows(rows, expectedColumns = []) {
-  const entries = normalizeSapScanRows(rows);
-  if (entries.length === 0) {
-    return "<p class=\"muted\">Keine Datensaetze gefunden.</p>";
-  }
-
-  const expected = Array.isArray(expectedColumns)
-    ? expectedColumns.filter((value) => typeof value === "string" && value.trim() !== "")
-    : [];
-  const headers = expected.length > 0
-    ? expected
-    : Array.from(new Set(entries.flatMap((entry) => Object.keys(entry || {}))));
-  if (headers.length === 0) {
-    return "<p class=\"muted\">Leere Datensaetze empfangen.</p>";
-  }
-
-  const headHtml = headers
-    .map((key) => `<th>${escapeHtml(key)}</th>`)
-    .join("");
-
-  const bodyHtml = entries
-    .map((entry) => {
-      const cols = headers
-        .map((key) => `<td>${formatSapScanCellValue(entry[key])}</td>`)
-        .join("");
-      return `<tr>${cols}</tr>`;
-    })
-    .join("");
-
-  return `
-    <div class="table-wrap">
-      <table class="report-subtable">
-        <thead><tr>${headHtml}</tr></thead>
-        <tbody>${bodyHtml}</tbody>
-      </table>
-    </div>
-  `;
-}
 
 function renderHarvestStatusSection(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
@@ -4203,56 +4077,6 @@ function renderSapB1ExtensionsSection(payload) {
   `;
 }
 
-function renderSapB1TableScanSection(payload) {
-  const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
-  const scan = sap && typeof sap.table_scan === "object" ? sap.table_scan : null;
-  if (!scan) {
-    return `<p class="muted">Kein SBO-COMMON/SLDData Tabellenscan im Payload vorhanden.</p>`;
-  }
-
-  const blocks = [
-    {
-      title: "SBOCOMMON.dbo.SARI",
-      item: scan.sbo_common_sari,
-    },
-    {
-      title: "SLDModel.SLDData.dbo.Extensions",
-      item: scan.sld_extensions,
-    },
-  ];
-
-  return blocks
-    .map((block) => {
-      const item = block.item && typeof block.item === "object" ? block.item : null;
-      if (!item) {
-        return `
-          <details class="sap-b1-raw-details">
-            <summary class="sap-b1-raw-summary">${escapeHtml(block.title)}</summary>
-            <p class="muted">Keine Daten empfangen.</p>
-          </details>`;
-      }
-
-      const available = item.available === true;
-      const error = asText(item.error, "");
-      const rawRows = item.rows;
-      const normalizedRows = normalizeSapScanRows(rawRows);
-      const rowCount = Number(item.row_count || normalizedRows.length || 0);
-      const columns = Array.isArray(item.columns) ? item.columns : [];
-      const columnCount = Number(item.column_count || columns.length || 0);
-      const effectiveDb = asText(item.database, "");
-      const heading = effectiveDb ? `${effectiveDb}.dbo.${asText(item.table, "")}` : block.title;
-
-      return `
-        <details class="sap-b1-raw-details">
-          <summary class="sap-b1-raw-summary">${escapeHtml(heading)} (${Number.isFinite(rowCount) ? rowCount : rows.length})</summary>
-          ${available ? `<p class="muted">Spalten: ${Number.isFinite(columnCount) ? columnCount : columns.length}${columns.length > 0 ? ` (${escapeHtml(columns.join(", "))})` : ""}</p>` : ""}
-          ${!available ? `<p class="muted">Nicht verfuegbar${error ? `: ${escapeHtml(error)}` : "."}</p>` : ""}
-          ${available ? renderSapB1FirstRowDetails(rawRows, columns) : ""}
-          ${available ? `<details class="sap-b1-raw-details"><summary class="sap-b1-raw-summary">Roh-Tabellenansicht</summary>${renderSapB1TableScanRows(rawRows, columns)}</details>` : ""}
-        </details>`;
-    })
-    .join("");
-}
 
 function renderSapB1VersionMapCard() {
   const sortedEntries = Array.from(SAP_B1_VERSION_MAP.entries())
@@ -4383,11 +4207,6 @@ function renderSapB1CombinedCard(payload) {
         <summary class="sap-b1-raw-summary">HANA Versions-Scan</summary>
         ${hanaInfoRows}
         ${hanaRawOutput ? `<pre class="sap-b1-raw-output">${escapeHtml(hanaRawOutput)}</pre>` : ""}
-      </details>
-
-      <details class="sap-b1-raw-details">
-        <summary class="sap-b1-raw-summary">SBOCOMMON / SLDData Tabellenscan</summary>
-        ${renderSapB1TableScanSection(payload)}
       </details>
 
       <details class="sap-b1-raw-details">
