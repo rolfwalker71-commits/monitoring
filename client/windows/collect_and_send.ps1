@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.193'
+$EmbeddedAgentVersion = '1.1.194'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -790,6 +790,99 @@ function Invoke-AgentSelfUpdate {
     return $false
 }
 
+function Get-UpdateBaseUrl {
+    if ($cfg.ContainsKey('UPDATE_BASE_URL') -and $cfg['UPDATE_BASE_URL']) {
+        return $cfg['UPDATE_BASE_URL'].TrimEnd('/')
+    }
+    if ($cfg.ContainsKey('SERVER_URL') -and $cfg['SERVER_URL']) {
+        return (($cfg['SERVER_URL']).TrimEnd('/') + '/updates')
+    }
+    if ($cfg.ContainsKey('RAW_BASE_URL') -and $cfg['RAW_BASE_URL']) {
+        return $cfg['RAW_BASE_URL'].TrimEnd('/')
+    }
+    return ''
+}
+
+function Test-PowerShellScriptContent {
+    param([string]$Path)
+
+    try {
+        $text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+        if (-not $text) { return $false }
+        if ($text -match '<!DOCTYPE\s+html|<html\b|<head\b|<body\b') { return $false }
+        return ($text -match '(?m)^#Requires\s+-Version\s+5\.1' -or $text -match '(?m)^Set-StrictMode\s+-Version\s+Latest' -or $text -match '(?m)^\[CmdletBinding\(\)\]')
+    } catch {
+        return $false
+    }
+}
+
+function Download-FileBestEffort {
+    param(
+        [string]$Url,
+        [string]$Destination
+    )
+
+    try {
+        $wc = New-Object System.Net.WebClient
+        $wc.DownloadFile($Url, $Destination)
+        return $true
+    } catch { }
+
+    try {
+        Invoke-WebRequest -Uri $Url -UseBasicParsing -OutFile $Destination -ErrorAction Stop | Out-Null
+        return $true
+    } catch { }
+
+    $curl = Get-Command 'curl.exe' -ErrorAction SilentlyContinue
+    if ($curl) {
+        try {
+            $null = & $curl.Source '--silent' '--show-error' '--fail' '--location' '--output' $Destination $Url 2>&1
+            if ($LASTEXITCODE -eq 0) { return $true }
+        } catch { }
+    }
+
+    return $false
+}
+
+function Sync-CoreScriptsBestEffort {
+    $base = Get-UpdateBaseUrl
+    if (-not $base) { return }
+
+    $installDir = if ($cfg.ContainsKey('INSTALL_DIR') -and $cfg['INSTALL_DIR']) { $cfg['INSTALL_DIR'] } else { Split-Path -Parent $ConfigFile }
+    if (-not $installDir) { return }
+
+    $cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $items = @(
+        @{ rel = 'client/windows/collect_and_send.ps1'; target = Join-Path $installDir 'collect_and_send.ps1'; isScript = $true },
+        @{ rel = 'client/windows/self_update.ps1'; target = Join-Path $installDir 'self_update.ps1'; isScript = $true },
+        @{ rel = 'client/windows/setup_harvest_sql_user.ps1'; target = Join-Path $installDir 'setup_harvest_sql_user.ps1'; isScript = $true },
+        @{ rel = 'client/windows/collect_and_scan_sap_tables.ps1'; target = Join-Path $installDir 'collect_and_scan_sap_tables.ps1'; isScript = $true },
+        @{ rel = 'AGENT_VERSION'; target = $VersionFile; isScript = $false }
+    )
+
+    foreach ($item in $items) {
+        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString('N') + '.tmp')
+        try {
+            $url = "{0}/{1}?cb={2}" -f $base, $item.rel, $cacheBust
+            if (-not (Download-FileBestEffort -Url $url -Destination $tmp)) {
+                continue
+            }
+
+            if ($item.isScript -and -not (Test-PowerShellScriptContent -Path $tmp)) {
+                continue
+            }
+
+            Copy-Item $tmp $item.target -Force -ErrorAction SilentlyContinue
+        } catch {
+            # Best-effort sync only; never block collection.
+        } finally {
+            if (Test-Path $tmp) {
+                Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}
+
 function Ensure-OptionalSapScanScript {
     $installDir = if ($cfg.ContainsKey('INSTALL_DIR') -and $cfg['INSTALL_DIR']) { $cfg['INSTALL_DIR'] } else { Split-Path -Parent $ConfigFile }
     if (-not $installDir) { return }
@@ -977,6 +1070,8 @@ function Get-ContainerEntries {
 }
 
 # ---- Collect system info ----
+
+Sync-CoreScriptsBestEffort
 
 $hostnameValue = try { [System.Net.Dns]::GetHostEntry('').HostName } catch { $env:COMPUTERNAME }
 if (-not $hostnameValue) { $hostnameValue = $env:COMPUTERNAME }
