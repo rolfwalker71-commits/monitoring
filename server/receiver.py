@@ -6677,7 +6677,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             try:
                 with sqlite3.connect(DB_PATH) as conn:
                     row = conn.execute(
-                        "SELECT payload FROM reports WHERE hostname = ? ORDER BY received_at_utc DESC LIMIT 1",
+                        "SELECT payload_json FROM reports WHERE hostname = ? ORDER BY id DESC LIMIT 1",
                         (hostname_param,),
                     ).fetchone()
                 if not row:
