@@ -867,14 +867,14 @@ async function showHostUpdateLog(hostname) {
   if (!modal) {
     modal = document.createElement("div");
     modal.id = "hostUpdateLogModal";
-    modal.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;";
+    modal.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;";
     modal.innerHTML = `
-      <div style="background:var(--bg-card,#1e1e2e);border:1px solid var(--border,#333);border-radius:10px;padding:1.4rem 1.6rem;max-width:720px;width:95%;max-height:82vh;display:flex;flex-direction:column;gap:.8rem;">
+      <div style="background:#2a2a3a;border:1px solid #444;border-radius:10px;padding:1.4rem 1.6rem;max-width:720px;width:95%;max-height:82vh;display:flex;flex-direction:column;gap:.8rem;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-          <strong id="hostUpdateLogModalTitle" style="font-size:1rem;">Update-Log</strong>
-          <button onclick="document.getElementById('hostUpdateLogModal').remove()" style="background:none;border:none;cursor:pointer;font-size:1.3rem;color:var(--text-muted,#888);">&#10005;</button>
+          <strong id="hostUpdateLogModalTitle" style="font-size:1rem;color:#fff;">Update-Log</strong>
+          <button onclick="document.getElementById('hostUpdateLogModal').remove()" style="background:none;border:none;cursor:pointer;font-size:1.3rem;color:#999;">✕</button>
         </div>
-        <div id="hostUpdateLogModalBody" style="overflow-y:auto;flex:1;font-family:monospace;font-size:.78rem;white-space:pre-wrap;background:var(--bg-deep,#13131e);border-radius:6px;padding:.8rem;color:var(--text,#ddd);min-height:200px;">Lade...</div>
+        <div id="hostUpdateLogModalBody" style="overflow-y:auto;flex:1;font-family:monospace;font-size:.8rem;white-space:pre-wrap;background:#1a1a2a;border-radius:6px;padding:.8rem;color:#e0e0e0;min-height:200px;line-height:1.4;">Lade...</div>
       </div>`;
     modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
     document.body.appendChild(modal);
