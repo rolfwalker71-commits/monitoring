@@ -183,9 +183,10 @@ function Test-PowerShellScriptContent {
             $text = $text.Substring(1)
         }
         
-        # Check for HTML (common error response)
-        if ($text -match '<!DOCTYPE\s+html|<html\b|<head\b|<body\b') { 
-            Write-Host "[TEST] File contains HTML - download returned error page" -ForegroundColor Red
+        # Check for HTML only in first 500 chars (error pages appear at start)
+        $firstChars = if ($text.Length -gt 500) { $text.Substring(0, 500) } else { $text }
+        if ($firstChars -match '<!DOCTYPE\s+html|<html\b|<head\b|<body\b') { 
+            Write-Host "[TEST] File contains HTML in first 500 chars - download returned error page" -ForegroundColor Red
             Write-Host "[TEST] First 200 chars: $($text.Substring(0, [Math]::Min(200, $text.Length)))" -ForegroundColor Red
             return $false 
         }
