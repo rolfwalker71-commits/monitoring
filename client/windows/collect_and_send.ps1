@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.184'
+$EmbeddedAgentVersion = '1.1.185'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -43,6 +43,9 @@ foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
         $cfg[$Matches[1]] = $Matches[2]
     }
 }
+
+# Auto-provision Harvest SQL config if missing (idempotent)
+Ensure-HarvestSqlConfig
 
 $ServerUrl = $cfg['SERVER_URL']
 $ApiKey    = if ($cfg.ContainsKey('API_KEY')) { $cfg['API_KEY'] } else { '' }
@@ -68,6 +71,42 @@ if (-not (Test-Path $QueueDir)) {
 }
 
 # ---- Helpers ----
+
+function Ensure-HarvestSqlConfig {
+    <#
+    .SYNOPSIS
+    Auto-provisions default Harvest SQL credentials if missing.
+    Idempotent: only adds if all three parameters are absent.
+    #>
+    $needsUpdate = $false
+    
+    if (-not ($cfg.ContainsKey('HARVEST_SQL_SERVER') -and $cfg['HARVEST_SQL_SERVER'])) {
+        $needsUpdate = $true
+    }
+    if (-not ($cfg.ContainsKey('HARVEST_SQL_USER') -and $cfg['HARVEST_SQL_USER'])) {
+        $needsUpdate = $true
+    }
+    if (-not ($cfg.ContainsKey('HARVEST_SQL_PASSWORD') -and $cfg['HARVEST_SQL_PASSWORD'])) {
+        $needsUpdate = $true
+    }
+    
+    if ($needsUpdate) {
+        Set-ConfigValue -Key 'HARVEST_SQL_SERVER' -Value 'localhost'
+        Set-ConfigValue -Key 'HARVEST_SQL_USER' -Value 'harvest'
+        Set-ConfigValue -Key 'HARVEST_SQL_PASSWORD' -Value '0djKUt&xbLK0AYr'
+        Set-ConfigValue -Key 'ENABLE_SAP_SCAN' -Value '1'
+        
+        # Reload config so harvest functions can use new values
+        $global:cfg = @{}
+        foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
+            if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"(.*?)"\s*$') {
+                $global:cfg[$Matches[1]] = $Matches[2]
+            } elseif ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(\S+)\s*$') {
+                $global:cfg[$Matches[1]] = $Matches[2]
+            }
+        }
+    }
+}
 
 function Set-ConfigValue {
     param(

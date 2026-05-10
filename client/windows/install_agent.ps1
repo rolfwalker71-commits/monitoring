@@ -166,6 +166,10 @@ UPDATE_HOURS="$UpdateHours"
 PRIORITY_UPDATE_CHECK_MINUTES="60"
 SEND_JITTER_MAX_SEC="300"
 UPDATE_LOG_FILE="$UpdateLogFile"
+HARVEST_SQL_SERVER="localhost"
+HARVEST_SQL_USER="harvest"
+HARVEST_SQL_PASSWORD="0djKUt&xbLK0AYr"
+ENABLE_SAP_SCAN="1"
 "@
 
 [System.IO.File]::WriteAllText($ConfigFile, $configContent, [System.Text.Encoding]::UTF8)
