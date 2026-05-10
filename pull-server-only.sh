@@ -124,9 +124,8 @@ if ! sed 's#^#server/static/icons/#' "$ICON_NAMES_FILE" | xargs -P 4 -I {} bash 
   echo "Fehler bei Icon-Downloads (nicht kritisch)" >&2
 fi
 echo "Icons geladen ✓"
-d.%m.%y %H:%M
 echo "$SHA" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
-DEPLOY_TIME="$(date '+%Y-%m-%d %H:%M:%S %Z')"
+DEPLOY_TIME="$(date '+%d.%m.%y %H:%M')"
 echo "Fertig. Deploy-Commit: $SHA [$DEPLOY_TIME]"
 echo -n "BUILD_VERSION lokal: "
 cat "$TARGET_DIR/BUILD_VERSION"
