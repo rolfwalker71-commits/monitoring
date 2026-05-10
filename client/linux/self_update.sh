@@ -44,23 +44,88 @@ cleanup() {
 }
 trap cleanup EXIT
 
-remote_version=""
-if [[ -n "$UPDATE_BASE_URL" ]]; then
-  remote_version="$(curl "${CURL_BASE_ARGS[@]}" "$UPDATE_BASE_URL/AGENT_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
-fi
-if [[ -z "$remote_version" ]]; then
-  remote_version="$(curl "${CURL_BASE_ARGS[@]}" "${API_ACCEPT[@]}" "$API_BASE_URL/AGENT_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
-fi
-if [[ -z "$remote_version" && -n "$RAW_BASE_URL" ]]; then
-  remote_version="$(curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/AGENT_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
-fi
+version_is_valid() {
+  local ver="$1"
+  [[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+
+version_is_newer() {
+  local newer older
+  newer="$1"
+  older="$2"
+  if [[ "$newer" == "$older" ]]; then
+    return 1
+  fi
+  local lowest
+  lowest="$(printf '%s\n' "$newer" "$older" | sort -V | head -n 1)"
+  [[ "$lowest" == "$older" ]]
+}
+
+fetch_remote_version_file() {
+  local rel="$1"
+  local candidate=""
+
+  if [[ -n "$UPDATE_BASE_URL" ]]; then
+    candidate="$(curl "${CURL_BASE_ARGS[@]}" "$UPDATE_BASE_URL/$rel" 2>/dev/null | tr -d '[:space:]' || true)"
+    if version_is_valid "$candidate"; then
+      printf '%s|%s\n' "$candidate" "$UPDATE_BASE_URL/$rel"
+      return 0
+    fi
+  fi
+
+  candidate="$(curl "${CURL_BASE_ARGS[@]}" "${API_ACCEPT[@]}" "$API_BASE_URL/$rel" 2>/dev/null | tr -d '[:space:]' || true)"
+  if version_is_valid "$candidate"; then
+    printf '%s|%s\n' "$candidate" "$API_BASE_URL/$rel"
+    return 0
+  fi
+
+  if [[ -n "$RAW_BASE_URL" ]]; then
+    candidate="$(curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/$rel" 2>/dev/null | tr -d '[:space:]' || true)"
+    if version_is_valid "$candidate"; then
+      printf '%s|%s\n' "$candidate" "$RAW_BASE_URL/$rel"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
 local_version="unknown"
 if [[ -f "$AGENT_VERSION_FILE" ]]; then
   local_version="$(head -n 1 "$AGENT_VERSION_FILE" | tr -d '[:space:]')"
 fi
 
+agent_version=""
+agent_source=""
+agent_pair=""
+if agent_pair="$(fetch_remote_version_file "AGENT_VERSION" 2>/dev/null)"; then
+  agent_version="${agent_pair%%|*}"
+  agent_source="${agent_pair#*|}"
+fi
+
+build_version=""
+build_source=""
+build_pair=""
+if build_pair="$(fetch_remote_version_file "BUILD_VERSION" 2>/dev/null)"; then
+  build_version="${build_pair%%|*}"
+  build_source="${build_pair#*|}"
+fi
+
+remote_version=""
+remote_version_source=""
+if version_is_valid "$agent_version"; then
+  remote_version="$agent_version"
+  remote_version_source="$agent_source"
+fi
+if version_is_valid "$build_version"; then
+  if [[ -z "$remote_version" ]] || version_is_newer "$build_version" "$remote_version"; then
+    remote_version="$build_version"
+    remote_version_source="$build_source"
+  fi
+fi
+
 if [[ -z "$remote_version" ]]; then
-  echo "Remote version is empty; aborting update check." >&2
+  echo "Remote version lookup failed (AGENT_VERSION/BUILD_VERSION empty or invalid); aborting update check." >&2
   exit 1
 fi
 
@@ -93,23 +158,14 @@ install -m 0755 "$tmp_dir/collect_and_send.sh" "$INSTALL_DIR/collect_and_send.sh
 install -m 0755 "$tmp_dir/self_update.sh" "$INSTALL_DIR/self_update.sh"
 install -m 0644 "$tmp_dir/AGENT_VERSION" "$AGENT_VERSION_FILE"
 
-version_is_newer() {
-  local newer older
-  newer="$1"
-  older="$2"
-  if [[ "$newer" == "$older" ]]; then
-    return 1
-  fi
-  local lowest
-  lowest="$(printf '%s\n' "$newer" "$older" | sort -V | head -n 1)"
-  [[ "$lowest" == "$older" ]]
-}
-
 ts="$(date +"%d.%m.%Y %H:%M" 2>/dev/null || true)"
 if [[ "$remote_version" == "$local_version" ]]; then
-  echo "${ts} Monitoring agent already at ${local_version}, files refreshed"
+  echo "${ts} Monitoring agent already at ${local_version}, files refreshed (source: ${remote_version_source})"
 else
-  echo "${ts} Monitoring agent updated from ${local_version} to ${remote_version}"
+  if [[ -n "$agent_version" && -n "$build_version" && "$agent_version" != "$build_version" ]]; then
+    echo "${ts} Version selection: AGENT_VERSION=${agent_version}, BUILD_VERSION=${build_version}; chosen ${remote_version}"
+  fi
+  echo "${ts} Monitoring agent updated from ${local_version} to ${remote_version} (source: ${remote_version_source})"
 fi
 
 # Migration: remove old static DIR_SCAN_DEEP_PATHS that was auto-written by a
