@@ -9319,7 +9319,6 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
       <td class="so-host-cell">
         <div class="so-host-title">${hostTitle}</div>
         <div class="so-host-short">${shortHostname}</div>
-        <div class="so-host-spacer"></div>
         <div class="so-host-addons">${addOnSection}</div>
       </td>
       <td>
