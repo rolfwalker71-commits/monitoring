@@ -62,6 +62,99 @@ function Get-RepoUrlCandidates {
     )
 }
 
+function Get-RepoZipUrlCandidates {
+    $cacheBust = [System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    return @(
+        ("https://codeload.github.com/{0}/zip/refs/heads/main?cb={1}" -f $GithubRepo, $cacheBust),
+        ("https://github.com/{0}/archive/refs/heads/main.zip?cb={1}" -f $GithubRepo, $cacheBust),
+        ("https://codeload.github.com/{0}/zip/refs/heads/main" -f $GithubRepo),
+        ("https://github.com/{0}/archive/refs/heads/main.zip" -f $GithubRepo)
+    )
+}
+
+function Get-RepoZipEntryText {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RelativePath,
+        [Parameter(Mandatory = $true)]
+        [System.Collections.Generic.List[string]]$AttemptErrors
+    )
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+
+    $repoName = ($GithubRepo -split '/')[-1]
+    $entryPath = ('{0}-main/{1}' -f $repoName, (($RelativePath -replace '\\', '/').TrimStart('/')))
+    $tmpZipPath = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), ('monitoring-updater-{0}.zip' -f [System.Guid]::NewGuid().ToString('N')))
+
+    foreach ($url in (Get-RepoZipUrlCandidates)) {
+        try {
+            $wc.DownloadFile($url, $tmpZipPath)
+        } catch {
+            $AttemptErrors.Add("zip-webclient: $url => $($_.Exception.Message)")
+            continue
+        }
+
+        try {
+            $zip = [System.IO.Compression.ZipFile]::OpenRead($tmpZipPath)
+            try {
+                $entry = $zip.GetEntry($entryPath)
+                if (-not $entry) {
+                    $AttemptErrors.Add("zip-entry-missing: $url => $entryPath")
+                    continue
+                }
+                $reader = New-Object System.IO.StreamReader($entry.Open(), [System.Text.Encoding]::UTF8)
+                try {
+                    $text = $reader.ReadToEnd()
+                } finally {
+                    $reader.Dispose()
+                }
+                if ($text) {
+                    return [string]$text
+                }
+                $AttemptErrors.Add("zip-empty-content: $url => $entryPath")
+            } finally {
+                $zip.Dispose()
+            }
+        } catch {
+            $AttemptErrors.Add("zip-read: $url => $($_.Exception.Message)")
+        } finally {
+            Remove-Item $tmpZipPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    return ''
+}
+
+function Download-RepoFileViaZip {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RelativePath,
+        [Parameter(Mandatory = $true)]
+        [string]$DestinationPath,
+        [Parameter(Mandatory = $true)]
+        [System.Collections.Generic.List[string]]$AttemptErrors
+    )
+
+    $text = Get-RepoZipEntryText -RelativePath $RelativePath -AttemptErrors $AttemptErrors
+    if (-not $text) {
+        return $false
+    }
+
+    try {
+        [System.IO.File]::WriteAllText($DestinationPath, $text, [System.Text.Encoding]::UTF8)
+    } catch {
+        $AttemptErrors.Add("zip-write: $RelativePath => $($_.Exception.Message)")
+        return $false
+    }
+
+    if (Test-DownloadedFileContent -RelativePath $RelativePath -Path $DestinationPath) {
+        return $true
+    }
+
+    $AttemptErrors.Add("zip-invalid-content: $RelativePath")
+    return $false
+}
+
 function Test-DownloadedFileContent {
     param(
         [Parameter(Mandatory = $true)]
@@ -152,6 +245,11 @@ function Download-RepoText {
         }
     }
 
+    $zipText = Get-RepoZipEntryText -RelativePath $RelativePath -AttemptErrors $attemptErrors
+    if ($zipText) {
+        return [string]$zipText
+    }
+
     $global:LastDownloadRepoTextError = ($attemptErrors -join ' | ')
     return ''
 }
@@ -202,6 +300,10 @@ function Download-RepoFile {
                 $attemptErrors.Add("curl-exception: $url => $($_.Exception.Message)")
             }
         }
+    }
+
+    if (Download-RepoFileViaZip -RelativePath $RelativePath -DestinationPath $DestinationPath -AttemptErrors $attemptErrors) {
+        return $true
     }
 
     $global:LastDownloadRepoFileError = ($attemptErrors -join ' | ')
