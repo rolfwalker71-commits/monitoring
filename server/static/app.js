@@ -4096,7 +4096,7 @@ function renderSapB1VersionMapCard() {
   return `
     <details class="sap-b1-raw-details">
       <summary class="sap-b1-raw-summary">
-        📋 SAP B1 Version-Referenztabelle (${SAP_B1_VERSION_MAP.size} Einträge)
+        SAP B1 Version-Referenztabelle (${SAP_B1_VERSION_MAP.size} Einträge) 📋
         <button class="sap-vmap-copy-btn" type="button" title="In Zwischenablage kopieren" data-copy="${escapeHtml(copyText)}">📋 Kopieren</button>
       </summary>
       <div class="table-wrap" style="margin-top:8px;">
@@ -4215,13 +4215,13 @@ function renderSapB1CombinedCard(payload) {
       </details>
 
         <details class="sap-b1-raw-details">
-          <summary class="sap-b1-raw-summary">🔐 Harvest SQL-Benutzer Status</summary>
+          <summary class="sap-b1-raw-summary">Harvest SQL-Benutzer Status</summary>
           ${renderHarvestStatusSection(payload)}
         </details>
 
       <details class="sap-b1-raw-details">
         <summary class="sap-b1-raw-summary">
-          📋 SAP B1 Version-Referenztabelle (${SAP_B1_VERSION_MAP.size} Einträge)
+          SAP B1 Version-Referenztabelle (${SAP_B1_VERSION_MAP.size} Einträge) 📋
           <button class="sap-vmap-copy-btn" type="button" title="In Zwischenablage kopieren" data-copy="${escapeHtml(copyText)}">📋 Kopieren</button>
         </summary>
         <div class="table-wrap" style="margin-top:8px;">
