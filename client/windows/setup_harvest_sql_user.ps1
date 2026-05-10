@@ -88,6 +88,7 @@ function Invoke-SqlQuery {
 
 function Get-SqlServerCandidates {
     $candidates = New-Object System.Collections.Generic.List[string]
+    $hasConfiguredCandidates = $false
 
     if ($cfg.ContainsKey('HARVEST_SQL_SERVER') -and $cfg['HARVEST_SQL_SERVER']) {
         $parts = [string]$cfg['HARVEST_SQL_SERVER'] -split '[,;]'
@@ -95,44 +96,49 @@ function Get-SqlServerCandidates {
             $v = ([string]$part).Trim()
             if ($v -and -not $candidates.Contains($v)) {
                 $candidates.Add($v)
+                $hasConfiguredCandidates = $true
             }
         }
     }
 
-    foreach ($base in @('.', 'localhost', $env:COMPUTERNAME)) {
-        if ($base -and -not $candidates.Contains($base)) {
-            $candidates.Add($base)
+    if (-not $hasConfiguredCandidates) {
+        foreach ($base in @('.', 'localhost', $env:COMPUTERNAME)) {
+            if ($base -and -not $candidates.Contains($base)) {
+                $candidates.Add($base)
+            }
         }
     }
 
-    $regPath = 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL'
-    try {
-        if (Test-Path $regPath) {
-            $instanceMap = Get-ItemProperty -Path $regPath -ErrorAction Stop
-            foreach ($prop in $instanceMap.PSObject.Properties) {
-                if ($prop.Name -in @('PSPath','PSParentPath','PSChildName','PSDrive','PSProvider')) { continue }
-                $instanceName = [string]$prop.Name
-                if (-not $instanceName) { continue }
+    if (-not $hasConfiguredCandidates) {
+        $regPath = 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL'
+        try {
+            if (Test-Path $regPath) {
+                $instanceMap = Get-ItemProperty -Path $regPath -ErrorAction Stop
+                foreach ($prop in $instanceMap.PSObject.Properties) {
+                    if ($prop.Name -in @('PSPath','PSParentPath','PSChildName','PSDrive','PSProvider')) { continue }
+                    $instanceName = [string]$prop.Name
+                    if (-not $instanceName) { continue }
 
-                if ($instanceName -ieq 'MSSQLSERVER') {
-                    foreach ($base in @('.', 'localhost', $env:COMPUTERNAME)) {
-                        if ($base -and -not $candidates.Contains($base)) {
-                            $candidates.Add($base)
+                    if ($instanceName -ieq 'MSSQLSERVER') {
+                        foreach ($base in @('.', 'localhost', $env:COMPUTERNAME)) {
+                            if ($base -and -not $candidates.Contains($base)) {
+                                $candidates.Add($base)
+                            }
                         }
-                    }
-                } else {
-                    foreach ($base in @('.', 'localhost', $env:COMPUTERNAME)) {
-                        if (-not $base) { continue }
-                        $name = "$base\$instanceName"
-                        if (-not $candidates.Contains($name)) {
-                            $candidates.Add($name)
+                    } else {
+                        foreach ($base in @('.', 'localhost', $env:COMPUTERNAME)) {
+                            if (-not $base) { continue }
+                            $name = "$base\$instanceName"
+                            if (-not $candidates.Contains($name)) {
+                                $candidates.Add($name)
+                            }
                         }
                     }
                 }
             }
+        } catch {
+            # Ignore registry discovery errors
         }
-    } catch {
-        # Ignore registry discovery errors
     }
 
     return @($candidates)
