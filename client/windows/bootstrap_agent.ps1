@@ -34,6 +34,7 @@ $ErrorActionPreference = 'Stop'
 $IC = [System.Globalization.CultureInfo]::InvariantCulture
 $ServerUrl = $ServerUrl.TrimEnd('/')
 $UpdateBaseUrl = $ServerUrl + '/updates'
+$GithubRawBaseUrl = 'https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main'
 $ConfigFile = Join-Path $InstallDir 'agent.conf'
 $VersionFile = Join-Path $InstallDir 'AGENT_VERSION'
 
@@ -145,6 +146,21 @@ function Download-FileBestEffort {
     return $false
 }
 
+function Download-FileFromCandidates {
+    param(
+        [string[]]$Urls,
+        [string]$Destination
+    )
+
+    foreach ($url in $Urls) {
+        if (Download-FileBestEffort -Url $url -Destination $Destination) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
 function Test-PowerShellScriptContent {
     param([string]$Path)
 
@@ -208,8 +224,15 @@ try {
         foreach ($item in $filesToRefresh) {
             $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString('N') + '.tmp')
             try {
-                $url = "{0}/{1}?cb={2}" -f $UpdateBaseUrl, $item.rel, [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-                if (-not (Download-FileBestEffort -Url $url -Destination $tmp)) {
+                $cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+                $urls = @(
+                    ("{0}/{1}?cb={2}" -f $UpdateBaseUrl, $item.rel, $cacheBust),
+                    ("{0}/{1}" -f $UpdateBaseUrl, $item.rel),
+                    ("{0}/{1}?cb={2}" -f $GithubRawBaseUrl, $item.rel, $cacheBust),
+                    ("{0}/{1}" -f $GithubRawBaseUrl, $item.rel)
+                )
+
+                if (-not (Download-FileFromCandidates -Urls $urls -Destination $tmp)) {
                     if ($item.required) {
                         throw "Failed to download $($item.rel)"
                     }
@@ -247,8 +270,15 @@ try {
 
         $installScript = Join-Path ([System.IO.Path]::GetTempPath()) ('monitoring-install-agent-' + [System.Guid]::NewGuid().ToString('N') + '.ps1')
         try {
-            $url = $UpdateBaseUrl + '/client/windows/install_agent.ps1?cb=' + [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-            if (-not (Download-FileBestEffort -Url $url -Destination $installScript)) {
+            $cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+            $urls = @(
+                ($UpdateBaseUrl + '/client/windows/install_agent.ps1?cb=' + $cacheBust),
+                ($UpdateBaseUrl + '/client/windows/install_agent.ps1'),
+                ($GithubRawBaseUrl + '/client/windows/install_agent.ps1?cb=' + $cacheBust),
+                ($GithubRawBaseUrl + '/client/windows/install_agent.ps1')
+            )
+
+            if (-not (Download-FileFromCandidates -Urls $urls -Destination $installScript)) {
                 throw 'Could not download install_agent.ps1'
             }
             if (-not (Test-PowerShellScriptContent -Path $installScript)) {
