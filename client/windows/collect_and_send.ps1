@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.194'
+$EmbeddedAgentVersion = '1.1.195'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -574,8 +574,8 @@ function Get-SapB1PayloadBlock {
     $extensionsRowsJson = @(
         $harvestStatus.extensions_rows | ForEach-Object {
             '{' +
-            '`"AddOnName`":`"' + (ConvertTo-JsonString ([string]$_.AddOnName)) + '`",' +
-            '`"Version`":`"' + (ConvertTo-JsonString ([string]$_.Version)) + '`"' +
+            '"AddOnName":"' + (ConvertTo-JsonString ([string]$_.AddOnName)) + '",' +
+            '"Version":"' + (ConvertTo-JsonString ([string]$_.Version)) + '"' +
             '}'
         }
     ) -join ','
