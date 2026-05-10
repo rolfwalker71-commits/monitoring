@@ -7339,6 +7339,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             file_path = UPDATES_DIR / rel_path
+            if not (file_path.exists() and file_path.is_file()):
+                fallback_root = BASE_DIR.parent
+                fallback_candidates: list[Path] = []
+
+                # Serve current repo scripts if updates/ is missing or stale.
+                if rel_path_raw in {"AGENT_VERSION", "BUILD_VERSION"}:
+                    fallback_candidates.append(fallback_root / rel_path_raw)
+                elif len(rel_path.parts) >= 3 and rel_path.parts[0] == "client" and rel_path.parts[1] in {"windows", "linux"}:
+                    fallback_candidates.append(fallback_root / rel_path)
+
+                for candidate in fallback_candidates:
+                    if candidate.exists() and candidate.is_file():
+                        file_path = candidate
+                        break
+
             suffix = file_path.suffix.lower()
             if suffix == ".ps1":
                 mime = "text/plain; charset=utf-8"
