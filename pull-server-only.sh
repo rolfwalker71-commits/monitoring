@@ -215,11 +215,28 @@ fi
 echo "Icons geladen ✓"
 echo "$SHA" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
 DEPLOY_TIME="$(date '+%d.%m.%y %H:%M')"
+
+LATEST_META_AFTER="$(curl -fsSL --retry 5 --retry-delay 1 "https://api.github.com/repos/$OWNER_REPO/commits/main")"
+LATEST_SHA_AFTER="$(printf '%s\n' "$LATEST_META_AFTER" \
+  | sed -n 's/.*"sha":[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' \
+  | head -n 1)"
+
+DEPLOYED_SHA_FILE="$(cat "$TARGET_DIR/DEPLOYED_COMMIT_SHA" 2>/dev/null || true)"
+
 if [ -n "$GITHUB_COMMIT_TIME" ]; then
   echo "Fertig. Deploy-Commit: $SHA [GitHub: $GITHUB_COMMIT_TIME | Deploy: $DEPLOY_TIME]"
 else
   echo "Fertig. Deploy-Commit: $SHA [Deploy: $DEPLOY_TIME]"
 fi
+
+if [ -n "$LATEST_SHA_AFTER" ] && [ "$DEPLOYED_SHA_FILE" = "$LATEST_SHA_AFTER" ]; then
+  echo "Commit-Status: AKTUELL (deployter Commit entspricht repo/main)"
+elif [ -n "$LATEST_SHA_AFTER" ]; then
+  echo "Commit-Status: NICHT AKTUELL (deployt=$DEPLOYED_SHA_FILE, repo/main=$LATEST_SHA_AFTER)"
+else
+  echo "Commit-Status: UNBEKANNT (konnte latest main SHA nicht ermitteln)"
+fi
+
 echo -n "BUILD_VERSION lokal: "
 cat "$TARGET_DIR/BUILD_VERSION"
 echo -n "AGENT_VERSION lokal: "
