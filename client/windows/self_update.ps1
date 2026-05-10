@@ -199,8 +199,11 @@ function Test-DownloadedFileContent {
         if ($strictHeaderOk) {
             return $true
         }
-        # Fallback guard: still reject HTML, but accept if core collector markers are present.
-        return ($textNormalized -match '\$EmbeddedAgentVersion\s*=\s*' -and $textNormalized -match '(?m)^function\s+Send-Payload' -and $textNormalized -match '(?m)^function\s+Invoke-ServerJsonPost')
+        # Fallback guard for proxied/transcoded content: rely on broad, non-line-anchored markers.
+        if ($textNormalized.Length -lt 1000) {
+            return $false
+        }
+        return ($textNormalized -match 'EmbeddedAgentVersion' -and $textNormalized -match 'Send-Payload' -and $textNormalized -match 'Invoke-ServerJsonPost' -and $textNormalized -match 'Collects system metrics')
     }
 
     if ($RelativePath -ieq 'client/windows/collect_and_scan_sap_tables.ps1') {
