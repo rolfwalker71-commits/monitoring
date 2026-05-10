@@ -177,8 +177,8 @@ function Setup-HarvestUser {
         [void](Invoke-SqlNonQuery -Connection $conn -Query "GRANT VIEW ANY DEFINITION TO [$HarvestUser]")
         $result.permissions_granted = $true
 
-        # Grant database-level read rights for SAP-relevant DBs if present.
-        $targetDbs = Invoke-SqlQuery -Connection $conn -Query "SELECT name FROM sys.databases WHERE state_desc = 'ONLINE' AND name IN ('SBO-COMMON','SBOCOMMON','SLDModel.SLDData') ORDER BY name"
+        # Grant database-level read rights for all online non-system databases.
+        $targetDbs = Invoke-SqlQuery -Connection $conn -Query "SELECT name FROM sys.databases WHERE state_desc = 'ONLINE' AND database_id > 4 ORDER BY name"
         foreach ($dbRow in @($targetDbs.Rows)) {
             $dbName = [string]$dbRow['name']
             if (-not $dbName) { continue }

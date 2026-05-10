@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.189'
+$EmbeddedAgentVersion = '1.1.190'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -491,8 +491,22 @@ function Get-HarvestHealthStatus {
         $currentUser = $cmd.ExecuteScalar()
         $status.user_exists = $null -ne $currentUser
 
-        # Test database access with HAS_DBACCESS to avoid failing metadata/table probes.
-        $dbCandidates = @('SBO-COMMON', 'SBOCOMMON', 'SLDModel.SLDData')
+        # Test access across all online non-system DBs using HAS_DBACCESS.
+        $dbListCmd = $conn.CreateCommand()
+        $dbListCmd.CommandText = "SELECT name FROM sys.databases WHERE state_desc = 'ONLINE' AND database_id > 4 ORDER BY name"
+        $dbCandidates = @()
+        $dbReader = $dbListCmd.ExecuteReader()
+        try {
+            while ($dbReader.Read()) {
+                $dbName = [string]$dbReader['name']
+                if ($dbName) {
+                    $dbCandidates += $dbName
+                }
+            }
+        } finally {
+            $dbReader.Close()
+        }
+
         foreach ($dbName in $dbCandidates) {
             try {
                 $safeDb = $dbName.Replace("'", "''")
