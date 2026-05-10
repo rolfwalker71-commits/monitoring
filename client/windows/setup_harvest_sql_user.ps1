@@ -83,7 +83,7 @@ function Invoke-SqlQuery {
     $adapter = New-Object System.Data.SqlClient.SqlDataAdapter($cmd)
     $table = New-Object System.Data.DataTable
     [void]$adapter.Fill($table)
-    return $table
+    return ,$table
 }
 
 function Get-SqlServerCandidates {
@@ -179,7 +179,7 @@ function Setup-HarvestUser {
 
         # Grant database-level read rights for SAP-relevant DBs if present.
         $targetDbs = Invoke-SqlQuery -Connection $conn -Query "SELECT name FROM sys.databases WHERE state_desc = 'ONLINE' AND name IN ('SBO-COMMON','SBOCOMMON','SLDModel.SLDData') ORDER BY name"
-        foreach ($dbRow in $targetDbs.Rows) {
+        foreach ($dbRow in @($targetDbs.Rows)) {
             $dbName = [string]$dbRow['name']
             if (-not $dbName) { continue }
             $safeDbName = $dbName.Replace(']', ']]')
@@ -192,7 +192,7 @@ function Setup-HarvestUser {
         $conn.Open()
 
         $dbRows = Invoke-SqlQuery -Connection $conn -Query "SELECT name FROM sys.databases WHERE state_desc = 'ONLINE' AND HAS_DBACCESS(name) = 1 ORDER BY name"
-        foreach ($row in $dbRows.Rows) {
+        foreach ($row in @($dbRows.Rows)) {
             $dbName = [string]$row['name']
             if ($dbName -and $dbName -notin @('master', 'tempdb', 'model', 'msdb')) {
                 $result.accessible_databases += $dbName
