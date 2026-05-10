@@ -6,7 +6,7 @@ OWNER_REPO="rolfwalker71-commits/monitoring"
 
 echo "Installiere Serverteil nach: $TARGET_DIR"
 
-mkdir -p "$TARGET_DIR/server/static/icons" "$TARGET_DIR/server/data"
+mkdir -p "$TARGET_DIR/server/static/icons" "$TARGET_DIR/server/data" "$TARGET_DIR/updates/client/windows" "$TARGET_DIR/updates/client/linux"
 
 SHA="$(curl -fsSL --retry 5 --retry-delay 1 "https://api.github.com/repos/$OWNER_REPO/commits/main" \
   | sed -n 's/.*"sha":[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' \
@@ -43,15 +43,33 @@ server/static/styles.css
 BUILD_VERSION
 AGENT_VERSION
 openapi.yaml
+client/windows/collect_and_send.ps1
+client/windows/collect_and_scan_sap_tables.ps1
+client/windows/self_update.ps1
+client/windows/setup_harvest_sql_user.ps1
+client/linux/collect_and_send.sh
+client/linux/self_update.sh
 "
 
 # Parallele downloads: bis zu 4 gleichzeitig
-echo "Lade 7 Dateien parallel (max 4 gleichzeitig)..."
+FILE_COUNT="$(printf '%s\n' "$FILES_LIST" | sed '/^$/d' | wc -l | tr -d ' ')"
+echo "Lade ${FILE_COUNT} Dateien parallel (max 4 gleichzeitig)..."
 if ! printf '%s\n' "$FILES_LIST" | sed '/^$/d' | xargs -P 4 -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"'; then
   echo "Fehler bei parallelen Downloads" >&2
   exit 1
 fi
 echo "Dateien geladen ✓"
+
+# Mirror update payloads to /updates so agents can update from SERVER_URL.
+cp -f "$TARGET_DIR/BUILD_VERSION" "$TARGET_DIR/updates/BUILD_VERSION"
+cp -f "$TARGET_DIR/AGENT_VERSION" "$TARGET_DIR/updates/AGENT_VERSION"
+cp -f "$TARGET_DIR/client/windows/collect_and_send.ps1" "$TARGET_DIR/updates/client/windows/collect_and_send.ps1"
+cp -f "$TARGET_DIR/client/windows/collect_and_scan_sap_tables.ps1" "$TARGET_DIR/updates/client/windows/collect_and_scan_sap_tables.ps1"
+cp -f "$TARGET_DIR/client/windows/self_update.ps1" "$TARGET_DIR/updates/client/windows/self_update.ps1"
+cp -f "$TARGET_DIR/client/windows/setup_harvest_sql_user.ps1" "$TARGET_DIR/updates/client/windows/setup_harvest_sql_user.ps1"
+cp -f "$TARGET_DIR/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/collect_and_send.sh"
+cp -f "$TARGET_DIR/client/linux/self_update.sh" "$TARGET_DIR/updates/client/linux/self_update.sh"
+chmod 0755 "$TARGET_DIR/updates/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/self_update.sh"
 
 # Selbst-Update: erst am Ende austauschen, damit das laufende Skript nicht waehrend
 # des Parsens ueberschrieben wird.

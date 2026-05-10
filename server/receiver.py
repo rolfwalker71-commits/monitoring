@@ -40,6 +40,7 @@ WINDOWS_LOGO_PATH = STATIC_DIR / "icons" / "windows.png"
 BUILD_VERSION_PATH = BASE_DIR.parent / "BUILD_VERSION"
 AGENT_VERSION_PATH = BASE_DIR.parent / "AGENT_VERSION"
 OPENAPI_SPEC_PATH = BASE_DIR.parent / "openapi.yaml"
+UPDATES_DIR = BASE_DIR.parent / "updates"
 API_KEY = os.getenv("MONITORING_API_KEY", "")
 API_KEY_GRACE_ALLOW_KNOWN_HOSTS = os.getenv("MONITORING_API_KEY_GRACE_ALLOW_KNOWN_HOSTS", "1").strip().lower() in {"1", "true", "yes", "on"}
 MAX_REPORTS_PER_HOST = int(os.getenv("MONITORING_MAX_REPORTS_PER_HOST", "1344"))
@@ -7211,6 +7212,38 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_file(AGENT_VERSION_PATH, "text/plain; charset=utf-8")
             else:
                 self._send_file(BUILD_VERSION_PATH, "text/plain; charset=utf-8")
+            return
+
+        if parsed.path.startswith("/updates/"):
+            rel_path_raw = parsed.path[len("/updates/"):].strip("/")
+            if not rel_path_raw:
+                self.send_error(HTTPStatus.NOT_FOUND, "Not found")
+                return
+            rel_path = Path(rel_path_raw)
+            if rel_path.is_absolute() or ".." in rel_path.parts:
+                self.send_error(HTTPStatus.BAD_REQUEST, "Invalid path")
+                return
+
+            file_path = UPDATES_DIR / rel_path
+            suffix = file_path.suffix.lower()
+            if suffix == ".ps1":
+                mime = "text/plain; charset=utf-8"
+            elif suffix == ".sh":
+                mime = "text/plain; charset=utf-8"
+            elif suffix in {".txt", ""}:
+                mime = "text/plain; charset=utf-8"
+            else:
+                mime = "application/octet-stream"
+
+            self._send_file(
+                file_path,
+                mime,
+                extra_headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
             return
 
         if parsed.path.startswith("/icons/"):

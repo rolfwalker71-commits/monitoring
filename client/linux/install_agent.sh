@@ -15,7 +15,7 @@ AGENT_ID=""
 DISPLAY_NAME=""
 INTERVAL_MINUTES="15"
 UPDATE_HOURS="6"
-RAW_BASE_URL="https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main"
+RAW_BASE_URL=""
 AGENT_QUEUE_DIR="/var/lib/monitoring-agent/queue"
 COLLECT_SCRIPT_URL=""
 SELF_UPDATE_SCRIPT_URL=""
@@ -91,6 +91,10 @@ if [[ -z "$SERVER_URL" ]]; then
   echo "--server-url is required" >&2
   usage
   exit 1
+fi
+
+if [[ -z "$RAW_BASE_URL" ]]; then
+  RAW_BASE_URL="${SERVER_URL%/}/updates"
 fi
 
 if ! [[ "$INTERVAL_MINUTES" =~ ^[0-9]+$ ]] || [[ "$INTERVAL_MINUTES" -lt 1 ]] || [[ "$INTERVAL_MINUTES" -gt 59 ]]; then
@@ -212,6 +216,7 @@ API_KEY="$API_KEY"
 AGENT_ID="$AGENT_ID"
 DISPLAY_NAME="$DISPLAY_NAME"
 RAW_BASE_URL="$RAW_BASE_URL"
+UPDATE_BASE_URL="$RAW_BASE_URL"
 INSTALL_DIR="$INSTALL_DIR"
 AGENT_VERSION_FILE="$INSTALL_DIR/AGENT_VERSION"
 AGENT_QUEUE_DIR="$AGENT_QUEUE_DIR"

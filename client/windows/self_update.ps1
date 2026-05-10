@@ -33,6 +33,9 @@ foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
 }
 
 $InstallDir = if ($cfg.ContainsKey('INSTALL_DIR'))   { $cfg['INSTALL_DIR'] }   else { 'C:\ProgramData\monitoring-agent' }
+$ServerUrl = if ($cfg.ContainsKey('SERVER_URL')) { $cfg['SERVER_URL'] } else { '' }
+$ConfiguredUpdateBaseUrl = if ($cfg.ContainsKey('UPDATE_BASE_URL')) { $cfg['UPDATE_BASE_URL'] } elseif ($cfg.ContainsKey('RAW_BASE_URL')) { $cfg['RAW_BASE_URL'] } else { '' }
+$PrimaryUpdateBaseUrl = if ($ConfiguredUpdateBaseUrl) { $ConfiguredUpdateBaseUrl.TrimEnd('/') } elseif ($ServerUrl) { ($ServerUrl.TrimEnd('/')) + '/updates' } else { '' }
 $GithubRepo = if ($cfg.ContainsKey('GITHUB_REPO'))   { $cfg['GITHUB_REPO'] }   else { 'rolfwalker71-commits/monitoring' }
 $RawBaseUrl = "https://raw.githubusercontent.com/$GithubRepo/main"
 $GithubRawAltBaseUrl = "https://github.com/$GithubRepo/raw/refs/heads/main"
@@ -54,12 +57,21 @@ function Get-RepoUrlCandidates {
     $path = ($RelativePath -replace '\\', '/').TrimStart('/')
     $cacheBust = [System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 
-    return @(
+    $urls = @()
+    if ($PrimaryUpdateBaseUrl) {
+        $urls += @(
+            ("{0}/{1}?cb={2}" -f $PrimaryUpdateBaseUrl, $path, $cacheBust),
+            ("{0}/{1}" -f $PrimaryUpdateBaseUrl, $path)
+        )
+    }
+    $urls += @(
         ("{0}/{1}?cb={2}" -f $RawBaseUrl, $path, $cacheBust),
         ("{0}/{1}?raw=1&cb={2}" -f $GithubRawAltBaseUrl, $path, $cacheBust),
         ("{0}/{1}" -f $RawBaseUrl, $path),
         ("{0}/{1}?raw=1" -f $GithubRawAltBaseUrl, $path)
     )
+
+    return @($urls | Select-Object -Unique)
 }
 
 function Get-RepoZipUrlCandidates {
@@ -372,13 +384,13 @@ New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
 
 try {
     if (-not (Download-RepoFile -RelativePath 'client/windows/collect_and_send.ps1' -DestinationPath "$tmpDir\collect_and_send.ps1")) {
-        throw "Failed to download collect_and_send.ps1 from GitHub sources. Details: $global:LastDownloadRepoFileError"
+        throw "Failed to download collect_and_send.ps1 from configured update sources. Details: $global:LastDownloadRepoFileError"
     }
     if (-not (Download-RepoFile -RelativePath 'client/windows/collect_and_scan_sap_tables.ps1' -DestinationPath "$tmpDir\collect_and_scan_sap_tables.ps1")) {
-        throw "Failed to download collect_and_scan_sap_tables.ps1 from GitHub sources. Details: $global:LastDownloadRepoFileError"
+        throw "Failed to download collect_and_scan_sap_tables.ps1 from configured update sources. Details: $global:LastDownloadRepoFileError"
     }
     if (-not (Download-RepoFile -RelativePath 'client/windows/setup_harvest_sql_user.ps1' -DestinationPath "$tmpDir\setup_harvest_sql_user.ps1")) {
-        throw "Failed to download setup_harvest_sql_user.ps1 from GitHub sources. Details: $global:LastDownloadRepoFileError"
+        throw "Failed to download setup_harvest_sql_user.ps1 from configured update sources. Details: $global:LastDownloadRepoFileError"
     }
     # Guard against stale or incompatible script payloads before replacing local files.
     $collectContent = [System.IO.File]::ReadAllText("$tmpDir\collect_and_send.ps1", [System.Text.Encoding]::UTF8)

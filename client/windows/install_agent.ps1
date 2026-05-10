@@ -38,11 +38,15 @@ param(
     [int] $UpdateHours = 6,
 
     [Parameter(Mandatory = $false)]
-    [string] $RawBaseUrl = 'https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main'
+    [string] $RawBaseUrl = ''
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if (-not $RawBaseUrl) {
+    $RawBaseUrl = ($ServerUrl.TrimEnd('/')) + '/updates'
+}
 
 # Enable TLS 1.2 for older Windows versions
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -154,6 +158,7 @@ API_KEY="$ApiKey"
 AGENT_ID="$AgentId"
 DISPLAY_NAME="$DisplayName"
 RAW_BASE_URL="$RawBaseUrl"
+UPDATE_BASE_URL="$RawBaseUrl"
 INSTALL_DIR="$InstallDir"
 AGENT_VERSION_FILE="$InstallDir\AGENT_VERSION"
 AGENT_QUEUE_DIR="$QueueDir"

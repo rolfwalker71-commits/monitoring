@@ -12,7 +12,15 @@ fi
 source "$CONFIG_FILE"
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/monitoring-agent}"
-RAW_BASE_URL="${RAW_BASE_URL:-https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main}"
+SERVER_URL="${SERVER_URL:-}"
+RAW_BASE_URL="${RAW_BASE_URL:-}"
+UPDATE_BASE_URL="${UPDATE_BASE_URL:-${RAW_BASE_URL:-}}"
+if [[ -z "$UPDATE_BASE_URL" && -n "$SERVER_URL" ]]; then
+  UPDATE_BASE_URL="${SERVER_URL%/}/updates"
+fi
+if [[ -z "$RAW_BASE_URL" ]]; then
+  RAW_BASE_URL="$UPDATE_BASE_URL"
+fi
 GITHUB_REPO="${GITHUB_REPO:-rolfwalker71-commits/monitoring}"
 AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-$INSTALL_DIR/AGENT_VERSION}"
 TLS_INSECURE="${TLS_INSECURE:-0}"
@@ -33,8 +41,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-remote_version="$(curl "${CURL_BASE_ARGS[@]}" "${API_ACCEPT[@]}" "$API_BASE_URL/AGENT_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+remote_version=""
+if [[ -n "$UPDATE_BASE_URL" ]]; then
+  remote_version="$(curl "${CURL_BASE_ARGS[@]}" "$UPDATE_BASE_URL/AGENT_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+fi
 if [[ -z "$remote_version" ]]; then
+  remote_version="$(curl "${CURL_BASE_ARGS[@]}" "${API_ACCEPT[@]}" "$API_BASE_URL/AGENT_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
+fi
+if [[ -z "$remote_version" && -n "$RAW_BASE_URL" ]]; then
   remote_version="$(curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/AGENT_VERSION" 2>/dev/null | tr -d '[:space:]' || true)"
 fi
 local_version="unknown"
@@ -47,8 +61,29 @@ if [[ -z "$remote_version" ]]; then
   exit 1
 fi
 
-curl "${CURL_BASE_ARGS[@]}" "${API_ACCEPT[@]}" "$API_BASE_URL/client/linux/collect_and_send.sh" -o "$tmp_dir/collect_and_send.sh"
-curl "${CURL_BASE_ARGS[@]}" "${API_ACCEPT[@]}" "$API_BASE_URL/client/linux/self_update.sh" -o "$tmp_dir/self_update.sh"
+download_update_file() {
+  local rel="$1"
+  local out="$2"
+  if [[ -n "$UPDATE_BASE_URL" ]] && curl "${CURL_BASE_ARGS[@]}" "$UPDATE_BASE_URL/$rel" -o "$out" 2>/dev/null; then
+    return 0
+  fi
+  if curl "${CURL_BASE_ARGS[@]}" "${API_ACCEPT[@]}" "$API_BASE_URL/$rel" -o "$out" 2>/dev/null; then
+    return 0
+  fi
+  if [[ -n "$RAW_BASE_URL" ]] && curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/$rel" -o "$out" 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+if ! download_update_file "client/linux/collect_and_send.sh" "$tmp_dir/collect_and_send.sh"; then
+  echo "Failed to download collect_and_send.sh from configured update sources." >&2
+  exit 1
+fi
+if ! download_update_file "client/linux/self_update.sh" "$tmp_dir/self_update.sh"; then
+  echo "Failed to download self_update.sh from configured update sources." >&2
+  exit 1
+fi
 printf '%s\n' "$remote_version" > "$tmp_dir/AGENT_VERSION"
 
 install -m 0755 "$tmp_dir/collect_and_send.sh" "$INSTALL_DIR/collect_and_send.sh"

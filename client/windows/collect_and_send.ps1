@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.181'
+$EmbeddedAgentVersion = '1.1.182'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -668,10 +668,19 @@ function Invoke-AgentSelfUpdate {
 
     $tmpScript = $null
     try {
-        if ($cfg.ContainsKey('RAW_BASE_URL') -and $cfg['RAW_BASE_URL']) {
+        $updateBase = ''
+        if ($cfg.ContainsKey('UPDATE_BASE_URL') -and $cfg['UPDATE_BASE_URL']) {
+            $updateBase = $cfg['UPDATE_BASE_URL']
+        } elseif ($cfg.ContainsKey('RAW_BASE_URL') -and $cfg['RAW_BASE_URL']) {
+            $updateBase = $cfg['RAW_BASE_URL']
+        } elseif ($cfg.ContainsKey('SERVER_URL') -and $cfg['SERVER_URL']) {
+            $updateBase = ($cfg['SERVER_URL'].TrimEnd('/')) + '/updates'
+        }
+
+        if ($updateBase) {
             $tmpScript = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + '.ps1')
             $wc = New-Object System.Net.WebClient
-            $wc.DownloadFile(($cfg['RAW_BASE_URL'].TrimEnd('/')) + '/client/windows/self_update.ps1', $tmpScript)
+            $wc.DownloadFile(($updateBase.TrimEnd('/')) + '/client/windows/self_update.ps1', $tmpScript)
             & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $tmpScript *>> $UpdateLogFile
             return ($LASTEXITCODE -eq 0)
         }
@@ -695,14 +704,23 @@ function Ensure-OptionalSapScanScript {
         return
     }
 
-    if (-not ($cfg.ContainsKey('RAW_BASE_URL') -and $cfg['RAW_BASE_URL'])) {
+    $updateBase = ''
+    if ($cfg.ContainsKey('UPDATE_BASE_URL') -and $cfg['UPDATE_BASE_URL']) {
+        $updateBase = $cfg['UPDATE_BASE_URL']
+    } elseif ($cfg.ContainsKey('RAW_BASE_URL') -and $cfg['RAW_BASE_URL']) {
+        $updateBase = $cfg['RAW_BASE_URL']
+    } elseif ($cfg.ContainsKey('SERVER_URL') -and $cfg['SERVER_URL']) {
+        $updateBase = ($cfg['SERVER_URL'].TrimEnd('/')) + '/updates'
+    }
+
+    if (-not $updateBase) {
         return
     }
 
     $tmpScript = $null
     try {
         $tmpScript = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + '.ps1')
-        $uri = ($cfg['RAW_BASE_URL'].TrimEnd('/')) + '/client/windows/collect_and_scan_sap_tables.ps1'
+        $uri = ($updateBase.TrimEnd('/')) + '/client/windows/collect_and_scan_sap_tables.ps1'
         $wc = New-Object System.Net.WebClient
         $wc.DownloadFile($uri, $tmpScript)
 
