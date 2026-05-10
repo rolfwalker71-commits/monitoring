@@ -90,6 +90,8 @@ chmod 0755 "$TARGET_DIR/updates/client/linux/collect_and_send.sh" "$TARGET_DIR/u
 NEW_PULL_SCRIPT="$TARGET_DIR/pull-server-only.sh.new"
 if download_file "pull-server-only.sh" "$NEW_PULL_SCRIPT"; then
   chmod +x "$NEW_PULL_SCRIPT"
+  mv -f "$NEW_PULL_SCRIPT" "$TARGET_DIR/pull-server-only.sh"
+  echo "Self-Update abgeschlossen: pull-server-only.sh aktualisiert"
 else
   echo "WARNUNG: Konnte neue pull-server-only.sh nicht laden." >&2
 fi
@@ -189,11 +191,6 @@ EOF
 
 systemctl daemon-reload
 systemctl enable monitoring
-
-if [ -f "$NEW_PULL_SCRIPT" ]; then
-  mv -f "$NEW_PULL_SCRIPT" "$TARGET_DIR/pull-server-only.sh"
-  echo "Self-Update abgeschlossen: pull-server-only.sh aktualisiert"
-fi
 
 echo ""
 echo "systemd Service installiert: $SERVICE_FILE"
