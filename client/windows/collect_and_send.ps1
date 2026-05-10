@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.195'
+$EmbeddedAgentVersion = '1.1.196'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -462,6 +462,10 @@ function Get-HarvestHealthStatus {
         extensions_available = $false
         extensions_rows = @()
         extensions_error = ''
+        sari_addons_available = $false
+        sari_addons_source_db = ''
+        sari_addons_rows = @()
+        sari_addons_error = ''
         diagnostics = ''
         error = ''
     }
@@ -552,6 +556,37 @@ function Get-HarvestHealthStatus {
             $status.extensions_error = $_.Exception.Message
         }
 
+        # Read lightweight add-ons from SARI with DB fallback: SBO-COMMON, SBOCOMMON.
+        $sariDbCandidates = @('SBO-COMMON', 'SBOCOMMON')
+        $sariErrors = @()
+        foreach ($sariDb in $sariDbCandidates) {
+            try {
+                $safeDbName = $sariDb.Replace(']', ']]')
+                $sariCmd = $conn.CreateCommand()
+                $sariCmd.CommandText = "SELECT AName, AddOnVer FROM [$safeDbName].[dbo].[SARI] ORDER BY AName"
+                $sariCmd.CommandTimeout = 10
+                $sariReader = $sariCmd.ExecuteReader()
+                try {
+                    while ($sariReader.Read()) {
+                        $status.sari_addons_rows += @{
+                            AName = [string]$sariReader['AName']
+                            AddOnVer = [string]$sariReader['AddOnVer']
+                        }
+                    }
+                    $status.sari_addons_available = $true
+                    $status.sari_addons_source_db = $sariDb
+                    break
+                } finally {
+                    $sariReader.Close()
+                }
+            } catch {
+                $sariErrors += ($sariDb + ': ' + $_.Exception.Message)
+            }
+        }
+        if (-not $status.sari_addons_available -and $sariErrors.Count -gt 0) {
+            $status.sari_addons_error = ($sariErrors -join ' | ')
+        }
+
         $status.diagnostics = "Connected as $currentUser on $harvestServer; accessible DBs: $($status.databases_accessible -join ', ')"
 
         $conn.Close()
@@ -580,12 +615,23 @@ function Get-SapB1PayloadBlock {
         }
     ) -join ','
     $extensionsErrorEsc = ConvertTo-JsonString $harvestStatus.extensions_error
+    $sariRowsJson = @(
+        $harvestStatus.sari_addons_rows | ForEach-Object {
+            '{' +
+            '"AName":"' + (ConvertTo-JsonString ([string]$_.AName)) + '",' +
+            '"AddOnVer":"' + (ConvertTo-JsonString ([string]$_.AddOnVer)) + '"' +
+            '}'
+        }
+    ) -join ','
+    $sariErrorEsc = ConvertTo-JsonString $harvestStatus.sari_addons_error
+    $sariSourceDbEsc = ConvertTo-JsonString $harvestStatus.sari_addons_source_db
 
     $harvJson = "{`"harvest_enabled`":$(if($harvestStatus.harvest_enabled){'true'}else{'false'}),`"user_exists`":$(if($harvestStatus.user_exists){'true'}else{'false'}),`"can_connect`":$(if($harvestStatus.can_connect){'true'}else{'false'}),`"databases_accessible`":[${harvDbsJson}],`"error`":`"$harvErrorEsc`",`"diagnostics`":`"$harvDiagsEsc`"}"
     $extensionsJson = "{`"available`":$(if($harvestStatus.extensions_available){'true'}else{'false'}),`"rows`":[$extensionsRowsJson],`"error`":`"$extensionsErrorEsc`"}"
+    $sariAddonsJson = "{`"available`":$(if($harvestStatus.sari_addons_available){'true'}else{'false'}),`"source_db`":`"$sariSourceDbEsc`",`"rows`":[${sariRowsJson}],`"error`":`"$sariErrorEsc`"}"
 
     if ($b1Block.EndsWith('}')) {
-        return $b1Block.Substring(0, $b1Block.Length - 1) + ",`"harvest_status`":$harvJson,`"extensions`":$extensionsJson}"
+        return $b1Block.Substring(0, $b1Block.Length - 1) + ",`"harvest_status`":$harvJson,`"extensions`":$extensionsJson,`"sari_addons`":$sariAddonsJson}"
     }
     return $b1Block
 }

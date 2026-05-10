@@ -2483,23 +2483,34 @@ def _extract_sap_addon_snapshot(payload: dict) -> dict[str, str]:
     if not isinstance(sap_block, dict):
         return {}
 
-    ext_block = sap_block.get("extensions")
-    if not isinstance(ext_block, dict):
-        return {}
-
-    rows = ext_block.get("rows")
-    if not isinstance(rows, list):
-        return {}
-
     snapshot: dict[str, str] = {}
-    for row in rows:
+
+    ext_block = sap_block.get("extensions")
+    ext_rows = ext_block.get("rows") if isinstance(ext_block, dict) else []
+    if not isinstance(ext_rows, list):
+        ext_rows = []
+    for row in ext_rows:
         if not isinstance(row, dict):
             continue
         addon_name = str(row.get("AddOnName") or "").strip()
         if not addon_name:
             continue
         addon_version = str(row.get("Version") or "").strip() or "-"
-        snapshot[addon_name] = addon_version
+        snapshot[f"extensions::{addon_name}"] = addon_version
+
+    sari_block = sap_block.get("sari_addons")
+    sari_rows = sari_block.get("rows") if isinstance(sari_block, dict) else []
+    if not isinstance(sari_rows, list):
+        sari_rows = []
+    for row in sari_rows:
+        if not isinstance(row, dict):
+            continue
+        addon_name = str(row.get("AName") or "").strip()
+        if not addon_name:
+            continue
+        addon_version = str(row.get("AddOnVer") or "").strip() or "-"
+        snapshot[f"sari::{addon_name}"] = addon_version
+
     return snapshot
 
 
@@ -2543,6 +2554,15 @@ def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit:
                 if old_version == new_version:
                     continue
 
+                label_source = "Lightweight Extension"
+                plain_name = addon_name
+                if addon_name.startswith("extensions::"):
+                    plain_name = addon_name.split("::", 1)[1]
+                    label_source = "Lightweight Extension (Extensions)"
+                elif addon_name.startswith("sari::"):
+                    plain_name = addon_name.split("::", 1)[1]
+                    label_source = "Lightweight Extension (SARI)"
+
                 display_override = str(row[4] or "").strip()
                 country_code = normalize_country_code(str(row[5] or ""))
                 changes.append(
@@ -2552,7 +2572,7 @@ def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit:
                         "hostname": hostname,
                         "display_name": display_override or hostname,
                         "field_key": f"sap_addon::{addon_name}",
-                        "field_label": f"Lightweight AddOn: {addon_name}",
+                        "field_label": f"{label_source}: {plain_name}",
                         "old_value": old_version,
                         "new_value": new_version,
                         "source": "agent-report:addon",
