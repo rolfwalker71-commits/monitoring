@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 $IC = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile = if ($env:CONFIG_FILE) { $env:CONFIG_FILE } else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
-$EmbeddedAgentVersion = '1.1.197'
+$EmbeddedAgentVersion = '1.1.198'
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -371,7 +371,7 @@ $agentId = if ($cfg.ContainsKey('AGENT_ID') -and $cfg['AGENT_ID']) { $cfg['AGENT
 $displayName = if ($cfg.ContainsKey('DISPLAY_NAME') -and $cfg['DISPLAY_NAME']) { $cfg['DISPLAY_NAME'] } else { $hostnameValue }
 $agentVersion = Select-AgentVersion -EmbeddedVersion $EmbeddedAgentVersion -FilePath $VersionFile
 
-$sariDbCandidates = @('SBO-COMMON', 'SBOCOMMON', 'sbo-commen')
+$sariDbCandidates = @('SBO-COMMON', 'SBOCOMMON')
 $extensionsDbCandidates = @('SLDModel.SLDData', 'SLDMODEL.SLDDATA')
 $sariPreferredColumns = @('AddOnId', 'NameSpace', 'AName', 'AddOnVer', 'ClientType', 'UpgChkSumX')
 $extensionsPreferredColumns = @('Id', 'Name', 'Version', 'Vendor', 'Type', 'Status', 'ClientType', 'LastUpdated')
