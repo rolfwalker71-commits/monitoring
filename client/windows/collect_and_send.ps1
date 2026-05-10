@@ -414,6 +414,88 @@ function Get-SapB1InfoBlock {
     return $empty
 }
 
+function Get-HarvestHealthStatus {
+    $status = @{
+        harvest_enabled = $false
+    function Get-SapB1PayloadBlock {
+        $b1Block = Get-SapB1InfoBlock
+        $harvestStatus = Get-HarvestHealthStatus
+    
+        # Convert harvest status to JSON inline
+        $harvDbsJson = '"' + (($harvestStatus.databases_accessible | ForEach-Object { ConvertTo-JsonString $_ }) -join '","') + '"'
+        $harvErrorEsc = ConvertTo-JsonString $harvestStatus.error
+        $harvDiagsEsc = ConvertTo-JsonString $harvestStatus.diagnostics
+    
+        $harvJson = "{`"harvest_enabled`":$(if($harvestStatus.harvest_enabled){'true'}else{'false'}),`"user_exists`":$(if($harvestStatus.user_exists){'true'}else{'false'}),`"can_connect`":$(if($harvestStatus.can_connect){'true'}else{'false'}),`"databases_accessible`":[$harvDbsJson],`"error`":`"$harvErrorEsc`",`"diagnostics`":`"$harvDiagsEsc`"}"
+    
+        # Merge harvest status into B1 block (strip closing brace from b1Block, add harvest, close)
+        if ($b1Block.EndsWith('}')) {
+            return $b1Block.Substring(0, $b1Block.Length - 1) + ",`"harvest_status`":$harvJson}"
+        }
+        return $b1Block
+    }
+
+        user_exists = $false
+        can_connect = $false
+        databases_accessible = @()
+        diagnostics = ''
+        error = ''
+    }
+
+    # Check if harvest is enabled
+    if (-not ($cfg.ContainsKey('ENABLE_SAP_SCAN') -and $cfg['ENABLE_SAP_SCAN'] -eq '1')) {
+        $status.diagnostics = 'Harvest scanning disabled in config'
+        return $status
+    }
+
+    $status.harvest_enabled = $true
+
+    $harvestServer = if ($cfg.ContainsKey('HARVEST_SQL_SERVER')) { $cfg['HARVEST_SQL_SERVER'] } else { '' }
+    $harvestUser = if ($cfg.ContainsKey('HARVEST_SQL_USER')) { $cfg['HARVEST_SQL_USER'] } else { '' }
+    $harvestPassword = if ($cfg.ContainsKey('HARVEST_SQL_PASSWORD')) { $cfg['HARVEST_SQL_PASSWORD'] } else { '' }
+
+    if (-not $harvestServer -or -not $harvestUser -or -not $harvestPassword) {
+        $status.diagnostics = 'Harvest credentials not fully configured'
+        return $status
+    }
+
+    try {
+        $conn = New-Object System.Data.SqlClient.SqlConnection
+        $conn.ConnectionString = "Server=$harvestServer;Database=master;User ID=$harvestUser;Password=$harvestPassword;TrustServerCertificate=True;Connection Timeout=10;"
+        $conn.Open()
+
+        # Test user exists by checking login
+        $cmd = $conn.CreateCommand()
+        $cmd.CommandText = "SELECT SUSER_SNAME()"
+        $currentUser = $cmd.ExecuteScalar()
+        $status.user_exists = $null -ne $currentUser
+
+        # Test database access
+        $dbCandidates = @('SBO-COMMON', 'SBOCOMMON', 'SLDModel.SLDData')
+        foreach ($dbName in $dbCandidates) {
+            try {
+                $testCmd = $conn.CreateCommand()
+                $testCmd.CommandText = "SELECT 1 FROM [$dbName].sys.tables WHERE type='U'"
+                $testCmd.CommandTimeout = 5
+                $testCmd.ExecuteScalar() | Out-Null
+                $status.databases_accessible += $dbName
+            } catch {
+                # DB not accessible or doesn't exist
+            }
+        }
+
+        $status.can_connect = $true
+        $status.diagnostics = "Connected as $currentUser on $harvestServer; accessible DBs: $($status.databases_accessible -join ', ')"
+
+        $conn.Close()
+    } catch {
+        $status.error = $_.Exception.Message
+        $status.diagnostics = "Connection failed: $($_.Exception.Message)"
+    }
+
+    return $status
+}
+
 function Send-Payload([string]$body) {
     $uri = ($ServerUrl.TrimEnd('/')) + '/api/v1/agent-report'
     Invoke-ServerJsonPost -Uri $uri -Body $body | Out-Null
@@ -945,7 +1027,7 @@ $containersStr = [string]$containerData.entries
 $dockerAvailable = if ($containerData.available) { 'true' } else { 'false' }
 $updateLogJson   = Get-UpdateLogBlock
 $agentConfigJson = Get-AgentConfigBlock
-$sapB1Json       = Get-SapB1InfoBlock
+$sapB1Json       = Get-SapB1PayloadBlock
 $sqlServerJson   = Get-SqlServerInfoBlock
 $largeFilesJson  = '{"enabled":false,"status":"unsupported","filesystems":[]}'
 

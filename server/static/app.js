@@ -4137,6 +4137,38 @@ function renderSapB1TableScanRows(rows, expectedColumns = []) {
   `;
 }
 
+function renderHarvestStatusSection(payload) {
+  const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
+  const harvest = sap && typeof sap.harvest_status === "object" ? sap.harvest_status : null;
+  
+  if (!harvest) {
+    return `<p class="muted">Kein Harvest-Status im Payload vorhanden.</p>`;
+  }
+  
+  const enabled = harvest.harvest_enabled === true;
+  const userExists = harvest.user_exists === true;
+  const canConnect = harvest.can_connect === true;
+  const databases = Array.isArray(harvest.databases_accessible) ? harvest.databases_accessible : [];
+  const error = asText(harvest.error, "");
+  const diagnostics = asText(harvest.diagnostics, "");
+  
+  const statusIcon = (canConnect && userExists) ? "✅" : "❌";
+  
+  return `
+    <div style="padding: 8px; background: #f5f5f5; border-radius: 4px; margin-bottom: 8px;">
+      <p><strong>${statusIcon} Harvest-Status:</strong></p>
+      <p class="muted">
+        • Aktiviert: ${enabled ? "✅" : "❌"}<br/>
+        • Benutzer existiert: ${userExists ? "✅" : "❌"}<br/>
+        • Verbindung möglich: ${canConnect ? "✅" : "❌"}<br/>
+        ${databases.length > 0 ? `• Zugängliche Datenbanken: ${databases.length}<br/>` : ""}
+        ${error ? `• Fehler: ${escapeHtml(error)}<br/>` : ""}
+        ${diagnostics ? `• Details: ${escapeHtml(diagnostics)}<br/>` : ""}
+      </p>
+    </div>
+  `;
+}
+
 function renderSapB1TableScanSection(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const scan = sap && typeof sap.table_scan === "object" ? sap.table_scan : null;
@@ -4323,6 +4355,11 @@ function renderSapB1CombinedCard(payload) {
         <summary class="sap-b1-raw-summary">SBOCOMMON / SLDData Tabellenscan</summary>
         ${renderSapB1TableScanSection(payload)}
       </details>
+
+        <details class="sap-b1-raw-details">
+          <summary class="sap-b1-raw-summary">🔐 Harvest SQL-Benutzer Status</summary>
+          ${renderHarvestStatusSection(payload)}
+        </details>
 
       <details class="sap-b1-raw-details">
         <summary class="sap-b1-raw-summary">

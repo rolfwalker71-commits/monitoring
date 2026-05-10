@@ -120,6 +120,9 @@ $wc.DownloadFile("$RawBaseUrl/client/windows/collect_and_send.ps1", "$InstallDir
 Write-Host "Downloading collect_and_scan_sap_tables.ps1..."
 $wc.DownloadFile("$RawBaseUrl/client/windows/collect_and_scan_sap_tables.ps1", "$InstallDir\collect_and_scan_sap_tables.ps1")
 
+Write-Host "Downloading setup_harvest_sql_user.ps1..."
+$wc.DownloadFile("$RawBaseUrl/client/windows/setup_harvest_sql_user.ps1", "$InstallDir\setup_harvest_sql_user.ps1")
+
 Write-Host "Downloading self_update.ps1..."
 $wc.DownloadFile("$RawBaseUrl/client/windows/self_update.ps1", "$InstallDir\self_update.ps1")
 
@@ -227,6 +230,11 @@ Register-MonitoringTask `
 
 # Non-interactive post-install self-test: run collector and updater once immediately.
 Write-Host "Running self-test (collect and update)..."
+
+# Run harvest setup once after initial config
+Write-Host "Running harvest SQL user setup..."
+$harvestSetup = "`$env:CONFIG_FILE='$ConfigFile'; & '$InstallDir\setup_harvest_sql_user.ps1' *>> '$LogFile'"
+& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command $harvestSetup
 
 $selfTestCollect = "`$env:CONFIG_FILE='$ConfigFile'; `$env:AGENT_VERSION_FILE='$InstallDir\AGENT_VERSION'; `$env:AGENT_QUEUE_DIR='$QueueDir'; & '$InstallDir\collect_and_send.ps1' *>> '$LogFile'"
 & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command $selfTestCollect

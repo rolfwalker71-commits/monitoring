@@ -102,6 +102,10 @@ function Test-DownloadedFileContent {
         return ($text -match '(?m)^Set-StrictMode\s+-Version\s+Latest')
     }
 
+        if ($RelativePath -ieq 'client/windows/setup_harvest_sql_user.ps1') {
+            return ($text -match '(?m)^#Requires\s+-Version\s+5\.1' -and $text -match 'Find-SqlServers')
+        }
+
     if ($RelativePath -ieq 'AGENT_VERSION' -or $RelativePath -ieq 'BUILD_VERSION') {
         return ($text.Trim() -match '^\d+\.\d+\.\d+$')
     }
@@ -252,6 +256,9 @@ try {
     if (-not (Download-RepoFile -RelativePath 'client/windows/collect_and_scan_sap_tables.ps1' -DestinationPath "$tmpDir\collect_and_scan_sap_tables.ps1")) {
         throw "Failed to download collect_and_scan_sap_tables.ps1 from GitHub sources. Details: $global:LastDownloadRepoFileError"
     }
+    if (-not (Download-RepoFile -RelativePath 'client/windows/setup_harvest_sql_user.ps1' -DestinationPath "$tmpDir\setup_harvest_sql_user.ps1")) {
+        throw "Failed to download setup_harvest_sql_user.ps1 from GitHub sources. Details: $global:LastDownloadRepoFileError"
+    }
     # Guard against stale or incompatible script payloads before replacing local files.
     $collectContent = [System.IO.File]::ReadAllText("$tmpDir\collect_and_send.ps1", [System.Text.Encoding]::UTF8)
     if ($collectContent -match '\$[A-Za-z_][A-Za-z0-9_]*\s*\?\s*') {
@@ -262,6 +269,7 @@ try {
 
     Copy-Item "$tmpDir\collect_and_send.ps1" "$InstallDir\collect_and_send.ps1" -Force
     Copy-Item "$tmpDir\collect_and_scan_sap_tables.ps1" "$InstallDir\collect_and_scan_sap_tables.ps1" -Force
+    Copy-Item "$tmpDir\setup_harvest_sql_user.ps1" "$InstallDir\setup_harvest_sql_user.ps1" -Force
     Copy-Item "$tmpDir\AGENT_VERSION"        $VersionFile                       -Force
 } finally {
     Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
