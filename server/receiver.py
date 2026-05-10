@@ -2478,6 +2478,94 @@ def _track_host_config_changes(
     )
 
 
+def _extract_sap_addon_snapshot(payload: dict) -> dict[str, str]:
+    sap_block = payload.get("sap_business_one") if isinstance(payload, dict) else None
+    if not isinstance(sap_block, dict):
+        return {}
+
+    ext_block = sap_block.get("extensions")
+    if not isinstance(ext_block, dict):
+        return {}
+
+    rows = ext_block.get("rows")
+    if not isinstance(rows, list):
+        return {}
+
+    snapshot: dict[str, str] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        addon_name = str(row.get("AddOnName") or "").strip()
+        if not addon_name:
+            continue
+        addon_version = str(row.get("Version") or "").strip() or "-"
+        snapshot[addon_name] = addon_version
+    return snapshot
+
+
+def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit: int) -> list[dict]:
+    cutoff_iso = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    rows = conn.execute(
+        """
+        SELECT r.id,
+               r.received_at_utc,
+               r.hostname,
+               r.payload_json,
+               COALESCE(h.display_name_override, ''),
+               COALESCE(h.country_code_override, '')
+        FROM reports r
+        LEFT JOIN host_settings h ON h.hostname = r.hostname
+        WHERE r.received_at_utc >= ?
+        ORDER BY r.hostname COLLATE NOCASE ASC, r.id ASC
+        """,
+        (cutoff_iso,),
+    ).fetchall()
+
+    previous_by_host: dict[str, dict[str, str]] = {}
+    changes: list[dict] = []
+
+    for row in rows:
+        report_id = int(row[0] or 0)
+        detected_at_utc = str(row[1] or "")
+        hostname = str(row[2] or "").strip()
+        if not hostname:
+            continue
+
+        payload = parse_payload_json(str(row[3] or "{}"))
+        current_snapshot = _extract_sap_addon_snapshot(payload)
+        previous_snapshot = previous_by_host.get(hostname)
+
+        if previous_snapshot is not None:
+            addon_names = sorted(set(previous_snapshot.keys()) | set(current_snapshot.keys()), key=lambda x: x.lower())
+            for addon_name in addon_names:
+                old_version = str(previous_snapshot.get(addon_name, "-") or "-")
+                new_version = str(current_snapshot.get(addon_name, "-") or "-")
+                if old_version == new_version:
+                    continue
+
+                display_override = str(row[4] or "").strip()
+                country_code = normalize_country_code(str(row[5] or ""))
+                changes.append(
+                    {
+                        "id": report_id,
+                        "detected_at_utc": detected_at_utc,
+                        "hostname": hostname,
+                        "display_name": display_override or hostname,
+                        "field_key": f"sap_addon::{addon_name}",
+                        "field_label": f"Lightweight AddOn: {addon_name}",
+                        "old_value": old_version,
+                        "new_value": new_version,
+                        "source": "agent-report:addon",
+                        "country_code": country_code,
+                    }
+                )
+
+        previous_by_host[hostname] = current_snapshot
+
+    changes.sort(key=lambda item: (str(item.get("detected_at_utc") or ""), int(item.get("id") or 0)), reverse=True)
+    return changes[:limit]
+
+
 def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit: int = 300) -> dict:
     window_hours = max(1, int(hours or 24))
     row_limit = max(1, min(int(limit or 300), 1000))
@@ -2522,6 +2610,12 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
                 "country_code": country_code,
             }
         )
+
+    addon_items = _collect_sap_addon_change_items(conn, window_hours, row_limit)
+    if addon_items:
+        items.extend(addon_items)
+        items.sort(key=lambda item: (str(item.get("detected_at_utc") or ""), int(item.get("id") or 0)), reverse=True)
+        items = items[:row_limit]
 
     return {
         "hours": window_hours,
