@@ -5943,7 +5943,7 @@ async function triggerAgentUpdate(hostname) {
     body: JSON.stringify({
       hostname,
       command_type: "update-now",
-      ttl_minutes: 240,
+      ttl_minutes: 10080,
     }),
   });
 
@@ -5963,7 +5963,7 @@ async function triggerAgentUpdateForAllHosts() {
     },
     body: JSON.stringify({
       command_type: "update-now",
-      ttl_minutes: 240,
+      ttl_minutes: 10080,
     }),
   });
 
