@@ -264,7 +264,12 @@ function Test-DownloadedFileContent {
     }
 
     if ($RelativePath -ieq 'client/windows/setup_harvest_sql_user.ps1') {
-        $ok = ($textNormalized -match '(?m)^#Requires\s+-Version\s+5\.1' -and $textNormalized -match 'Find-SqlServers')
+        $ok = (
+            $textNormalized -match '(?m)^#Requires\s+-Version\s+5\.1' -and
+            $textNormalized -match '(?m)^Set-StrictMode\s+-Version\s+Latest' -and
+            $textNormalized -match '(?m)^function\s+Get-SqlServerCandidates' -and
+            $textNormalized -match '(?m)^function\s+Invoke-SqlNonQuery'
+        )
         if (-not $ok) {
             $global:LastContentValidationHint = "setup_harvest script markers missing; preview='$preview'"
         }
