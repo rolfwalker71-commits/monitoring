@@ -51,6 +51,7 @@ if ($wc.Proxy) {
 
 $global:UsedLocalFallback = $false
 $global:LocalFallbackFiles = New-Object System.Collections.Generic.List[string]
+$global:LastContentValidationHint = ''
 
 function Get-RepoUrlCandidates {
     param(
@@ -167,7 +168,11 @@ function Download-RepoFileViaZip {
         return $true
     }
 
-    $AttemptErrors.Add("zip-invalid-content: $RelativePath")
+    $hint = ''
+    if ($global:LastContentValidationHint) {
+        $hint = " => $($global:LastContentValidationHint)"
+    }
+    $AttemptErrors.Add("zip-invalid-content: $RelativePath$hint")
     return $false
 }
 
@@ -179,7 +184,10 @@ function Test-DownloadedFileContent {
         [string]$Path
     )
 
+    $global:LastContentValidationHint = ''
+
     if (-not (Test-Path $Path)) {
+        $global:LastContentValidationHint = 'downloaded file missing'
         return $false
     }
 
@@ -192,10 +200,12 @@ function Test-DownloadedFileContent {
             $reader.Dispose()
         }
     } catch {
+        $global:LastContentValidationHint = "read failed: $($_.Exception.Message)"
         return $false
     }
 
     if (-not $text) {
+        $global:LastContentValidationHint = 'empty response body'
         return $false
     }
 
@@ -204,9 +214,14 @@ function Test-DownloadedFileContent {
 
     # Normalize BOM at start to avoid false negatives with strict line-anchored regex checks.
     $textNormalized = $text -replace '^[\uFEFF]+', ''
+    $preview = ($textNormalized -replace '[\r\n\t]+', ' ').Trim()
+    if ($preview.Length -gt 180) {
+        $preview = $preview.Substring(0, 180)
+    }
 
     # Guard against GitHub/proxy HTML pages being saved as .ps1/.txt content.
     if ($textNormalized -match '<!DOCTYPE\s+html|<html\b|<head\b|<body\b') {
+        $global:LastContentValidationHint = "html-like response preview='$preview'"
         return $false
     }
 
@@ -217,25 +232,46 @@ function Test-DownloadedFileContent {
         }
         # Fallback guard for proxied/transcoded content: rely on broad, non-line-anchored markers.
         if ($textNormalized.Length -lt 1000) {
+            $global:LastContentValidationHint = "collect script header missing and response too short (len=$($textNormalized.Length)); preview='$preview'"
             return $false
         }
-        return ($textNormalized -match 'EmbeddedAgentVersion' -and $textNormalized -match 'Send-Payload' -and $textNormalized -match 'Invoke-ServerJsonPost' -and $textNormalized -match 'Collects system metrics')
+        $fallbackMarkerOk = ($textNormalized -match 'EmbeddedAgentVersion' -and $textNormalized -match 'Send-Payload' -and $textNormalized -match 'Invoke-ServerJsonPost' -and $textNormalized -match 'Collects system metrics')
+        if (-not $fallbackMarkerOk) {
+            $global:LastContentValidationHint = "collect script markers missing; preview='$preview'"
+        }
+        return $fallbackMarkerOk
     }
 
     if ($RelativePath -ieq 'client/windows/collect_and_scan_sap_tables.ps1') {
-        return ($textNormalized -match '(?m)^#Requires\s+-Version\s+5\.1' -and $textNormalized -match '(?m)^Set-StrictMode\s+-Version\s+Latest')
+        $ok = ($textNormalized -match '(?m)^#Requires\s+-Version\s+5\.1' -and $textNormalized -match '(?m)^Set-StrictMode\s+-Version\s+Latest')
+        if (-not $ok) {
+            $global:LastContentValidationHint = "sap scan script header mismatch; preview='$preview'"
+        }
+        return $ok
     }
 
     if ($RelativePath -ieq 'client/windows/self_update.ps1') {
-        return ($textNormalized -match '(?m)^Set-StrictMode\s+-Version\s+Latest' -and $textNormalized -match '(?m)^function\s+Download-RepoFile')
+        $ok = ($textNormalized -match '(?m)^Set-StrictMode\s+-Version\s+Latest' -and $textNormalized -match '(?m)^function\s+Download-RepoFile')
+        if (-not $ok) {
+            $global:LastContentValidationHint = "self_update script markers missing; preview='$preview'"
+        }
+        return $ok
     }
 
     if ($RelativePath -ieq 'client/windows/setup_harvest_sql_user.ps1') {
-        return ($textNormalized -match '(?m)^#Requires\s+-Version\s+5\.1' -and $textNormalized -match 'Find-SqlServers')
+        $ok = ($textNormalized -match '(?m)^#Requires\s+-Version\s+5\.1' -and $textNormalized -match 'Find-SqlServers')
+        if (-not $ok) {
+            $global:LastContentValidationHint = "setup_harvest script markers missing; preview='$preview'"
+        }
+        return $ok
         }
 
     if ($RelativePath -ieq 'AGENT_VERSION' -or $RelativePath -ieq 'BUILD_VERSION') {
-        return ($textNormalized.Trim() -match '^\d+\.\d+\.\d+$')
+        $ok = ($textNormalized.Trim() -match '^\d+\.\d+\.\d+$')
+        if (-not $ok) {
+            $global:LastContentValidationHint = "version file has unexpected format: '$preview'"
+        }
+        return $ok
     }
 
     return $true
@@ -306,7 +342,7 @@ function Download-RepoFile {
             if (Test-DownloadedFileContent -RelativePath $RelativePath -Path $DestinationPath) {
                 return $true
             }
-            $attemptErrors.Add("webclient-invalid-content: $url")
+            $attemptErrors.Add("webclient-invalid-content: $url => $($global:LastContentValidationHint)")
         } catch {
             $attemptErrors.Add("webclient: $url => $($_.Exception.Message)")
         }
@@ -316,7 +352,7 @@ function Download-RepoFile {
             if (Test-DownloadedFileContent -RelativePath $RelativePath -Path $DestinationPath) {
                 return $true
             }
-            $attemptErrors.Add("iwr-invalid-content: $url")
+            $attemptErrors.Add("iwr-invalid-content: $url => $($global:LastContentValidationHint)")
         } catch {
             $attemptErrors.Add("iwr: $url => $($_.Exception.Message)")
         }
@@ -328,7 +364,7 @@ function Download-RepoFile {
                     if (Test-DownloadedFileContent -RelativePath $RelativePath -Path $DestinationPath) {
                         return $true
                     }
-                    $attemptErrors.Add("curl-invalid-content: $url")
+                    $attemptErrors.Add("curl-invalid-content: $url => $($global:LastContentValidationHint)")
                 }
                 $attemptErrors.Add("curl($LASTEXITCODE): $url => $($result | Out-String)")
             } catch {
