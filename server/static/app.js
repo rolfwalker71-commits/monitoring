@@ -9169,6 +9169,57 @@ function formatShortHostname(hostname) {
   return raw.split(".")[0] || raw;
 }
 
+function renderSystemOverviewAddons(payload) {
+  const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
+  if (!sap) {
+    return "";
+  }
+
+  const extRows = Array.isArray(sap?.extensions?.rows) ? sap.extensions.rows : [];
+  const legacyRows = Array.isArray(sap?.sari_addons?.rows) ? sap.sari_addons.rows : [];
+  const extCount = extRows.length;
+  const legacyCount = legacyRows.length;
+  const totalCount = extCount + legacyCount;
+
+  const renderListItems = (rows, nameKey, versionKey) => {
+    const listRows = rows.slice(0, 8).map((row) => {
+      const name = escapeHtml(asText(row?.[nameKey], "-"));
+      const version = escapeHtml(asText(row?.[versionKey], "-"));
+      return `<li><span>${name}</span><span class="so-addon-version">${version}</span></li>`;
+    }).join("");
+    const rest = rows.length > 8 ? `<li class="so-addon-rest">+${rows.length - 8} weitere</li>` : "";
+    return `${listRows}${rest}`;
+  };
+
+  const extContent = extCount > 0
+    ? `<ul class="so-addon-list">${renderListItems(extRows, "AddOnName", "Version")}</ul>`
+    : '<p class="so-addon-empty">Keine</p>';
+
+  const legacyContent = legacyCount > 0
+    ? `<ul class="so-addon-list">${renderListItems(legacyRows, "AName", "AddOnVer")}</ul>`
+    : '<p class="so-addon-empty">Keine</p>';
+
+  const summary = totalCount > 0
+    ? `AddOns (${extCount} LW / ${legacyCount} Legacy)`
+    : "AddOns (keine)";
+
+  return `
+    <details class="so-addon-details">
+      <summary>${escapeHtml(summary)}</summary>
+      <div class="so-addon-grid">
+        <div class="so-addon-col">
+          <h6>Lightweight</h6>
+          ${extContent}
+        </div>
+        <div class="so-addon-col">
+          <h6>Legacy</h6>
+          ${legacyContent}
+        </div>
+      </div>
+    </details>
+  `;
+}
+
 function renderSystemOverviewCountryFilter(countryCodes) {
   const filterEl = document.getElementById("systemOverviewCountryFilter");
   if (!filterEl) return;
@@ -9230,6 +9281,7 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
   const systemModel = escapeHtml(String(host.model || host.system_model || host.payload?.model || "-"));
   const lastUpdate = formatSystemOverviewLastUpdate(host.last_update);
   const statusBadge = formatSystemOverviewStatus(host);
+  const addOnSection = renderSystemOverviewAddons(host.payload || {});
 
   const rowClickClass = onRowClick ? "so-row-clickable" : "";
   const rowClickAttr = onRowClick ? `data-hostname="${hostname}"` : "";
@@ -9256,6 +9308,7 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
         <div class="so-cell-sub">SAP Release: ${sapReleaseDisplay}</div>
         <div class="so-cell-sub">HANA Release: ${hanaVersion}</div>
         <div class="so-cell-sub">HANA SID: ${hanaSid}</div>
+        ${addOnSection}
       </td>
       <td>
         <div class="so-cell-main">${statusBadge}</div>

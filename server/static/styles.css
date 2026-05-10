@@ -7089,6 +7089,87 @@ body[data-theme="dark"] .backup-row--hana td {
   font-size: 11px;
   color: #475569;
   line-height: 1.35;
+
+.so-addon-details {
+  margin-top: 6px;
+  border: 1px solid #d8e2ef;
+  border-radius: 6px;
+  background: #f8fbff;
+  font-size: 11px;
+}
+
+.so-addon-details > summary {
+  cursor: pointer;
+  padding: 4px 6px;
+  font-weight: 600;
+  color: #1f3b63;
+  user-select: none;
+}
+
+.so-addon-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px 6px 6px;
+}
+
+.so-addon-col {
+  min-width: 0;
+}
+
+.so-addon-col h6 {
+  margin: 0 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.so-addon-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+
+.so-addon-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  line-height: 1.2;
+}
+
+.so-addon-version {
+  color: #64748b;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.so-addon-empty,
+.so-addon-rest {
+  margin: 0;
+  color: #64748b;
+  font-size: 10px;
+}
+
+body[data-theme="dark"] .so-addon-details {
+  border-color: #304762;
+  background: #13243a;
+}
+
+body[data-theme="dark"] .so-addon-details > summary {
+  color: #c8dbf7;
+}
+
+body[data-theme="dark"] .so-addon-col h6,
+body[data-theme="dark"] .so-addon-version,
+body[data-theme="dark"] .so-addon-empty,
+body[data-theme="dark"] .so-addon-rest {
+  color: #9fb3cc;
+}
 }
 
 .so-row-clickable {
