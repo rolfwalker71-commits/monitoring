@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.198'
+$EmbeddedAgentVersion = '1.1.199'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -849,6 +849,17 @@ function Get-UpdateBaseUrl {
     return ''
 }
 
+function Write-UpdateLog {
+    param([string]$Message)
+
+    try {
+        $stamp = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', $IC)
+        Add-Content -Path $UpdateLogFile -Value ("[{0}] {1}" -f $stamp, $Message) -Encoding UTF8 -ErrorAction SilentlyContinue
+    } catch {
+        # Best-effort logging only.
+    }
+}
+
 function Test-PowerShellScriptContent {
     param([string]$Path)
 
@@ -892,10 +903,18 @@ function Download-FileBestEffort {
 
 function Sync-CoreScriptsBestEffort {
     $base = Get-UpdateBaseUrl
-    if (-not $base) { return }
+    if (-not $base) {
+        Write-UpdateLog 'Core sync skipped: no update base URL configured.'
+        return
+    }
 
     $installDir = if ($cfg.ContainsKey('INSTALL_DIR') -and $cfg['INSTALL_DIR']) { $cfg['INSTALL_DIR'] } else { Split-Path -Parent $ConfigFile }
-    if (-not $installDir) { return }
+    if (-not $installDir) {
+        Write-UpdateLog 'Core sync skipped: install directory could not be resolved.'
+        return
+    }
+
+    Write-UpdateLog ("Core sync started (base={0}, install_dir={1})." -f $base, $installDir)
 
     $cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $items = @(
@@ -911,21 +930,72 @@ function Sync-CoreScriptsBestEffort {
         try {
             $url = "{0}/{1}?cb={2}" -f $base, $item.rel, $cacheBust
             if (-not (Download-FileBestEffort -Url $url -Destination $tmp)) {
+                Write-UpdateLog ("Core sync download failed: {0} ({1})." -f $item.rel, $url)
                 continue
             }
 
             if ($item.isScript -and -not (Test-PowerShellScriptContent -Path $tmp)) {
+                Write-UpdateLog ("Core sync rejected invalid script content: {0}." -f $item.rel)
                 continue
             }
 
-            Copy-Item $tmp $item.target -Force -ErrorAction SilentlyContinue
+            $copied = $false
+            try {
+                Copy-Item $tmp $item.target -Force -ErrorAction Stop
+                $copied = $true
+            } catch {
+                Write-UpdateLog ("Core sync copy failed: {0} -> {1} ({2})." -f $item.rel, $item.target, $_.Exception.Message)
+            }
+
+            if (-not $copied) {
+                try {
+                    [System.IO.File]::Copy($tmp, $item.target, $true)
+                    $copied = $true
+                    Write-UpdateLog ("Core sync fallback copy succeeded: {0} -> {1}." -f $item.rel, $item.target)
+                } catch {
+                    Write-UpdateLog ("Core sync fallback copy failed: {0} -> {1} ({2})." -f $item.rel, $item.target, $_.Exception.Message)
+                }
+            }
+
+            if (-not $copied -and $item.rel -eq 'client/windows/collect_and_send.ps1') {
+                $pendingTarget = $item.target + '.pending'
+                try {
+                    Copy-Item $tmp $pendingTarget -Force -ErrorAction Stop
+                    Write-UpdateLog ("Core sync staged pending collect update: {0}." -f $pendingTarget)
+                } catch {
+                    Write-UpdateLog ("Core sync pending staging failed: {0} ({1})." -f $pendingTarget, $_.Exception.Message)
+                }
+            }
+
+            if ($copied) {
+                Write-UpdateLog ("Core sync updated: {0}." -f $item.rel)
+            }
         } catch {
-            # Best-effort sync only; never block collection.
+            Write-UpdateLog ("Core sync unexpected error for {0}: {1}." -f $item.rel, $_.Exception.Message)
         } finally {
             if (Test-Path $tmp) {
                 Remove-Item $tmp -Force -ErrorAction SilentlyContinue
             }
         }
+    }
+
+    Write-UpdateLog 'Core sync completed.'
+}
+
+function Apply-PendingCoreScriptUpdate {
+    $installDir = if ($cfg.ContainsKey('INSTALL_DIR') -and $cfg['INSTALL_DIR']) { $cfg['INSTALL_DIR'] } else { Split-Path -Parent $ConfigFile }
+    if (-not $installDir) { return }
+
+    $target = Join-Path $installDir 'collect_and_send.ps1'
+    $pending = $target + '.pending'
+    if (-not (Test-Path $pending)) { return }
+
+    try {
+        Copy-Item $pending $target -Force -ErrorAction Stop
+        Remove-Item $pending -Force -ErrorAction SilentlyContinue
+        Write-UpdateLog ("Applied pending collect update: {0}." -f $target)
+    } catch {
+        Write-UpdateLog ("Failed to apply pending collect update: {0} ({1})." -f $target, $_.Exception.Message)
     }
 }
 
@@ -1117,6 +1187,7 @@ function Get-ContainerEntries {
 
 # ---- Collect system info ----
 
+Apply-PendingCoreScriptUpdate
 Sync-CoreScriptsBestEffort
 
 $hostnameValue = try { [System.Net.Dns]::GetHostEntry('').HostName } catch { $env:COMPUTERNAME }
