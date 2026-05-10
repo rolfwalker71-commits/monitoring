@@ -25,7 +25,19 @@ download_file() {
     local target_path="$2"
     mkdir -p "$(dirname "$target_path")"
     if curl -fsSL --retry 5 --retry-delay 1 "$RAW_BASE/$source_path" -o "$target_path"; then
-        echo "✓ $source_path"
+        # Get file modification time for display
+        local file_time
+        if command -v stat >/dev/null 2>&1; then
+            # Try GNU stat first (Linux)
+            file_time=$(stat -c "%y" "$target_path" 2>/dev/null || stat -f "%Sm" "$target_path" 2>/dev/null || echo "")
+        else
+            file_time=$(ls -l "$target_path" 2>/dev/null | awk '{print $6, $7, $8}' || echo "")
+        fi
+        if [ -n "$file_time" ]; then
+            echo "✓ $source_path [$file_time]"
+        else
+            echo "✓ $source_path"
+        fi
     else
         echo "✗ FEHLER: $source_path" >&2
         return 1
@@ -112,7 +124,8 @@ fi
 echo "Icons geladen ✓"
 
 echo "$SHA" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
-echo "Fertig. Deploy-Commit: $SHA"
+DEPLOY_TIME="$(date '+%Y-%m-%d %H:%M:%S %Z')"
+echo "Fertig. Deploy-Commit: $SHA [$DEPLOY_TIME]"
 echo -n "BUILD_VERSION lokal: "
 cat "$TARGET_DIR/BUILD_VERSION"
 echo -n "AGENT_VERSION lokal: "
