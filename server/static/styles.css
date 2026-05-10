@@ -745,7 +745,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 .agent-update-admin-table-wrap {
   margin-top: 8px;
   overflow: auto;
-  max-height: 420px;
+  max-height: 380px;
   border: 1px solid #d8e2f0;
   border-radius: 8px;
   background: #fff;
@@ -754,26 +754,27 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 .agent-update-admin-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
-  min-width: 1350px;
+  font-size: 11px;
+  min-width: 1180px;
 }
 
 .agent-update-admin-table thead th {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 3;
   background: #edf3fb;
   color: #1f2e46;
   text-align: left;
-  padding: 7px 8px;
+  padding: 5px 6px;
   border-bottom: 1px solid #d8e2f0;
   white-space: nowrap;
 }
 
 .agent-update-admin-table tbody td {
-  padding: 7px 8px;
+  padding: 4px 6px;
   border-bottom: 1px solid #edf1f7;
   vertical-align: top;
+  line-height: 1.2;
 }
 
 .agent-update-admin-table tbody tr:nth-child(2n) {
@@ -783,18 +784,81 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 .agent-update-admin-host {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .agent-update-admin-hostname {
   font-family: "IBM Plex Mono", monospace;
-  font-size: 11px;
+  font-size: 10px;
   color: #4b5b73;
 }
 
 .agent-update-admin-message {
-  max-width: 360px;
+  max-width: 240px;
   word-break: break-word;
+}
+
+/* Keep context columns visible when horizontally scrolling. */
+.agent-update-admin-table thead th:nth-child(1),
+.agent-update-admin-table tbody td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  min-width: 120px;
+  max-width: 120px;
+}
+
+.agent-update-admin-table thead th:nth-child(2),
+.agent-update-admin-table tbody td:nth-child(2) {
+  position: sticky;
+  left: 120px;
+  min-width: 280px;
+  max-width: 280px;
+}
+
+.agent-update-admin-table thead th:nth-child(1),
+.agent-update-admin-table thead th:nth-child(2) {
+  z-index: 4;
+  background: #e8f0fb;
+}
+
+.agent-update-admin-table tbody td:nth-child(1),
+.agent-update-admin-table tbody td:nth-child(2) {
+  z-index: 2;
+  background: #fff;
+}
+
+.agent-update-admin-table tbody tr:nth-child(2n) td:nth-child(1),
+.agent-update-admin-table tbody tr:nth-child(2n) td:nth-child(2) {
+  background: #fbfdff;
+}
+
+body[data-theme="dark"] .agent-update-admin-table-wrap {
+  background: #0f1a2d;
+  border-color: #2b3b56;
+}
+
+body[data-theme="dark"] .agent-update-admin-table thead th:nth-child(1),
+body[data-theme="dark"] .agent-update-admin-table thead th:nth-child(2) {
+  background: #213551;
+}
+
+body[data-theme="dark"] .agent-update-admin-table tbody td:nth-child(1),
+body[data-theme="dark"] .agent-update-admin-table tbody td:nth-child(2) {
+  background: #111b2f;
+}
+
+body[data-theme="dark"] .agent-update-admin-table tbody tr:nth-child(2n) td:nth-child(1),
+body[data-theme="dark"] .agent-update-admin-table tbody tr:nth-child(2n) td:nth-child(2) {
+  background: #15243c;
+}
+
+.agent-update-admin-table th,
+.agent-update-admin-table td {
+  white-space: nowrap;
+}
+
+.agent-update-admin-message {
+  white-space: normal;
 }
 
 .mountpoint-table-header h4 {
