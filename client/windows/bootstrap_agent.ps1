@@ -165,19 +165,47 @@ function Test-PowerShellScriptContent {
     param([string]$Path)
 
     try {
-        $text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
-        if (-not $text) { return $false }
+        # Try UTF-8 with BOM, then without
+        try {
+            $text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+        } catch {
+            $text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::GetEncoding('utf-8', $null, $false))
+        }
         
-        # Remove UTF-8 BOM if present (fixes line-anchor regex issues)
-        if ($text[0] -eq [char]0xFEFF) {
+        if (-not $text) { 
+            Write-Host "[TEST] Empty file: $Path" -ForegroundColor Red
+            return $false 
+        }
+        
+        # Remove UTF-8 BOM if present
+        if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) {
+            Write-Host "[TEST] Removing BOM from file" -ForegroundColor Yellow
             $text = $text.Substring(1)
         }
         
-        if ($text -match '<!DOCTYPE\s+html|<html\b|<head\b|<body\b') { return $false }
+        # Check for HTML (common error response)
+        if ($text -match '<!DOCTYPE\s+html|<html\b|<head\b|<body\b') { 
+            Write-Host "[TEST] File contains HTML - download returned error page" -ForegroundColor Red
+            Write-Host "[TEST] First 200 chars: $($text.Substring(0, [Math]::Min(200, $text.Length)))" -ForegroundColor Red
+            return $false 
+        }
         
-        # Check for PowerShell markers (no longer anchor-dependent)
-        return ($text -match '#Requires\s+-Version\s+5\.1' -or $text -match 'Set-StrictMode\s+-Version\s+Latest' -or $text -match '\[CmdletBinding\(\)\]')
+        # Get first 300 chars for debugging
+        $firstChars = $text.Substring(0, [Math]::Min(300, $text.Length))
+        Write-Host "[TEST] First 300 chars: $firstChars" -ForegroundColor Cyan
+        
+        # Check for PowerShell markers
+        $hasRequires = $text -match '#Requires\s+-Version\s+5\.1'
+        $hasStrictMode = $text -match 'Set-StrictMode\s+-Version\s+Latest'
+        $hasCmdletBinding = $text -match '\[CmdletBinding\(\)\]'
+        
+        Write-Host "[TEST] #Requires match: $hasRequires" -ForegroundColor $(if ($hasRequires) { 'Green' } else { 'Red' })
+        Write-Host "[TEST] Set-StrictMode match: $hasStrictMode" -ForegroundColor $(if ($hasStrictMode) { 'Green' } else { 'Red' })
+        Write-Host "[TEST] [CmdletBinding()] match: $hasCmdletBinding" -ForegroundColor $(if ($hasCmdletBinding) { 'Green' } else { 'Red' })
+        
+        return ($hasRequires -or $hasStrictMode -or $hasCmdletBinding)
     } catch {
+        Write-Host "[TEST] Exception: $_" -ForegroundColor Red
         return $false
     }
 }
