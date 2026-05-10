@@ -31,7 +31,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.209'
+$EmbeddedAgentVersion = '1.1.210'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -963,9 +963,15 @@ function Test-PowerShellScriptContent {
     try {
         $text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
         if (-not $text) { return $false }
+        $text = $text -replace "`0", ''
+        $textNormalized = $text -replace '^[\uFEFF]+', ''
+        $leadingChunk = $textNormalized
+        if ($leadingChunk.Length -gt 2048) {
+            $leadingChunk = $leadingChunk.Substring(0, 2048)
+        }
         $htmlGuardPattern = '<!' + 'DOCTYPE\s+' + 'html|<' + 'html\b|<' + 'head\b|<' + 'body\b'
-        if ($text -match $htmlGuardPattern) { return $false }
-        return ($text -match '(?m)^#Requires\s+-Version\s+5\.1' -or $text -match '(?m)^Set-StrictMode\s+-Version\s+Latest' -or $text -match '(?m)^\[CmdletBinding\(\)\]')
+        if ($leadingChunk -match '^\s*(' + $htmlGuardPattern + ')') { return $false }
+        return ($textNormalized -match '(?m)^#Requires\s+-Version\s+5\.1' -or $textNormalized -match '(?m)^Set-StrictMode\s+-Version\s+Latest' -or $textNormalized -match '(?m)^\[CmdletBinding\(\)\]')
     } catch {
         return $false
     }
@@ -1128,8 +1134,14 @@ function Ensure-OptionalSapScanScript {
 
         # Basic guard against HTML/proxy responses.
         $text = [System.IO.File]::ReadAllText($tmpScript, [System.Text.Encoding]::UTF8)
+        $text = $text -replace "`0", ''
+        $textNormalized = $text -replace '^[\uFEFF]+', ''
+        $leadingChunk = $textNormalized
+        if ($leadingChunk.Length -gt 2048) {
+            $leadingChunk = $leadingChunk.Substring(0, 2048)
+        }
         $htmlGuardPattern = '<!' + 'DOCTYPE\s+' + 'html|<' + 'html\b|<' + 'head\b|<' + 'body\b'
-        if ($text -match $htmlGuardPattern) {
+        if ($leadingChunk -match '^\s*(' + $htmlGuardPattern + ')') {
             throw 'Downloaded collect_and_scan_sap_tables.ps1 appears to be HTML content.'
         }
 
