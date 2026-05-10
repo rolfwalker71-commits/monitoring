@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.199'
+$EmbeddedAgentVersion = '1.1.200'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -792,6 +792,42 @@ function Send-CommandResult {
     } catch { }
 }
 
+function Get-UpdateFailureHint {
+    try {
+        if (-not (Test-Path $UpdateLogFile)) {
+            return ''
+        }
+
+        $lines = @(Get-Content -Path $UpdateLogFile -Tail 50 -Encoding UTF8 -ErrorAction SilentlyContinue)
+        if ($lines.Count -eq 0) {
+            return ''
+        }
+
+        for ($idx = $lines.Count - 1; $idx -ge 0; $idx--) {
+            $line = [string]$lines[$idx]
+            if ([string]::IsNullOrWhiteSpace($line)) {
+                continue
+            }
+            if ($line -match 'failed|error|exception|blocked|invalid|unsupported|abort|not found|cannot') {
+                return $line.Trim()
+            }
+        }
+
+        return ([string]$lines[$lines.Count - 1]).Trim()
+    } catch {
+        return ''
+    }
+}
+
+function New-UpdateResult {
+    param(
+        [bool]$Ok,
+        [string]$Message
+    )
+
+    return @{ ok = $Ok; message = [string]$Message }
+}
+
 function Invoke-AgentSelfUpdate {
     $selfUpdateScript = Join-Path (Split-Path $ConfigFile -Parent) 'self_update.ps1'
     if (-not (Test-Path $selfUpdateScript)) {
@@ -802,9 +838,21 @@ function Invoke-AgentSelfUpdate {
         try {
             & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $selfUpdateScript *>> $UpdateLogFile
             if ($LASTEXITCODE -eq 0) {
-                return $true
+                return (New-UpdateResult -Ok $true -Message 'update command executed')
             }
-        } catch { }
+            $hint = Get-UpdateFailureHint
+            $msg = "self_update.ps1 exited with code $LASTEXITCODE"
+            if ($hint) {
+                $msg = "$msg | $hint"
+            }
+            return (New-UpdateResult -Ok $false -Message $msg)
+        } catch {
+            $msg = 'self_update.ps1 execution failed'
+            if ($_.Exception -and $_.Exception.Message) {
+                $msg = "$msg | $($_.Exception.Message)"
+            }
+            return (New-UpdateResult -Ok $false -Message $msg)
+        }
     }
 
     $tmpScript = $null
@@ -823,17 +871,29 @@ function Invoke-AgentSelfUpdate {
             $wc = New-Object System.Net.WebClient
             $wc.DownloadFile(($updateBase.TrimEnd('/')) + '/client/windows/self_update.ps1', $tmpScript)
             & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $tmpScript *>> $UpdateLogFile
-            return ($LASTEXITCODE -eq 0)
+            if ($LASTEXITCODE -eq 0) {
+                return (New-UpdateResult -Ok $true -Message 'update command executed (remote updater)')
+            }
+            $hint = Get-UpdateFailureHint
+            $msg = "remote self_update.ps1 exited with code $LASTEXITCODE"
+            if ($hint) {
+                $msg = "$msg | $hint"
+            }
+            return (New-UpdateResult -Ok $false -Message $msg)
         }
     } catch {
-        return $false
+        $msg = 'remote self_update.ps1 download/execute failed'
+        if ($_.Exception -and $_.Exception.Message) {
+            $msg = "$msg | $($_.Exception.Message)"
+        }
+        return (New-UpdateResult -Ok $false -Message $msg)
     } finally {
         if ($tmpScript -and (Test-Path $tmpScript)) {
             Remove-Item $tmpScript -Force -ErrorAction SilentlyContinue
         }
     }
 
-    return $false
+    return (New-UpdateResult -Ok $false -Message 'no self-update source available (local script missing and no update base configured)')
 }
 
 function Get-UpdateBaseUrl {
@@ -1057,10 +1117,20 @@ function Invoke-RemoteCommands {
             if ($cmdId -le 0) { continue }
 
             if ($cmdType -eq 'update-now') {
-                if (Invoke-AgentSelfUpdate) {
-                    Send-CommandResult -CommandId $cmdId -Status 'completed' -Message 'update command executed'
+                $updateResult = Invoke-AgentSelfUpdate
+                $isOk = $false
+                $resultMessage = 'update command failed'
+                if ($updateResult -is [System.Collections.IDictionary]) {
+                    $isOk = [bool]$updateResult['ok']
+                    $candidateMessage = [string]$updateResult['message']
+                    if ($candidateMessage) {
+                        $resultMessage = $candidateMessage
+                    }
+                }
+                if ($isOk) {
+                    Send-CommandResult -CommandId $cmdId -Status 'completed' -Message $resultMessage
                 } else {
-                    Send-CommandResult -CommandId $cmdId -Status 'failed' -Message 'update command failed'
+                    Send-CommandResult -CommandId $cmdId -Status 'failed' -Message $resultMessage
                 }
                 continue
             }

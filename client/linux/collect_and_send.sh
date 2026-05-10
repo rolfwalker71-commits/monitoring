@@ -1024,6 +1024,17 @@ run_self_update_now() {
   return 127
 }
 
+get_update_failure_hint() {
+  if [[ ! -r "$UPDATE_LOG_FILE" ]]; then
+    return
+  fi
+
+  tail -n 50 "$UPDATE_LOG_FILE" 2>/dev/null \
+    | grep -Ei 'failed|error|exception|blocked|invalid|unsupported|abort|not found|cannot' \
+    | tail -n 1 \
+    | sed 's/[[:space:]]\+/ /g; s/^ //; s/ $//'
+}
+
 collect_agent_config_json() {
   local entries="" line key value masked_keys="API_KEY|PASSWORD|SECRET|TOKEN|PASS"
   if [[ ! -r "$CONFIG_FILE" ]]; then
@@ -1504,12 +1515,16 @@ execute_remote_commands() {
           status="completed"
           message="update command executed"
         else
+          hint="$(get_update_failure_hint)"
           if [[ -x "${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh" ]]; then
             status="failed"
             message="update command failed"
           else
             status="failed"
             message="self_update.sh not found"
+          fi
+          if [[ -n "$hint" ]]; then
+            message="$message | $hint"
           fi
         fi
         ;;
