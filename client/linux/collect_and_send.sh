@@ -989,6 +989,7 @@ maybe_priority_self_update() {
 
 run_self_update_now() {
   local updater_path="${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh"
+  local update_base_url="${UPDATE_BASE_URL:-}"
   local tmp_updater=""
   local curl_args=(--silent --show-error --fail --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC" --max-time "$CURL_MAX_TIME_SEC")
 
@@ -996,9 +997,16 @@ run_self_update_now() {
     curl_args+=(--insecure)
   fi
 
-  if [[ -n "${RAW_BASE_URL:-}" ]]; then
+  if [[ -z "$update_base_url" && -n "${SERVER_URL:-}" ]]; then
+    update_base_url="${SERVER_URL%/}/updates"
+  fi
+  if [[ -z "$update_base_url" && -n "${RAW_BASE_URL:-}" ]]; then
+    update_base_url="$RAW_BASE_URL"
+  fi
+
+  if [[ -n "$update_base_url" ]]; then
     tmp_updater="$(mktemp)"
-    if curl "${curl_args[@]}" "$RAW_BASE_URL/client/linux/self_update.sh" -o "$tmp_updater" 2>/dev/null; then
+    if curl "${curl_args[@]}" "$update_base_url/client/linux/self_update.sh" -o "$tmp_updater" 2>/dev/null; then
       chmod 0755 "$tmp_updater"
       if CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$AGENT_VERSION_FILE" "$tmp_updater" >> "$UPDATE_LOG_FILE" 2>&1; then
         rm -f "$tmp_updater"
