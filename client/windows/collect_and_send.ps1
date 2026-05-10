@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.186'
+$EmbeddedAgentVersion = '1.1.187'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -491,17 +491,24 @@ function Get-HarvestHealthStatus {
         $currentUser = $cmd.ExecuteScalar()
         $status.user_exists = $null -ne $currentUser
 
-        # Test database access
+        # Test database access with HAS_DBACCESS to avoid failing metadata/table probes.
         $dbCandidates = @('SBO-COMMON', 'SBOCOMMON', 'SLDModel.SLDData')
         foreach ($dbName in $dbCandidates) {
             try {
+                $safeDb = $dbName.Replace("'", "''")
                 $testCmd = $conn.CreateCommand()
-                $testCmd.CommandText = "SELECT 1 FROM [$dbName].sys.tables WHERE type='U'"
+                $testCmd.CommandText = "SELECT HAS_DBACCESS(N'$safeDb')"
                 $testCmd.CommandTimeout = 5
-                $testCmd.ExecuteScalar() | Out-Null
-                $status.databases_accessible += $dbName
+                $hasAccessRaw = $testCmd.ExecuteScalar()
+                $hasAccess = 0
+                if ($null -ne $hasAccessRaw) {
+                    $hasAccess = [int]$hasAccessRaw
+                }
+                if ($hasAccess -eq 1) {
+                    $status.databases_accessible += $dbName
+                }
             } catch {
-                # DB not accessible or doesn't exist
+                # DB probe failed
             }
         }
 

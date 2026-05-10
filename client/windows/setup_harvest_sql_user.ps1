@@ -179,12 +179,21 @@ function Setup-HarvestUser {
         [void](Invoke-SqlNonQuery -Connection $conn -Query "GRANT VIEW ANY DEFINITION TO [$HarvestUser]")
         $result.permissions_granted = $true
 
+        # Grant database-level read rights for SAP-relevant DBs if present.
+        $targetDbs = Invoke-SqlQuery -Connection $conn -Query "SELECT name FROM sys.databases WHERE state_desc = 'ONLINE' AND name IN ('SBO-COMMON','SBOCOMMON','SLDModel.SLDData') ORDER BY name"
+        foreach ($dbRow in $targetDbs.Rows) {
+            $dbName = [string]$dbRow['name']
+            if (-not $dbName) { continue }
+            $safeDbName = $dbName.Replace(']', ']]')
+            [void](Invoke-SqlNonQuery -Connection $conn -Query "USE [$safeDbName]; IF USER_ID(N'$HarvestUser') IS NULL CREATE USER [$HarvestUser] FOR LOGIN [$HarvestUser]; ALTER ROLE [db_datareader] ADD MEMBER [$HarvestUser];")
+        }
+
         # Find accessible databases
         $conn.Close()
         $conn = Get-SqlConnection -Server $SqlServer -Database 'master' -User $HarvestUser -Password $HarvestPassword
         $conn.Open()
 
-        $dbRows = Invoke-SqlQuery -Connection $conn -Query "SELECT name FROM sys.databases WHERE state_desc = 'ONLINE' ORDER BY name"
+        $dbRows = Invoke-SqlQuery -Connection $conn -Query "SELECT name FROM sys.databases WHERE state_desc = 'ONLINE' AND HAS_DBACCESS(name) = 1 ORDER BY name"
         foreach ($row in $dbRows.Rows) {
             $dbName = [string]$row['name']
             if ($dbName -and $dbName -notin @('master', 'tempdb', 'model', 'msdb')) {
