@@ -4194,6 +4194,11 @@ function renderSapB1CombinedCard(payload) {
       <h4>SAP B1</h4>
 
       <details class="sap-b1-raw-details" open>
+        <summary class="sap-b1-raw-summary">SLDModel.SLDData.dbo.Extensions (AddOnName / Version)</summary>
+        ${renderSapB1ExtensionsSection(payload)}
+      </details>
+
+      <details class="sap-b1-raw-details">
         <summary class="sap-b1-raw-summary">SAP Business One Files / Ordner</summary>
         ${filesContent}
       </details>
@@ -4207,11 +4212,6 @@ function renderSapB1CombinedCard(payload) {
         <summary class="sap-b1-raw-summary">HANA Versions-Scan</summary>
         ${hanaInfoRows}
         ${hanaRawOutput ? `<pre class="sap-b1-raw-output">${escapeHtml(hanaRawOutput)}</pre>` : ""}
-      </details>
-
-      <details class="sap-b1-raw-details">
-        <summary class="sap-b1-raw-summary">SLDModel.SLDData.dbo.Extensions (AddOnName / Version)</summary>
-        ${renderSapB1ExtensionsSection(payload)}
       </details>
 
         <details class="sap-b1-raw-details">
