@@ -49,6 +49,9 @@ if ($wc.Proxy) {
     $wc.Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
 }
 
+$global:UsedLocalFallback = $false
+$global:LocalFallbackFiles = New-Object System.Collections.Generic.List[string]
+
 function Get-RepoUrlCandidates {
     param(
         [Parameter(Mandatory = $true)]
@@ -361,6 +364,8 @@ function Use-LocalScriptFallback {
     }
 
     Copy-Item $installedPath $DestinationPath -Force
+    $global:UsedLocalFallback = $true
+    $global:LocalFallbackFiles.Add($leaf) | Out-Null
     Write-Warning "Using local fallback for $leaf because remote download was blocked/invalid."
     return $true
 }
@@ -426,6 +431,14 @@ try {
     $collectContent = [System.IO.File]::ReadAllText("$tmpDir\collect_and_send.ps1", [System.Text.Encoding]::UTF8)
     if ($collectContent -match '\$[A-Za-z_][A-Za-z0-9_]*\s*\?\s*') {
         throw 'Downloaded collect_and_send.ps1 contains unsupported ternary syntax for PowerShell 5.1.'
+    }
+
+    if ((Compare-Versions -Newer $remoteVersion -Older $localVersion) -and $global:UsedLocalFallback) {
+        $fallbackFiles = 'unknown'
+        if ($global:LocalFallbackFiles.Count -gt 0) {
+            $fallbackFiles = ($global:LocalFallbackFiles | Select-Object -Unique) -join ', '
+        }
+        throw "Remote download blocked/invalid for: $fallbackFiles. Refusing to mark version upgrade to $remoteVersion with local fallback content."
     }
 
     [System.IO.File]::WriteAllText("$tmpDir\AGENT_VERSION", "$remoteVersion`n", [System.Text.Encoding]::UTF8)
