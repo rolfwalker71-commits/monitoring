@@ -14,9 +14,12 @@ source "$CONFIG_FILE"
 INSTALL_DIR="${INSTALL_DIR:-/opt/monitoring-agent}"
 SERVER_URL="${SERVER_URL:-}"
 RAW_BASE_URL="${RAW_BASE_URL:-}"
-UPDATE_BASE_URL="${UPDATE_BASE_URL:-${RAW_BASE_URL:-}}"
+UPDATE_BASE_URL="${UPDATE_BASE_URL:-}"
 if [[ -z "$UPDATE_BASE_URL" && -n "$SERVER_URL" ]]; then
   UPDATE_BASE_URL="${SERVER_URL%/}/updates"
+fi
+if [[ -z "$UPDATE_BASE_URL" ]]; then
+  UPDATE_BASE_URL="$RAW_BASE_URL"
 fi
 if [[ -z "$RAW_BASE_URL" ]]; then
   RAW_BASE_URL="$UPDATE_BASE_URL"

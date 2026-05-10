@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.182'
+$EmbeddedAgentVersion = '1.1.183'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -671,10 +671,10 @@ function Invoke-AgentSelfUpdate {
         $updateBase = ''
         if ($cfg.ContainsKey('UPDATE_BASE_URL') -and $cfg['UPDATE_BASE_URL']) {
             $updateBase = $cfg['UPDATE_BASE_URL']
-        } elseif ($cfg.ContainsKey('RAW_BASE_URL') -and $cfg['RAW_BASE_URL']) {
-            $updateBase = $cfg['RAW_BASE_URL']
         } elseif ($cfg.ContainsKey('SERVER_URL') -and $cfg['SERVER_URL']) {
             $updateBase = ($cfg['SERVER_URL'].TrimEnd('/')) + '/updates'
+        } elseif ($cfg.ContainsKey('RAW_BASE_URL') -and $cfg['RAW_BASE_URL']) {
+            $updateBase = $cfg['RAW_BASE_URL']
         }
 
         if ($updateBase) {
@@ -707,10 +707,10 @@ function Ensure-OptionalSapScanScript {
     $updateBase = ''
     if ($cfg.ContainsKey('UPDATE_BASE_URL') -and $cfg['UPDATE_BASE_URL']) {
         $updateBase = $cfg['UPDATE_BASE_URL']
-    } elseif ($cfg.ContainsKey('RAW_BASE_URL') -and $cfg['RAW_BASE_URL']) {
-        $updateBase = $cfg['RAW_BASE_URL']
     } elseif ($cfg.ContainsKey('SERVER_URL') -and $cfg['SERVER_URL']) {
         $updateBase = ($cfg['SERVER_URL'].TrimEnd('/')) + '/updates'
+    } elseif ($cfg.ContainsKey('RAW_BASE_URL') -and $cfg['RAW_BASE_URL']) {
+        $updateBase = $cfg['RAW_BASE_URL']
     }
 
     if (-not $updateBase) {

@@ -34,8 +34,9 @@ foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
 
 $InstallDir = if ($cfg.ContainsKey('INSTALL_DIR'))   { $cfg['INSTALL_DIR'] }   else { 'C:\ProgramData\monitoring-agent' }
 $ServerUrl = if ($cfg.ContainsKey('SERVER_URL')) { $cfg['SERVER_URL'] } else { '' }
-$ConfiguredUpdateBaseUrl = if ($cfg.ContainsKey('UPDATE_BASE_URL')) { $cfg['UPDATE_BASE_URL'] } elseif ($cfg.ContainsKey('RAW_BASE_URL')) { $cfg['RAW_BASE_URL'] } else { '' }
-$PrimaryUpdateBaseUrl = if ($ConfiguredUpdateBaseUrl) { $ConfiguredUpdateBaseUrl.TrimEnd('/') } elseif ($ServerUrl) { ($ServerUrl.TrimEnd('/')) + '/updates' } else { '' }
+$ConfiguredUpdateBaseUrl = if ($cfg.ContainsKey('UPDATE_BASE_URL')) { $cfg['UPDATE_BASE_URL'] } else { '' }
+$LegacyRawBaseUrl = if ($cfg.ContainsKey('RAW_BASE_URL')) { $cfg['RAW_BASE_URL'] } else { '' }
+$PrimaryUpdateBaseUrl = if ($ConfiguredUpdateBaseUrl) { $ConfiguredUpdateBaseUrl.TrimEnd('/') } elseif ($ServerUrl) { ($ServerUrl.TrimEnd('/')) + '/updates' } elseif ($LegacyRawBaseUrl) { $LegacyRawBaseUrl.TrimEnd('/') } else { '' }
 $GithubRepo = if ($cfg.ContainsKey('GITHUB_REPO'))   { $cfg['GITHUB_REPO'] }   else { 'rolfwalker71-commits/monitoring' }
 $RawBaseUrl = "https://raw.githubusercontent.com/$GithubRepo/main"
 $GithubRawAltBaseUrl = "https://github.com/$GithubRepo/raw/refs/heads/main"
