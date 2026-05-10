@@ -19,7 +19,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.192'
+$EmbeddedAgentVersion = '1.1.193'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -459,6 +459,9 @@ function Get-HarvestHealthStatus {
         user_exists = $false
         can_connect = $false
         databases_accessible = @()
+        extensions_available = $false
+        extensions_rows = @()
+        extensions_error = ''
         diagnostics = ''
         error = ''
     }
@@ -527,6 +530,28 @@ function Get-HarvestHealthStatus {
         }
 
         $status.can_connect = $true
+
+        # Read SAP B1 extensions from SLDModel.SLDData for frontend display.
+        try {
+            $extCmd = $conn.CreateCommand()
+            $extCmd.CommandText = "SELECT AddOnName, Version FROM [SLDModel.SLDData].[dbo].[Extensions] ORDER BY AddOnName"
+            $extCmd.CommandTimeout = 10
+            $extReader = $extCmd.ExecuteReader()
+            try {
+                while ($extReader.Read()) {
+                    $status.extensions_rows += @{
+                        AddOnName = [string]$extReader['AddOnName']
+                        Version = [string]$extReader['Version']
+                    }
+                }
+                $status.extensions_available = $true
+            } finally {
+                $extReader.Close()
+            }
+        } catch {
+            $status.extensions_error = $_.Exception.Message
+        }
+
         $status.diagnostics = "Connected as $currentUser on $harvestServer; accessible DBs: $($status.databases_accessible -join ', ')"
 
         $conn.Close()
@@ -546,11 +571,21 @@ function Get-SapB1PayloadBlock {
     $harvDbsJson = ($dbItems -join ',')
     $harvErrorEsc = ConvertTo-JsonString $harvestStatus.error
     $harvDiagsEsc = ConvertTo-JsonString $harvestStatus.diagnostics
+    $extensionsRowsJson = @(
+        $harvestStatus.extensions_rows | ForEach-Object {
+            '{' +
+            '`"AddOnName`":`"' + (ConvertTo-JsonString ([string]$_.AddOnName)) + '`",' +
+            '`"Version`":`"' + (ConvertTo-JsonString ([string]$_.Version)) + '`"' +
+            '}'
+        }
+    ) -join ','
+    $extensionsErrorEsc = ConvertTo-JsonString $harvestStatus.extensions_error
 
     $harvJson = "{`"harvest_enabled`":$(if($harvestStatus.harvest_enabled){'true'}else{'false'}),`"user_exists`":$(if($harvestStatus.user_exists){'true'}else{'false'}),`"can_connect`":$(if($harvestStatus.can_connect){'true'}else{'false'}),`"databases_accessible`":[${harvDbsJson}],`"error`":`"$harvErrorEsc`",`"diagnostics`":`"$harvDiagsEsc`"}"
+    $extensionsJson = "{`"available`":$(if($harvestStatus.extensions_available){'true'}else{'false'}),`"rows`":[$extensionsRowsJson],`"error`":`"$extensionsErrorEsc`"}"
 
     if ($b1Block.EndsWith('}')) {
-        return $b1Block.Substring(0, $b1Block.Length - 1) + ",`"harvest_status`":$harvJson}"
+        return $b1Block.Substring(0, $b1Block.Length - 1) + ",`"harvest_status`":$harvJson,`"extensions`":$extensionsJson}"
     }
     return $b1Block
 }

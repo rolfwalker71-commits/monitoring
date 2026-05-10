@@ -4169,6 +4169,40 @@ function renderHarvestStatusSection(payload) {
   `;
 }
 
+function renderSapB1ExtensionsSection(payload) {
+  const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
+  const ext = sap && typeof sap.extensions === "object" ? sap.extensions : null;
+
+  if (!ext) {
+    return '<p class="muted">Keine Extensions-Daten im Payload vorhanden.</p>';
+  }
+
+  const rows = Array.isArray(ext.rows) ? ext.rows : [];
+  const error = asText(ext.error, "");
+
+  if (rows.length === 0) {
+    if (error) {
+      return `<p class="muted">Extensions nicht lesbar: ${escapeHtml(error)}</p>`;
+    }
+    return '<p class="muted">Keine Extensions gefunden.</p>';
+  }
+
+  const bodyHtml = rows.map((row) => {
+    const addOnName = escapeHtml(asText(row?.AddOnName, ""));
+    const version = escapeHtml(asText(row?.Version, ""));
+    return `<tr><td>${addOnName}</td><td>${version}</td></tr>`;
+  }).join("");
+
+  return `
+    <div class="table-wrap">
+      <table class="report-subtable">
+        <thead><tr><th>AddOnName</th><th>Version</th></tr></thead>
+        <tbody>${bodyHtml}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderSapB1TableScanSection(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const scan = sap && typeof sap.table_scan === "object" ? sap.table_scan : null;
@@ -4354,6 +4388,11 @@ function renderSapB1CombinedCard(payload) {
       <details class="sap-b1-raw-details">
         <summary class="sap-b1-raw-summary">SBOCOMMON / SLDData Tabellenscan</summary>
         ${renderSapB1TableScanSection(payload)}
+      </details>
+
+      <details class="sap-b1-raw-details">
+        <summary class="sap-b1-raw-summary">SLDModel.SLDData.dbo.Extensions (AddOnName / Version)</summary>
+        ${renderSapB1ExtensionsSection(payload)}
       </details>
 
         <details class="sap-b1-raw-details">
