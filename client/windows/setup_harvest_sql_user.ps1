@@ -101,6 +101,33 @@ function Get-SqlServerCandidates {
         }
     }
 
+    $computerName = [string]$env:COMPUTERNAME
+    $genericLocalAliases = @('.', 'localhost', '(local)', $computerName) | Where-Object { $_ }
+    $genericLocalSet = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($alias in $genericLocalAliases) {
+        [void]$genericLocalSet.Add([string]$alias)
+    }
+
+    $shouldDiscoverLocalInstances = $false
+    if (-not $hasConfiguredCandidates) {
+        $shouldDiscoverLocalInstances = $true
+    } else {
+        # If only generic local aliases are configured (e.g. localhost), still auto-discover named instances.
+        $onlyGenericLocalConfigured = $true
+        foreach ($candidate in $candidates) {
+            $cand = [string]$candidate
+            if ($cand.Contains('\')) {
+                $onlyGenericLocalConfigured = $false
+                break
+            }
+            if (-not $genericLocalSet.Contains($cand)) {
+                $onlyGenericLocalConfigured = $false
+                break
+            }
+        }
+        $shouldDiscoverLocalInstances = $onlyGenericLocalConfigured
+    }
+
     if (-not $hasConfiguredCandidates) {
         foreach ($base in @('.', 'localhost', $env:COMPUTERNAME)) {
             if ($base -and -not $candidates.Contains($base)) {
@@ -109,7 +136,7 @@ function Get-SqlServerCandidates {
         }
     }
 
-    if (-not $hasConfiguredCandidates) {
+    if ($shouldDiscoverLocalInstances) {
         $regPath = 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL'
         try {
             if (Test-Path $regPath) {
