@@ -4217,9 +4217,7 @@ function renderSapB1ExtensionsSection(payload) {
       const version = escapeHtml(asText(row?.AddOnVer, ""));
       return `<tr><td>${addOnName}</td><td>${version}</td></tr>`;
     }).join("");
-    const sourceHint = sariSourceDb ? `<p class="count compact">Quelle: ${escapeHtml(sariSourceDb)}</p>` : "";
     sariContent = `
-      ${sourceHint}
       <div class="table-wrap">
         <table class="report-subtable">
           <thead><tr><th>AName</th><th>AddOnVer</th></tr></thead>
@@ -4231,8 +4229,7 @@ function renderSapB1ExtensionsSection(payload) {
     sariContent = `<p class="muted">SARI-Check gelaufen, aber keine Daten gefunden. Fehler: ${escapeHtml(sariError)}</p>`;
   } else if (sariAddons) {
     if (sariAvailable) {
-      const sourceText = sariSourceDb ? ` (Quelle: ${escapeHtml(sariSourceDb)})` : "";
-      sariContent = `<p class="muted">SARI-Check gelaufen, aber keine Legacy AddOns gefunden${sourceText}.</p>`;
+      sariContent = "<p class=\"muted\">SARI-Check gelaufen, aber keine Legacy AddOns gefunden.</p>";
     } else {
       sariContent = "<p class=\"muted\">SARI-Check gelaufen, aber keine Daten zum Anzeigen gefunden.</p>";
     }
