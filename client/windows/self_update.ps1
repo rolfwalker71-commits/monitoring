@@ -366,7 +366,11 @@ function Use-LocalScriptFallback {
     Copy-Item $installedPath $DestinationPath -Force
     $global:UsedLocalFallback = $true
     $global:LocalFallbackFiles.Add($leaf) | Out-Null
-    Write-Warning "Using local fallback for $leaf because remote download was blocked/invalid."
+    $details = ''
+    if ($global:LastDownloadRepoFileError) {
+        $details = " Details: $($global:LastDownloadRepoFileError)"
+    }
+    Write-Warning "Using local fallback for $leaf because remote download was blocked/invalid.$details"
     return $true
 }
 
@@ -438,7 +442,11 @@ try {
         if ($global:LocalFallbackFiles.Count -gt 0) {
             $fallbackFiles = ($global:LocalFallbackFiles | Select-Object -Unique) -join ', '
         }
-        throw "Remote download blocked/invalid for: $fallbackFiles. Refusing to mark version upgrade to $remoteVersion with local fallback content."
+        $details = ''
+        if ($global:LastDownloadRepoFileError) {
+            $details = " Details: $($global:LastDownloadRepoFileError)"
+        }
+        throw "Remote download blocked/invalid for: $fallbackFiles. Refusing to mark version upgrade to $remoteVersion with local fallback content.$details"
     }
 
     [System.IO.File]::WriteAllText("$tmpDir\AGENT_VERSION", "$remoteVersion`n", [System.Text.Encoding]::UTF8)
