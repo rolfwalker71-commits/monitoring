@@ -4,8 +4,9 @@
     Updates monitoring agent scripts on multiple Windows hosts and verifies runtime version details.
 
 .DESCRIPTION
-    For each target host, this script:
-    - Downloads latest collect_and_send.ps1, self_update.ps1, and AGENT_VERSION from GitHub
+        For each target host, this script:
+        - Downloads latest collect_and_send.ps1, self_update.ps1, collect_and_scan_sap_tables.ps1,
+            and AGENT_VERSION (prefers server /updates, falls back to GitHub raw)
     - Writes AGENT_VERSION into AGENT_VERSION (fallback BUILD_VERSION for compatibility)
     - Verifies EmbeddedAgentVersion in collect_and_send.ps1
     - Optionally executes one immediate collect run
@@ -24,6 +25,9 @@ param(
 
     [Parameter(Mandatory = $false)]
     [pscredential]$Credential,
+
+    [Parameter(Mandatory = $false)]
+    [string]$UpdateBaseUrl = 'https://monitoring.rolfwalker.ch/updates',
 
     [Parameter(Mandatory = $false)]
     [string]$RawBaseUrl = 'https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main',
@@ -45,6 +49,7 @@ if ($PSBoundParameters.ContainsKey('Credential')) {
 
 $remoteScript = {
     param(
+        [string]$RemoteUpdateBaseUrl,
         [string]$RemoteRawBaseUrl,
         [bool]$RemoteSkipCollect
     )
@@ -58,6 +63,7 @@ $remoteScript = {
     $base = 'C:\ProgramData\monitoring-agent'
     $collectPath = Join-Path $base 'collect_and_send.ps1'
     $selfUpdatePath = Join-Path $base 'self_update.ps1'
+    $scanPath = Join-Path $base 'collect_and_scan_sap_tables.ps1'
     $versionPath = Join-Path $base 'AGENT_VERSION'
     $configPath = Join-Path $base 'agent.conf'
     $queuePath = Join-Path $base 'queue'
@@ -70,19 +76,76 @@ $remoteScript = {
         New-Item -ItemType Directory -Path $queuePath -Force | Out-Null
     }
 
-    $wc = New-Object System.Net.WebClient
-    $wc.DownloadFile("$RemoteRawBaseUrl/client/windows/collect_and_send.ps1", $collectPath)
-    $wc.DownloadFile("$RemoteRawBaseUrl/client/windows/self_update.ps1", $selfUpdatePath)
+    function Download-TextBestEffort {
+        param([string[]]$Uris)
+
+        foreach ($uri in $Uris) {
+            if (-not $uri) { continue }
+            try {
+                $wcInner = New-Object System.Net.WebClient
+                return ($wcInner.DownloadString($uri))
+            } catch {
+                # Try next candidate.
+            }
+        }
+
+        throw 'Could not download text from any candidate URL.'
+    }
+
+    function Download-FileBestEffort {
+        param(
+            [string[]]$Uris,
+            [string]$Destination
+        )
+
+        foreach ($uri in $Uris) {
+            if (-not $uri) { continue }
+            try {
+                $wcInner = New-Object System.Net.WebClient
+                $wcInner.DownloadFile($uri, $Destination)
+                return $uri
+            } catch {
+                # Try next candidate.
+            }
+        }
+
+        throw "Could not download file to $Destination from any candidate URL."
+    }
+
+    $usedSources = @()
+    $collectSource = Download-FileBestEffort -Uris @(
+        "$RemoteUpdateBaseUrl/client/windows/collect_and_send.ps1",
+        "$RemoteRawBaseUrl/client/windows/collect_and_send.ps1"
+    ) -Destination $collectPath
+    $usedSources += "collect_and_send=$collectSource"
+
+    $selfSource = Download-FileBestEffort -Uris @(
+        "$RemoteUpdateBaseUrl/client/windows/self_update.ps1",
+        "$RemoteRawBaseUrl/client/windows/self_update.ps1"
+    ) -Destination $selfUpdatePath
+    $usedSources += "self_update=$selfSource"
+
+    $scanSource = Download-FileBestEffort -Uris @(
+        "$RemoteUpdateBaseUrl/client/windows/collect_and_scan_sap_tables.ps1",
+        "$RemoteRawBaseUrl/client/windows/collect_and_scan_sap_tables.ps1"
+    ) -Destination $scanPath
+    $usedSources += "scan=$scanSource"
 
     $agentVersion = ''
     try {
-        $agentVersion = ($wc.DownloadString("$RemoteRawBaseUrl/AGENT_VERSION")).Trim()
+        $agentVersion = (Download-TextBestEffort -Uris @(
+            "$RemoteUpdateBaseUrl/AGENT_VERSION",
+            "$RemoteRawBaseUrl/AGENT_VERSION"
+        )).Trim()
     } catch {
         $agentVersion = ''
     }
     if (-not $agentVersion) {
         try {
-            $agentVersion = ($wc.DownloadString("$RemoteRawBaseUrl/BUILD_VERSION")).Trim()
+            $agentVersion = (Download-TextBestEffort -Uris @(
+                "$RemoteUpdateBaseUrl/BUILD_VERSION",
+                "$RemoteRawBaseUrl/BUILD_VERSION"
+            )).Trim()
         } catch {
             $agentVersion = ''
         }
@@ -96,6 +159,10 @@ $remoteScript = {
     $embeddedVersion = ''
     if ($collectContent -match "\$EmbeddedAgentVersion\s*=\s*'([^']+)'") {
         $embeddedVersion = $Matches[1]
+    }
+    $hasSariMarker = ($collectContent -match 'sari_addons')
+    if (-not $hasSariMarker) {
+        throw 'Downloaded collect_and_send.ps1 does not contain sari_addons marker.'
     }
 
     $agentVersionFileValue = ''
@@ -129,6 +196,8 @@ $remoteScript = {
         collect_run = $collectRunStatus
         collect_exit_code = $collectExitCode
         collect_log_path = $collectLogPath
+        source_used = ($usedSources -join '; ')
+        has_sari_marker = $hasSariMarker
         updated_at_utc = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
         ok = $true
         error = ''
@@ -143,7 +212,7 @@ foreach ($host in $ComputerName) {
     }
 
     try {
-        $res = Invoke-Command -ComputerName $target @invokeParams -ScriptBlock $remoteScript -ArgumentList $RawBaseUrl, [bool]$SkipCollectRun
+        $res = Invoke-Command -ComputerName $target @invokeParams -ScriptBlock $remoteScript -ArgumentList $UpdateBaseUrl, $RawBaseUrl, [bool]$SkipCollectRun
         if ($res -is [System.Array]) {
             $results += $res
         } else {
@@ -160,6 +229,8 @@ foreach ($host in $ComputerName) {
             collect_run = 'failed'
             collect_exit_code = -1
             collect_log_path = 'C:\ProgramData\monitoring-agent\monitoring-agent.log'
+            source_used = ''
+            has_sari_marker = $false
             updated_at_utc = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
             ok = $false
             error = $_.Exception.Message
@@ -167,7 +238,7 @@ foreach ($host in $ComputerName) {
     }
 }
 
-$results | Sort-Object host_name | Format-Table host_name, ok, embedded_version, version_file_value, collect_run, collect_exit_code, error -AutoSize
+$results | Sort-Object host_name | Format-Table host_name, ok, embedded_version, version_file_value, has_sari_marker, collect_run, collect_exit_code, error -AutoSize
 
 if ($OutputCsvPath) {
     $results | Sort-Object host_name | Export-Csv -Path $OutputCsvPath -NoTypeInformation -Encoding UTF8
