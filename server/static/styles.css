@@ -720,6 +720,83 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 .db-ops-progress-label.error { color: #dc2626; }
 .db-ops-progress-label.success { color: #16a34a; }
 
+.agent-update-admin-status {
+  margin-top: 14px;
+  border: 1px solid #d8e2f0;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 10px;
+}
+
+.agent-update-admin-status-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.agent-update-admin-status-head h6 {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.agent-update-admin-table-wrap {
+  margin-top: 8px;
+  overflow: auto;
+  max-height: 420px;
+  border: 1px solid #d8e2f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.agent-update-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: 1350px;
+}
+
+.agent-update-admin-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #edf3fb;
+  color: #1f2e46;
+  text-align: left;
+  padding: 7px 8px;
+  border-bottom: 1px solid #d8e2f0;
+  white-space: nowrap;
+}
+
+.agent-update-admin-table tbody td {
+  padding: 7px 8px;
+  border-bottom: 1px solid #edf1f7;
+  vertical-align: top;
+}
+
+.agent-update-admin-table tbody tr:nth-child(2n) {
+  background: #fbfdff;
+}
+
+.agent-update-admin-host {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-update-admin-hostname {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: #4b5b73;
+}
+
+.agent-update-admin-message {
+  max-width: 360px;
+  word-break: break-word;
+}
+
 .mountpoint-table-header h4 {
   margin: 0;
 }

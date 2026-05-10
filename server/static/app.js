@@ -740,15 +740,97 @@ function renderAgentUpdateStatusRows(hosts) {
     .join("");
 }
 
+function agentUpdateStatusSortWeight(status) {
+  switch (String(status || "idle").toLowerCase()) {
+    case "failed":
+      return 0;
+    case "expired":
+      return 1;
+    case "pending":
+      return 2;
+    case "idle":
+      return 3;
+    case "completed":
+      return 4;
+    default:
+      return 5;
+  }
+}
+
+function renderAgentUpdateStatusTableRows(hosts) {
+  if (!Array.isArray(hosts) || hosts.length === 0) {
+    return '<tr><td colspan="12" class="muted">Noch keine Host-Statusdaten vorhanden.</td></tr>';
+  }
+
+  const sorted = [...hosts].sort((a, b) => {
+    const wa = agentUpdateStatusSortWeight(a.command_status);
+    const wb = agentUpdateStatusSortWeight(b.command_status);
+    if (wa !== wb) return wa - wb;
+
+    const aReport = Date.parse(asText(a.last_report_utc || "")) || 0;
+    const bReport = Date.parse(asText(b.last_report_utc || "")) || 0;
+    if (aReport !== bReport) return bReport - aReport;
+
+    return asText(a.display_name || a.hostname).localeCompare(asText(b.display_name || b.hostname));
+  });
+
+  return sorted
+    .map((host) => {
+      const status = asText(host.command_status || "idle").toLowerCase();
+      const displayName = asText(host.display_name || host.hostname);
+      const hostname = asText(host.hostname || "-");
+      const agentVersion = asText(host.agent_version || "-");
+      const lastReport = host.last_report_utc ? formatUtcPlus2(host.last_report_utc) : "-";
+      const cmdCreated = host.command_created_at_utc ? formatUtcPlus2(host.command_created_at_utc) : "-";
+      const cmdExecuted = host.command_executed_at_utc ? formatUtcPlus2(host.command_executed_at_utc) : "-";
+      const cmdExpires = host.command_expires_at_utc ? formatUtcPlus2(host.command_expires_at_utc) : "-";
+      const nextPriority = host.next_priority_check_utc ? formatUtcPlus2(host.next_priority_check_utc) : "-";
+      const lastPriority = host.last_priority_check_utc ? formatUtcPlus2(host.last_priority_check_utc) : "-";
+      const priorityMinutes = Number(host.priority_check_minutes || 0) > 0 ? Number(host.priority_check_minutes || 0) : "-";
+      const recurringHours = Number(host.recurring_update_hours || 0) > 0 ? Number(host.recurring_update_hours || 0) : "-";
+      const recurringHint = asText(host.recurring_update_hint || "");
+      const commandMessage = asText(host.command_result_message || "Kein Rueckkanal-Ergebnis.");
+
+      return `
+        <tr>
+          <td><span class="agent-update-status-badge ${escapeHtml(status)}">${escapeHtml(updateStatusBadgeLabel(status))}</span></td>
+          <td>
+            <div class="agent-update-admin-host">
+              <strong>${escapeHtml(displayName)}</strong>
+              <span class="agent-update-admin-hostname">${escapeHtml(hostname)}</span>
+            </div>
+          </td>
+          <td>${escapeHtml(agentVersion)}</td>
+          <td>${escapeHtml(lastReport)}</td>
+          <td>${escapeHtml(cmdCreated)}</td>
+          <td>${escapeHtml(cmdExecuted)}</td>
+          <td>${escapeHtml(cmdExpires)}</td>
+          <td>${escapeHtml(nextPriority)}</td>
+          <td>${escapeHtml(lastPriority)}</td>
+          <td>${escapeHtml(String(priorityMinutes))}</td>
+          <td title="${escapeHtml(recurringHint)}">${escapeHtml(String(recurringHours))}</td>
+          <td class="agent-update-admin-message">${escapeHtml(commandMessage)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
 async function loadAgentUpdateStatus() {
   const summaryEl = document.getElementById("agentUpdateStatusSummary");
   const listEl = document.getElementById("agentUpdateStatusList");
-  if (!summaryEl || !listEl) {
+  const tableBodyEl = document.getElementById("agentUpdateStatusTableBody");
+  if (!summaryEl) {
     return;
   }
 
   summaryEl.textContent = "Lade Update-Status...";
-  listEl.innerHTML = "";
+  if (listEl) {
+    listEl.innerHTML = "";
+  }
+  if (tableBodyEl) {
+    tableBodyEl.innerHTML = '<tr><td colspan="12" class="muted">Lade Daten...</td></tr>';
+  }
 
   try {
     const response = await fetch("/api/v1/agent-update-status");
@@ -759,11 +841,21 @@ async function loadAgentUpdateStatus() {
     const data = await response.json();
     const summary = data.summary || {};
     summaryEl.textContent = `Status: ${Number(summary.pending || 0)} pending | ${Number(summary.completed || 0)} completed | ${Number(summary.failed || 0)} failed | ${Number(summary.expired || 0)} expired | ${Number(summary.idle || 0)} idle. ${asText(data.default_schedule_note)}`;
-    listEl.innerHTML = renderAgentUpdateStatusRows(data.hosts || []);
+    if (listEl) {
+      listEl.innerHTML = renderAgentUpdateStatusRows(data.hosts || []);
+    }
+    if (tableBodyEl) {
+      tableBodyEl.innerHTML = renderAgentUpdateStatusTableRows(data.hosts || []);
+    }
     state.agentUpdateStatusLoaded = true;
   } catch (error) {
     summaryEl.textContent = `Update-Status konnte nicht geladen werden: ${error.message}`;
-    listEl.innerHTML = "";
+    if (listEl) {
+      listEl.innerHTML = "";
+    }
+    if (tableBodyEl) {
+      tableBodyEl.innerHTML = '<tr><td colspan="12" class="muted">Fehler beim Laden der Statusdaten.</td></tr>';
+    }
   }
 }
 
@@ -8292,10 +8384,18 @@ function wireEvents() {
       const queuedCount = Number(result.queued_count || 0);
       const alreadyQueuedCount = Number(result.already_queued_count || 0);
       window.alert(`Update-Trigger gesetzt: ${queuedCount} Hosts neu gequeued, ${alreadyQueuedCount} bereits pending, gesamt ${totalHosts}.`);
+      await loadAgentUpdateStatus();
     } catch (error) {
       window.alert(`Globaler Update-Trigger fehlgeschlagen: ${error.message}`);
     }
   });
+
+  const refreshAgentUpdateStatusButton = document.getElementById("refreshAgentUpdateStatusButton");
+  if (refreshAgentUpdateStatusButton) {
+    refreshAgentUpdateStatusButton.addEventListener("click", async () => {
+      await loadAgentUpdateStatus();
+    });
+  }
 
   document.getElementById("rolloutApiKeyButton").addEventListener("click", async () => {
     const apiKey = window.prompt("API-Key fuer alle bekannten Hosts verteilen:", "");
@@ -8909,6 +9009,7 @@ async function init() {
     await loadSettingsPanel(true);
   }
   await refreshDashboard({ preserveScroll: false });
+  await loadAgentUpdateStatus();
   startAutoRefreshTimer();
   startSessionRefreshTimer();
 }

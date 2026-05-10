@@ -307,6 +307,37 @@
                 </div>
                 <span id="dbOpsProgressLabel" class="db-ops-progress-label"></span>
               </div>
+
+              <div class="agent-update-admin-status">
+                <div class="agent-update-admin-status-head">
+                  <h6>Agent Update Status (Alle Hosts)</h6>
+                  <button id="refreshAgentUpdateStatusButton" type="button" class="btn-secondary-compact">↻</button>
+                </div>
+                <p id="agentUpdateStatusSummary" class="count compact">Lade Update-Status...</p>
+                <div class="agent-update-admin-table-wrap">
+                  <table class="agent-update-admin-table">
+                    <thead>
+                      <tr>
+                        <th>Status</th>
+                        <th>Host</th>
+                        <th>Agent</th>
+                        <th>Letzter Report</th>
+                        <th>Command erstellt</th>
+                        <th>Command ausgefuehrt</th>
+                        <th>Command laeuft ab</th>
+                        <th>Naechster Priority-Check</th>
+                        <th>Letzter Priority-Check</th>
+                        <th>Priority (min)</th>
+                        <th>Recurring (h)</th>
+                        <th>Rueckkanal</th>
+                      </tr>
+                    </thead>
+                    <tbody id="agentUpdateStatusTableBody">
+                      <tr><td colspan="12" class="muted">Lade Daten...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </section>
           </div>
         </div>
