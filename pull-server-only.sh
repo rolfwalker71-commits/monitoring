@@ -60,6 +60,60 @@ download_file() {
     fi
 }
 
+checksum_file() {
+  local file_path="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file_path" | awk '{print $1}'
+    return 0
+  fi
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file_path" | awk '{print $1}'
+    return 0
+  fi
+  return 1
+}
+
+verify_synced_file() {
+  local source_path="$1"
+  local target_path="$2"
+  local tmp_verify
+  local local_hash
+  local remote_hash
+
+  if [ ! -f "$target_path" ]; then
+    echo "✗ VERIFY: $source_path (lokale Datei fehlt: $target_path)" >&2
+    return 1
+  fi
+
+  tmp_verify="$(mktemp)"
+  if ! curl -fsSL --retry 5 --retry-delay 1 "$RAW_BASE/$source_path" -o "$tmp_verify"; then
+    echo "✗ VERIFY: $source_path (Remote-Download fehlgeschlagen)" >&2
+    rm -f "$tmp_verify"
+    return 1
+  fi
+
+  if ! local_hash="$(checksum_file "$target_path")"; then
+    echo "✗ VERIFY: $source_path (kein sha256sum/shasum verfuegbar)" >&2
+    rm -f "$tmp_verify"
+    return 1
+  fi
+  if ! remote_hash="$(checksum_file "$tmp_verify")"; then
+    echo "✗ VERIFY: $source_path (Remote-Hash fehlgeschlagen)" >&2
+    rm -f "$tmp_verify"
+    return 1
+  fi
+
+  rm -f "$tmp_verify"
+
+  if [ "$local_hash" = "$remote_hash" ]; then
+    echo "✓ VERIFY: $source_path"
+    return 0
+  fi
+
+  echo "✗ VERIFY: $source_path (Hash-Mismatch)" >&2
+  return 1
+}
+
 export -f download_file
 export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME
 
@@ -89,6 +143,21 @@ if ! printf '%s\n' "$FILES_LIST" | sed '/^$/d' | xargs -P 4 -I {} bash -c 'downl
   exit 1
 fi
 echo "Dateien geladen ✓"
+
+echo "Pruefe heruntergeladene Dateien gegen gepinnten Commit..."
+VERIFY_ERRORS=0
+while IFS= read -r source_path; do
+  [ -n "$source_path" ] || continue
+  if ! verify_synced_file "$source_path" "$TARGET_DIR/$source_path"; then
+    VERIFY_ERRORS=$((VERIFY_ERRORS + 1))
+  fi
+done < <(printf '%s\n' "$FILES_LIST" | sed '/^$/d')
+
+if [ "$VERIFY_ERRORS" -gt 0 ]; then
+  echo "Verifikation fehlgeschlagen: $VERIFY_ERRORS Datei(en) stimmen nicht mit dem gepinnten Commit ueberein." >&2
+  exit 1
+fi
+echo "Verifikation erfolgreich ✓ Alle Dateien entsprechen Commit $SHA"
 
 # Mirror update payloads to /updates so agents can update from SERVER_URL.
 cp -f "$TARGET_DIR/BUILD_VERSION" "$TARGET_DIR/updates/BUILD_VERSION"
