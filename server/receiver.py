@@ -6669,10 +6669,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/host-update-log":
-            username = self._web_session_username()
-            if not username:
-                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "authentication required"})
-                return
             query = parse_qs(parsed.query)
             hostname_param = (query.get("hostname") or [""])[0].strip()
             if not hostname_param:
