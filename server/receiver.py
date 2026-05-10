@@ -2561,7 +2561,7 @@ def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit:
                     label_source = "LW"
                 elif addon_name.startswith("sari::"):
                     plain_name = addon_name.split("::", 1)[1]
-                    label_source = "Lightweight Extension (SARI)"
+                    label_source = "Legacy"
 
                 display_override = str(row[4] or "").strip()
                 country_code = normalize_country_code(str(row[5] or ""))
