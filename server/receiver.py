@@ -6165,7 +6165,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path.startswith("/api/v1/"):
-            if parsed.path != "/api/v1/agent-commands":
+            if parsed.path != "/api/v1/agent-commands" and parsed.path != "/api/v1/host-update-log":
                 if not self._require_web_session():
                     return
 
