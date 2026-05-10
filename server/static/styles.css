@@ -7111,7 +7111,7 @@ body[data-theme="dark"] .backup-row--hana td {
   margin-top: 6px;
   border: 1px solid #d8e2ef;
   border-radius: 6px;
-  background: #f8fbff;
+  background: linear-gradient(180deg, #ffffff 0%, #eef4fb 100%);
   font-size: 11px;
 }
 
@@ -7177,7 +7177,7 @@ body[data-theme="dark"] .backup-row--hana td {
 
 body[data-theme="dark"] .so-addon-details {
   border-color: #304762;
-  background: #13243a;
+  background: linear-gradient(180deg, #1a2f47 0%, #13243a 100%);
 }
 
 body[data-theme="dark"] .so-addon-details > summary {
