@@ -791,7 +791,7 @@ function renderAgentUpdateStatusTableRows(hosts) {
       const recurringHint = asText(host.recurring_update_hint || "");
       const commandMessage = asText(host.command_result_message || "Kein Rueckkanal-Ergebnis.");
       const showLogBtn = (status === "failed" || status === "completed")
-        ? ` <button class="chip-btn" onclick="showHostUpdateLog(${JSON.stringify(hostname)})" title="Update-Log anzeigen">Log</button>`
+        ? ` <button class="chip-btn" onclick="showHostUpdateLog(${escapeHtml(JSON.stringify(hostname))})" title="Update-Log anzeigen">Log</button>`
         : "";
 
       return `
