@@ -219,8 +219,13 @@ function Test-DownloadedFileContent {
         $preview = $preview.Substring(0, 180)
     }
 
-    # Guard against GitHub/proxy HTML pages being saved as .ps1/.txt content.
-    if ($textNormalized -match '<!DOCTYPE\s+html|<html\b|<head\b|<body\b') {
+    # Guard against HTML pages being saved as scripts.
+    # Only inspect the leading chunk to avoid false positives from literal regex strings inside valid scripts.
+    $leadingChunk = $textNormalized
+    if ($leadingChunk.Length -gt 2048) {
+        $leadingChunk = $leadingChunk.Substring(0, 2048)
+    }
+    if ($leadingChunk -match '^\s*(<!DOCTYPE\s+html|<html\b|<head\b|<body\b)') {
         $global:LastContentValidationHint = "html-like response preview='$preview'"
         return $false
     }
