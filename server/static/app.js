@@ -68,6 +68,7 @@ const state = {
   hostOsFilter: "all",
   hostCountryFilter: "all",
   systemOverviewCountryFilter: "all",
+  systemOverviewAddonsExpanded: false,
   viewMode: "overview",
   userSettingsSubMode: "password",
   overviewSection: "main",
@@ -8282,6 +8283,20 @@ function wireEvents() {
       await loadSystemOverview();
     });
   }
+  const refreshSystemOverviewButton = document.getElementById("refreshSystemOverviewButton");
+  if (refreshSystemOverviewButton) {
+    refreshSystemOverviewButton.addEventListener("click", async () => {
+      await loadSystemOverview();
+    });
+  }
+  const toggleSystemOverviewAddonsButton = document.getElementById("toggleSystemOverviewAddonsButton");
+  if (toggleSystemOverviewAddonsButton) {
+    toggleSystemOverviewAddonsButton.addEventListener("click", async () => {
+      state.systemOverviewAddonsExpanded = !state.systemOverviewAddonsExpanded;
+      updateSystemOverviewAddonsToggleButton();
+      await loadSystemOverview();
+    });
+  }
   const hostConfigChangesTabButton = document.getElementById("hostConfigChangesTabButton");
   if (hostConfigChangesTabButton) {
     hostConfigChangesTabButton.addEventListener("click", async () => {
@@ -9031,6 +9046,7 @@ async function init() {
   updateViewMode();
   updateOverviewSection();
   updateAnalysisRangeUi();
+  updateSystemOverviewAddonsToggleButton();
   document.getElementById("criticalTrendsRangeSelect").value = String(state.criticalTrendsHours);
   document.getElementById("criticalTrendsProjectSelect").value = String(state.criticalTrendsProjectHours);
   document.getElementById("inactiveHostsRangeSelect").value = String(state.inactiveHostsHours);
@@ -9169,6 +9185,16 @@ function formatShortHostname(hostname) {
   return raw.split(".")[0] || raw;
 }
 
+function updateSystemOverviewAddonsToggleButton() {
+  const button = document.getElementById("toggleSystemOverviewAddonsButton");
+  if (!button) {
+    return;
+  }
+  const expanded = state.systemOverviewAddonsExpanded === true;
+  button.textContent = expanded ? "AddOns zuklappen" : "AddOns aufklappen";
+  button.setAttribute("aria-pressed", expanded ? "true" : "false");
+}
+
 function renderSystemOverviewAddons(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   if (!sap) {
@@ -9202,9 +9228,10 @@ function renderSystemOverviewAddons(payload) {
   const summary = totalCount > 0
     ? `AddOns (${extCount} LW / ${legacyCount} Legacy)`
     : "AddOns (keine)";
+  const openAttr = state.systemOverviewAddonsExpanded === true ? " open" : "";
 
   return `
-    <details class="so-addon-details">
+    <details class="so-addon-details"${openAttr}>
       <summary>${escapeHtml(summary)}</summary>
       <div class="so-addon-grid">
         <div class="so-addon-col">
@@ -9322,6 +9349,7 @@ async function loadSystemOverview() {
   const container = document.getElementById("systemOverviewContainer");
   const statsEl = document.getElementById("systemOverviewStats");
   const filterEl = document.getElementById("systemOverviewCountryFilter");
+  updateSystemOverviewAddonsToggleButton();
   if (!container) return;
 
   container.innerHTML = '<p class="muted">Lade Systemdaten...</p>';
