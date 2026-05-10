@@ -7080,6 +7080,28 @@ body[data-theme="dark"] .backup-row--hana td {
   line-height: 1.3;
 }
 
+.so-host-cell {
+  display: grid;
+  grid-template-rows: auto auto minmax(40px, 1fr) auto;
+  gap: 0;
+}
+
+.so-host-title {
+  grid-row: 1;
+}
+
+.so-host-short {
+  grid-row: 2;
+}
+
+.so-host-spacer {
+  grid-row: 3;
+}
+
+.so-host-addons {
+  grid-row: 4;
+}
+
 .so-cell-main {
   line-height: 1.35;
 }
