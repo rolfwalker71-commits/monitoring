@@ -790,6 +790,9 @@ function renderAgentUpdateStatusTableRows(hosts) {
       const recurringHours = Number(host.recurring_update_hours || 0) > 0 ? Number(host.recurring_update_hours || 0) : "-";
       const recurringHint = asText(host.recurring_update_hint || "");
       const commandMessage = asText(host.command_result_message || "Kein Rueckkanal-Ergebnis.");
+      const showLogBtn = (status === "failed" || status === "completed")
+        ? ` <button class="chip-btn" onclick="showHostUpdateLog(${JSON.stringify(hostname)})" title="Update-Log anzeigen">Log</button>`
+        : "";
 
       return `
         <tr>
@@ -809,7 +812,7 @@ function renderAgentUpdateStatusTableRows(hosts) {
           <td>${escapeHtml(lastPriority)}</td>
           <td>${escapeHtml(String(priorityMinutes))}</td>
           <td title="${escapeHtml(recurringHint)}">${escapeHtml(String(recurringHours))}</td>
-          <td class="agent-update-admin-message">${escapeHtml(commandMessage)}</td>
+          <td class="agent-update-admin-message">${escapeHtml(commandMessage)}${showLogBtn}</td>
         </tr>
       `;
     })
@@ -856,6 +859,51 @@ async function loadAgentUpdateStatus() {
     if (tableBodyEl) {
       tableBodyEl.innerHTML = '<tr><td colspan="12" class="muted">Fehler beim Laden der Statusdaten.</td></tr>';
     }
+  }
+}
+
+async function showHostUpdateLog(hostname) {
+  let modal = document.getElementById("hostUpdateLogModal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "hostUpdateLogModal";
+    modal.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;";
+    modal.innerHTML = `
+      <div style="background:var(--bg-card,#1e1e2e);border:1px solid var(--border,#333);border-radius:10px;padding:1.4rem 1.6rem;max-width:720px;width:95%;max-height:82vh;display:flex;flex-direction:column;gap:.8rem;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+          <strong id="hostUpdateLogModalTitle" style="font-size:1rem;">Update-Log</strong>
+          <button onclick="document.getElementById('hostUpdateLogModal').remove()" style="background:none;border:none;cursor:pointer;font-size:1.3rem;color:var(--text-muted,#888);">&#10005;</button>
+        </div>
+        <div id="hostUpdateLogModalBody" style="overflow-y:auto;flex:1;font-family:monospace;font-size:.78rem;white-space:pre-wrap;background:var(--bg-deep,#13131e);border-radius:6px;padding:.8rem;color:var(--text,#ddd);min-height:200px;">Lade...</div>
+      </div>`;
+    modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+  }
+
+  const titleEl = document.getElementById("hostUpdateLogModalTitle");
+  const bodyEl = document.getElementById("hostUpdateLogModalBody");
+  if (titleEl) titleEl.textContent = `Update-Log: ${hostname}`;
+  if (bodyEl) bodyEl.textContent = "Lade...";
+
+  try {
+    const res = await fetch(`/api/v1/host-update-log?hostname=${encodeURIComponent(hostname)}`);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (!bodyEl) return;
+    if (!data.available) {
+      bodyEl.textContent = "Kein Update-Log verfügbar (Host hat noch keinen Bericht gesendet).";
+      return;
+    }
+    let text = "";
+    if (data.crash_info) {
+      text += "=== LETZTER ABSTURZ ===\n" + data.crash_info + "\n\n";
+    }
+    if (data.lines && data.lines.length > 0) {
+      text += "=== UPDATE-LOG (letzte Einträge) ===\n" + data.lines.join("\n");
+    }
+    bodyEl.textContent = text || "(Keine Einträge)";
+  } catch (err) {
+    if (bodyEl) bodyEl.textContent = "Fehler beim Laden: " + err.message;
   }
 }
 

@@ -10,6 +10,18 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# ---- Global crash trap: catches any unhandled terminating error ----
+# Writes to stdout (captured by scheduled task log) and to a persistent crash file.
+trap {
+    $crashMsg = "COLLECT_CRASH $(([System.DateTime]::UtcNow).ToString('yyyy-MM-ddTHH:mm:ssZ')): $($_.Exception.Message)"
+    try { Write-Host $crashMsg } catch { }
+    try {
+        $crashFile = 'C:\ProgramData\monitoring-agent\last-collect-crash.txt'
+        [System.IO.File]::WriteAllText($crashFile, "$crashMsg`n$($_.ScriptStackTrace)`n", [System.Text.Encoding]::UTF8)
+    } catch { }
+    break
+}
+
 # Enable TLS 1.2 for older Windows versions
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 [Net.ServicePointManager]::Expect100Continue = $false
@@ -19,7 +31,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.1.201'
+$EmbeddedAgentVersion = '1.1.202'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -224,7 +236,7 @@ function Get-UpdateLogBlock {
     }
 
     if (-not (Test-Path $UpdateLogFile)) {
-        return '{"available":false,"path":"' + $logPathJson + '","line_count":0,"lines":[],"priority_check_minutes":' + $priorityMinutes + ',"last_priority_check_utc":"' + (ConvertTo-JsonString $lastPriorityCheckUtc) + '","next_priority_check_utc":"' + (ConvertTo-JsonString $nextPriorityCheckUtc) + '","recurring_update_hours":' + $recurringUpdateHours + ',"recurring_update_hint":"' + (ConvertTo-JsonString ("Windows-Fallback-Update standardmaessig alle {0} Stunden relativ zum Installationszeitpunkt" -f $recurringUpdateHours)) + '"}'
+        return '{"available":false,"path":"' + $logPathJson + '","line_count":0,"lines":[],"last_crash":"","priority_check_minutes":' + $priorityMinutes + ',"last_priority_check_utc":"' + (ConvertTo-JsonString $lastPriorityCheckUtc) + '","next_priority_check_utc":"' + (ConvertTo-JsonString $nextPriorityCheckUtc) + '","recurring_update_hours":' + $recurringUpdateHours + ',"recurring_update_hint":"' + (ConvertTo-JsonString ("Windows-Fallback-Update standardmaessig alle {0} Stunden relativ zum Installationszeitpunkt" -f $recurringUpdateHours)) + '"}'
     }
 
     $lines = @(Get-Content -Path $UpdateLogFile -Tail $UpdateLogLines -Encoding UTF8 -ErrorAction SilentlyContinue)
@@ -233,7 +245,15 @@ function Get-UpdateLogBlock {
         $encodedLines += ('"' + (ConvertTo-JsonString ([string]$line)) + '"')
     }
 
-    return '{"available":true,"path":"' + $logPathJson + '","line_count":' + $lines.Count + ',"lines":[' + ($encodedLines -join ',') + '],"priority_check_minutes":' + $priorityMinutes + ',"last_priority_check_utc":"' + (ConvertTo-JsonString $lastPriorityCheckUtc) + '","next_priority_check_utc":"' + (ConvertTo-JsonString $nextPriorityCheckUtc) + '","recurring_update_hours":' + $recurringUpdateHours + ',"recurring_update_hint":"' + (ConvertTo-JsonString ("Windows-Fallback-Update standardmaessig alle {0} Stunden relativ zum Installationszeitpunkt" -f $recurringUpdateHours)) + '"}'
+    $lastCrash = ''
+    $crashFile = 'C:\ProgramData\monitoring-agent\last-collect-crash.txt'
+    if (Test-Path $crashFile) {
+        try {
+            $lastCrash = [System.IO.File]::ReadAllText($crashFile, [System.Text.Encoding]::UTF8).Trim()
+        } catch { }
+    }
+
+    return '{"available":true,"path":"' + $logPathJson + '","line_count":' + $lines.Count + ',"lines":[' + ($encodedLines -join ',') + '],"last_crash":"' + (ConvertTo-JsonString $lastCrash) + '","priority_check_minutes":' + $priorityMinutes + ',"last_priority_check_utc":"' + (ConvertTo-JsonString $lastPriorityCheckUtc) + '","next_priority_check_utc":"' + (ConvertTo-JsonString $nextPriorityCheckUtc) + '","recurring_update_hours":' + $recurringUpdateHours + ',"recurring_update_hint":"' + (ConvertTo-JsonString ("Windows-Fallback-Update standardmaessig alle {0} Stunden relativ zum Installationszeitpunkt" -f $recurringUpdateHours)) + '"}'
 }
 
 function Get-AgentConfigBlock {

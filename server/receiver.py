@@ -6668,6 +6668,40 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             })
             return
 
+        if parsed.path == "/api/v1/host-update-log":
+            username = self._web_session_username()
+            if not username:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "authentication required"})
+                return
+            query = parse_qs(parsed.query)
+            hostname_param = (query.get("hostname") or [""])[0].strip()
+            if not hostname_param:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname parameter required"})
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                row = conn.execute(
+                    "SELECT payload FROM reports WHERE hostname = ? ORDER BY received_at_utc DESC LIMIT 1",
+                    (hostname_param,),
+                ).fetchone()
+            if not row:
+                self._send_json(HTTPStatus.OK, {"hostname": hostname_param, "lines": [], "crash_info": "", "available": False})
+                return
+            try:
+                payload = json.loads(row[0] or "{}")
+            except Exception:
+                payload = {}
+            agent_update = payload.get("agent_update", {}) if isinstance(payload.get("agent_update"), dict) else {}
+            lines = agent_update.get("lines", []) if isinstance(agent_update.get("lines"), list) else []
+            crash_info = str(agent_update.get("last_crash", "") or "")
+            self._send_json(HTTPStatus.OK, {
+                "hostname": hostname_param,
+                "available": bool(lines or crash_info),
+                "lines": [str(l) for l in lines],
+                "crash_info": crash_info,
+                "log_path": str(agent_update.get("path", "")),
+            })
+            return
+
         if parsed.path == "/api/v1/inactive-hosts":
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=3, min_value=1, max_value=24 * 30)
