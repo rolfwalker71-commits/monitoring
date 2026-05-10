@@ -8,9 +8,20 @@ echo "Installiere Serverteil nach: $TARGET_DIR"
 
 mkdir -p "$TARGET_DIR/server/static/icons" "$TARGET_DIR/server/data" "$TARGET_DIR/updates/client/windows" "$TARGET_DIR/updates/client/linux"
 
-SHA="$(curl -fsSL --retry 5 --retry-delay 1 "https://api.github.com/repos/$OWNER_REPO/commits/main" \
+COMMIT_META_JSON="$(curl -fsSL --retry 5 --retry-delay 1 "https://api.github.com/repos/$OWNER_REPO/commits/main")"
+
+SHA="$(printf '%s\n' "$COMMIT_META_JSON" \
   | sed -n 's/.*"sha":[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' \
   | head -n 1)"
+
+GITHUB_COMMIT_ISO="$(printf '%s\n' "$COMMIT_META_JSON" \
+  | sed -n 's/.*"date":[[:space:]]*"\([0-9T:\-]\+Z\)".*/\1/p' \
+  | head -n 1)"
+
+GITHUB_COMMIT_TIME=""
+if [ -n "$GITHUB_COMMIT_ISO" ]; then
+  GITHUB_COMMIT_TIME="$(date -u -d "$GITHUB_COMMIT_ISO" '+%d.%m.%y %H:%M UTC' 2>/dev/null || date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$GITHUB_COMMIT_ISO" '+%d.%m.%y %H:%M UTC' 2>/dev/null || echo "")"
+fi
 
 if [ -z "$SHA" ]; then
   echo "Konnte Commit-SHA nicht ermitteln." >&2
@@ -25,18 +36,21 @@ download_file() {
     local target_path="$2"
     mkdir -p "$(dirname "$target_path")"
     if curl -fsSL --retry 5 --retry-delay 1 "$RAW_BASE/$source_path" -o "$target_path"; then
-        # Get file modification time and format nicely
-        local file_time=""
-        if command -v stat >/dev/null 2>&1; then
-            # Get mtime in seconds since epoch, then format with date
-            local mtime
-            mtime=$(stat -c %Y "$target_path" 2>/dev/null || stat -f %m "$target_path" 2>/dev/null || echo "")
-            if [ -n "$mtime" ]; then
-                file_time=$(date -d @"$mtime" '+%d.%m.%y %H:%M' 2>/dev/null || date -r "$mtime" '+%d.%m.%y %H:%M' 2>/dev/null || echo "")
-            fi
-        fi
-        if [ -n "$file_time" ]; then
-            echo "✓ $source_path [$file_time]"
+    local file_size_bytes=""
+    local file_size_human=""
+    file_size_bytes="$(wc -c < "$target_path" 2>/dev/null | tr -d ' ' || echo "")"
+    if [ -n "$file_size_bytes" ] && [ "$file_size_bytes" -ge 1024 ] 2>/dev/null; then
+      file_size_human="$(awk -v b="$file_size_bytes" 'BEGIN { printf "%.1f KiB", (b / 1024) }')"
+    elif [ -n "$file_size_bytes" ]; then
+      file_size_human="${file_size_bytes} B"
+    fi
+
+    if [ -n "$GITHUB_COMMIT_TIME" ] && [ -n "$file_size_human" ]; then
+      echo "✓ $source_path [GitHub: $GITHUB_COMMIT_TIME | $file_size_human]"
+    elif [ -n "$GITHUB_COMMIT_TIME" ]; then
+      echo "✓ $source_path [GitHub: $GITHUB_COMMIT_TIME]"
+    elif [ -n "$file_size_human" ]; then
+      echo "✓ $source_path [$file_size_human]"
         else
             echo "✓ $source_path"
         fi
@@ -47,7 +61,7 @@ download_file() {
 }
 
 export -f download_file
-export RAW_BASE TARGET_DIR
+export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME
 
 FILES_LIST="
 server/receiver.py
@@ -132,7 +146,11 @@ fi
 echo "Icons geladen ✓"
 echo "$SHA" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
 DEPLOY_TIME="$(date '+%d.%m.%y %H:%M')"
-echo "Fertig. Deploy-Commit: $SHA [$DEPLOY_TIME]"
+if [ -n "$GITHUB_COMMIT_TIME" ]; then
+  echo "Fertig. Deploy-Commit: $SHA [GitHub: $GITHUB_COMMIT_TIME | Deploy: $DEPLOY_TIME]"
+else
+  echo "Fertig. Deploy-Commit: $SHA [Deploy: $DEPLOY_TIME]"
+fi
 echo -n "BUILD_VERSION lokal: "
 cat "$TARGET_DIR/BUILD_VERSION"
 echo -n "AGENT_VERSION lokal: "
