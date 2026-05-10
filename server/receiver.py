@@ -248,6 +248,7 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS web_users (
                 username TEXT PRIMARY KEY,
+                display_name TEXT NOT NULL DEFAULT '',
                 password_hash TEXT NOT NULL,
                 password_salt TEXT NOT NULL,
                 is_admin INTEGER NOT NULL DEFAULT 0,
@@ -265,6 +266,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
         if "is_disabled" not in existing_web_user_columns:
             conn.execute("ALTER TABLE web_users ADD COLUMN is_disabled INTEGER NOT NULL DEFAULT 0")
+        if "display_name" not in existing_web_user_columns:
+            conn.execute("ALTER TABLE web_users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''")
         if "created_at_utc" not in existing_web_user_columns:
             conn.execute("ALTER TABLE web_users ADD COLUMN created_at_utc TEXT NOT NULL DEFAULT ''")
         conn.execute(
@@ -524,6 +527,7 @@ def init_db() -> None:
                 """
                 INSERT INTO web_users (
                     username,
+                    display_name,
                     password_hash,
                     password_salt,
                     is_admin,
@@ -531,10 +535,11 @@ def init_db() -> None:
                     created_at_utc,
                     updated_at_utc
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     WEB_DEFAULT_USERNAME,
+                    "",
                     hash_password(WEB_DEFAULT_PASSWORD, salt),
                     salt,
                     1,
@@ -892,19 +897,26 @@ def list_active_web_sessions(conn: sqlite3.Connection) -> list[dict]:
     )
     rows = conn.execute(
         """
-        SELECT username, COUNT(*) AS session_count, MAX(last_activity_at_utc) AS latest_activity_at_utc
-        FROM web_sessions
+        SELECT s.username,
+               COALESCE(u.display_name, ''),
+               COUNT(*) AS session_count,
+               MAX(s.expires_at_utc) AS latest_expires_at_utc,
+               MAX(s.last_activity_at_utc) AS latest_activity_at_utc
+        FROM web_sessions s
+        LEFT JOIN web_users u ON u.username = s.username
         WHERE last_activity_at_utc > ?
-        GROUP BY username
-        ORDER BY username COLLATE NOCASE ASC
+        GROUP BY s.username, u.display_name
+        ORDER BY s.username COLLATE NOCASE ASC
         """,
         (one_hour_ago_iso,),
     ).fetchall()
     return [
         {
             "username": str(row[0] or ""),
-            "session_count": int(row[1] or 0),
-            "latest_activity_at_utc": str(row[2] or ""),
+            "display_name": str(row[1] or ""),
+            "session_count": int(row[2] or 0),
+            "latest_expires_at_utc": str(row[3] or ""),
+            "latest_activity_at_utc": str(row[4] or ""),
         }
         for row in rows
         if str(row[0] or "").strip()
@@ -1039,7 +1051,7 @@ def microsoft_scope_string() -> str:
 def get_web_user(conn: sqlite3.Connection, username: str) -> dict | None:
     row = conn.execute(
         """
-        SELECT username, password_hash, password_salt, COALESCE(is_admin, 0), COALESCE(is_disabled, 0),
+        SELECT username, COALESCE(display_name, ''), password_hash, password_salt, COALESCE(is_admin, 0), COALESCE(is_disabled, 0),
                COALESCE(created_at_utc, ''), updated_at_utc
         FROM web_users
         WHERE username = ?
@@ -1050,12 +1062,13 @@ def get_web_user(conn: sqlite3.Connection, username: str) -> dict | None:
         return None
     return {
         "username": str(row[0] or ""),
-        "password_hash": str(row[1] or ""),
-        "password_salt": str(row[2] or ""),
-        "is_admin": bool(int(row[3] or 0)),
-        "is_disabled": bool(int(row[4] or 0)),
-        "created_at_utc": str(row[5] or ""),
-        "updated_at_utc": str(row[6] or ""),
+        "display_name": str(row[1] or ""),
+        "password_hash": str(row[2] or ""),
+        "password_salt": str(row[3] or ""),
+        "is_admin": bool(int(row[4] or 0)),
+        "is_disabled": bool(int(row[5] or 0)),
+        "created_at_utc": str(row[6] or ""),
+        "updated_at_utc": str(row[7] or ""),
     }
 
 
@@ -1063,6 +1076,7 @@ def list_web_users(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         """
         SELECT u.username,
+             COALESCE(u.display_name, ''),
                COALESCE(u.is_admin, 0),
                COALESCE(u.is_disabled, 0),
                COALESCE(u.created_at_utc, ''),
@@ -1085,26 +1099,28 @@ def list_web_users(conn: sqlite3.Connection) -> list[dict]:
     return [
         {
             "username": str(row[0] or ""),
-            "is_admin": bool(int(row[1] or 0)),
-            "is_disabled": bool(int(row[2] or 0)),
-            "created_at_utc": str(row[3] or ""),
-            "updated_at_utc": str(row[4] or ""),
-            "email_enabled": bool(int(row[5] or 0)),
-            "email_recipient": str(row[6] or ""),
-            "trend_email_enabled": bool(int(row[7] or 0)),
-            "trend_email_time_hhmm": normalize_hhmm(row[8], DEFAULT_TREND_DIGEST_TIME),
-            "alert_email_enabled": bool(int(row[9] or 0)),
-            "alert_email_time_hhmm": normalize_hhmm(row[10], DEFAULT_ALERT_DIGEST_TIME),
-            "microsoft_connected_email": str(row[11] or ""),
-            "microsoft_connected_at_utc": str(row[12] or ""),
-            "has_microsoft_oauth": bool(str(row[11] or "").strip()),
+            "display_name": str(row[1] or ""),
+            "is_admin": bool(int(row[2] or 0)),
+            "is_disabled": bool(int(row[3] or 0)),
+            "created_at_utc": str(row[4] or ""),
+            "updated_at_utc": str(row[5] or ""),
+            "email_enabled": bool(int(row[6] or 0)),
+            "email_recipient": str(row[7] or ""),
+            "trend_email_enabled": bool(int(row[8] or 0)),
+            "trend_email_time_hhmm": normalize_hhmm(row[9], DEFAULT_TREND_DIGEST_TIME),
+            "alert_email_enabled": bool(int(row[10] or 0)),
+            "alert_email_time_hhmm": normalize_hhmm(row[11], DEFAULT_ALERT_DIGEST_TIME),
+            "microsoft_connected_email": str(row[12] or ""),
+            "microsoft_connected_at_utc": str(row[13] or ""),
+            "has_microsoft_oauth": bool(str(row[12] or "").strip()),
         }
         for row in rows
     ]
 
 
-def create_web_user(conn: sqlite3.Connection, username: str, password: str, is_admin: bool = False) -> dict:
+def create_web_user(conn: sqlite3.Connection, username: str, password: str, is_admin: bool = False, display_name: str = "") -> dict:
     normalized_username = normalize_username(username)
+    normalized_display_name = str(display_name or "").strip()
     if not normalized_username:
         raise ValueError("username required")
     if not password_meets_policy(password):
@@ -1118,6 +1134,7 @@ def create_web_user(conn: sqlite3.Connection, username: str, password: str, is_a
         """
         INSERT INTO web_users (
             username,
+            display_name,
             password_hash,
             password_salt,
             is_admin,
@@ -1125,10 +1142,11 @@ def create_web_user(conn: sqlite3.Connection, username: str, password: str, is_a
             created_at_utc,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, 0, ?, ?)
+        VALUES (?, ?, ?, ?, ?, 0, ?, ?)
         """,
         (
             normalized_username,
+            normalized_display_name,
             hash_password(password, salt),
             salt,
             1 if is_admin else 0,
@@ -1200,6 +1218,25 @@ def update_web_user_flags(
     )
     if next_is_disabled:
         conn.execute("DELETE FROM web_sessions WHERE username = ?", (username,))
+    updated = get_web_user(conn, username)
+    if updated is None:
+        raise ValueError("user update failed")
+    return updated
+
+
+def update_web_user_display_name(conn: sqlite3.Connection, username: str, display_name: str) -> dict:
+    user = get_web_user(conn, username)
+    if user is None:
+        raise ValueError("user not found")
+    normalized_display_name = str(display_name or "").strip()
+    conn.execute(
+        """
+        UPDATE web_users
+        SET display_name = ?, updated_at_utc = ?
+        WHERE username = ?
+        """,
+        (normalized_display_name, utc_now_iso(), username),
+    )
     updated = get_web_user(conn, username)
     if updated is None:
         raise ValueError("user update failed")
@@ -4196,6 +4233,7 @@ def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
     connection = get_oauth_connection(conn, username, MICROSOFT_PROVIDER)
     return {
         "username": user["username"],
+        "display_name": user["display_name"],
         "is_admin": user["is_admin"],
         "is_disabled": user["is_disabled"],
         "created_at_utc": user["created_at_utc"],
@@ -5943,15 +5981,18 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/session":
             username = self._web_session_username()
             is_admin = False
+            display_name = ""
             if username:
                 with sqlite3.connect(DB_PATH) as conn:
                     user = get_web_user(conn, username)
                     is_admin = bool(user and user.get("is_admin"))
+                    display_name = str((user or {}).get("display_name", "") or "")
             self._send_json(
                 HTTPStatus.OK,
                 {
                     "authenticated": bool(username),
                     "username": username,
+                    "display_name": display_name,
                     "is_admin": is_admin,
                 },
             )
@@ -7229,6 +7270,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 {
                     "status": "authenticated",
                     "username": username,
+                    "display_name": str(user.get("display_name", "") or ""),
                     "expires_at_utc": expires_at,
                 },
                 extra_headers={
@@ -7809,9 +7851,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             target_username,
                             str(payload.get("password", "") or ""),
                             is_admin=coerce_bool(payload.get("is_admin", False)),
+                            display_name=str(payload.get("display_name", "") or ""),
                         )
                     elif action == "set-password":
                         update_web_user_password(conn, target_username, str(payload.get("password", "") or ""))
+                    elif action == "update-display-name":
+                        update_web_user_display_name(conn, target_username, str(payload.get("display_name", "") or ""))
                     elif action == "update-flags":
                         if current_admin == target_username and coerce_bool(payload.get("is_disabled", False)):
                             raise ValueError("current admin cannot disable self")
