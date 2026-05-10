@@ -167,8 +167,16 @@ function Test-PowerShellScriptContent {
     try {
         $text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
         if (-not $text) { return $false }
+        
+        # Remove UTF-8 BOM if present (fixes line-anchor regex issues)
+        if ($text[0] -eq [char]0xFEFF) {
+            $text = $text.Substring(1)
+        }
+        
         if ($text -match '<!DOCTYPE\s+html|<html\b|<head\b|<body\b') { return $false }
-        return ($text -match '(?m)^#Requires\s+-Version\s+5\.1' -or $text -match '(?m)^Set-StrictMode\s+-Version\s+Latest' -or $text -match '(?m)^\[CmdletBinding\(\)\]')
+        
+        # Check for PowerShell markers (no longer anchor-dependent)
+        return ($text -match '#Requires\s+-Version\s+5\.1' -or $text -match 'Set-StrictMode\s+-Version\s+Latest' -or $text -match '\[CmdletBinding\(\)\]')
     } catch {
         return $false
     }
@@ -232,16 +240,29 @@ try {
                     ("{0}/{1}" -f $GithubRawBaseUrl, $item.rel)
                 )
 
-                if (-not (Download-FileFromCandidates -Urls $urls -Destination $tmp)) {
+                $downloaded = $false
+                $usedUrl = ''
+                foreach ($url in $urls) {
+                    if (Download-FileBestEffort -Url $url -Destination $tmp) {
+                        $usedUrl = $url
+                        $downloaded = $true
+                        break
+                    }
+                }
+
+                if (-not $downloaded) {
                     if ($item.required) {
                         throw "Failed to download $($item.rel)"
                     }
                     continue
                 }
 
+                $fileSize = (Get-Item $tmp).Length
+                Write-Host "[DEBUG] Downloaded $($item.rel) ($fileSize bytes) from $usedUrl" -ForegroundColor Cyan
+
                 if ($item.rel -like '*.ps1' -and -not (Test-PowerShellScriptContent -Path $tmp)) {
                     if ($item.required) {
-                        throw "Downloaded script looks invalid: $($item.rel)"
+                        throw "Downloaded script looks invalid: $($item.rel) (size: $fileSize)"
                     }
                     continue
                 }
