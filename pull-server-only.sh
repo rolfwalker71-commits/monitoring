@@ -25,13 +25,15 @@ download_file() {
     local target_path="$2"
     mkdir -p "$(dirname "$target_path")"
     if curl -fsSL --retry 5 --retry-delay 1 "$RAW_BASE/$source_path" -o "$target_path"; then
-        # Get file modification time for display
-        local file_time
+        # Get file modification time and format nicely
+        local file_time=""
         if command -v stat >/dev/null 2>&1; then
-            # Try GNU stat first (Linux)
-            file_time=$(stat -c "%y" "$target_path" 2>/dev/null || stat -f "%Sm" "$target_path" 2>/dev/null || echo "")
-        else
-            file_time=$(ls -l "$target_path" 2>/dev/null | awk '{print $6, $7, $8}' || echo "")
+            # Get mtime in seconds since epoch, then format with date
+            local mtime
+            mtime=$(stat -c %Y "$target_path" 2>/dev/null || stat -f %m "$target_path" 2>/dev/null || echo "")
+            if [ -n "$mtime" ]; then
+                file_time=$(date -d @"$mtime" '+%d.%m.%y %H:%M' 2>/dev/null || date -r "$mtime" '+%d.%m.%y %H:%M' 2>/dev/null || echo "")
+            fi
         fi
         if [ -n "$file_time" ]; then
             echo "✓ $source_path [$file_time]"
@@ -122,7 +124,7 @@ if ! sed 's#^#server/static/icons/#' "$ICON_NAMES_FILE" | xargs -P 4 -I {} bash 
   echo "Fehler bei Icon-Downloads (nicht kritisch)" >&2
 fi
 echo "Icons geladen ✓"
-
+d.%m.%y %H:%M
 echo "$SHA" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
 DEPLOY_TIME="$(date '+%Y-%m-%d %H:%M:%S %Z')"
 echo "Fertig. Deploy-Commit: $SHA [$DEPLOY_TIME]"
