@@ -1254,6 +1254,8 @@ function updateAdminSettingsVisibility() {
   const globalAdminAlertSubsTab = document.getElementById("globalAdminAlertSubsTabButton");
   const globalAdminSettingsTab = document.getElementById("globalAdminSettingsTabButton");
   const globalAdminOpsSection = document.getElementById("globalAdminOpsSection");
+  const hostConfigChangesBackfillButton = document.getElementById("backfillHostConfigChangesButton");
+  const hostConfigChangesBackfillStatus = document.getElementById("hostConfigChangesBackfillStatus");
   if (adminOauthSection) {
     adminOauthSection.classList.toggle("hidden", !state.isAdmin);
   }
@@ -1271,6 +1273,12 @@ function updateAdminSettingsVisibility() {
   }
   if (globalAdminOpsSection) {
     globalAdminOpsSection.classList.toggle("hidden", !state.isAdmin);
+  }
+  if (hostConfigChangesBackfillButton) {
+    hostConfigChangesBackfillButton.classList.toggle("hidden", !state.isAdmin);
+  }
+  if (hostConfigChangesBackfillStatus) {
+    hostConfigChangesBackfillStatus.classList.toggle("hidden", !state.isAdmin);
   }
   const overviewNotificationTab = document.getElementById("overviewNotificationTabButton");
   if (overviewNotificationTab) {
@@ -8431,6 +8439,15 @@ function wireEvents() {
   if (refreshHostConfigChangesButton) {
     refreshHostConfigChangesButton.addEventListener("click", async () => {
       await loadHostConfigChanges();
+    });
+  }
+  const backfillHostConfigChangesButton = document.getElementById("backfillHostConfigChangesButton");
+  if (backfillHostConfigChangesButton) {
+    backfillHostConfigChangesButton.addEventListener("click", async () => {
+      const hoursFilterEl = document.getElementById("hostConfigChangesHoursFilter");
+      const hours = Number(hoursFilterEl?.value || state.hostConfigChangesHours || 720);
+      const days = Math.max(1, Math.min(30, Math.ceil(hours / 24)));
+      await runHostConfigChangesBackfill(days);
     });
   }
   const hostConfigChangesHoursFilter = document.getElementById("hostConfigChangesHoursFilter");
