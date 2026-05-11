@@ -4189,7 +4189,9 @@ function renderSapB1ExtensionsSection(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const ext = sap && typeof sap.extensions === "object" ? sap.extensions : null;
   const sariAddons = sap && typeof sap.sari_addons === "object" ? sap.sari_addons : null;
+  const hanaAddons = payload && typeof payload.hana_addons === "object" ? payload.hana_addons : null;
 
+  // SQL B1: Lightweight Extensions
   const rows = Array.isArray(ext?.rows) ? ext.rows : [];
   let extContent = '<p class="muted">Keine Daten vorhanden.</p>';
   if (rows.length > 0) {
@@ -4208,6 +4210,7 @@ function renderSapB1ExtensionsSection(payload) {
     `;
   }
 
+  // SQL B1: Legacy AddOns
   const sariRows = Array.isArray(sariAddons?.rows) ? sariAddons.rows : [];
   const sariAvailable = sariAddons?.available === true;
   const sariSourceDb = asText(sariAddons?.source_db, "");
@@ -4237,15 +4240,86 @@ function renderSapB1ExtensionsSection(payload) {
     }
   }
 
+  // HANA: Lightweight Extensions
+  const hanaLightweight = Array.isArray(hanaAddons?.lightweight) ? hanaAddons.lightweight : [];
+  let hanaLightweightContent = '<p class="muted">Keine Daten vorhanden.</p>';
+  if (hanaAddons?.available === true && hanaLightweight.length > 0) {
+    const bodyHtml = hanaLightweight.map((row) => {
+      const name = escapeHtml(asText(row?.name, ""));
+      const version = escapeHtml(asText(row?.version, ""));
+      return `<tr><td>${name}</td><td>${version}</td></tr>`;
+    }).join("");
+    hanaLightweightContent = `
+      <div class="table-wrap">
+        <table class="report-subtable">
+          <thead><tr><th>Name</th><th>Version</th></tr></thead>
+          <tbody>${bodyHtml}</tbody>
+        </table>
+      </div>
+    `;
+  } else if (hanaAddons?.reason) {
+    const reason = escapeHtml(hanaAddons.reason);
+    const error = escapeHtml(asText(hanaAddons.error, ""));
+    const reasonText = {
+      "missing_hana_sid": "HANA SID nicht gefunden",
+      "missing_sid_user": `HANA-Benutzer nicht angelegt`,
+      "missing_hdbsql": "hdbsql nicht vorhanden",
+      "empty_result": "Keine Extensions gefunden",
+      "success": "Keine Extensions vorhanden"
+    }[reason] || reason;
+    hanaLightweightContent = `<p class="muted">${reasonText}${error ? ": " + error : ""}</p>`;
+  }
+
+  // HANA: Legacy AddOns
+  const hanaLegacy = Array.isArray(hanaAddons?.legacy) ? hanaAddons.legacy : [];
+  let hanaLegacyContent = '<p class="muted">Keine Daten vorhanden.</p>';
+  if (hanaAddons?.available === true && hanaLegacy.length > 0) {
+    const bodyHtml = hanaLegacy.map((row) => {
+      const name = escapeHtml(asText(row?.name, ""));
+      const version = escapeHtml(asText(row?.version, ""));
+      return `<tr><td>${name}</td><td>${version}</td></tr>`;
+    }).join("");
+    hanaLegacyContent = `
+      <div class="table-wrap">
+        <table class="report-subtable">
+          <thead><tr><th>Name</th><th>Version</th></tr></thead>
+          <tbody>${bodyHtml}</tbody>
+        </table>
+      </div>
+    `;
+  } else if (hanaAddons?.reason) {
+    const reason = escapeHtml(hanaAddons.reason);
+    const reasonText = {
+      "empty_result": "Keine Legacy AddOns gefunden",
+      "success": "Keine Legacy AddOns vorhanden"
+    }[reason] || "";
+    if (reasonText) {
+      hanaLegacyContent = `<p class="muted">${reasonText}</p>`;
+    }
+  }
+
   return `
     <details class="sap-b1-raw-details sap-b1-sub-details" open>
-      <summary class="sap-b1-raw-summary">Lightweight Extensions</summary>
+      <summary class="sap-b1-raw-summary">Lightweight Extensions (SQL)</summary>
       ${extContent}
     </details>
     <details class="sap-b1-raw-details sap-b1-sub-details">
-      <summary class="sap-b1-raw-summary">Legacy AddOns</summary>
+      <summary class="sap-b1-raw-summary">Legacy AddOns (SQL)</summary>
       ${sariContent}
     </details>
+    ${hanaAddons ? `
+    <details class="sap-b1-raw-details sap-b1-sub-details">
+      <summary class="sap-b1-raw-summary">HANA Extensions</summary>
+      <details class="sap-b1-raw-details sap-b1-sub-details sap-b1-sub-sub-details">
+        <summary class="sap-b1-raw-summary" style="font-size: 0.95em;">Lightweight (SLDDATA)</summary>
+        ${hanaLightweightContent}
+      </details>
+      <details class="sap-b1-raw-details sap-b1-sub-details sap-b1-sub-sub-details">
+        <summary class="sap-b1-raw-summary" style="font-size: 0.95em;">Legacy (SBOCOMMON)</summary>
+        ${hanaLegacyContent}
+      </details>
+    </details>
+    ` : ''}
   `;
 }
 
