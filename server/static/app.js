@@ -133,6 +133,7 @@ const state = {
   backupStatusFilterSql: false,
   backupStatusFilterHana: false,
   backupStatusCountryFilter: "all",
+  agentSourceStatusLoaded: false,
   filesystemBlacklistPatterns: [],
   showBlacklistedFilesystems: false,
 };
@@ -962,6 +963,7 @@ function updateGlobalSubMode() {
   const systemOverviewView = document.getElementById("systemOverviewView");
   const backupStatusView = document.getElementById("backupStatusView");
   const hostConfigChangesView = document.getElementById("hostConfigChangesView");
+  const agentSourceStatusView = document.getElementById("agentSourceStatusView");
   const globalAdminAlertSubsView = document.getElementById("globalAdminAlertSubsView");
   const globalAdminSettingsView = document.getElementById("globalAdminSettingsView");
   const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
@@ -970,6 +972,7 @@ function updateGlobalSubMode() {
   const systemOverviewTabButton = document.getElementById("systemOverviewTabButton");
   const backupStatusTabButton = document.getElementById("backupStatusTabButton");
   const hostConfigChangesTabButton = document.getElementById("hostConfigChangesTabButton");
+  const agentSourceStatusTabButton = document.getElementById("agentSourceStatusTabButton");
   const globalAdminAlertSubsTabButton = document.getElementById("globalAdminAlertSubsTabButton");
   const globalAdminSettingsTabButton = document.getElementById("globalAdminSettingsTabButton");
 
@@ -979,6 +982,7 @@ function updateGlobalSubMode() {
   const systemOverviewActive = state.globalSubMode === "system-overview";
   const backupActive = state.globalSubMode === "backup-status";
   const hostConfigChangesActive = state.globalSubMode === "host-config-changes";
+  const agentSourceStatusActive = state.globalSubMode === "agent-source-status";
   const adminAlertSubsActive = state.globalSubMode === "admin-alert-subs";
   const adminSettingsActive = state.globalSubMode === "admin-settings";
 
@@ -988,6 +992,7 @@ function updateGlobalSubMode() {
   if (systemOverviewView) systemOverviewView.classList.toggle("hidden", !systemOverviewActive);
   if (backupStatusView) backupStatusView.classList.toggle("hidden", !backupActive);
   if (hostConfigChangesView) hostConfigChangesView.classList.toggle("hidden", !hostConfigChangesActive);
+  if (agentSourceStatusView) agentSourceStatusView.classList.toggle("hidden", !agentSourceStatusActive);
   if (globalAdminAlertSubsView) globalAdminAlertSubsView.classList.toggle("hidden", !adminAlertSubsActive);
   if (globalAdminSettingsView) globalAdminSettingsView.classList.toggle("hidden", !adminSettingsActive);
   if (globalAlertsTabButton) { globalAlertsTabButton.classList.toggle("active", alertsActive); globalAlertsTabButton.setAttribute("aria-selected", alertsActive ? "true" : "false"); }
@@ -996,6 +1001,7 @@ function updateGlobalSubMode() {
   if (systemOverviewTabButton) { systemOverviewTabButton.classList.toggle("active", systemOverviewActive); systemOverviewTabButton.setAttribute("aria-selected", systemOverviewActive ? "true" : "false"); }
   if (backupStatusTabButton) { backupStatusTabButton.classList.toggle("active", backupActive); backupStatusTabButton.setAttribute("aria-selected", backupActive ? "true" : "false"); }
   if (hostConfigChangesTabButton) { hostConfigChangesTabButton.classList.toggle("active", hostConfigChangesActive); hostConfigChangesTabButton.setAttribute("aria-selected", hostConfigChangesActive ? "true" : "false"); }
+  if (agentSourceStatusTabButton) { agentSourceStatusTabButton.classList.toggle("active", agentSourceStatusActive); agentSourceStatusTabButton.setAttribute("aria-selected", agentSourceStatusActive ? "true" : "false"); }
   if (globalAdminAlertSubsTabButton) { globalAdminAlertSubsTabButton.classList.toggle("active", adminAlertSubsActive); globalAdminAlertSubsTabButton.setAttribute("aria-selected", adminAlertSubsActive ? "true" : "false"); }
   if (globalAdminSettingsTabButton) { globalAdminSettingsTabButton.classList.toggle("active", adminSettingsActive); globalAdminSettingsTabButton.setAttribute("aria-selected", adminSettingsActive ? "true" : "false"); }
 }
@@ -7978,6 +7984,75 @@ async function loadHostConfigChanges() {
   }
 }
 
+function renderAgentSourceStatusCell(value, ok) {
+  const text = asText(value, "-");
+  const cls = ok ? "agent-source-cell-ok" : "agent-source-cell-bad";
+  return `<span class="${cls}">${escapeHtml(text || "-")}</span>`;
+}
+
+async function loadAgentSourceStatus() {
+  const summaryEl = document.getElementById("agentSourceStatusSummary");
+  const rowsEl = document.getElementById("agentSourceStatusRows");
+  if (!rowsEl) return;
+
+  rowsEl.innerHTML = '<tr><td colspan="8" class="muted">Lade Daten...</td></tr>';
+  if (summaryEl) summaryEl.textContent = "";
+
+  try {
+    const response = await fetch("/api/v1/agent-source-status", {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+
+    const data = await response.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+    const total = Number(data.total || items.length || 0);
+    const okCount = Number(data.ok || 0);
+    const pendingCount = Number(data.pending || Math.max(0, total - okCount));
+    if (summaryEl) {
+      summaryEl.textContent = `${okCount}/${total} umgestellt, ${pendingCount} offen`;
+    }
+
+    if (!items.length) {
+      rowsEl.innerHTML = '<tr><td colspan="8" class="muted">Keine Host-Daten vorhanden.</td></tr>';
+      return;
+    }
+
+    rowsEl.innerHTML = items.map((item) => {
+      const checks = item && typeof item.checks === "object" ? item.checks : {};
+      const host = asText(item.display_name || item.hostname, "-");
+      const hostname = asText(item.hostname, "-");
+      const showHostname = host !== hostname;
+      const statusOk = Boolean(item.is_ok);
+      const statusBadge = statusOk
+        ? '<span class="agent-source-status-badge ok">OK</span>'
+        : '<span class="agent-source-status-badge pending">Offen</span>';
+      return `
+        <tr>
+          <td>${statusBadge}</td>
+          <td>
+            <div class="global-host-cell">
+              <span class="global-host-label">${escapeHtml(host)}</span>
+              ${showHostname ? `<span class="global-hostname-sub">(${escapeHtml(hostname)})</span>` : ""}
+            </div>
+          </td>
+          <td class="agent-source-mono">${renderAgentSourceStatusCell(item.server_url, Boolean(checks.server_url))}</td>
+          <td class="agent-source-mono">${renderAgentSourceStatusCell(item.update_base_url, Boolean(checks.update_base_url))}</td>
+          <td class="agent-source-mono">${renderAgentSourceStatusCell(item.raw_base_url, Boolean(checks.raw_base_url))}</td>
+          <td class="agent-source-mono">${renderAgentSourceStatusCell(item.github_repo, Boolean(checks.github_repo_empty))}</td>
+          <td class="agent-source-mono">${escapeHtml(asText(item.expected_update_base_url, "-"))}</td>
+          <td>${escapeHtml(formatUtcPlus2(asText(item.received_at_utc, "")))}</td>
+        </tr>
+      `;
+    }).join("");
+
+    state.agentSourceStatusLoaded = true;
+  } catch (error) {
+    rowsEl.innerHTML = `<tr><td colspan="8" class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
 function setHostConfigChangesBackfillStatus(message, isError = false) {
   const statusEl = document.getElementById("hostConfigChangesBackfillStatus");
   if (!statusEl) return;
@@ -8515,6 +8590,20 @@ function wireEvents() {
       await loadHostConfigChanges();
     });
   }
+  const agentSourceStatusTabButton = document.getElementById("agentSourceStatusTabButton");
+  if (agentSourceStatusTabButton) {
+    agentSourceStatusTabButton.addEventListener("click", async () => {
+      state.globalSubMode = "agent-source-status";
+      updateGlobalSubMode();
+      await loadAgentSourceStatus();
+    });
+  }
+  const refreshAgentSourceStatusButton = document.getElementById("refreshAgentSourceStatusButton");
+  if (refreshAgentSourceStatusButton) {
+    refreshAgentSourceStatusButton.addEventListener("click", async () => {
+      await loadAgentSourceStatus();
+    });
+  }
   document.getElementById("globalViewButton").addEventListener("click", async () => {
     const previousViewMode = state.viewMode;
     state.viewMode = "global";
@@ -8535,6 +8624,7 @@ function wireEvents() {
     else if (state.globalSubMode === "system-overview") await loadSystemOverview();
     else if (state.globalSubMode === "backup-status") await loadBackupStatus();
     else if (state.globalSubMode === "host-config-changes") await loadHostConfigChanges();
+    else if (state.globalSubMode === "agent-source-status") await loadAgentSourceStatus();
     else if (state.globalSubMode === "admin-alert-subs") await loadAdminAlertSubscriptions();
     else if (state.globalSubMode === "admin-settings") await loadGlobalAdminSettingsPanel();
   });

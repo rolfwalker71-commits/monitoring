@@ -178,6 +178,15 @@ ensure_config_value "HANA_ADDONS_PORT" "30015"
 if [[ -n "$UPDATE_BASE_URL" ]]; then
   ensure_config_value "UPDATE_BASE_URL" "$UPDATE_BASE_URL"
 fi
+if [[ -n "$SERVER_URL" ]]; then
+  ensure_config_value "SERVER_URL" "$SERVER_URL"
+elif [[ "$UPDATE_BASE_URL" =~ /updates$ ]]; then
+  ensure_config_value "SERVER_URL" "${UPDATE_BASE_URL%/updates}"
+fi
+if [[ -n "$UPDATE_BASE_URL" ]]; then
+  ensure_config_value "RAW_BASE_URL" "$UPDATE_BASE_URL"
+fi
+ensure_config_value "GITHUB_REPO" ""
 # Migration: remove old static DIR_SCAN_DEEP_PATHS that was auto-written by a
 # previous agent version. The new agent performs a hostname-aware search and
 # will re-write the correct value on the next run.

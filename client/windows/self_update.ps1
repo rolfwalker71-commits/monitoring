@@ -330,6 +330,41 @@ function Download-RepoFile {
     return $false
 }
 
+function Set-ConfigValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+        [Parameter(Mandatory = $true)]
+        [string]$Key,
+        [Parameter(Mandatory = $true)]
+        [string]$Value
+    )
+
+    $escapedValue = $Value -replace '"', '\\"'
+    $line = "$Key=\"$escapedValue\""
+    $content = @()
+    if (Test-Path $Path) {
+        $content = Get-Content -Path $Path -Encoding UTF8
+    }
+
+    $pattern = '^\s*' + [Regex]::Escape($Key) + '\s*='
+    $updated = $false
+    $newContent = foreach ($existing in $content) {
+        if (-not $updated -and $existing -match $pattern) {
+            $updated = $true
+            $line
+        } else {
+            $existing
+        }
+    }
+
+    if (-not $updated) {
+        $newContent += $line
+    }
+
+    [System.IO.File]::WriteAllLines($Path, $newContent, [System.Text.Encoding]::UTF8)
+}
+
 function Use-LocalScriptFallback {
     param(
         [Parameter(Mandatory = $true)]
@@ -440,6 +475,17 @@ try {
     Copy-Item "$tmpDir\collect_and_scan_sap_tables.ps1" "$InstallDir\collect_and_scan_sap_tables.ps1" -Force
     Copy-Item "$tmpDir\setup_harvest_sql_user.ps1" "$InstallDir\setup_harvest_sql_user.ps1" -Force
     Copy-Item "$tmpDir\AGENT_VERSION"        $VersionFile                       -Force
+
+    $normalizedServerUrl = $ServerUrl.Trim()
+    if (-not $normalizedServerUrl -and $PrimaryUpdateBaseUrl -match '/updates$') {
+        $normalizedServerUrl = $PrimaryUpdateBaseUrl.Substring(0, $PrimaryUpdateBaseUrl.Length - '/updates'.Length)
+    }
+    if ($normalizedServerUrl) {
+        Set-ConfigValue -Path $ConfigFile -Key 'SERVER_URL' -Value $normalizedServerUrl
+    }
+    Set-ConfigValue -Path $ConfigFile -Key 'UPDATE_BASE_URL' -Value $PrimaryUpdateBaseUrl
+    Set-ConfigValue -Path $ConfigFile -Key 'RAW_BASE_URL' -Value $PrimaryUpdateBaseUrl
+    Set-ConfigValue -Path $ConfigFile -Key 'GITHUB_REPO' -Value ''
 } finally {
     Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
 }

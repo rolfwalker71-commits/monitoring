@@ -5491,6 +5491,129 @@ def payload_has_agent_api_key(payload: dict) -> bool:
     return False
 
 
+def payload_agent_config_entries_map(payload: dict) -> dict[str, str]:
+    agent_config = payload.get("agent_config", {})
+    if not isinstance(agent_config, dict):
+        return {}
+
+    entries = agent_config.get("entries", [])
+    if not isinstance(entries, list):
+        return {}
+
+    result: dict[str, str] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        key = str(entry.get("key", "") or "").strip().upper()
+        if not key:
+            continue
+        result[key] = str(entry.get("value", "") or "").strip()
+    return result
+
+
+def collect_agent_source_status(conn: sqlite3.Connection) -> dict:
+    known_hosts = get_known_hostnames(conn)
+    if not known_hosts:
+        return {
+            "generated_at": utc_now_iso(),
+            "total": 0,
+            "ok": 0,
+            "pending": 0,
+            "items": [],
+        }
+
+    placeholders = ",".join("?" for _ in known_hosts)
+
+    settings_rows = conn.execute(
+        f"""
+        SELECT hostname, COALESCE(display_name_override, ''), COALESCE(country_code_override, '')
+        FROM host_settings
+        WHERE hostname IN ({placeholders})
+        """,
+        tuple(known_hosts),
+    ).fetchall()
+    display_name_override_map = {str(row[0] or ""): str(row[1] or "") for row in settings_rows}
+    country_override_map = {str(row[0] or ""): normalize_country_code(str(row[2] or "")) for row in settings_rows}
+
+    latest_rows = conn.execute(
+        f"""
+        SELECT r.hostname, r.received_at_utc, r.payload_json
+        FROM reports r
+        JOIN (
+            SELECT hostname, MAX(id) AS latest_id
+            FROM reports
+            WHERE hostname IN ({placeholders})
+            GROUP BY hostname
+        ) latest ON latest.latest_id = r.id
+        ORDER BY LOWER(r.hostname)
+        """,
+        tuple(known_hosts),
+    ).fetchall()
+
+    items: list[dict] = []
+    for row in latest_rows:
+        hostname = str(row[0] or "").strip()
+        if not hostname:
+            continue
+        received_at_utc = str(row[1] or "").strip()
+        payload = parse_payload_json(str(row[2] or "{}"))
+
+        entries_map = payload_agent_config_entries_map(payload)
+        server_url = str(entries_map.get("SERVER_URL", "") or "").strip()
+        update_base_url = str(entries_map.get("UPDATE_BASE_URL", "") or "").strip()
+        raw_base_url = str(entries_map.get("RAW_BASE_URL", "") or "").strip()
+        github_repo = str(entries_map.get("GITHUB_REPO", "") or "").strip()
+
+        expected_update_base = f"{server_url.rstrip('/')}/updates" if server_url else ""
+
+        server_ok = bool(server_url)
+        update_ok = bool(update_base_url) and bool(expected_update_base) and (update_base_url == expected_update_base)
+        raw_ok = (not raw_base_url) or (bool(update_base_url) and raw_base_url == update_base_url)
+        github_ok = not github_repo
+
+        is_ok = bool(server_ok and update_ok and raw_ok and github_ok)
+
+        display_name = effective_display_name(
+            payload,
+            display_name_override_map.get(hostname, ""),
+            hostname,
+        )
+        country_code = country_override_map.get(hostname, "") or extract_country_code_from_payload(payload)
+
+        items.append(
+            {
+                "hostname": hostname,
+                "display_name": display_name,
+                "country_code": normalize_country_code(country_code),
+                "received_at_utc": received_at_utc,
+                "server_url": server_url,
+                "update_base_url": update_base_url,
+                "raw_base_url": raw_base_url,
+                "github_repo": github_repo,
+                "expected_update_base_url": expected_update_base,
+                "checks": {
+                    "server_url": server_ok,
+                    "update_base_url": update_ok,
+                    "raw_base_url": raw_ok,
+                    "github_repo_empty": github_ok,
+                },
+                "is_ok": is_ok,
+            }
+        )
+
+    items.sort(key=lambda item: (str(item.get("display_name", "")).lower(), str(item.get("hostname", "")).lower()))
+    ok_count = sum(1 for item in items if bool(item.get("is_ok")))
+    total_count = len(items)
+
+    return {
+        "generated_at": utc_now_iso(),
+        "total": total_count,
+        "ok": ok_count,
+        "pending": max(0, total_count - ok_count),
+        "items": items,
+    }
+
+
 def build_agent_api_key_status(payload: dict, request_key: str, hostname: str) -> dict:
     configured = payload_has_agent_api_key(payload)
     server_requires_api_key = bool(API_KEY)
@@ -7109,6 +7232,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             limit = parse_int(query, "limit", default=300, min_value=1, max_value=1000)
             with sqlite3.connect(DB_PATH) as conn:
                 data = collect_host_config_changes(conn, hours=hours, limit=limit)
+            self._send_json(HTTPStatus.OK, data)
+            return
+
+        if parsed.path == "/api/v1/agent-source-status":
+            with sqlite3.connect(DB_PATH) as conn:
+                data = collect_agent_source_status(conn)
             self._send_json(HTTPStatus.OK, data)
             return
 

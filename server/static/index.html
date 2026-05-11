@@ -100,6 +100,7 @@
                 <button id="backupStatusTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="backupStatusView">Backup Stati</button>
                 <button id="systemOverviewTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="systemOverviewView">Systemübersicht</button>
                 <button id="hostConfigChangesTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="hostConfigChangesView">Changelog</button>
+                <button id="agentSourceStatusTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="agentSourceStatusView">Agent Quelle</button>
                 <button id="globalAdminAlertSubsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminAlertSubsView">Alert Abos</button>
                 <button id="globalAdminSettingsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminSettingsView">Admin Settings</button>
               </div>
@@ -267,6 +268,32 @@
               </div>
               <div id="hostConfigChangesGroups" class="host-config-changes-groups">
                 <p class="muted">Lade Daten…</p>
+              </div>
+            </div>
+
+            <div id="agentSourceStatusView" class="hidden" role="tabpanel" aria-labelledby="agentSourceStatusTabButton">
+              <div class="inactive-hosts-toolbar">
+                <span id="agentSourceStatusSummary" class="count compact"></span>
+                <button id="refreshAgentSourceStatusButton" type="button" class="btn-secondary-compact">↻</button>
+              </div>
+              <div class="table-wrap">
+                <table class="report-subtable agent-source-status-table">
+                  <thead>
+                    <tr>
+                      <th>Status</th>
+                      <th>Host</th>
+                      <th>SERVER_URL</th>
+                      <th>UPDATE_BASE_URL</th>
+                      <th>RAW_BASE_URL</th>
+                      <th>GITHUB_REPO</th>
+                      <th>Soll UPDATE_BASE_URL</th>
+                      <th>Letzter Report</th>
+                    </tr>
+                  </thead>
+                  <tbody id="agentSourceStatusRows">
+                    <tr><td colspan="8" class="muted">Lade Daten...</td></tr>
+                  </tbody>
+                </table>
               </div>
             </div>
 
