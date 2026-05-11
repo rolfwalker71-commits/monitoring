@@ -44,7 +44,8 @@ receiver.py  ← ThreadingHTTPServer auf Port 8080
 | Journal           | Fehler/Warn-Ereignisse der letzten Stunde                    |
 | Prozesse          | Top-Prozesse nach CPU/RAM                                    |
 | Container         | Docker/Podman Status (Name, State, Image)                    |
-| SAP Business One  | Build-Version, Feature Pack, Patch Level, HANA SID           |
+| SAP Business One  | Build-Version, Feature Pack, Patch Level                     |
+| HANA              | SID, Version, Branch, AddOns (Lightweight + Legacy)          |
 | Backup-Status     | Letzter Backup-Zeitstempel (konfigurierbar per Pfad)         |
 | Update-Log        | Letzte Zeilen des lokalen Self-Update-Logs                   |
 
@@ -291,3 +292,20 @@ openapi.yaml               # OpenAPI 3.0.3 Spec
 AGENT_VERSION              # Aktuelle Agent-Versionsnummer
 BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ```
+
+---
+
+## Changelog (Agent)
+
+### v1.4.42 (11. Mai 2026)
+- **HANA AddOns Extraction**: Neue Funktionalität für Linux Agent zur Auslesung von HANA AddOns über hdbsql
+  - Lightweight Extensions aus `SLDDATA.EXTENSIONS` (Tabelle: NAME, Version)
+  - Legacy AddOns aus `SBOCOMMON.SARI` (Tabelle: AName, AddOnVer)
+  - Read-only Abfragen mit konfigurierbarem Timeout (default: 15 Sekunden)
+  - Graceful Failure: Fehlende User/hdbsql/Timeout führen nicht zu Agent-Hängern
+- **UI Update**: AddOns-Section im System-Tab zeigt nun auch HANA Extensions separat von SQL B1 AddOns
+  - HANA Extensions (Lightweight + Legacy) collapsible unter SAP B1 AddOns
+  - Aussagekräftige Fehlermeldungen bei User-nicht-angelegt oder hdbsql nicht vorhanden
+
+### v1.4.41 (früher)
+- AddOns Card mit subtlem Hintergrund-Gradient
