@@ -5260,15 +5260,16 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
       const schemas = (Array.isArray(hanaInfo.schemas) ? hanaInfo.schemas : []).filter((entry) => {
         const name = asText(entry?.name, "").trim();
         if (!name) return false;
+        const upperName = name.toUpperCase();
         if (name.startsWith("_")) return false;
-        if (name.toUpperCase().startsWith("SAP")) return false;
-        if (name.toUpperCase() === "SLDDATA") return false;
+        if (upperName.startsWith("SAP")) return false;
+        if (upperName === "SLDDATA" || upperName === "SBOCOMMON" || upperName === "LANDSCAPE") return false;
         const memoryGb = Number(entry?.memory_gb || 0);
         return Number.isFinite(memoryGb) && memoryGb > 0;
       });
       const target = asText(hanaInfo.target, "");
       if (schemas.length === 0) {
-        parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Datenbanken</h4><p class="muted">Keine Eintraege gefunden (Filter: kein SAP*, kein _*, kein SLDDATA, Groesse > 0 GB).</p></section>`);
+        parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Datenbanken</h4><p class="muted">Keine Eintraege gefunden (Filter: kein SAP*, kein _*, kein SLDDATA, kein SBOCOMMON, kein LANDSCAPE, Groesse > 0 GB).</p></section>`);
       } else {
         const rows = schemas.map((entry) => {
           const name = asText(entry.name, "-");

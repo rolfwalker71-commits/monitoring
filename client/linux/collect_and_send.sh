@@ -1126,7 +1126,7 @@ collect_hana_db_info_json() {
 
   local db_output=""
   local db_error=""
-  db_output="$(run_hdbsql_db_query "SELECT SCHEMA_NAME, ROUND(SUM(MEMORY_SIZE_IN_TOTAL) / 1024 / 1024 / 1024, 2) AS MEMORY_GB FROM M_CS_TABLES WHERE UPPER(SCHEMA_NAME) NOT LIKE 'SAP%' AND UPPER(SCHEMA_NAME) <> 'SLDDATA' AND SCHEMA_NAME NOT LIKE '\\_%' ESCAPE '\\' GROUP BY SCHEMA_NAME HAVING SUM(MEMORY_SIZE_IN_TOTAL) > 0 ORDER BY MEMORY_GB DESC;")"
+  db_output="$(run_hdbsql_db_query "SELECT SCHEMA_NAME, ROUND(SUM(MEMORY_SIZE_IN_TOTAL) / 1024 / 1024 / 1024, 2) AS MEMORY_GB FROM M_CS_TABLES WHERE UPPER(SCHEMA_NAME) NOT LIKE 'SAP%' AND UPPER(SCHEMA_NAME) NOT IN ('SLDDATA','SBOCOMMON','LANDSCAPE') AND SCHEMA_NAME NOT LIKE '\\_%' ESCAPE '\\' GROUP BY SCHEMA_NAME HAVING SUM(MEMORY_SIZE_IN_TOTAL) > 0 ORDER BY MEMORY_GB DESC;")"
 
   if detect_hdbsql_db_error_line "$db_output" >/dev/null; then
     db_error="$(detect_hdbsql_db_error_line "$db_output")"
@@ -1156,6 +1156,8 @@ collect_hana_db_info_json() {
         [[ -z "$schema_name" ]] && continue
         [[ "${schema_name^^}" == SAP* ]] && continue
         [[ "${schema_name^^}" == "SLDDATA" ]] && continue
+        [[ "${schema_name^^}" == "SBOCOMMON" ]] && continue
+        [[ "${schema_name^^}" == "LANDSCAPE" ]] && continue
         [[ "$schema_name" == _* ]] && continue
         if ! [[ "$memory_gb" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
           continue
@@ -1181,6 +1183,8 @@ collect_hana_db_info_json() {
         [[ -z "$schema_name" ]] && continue
         [[ "${schema_name^^}" == SAP* ]] && continue
         [[ "${schema_name^^}" == "SLDDATA" ]] && continue
+        [[ "${schema_name^^}" == "SBOCOMMON" ]] && continue
+        [[ "${schema_name^^}" == "LANDSCAPE" ]] && continue
         [[ "$schema_name" == _* ]] && continue
         if ! [[ "$memory_gb" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
           continue
