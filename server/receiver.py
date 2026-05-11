@@ -209,6 +209,7 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS host_config_snapshot (
                 hostname TEXT PRIMARY KEY,
                 os_release TEXT NOT NULL DEFAULT '-',
+                kernel_release TEXT NOT NULL DEFAULT '-',
                 cpu_cores TEXT NOT NULL DEFAULT '-',
                 cpu_model_name TEXT NOT NULL DEFAULT '-',
                 ram_gb TEXT NOT NULL DEFAULT '-',
@@ -220,6 +221,12 @@ def init_db() -> None:
             )
             """
         )
+        existing_host_config_snapshot_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(host_config_snapshot)").fetchall()
+        }
+        if "kernel_release" not in existing_host_config_snapshot_columns:
+            conn.execute("ALTER TABLE host_config_snapshot ADD COLUMN kernel_release TEXT NOT NULL DEFAULT '-'")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS host_config_changes (
@@ -2262,6 +2269,7 @@ def _extract_cpu_overview(payload: dict) -> dict:
 
 HOST_CONFIG_TRACKED_FIELDS = (
     "os_release",
+    "kernel_release",
     "cpu_cores",
     "cpu_model_name",
     "ram_gb",
@@ -2273,6 +2281,7 @@ HOST_CONFIG_TRACKED_FIELDS = (
 
 HOST_CONFIG_FIELD_LABELS = {
     "os_release": "OS Release",
+    "kernel_release": "Kernel",
     "cpu_cores": "CPU Cores",
     "cpu_model_name": "CPU Modell",
     "ram_gb": "RAM (GB)",
@@ -2334,6 +2343,11 @@ def _extract_os_release(payload: dict) -> str:
     return str(os_value or "").strip() or "-"
 
 
+def _extract_kernel_release(payload: dict) -> str:
+    kernel_value = payload.get("kernel") if isinstance(payload, dict) else ""
+    return str(kernel_value or "").strip() or "-"
+
+
 def _extract_sql_release(payload: dict) -> str:
     sql_release = "-"
     sql_block = payload.get("sql_server_info")
@@ -2351,6 +2365,7 @@ def _extract_host_config_snapshot(payload: dict) -> dict[str, str]:
     cpu_info = _extract_cpu_overview(payload)
     return {
         "os_release": _extract_os_release(payload),
+        "kernel_release": _extract_kernel_release(payload),
         "cpu_cores": str(cpu_info["cpu_cores"]),
         "cpu_model_name": str(cpu_info["cpu_model_name"]),
         "ram_gb": str(release_info["ram_gb"]),
@@ -2379,7 +2394,7 @@ def _track_host_config_changes(
 
     existing_row = conn.execute(
         """
-        SELECT os_release, cpu_cores, cpu_model_name, ram_gb, sap_release, hana_release, hana_sid, sql_release
+        SELECT os_release, kernel_release, cpu_cores, cpu_model_name, ram_gb, sap_release, hana_release, hana_sid, sql_release
         FROM host_config_snapshot
         WHERE hostname = ?
         """,
@@ -2389,13 +2404,14 @@ def _track_host_config_changes(
     if existing_row:
         old_snapshot = {
             "os_release": _normalize_config_value("os_release", existing_row[0]),
-            "cpu_cores": _normalize_config_value("cpu_cores", existing_row[1]),
-            "cpu_model_name": _normalize_config_value("cpu_model_name", existing_row[2]),
-            "ram_gb": _normalize_config_value("ram_gb", existing_row[3]),
-            "sap_release": _normalize_config_value("sap_release", existing_row[4]),
-            "hana_release": _normalize_config_value("hana_release", existing_row[5]),
-            "hana_sid": _normalize_config_value("hana_sid", existing_row[6]),
-            "sql_release": _normalize_config_value("sql_release", existing_row[7]),
+            "kernel_release": _normalize_config_value("kernel_release", existing_row[1]),
+            "cpu_cores": _normalize_config_value("cpu_cores", existing_row[2]),
+            "cpu_model_name": _normalize_config_value("cpu_model_name", existing_row[3]),
+            "ram_gb": _normalize_config_value("ram_gb", existing_row[4]),
+            "sap_release": _normalize_config_value("sap_release", existing_row[5]),
+            "hana_release": _normalize_config_value("hana_release", existing_row[6]),
+            "hana_sid": _normalize_config_value("hana_sid", existing_row[7]),
+            "sql_release": _normalize_config_value("sql_release", existing_row[8]),
         }
 
         dedupe_cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -2443,6 +2459,7 @@ def _track_host_config_changes(
         INSERT INTO host_config_snapshot (
             hostname,
             os_release,
+            kernel_release,
             cpu_cores,
             cpu_model_name,
             ram_gb,
@@ -2452,9 +2469,10 @@ def _track_host_config_changes(
             sql_release,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(hostname) DO UPDATE SET
             os_release = excluded.os_release,
+            kernel_release = excluded.kernel_release,
             cpu_cores = excluded.cpu_cores,
             cpu_model_name = excluded.cpu_model_name,
             ram_gb = excluded.ram_gb,
@@ -2467,6 +2485,7 @@ def _track_host_config_changes(
         (
             hostname,
             new_snapshot["os_release"],
+            new_snapshot["kernel_release"],
             new_snapshot["cpu_cores"],
             new_snapshot["cpu_model_name"],
             new_snapshot["ram_gb"],
@@ -2860,6 +2879,7 @@ def backfill_host_config_changes(conn: sqlite3.Connection, days: int = 7) -> dic
             INSERT INTO host_config_snapshot (
                 hostname,
                 os_release,
+                kernel_release,
                 cpu_cores,
                 cpu_model_name,
                 ram_gb,
@@ -2869,9 +2889,10 @@ def backfill_host_config_changes(conn: sqlite3.Connection, days: int = 7) -> dic
                 sql_release,
                 updated_at_utc
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(hostname) DO UPDATE SET
                 os_release = excluded.os_release,
+                kernel_release = excluded.kernel_release,
                 cpu_cores = excluded.cpu_cores,
                 cpu_model_name = excluded.cpu_model_name,
                 ram_gb = excluded.ram_gb,
@@ -2884,6 +2905,7 @@ def backfill_host_config_changes(conn: sqlite3.Connection, days: int = 7) -> dic
             (
                 hostname,
                 snapshot["os_release"],
+                snapshot["kernel_release"],
                 snapshot["cpu_cores"],
                 snapshot["cpu_model_name"],
                 snapshot["ram_gb"],
