@@ -297,6 +297,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.4.63 (11. Mai 2026)
+
+- **HANA AddOns Regression-Hotfix**: Bei `connection failed` auf explizitem `HANA_ADDONS_HOST:HANA_ADDONS_PORT` faellt der Linux-Agent automatisch auf den frueheren impliziten `hdbsql`-Verbindungsmodus zurueck.
+- **Diagnose erweitert**: Payload enthaelt jetzt `target_mode` sowie `mode=lw:...,lg:...` im Fehlertext, damit sichtbar ist, ob der Fallback aktiv war.
+
 ### v1.4.62 (11. Mai 2026)
 
 - **Host-Config-Changelog erweitert**: `OS Release` und `Kernel` werden jetzt als eigene Metriken verfolgt und als Aenderungen geloggt.
