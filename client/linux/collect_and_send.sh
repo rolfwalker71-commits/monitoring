@@ -510,6 +510,23 @@ collect_hana_addons_json() {
     printf '%s' "$explicit_output"
   }
 
+  summarize_hana_sql_listener_diagnostics() {
+    local listeners_csv=""
+    local target_open="no"
+
+    if command -v ss >/dev/null 2>&1; then
+      listeners_csv="$(ss -lntH 2>/dev/null | awk '{print $4}' | sed -E 's/.*:([0-9]+)$/\1/' | grep -E '^3[0-9]{2}15$' | sort -u | tr '\n' ',' | sed -e 's/,$//' || true)"
+    fi
+
+    if [[ -z "$listeners_csv" ]]; then
+      listeners_csv="none"
+    elif printf '%s\n' "$listeners_csv" | tr ',' '\n' | grep -qx "$addons_port"; then
+      target_open="yes"
+    fi
+
+    printf 'listener_target=%s; listeners_3xx15=%s; sid=%s' "$target_open" "$listeners_csv" "${sid:-}"
+  }
+
   # Auto-detect SID if not set
   if [[ -z "$sid" ]] && [[ -d /hana/shared ]]; then
     sid="$(find /hana/shared -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
@@ -718,6 +735,11 @@ collect_hana_addons_json() {
       local merged_error
       merged_error="$(printf '%s | %s' "$lightweight_error" "$legacy_error" | sed -E 's/^[[:space:]|]+//; s/[[:space:]|]+$//; s/[[:space:]]*\|[[:space:]]*/ | /g; s/( \| )+/ | /g')"
       error_msg="${merged_error:-hdbsql query failed} (target=${hdbsql_target}; mode=lw:${lw_mode},lg:${lg_mode})"
+      if is_hdbsql_connection_error "$merged_error"; then
+        local listener_diag
+        listener_diag="$(summarize_hana_sql_listener_diagnostics)"
+        error_msg="${error_msg}; ${listener_diag}"
+      fi
       if [[ "$error_msg" =~ [Aa]uthentication[[:space:]]+failed ]] || [[ "$error_msg" =~ SQLSTATE:[[:space:]]*28000 ]]; then
         reason="auth_failed"
       else
