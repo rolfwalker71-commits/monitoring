@@ -389,6 +389,8 @@ collect_hana_addons_json() {
   else
     lightweight_output="$(su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"NAME\\\", \\\"Version\\\" FROM \\\"SLDDATA\\\".\\\"EXTENSIONS\\\";\" 2>&1" || true)"
   fi
+  # Remove hdbsql footer line (e.g., "27 rows selected (overall time...)")
+  lightweight_output="$(printf '%s' "$lightweight_output" | grep -v 'rows selected' || true)"
 
   # Parse lightweight output (pipe-delimited: NAME|Version, skip header row)
   # Remove JSON quotes and trailing decimals from hdbsql output
@@ -417,6 +419,8 @@ collect_hana_addons_json() {
   else
     legacy_output="$(su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"AName\\\", \\\"AddOnVer\\\" FROM \\\"SBOCOMMON\\\".\\\"SARI\\\";\" 2>&1" || true)"
   fi
+  # Remove hdbsql footer line (e.g., "4 rows selected (overall time...)")
+  legacy_output="$(printf '%s' "$legacy_output" | grep -v 'rows selected' || true)"
 
   # Parse legacy output (pipe-delimited: AName|AddOnVer, skip header row)
   # Remove JSON quotes from hdbsql output
