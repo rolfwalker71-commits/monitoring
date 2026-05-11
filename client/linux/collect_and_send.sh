@@ -332,6 +332,8 @@ collect_hana_addons_json() {
   local query_timeout_sec="${HANA_ADDONS_QUERY_TIMEOUT_SEC:-15}"
   local addons_host="${HANA_ADDONS_HOST:-127.0.0.1}"
   local addons_port="${HANA_ADDONS_PORT:-30015}"
+  local detected_instance_no=""
+  local detected_sql_port=""
   local hdbsql_target=""
   local lw_mode="explicit_target"
   local lg_mode="explicit_target"
@@ -488,6 +490,24 @@ collect_hana_addons_json() {
   # Validate timeout is numeric
   [[ "$query_timeout_sec" =~ ^[0-9]+$ ]] || query_timeout_sec=15
   [[ "$addons_port" =~ ^[0-9]+$ ]] || addons_port=30015
+
+  # Auto-detect local HANA SQL port if config is still on default 30015.
+  # Example: HDB90 -> SQL port 39015.
+  if [[ "$addons_port" == "30015" ]]; then
+    if [[ -n "$sid" ]] && [[ -d "/usr/sap/${sid}" ]]; then
+      detected_instance_no="$(find "/usr/sap/${sid}" -maxdepth 1 -type d -name 'HDB[0-9][0-9]' 2>/dev/null | sed -n 's|.*/HDB\([0-9][0-9]\)$|\1|p' | head -1 || true)"
+      if [[ -z "$detected_instance_no" ]]; then
+        detected_instance_no="$(grep -hE '^[[:space:]]*SAPSYSTEM[[:space:]]*=' "/usr/sap/${sid}/SYS/profile"/* 2>/dev/null | tail -1 | sed -E 's/.*=[[:space:]]*([0-9]{1,2}).*/\1/' | sed -E 's/^([0-9])$/0\1/' || true)"
+      fi
+      if [[ "$detected_instance_no" =~ ^[0-9]{2}$ ]]; then
+        detected_sql_port="3${detected_instance_no}15"
+        if [[ "$detected_sql_port" =~ ^[0-9]{5}$ ]]; then
+          addons_port="$detected_sql_port"
+        fi
+      fi
+    fi
+  fi
+
   hdbsql_target="${addons_host}:${addons_port}"
 
   # Auto-detect SID if not set
