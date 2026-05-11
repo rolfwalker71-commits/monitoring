@@ -8445,8 +8445,11 @@ function wireEvents() {
   if (backfillHostConfigChangesButton) {
     backfillHostConfigChangesButton.addEventListener("click", async () => {
       const hoursFilterEl = document.getElementById("hostConfigChangesHoursFilter");
-      const hours = Number(hoursFilterEl?.value || state.hostConfigChangesHours || 720);
-      const days = Math.max(1, Math.min(30, Math.ceil(hours / 24)));
+      const days = 30;
+      state.hostConfigChangesHours = 720;
+      if (hoursFilterEl) {
+        hoursFilterEl.value = "720";
+      }
       await runHostConfigChangesBackfill(days);
     });
   }

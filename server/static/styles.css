@@ -4028,6 +4028,10 @@ body[data-theme="dark"] .trend-progress-bar {
   display: none;
 }
 
+.host-config-change-summary::marker {
+  content: "";
+}
+
 .host-config-change-count {
   margin-left: auto;
   font-size: 12px;
@@ -4080,6 +4084,10 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-config-change-date-summary::-webkit-details-marker {
   display: none;
+}
+
+.host-config-change-date-summary::marker {
+  content: "";
 }
 
 .host-config-date-label {
