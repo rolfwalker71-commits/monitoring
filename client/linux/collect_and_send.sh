@@ -851,6 +851,339 @@ collect_hana_addons_json() {
     "$reason"
 }
 
+collect_hana_db_info_json() {
+  # Collects HANA schema memory usage (read-only) via hdbsql.
+  # Connection behavior intentionally mirrors collect_hana_addons_json.
+  local sid="${HANA_SID:-}"
+  local sid_user=""
+  local db_user="${HANA_ADDONS_USER:-HARVEST}"
+  local db_password="${HANA_ADDONS_PASSWORD:-0djKUt&xbLK0AYr}"
+  local query_timeout_sec="${HANA_ADDONS_QUERY_TIMEOUT_SEC:-15}"
+  local db_host="${HANA_ADDONS_HOST:-127.0.0.1}"
+  local db_port="${HANA_ADDONS_PORT:-30015}"
+  local detected_instance_no=""
+  local detected_sql_port=""
+  local hdbsql_target=""
+  local last_hdbsql_mode="explicit_target"
+  local available=false
+  local reason="unknown"
+  local error_msg=""
+  local schema_entries=""
+
+  clean_hdbsql_db_output() {
+    local raw_text="${1-}"
+    printf '%s' "$raw_text" \
+      | tr -d '\r' \
+      | sed -E '
+          s/[[:space:]]*[0-9]+[[:space:]]+rows selected.*$//I;
+          s/[[:space:]]*[0-9]+[[:space:]]+row selected.*$//I;
+          s/[[:space:]]*(overall|server)[[:space:]]+time.*$//I;
+        '
+  }
+
+  detect_hdbsql_db_error_line() {
+    local raw_text="${1-}"
+    local first_error=""
+
+    first_error="$(printf '%s\n' "$raw_text" | awk '
+      BEGIN { IGNORECASE=1 }
+      /authentication failed|sqlstate|insufficient privilege|invalid user|user is locked|connection failed|cannot connect|error:/ {
+        line=$0
+        sub(/^[[:space:]]+/, "", line)
+        sub(/[[:space:]]+$/, "", line)
+        print line
+        exit
+      }
+    ')"
+
+    if [[ -n "$first_error" ]]; then
+      printf '%s' "$first_error"
+      return 0
+    fi
+    return 1
+  }
+
+  is_hdbsql_db_connection_error() {
+    local raw_text="${1-}"
+    if printf '%s\n' "$raw_text" | grep -qiE 'connection failed|cannot connect|rc=111|rc=99'; then
+      return 0
+    fi
+    return 1
+  }
+
+  run_hdbsql_db_query() {
+    local sql_text="${1-}"
+    local sql_escaped=""
+    local implicit_output=""
+    local explicit_output=""
+    local alt_port=""
+    local alt_host=""
+    local alt_output=""
+    local probe_hosts_csv=""
+    local probe_host_list=""
+
+    sql_escaped="$(printf '%q' "$sql_text")"
+
+    if command -v timeout >/dev/null 2>&1; then
+      implicit_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -u \"$db_user\" -p \"$db_password\" $sql_escaped 2>&1" || true)"
+    else
+      implicit_output="$(su - "$sid_user" -c "hdbsql -u \"$db_user\" -p \"$db_password\" $sql_escaped 2>&1" || true)"
+    fi
+    if [[ -n "$implicit_output" ]] && ! is_hdbsql_db_connection_error "$implicit_output"; then
+      last_hdbsql_mode="implicit_primary"
+      printf '%s' "$implicit_output"
+      return
+    fi
+
+    last_hdbsql_mode="explicit_target"
+    if command -v timeout >/dev/null 2>&1; then
+      explicit_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -n \"$hdbsql_target\" -u \"$db_user\" -p \"$db_password\" $sql_escaped 2>&1" || true)"
+    else
+      explicit_output="$(su - "$sid_user" -c "hdbsql -n \"$hdbsql_target\" -u \"$db_user\" -p \"$db_password\" $sql_escaped 2>&1" || true)"
+    fi
+
+    if is_hdbsql_db_connection_error "$explicit_output"; then
+      probe_hosts_csv="$db_host,127.0.0.1,localhost,$(hostname -f 2>/dev/null || true),$(hostname 2>/dev/null || true)"
+      probe_host_list="$(printf '%s' "$probe_hosts_csv" | tr ',' '\n' | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//' | awk 'NF>0' | awk '!seen[$0]++')"
+
+      while IFS= read -r alt_port; do
+        [[ -z "$alt_port" ]] && continue
+        while IFS= read -r alt_host; do
+          [[ -z "$alt_host" ]] && continue
+          if command -v timeout >/dev/null 2>&1; then
+            alt_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -n \"${alt_host}:${alt_port}\" -u \"$db_user\" -p \"$db_password\" $sql_escaped 2>&1" || true)"
+          else
+            alt_output="$(su - "$sid_user" -c "hdbsql -n \"${alt_host}:${alt_port}\" -u \"$db_user\" -p \"$db_password\" $sql_escaped 2>&1" || true)"
+          fi
+          if [[ -n "$alt_output" ]] && ! is_hdbsql_db_connection_error "$alt_output"; then
+            db_host="$alt_host"
+            db_port="$alt_port"
+            hdbsql_target="${db_host}:${db_port}"
+            last_hdbsql_mode="auto_probe_${alt_host}_${alt_port}"
+            printf '%s' "$alt_output"
+            return
+          fi
+        done <<< "$probe_host_list"
+      done < <(ss -lntH 2>/dev/null | awk '{print $4}' | sed -E 's/.*:([0-9]+)$/\1/' | grep -E '^3[0-9]{2}15$' | sort -u || true)
+
+      for alt_port in 30015 30115 30215 30315 30415 30515 30615 30715 30815 30915 31015 31115 31215 31315 31415 31515 31615 31715 31815 31915 32015 32115 32215 32315 32415 32515 32615 32715 32815 32915 33015 33115 33215 33315 33415 33515 33615 33715 33815 33915 34015 34115 34215 34315 34415 34515 34615 34715 34815 34915 35015 35115 35215 35315 35415 35515 35615 35715 35815 35915 36015 36115 36215 36315 36415 36515 36615 36715 36815 36915 37015 37115 37215 37315 37415 37515 37615 37715 37815 37915 38015 38115 38215 38315 38415 38515 38615 38715 38815 38915 39015 39115 39215 39315 39415 39515 39615 39715 39815 39915; do
+        while IFS= read -r alt_host; do
+          [[ -z "$alt_host" ]] && continue
+          if command -v timeout >/dev/null 2>&1; then
+            alt_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -n \"${alt_host}:${alt_port}\" -u \"$db_user\" -p \"$db_password\" $sql_escaped 2>&1" || true)"
+          else
+            alt_output="$(su - "$sid_user" -c "hdbsql -n \"${alt_host}:${alt_port}\" -u \"$db_user\" -p \"$db_password\" $sql_escaped 2>&1" || true)"
+          fi
+          if [[ -n "$alt_output" ]] && ! is_hdbsql_db_connection_error "$alt_output"; then
+            db_host="$alt_host"
+            db_port="$alt_port"
+            hdbsql_target="${db_host}:${db_port}"
+            last_hdbsql_mode="auto_probe_common_${alt_host}_${alt_port}"
+            printf '%s' "$alt_output"
+            return
+          fi
+        done <<< "$probe_host_list"
+      done
+    fi
+
+    printf '%s' "$explicit_output"
+  }
+
+  parse_hdbsql_db_row_fallback() {
+    local line="${1-}"
+    local parsed_name=""
+    local parsed_value=""
+
+    line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+    [[ -z "$line" ]] && return 1
+
+    if [[ "$line" =~ [Rr]ows[[:space:]]+selected ]] || [[ "$line" =~ [Oo]verall[[:space:]]+time ]] || [[ "$line" =~ [Ss]erver[[:space:]]+time ]] || [[ "$line" =~ ^[-=]+$ ]] || [[ "$line" =~ ^\* ]]; then
+      return 1
+    fi
+
+    if [[ "$line" == *"|"* ]]; then
+      IFS='|' read -r parsed_name parsed_value _ <<< "$line"
+    elif [[ "$line" =~ ^\"(.*)\",\"(.*)\"$ ]]; then
+      parsed_name="${BASH_REMATCH[1]}"
+      parsed_value="${BASH_REMATCH[2]}"
+    elif [[ "$line" =~ ^([^,]+),(.+)$ ]]; then
+      parsed_name="${BASH_REMATCH[1]}"
+      parsed_value="${BASH_REMATCH[2]}"
+    elif [[ "$line" =~ ^(.+)[[:space:]][[:space:]]+(.+)$ ]]; then
+      parsed_name="${BASH_REMATCH[1]}"
+      parsed_value="${BASH_REMATCH[2]}"
+    else
+      return 1
+    fi
+
+    parsed_name="$(printf '%s' "$parsed_name" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
+    parsed_value="$(printf '%s' "$parsed_value" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
+
+    [[ -z "$parsed_name" ]] && return 1
+    if [[ "$parsed_name" == "SCHEMA_NAME" ]] || [[ "$parsed_value" == "MEMORY_GB" ]]; then
+      return 1
+    fi
+
+    printf '%s\t%s' "$parsed_name" "$parsed_value"
+    return 0
+  }
+
+  if [[ -z "$sid" ]] && [[ -d /hana/shared ]]; then
+    sid="$(find /hana/shared -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+      | awk -F/ '{print $NF}' \
+      | grep -E '^[A-Z][A-Z0-9]{2}$' \
+      | head -1 || true)"
+  fi
+
+  [[ "$query_timeout_sec" =~ ^[0-9]+$ ]] || query_timeout_sec=15
+  [[ "$db_port" =~ ^[0-9]+$ ]] || db_port=30015
+
+  if [[ "$db_port" == "30015" ]]; then
+    if [[ -n "$sid" ]] && [[ -d "/usr/sap/${sid}" ]]; then
+      detected_instance_no="$(find "/usr/sap/${sid}" -maxdepth 1 -type d -name 'HDB[0-9][0-9]' 2>/dev/null | sed -n 's|.*/HDB\([0-9][0-9]\)$|\1|p' | head -1 || true)"
+      if [[ -z "$detected_instance_no" ]]; then
+        detected_instance_no="$(grep -hE '^[[:space:]]*SAPSYSTEM[[:space:]]*=' "/usr/sap/${sid}/SYS/profile"/* 2>/dev/null | tail -1 | sed -E 's/.*=[[:space:]]*([0-9]{1,2}).*/\1/' | sed -E 's/^([0-9])$/0\1/' || true)"
+      fi
+      if [[ "$detected_instance_no" =~ ^[0-9]{2}$ ]]; then
+        detected_sql_port="3${detected_instance_no}15"
+        if [[ "$detected_sql_port" =~ ^[0-9]{5}$ ]]; then
+          db_port="$detected_sql_port"
+        fi
+      fi
+    fi
+  fi
+
+  hdbsql_target="${db_host}:${db_port}"
+
+  if [[ -z "$sid" ]]; then
+    reason="missing_hana_sid"
+    error_msg="HANA SID nicht gefunden"
+    printf '{"available":false,"sid":"","user":"%s","target":"%s","target_mode":"n/a","schemas":[],"error":"%s","reason":"%s"}' \
+      "$(json_escape "$db_user")" \
+      "$(json_escape "$hdbsql_target")" \
+      "$(json_escape "$error_msg")" \
+      "$reason"
+    return
+  fi
+
+  sid_user="$(printf '%s' "$sid" | tr '[:upper:]' '[:lower:]')adm"
+  if ! id "$sid_user" >/dev/null 2>&1; then
+    reason="missing_sid_user"
+    error_msg="User ${sid_user} nicht angelegt"
+    printf '{"available":false,"sid":"%s","user":"%s","target":"%s","target_mode":"n/a","schemas":[],"error":"%s","reason":"%s"}' \
+      "$(json_escape "$sid")" \
+      "$(json_escape "$db_user")" \
+      "$(json_escape "$hdbsql_target")" \
+      "$(json_escape "$error_msg")" \
+      "$reason"
+    return
+  fi
+
+  if ! su - "$sid_user" -c "command -v hdbsql" >/dev/null 2>&1; then
+    reason="missing_hdbsql"
+    error_msg="hdbsql nicht vorhanden"
+    printf '{"available":false,"sid":"%s","user":"%s","target":"%s","target_mode":"n/a","schemas":[],"error":"%s","reason":"%s"}' \
+      "$(json_escape "$sid")" \
+      "$(json_escape "$db_user")" \
+      "$(json_escape "$hdbsql_target")" \
+      "$(json_escape "$error_msg")" \
+      "$reason"
+    return
+  fi
+
+  local db_output=""
+  local db_error=""
+  db_output="$(run_hdbsql_db_query 'SELECT SCHEMA_NAME, ROUND(SUM(MEMORY_SIZE_IN_TOTAL) / 1024 / 1024 / 1024, 2) AS MEMORY_GB FROM M_CS_TABLES WHERE UPPER(SCHEMA_NAME) NOT LIKE "SAP%" AND SCHEMA_NAME NOT LIKE "\\_%" ESCAPE "\\" GROUP BY SCHEMA_NAME HAVING SUM(MEMORY_SIZE_IN_TOTAL) > 0 ORDER BY MEMORY_GB DESC;')"
+
+  if detect_hdbsql_db_error_line "$db_output" >/dev/null; then
+    db_error="$(detect_hdbsql_db_error_line "$db_output")"
+  fi
+
+  if [[ -z "$db_error" ]]; then
+    local cleaned_output=""
+    cleaned_output="$(clean_hdbsql_db_output "$db_output")"
+
+    local csv_matches=""
+    csv_matches="$(printf '%s\n' "$cleaned_output" | grep -oE '"[^"]*","[^"]*"' || true)"
+    if [[ -n "$csv_matches" ]]; then
+      while IFS= read -r record; do
+        local schema_name=""
+        local memory_gb=""
+        [[ -z "$record" ]] && continue
+        if [[ "$record" =~ \"([^\"]*)\",\"([^\"]*)\" ]]; then
+          schema_name="${BASH_REMATCH[1]}"
+          memory_gb="${BASH_REMATCH[2]}"
+        else
+          continue
+        fi
+
+        schema_name="$(printf '%s' "$schema_name" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+        memory_gb="$(printf '%s' "$memory_gb" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+
+        [[ -z "$schema_name" ]] && continue
+        [[ "$schema_name" =~ ^SAP ]] && continue
+        [[ "$schema_name" == _* ]] && continue
+        if ! [[ "$memory_gb" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+          continue
+        fi
+        if awk "BEGIN { exit !($memory_gb > 0) }"; then
+          local entry
+          entry="$(printf '{"name":"%s","memory_gb":%s}' "$(json_escape "$schema_name")" "$memory_gb")"
+          schema_entries="${schema_entries:+$schema_entries,}$entry"
+        fi
+      done <<< "$csv_matches"
+    fi
+
+    if [[ -z "$schema_entries" ]]; then
+      while IFS= read -r line; do
+        local parsed_row=""
+        local schema_name=""
+        local memory_gb=""
+        parsed_row="$(parse_hdbsql_db_row_fallback "$line" || true)"
+        [[ -z "$parsed_row" ]] && continue
+        schema_name="${parsed_row%%$'\t'*}"
+        memory_gb="${parsed_row#*$'\t'}"
+
+        [[ -z "$schema_name" ]] && continue
+        [[ "$schema_name" =~ ^SAP ]] && continue
+        [[ "$schema_name" == _* ]] && continue
+        if ! [[ "$memory_gb" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+          continue
+        fi
+        if awk "BEGIN { exit !($memory_gb > 0) }"; then
+          local entry
+          entry="$(printf '{"name":"%s","memory_gb":%s}' "$(json_escape "$schema_name")" "$memory_gb")"
+          schema_entries="${schema_entries:+$schema_entries,}$entry"
+        fi
+      done <<< "$cleaned_output"
+    fi
+
+    available=true
+    if [[ -n "$schema_entries" ]]; then
+      reason="success"
+    else
+      reason="empty_result"
+    fi
+  else
+    error_msg="$db_error (target=${hdbsql_target}; mode=${last_hdbsql_mode})"
+    if [[ "$error_msg" =~ [Aa]uthentication[[:space:]]+failed ]] || [[ "$error_msg" =~ SQLSTATE:[[:space:]]*28000 ]]; then
+      reason="auth_failed"
+    else
+      reason="query_failed"
+    fi
+  fi
+
+  printf '{"available":%s,"sid":"%s","user":"%s","target":"%s","target_mode":"%s","schemas":[%s],"error":"%s","reason":"%s"}' \
+    "$([ "$available" = true ] && echo true || echo false)" \
+    "$(json_escape "$sid")" \
+    "$(json_escape "$db_user")" \
+    "$(json_escape "$hdbsql_target")" \
+    "$(json_escape "$last_hdbsql_mode")" \
+    "$schema_entries" \
+    "$(json_escape "$error_msg")" \
+    "$reason"
+}
+
 collect_cron_json() {
   # Collects additional HANA runtime info without requiring DB credentials:
   #   - Service status via "HDB info" (as <sid>adm)
@@ -2192,6 +2525,7 @@ LARGE_FILES_JSON="$(collect_large_files_json)"
 SAP_BUSINESS_ONE_JSON="$(collect_sap_business_one_json)"
 HANA_INFO_JSON="$(collect_hana_version_json)"
 HANA_ADDONS_JSON="$(collect_hana_addons_json)"
+HANA_DB_INFO_JSON="$(collect_hana_db_info_json)"
 DIR_LISTINGS_JSON="$(collect_dir_listings_json)"
 DIR_DEEP_LISTINGS_JSON="$(collect_dir_deep_listings_json)"
 CRON_INFO_JSON="$(collect_cron_json)"
@@ -2270,6 +2604,7 @@ PAYLOAD=$(cat <<EOF
   "sap_business_one": ${SAP_BUSINESS_ONE_JSON},
   "hana_info": ${HANA_INFO_JSON},
   "hana_addons": ${HANA_ADDONS_JSON},
+  "hana_db_info": ${HANA_DB_INFO_JSON},
   "dir_listings": ${DIR_LISTINGS_JSON},
   "dir_deep_listings": ${DIR_DEEP_LISTINGS_JSON},
   "cron_info": ${CRON_INFO_JSON}

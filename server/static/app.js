@@ -5243,10 +5243,54 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
     }
   }
 
-  // ---- HANA DB (placeholder — populated once hana_db_info is available) ----
-  if (hanaInfo && typeof hanaInfo === "object" && hanaInfo.available === true) {
-    // Future: render HANA schema/database info here
-    parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Datenbanken</h4><p class="muted">HANA DB-Daten werden hier angezeigt sobald der Agent einen Read-Only-User konfiguriert hat.</p></section>`);
+  // ---- HANA DB (schema memory usage) ----
+  if (hanaInfo && typeof hanaInfo === "object") {
+    if (hanaInfo.available !== true) {
+      const reason = asText(hanaInfo.reason, "");
+      const error = asText(hanaInfo.error, "");
+      const reasonText = {
+        "missing_hana_sid": "HANA SID nicht gefunden",
+        "missing_sid_user": "SID-Benutzer nicht vorhanden",
+        "missing_hdbsql": "hdbsql nicht gefunden",
+        "auth_failed": "Authentifizierung fehlgeschlagen",
+        "query_failed": "Abfrage fehlgeschlagen"
+      }[reason] || (reason || "HANA DB-Scan nicht verfuegbar");
+      parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Datenbanken</h4><p class="muted">${escapeHtml(reasonText)}${error ? `: ${escapeHtml(error)}` : ""}</p></section>`);
+    } else {
+      const schemas = Array.isArray(hanaInfo.schemas) ? hanaInfo.schemas : [];
+      const target = asText(hanaInfo.target, "");
+      if (schemas.length === 0) {
+        parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Datenbanken</h4><p class="muted">Keine Eintraege gefunden (Filter: kein SAP*, kein _*, Groesse > 0 GB).</p></section>`);
+      } else {
+        const rows = schemas.map((entry) => {
+          const name = asText(entry.name, "-");
+          const memoryGb = Number(entry.memory_gb || 0);
+          const memoryText = Number.isFinite(memoryGb) ? `${memoryGb.toFixed(2)} GB` : "-";
+          return `
+            <tr>
+              <td>${escapeHtml(name)}</td>
+              <td class="db-size-cell">${escapeHtml(memoryText)}</td>
+            </tr>`;
+        }).join("");
+
+        parts.push(`
+          <section class="detail-card">
+            <h4>🔶 SAP HANA Datenbanken</h4>
+            <p class="count compact">Eintraege: ${schemas.length}${target ? ` | Target: ${escapeHtml(target)}` : ""}</p>
+            <div class="table-wrap">
+              <table class="db-table">
+                <thead>
+                  <tr>
+                    <th>Schema</th>
+                    <th class="db-size-cell">Groesse</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          </section>`);
+      }
+    }
   }
 
   if (parts.length === 0) {
