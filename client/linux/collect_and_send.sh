@@ -334,6 +334,54 @@ collect_hana_addons_json() {
   local lightweight_entries=""
   local legacy_entries=""
 
+  parse_hdbsql_row_fallback() {
+    local line="${1-}"
+    local parsed_name=""
+    local parsed_version=""
+
+    line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+    [[ -z "$line" ]] && return 1
+
+    # Skip headers/separators/diagnostic lines.
+    if [[ "$line" =~ [Rr]ows[[:space:]]+selected ]] || [[ "$line" =~ [Oo]verall[[:space:]]+time ]] || [[ "$line" =~ [Ss]erver[[:space:]]+time ]] || [[ "$line" =~ ^[-=]+$ ]] || [[ "$line" =~ ^\* ]]; then
+      return 1
+    fi
+
+    # Formats seen in the field:
+    #   NAME|Version
+    #   "NAME","Version"
+    #   NAME,Version
+    #   NAME;Version
+    #   NAME    Version   (multiple spaces)
+    if [[ "$line" == *"|"* ]]; then
+      IFS='|' read -r parsed_name parsed_version _ <<< "$line"
+    elif [[ "$line" =~ ^\"(.*)\",\"(.*)\"$ ]]; then
+      parsed_name="${BASH_REMATCH[1]}"
+      parsed_version="${BASH_REMATCH[2]}"
+    elif [[ "$line" =~ ^([^,]+),(.+)$ ]]; then
+      parsed_name="${BASH_REMATCH[1]}"
+      parsed_version="${BASH_REMATCH[2]}"
+    elif [[ "$line" == *";"* ]]; then
+      IFS=';' read -r parsed_name parsed_version _ <<< "$line"
+    elif [[ "$line" =~ ^(.+)[[:space:]][[:space:]]+(.+)$ ]]; then
+      parsed_name="${BASH_REMATCH[1]}"
+      parsed_version="${BASH_REMATCH[2]}"
+    else
+      return 1
+    fi
+
+    parsed_name="$(printf '%s' "$parsed_name" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
+    parsed_version="$(printf '%s' "$parsed_version" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
+
+    [[ -z "$parsed_name" ]] && return 1
+    if [[ "$parsed_name" == "NAME" ]] || [[ "$parsed_name" == "AName" ]] || [[ "$parsed_version" == "Version" ]] || [[ "$parsed_version" == "AddOnVer" ]]; then
+      return 1
+    fi
+
+    printf '%s\t%s' "$parsed_name" "$parsed_version"
+    return 0
+  }
+
   clean_hdbsql_output() {
     local raw_text="${1-}"
     printf '%s' "$raw_text" \
@@ -469,37 +517,13 @@ collect_hana_addons_json() {
       done <<< "$csv_matches"
     else
       while IFS= read -r line; do
+        local parsed_row=""
         local name=""
         local version=""
-
-        line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
-        [[ -z "$line" ]] && continue
-
-        # Skip headers, separators and hdbsql timing/status lines.
-        if [[ "$line" =~ [Rr]ows[[:space:]]+selected ]] || [[ "$line" =~ [Oo]verall[[:space:]]+time ]] || [[ "$line" =~ [Ss]erver[[:space:]]+time ]] || [[ "$line" =~ ^[-=]+$ ]] || [[ "$line" =~ ^\* ]]; then
-          continue
-        fi
-
-        if [[ "$line" == *"|"* ]]; then
-          IFS='|' read -r name version _ <<< "$line"
-        elif [[ "$line" =~ ^\"(.*)\",\"(.*)\"$ ]]; then
-          name="${BASH_REMATCH[1]}"
-          version="${BASH_REMATCH[2]}"
-        elif [[ "$line" =~ ^([^,]+),(.+)$ ]]; then
-          name="${BASH_REMATCH[1]}"
-          version="${BASH_REMATCH[2]}"
-        else
-          continue
-        fi
-
-        # Trim whitespace and remove surrounding quotes
-        name="$(printf '%s' "$name" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
-        version="$(printf '%s' "$version" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
-
-        # Skip header rows
-        if [[ -z "$name" ]] || [[ "$name" == "NAME" ]] || [[ "$version" == "Version" ]]; then
-          continue
-        fi
+        parsed_row="$(parse_hdbsql_row_fallback "$line" || true)"
+        [[ -z "$parsed_row" ]] && continue
+        name="${parsed_row%%$'\t'*}"
+        version="${parsed_row#*$'\t'}"
 
         if [[ -n "$name" ]]; then
           local entry
@@ -557,37 +581,13 @@ collect_hana_addons_json() {
       done <<< "$csv_matches"
     else
       while IFS= read -r line; do
+        local parsed_row=""
         local aname=""
         local addonver=""
-
-        line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
-        [[ -z "$line" ]] && continue
-
-        # Skip headers, separators and hdbsql timing/status lines.
-        if [[ "$line" =~ [Rr]ows[[:space:]]+selected ]] || [[ "$line" =~ [Oo]verall[[:space:]]+time ]] || [[ "$line" =~ [Ss]erver[[:space:]]+time ]] || [[ "$line" =~ ^[-=]+$ ]] || [[ "$line" =~ ^\* ]]; then
-          continue
-        fi
-
-        if [[ "$line" == *"|"* ]]; then
-          IFS='|' read -r aname addonver _ <<< "$line"
-        elif [[ "$line" =~ ^\"(.*)\",\"(.*)\"$ ]]; then
-          aname="${BASH_REMATCH[1]}"
-          addonver="${BASH_REMATCH[2]}"
-        elif [[ "$line" =~ ^([^,]+),(.+)$ ]]; then
-          aname="${BASH_REMATCH[1]}"
-          addonver="${BASH_REMATCH[2]}"
-        else
-          continue
-        fi
-
-        # Trim whitespace and remove surrounding quotes
-        aname="$(printf '%s' "$aname" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
-        addonver="$(printf '%s' "$addonver" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
-
-        # Skip header rows
-        if [[ -z "$aname" ]] || [[ "$aname" == "AName" ]] || [[ "$addonver" == "AddOnVer" ]]; then
-          continue
-        fi
+        parsed_row="$(parse_hdbsql_row_fallback "$line" || true)"
+        [[ -z "$parsed_row" ]] && continue
+        aname="${parsed_row%%$'\t'*}"
+        addonver="${parsed_row#*$'\t'}"
 
         if [[ -n "$aname" ]]; then
           local entry
@@ -617,6 +617,9 @@ collect_hana_addons_json() {
       else
         reason="query_failed"
       fi
+    elif [[ -n "${lightweight_output:-}" ]] || [[ -n "${legacy_output:-}" ]]; then
+      reason="parse_failed"
+      error_msg="hdbsql output vorhanden, aber keine AddOn-Zeilen erkannt"
     else
       reason="empty_result"
       error_msg="Keine AddOns gefunden"
