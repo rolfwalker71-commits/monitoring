@@ -29,12 +29,6 @@ SAP_B1_SIZE_TIMEOUT_SEC="${SAP_B1_SIZE_TIMEOUT_SEC:-20}"
 SAP_B1_VERSION_TIMEOUT_SEC="${SAP_B1_VERSION_TIMEOUT_SEC:-15}"
 HANA_VERSION_TIMEOUT_SEC="${HANA_VERSION_TIMEOUT_SEC:-10}"
 HANA_SID="${HANA_SID:-}"
-HANA_HARVEST_AUTO_PROVISION="${HANA_HARVEST_AUTO_PROVISION:-1}"
-HANA_HARVEST_USER="${HANA_HARVEST_USER:-HARVEST}"
-HANA_HARVEST_PASSWORD="${HANA_HARVEST_PASSWORD:-0djKUt&xbLK0AYr}"
-HANA_HARVEST_USERSTORE_KEY="${HANA_HARVEST_USERSTORE_KEY:-}"
-HANA_HARVEST_STATE_FILE="${HANA_HARVEST_STATE_FILE:-/var/lib/monitoring-agent/hana-harvest-provisioned}"
-HANA_HARVEST_FORCE_PROVISION="${HANA_HARVEST_FORCE_PROVISION:-0}"
 DIR_SCAN_PATHS="${DIR_SCAN_PATHS:-}"
 DIR_SCAN_MAX_ITEMS="${DIR_SCAN_MAX_ITEMS:-50}"
 DIR_SCAN_DEEP_PATHS="${DIR_SCAN_DEEP_PATHS:-}"
@@ -321,183 +315,6 @@ collect_hana_version_json() {
     "$(json_escape "$version_error")"
 }
 
-collect_hana_harvest_provision_json() {
-  local enabled_raw="${HANA_HARVEST_AUTO_PROVISION:-1}"
-  local enabled=true
-  local attempted=false
-  local success=false
-  local sid="${HANA_SID:-}"
-  local sid_user=""
-  local harvest_user="${HANA_HARVEST_USER:-HARVEST}"
-  local harvest_password="${HANA_HARVEST_PASSWORD:-0djKUt&xbLK0AYr}"
-  local requested_key="${HANA_HARVEST_USERSTORE_KEY:-}"
-  local selected_key=""
-  local state_file="${HANA_HARVEST_STATE_FILE:-/var/lib/monitoring-agent/hana-harvest-provisioned}"
-  local force_raw="${HANA_HARVEST_FORCE_PROVISION:-0}"
-  local force=false
-  local error=""
-  local diagnostics=""
-
-  case "${enabled_raw,,}" in
-    0|false|no|off) enabled=false ;;
-  esac
-  case "${force_raw,,}" in
-    1|true|yes|on) force=true ;;
-  esac
-
-  if ! $enabled; then
-    printf '{"enabled":false,"attempted":false,"success":false,"sid":"%s","sid_user":"","user":"%s","userstore_key":"","error":"","diagnostics":"auto provisioning disabled"}' \
-      "$(json_escape "$sid")" "$(json_escape "$harvest_user")"
-    return
-  fi
-
-  if [[ -z "$sid" ]] && [[ -d /hana/shared ]]; then
-    local detected_sid
-    detected_sid="$(find /hana/shared -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
-      | awk -F/ '{print $NF}' \
-      | grep -E '^[A-Z][A-Z0-9]{2}$' \
-      | head -1 || true)"
-    [[ -n "$detected_sid" ]] && sid="$detected_sid"
-  fi
-
-  if [[ -z "$sid" ]]; then
-    error="HANA SID nicht gefunden"
-    printf '{"enabled":true,"attempted":false,"success":false,"sid":"","sid_user":"","user":"%s","userstore_key":"","error":"%s","diagnostics":""}' \
-      "$(json_escape "$harvest_user")" "$(json_escape "$error")"
-    return
-  fi
-
-  sid_user="$(printf '%s' "$sid" | tr '[:upper:]' '[:lower:]')adm"
-  if ! id "$sid_user" >/dev/null 2>&1; then
-    error="User ${sid_user} nicht gefunden"
-    printf '{"enabled":true,"attempted":false,"success":false,"sid":"%s","sid_user":"%s","user":"%s","userstore_key":"","error":"%s","diagnostics":""}' \
-      "$(json_escape "$sid")" "$(json_escape "$sid_user")" "$(json_escape "$harvest_user")" "$(json_escape "$error")"
-    return
-  fi
-
-  if ! [[ "$harvest_user" =~ ^[A-Za-z0-9_]+$ ]]; then
-    error="HANA_HARVEST_USER muss [A-Za-z0-9_] sein"
-    printf '{"enabled":true,"attempted":false,"success":false,"sid":"%s","sid_user":"%s","user":"%s","userstore_key":"","error":"%s","diagnostics":""}' \
-      "$(json_escape "$sid")" "$(json_escape "$sid_user")" "$(json_escape "$harvest_user")" "$(json_escape "$error")"
-    return
-  fi
-
-  if [[ -z "$harvest_password" ]] || [[ "$harvest_password" == *'"'* ]]; then
-    error="HANA_HARVEST_PASSWORD leer oder enthaelt doppelte Anfuehrungszeichen"
-    printf '{"enabled":true,"attempted":false,"success":false,"sid":"%s","sid_user":"%s","user":"%s","userstore_key":"","error":"%s","diagnostics":""}' \
-      "$(json_escape "$sid")" "$(json_escape "$sid_user")" "$(json_escape "$harvest_user")" "$(json_escape "$error")"
-    return
-  fi
-
-  if [[ -f "$state_file" ]] && ! $force; then
-    if grep -Fqx "${sid}|${harvest_user^^}" "$state_file" 2>/dev/null; then
-      diagnostics="already provisioned (state file)"
-      printf '{"enabled":true,"attempted":false,"success":true,"sid":"%s","sid_user":"%s","user":"%s","userstore_key":"","error":"","diagnostics":"%s"}' \
-        "$(json_escape "$sid")" "$(json_escape "$sid_user")" "$(json_escape "${harvest_user^^}")" "$(json_escape "$diagnostics")"
-      return
-    fi
-  fi
-
-  local keys_raw=""
-  if [[ -n "$requested_key" ]]; then
-    keys_raw="$requested_key"
-  fi
-
-  local discovered_keys
-  discovered_keys="$(su - "$sid_user" -c 'hdbuserstore LIST' 2>/dev/null | awk '/^KEY[[:space:]]+/ {print $2}' || true)"
-  if [[ -n "$discovered_keys" ]]; then
-    if [[ -n "$keys_raw" ]]; then
-      keys_raw+=$'\n'
-    fi
-    keys_raw+="DEFAULT"
-    keys_raw+=$'\nSYSTEM'
-    keys_raw+=$'\nSYSTEMDB'
-    keys_raw+=$'\n'
-    keys_raw+="$discovered_keys"
-  fi
-
-  local keys_unique
-  keys_unique="$(printf '%s\n' "$keys_raw" | awk 'NF && !seen[$0]++')"
-  if [[ -z "$keys_unique" ]]; then
-    error="Kein HANA userstore key verfuegbar (z.B. DEFAULT/SYSTEMDB)"
-    printf '{"enabled":true,"attempted":true,"success":false,"sid":"%s","sid_user":"%s","user":"%s","userstore_key":"","error":"%s","diagnostics":""}' \
-      "$(json_escape "$sid")" "$(json_escape "$sid_user")" "$(json_escape "${harvest_user^^}")" "$(json_escape "$error")"
-    return
-  fi
-
-  attempted=true
-  while IFS= read -r key; do
-    [[ -n "$key" ]] || continue
-    if su - "$sid_user" -c "hdbsql -U \"$key\" -A -x \"SELECT CURRENT_USER FROM DUMMY;\"" >/dev/null 2>&1; then
-      selected_key="$key"
-      break
-    fi
-  done <<< "$keys_unique"
-
-  if [[ -z "$selected_key" ]]; then
-    error="Kein nutzbarer userstore key fuer hdbsql gefunden"
-    printf '{"enabled":true,"attempted":true,"success":false,"sid":"%s","sid_user":"%s","user":"%s","userstore_key":"","error":"%s","diagnostics":"%s"}' \
-      "$(json_escape "$sid")" "$(json_escape "$sid_user")" "$(json_escape "${harvest_user^^}")" "$(json_escape "$error")" "$(json_escape "keys tested: $(printf '%s' "$keys_unique" | tr '\n' ',' | sed 's/,$//')")"
-    return
-  fi
-
-  local harvest_user_upper harvest_user_sql harvest_password_sql
-  harvest_user_upper="${harvest_user^^}"
-  harvest_user_sql="$(printf '%s' "$harvest_user_upper" | sed "s/'/''/g")"
-  harvest_password_sql="$(printf '%s' "$harvest_password" | sed "s/'/''/g")"
-
-  local sql_block
-  sql_block=$(cat <<SQL
-DO BEGIN
-  DECLARE target_user NVARCHAR(256) := '${harvest_user_sql}';
-  DECLARE target_pwd NVARCHAR(512) := '${harvest_password_sql}';
-  IF NOT EXISTS (SELECT 1 FROM USERS WHERE USER_NAME = :target_user) THEN
-    EXEC 'CREATE USER "' || :target_user || '" PASSWORD "' || :target_pwd || '" NO FORCE_FIRST_PASSWORD_CHANGE';
-  END IF;
-  EXEC 'GRANT CATALOG READ TO "' || :target_user || '"';
-  IF EXISTS (SELECT 1 FROM SCHEMAS WHERE SCHEMA_NAME = 'SBOCOMMON') THEN
-    EXEC 'GRANT SELECT ON SCHEMA "SBOCOMMON" TO "' || :target_user || '"';
-  END IF;
-  IF EXISTS (SELECT 1 FROM SCHEMAS WHERE SCHEMA_NAME = 'SLDDATA') THEN
-    EXEC 'GRANT SELECT ON SCHEMA "SLDDATA" TO "' || :target_user || '"';
-  END IF;
-  IF EXISTS (SELECT 1 FROM SCHEMAS WHERE SCHEMA_NAME = 'SLDMODEL') THEN
-    EXEC 'GRANT SELECT ON SCHEMA "SLDMODEL" TO "' || :target_user || '"';
-  END IF;
-END;
-SQL
-)
-
-  local provision_out rc
-  set +e
-  provision_out="$(printf '%s\n' "$sql_block" | su - "$sid_user" -c "hdbsql -U \"$selected_key\" -A -x" 2>&1)"
-  rc=$?
-  set -e
-
-  if [[ "$rc" -eq 0 ]]; then
-    success=true
-    diagnostics="Harvest user ${harvest_user_upper} bereitgestellt; Grants auf SBOCOMMON/SLDDATA/SLDMODEL sofern vorhanden"
-    mkdir -p "$(dirname "$state_file")" 2>/dev/null || true
-    if [[ -f "$state_file" ]]; then
-      grep -Fqx "${sid}|${harvest_user_upper}" "$state_file" 2>/dev/null || printf '%s\n' "${sid}|${harvest_user_upper}" >> "$state_file"
-    else
-      printf '%s\n' "${sid}|${harvest_user_upper}" > "$state_file" 2>/dev/null || true
-    fi
-  else
-    error="Provisionierung via hdbsql fehlgeschlagen"
-    diagnostics="$(printf '%s' "$provision_out" | tail -20)"
-  fi
-
-  printf '{"enabled":true,"attempted":%s,"success":%s,"sid":"%s","sid_user":"%s","user":"%s","userstore_key":"%s","error":"%s","diagnostics":"%s"}' \
-    "$attempted" \
-    "$success" \
-    "$(json_escape "$sid")" \
-    "$(json_escape "$sid_user")" \
-    "$(json_escape "$harvest_user_upper")" \
-    "$(json_escape "$selected_key")" \
-    "$(json_escape "$error")" \
-    "$(json_escape "$diagnostics")"
-}
 collect_cron_json() {
   # Collects additional HANA runtime info without requiring DB credentials:
   #   - Service status via "HDB info" (as <sid>adm)
@@ -1838,7 +1655,6 @@ AGENT_CONFIG_JSON="$(collect_agent_config_json)"
 LARGE_FILES_JSON="$(collect_large_files_json)"
 SAP_BUSINESS_ONE_JSON="$(collect_sap_business_one_json)"
 HANA_INFO_JSON="$(collect_hana_version_json)"
-HANA_HARVEST_JSON="$(collect_hana_harvest_provision_json)"
 DIR_LISTINGS_JSON="$(collect_dir_listings_json)"
 DIR_DEEP_LISTINGS_JSON="$(collect_dir_deep_listings_json)"
 CRON_INFO_JSON="$(collect_cron_json)"
@@ -1916,7 +1732,6 @@ PAYLOAD=$(cat <<EOF
   "large_files": ${LARGE_FILES_JSON},
   "sap_business_one": ${SAP_BUSINESS_ONE_JSON},
   "hana_info": ${HANA_INFO_JSON},
-  "hana_harvest": ${HANA_HARVEST_JSON},
   "dir_listings": ${DIR_LISTINGS_JSON},
   "dir_deep_listings": ${DIR_DEEP_LISTINGS_JSON},
   "cron_info": ${CRON_INFO_JSON}

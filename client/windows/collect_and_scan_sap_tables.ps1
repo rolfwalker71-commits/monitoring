@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 $IC = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile = if ($env:CONFIG_FILE) { $env:CONFIG_FILE } else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
-$EmbeddedAgentVersion = '1.4.42'
+$EmbeddedAgentVersion = '1.4.41'
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
