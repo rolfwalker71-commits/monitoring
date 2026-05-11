@@ -297,6 +297,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.4.74 (11. Mai 2026)
+
+- **Agent-Quelle Ansicht optisch verdichtet**: kleinere Schrift und kompaktere Zellen fuer mehr Host-Zeilen auf gleicher Hoehe.
+- **Breite besser genutzt**: Tabellenlayout der "Agent Quelle"-Seite auf bessere Spaltenverteilung angepasst, weniger abgeschnittene Werte.
+- **Lesbarkeit verbessert**: URL-Felder umbrechen nun kontrolliert statt frueh mit Ellipsis zu enden.
+
 ### v1.4.73 (11. Mai 2026)
 
 - **agent.conf Migration fuer bestehende Agents**: Linux- und Windows-`self_update` schreiben relevante Source-Keys jetzt aktiv nach (`SERVER_URL`, `UPDATE_BASE_URL`, `RAW_BASE_URL`) und leeren `GITHUB_REPO`.

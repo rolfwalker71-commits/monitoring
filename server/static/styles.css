@@ -1298,7 +1298,63 @@ td.center {
 }
 
 .agent-source-status-table {
-  table-layout: fixed;
+  table-layout: auto;
+  width: 100%;
+  min-width: 1220px;
+  margin-top: 4px;
+}
+
+.agent-source-status-table th,
+.agent-source-status-table td {
+  font-size: 11px;
+  padding: 6px 8px;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.agent-source-status-table th {
+  white-space: nowrap;
+}
+
+.agent-source-status-table td {
+  white-space: normal;
+  vertical-align: middle;
+}
+
+.agent-source-status-table th:nth-child(1),
+.agent-source-status-table td:nth-child(1) {
+  width: 6%;
+  min-width: 72px;
+}
+
+.agent-source-status-table th:nth-child(2),
+.agent-source-status-table td:nth-child(2) {
+  width: 14%;
+  min-width: 160px;
+}
+
+.agent-source-status-table th:nth-child(3),
+.agent-source-status-table td:nth-child(3),
+.agent-source-status-table th:nth-child(4),
+.agent-source-status-table td:nth-child(4),
+.agent-source-status-table th:nth-child(5),
+.agent-source-status-table td:nth-child(5),
+.agent-source-status-table th:nth-child(7),
+.agent-source-status-table td:nth-child(7) {
+  width: 14%;
+  min-width: 150px;
+}
+
+.agent-source-status-table th:nth-child(6),
+.agent-source-status-table td:nth-child(6) {
+  width: 10%;
+  min-width: 120px;
+}
+
+.agent-source-status-table th:nth-child(8),
+.agent-source-status-table td:nth-child(8) {
+  width: 10%;
+  min-width: 130px;
 }
 
 .agent-source-status-badge {
@@ -1323,8 +1379,9 @@ td.center {
 
 .agent-source-mono {
   font-family: "IBM Plex Mono", "Courier New", monospace;
-  font-size: 12px;
-  word-break: break-all;
+  font-size: 11px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .agent-source-cell-ok,
@@ -1332,7 +1389,7 @@ td.center {
   display: inline-block;
   width: 100%;
   border-radius: 6px;
-  padding: 3px 6px;
+  padding: 2px 6px;
 }
 
 .agent-source-cell-ok {
