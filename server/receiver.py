@@ -2292,6 +2292,15 @@ HOST_CONFIG_FIELD_LABELS = {
 }
 
 
+def _ensure_host_config_snapshot_schema(conn: sqlite3.Connection) -> None:
+    columns = {
+        str(row[1])
+        for row in conn.execute("PRAGMA table_info(host_config_snapshot)").fetchall()
+    }
+    if "kernel_release" not in columns:
+        conn.execute("ALTER TABLE host_config_snapshot ADD COLUMN kernel_release TEXT NOT NULL DEFAULT '-'")
+
+
 def _normalize_config_value(field_key: str, value: object) -> str:
     raw = str(value or "").strip()
     if not raw:
@@ -2383,6 +2392,8 @@ def _track_host_config_changes(
     report_id: int,
     detected_at_utc: str,
 ) -> None:
+    _ensure_host_config_snapshot_schema(conn)
+
     if not hostname:
         return
 
@@ -2796,6 +2807,8 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
 
 
 def backfill_host_config_changes(conn: sqlite3.Connection, days: int = 7) -> dict:
+    _ensure_host_config_snapshot_schema(conn)
+
     window_days = max(1, int(days or 7))
     cutoff_iso = (datetime.now(timezone.utc) - timedelta(days=window_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
 

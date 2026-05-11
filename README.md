@@ -297,6 +297,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.4.71 (11. Mai 2026)
+
+- **DB-Schema Guard fuer Host-Config**: Der Server stellt vor Host-Config-Tracking/Backfill jetzt runtime-sicher sicher, dass `host_config_snapshot.kernel_release` existiert.
+- **Nutzen**: Alte/extern eingespielte DBs ohne neue Spalte brechen nicht mehr bei Host-Config-Operationen.
+
 ### v1.4.70 (11. Mai 2026)
 
 - **HANA AddOn-Parser tolerant gemacht**: CSV-Extraktion faellt jetzt bei Mischformaten automatisch auf die Zeilenlogik zurueck, damit echte AddOn-Daten nicht mehr im `parse_failed` landen.
