@@ -44,6 +44,39 @@ CURL_CONNECT_TIMEOUT_SEC="${CURL_CONNECT_TIMEOUT_SEC:-10}"
 CURL_MAX_TIME_SEC="${CURL_MAX_TIME_SEC:-45}"
 SEND_JITTER_MAX_SEC="${SEND_JITTER_MAX_SEC:-300}"
 
+DISABLE_JITTER=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --no-jitter)
+      DISABLE_JITTER=true
+      shift
+      ;;
+    --jitter-max-sec)
+      if [[ $# -lt 2 ]]; then
+        echo "Missing value for --jitter-max-sec" >&2
+        exit 2
+      fi
+      SEND_JITTER_MAX_SEC="$2"
+      shift 2
+      ;;
+    --help|-h)
+      cat <<'EOF'
+Usage: collect_and_send.sh [--no-jitter] [--jitter-max-sec <seconds>]
+
+Options:
+  --no-jitter              Skip startup jitter sleep (useful for manual tests)
+  --jitter-max-sec <sec>   Override maximum jitter delay for this run
+EOF
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      echo "Use --help for usage." >&2
+      exit 2
+      ;;
+  esac
+done
+
 if [[ ! -f "$CONFIG_FILE" ]]; then
   echo "Config file not found: $CONFIG_FILE" >&2
   exit 1
@@ -57,7 +90,7 @@ if [[ -z "${SERVER_URL:-}" ]]; then
   exit 1
 fi
 
-if [[ "$SEND_JITTER_MAX_SEC" =~ ^[0-9]+$ ]] && [[ "$SEND_JITTER_MAX_SEC" -gt 0 ]]; then
+if [[ "$DISABLE_JITTER" != true ]] && [[ "$SEND_JITTER_MAX_SEC" =~ ^[0-9]+$ ]] && [[ "$SEND_JITTER_MAX_SEC" -gt 0 ]]; then
   jitter_identity="${AGENT_ID:-$(hostname -f 2>/dev/null || hostname)}"
   jitter_sec="$(printf '%s' "$jitter_identity" | cksum | awk -v max="$SEND_JITTER_MAX_SEC" '{print $1 % (max + 1)}')"
   if [[ "$jitter_sec" =~ ^[0-9]+$ ]] && [[ "$jitter_sec" -gt 0 ]]; then
