@@ -9478,8 +9478,20 @@ function updateSystemOverviewAddonsToggleButton() {
 function renderSystemOverviewAddons(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const hana = payload && typeof payload.hana_addons === "object" ? payload.hana_addons : null;
+  const osField = (payload?.os || "").toLowerCase();
   
-  if (!sap && !hana) {
+  // Determine which addons to show based on OS
+  const isWindows = osField.includes("windows");
+  const isLinux = osField.includes("linux");
+  
+  // Linux → HANA only; Windows → SQL only; Unknown/Both → show both
+  const showSql = !isLinux;  // Show SQL for Windows or unknown OS
+  const showHana = !isWindows; // Show HANA for Linux or unknown OS
+  
+  const sapToShow = showSql && sap ? sap : null;
+  const hanaToShow = showHana && hana ? hana : null;
+  
+  if (!sapToShow && !hanaToShow) {
     return "";
   }
 
@@ -9494,50 +9506,30 @@ function renderSystemOverviewAddons(payload) {
     return `${listRows}${rest}`;
   };
 
-  // SQL AddOns
-  const extRows = sap ? (Array.isArray(sap?.extensions?.rows) ? sap.extensions.rows : []) : [];
-  const legacyRows = sap ? (Array.isArray(sap?.sari_addons?.rows) ? sap.sari_addons.rows : []) : [];
-  const extCount = extRows.length;
-  const legacyCount = legacyRows.length;
-  const sqlTotalCount = extCount + legacyCount;
-
-  const extContent = extCount > 0
-    ? `<ul class="so-addon-list">${renderListItems(extRows, "AddOnName", "Version")}</ul>`
-    : '<p class="so-addon-empty">Keine</p>';
-
-  const legacyContent = legacyCount > 0
-    ? `<ul class="so-addon-list">${renderListItems(legacyRows, "AName", "AddOnVer")}</ul>`
-    : '<p class="so-addon-empty">Keine</p>';
-
-  const sqlSummary = sqlTotalCount > 0
-    ? `SQL AddOns (${extCount} LW / ${legacyCount} Legacy)`
-    : "SQL AddOns (keine)";
-
-  // HANA AddOns
-  const hanaLightweight = hana ? (Array.isArray(hana?.lightweight) ? hana.lightweight : []) : [];
-  const hanaLegacy = hana ? (Array.isArray(hana?.legacy) ? hana.legacy : []) : [];
-  const hanaLightCount = hanaLightweight.length;
-  const hanaLegacyCount = hanaLegacy.length;
-  const hanaTotalCount = hanaLightCount + hanaLegacyCount;
-
-  const hanaLightContent = hanaLightCount > 0
-    ? `<ul class="so-addon-list">${renderListItems(hanaLightweight, "name", "version")}</ul>`
-    : '<p class="so-addon-empty">Keine</p>';
-
-  const hanaLegacyContent = hanaLegacyCount > 0
-    ? `<ul class="so-addon-list">${renderListItems(hanaLegacy, "name", "version")}</ul>`
-    : '<p class="so-addon-empty">Keine</p>';
-
-  const hanaSummary = hanaTotalCount > 0
-    ? `HANA AddOns (${hanaLightCount} LW / ${hanaLegacyCount} Legacy)`
-    : "HANA AddOns (keine)";
-
-  const openAttr = state.systemOverviewAddonsExpanded === true ? " open" : "";
-
   let result = "";
-  
-  // Render SQL AddOns section if available
-  if (sap) {
+
+  // SQL AddOns (Windows or unknown OS)
+  if (sapToShow) {
+    const extRows = Array.isArray(sapToShow?.extensions?.rows) ? sapToShow.extensions.rows : [];
+    const legacyRows = Array.isArray(sapToShow?.sari_addons?.rows) ? sapToShow.sari_addons.rows : [];
+    const extCount = extRows.length;
+    const legacyCount = legacyRows.length;
+    const sqlTotalCount = extCount + legacyCount;
+
+    const extContent = extCount > 0
+      ? `<ul class="so-addon-list">${renderListItems(extRows, "AddOnName", "Version")}</ul>`
+      : '<p class="so-addon-empty">Keine</p>';
+
+    const legacyContent = legacyCount > 0
+      ? `<ul class="so-addon-list">${renderListItems(legacyRows, "AName", "AddOnVer")}</ul>`
+      : '<p class="so-addon-empty">Keine</p>';
+
+    const sqlSummary = sqlTotalCount > 0
+      ? `SQL AddOns (${extCount} LW / ${legacyCount} Legacy)`
+      : "SQL AddOns (keine)";
+
+    const openAttr = state.systemOverviewAddonsExpanded === true ? " open" : "";
+
     result += `
     <details class="so-addon-details"${openAttr}>
       <summary>${escapeHtml(sqlSummary)}</summary>
@@ -9554,8 +9546,28 @@ function renderSystemOverviewAddons(payload) {
     </details>`;
   }
 
-  // Render HANA AddOns section if available
-  if (hana) {
+  // HANA AddOns (Linux or unknown OS)
+  if (hanaToShow) {
+    const hanaLightweight = Array.isArray(hanaToShow?.lightweight) ? hanaToShow.lightweight : [];
+    const hanaLegacy = Array.isArray(hanaToShow?.legacy) ? hanaToShow.legacy : [];
+    const hanaLightCount = hanaLightweight.length;
+    const hanaLegacyCount = hanaLegacy.length;
+    const hanaTotalCount = hanaLightCount + hanaLegacyCount;
+
+    const hanaLightContent = hanaLightCount > 0
+      ? `<ul class="so-addon-list">${renderListItems(hanaLightweight, "name", "version")}</ul>`
+      : '<p class="so-addon-empty">Keine</p>';
+
+    const hanaLegacyContent = hanaLegacyCount > 0
+      ? `<ul class="so-addon-list">${renderListItems(hanaLegacy, "name", "version")}</ul>`
+      : '<p class="so-addon-empty">Keine</p>';
+
+    const hanaSummary = hanaTotalCount > 0
+      ? `HANA AddOns (${hanaLightCount} LW / ${hanaLegacyCount} Legacy)`
+      : "HANA AddOns (keine)";
+
+    const openAttr = state.systemOverviewAddonsExpanded === true ? " open" : "";
+
     result += `
     <details class="so-addon-details"${openAttr}>
       <summary>${escapeHtml(hanaSummary)}</summary>
