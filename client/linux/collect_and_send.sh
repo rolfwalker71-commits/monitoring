@@ -462,6 +462,8 @@ collect_hana_addons_json() {
     local sql_text="${1-}"
     local explicit_output=""
     local implicit_output=""
+    local alt_port=""
+    local alt_output=""
 
     last_hdbsql_mode="explicit_target"
     if command -v timeout >/dev/null 2>&1; then
@@ -472,6 +474,27 @@ collect_hana_addons_json() {
 
     # Compatibility fallback: if explicit host:port fails, retry legacy implicit mode.
     if is_hdbsql_connection_error "$explicit_output"; then
+      # Additional runtime fallback: probe locally listening HANA-style SQL ports
+      # (3xx15), useful when instance-specific port differs from 30015.
+      if [[ "$addons_host" == "127.0.0.1" || "$addons_host" == "localhost" ]] && [[ "$addons_port" == "30015" ]]; then
+        while IFS= read -r alt_port; do
+          [[ -z "$alt_port" ]] && continue
+          [[ "$alt_port" == "30015" ]] && continue
+          if command -v timeout >/dev/null 2>&1; then
+            alt_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -n \"${addons_host}:${alt_port}\" -u \"$addons_user\" -p \"$addons_password\" \"$sql_text\" 2>&1" || true)"
+          else
+            alt_output="$(su - "$sid_user" -c "hdbsql -n \"${addons_host}:${alt_port}\" -u \"$addons_user\" -p \"$addons_password\" \"$sql_text\" 2>&1" || true)"
+          fi
+          if [[ -n "$alt_output" ]] && ! is_hdbsql_connection_error "$alt_output"; then
+            addons_port="$alt_port"
+            hdbsql_target="${addons_host}:${addons_port}"
+            last_hdbsql_mode="auto_port_probe_${alt_port}"
+            printf '%s' "$alt_output"
+            return
+          fi
+        done < <(ss -lntH 2>/dev/null | awk '{print $4}' | sed -E 's/.*:([0-9]+)$/\1/' | grep -E '^3[0-9]{2}15$' | sort -u || true)
+      fi
+
       if command -v timeout >/dev/null 2>&1; then
         implicit_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"$sql_text\" 2>&1" || true)"
       else
@@ -487,7 +510,15 @@ collect_hana_addons_json() {
     printf '%s' "$explicit_output"
   }
 
-  # Validate timeout is numeric
+  # Auto-detect SID if not set
+  if [[ -z "$sid" ]] && [[ -d /hana/shared ]]; then
+    sid="$(find /hana/shared -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+      | awk -F/ '{print $NF}' \
+      | grep -E '^[A-Z][A-Z0-9]{2}$' \
+      | head -1 || true)"
+  fi
+
+  # Validate timeout/port defaults
   [[ "$query_timeout_sec" =~ ^[0-9]+$ ]] || query_timeout_sec=15
   [[ "$addons_port" =~ ^[0-9]+$ ]] || addons_port=30015
 
@@ -509,14 +540,6 @@ collect_hana_addons_json() {
   fi
 
   hdbsql_target="${addons_host}:${addons_port}"
-
-  # Auto-detect SID if not set
-  if [[ -z "$sid" ]] && [[ -d /hana/shared ]]; then
-    sid="$(find /hana/shared -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
-      | awk -F/ '{print $NF}' \
-      | grep -E '^[A-Z][A-Z0-9]{2}$' \
-      | head -1 || true)"
-  fi
 
   if [[ -z "$sid" ]]; then
     reason="missing_hana_sid"
