@@ -15,11 +15,13 @@ INSTALL_DIR="${INSTALL_DIR:-/opt/monitoring-agent}"
 SERVER_URL="${SERVER_URL:-}"
 RAW_BASE_URL="${RAW_BASE_URL:-}"
 UPDATE_BASE_URL="${UPDATE_BASE_URL:-}"
+# Prefer explicit RAW_BASE_URL over implicit server /updates fallback.
+# This avoids pulling stale/mismatched artifacts when UPDATE_BASE_URL is unset.
+if [[ -z "$UPDATE_BASE_URL" && -n "$RAW_BASE_URL" ]]; then
+  UPDATE_BASE_URL="$RAW_BASE_URL"
+fi
 if [[ -z "$UPDATE_BASE_URL" && -n "$SERVER_URL" ]]; then
   UPDATE_BASE_URL="${SERVER_URL%/}/updates"
-fi
-if [[ -z "$UPDATE_BASE_URL" ]]; then
-  UPDATE_BASE_URL="$RAW_BASE_URL"
 fi
 if [[ -z "$RAW_BASE_URL" ]]; then
   RAW_BASE_URL="$UPDATE_BASE_URL"
@@ -191,6 +193,9 @@ ensure_config_value "HANA_ADDONS_ENABLED" "1"
 ensure_config_value "HANA_ADDONS_USER" "HARVEST"
 ensure_config_value "HANA_ADDONS_PASSWORD" "0djKUt&xbLK0AYr"
 ensure_config_value "HANA_ADDONS_QUERY_TIMEOUT_SEC" "15"
+if [[ -n "$UPDATE_BASE_URL" ]]; then
+  ensure_config_value "UPDATE_BASE_URL" "$UPDATE_BASE_URL"
+fi
 # Migration: remove old static DIR_SCAN_DEEP_PATHS that was auto-written by a
 # previous agent version. The new agent performs a hostname-aware search and
 # will re-write the correct value on the next run.
