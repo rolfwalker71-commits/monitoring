@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import base64
+import csv
 import fnmatch
 import hashlib
 import hmac
@@ -2487,26 +2488,66 @@ def _extract_sap_addon_snapshot(payload: dict) -> dict[str, str]:
 
     def _clean_text(value: object) -> str:
         text = str(value or "").strip()
-        if text.startswith('"') and text.endswith('"') and len(text) >= 2:
-            text = text[1:-1].strip()
+        if text.startswith('"'):
+            text = text[1:].strip()
+        if text.endswith('"'):
+            text = text[:-1].strip()
+        if text.startswith("'"):
+            text = text[1:].strip()
+        if text.endswith("'"):
+            text = text[:-1].strip()
         return text
 
+    def _looks_like_hdbsql_footer(raw_text: str) -> bool:
+        lower = raw_text.strip().lower()
+        return "rows selected" in lower or "overall time" in lower or "server time" in lower
+
+    def _parse_combined_pair(raw_name: str) -> tuple[str, str] | None:
+        candidates = [raw_name]
+        if raw_name and not raw_name.startswith('"'):
+            candidates.append(f'"{raw_name}')
+        if raw_name and not raw_name.endswith('"'):
+            candidates.append(f'{raw_name}"')
+        if raw_name and not raw_name.startswith('"') and not raw_name.endswith('"'):
+            candidates.append(f'"{raw_name}"')
+
+        for candidate in candidates:
+            try:
+                parsed = next(csv.reader([candidate], skipinitialspace=True))
+            except Exception:
+                continue
+            if len(parsed) < 2:
+                continue
+            left = _clean_text(parsed[0])
+            right = _clean_text(parsed[1])
+            if left:
+                return left, right
+        return None
+
     def _normalize_pair(name_value: object, version_value: object) -> tuple[str, str]:
+        raw_name = str(name_value or "").strip()
         name = _clean_text(name_value)
         version = _clean_text(version_value)
+
+        if _looks_like_hdbsql_footer(raw_name):
+            return "", "-"
 
         # Some collectors delivered combined CSV-like pairs in the name field:
         #   "Addon Name","1.2.3"
         # Normalize those into clean name/version values.
-        if (not version or version in {"?", "-"}) and name.startswith('"') and '\",\"' in name and name.endswith('"'):
-            parts = name.split('\",\"', 1)
-            left = parts[0].lstrip('"').strip()
-            right = parts[1].rstrip('"').strip()
-            name = left
-            version = right or version
+        if not version or version in {"?", "-"}:
+            parsed_pair = _parse_combined_pair(raw_name)
+            if parsed_pair is not None:
+                left, right = parsed_pair
+                name = left or name
+                version = right or version
 
         name = _clean_text(name)
         version = _clean_text(version)
+
+        if _looks_like_hdbsql_footer(name):
+            return "", "-"
+
         return name, (version or "-")
 
     ext_block = sap_block.get("extensions")
