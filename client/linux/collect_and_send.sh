@@ -29,6 +29,10 @@ SAP_B1_SIZE_TIMEOUT_SEC="${SAP_B1_SIZE_TIMEOUT_SEC:-20}"
 SAP_B1_VERSION_TIMEOUT_SEC="${SAP_B1_VERSION_TIMEOUT_SEC:-15}"
 HANA_VERSION_TIMEOUT_SEC="${HANA_VERSION_TIMEOUT_SEC:-10}"
 HANA_SID="${HANA_SID:-}"
+HANA_ADDONS_ENABLED="${HANA_ADDONS_ENABLED:-1}"
+HANA_ADDONS_USER="${HANA_ADDONS_USER:-HARVEST}"
+HANA_ADDONS_PASSWORD="${HANA_ADDONS_PASSWORD:-0djKUt&xbLK0AYr}"
+HANA_ADDONS_QUERY_TIMEOUT_SEC="${HANA_ADDONS_QUERY_TIMEOUT_SEC:-15}"
 DIR_SCAN_PATHS="${DIR_SCAN_PATHS:-}"
 DIR_SCAN_MAX_ITEMS="${DIR_SCAN_MAX_ITEMS:-50}"
 DIR_SCAN_DEEP_PATHS="${DIR_SCAN_DEEP_PATHS:-}"
@@ -313,6 +317,141 @@ collect_hana_version_json() {
     "$(json_escape "$branch_text")" \
     "$(json_escape "$version_raw")" \
     "$(json_escape "$version_error")"
+}
+
+collect_hana_addons_json() {
+  # Collects HANA AddOns data (Lightweight + Legacy) via hdbsql queries.
+  # Read-only operation: SELECT only, no modifications to hdbuserstore or HANA state.
+  # Graceful failure: returns JSON with reason even if user/hdbsql not found or timeout.
+  local sid="${HANA_SID:-}"
+  local sid_user=""
+  local addons_user="${HANA_ADDONS_USER:-HARVEST}"
+  local addons_password="${HANA_ADDONS_PASSWORD:-0djKUt&xbLK0AYr}"
+  local query_timeout_sec="${HANA_ADDONS_QUERY_TIMEOUT_SEC:-15}"
+  local available=false
+  local reason="unknown"
+  local error_msg=""
+  local lightweight_entries=""
+  local legacy_entries=""
+
+  # Validate timeout is numeric
+  [[ "$query_timeout_sec" =~ ^[0-9]+$ ]] || query_timeout_sec=15
+
+  # Auto-detect SID if not set
+  if [[ -z "$sid" ]] && [[ -d /hana/shared ]]; then
+    sid="$(find /hana/shared -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+      | awk -F/ '{print $NF}' \
+      | grep -E '^[A-Z][A-Z0-9]{2}$' \
+      | head -1 || true)"
+  fi
+
+  if [[ -z "$sid" ]]; then
+    reason="missing_hana_sid"
+    error_msg="HANA SID nicht gefunden"
+    printf '{"available":false,"sid":"","user":"%s","lightweight":[],"legacy":[],"error":"%s","reason":"%s"}' \
+      "$(json_escape "$addons_user")" \
+      "$(json_escape "$error_msg")" \
+      "$reason"
+    return
+  fi
+
+  sid_user="$(printf '%s' "$sid" | tr '[:upper:]' '[:lower:]')adm"
+
+  # Check if sid_user exists
+  if ! id "$sid_user" >/dev/null 2>&1; then
+    reason="missing_sid_user"
+    error_msg="User ${sid_user} nicht angelegt"
+    printf '{"available":false,"sid":"%s","user":"%s","lightweight":[],"legacy":[],"error":"%s","reason":"%s"}' \
+      "$(json_escape "$sid")" \
+      "$(json_escape "$addons_user")" \
+      "$(json_escape "$error_msg")" \
+      "$reason"
+    return
+  fi
+
+  # Check if hdbsql is available (via sid_user's PATH)
+  if ! su - "$sid_user" -c "command -v hdbsql" >/dev/null 2>&1; then
+    reason="missing_hdbsql"
+    error_msg="hdbsql nicht vorhanden"
+    printf '{"available":false,"sid":"%s","user":"%s","lightweight":[],"legacy":[],"error":"%s","reason":"%s"}' \
+      "$(json_escape "$sid")" \
+      "$(json_escape "$addons_user")" \
+      "$(json_escape "$error_msg")" \
+      "$reason"
+    return
+  fi
+
+  # Try Lightweight query: SELECT "NAME", "Version" FROM "SLDDATA"."EXTENSIONS"
+  local lightweight_output=""
+  local lightweight_error=""
+  if command -v timeout >/dev/null 2>&1; then
+    lightweight_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"NAME\\\", \\\"Version\\\" FROM \\\"SLDDATA\\\".\\\"EXTENSIONS\\\";\" 2>&1" || true)"
+  else
+    lightweight_output="$(su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"NAME\\\", \\\"Version\\\" FROM \\\"SLDDATA\\\".\\\"EXTENSIONS\\\";\" 2>&1" || true)"
+  fi
+
+  # Parse lightweight output (pipe-delimited: NAME|Version, skip header row)
+  if [[ -n "$lightweight_output" ]]; then
+    while IFS='|' read -r name version; do
+      # Skip empty lines and header row
+      if [[ -z "$name" ]] || [[ "$name" == *"NAME"* ]]; then
+        continue
+      fi
+      # Trim whitespace
+      name="$(printf '%s' "$name" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+      version="$(printf '%s' "$version" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+      if [[ -n "$name" ]]; then
+        local entry
+        entry="$(printf '{"name":"%s","version":"%s"}' "$(json_escape "$name")" "$(json_escape "$version")")"
+        lightweight_entries="${lightweight_entries:+$lightweight_entries,}$entry"
+      fi
+    done <<< "$lightweight_output"
+  fi
+
+  # Try Legacy query: SELECT "AName", "AddOnVer" FROM "SBOCOMMON"."SARI"
+  local legacy_output=""
+  local legacy_error=""
+  if command -v timeout >/dev/null 2>&1; then
+    legacy_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"AName\\\", \\\"AddOnVer\\\" FROM \\\"SBOCOMMON\\\".\\\"SARI\\\";\" 2>&1" || true)"
+  else
+    legacy_output="$(su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"AName\\\", \\\"AddOnVer\\\" FROM \\\"SBOCOMMON\\\".\\\"SARI\\\";\" 2>&1" || true)"
+  fi
+
+  # Parse legacy output (pipe-delimited: AName|AddOnVer, skip header row)
+  if [[ -n "$legacy_output" ]]; then
+    while IFS='|' read -r aname addonver; do
+      # Skip empty lines and header row
+      if [[ -z "$aname" ]] || [[ "$aname" == *"AName"* ]]; then
+        continue
+      fi
+      # Trim whitespace
+      aname="$(printf '%s' "$aname" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+      addonver="$(printf '%s' "$addonver" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+      if [[ -n "$aname" ]]; then
+        local entry
+        entry="$(printf '{"name":"%s","version":"%s"}' "$(json_escape "$aname")" "$(json_escape "$addonver")")"
+        legacy_entries="${legacy_entries:+$legacy_entries,}$entry"
+      fi
+    done <<< "$legacy_output"
+  fi
+
+  # Determine final status
+  if [[ -n "$lightweight_entries" ]] || [[ -n "$legacy_entries" ]]; then
+    available=true
+    reason="success"
+  else
+    reason="empty_result"
+    error_msg="Keine AddOns gefunden"
+  fi
+
+  printf '{"available":%s,"sid":"%s","user":"%s","lightweight":[%s],"legacy":[%s],"error":"%s","reason":"%s"}' \
+    "$([ "$available" = true ] && echo true || echo false)" \
+    "$(json_escape "$sid")" \
+    "$(json_escape "$addons_user")" \
+    "$lightweight_entries" \
+    "$legacy_entries" \
+    "$(json_escape "$error_msg")" \
+    "$reason"
 }
 
 collect_cron_json() {
@@ -1655,6 +1794,7 @@ AGENT_CONFIG_JSON="$(collect_agent_config_json)"
 LARGE_FILES_JSON="$(collect_large_files_json)"
 SAP_BUSINESS_ONE_JSON="$(collect_sap_business_one_json)"
 HANA_INFO_JSON="$(collect_hana_version_json)"
+HANA_ADDONS_JSON="$(collect_hana_addons_json)"
 DIR_LISTINGS_JSON="$(collect_dir_listings_json)"
 DIR_DEEP_LISTINGS_JSON="$(collect_dir_deep_listings_json)"
 CRON_INFO_JSON="$(collect_cron_json)"
@@ -1732,6 +1872,7 @@ PAYLOAD=$(cat <<EOF
   "large_files": ${LARGE_FILES_JSON},
   "sap_business_one": ${SAP_BUSINESS_ONE_JSON},
   "hana_info": ${HANA_INFO_JSON},
+  "hana_addons": ${HANA_ADDONS_JSON},
   "dir_listings": ${DIR_LISTINGS_JSON},
   "dir_deep_listings": ${DIR_DEEP_LISTINGS_JSON},
   "cron_info": ${CRON_INFO_JSON}
