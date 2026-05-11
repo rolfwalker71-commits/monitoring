@@ -1098,7 +1098,7 @@
       </div>
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(function(err) {
+      navigator.serviceWorker.register('/sw.js?v=__ASSET_VERSION__').catch(function(err) {
         console.warn('Service Worker registration failed:', err);
       });
     }
