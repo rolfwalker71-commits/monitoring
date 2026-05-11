@@ -4210,9 +4210,16 @@ function renderSapB1ExtensionsSection(payload) {
   const ext = sap && typeof sap.extensions === "object" ? sap.extensions : null;
   const sariAddons = sap && typeof sap.sari_addons === "object" ? sap.sari_addons : null;
   const hanaAddons = payload && typeof payload.hana_addons === "object" ? payload.hana_addons : null;
+  const osField = asText(payload?.os, "").toLowerCase();
+
+  const isWindows = osField.includes("windows");
+  const isLinux = osField.includes("linux");
+  const showSql = !isLinux;
+  const showHana = !isWindows;
 
   // SQL B1: Lightweight Extensions
   const rows = Array.isArray(ext?.rows) ? ext.rows : [];
+  const extCount = rows.length;
   let extContent = '<p class="muted">Keine Daten vorhanden.</p>';
   if (rows.length > 0) {
     const bodyHtml = rows.map((row) => {
@@ -4236,6 +4243,7 @@ function renderSapB1ExtensionsSection(payload) {
 
   // SQL B1: Legacy AddOns
   const sariRows = Array.isArray(sariAddons?.rows) ? sariAddons.rows : [];
+  const sariCount = sariRows.length;
   const sariAvailable = sariAddons?.available === true;
   const sariSourceDb = asText(sariAddons?.source_db, "");
   const sariError = asText(sariAddons?.error, "");
@@ -4270,6 +4278,7 @@ function renderSapB1ExtensionsSection(payload) {
 
   // HANA: Lightweight Extensions
   const hanaLightweight = Array.isArray(hanaAddons?.lightweight) ? hanaAddons.lightweight : [];
+  const hanaLightweightCount = hanaLightweight.length;
   let hanaLightweightContent = '<p class="muted">Keine Daten vorhanden.</p>';
   if (hanaAddons && hanaLightweight.length > 0) {
     const bodyHtml = hanaLightweight.map((row) => {
@@ -4306,6 +4315,7 @@ function renderSapB1ExtensionsSection(payload) {
 
   // HANA: Legacy AddOns
   const hanaLegacy = Array.isArray(hanaAddons?.legacy) ? hanaAddons.legacy : [];
+  const hanaLegacyCount = hanaLegacy.length;
   let hanaLegacyContent = '<p class="muted">Keine Daten vorhanden.</p>';
   if (hanaAddons && hanaLegacy.length > 0) {
     const bodyHtml = hanaLegacy.map((row) => {
@@ -4339,21 +4349,23 @@ function renderSapB1ExtensionsSection(payload) {
   }
 
   return `
+    ${showSql ? `
     <details class="sap-b1-raw-details sap-b1-sub-details">
-      <summary class="sap-b1-raw-summary">Lightweight Extensions (SQL)</summary>
+      <summary class="sap-b1-raw-summary">Lightweight Extensions (SQL) (${extCount})</summary>
       ${extContent}
     </details>
     <details class="sap-b1-raw-details sap-b1-sub-details">
-      <summary class="sap-b1-raw-summary">Legacy AddOns (SQL)</summary>
+      <summary class="sap-b1-raw-summary">Legacy AddOns (SQL) (${sariCount})</summary>
       ${sariContent}
     </details>
-    ${hanaAddons ? `
+    ` : ""}
+    ${showHana && hanaAddons ? `
     <details class="sap-b1-raw-details sap-b1-sub-details">
-      <summary class="sap-b1-raw-summary">Lightweight Extensions (HANA)</summary>
+      <summary class="sap-b1-raw-summary">Lightweight Extensions (HANA) (${hanaLightweightCount})</summary>
       ${hanaLightweightContent}
     </details>
     <details class="sap-b1-raw-details sap-b1-sub-details">
-      <summary class="sap-b1-raw-summary">Legacy AddOns (HANA)</summary>
+      <summary class="sap-b1-raw-summary">Legacy AddOns (HANA) (${hanaLegacyCount})</summary>
       ${hanaLegacyContent}
     </details>
     ` : ''}
