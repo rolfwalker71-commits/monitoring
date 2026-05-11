@@ -5275,10 +5275,12 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
           const name = asText(entry.name, "-");
           const memoryGb = Number(entry.memory_gb || 0);
           const memoryText = Number.isFinite(memoryGb) ? `${memoryGb.toFixed(2)} GB` : "-";
+          // Fett, wenn Name auf _P oder _P[Zahl] endet
+          const isProject = /_P(\d+)?$/i.test(name);
           return `
             <tr>
-              <td>${escapeHtml(name)}</td>
-              <td class="db-size-cell">${escapeHtml(memoryText)}</td>
+              <td${isProject ? ' style="font-weight:bold"' : ''}>${escapeHtml(name)}</td>
+              <td class="db-size-cell"${isProject ? ' style="font-weight:bold"' : ''}>${escapeHtml(memoryText)}</td>
             </tr>`;
         }).join("");
 
