@@ -351,6 +351,28 @@ collect_hana_addons_json() {
     printf '%s' "${target_entries:+$target_entries,}$entry_json"
   }
 
+  detect_hdbsql_error_line() {
+    local raw_text="${1-}"
+    local first_error=""
+
+    first_error="$(printf '%s\n' "$raw_text" | awk '
+      BEGIN { IGNORECASE=1 }
+      /authentication failed|sqlstate|insufficient privilege|invalid user|user is locked|connection failed|cannot connect|error:/ {
+        line=$0
+        sub(/^[[:space:]]+/, "", line)
+        sub(/[[:space:]]+$/, "", line)
+        print line
+        exit
+      }
+    ')"
+
+    if [[ -n "$first_error" ]]; then
+      printf '%s' "$first_error"
+      return 0
+    fi
+    return 1
+  }
+
   # Validate timeout is numeric
   [[ "$query_timeout_sec" =~ ^[0-9]+$ ]] || query_timeout_sec=15
 
@@ -411,6 +433,10 @@ collect_hana_addons_json() {
   #   - pipe-delimited: NAME|Version
   #   - CSV-like:       "NAME","Version"
   if [[ -n "$lightweight_output" ]]; then
+    if detect_hdbsql_error_line "$lightweight_output" >/dev/null; then
+      lightweight_error="$(detect_hdbsql_error_line "$lightweight_output")"
+    fi
+
     local cleaned_lightweight_output
     cleaned_lightweight_output="$(clean_hdbsql_output "$lightweight_output")"
 
@@ -450,7 +476,7 @@ collect_hana_addons_json() {
         [[ -z "$line" ]] && continue
 
         # Skip headers, separators and hdbsql timing/status lines.
-        if [[ "$line" =~ [Rr]ows[[:space:]]+selected ]] || [[ "$line" =~ [Oo]verall[[:space:]]+time ]] || [[ "$line" =~ [Ss]erver[[:space:]]+time ]] || [[ "$line" =~ ^[-=]+$ ]]; then
+        if [[ "$line" =~ [Rr]ows[[:space:]]+selected ]] || [[ "$line" =~ [Oo]verall[[:space:]]+time ]] || [[ "$line" =~ [Ss]erver[[:space:]]+time ]] || [[ "$line" =~ ^[-=]+$ ]] || [[ "$line" =~ ^\* ]]; then
           continue
         fi
 
@@ -497,6 +523,10 @@ collect_hana_addons_json() {
   #   - pipe-delimited: AName|AddOnVer
   #   - CSV-like:       "AName","AddOnVer"
   if [[ -n "$legacy_output" ]]; then
+    if detect_hdbsql_error_line "$legacy_output" >/dev/null; then
+      legacy_error="$(detect_hdbsql_error_line "$legacy_output")"
+    fi
+
     local cleaned_legacy_output
     cleaned_legacy_output="$(clean_hdbsql_output "$legacy_output")"
 
@@ -534,7 +564,7 @@ collect_hana_addons_json() {
         [[ -z "$line" ]] && continue
 
         # Skip headers, separators and hdbsql timing/status lines.
-        if [[ "$line" =~ [Rr]ows[[:space:]]+selected ]] || [[ "$line" =~ [Oo]verall[[:space:]]+time ]] || [[ "$line" =~ [Ss]erver[[:space:]]+time ]] || [[ "$line" =~ ^[-=]+$ ]]; then
+        if [[ "$line" =~ [Rr]ows[[:space:]]+selected ]] || [[ "$line" =~ [Oo]verall[[:space:]]+time ]] || [[ "$line" =~ [Ss]erver[[:space:]]+time ]] || [[ "$line" =~ ^[-=]+$ ]] || [[ "$line" =~ ^\* ]]; then
           continue
         fi
 
@@ -571,10 +601,26 @@ collect_hana_addons_json() {
   # Determine final status
   if [[ -n "$lightweight_entries" ]] || [[ -n "$legacy_entries" ]]; then
     available=true
-    reason="success"
+    if [[ -n "$lightweight_error" ]] || [[ -n "$legacy_error" ]]; then
+      reason="partial_result"
+      error_msg="$(printf '%s | %s' "$lightweight_error" "$legacy_error" | sed -E 's/^[[:space:]|]+//; s/[[:space:]|]+$//; s/[[:space:]]*\|[[:space:]]*/ | /g; s/( \| )+/ | /g')"
+    else
+      reason="success"
+    fi
   else
-    reason="empty_result"
-    error_msg="Keine AddOns gefunden"
+    if [[ -n "$lightweight_error" ]] || [[ -n "$legacy_error" ]]; then
+      local merged_error
+      merged_error="$(printf '%s | %s' "$lightweight_error" "$legacy_error" | sed -E 's/^[[:space:]|]+//; s/[[:space:]|]+$//; s/[[:space:]]*\|[[:space:]]*/ | /g; s/( \| )+/ | /g')"
+      error_msg="${merged_error:-hdbsql query failed}"
+      if [[ "$error_msg" =~ [Aa]uthentication[[:space:]]+failed ]] || [[ "$error_msg" =~ SQLSTATE:[[:space:]]*28000 ]]; then
+        reason="auth_failed"
+      else
+        reason="query_failed"
+      fi
+    else
+      reason="empty_result"
+      error_msg="Keine AddOns gefunden"
+    fi
   fi
 
   printf '{"available":%s,"sid":"%s","user":"%s","lightweight":[%s],"legacy":[%s],"error":"%s","reason":"%s"}' \
