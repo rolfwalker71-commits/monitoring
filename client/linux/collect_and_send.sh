@@ -33,6 +33,8 @@ HANA_ADDONS_ENABLED="${HANA_ADDONS_ENABLED:-1}"
 HANA_ADDONS_USER="${HANA_ADDONS_USER:-HARVEST}"
 HANA_ADDONS_PASSWORD="${HANA_ADDONS_PASSWORD:-0djKUt&xbLK0AYr}"
 HANA_ADDONS_QUERY_TIMEOUT_SEC="${HANA_ADDONS_QUERY_TIMEOUT_SEC:-15}"
+HANA_ADDONS_HOST="${HANA_ADDONS_HOST:-127.0.0.1}"
+HANA_ADDONS_PORT="${HANA_ADDONS_PORT:-30015}"
 DIR_SCAN_PATHS="${DIR_SCAN_PATHS:-}"
 DIR_SCAN_MAX_ITEMS="${DIR_SCAN_MAX_ITEMS:-50}"
 DIR_SCAN_DEEP_PATHS="${DIR_SCAN_DEEP_PATHS:-}"
@@ -328,6 +330,9 @@ collect_hana_addons_json() {
   local addons_user="${HANA_ADDONS_USER:-HARVEST}"
   local addons_password="${HANA_ADDONS_PASSWORD:-0djKUt&xbLK0AYr}"
   local query_timeout_sec="${HANA_ADDONS_QUERY_TIMEOUT_SEC:-15}"
+  local addons_host="${HANA_ADDONS_HOST:-127.0.0.1}"
+  local addons_port="${HANA_ADDONS_PORT:-30015}"
+  local hdbsql_target=""
   local available=false
   local reason="unknown"
   local error_msg=""
@@ -442,6 +447,8 @@ collect_hana_addons_json() {
 
   # Validate timeout is numeric
   [[ "$query_timeout_sec" =~ ^[0-9]+$ ]] || query_timeout_sec=15
+  [[ "$addons_port" =~ ^[0-9]+$ ]] || addons_port=30015
+  hdbsql_target="${addons_host}:${addons_port}"
 
   # Auto-detect SID if not set
   if [[ -z "$sid" ]] && [[ -d /hana/shared ]]; then
@@ -454,8 +461,9 @@ collect_hana_addons_json() {
   if [[ -z "$sid" ]]; then
     reason="missing_hana_sid"
     error_msg="HANA SID nicht gefunden"
-    printf '{"available":false,"sid":"","user":"%s","lightweight":[],"legacy":[],"error":"%s","reason":"%s"}' \
+    printf '{"available":false,"sid":"","user":"%s","target":"%s","lightweight":[],"legacy":[],"error":"%s","reason":"%s"}' \
       "$(json_escape "$addons_user")" \
+      "$(json_escape "$hdbsql_target")" \
       "$(json_escape "$error_msg")" \
       "$reason"
     return
@@ -467,9 +475,10 @@ collect_hana_addons_json() {
   if ! id "$sid_user" >/dev/null 2>&1; then
     reason="missing_sid_user"
     error_msg="User ${sid_user} nicht angelegt"
-    printf '{"available":false,"sid":"%s","user":"%s","lightweight":[],"legacy":[],"error":"%s","reason":"%s"}' \
+    printf '{"available":false,"sid":"%s","user":"%s","target":"%s","lightweight":[],"legacy":[],"error":"%s","reason":"%s"}' \
       "$(json_escape "$sid")" \
       "$(json_escape "$addons_user")" \
+      "$(json_escape "$hdbsql_target")" \
       "$(json_escape "$error_msg")" \
       "$reason"
     return
@@ -479,9 +488,10 @@ collect_hana_addons_json() {
   if ! su - "$sid_user" -c "command -v hdbsql" >/dev/null 2>&1; then
     reason="missing_hdbsql"
     error_msg="hdbsql nicht vorhanden"
-    printf '{"available":false,"sid":"%s","user":"%s","lightweight":[],"legacy":[],"error":"%s","reason":"%s"}' \
+    printf '{"available":false,"sid":"%s","user":"%s","target":"%s","lightweight":[],"legacy":[],"error":"%s","reason":"%s"}' \
       "$(json_escape "$sid")" \
       "$(json_escape "$addons_user")" \
+      "$(json_escape "$hdbsql_target")" \
       "$(json_escape "$error_msg")" \
       "$reason"
     return
@@ -491,9 +501,9 @@ collect_hana_addons_json() {
   local lightweight_output=""
   local lightweight_error=""
   if command -v timeout >/dev/null 2>&1; then
-    lightweight_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"NAME\\\", \\\"Version\\\" FROM \\\"SLDDATA\\\".\\\"EXTENSIONS\\\";\" 2>&1" || true)"
+    lightweight_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -n \"$hdbsql_target\" -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"NAME\\\", \\\"Version\\\" FROM \\\"SLDDATA\\\".\\\"EXTENSIONS\\\";\" 2>&1" || true)"
   else
-    lightweight_output="$(su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"NAME\\\", \\\"Version\\\" FROM \\\"SLDDATA\\\".\\\"EXTENSIONS\\\";\" 2>&1" || true)"
+    lightweight_output="$(su - "$sid_user" -c "hdbsql -n \"$hdbsql_target\" -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"NAME\\\", \\\"Version\\\" FROM \\\"SLDDATA\\\".\\\"EXTENSIONS\\\";\" 2>&1" || true)"
   fi
   # Parse lightweight output.
   # Supports both hdbsql formats seen in the field:
@@ -557,9 +567,9 @@ collect_hana_addons_json() {
   local legacy_output=""
   local legacy_error=""
   if command -v timeout >/dev/null 2>&1; then
-    legacy_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"AName\\\", \\\"AddOnVer\\\" FROM \\\"SBOCOMMON\\\".\\\"SARI\\\";\" 2>&1" || true)"
+    legacy_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -n \"$hdbsql_target\" -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"AName\\\", \\\"AddOnVer\\\" FROM \\\"SBOCOMMON\\\".\\\"SARI\\\";\" 2>&1" || true)"
   else
-    legacy_output="$(su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"AName\\\", \\\"AddOnVer\\\" FROM \\\"SBOCOMMON\\\".\\\"SARI\\\";\" 2>&1" || true)"
+    legacy_output="$(su - "$sid_user" -c "hdbsql -n \"$hdbsql_target\" -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"AName\\\", \\\"AddOnVer\\\" FROM \\\"SBOCOMMON\\\".\\\"SARI\\\";\" 2>&1" || true)"
   fi
   # Parse legacy output.
   # Supports both hdbsql formats seen in the field:
@@ -630,7 +640,7 @@ collect_hana_addons_json() {
     if [[ -n "$lightweight_error" ]] || [[ -n "$legacy_error" ]]; then
       local merged_error
       merged_error="$(printf '%s | %s' "$lightweight_error" "$legacy_error" | sed -E 's/^[[:space:]|]+//; s/[[:space:]|]+$//; s/[[:space:]]*\|[[:space:]]*/ | /g; s/( \| )+/ | /g')"
-      error_msg="${merged_error:-hdbsql query failed}"
+      error_msg="${merged_error:-hdbsql query failed} (target=${hdbsql_target})"
       if [[ "$error_msg" =~ [Aa]uthentication[[:space:]]+failed ]] || [[ "$error_msg" =~ SQLSTATE:[[:space:]]*28000 ]]; then
         reason="auth_failed"
       else
@@ -641,17 +651,18 @@ collect_hana_addons_json() {
       local lw_sample lg_sample
       lw_sample="$(summarize_hdbsql_output_for_diagnostics "${lightweight_output:-}")"
       lg_sample="$(summarize_hdbsql_output_for_diagnostics "${legacy_output:-}")"
-      error_msg="hdbsql output vorhanden, aber keine AddOn-Zeilen erkannt; LW=[${lw_sample}] LEG=[${lg_sample}]"
+      error_msg="hdbsql output vorhanden, aber keine AddOn-Zeilen erkannt (target=${hdbsql_target}); LW=[${lw_sample}] LEG=[${lg_sample}]"
     else
       reason="empty_result"
       error_msg="Keine AddOns gefunden"
     fi
   fi
 
-  printf '{"available":%s,"sid":"%s","user":"%s","lightweight":[%s],"legacy":[%s],"error":"%s","reason":"%s"}' \
+  printf '{"available":%s,"sid":"%s","user":"%s","target":"%s","lightweight":[%s],"legacy":[%s],"error":"%s","reason":"%s"}' \
     "$([ "$available" = true ] && echo true || echo false)" \
     "$(json_escape "$sid")" \
     "$(json_escape "$addons_user")" \
+    "$(json_escape "$hdbsql_target")" \
     "$lightweight_entries" \
     "$legacy_entries" \
     "$(json_escape "$error_msg")" \

@@ -193,6 +193,8 @@ ensure_config_value "HANA_ADDONS_ENABLED" "1"
 ensure_config_value "HANA_ADDONS_USER" "HARVEST"
 ensure_config_value "HANA_ADDONS_PASSWORD" "0djKUt&xbLK0AYr"
 ensure_config_value "HANA_ADDONS_QUERY_TIMEOUT_SEC" "15"
+ensure_config_value "HANA_ADDONS_HOST" "127.0.0.1"
+ensure_config_value "HANA_ADDONS_PORT" "30015"
 if [[ -n "$UPDATE_BASE_URL" ]]; then
   ensure_config_value "UPDATE_BASE_URL" "$UPDATE_BASE_URL"
 fi
