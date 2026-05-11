@@ -59,13 +59,13 @@ receiver.py  ← ThreadingHTTPServer auf Port 8080
 **Linux (per curl):**
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/linux/install_agent.sh | bash
+curl -sSL https://monitoring.rolfwalker.ch/updates/client/linux/install_agent.sh | bash
 ```
 
 **Windows (PowerShell als Admin):**
 
 ```powershell
-irm https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/windows/install_agent.ps1 | iex
+irm https://monitoring.rolfwalker.ch/updates/client/windows/install_agent.ps1 | iex
 ```
 
 **Windows repair/bootstrap für bestehende Hosts:**
@@ -78,7 +78,21 @@ Der Wrapper zieht die aktuellen Windows-Skripte von `/updates`, repariert eine b
 
 ### Self-Update
 
-Agents prüfen selbständig (alle ~6 Stunden, plus bei jedem Sammellauf wenn die Version veraltet ist) ob eine neue Version auf GitHub verfügbar ist und aktualisieren sich automatisch. Die aktuelle Agent-Version steht in `AGENT_VERSION`.
+Agents prüfen selbständig (alle ~6 Stunden, plus bei jedem Sammellauf wenn die Version veraltet ist) die vom Server bereitgestellten Pakete unter `/updates` und aktualisieren sich automatisch. Die aktuelle Agent-Version steht in `AGENT_VERSION`.
+
+### Server-Deploy bei privatem Repo
+
+Das Agent-Update selbst bleibt funktionsfaehig, weil Agenten nur noch von deinem Monitoring-Server unter `/updates` laden. Wenn das GitHub-Repo privat ist, betrifft das nur den Server-Deploy per `pull-server-only.sh`.
+
+`pull-server-only.sh` unterstuetzt dafuer jetzt GitHub-Tokens ueber diese Variablen:
+
+```bash
+export MONITORING_GITHUB_TOKEN=ghp_xxx
+# alternativ: export GITHUB_TOKEN=ghp_xxx
+sudo ./pull-server-only.sh
+```
+
+Alternativ kann `MONITORING_GITHUB_TOKEN` dauerhaft in der serverseitigen `monitoring.env` hinterlegt werden. Das Skript liest diese Datei beim Deploy ein und spiegelt danach die aktuellen Pakete wieder nach `/updates` fuer die Agenten.
 
 ### Remote-Befehle (Command Queue)
 
@@ -296,6 +310,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+
+### v1.4.75 (11. Mai 2026)
+
+- **Privates GitHub-Repo unterstuetzt**: `pull-server-only.sh` kann Deploy-Dateien jetzt authentifiziert per GitHub-Token aus einem privaten Repo laden.
+- **Token-Quellen**: `MONITORING_GITHUB_TOKEN`, `GITHUB_TOKEN` oder `GH_TOKEN`; alternativ liest das Skript `MONITORING_GITHUB_TOKEN` aus der serverseitigen `monitoring.env`.
+- **Deploy-Hinweise erweitert**: README und `monitoring.env`-Template dokumentieren den einmaligen Token-Schritt fuer Server-Deploys bei privatem Repo.
 
 ### v1.4.74 (11. Mai 2026)
 

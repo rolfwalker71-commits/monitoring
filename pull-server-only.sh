@@ -2,6 +2,8 @@
 set -euo pipefail
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
+GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
+GITHUB_API_BASE="https://api.github.com/repos/$OWNER_REPO"
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
@@ -31,12 +33,68 @@ detect_target_dir() {
 }
 
 TARGET_DIR="$(detect_target_dir "${1:-}")"
+TARGET_ENV_FILE="$TARGET_DIR/monitoring.env"
+
+if [ -z "$GITHUB_TOKEN" ] && [ -f "$TARGET_ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  source "$TARGET_ENV_FILE"
+  GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
+fi
+
+curl_github() {
+  local accept_header="${1:-application/vnd.github+json}"
+  shift || true
+  if [ -n "$GITHUB_TOKEN" ]; then
+    curl -fsSL --retry 5 --retry-delay 1 \
+      -H "Authorization: Bearer $GITHUB_TOKEN" \
+      -H "Accept: $accept_header" \
+      -H "X-GitHub-Api-Version: 2022-11-28" \
+      -H "User-Agent: monitoring-pull-server-only" \
+      "$@"
+  else
+    curl -fsSL --retry 5 --retry-delay 1 \
+      -H "Accept: $accept_header" \
+      -H "User-Agent: monitoring-pull-server-only" \
+      "$@"
+  fi
+}
+
+download_repo_file() {
+  local source_path="$1"
+  local target_path="$2"
+  local api_url="$GITHUB_API_BASE/contents/$source_path?ref=$SHA"
+  mkdir -p "$(dirname "$target_path")"
+
+  if [ -n "$GITHUB_TOKEN" ]; then
+    curl_github "application/vnd.github.raw" "$api_url" -o "$target_path"
+  else
+    curl_github "application/octet-stream" "$RAW_BASE/$source_path" -o "$target_path"
+  fi
+}
+
+print_private_repo_hint() {
+  cat >&2 <<'EOF'
+Private GitHub repo detected or anonymous access blocked.
+Provide a token via one of these variables before running pull-server-only.sh:
+  export MONITORING_GITHUB_TOKEN=ghp_xxx
+  export GITHUB_TOKEN=ghp_xxx
+  export GH_TOKEN=ghp_xxx
+
+Alternative: store MONITORING_GITHUB_TOKEN in monitoring.env on the server.
+EOF
+}
 
 echo "Installiere Serverteil nach: $TARGET_DIR"
 
 mkdir -p "$TARGET_DIR/server/static/icons" "$TARGET_DIR/server/data" "$TARGET_DIR/updates/client/windows" "$TARGET_DIR/updates/client/linux"
 
-COMMIT_META_JSON="$(curl -fsSL --retry 5 --retry-delay 1 "https://api.github.com/repos/$OWNER_REPO/commits/main")"
+if ! COMMIT_META_JSON="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE/commits/main")"; then
+  echo "Konnte Commit-Metadaten von GitHub nicht laden." >&2
+  if [ -z "$GITHUB_TOKEN" ]; then
+    print_private_repo_hint
+  fi
+  exit 1
+fi
 
 SHA="$(printf '%s\n' "$COMMIT_META_JSON" \
   | sed -n 's/.*"sha":[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' \
@@ -62,8 +120,7 @@ RAW_BASE="https://raw.githubusercontent.com/$OWNER_REPO/$SHA"
 download_file() {
     local source_path="$1"
     local target_path="$2"
-    mkdir -p "$(dirname "$target_path")"
-    if curl -fsSL --retry 5 --retry-delay 1 "$RAW_BASE/$source_path" -o "$target_path"; then
+  if download_repo_file "$source_path" "$target_path"; then
     local file_size_bytes=""
     local file_size_human=""
     file_size_bytes="$(wc -c < "$target_path" 2>/dev/null | tr -d ' ' || echo "")"
@@ -114,7 +171,7 @@ verify_synced_file() {
   fi
 
   tmp_verify="$(mktemp)"
-  if ! curl -fsSL --retry 5 --retry-delay 1 "$RAW_BASE/$source_path" -o "$tmp_verify"; then
+  if ! download_repo_file "$source_path" "$tmp_verify"; then
     echo "✗ VERIFY: $source_path (Remote-Download fehlgeschlagen)" >&2
     rm -f "$tmp_verify"
     return 1
@@ -143,7 +200,7 @@ verify_synced_file() {
 }
 
 export -f download_file
-export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME
+export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE SHA OWNER_REPO
 
 FILES_LIST="
 server/receiver.py
@@ -211,7 +268,7 @@ else
   echo "WARNUNG: Konnte neue pull-server-only.sh nicht laden." >&2
 fi
 
-ICONS_API="https://api.github.com/repos/$OWNER_REPO/contents/server/static/icons?ref=$SHA"
+ICONS_API="$GITHUB_API_BASE/contents/server/static/icons?ref=$SHA"
 TMP_DIR="$(mktemp -d)"
 cleanup() {
   rm -rf "$TMP_DIR"
@@ -219,11 +276,13 @@ cleanup() {
 trap cleanup EXIT
 
 ICONS_JSON="$TMP_DIR/icons.json"
-curl -fsSL --retry 5 --retry-delay 1 \
-  -H "Accept: application/vnd.github+json" \
-  -H "User-Agent: monitoring-pull-server-only" \
-  "$ICONS_API" \
-  -o "$ICONS_JSON"
+if ! curl_github "application/vnd.github+json" "$ICONS_API" -o "$ICONS_JSON"; then
+  echo "Konnte die Icon-Liste von GitHub nicht laden." >&2
+  if [ -z "$GITHUB_TOKEN" ]; then
+    print_private_repo_hint
+  fi
+  exit 1
+fi
 
 ICON_NAMES_FILE="$TMP_DIR/icon_names.txt"
 grep -o '"name":[[:space:]]*"[^"]*\.png"' "$ICONS_JSON" \
@@ -244,7 +303,7 @@ echo "Icons geladen ✓"
 echo "$SHA" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
 DEPLOY_TIME="$(date '+%d.%m.%y %H:%M')"
 
-LATEST_META_AFTER="$(curl -fsSL --retry 5 --retry-delay 1 "https://api.github.com/repos/$OWNER_REPO/commits/main")"
+LATEST_META_AFTER="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE/commits/main" || true)"
 LATEST_SHA_AFTER="$(printf '%s\n' "$LATEST_META_AFTER" \
   | sed -n 's/.*"sha":[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' \
   | head -n 1)"
@@ -294,11 +353,12 @@ if [ ! -f "$ENV_FILE" ]; then
 # Diese Datei bleibt nur auf dem Server und kommt NIE ins Git!
 MONITORING_API_KEY=HIER_API_KEY_EINTRAGEN
 MONITORING_API_KEY_GRACE_ALLOW_KNOWN_HOSTS=0
+MONITORING_GITHUB_TOKEN=HIER_GITHUB_TOKEN_EINTRAGEN
 # MONITORING_SCHEDULE_TIMEZONE=Europe/Zurich
 EOF
     chmod 600 "$ENV_FILE"
     echo "EnvironmentFile angelegt: $ENV_FILE"
-    echo "  --> Bitte den API-Key dort eintragen!"
+    echo "  --> Bitte API-Key und GitHub-Token dort eintragen!"
 else
     echo "EnvironmentFile bereits vorhanden: $ENV_FILE (unveraendert)"
 fi
