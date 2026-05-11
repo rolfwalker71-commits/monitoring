@@ -297,6 +297,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.4.70 (11. Mai 2026)
+
+- **HANA AddOn-Parser tolerant gemacht**: CSV-Extraktion faellt jetzt bei Mischformaten automatisch auf die Zeilenlogik zurueck, damit echte AddOn-Daten nicht mehr im `parse_failed` landen.
+- **Ziel**: die bereits wieder ankommenden Daten auch bei leicht variierendem hdbsql-Output sauber als AddOns erfassen.
+
 ### v1.4.69 (11. Mai 2026)
 
 - **1.4.42-Mehrfach-Commit Abgleich umgesetzt**: HANA-Abfragepfad wurde gegen die originale 1.4.42-Kette abgeglichen und robust gemacht.

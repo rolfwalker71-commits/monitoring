@@ -700,7 +700,7 @@ collect_hana_addons_json() {
         local name=""
         local version=""
         [[ -z "$record" ]] && continue
-        if [[ "$record" =~ ^\"([^"]*)\",\"([^"]*)\"$ ]]; then
+        if [[ "$record" =~ \"([^\"]*)\",\"([^\"]*)\" ]]; then
           name="${BASH_REMATCH[1]}"
           version="${BASH_REMATCH[2]}"
         else
@@ -718,7 +718,9 @@ collect_hana_addons_json() {
         entry="$(printf '{"name":"%s","version":"%s"}' "$(json_escape "$name")" "$(json_escape "$version")")"
         lightweight_entries="$(append_hana_addon_json_entry "$lightweight_entries" "$entry")"
       done <<< "$csv_matches"
-    else
+    fi
+
+    if [[ -z "$lightweight_entries" ]]; then
       while IFS= read -r line; do
         local parsed_row=""
         local name=""
@@ -761,7 +763,7 @@ collect_hana_addons_json() {
         local aname=""
         local addonver=""
         [[ -z "$record" ]] && continue
-        if [[ "$record" =~ ^\"([^"]*)\",\"([^"]*)\"$ ]]; then
+        if [[ "$record" =~ \"([^\"]*)\",\"([^\"]*)\" ]]; then
           aname="${BASH_REMATCH[1]}"
           addonver="${BASH_REMATCH[2]}"
         else
@@ -779,7 +781,9 @@ collect_hana_addons_json() {
         entry="$(printf '{"name":"%s","version":"%s"}' "$(json_escape "$aname")" "$(json_escape "$addonver")")"
         legacy_entries="$(append_hana_addon_json_entry "$legacy_entries" "$entry")"
       done <<< "$csv_matches"
-    else
+    fi
+
+    if [[ -z "$legacy_entries" ]]; then
       while IFS= read -r line; do
         local parsed_row=""
         local aname=""
