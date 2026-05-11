@@ -2485,6 +2485,30 @@ def _extract_sap_addon_snapshot(payload: dict) -> dict[str, str]:
 
     snapshot: dict[str, str] = {}
 
+    def _clean_text(value: object) -> str:
+        text = str(value or "").strip()
+        if text.startswith('"') and text.endswith('"') and len(text) >= 2:
+            text = text[1:-1].strip()
+        return text
+
+    def _normalize_pair(name_value: object, version_value: object) -> tuple[str, str]:
+        name = _clean_text(name_value)
+        version = _clean_text(version_value)
+
+        # Some collectors delivered combined CSV-like pairs in the name field:
+        #   "Addon Name","1.2.3"
+        # Normalize those into clean name/version values.
+        if (not version or version in {"?", "-"}) and name.startswith('"') and '\",\"' in name and name.endswith('"'):
+            parts = name.split('\",\"', 1)
+            left = parts[0].lstrip('"').strip()
+            right = parts[1].rstrip('"').strip()
+            name = left
+            version = right or version
+
+        name = _clean_text(name)
+        version = _clean_text(version)
+        return name, (version or "-")
+
     ext_block = sap_block.get("extensions")
     ext_rows = ext_block.get("rows") if isinstance(ext_block, dict) else []
     if not isinstance(ext_rows, list):
@@ -2492,10 +2516,9 @@ def _extract_sap_addon_snapshot(payload: dict) -> dict[str, str]:
     for row in ext_rows:
         if not isinstance(row, dict):
             continue
-        addon_name = str(row.get("AddOnName") or "").strip()
+        addon_name, addon_version = _normalize_pair(row.get("AddOnName"), row.get("Version"))
         if not addon_name:
             continue
-        addon_version = str(row.get("Version") or "").strip() or "-"
         snapshot[f"extensions::{addon_name}"] = addon_version
 
     sari_block = sap_block.get("sari_addons")
@@ -2505,11 +2528,34 @@ def _extract_sap_addon_snapshot(payload: dict) -> dict[str, str]:
     for row in sari_rows:
         if not isinstance(row, dict):
             continue
-        addon_name = str(row.get("AName") or "").strip()
+        addon_name, addon_version = _normalize_pair(row.get("AName"), row.get("AddOnVer"))
         if not addon_name:
             continue
-        addon_version = str(row.get("AddOnVer") or "").strip() or "-"
         snapshot[f"sari::{addon_name}"] = addon_version
+
+    hana_block = payload.get("hana_addons") if isinstance(payload, dict) else None
+    if isinstance(hana_block, dict):
+        hana_lw_rows = hana_block.get("lightweight")
+        if not isinstance(hana_lw_rows, list):
+            hana_lw_rows = []
+        for row in hana_lw_rows:
+            if not isinstance(row, dict):
+                continue
+            addon_name, addon_version = _normalize_pair(row.get("name"), row.get("version"))
+            if not addon_name:
+                continue
+            snapshot[f"hana_extensions::{addon_name}"] = addon_version
+
+        hana_legacy_rows = hana_block.get("legacy")
+        if not isinstance(hana_legacy_rows, list):
+            hana_legacy_rows = []
+        for row in hana_legacy_rows:
+            if not isinstance(row, dict):
+                continue
+            addon_name, addon_version = _normalize_pair(row.get("name"), row.get("version"))
+            if not addon_name:
+                continue
+            snapshot[f"hana_sari::{addon_name}"] = addon_version
 
     return snapshot
 
@@ -2562,6 +2608,12 @@ def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit:
                 elif addon_name.startswith("sari::"):
                     plain_name = addon_name.split("::", 1)[1]
                     label_source = "Legacy"
+                elif addon_name.startswith("hana_extensions::"):
+                    plain_name = addon_name.split("::", 1)[1]
+                    label_source = "HANA LW"
+                elif addon_name.startswith("hana_sari::"):
+                    plain_name = addon_name.split("::", 1)[1]
+                    label_source = "HANA Legacy"
 
                 display_override = str(row[4] or "").strip()
                 country_code = normalize_country_code(str(row[5] or ""))

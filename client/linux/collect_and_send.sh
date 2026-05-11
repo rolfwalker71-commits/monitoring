@@ -389,20 +389,44 @@ collect_hana_addons_json() {
   else
     lightweight_output="$(su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"NAME\\\", \\\"Version\\\" FROM \\\"SLDDATA\\\".\\\"EXTENSIONS\\\";\" 2>&1" || true)"
   fi
-  # Remove hdbsql footer line (e.g., "27 rows selected (overall time...)")
-  lightweight_output="$(printf '%s' "$lightweight_output" | grep -v 'rows selected' || true)"
-
-  # Parse lightweight output (pipe-delimited: NAME|Version, skip header row)
-  # Remove JSON quotes and trailing decimals from hdbsql output
+  # Parse lightweight output.
+  # Supports both hdbsql formats seen in the field:
+  #   - pipe-delimited: NAME|Version
+  #   - CSV-like:       "NAME","Version"
   if [[ -n "$lightweight_output" ]]; then
-    while IFS='|' read -r name version; do
-      # Skip empty lines and header row
-      if [[ -z "$name" ]] || [[ "$name" == *"NAME"* ]]; then
+    while IFS= read -r line; do
+      local name=""
+      local version=""
+
+      line="$(printf '%s' "$line" | tr -d '\r' | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+      [[ -z "$line" ]] && continue
+
+      # Skip headers, separators and hdbsql timing/status lines.
+      if [[ "$line" =~ [Rr]ows[[:space:]]+selected ]] || [[ "$line" =~ [Oo]verall[[:space:]]+time ]] || [[ "$line" =~ [Ss]erver[[:space:]]+time ]] || [[ "$line" =~ ^[-=]+$ ]]; then
         continue
       fi
+
+      if [[ "$line" == *"|"* ]]; then
+        IFS='|' read -r name version _ <<< "$line"
+      elif [[ "$line" =~ ^\"(.*)\",\"(.*)\"$ ]]; then
+        name="${BASH_REMATCH[1]}"
+        version="${BASH_REMATCH[2]}"
+      elif [[ "$line" =~ ^([^,]+),(.+)$ ]]; then
+        name="${BASH_REMATCH[1]}"
+        version="${BASH_REMATCH[2]}"
+      else
+        continue
+      fi
+
       # Trim whitespace and remove surrounding quotes
       name="$(printf '%s' "$name" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
       version="$(printf '%s' "$version" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
+
+      # Skip header rows
+      if [[ -z "$name" ]] || [[ "$name" == "NAME" ]] || [[ "$version" == "Version" ]]; then
+        continue
+      fi
+
       if [[ -n "$name" ]]; then
         local entry
         entry="$(printf '{"name":"%s","version":"%s"}' "$(json_escape "$name")" "$(json_escape "$version")")"
@@ -419,20 +443,44 @@ collect_hana_addons_json() {
   else
     legacy_output="$(su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"SELECT \\\"AName\\\", \\\"AddOnVer\\\" FROM \\\"SBOCOMMON\\\".\\\"SARI\\\";\" 2>&1" || true)"
   fi
-  # Remove hdbsql footer line (e.g., "4 rows selected (overall time...)")
-  legacy_output="$(printf '%s' "$legacy_output" | grep -v 'rows selected' || true)"
-
-  # Parse legacy output (pipe-delimited: AName|AddOnVer, skip header row)
-  # Remove JSON quotes from hdbsql output
+  # Parse legacy output.
+  # Supports both hdbsql formats seen in the field:
+  #   - pipe-delimited: AName|AddOnVer
+  #   - CSV-like:       "AName","AddOnVer"
   if [[ -n "$legacy_output" ]]; then
-    while IFS='|' read -r aname addonver; do
-      # Skip empty lines and header row
-      if [[ -z "$aname" ]] || [[ "$aname" == *"AName"* ]]; then
+    while IFS= read -r line; do
+      local aname=""
+      local addonver=""
+
+      line="$(printf '%s' "$line" | tr -d '\r' | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+      [[ -z "$line" ]] && continue
+
+      # Skip headers, separators and hdbsql timing/status lines.
+      if [[ "$line" =~ [Rr]ows[[:space:]]+selected ]] || [[ "$line" =~ [Oo]verall[[:space:]]+time ]] || [[ "$line" =~ [Ss]erver[[:space:]]+time ]] || [[ "$line" =~ ^[-=]+$ ]]; then
         continue
       fi
+
+      if [[ "$line" == *"|"* ]]; then
+        IFS='|' read -r aname addonver _ <<< "$line"
+      elif [[ "$line" =~ ^\"(.*)\",\"(.*)\"$ ]]; then
+        aname="${BASH_REMATCH[1]}"
+        addonver="${BASH_REMATCH[2]}"
+      elif [[ "$line" =~ ^([^,]+),(.+)$ ]]; then
+        aname="${BASH_REMATCH[1]}"
+        addonver="${BASH_REMATCH[2]}"
+      else
+        continue
+      fi
+
       # Trim whitespace and remove surrounding quotes
       aname="$(printf '%s' "$aname" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
       addonver="$(printf '%s' "$addonver" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
+
+      # Skip header rows
+      if [[ -z "$aname" ]] || [[ "$aname" == "AName" ]] || [[ "$addonver" == "AddOnVer" ]]; then
+        continue
+      fi
+
       if [[ -n "$aname" ]]; then
         local entry
         entry="$(printf '{"name":"%s","version":"%s"}' "$(json_escape "$aname")" "$(json_escape "$addonver")")"
