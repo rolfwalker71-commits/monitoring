@@ -4433,6 +4433,9 @@ function renderSapB1CombinedCard(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const versionBlock = sap && typeof sap.server_components_version === "object" ? sap.server_components_version : null;
   const rawOutput = asText(versionBlock?.raw_output, "");
+  const osField = asText(payload?.os, "").toLowerCase();
+  const isWindows = osField.includes("windows");
+  const isLinux = osField.includes("linux");
 
   // Files / Ordner section
   let filesContent;
@@ -4493,26 +4496,32 @@ function renderSapB1CombinedCard(payload) {
         ${renderSapB1ExtensionsSection(payload)}
       </details>
 
+      ${isLinux ? `
       <details class="sap-b1-raw-details">
         <summary class="sap-b1-raw-summary">SAP Business One Files / Ordner</summary>
         ${filesContent}
       </details>
+      ` : ""}
 
       <details class="sap-b1-raw-details">
         <summary class="sap-b1-raw-summary">SAP B1 Setup Roh-Output</summary>
         <pre class="sap-b1-raw-output">${escapeHtml(rawOutput || "-")}</pre>
       </details>
 
+      ${isLinux ? `
       <details class="sap-b1-raw-details">
         <summary class="sap-b1-raw-summary">HANA Versions-Scan</summary>
         ${hanaInfoRows}
         ${hanaRawOutput ? `<pre class="sap-b1-raw-output">${escapeHtml(hanaRawOutput)}</pre>` : ""}
       </details>
+      ` : ""}
 
+        ${isWindows ? `
         <details class="sap-b1-raw-details">
           <summary class="sap-b1-raw-summary">Harvest SQL-Benutzer Status</summary>
           ${renderHarvestStatusSection(payload)}
         </details>
+        ` : ""}
 
       <details class="sap-b1-raw-details">
         <summary class="sap-b1-raw-summary">
