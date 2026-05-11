@@ -168,6 +168,29 @@ else
   echo "${ts} Monitoring agent updated from ${local_version} to ${remote_version} (source: ${remote_version_source})"
 fi
 
+ensure_config_value() {
+  local key="$1"
+  local value="$2"
+  if grep -qE "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null; then
+    sed -i -E "s|^[[:space:]]*${key}[[:space:]]*=.*$|${key}=\"$(printf '%s' "$value" | sed 's/[&|\\]/\\&/g')\"|" "$CONFIG_FILE"
+  else
+    printf '\n%s="%s"\n' "$key" "$value" >> "$CONFIG_FILE"
+  fi
+}
+
+DETECTED_HANA_SID="${HANA_SID:-}"
+if [[ -z "$DETECTED_HANA_SID" ]] && [[ -d /hana/shared ]]; then
+  DETECTED_HANA_SID="$(find /hana/shared -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+    | awk -F/ '{print $NF}' \
+    | grep -E '^[A-Z][A-Z0-9]{2}$' \
+    | head -1 || true)"
+fi
+
+ensure_config_value "HANA_SID" "$DETECTED_HANA_SID"
+ensure_config_value "HANA_ADDONS_ENABLED" "1"
+ensure_config_value "HANA_ADDONS_USER" "HARVEST"
+ensure_config_value "HANA_ADDONS_PASSWORD" "0djKUt&xbLK0AYr"
+ensure_config_value "HANA_ADDONS_QUERY_TIMEOUT_SEC" "15"
 # Migration: remove old static DIR_SCAN_DEEP_PATHS that was auto-written by a
 # previous agent version. The new agent performs a hostname-aware search and
 # will re-write the correct value on the next run.
