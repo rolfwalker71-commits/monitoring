@@ -399,6 +399,25 @@ collect_hana_addons_json() {
     printf '%s' "${target_entries:+$target_entries,}$entry_json"
   }
 
+  summarize_hdbsql_output_for_diagnostics() {
+    local raw_text="${1-}"
+    local lines=""
+    lines="$(printf '%s\n' "$raw_text" \
+      | tr -d '\r' \
+      | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+      | grep -vE '^(|[-=]+)$' \
+      | grep -viE 'rows selected|overall time|server time|^name[[:space:]]+version$|^aname[[:space:]]+addonver$' \
+      | head -n 3 \
+      | tr '\n' '|' \
+      | sed -e 's/|$//' || true)"
+
+    if [[ -z "$lines" ]]; then
+      printf 'no-sample-lines'
+      return
+    fi
+    printf '%s' "$lines"
+  }
+
   detect_hdbsql_error_line() {
     local raw_text="${1-}"
     local first_error=""
@@ -619,7 +638,10 @@ collect_hana_addons_json() {
       fi
     elif [[ -n "${lightweight_output:-}" ]] || [[ -n "${legacy_output:-}" ]]; then
       reason="parse_failed"
-      error_msg="hdbsql output vorhanden, aber keine AddOn-Zeilen erkannt"
+      local lw_sample lg_sample
+      lw_sample="$(summarize_hdbsql_output_for_diagnostics "${lightweight_output:-}")"
+      lg_sample="$(summarize_hdbsql_output_for_diagnostics "${legacy_output:-}")"
+      error_msg="hdbsql output vorhanden, aber keine AddOn-Zeilen erkannt; LW=[${lw_sample}] LEG=[${lg_sample}]"
     else
       reason="empty_result"
       error_msg="Keine AddOns gefunden"

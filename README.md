@@ -297,6 +297,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.4.60 (11. Mai 2026)
+
+- **Parse-Failed Diagnose erweitert**: Bei `reason=parse_failed` liefert der Linux-Agent jetzt ein kurzes hdbsql-Snippet (`LW`/`LEG`) im Fehlertext, damit das konkrete Rohformat direkt im UI sichtbar wird.
+
 ### v1.4.59 (11. Mai 2026)
 
 - **Linux HANA AddOn Parser erweitert**: Fallback erkennt jetzt zusaetzlich tabellarische (`Mehrfach-Whitespace`) und `;`-getrennte hdbsql-Zeilen.
