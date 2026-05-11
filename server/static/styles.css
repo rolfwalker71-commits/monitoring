@@ -4763,7 +4763,12 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   font-size: 10px;
   color: #64748b;
   transition: transform 0.18s ease;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  transform-origin: center;
 }
 
 .cron-details[open] summary::before {
@@ -4845,7 +4850,12 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   font-size: 10px;
   color: #64748b;
   transition: transform 0.18s ease;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  transform-origin: center;
 }
 
 .sap-b1-raw-details[open] .sap-b1-raw-summary::before {
@@ -6539,6 +6549,12 @@ body[data-theme="dark"] .dir-deep-subdir-title::before {
   font-size: 11px;
   margin-right: 2px;
   transition: transform 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  transform-origin: center;
 }
 
 .backup-host-details[open] > summary::before {

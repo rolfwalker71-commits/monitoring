@@ -4299,7 +4299,7 @@ function renderSapB1ExtensionsSection(payload) {
   }
 
   return `
-    <details class="sap-b1-raw-details sap-b1-sub-details" open>
+    <details class="sap-b1-raw-details sap-b1-sub-details">
       <summary class="sap-b1-raw-summary">Lightweight Extensions (SQL)</summary>
       ${extContent}
     </details>
@@ -4308,7 +4308,7 @@ function renderSapB1ExtensionsSection(payload) {
       ${sariContent}
     </details>
     ${hanaAddons ? `
-    <details class="sap-b1-raw-details sap-b1-sub-details" open>
+    <details class="sap-b1-raw-details sap-b1-sub-details">
       <summary class="sap-b1-raw-summary">Lightweight Extensions (HANA)</summary>
       ${hanaLightweightContent}
     </details>
