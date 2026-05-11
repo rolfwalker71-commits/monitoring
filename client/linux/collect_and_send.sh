@@ -464,7 +464,10 @@ collect_hana_addons_json() {
     local implicit_output=""
     local explicit_output=""
     local alt_port=""
+    local alt_host=""
     local alt_output=""
+    local probe_hosts_csv=""
+    local probe_host_list=""
 
     sql_escaped="$(printf '%q' "$sql_text")"
 
@@ -491,24 +494,48 @@ collect_hana_addons_json() {
 
     # If explicit host:port fails, try runtime local 3xx15 probe.
     if is_hdbsql_connection_error "$explicit_output"; then
-      if [[ "$addons_host" == "127.0.0.1" || "$addons_host" == "localhost" ]] && [[ "$addons_port" == "30015" ]]; then
-        while IFS= read -r alt_port; do
-          [[ -z "$alt_port" ]] && continue
-          [[ "$alt_port" == "30015" ]] && continue
+      probe_hosts_csv="$addons_host,127.0.0.1,localhost,$(hostname -f 2>/dev/null || true),$(hostname 2>/dev/null || true)"
+      probe_host_list="$(printf '%s' "$probe_hosts_csv" | tr ',' '\n' | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//' | awk 'NF>0' | awk '!seen[$0]++')"
+
+      while IFS= read -r alt_port; do
+        [[ -z "$alt_port" ]] && continue
+        while IFS= read -r alt_host; do
+          [[ -z "$alt_host" ]] && continue
           if command -v timeout >/dev/null 2>&1; then
-            alt_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -n \"${addons_host}:${alt_port}\" -u \"$addons_user\" -p \"$addons_password\" $sql_escaped 2>&1" || true)"
+            alt_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -n \"${alt_host}:${alt_port}\" -u \"$addons_user\" -p \"$addons_password\" $sql_escaped 2>&1" || true)"
           else
-            alt_output="$(su - "$sid_user" -c "hdbsql -n \"${addons_host}:${alt_port}\" -u \"$addons_user\" -p \"$addons_password\" $sql_escaped 2>&1" || true)"
+            alt_output="$(su - "$sid_user" -c "hdbsql -n \"${alt_host}:${alt_port}\" -u \"$addons_user\" -p \"$addons_password\" $sql_escaped 2>&1" || true)"
           fi
           if [[ -n "$alt_output" ]] && ! is_hdbsql_connection_error "$alt_output"; then
+            addons_host="$alt_host"
             addons_port="$alt_port"
             hdbsql_target="${addons_host}:${addons_port}"
-            last_hdbsql_mode="auto_port_probe_${alt_port}"
+            last_hdbsql_mode="auto_probe_${alt_host}_${alt_port}"
             printf '%s' "$alt_output"
             return
           fi
-        done < <(ss -lntH 2>/dev/null | awk '{print $4}' | sed -E 's/.*:([0-9]+)$/\1/' | grep -E '^3[0-9]{2}15$' | sort -u || true)
-      fi
+        done <<< "$probe_host_list"
+      done < <(ss -lntH 2>/dev/null | awk '{print $4}' | sed -E 's/.*:([0-9]+)$/\1/' | grep -E '^3[0-9]{2}15$' | sort -u || true)
+
+      # Last fallback: probe common HANA SQL ports (3xx15) even if ss is unavailable.
+      for alt_port in 30015 30115 30215 30315 30415 30515 30615 30715 30815 30915 31015 31115 31215 31315 31415 31515 31615 31715 31815 31915 32015 32115 32215 32315 32415 32515 32615 32715 32815 32915 33015 33115 33215 33315 33415 33515 33615 33715 33815 33915 34015 34115 34215 34315 34415 34515 34615 34715 34815 34915 35015 35115 35215 35315 35415 35515 35615 35715 35815 35915 36015 36115 36215 36315 36415 36515 36615 36715 36815 36915 37015 37115 37215 37315 37415 37515 37615 37715 37815 37915 38015 38115 38215 38315 38415 38515 38615 38715 38815 38915 39015 39115 39215 39315 39415 39515 39615 39715 39815 39915; do
+        while IFS= read -r alt_host; do
+          [[ -z "$alt_host" ]] && continue
+          if command -v timeout >/dev/null 2>&1; then
+            alt_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -n \"${alt_host}:${alt_port}\" -u \"$addons_user\" -p \"$addons_password\" $sql_escaped 2>&1" || true)"
+          else
+            alt_output="$(su - "$sid_user" -c "hdbsql -n \"${alt_host}:${alt_port}\" -u \"$addons_user\" -p \"$addons_password\" $sql_escaped 2>&1" || true)"
+          fi
+          if [[ -n "$alt_output" ]] && ! is_hdbsql_connection_error "$alt_output"; then
+            addons_host="$alt_host"
+            addons_port="$alt_port"
+            hdbsql_target="${addons_host}:${addons_port}"
+            last_hdbsql_mode="auto_probe_common_${alt_host}_${alt_port}"
+            printf '%s' "$alt_output"
+            return
+          fi
+        done <<< "$probe_host_list"
+      done
     fi
 
     printf '%s' "$explicit_output"
@@ -528,7 +555,53 @@ collect_hana_addons_json() {
       target_open="yes"
     fi
 
-    printf 'listener_target=%s; listeners_3xx15=%s; sid=%s' "$target_open" "$listeners_csv" "${sid:-}"
+    printf 'listener_target=%s; listeners_3xx15=%s; sid=%s; target=%s' "$target_open" "$listeners_csv" "${sid:-}" "$hdbsql_target"
+  }
+
+  is_hdbsql_invalid_column_error() {
+    local raw_text="${1-}"
+    if printf '%s\n' "$raw_text" | grep -qiE 'invalid column name'; then
+      return 0
+    fi
+    return 1
+  }
+
+  run_hdbsql_query_candidates() {
+    local query_group="${1-}"
+    local output=""
+    local err_line=""
+    local selected_mode=""
+    local q=""
+    local -a queries=()
+
+    if [[ "$query_group" == "lightweight" ]]; then
+      queries=(
+        'SELECT "NAME", "Version" FROM "SLDDATA"."EXTENSIONS";'
+        'SELECT "NAME", "VERSION" FROM "SLDDATA"."EXTENSIONS";'
+        'SELECT NAME, VERSION FROM "SLDDATA"."EXTENSIONS";'
+      )
+    else
+      queries=(
+        'SELECT "AName", "AddOnVer" FROM "SBOCOMMON"."SARI";'
+        'SELECT "ANAME", "ADDONVER" FROM "SBOCOMMON"."SARI";'
+        'SELECT ANAME, ADDONVER FROM "SBOCOMMON"."SARI";'
+      )
+    fi
+
+    for q in "${queries[@]}"; do
+      output="$(run_hdbsql_query "$q")"
+      selected_mode="$last_hdbsql_mode"
+      err_line="$(detect_hdbsql_error_line "$output" || true)"
+      if [[ -n "$err_line" ]] && is_hdbsql_invalid_column_error "$err_line"; then
+        continue
+      fi
+      printf '%s' "$output"
+      last_hdbsql_mode="$selected_mode"
+      return
+    done
+
+    # Return output of last candidate if all variants failed.
+    printf '%s' "$output"
   }
 
   # Auto-detect SID if not set
@@ -604,7 +677,7 @@ collect_hana_addons_json() {
   # Try Lightweight query: SELECT "NAME", "Version" FROM "SLDDATA"."EXTENSIONS"
   local lightweight_output=""
   local lightweight_error=""
-  lightweight_output="$(run_hdbsql_query "SELECT \"NAME\", \"Version\" FROM \"SLDDATA\".\"EXTENSIONS\";")"
+  lightweight_output="$(run_hdbsql_query_candidates "lightweight")"
   lw_mode="$last_hdbsql_mode"
   # Parse lightweight output.
   # Supports both hdbsql formats seen in the field:
@@ -667,7 +740,7 @@ collect_hana_addons_json() {
   # Try Legacy query: SELECT "AName", "AddOnVer" FROM "SBOCOMMON"."SARI"
   local legacy_output=""
   local legacy_error=""
-  legacy_output="$(run_hdbsql_query "SELECT \"AName\", \"AddOnVer\" FROM \"SBOCOMMON\".\"SARI\";")"
+  legacy_output="$(run_hdbsql_query_candidates "legacy")"
   lg_mode="$last_hdbsql_mode"
   # Parse legacy output.
   # Supports both hdbsql formats seen in the field:
