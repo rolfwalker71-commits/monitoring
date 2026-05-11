@@ -58,6 +58,12 @@ let autoRefreshCountdownTimerId = null;
 const state = {
   hostLimit: 500,
   hostOffset: 0,
+  reportLimit: 1,
+  reportOffset: 0,
+  totalReports: 0,
+  currentReport: null,
+  reportSection: "overview",
+  analysisHours: 24,
   hosts: [],
   totalHosts: 0,
   selectedHost: "",
@@ -4205,18 +4211,21 @@ function renderSapB1ExtensionsSection(payload) {
   if (rows.length > 0) {
     const bodyHtml = rows.map((row) => {
       const pair = normalizeAddonPair(row?.AddOnName, row?.Version);
+      if (!pair.name) return "";
       const addOnName = escapeHtml(pair.name);
-      const version = escapeHtml(pair.version);
+      const version = escapeHtml(pair.version || "-");
       return `<tr><td>${addOnName}</td><td>${version}</td></tr>`;
-    }).join("");
-    extContent = `
-      <div class="table-wrap">
-        <table class="report-subtable">
-          <thead><tr><th>AddOnName</th><th>Version</th></tr></thead>
-          <tbody>${bodyHtml}</tbody>
-        </table>
-      </div>
-    `;
+    }).filter(Boolean).join("");
+    if (bodyHtml) {
+      extContent = `
+        <div class="table-wrap">
+          <table class="report-subtable">
+            <thead><tr><th>AddOnName</th><th>Version</th></tr></thead>
+            <tbody>${bodyHtml}</tbody>
+          </table>
+        </div>
+      `;
+    }
   }
 
   // SQL B1: Legacy AddOns
@@ -4228,18 +4237,21 @@ function renderSapB1ExtensionsSection(payload) {
   if (sariRows.length > 0) {
     const sariBodyHtml = sariRows.map((row) => {
       const pair = normalizeAddonPair(row?.AName, row?.AddOnVer);
+      if (!pair.name) return "";
       const addOnName = escapeHtml(pair.name);
-      const version = escapeHtml(pair.version);
+      const version = escapeHtml(pair.version || "-");
       return `<tr><td>${addOnName}</td><td>${version}</td></tr>`;
-    }).join("");
-    sariContent = `
-      <div class="table-wrap">
-        <table class="report-subtable">
-          <thead><tr><th>AName</th><th>AddOnVer</th></tr></thead>
-          <tbody>${sariBodyHtml}</tbody>
-        </table>
-      </div>
-    `;
+    }).filter(Boolean).join("");
+    if (sariBodyHtml) {
+      sariContent = `
+        <div class="table-wrap">
+          <table class="report-subtable">
+            <thead><tr><th>AName</th><th>AddOnVer</th></tr></thead>
+            <tbody>${sariBodyHtml}</tbody>
+          </table>
+        </div>
+      `;
+    }
   } else if (sariError) {
     sariContent = `<p class="muted">SARI-Check gelaufen, aber keine Daten gefunden. Fehler: ${escapeHtml(sariError)}</p>`;
   } else if (sariAddons) {
@@ -4253,21 +4265,26 @@ function renderSapB1ExtensionsSection(payload) {
   // HANA: Lightweight Extensions
   const hanaLightweight = Array.isArray(hanaAddons?.lightweight) ? hanaAddons.lightweight : [];
   let hanaLightweightContent = '<p class="muted">Keine Daten vorhanden.</p>';
-  if (hanaAddons && hanaAddons.available === true && hanaLightweight.length > 0) {
+  if (hanaAddons && hanaLightweight.length > 0) {
     const bodyHtml = hanaLightweight.map((row) => {
       const pair = normalizeAddonPair(row?.name, row?.version);
+      if (!pair.name) return "";
       const name = escapeHtml(pair.name);
-      const version = escapeHtml(pair.version);
+      const version = escapeHtml(pair.version || "-");
       return `<tr><td>${name}</td><td>${version}</td></tr>`;
-    }).join("");
-    hanaLightweightContent = `
-      <div class="table-wrap">
-        <table class="report-subtable">
-          <thead><tr><th>Name</th><th>Version</th></tr></thead>
-          <tbody>${bodyHtml}</tbody>
-        </table>
-      </div>
-    `;
+    }).filter(Boolean).join("");
+    if (bodyHtml) {
+      hanaLightweightContent = `
+        <div class="table-wrap">
+          <table class="report-subtable">
+            <thead><tr><th>Name</th><th>Version</th></tr></thead>
+            <tbody>${bodyHtml}</tbody>
+          </table>
+        </div>
+      `;
+    } else {
+      hanaLightweightContent = '<p class="muted">Extensions gefunden, aber ohne verwertbare Werte.</p>';
+    }
   } else if (hanaAddons && hanaAddons.reason) {
     const reason = asText(hanaAddons.reason, "");
     const error = asText(hanaAddons.error, "");
@@ -4284,21 +4301,26 @@ function renderSapB1ExtensionsSection(payload) {
   // HANA: Legacy AddOns
   const hanaLegacy = Array.isArray(hanaAddons?.legacy) ? hanaAddons.legacy : [];
   let hanaLegacyContent = '<p class="muted">Keine Daten vorhanden.</p>';
-  if (hanaAddons && hanaAddons.available === true && hanaLegacy.length > 0) {
+  if (hanaAddons && hanaLegacy.length > 0) {
     const bodyHtml = hanaLegacy.map((row) => {
       const pair = normalizeAddonPair(row?.name, row?.version);
+      if (!pair.name) return "";
       const name = escapeHtml(pair.name);
-      const version = escapeHtml(pair.version);
+      const version = escapeHtml(pair.version || "-");
       return `<tr><td>${name}</td><td>${version}</td></tr>`;
-    }).join("");
-    hanaLegacyContent = `
-      <div class="table-wrap">
-        <table class="report-subtable">
-          <thead><tr><th>Name</th><th>Version</th></tr></thead>
-          <tbody>${bodyHtml}</tbody>
-        </table>
-      </div>
-    `;
+    }).filter(Boolean).join("");
+    if (bodyHtml) {
+      hanaLegacyContent = `
+        <div class="table-wrap">
+          <table class="report-subtable">
+            <thead><tr><th>Name</th><th>Version</th></tr></thead>
+            <tbody>${bodyHtml}</tbody>
+          </table>
+        </div>
+      `;
+    } else {
+      hanaLegacyContent = '<p class="muted">Legacy AddOns gefunden, aber ohne verwertbare Werte.</p>';
+    }
   } else if (hanaAddons && hanaAddons.reason) {
     const reason = asText(hanaAddons.reason, "");
     const reasonText = {
@@ -4835,24 +4857,50 @@ function cleanAddonCellText(value, fallback = "-") {
     .trim() || fallback;
 }
 
+function isAddonNoiseLine(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!text) return false;
+  return text.includes("rows selected") || text.includes("overall time") || text.includes("server time");
+}
+
 function normalizeAddonPair(primaryValue, secondaryValue) {
-  const primary = cleanAddonCellText(primaryValue, "");
+  const rawPrimary = String(primaryValue ?? "").trim();
   const secondary = cleanAddonCellText(secondaryValue, "");
 
-  if (!secondary && primary.includes(",")) {
-    const splitIndex = primary.indexOf(",");
-    const left = primary.slice(0, splitIndex).trim();
-    const right = primary.slice(splitIndex + 1).trim();
-    return {
-      name: left || primary,
-      version: right,
-    };
+  if (!rawPrimary || isAddonNoiseLine(rawPrimary)) {
+    return { name: "", version: "" };
   }
 
-  return {
-    name: primary,
-    version: secondary,
-  };
+  let name = cleanAddonCellText(rawPrimary, "");
+  let version = secondary;
+
+  if (!version || version === "?" || version === "-") {
+    const normalized = rawPrimary
+      .replace(/^['"]+/, "")
+      .replace(/['"]+$/, "")
+      .replace(/"\s*,\s*"/g, ",")
+      .replace(/"\s*,\s*/g, ",")
+      .replace(/\s*,\s*"/g, ",")
+      .trim();
+
+    if (normalized.includes(",")) {
+      const splitIndex = normalized.indexOf(",");
+      const left = normalized.slice(0, splitIndex).trim();
+      const right = normalized.slice(splitIndex + 1).trim();
+      name = cleanAddonCellText(left, name || "");
+      version = cleanAddonCellText(right, version || "");
+    }
+  }
+
+  if (isAddonNoiseLine(name)) {
+    return { name: "", version: "" };
+  }
+
+  if (version === "?" || !version) {
+    version = "-";
+  }
+
+  return { name, version };
 }
 
 function formatUtcPlus2(value) {
