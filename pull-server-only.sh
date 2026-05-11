@@ -62,11 +62,14 @@ curl_github() {
 download_repo_file() {
   local source_path="$1"
   local target_path="$2"
-  local api_url="$GITHUB_API_BASE/contents/$source_path?ref=$SHA"
+  local api_url="$GITHUB_API_BASE/contents/$source_path?ref=$REF"
+  local api_url_main="$GITHUB_API_BASE/contents/$source_path?ref=main"
   mkdir -p "$(dirname "$target_path")"
 
   if [ -n "$GITHUB_TOKEN" ]; then
-    curl_github "application/vnd.github.raw" "$api_url" -o "$target_path"
+    # Prefer pinned ref, then fallback to main if GitHub API returns not found.
+    curl_github "application/vnd.github.raw" "$api_url" -o "$target_path" \
+      || curl_github "application/vnd.github.raw" "$api_url_main" -o "$target_path"
   else
     curl_github "application/octet-stream" "$RAW_BASE/$source_path" -o "$target_path"
   fi
@@ -96,9 +99,14 @@ if ! COMMIT_META_JSON="$(curl_github "application/vnd.github+json" "$GITHUB_API_
   exit 1
 fi
 
-SHA="$(printf '%s\n' "$COMMIT_META_JSON" \
-  | sed -n 's/.*"sha":[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' \
-  | head -n 1)"
+SHA=""
+if command -v python3 >/dev/null 2>&1; then
+  SHA="$(printf '%s\n' "$COMMIT_META_JSON" | python3 -c 'import json,sys; print((json.load(sys.stdin) or {}).get("sha", ""))' 2>/dev/null || true)"
+fi
+if [ -z "$SHA" ]; then
+  SHA="$(printf '%s\n' "$COMMIT_META_JSON" \
+    | awk 'match($0, /"sha"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"/) { m=substr($0, RSTART, RLENGTH); sub(/^.*"/, "", m); sub(/"$/, "", m); print m; exit }')"
+fi
 
 GITHUB_COMMIT_ISO="$(printf '%s\n' "$COMMIT_META_JSON" \
   | sed -n 's/.*"date":[[:space:]]*"\([0-9T:\-]\+Z\)".*/\1/p' \
@@ -114,6 +122,7 @@ if [ -z "$SHA" ]; then
   exit 1
 fi
 
+REF="$SHA"
 RAW_BASE="https://raw.githubusercontent.com/$OWNER_REPO/$SHA"
 
 # Hilfsfunction fuer parallele downloads
@@ -200,7 +209,7 @@ verify_synced_file() {
 }
 
 export -f download_file download_repo_file checksum_file curl_github
-export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE SHA OWNER_REPO
+export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE SHA REF OWNER_REPO
 
 FILES_LIST="
 server/receiver.py
