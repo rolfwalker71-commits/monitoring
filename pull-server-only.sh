@@ -199,7 +199,7 @@ verify_synced_file() {
   return 1
 }
 
-export -f download_file
+export -f download_file download_repo_file checksum_file curl_github
 export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE SHA OWNER_REPO
 
 FILES_LIST="
