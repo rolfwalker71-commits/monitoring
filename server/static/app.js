@@ -4243,7 +4243,7 @@ function renderSapB1ExtensionsSection(payload) {
   // HANA: Lightweight Extensions
   const hanaLightweight = Array.isArray(hanaAddons?.lightweight) ? hanaAddons.lightweight : [];
   let hanaLightweightContent = '<p class="muted">Keine Daten vorhanden.</p>';
-  if (hanaAddons?.available === true && hanaLightweight.length > 0) {
+  if (hanaAddons && hanaAddons.available === true && hanaLightweight.length > 0) {
     const bodyHtml = hanaLightweight.map((row) => {
       const name = escapeHtml(asText(row?.name, ""));
       const version = escapeHtml(asText(row?.version, ""));
@@ -4257,23 +4257,23 @@ function renderSapB1ExtensionsSection(payload) {
         </table>
       </div>
     `;
-  } else if (hanaAddons?.reason) {
-    const reason = escapeHtml(hanaAddons.reason);
-    const error = escapeHtml(asText(hanaAddons.error, ""));
+  } else if (hanaAddons && hanaAddons.reason) {
+    const reason = asText(hanaAddons.reason, "");
+    const error = asText(hanaAddons.error, "");
     const reasonText = {
       "missing_hana_sid": "HANA SID nicht gefunden",
-      "missing_sid_user": `HANA-Benutzer nicht angelegt`,
+      "missing_sid_user": "HANA-Benutzer nicht angelegt",
       "missing_hdbsql": "hdbsql nicht vorhanden",
       "empty_result": "Keine Extensions gefunden",
       "success": "Keine Extensions vorhanden"
     }[reason] || reason;
-    hanaLightweightContent = `<p class="muted">${reasonText}${error ? ": " + error : ""}</p>`;
+    hanaLightweightContent = `<p class="muted">${reasonText}${error ? ": " + escapeHtml(error) : ""}</p>`;
   }
 
   // HANA: Legacy AddOns
   const hanaLegacy = Array.isArray(hanaAddons?.legacy) ? hanaAddons.legacy : [];
   let hanaLegacyContent = '<p class="muted">Keine Daten vorhanden.</p>';
-  if (hanaAddons?.available === true && hanaLegacy.length > 0) {
+  if (hanaAddons && hanaAddons.available === true && hanaLegacy.length > 0) {
     const bodyHtml = hanaLegacy.map((row) => {
       const name = escapeHtml(asText(row?.name, ""));
       const version = escapeHtml(asText(row?.version, ""));
@@ -4287,8 +4287,8 @@ function renderSapB1ExtensionsSection(payload) {
         </table>
       </div>
     `;
-  } else if (hanaAddons?.reason) {
-    const reason = escapeHtml(hanaAddons.reason);
+  } else if (hanaAddons && hanaAddons.reason) {
+    const reason = asText(hanaAddons.reason, "");
     const reasonText = {
       "empty_result": "Keine Legacy AddOns gefunden",
       "success": "Keine Legacy AddOns vorhanden"
@@ -4308,16 +4308,13 @@ function renderSapB1ExtensionsSection(payload) {
       ${sariContent}
     </details>
     ${hanaAddons ? `
+    <details class="sap-b1-raw-details sap-b1-sub-details" open>
+      <summary class="sap-b1-raw-summary">Lightweight Extensions (HANA)</summary>
+      ${hanaLightweightContent}
+    </details>
     <details class="sap-b1-raw-details sap-b1-sub-details">
-      <summary class="sap-b1-raw-summary">HANA Extensions</summary>
-      <details class="sap-b1-raw-details sap-b1-sub-details sap-b1-sub-sub-details">
-        <summary class="sap-b1-raw-summary" style="font-size: 0.95em;">Lightweight (SLDDATA)</summary>
-        ${hanaLightweightContent}
-      </details>
-      <details class="sap-b1-raw-details sap-b1-sub-details sap-b1-sub-sub-details">
-        <summary class="sap-b1-raw-summary" style="font-size: 0.95em;">Legacy (SBOCOMMON)</summary>
-        ${hanaLegacyContent}
-      </details>
+      <summary class="sap-b1-raw-summary">Legacy AddOns (HANA)</summary>
+      ${hanaLegacyContent}
     </details>
     ` : ''}
   `;

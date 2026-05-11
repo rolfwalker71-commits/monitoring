@@ -391,15 +391,16 @@ collect_hana_addons_json() {
   fi
 
   # Parse lightweight output (pipe-delimited: NAME|Version, skip header row)
+  # Remove JSON quotes and trailing decimals from hdbsql output
   if [[ -n "$lightweight_output" ]]; then
     while IFS='|' read -r name version; do
       # Skip empty lines and header row
       if [[ -z "$name" ]] || [[ "$name" == *"NAME"* ]]; then
         continue
       fi
-      # Trim whitespace
-      name="$(printf '%s' "$name" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
-      version="$(printf '%s' "$version" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+      # Trim whitespace and remove surrounding quotes
+      name="$(printf '%s' "$name" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
+      version="$(printf '%s' "$version" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
       if [[ -n "$name" ]]; then
         local entry
         entry="$(printf '{"name":"%s","version":"%s"}' "$(json_escape "$name")" "$(json_escape "$version")")"
@@ -418,15 +419,16 @@ collect_hana_addons_json() {
   fi
 
   # Parse legacy output (pipe-delimited: AName|AddOnVer, skip header row)
+  # Remove JSON quotes from hdbsql output
   if [[ -n "$legacy_output" ]]; then
     while IFS='|' read -r aname addonver; do
       # Skip empty lines and header row
       if [[ -z "$aname" ]] || [[ "$aname" == *"AName"* ]]; then
         continue
       fi
-      # Trim whitespace
-      aname="$(printf '%s' "$aname" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
-      addonver="$(printf '%s' "$addonver" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+      # Trim whitespace and remove surrounding quotes
+      aname="$(printf '%s' "$aname" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
+      addonver="$(printf '%s' "$addonver" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')"
       if [[ -n "$aname" ]]; then
         local entry
         entry="$(printf '{"name":"%s","version":"%s"}' "$(json_escape "$aname")" "$(json_escape "$addonver")")"
