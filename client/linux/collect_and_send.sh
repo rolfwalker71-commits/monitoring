@@ -460,11 +460,25 @@ collect_hana_addons_json() {
 
   run_hdbsql_query() {
     local sql_text="${1-}"
-    local explicit_output=""
     local implicit_output=""
+    local explicit_output=""
     local alt_port=""
     local alt_output=""
 
+    # 1) Primary mode (legacy behavior from early stable releases): implicit
+    # connection as <sid>adm without explicit -n target.
+    if command -v timeout >/dev/null 2>&1; then
+      implicit_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"$sql_text\" 2>&1" || true)"
+    else
+      implicit_output="$(su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"$sql_text\" 2>&1" || true)"
+    fi
+    if [[ -n "$implicit_output" ]] && ! is_hdbsql_connection_error "$implicit_output"; then
+      last_hdbsql_mode="implicit_primary"
+      printf '%s' "$implicit_output"
+      return
+    fi
+
+    # 2) Fallback mode: explicit configured target (with runtime diagnostics).
     last_hdbsql_mode="explicit_target"
     if command -v timeout >/dev/null 2>&1; then
       explicit_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -n \"$hdbsql_target\" -u \"$addons_user\" -p \"$addons_password\" \"$sql_text\" 2>&1" || true)"
@@ -472,10 +486,8 @@ collect_hana_addons_json() {
       explicit_output="$(su - "$sid_user" -c "hdbsql -n \"$hdbsql_target\" -u \"$addons_user\" -p \"$addons_password\" \"$sql_text\" 2>&1" || true)"
     fi
 
-    # Compatibility fallback: if explicit host:port fails, retry legacy implicit mode.
+    # If explicit host:port fails, try runtime local 3xx15 probe.
     if is_hdbsql_connection_error "$explicit_output"; then
-      # Additional runtime fallback: probe locally listening HANA-style SQL ports
-      # (3xx15), useful when instance-specific port differs from 30015.
       if [[ "$addons_host" == "127.0.0.1" || "$addons_host" == "localhost" ]] && [[ "$addons_port" == "30015" ]]; then
         while IFS= read -r alt_port; do
           [[ -z "$alt_port" ]] && continue
@@ -493,17 +505,6 @@ collect_hana_addons_json() {
             return
           fi
         done < <(ss -lntH 2>/dev/null | awk '{print $4}' | sed -E 's/.*:([0-9]+)$/\1/' | grep -E '^3[0-9]{2}15$' | sort -u || true)
-      fi
-
-      if command -v timeout >/dev/null 2>&1; then
-        implicit_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"$sql_text\" 2>&1" || true)"
-      else
-        implicit_output="$(su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" \"$sql_text\" 2>&1" || true)"
-      fi
-      if [[ -n "$implicit_output" ]] && ! is_hdbsql_connection_error "$implicit_output"; then
-        last_hdbsql_mode="implicit_fallback"
-        printf '%s' "$implicit_output"
-        return
       fi
     fi
 
