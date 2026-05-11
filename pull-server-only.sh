@@ -302,7 +302,17 @@ systemctl enable monitoring
 
 echo ""
 echo "systemd Service installiert: $SERVICE_FILE"
+
+echo "Versuche monitoring-Service neu zu starten ..."
+if systemctl restart monitoring; then
+  echo "✓ monitoring wurde neu gestartet"
+  systemctl --no-pager --full status monitoring | sed -n '1,14p' || true
+else
+  echo "✗ monitoring konnte nicht automatisch neu gestartet werden" >&2
+  echo "  Bitte manuell ausführen: systemctl restart monitoring" >&2
+fi
+
 echo ""
-echo "Nächste Schritte:"
-echo "  1. API-Key eintragen:  nano $ENV_FILE"
-echo "  2. Dienst starten:     systemctl restart monitoring"
+echo "Nächste Schritte (falls nötig):"
+echo "  1. API-Key prüfen:     nano $ENV_FILE"
+echo "  2. Service-Status:     systemctl status monitoring"

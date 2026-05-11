@@ -297,6 +297,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.4.45 (11. Mai 2026)
+- **Deploy-Fix (`pull-server-only.sh`)**: Der Service `monitoring` wird nach dem Update jetzt automatisch neu gestartet.
+- **Sichtbarkeits-Fix fuer UI-Updates**: Durch den automatischen Restart greifen neue `receiver.py` Header-/Routing-Aenderungen direkt, statt bis zum manuellen Restart zu warten.
+
 ### v1.4.44 (11. Mai 2026)
 - **Webclient-Update-Zuverlaessigkeit**: No-Cache Header fuer `app.js`, `styles.css`, `sw.js` und `manifest.json`; Service Worker wird versionsgebunden registriert.
 - **Host-Changelog Sichtbarkeit**: HANA AddOns werden beim ersten Auftreten als `addon-init` Eintrag angezeigt (nicht erst bei spaeteren Delta-Aenderungen).
