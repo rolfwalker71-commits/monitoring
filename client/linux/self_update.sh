@@ -15,18 +15,16 @@ INSTALL_DIR="${INSTALL_DIR:-/opt/monitoring-agent}"
 SERVER_URL="${SERVER_URL:-}"
 RAW_BASE_URL="${RAW_BASE_URL:-}"
 UPDATE_BASE_URL="${UPDATE_BASE_URL:-}"
-# Prefer explicit RAW_BASE_URL over implicit server /updates fallback.
-# This avoids pulling stale/mismatched artifacts when UPDATE_BASE_URL is unset.
+# Enforce server-only update source: always derive from SERVER_URL when present.
+if [[ -n "$SERVER_URL" ]]; then
+  UPDATE_BASE_URL="${SERVER_URL%/}/updates"
+fi
 if [[ -z "$UPDATE_BASE_URL" && -n "$RAW_BASE_URL" ]]; then
   UPDATE_BASE_URL="$RAW_BASE_URL"
-fi
-if [[ -z "$UPDATE_BASE_URL" && -n "$SERVER_URL" ]]; then
-  UPDATE_BASE_URL="${SERVER_URL%/}/updates"
 fi
 if [[ -z "$RAW_BASE_URL" ]]; then
   RAW_BASE_URL="$UPDATE_BASE_URL"
 fi
-GITHUB_REPO="${GITHUB_REPO:-rolfwalker71-commits/monitoring}"
 AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-$INSTALL_DIR/AGENT_VERSION}"
 TLS_INSECURE="${TLS_INSECURE:-0}"
 CURL_CONNECT_TIMEOUT_SEC="${CURL_CONNECT_TIMEOUT_SEC:-10}"
@@ -36,9 +34,11 @@ CURL_BASE_ARGS=(--fail --silent --show-error --location --connect-timeout "$CURL
 if [[ "$TLS_INSECURE" == "1" ]]; then
   CURL_BASE_ARGS+=(--insecure)
 fi
-# Use GitHub API for downloads to avoid CDN caching issues
-API_ACCEPT=(-H "Accept: application/vnd.github.v3.raw")
-API_BASE_URL="https://api.github.com/repos/${GITHUB_REPO}/contents"
+
+if [[ -z "$UPDATE_BASE_URL" ]]; then
+  echo "No update source configured. Set SERVER_URL or UPDATE_BASE_URL in $CONFIG_FILE." >&2
+  exit 1
+fi
 
 tmp_dir="$(mktemp -d)"
 cleanup() {
@@ -71,20 +71,6 @@ fetch_remote_version_file() {
     candidate="$(curl "${CURL_BASE_ARGS[@]}" "$UPDATE_BASE_URL/$rel" 2>/dev/null | tr -d '[:space:]' || true)"
     if version_is_valid "$candidate"; then
       printf '%s|%s\n' "$candidate" "$UPDATE_BASE_URL/$rel"
-      return 0
-    fi
-  fi
-
-  candidate="$(curl "${CURL_BASE_ARGS[@]}" "${API_ACCEPT[@]}" "$API_BASE_URL/$rel" 2>/dev/null | tr -d '[:space:]' || true)"
-  if version_is_valid "$candidate"; then
-    printf '%s|%s\n' "$candidate" "$API_BASE_URL/$rel"
-    return 0
-  fi
-
-  if [[ -n "$RAW_BASE_URL" ]]; then
-    candidate="$(curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/$rel" 2>/dev/null | tr -d '[:space:]' || true)"
-    if version_is_valid "$candidate"; then
-      printf '%s|%s\n' "$candidate" "$RAW_BASE_URL/$rel"
       return 0
     fi
   fi
@@ -135,12 +121,6 @@ download_update_file() {
   local rel="$1"
   local out="$2"
   if [[ -n "$UPDATE_BASE_URL" ]] && curl "${CURL_BASE_ARGS[@]}" "$UPDATE_BASE_URL/$rel" -o "$out" 2>/dev/null; then
-    return 0
-  fi
-  if curl "${CURL_BASE_ARGS[@]}" "${API_ACCEPT[@]}" "$API_BASE_URL/$rel" -o "$out" 2>/dev/null; then
-    return 0
-  fi
-  if [[ -n "$RAW_BASE_URL" ]] && curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/$rel" -o "$out" 2>/dev/null; then
     return 0
   fi
   return 1

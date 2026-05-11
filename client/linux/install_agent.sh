@@ -15,7 +15,7 @@ AGENT_ID=""
 DISPLAY_NAME=""
 INTERVAL_MINUTES="15"
 UPDATE_HOURS="6"
-Get-Content C:\ProgramData\monitoring-agent\monitoring-agent-update.log -Tail 80Get-Content C:\ProgramData\monitoring-agent\monitoring-agent-update.log -Tail 80RAW_BASE_URL=""
+RAW_BASE_URL=""
 AGENT_QUEUE_DIR="/var/lib/monitoring-agent/queue"
 COLLECT_SCRIPT_URL=""
 SELF_UPDATE_SCRIPT_URL=""
@@ -28,11 +28,11 @@ usage() {
 Usage: $0 --server-url URL [--api-key KEY] [--agent-id ID] [--display-name NAME] [--interval-minutes 15] [--update-hours 6] [--collect-script-url URL] [--insecure-tls]
 
 Example:
-  curl -fsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/linux/install_agent.sh \
+  curl -fsSL https://monitoring.example.com/updates/client/linux/install_agent.sh \
     | sudo bash -s -- --server-url https://monitoring.example.com --interval-minutes 15
 
   # Emergency fallback for broken CA chains (less secure):
-  curl -kfsSL https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/linux/install_agent.sh \
+  curl -kfsSL https://monitoring.example.com/updates/client/linux/install_agent.sh \
     | sudo bash -s -- --server-url https://monitoring.example.com --insecure-tls
 EOF
 }

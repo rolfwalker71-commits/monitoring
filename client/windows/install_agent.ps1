@@ -7,7 +7,7 @@
 .EXAMPLE
     # Download to temp file and run (as Administrator):
     $tmp = "$env:TEMP\install_agent.ps1"
-    (New-Object System.Net.WebClient).DownloadFile('https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main/client/windows/install_agent.ps1', $tmp)
+    (New-Object System.Net.WebClient).DownloadFile('https://monitoring.example.com/updates/client/windows/install_agent.ps1', $tmp)
     & $tmp -ServerUrl 'https://monitoring.example.com'
     Remove-Item $tmp -ErrorAction SilentlyContinue
 

@@ -6,7 +6,7 @@
 .DESCRIPTION
         For each target host, this script:
         - Downloads latest collect_and_send.ps1, self_update.ps1, collect_and_scan_sap_tables.ps1,
-            and AGENT_VERSION (prefers server /updates, falls back to GitHub raw)
+            and AGENT_VERSION from server /updates
     - Writes AGENT_VERSION into AGENT_VERSION (fallback BUILD_VERSION for compatibility)
     - Verifies EmbeddedAgentVersion in collect_and_send.ps1
     - Optionally executes one immediate collect run
@@ -30,9 +30,6 @@ param(
     [string]$UpdateBaseUrl = 'https://monitoring.rolfwalker.ch/updates',
 
     [Parameter(Mandatory = $false)]
-    [string]$RawBaseUrl = 'https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main',
-
-    [Parameter(Mandatory = $false)]
     [switch]$SkipCollectRun,
 
     [Parameter(Mandatory = $false)]
@@ -50,7 +47,6 @@ if ($PSBoundParameters.ContainsKey('Credential')) {
 $remoteScript = {
     param(
         [string]$RemoteUpdateBaseUrl,
-        [string]$RemoteRawBaseUrl,
         [bool]$RemoteSkipCollect
     )
 
@@ -114,28 +110,24 @@ $remoteScript = {
 
     $usedSources = @()
     $collectSource = Download-FileBestEffort -Uris @(
-        "$RemoteUpdateBaseUrl/client/windows/collect_and_send.ps1",
-        "$RemoteRawBaseUrl/client/windows/collect_and_send.ps1"
+        "$RemoteUpdateBaseUrl/client/windows/collect_and_send.ps1"
     ) -Destination $collectPath
     $usedSources += "collect_and_send=$collectSource"
 
     $selfSource = Download-FileBestEffort -Uris @(
-        "$RemoteUpdateBaseUrl/client/windows/self_update.ps1",
-        "$RemoteRawBaseUrl/client/windows/self_update.ps1"
+        "$RemoteUpdateBaseUrl/client/windows/self_update.ps1"
     ) -Destination $selfUpdatePath
     $usedSources += "self_update=$selfSource"
 
     $scanSource = Download-FileBestEffort -Uris @(
-        "$RemoteUpdateBaseUrl/client/windows/collect_and_scan_sap_tables.ps1",
-        "$RemoteRawBaseUrl/client/windows/collect_and_scan_sap_tables.ps1"
+        "$RemoteUpdateBaseUrl/client/windows/collect_and_scan_sap_tables.ps1"
     ) -Destination $scanPath
     $usedSources += "scan=$scanSource"
 
     $agentVersion = ''
     try {
         $agentVersion = (Download-TextBestEffort -Uris @(
-            "$RemoteUpdateBaseUrl/AGENT_VERSION",
-            "$RemoteRawBaseUrl/AGENT_VERSION"
+            "$RemoteUpdateBaseUrl/AGENT_VERSION"
         )).Trim()
     } catch {
         $agentVersion = ''
@@ -143,8 +135,7 @@ $remoteScript = {
     if (-not $agentVersion) {
         try {
             $agentVersion = (Download-TextBestEffort -Uris @(
-                "$RemoteUpdateBaseUrl/BUILD_VERSION",
-                "$RemoteRawBaseUrl/BUILD_VERSION"
+                "$RemoteUpdateBaseUrl/BUILD_VERSION"
             )).Trim()
         } catch {
             $agentVersion = ''
@@ -212,7 +203,7 @@ foreach ($host in $ComputerName) {
     }
 
     try {
-        $res = Invoke-Command -ComputerName $target @invokeParams -ScriptBlock $remoteScript -ArgumentList $UpdateBaseUrl, $RawBaseUrl, [bool]$SkipCollectRun
+        $res = Invoke-Command -ComputerName $target @invokeParams -ScriptBlock $remoteScript -ArgumentList $UpdateBaseUrl, [bool]$SkipCollectRun
         if ($res -is [System.Array]) {
             $results += $res
         } else {

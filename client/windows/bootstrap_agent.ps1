@@ -34,7 +34,6 @@ $ErrorActionPreference = 'Stop'
 $IC = [System.Globalization.CultureInfo]::InvariantCulture
 $ServerUrl = $ServerUrl.TrimEnd('/')
 $UpdateBaseUrl = $ServerUrl + '/updates'
-$GithubRawBaseUrl = 'https://raw.githubusercontent.com/rolfwalker71-commits/monitoring/main'
 $ConfigFile = Join-Path $InstallDir 'agent.conf'
 $VersionFile = Join-Path $InstallDir 'AGENT_VERSION'
 
@@ -264,9 +263,7 @@ try {
                 $cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
                 $urls = @(
                     ("{0}/{1}?cb={2}" -f $UpdateBaseUrl, $item.rel, $cacheBust),
-                    ("{0}/{1}" -f $UpdateBaseUrl, $item.rel),
-                    ("{0}/{1}?cb={2}" -f $GithubRawBaseUrl, $item.rel, $cacheBust),
-                    ("{0}/{1}" -f $GithubRawBaseUrl, $item.rel)
+                    ("{0}/{1}" -f $UpdateBaseUrl, $item.rel)
                 )
 
                 $downloaded = $false
@@ -323,9 +320,7 @@ try {
             $cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
             $urls = @(
                 ($UpdateBaseUrl + '/client/windows/install_agent.ps1?cb=' + $cacheBust),
-                ($UpdateBaseUrl + '/client/windows/install_agent.ps1'),
-                ($GithubRawBaseUrl + '/client/windows/install_agent.ps1?cb=' + $cacheBust),
-                ($GithubRawBaseUrl + '/client/windows/install_agent.ps1')
+                ($UpdateBaseUrl + '/client/windows/install_agent.ps1')
             )
 
             if (-not (Download-FileFromCandidates -Urls $urls -Destination $installScript)) {

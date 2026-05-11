@@ -36,10 +36,12 @@ $InstallDir = if ($cfg.ContainsKey('INSTALL_DIR'))   { $cfg['INSTALL_DIR'] }   e
 $ServerUrl = if ($cfg.ContainsKey('SERVER_URL')) { $cfg['SERVER_URL'] } else { '' }
 $ConfiguredUpdateBaseUrl = if ($cfg.ContainsKey('UPDATE_BASE_URL')) { $cfg['UPDATE_BASE_URL'] } else { '' }
 $LegacyRawBaseUrl = if ($cfg.ContainsKey('RAW_BASE_URL')) { $cfg['RAW_BASE_URL'] } else { '' }
-$PrimaryUpdateBaseUrl = if ($ConfiguredUpdateBaseUrl) { $ConfiguredUpdateBaseUrl.TrimEnd('/') } elseif ($ServerUrl) { ($ServerUrl.TrimEnd('/')) + '/updates' } elseif ($LegacyRawBaseUrl) { $LegacyRawBaseUrl.TrimEnd('/') } else { '' }
-$GithubRepo = if ($cfg.ContainsKey('GITHUB_REPO'))   { $cfg['GITHUB_REPO'] }   else { 'rolfwalker71-commits/monitoring' }
-$RawBaseUrl = "https://raw.githubusercontent.com/$GithubRepo/main"
-$GithubRawAltBaseUrl = "https://github.com/$GithubRepo/raw/refs/heads/main"
+$PrimaryUpdateBaseUrl = if ($ServerUrl) { ($ServerUrl.TrimEnd('/')) + '/updates' } elseif ($ConfiguredUpdateBaseUrl) { $ConfiguredUpdateBaseUrl.TrimEnd('/') } elseif ($LegacyRawBaseUrl) { $LegacyRawBaseUrl.TrimEnd('/') } else { '' }
+
+if (-not $PrimaryUpdateBaseUrl) {
+    Write-Error "No update source configured. Set SERVER_URL or UPDATE_BASE_URL in agent.conf."
+    exit 1
+}
 
 $wc = New-Object System.Net.WebClient
 $wc.Headers['Accept'] = '*/*'
@@ -69,24 +71,12 @@ function Get-RepoUrlCandidates {
             ("{0}/{1}" -f $PrimaryUpdateBaseUrl, $path)
         )
     }
-    $urls += @(
-        ("{0}/{1}?cb={2}" -f $RawBaseUrl, $path, $cacheBust),
-        ("{0}/{1}?raw=1&cb={2}" -f $GithubRawAltBaseUrl, $path, $cacheBust),
-        ("{0}/{1}" -f $RawBaseUrl, $path),
-        ("{0}/{1}?raw=1" -f $GithubRawAltBaseUrl, $path)
-    )
 
     return @($urls | Select-Object -Unique)
 }
 
 function Get-RepoZipUrlCandidates {
-    $cacheBust = [System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-    return @(
-        ("https://codeload.github.com/{0}/zip/refs/heads/main?cb={1}" -f $GithubRepo, $cacheBust),
-        ("https://github.com/{0}/archive/refs/heads/main.zip?cb={1}" -f $GithubRepo, $cacheBust),
-        ("https://codeload.github.com/{0}/zip/refs/heads/main" -f $GithubRepo),
-        ("https://github.com/{0}/archive/refs/heads/main.zip" -f $GithubRepo)
-    )
+    return @()
 }
 
 function Get-RepoZipEntryText {
@@ -96,49 +86,7 @@ function Get-RepoZipEntryText {
         [Parameter(Mandatory = $true)]
         [System.Collections.Generic.List[string]]$AttemptErrors
     )
-
-    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
-
-    $repoName = ($GithubRepo -split '/')[-1]
-    $entryPath = ('{0}-main/{1}' -f $repoName, (($RelativePath -replace '\\', '/').TrimStart('/')))
-    $tmpZipPath = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), ('monitoring-updater-{0}.zip' -f [System.Guid]::NewGuid().ToString('N')))
-
-    foreach ($url in (Get-RepoZipUrlCandidates)) {
-        try {
-            $wc.DownloadFile($url, $tmpZipPath)
-        } catch {
-            $AttemptErrors.Add("zip-webclient: $url => $($_.Exception.Message)")
-            continue
-        }
-
-        try {
-            $zip = [System.IO.Compression.ZipFile]::OpenRead($tmpZipPath)
-            try {
-                $entry = $zip.GetEntry($entryPath)
-                if (-not $entry) {
-                    $AttemptErrors.Add("zip-entry-missing: $url => $entryPath")
-                    continue
-                }
-                $reader = New-Object System.IO.StreamReader($entry.Open(), $true)
-                try {
-                    $text = $reader.ReadToEnd()
-                } finally {
-                    $reader.Dispose()
-                }
-                if ($text) {
-                    return [string]$text
-                }
-                $AttemptErrors.Add("zip-empty-content: $url => $entryPath")
-            } finally {
-                $zip.Dispose()
-            }
-        } catch {
-            $AttemptErrors.Add("zip-read: $url => $($_.Exception.Message)")
-        } finally {
-            Remove-Item $tmpZipPath -Force -ErrorAction SilentlyContinue
-        }
-    }
-
+    # Server-only mode: ZIP fallback disabled.
     return ''
 }
 
@@ -326,11 +274,6 @@ function Download-RepoText {
         }
     }
 
-    $zipText = Get-RepoZipEntryText -RelativePath $RelativePath -AttemptErrors $attemptErrors
-    if ($zipText) {
-        return [string]$zipText
-    }
-
     $global:LastDownloadRepoTextError = ($attemptErrors -join ' | ')
     return ''
 }
@@ -381,10 +324,6 @@ function Download-RepoFile {
                 $attemptErrors.Add("curl-exception: $url => $($_.Exception.Message)")
             }
         }
-    }
-
-    if (Download-RepoFileViaZip -RelativePath $RelativePath -DestinationPath $DestinationPath -AttemptErrors $attemptErrors) {
-        return $true
     }
 
     $global:LastDownloadRepoFileError = ($attemptErrors -join ' | ')
