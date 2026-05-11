@@ -1,8 +1,36 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TARGET_DIR="${1:-$HOME/monitoring-server}"
 OWNER_REPO="rolfwalker71-commits/monitoring"
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+
+detect_target_dir() {
+  if [ -n "${1:-}" ]; then
+    printf '%s\n' "$1"
+    return 0
+  fi
+
+  # Prefer the currently installed service path to avoid deploying into a wrong default directory.
+  if [ -f "/etc/systemd/system/monitoring.service" ]; then
+    local unit_dir
+    unit_dir="$(sed -n 's/^WorkingDirectory=//p' /etc/systemd/system/monitoring.service | tail -n 1)"
+    if [ -n "$unit_dir" ]; then
+      printf '%s\n' "$unit_dir"
+      return 0
+    fi
+  fi
+
+  # Fallback: if script is executed from a checked-out repo, use that repo root.
+  if [ -d "$SCRIPT_DIR/server" ] && [ -f "$SCRIPT_DIR/server/receiver.py" ]; then
+    printf '%s\n' "$SCRIPT_DIR"
+    return 0
+  fi
+
+  printf '%s\n' "$HOME/monitoring-server"
+}
+
+TARGET_DIR="$(detect_target_dir "${1:-}")"
 
 echo "Installiere Serverteil nach: $TARGET_DIR"
 
