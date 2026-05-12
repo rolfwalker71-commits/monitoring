@@ -130,6 +130,9 @@ def init_db() -> None:
                 country_code_override TEXT NOT NULL DEFAULT '',
                 is_favorite INTEGER NOT NULL DEFAULT 0,
                 is_hidden INTEGER NOT NULL DEFAULT 0,
+                customer_alert_emails TEXT NOT NULL DEFAULT '',
+                customer_alert_mountpoints TEXT NOT NULL DEFAULT '',
+                customer_alert_min_severity TEXT NOT NULL DEFAULT 'critical',
                 updated_at_utc TEXT NOT NULL
             )
             """
@@ -144,6 +147,12 @@ def init_db() -> None:
             conn.execute("ALTER TABLE host_settings ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0")
         if "country_code_override" not in existing_host_columns:
             conn.execute("ALTER TABLE host_settings ADD COLUMN country_code_override TEXT NOT NULL DEFAULT ''")
+        if "customer_alert_emails" not in existing_host_columns:
+            conn.execute("ALTER TABLE host_settings ADD COLUMN customer_alert_emails TEXT NOT NULL DEFAULT ''")
+        if "customer_alert_mountpoints" not in existing_host_columns:
+            conn.execute("ALTER TABLE host_settings ADD COLUMN customer_alert_mountpoints TEXT NOT NULL DEFAULT ''")
+        if "customer_alert_min_severity" not in existing_host_columns:
+            conn.execute("ALTER TABLE host_settings ADD COLUMN customer_alert_min_severity TEXT NOT NULL DEFAULT 'critical'")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS alarm_settings (
@@ -6147,7 +6156,14 @@ def get_latest_report_rows_by_hostname(conn: sqlite3.Connection) -> dict[str, di
 def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
     row = conn.execute(
         """
-        SELECT display_name_override, COALESCE(country_code_override, ''), COALESCE(is_favorite, 0), COALESCE(is_hidden, 0)
+        SELECT
+          display_name_override,
+          COALESCE(country_code_override, ''),
+          COALESCE(is_favorite, 0),
+          COALESCE(is_hidden, 0),
+          COALESCE(customer_alert_emails, ''),
+          COALESCE(customer_alert_mountpoints, ''),
+          COALESCE(customer_alert_min_severity, 'critical')
         FROM host_settings
         WHERE hostname = ?
         """,
@@ -6159,12 +6175,21 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
             "country_code_override": "",
             "is_favorite": False,
             "is_hidden": False,
+            "customer_alert_emails": "",
+            "customer_alert_mountpoints": "",
+            "customer_alert_min_severity": "critical",
         }
+    customer_alert_min_severity = str(row[6] or "critical").strip().lower()
+    if customer_alert_min_severity not in {"warning", "critical"}:
+        customer_alert_min_severity = "critical"
     return {
         "display_name_override": str(row[0] or "").strip(),
         "country_code_override": normalize_country_code(row[1]),
         "is_favorite": bool(int(row[2] or 0)),
         "is_hidden": bool(int(row[3] or 0)),
+        "customer_alert_emails": str(row[4] or "").strip(),
+        "customer_alert_mountpoints": str(row[5] or "").strip(),
+        "customer_alert_min_severity": customer_alert_min_severity,
     }
 
 
@@ -7191,6 +7216,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "country_code_override": host_settings["country_code_override"],
                     "is_favorite": host_settings["is_favorite"],
                     "is_hidden": host_settings["is_hidden"],
+                    "customer_alert_emails": host_settings["customer_alert_emails"],
+                    "customer_alert_mountpoints": host_settings["customer_alert_mountpoints"],
+                    "customer_alert_min_severity": host_settings["customer_alert_min_severity"],
                 },
             )
             return
@@ -8979,12 +9007,23 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             has_country_code = "country_code_override" in payload
             has_is_favorite = "is_favorite" in payload
             has_is_hidden = "is_hidden" in payload
+            has_customer_alert_emails = "customer_alert_emails" in payload
+            has_customer_alert_mountpoints = "customer_alert_mountpoints" in payload
+            has_customer_alert_min_severity = "customer_alert_min_severity" in payload
 
             if not hostname:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
                 return
 
-            if not (has_display_name or has_country_code or has_is_favorite or has_is_hidden):
+            if not (
+                has_display_name
+                or has_country_code
+                or has_is_favorite
+                or has_is_hidden
+                or has_customer_alert_emails
+                or has_customer_alert_mountpoints
+                or has_customer_alert_min_severity
+            ):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no host setting provided"})
                 return
 
@@ -8994,6 +9033,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 country_code_override = current["country_code_override"]
                 is_favorite = bool(current["is_favorite"])
                 is_hidden = bool(current["is_hidden"])
+                customer_alert_emails = current["customer_alert_emails"]
+                customer_alert_mountpoints = current["customer_alert_mountpoints"]
+                customer_alert_min_severity = current["customer_alert_min_severity"]
 
                 if has_display_name:
                     display_name_override = str(payload.get("display_name_override", "")).strip()
@@ -9007,17 +9049,47 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     is_favorite = parse_bool(payload.get("is_favorite"), is_favorite)
                 if has_is_hidden:
                     is_hidden = parse_bool(payload.get("is_hidden"), is_hidden)
+                if has_customer_alert_emails:
+                    customer_alert_emails = str(payload.get("customer_alert_emails", "") or "").strip()
+                if has_customer_alert_mountpoints:
+                    customer_alert_mountpoints = str(payload.get("customer_alert_mountpoints", "") or "").strip()
+                if has_customer_alert_min_severity:
+                    customer_alert_min_severity = str(payload.get("customer_alert_min_severity", "critical") or "critical").strip().lower()
+                    if customer_alert_min_severity not in {"warning", "critical"}:
+                        self._send_json(HTTPStatus.BAD_REQUEST, {"error": "customer_alert_min_severity must be warning or critical"})
+                        return
 
-                if display_name_override or country_code_override or is_favorite or is_hidden:
+                if (
+                    display_name_override
+                    or country_code_override
+                    or is_favorite
+                    or is_hidden
+                    or customer_alert_emails
+                    or customer_alert_mountpoints
+                    or customer_alert_min_severity != "critical"
+                ):
                     conn.execute(
                         """
-                        INSERT INTO host_settings (hostname, display_name_override, country_code_override, is_favorite, is_hidden, updated_at_utc)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        INSERT INTO host_settings (
+                          hostname,
+                          display_name_override,
+                          country_code_override,
+                          is_favorite,
+                          is_hidden,
+                          customer_alert_emails,
+                          customer_alert_mountpoints,
+                          customer_alert_min_severity,
+                          updated_at_utc
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(hostname) DO UPDATE SET
                           display_name_override = excluded.display_name_override,
                           country_code_override = excluded.country_code_override,
                           is_favorite = excluded.is_favorite,
                           is_hidden = excluded.is_hidden,
+                          customer_alert_emails = excluded.customer_alert_emails,
+                          customer_alert_mountpoints = excluded.customer_alert_mountpoints,
+                          customer_alert_min_severity = excluded.customer_alert_min_severity,
                           updated_at_utc = excluded.updated_at_utc
                         """,
                         (
@@ -9026,6 +9098,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             country_code_override,
                             1 if is_favorite else 0,
                             1 if is_hidden else 0,
+                            customer_alert_emails,
+                            customer_alert_mountpoints,
+                            customer_alert_min_severity,
                             utc_now_iso(),
                         ),
                     )
@@ -9046,6 +9121,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "country_code_override": country_code_override,
                     "is_favorite": is_favorite,
                     "is_hidden": is_hidden,
+                    "customer_alert_emails": customer_alert_emails,
+                    "customer_alert_mountpoints": customer_alert_mountpoints,
+                    "customer_alert_min_severity": customer_alert_min_severity,
                 },
             )
             return

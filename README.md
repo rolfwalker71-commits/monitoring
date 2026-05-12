@@ -312,7 +312,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 ## Versioning
 
 - Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.112**)
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.113**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.114**)
 - Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.88**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
@@ -320,6 +320,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.4.114 | 12.05.2026 | Fix host notification save by persisting customer alert fields in host settings API |
 | 1.4.113 | 12.05.2026 | Fix Windows self_update empty-string config binding for GITHUB_REPO reset |
 | 1.4.112 | 12.05.2026 | Fix Windows self_update parser error and add X_API_KEY fallback in Windows agents |
 | 1.4.111 | 12.05.2026 | Add comprehensive technical documentation for Linux and Windows agents |
