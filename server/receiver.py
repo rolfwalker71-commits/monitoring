@@ -662,6 +662,8 @@ def init_db() -> None:
             (DEFAULT_ALERT_DIGEST_TIME,),
         )
 
+        resolve_open_blacklisted_alerts(conn, get_filesystem_blacklist_pattern_strings(conn))
+
         session_cutoff_iso = utc_hours_ago_iso(1)
         conn.execute(
             "DELETE FROM web_sessions WHERE last_activity_at_utc <= ?",
