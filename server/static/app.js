@@ -9372,24 +9372,23 @@ function wireEvents() {
     }
   });
 
-  document.getElementById("saveUserMailSettingsButton").addEventListener("click", async () => {
-    try {
-      await saveUserProfile();
-    } catch (error) {
-      setUserMailSettingsStatus(error.message, true);
-    }
-  });
-
-  const saveDigestSettingsButton = document.getElementById("saveDigestSettingsButton");
-  if (saveDigestSettingsButton) {
-    saveDigestSettingsButton.addEventListener("click", async () => {
+  const wireMailSettingsSaveButton = (buttonId) => {
+    const button = document.getElementById(buttonId);
+    if (!button) return;
+    button.addEventListener("click", async () => {
       try {
         await saveUserProfile();
       } catch (error) {
         setUserMailSettingsStatus(error.message, true);
       }
     });
-  }
+  };
+
+  // Primary save action (placed at the end of the digest section).
+  wireMailSettingsSaveButton("saveAllMailSettingsButton");
+  // Backward compatibility for older cached HTML shells.
+  wireMailSettingsSaveButton("saveUserMailSettingsButton");
+  wireMailSettingsSaveButton("saveDigestSettingsButton");
 
   const hostInterestModeSelect = document.getElementById("hostInterestModeSelect");
   if (hostInterestModeSelect) {
