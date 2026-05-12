@@ -8146,19 +8146,13 @@ async function loadHostConfigChanges() {
               let newFpInfo = "";
               if (fieldKey === "sap_release") {
                 const oldFp = resolveSapReleaseDisplay(oldValue, SAP_B1_VERSION_MAP);
-                const oldFpSafe = escapeHtml(asText(oldFp, "-"));
-                oldFpInfo = `
-                  <div class="host-config-change-subline">
-                    ${oldFpSafe}
-                  </div>
-                `;
+                if (oldFp && oldFp !== "-") {
+                  oldFpInfo = `<div class="host-config-change-subline"><strong>(${escapeHtml(oldFp)})</strong></div>`;
+                }
                 const newFp = resolveSapReleaseDisplay(newValue, SAP_B1_VERSION_MAP);
-                const newFpSafe = escapeHtml(asText(newFp, "-"));
-                newFpInfo = `
-                  <div class="host-config-change-subline">
-                    ${newFpSafe}
-                  </div>
-                `;
+                if (newFp && newFp !== "-") {
+                  newFpInfo = `<div class="host-config-change-subline"><strong>(${escapeHtml(newFp)})</strong></div>`;
+                }
               }
 
               return `
