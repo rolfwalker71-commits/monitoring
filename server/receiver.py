@@ -8718,24 +8718,30 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "days must be an integer between 1 and 30"})
                     return
 
-            with sqlite3.connect(DB_PATH) as conn:
-                config_result = backfill_host_config_changes(conn, days=days)
-                db_result = backfill_database_lifecycle(conn, days=days)
-                conn.commit()
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    config_result = backfill_host_config_changes(conn, days=days)
+                    db_result = backfill_database_lifecycle(conn, days=days)
+                    conn.commit()
 
-            self._send_json(
-                HTTPStatus.OK,
-                {
-                    "status": "ok",
-                    "result": {
-                        "config_changes": config_result,
-                        "database_lifecycle": db_result,
-                        "inserted_changes": config_result.get("inserted_changes", 0),
-                        "reports_scanned": config_result.get("reports_scanned", 0),
-                        "inserted_events": db_result.get("inserted_events", 0),
+                self._send_json(
+                    HTTPStatus.OK,
+                    {
+                        "status": "ok",
+                        "result": {
+                            "config_changes": config_result,
+                            "database_lifecycle": db_result,
+                            "inserted_changes": config_result.get("inserted_changes", 0),
+                            "reports_scanned": config_result.get("reports_scanned", 0),
+                            "inserted_events": db_result.get("inserted_events", 0),
+                        },
                     },
-                },
-            )
+                )
+            except Exception as e:
+                import traceback
+                error_msg = f"{type(e).__name__}: {str(e)}"
+                traceback.print_exc()
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": error_msg})
             return
 
 
