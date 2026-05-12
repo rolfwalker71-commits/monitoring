@@ -7282,6 +7282,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 hidden_mountpoints = get_filesystem_visibility_hidden(conn, username, hostname, "analysis")
                 fs_focus_hidden = get_filesystem_visibility_hidden(conn, username, hostname, "fs-focus")
                 large_files_hidden = get_filesystem_visibility_hidden(conn, username, hostname, "large-files")
+                blacklist_patterns = [row[0] for row in conn.execute("SELECT pattern FROM filesystem_blacklist_patterns").fetchall()]
 
             fs_by_mountpoint = {}
             fs_total_kb_by_mountpoint = {}
@@ -7369,6 +7370,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         continue
 
                     mountpoint = str(fs.get("mountpoint", "")).strip()
+                    if not mountpoint:
+                        continue
+                    if any(fnmatch.fnmatch(mountpoint, pat) for pat in blacklist_patterns):
+                        continue
                     used_percent_raw = fs.get("used_percent")
                     try:
                         used_percent = float(used_percent_raw)
