@@ -4147,7 +4147,7 @@ function getSapB1LandscapeStatus(payload) {
   if (hasHana && hasVersion) {
     return {
       label: `SAP B1 ${versionText || versionInfo.build}`.trim(),
-      detail: "Version erkannt | HANA erkannt",
+      detail: `${versionInfo.mapping?.featurePack || "Version erkannt"} | HANA erkannt`,
       stateClass: "ok",
       compatible: true,
     };
@@ -4186,9 +4186,13 @@ function renderSapB1SystemSummary(payload) {
   const versionBlock = sap && typeof sap.server_components_version === "object" ? sap.server_components_version : null;
   const versionText = asText(versionBlock?.version, "");
   const versionInfo = parseSapB1Version(versionText);
+  const fp = asText(versionInfo.mapping?.featurePack, "");
   const releaseDate = asText(versionInfo.mapping?.releaseDate, "");
-  if (!releaseDate) {
+  if (!fp && !releaseDate) {
     return "-";
+  }
+  if (fp) {
+    return `<strong>${escapeHtml(fp)}</strong>`;
   }
   return escapeHtml(releaseDate);
 }
@@ -6056,12 +6060,21 @@ function renderSingleHostCard(host) {
     const text = asText(value, "").trim();
     return text === "-" ? "" : text;
   };
+  const sapReleaseRaw = cleanHostValue(host.sap_release || host.sap_feature_pack || "");
+  const sapVersionInfo = parseSapB1Version(sapReleaseRaw);
+  const sapFeaturePack = cleanHostValue(
+    sapVersionInfo.mapping?.featurePack
+      || (sapReleaseRaw.toUpperCase().startsWith("FP") ? sapReleaseRaw : "")
+  );
   const hanaReleaseRaw = cleanHostValue(host.hana_release || host.hana_version || "");
   const hanaReleaseValue = hanaReleaseRaw
     ? hanaReleaseRaw.split(".").slice(0, 3).join(".") || hanaReleaseRaw
     : "";
   const hanaSidValue = cleanHostValue(host.hana_sid || "");
   const valueChipStack = [
+    sapFeaturePack
+      ? `<span class="host-value-chip host-value-chip--sap" title="SAP Feature Pack">${escapeHtml(sapFeaturePack)}</span>`
+      : "",
     hanaReleaseValue
       ? `<span class="host-value-chip host-value-chip--hana" title="HANA Release: ${escapeHtml(hanaReleaseRaw)}">${escapeHtml(hanaReleaseValue)}</span>`
       : "",
@@ -8126,8 +8139,22 @@ async function loadHostConfigChanges() {
             });
 
             const rows = sortedItems.map((item) => {
+              const fieldKey = String(item.field_key || "");
               const oldValue = asText(item.old_value, "-");
               const newValue = asText(item.new_value, "-");
+
+              let oldFpInfo = "";
+              let newFpInfo = "";
+              if (fieldKey === "sap_release") {
+                const oldFp = resolveSapReleaseDisplay(oldValue, SAP_B1_VERSION_MAP);
+                if (oldFp && oldFp !== "-") {
+                  oldFpInfo = `<div class="host-config-change-subline"><strong>(${escapeHtml(oldFp)})</strong></div>`;
+                }
+                const newFp = resolveSapReleaseDisplay(newValue, SAP_B1_VERSION_MAP);
+                if (newFp && newFp !== "-") {
+                  newFpInfo = `<div class="host-config-change-subline"><strong>(${escapeHtml(newFp)})</strong></div>`;
+                }
+              }
 
               return `
                 <tr>
@@ -8135,9 +8162,11 @@ async function loadHostConfigChanges() {
                   <td>${escapeHtml(asText(item.field_label || item.field_key, "-"))}</td>
                   <td>
                     <div class="host-config-main-value">${escapeHtml(oldValue)}</div>
+                    ${oldFpInfo}
                   </td>
                   <td>
                     <div class="host-config-main-value"><strong>${escapeHtml(newValue)}</strong></div>
+                    ${newFpInfo}
                   </td>
                 </tr>
               `;
@@ -9670,7 +9699,17 @@ function formatSystemOverviewStatus(host) {
 
 function resolveSapReleaseDisplay(sapRelease, sapVersionMap) {
   if (!sapRelease) return "-";
-  return String(sapRelease);
+  const releaseText = String(sapRelease);
+  const buildMatch = releaseText.match(/\d+\.\d+\.\d+/);
+  const buildKey = buildMatch ? buildMatch[0] : releaseText;
+  const versionInfo = sapVersionMap.get(buildKey);
+  // Return Feature Pack if found, else return the release text for fallback display
+  // This ensures dynamically updated versions show current FP mapping at display time
+  if (versionInfo?.featurePack) {
+    return versionInfo.featurePack;
+  }
+  // If not found, return original release text (preserves old data for reference)
+  return releaseText;
 }
 
 function formatShortHostname(hostname) {
