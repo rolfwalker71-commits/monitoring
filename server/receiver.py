@@ -350,6 +350,7 @@ def init_db() -> None:
                 username TEXT PRIMARY KEY,
                 email_enabled INTEGER NOT NULL DEFAULT 0,
                 email_recipient TEXT NOT NULL DEFAULT '',
+                email_sender TEXT NOT NULL DEFAULT '',
                 trend_email_enabled INTEGER NOT NULL DEFAULT 0,
                 trend_email_time_hhmm TEXT NOT NULL DEFAULT '08:00',
                 trend_email_last_sent_local_date TEXT NOT NULL DEFAULT '',
@@ -370,6 +371,8 @@ def init_db() -> None:
         }
         if "trend_email_enabled" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN trend_email_enabled INTEGER NOT NULL DEFAULT 0")
+        if "email_sender" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN email_sender TEXT NOT NULL DEFAULT ''")
         if "trend_email_time_hhmm" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN trend_email_time_hhmm TEXT NOT NULL DEFAULT '08:00'")
         if "trend_email_last_sent_local_date" not in existing_web_user_settings_columns:
@@ -1290,6 +1293,7 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
         """
         SELECT COALESCE(email_enabled, 0),
                COALESCE(email_recipient, ''),
+               COALESCE(email_sender, ''),
                COALESCE(trend_email_enabled, 0),
                COALESCE(trend_email_time_hhmm, ''),
                COALESCE(trend_email_last_sent_local_date, ''),
@@ -1313,6 +1317,7 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
         return {
             "email_enabled": False,
             "email_recipient": "",
+            "email_sender": "",
             "trend_email_enabled": False,
             "trend_email_time_hhmm": DEFAULT_TREND_DIGEST_TIME,
             "trend_email_last_sent_local_date": "",
@@ -1331,26 +1336,28 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
     return {
         "email_enabled": bool(int(row[0] or 0)),
         "email_recipient": str(row[1] or ""),
-        "trend_email_enabled": bool(int(row[2] or 0)),
-        "trend_email_time_hhmm": normalize_hhmm(row[3], DEFAULT_TREND_DIGEST_TIME),
-        "trend_email_last_sent_local_date": str(row[4] or ""),
-        "alert_email_enabled": bool(int(row[5] or 0)),
-        "alert_email_time_hhmm": normalize_hhmm(row[6], DEFAULT_ALERT_DIGEST_TIME),
-        "alert_email_recipients": str(row[7] or ""),
-        "alert_warning_email_recipients": str(row[8] or ""),
-        "alert_critical_email_recipients": str(row[9] or ""),
-        "alert_email_last_sent_local_date": str(row[10] or ""),
-        "alert_instant_mail_enabled": bool(int(row[11] or 0)),
-        "alert_instant_min_severity": str(row[12] or "warning"),
-        "alert_instant_telegram_enabled": bool(int(row[13] or 0)),
-        "alert_telegram_chat_id": str(row[14] or ""),
-        "updated_at_utc": str(row[15] or ""),
+        "email_sender": str(row[2] or ""),
+        "trend_email_enabled": bool(int(row[3] or 0)),
+        "trend_email_time_hhmm": normalize_hhmm(row[4], DEFAULT_TREND_DIGEST_TIME),
+        "trend_email_last_sent_local_date": str(row[5] or ""),
+        "alert_email_enabled": bool(int(row[6] or 0)),
+        "alert_email_time_hhmm": normalize_hhmm(row[7], DEFAULT_ALERT_DIGEST_TIME),
+        "alert_email_recipients": str(row[8] or ""),
+        "alert_warning_email_recipients": str(row[9] or ""),
+        "alert_critical_email_recipients": str(row[10] or ""),
+        "alert_email_last_sent_local_date": str(row[11] or ""),
+        "alert_instant_mail_enabled": bool(int(row[12] or 0)),
+        "alert_instant_min_severity": str(row[13] or "warning"),
+        "alert_instant_telegram_enabled": bool(int(row[14] or 0)),
+        "alert_telegram_chat_id": str(row[15] or ""),
+        "updated_at_utc": str(row[16] or ""),
     }
 
 
 def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dict) -> dict:
     existing = get_web_user_settings(conn, username)
     email_recipient = str(payload.get("email_recipient", existing.get("email_recipient", "")) or "").strip()
+    email_sender = str(payload.get("email_sender", existing.get("email_sender", "")) or "").strip()
     email_enabled = coerce_bool(payload.get("email_enabled", existing.get("email_enabled", False)))
     trend_email_enabled = coerce_bool(payload.get("trend_email_enabled", existing.get("trend_email_enabled", False)))
     alert_email_enabled = coerce_bool(payload.get("alert_email_enabled", existing.get("alert_email_enabled", False)))
@@ -1393,6 +1400,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             username,
             email_enabled,
             email_recipient,
+            email_sender,
             trend_email_enabled,
             trend_email_time_hhmm,
             trend_email_last_sent_local_date,
@@ -1408,10 +1416,11 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_telegram_chat_id,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             email_enabled = excluded.email_enabled,
             email_recipient = excluded.email_recipient,
+            email_sender = excluded.email_sender,
             trend_email_enabled = excluded.trend_email_enabled,
             trend_email_time_hhmm = excluded.trend_email_time_hhmm,
             trend_email_last_sent_local_date = excluded.trend_email_last_sent_local_date,
@@ -1431,6 +1440,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             username,
             1 if email_enabled else 0,
             email_recipient,
+            email_sender,
             1 if trend_email_enabled else 0,
             trend_email_time_hhmm,
             trend_email_last_sent_local_date,
@@ -1450,6 +1460,7 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
     return {
         "email_enabled": email_enabled,
         "email_recipient": email_recipient,
+        "email_sender": email_sender,
         "trend_email_enabled": trend_email_enabled,
         "trend_email_time_hhmm": trend_email_time_hhmm,
         "trend_email_last_sent_local_date": trend_email_last_sent_local_date,
@@ -4717,6 +4728,7 @@ def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
         "updated_at_utc": user["updated_at_utc"],
         "email_enabled": settings["email_enabled"],
         "email_recipient": settings["email_recipient"],
+        "email_sender": settings["email_sender"],
         "trend_email_enabled": settings["trend_email_enabled"],
         "trend_email_time_hhmm": settings["trend_email_time_hhmm"],
         "alert_email_enabled": settings["alert_email_enabled"],
@@ -4899,6 +4911,7 @@ def send_microsoft_mail(
     *,
     content_type: str = "Text",
     attachments: list[dict] | None = None,
+    sender_address: str = "",
 ) -> tuple[bool, str]:
     message_payload = {
         "subject": subject,
@@ -4914,6 +4927,13 @@ def send_microsoft_mail(
             }
         ],
     }
+    normalized_sender = str(sender_address or "").strip()
+    if normalized_sender:
+        message_payload["from"] = {
+            "emailAddress": {
+                "address": normalized_sender,
+            }
+        }
     if attachments:
         message_payload["attachments"] = attachments
 
@@ -4941,6 +4961,7 @@ def send_microsoft_mail_multi(
     *,
     content_type: str = "Text",
     attachments: list[dict] | None = None,
+    sender_address: str = "",
 ) -> tuple[bool, str]:
     if not recipients:
         return False, "no recipients"
@@ -4955,6 +4976,7 @@ def send_microsoft_mail_multi(
             content,
             content_type=content_type,
             attachments=attachments,
+            sender_address=sender_address,
         )
         if ok:
             sent_count += 1
@@ -5082,6 +5104,8 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                     body,
                     content_type="HTML",
                     attachments=graph_attachments,
+                    sender_address=str(user_settings.get("email_sender", "") or "").strip(),
+                    sender_address=str(user_settings.get("email_sender", "") or "").strip(),
                 )
                 sent_to_anyone = True
             except Exception:
@@ -5177,6 +5201,7 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
                 trend_digest_subject(warnings, today_local),
                 trend_digest_html(username, warnings, 72),
                 content_type="HTML",
+                sender_address=str(settings.get("email_sender", "") or "").strip(),
             )
             if trend_ok:
                 conn.execute(
@@ -5205,6 +5230,7 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
                 alert_digest_html(username, alerts, graph_cids=graph_cids, graph_hours=24),
                 content_type="HTML",
                 attachments=graph_attachments,
+                sender_address=str(settings.get("email_sender", "") or "").strip(),
             )
             if alert_ok:
                 conn.execute(
@@ -8488,6 +8514,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 settings = get_web_user_settings(conn, username)
                 recipient = str(settings.get("email_recipient", "") or "").strip()
+                sender_address = str(settings.get("email_sender", "") or "").strip()
                 if not recipient:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "email recipient missing"})
                     return
@@ -8517,6 +8544,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         trend_digest_subject(warnings, datetime.now().astimezone().date().isoformat()) + " [TEST]",
                         trend_digest_html(username, warnings, 72),
                         content_type="HTML",
+                        sender_address=sender_address,
                     )
                 elif endpoint_mode == "alerts":
                     alerts = collect_open_alerts(conn)
@@ -8535,6 +8563,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         alert_digest_html(username, alerts, graph_cids=graph_cids, graph_hours=24),
                         content_type="HTML",
                         attachments=graph_attachments,
+                        sender_address=sender_address,
                     )
                 elif endpoint_mode == "backup":
                     overview = collect_backup_status_overview(conn, 24)
@@ -8557,6 +8586,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         recipient,
                         f"[TEST] Backup Status: {missing}/{total} mit Luecken",
                         "\n".join(lines),
+                        sender_address=sender_address,
                     )
                 else:
                     mail_ok, mail_details = send_microsoft_mail(
@@ -8569,6 +8599,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             f"Zeit: {utc_now_iso()}\n"
                             "Wenn diese Mail ankommt, funktioniert Microsoft Graph OAuth."
                         ),
+                        sender_address=sender_address,
                     )
                 conn.commit()
             self._send_json(
@@ -8790,6 +8821,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 if not ok_token:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": details or "oauth unavailable"})
                     return
+                user_settings = get_web_user_settings(conn, username)
 
                 host_context = collect_host_mail_context(conn, hostname) if hostname else {"display_name": "(ohne Host)", "hostname": ""}
                 subject = f"[TEST] Kundenalarm {str(host_context.get('display_name') or hostname or '')}"
@@ -8807,6 +8839,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     subject,
                     body,
                     content_type="HTML",
+                    sender_address=str(user_settings.get("email_sender", "") or "").strip(),
                 )
                 conn.commit()
 
