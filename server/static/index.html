@@ -910,6 +910,9 @@
                   <button id="overviewNotificationTabButton" type="button" class="overview-sidebar-item hidden" role="tab" aria-selected="false" aria-controls="overviewNotificationSection">
                     <span class="osi-icon">✉️</span> Benachrichtigung
                   </button>
+                  <button id="overviewDatabaseLifecycleTabButton" type="button" class="overview-sidebar-item" role="tab" aria-selected="false" aria-controls="overviewDatabaseLifecycleSection">
+                    <span class="osi-icon">🗄️</span> DB-Verlauf
+                  </button>
                   <div class="overview-sidebar-divider"></div>
                   <label class="overview-sidebar-range" for="analysisRangeSelect">
                     <span>Zeitraum</span>
@@ -1017,6 +1020,31 @@
                       <tbody id="analysisRows"></tbody>
                     </table>
                   </div>
+                </div>
+              </section>
+
+              <section id="overviewDatabaseLifecycleSection" class="analysis-panel overview-subsection overview-scroll-panel hidden" role="tabpanel" aria-labelledby="overviewDatabaseLifecycleTabButton">
+                <div class="analysis-header">
+                  <h4>🗄️ Datenbank-Verlauf</h4>
+                  <p id="databaseLifecycleSummary" class="count"></p>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Datenbank</th>
+                        <th>Aktion</th>
+                        <th>Auslöser</th>
+                        <th>Zeitpunkt</th>
+                        <th>Grund</th>
+                      </tr>
+                    </thead>
+                    <tbody id="databaseLifecycleRows"></tbody>
+                  </table>
+                </div>
+                <div class="pager pager-bottom">
+                  <p id="databaseLifecyclePagingStatus" class="count compact"></p>
+                  <button id="databaseLifecycleLoadMoreButton" type="button" class="btn-secondary hidden">Mehr laden</button>
                 </div>
               </section>
 

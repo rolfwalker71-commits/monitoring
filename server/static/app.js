@@ -1107,9 +1107,11 @@ function updateOverviewSection() {
   const mainSection = document.getElementById("overviewMainSection");
   const filesystemSection = document.getElementById("overviewFilesystemSection");
   const notificationSection = document.getElementById("overviewNotificationSection");
+  const databaseLifecycleSection = document.getElementById("overviewDatabaseLifecycleSection");
   const mainTabButton = document.getElementById("overviewMainTabButton");
   const filesystemTabButton = document.getElementById("overviewFilesystemTabButton");
   const notificationTabButton = document.getElementById("overviewNotificationTabButton");
+  const databaseLifecycleTabButton = document.getElementById("overviewDatabaseLifecycleTabButton");
 
   if (!mainSection || !filesystemSection || !mainTabButton || !filesystemTabButton) {
     return;
@@ -1118,17 +1120,22 @@ function updateOverviewSection() {
   const showMain = state.overviewSection === "main";
   const showFilesystem = state.overviewSection === "filesystem";
   const showNotification = state.overviewSection === "notification";
+  const showDatabaseLifecycle = state.overviewSection === "database-lifecycle";
 
   mainSection.classList.toggle("hidden", !showMain);
   filesystemSection.classList.toggle("hidden", !showFilesystem);
   if (notificationSection) notificationSection.classList.toggle("hidden", !showNotification);
+  if (databaseLifecycleSection) databaseLifecycleSection.classList.toggle("hidden", !showDatabaseLifecycle);
 
   mainTabButton.classList.toggle("active", showMain);
   filesystemTabButton.classList.toggle("active", showFilesystem);
   if (notificationTabButton) notificationTabButton.classList.toggle("active", showNotification);
+  if (databaseLifecycleTabButton) databaseLifecycleTabButton.classList.toggle("active", showDatabaseLifecycle);
+  
   mainTabButton.setAttribute("aria-selected", showMain ? "true" : "false");
   filesystemTabButton.setAttribute("aria-selected", showFilesystem ? "true" : "false");
   if (notificationTabButton) notificationTabButton.setAttribute("aria-selected", showNotification ? "true" : "false");
+  if (databaseLifecycleTabButton) databaseLifecycleTabButton.setAttribute("aria-selected", showDatabaseLifecycle ? "true" : "false");
 }
 
 function setAlarmSettingsStatus(message, isError = false) {
@@ -6577,6 +6584,7 @@ function wireHostListInteractions() {
       loadReportsForHost();
       loadAnalysisForHost();
       loadAlertsForHost();
+      loadDatabaseLifecycleForHost();
       loadAndRenderCustomerNotificationPanel(hostname);
     });
 
@@ -7341,6 +7349,75 @@ async function loadAlertsForHost() {
     });
   } catch (error) {
     alertsRows.innerHTML = `<tr><td colspan="6" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
+async function loadDatabaseLifecycleForHost() {
+  const databaseLifecycleRows = document.getElementById("databaseLifecycleRows");
+  const databaseLifecycleSummary = document.getElementById("databaseLifecycleSummary");
+  const pagingStatus = document.getElementById("databaseLifecyclePagingStatus");
+  const loadMoreBtn = document.getElementById("databaseLifecycleLoadMoreButton");
+
+  if (!state.selectedHost) {
+    databaseLifecycleSummary.textContent = "";
+    databaseLifecycleRows.innerHTML = state.hostFilterNoMatches
+      ? "<tr><td colspan=\"5\" class=\"muted\">Keine Daten zum Suchfilter vorhanden.</td></tr>"
+      : "<tr><td colspan=\"5\"><div class=\"empty-state\"><span>🗄️</span><p>Wähle einen Host, um den Datenbank-Verlauf zu sehen.</p></div></td></tr>";
+    pagingStatus.textContent = "";
+    loadMoreBtn.classList.add("hidden");
+    return;
+  }
+
+  databaseLifecycleRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Lade Datenbank-Verlauf...</td></tr>";
+  databaseLifecycleSummary.textContent = "";
+  pagingStatus.textContent = "";
+
+  try {
+    const hostNameParam = encodeURIComponent(state.selectedHost);
+    const resp = await fetch(`/api/v1/database-lifecycle?hostname=${hostNameParam}&limit=100&offset=0`);
+
+    if (!resp.ok) {
+      throw new Error("HTTP " + resp.status);
+    }
+
+    const data = await resp.json();
+    const events = data.events || [];
+    const total = data.total || 0;
+    const returned = data.returned || 0;
+
+    databaseLifecycleSummary.textContent = `Insgesamt: ${total} Ereignisse`;
+
+    if (events.length === 0) {
+      databaseLifecycleRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Keine Ereignisse vorhanden.</td></tr>";
+      pagingStatus.textContent = "";
+      loadMoreBtn.classList.add("hidden");
+      return;
+    }
+
+    databaseLifecycleRows.innerHTML = events
+      .map((item) => {
+        const actionBadgeClass = item.action === "create" ? "badge-success" : item.action === "delete" ? "badge-danger" : "badge-info";
+        const actionLabel = item.action === "create" ? "✨ Erstellt" : item.action === "delete" ? "🗑️ Gelöscht" : "Umbenenannt";
+        const triggeredByLabel = item.triggered_by === "system" ? "🖥️ System" : item.triggered_by === "admin" ? "👤 Admin" : "🤖 Agent";
+        const reason = asText(item.reason || "-");
+
+        return `
+          <tr>
+            <td>${escapeHtml(asText(item.database_name))}</td>
+            <td><span class="badge ${actionBadgeClass}">${actionLabel}</span></td>
+            <td>${triggeredByLabel}</td>
+            <td>${escapeHtml(formatUtcPlus2(item.triggered_at_utc))}</td>
+            <td>${escapeHtml(reason)}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    pagingStatus.textContent = `Zeige ${returned} von ${total}`;
+    loadMoreBtn.classList.toggle("hidden", returned >= total);
+  } catch (error) {
+    databaseLifecycleRows.innerHTML = `<tr><td colspan="5" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+    loadMoreBtn.classList.add("hidden");
   }
 }
 
@@ -9133,6 +9210,14 @@ function wireEvents() {
     // Reload panel for current host when switching to this tab
     if (state.selectedHost) {
       loadAndRenderCustomerNotificationPanel(state.selectedHost);
+    }
+  });
+
+  document.getElementById("overviewDatabaseLifecycleTabButton").addEventListener("click", () => {
+    state.overviewSection = "database-lifecycle";
+    updateOverviewSection();
+    if (state.selectedHost) {
+      loadDatabaseLifecycleForHost();
     }
   });
 

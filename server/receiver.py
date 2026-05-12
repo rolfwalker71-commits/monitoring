@@ -500,6 +500,26 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS database_lifecycle (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                hostname TEXT NOT NULL,
+                database_name TEXT NOT NULL,
+                action TEXT NOT NULL,
+                triggered_by TEXT NOT NULL DEFAULT 'system',
+                triggered_at_utc TEXT NOT NULL,
+                reason TEXT NOT NULL DEFAULT '',
+                report_id INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_database_lifecycle_host_time
+            ON database_lifecycle(hostname, triggered_at_utc DESC)
+            """
+        )
+        conn.execute(
+            """
             INSERT INTO alarm_settings (
                 id,
                 warning_threshold_percent,
@@ -1583,6 +1603,66 @@ def is_filesystem_blacklisted(conn: sqlite3.Connection, mountpoint: str) -> bool
         if fnmatch.fnmatch(mountpoint, str(pattern or "")):
             return True
     return False
+
+
+def log_database_lifecycle_event(
+    conn: sqlite3.Connection,
+    hostname: str,
+    database_name: str,
+    action: str,
+    triggered_by: str = "system",
+    reason: str = "",
+    report_id: int | None = None,
+) -> None:
+    """Log database creation/deletion/rename events."""
+    now_utc = utc_now_iso()
+    conn.execute(
+        """
+        INSERT INTO database_lifecycle (
+            hostname, database_name, action, triggered_by, triggered_at_utc, reason, report_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (hostname, database_name, action, triggered_by, now_utc, reason, report_id),
+    )
+
+
+def get_database_lifecycle_for_host(
+    conn: sqlite3.Connection,
+    hostname: str,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict:
+    """Get database lifecycle events for a host."""
+    rows = conn.execute(
+        """
+        SELECT id, database_name, action, triggered_by, triggered_at_utc, reason
+        FROM database_lifecycle
+        WHERE hostname = ?
+        ORDER BY triggered_at_utc DESC
+        LIMIT ? OFFSET ?
+        """,
+        (hostname, limit, offset),
+    ).fetchall()
+    total = conn.execute(
+        "SELECT COUNT(*) FROM database_lifecycle WHERE hostname = ?",
+        (hostname,),
+    ).fetchone()[0]
+    return {
+        "events": [
+            {
+                "id": row[0],
+                "database_name": row[1],
+                "action": row[2],
+                "triggered_by": row[3],
+                "triggered_at_utc": row[4],
+                "reason": row[5],
+            }
+            for row in rows
+        ],
+        "total": total,
+        "returned": len(rows),
+    }
 
 
 def add_filesystem_blacklist_pattern(
@@ -6866,6 +6946,22 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "is_hidden": host_settings["is_hidden"],
                 },
             )
+            return
+
+        if parsed.path == "/api/v1/database-lifecycle":
+            query = parse_qs(parsed.query)
+            hostname = query.get("hostname", [""])[0].strip()
+            if not hostname:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
+                return
+
+            limit = parse_int(query, "limit", default=100, min_value=1, max_value=1000)
+            offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
+
+            with sqlite3.connect(DB_PATH) as conn:
+                data = get_database_lifecycle_for_host(conn, hostname, limit=limit, offset=offset)
+
+            self._send_json(HTTPStatus.OK, data)
             return
 
         if parsed.path == "/api/v1/agent-update-status":
