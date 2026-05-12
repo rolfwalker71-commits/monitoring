@@ -311,14 +311,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.110**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.86**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.112**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.87**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.4.112 | 12.05.2026 | Fix Windows self_update parser error and add X_API_KEY fallback in Windows agents |
 | 1.4.111 | 12.05.2026 | Add comprehensive technical documentation for Linux and Windows agents |
 | 1.4.110 | 12.05.2026 | Add SAP Feature Pack display to host changelog |
 | 1.4.109 | 12.05.2026 | Bump version |

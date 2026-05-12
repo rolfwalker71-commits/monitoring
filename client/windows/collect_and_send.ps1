@@ -31,7 +31,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
-$EmbeddedAgentVersion = '1.4.73'
+$EmbeddedAgentVersion = '1.4.87'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -134,7 +134,7 @@ function Set-AgentApiKey {
 Ensure-HarvestSqlConfig
 
 $ServerUrl = $cfg['SERVER_URL']
-$ApiKey    = if ($cfg.ContainsKey('API_KEY')) { $cfg['API_KEY'] } else { '' }
+$ApiKey    = if ($cfg.ContainsKey('API_KEY') -and $cfg['API_KEY']) { $cfg['API_KEY'] } elseif ($cfg.ContainsKey('X_API_KEY')) { $cfg['X_API_KEY'] } else { '' }
 $SendJitterMaxSec = 300
 
 if ($env:SEND_JITTER_MAX_SEC -match '^\d+$') {

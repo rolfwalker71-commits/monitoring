@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 $IC = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile = if ($env:CONFIG_FILE) { $env:CONFIG_FILE } else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
-$EmbeddedAgentVersion = '1.4.44'
+$EmbeddedAgentVersion = '1.4.87'
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -36,7 +36,7 @@ foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
 }
 
 $ServerUrl = $cfg['SERVER_URL']
-$ApiKey = if ($cfg.ContainsKey('API_KEY')) { $cfg['API_KEY'] } else { '' }
+$ApiKey = if ($cfg.ContainsKey('API_KEY') -and $cfg['API_KEY']) { $cfg['API_KEY'] } elseif ($cfg.ContainsKey('X_API_KEY')) { $cfg['X_API_KEY'] } else { '' }
 if (-not $ServerUrl) {
     Write-Error 'SERVER_URL is not set in config'
     exit 1

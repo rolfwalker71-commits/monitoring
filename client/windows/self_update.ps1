@@ -340,8 +340,7 @@ function Set-ConfigValue {
         [string]$Value
     )
 
-    $escapedValue = $Value -replace '"', '\\"'
-    $line = "$Key=\"$escapedValue\""
+    $line = $Key + '="' + $Value + '"'
     $content = @()
     if (Test-Path $Path) {
         $content = Get-Content -Path $Path -Encoding UTF8
