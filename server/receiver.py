@@ -1607,14 +1607,99 @@ def get_filesystem_blacklist_patterns(conn: sqlite3.Connection) -> list[dict]:
     ]
 
 
-def is_filesystem_blacklisted(conn: sqlite3.Connection, mountpoint: str) -> bool:
+def get_filesystem_blacklist_pattern_strings(conn: sqlite3.Connection) -> list[str]:
+    rows = conn.execute("SELECT pattern FROM filesystem_blacklist_patterns").fetchall()
+    return [str(row[0] or "").strip() for row in rows if str(row[0] or "").strip()]
+
+
+def _filesystem_path_variants(value: str) -> set[str]:
+    text = str(value or "").strip()
+    if not text:
+        return set()
+    variants = {text}
+    if text != "/":
+        trimmed = text.rstrip("/")
+        if trimmed:
+            variants.add(trimmed)
+        if not text.endswith("/"):
+            variants.add(text + "/")
+    return {item for item in variants if item}
+
+
+def filesystem_blacklist_matches_mountpoint(pattern: str, mountpoint: str) -> bool:
+    pattern_text = str(pattern or "").strip()
+    mountpoint_text = str(mountpoint or "").strip()
+    if not pattern_text or not mountpoint_text:
+        return False
+
+    mount_variants = _filesystem_path_variants(mountpoint_text)
+    pattern_variants = _filesystem_path_variants(pattern_text)
+    mount_variants_lower = {item.lower() for item in mount_variants}
+    pattern_variants_lower = {item.lower() for item in pattern_variants}
+
+    has_glob = any(token in pattern_text for token in "*?[")
+    if not has_glob:
+        pattern_key = normalize_mountpoint_key(pattern_text)
+        return any(normalize_mountpoint_key(item) == pattern_key for item in mount_variants)
+
+    # '/path/*' should also match '/path' itself.
+    if pattern_text.endswith("/*"):
+        base_pattern = pattern_text[:-2].rstrip("/") or "/"
+        base_key = normalize_mountpoint_key(base_pattern)
+        if any(normalize_mountpoint_key(item) == base_key for item in mount_variants):
+            return True
+
+    for candidate_mount in mount_variants:
+        for candidate_pattern in pattern_variants:
+            if fnmatch.fnmatch(candidate_mount, candidate_pattern):
+                return True
+    for candidate_mount in mount_variants_lower:
+        for candidate_pattern in pattern_variants_lower:
+            if fnmatch.fnmatch(candidate_mount, candidate_pattern):
+                return True
+    return False
+
+
+def is_filesystem_blacklisted_by_patterns(mountpoint: str, patterns: list[str]) -> bool:
     if not mountpoint:
         return False
-    patterns = conn.execute("SELECT pattern FROM filesystem_blacklist_patterns").fetchall()
-    for (pattern,) in patterns:
-        if fnmatch.fnmatch(mountpoint, str(pattern or "")):
+    for pattern in patterns:
+        if filesystem_blacklist_matches_mountpoint(pattern, mountpoint):
             return True
     return False
+
+
+def is_filesystem_blacklisted(conn: sqlite3.Connection, mountpoint: str) -> bool:
+    return is_filesystem_blacklisted_by_patterns(mountpoint, get_filesystem_blacklist_pattern_strings(conn))
+
+
+def resolve_open_blacklisted_alerts(conn: sqlite3.Connection, patterns: list[str]) -> int:
+    if not patterns:
+        return 0
+    now_utc = utc_now_iso()
+    open_rows = conn.execute(
+        """
+        SELECT id, hostname, mountpoint
+        FROM alerts
+        WHERE status = 'open'
+        """
+    ).fetchall()
+    resolved_count = 0
+    for row in open_rows:
+        alert_id = int(row[0] or 0)
+        hostname = str(row[1] or "").strip()
+        mountpoint = str(row[2] or "").strip()
+        if alert_id <= 0 or not hostname or not mountpoint:
+            continue
+        if not is_filesystem_blacklisted_by_patterns(mountpoint, patterns):
+            continue
+        conn.execute(
+            "UPDATE alerts SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ? WHERE id = ?",
+            (now_utc, now_utc, alert_id),
+        )
+        conn.execute("DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?", (hostname, mountpoint))
+        resolved_count += 1
+    return resolved_count
 
 
 def log_database_lifecycle_event(
@@ -1822,13 +1907,15 @@ def add_filesystem_blacklist_pattern(
             """,
             (pattern_normalized, description_normalized, now_utc, now_utc),
         )
-        return {
+        result = {
             "id": cursor.lastrowid,
             "pattern": pattern_normalized,
             "description": description_normalized,
             "created_at_utc": now_utc,
             "updated_at_utc": now_utc,
         }
+        resolve_open_blacklisted_alerts(conn, [pattern_normalized])
+        return result
     except sqlite3.IntegrityError:
         raise ValueError("pattern already exists")
 
@@ -2271,6 +2358,9 @@ def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | 
         ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, used_percent DESC, id DESC
         """
     ).fetchall()
+    blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
+    if blacklist_patterns:
+        rows = [row for row in rows if not is_filesystem_blacklisted_by_patterns(str(row[2] or ""), blacklist_patterns)]
     if allowed_hostnames is not None:
         rows = [row for row in rows if str(row[1] or "") in allowed_hostnames]
 
@@ -3484,14 +3574,18 @@ def export_alerts_rows(conn: sqlite3.Connection, *, status: str | None = None, s
         """,
         tuple(params),
     ).fetchall()
+    blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
 
     result: list[dict] = []
     for row in rows:
+        mountpoint = str(row[2] or "")
+        if is_filesystem_blacklisted_by_patterns(mountpoint, blacklist_patterns):
+            continue
         result.append(
             {
                 "id": int(row[0] or 0),
                 "hostname": str(row[1] or ""),
-                "mountpoint": str(row[2] or ""),
+                "mountpoint": mountpoint,
                 "severity": str(row[3] or "warning"),
                 "used_percent": float(row[4] or 0.0),
                 "created_at_utc": str(row[5] or ""),
@@ -5014,6 +5108,7 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
 
     now_utc_iso = now_utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     host_context_cache: dict[str, dict] = {}
+    blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
 
     try:
         user_rows = conn.execute(
@@ -5039,6 +5134,14 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
         mountpoint = str(alert_row[2] or "")
         severity = str(alert_row[3] or "warning")
         used_percent = float(alert_row[4] or 0)
+
+        if is_filesystem_blacklisted_by_patterns(mountpoint, blacklist_patterns):
+            conn.execute(
+                "UPDATE alerts SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ? WHERE id = ?",
+                (now_utc_iso, now_utc_iso, alert_id),
+            )
+            conn.execute("DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?", (hostname, mountpoint))
+            continue
 
         if hostname not in host_context_cache:
             host_context_cache[hostname] = collect_host_mail_context(conn, hostname)
@@ -6162,6 +6265,7 @@ def evaluate_severity(used_percent: float) -> str:
 def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id: int, filesystems: list, alarm_settings: dict) -> None:
     now_utc = utc_now_iso()
     mountpoints_seen = set()
+    blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
     hidden_mountpoint_keys = {
         normalize_mountpoint_key(str(row[0] or ""))
         for row in conn.execute(
@@ -6202,7 +6306,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
             conn.execute("DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?", (hostname, mountpoint))
             continue
 
-        if is_filesystem_blacklisted(conn, mountpoint):
+        if is_filesystem_blacklisted_by_patterns(mountpoint, blacklist_patterns):
             blacklisted_open = conn.execute(
                 "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open'",
                 (hostname, mountpoint),
@@ -7613,12 +7717,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 where_clause = "WHERE " + " AND ".join(where_parts)
 
             with sqlite3.connect(DB_PATH) as conn:
-                total = conn.execute(
-                    f"SELECT COUNT(*) FROM alerts {where_clause}",
-                    tuple(args),
-                ).fetchone()[0]
-
-                rows = conn.execute(
+                all_rows = conn.execute(
                     f"""
                     SELECT id, hostname, mountpoint, severity, used_percent, status,
                           created_at_utc, last_seen_at_utc, resolved_at_utc, report_id,
@@ -7627,10 +7726,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     FROM alerts
                     {where_clause}
                     ORDER BY id DESC
-                    LIMIT ? OFFSET ?
                     """,
-                    tuple(args + [limit, offset]),
+                    tuple(args),
                 ).fetchall()
+                blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
+                filtered_rows = [
+                    row
+                    for row in all_rows
+                    if not is_filesystem_blacklisted_by_patterns(str(row[2] or ""), blacklist_patterns)
+                ]
+                total = len(filtered_rows)
+                rows = filtered_rows[offset : offset + limit]
 
                 hostnames = sorted({str(row[1]) for row in rows if row[1]})
                 display_names: dict[str, str] = {}
@@ -7730,18 +7836,19 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             with sqlite3.connect(DB_PATH) as conn:
                 alarm_settings = get_alarm_settings(conn)
-                total_open = conn.execute(
-                    f"SELECT COUNT(*) FROM alerts {where_clause}",
+                rows = conn.execute(
+                    f"SELECT severity, mountpoint FROM alerts {where_clause}",
                     tuple(args),
-                ).fetchone()[0]
-                warning_open = conn.execute(
-                    f"SELECT COUNT(*) FROM alerts {where_clause} AND severity = 'warning'",
-                    tuple(args),
-                ).fetchone()[0]
-                critical_open = conn.execute(
-                    f"SELECT COUNT(*) FROM alerts {where_clause} AND severity = 'critical'",
-                    tuple(args),
-                ).fetchone()[0]
+                ).fetchall()
+                blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
+                visible_rows = [
+                    row
+                    for row in rows
+                    if not is_filesystem_blacklisted_by_patterns(str(row[1] or ""), blacklist_patterns)
+                ]
+                total_open = len(visible_rows)
+                warning_open = sum(1 for row in visible_rows if str(row[0] or "").strip().lower() == "warning")
+                critical_open = sum(1 for row in visible_rows if str(row[0] or "").strip().lower() == "critical")
 
             self._send_json(
                 HTTPStatus.OK,
