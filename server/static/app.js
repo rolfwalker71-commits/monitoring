@@ -1,4 +1,4 @@
-// Dummy change marker for commit/push test
+// Republish marker: app.js refreshed for deploy verification
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
