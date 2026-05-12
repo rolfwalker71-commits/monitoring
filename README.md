@@ -301,7 +301,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ---
 
-## Versionierung
+## Documentation
+
+- **[TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md)** – Server architecture, data flows, alert state machine, database lifecycle tracking, and blacklist enforcement mechanisms with Mermaid diagrams
+- **[AGENT_LINUX_TECHNICAL.md](AGENT_LINUX_TECHNICAL.md)** – Comprehensive reference for `collect_and_send.sh`: metrics collection, jitter mechanism, locking, large files scanning, SAP B1 and HANA integration
+- **[AGENT_WINDOWS_TECHNICAL.md](AGENT_WINDOWS_TECHNICAL.md)** – Complete guide for `collect_and_send.ps1`: WMI/SMO data collection, SQL Server integration, HANA querying, crash handling, and Task Scheduler setup
+
+---
+
+## Versioning
 
 - Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.110**)
 - Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.86**)
@@ -311,6 +319,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.4.111 | 12.05.2026 | Add comprehensive technical documentation for Linux and Windows agents |
 | 1.4.110 | 12.05.2026 | Add SAP Feature Pack display to host changelog |
 | 1.4.109 | 12.05.2026 | Bump version |
 | 1.4.108 | 12.05.2026 | Bold Feature Pack in SAP Release changelog display |
