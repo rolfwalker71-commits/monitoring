@@ -1884,32 +1884,31 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 #overviewConfigChangelogSection table {
   table-layout: auto;
   width: 100%;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 #overviewConfigChangelogSection td,
 #overviewConfigChangelogSection th {
-  padding: 4px 5px;
-  font-size: 11px;
+  padding: 3px 4px;
+  font-size: 10px;
   word-break: break-word;
   white-space: normal;
 }
 
 #overviewConfigChangelogSection th {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
 #overviewConfigChangelogSection code {
-  font-size: 10.5px;
+  font-size: 10px;
   word-break: break-all;
 }
 
-#overviewConfigChangelogSection th:nth-child(1) { width: 14%; }
-#overviewConfigChangelogSection th:nth-child(2) { width: 26%; }
-#overviewConfigChangelogSection th:nth-child(3) { width: 26%; }
-#overviewConfigChangelogSection th:nth-child(4) { width: 10%; }
-#overviewConfigChangelogSection th:nth-child(5) { width: 24%; }
+#overviewConfigChangelogSection th:nth-child(1) { width: 16%; }
+#overviewConfigChangelogSection th:nth-child(2) { width: 31%; }
+#overviewConfigChangelogSection th:nth-child(3) { width: 31%; }
+#overviewConfigChangelogSection th:nth-child(4) { width: 22%; }
 
 #overviewDatabaseLifecycleSection table {
   table-layout: auto;

@@ -7444,7 +7444,7 @@ async function loadConfigChangelogForHost() {
     return;
   }
 
-  configChangelogRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Lade Änderungen...</td></tr>";
+  configChangelogRows.innerHTML = "<tr><td colspan=\"4\" class=\"muted\">Lade Änderungen...</td></tr>";
   configChangelogSummary.textContent = "";
   pagingStatus.textContent = "";
 
@@ -7464,7 +7464,7 @@ async function loadConfigChangelogForHost() {
     configChangelogSummary.textContent = `Insgesamt: ${total} Änderungen`;
 
     if (items.length === 0) {
-      configChangelogRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Keine Änderungen vorhanden.</td></tr>";
+      configChangelogRows.innerHTML = "<tr><td colspan=\"4\" class=\"muted\">Keine Änderungen vorhanden.</td></tr>";
       pagingStatus.textContent = "";
       loadMoreBtn.classList.add("hidden");
       return;
@@ -7472,7 +7472,6 @@ async function loadConfigChangelogForHost() {
 
     configChangelogRows.innerHTML = items
       .map((item) => {
-        const sourceLabel = item.source === "system" ? "🖥️ System" : item.source === "admin" ? "👤 Admin" : "🤖 Agent";
         const fieldLabel = asText(item.field_label || item.field_key);
         const oldValue = asText(item.old_value || "-");
         const newValue = asText(item.new_value || "-");
@@ -7482,7 +7481,7 @@ async function loadConfigChangelogForHost() {
             <td><strong>${escapeHtml(fieldLabel)}</strong></td>
             <td><code>${escapeHtml(oldValue)}</code></td>
             <td><code>${escapeHtml(newValue)}</code></td>
-            <td>${sourceLabel}</td>
+            
             <td>${escapeHtml(formatUtcPlus2(item.detected_at_utc))}</td>
           </tr>
         `;
@@ -7492,7 +7491,7 @@ async function loadConfigChangelogForHost() {
     pagingStatus.textContent = `Zeige ${returned} von ${total}`;
     loadMoreBtn.classList.toggle("hidden", returned >= total);
   } catch (error) {
-    configChangelogRows.innerHTML = `<tr><td colspan="5" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+    configChangelogRows.innerHTML = `<tr><td colspan="4" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
     loadMoreBtn.classList.add("hidden");
   }
 }
