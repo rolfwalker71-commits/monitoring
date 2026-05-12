@@ -4041,8 +4041,8 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
         "<div style='display:flex;align-items:center;gap:22px;margin-bottom:12px;'>"
         f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;'>"
         "<div>"
-        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>MONITORING</div>"
-        f"<div style='margin-top:4px;font-size:12px;color:#5f7590;'>v{build_version}</div>"
+        "<div style='font-size:20px;font-weight:900;letter-spacing:.4px;line-height:1.1;'>ANG System Health</div>"
+        "<div style='font-size:14px;font-weight:600;color:#5f7590;line-height:1.2;'>Dashboard</div>"
         "</div>"
         "</div>"
         "<h2 style='margin:0 0 6px 0;font-size:22px;color:#17324d;'>Daily Trend Digest</h2>"
@@ -4070,13 +4070,7 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
 def trend_digest_subject(warnings: list[dict], local_date: str) -> str:
     critical_count = sum(1 for item in warnings if str(item.get("level")) == "crit")
     warning_count = sum(1 for item in warnings if str(item.get("level")) == "warn")
-    if critical_count > 0:
-        level = "KRITISCH"
-    elif warning_count > 0:
-        level = "WARNUNG"
-    else:
-        level = "INFO"
-    return f"[Monitoring] [{level}] Trend Digest {local_date} (C:{critical_count} W:{warning_count})"
+    return f"[Monitoring] Trend Digest {local_date} (C:{critical_count} W:{warning_count})"
 
 
 def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int, str] | None = None, graph_hours: int = 24) -> str:
@@ -4121,8 +4115,8 @@ def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int
         "<div style='display:flex;align-items:center;gap:22px;margin-bottom:12px;'>"
         f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;'>"
         "<div>"
-        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>MONITORING</div>"
-        f"<div style='margin-top:4px;font-size:12px;color:#5f7590;'>v{build_version}</div>"
+        "<div style='font-size:20px;font-weight:900;letter-spacing:.4px;line-height:1.1;'>ANG System Health</div>"
+        "<div style='font-size:14px;font-weight:600;color:#5f7590;line-height:1.2;'>Dashboard</div>"
         "</div>"
         f"<div style='font-size:13px;color:#5f7590;'>Benutzer: {html.escape(username)} | Zeit: {html.escape(format_mail_datetime())}</div>"
         "</div>"
@@ -4148,13 +4142,7 @@ def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int
 def alert_digest_subject(alerts: list[dict], local_date: str) -> str:
     critical_count = sum(1 for item in alerts if str(item.get("severity")) == "critical")
     warning_count = sum(1 for item in alerts if str(item.get("severity")) == "warning")
-    if critical_count > 0:
-        level = "KRITISCH"
-    elif warning_count > 0:
-        level = "WARNUNG"
-    else:
-        level = "INFO"
-    return f"[Monitoring] [{level}] Alert Digest {local_date} (C:{critical_count} W:{warning_count})"
+    return f"[Monitoring] Alert Digest {local_date} (C:{critical_count} W:{warning_count})"
 
 
 def alert_instant_mail_subject(event_type: str, hostname: str, severity: str, display_name: str = "") -> str:
@@ -4235,8 +4223,8 @@ def alert_instant_mail_html(
         "<div style='display:flex;align-items:center;gap:22px;margin-bottom:12px;'>"
         f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;'>"
         "<div>"
-        "<div style='font-size:24px;font-weight:900;letter-spacing:.4px;line-height:1.05;'>MONITORING</div>"
-        f"<div style='margin-top:4px;font-size:12px;color:#5f7590;'>v{build_version}</div>"
+        "<div style='font-size:20px;font-weight:900;letter-spacing:.4px;line-height:1.1;'>ANG System Health</div>"
+        "<div style='font-size:14px;font-weight:600;color:#5f7590;line-height:1.2;'>Dashboard</div>"
         "</div>"
         "</div>"
         f"<div style='font-size:12px;color:#5f7590;margin-bottom:8px;'>Benutzer: {html.escape(username)} | {html.escape(format_mail_datetime())}</div>"
