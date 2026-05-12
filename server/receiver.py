@@ -5105,7 +5105,6 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                     content_type="HTML",
                     attachments=graph_attachments,
                     sender_address=str(user_settings.get("email_sender", "") or "").strip(),
-                    sender_address=str(user_settings.get("email_sender", "") or "").strip(),
                 )
                 sent_to_anyone = True
             except Exception:
