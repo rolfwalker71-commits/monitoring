@@ -311,7 +311,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.116**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.117**)
 - Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.88**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
@@ -319,6 +319,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.4.117 | 12.05.2026 | Add explicit helper note below centralized mail settings save button |
 | 1.4.116 | 12.05.2026 | Consolidate mail settings save action to one button at end of digest section |
 | 1.4.115 | 12.05.2026 | Normalize German UI/user texts to umlauts (Swiss ss retained) |
 | 1.4.114 | 12.05.2026 | Fix host notification save by persisting customer alert fields in host settings API |
