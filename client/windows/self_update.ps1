@@ -336,6 +336,7 @@ function Set-ConfigValue {
         [string]$Path,
         [Parameter(Mandatory = $true)]
         [string]$Key,
+        [AllowEmptyString()]
         [Parameter(Mandatory = $true)]
         [string]$Value
     )
