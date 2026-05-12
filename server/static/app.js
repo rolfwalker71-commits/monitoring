@@ -1,3 +1,4 @@
+// Dummy change marker for commit/push test
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
