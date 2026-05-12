@@ -254,7 +254,7 @@
                 <span id="hostConfigChangesSummary" class="count compact"></span>
                 <input id="hostConfigChangesSearchInput" type="text" class="search-input-compact" placeholder="Nach Host oder Feld suchen..." />
                 <div id="hostConfigChangesCountryFilter" class="system-overview-country-filter" aria-label="Land Filter"></div>
-                <select id="hostConfigChangesHoursFilter" class="btn-secondary-compact" title="Zeitraum für Aenderungen">
+                <select id="hostConfigChangesHoursFilter" class="btn-secondary-compact" title="Zeitraum für Änderungen">
                   <option value="24">24h</option>
                   <option value="168">7 Tage</option>
                   <option value="720" selected>30 Tage</option>
@@ -325,7 +325,7 @@
                 <p class="count compact">Systemweite Agent-Aktionen</p>
               </div>
               <div class="global-admin-ops-actions">
-                <button id="triggerAllAgentsUpdateButton" class="global-update-chip global-update-chip-inline" type="button" title="Update fuer alle Hosts">⟳ Update fuer alle Hosts</button>
+                <button id="triggerAllAgentsUpdateButton" class="global-update-chip global-update-chip-inline" type="button" title="Update für alle Hosts">⟳ Update für alle Hosts</button>
                 <button id="rolloutApiKeyButton" class="btn-secondary" type="button" title="Neuen API-Key auf alle Agenten ausrollen">🔐 API-Key verteilen</button>
                 <button id="downloadDatabaseBackupButton" class="btn-secondary" type="button" title="SQLite Datenbank lokal sichern">💾 DB sichern</button>
                 <button id="restoreDatabaseButton" class="btn-secondary btn-danger-outline" type="button" title="Datenbank aus Backup-Datei wiederherstellen">&#x267B;&#xFE0F; DB wiederherstellen</button>
@@ -355,12 +355,12 @@
                         <th>Letzter Report</th>
                         <th>Command erstellt</th>
                         <th>Command ausgefuehrt</th>
-                        <th>Command laeuft ab</th>
+                        <th>Command läuft ab</th>
                         <th>Naechster Priority-Check</th>
                         <th>Letzter Priority-Check</th>
                         <th>Priority (min)</th>
                         <th>Recurring (h)</th>
-                        <th>Rueckkanal</th>
+                        <th>Rückkanal</th>
                       </tr>
                     </thead>
                     <tbody id="agentUpdateStatusTableBody">
@@ -377,7 +377,7 @@
           <div class="settings-page">
             <div class="settings-page-header">
               <h3>👤 Benutzereinstellungen</h3>
-              <p class="count">Persoenliche Sicherheit, Benachrichtigungen, Digests und Host-Interessen</p>
+              <p class="count">Persönliche Sicherheit, Benachrichtigungen, Digests und Host-Interessen</p>
               <div>
                 <button id="settingsBackToOverviewButton" class="btn-secondary" type="button">Zur Hauptansicht</button>
               </div>
@@ -394,7 +394,7 @@
 
             <section class="settings-subsection" id="userSettingsPasswordPanel" data-user-settings-panel="password">
               <div class="settings-subsection-head">
-                <h5>🔑 Passwort aendern</h5>
+                <h5>🔑 Passwort ändern</h5>
                 <p class="count compact">Eigenes Web-Passwort aktualisieren</p>
               </div>
               <div class="alarm-settings-grid">
@@ -425,10 +425,10 @@
               <div class="alarm-settings-grid">
                 <label class="checkbox-line">
                   <input id="userEmailEnabledInput" type="checkbox" />
-                  Mailversand fuer mich aktivieren
+                  Mailversand für mich aktivieren
                 </label>
                 <label>
-                  Mail Empfaenger
+                  Mail Empfänger
                   <input id="userEmailRecipientInput" type="email" placeholder="alerts@example.com" />
                 </label>
                 <label>
@@ -460,7 +460,7 @@
                   <input id="trendEmailTimeInput" type="time" />
                 </label>
                 <label>
-                  Empfaenger Mail-Adresse
+                  Empfänger Mail-Adresse
                   <input id="trendDigestRecipientInput" type="email" placeholder="alerts@example.com" />
                 </label>
                 <div class="settings-fieldset-row">
@@ -495,16 +495,16 @@
                   <input id="alertEmailTimeInput" type="time" />
                 </label>
                 <label>
-                  Weitere Alarm Empfaenger (optional, comma/semicolon getrennt)
+                  Weitere Alarm Empfänger (optional, comma/semicolon getrennt)
                   <input id="alertEmailRecipientsInput" type="text" placeholder="ops@example.com; noc@example.com" />
                 </label>
                 <label>
-                  Empfaenger nur fuer Warnung (optional, ueberschreibt Standard)
+                  Empfänger nur für Warnung (optional, überschreibt Standard)
                   <input id="alertWarningEmailRecipientsInput" type="text" placeholder="warn@example.com; team-warning@example.com" />
                   <span class="settings-helper-text override-explanation">Wenn hier mindestens eine Adresse eingetragen ist, wird diese Liste bei Warnung-Alert-Mails als <b>vollständiger Empfängerersatz</b> verwendet. Die Standard-Empfängerliste wird <b>nicht</b> verwendet.</span>
                 </label>
                 <label>
-                  Empfaenger nur fuer Kritisch (optional, ueberschreibt Standard)
+                  Empfänger nur für Kritisch (optional, überschreibt Standard)
                   <input id="alertCriticalEmailRecipientsInput" type="text" placeholder="critical@example.com; team-critical@example.com" />
                   <span class="settings-helper-text override-explanation">Wenn hier mindestens eine Adresse eingetragen ist, wird diese Liste bei Kritisch-Alert-Mails als <b>vollständiger Empfängerersatz</b> verwendet. Die Standard-Empfängerliste wird <b>nicht</b> verwendet.</span>
                 </label>
@@ -530,7 +530,7 @@
                   <input id="backupEmailTimeInput" type="time" />
                 </label>
                 <label>
-                  Empfaenger (comma/semicolon getrennt)
+                  Empfänger (comma/semicolon getrennt)
                   <input id="backupEmailRecipientsInput" type="text" placeholder="backup-team@example.com; ops@example.com" />
                 </label>
               </div>
@@ -561,7 +561,7 @@
                   </select>
                 </label>
                 <label>
-                  Persoenliche Telegram Chat ID
+                  Persönliche Telegram Chat ID
                   <input id="alertTelegramChatIdInput" type="text" placeholder="z.B. 123456789 oder -1001234567890" />
                 </label>
               </div>
@@ -601,7 +601,7 @@
             <section id="adminOauthSettingsSection" class="settings-subsection hidden" data-user-settings-panel="admin">
               <div class="settings-subsection-head">
                 <h5>Microsoft OAuth App</h5>
-                <p class="count compact">Globale App-Registrierung fuer den Webserver</p>
+                <p class="count compact">Globale App-Registrierung für den Webserver</p>
               </div>
               <div class="alarm-settings-grid">
                 <label class="checkbox-line">
@@ -662,7 +662,7 @@
                       <th>Anzeigename</th>
                       <th>Admin</th>
                       <th>Aktiv</th>
-                      <th>Mail Empfaenger</th>
+                      <th>Mail Empfänger</th>
                       <th>Microsoft</th>
                       <th>Aktionen</th>
                     </tr>
@@ -882,7 +882,7 @@
                   </label>
                   <span id="autoRefreshStatus" class="auto-refresh-status">-</span>
                   <span id="summaryLastUpdate" class="stat-chip auto-refresh-last-update hidden">🕒 -</span>
-                  <button id="exportHostReportsButton" class="btn-secondary btn-secondary--compact" type="button" title="Meldungen des gewaehlten Hosts als JSON exportieren">Export JSON</button>
+                  <button id="exportHostReportsButton" class="btn-secondary btn-secondary--compact" type="button" title="Meldungen des gewählten Hosts als JSON exportieren">Export JSON</button>
                   <button id="editDisplayNameButton" class="btn-icon" type="button" title="Titel bearbeiten">✏️</button>
                 </div>
               </div>
@@ -988,7 +988,7 @@
                   <h4 id="filesystemSectionTitle">Filesysteme (letzte 24 Std.)</h4>
                   <div class="fs-focus-actions">
                     <p id="filesystemStats" class="count"></p>
-                    <button id="filesystemAiTroubleshootButton" class="btn-secondary btn-secondary--compact" type="button" title="KI Analyse fuer alle Filesysteme">🤖 KI Analyse</button>
+                    <button id="filesystemAiTroubleshootButton" class="btn-secondary btn-secondary--compact" type="button" title="KI Analyse für alle Filesysteme">🤖 KI Analyse</button>
                     <button id="filesystemFocusSettingsButton" class="btn-emoji-pill hidden" type="button" title="Filesysteme konfigurieren">⚙️</button>
                   </div>
                 </div>

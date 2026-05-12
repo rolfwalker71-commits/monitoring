@@ -3760,8 +3760,8 @@ def build_ai_troubleshoot_response(conn: sqlite3.Connection, hostname: str, metr
             "analysis": build_analysis_payload(
                 severity="info",
                 confidence="hoch",
-                summary="Keine ausreichenden Messdaten im gewaehlten Zeitraum.",
-                probable_causes=["Im gewaehlten Zeitfenster liegen keine verwertbaren Werte fuer diese Kennzahl vor."],
+                summary="Keine ausreichenden Messdaten im gewählten Zeitraum.",
+                probable_causes=["Im gewählten Zeitfenster liegen keine verwertbaren Werte für diese Kennzahl vor."],
                 recommended_steps=["Zeitraum vergroessern oder pruefen, ob der Agent aktuelle Reports liefert."],
             ),
             "model": "local-rules-v1",
@@ -3790,7 +3790,7 @@ def build_ai_troubleshoot_response(conn: sqlite3.Connection, hostname: str, metr
         severity = "critical" if peak >= CRITICAL_THRESHOLD_PERCENT else ("warning" if peak >= WARNING_THRESHOLD_PERCENT else "info")
         confidence = "hoch" if len(values) >= 12 else "mittel"
         summary = (
-            f"Filesystem-Analyse fuer {host}: aktuell {latest:.1f}%, Mittelwert {avg:.1f}%, Spitze {peak:.1f}%."
+            f"Filesystem-Analyse für {host}: aktuell {latest:.1f}%, Mittelwert {avg:.1f}%, Spitze {peak:.1f}%."
         )
         probable_causes = [
             "Ein oder mehrere Mountpoints laufen in eine hohe Belegung hinein.",
@@ -3817,7 +3817,7 @@ def build_ai_troubleshoot_response(conn: sqlite3.Connection, hostname: str, metr
     elif metric_key == "load_avg_1":
         severity = "critical" if peak >= 4.0 else ("warning" if peak >= 2.0 else "info")
         confidence = "mittel"
-        summary = f"Load-Analyse fuer {host}: aktuell {latest:.2f}, Mittelwert {avg:.2f}, Spitze {peak:.2f}."
+        summary = f"Load-Analyse für {host}: aktuell {latest:.2f}, Mittelwert {avg:.2f}, Spitze {peak:.2f}."
         probable_causes = [
             "CPU-intensive Prozesse oder I/O-Wartezeiten treiben den Load Average hoch.",
             "Kurzfristige Jobs oder Backups koennen Lastspitzen ausloesen.",
@@ -3840,10 +3840,10 @@ def build_ai_troubleshoot_response(conn: sqlite3.Connection, hostname: str, metr
         confidence = "hoch" if len(values) >= 12 else "mittel"
         direction = "steigend" if trend > 3.0 else ("fallend" if trend < -3.0 else "seitwaerts")
         summary = (
-            f"Trend-Analyse fuer {host}: aktuell {latest:.1f}%, Mittelwert {avg:.1f}%, Spitze {peak:.1f}%. Trend: {direction}."
+            f"Trend-Analyse für {host}: aktuell {latest:.1f}%, Mittelwert {avg:.1f}%, Spitze {peak:.1f}%. Trend: {direction}."
         )
         probable_causes = [
-            "Die Kennzahl zeigt ueber das Zeitfenster eine anhaltende Last oder wiederkehrende Peaks.",
+            "Die Kennzahl zeigt über das Zeitfenster eine anhaltende Last oder wiederkehrende Peaks.",
             "Parallele Jobs, Speicherdruck oder Hintergrundprozesse koennen den Verlauf erklaeren.",
         ]
         recommended_steps = [
@@ -4148,7 +4148,7 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
         for item in warnings
     )
     if not rows_html:
-        rows_html = "<tr><td colspan='5' style='padding:12px 8px;text-align:left;color:#475569;'>Keine kritischen Trends im gewaehlten Zeitraum.</td></tr>"
+        rows_html = "<tr><td colspan='5' style='padding:12px 8px;text-align:left;color:#475569;'>Keine kritischen Trends im gewählten Zeitraum.</td></tr>"
 
     return (
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
@@ -4330,7 +4330,7 @@ def alert_instant_mail_html(
         "</div>"
     ) if graph_cid else (
         "<div style='margin-top:14px;padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #dbe3ef;color:#64748b;font-size:12px;'>"
-        "Keine Verlaufsgrafik verfuegbar (zu wenig Datenpunkte).</div>"
+        "Keine Verlaufsgrafik verfügbar (zu wenig Datenpunkte).</div>"
     )
     return (
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
@@ -4622,19 +4622,19 @@ def oauth_is_configured(settings: dict) -> bool:
 def build_user_mail_logic_help() -> dict:
     return {
         "channels": {
-            "title": "Mailversand ueber Microsoft OAuth",
+            "title": "Mailversand über Microsoft OAuth",
             "items": [
                 "Global muss zuerst die Microsoft OAuth App im Admin-Bereich konfiguriert und aktiviert sein.",
-                "Zusaetzlich muss jeder Benutzer sein eigenes Microsoft-Konto verbinden. Gesendet wird ueber dieses Benutzerkonto via Microsoft Graph.",
-                "Mailversand fuer mich aktivieren schaltet nur die persoenliche Versandfreigabe ein. Ohne Mail-Empfaenger und ohne OAuth-Verbindung wird nichts versendet.",
-                "Die Empfaenger-Adresse hier ist die Basisadresse fuer Trend-Mail, Alert-Digest und Instant-Alert-Mail.",
+                "Zusätzlich muss jeder Benutzer sein eigenes Microsoft-Konto verbinden. Gesendet wird über dieses Benutzerkonto via Microsoft Graph.",
+                "Mailversand für mich aktivieren schaltet nur die persönliche Versandfreigabe ein. Ohne Mail-Empfänger und ohne OAuth-Verbindung wird nichts versendet.",
+                "Die Empfänger-Adresse hier ist die Basisadresse für Trend-Mail, Alert-Digest und Instant-Alert-Mail.",
             ],
         },
         "trend_digest": {
             "title": "Trend Mail Logik",
             "items": [
-                "Der Versand laeuft einmal pro Tag zur eingestellten Zeit in der festen Zeitzone Europe/Zurich.",
-                "Voraussetzungen: persoenlicher Mailversand aktiv, Mail-Empfaenger gesetzt, Trend-Mail aktiv und Microsoft-OAuth verbunden.",
+                "Der Versand läuft einmal pro Tag zur eingestellten Zeit in der festen Zeitzone Europe/Zurich.",
+                "Voraussetzungen: persönlicher Mailversand aktiv, Mail-Empfänger gesetzt, Trend-Mail aktiv und Microsoft-OAuth verbunden.",
                 "Hidden Mountpoints aus Kritische Trends und FS-Focus werden im Digest nicht gezeigt.",
                 "Die Host-Auswahl folgt den gespeicherten Host-Interessen: Alle Hosts, Interessante Hosts zuerst oder Nur interessante Hosts.",
                 "Interessante Hosts zuerst priorisiert nur die Sortierung. Nur interessante Hosts filtert den Digest inhaltlich auf diese Hosts ein.",
@@ -4643,22 +4643,22 @@ def build_user_mail_logic_help() -> dict:
         "alert_digest": {
             "title": "Alarm Digest Logik",
             "items": [
-                "Der Alarm-Digest laeuft einmal pro Tag zur eingestellten Zeit in Europe/Zurich.",
-                "Voraussetzungen: persoenlicher Mailversand aktiv, Basis-Empfaenger gesetzt, Alarm-Mail aktiv und Microsoft-OAuth verbunden.",
-                "Weitere Alarm Empfaenger erweitern die Versandliste fuer diesen Digest zusaetzlich zur Basisadresse.",
+                "Der Alarm-Digest läuft einmal pro Tag zur eingestellten Zeit in Europe/Zurich.",
+                "Voraussetzungen: persönlicher Mailversand aktiv, Basis-Empfänger gesetzt, Alarm-Mail aktiv und Microsoft-OAuth verbunden.",
+                "Weitere Alarm Empfänger erweitern die Versandliste für diesen Digest zusätzlich zur Basisadresse.",
                 "Der Inhalt respektiert jetzt die Mail-Host-Abos des Benutzers: nur Hosts mit aktiviertem Mail-Abo erscheinen im Alert-Digest.",
-                "Wenn Empfaenger nur fuer Warnung oder nur fuer Kritisch gesetzt sind, ersetzen diese Listen fuer den entsprechenden Schweregrad die Standard-Empfaenger vollstaendig.",
+                "Wenn Empfänger nur für Warnung oder nur für Kritisch gesetzt sind, ersetzen diese Listen für den entsprechenden Schweregrad die Standard-Empfänger vollständig.",
             ],
         },
         "instant_alerts": {
             "title": "Sofort-Alerts per Mail und Telegram",
             "items": [
                 "Sofort-Alerts reagieren auf einzelne Events: Alarm ausgeloest, eskaliert oder behoben.",
-                "Mail respektiert pro Benutzer: Mailversand aktiv, Basis-Empfaenger vorhanden, Instant-Mail aktiv, Mindest-Schweregrad passend und Mail-Host-Abo fuer den betroffenen Host gesetzt.",
-                "Wenn fuer Warnung oder Kritisch eigene Empfaengerlisten hinterlegt sind, ersetzen diese fuer Sofort-Mails die Standard-Empfaenger des jeweiligen Schweregrads.",
-                "Telegram respektiert pro Benutzer: Instant-Telegram aktiv, persoenliche Chat-ID gesetzt, Mindest-Schweregrad passend und Telegram-Host-Abo fuer den betroffenen Host gesetzt.",
-                "Telegram braucht zusaetzlich global aktiviertes Telegram und einen global hinterlegten Bot-Token im Alarm-Setup.",
-                "Die persoenliche Chat-ID ist benutzerspezifisch. Bot-Token und Telegram global an/aus sind systemweit.",
+                "Mail respektiert pro Benutzer: Mailversand aktiv, Basis-Empfänger vorhanden, Instant-Mail aktiv, Mindest-Schweregrad passend und Mail-Host-Abo für den betroffenen Host gesetzt.",
+                "Wenn für Warnung oder Kritisch eigene Empfängerlisten hinterlegt sind, ersetzen diese für Sofort-Mails die Standard-Empfänger des jeweiligen Schweregrads.",
+                "Telegram respektiert pro Benutzer: Instant-Telegram aktiv, persönliche Chat-ID gesetzt, Mindest-Schweregrad passend und Telegram-Host-Abo für den betroffenen Host gesetzt.",
+                "Telegram braucht zusätzlich global aktiviertes Telegram und einen global hinterlegten Bot-Token im Alarm-Setup.",
+                "Die persönliche Chat-ID ist benutzerspezifisch. Bot-Token und Telegram global an/aus sind systemweit.",
             ],
         },
     }
@@ -7314,7 +7314,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 {
                     "total_hosts": len(hosts),
                     "summary": summary,
-                    "default_schedule_note": "Linux-Installer im Repo plant den Fallback-Check standardmaessig um 00:11, 06:11, 12:11 und 18:11 Uhr. Windows plant standardmaessig alle 6 Stunden relativ zum Installationszeitpunkt. Der priorisierte Zusatz-Check laeuft standardmaessig alle 60 Minuten seit dem letzten Check.",
+                    "default_schedule_note": "Linux-Installer im Repo plant den Fallback-Check standardmässig um 00:11, 06:11, 12:11 und 18:11 Uhr. Windows plant standardmässig alle 6 Stunden relativ zum Installationszeitpunkt. Der priorisierte Zusatz-Check läuft standardmässig alle 60 Minuten seit dem letzten Check.",
                     "hosts": hosts,
                 },
             )
@@ -8565,10 +8565,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     if not ok_token:
                         self._send_json(HTTPStatus.BAD_REQUEST, {"error": details or "oauth unavailable"})
                         return
-                    subject = f"[TEST] Host Alert Abo fuer {host_context.get('display_name', hostname)}"
+                    subject = f"[TEST] Host Alert Abo für {host_context.get('display_name', hostname)}"
                     body = (
                         "<html><body>"
-                        f"<p>Test fuer Host Alert Abo.</p>"
+                        f"<p>Test für Host Alert Abo.</p>"
                         f"<p>User: <strong>{html.escape(username)}</strong></p>"
                         f"<p>Host: <strong>{html.escape(str(host_context.get('display_name', hostname)))}</strong> ({html.escape(hostname)})</p>"
                         f"<p>Zeit: {html.escape(format_mail_datetime())}</p>"
@@ -8706,7 +8706,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     missing = int(overview.get("missing_count") or 0)
                     total = int(overview.get("total") or 0)
                     lines = [
-                        "[TEST] Backup-Status Uebersicht",
+                        "[TEST] Backup-Status Übersicht",
                         f"Benutzer: {username}",
                         f"Zeit: {utc_now_iso()}",
                         f"Hosts mit fehlendem Backup: {missing} von {total}",
@@ -8963,7 +8963,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 subject = f"[TEST] Kundenalarm {str(host_context.get('display_name') or hostname or '')}"
                 body = (
                     "<html><body>"
-                    "<p>Dies ist ein Test fuer den Kundenalarm.</p>"
+                    "<p>Dies ist ein Test für den Kundenalarm.</p>"
                     f"<p>Host: <strong>{html.escape(str(host_context.get('display_name') or hostname or '-'))}</strong></p>"
                     f"<p>Ausgeloest von: {html.escape(username)}</p>"
                     f"<p>Zeit: {html.escape(format_mail_datetime())}</p>"

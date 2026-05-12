@@ -743,7 +743,7 @@ function renderAgentUpdateStatusRows(hosts) {
           <span>🖥️ ${escapeHtml(hostname)} | Letzte Ausfuehrung: ${escapeHtml(executedAt)}</span>
           <span>⏭️ Nächster priorisierter Check: ${escapeHtml(nextPriority)}</span>
           <span>🕒 ${escapeHtml(recurringHint || "Kein Scheduler-Hinweis vom Agenten vorhanden.")}</span>
-          <span>${escapeHtml(resultMessage || "Kein Rueckkanal-Ergebnis gespeichert.")}</span>
+          <span>${escapeHtml(resultMessage || "Kein Rückkanal-Ergebnis gespeichert.")}</span>
         </div>
       `;
     })
@@ -799,7 +799,7 @@ function renderAgentUpdateStatusTableRows(hosts) {
       const priorityMinutes = Number(host.priority_check_minutes || 0) > 0 ? Number(host.priority_check_minutes || 0) : "-";
       const recurringHours = Number(host.recurring_update_hours || 0) > 0 ? Number(host.recurring_update_hours || 0) : "-";
       const recurringHint = asText(host.recurring_update_hint || "");
-      const commandMessage = asText(host.command_result_message || "Kein Rueckkanal-Ergebnis.");
+      const commandMessage = asText(host.command_result_message || "Kein Rückkanal-Ergebnis.");
       const showLogBtn = (status === "failed" || status === "completed")
         ? ` <button class="chip-btn" onclick="showHostUpdateLog(${escapeHtml(JSON.stringify(hostname))})" title="Update-Log anzeigen">Log</button>`
         : "";
@@ -1071,7 +1071,7 @@ function renderHostInterestsEditor() {
     return;
   }
   if (visibleHosts.length === 0) {
-    listEl.innerHTML = '<p class="muted">Keine Treffer fuer die Suche.</p>';
+    listEl.innerHTML = '<p class="muted">Keine Treffer für die Suche.</p>';
     return;
   }
 
@@ -1393,7 +1393,7 @@ async function loadActiveUsers() {
       const sessionCount = Number(item.session_count || 0);
       const latestExpires = asText(item.latest_expires_at_utc, "");
       return `
-        <span class="active-user-chip${isCurrent ? " current" : ""}" title="Session gueltig bis ${escapeHtml(latestExpires || "-")}">
+        <span class="active-user-chip${isCurrent ? " current" : ""}" title="Session gültig bis ${escapeHtml(latestExpires || "-")}">
           <span>${escapeHtml(label)}${isCurrent ? " (du)" : ""}</span>
           ${sessionCount > 1 ? `<span class="active-user-chip-count">${sessionCount}</span>` : ""}
         </span>
@@ -1478,7 +1478,7 @@ async function changePassword() {
     return;
   }
   if (newPassword !== confirmPassword) {
-    setPasswordChangeStatus("Neue Passwoerter stimmen nicht ueberein.", true);
+    setPasswordChangeStatus("Neue Passwörter stimmen nicht überein.", true);
     return;
   }
 
@@ -1495,14 +1495,14 @@ async function changePassword() {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    setPasswordChangeStatus(data.error || ("Aenderung fehlgeschlagen (HTTP " + response.status + ")"), true);
+    setPasswordChangeStatus(data.error || ("Änderung fehlgeschlagen (HTTP " + response.status + ")"), true);
     return;
   }
 
   currentPasswordInput.value = "";
   newPasswordInput.value = "";
   confirmPasswordInput.value = "";
-  setPasswordChangeStatus("Passwort erfolgreich geaendert.", false);
+  setPasswordChangeStatus("Passwort erfolgreich geändert.", false);
 }
 
 async function loadAlarmSettings(force = false) {
@@ -1737,7 +1737,7 @@ async function saveUserProfile() {
   };
 
   if (payload.email_enabled && !payload.email_recipient) {
-    throw new Error("Bitte zuerst einen Mail-Empfaenger eintragen.");
+    throw new Error("Bitte zuerst einen Mail-Empfänger eintragen.");
   }
 
   const response = await fetch("/api/v1/user-profile", {
@@ -1845,7 +1845,7 @@ function renderUserManagementRows(users) {
             <button type="button" data-user-action="password" data-username-enc="${usernameEnc}">Passwort</button>
             <button type="button" data-user-action="admin" data-username-enc="${usernameEnc}" data-next="${user.is_admin ? "0" : "1"}">${user.is_admin ? "Admin aus" : "Admin an"}</button>
             <button type="button" data-user-action="disable" data-username-enc="${usernameEnc}" data-next="${user.is_disabled ? "0" : "1"}">${user.is_disabled ? "Aktivieren" : "Sperren"}</button>
-            <button type="button" data-user-action="delete" data-username-enc="${usernameEnc}">Loeschen</button>
+            <button type="button" data-user-action="delete" data-username-enc="${usernameEnc}">Löschen</button>
           </div>
         </td>
       </tr>
@@ -1884,40 +1884,40 @@ function wireUserManagementActions() {
 
       try {
         if (action === "password") {
-          const password = window.prompt(`Neues Passwort fuer ${username}:`, "");
+          const password = window.prompt(`Neues Passwort für ${username}:`, "");
           if (password === null) {
             return;
           }
           await submitWebUserAction({ action: "set-password", username, password });
-          setUserManagementStatus(`Passwort fuer ${username} aktualisiert.`);
+          setUserManagementStatus(`Passwort für ${username} aktualisiert.`);
         } else if (action === "display-name") {
           const current = button.getAttribute("data-current-name") || "";
-          const newName = window.prompt(`Anzeigename fuer ${username}:`, current);
+          const newName = window.prompt(`Anzeigename für ${username}:`, current);
           if (newName === null) {
             return;
           }
           await submitWebUserAction({ action: "update-display-name", username, display_name: newName.trim() });
-          setUserManagementStatus(`Anzeigename fuer ${username} aktualisiert.`);
+          setUserManagementStatus(`Anzeigename für ${username} aktualisiert.`);
         } else if (action === "admin") {
           await submitWebUserAction({
             action: "update-flags",
             username,
             is_admin: button.getAttribute("data-next") === "1",
           });
-          setUserManagementStatus(`Admin-Flag fuer ${username} aktualisiert.`);
+          setUserManagementStatus(`Admin-Flag für ${username} aktualisiert.`);
         } else if (action === "disable") {
           await submitWebUserAction({
             action: "update-flags",
             username,
             is_disabled: button.getAttribute("data-next") === "1",
           });
-          setUserManagementStatus(`Status fuer ${username} aktualisiert.`);
+          setUserManagementStatus(`Status für ${username} aktualisiert.`);
         } else if (action === "delete") {
-          if (!window.confirm(`Benutzer ${username} wirklich loeschen?`)) {
+          if (!window.confirm(`Benutzer ${username} wirklich löschen?`)) {
             return;
           }
           await submitWebUserAction({ action: "delete", username });
-          setUserManagementStatus(`Benutzer ${username} geloescht.`);
+          setUserManagementStatus(`Benutzer ${username} gelöscht.`);
         }
         state.userManagementLoaded = false;
         await loadWebUsers(true);
@@ -2122,7 +2122,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
 
   container.querySelectorAll(".admin-sub-cb").forEach((checkbox) => {
     checkbox.addEventListener("change", () => {
-      setAdminAlertSubscriptionsStatus("Ungespeicherte Aenderungen.");
+      setAdminAlertSubscriptionsStatus("Ungespeicherte Änderungen.");
     });
   });
 }
@@ -2529,7 +2529,7 @@ function wireSapB1VersionMapAdminSection(container) {
       });
       const contentType = String(resp.headers.get("content-type") || "").toLowerCase();
       if (!contentType.includes("application/json")) {
-        throw new Error(`Ungueltige Server-Antwort (HTTP ${resp.status})`);
+        throw new Error(`Ungültige Server-Antwort (HTTP ${resp.status})`);
       }
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || resp.statusText);
@@ -2771,13 +2771,13 @@ async function saveAlarmSettings() {
   const inactiveHostAlertHours = Number(inactiveHostAlertHoursInput?.value || 3);
 
   if (!Number.isFinite(warning) || !Number.isFinite(critical) || warning < 1 || critical > 100 || warning >= critical) {
-    throw new Error("Schwellwerte ungueltig: Warnung muss kleiner als Kritisch sein.");
+    throw new Error("Schwellwerte ungültig: Warnung muss kleiner als Kritisch sein.");
   }
   if (!Number.isFinite(cpuWarning) || !Number.isFinite(cpuCritical) || cpuWarning < 1 || cpuCritical > 100 || cpuWarning >= cpuCritical) {
-    throw new Error("CPU Schwellwerte ungueltig: Warnung muss kleiner als Kritisch sein.");
+    throw new Error("CPU Schwellwerte ungültig: Warnung muss kleiner als Kritisch sein.");
   }
   if (!Number.isFinite(ramWarning) || !Number.isFinite(ramCritical) || ramWarning < 1 || ramCritical > 100 || ramWarning >= ramCritical) {
-    throw new Error("RAM Schwellwerte ungueltig: Warnung muss kleiner als Kritisch sein.");
+    throw new Error("RAM Schwellwerte ungültig: Warnung muss kleiner als Kritisch sein.");
   }
   if (!Number.isFinite(cpuWindowReports) || cpuWindowReports < 2 || cpuWindowReports > 24) {
     throw new Error("CPU Fenster muss zwischen 2 und 24 Meldungen liegen.");
@@ -3026,7 +3026,7 @@ function renderFilesystemVisibilityModalContent() {
   summaryEl.textContent = `Host: ${state.selectedDisplayName || state.selectedHost} | Sichtbar: ${visibleCount}/${available.length}`;
 
   if (available.length === 0) {
-    listEl.innerHTML = '<p class="muted">Keine Filesysteme verfuegbar.</p>';
+    listEl.innerHTML = '<p class="muted">Keine Filesysteme verfügbar.</p>';
     return;
   }
 
@@ -3199,8 +3199,8 @@ function renderLargeFilesPanel(largeFiles, hiddenMountpoints = []) {
     cached: "Cache",
     scheduled: "Geplant",
     error: "Fehler",
-    unavailable: "Nicht verfuegbar",
-    unsupported: "Nicht unterstuetzt",
+    unavailable: "Nicht verfügbar",
+    unsupported: "Nicht unterstützt",
     disabled: "Deaktiviert",
   };
   const statusLabel = statusLabelMap[scanStatus] || (scanStatus || "-");
@@ -3212,10 +3212,10 @@ function renderLargeFilesPanel(largeFiles, hiddenMountpoints = []) {
 
   if (largeFiles.enabled === false) {
     const unsupportedReason = asText(largeFiles.status, "disabled") === "unsupported"
-      ? "Nicht unterstuetzt auf diesem Host"
+      ? "Nicht unterstützt auf diesem Host"
       : "Deaktiviert";
     meta.textContent = `📌 Status: ${unsupportedReason}`;
-    body.innerHTML = '<p class="muted">Large-File-Scan ist fuer dieses Betriebssystem nicht verfuegbar.</p>';
+    body.innerHTML = '<p class="muted">Large-File-Scan ist für dieses Betriebssystem nicht verfügbar.</p>';
     return;
   }
 
@@ -3226,12 +3226,12 @@ function renderLargeFilesPanel(largeFiles, hiddenMountpoints = []) {
     const statusText = scanStatus === "scheduled"
       ? "Nächster geplanter Scan steht noch aus (taeglicher Lauf)."
       : scanStatus === "unavailable"
-        ? "Large-File-Scan nicht verfuegbar auf diesem Host."
+        ? "Large-File-Scan nicht verfügbar auf diesem Host."
         : scanStatus === "ok"
           ? "Scan abgeschlossen, aber es konnten keine Dateisysteme ausgewertet werden."
           : scanStatus === "error"
             ? `Scan fehlgeschlagen: ${escapeHtml(asText(largeFiles.error, "unbekannter Fehler"))}`
-            : "Noch keine Large-File-Daten verfuegbar.";
+            : "Noch keine Large-File-Daten verfügbar.";
     body.innerHTML = `<p class="muted">${statusText}</p>`;
     return;
   }
@@ -3262,7 +3262,7 @@ function renderLargeFilesPanel(largeFiles, hiddenMountpoints = []) {
             `;
           })
           .join("")
-        : '<tr><td colspan="4" class="muted">Keine Dateien ueber Schwellwert gefunden.</td></tr>';
+        : '<tr><td colspan="4" class="muted">Keine Dateien über Schwellwert gefunden.</td></tr>';
       return `
         <details class="large-files-fs">
           <summary>${escapeHtml(mountpoint)} <span>${entries.length} Treffer, ${scannedFiles} Dateien gescannt</span></summary>
@@ -3726,7 +3726,7 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
 
   const hasAnySeries = chartDefinitions.some((item) => normalizeSeries(resourceSeries[item.key]).length > 1);
   if (!hasAnySeries) {
-    return "<p class=\"muted\">Keine Verlaufskurven verfuegbar.</p>";
+    return "<p class=\"muted\">Keine Verlaufskurven verfügbar.</p>";
   }
 
   const standText = formatUtcPlus2(latestReportTimeUtc);
@@ -3834,7 +3834,7 @@ async function openAiTroubleshootModal(metricKey, metricLabel) {
     return;
   }
   if (!state.selectedHost) {
-    window.alert("Kein Host ausgewaehlt.");
+    window.alert("Kein Host ausgewählt.");
     return;
   }
 
@@ -3941,12 +3941,12 @@ function sortFilesystemByMountpointAscending(rows) {
 
 function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
   if (!Array.isArray(filesystemTrends) || filesystemTrends.length === 0) {
-    return "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfuegbar.</p>";
+    return "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfügbar.</p>";
   }
 
   const filtered = filesystemTrends.filter((item) => shouldShowFilesystemGraph(item.mountpoint));
   if (filtered.length === 0) {
-    return "<p class=\"muted\">Keine relevanten Filesystem-Verlaufskurven verfuegbar.</p>";
+    return "<p class=\"muted\">Keine relevanten Filesystem-Verlaufskurven verfügbar.</p>";
   }
   const topTrends = sortFilesystemByMountpointAscending(filtered);
   const standText = formatUtcPlus2(latestReportTimeUtc);
@@ -5279,7 +5279,7 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
         "missing_hdbsql": "hdbsql nicht gefunden",
         "auth_failed": "Authentifizierung fehlgeschlagen",
         "query_failed": "Abfrage fehlgeschlagen"
-      }[reason] || (reason || "HANA DB-Scan nicht verfuegbar");
+      }[reason] || (reason || "HANA DB-Scan nicht verfügbar");
       parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Datenbanken</h4><p class="muted">${escapeHtml(reasonText)}${error ? `: ${escapeHtml(error)}` : ""}</p></section>`);
     } else {
       const schemas = (Array.isArray(hanaInfo.schemas) ? hanaInfo.schemas : []).filter((entry) => {
@@ -5387,7 +5387,7 @@ function renderTopProcessesTable(topProcesses) {
   const entries = Array.isArray(block.entries) ? block.entries : [];
 
   if (entries.length === 0) {
-    return "<p class=\"muted\">Keine Prozessdaten verfuegbar.</p>";
+    return "<p class=\"muted\">Keine Prozessdaten verfügbar.</p>";
   }
 
   const rows = entries
@@ -5437,7 +5437,7 @@ function renderContainersTable(containersBlock) {
   const available = block.available === true;
 
   if (!available && entries.length === 0) {
-    return `<p class="muted">Container-Runtime nicht verfuegbar (${escapeHtml(runtime)}).</p>`;
+    return `<p class="muted">Container-Runtime nicht verfügbar (${escapeHtml(runtime)}).</p>`;
   }
   if (entries.length === 0) {
     return "<p class=\"muted\">Keine Container gefunden.</p>";
@@ -5510,7 +5510,7 @@ function renderAgentUpdateLog(agentUpdateBlock) {
 
   if (!available && lines.length === 0) {
     return `
-      <p class="muted">Kein Update-Log uebertragen.</p>
+      <p class="muted">Kein Update-Log übertragen.</p>
       <p class="count compact">Pfad: ${escapeHtml(path || "-")}</p>
     `;
   }
@@ -6294,7 +6294,7 @@ function ensureHostContextMenu() {
     }
 
     const confirmed = window.confirm(
-      `Karte fuer ${hostname} wirklich loeschen?\n\nDas entfernt Reports, Alerts und Host-Settings dauerhaft.`
+      `Karte für ${hostname} wirklich löschen?\n\nDas entfernt Reports, Alerts und Host-Settings dauerhaft.`
     );
     if (!confirmed) {
       return;
@@ -6314,7 +6314,7 @@ function ensureHostContextMenu() {
       await loadAnalysisForHost();
       await loadAlertsForHost();
     } catch (error) {
-      window.alert(`Host-Karte konnte nicht geloescht werden: ${error.message}`);
+      window.alert(`Host-Karte konnte nicht gelöscht werden: ${error.message}`);
     }
   });
 
@@ -6563,7 +6563,7 @@ async function exportGlobalAlertsCsv() {
 
 async function exportSelectedHostReportsJson() {
   if (!state.selectedHost) {
-    throw new Error("Bitte zuerst einen Host auswaehlen.");
+    throw new Error("Bitte zuerst einen Host auswählen.");
   }
   const hostname = encodeURIComponent(state.selectedHost);
   return triggerFileDownload(
@@ -6685,8 +6685,8 @@ function renderHosts(hosts) {
   if (triggerAllButton) {
     triggerAllButton.disabled = state.totalHosts <= 0;
     triggerAllButton.textContent = state.totalHosts > 0
-      ? `⟳ Update fuer alle Hosts (${state.totalHosts})`
-      : "⟳ Update fuer alle Hosts";
+      ? `⟳ Update für alle Hosts (${state.totalHosts})`
+      : "⟳ Update für alle Hosts";
   }
 
   if (!Array.isArray(hosts) || hosts.length === 0) {
@@ -6926,7 +6926,7 @@ async function jumpToReportDateTime() {
   }
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) {
-    window.alert("Ungueltiges Datum/Uhrzeit.");
+    window.alert("Ungültiges Datum/Uhrzeit.");
     return;
   }
 
@@ -6960,7 +6960,7 @@ async function editDisplayName() {
   }
 
   const nextValue = window.prompt(
-    `Sprechenden Titel fuer ${state.selectedHost} setzen. Leer lassen entfernt den Override.`,
+    `Sprechenden Titel für ${state.selectedHost} setzen. Leer lassen entfernt den Override.`,
     state.selectedDisplayName || state.selectedHost,
   );
 
@@ -6973,7 +6973,7 @@ async function editDisplayName() {
     : null;
   const currentCountryCode = currentHost ? asText(currentHost.country_code || "", "") : "";
   const nextCountryCodeRaw = window.prompt(
-    `2-stelliges Laenderkuerzel fuer ${state.selectedHost} (z.B. CH, DE). Leer entfernt den Override.`,
+    `2-stelliges Länderkürzel für ${state.selectedHost} (z.B. CH, DE). Leer entfernt den Override.`,
     currentCountryCode,
   );
   if (nextCountryCodeRaw === null) {
@@ -6981,7 +6981,7 @@ async function editDisplayName() {
   }
   const nextCountryCode = nextCountryCodeRaw.trim().toUpperCase();
   if (nextCountryCode && !/^[A-Z]{2}$/.test(nextCountryCode)) {
-    throw new Error("Laenderkuerzel muss genau 2 Buchstaben haben (z.B. CH).");
+    throw new Error("Länderkürzel muss genau 2 Buchstaben haben (z.B. CH).");
   }
 
   await saveHostSettings(state.selectedHost, {
@@ -7096,9 +7096,9 @@ async function loadAnalysisForHost() {
     });
 
     if (sortedTrendRows.length === 0) {
-      filesystemCharts.innerHTML = "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfuegbar.</p>";
+      filesystemCharts.innerHTML = "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfügbar.</p>";
       analysisRows.innerHTML =
-        "<tr><td colspan=\"7\" class=\"muted\">Keine Analyse-Daten im gewaehlten Zeitfenster.</td></tr>";
+        "<tr><td colspan=\"7\" class=\"muted\">Keine Analyse-Daten im gewählten Zeitfenster.</td></tr>";
       return;
     }
 
@@ -8025,11 +8025,11 @@ async function loadHostConfigChanges() {
     const data = await response.json();
     const items = Array.isArray(data.items) ? data.items : [];
     if (summaryEl) {
-      summaryEl.textContent = `${items.length} Aenderung(en) in den letzten ${hours}h`;
+      summaryEl.textContent = `${items.length} Änderung(en) in den letzten ${hours}h`;
     }
 
     if (!items.length) {
-      groupsEl.innerHTML = '<p class="muted">Keine Aenderungen im gewaehlten Zeitraum.</p>';
+      groupsEl.innerHTML = '<p class="muted">Keine Änderungen im gewählten Zeitraum.</p>';
       if (countryFilterEl) {
         const cachedCountries = Array.isArray(state.hostConfigChangesAvailableCountries)
           ? state.hostConfigChangesAvailableCountries
@@ -8100,15 +8100,15 @@ async function loadHostConfigChanges() {
         ? ` (Land: ${state.hostConfigChangesCountryFilter})`
         : "";
       const searchMsg = state.hostConfigChangesSearchQuery ? ` - gefiltert` : "";
-      summaryEl.textContent = `${filteredCount} Aenderung(en) in den letzten ${hours}h${countryMsg}${searchMsg}`;
+      summaryEl.textContent = `${filteredCount} Änderung(en) in den letzten ${hours}h${countryMsg}${searchMsg}`;
     }
 
     if (!filteredItems.length) {
       const reason = state.hostConfigChangesSearchQuery
-        ? `Keine Aenderungen gefunden fuer "${state.hostConfigChangesSearchQuery}"`
+        ? `Keine Änderungen gefunden für "${state.hostConfigChangesSearchQuery}"`
         : state.hostConfigChangesCountryFilter && state.hostConfigChangesCountryFilter !== "all"
-          ? `Keine Aenderungen fuer Land ${state.hostConfigChangesCountryFilter}`
-          : "Keine Aenderungen im gewaehlten Zeitraum.";
+          ? `Keine Änderungen für Land ${state.hostConfigChangesCountryFilter}`
+          : "Keine Änderungen im gewählten Zeitraum.";
       groupsEl.innerHTML = `<p class="muted">${escapeHtml(reason)}</p>`;
       return;
     }
@@ -8193,7 +8193,7 @@ async function loadHostConfigChanges() {
                   ${hostGroup.country_code && getCountryFlagIconPath(hostGroup.country_code)
                     ? `<span class="host-config-country-badge" title="Land: ${escapeHtml(hostGroup.country_code)}"><img src="${getCountryFlagIconPath(hostGroup.country_code)}" class="host-config-country-flag" alt="${escapeHtml(hostGroup.country_code)}" /></span>`
                     : ""}
-                  <span class="host-config-change-count">${sortedItems.length} Aenderung(en)</span>
+                  <span class="host-config-change-count">${sortedItems.length} Änderung(en)</span>
                 </summary>
                 <div class="table-wrap host-config-changes-wrap">
                   <table>
@@ -8217,7 +8217,7 @@ async function loadHostConfigChanges() {
           <details class="host-config-change-date-group" ${autoExpandGroupsByDate ? "open" : ""}>
             <summary class="host-config-change-date-summary">
               <span class="host-config-date-label">${escapeHtml(dateGroup.dateLabel)}</span>
-              <span class="host-config-date-count">${dateGroup.items.length} Aenderung(en)</span>
+              <span class="host-config-date-count">${dateGroup.items.length} Änderung(en)</span>
             </summary>
             <div class="host-config-date-group-content">
               ${hostRowsHtml}
@@ -8310,7 +8310,7 @@ function setHostConfigChangesBackfillStatus(message, isError = false) {
 async function runCombinedBackfill(days = 7) {
   const button = document.getElementById("backfillHostConfigChangesButton");
   const targetDays = Math.max(1, Math.min(30, Number(days) || 7));
-  const confirmed = window.confirm(`Backfill (Config-Changes + DB-Lifecycle) fuer die letzten ${targetDays} Tage jetzt starten?`);
+  const confirmed = window.confirm(`Backfill (Config-Changes + DB-Lifecycle) für die letzten ${targetDays} Tage jetzt starten?`);
   if (!confirmed) return;
 
   if (button) button.disabled = true;
@@ -8430,7 +8430,7 @@ async function loadGlobalAlertsOverview(options = {}) {
     summaryEl.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}`;
 
     if (!append && alerts.length === 0) {
-      rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Keine offenen Alerts fuer den gesetzten Filter.</td></tr>";
+      rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Keine offenen Alerts für den gesetzten Filter.</td></tr>";
       if (loadMoreButton) loadMoreButton.classList.add("hidden");
       if (pagingStatus) pagingStatus.textContent = "0 / 0";
       return;
@@ -9002,7 +9002,7 @@ function wireEvents() {
   }
 
   document.getElementById("rolloutApiKeyButton").addEventListener("click", async () => {
-    const apiKey = window.prompt("API-Key fuer alle bekannten Hosts verteilen:", "");
+    const apiKey = window.prompt("API-Key für alle bekannten Hosts verteilen:", "");
     if (apiKey === null) {
       return;
     }
@@ -9080,7 +9080,7 @@ function wireEvents() {
       const file = restoreFileInput.files?.[0];
       if (!file) return;
       const confirmed = window.confirm(
-        `Datenbank wirklich aus "${file.name}" (${(file.size / 1024).toFixed(0)} KB) wiederherstellen?\n\nDie aktuelle Datenbank wird dabei UEBERSCHRIEBEN. Vorher ein Backup anlegen!`
+        `Datenbank wirklich aus "${file.name}" (${(file.size / 1024).toFixed(0)} KB) wiederherstellen?\n\nDie aktuelle Datenbank wird dabei ÜBERSCHRIEBEN. Vorher ein Backup anlegen!`
       );
       if (!confirmed) return;
 
@@ -9105,7 +9105,7 @@ function wireEvents() {
       try {
         await restoreDatabaseFromFile(file, showProgress);
         labelEl.className = "db-ops-progress-label success";
-        window.alert(`Datenbank erfolgreich wiederhergestellt aus: ${file.name}\n\nBitte den Server neu starten, damit alle Aenderungen wirksam werden.`);
+        window.alert(`Datenbank erfolgreich wiederhergestellt aus: ${file.name}\n\nBitte den Server neu starten, damit alle Änderungen wirksam werden.`);
         setTimeout(() => progressEl.classList.add("hidden"), 5000);
       } catch (error) {
         barEl.classList.remove("db-ops-progress-bar--indeterminate");
@@ -9984,7 +9984,7 @@ async function loadSystemOverview() {
     }, 0);
 
     if (statsEl) {
-      const scope = activeCountryFilter === "all" ? "Alle Laender" : activeCountryFilter;
+      const scope = activeCountryFilter === "all" ? "Alle Länder" : activeCountryFilter;
       statsEl.textContent = `${total} Systeme (${scope})`;
     }
     if (!total) {
