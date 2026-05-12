@@ -264,16 +264,18 @@ async function loadUserPreferences() {
 }
 
 function updateCriticalTrendsMetricsCheckboxes() {
-  const checkboxes = {
-    cpu: document.getElementById("ctMetricCpu"),
-    memory: document.getElementById("ctMetricMemory"),
-    swap: document.getElementById("ctMetricSwap"),
-    filesystem: document.getElementById("ctMetricFilesystem"),
+  const checkboxByMetric = {
+    cpu: ["ctMetricCpu", "digestMetricCpu"],
+    memory: ["ctMetricMemory", "digestMetricMemory"],
+    swap: ["ctMetricSwap", "digestMetricSwap"],
+    filesystem: ["ctMetricFilesystem", "digestMetricFilesystem"],
   };
-  for (const [metric, checkbox] of Object.entries(checkboxes)) {
-    if (checkbox) {
-      checkbox.checked = state.criticalTrendsMetrics.includes(metric);
-    }
+  for (const [metric, ids] of Object.entries(checkboxByMetric)) {
+    const checked = state.criticalTrendsMetrics.includes(metric);
+    ids.forEach((id) => {
+      const checkbox = document.getElementById(id);
+      if (checkbox) checkbox.checked = checked;
+    });
   }
 }
 
@@ -1632,11 +1634,6 @@ async function loadUserProfile(force = false) {
     trendTimeInput.value = asText(profile.trend_email_time_hhmm, "08:00");
     const trendRecipientInput = document.getElementById("trendDigestRecipientInput");
     if (trendRecipientInput) trendRecipientInput.value = asText(profile.email_recipient, "") === "-" ? "" : asText(profile.email_recipient, "");
-    const digestMetrics = (profile.digest_trend_metrics || "cpu,memory,swap,filesystem").split(",").map((m) => m.trim());
-    ["digestMetricCpu", "digestMetricMemory", "digestMetricSwap", "digestMetricFilesystem"].forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) el.checked = digestMetrics.includes(id.replace("digestMetric", "").toLowerCase());
-    });
     alertEnabledInput.checked = profile.alert_email_enabled === true;
     alertTimeInput.value = asText(profile.alert_email_time_hhmm, "08:05");
     alertRecipientsInput.value = asText(profile.alert_email_recipients, "") === "-" ? "" : asText(profile.alert_email_recipients, "");
@@ -1658,13 +1655,25 @@ async function loadUserProfile(force = false) {
     if (backupEmailEnabledInput) backupEmailEnabledInput.checked = profile.backup_email_enabled === true;
     if (backupEmailTimeInput) backupEmailTimeInput.value = asText(profile.backup_email_time_hhmm, "08:15");
     if (backupEmailRecipientsInput) backupEmailRecipientsInput.value = asText(profile.backup_email_recipients, "") === "-" ? "" : asText(profile.backup_email_recipients, "");
-    state.hostInterestMode = normalizeHostInterestMode(profile.host_interest_mode || "all");
-    state.hostInterestHosts = new Set(
-      String(profile.host_interest_hosts || "")
-        .split(",")
-        .map((item) => item.trim())
-        .filter((item) => item.length > 0)
-    );
+    try {
+      const prefsResponse = await fetch("/api/v1/user-preferences", { credentials: "same-origin" });
+      if (prefsResponse.ok) {
+        const prefs = await prefsResponse.json();
+        const metricsStr = String(prefs.critical_trends_metrics || "filesystem").trim();
+        const metrics = metricsStr.split(",").map((m) => m.trim()).filter((m) => m.length > 0);
+        state.criticalTrendsMetrics = metrics.length > 0 ? metrics : ["filesystem"];
+        state.hostInterestMode = normalizeHostInterestMode(prefs.host_interest_mode || "all");
+        state.hostInterestHosts = new Set(
+          String(prefs.host_interest_hosts || "")
+            .split(",")
+            .map((item) => item.trim())
+            .filter((item) => item.length > 0)
+        );
+      }
+    } catch (_error) {
+      // Keep existing in-memory preferences if loading fails.
+    }
+    updateCriticalTrendsMetricsCheckboxes();
     renderHostInterestsEditor();
 
     const oauth = profile.microsoft_oauth || {};
@@ -1710,15 +1719,16 @@ async function saveUserProfile() {
   if (trendRecipientInput && trendRecipientInput.value.trim()) {
     recipientInput.value = trendRecipientInput.value.trim();
   }
+  const selectedDigestMetrics = ["digestMetricCpu", "digestMetricMemory", "digestMetricSwap", "digestMetricFilesystem"]
+    .filter((id) => document.getElementById(id)?.checked)
+    .map((id) => id.replace("digestMetric", "").toLowerCase());
+  const digestMetrics = selectedDigestMetrics.length > 0 ? selectedDigestMetrics : ["filesystem"];
+
   const payload = {
     email_enabled: enabledInput.checked,
     email_recipient: recipientInput.value.trim(),
     trend_email_enabled: document.getElementById("trendEmailEnabledInput").checked,
     trend_email_time_hhmm: document.getElementById("trendEmailTimeInput").value || "08:00",
-    digest_trend_metrics: ["digestMetricCpu", "digestMetricMemory", "digestMetricSwap", "digestMetricFilesystem"]
-      .filter((id) => document.getElementById(id)?.checked)
-      .map((id) => id.replace("digestMetric", "").toLowerCase())
-      .join(",") || "cpu,memory,swap,filesystem",
     alert_email_enabled: document.getElementById("alertEmailEnabledInput").checked,
     alert_email_time_hhmm: document.getElementById("alertEmailTimeInput").value || "08:05",
     alert_email_recipients: document.getElementById("alertEmailRecipientsInput").value.trim(),
@@ -1732,8 +1742,6 @@ async function saveUserProfile() {
     backup_email_enabled: document.getElementById("backupEmailEnabledInput")?.checked ?? false,
     backup_email_time_hhmm: document.getElementById("backupEmailTimeInput")?.value || "08:15",
     backup_email_recipients: document.getElementById("backupEmailRecipientsInput")?.value.trim() || "",
-    host_interest_mode: normalizeHostInterestMode(document.getElementById("hostInterestModeSelect")?.value || state.hostInterestMode),
-    host_interest_hosts: [...state.hostInterestHosts].sort().join(","),
   };
 
   if (payload.email_enabled && !payload.email_recipient) {
@@ -1751,6 +1759,25 @@ async function saveUserProfile() {
   if (!response.ok) {
     throw new Error(data.error || ("HTTP " + response.status));
   }
+
+  const preferencesPayload = {
+    critical_trends_metrics: digestMetrics.join(","),
+    host_interest_mode: normalizeHostInterestMode(document.getElementById("hostInterestModeSelect")?.value || state.hostInterestMode),
+    host_interest_hosts: [...state.hostInterestHosts].sort().join(","),
+  };
+  const prefsResponse = await fetch("/api/v1/user-preferences", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(preferencesPayload),
+  });
+  const prefsData = await prefsResponse.json().catch(() => ({}));
+  if (!prefsResponse.ok) {
+    throw new Error(prefsData.error || ("HTTP " + prefsResponse.status));
+  }
+  state.criticalTrendsMetrics = digestMetrics;
+  updateCriticalTrendsMetricsCheckboxes();
 
   setUserMailSettingsStatus("Mail-Einstellungen gespeichert.");
   state.userProfileLoaded = false;

@@ -311,7 +311,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.119**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.120**)
 - Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.88**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
@@ -319,6 +319,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.4.120 | 12.05.2026 | Fix user settings wiring: Trend Digest metrics + Host Interests now persist via user-preferences endpoint; mail profile save no longer resets digest selections |
 | 1.4.119 | 12.05.2026 | Daily Trend Digest filters blacklisted filesystems (e.g. /hana/shared/.snapshot) |
 | 1.4.118 | 12.05.2026 | Persist backup mail settings in user profile API (no reset after save) |
 | 1.4.117 | 12.05.2026 | Add explicit helper note below centralized mail settings save button |
