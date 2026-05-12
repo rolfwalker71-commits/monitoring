@@ -1709,6 +1709,90 @@ def get_host_config_changes_for_host(
     }
 
 
+def backfill_database_lifecycle(conn: sqlite3.Connection, days: int = 7) -> dict:
+    """Backfill database_lifecycle table from historical reports."""
+    window_days = max(1, int(days or 7))
+    cutoff_iso = (datetime.now(timezone.utc) - timedelta(days=window_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Get all reports within the time window, grouped by hostname and sorted
+    rows = conn.execute(
+        """
+        SELECT id, received_at_utc, hostname, payload_json
+        FROM reports
+        WHERE received_at_utc >= ?
+        ORDER BY hostname COLLATE NOCASE ASC, received_at_utc ASC
+        """,
+        (cutoff_iso,),
+    ).fetchall()
+
+    # Track databases per host over time
+    prev_dbs_by_host: dict[str, set[str]] = {}
+    report_count = 0
+    inserted_events = 0
+    now_utc = utc_now_iso()
+
+    for row in rows:
+        report_id = int(row[0] or 0)
+        report_time_utc = str(row[1] or "").strip()
+        hostname = str(row[2] or "").strip()
+        if not hostname:
+            continue
+
+        payload = parse_payload_json(str(row[3] or "{}"))
+        report_count += 1
+
+        # Extract database names from the report
+        current_dbs = set()
+        databases_section = payload.get("databases", {})
+        if isinstance(databases_section, dict):
+            for db_name in databases_section.keys():
+                db_str = str(db_name or "").strip()
+                if db_str:
+                    current_dbs.add(db_str)
+
+        # Get previously known databases for this host
+        prev_dbs = prev_dbs_by_host.get(hostname, set())
+
+        # Find new and deleted databases
+        new_dbs = current_dbs - prev_dbs
+        deleted_dbs = prev_dbs - current_dbs
+
+        # Insert events for new databases
+        for db_name in new_dbs:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO database_lifecycle (
+                    hostname, database_name, action, triggered_by, triggered_at_utc, reason, report_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (hostname, db_name, "create", "system", report_time_utc, "Detected in backfill", report_id),
+            )
+            inserted_events += 1
+
+        # Insert events for deleted databases
+        for db_name in deleted_dbs:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO database_lifecycle (
+                    hostname, database_name, action, triggered_by, triggered_at_utc, reason, report_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (hostname, db_name, "delete", "system", report_time_utc, "Detected in backfill", report_id),
+            )
+            inserted_events += 1
+
+        # Update state for next iteration
+        prev_dbs_by_host[hostname] = current_dbs
+
+    return {
+        "reports_scanned": report_count,
+        "inserted_events": inserted_events,
+    }
+
+
+
 def add_filesystem_blacklist_pattern(
     conn: sqlite3.Connection,
     pattern: str,
@@ -8635,17 +8719,26 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     return
 
             with sqlite3.connect(DB_PATH) as conn:
-                result = backfill_host_config_changes(conn, days=days)
+                config_result = backfill_host_config_changes(conn, days=days)
+                db_result = backfill_database_lifecycle(conn, days=days)
                 conn.commit()
 
             self._send_json(
                 HTTPStatus.OK,
                 {
                     "status": "ok",
-                    "result": result,
+                    "result": {
+                        "config_changes": config_result,
+                        "database_lifecycle": db_result,
+                        "inserted_changes": config_result.get("inserted_changes", 0),
+                        "reports_scanned": config_result.get("reports_scanned", 0),
+                        "inserted_events": db_result.get("inserted_events", 0),
+                    },
                 },
             )
             return
+
+
 
         if path == "/api/v1/alarm-test":
             with sqlite3.connect(DB_PATH) as conn:

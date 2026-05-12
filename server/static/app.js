@@ -8300,14 +8300,14 @@ function setHostConfigChangesBackfillStatus(message, isError = false) {
   statusEl.classList.toggle("status-error", Boolean(isError));
 }
 
-async function runHostConfigChangesBackfill(days = 7) {
+async function runCombinedBackfill(days = 7) {
   const button = document.getElementById("backfillHostConfigChangesButton");
   const targetDays = Math.max(1, Math.min(30, Number(days) || 7));
-  const confirmed = window.confirm(`Backfill fuer die letzten ${targetDays} Tage jetzt starten?`);
+  const confirmed = window.confirm(`Backfill (Config-Changes + DB-Lifecycle) fuer die letzten ${targetDays} Tage jetzt starten?`);
   if (!confirmed) return;
 
   if (button) button.disabled = true;
-  setHostConfigChangesBackfillStatus("Backfill laeuft...");
+  setHostConfigChangesBackfillStatus("Backfill läuft...");
 
   try {
     const response = await fetch("/api/v1/host-config-changes/backfill", {
@@ -8316,14 +8316,17 @@ async function runHostConfigChangesBackfill(days = 7) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ days: targetDays }),
     });
+
     if (!response.ok) throw new Error("HTTP " + response.status);
     const data = await response.json();
     const result = data?.result || {};
-    setHostConfigChangesBackfillStatus(
-      `Backfill OK: ${Number(result.inserted_changes || 0)} Aenderungen aus ${Number(result.reports_scanned || 0)} Reports.`,
-      false,
-    );
+
+    const message = `Backfill OK: ${Number(result.inserted_changes || 0)} Änderungen + ${Number(result.inserted_events || 0)} DB-Events aus ${Number(result.reports_scanned || 0)} Reports.`;
+    setHostConfigChangesBackfillStatus(message, false);
     await loadHostConfigChanges();
+    if (state.selectedHost) {
+      await loadDatabaseLifecycleForHost();
+    }
   } catch (error) {
     setHostConfigChangesBackfillStatus(`Backfill Fehler: ${error.message}`, true);
   } finally {
@@ -8813,7 +8816,7 @@ function wireEvents() {
       if (hoursFilterEl) {
         hoursFilterEl.value = "720";
       }
-      await runHostConfigChangesBackfill(days);
+      await runCombinedBackfill(days);
     });
   }
   const hostConfigChangesHoursFilter = document.getElementById("hostConfigChangesHoursFilter");
