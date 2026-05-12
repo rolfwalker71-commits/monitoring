@@ -1108,10 +1108,12 @@ function updateOverviewSection() {
   const filesystemSection = document.getElementById("overviewFilesystemSection");
   const notificationSection = document.getElementById("overviewNotificationSection");
   const databaseLifecycleSection = document.getElementById("overviewDatabaseLifecycleSection");
+  const configChangelogSection = document.getElementById("overviewConfigChangelogSection");
   const mainTabButton = document.getElementById("overviewMainTabButton");
   const filesystemTabButton = document.getElementById("overviewFilesystemTabButton");
   const notificationTabButton = document.getElementById("overviewNotificationTabButton");
   const databaseLifecycleTabButton = document.getElementById("overviewDatabaseLifecycleTabButton");
+  const configChangelogTabButton = document.getElementById("overviewConfigChangelogTabButton");
 
   if (!mainSection || !filesystemSection || !mainTabButton || !filesystemTabButton) {
     return;
@@ -1121,21 +1123,25 @@ function updateOverviewSection() {
   const showFilesystem = state.overviewSection === "filesystem";
   const showNotification = state.overviewSection === "notification";
   const showDatabaseLifecycle = state.overviewSection === "database-lifecycle";
+  const showConfigChangelog = state.overviewSection === "config-changelog";
 
   mainSection.classList.toggle("hidden", !showMain);
   filesystemSection.classList.toggle("hidden", !showFilesystem);
   if (notificationSection) notificationSection.classList.toggle("hidden", !showNotification);
   if (databaseLifecycleSection) databaseLifecycleSection.classList.toggle("hidden", !showDatabaseLifecycle);
+  if (configChangelogSection) configChangelogSection.classList.toggle("hidden", !showConfigChangelog);
 
   mainTabButton.classList.toggle("active", showMain);
   filesystemTabButton.classList.toggle("active", showFilesystem);
   if (notificationTabButton) notificationTabButton.classList.toggle("active", showNotification);
   if (databaseLifecycleTabButton) databaseLifecycleTabButton.classList.toggle("active", showDatabaseLifecycle);
+  if (configChangelogTabButton) configChangelogTabButton.classList.toggle("active", showConfigChangelog);
   
   mainTabButton.setAttribute("aria-selected", showMain ? "true" : "false");
   filesystemTabButton.setAttribute("aria-selected", showFilesystem ? "true" : "false");
   if (notificationTabButton) notificationTabButton.setAttribute("aria-selected", showNotification ? "true" : "false");
   if (databaseLifecycleTabButton) databaseLifecycleTabButton.setAttribute("aria-selected", showDatabaseLifecycle ? "true" : "false");
+  if (configChangelogTabButton) configChangelogTabButton.setAttribute("aria-selected", showConfigChangelog ? "true" : "false");
 }
 
 function setAlarmSettingsStatus(message, isError = false) {
@@ -6585,6 +6591,7 @@ function wireHostListInteractions() {
       loadAnalysisForHost();
       loadAlertsForHost();
       loadDatabaseLifecycleForHost();
+      loadConfigChangelogForHost();
       loadAndRenderCustomerNotificationPanel(hostname);
     });
 
@@ -7417,6 +7424,75 @@ async function loadDatabaseLifecycleForHost() {
     loadMoreBtn.classList.toggle("hidden", returned >= total);
   } catch (error) {
     databaseLifecycleRows.innerHTML = `<tr><td colspan="5" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+    loadMoreBtn.classList.add("hidden");
+  }
+}
+
+async function loadConfigChangelogForHost() {
+  const configChangelogRows = document.getElementById("configChangelogRows");
+  const configChangelogSummary = document.getElementById("configChangelogSummary");
+  const pagingStatus = document.getElementById("configChangelogPagingStatus");
+  const loadMoreBtn = document.getElementById("configChangelogLoadMoreButton");
+
+  if (!state.selectedHost) {
+    configChangelogSummary.textContent = "";
+    configChangelogRows.innerHTML = state.hostFilterNoMatches
+      ? "<tr><td colspan=\"5\" class=\"muted\">Keine Daten zum Suchfilter vorhanden.</td></tr>"
+      : "<tr><td colspan=\"5\"><div class=\"empty-state\"><span>📝</span><p>Wähle einen Host, um das Änderungsprotokoll zu sehen.</p></div></td></tr>";
+    pagingStatus.textContent = "";
+    loadMoreBtn.classList.add("hidden");
+    return;
+  }
+
+  configChangelogRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Lade Änderungen...</td></tr>";
+  configChangelogSummary.textContent = "";
+  pagingStatus.textContent = "";
+
+  try {
+    const hostNameParam = encodeURIComponent(state.selectedHost);
+    const resp = await fetch(`/api/v1/host-changelog?hostname=${hostNameParam}&limit=100&offset=0`);
+
+    if (!resp.ok) {
+      throw new Error("HTTP " + resp.status);
+    }
+
+    const data = await resp.json();
+    const items = data.items || [];
+    const total = data.total || 0;
+    const returned = data.returned || 0;
+
+    configChangelogSummary.textContent = `Insgesamt: ${total} Änderungen`;
+
+    if (items.length === 0) {
+      configChangelogRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Keine Änderungen vorhanden.</td></tr>";
+      pagingStatus.textContent = "";
+      loadMoreBtn.classList.add("hidden");
+      return;
+    }
+
+    configChangelogRows.innerHTML = items
+      .map((item) => {
+        const sourceLabel = item.source === "system" ? "🖥️ System" : item.source === "admin" ? "👤 Admin" : "🤖 Agent";
+        const fieldLabel = asText(item.field_label || item.field_key);
+        const oldValue = asText(item.old_value || "-");
+        const newValue = asText(item.new_value || "-");
+
+        return `
+          <tr>
+            <td><strong>${escapeHtml(fieldLabel)}</strong></td>
+            <td><code>${escapeHtml(oldValue)}</code></td>
+            <td><code>${escapeHtml(newValue)}</code></td>
+            <td>${sourceLabel}</td>
+            <td>${escapeHtml(formatUtcPlus2(item.detected_at_utc))}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    pagingStatus.textContent = `Zeige ${returned} von ${total}`;
+    loadMoreBtn.classList.toggle("hidden", returned >= total);
+  } catch (error) {
+    configChangelogRows.innerHTML = `<tr><td colspan="5" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
     loadMoreBtn.classList.add("hidden");
   }
 }
@@ -9218,6 +9294,14 @@ function wireEvents() {
     updateOverviewSection();
     if (state.selectedHost) {
       loadDatabaseLifecycleForHost();
+    }
+  });
+
+  document.getElementById("overviewConfigChangelogTabButton").addEventListener("click", () => {
+    state.overviewSection = "config-changelog";
+    updateOverviewSection();
+    if (state.selectedHost) {
+      loadConfigChangelogForHost();
     }
   });
 

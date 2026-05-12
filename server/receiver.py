@@ -1665,6 +1665,50 @@ def get_database_lifecycle_for_host(
     }
 
 
+def get_host_config_changes_for_host(
+    conn: sqlite3.Connection,
+    hostname: str,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict:
+    """Get host config changes for a specific host."""
+    rows = conn.execute(
+        """
+        SELECT c.id,
+               c.detected_at_utc,
+               c.field_key,
+               c.old_value,
+               c.new_value,
+               COALESCE(c.source, 'agent-report')
+        FROM host_config_changes c
+        WHERE c.hostname = ?
+        ORDER BY c.detected_at_utc DESC
+        LIMIT ? OFFSET ?
+        """,
+        (hostname, limit, offset),
+    ).fetchall()
+    total = conn.execute(
+        "SELECT COUNT(*) FROM host_config_changes WHERE hostname = ?",
+        (hostname,),
+    ).fetchone()[0]
+    return {
+        "items": [
+            {
+                "id": row[0],
+                "detected_at_utc": row[1],
+                "field_key": row[2],
+                "field_label": HOST_CONFIG_FIELD_LABELS.get(row[2], row[2]),
+                "old_value": row[3] or "-",
+                "new_value": row[4] or "-",
+                "source": row[5],
+            }
+            for row in rows
+        ],
+        "total": total,
+        "returned": len(rows),
+    }
+
+
 def add_filesystem_blacklist_pattern(
     conn: sqlite3.Connection,
     pattern: str,
@@ -6960,6 +7004,22 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             with sqlite3.connect(DB_PATH) as conn:
                 data = get_database_lifecycle_for_host(conn, hostname, limit=limit, offset=offset)
+
+            self._send_json(HTTPStatus.OK, data)
+            return
+
+        if parsed.path == "/api/v1/host-changelog":
+            query = parse_qs(parsed.query)
+            hostname = query.get("hostname", [""])[0].strip()
+            if not hostname:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
+                return
+
+            limit = parse_int(query, "limit", default=100, min_value=1, max_value=1000)
+            offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
+
+            with sqlite3.connect(DB_PATH) as conn:
+                data = get_host_config_changes_for_host(conn, hostname, limit=limit, offset=offset)
 
             self._send_json(HTTPStatus.OK, data)
             return
