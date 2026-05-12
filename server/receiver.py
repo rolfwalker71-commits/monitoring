@@ -369,6 +369,9 @@ def init_db() -> None:
                 alert_email_last_sent_local_date TEXT NOT NULL DEFAULT '',
                 alert_instant_mail_enabled INTEGER NOT NULL DEFAULT 0,
                 alert_instant_min_severity TEXT NOT NULL DEFAULT 'warning',
+                backup_email_enabled INTEGER NOT NULL DEFAULT 0,
+                backup_email_time_hhmm TEXT NOT NULL DEFAULT '08:15',
+                backup_email_recipients TEXT NOT NULL DEFAULT '',
                 updated_at_utc TEXT NOT NULL,
                 FOREIGN KEY(username) REFERENCES web_users(username)
             )
@@ -406,6 +409,12 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_instant_telegram_enabled INTEGER NOT NULL DEFAULT 0")
         if "alert_telegram_chat_id" not in existing_web_user_settings_columns:
             conn.execute("ALTER TABLE web_user_settings ADD COLUMN alert_telegram_chat_id TEXT NOT NULL DEFAULT ''")
+        if "backup_email_enabled" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN backup_email_enabled INTEGER NOT NULL DEFAULT 0")
+        if "backup_email_time_hhmm" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN backup_email_time_hhmm TEXT NOT NULL DEFAULT '08:15'")
+        if "backup_email_recipients" not in existing_web_user_settings_columns:
+            conn.execute("ALTER TABLE web_user_settings ADD COLUMN backup_email_recipients TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS web_user_alert_subscriptions (
@@ -1318,6 +1327,9 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
                COALESCE(alert_instant_min_severity, 'warning'),
              COALESCE(alert_instant_telegram_enabled, 0),
              COALESCE(alert_telegram_chat_id, ''),
+                             COALESCE(backup_email_enabled, 0),
+                             COALESCE(backup_email_time_hhmm, '08:15'),
+                             COALESCE(backup_email_recipients, ''),
                COALESCE(updated_at_utc, '')
         FROM web_user_settings
         WHERE username = ?
@@ -1342,6 +1354,9 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
             "alert_instant_min_severity": "warning",
             "alert_instant_telegram_enabled": False,
             "alert_telegram_chat_id": "",
+            "backup_email_enabled": False,
+            "backup_email_time_hhmm": "08:15",
+            "backup_email_recipients": "",
             "updated_at_utc": "",
         }
     return {
@@ -1361,7 +1376,10 @@ def get_web_user_settings(conn: sqlite3.Connection, username: str) -> dict:
         "alert_instant_min_severity": str(row[13] or "warning"),
         "alert_instant_telegram_enabled": bool(int(row[14] or 0)),
         "alert_telegram_chat_id": str(row[15] or ""),
-        "updated_at_utc": str(row[16] or ""),
+        "backup_email_enabled": bool(int(row[16] or 0)),
+        "backup_email_time_hhmm": normalize_hhmm(row[17], "08:15"),
+        "backup_email_recipients": str(row[18] or ""),
+        "updated_at_utc": str(row[19] or ""),
     }
 
 
@@ -1404,6 +1422,14 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
     alert_telegram_chat_id = str(
         payload.get("alert_telegram_chat_id", existing.get("alert_telegram_chat_id", "")) or ""
     ).strip()
+    backup_email_enabled = coerce_bool(payload.get("backup_email_enabled", existing.get("backup_email_enabled", False)))
+    backup_email_time_hhmm = normalize_hhmm(
+        payload.get("backup_email_time_hhmm", existing.get("backup_email_time_hhmm", "08:15")),
+        "08:15",
+    )
+    backup_email_recipients = str(
+        payload.get("backup_email_recipients", existing.get("backup_email_recipients", "")) or ""
+    ).strip()
     now_utc = utc_now_iso()
     conn.execute(
         """
@@ -1425,9 +1451,12 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_instant_min_severity,
             alert_instant_telegram_enabled,
             alert_telegram_chat_id,
+            backup_email_enabled,
+            backup_email_time_hhmm,
+            backup_email_recipients,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             email_enabled = excluded.email_enabled,
             email_recipient = excluded.email_recipient,
@@ -1445,6 +1474,9 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_instant_min_severity = excluded.alert_instant_min_severity,
             alert_instant_telegram_enabled = excluded.alert_instant_telegram_enabled,
             alert_telegram_chat_id = excluded.alert_telegram_chat_id,
+            backup_email_enabled = excluded.backup_email_enabled,
+            backup_email_time_hhmm = excluded.backup_email_time_hhmm,
+            backup_email_recipients = excluded.backup_email_recipients,
             updated_at_utc = excluded.updated_at_utc
         """,
         (
@@ -1465,6 +1497,9 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
             alert_instant_min_severity,
             1 if alert_instant_telegram_enabled else 0,
             alert_telegram_chat_id,
+            1 if backup_email_enabled else 0,
+            backup_email_time_hhmm,
+            backup_email_recipients,
             now_utc,
         ),
     )
@@ -1485,6 +1520,9 @@ def save_web_user_settings(conn: sqlite3.Connection, username: str, payload: dic
         "alert_instant_min_severity": alert_instant_min_severity,
         "alert_instant_telegram_enabled": alert_instant_telegram_enabled,
         "alert_telegram_chat_id": alert_telegram_chat_id,
+        "backup_email_enabled": backup_email_enabled,
+        "backup_email_time_hhmm": backup_email_time_hhmm,
+        "backup_email_recipients": backup_email_recipients,
         "updated_at_utc": now_utc,
     }
 
@@ -4845,6 +4883,9 @@ def current_user_payload(conn: sqlite3.Connection, username: str) -> dict:
         "alert_instant_min_severity": settings["alert_instant_min_severity"],
         "alert_instant_telegram_enabled": settings["alert_instant_telegram_enabled"],
         "alert_telegram_chat_id": settings["alert_telegram_chat_id"],
+        "backup_email_enabled": settings["backup_email_enabled"],
+        "backup_email_time_hhmm": settings["backup_email_time_hhmm"],
+        "backup_email_recipients": settings["backup_email_recipients"],
         "mail_oauth_available": oauth_is_configured(oauth_settings),
         "microsoft_oauth": {
             "connected": connection is not None,
