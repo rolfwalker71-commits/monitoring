@@ -270,11 +270,59 @@ Die App ist als **Progressive Web App (PWA)** ausgeliefert und kann auf Mobilger
 
 ---
 
+## Audit Trail & Changelog
+
+### Database Lifecycle Tracking (v1.4.92+)
+
+Der Server erfasst automatisch, wann Datenbanken auf HANA-Systemen erstellt oder gelöscht werden:
+
+- **Globale DB-Historik**: Alle Datenbanken pro Mandant und Datum
+- **Host-spezifische DB-Historie**: Datenbanken pro einzelnem Host mit Zeitpunkte
+- **Backfill-Funktion**: Historische Daten aus alten Reports nachträglich einspeisen (`POST /api/v1/host-config-changes/backfill`)
+
+### Config Changelog (v1.4.93+)
+
+Alle Konfigurationsänderungen werden im Changelog erfasst und pro Host abrufbar:
+
+- **Globales Changelog** (Admin): Alle Konfigurationsänderungen aller Hosts mit Gruppierung nach Datum
+- **Host-Changelog** (Host-Detailansicht): Nur Änderungen des aktuellen Hosts
+- **SAP Feature Pack Display** (v1.4.106+): Bei SAP Release-Änderungen wird das Feature Pack automatisch aufgelöst und angezeigt (z. B. `10.00.251 **(FP 2601 HF1)**)
+- **Changelog-Betreff**: Kompakte Tabellenform mit minimalen Spaltenbreiten für maximale Lesbarkeit
+
+### Filesystem Blacklist (v1.4.99+)
+
+Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgenommen werden:
+
+- **Automatische Anwendung**: Alle blacklisted Filesysteme werden automatisch aus Alerts, Trend-Charts und Summaries entfernt
+- **On-Startup Resolution** (v1.4.105): Offene Alerts für blacklisted Mountpoints werden beim Server-Start automatisch als gelöst markiert
+- **Beispiel-Patterns**:
+  - `/hana/shared/.snapshot` — verhindert NetApp-Snapshot-Verzeichnis
+  - `/mnt/snapshots/*` — alle Unterverzeichnisse von `/mnt/snapshots`
+
+---
+
 ## Versionierung
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, z. B. `1.1.100`)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, z. B. `1.1.48`)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.110**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.86**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
+
+### Recent Releases (v1.4.99+)
+
+| Version | Datum | Änderung |
+|---------|-------|----------|
+| 1.4.110 | 12.05.2026 | Add SAP Feature Pack display to host changelog |
+| 1.4.109 | 12.05.2026 | Bump version |
+| 1.4.108 | 12.05.2026 | Bold Feature Pack in SAP Release changelog display |
+| 1.4.107 | 12.05.2026 | Add SAP Release Feature Pack display to config changelog |
+| 1.4.106 | 12.05.2026 | Compact config changelog and remove source column |
+| 1.4.105 | 12.05.2026 | Resolve open blacklisted alerts on startup |
+| 1.4.104 | 12.05.2026 | Enforce filesystem blacklist for alerts and summaries |
+| 1.4.103 | 12.05.2026 | Fix duplicate sender_address syntax error in alert reminders |
+| 1.4.102 | 12.05.2026 | Restore OAuth sender mailbox persistence and usage |
+| 1.4.101 | 12.05.2026 | Make dashboard subtitle same size as header title |
+| 1.4.100 | 12.05.2026 | Rebrand header to ANG System Health, remove digest mail severity prefix |
+| 1.4.99  | 12.05.2026 | Apply filesystem blacklist to analysis trends (not just alerts) |
 
 ---
 
