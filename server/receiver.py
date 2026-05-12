@@ -2129,6 +2129,7 @@ def collect_critical_trends(
     prioritized_hostnames: set[str] | None = None,
 ) -> list[dict]:
     cutoff_iso = utc_hours_ago_iso(hours)
+    blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
 
     hidden_normalized_by_host: dict[str, set[str]] = {}
     if hidden_mountpoints_by_host:
@@ -2243,6 +2244,8 @@ def collect_critical_trends(
                 if not isinstance(fs, dict):
                     continue
                 mountpoint = str(fs.get("mountpoint", "")).strip()
+                if mountpoint and blacklist_patterns and is_filesystem_blacklisted_by_patterns(mountpoint, blacklist_patterns):
+                    continue
                 try:
                     used_percent = float(fs["used_percent"])
                 except (KeyError, TypeError, ValueError):
@@ -2276,6 +2279,8 @@ def collect_critical_trends(
 
         for mountpoint, values in fs_series.items():
             if mountpoint in muted_mountpoints:
+                continue
+            if blacklist_patterns and is_filesystem_blacklisted_by_patterns(mountpoint, blacklist_patterns):
                 continue
             mountpoint_key = normalize_mountpoint_key(mountpoint)
             # Skip filesystem if it's hidden in user's visibility settings
