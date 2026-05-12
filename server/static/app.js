@@ -7476,12 +7476,25 @@ async function loadConfigChangelogForHost() {
         const fieldLabel = asText(item.field_label || item.field_key);
         const oldValue = asText(item.old_value || "-");
         const newValue = asText(item.new_value || "-");
+        const fieldKey = String(item.field_key || "");
+        let oldFpInfo = "";
+        let newFpInfo = "";
+        if (fieldKey === "sap_release") {
+          const oldFp = resolveSapReleaseDisplay(oldValue, SAP_B1_VERSION_MAP);
+          if (oldFp && oldFp !== "-" && oldFp !== oldValue) {
+            oldFpInfo = ` <strong>(${escapeHtml(oldFp)})</strong>`;
+          }
+          const newFp = resolveSapReleaseDisplay(newValue, SAP_B1_VERSION_MAP);
+          if (newFp && newFp !== "-" && newFp !== newValue) {
+            newFpInfo = ` <strong>(${escapeHtml(newFp)})</strong>`;
+          }
+        }
 
         return `
           <tr>
             <td><strong>${escapeHtml(fieldLabel)}</strong></td>
-            <td><code>${escapeHtml(oldValue)}</code></td>
-            <td><code>${escapeHtml(newValue)}</code></td>
+            <td><code>${escapeHtml(oldValue)}</code>${oldFpInfo}</td>
+            <td><code>${escapeHtml(newValue)}</code>${newFpInfo}</td>
             
             <td>${escapeHtml(formatUtcPlus2(item.detected_at_utc))}</td>
           </tr>
