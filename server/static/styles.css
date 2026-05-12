@@ -1858,51 +1858,65 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   table-layout: fixed;
 }
 
+#overviewConfigChangelogSection,
+#overviewDatabaseLifecycleSection {
+  padding: 6px 4px;
+}
+
+#overviewConfigChangelogSection .table-wrap,
+#overviewDatabaseLifecycleSection .table-wrap {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
 #overviewConfigChangelogSection table {
   table-layout: auto;
   width: 100%;
+  font-size: 11px;
 }
 
 #overviewConfigChangelogSection td,
 #overviewConfigChangelogSection th {
-  padding: 6px 8px;
-  font-size: 12px;
+  padding: 4px 5px;
+  font-size: 11px;
   word-break: break-word;
   white-space: normal;
 }
 
 #overviewConfigChangelogSection th {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 #overviewConfigChangelogSection code {
-  font-size: 11px;
+  font-size: 10.5px;
   word-break: break-all;
 }
 
-#overviewConfigChangelogSection th:nth-child(1) { width: 15%; }
-#overviewConfigChangelogSection th:nth-child(2) { width: 25%; }
-#overviewConfigChangelogSection th:nth-child(3) { width: 25%; }
-#overviewConfigChangelogSection th:nth-child(4) { width: 12%; }
-#overviewConfigChangelogSection th:nth-child(5) { width: 23%; }
+#overviewConfigChangelogSection th:nth-child(1) { width: 14%; }
+#overviewConfigChangelogSection th:nth-child(2) { width: 26%; }
+#overviewConfigChangelogSection th:nth-child(3) { width: 26%; }
+#overviewConfigChangelogSection th:nth-child(4) { width: 10%; }
+#overviewConfigChangelogSection th:nth-child(5) { width: 24%; }
 
 #overviewDatabaseLifecycleSection table {
   table-layout: auto;
   width: 100%;
+  font-size: 11px;
 }
 
 #overviewDatabaseLifecycleSection td,
 #overviewDatabaseLifecycleSection th {
-  padding: 6px 8px;
-  font-size: 12px;
+  padding: 4px 5px;
+  font-size: 11px;
   word-break: break-word;
   white-space: normal;
 }
 
 #overviewDatabaseLifecycleSection th {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 #overviewDatabaseLifecycleSection th:nth-child(1) { width: 18%; }
