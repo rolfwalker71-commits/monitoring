@@ -5981,6 +5981,19 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
             conn.execute("DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?", (hostname, mountpoint))
             continue
 
+        if is_filesystem_blacklisted(conn, mountpoint):
+            blacklisted_open = conn.execute(
+                "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open'",
+                (hostname, mountpoint),
+            ).fetchone()
+            if blacklisted_open:
+                conn.execute(
+                    "UPDATE alerts SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ? WHERE id = ?",
+                    (now_utc, now_utc, blacklisted_open[0]),
+                )
+            conn.execute("DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?", (hostname, mountpoint))
+            continue
+
         mountpoints_seen.add(mountpoint)
         if is_alert_muted(conn, hostname, mountpoint):
             muted_open = conn.execute(
