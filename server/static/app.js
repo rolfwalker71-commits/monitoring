@@ -2266,7 +2266,7 @@ function renderFilesystemBlacklistAdminSection() {
     </tr>`).join("");
 
   return `
-    <section class="settings-subsection" id="filesystemBlacklistAdminSection" style="display:none;">
+    <section class="settings-subsection" id="filesystemBlacklistAdminSection">
       <div class="settings-subsection-head">
         <h5>🚫 Filesystem-Blacklist</h5>
         <p class="count compact">Automatisch von Alerts, Trends und Filesystem-Listen ausschließen (es sei denn, "Geblacklistete anzeigen" ist aktiviert)</p>
