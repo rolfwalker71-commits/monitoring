@@ -508,7 +508,8 @@ def init_db() -> None:
                 triggered_by TEXT NOT NULL DEFAULT 'system',
                 triggered_at_utc TEXT NOT NULL,
                 reason TEXT NOT NULL DEFAULT '',
-                report_id INTEGER
+                report_id INTEGER,
+                UNIQUE(hostname, database_name, action, report_id)
             )
             """
         )
@@ -1729,7 +1730,6 @@ def backfill_database_lifecycle(conn: sqlite3.Connection, days: int = 7) -> dict
     prev_dbs_by_host: dict[str, set[str]] = {}
     report_count = 0
     inserted_events = 0
-    now_utc = utc_now_iso()
 
     for row in rows:
         report_id = int(row[0] or 0)
