@@ -2256,6 +2256,7 @@ function matchGlobPattern(pattern, text) {
 
 function renderFilesystemBlacklistAdminSection() {
   const patterns = state.filesystemBlacklistPatterns || [];
+  const patternCount = patterns.length;
   const rows = patterns.map((entry, idx) => `
     <tr>
       <td class="fs-bl-pattern" style="font-family:monospace;word-break:break-all;">${escapeHtml(entry.pattern)}</td>
@@ -2268,7 +2269,7 @@ function renderFilesystemBlacklistAdminSection() {
   return `
     <section class="settings-subsection" id="filesystemBlacklistAdminSection">
       <div class="settings-subsection-head">
-        <h5>🚫 Filesystem-Blacklist</h5>
+        <h5>🚫 Filesystem-Blacklist (<span id="fsBlPatternCount">${patternCount}</span>)</h5>
         <p class="count compact">Automatisch von Alerts, Trends und Filesystem-Listen ausschließen (es sei denn, "Geblacklistete anzeigen" ist aktiviert)</p>
       </div>
       <div class="alarm-settings-group">
@@ -2301,6 +2302,13 @@ function renderFilesystemBlacklistAdminSection() {
 function wireFilesystemBlacklistAdminSection(container) {
   const section = (container || document).querySelector("#filesystemBlacklistAdminSection");
   if (!section) return;
+
+  function updatePatternCount() {
+    const countEl = section.querySelector("#fsBlPatternCount");
+    if (countEl) {
+      countEl.textContent = String((state.filesystemBlacklistPatterns || []).length);
+    }
+  }
 
   section.querySelector("#fsBlAddBtn")?.addEventListener("click", async () => {
     const patternInput = section.querySelector("#fsBlNewPattern");
@@ -2341,6 +2349,7 @@ function wireFilesystemBlacklistAdminSection(container) {
           </tr>`).join("");
         container.innerHTML = newRows;
         wireDeleteButtons();
+        updatePatternCount();
       }
 
       patternInput.value = "";
@@ -2390,6 +2399,7 @@ function wireFilesystemBlacklistAdminSection(container) {
           </tr>`).join("");
         container.innerHTML = newRows;
         wireDeleteButtons();
+        updatePatternCount();
       }
       status.textContent = "✅ Pattern gelöscht";
     } catch (err) {
@@ -2398,6 +2408,7 @@ function wireFilesystemBlacklistAdminSection(container) {
     setTimeout(() => { status.textContent = ""; }, 2500);
   };
 
+  updatePatternCount();
   wireDeleteButtons();
 }
 
