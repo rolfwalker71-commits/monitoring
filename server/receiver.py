@@ -1759,18 +1759,123 @@ def log_database_lifecycle_event(
     triggered_by: str = "system",
     reason: str = "",
     report_id: int | None = None,
+    triggered_at_utc: str | None = None,
 ) -> None:
     """Log database creation/deletion/rename events."""
-    now_utc = utc_now_iso()
+    event_time_utc = str(triggered_at_utc or "").strip() or utc_now_iso()
     conn.execute(
         """
-        INSERT INTO database_lifecycle (
+        INSERT OR IGNORE INTO database_lifecycle (
             hostname, database_name, action, triggered_by, triggered_at_utc, reason, report_id
         )
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (hostname, database_name, action, triggered_by, now_utc, reason, report_id),
+        (hostname, database_name, action, triggered_by, event_time_utc, reason, report_id),
     )
+
+
+def _extract_database_inventory(payload: dict) -> set[str]:
+    if not isinstance(payload, dict):
+        return set()
+
+    inventory: set[str] = set()
+    system_db_names = {"master", "model", "msdb", "tempdb"}
+
+    def _add_name(raw_name: object, *, allow_system: bool = True) -> None:
+        name = str(raw_name or "").strip()
+        if not name:
+            return
+        if not allow_system and name.lower() in system_db_names:
+            return
+        inventory.add(name)
+
+    legacy_databases = payload.get("databases")
+    if isinstance(legacy_databases, dict):
+        for db_name in legacy_databases.keys():
+            _add_name(db_name)
+    elif isinstance(legacy_databases, list):
+        for db_entry in legacy_databases:
+            if isinstance(db_entry, dict):
+                _add_name(db_entry.get("name"))
+            else:
+                _add_name(db_entry)
+
+    sql_info = payload.get("sql_server_info") if isinstance(payload.get("sql_server_info"), dict) else {}
+    sql_instances = sql_info.get("instances") if isinstance(sql_info.get("instances"), list) else []
+    for instance in sql_instances:
+        if not isinstance(instance, dict):
+            continue
+        databases = instance.get("databases") if isinstance(instance.get("databases"), list) else []
+        for db_entry in databases:
+            if not isinstance(db_entry, dict):
+                _add_name(db_entry, allow_system=False)
+                continue
+            db_name = db_entry.get("name")
+            if bool(db_entry.get("system_db")):
+                continue
+            _add_name(db_name, allow_system=False)
+
+    hana_info = payload.get("sap_hana") if isinstance(payload.get("sap_hana"), dict) else {}
+    hana_schemas = hana_info.get("schemas") if isinstance(hana_info.get("schemas"), list) else []
+    for schema_entry in hana_schemas:
+        if isinstance(schema_entry, dict):
+            _add_name(schema_entry.get("name"))
+        else:
+            _add_name(schema_entry)
+
+    return inventory
+
+
+def _track_database_lifecycle(
+    conn: sqlite3.Connection,
+    hostname: str,
+    payload: dict,
+    report_id: int,
+    detected_at_utc: str,
+) -> None:
+    if not hostname:
+        return
+
+    previous_row = conn.execute(
+        """
+        SELECT payload_json
+        FROM reports
+        WHERE hostname = ? AND id < ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (hostname, report_id),
+    ).fetchone()
+    if not previous_row:
+        return
+
+    previous_payload = parse_payload_json(str(previous_row[0] or "{}"))
+    previous_dbs = _extract_database_inventory(previous_payload)
+    current_dbs = _extract_database_inventory(payload)
+
+    for db_name in sorted(current_dbs - previous_dbs, key=str.lower):
+        log_database_lifecycle_event(
+            conn,
+            hostname,
+            db_name,
+            "create",
+            triggered_by="system",
+            reason="Detected from agent report",
+            report_id=report_id,
+            triggered_at_utc=detected_at_utc,
+        )
+
+    for db_name in sorted(previous_dbs - current_dbs, key=str.lower):
+        log_database_lifecycle_event(
+            conn,
+            hostname,
+            db_name,
+            "delete",
+            triggered_by="system",
+            reason="Detected from agent report",
+            report_id=report_id,
+            triggered_at_utc=detected_at_utc,
+        )
 
 
 def get_database_lifecycle_for_host(
@@ -1886,14 +1991,7 @@ def backfill_database_lifecycle(conn: sqlite3.Connection, days: int = 7) -> dict
         payload = parse_payload_json(str(row[3] or "{}"))
         report_count += 1
 
-        # Extract database names from the report
-        current_dbs = set()
-        databases_section = payload.get("databases", {})
-        if isinstance(databases_section, dict):
-            for db_name in databases_section.keys():
-                db_str = str(db_name or "").strip()
-                if db_str:
-                    current_dbs.add(db_str)
+        current_dbs = _extract_database_inventory(payload)
 
         # Get previously known databases for this host
         prev_dbs = prev_dbs_by_host.get(hostname, set())
@@ -9729,6 +9827,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             report_id = int(cursor.lastrowid)
             _track_host_config_changes(conn, hostname, payload, report_id, report_received_at_utc)
+            _track_database_lifecycle(conn, hostname, payload, report_id, report_received_at_utc)
             prune_reports_for_host(conn, hostname, MAX_REPORTS_PER_HOST)
             alarm_settings = get_alarm_settings(conn)
             host_settings = get_host_settings(conn, hostname)
