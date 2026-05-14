@@ -10129,7 +10129,7 @@ async function loadSystemOverview() {
                             <th>CPU</th>
                             <th>RAM / Modell</th>
                             <th>SAP / DB</th>
-                            <th>Status / Update</th>
+                            <th>Status</th>
                           </tr>
                         </thead>
                         <tbody>${rowHtml}</tbody>

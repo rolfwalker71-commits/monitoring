@@ -311,14 +311,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.145**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.145**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.146**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.146**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.4.146 | 14.05.2026 | Rename Systemübersicht last column header from "Status / Update" to "Status" |
 | 1.4.145 | 14.05.2026 | Refine Systemübersicht licenses: remove Datei-Stand row, align with AddOns height, rebalance column widths |
 | 1.4.144 | 14.05.2026 | Hide AddOns and Lizenzinfos dropdowns in Systemübersicht when no data is available |
 | 1.4.143 | 14.05.2026 | Add license info dropdown to Systemübersicht under OS column with row count |
