@@ -4425,7 +4425,7 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .report-header {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr auto;
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 6px;
