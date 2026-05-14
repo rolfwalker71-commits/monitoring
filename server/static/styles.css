@@ -7475,6 +7475,10 @@ body[data-theme="dark"] .backup-row--hana td {
   margin-top: 8px;
 }
 
+.so-os-license {
+  margin-top: 8px;
+}
+
 .so-cell-main {
   line-height: 1.35;
 }
@@ -7554,6 +7558,31 @@ body[data-theme="dark"] .backup-row--hana td {
   font-size: 10px;
 }
 
+.so-license-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+
+.so-license-list li {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.25;
+  color: #1f3b63;
+}
+
+.so-license-list strong {
+  font-weight: 700;
+  color: #1f3b63;
+}
+
+.so-license-list span {
+  font-weight: 600;
+  color: #0f172a;
+}
+
 body[data-theme="dark"] .so-addon-details {
   border-color: #304762;
   background: linear-gradient(180deg, #1a2f47 0%, #13243a 100%);
@@ -7572,6 +7601,15 @@ body[data-theme="dark"] .so-addon-version,
 body[data-theme="dark"] .so-addon-empty,
 body[data-theme="dark"] .so-addon-rest {
   color: #9fb3cc;
+}
+
+body[data-theme="dark"] .so-license-list li,
+body[data-theme="dark"] .so-license-list strong {
+  color: #c8dbf7;
+}
+
+body[data-theme="dark"] .so-license-list span {
+  color: #e2edf8;
 }
 
 .so-row-clickable {

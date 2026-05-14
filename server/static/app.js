@@ -9929,6 +9929,49 @@ function renderSystemOverviewAddons(payload) {
   return result;
 }
 
+function renderSystemOverviewLicenseInfos(payload) {
+  const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : null;
+  if (!sapLicense) {
+    return "";
+  }
+
+  const rawExpiration = asText(sapLicense.expiration, "").trim();
+  const formattedExpiration = /^\d{8}$/.test(rawExpiration)
+    ? `${rawExpiration.substring(6, 8)}.${rawExpiration.substring(4, 6)}.${rawExpiration.substring(0, 4)}`
+    : rawExpiration;
+
+  const fileMtimeUtc = asText(sapLicense.file_mtime_utc, "").trim();
+  const fileMtimeLabel = fileMtimeUtc ? formatUtcPlus2(fileMtimeUtc) : "";
+
+  const rows = [
+    { label: "HW-Key", value: asText(sapLicense.hardware_key, "").trim() },
+    { label: "Installationsnummer", value: asText(sapLicense.instno, "").trim() },
+    { label: "Systemnummer", value: asText(sapLicense.system_nr, "").trim() },
+    { label: "Kundennummer", value: asText(sapLicense.customer_no, "").trim() },
+    { label: "Lizenznehmer", value: asText(sapLicense.customer_name, "").trim() },
+    { label: "Gültig bis", value: formattedExpiration },
+    { label: "Datei-Stand B01.txt", value: fileMtimeLabel }
+  ].filter((entry) => entry.value);
+
+  if (rows.length === 0) {
+    return "";
+  }
+
+  const openAttr = state.systemOverviewAddonsExpanded === true ? " open" : "";
+  const rowsHtml = rows.map((entry) => {
+    return `<li><strong>${escapeHtml(entry.label)}:</strong> <span>${escapeHtml(entry.value)}</span></li>`;
+  }).join("");
+
+  return `
+    <details class="so-addon-details so-license-details"${openAttr}>
+      <summary>Lizenzinfos (${rows.length})</summary>
+      <div class="so-addon-grid">
+        <ul class="so-license-list">${rowsHtml}</ul>
+      </div>
+    </details>
+  `;
+}
+
 function renderSystemOverviewCountryFilter(countryCodes) {
   const filterEl = document.getElementById("systemOverviewCountryFilter");
   if (!filterEl) return;
@@ -9990,7 +10033,9 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
   const systemModel = escapeHtml(String(host.model || host.system_model || host.payload?.model || "-"));
   const lastUpdate = formatSystemOverviewLastUpdate(host.last_update);
   const statusBadge = formatSystemOverviewStatus(host);
-  const addOnSection = renderSystemOverviewAddons(host.payload || {});
+  const payload = host.payload || {};
+  const addOnSection = renderSystemOverviewAddons(payload);
+  const licenseInfoSection = renderSystemOverviewLicenseInfos(payload);
 
   const rowClickClass = onRowClick ? "so-row-clickable" : "";
   const rowClickAttr = onRowClick ? `data-hostname="${hostname}"` : "";
@@ -10004,6 +10049,7 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
       </td>
       <td>
         <div class="so-cell-main">${osReleaseDisplay}</div>
+        <div class="so-os-license">${licenseInfoSection}</div>
       </td>
       <td>
         <div class="so-cell-main">${cpuCores} vCPU</div>
