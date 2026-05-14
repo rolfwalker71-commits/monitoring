@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prozessdokumente</title>
+  <style>
+    :root {
+      --bg: #f5f8fc;
+      --card: #ffffff;
+      --text: #1f2a3a;
+      --muted: #5a6c84;
+      --line: #d7e2ef;
+      --accent: #1f5fbf;
+    }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top right, #eaf2ff, transparent 38%), var(--bg);
+    }
+    main {
+      width: min(1080px, calc(100% - 28px));
+      margin: 22px auto 40px;
+      display: grid;
+      gap: 14px;
+    }
+    .hero, .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(31, 42, 58, 0.08);
+      padding: 18px;
+    }
+    h1, h2 {
+      margin: 0;
+      line-height: 1.15;
+    }
+    h1 { font-size: 30px; }
+    h2 { font-size: 19px; }
+    p { margin: 0; color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 12px;
+    }
+    a.doc {
+      display: grid;
+      gap: 6px;
+      text-decoration: none;
+      color: inherit;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+    a.doc:hover {
+      border-color: var(--accent);
+      box-shadow: 0 6px 16px rgba(31, 95, 191, 0.14);
+    }
+    .title {
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .desc {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>📚 Prozessdokumente (HTML)</h1>
+      <p>Alle Prozessbeschreibungen als HTML mit Mermaid-Diagrammen. Jede Seite rendert die Diagramme direkt im Browser.</p>
+    </section>
+
+    <section class="card">
+      <h2>Grundprozesse</h2>
+      <div class="grid">
+        <a class="doc" href="mailversand-prozess.html"><span class="title">📧 Mailversand Prozess</span><span class="desc">OAuth/Graph, Instant Alerts, Reminder und Digests.</span></a>
+        <a class="doc" href="alert-handling-gesamtprozess.html"><span class="title">🚨 Alert Handling Gesamtprozess</span><span class="desc">Lifecycle von open/escalated bis resolved inkl. Aktionen.</span></a>
+        <a class="doc" href="backfill-prozess.html"><span class="title">♻️ Backfill Prozess</span><span class="desc">Historische Rekonstruktion von Config- und DB-Lifecycle-Daten.</span></a>
+        <a class="doc" href="datenholung-prozess.html"><span class="title">📥 Datenholung Prozess</span><span class="desc">Ingest von Reports sowie Command-Resultaten.</span></a>
+        <a class="doc" href="db-schreiben-prozess.html"><span class="title">🗃️ Schreiben in die Datenbank</span><span class="desc">Persistenzpipeline und Folgeprozesse nach Report-Ingest.</span></a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Erweiterte Prozesse (1-8)</h2>
+      <div class="grid">
+        <a class="doc" href="remote-command-lifecycle.html"><span class="title">🎛 Remote-Command Lifecycle</span><span class="desc">Queue, Polling, TTL, Expire und Resultat-Rueckmeldung.</span></a>
+        <a class="doc" href="oauth-lifecycle.html"><span class="title">🔐 OAuth Lifecycle</span><span class="desc">Connect, Callback, Token-Refresh und Disconnect.</span></a>
+        <a class="doc" href="alert-routing-matrix.html"><span class="title">📬 Alert Routing Matrix</span><span class="desc">Wer bekommt welchen Alert ueber welchen Kanal.</span></a>
+        <a class="doc" href="datenaufbewahrung-pruning.html"><span class="title">🧹 Datenaufbewahrung und Pruning</span><span class="desc">Retention, Aufraeumlogik und Datenkonsistenz.</span></a>
+        <a class="doc" href="backup-restore-prozess.html"><span class="title">💾 Backup und Restore Prozess</span><span class="desc">Backup-Jobs, Download-Fluss und sicheres Restore.</span></a>
+        <a class="doc" href="agent-self-update-e2e.html"><span class="title">🔄 Agent Self-Update End-to-End</span><span class="desc">Linux/Windows Updatepfad inklusive Bootstrap.</span></a>
+        <a class="doc" href="api-key-grace-mode.html"><span class="title">🛡 API-Key und Grace-Mode</span><span class="desc">Authentisierung und Grace-Verhalten fuer bekannte Hosts.</span></a>
+        <a class="doc" href="visibility-blacklist-auswirkungen.html"><span class="title">👁 Visibility/Blacklist Auswirkungen</span><span class="desc">Filtereffekte auf Alerts, Trends und Uebersichten.</span></a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

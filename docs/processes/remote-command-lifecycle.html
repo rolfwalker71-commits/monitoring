@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎛 Remote-Command Lifecycle</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #fdfdfd;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 1rem;
+            overflow-x: auto;
+            border-radius: 4px;
+        }
+        code {
+            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        .mermaid {
+            background: white;
+            padding: 1rem;
+            margin: 1rem 0;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="content"></div>
+    <script id="markdown-content" type="text/markdown"># 🎛 Remote-Command Lifecycle
+
+Kurzbeschreibung: Dieser Ablauf beschreibt, wie Befehle fuer Agents gequeued, ausgeliefert, ausgefuehrt und als Resultat zurueckgeschrieben werden.
+
+## Wichtige Endpunkte
+
+- GET /api/v1/agent-commands
+- POST /api/v1/agent-command
+- POST /api/v1/agent-command-bulk
+- POST /api/v1/agent-command-result
+
+## Hauptfluss
+
+```mermaid
+flowchart TD
+    A[Web User queued command] --&gt; B[queue_agent_command_once]
+    B --&gt; C[status=pending, expires_at_utc gesetzt]
+    C --&gt; D[Agent pollt /api/v1/agent-commands]
+    D --&gt; E[expire_old_agent_commands]
+    E --&gt; F[pending commands fuer hostname]
+    F --&gt; G[Agent fuehrt lokal aus]
+    G --&gt; H[POST /api/v1/agent-command-result]
+    H --&gt; I{status completed/failed?}
+    I --&gt;|Nein| J[400]
+    I --&gt;|Ja| K[agent_commands update]
+    K --&gt; L[status + executed_at_utc + result_json]
+```
+
+## Sonderregeln
+
+- Doppelte pending Commands werden via queue_agent_command_once verhindert.
+- TTL wird begrenzt und abgelaufene Commands werden auf expired gesetzt.
+- Bei set-api-key wird command_payload_json nach Rueckmeldung auf {} gesetzt.
+- Resultate fuer bereits behandelte Commands werden als ignored beantwortet.
+
+## Datenmodell
+
+- Tabelle: agent_commands
+- Kernfelder: command_type, command_payload_json, status, expires_at_utc, executed_at_utc, result_json</script>
+    <script>
+        const markdown = document.getElementById('markdown-content').textContent;
+        const renderer = new marked.Renderer();
+        
+        // Custom renderer for code blocks to handle mermaid
+        const originalCodeRenderer = renderer.code.bind(renderer);
+        renderer.code = function(code, language, escaped) {
+            if (language === 'mermaid') {
+                return '<div class="mermaid">' + code + '</div>';
+            }
+            return originalCodeRenderer(code, language, escaped);
+        };
+
+        document.getElementById('content').innerHTML = marked.parse(markdown, { renderer: renderer });
+        
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>

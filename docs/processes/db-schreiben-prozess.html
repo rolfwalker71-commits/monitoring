@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🗃️ Schreiben in die Datenbank</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #fdfdfd;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 1rem;
+            overflow-x: auto;
+            border-radius: 4px;
+        }
+        code {
+            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        .mermaid {
+            background: white;
+            padding: 1rem;
+            margin: 1rem 0;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="content"></div>
+    <script id="markdown-content" type="text/markdown"># 🗃️ Schreiben in die Datenbank
+
+Kurzbeschreibung: Was nach einem gueltigen Agent-Report in SQLite geschrieben und aktualisiert wird.
+
+## 🔄 Schreibpipeline nach /agent-report
+
+```mermaid
+flowchart TD
+    A[Gueltiger Report] --&gt; B[INSERT reports]
+    B --&gt; C[_track_host_config_changes]
+    C --&gt; D[_track_database_lifecycle]
+    D --&gt; E[prune_reports_for_host]
+    E --&gt; F{Host hidden?}
+    F --&gt;|Ja| G[resolve_open_alerts_for_host]
+    F --&gt;|Nein| H[update_alerts_for_report]
+    H --&gt; I[maybe_send_alert_reminders]
+    I --&gt; J[maybe_send_scheduled_user_mails]
+    G --&gt; I
+    J --&gt; K[COMMIT]
+```
+
+## 🧩 Haupttabellen
+
+- reports: Rohpayload pro Empfang
+- alerts: aktiver/aufgeloester Alert-Status je Mountpoint
+- alert_debounce: Warning Debounce Zustand
+- host_config_changes + host_config_snapshot: Konfig-Aenderungen
+- database_lifecycle: create/delete Events fuer DB-Inventar
+- agent_commands: Queue und Ausfuehrungsstatus von Remote-Commands
+
+## 🧹 Datenhygiene
+
+- Reports werden pro Host auf MAX_REPORTS_PER_HOST begrenzt.
+- Beim Prune werden report_id Referenzen in alerts vorher auf NULL gesetzt.
+- Aufloesungen fuer alte/open Alerts laufen automatisch im Reportfluss.
+
+## ✅ Transaktionale Sicht
+
+Alle Schritte laufen innerhalb einer SQLite-Transaktion und werden am Ende gemeinsam committed.</script>
+    <script>
+        const markdown = document.getElementById('markdown-content').textContent;
+        const renderer = new marked.Renderer();
+        
+        // Custom renderer for code blocks to handle mermaid
+        const originalCodeRenderer = renderer.code.bind(renderer);
+        renderer.code = function(code, language, escaped) {
+            if (language === 'mermaid') {
+                return '<div class="mermaid">' + code + '</div>';
+            }
+            return originalCodeRenderer(code, language, escaped);
+        };
+
+        document.getElementById('content').innerHTML = marked.parse(markdown, { renderer: renderer });
+        
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>

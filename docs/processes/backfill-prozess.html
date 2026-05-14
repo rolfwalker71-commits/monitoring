@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>♻️ Backfill Prozess</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #fdfdfd;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 1rem;
+            overflow-x: auto;
+            border-radius: 4px;
+        }
+        code {
+            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        .mermaid {
+            background: white;
+            padding: 1rem;
+            margin: 1rem 0;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="content"></div>
+    <script id="markdown-content" type="text/markdown"># ♻️ Backfill Prozess
+
+Kurzbeschreibung: Rekonstruktion historischer Aenderungen aus alten Reports fuer Host-Config-Changes und Database-Lifecycle.
+
+## ▶️ Trigger
+
+- POST /api/v1/host-config-changes/backfill
+- Optionales Parameterfeld: days (1..30)
+
+## 🔄 Gesamtfluss
+
+```mermaid
+flowchart TD
+    A[Admin startet Backfill API] --&gt; B[days validieren]
+    B --&gt; C[Reports im Zeitfenster laden]
+    C --&gt; D[backfill_host_config_changes]
+    C --&gt; E[backfill_database_lifecycle]
+    D --&gt; F[Snapshots je Host vergleichen]
+    F --&gt; G[Diffs als source=backfill speichern]
+    E --&gt; H[DB Inventar je Host reportweise vergleichen]
+    H --&gt; I[create/delete Events als backfill speichern]
+    G --&gt; J[Ergebnisobjekt bauen]
+    I --&gt; J
+    J --&gt; K[Response mit counters]
+```
+
+## 🧠 Host Config Backfill
+
+- Reihenfolge: pro Host chronologisch nach Report-ID.
+- Snapshot pro Report extrahieren.
+- Gegen letzten Snapshot vergleichen.
+- Signifikante Aenderungen als host_config_changes schreiben.
+- Danach host_config_snapshot auf letzten Stand bringen.
+
+## 🗄 Database Lifecycle Backfill
+
+- Reihenfolge: pro Host chronologisch.
+- Aktuelles DB-Inventar aus Payload extrahieren.
+- Mengenvergleich gegen vorherigen Zustand.
+- Neue DB -&gt; create Event, fehlende DB -&gt; delete Event.
+
+## ✅ Output
+
+- reports_scanned
+- inserted_changes
+- inserted_events
+- zusammengesetztes result Objekt in der API-Antwort</script>
+    <script>
+        const markdown = document.getElementById('markdown-content').textContent;
+        const renderer = new marked.Renderer();
+        
+        // Custom renderer for code blocks to handle mermaid
+        const originalCodeRenderer = renderer.code.bind(renderer);
+        renderer.code = function(code, language, escaped) {
+            if (language === 'mermaid') {
+                return '<div class="mermaid">' + code + '</div>';
+            }
+            return originalCodeRenderer(code, language, escaped);
+        };
+
+        document.getElementById('content').innerHTML = marked.parse(markdown, { renderer: renderer });
+        
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>

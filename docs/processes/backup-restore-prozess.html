@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💾 Backup und Restore Prozess</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #fdfdfd;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 1rem;
+            overflow-x: auto;
+            border-radius: 4px;
+        }
+        code {
+            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        .mermaid {
+            background: white;
+            padding: 1rem;
+            margin: 1rem 0;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="content"></div>
+    <script id="markdown-content" type="text/markdown"># 💾 Backup und Restore Prozess
+
+Kurzbeschreibung: Dieser Ablauf beschreibt die serverseitige Sicherung der SQLite-Datenbank und das sichere Restore.
+
+## Relevante Endpunkte
+
+- GET /api/v1/backup/database/start
+- GET /api/v1/backup/database/status?job_id=...
+- GET /api/v1/backup/database/download?job_id=...
+- POST /api/v1/restore/database
+
+## Backup Flow
+
+```mermaid
+flowchart TD
+    A[Admin startet Backup] --&gt; B[/api/v1/backup/database/start]
+    B --&gt; C[_create_database_backup_job]
+    C --&gt; D[monitoring.db kopieren]
+    D --&gt; E[optional -wal/-shm mitkopieren]
+    E --&gt; F[Job in _backup_jobs als ready]
+    F --&gt; G[Status poll via /status]
+    G --&gt; H[Download via /download]
+```
+
+## Restore Flow
+
+```mermaid
+flowchart TD
+    A[Admin uploadet DB Bytes] --&gt; B[_restore_database_from_bytes]
+    B --&gt; C{SQLite Header gueltig?}
+    C --&gt;|Nein| D[restore failed]
+    C --&gt;|Ja| E[temp file schreiben]
+    E --&gt; F[VACUUM INTO clean copy]
+    F --&gt; G[aktuelle DB als .bak sichern]
+    G --&gt; H[clean DB auf monitoring.db replacen]
+    H --&gt; I[alte wal/shm entfernen]
+    I --&gt; J[restore ok]
+```
+
+## Sicherheits- und Integritaetspunkte
+
+- Restore wird nur fuer Admin-Session akzeptiert.
+- Vor dem Ersetzen wird die aktuelle DB gesichert.
+- WAL/SHM Altdateien werden nach Restore bereinigt.</script>
+    <script>
+        const markdown = document.getElementById('markdown-content').textContent;
+        const renderer = new marked.Renderer();
+        
+        // Custom renderer for code blocks to handle mermaid
+        const originalCodeRenderer = renderer.code.bind(renderer);
+        renderer.code = function(code, language, escaped) {
+            if (language === 'mermaid') {
+                return '<div class="mermaid">' + code + '</div>';
+            }
+            return originalCodeRenderer(code, language, escaped);
+        };
+
+        document.getElementById('content').innerHTML = marked.parse(markdown, { renderer: renderer });
+        
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>

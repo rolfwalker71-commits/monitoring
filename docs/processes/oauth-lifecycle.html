@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔐 OAuth Lifecycle (Microsoft)</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #fdfdfd;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 1rem;
+            overflow-x: auto;
+            border-radius: 4px;
+        }
+        code {
+            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        .mermaid {
+            background: white;
+            padding: 1rem;
+            margin: 1rem 0;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="content"></div>
+    <script id="markdown-content" type="text/markdown"># 🔐 OAuth Lifecycle (Microsoft)
+
+Kurzbeschreibung: End-to-End Verbindung eines Benutzers mit Microsoft OAuth inklusive Token-Refresh fuer Graph Mailversand.
+
+## Wichtige Endpunkte
+
+- GET /api/v1/oauth/microsoft/start
+- GET /oauth/microsoft/callback
+- POST /api/v1/oauth-settings
+- POST /api/v1/oauth/microsoft/disconnect
+
+## Verbindungsfluss
+
+```mermaid
+flowchart LR
+    A[User klickt Connect] --&gt; B[/api/v1/oauth/microsoft/start]
+    B --&gt; C[create_oauth_state]
+    C --&gt; D[Redirect zu Microsoft Authorize URL]
+    D --&gt; E[/oauth/microsoft/callback]
+    E --&gt; F{state + code gueltig?}
+    F --&gt;|Nein| G[oauth_status=error]
+    F --&gt;|Ja| H[exchange code for tokens]
+    H --&gt; I[upsert_oauth_connection]
+    I --&gt; J[oauth_status=success]
+```
+
+## Token-Nutzung zur Laufzeit
+
+```mermaid
+flowchart TD
+    A[Mail Versand angefordert] --&gt; B[ensure_microsoft_access_token]
+    B --&gt; C{Token noch gueltig?}
+    C --&gt;|Ja| D[send_microsoft_mail(_multi)]
+    C --&gt;|Nein| E[refresh_token grant]
+    E --&gt; F{Refresh ok?}
+    F --&gt;|Nein| G[Versand abbrechen]
+    F --&gt;|Ja| D
+    D --&gt; H[Graph: POST /me/sendMail]
+```
+
+## Hinweise
+
+- OAuth ist benutzerbezogen, nicht global fuer alle User.
+- Admin konfiguriert App-Daten, jeder User verbindet sein eigenes Konto.
+- Disconnect entfernt die gespeicherte OAuth-Verbindung des Benutzers.</script>
+    <script>
+        const markdown = document.getElementById('markdown-content').textContent;
+        const renderer = new marked.Renderer();
+        
+        // Custom renderer for code blocks to handle mermaid
+        const originalCodeRenderer = renderer.code.bind(renderer);
+        renderer.code = function(code, language, escaped) {
+            if (language === 'mermaid') {
+                return '<div class="mermaid">' + code + '</div>';
+            }
+            return originalCodeRenderer(code, language, escaped);
+        };
+
+        document.getElementById('content').innerHTML = marked.parse(markdown, { renderer: renderer });
+        
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>

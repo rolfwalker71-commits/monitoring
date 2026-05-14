@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📥 Datenholung Prozess (Agent -> Server)</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #fdfdfd;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 1rem;
+            overflow-x: auto;
+            border-radius: 4px;
+        }
+        code {
+            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        .mermaid {
+            background: white;
+            padding: 1rem;
+            margin: 1rem 0;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="content"></div>
+    <script id="markdown-content" type="text/markdown"># 📥 Datenholung Prozess (Agent -&gt; Server)
+
+Kurzbeschreibung: Wie Reports und Command-Resultate vom Agent geholt bzw. empfangen werden.
+
+## 🧭 Report Ingest
+
+```mermaid
+flowchart LR
+    A[Agent sendet POST /api/v1/agent-report] --&gt; B[JSON und Pflichtfelder validieren]
+    B --&gt; C[API-Key/Grace pruefen]
+    C --&gt; D{authorized?}
+    D --&gt;|Nein| E[401/403]
+    D --&gt;|Ja| F[Payload anreichern: agent_api_key status]
+    F --&gt; G[Weiter in DB-Schreibpipeline]
+```
+
+## 🧭 Command Poll/Result
+
+```mermaid
+flowchart LR
+    A[Agent GET /api/v1/agent-commands] --&gt; B[Pending Command ausliefern]
+    B --&gt; C[Agent fuehrt Command lokal aus]
+    C --&gt; D[POST /api/v1/agent-command-result]
+    D --&gt; E[status completed/failed validieren]
+    E --&gt; F[Command Status und Resultat speichern]
+```
+
+## 🔍 Validierungen
+
+- hostname muss vorhanden sein.
+- filesystems muss ein Array sein.
+- command_id und result status muessen gueltig sein.
+- Agent-Endpunkte sind von Web-Session-Login ausgenommen, aber durch Agent-Auth geschuetzt.
+
+## 📌 Warum getrennt von DB-Write?
+
+Datenholung beschreibt Transport, Auth und API-Vertrag. Die persistente Verarbeitung steht im separaten Dokument zum DB-Schreiben.</script>
+    <script>
+        const markdown = document.getElementById('markdown-content').textContent;
+        const renderer = new marked.Renderer();
+        
+        // Custom renderer for code blocks to handle mermaid
+        const originalCodeRenderer = renderer.code.bind(renderer);
+        renderer.code = function(code, language, escaped) {
+            if (language === 'mermaid') {
+                return '<div class="mermaid">' + code + '</div>';
+            }
+            return originalCodeRenderer(code, language, escaped);
+        };
+
+        document.getElementById('content').innerHTML = marked.parse(markdown, { renderer: renderer });
+        
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>

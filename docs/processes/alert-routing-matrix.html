@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📬 Alert Notification Routing Matrix</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #fdfdfd;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 1rem;
+            overflow-x: auto;
+            border-radius: 4px;
+        }
+        code {
+            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        .mermaid {
+            background: white;
+            padding: 1rem;
+            margin: 1rem 0;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="content"></div>
+    <script id="markdown-content" type="text/markdown"># 📬 Alert Notification Routing Matrix
+
+Kurzbeschreibung: Welche Alerts an wen gesendet werden, ueber welche Kanaele und unter welchen Bedingungen.
+
+## Routing-Entscheidung
+
+```mermaid
+flowchart TD
+    A[Alert Event opened/escalated/resolved/reminder] --&gt; B[Global Telegram aktiviert?]
+    B --&gt;|Ja| C[telegram_send]
+    B --&gt;|Nein| D[weiter]
+    C --&gt; D
+    D --&gt; E[Pro User pruefen]
+    E --&gt; F{Host subscription aktiv?}
+    F --&gt;|Nein| G[skip user]
+    F --&gt;|Ja| H{Severity &gt;= User Min Severity?}
+    H --&gt;|Nein| G
+    H --&gt;|Ja| I{Kanal Mail aktiv?}
+    I --&gt;|Ja| J[OAuth + Recipient + send_microsoft_mail_multi]
+    I --&gt;|Nein| K{Kanal Telegram aktiv?}
+    K --&gt;|Ja| L[user chat id + telegram_send_to_chat]
+    K --&gt;|Nein| G
+```
+
+## Matrix (vereinfachte Sicht)
+
+| Kanal | Muss aktiv sein | Weitere Bedingungen |
+|---|---|---|
+| Global Telegram | alarm_settings.telegram_enabled + bot token + chat id | wird direkt aus maybe_send_alert_message versendet |
+| Instant Mail pro User | alert_instant_mail_enabled + email_enabled + recipient + OAuth | Host-Subscription notify_mail und severity passt |
+| Instant Telegram pro User | alert_instant_telegram_enabled + persönliche chat id + global bot token | Host-Subscription notify_telegram und severity passt |
+| Alert Digest Mail | alert_email_enabled + Alert-Zeitpunkt faellig | Empfaenger aus resolve_user_alert_mail_recipients |
+| Reminder Mail | alert_reminder_interval_hours &gt; 0 | Nur offene Alerts, host-/severity-kompatibel |
+
+## Wichtige Funktionen
+
+- maybe_send_alert_message
+- send_instant_alert_mails_to_users
+- send_instant_alert_telegram_to_users
+- maybe_send_alert_reminders
+- maybe_send_scheduled_user_mails</script>
+    <script>
+        const markdown = document.getElementById('markdown-content').textContent;
+        const renderer = new marked.Renderer();
+        
+        // Custom renderer for code blocks to handle mermaid
+        const originalCodeRenderer = renderer.code.bind(renderer);
+        renderer.code = function(code, language, escaped) {
+            if (language === 'mermaid') {
+                return '<div class="mermaid">' + code + '</div>';
+            }
+            return originalCodeRenderer(code, language, escaped);
+        };
+
+        document.getElementById('content').innerHTML = marked.parse(markdown, { renderer: renderer });
+        
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>

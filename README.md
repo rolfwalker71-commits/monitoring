@@ -307,24 +307,34 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 - **[AGENT_LINUX_TECHNICAL.md](AGENT_LINUX_TECHNICAL.md)** – Comprehensive reference for `collect_and_send.sh`: metrics collection, jitter mechanism, locking, large files scanning, SAP B1 and HANA integration
 - **[AGENT_WINDOWS_TECHNICAL.md](AGENT_WINDOWS_TECHNICAL.md)** – Complete guide for `collect_and_send.ps1`: WMI/SMO data collection, SQL Server integration, HANA querying, crash handling, and Task Scheduler setup
 - **[agent-deployment-guide.html](agent-deployment-guide.html)** – Practical deployment guide for Linux and Windows agents with install/update commands, parameters, license file paths, and current HANA/SAP payload sources
-- **[docs/processes/mailversand-prozess.md](docs/processes/mailversand-prozess.md)** – Mailversand mit OAuth/Graph, Instant-Alerts, Reminder und Scheduled Digests
-- **[docs/processes/alert-handling-gesamtprozess.md](docs/processes/alert-handling-gesamtprozess.md)** – Voller Alert-Lifecycle inklusive Debounce, Mute/Ack/Close und Eskalation
-- **[docs/processes/backfill-prozess.md](docs/processes/backfill-prozess.md)** – Historische Rekonstruktion fuer Host-Config und Database-Lifecycle
-- **[docs/processes/datenholung-prozess.md](docs/processes/datenholung-prozess.md)** – Datenannahme von Agenten (Reports, Commands, Resultate)
-- **[docs/processes/db-schreiben-prozess.md](docs/processes/db-schreiben-prozess.md)** – Persistenzpipeline vom Report bis zu Alerts, Lifecycle und Mail-Triggern
+- **[docs/processes/index.html](docs/processes/index.html)** – HTML-Startseite fuer alle Prozessdokumente (mit Mermaid-Rendering)
+- **[docs/processes/mailversand-prozess.html](docs/processes/mailversand-prozess.html)** – Mailversand mit OAuth/Graph, Instant-Alerts, Reminder und Scheduled Digests
+- **[docs/processes/alert-handling-gesamtprozess.html](docs/processes/alert-handling-gesamtprozess.html)** – Voller Alert-Lifecycle inklusive Debounce, Mute/Ack/Close und Eskalation
+- **[docs/processes/backfill-prozess.html](docs/processes/backfill-prozess.html)** – Historische Rekonstruktion fuer Host-Config und Database-Lifecycle
+- **[docs/processes/datenholung-prozess.html](docs/processes/datenholung-prozess.html)** – Datenannahme von Agenten (Reports, Commands, Resultate)
+- **[docs/processes/db-schreiben-prozess.html](docs/processes/db-schreiben-prozess.html)** – Persistenzpipeline vom Report bis zu Alerts, Lifecycle und Mail-Triggern
+- **[docs/processes/remote-command-lifecycle.html](docs/processes/remote-command-lifecycle.html)** – Queue, Auslieferung, TTL und Rueckmeldung von Agent-Commands
+- **[docs/processes/oauth-lifecycle.html](docs/processes/oauth-lifecycle.html)** – OAuth Connect, Callback, Token-Refresh und Disconnect
+- **[docs/processes/alert-routing-matrix.html](docs/processes/alert-routing-matrix.html)** – Routing-Matrix fuer Mail/Telegram je Schweregrad und Subscription
+- **[docs/processes/datenaufbewahrung-pruning.html](docs/processes/datenaufbewahrung-pruning.html)** – Report-Retention, Pruning und Konsistenzwirkung
+- **[docs/processes/backup-restore-prozess.html](docs/processes/backup-restore-prozess.html)** – DB-Backup Jobs, Download und Restore-Absicherung
+- **[docs/processes/agent-self-update-e2e.html](docs/processes/agent-self-update-e2e.html)** – Linux/Windows Self-Update und Bootstrap-Ablauf
+- **[docs/processes/api-key-grace-mode.html](docs/processes/api-key-grace-mode.html)** – API-Key-Pruefung und Grace-Mode fuer bekannte Hosts
+- **[docs/processes/visibility-blacklist-auswirkungen.html](docs/processes/visibility-blacklist-auswirkungen.html)** – Auswirkungen von Visibility/Blacklist auf Alerts und Trends
 
 ---
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.14**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.14**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.15**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.15**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.5.15  | 14.05.2026 | Add HTML versions for all process documents with Mermaid rendering and include detailed docs for processes 1-8 |
 | 1.5.14  | 14.05.2026 | Add dedicated process docs with Mermaid flows for mail delivery, alert lifecycle, backfill, data ingestion, and database write pipeline |
 | 1.5.13  | 14.05.2026 | Extend deployment guide with embedded Mermaid flowcharts for overview, Windows, Linux, and API/queue process flows |
 | 1.5.12  | 14.05.2026 | Use distro-specific OS icons in host cards (ubuntu/debian/suse) with linux.png fallback when no mapping matches |

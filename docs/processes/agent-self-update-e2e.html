@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔄 Agent Self-Update End-to-End</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #fdfdfd;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 1rem;
+            overflow-x: auto;
+            border-radius: 4px;
+        }
+        code {
+            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        .mermaid {
+            background: white;
+            padding: 1rem;
+            margin: 1rem 0;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="content"></div>
+    <script id="markdown-content" type="text/markdown"># 🔄 Agent Self-Update End-to-End
+
+Kurzbeschreibung: Wie Linux- und Windows-Agenten Updates von /updates beziehen und lokal anwenden.
+
+## Linux Flow
+
+```mermaid
+flowchart LR
+    A[self_update.sh] --&gt; B[agent.conf laden]
+    B --&gt; C[UPDATE_BASE_URL aus SERVER_URL/updates]
+    C --&gt; D[Remote AGENT_VERSION/BUILD_VERSION lesen]
+    D --&gt; E[collect_and_send.sh + self_update.sh laden]
+    E --&gt; F[Dateien nach /opt/monitoring-agent installieren]
+    F --&gt; G[AGENT_VERSION schreiben]
+    G --&gt; H[Config-Werte migrieren/normalisieren]
+```
+
+## Windows Flow
+
+```mermaid
+flowchart LR
+    A[self_update.ps1] --&gt; B[agent.conf parsen]
+    B --&gt; C[Update-Base aus SERVER_URL/updates]
+    C --&gt; D[Dateien mit Validierung laden]
+    D --&gt; E[collect_and_send.ps1/self_update.ps1 ersetzen]
+    E --&gt; F[AGENT_VERSION aktualisieren]
+    F --&gt; G[Task-basierter Betrieb laeuft weiter]
+```
+
+## Bootstrap-Sonderfall (Windows)
+
+```mermaid
+flowchart TD
+    A[bootstrap_agent.ps1] --&gt; B{Bestehende Installation + Tasks?}
+    B --&gt;|Ja| C[Scripts in place refresh]
+    B --&gt;|Nein| D[install_agent.ps1 von /updates ziehen]
+    D --&gt; E[Neuinstallation + Tasks]
+```
+
+## Kernaussagen
+
+- Update-Quelle ist serverzentrisch auf /updates ausgelegt.
+- Linux und Windows aktualisieren Kernskripte in place.
+- Bootstrap repariert bestehende Installationen oder installiert neu.</script>
+    <script>
+        const markdown = document.getElementById('markdown-content').textContent;
+        const renderer = new marked.Renderer();
+        
+        // Custom renderer for code blocks to handle mermaid
+        const originalCodeRenderer = renderer.code.bind(renderer);
+        renderer.code = function(code, language, escaped) {
+            if (language === 'mermaid') {
+                return '<div class="mermaid">' + code + '</div>';
+            }
+            return originalCodeRenderer(code, language, escaped);
+        };
+
+        document.getElementById('content').innerHTML = marked.parse(markdown, { renderer: renderer });
+        
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>

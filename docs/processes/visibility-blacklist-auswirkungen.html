@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>👁 Visibility und Blacklist Auswirkungen</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #fdfdfd;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 1rem;
+            overflow-x: auto;
+            border-radius: 4px;
+        }
+        code {
+            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        .mermaid {
+            background: white;
+            padding: 1rem;
+            margin: 1rem 0;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="content"></div>
+    <script id="markdown-content" type="text/markdown"># 👁 Visibility und Blacklist Auswirkungen
+
+Kurzbeschreibung: Wie ausgeblendete Mountpoints und Blacklist-Patterns Alerts, Trends und Auswertungen beeinflussen.
+
+## Zusammenspiel
+
+```mermaid
+flowchart TD
+    A[Filesystem im Report] --&gt; B{In user visibility hidden?}
+    B --&gt;|Ja| C[In UI-Sections ausgeblendet]
+    B --&gt;|Nein| D[normal anzeigen]
+    A --&gt; E{Blacklist Pattern Match?}
+    E --&gt;|Ja| F[aus Alerts/Trends/Exports herausfiltern]
+    E --&gt;|Nein| G[normal bewerten]
+    F --&gt; H[offene passende Alerts auto-resolve]
+```
+
+## Datenquellen
+
+- filesystem_visibility (pro User, Host, Section)
+- filesystem_blacklist_patterns (globale Pattern)
+
+## Wirkung im Alerting
+
+- Bei Blacklist-Match werden offene Alerts fuer betroffene Mountpoints resolved.
+- Bei hidden Mountpoints in alert-relevanten Sections werden Alerts ebenfalls unterdrueckt.
+
+## Wirkung in Auswertungen
+
+- Critical Trends und Uebersichten filtern blacklisted Mountpoints.
+- User-spezifische Hidden-Listen beeinflussen Analyse- und Fokus-Ansichten.
+
+## Betriebsnutzen
+
+- Weniger Alert-Rauschen fuer irrelevante Pfade.
+- Saubere, user-spezifische Sicht auf wirklich relevante Filesysteme.</script>
+    <script>
+        const markdown = document.getElementById('markdown-content').textContent;
+        const renderer = new marked.Renderer();
+        
+        // Custom renderer for code blocks to handle mermaid
+        const originalCodeRenderer = renderer.code.bind(renderer);
+        renderer.code = function(code, language, escaped) {
+            if (language === 'mermaid') {
+                return '<div class="mermaid">' + code + '</div>';
+            }
+            return originalCodeRenderer(code, language, escaped);
+        };
+
+        document.getElementById('content').innerHTML = marked.parse(markdown, { renderer: renderer });
+        
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>

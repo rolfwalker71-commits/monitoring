@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧹 Datenaufbewahrung und Pruning</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #fdfdfd;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 1rem;
+            overflow-x: auto;
+            border-radius: 4px;
+        }
+        code {
+            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+        }
+        .mermaid {
+            background: white;
+            padding: 1rem;
+            margin: 1rem 0;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="content"></div>
+    <script id="markdown-content" type="text/markdown"># 🧹 Datenaufbewahrung und Pruning
+
+Kurzbeschreibung: Wie Reports pro Host begrenzt werden und welche Auswirkungen auf referenzierende Daten bestehen.
+
+## Kernregel
+
+- MONITORING_MAX_REPORTS_PER_HOST steuert, wie viele Reports pro Host erhalten bleiben.
+- Pruning laeuft im Report-Ingest direkt nach dem Insert.
+
+## Ablauf
+
+```mermaid
+flowchart TD
+    A[Neuer Report INSERT] --&gt; B[prune_reports_for_host]
+    B --&gt; C[alte report ids bestimmen]
+    C --&gt; D[alerts.report_id fuer alte ids auf NULL]
+    D --&gt; E[alte reports loeschen]
+    E --&gt; F[neueste Reports bleiben erhalten]
+```
+
+## Warum zuerst report_id auf NULL?
+
+Damit Alerts bei Loeschung alter Reports keine ungueltigen Fremdbezuege behalten.
+
+## Auswirkungen
+
+- Trend- und Verlaufsauswertungen nutzen nur verbleibende Reports.
+- Alert-Lifecycle bleibt konsistent, auch wenn historische report_id entfaellt.
+- Speicherverbrauch bleibt begrenzt und vorhersehbar.</script>
+    <script>
+        const markdown = document.getElementById('markdown-content').textContent;
+        const renderer = new marked.Renderer();
+        
+        // Custom renderer for code blocks to handle mermaid
+        const originalCodeRenderer = renderer.code.bind(renderer);
+        renderer.code = function(code, language, escaped) {
+            if (language === 'mermaid') {
+                return '<div class="mermaid">' + code + '</div>';
+            }
+            return originalCodeRenderer(code, language, escaped);
+        };
+
+        document.getElementById('content').innerHTML = marked.parse(markdown, { renderer: renderer });
+        
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+</body>
+</html>
