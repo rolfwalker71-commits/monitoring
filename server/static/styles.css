@@ -3072,7 +3072,6 @@ body[data-theme="dark"] .trend-progress-bar {
   border: 1px solid #bfdbfe;
   background: #eff6ff;
   color: #1e3a8a;
-  font-family: "IBM Plex Mono", monospace;
   font-size: 11px;
   font-weight: 800;
   max-width: 120px;
@@ -3085,12 +3084,14 @@ body[data-theme="dark"] .trend-progress-bar {
   border-color: #93c5fd;
   background: #eff6ff;
   color: #1e3a8a;
+  font-family: "IBM Plex Mono", monospace;
 }
 
 .host-value-chip--hana {
   border-color: #86efac;
   background: #ecfdf3;
   color: #166534;
+  font-family: "IBM Plex Mono", monospace;
 }
 
 .host-value-chip--sid {
@@ -3534,7 +3535,6 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .host-item .host-meta-line {
-  font-family: "IBM Plex Mono", monospace;
   font-size: 10px;
   line-height: 1.15;
 }

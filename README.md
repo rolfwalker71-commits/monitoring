@@ -311,14 +311,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.5**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.5**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.6**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.6**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.5.6   | 14.05.2026 | Restrict IBM Plex Mono to FP and HANA release chips only; revert from meta lines and SID chip |
 | 1.5.5   | 14.05.2026 | Apply IBM Plex Mono to host card meta lines (IP, hostname, agent version, date) and value chips (FP, HANA release, SID) |
 | 1.5.4   | 14.05.2026 | Reduce font sizes and weights for HOSTS title, host card names, Meldungen header and base body font (Edge compatibility) |
 | 1.4.154 | 14.05.2026 | Fix Meldungen datetime jump by honoring jump_to_utc in host-reports API and trigger jump reliably on picker input |
