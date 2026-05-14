@@ -5683,6 +5683,8 @@ function renderReportCard(report) {
 
   const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : {};
   const licenseAvailable = sapLicense.available === true || sapLicense.available === "true";
+  const licenseFileMtimeUtc = asText(sapLicense.file_mtime_utc || "", "");
+  const licenseFileMtimeLabel = licenseFileMtimeUtc ? formatUtcPlus2(licenseFileMtimeUtc) : "-";
   const licenseExpiration = sapLicense.expiration && /^\d{8}$/.test(String(sapLicense.expiration))
     ? `${String(sapLicense.expiration).substring(6,8)}.${String(sapLicense.expiration).substring(4,6)}.${String(sapLicense.expiration).substring(0,4)}`
     : asText(sapLicense.expiration || "-");
@@ -5702,6 +5704,7 @@ function renderReportCard(report) {
           <p class="report-license-item"><strong>Gültig bis</strong><span>${escapeHtml(licenseExpiration)}</span></p>
         </div>
       </div>
+      <p class="report-license-meta">Datei-Stand B01.txt: <span>${escapeHtml(licenseFileMtimeLabel)}</span></p>
     </section>
   ` : "";
 

@@ -1303,6 +1303,7 @@ function Get-SapLicenseInfo {
         system_nr = ""
         customer_name = ""
         customer_no = ""
+        file_mtime_utc = ""
     }
     
     try {
@@ -1324,6 +1325,11 @@ function Get-SapLicenseInfo {
         if (-not $licensePath) {
             return $licenseInfo
         }
+
+        try {
+            $fileInfo = Get-Item -LiteralPath $licensePath -ErrorAction Stop
+            $licenseInfo.file_mtime_utc = $fileInfo.LastWriteTimeUtc.ToString('yyyy-MM-ddTHH:mm:ssZ', $IC)
+        } catch { }
         
         $content = [System.IO.File]::ReadAllText($licensePath, [System.Text.Encoding]::UTF8)
         if (-not $content) {
@@ -1616,6 +1622,7 @@ $expirationEsc = ConvertTo-JsonString $licenseInfo.expiration
 $systemNrEsc = ConvertTo-JsonString $licenseInfo.system_nr
 $customerNameEsc = ConvertTo-JsonString $licenseInfo.customer_name
 $customerNoEsc = ConvertTo-JsonString $licenseInfo.customer_no
+$licenseFileMtimeUtcEsc = ConvertTo-JsonString $licenseInfo.file_mtime_utc
 
 $payload = @"
 {
@@ -1691,7 +1698,8 @@ $payload = @"
         "expiration": "$expirationEsc",
         "system_nr": "$systemNrEsc",
         "customer_name": "$customerNameEsc",
-        "customer_no": "$customerNoEsc"
+        "customer_no": "$customerNoEsc",
+        "file_mtime_utc": "$licenseFileMtimeUtcEsc"
     }
 }
 "@

@@ -4534,6 +4534,16 @@ body[data-theme="dark"] .trend-progress-bar {
   padding: 7px 10px;
 }
 
+.report-license-meta {
+  margin: 5px 0 0;
+  font-size: 10px;
+  color: #5f78a0;
+}
+
+.report-license-meta span {
+  font-weight: 600;
+}
+
 .sap-hana-chip {
   display: inline-block;
   font-size: 11px;
@@ -4594,6 +4604,10 @@ body[data-theme="dark"] .report-license-item strong {
 
 body[data-theme="dark"] .report-license-item span {
   color: #d8e4f3;
+}
+
+body[data-theme="dark"] .report-license-meta {
+  color: #94b0d1;
 }
 
 @media (max-width: 1100px) {
