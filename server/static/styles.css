@@ -4494,36 +4494,36 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .report-license-title {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: #1d4f91;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .report-license-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 14px;
+  gap: 4px 14px;
 }
 
 .report-license-column {
   display: grid;
-  gap: 5px;
+  gap: 3px;
 }
 
 .report-license-item {
   margin: 0;
   display: flex;
-  gap: 7px;
+  gap: 5px;
   align-items: baseline;
   min-width: 0;
 }
 
 .report-license-item strong {
   flex: 0 0 108px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
   color: #3e5f8d;
 }
@@ -4532,7 +4532,7 @@ body[data-theme="dark"] .trend-progress-bar {
   min-width: 0;
   word-break: break-word;
   color: #122038;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -4541,8 +4541,8 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .report-license-meta {
-  margin: 5px 0 0;
-  font-size: 10px;
+  margin: 3px 0 0;
+  font-size: 9px;
   color: #5f78a0;
 }
 
