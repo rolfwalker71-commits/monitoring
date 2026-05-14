@@ -15,14 +15,14 @@
   --crit-bg: #fee2e2;
   --crit-border: #fca5a5;
   --kv-label-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  --kv-label-size: 10px;
-  --kv-label-weight: 700;
-  --kv-label-letter: 0.03em;
-  --kv-label-color: #64748b;
+  --kv-label-size: 11px;
+  --kv-label-weight: 600;
+  --kv-label-letter: 0;
+  --kv-label-color: #1e293b;
   --kv-value-family: "IBM Plex Mono", monospace;
-  --kv-value-size: 11px;
+  --kv-value-size: 10px;
   --kv-value-weight: 700;
-  --kv-value-color: #0f172a;
+  --kv-value-color: #64748b;
 }
 
 * {
@@ -45,8 +45,8 @@ body[data-theme="dark"] {
   --muted: #9fb3cc;
   --line: #24344d;
   --accent: #3b82f6;
-  --kv-label-color: #9fb3cc;
-  --kv-value-color: #e2edf8;
+  --kv-label-color: #c8dbf7;
+  --kv-value-color: #9fb3cc;
   color-scheme: dark;
   background: radial-gradient(circle at top left, #1b2b45 0%, var(--bg) 48%);
 }
@@ -7649,9 +7649,9 @@ body[data-theme="dark"] .backup-row--hana td {
 
 .so-license-list li {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.2;
-  color: #1f3b63;
+  color: var(--kv-label-color);
 }
 
 .so-license-label {
@@ -7659,7 +7659,6 @@ body[data-theme="dark"] .backup-row--hana td {
   font-size: var(--kv-label-size);
   font-weight: var(--kv-label-weight);
   letter-spacing: var(--kv-label-letter);
-  text-transform: uppercase;
   color: var(--kv-label-color);
 }
 
