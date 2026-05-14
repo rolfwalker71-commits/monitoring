@@ -287,6 +287,23 @@
       color: var(--muted);
     }
 
+    .mermaid-wrap {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #ffffff;
+      padding: 10px;
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      min-width: 560px;
+    }
+
+    .mermaid-note {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
     @media (max-width: 720px) {
       .page {
         width: min(100% - 18px, 1180px);
@@ -325,6 +342,24 @@
 
     <section class="card">
       <h2>🧭 Ablauf pro Welt</h2>
+      <div class="subcard">
+        <h3>🗺️ Prozess-Überblick</h3>
+        <div class="mermaid-wrap">
+          <div class="mermaid">
+flowchart LR
+    A[Neuer oder bestehender Host] --> B[Installieren oder Bootstrap]
+    B --> C[Skripte von /updates beziehen]
+    C --> D[Collect Lauf mit Jitter]
+    D --> E[POST /api/v1/agent-report]
+    E --> F{Upload erfolgreich?}
+    F -->|Ja| G[Report in Dashboard sichtbar]
+    F -->|Nein| H[JSON in lokale Queue]
+    H --> I[Nächster Lauf flusht Queue]
+    I --> E
+          </div>
+        </div>
+        <p class="mermaid-note">Das Diagramm zeigt den gemeinsamen Basisprozess für beide Welten.</p>
+      </div>
       <div class="grid-3">
         <div class="subcard">
           <span class="tag">1. 🚀 Deploy</span>
@@ -345,6 +380,24 @@
       <div class="section-head">
         <h2>1. 🪟 Windows</h2>
         <img class="os-icon" src="server/static/icons/windows.png" alt="Windows Icon">
+      </div>
+
+      <div class="subcard">
+        <h3>🪟 Windows Flow</h3>
+        <div class="mermaid-wrap">
+          <div class="mermaid">
+flowchart LR
+    A[install_agent.ps1] --> B[C:\\ProgramData\\monitoring-agent]
+    B --> C[Scheduled Task: collect]
+    B --> D[Scheduled Task: update]
+    C --> E[collect_and_send.ps1]
+    E --> F{Send ok?}
+    F -->|Nein| G[Queue: *.json]
+    G --> E
+    D --> H[self_update.ps1]
+    H --> I[Skripte von /updates]
+          </div>
+        </div>
       </div>
 
       <div class="two-col">
@@ -510,6 +563,25 @@ ENABLE_SAP_SCAN="1"</pre>
         <img class="os-icon" src="server/static/icons/linux.png" alt="Linux Icon">
       </div>
 
+      <div class="subcard">
+        <h3>🐧 Linux Flow</h3>
+        <div class="mermaid-wrap">
+          <div class="mermaid">
+flowchart LR
+    A[install_agent.sh] --> B[/opt/monitoring-agent]
+    A --> C[/etc/monitoring-agent/agent.conf]
+    B --> D[Cron: collect]
+    B --> E[Cron: update]
+    D --> F[collect_and_send.sh]
+    F --> G{Send ok?}
+    G -->|Nein| H[/var/lib/monitoring-agent/queue]
+    H --> F
+    E --> I[self_update.sh]
+    I --> J[Skripte von /updates]
+          </div>
+        </div>
+      </div>
+
       <div class="two-col">
         <div class="subcard">
           <h3>🚀 Neu deployen</h3>
@@ -663,6 +735,24 @@ PRIORITY_UPDATE_CHECK_MINUTES="60"</pre>
 
     <section class="card">
       <h2>📡 Gemeinsame Datenübermittlung</h2>
+      <div class="subcard">
+        <h3>🔁 API- und Queue-Fluss</h3>
+        <div class="mermaid-wrap">
+          <div class="mermaid">
+flowchart TB
+    A[Agent erzeugt JSON Payload] --> B[POST /api/v1/agent-report]
+    B --> C{HTTP 2xx?}
+    C -->|Ja| D[Server speichert Report]
+    C -->|Nein| E[Payload in Queue schreiben]
+    E --> F[Nächster Lauf liest Queue]
+    F --> B
+    D --> G[Dashboard + Alerts aktualisiert]
+    D --> H[GET /api/v1/agent-commands]
+    H --> I[Agent führt Command aus]
+    I --> J[POST /api/v1/agent-command-result]
+          </div>
+        </div>
+      </div>
       <div class="two-col">
         <div class="subcard">
           <h3>🎯 Ziel-Endpoints</h3>
@@ -692,5 +782,13 @@ PRIORITY_UPDATE_CHECK_MINUTES="60"</pre>
       <p class="footer-note">Diese HTML-Doku basiert direkt auf den aktuellen Skripten in <code>client/linux</code> und <code>client/windows</code>.</p>
     </section>
   </main>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      securityLevel: "loose",
+      theme: "default"
+    });
+  </script>
 </body>
 </html>

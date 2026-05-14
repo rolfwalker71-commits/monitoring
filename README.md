@@ -312,14 +312,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.12**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.12**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.13**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.13**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.5.13  | 14.05.2026 | Extend deployment guide with embedded Mermaid flowcharts for overview, Windows, Linux, and API/queue process flows |
 | 1.5.12  | 14.05.2026 | Use distro-specific OS icons in host cards (ubuntu/debian/suse) with linux.png fallback when no mapping matches |
 | 1.5.11  | 14.05.2026 | Enhance deployment guide with emoji section markers and OS icons (windows.png/linux.png) in respective sections |
 | 1.5.10  | 14.05.2026 | Fix corrupted HTML deployment guide markup and restore valid rendering with separate Windows/Linux sections |
