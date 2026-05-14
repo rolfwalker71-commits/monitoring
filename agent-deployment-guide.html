@@ -131,6 +131,25 @@
       gap: 14px;
     }
 
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .section-head .os-icon {
+      width: 58px;
+      height: 58px;
+      object-fit: contain;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #ffffff;
+      padding: 8px;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+    }
+
     .subcard {
       padding: 16px 18px;
       border-radius: 18px;
@@ -290,44 +309,47 @@
       <p>Diese Seite ist in zwei getrennte Welten aufgebaut: zuerst Windows, danach Linux. Beide Bereiche folgen dem gleichen Ablauf: neue Agents deployen, einzelne Skripte beziehen, bestehende Agents updaten, Daten manuell senden, Lizenzpfade, Payload-Quellen und wichtige Defaults.</p>
       <div class="hero-grid">
         <div class="subcard ok">
-          <h3>1. Windows</h3>
+          <h3>1. 🪟 Windows</h3>
           <p>Installiert nach <strong>C:\ProgramData\monitoring-agent</strong>, mit Scheduled Tasks für Collect und Update sowie lokaler Queue im selben Basisverzeichnis.</p>
         </div>
         <div class="subcard ok">
-          <h3>2. Linux</h3>
+          <h3>2. 🐧 Linux</h3>
           <p>Installiert nach <strong>/opt/monitoring-agent</strong>, Konfiguration unter <strong>/etc/monitoring-agent/agent.conf</strong> und Queue unter <strong>/var/lib/monitoring-agent/queue</strong>.</p>
         </div>
         <div class="subcard warn">
-          <h3>Wichtiger Unterschied</h3>
+          <h3>⚠️ Wichtiger Unterschied</h3>
           <p><strong>HANA-Abfragen existieren aktuell nur im Linux-Agent.</strong> Der Windows-Agent liest SAP-B1-/SQL-Server-Daten, aber keine HANA/hdbsql-Queries.</p>
         </div>
       </div>
     </section>
 
     <section class="card">
-      <h2>Ablauf pro Welt</h2>
+      <h2>🧭 Ablauf pro Welt</h2>
       <div class="grid-3">
         <div class="subcard">
-          <span class="tag">1. Deploy</span>
+          <span class="tag">1. 🚀 Deploy</span>
           <p>Ein neuer Host zieht das Install-Skript und erstellt damit die lokale Installation samt Konfiguration, Logs, Queue und Scheduler/Cron.</p>
         </div>
         <div class="subcard">
-          <span class="tag">2. Einzelne Skripte</span>
+          <span class="tag">2. 🧩 Einzelne Skripte</span>
           <p>Jedes Kernskript kann direkt vom Server-Endpunkt <strong>/updates</strong> geholt werden, zum Beispiel für Reparatur, Debugging oder manuelle Verteilung.</p>
         </div>
         <div class="subcard">
-          <span class="tag">3. Betrieb</span>
+          <span class="tag">3. 📦 Betrieb</span>
           <p>Danach folgen Update, manuelles Senden, Lizenz- und Datenquellen. Beide Agents senden an <strong>/api/v1/agent-report</strong> und verwenden lokale Queue-Dateien bei Fehlern.</p>
         </div>
       </div>
     </section>
 
     <section class="card">
-      <h2>1. Windows</h2>
+      <div class="section-head">
+        <h2>1. 🪟 Windows</h2>
+        <img class="os-icon" src="server/static/icons/windows.png" alt="Windows Icon">
+      </div>
 
       <div class="two-col">
         <div class="subcard">
-          <h3>Neu deployen</h3>
+          <h3>🚀 Neu deployen</h3>
           <pre>$tmp = "$env:TEMP\install_agent.ps1"
 (New-Object System.Net.WebClient).DownloadFile(
   'https://monitoring.example.com/updates/client/windows/install_agent.ps1',
@@ -349,7 +371,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmp `
           </div>
         </div>
         <div class="subcard">
-          <h3>Install-Parameter</h3>
+          <h3>⚙️ Install-Parameter</h3>
           <table>
             <thead>
               <tr><th>Parameter</th><th>Bedeutung</th></tr>
@@ -369,7 +391,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmp `
 
       <div class="two-col">
         <div class="subcard">
-          <h3>Einzelne Skripte direkt holen</h3>
+          <h3>🧩 Einzelne Skripte direkt holen</h3>
           <pre>$base = 'https://monitoring.example.com/updates/client/windows'
 $target = 'C:\ProgramData\monitoring-agent'
 
@@ -396,7 +418,7 @@ $target = 'C:\ProgramData\monitoring-agent'
           </table>
         </div>
         <div class="subcard">
-          <h3>Bestehende Agents updaten</h3>
+          <h3>🔄 Bestehende Agents updaten</h3>
           <pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\bootstrap_agent.ps1 `
   -ServerUrl https://monitoring.example.com `
   -DisableJitter
@@ -413,7 +435,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
 
       <div class="two-col">
         <div class="subcard">
-          <h3>Daten manuell übermitteln</h3>
+          <h3>📤 Daten manuell übermitteln</h3>
           <pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
   C:\ProgramData\monitoring-agent\collect_and_send.ps1 -NoJitter
 
@@ -435,7 +457,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
           <div class="callout"><strong>Queue:</strong> Fehlgeschlagene Reports landen in <code>C:\ProgramData\monitoring-agent\queue</code> und werden später erneut gesendet.</div>
         </div>
         <div class="subcard">
-          <h3>Lizenzfile-Pfade</h3>
+          <h3>📄 Lizenzfile-Pfade</h3>
           <ul>
             <li><code>C:\ANG\Lizenzen\B01.txt</code></li>
             <li><code>C:\ANG\Lizenz\B01.txt</code></li>
@@ -447,7 +469,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
 
       <div class="two-col">
         <div class="subcard">
-          <h3>Payload-Quellen</h3>
+          <h3>🧠 Payload-Quellen</h3>
           <p>Der Windows-Agent füllt den SAP-B1-Teil aktuell über SQL Server und lokale SAP-Dateien, <strong>nicht</strong> über HANA / <code>hdbsql</code>.</p>
           <pre># SAP B1 Version aus XML
 C:\Program Files\SAP\SAP Business One DI API\Conf\InstallationConfigMSSQL.xml
@@ -467,7 +489,7 @@ ORDER BY AName;
           <div class="callout"><strong>Praktisch:</strong> Wenn du für Windows HANA dokumentieren willst, muss das erst implementiert werden. Die bestehenden Windows-Skripte greifen aktuell nur auf SQL-Server-/SAP-B1-Quellen zu.</div>
         </div>
         <div class="subcard">
-          <h3>Nützliche Defaults aus der Config</h3>
+          <h3>🛠️ Nützliche Defaults aus der Config</h3>
           <pre>SERVER_URL="https://monitoring.example.com"
 API_KEY="..."
 INSTALL_DIR="C:\ProgramData\monitoring-agent"
@@ -483,11 +505,14 @@ ENABLE_SAP_SCAN="1"</pre>
     </section>
 
     <section class="card">
-      <h2>2. Linux</h2>
+      <div class="section-head">
+        <h2>2. 🐧 Linux</h2>
+        <img class="os-icon" src="server/static/icons/linux.png" alt="Linux Icon">
+      </div>
 
       <div class="two-col">
         <div class="subcard">
-          <h3>Neu deployen</h3>
+          <h3>🚀 Neu deployen</h3>
           <pre>curl -fsSL https://monitoring.example.com/updates/client/linux/install_agent.sh \
   | sudo bash -s -- \
     --server-url https://monitoring.example.com \
@@ -504,7 +529,7 @@ ENABLE_SAP_SCAN="1"</pre>
           </div>
         </div>
         <div class="subcard">
-          <h3>Install-Parameter</h3>
+          <h3>⚙️ Install-Parameter</h3>
           <table>
             <thead>
               <tr><th>Parameter</th><th>Bedeutung</th></tr>
@@ -526,7 +551,7 @@ ENABLE_SAP_SCAN="1"</pre>
 
       <div class="two-col">
         <div class="subcard">
-          <h3>Einzelne Skripte direkt holen</h3>
+          <h3>🧩 Einzelne Skripte direkt holen</h3>
           <pre>base="https://monitoring.example.com/updates/client/linux"
 
 curl -fsSL "$base/install_agent.sh" -o /tmp/install_agent.sh
@@ -548,7 +573,7 @@ chmod +x /tmp/install_agent.sh /tmp/collect_and_send.sh /tmp/self_update.sh /tmp
           </table>
         </div>
         <div class="subcard">
-          <h3>Bestehende Agents updaten</h3>
+          <h3>🔄 Bestehende Agents updaten</h3>
           <pre>sudo CONFIG_FILE=/etc/monitoring-agent/agent.conf \
   AGENT_VERSION_FILE=/opt/monitoring-agent/AGENT_VERSION \
   /opt/monitoring-agent/self_update.sh
@@ -564,7 +589,7 @@ sudo SERVER_URL=https://monitoring.example.com \
 
       <div class="two-col">
         <div class="subcard">
-          <h3>Daten manuell übermitteln</h3>
+          <h3>📤 Daten manuell übermitteln</h3>
           <pre>sudo /opt/monitoring-agent/collect_and_send.sh --no-jitter
 
 sudo /opt/monitoring-agent/collect_and_send.sh --jitter-max-sec 30
@@ -582,7 +607,7 @@ sudo /opt/monitoring-agent/collect_and_send.sh --help</pre>
           <div class="callout"><strong>Hinweis:</strong> Linux hat aktuell keinen eingebauten <code>--print-payload</code>-Parameter. Bei Sendeproblemen landet der JSON-Report in der Queue unter <code>/var/lib/monitoring-agent/queue</code>.</div>
         </div>
         <div class="subcard">
-          <h3>Lizenzfile-Pfade</h3>
+          <h3>📄 Lizenzfile-Pfade</h3>
           <ul>
             <li><code>/usr/sap/SAPBusinessOne/B1_SHF/Lizenzen/B01.txt</code></li>
             <li><code>/usr/sap/SAPBusinessOne/B1_SHF/Lizenz/B01.txt</code></li>
@@ -593,7 +618,7 @@ sudo /opt/monitoring-agent/collect_and_send.sh --help</pre>
 
       <div class="two-col">
         <div class="subcard">
-          <h3>Payload-Quellen</h3>
+          <h3>🧠 Payload-Quellen</h3>
           <div class="callout"><strong>Version / Branch:</strong> Der Linux-Agent ruft <code>HDB version</code> auf, bevorzugt als <code>&lt;sid&gt;adm</code>. Die SID wird bei Bedarf aus <code>/hana/shared/&lt;SID&gt;</code> auto-detektiert.</div>
           <pre># HANA-Version
 HDB version
@@ -621,7 +646,7 @@ ORDER BY MEMORY_GB DESC;</pre>
           </ul>
         </div>
         <div class="subcard">
-          <h3>Nützliche Defaults aus der Config</h3>
+          <h3>🛠️ Nützliche Defaults aus der Config</h3>
           <pre>SERVER_URL="https://monitoring.example.com"
 API_KEY="..."
 HANA_SID="BUP"
@@ -637,10 +662,10 @@ PRIORITY_UPDATE_CHECK_MINUTES="60"</pre>
     </section>
 
     <section class="card">
-      <h2>Gemeinsame Datenübermittlung</h2>
+      <h2>📡 Gemeinsame Datenübermittlung</h2>
       <div class="two-col">
         <div class="subcard">
-          <h3>Ziel-Endpoints</h3>
+          <h3>🎯 Ziel-Endpoints</h3>
           <div class="kvs">
             <div class="kv"><div class="kv-label">Report Upload</div><div class="kv-value">POST /api/v1/agent-report</div></div>
             <div class="kv"><div class="kv-label">Command Polling</div><div class="kv-value">GET /api/v1/agent-commands</div></div>
@@ -652,7 +677,7 @@ PRIORITY_UPDATE_CHECK_MINUTES="60"</pre>
           </ul>
         </div>
         <div class="subcard">
-          <h3>Queue-Verhalten</h3>
+          <h3>📬 Queue-Verhalten</h3>
           <table>
             <thead>
               <tr><th>OS</th><th>Queue-Pfad</th><th>Verhalten</th></tr>

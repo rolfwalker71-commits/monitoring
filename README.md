@@ -312,14 +312,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.10**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.10**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.11**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.11**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.5.11  | 14.05.2026 | Enhance deployment guide with emoji section markers and OS icons (windows.png/linux.png) in respective sections |
 | 1.5.10  | 14.05.2026 | Fix corrupted HTML deployment guide markup and restore valid rendering with separate Windows/Linux sections |
 | 1.5.9   | 14.05.2026 | Restructure HTML agent guide into separate Windows and Linux sections with identical flow and direct script download examples |
 | 1.5.8   | 14.05.2026 | Add HTML deployment guide for Linux and Windows agents including install/update commands, payload parameters, license paths, and HANA/SAP data sources |
