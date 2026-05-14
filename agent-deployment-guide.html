@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitoring Agent Deployment Guide</title>
+  <style>
+    :root {
+      --bg: #eef4fb;
+      --panel: rgba(255, 255, 255, 0.92);
+      --panel-strong: #ffffff;
+      --text: #1f2a3a;
+      --muted: #5a6c84;
+      --line: #cfdceb;
+      --accent: #2a5caa;
+      --accent-soft: #e8f0ff;
+      --ok: #1c7c54;
+      --warn: #b66a00;
+      --code-bg: #0f172a;
+      --code-text: #dbeafe;
+      --mono: "IBM Plex Mono", "Cascadia Code", "Consolas", monospace;
+      --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+      --shadow: 0 18px 44px rgba(31, 42, 58, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(42, 92, 170, 0.16), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(28, 124, 84, 0.14), transparent 28%),
+        linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+    }
+
+    .page {
+      width: min(1180px, calc(100% - 32px));
+      margin: 24px auto 48px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .hero,
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero {
+      padding: 28px 30px;
+      display: grid;
+      gap: 12px;
+      background:
+        linear-gradient(135deg, rgba(42, 92, 170, 0.16), rgba(255, 255, 255, 0.92) 38%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(244, 249, 255, 0.95));
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      line-height: 1.1;
+    }
+
+    h1 {
+      font-size: clamp(30px, 5vw, 44px);
+      font-weight: 800;
+    }
+
+    h2 {
+      font-size: 24px;
+      font-weight: 750;
+    }
+
+    h3 {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .hero-grid,
+    .two-col,
+    .grid-3 {
+      display: grid;
+      gap: 16px;
+    }
+
+    .hero-grid {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      margin-top: 8px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #f4f8fd;
+      border: 1px solid var(--line);
+      color: #334155;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .card {
+      padding: 22px 24px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .two-col {
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .subcard {
+      padding: 16px 18px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: var(--panel-strong);
+      display: grid;
+      gap: 10px;
+    }
+
+    .subcard.ok {
+      border-color: rgba(28, 124, 84, 0.25);
+      background: linear-gradient(180deg, rgba(28, 124, 84, 0.06), rgba(255, 255, 255, 0.96));
+    }
+
+    .subcard.warn {
+      border-color: rgba(182, 106, 0, 0.28);
+      background: linear-gradient(180deg, rgba(182, 106, 0, 0.06), rgba(255, 255, 255, 0.96));
+    }
+
+    .kvs {
+      display: grid;
+      gap: 8px;
+    }
+
+    .kv {
+      display: grid;
+      gap: 4px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: #f7faff;
+      border: 1px solid #e3ecf6;
+    }
+
+    .kv-label {
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .kv-value {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    pre,
+    code {
+      font-family: var(--mono);
+    }
+
+    pre {
+      margin: 0;
+      padding: 14px 16px;
+      border-radius: 16px;
+      overflow: auto;
+      background: var(--code-bg);
+      color: var(--code-text);
+      font-size: 12px;
+      line-height: 1.5;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+    }
+
+    .callout {
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: #f7fbff;
+      color: var(--muted);
+    }
+
+    .callout strong {
+      color: var(--text);
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      display: grid;
+      gap: 6px;
+    }
+
+    li strong {
+      color: var(--text);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    th,
+    td {
+      padding: 11px 12px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid #e8eef5;
+      font-size: 13px;
+    }
+
+    th {
+      background: #f4f8fd;
+      color: #334155;
+      font-weight: 700;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: #eef4ff;
+      color: #1d4ed8;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .footer-note {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 720px) {
+      .page {
+        width: min(100% - 18px, 1180px);
+        margin-top: 12px;
+      }
+
+      .hero,
+      .card {
+        padding: 18px;
+        border-radius: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">Monitoring Agent Guide</div>
+      <h1>Deployment, Update und Payload-Referenz</h1>
+      <p>Diese Seite fasst zusammen, wie neue Agents installiert werden, wie bestehende Agents aktualisiert werden, wie die Datenübermittlung funktioniert, welche Parameter es gibt und welche Lizenz- bzw. HANA/SAP-Quellen die Linux- und Windows-Agents tatsächlich verwenden.</p>
+      <div class="hero-grid">
+        <div class="subcard ok">
+          <h3>Linux</h3>
+          <p>Installiert nach <strong>/opt/monitoring-agent</strong>, Konfiguration unter <strong>/etc/monitoring-agent/agent.conf</strong>, Queue unter <strong>/var/lib/monitoring-agent/queue</strong>.</p>
+        </div>
+        <div class="subcard ok">
+          <h3>Windows</h3>
+          <p>Installiert nach <strong>C:\ProgramData\monitoring-agent</strong>, Scheduled Tasks für Collect + Update, Queue im selben Basisverzeichnis.</p>
+        </div>
+        <div class="subcard warn">
+          <h3>Wichtiger Unterschied</h3>
+          <p><strong>HANA-Abfragen existieren aktuell nur im Linux-Agent.</strong> Der Windows-Agent liest SAP-B1-/SQL-Server-Daten, aber keine HANA/hdbsql-Queries.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Schnellübersicht</h2>
+      <div class="grid-3">
+        <div class="subcard">
+          <span class="tag">Install</span>
+          <p>Neuer Host zieht die Skripte vom Server unter <strong>/updates</strong> und schreibt lokale Konfigurationswerte.</p>
+        </div>
+        <div class="subcard">
+          <span class="tag">Update</span>
+          <p>Bestehende Hosts aktualisieren sich über <strong>self_update</strong> oder via Windows-<strong>bootstrap_agent.ps1</strong>.</p>
+        </div>
+        <div class="subcard">
+          <span class="tag">Payload</span>
+          <p>Beide Agents senden an <strong>/api/v1/agent-report</strong>; bei Fehlern wird lokal in eine Queue geschrieben und später erneut gesendet.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Linux Agent</h2>
+      <div class="two-col">
+        <div class="subcard">
+          <h3>Neu deployen</h3>
+          <pre>curl -fsSL https://monitoring.example.com/updates/client/linux/install_agent.sh \
+  | sudo bash -s -- \
+    --server-url https://monitoring.example.com \
+    --api-key MEIN_KEY \
+    --agent-id host.example.local \
+    --display-name "Produktiv Host" \
+    --interval-minutes 15 \
+    --update-hours 6</pre>
+          <div class="kvs">
+            <div class="kv"><div class="kv-label">Installationspfad</div><div class="kv-value">/opt/monitoring-agent</div></div>
+            <div class="kv"><div class="kv-label">Config</div><div class="kv-value">/etc/monitoring-agent/agent.conf</div></div>
+            <div class="kv"><div class="kv-label">Queue</div><div class="kv-value">/var/lib/monitoring-agent/queue</div></div>
+            <div class="kv"><div class="kv-label">Logs</div><div class="kv-value">/var/log/monitoring-agent.log, /var/log/monitoring-agent-update.log</div></div>
+          </div>
+        </div>
+        <div class="subcard">
+          <h3>Install-Parameter</h3>
+          <table>
+            <thead>
+              <tr><th>Parameter</th><th>Bedeutung</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>--server-url</code></td><td>Pflichtparameter. Basis-URL des Monitoring-Servers.</td></tr>
+              <tr><td><code>--api-key</code></td><td>Optionaler API-Key für die REST-Calls.</td></tr>
+              <tr><td><code>--agent-id</code></td><td>Explizite Agent-ID, sonst Hostname/FQDN.</td></tr>
+              <tr><td><code>--display-name</code></td><td>Anzeigename in der UI.</td></tr>
+              <tr><td><code>--interval-minutes</code></td><td>Collect-Intervall, erlaubt 1 bis 59.</td></tr>
+              <tr><td><code>--update-hours</code></td><td>Update-Intervall, erlaubt 1 bis 24.</td></tr>
+              <tr><td><code>--collect-script-url</code></td><td>Überschreibt die URL für collect_and_send.sh.</td></tr>
+              <tr><td><code>--raw-base-url</code></td><td>Explizite Update-Basis, sonst <code>SERVER_URL/updates</code>.</td></tr>
+              <tr><td><code>--insecure-tls</code></td><td>Aktiviert <code>curl --insecure</code>; nur für kaputte CA-Ketten.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="subcard">
+          <h3>Bestehende Agents updaten</h3>
+          <pre># Reguläres In-Place-Update
+sudo CONFIG_FILE=/etc/monitoring-agent/agent.conf \
+  AGENT_VERSION_FILE=/opt/monitoring-agent/AGENT_VERSION \
+  /opt/monitoring-agent/self_update.sh
+
+# Config reparieren / Defaults nachziehen
+sudo SERVER_URL=https://monitoring.example.com \
+  /opt/monitoring-agent/repair_agent_conf.sh</pre>
+          <ul>
+            <li><strong>self_update.sh</strong> lädt <code>collect_and_send.sh</code>, <code>self_update.sh</code> und <code>AGENT_VERSION</code> erneut vom Server.</li>
+            <li><strong>repair_agent_conf.sh</strong> setzt fehlende Standardwerte wie <code>HANA_SID</code>, <code>HANA_ADDONS_USER</code> und Ports nach.</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h3>Daten manuell übermitteln</h3>
+          <pre># Normaler manueller Lauf ohne Jitter
+sudo /opt/monitoring-agent/collect_and_send.sh --no-jitter
+
+# Mit explizitem Maximal-Jitter nur für diesen Lauf
+sudo /opt/monitoring-agent/collect_and_send.sh --jitter-max-sec 30
+
+# Hilfe anzeigen
+sudo /opt/monitoring-agent/collect_and_send.sh --help</pre>
+          <table>
+            <thead>
+              <tr><th>Parameter</th><th>Bedeutung</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>--no-jitter</code></td><td>Überspringt den deterministischen Start-Delay.</td></tr>
+              <tr><td><code>--jitter-max-sec N</code></td><td>Setzt den maximalen Jitter für genau diesen Lauf.</td></tr>
+            </tbody>
+          </table>
+          <div class="callout"><strong>Hinweis:</strong> Linux hat aktuell keinen eingebauten <code>--print-payload</code>-Parameter. Bei Sendeproblemen landet der JSON-Report in der Queue unter <code>/var/lib/monitoring-agent/queue</code>.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Windows Agent</h2>
+      <div class="two-col">
+        <div class="subcard">
+          <h3>Neu deployen</h3>
+          <pre>$tmp = "$env:TEMP\install_agent.ps1"
+(New-Object System.Net.WebClient).DownloadFile(
+  'https://monitoring.example.com/updates/client/windows/install_agent.ps1',
+  $tmp
+)
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmp `
+  -ServerUrl 'https://monitoring.example.com' `
+  -ApiKey 'MEIN_KEY' `
+  -AgentId 'HOST01' `
+  -DisplayName 'Produktiv Host' `
+  -IntervalMinutes 15 `
+  -UpdateHours 6</pre>
+          <div class="kvs">
+            <div class="kv"><div class="kv-label">Installationspfad</div><div class="kv-value">C:\ProgramData\monitoring-agent</div></div>
+            <div class="kv"><div class="kv-label">Config</div><div class="kv-value">C:\ProgramData\monitoring-agent\agent.conf</div></div>
+            <div class="kv"><div class="kv-label">Queue</div><div class="kv-value">C:\ProgramData\monitoring-agent\queue</div></div>
+            <div class="kv"><div class="kv-label">Tasks</div><div class="kv-value">monitoring-agent-collect, monitoring-agent-update</div></div>
+          </div>
+        </div>
+        <div class="subcard">
+          <h3>Install-Parameter</h3>
+          <table>
+            <thead>
+              <tr><th>Parameter</th><th>Bedeutung</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>-ServerUrl</code></td><td>Pflichtparameter. Basis-URL des Monitoring-Servers.</td></tr>
+              <tr><td><code>-ApiKey</code></td><td>Optionaler API-Key.</td></tr>
+              <tr><td><code>-AgentId</code></td><td>Explizite Agent-ID.</td></tr>
+              <tr><td><code>-DisplayName</code></td><td>Anzeigename in der UI.</td></tr>
+              <tr><td><code>-IntervalMinutes</code></td><td>Collect-Intervall, 1 bis 59.</td></tr>
+              <tr><td><code>-UpdateHours</code></td><td>Update-Intervall, 1 bis 24.</td></tr>
+              <tr><td><code>-RawBaseUrl</code></td><td>Explizite Update-Basis, sonst <code>ServerUrl/updates</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="subcard">
+          <h3>Bestehende Agents updaten</h3>
+          <pre># Bestehende Installation reparieren / Kernskripte neu ziehen
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\bootstrap_agent.ps1 `
+  -ServerUrl https://monitoring.example.com `
+  -DisableJitter
+
+# Direktes In-Place-Update über self_update
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+  C:\ProgramData\monitoring-agent\self_update.ps1</pre>
+          <ul>
+            <li><strong>bootstrap_agent.ps1</strong> erkennt, ob bereits eine Installation existiert, und aktualisiert dann Skripte in place.</li>
+            <li>Wenn keine gültige Installation gefunden wird, zieht <strong>bootstrap_agent.ps1</strong> das aktuelle <code>install_agent.ps1</code> vom Server und installiert neu.</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h3>Daten manuell übermitteln</h3>
+          <pre># Normaler manueller Lauf ohne Jitter
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+  C:\ProgramData\monitoring-agent\collect_and_send.ps1 -NoJitter
+
+# Jitter für diesen Lauf überschreiben
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+  C:\ProgramData\monitoring-agent\collect_and_send.ps1 -JitterMaxSec 30
+
+# Payload nur anzeigen, nicht senden
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+  C:\ProgramData\monitoring-agent\collect_and_send.ps1 -DebugPayload</pre>
+          <table>
+            <thead>
+              <tr><th>Parameter</th><th>Bedeutung</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>-NoJitter</code></td><td>Überspringt den Start-Delay.</td></tr>
+              <tr><td><code>-JitterMaxSec</code></td><td>Setzt einen maximalen Jitter für diesen Lauf.</td></tr>
+              <tr><td><code>-DebugPayload</code></td><td>Gibt den JSON-Payload auf stdout aus statt ihn zu senden.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Wie die Datenübermittlung funktioniert</h2>
+      <div class="two-col">
+        <div class="subcard">
+          <h3>Ziel-Endpoints</h3>
+          <div class="kvs">
+            <div class="kv"><div class="kv-label">Report Upload</div><div class="kv-value">POST /api/v1/agent-report</div></div>
+            <div class="kv"><div class="kv-label">Command Polling</div><div class="kv-value">GET /api/v1/agent-commands</div></div>
+            <div class="kv"><div class="kv-label">Command Result</div><div class="kv-value">POST /api/v1/agent-command-result</div></div>
+          </div>
+          <ul>
+            <li>Falls konfiguriert, wird der API-Key als Header <strong>X-Api-Key</strong> mitgesendet.</li>
+            <li>Wenn das Senden fehlschlägt, wird der Payload lokal als JSON gepuffert und beim nächsten Lauf erneut versucht.</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h3>Queue-Verhalten</h3>
+          <table>
+            <thead>
+              <tr><th>OS</th><th>Queue-Pfad</th><th>Verhalten</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Linux</td><td><code>/var/lib/monitoring-agent/queue</code></td><td>Fehlgeschlagene Reports werden als <code>*.json</code> gespeichert und später nachgesendet.</td></tr>
+              <tr><td>Windows</td><td><code>C:\ProgramData\monitoring-agent\queue</code></td><td>Fehlgeschlagene Reports werden als <code>*.json</code> gespeichert und vor dem neuen Sendelauf geflusht.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Lizenzfile-Pfade</h2>
+      <div class="two-col">
+        <div class="subcard">
+          <h3>Linux</h3>
+          <ul>
+            <li><code>/usr/sap/SAPBusinessOne/B1_SHF/Lizenzen/B01.txt</code></li>
+            <li><code>/usr/sap/SAPBusinessOne/B1_SHF/Lizenz/B01.txt</code></li>
+          </ul>
+          <p>Der Linux-Agent nimmt den ersten vorhandenen Pfad und extrahiert daraus Felder wie <strong>HARDWARE-KEY</strong>, <strong>INSTNO</strong>, <strong>EXPIRATION</strong>, <strong>SYSTEM-NR</strong>, <strong>CUSTOMER-NAME</strong> und <strong>CUSTOMER-NO</strong>.</p>
+        </div>
+        <div class="subcard">
+          <h3>Windows</h3>
+          <ul>
+            <li><code>C:\ANG\Lizenzen\B01.txt</code></li>
+            <li><code>C:\ANG\Lizenz\B01.txt</code></li>
+            <li><code>C:\ANG\B01.txt</code></li>
+          </ul>
+          <p>Auch hier wird der erste vorhandene Pfad verwendet. Die geparsten Felder entsprechen dem Linux-Agent.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>HANA- und SAP-Quellen für den Payload</h2>
+      <div class="two-col">
+        <div class="subcard">
+          <h3>Linux: HANA wird aktiv ausgelesen</h3>
+          <div class="callout"><strong>Version / Branch:</strong> Der Linux-Agent ruft <code>HDB version</code> auf, bevorzugt als <code>&lt;sid&gt;adm</code>. Die SID wird bei Bedarf aus <code>/hana/shared/&lt;SID&gt;</code> auto-detektiert.</div>
+          <pre># HANA-Version
+HDB version
+
+# HANA AddOns (Lightweight)
+SELECT "NAME", "Version" FROM "SLDDATA"."EXTENSIONS";
+
+# HANA AddOns (Legacy)
+SELECT "AName", "AddOnVer" FROM "SBOCOMMON"."SARI";
+
+# HANA DB Memory pro Schema
+SELECT SCHEMA_NAME,
+       ROUND(SUM(MEMORY_SIZE_IN_TOTAL) / 1024 / 1024 / 1024, 2) AS MEMORY_GB
+FROM M_CS_TABLES
+WHERE UPPER(SCHEMA_NAME) NOT LIKE 'SAP%'
+  AND UPPER(SCHEMA_NAME) NOT IN ('SLDDATA','SBOCOMMON','LANDSCAPE')
+  AND SCHEMA_NAME NOT LIKE '\_%' ESCAPE '\'
+GROUP BY SCHEMA_NAME
+HAVING SUM(MEMORY_SIZE_IN_TOTAL) &gt; 0
+ORDER BY MEMORY_GB DESC;</pre>
+          <ul>
+            <li>Transport über <strong>hdbsql</strong> als <code>&lt;sid&gt;adm</code>.</li>
+            <li>Default-Credentials: <code>HARVEST</code> / konfigurierbares Passwort in <code>agent.conf</code>.</li>
+            <li>Default-Host/Port: <code>127.0.0.1:30015</code>, mit automatischer 3xx15-Port-Erkennung und lokalen Probe-Fallbacks.</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h3>Windows: keine HANA-Abfragen im Agent</h3>
+          <p>Der Windows-Agent füllt den SAP-B1-Teil aktuell über SQL Server und lokale SAP-Dateien, <strong>nicht</strong> über HANA / <code>hdbsql</code>.</p>
+          <pre># SAP B1 Version aus XML
+C:\Program Files\SAP\SAP Business One DI API\Conf\InstallationConfigMSSQL.xml
+
+# Extensions
+SELECT AddOnName, Version
+FROM [SLDModel.SLDData].[dbo].[Extensions]
+ORDER BY AddOnName;
+
+# SARI AddOns
+SELECT AName, AddOnVer
+FROM [SBO-COMMON].[dbo].[SARI]
+ORDER BY AName;
+
+# Fallback-Datenbankname
+[SBOCOMMON].[dbo].[SARI]</pre>
+          <div class="callout"><strong>Praktisch:</strong> Wenn du für Windows HANA dokumentieren willst, muss das erst implementiert werden. Die bestehenden Windows-Skripte greifen aktuell nur auf SQL-Server-/SAP-B1-Quellen zu.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Nützliche Defaults aus der Config</h2>
+      <div class="two-col">
+        <div class="subcard">
+          <h3>Linux</h3>
+          <pre>SERVER_URL="https://monitoring.example.com"
+API_KEY="..."
+HANA_SID="BUP"
+HANA_ADDONS_ENABLED="1"
+HANA_ADDONS_USER="HARVEST"
+HANA_ADDONS_PASSWORD="..."
+HANA_ADDONS_HOST="127.0.0.1"
+HANA_ADDONS_PORT="30015"
+UPDATE_HOURS="6"
+PRIORITY_UPDATE_CHECK_MINUTES="60"</pre>
+        </div>
+        <div class="subcard">
+          <h3>Windows</h3>
+          <pre>SERVER_URL="https://monitoring.example.com"
+API_KEY="..."
+INSTALL_DIR="C:\ProgramData\monitoring-agent"
+UPDATE_HOURS="6"
+PRIORITY_UPDATE_CHECK_MINUTES="60"
+SEND_JITTER_MAX_SEC="300"
+HARVEST_SQL_SERVER="localhost"
+HARVEST_SQL_USER="harvest"
+HARVEST_SQL_PASSWORD="..."
+ENABLE_SAP_SCAN="1"</pre>
+        </div>
+      </div>
+      <p class="footer-note">Diese HTML-Doku basiert direkt auf den aktuellen Skripten in <code>client/linux</code> und <code>client/windows</code>.</p>
+    </section>
+  </main>
+</body>
+</html>
