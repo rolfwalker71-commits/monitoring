@@ -9926,17 +9926,13 @@ function renderSystemOverviewLicenseInfos(payload) {
     ? `${rawExpiration.substring(6, 8)}.${rawExpiration.substring(4, 6)}.${rawExpiration.substring(0, 4)}`
     : rawExpiration;
 
-  const fileMtimeUtc = asText(sapLicense.file_mtime_utc, "").trim();
-  const fileMtimeLabel = fileMtimeUtc ? formatUtcPlus2(fileMtimeUtc) : "";
-
   const rows = [
     { label: "HW-Key", value: asText(sapLicense.hardware_key, "").trim() },
     { label: "Installationsnummer", value: asText(sapLicense.instno, "").trim() },
     { label: "Systemnummer", value: asText(sapLicense.system_nr, "").trim() },
     { label: "Kundennummer", value: asText(sapLicense.customer_no, "").trim() },
     { label: "Lizenznehmer", value: asText(sapLicense.customer_name, "").trim() },
-    { label: "Gültig bis", value: formattedExpiration },
-    { label: "Datei-Stand B01.txt", value: fileMtimeLabel }
+    { label: "Gültig bis", value: formattedExpiration }
   ].filter((entry) => entry.value);
 
   if (rows.length === 0) {
@@ -10035,6 +10031,7 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
       </td>
       <td>
         <div class="so-cell-main">${osReleaseDisplay}</div>
+        <div class="so-os-spacer">&nbsp;</div>
         ${licenseInfoSection ? `<div class="so-os-license">${licenseInfoSection}</div>` : ""}
       </td>
       <td>
