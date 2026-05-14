@@ -5688,31 +5688,21 @@ function renderReportCard(report) {
     : asText(sapLicense.expiration || "-");
 
   const licenseHeaderPanel = licenseAvailable ? `
-    <section class="report-license-panel" aria-label="SAP Lizenz">
+    <section class="report-license-panel report-license-panel--header" aria-label="SAP Lizenz">
       <div class="report-license-title">SAP Lizenz</div>
-      <div class="report-license-grid">
-        <p class="report-license-item"><strong>Hardware Key</strong><span>${escapeHtml(asText(sapLicense.hardware_key || "-"))}</span></p>
-        <p class="report-license-item"><strong>System Nummer</strong><span>${escapeHtml(asText(sapLicense.system_nr || "-"))}</span></p>
-        <p class="report-license-item"><strong>Installations Nummer</strong><span>${escapeHtml(asText(sapLicense.instno || "-"))}</span></p>
-        <p class="report-license-item"><strong>Lizenznehmer</strong><span>${escapeHtml(asText(sapLicense.customer_name || "-"))}</span></p>
-        <p class="report-license-item"><strong>Kundennummer</strong><span>${escapeHtml(asText(sapLicense.customer_no || "-"))}</span></p>
-        <p class="report-license-item"><strong>Gueltig bis</strong><span>${escapeHtml(licenseExpiration)}</span></p>
+      <div class="report-license-columns">
+        <div class="report-license-column">
+          <p class="report-license-item"><strong>HW-Key</strong><span>${escapeHtml(asText(sapLicense.hardware_key || "-"))}</span></p>
+          <p class="report-license-item"><strong>Installationsnummer</strong><span>${escapeHtml(asText(sapLicense.instno || "-"))}</span></p>
+          <p class="report-license-item"><strong>Systemnummer</strong><span>${escapeHtml(asText(sapLicense.system_nr || "-"))}</span></p>
+        </div>
+        <div class="report-license-column">
+          <p class="report-license-item"><strong>Kundennummer</strong><span>${escapeHtml(asText(sapLicense.customer_no || "-"))}</span></p>
+          <p class="report-license-item"><strong>Lizenznehmer</strong><span>${escapeHtml(asText(sapLicense.customer_name || "-"))}</span></p>
+          <p class="report-license-item"><strong>Gültig bis</strong><span>${escapeHtml(licenseExpiration)}</span></p>
+        </div>
       </div>
     </section>
-  ` : "";
-  
-  const licenseGroup = licenseAvailable ? `
-    <div class="meta-group">
-      <div class="meta-group-title">SAP Lizenz</div>
-      <div class="meta-group-content">
-        ${renderMetaItem("HW", "Hardware Key", sapLicense.hardware_key)}
-        ${renderMetaItem("SysNr", "System Nummer", sapLicense.system_nr)}
-        ${renderMetaItem("Inst", "Installations Nummer", sapLicense.instno)}
-        ${renderMetaItem("Kunde", "Lizenznehmer", sapLicense.customer_name)}
-        ${renderMetaItem("KdNr", "Kundennummer", sapLicense.customer_no)}
-        ${renderMetaItem("Exp", "Gueltig bis", licenseExpiration)}
-      </div>
-    </div>
   ` : "";
 
   const networkGroup = `
@@ -5814,6 +5804,7 @@ function renderReportCard(report) {
           <h3>${escapeHtml(title)}</h3>
           <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}${reportDeliveryLag !== "-" ? ` <span class="report-detail-chip report-delivery-chip">⏱️ ${escapeHtml(reportDeliveryLag)}</span>` : ""}</p>
           ${(sapB1Summary !== "-" || hanaInfoMeta !== "-" || hanaSid) ? `<p class="report-sap-meta">${sapB1Summary !== "-" ? `<span class="sap-hana-chip sap-b1-chip" title="SAP Feature Pack">${escapeHtml(sapB1Summary.replace(/<[^>]+>/g, ""))}</span>` : ""}${hanaInfoMeta !== "-" ? (() => { const short = hanaInfoMeta.split(".").slice(0, 3).join("."); return `<span class="sap-hana-chip hana-chip" title="${escapeHtml(hanaInfoMeta)}">${escapeHtml(short)}</span>`; })() : ""}${hanaSid ? `<span class="sap-hana-chip hana-sid-chip" title="HANA SID">${escapeHtml(hanaSid)}</span>` : ""}</p>` : ""}
+          ${licenseHeaderPanel}
         </div>
         <div class="report-header-meta">
           <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
@@ -5821,14 +5812,11 @@ function renderReportCard(report) {
         </div>
       </div>
 
-      ${licenseHeaderPanel}
-
       ${showMetaGroups ? `<div class="meta-groups">
         ${agentGroup}
         ${systemGroup}
         ${resourcesGroup}
         ${networkGroup}
-        ${licenseGroup}
       </div>` : ""}
       ${detailContent}
     </article>
