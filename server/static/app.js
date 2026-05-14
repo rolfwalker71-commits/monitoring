@@ -5689,11 +5689,11 @@ function renderReportCard(report) {
       <div class="meta-group-title">SAP Lizenz</div>
       <div class="meta-group-content">
         ${renderMetaItem("HW", "Hardware Key", sapLicense.hardware_key)}
-        ${renderMetaItem("Inst", "Installations Nummer", sapLicense.instno)}
-        ${renderMetaItem("Exp", "Gültig bis", sapLicense.expiration ? (() => { const d = sapLicense.expiration; return d.length === 8 && /^\d{8}$/.test(d) ? d.substring(6,8) + "." + d.substring(4,6) + "." + d.substring(0,4) : d; })() : "-")}
         ${renderMetaItem("SysNr", "System Nummer", sapLicense.system_nr)}
+        ${renderMetaItem("Inst", "Installations Nummer", sapLicense.instno)}
         ${renderMetaItem("Kunde", "Lizenznehmer", sapLicense.customer_name)}
         ${renderMetaItem("KdNr", "Kundennummer", sapLicense.customer_no)}
+        ${renderMetaItem("Exp", "Gültig bis", sapLicense.expiration ? (() => { const d = sapLicense.expiration; return d.length === 8 && /^\d{8}$/.test(d) ? d.substring(6,8) + "." + d.substring(4,6) + "." + d.substring(0,4) : d; })() : "-")}
       </div>
     </div>
   ` : "";
