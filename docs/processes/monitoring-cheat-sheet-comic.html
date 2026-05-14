@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitoring Cheat Sheet Comic</title>
+  <style>
+    :root {
+      --bg: #f9f6ef;
+      --ink: #202432;
+      --muted: #505a73;
+      --paper: #fffdf7;
+      --paper-2: #fef6dc;
+      --blue: #4f7cff;
+      --yellow: #ffd84d;
+      --orange: #ff9a3c;
+      --green: #40b98a;
+      --red: #ff6a59;
+      --line: #202432;
+      --shadow: 8px 8px 0 rgba(32, 36, 50, 0.16);
+      --mono: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
+      --sans: "Trebuchet MS", "Avenir Next", "IBM Plex Sans", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(79, 124, 255, 0.18), transparent 24%),
+        radial-gradient(circle at bottom right, rgba(255, 154, 60, 0.14), transparent 20%),
+        linear-gradient(180deg, #fffdf7 0%, var(--bg) 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image: radial-gradient(rgba(32, 36, 50, 0.08) 0.8px, transparent 0.8px);
+      background-size: 18px 18px;
+      opacity: 0.5;
+    }
+
+    .page {
+      position: relative;
+      width: min(1240px, calc(100% - 28px));
+      margin: 20px auto 40px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--paper);
+      border: 3px solid var(--line);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+
+    .hero {
+      display: grid;
+      gap: 14px;
+      background:
+        linear-gradient(135deg, rgba(255, 216, 77, 0.88), rgba(255, 253, 247, 0.96) 44%),
+        var(--paper);
+    }
+
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .stamp {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 3px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 12px;
+    }
+
+    h1, h2, h3 { margin: 0; line-height: 1.05; }
+    h1 { font-size: clamp(2rem, 6vw, 4rem); max-width: 740px; }
+    h2 { font-size: clamp(1.1rem, 3vw, 1.8rem); }
+    h3 { font-size: 1.1rem; }
+    p { margin: 0; color: var(--muted); line-height: 1.5; }
+
+    .hero-grid,
+    .process-strip,
+    .dual,
+    .quad {
+      display: grid;
+      gap: 14px;
+    }
+
+    .hero-grid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+    .process-strip { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+    .dual { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+    .quad { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+
+    .mini-card,
+    .speech,
+    .card,
+    .command {
+      border: 3px solid var(--line);
+      border-radius: 24px;
+      background: #fff;
+      box-shadow: 6px 6px 0 rgba(32, 36, 50, 0.12);
+    }
+
+    .mini-card,
+    .card,
+    .command {
+      padding: 16px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .mini-card:nth-child(2n) { transform: rotate(-1deg); }
+    .mini-card:nth-child(3n) { transform: rotate(1deg); }
+
+    .mini-label,
+    .chip {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border: 2px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .speech {
+      position: relative;
+      padding: 18px 18px 20px;
+      background: var(--paper-2);
+    }
+
+    .speech::after {
+      content: "";
+      position: absolute;
+      left: 26px;
+      bottom: -16px;
+      width: 22px;
+      height: 22px;
+      background: var(--paper-2);
+      border-right: 3px solid var(--line);
+      border-bottom: 3px solid var(--line);
+      transform: rotate(45deg);
+    }
+
+    .strip-card {
+      position: relative;
+      padding: 16px 14px 18px;
+      border: 3px solid var(--line);
+      border-radius: 24px;
+      background: #fff;
+      box-shadow: 6px 6px 0 rgba(32, 36, 50, 0.12);
+      min-height: 170px;
+      display: grid;
+      align-content: start;
+      gap: 8px;
+    }
+
+    .strip-card::before {
+      content: attr(data-sfx);
+      position: absolute;
+      top: -14px;
+      right: 12px;
+      padding: 5px 10px;
+      border: 3px solid var(--line);
+      border-radius: 999px;
+      background: var(--yellow);
+      font-weight: 900;
+      font-size: 12px;
+      transform: rotate(8deg);
+    }
+
+    .strip-no {
+      font-size: 30px;
+      font-weight: 900;
+    }
+
+    .accent-blue { background: rgba(79, 124, 255, 0.12); }
+    .accent-yellow { background: rgba(255, 216, 77, 0.22); }
+    .accent-orange { background: rgba(255, 154, 60, 0.18); }
+    .accent-green { background: rgba(64, 185, 138, 0.14); }
+    .accent-red { background: rgba(255, 106, 89, 0.12); }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      display: grid;
+      gap: 6px;
+    }
+
+    li strong { color: var(--ink); }
+
+    code, pre {
+      font-family: var(--mono);
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: rgba(79, 124, 255, 0.1);
+      border: 1px solid rgba(79, 124, 255, 0.28);
+      color: #20458d;
+    }
+
+    pre {
+      margin: 0;
+      padding: 14px;
+      border-radius: 18px;
+      background: #171d2f;
+      color: #edf4ff;
+      overflow: auto;
+      border: 3px solid var(--line);
+      white-space: pre-wrap;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .stat-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .stat {
+      padding: 8px 10px;
+      border: 2px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+      font-weight: 800;
+      font-size: 12px;
+    }
+
+    .legend {
+      display: grid;
+      gap: 10px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 16px;
+      height: 16px;
+      border: 3px solid var(--line);
+      border-radius: 50%;
+      flex: none;
+    }
+
+    .footer-note {
+      text-align: center;
+      font-size: 13px;
+    }
+
+    @media (max-width: 720px) {
+      .page { width: min(100%, calc(100% - 16px)); margin: 10px auto 24px; }
+      .panel { padding: 16px; border-radius: 22px; }
+      .mini-card:nth-child(2n),
+      .mini-card:nth-child(3n) { transform: none; }
+      .strip-card::before { position: static; width: fit-content; margin-bottom: 4px; transform: rotate(0); }
+      .speech::after { left: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="panel hero">
+      <div class="hero-top">
+        <div class="stamp">POW! Monitoring Ops Cheat Sheet</div>
+        <div class="stamp">Offline HTML · v1.5.21</div>
+      </div>
+      <div class="speech">
+        <h1>Comic-Überblick für Deploy, Sammeln, Alerts und Updates</h1>
+        <p>Die Kurzfassung für den Alltag: Welche Skripte sind wichtig, welche Parameter musst du kennen und wie läuft der Pfad von Agent bis Alarm wirklich durch das System.</p>
+      </div>
+      <div class="hero-grid">
+        <article class="mini-card accent-blue">
+          <span class="mini-label">🎯 Ziel</span>
+          <h3>Schnell entscheiden</h3>
+          <p>Was deploye ich, welches Skript starte ich und an welcher Stelle im Ablauf hängt ein Problem?</p>
+        </article>
+        <article class="mini-card accent-yellow">
+          <span class="mini-label">🧰 Kernobjekte</span>
+          <h3>Agent, Receiver, DB, Alerts</h3>
+          <p>Linux und Windows Agents liefern Reports an den Server; dort folgen Persistenz, Alerting, Mail und Dashboard.</p>
+        </article>
+        <article class="mini-card accent-green">
+          <span class="mini-label">⚡ Merke</span>
+          <h3>Install → Collect → Queue → Ingest → Alert → Update</h3>
+          <p>Das ist der Gesamtpfad, den du für Debugging fast immer von links nach rechts prüfen kannst.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="card-title">
+        <h2>1. Der Gesamtfluss in 6 Panels</h2>
+        <span class="chip">BAM! End-to-End</span>
+      </div>
+      <div class="process-strip">
+        <article class="strip-card accent-yellow" data-sfx="ZAP">
+          <div class="strip-no">01</div>
+          <h3>Deploy</h3>
+          <p><strong>Windows:</strong> <code>install_agent.ps1</code> oder <code>bootstrap_agent.ps1</code></p>
+          <p><strong>Linux:</strong> <code>install_agent.sh</code></p>
+          <p>Konfig, Pfade, Scheduler/Cron und Update-Routen werden eingerichtet.</p>
+        </article>
+        <article class="strip-card accent-blue" data-sfx="WHOOSH">
+          <div class="strip-no">02</div>
+          <h3>Collect</h3>
+          <p><code>collect_and_send.ps1</code> bzw. <code>collect_and_send.sh</code> sammeln Host-, FS-, DB- und SAP-Daten.</p>
+        </article>
+        <article class="strip-card accent-orange" data-sfx="CLANK">
+          <div class="strip-no">03</div>
+          <h3>Queue bei Fehlern</h3>
+          <p>Wenn der Server nicht erreichbar ist, landen Payloads lokal in der Agent-Queue und werden später nachgesendet.</p>
+        </article>
+        <article class="strip-card accent-green" data-sfx="PING">
+          <div class="strip-no">04</div>
+          <h3>Report Ingest</h3>
+          <p><code>/api/v1/agent-report</code> validiert JSON, prüft Auth/Grace-Mode und gibt in die DB-Pipeline weiter.</p>
+        </article>
+        <article class="strip-card accent-red" data-sfx="ALERT">
+          <div class="strip-no">05</div>
+          <h3>Persistenz & Alerting</h3>
+          <p>Reports, Filesystems, Lifecycle und offene Alerts werden aktualisiert; Mail/Telegram kann folgen.</p>
+        </article>
+        <article class="strip-card accent-blue" data-sfx="BOOST">
+          <div class="strip-no">06</div>
+          <h3>Self-Update</h3>
+          <p><code>self_update.ps1</code> und <code>self_update.sh</code> laden neue Skripte von <code>/updates</code>.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="dual">
+      <article class="panel card accent-blue">
+        <div class="card-title">
+          <h2>2. Windows Agent Cheats</h2>
+          <span class="chip">🪟 Scheduled Tasks</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat">Pfad: C:\ProgramData\monitoring-agent</span>
+          <span class="stat">Tasks: monitoring-agent-collect, monitoring-agent-update</span>
+        </div>
+        <ul>
+          <li><strong>install_agent.ps1</strong>: Neuinstallation mit Config, Queue und Scheduled Tasks.</li>
+          <li><strong>bootstrap_agent.ps1</strong>: Bestehende Installation reparieren oder notfalls neu ziehen.</li>
+          <li><strong>collect_and_send.ps1</strong>: Daten sammeln und an den Server senden.</li>
+          <li><strong>self_update.ps1</strong>: Agent-Dateien in place aktualisieren.</li>
+          <li><strong>setup_harvest_sql_user.ps1</strong>: SQL-Harvest-User vorbereiten.</li>
+          <li><strong>bulk_update_agents.ps1</strong>: Mehrere Windows Agents aktualisieren.</li>
+        </ul>
+        <pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install_agent.ps1 
+  -ServerUrl https://monitoring.example.com 
+  -ApiKey MEIN_KEY 
+  -IntervalMinutes 15 
+  -UpdateHours 6</pre>
+      </article>
+
+      <article class="panel card accent-green">
+        <div class="card-title">
+          <h2>3. Linux Agent Cheats</h2>
+          <span class="chip">🐧 Cron</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat">Pfad: /opt/monitoring-agent</span>
+          <span class="stat">Config: /etc/monitoring-agent/agent.conf</span>
+        </div>
+        <ul>
+          <li><strong>install_agent.sh</strong>: Erstinstallation inkl. Cron, Config und Download der Kernskripte.</li>
+          <li><strong>collect_and_send.sh</strong>: Metriken sammeln und Payload senden.</li>
+          <li><strong>self_update.sh</strong>: Lädt neue Skripte und Agent-Version nach.</li>
+          <li><strong>repair_agent_conf.sh</strong>: Fehlende Defaults und HANA-Werte nachziehen.</li>
+        </ul>
+        <pre>curl -fsSL https://monitoring.example.com/updates/client/linux/install_agent.sh \
+  | sudo bash -s -- \
+    --server-url https://monitoring.example.com \
+    --api-key MEIN_KEY \
+    --interval-minutes 15 \
+    --update-hours 6</pre>
+      </article>
+    </section>
+
+    <section class="dual">
+      <article class="panel card">
+        <div class="card-title">
+          <h2>4. Wichtigste Parameter</h2>
+          <span class="chip">🧪 Nur das Relevante</span>
+        </div>
+        <div class="quad">
+          <div class="command accent-yellow">
+            <h3>Gemeinsame Pflicht</h3>
+            <p><code>ServerUrl</code> bzw. <code>--server-url</code></p>
+            <p>Basis-URL des Monitoring-Servers. Ohne diese Adresse gibt es keinen Deploy und keinen Report-Upload.</p>
+          </div>
+          <div class="command accent-blue">
+            <h3>Auth</h3>
+            <p><code>ApiKey</code> bzw. <code>--api-key</code></p>
+            <p>Optional, aber für abgesicherte Agent-Calls praktisch der Regelfall.</p>
+          </div>
+          <div class="command accent-green">
+            <h3>Taktung</h3>
+            <p><code>IntervalMinutes</code> bzw. <code>--interval-minutes</code></p>
+            <p>Sammler-Rhythmus, typischerweise 15 Minuten, gültig 1 bis 59.</p>
+          </div>
+          <div class="command accent-orange">
+            <h3>Update</h3>
+            <p><code>UpdateHours</code> bzw. <code>--update-hours</code></p>
+            <p>Update-Intervall der Agents, gültig 1 bis 24.</p>
+          </div>
+          <div class="command accent-blue">
+            <h3>Identity</h3>
+            <p><code>AgentId</code>, <code>DisplayName</code></p>
+            <p>Steuern Host-Identität und Anzeigenamen im Monitoring.</p>
+          </div>
+          <div class="command accent-red">
+            <h3>Sonderwege</h3>
+            <p><code>RawBaseUrl</code>, <code>--raw-base-url</code>, <code>--collect-script-url</code>, <code>--insecure-tls</code></p>
+            <p>Für Proxy-/Bootstrap-Sonderfälle oder kaputte Zertifikatsketten im Notfall.</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel card">
+        <div class="card-title">
+          <h2>5. Wo prüfe ich was?</h2>
+          <span class="chip">🔎 Debug-Route</span>
+        </div>
+        <div class="legend">
+          <div class="legend-item"><span class="dot" style="background:#ffd84d"></span><span><strong>Deploy-Problem:</strong> Install-Skript, lokale Pfade, Task/Cron-Eintrag, Config-Datei.</span></div>
+          <div class="legend-item"><span class="dot" style="background:#4f7cff"></span><span><strong>Keine Daten:</strong> Collector manuell starten, Logs prüfen, Queue-Verzeichnis prüfen.</span></div>
+          <div class="legend-item"><span class="dot" style="background:#40b98a"></span><span><strong>Server nimmt nichts an:</strong> <code>/api/v1/agent-report</code>, API-Key, Grace-Mode, Pflichtfelder.</span></div>
+          <div class="legend-item"><span class="dot" style="background:#ff6a59"></span><span><strong>Kein Alarm:</strong> Thresholds, Mute/Ack/Blacklist, Routing-Matrix, Mail/OAuth.</span></div>
+          <div class="legend-item"><span class="dot" style="background:#ff9a3c"></span><span><strong>Update hängt:</strong> <code>/updates</code>-Pfad, lokale Version, Update-Task/Cron, Self-Update-Logs.</span></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel card">
+      <div class="card-title">
+        <h2>6. Schnellbefehle</h2>
+        <span class="chip">💥 Alltag</span>
+      </div>
+      <div class="quad">
+        <div class="command">
+          <h3>Windows: Collect sofort</h3>
+          <pre>C:\ProgramData\monitoring-agent\collect_and_send.ps1 -NoJitter</pre>
+        </div>
+        <div class="command">
+          <h3>Windows: Update sofort</h3>
+          <pre>powershell.exe -ExecutionPolicy Bypass -File 
+C:\ProgramData\monitoring-agent\self_update.ps1</pre>
+        </div>
+        <div class="command">
+          <h3>Linux: Collect sofort</h3>
+          <pre>sudo /opt/monitoring-agent/collect_and_send.sh --no-jitter</pre>
+        </div>
+        <div class="command">
+          <h3>Linux: Update sofort</h3>
+          <pre>sudo /opt/monitoring-agent/self_update.sh</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel footer-note">
+      <p>Für Tiefe statt Geschwindigkeit: Prozessdetails in den HTML-Prozessdokumenten, Deployment-Details in der Deployment-Guide-Seite und Laufzeitlogik in <code>server/receiver.py</code>.</p>
+    </section>
+  </main>
+</body>
+</html>
