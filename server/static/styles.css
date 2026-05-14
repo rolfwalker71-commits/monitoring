@@ -14,6 +14,15 @@
   --crit: #dc2626;
   --crit-bg: #fee2e2;
   --crit-border: #fca5a5;
+  --kv-label-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --kv-label-size: 10px;
+  --kv-label-weight: 700;
+  --kv-label-letter: 0.03em;
+  --kv-label-color: #64748b;
+  --kv-value-family: "IBM Plex Mono", monospace;
+  --kv-value-size: 11px;
+  --kv-value-weight: 700;
+  --kv-value-color: #0f172a;
 }
 
 * {
@@ -36,8 +45,25 @@ body[data-theme="dark"] {
   --muted: #9fb3cc;
   --line: #24344d;
   --accent: #3b82f6;
+  --kv-label-color: #9fb3cc;
+  --kv-value-color: #e2edf8;
   color-scheme: dark;
   background: radial-gradient(circle at top left, #1b2b45 0%, var(--bg) 48%);
+}
+
+.kv-label {
+  font-family: var(--kv-label-family);
+  font-size: var(--kv-label-size);
+  font-weight: var(--kv-label-weight);
+  letter-spacing: var(--kv-label-letter);
+  color: var(--kv-label-color);
+}
+
+.kv-value {
+  font-family: var(--kv-value-family);
+  font-size: var(--kv-value-size);
+  font-weight: var(--kv-value-weight);
+  color: var(--kv-value-color);
 }
 
 .login-overlay {
@@ -4779,8 +4805,11 @@ body[data-theme="dark"] .report-license-meta {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: var(--muted);
-  font-size: 11px;
+  color: var(--kv-label-color);
+  font-family: var(--kv-label-family);
+  font-size: var(--kv-label-size);
+  font-weight: var(--kv-label-weight);
+  letter-spacing: var(--kv-label-letter);
   min-width: 0;
 }
 
@@ -4832,6 +4861,10 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   display: inline-flex;
   align-items: center;
   min-height: 20px;
+  font-family: var(--kv-value-family);
+  font-size: var(--kv-value-size);
+  font-weight: var(--kv-value-weight);
+  color: var(--kv-value-color);
 }
 
 .meta-group-item span strong {
@@ -5006,8 +5039,11 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
 }
 
 .sap-b1-size-label {
-  font-size: 11px;
-  color: #64748b;
+  font-family: var(--kv-label-family);
+  font-size: var(--kv-label-size);
+  font-weight: var(--kv-label-weight);
+  letter-spacing: var(--kv-label-letter);
+  color: var(--kv-label-color);
 }
 
 .sap-b1-size-label--bold {
@@ -5017,8 +5053,10 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
 }
 
 .sap-b1-size-value {
-  font-size: 13px;
-  color: #0f172a;
+  font-family: var(--kv-value-family);
+  font-size: var(--kv-value-size);
+  font-weight: var(--kv-value-weight);
+  color: var(--kv-value-color);
 }
 
 .sap-b1-size-value--bold {
@@ -5184,16 +5222,19 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
 }
 
 .sap-license-list-item strong {
-  font-size: 11px;
-  font-weight: 600;
-  color: #3e5f8d;
+  font-family: var(--kv-label-family);
+  font-size: var(--kv-label-size);
+  font-weight: var(--kv-label-weight);
+  letter-spacing: var(--kv-label-letter);
+  color: var(--kv-label-color);
   line-height: 1.15;
 }
 
 .sap-license-list-item span {
-  font-size: 12px;
-  font-weight: 700;
-  color: #122038;
+  font-family: var(--kv-value-family);
+  font-size: var(--kv-value-size);
+  font-weight: var(--kv-value-weight);
+  color: var(--kv-value-color);
   line-height: 1.15;
 }
 
@@ -5381,7 +5422,19 @@ body[data-theme="dark"] .fs-bar-wrap {
   font-size: 12px;
 }
 .db-meta-item {
-  color: var(--text);
+  color: var(--kv-value-color);
+  font-family: var(--kv-value-family);
+  font-size: var(--kv-value-size);
+  font-weight: var(--kv-value-weight);
+}
+
+.db-meta-item > strong,
+.db-diag-item > strong {
+  font-family: var(--kv-label-family);
+  font-size: var(--kv-label-size);
+  font-weight: var(--kv-label-weight);
+  letter-spacing: var(--kv-label-letter);
+  color: var(--kv-label-color);
 }
 .db-diag-info {
   margin-top: 10px;
@@ -7602,19 +7655,19 @@ body[data-theme="dark"] .backup-row--hana td {
 }
 
 .so-license-label {
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
+  font-family: var(--kv-label-family);
+  font-size: var(--kv-label-size);
+  font-weight: var(--kv-label-weight);
+  letter-spacing: var(--kv-label-letter);
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--kv-label-color);
 }
 
 .so-license-value {
-  font-family: "IBM Plex Mono", monospace;
-  font-size: 11px;
-  font-weight: 700;
-  color: #0f172a;
+  font-family: var(--kv-value-family);
+  font-size: var(--kv-value-size);
+  font-weight: var(--kv-value-weight);
+  color: var(--kv-value-color);
 }
 
 body[data-theme="dark"] .so-addon-details {

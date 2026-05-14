@@ -311,14 +311,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.147**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.147**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.148**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.148**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.4.148 | 14.05.2026 | Apply unified label/value typography pattern across major UI sections using shared kv styles |
 | 1.4.147 | 14.05.2026 | Show first 10 AddOns in Systemübersicht with expandable '+x weitere' and align Lizenzinfos typography to AddOns style |
 | 1.4.146 | 14.05.2026 | Rename Systemübersicht last column header from "Status / Update" to "Status" |
 | 1.4.145 | 14.05.2026 | Refine Systemübersicht licenses: remove Datei-Stand row, align with AddOns height, rebalance column widths |

@@ -5687,11 +5687,11 @@ function renderReportCard(report) {
 
   // Helper function to render meta-group items
   function renderMetaItem(tag, label, value) {
-    return `<p class="meta-group-item"><strong><span class="meta-label-tag">${tag}</span> ${label}</strong><span>${escapeHtml(asText(value || "-"))}</span></p>`;
+    return `<p class="meta-group-item"><strong class="kv-label"><span class="meta-label-tag">${tag}</span> ${label}</strong><span class="kv-value">${escapeHtml(asText(value || "-"))}</span></p>`;
   }
 
   function renderMetaItemHtml(tag, label, html) {
-    return `<p class="meta-group-item"><strong><span class="meta-label-tag">${tag}</span> ${label}</strong><span>${html}</span></p>`;
+    return `<p class="meta-group-item"><strong class="kv-label"><span class="meta-label-tag">${tag}</span> ${label}</strong><span class="kv-value">${html}</span></p>`;
   }
 
   // Build grouped meta sections
