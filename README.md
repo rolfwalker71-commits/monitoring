@@ -312,14 +312,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.8**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.8**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.9**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.9**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.5.9   | 14.05.2026 | Restructure HTML agent guide into separate Windows and Linux sections with identical flow and direct script download examples |
 | 1.5.8   | 14.05.2026 | Add HTML deployment guide for Linux and Windows agents including install/update commands, payload parameters, license paths, and HANA/SAP data sources |
 | 1.5.7   | 14.05.2026 | Revert v1.5.4 font size and weight reductions (body, sidebar title, host card names, Meldungen header) |
 | 1.5.6   | 14.05.2026 | Restrict IBM Plex Mono to FP and HANA release chips only; revert from meta lines and SID chip |
