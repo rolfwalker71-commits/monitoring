@@ -90,22 +90,6 @@ flowchart TD
 - Erfolgreiche Aufrufe liefern status sent.
 - Fehler liefern status failed plus details.
 - Bei Daily Digests wird der last_sent Tag nur bei Erfolg fortgeschrieben.</script>
-    <script>
-        const markdown = document.getElementById('markdown-content').textContent;
-        const renderer = new marked.Renderer();
-        
-        // Custom renderer for code blocks to handle mermaid
-        const originalCodeRenderer = renderer.code.bind(renderer);
-        renderer.code = function(code, language, escaped) {
-            if (language === 'mermaid') {
-                return '<div class="mermaid">' + code + '</div>';
-            }
-            return originalCodeRenderer(code, language, escaped);
-        };
-
-        document.getElementById('content').innerHTML = marked.parse(markdown, { renderer: renderer });
-        
-        mermaid.initialize({ startOnLoad: true, theme: 'default' });
-    </script>
+    <script src="process-doc-renderer.js"></script>
 </body>
 </html>

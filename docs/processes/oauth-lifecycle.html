@@ -81,22 +81,6 @@ flowchart TD
 - OAuth ist benutzerbezogen, nicht global fuer alle User.
 - Admin konfiguriert App-Daten, jeder User verbindet sein eigenes Konto.
 - Disconnect entfernt die gespeicherte OAuth-Verbindung des Benutzers.</script>
-    <script>
-        const markdown = document.getElementById('markdown-content').textContent;
-        const renderer = new marked.Renderer();
-        
-        // Custom renderer for code blocks to handle mermaid
-        const originalCodeRenderer = renderer.code.bind(renderer);
-        renderer.code = function(code, language, escaped) {
-            if (language === 'mermaid') {
-                return '<div class="mermaid">' + code + '</div>';
-            }
-            return originalCodeRenderer(code, language, escaped);
-        };
-
-        document.getElementById('content').innerHTML = marked.parse(markdown, { renderer: renderer });
-        
-        mermaid.initialize({ startOnLoad: true, theme: 'default' });
-    </script>
+    <script src="process-doc-renderer.js"></script>
 </body>
 </html>

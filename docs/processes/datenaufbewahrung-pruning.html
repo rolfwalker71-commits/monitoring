@@ -65,22 +65,6 @@ Damit Alerts bei Loeschung alter Reports keine ungueltigen Fremdbezuege behalten
 - Trend- und Verlaufsauswertungen nutzen nur verbleibende Reports.
 - Alert-Lifecycle bleibt konsistent, auch wenn historische report_id entfaellt.
 - Speicherverbrauch bleibt begrenzt und vorhersehbar.</script>
-    <script>
-        const markdown = document.getElementById('markdown-content').textContent;
-        const renderer = new marked.Renderer();
-        
-        // Custom renderer for code blocks to handle mermaid
-        const originalCodeRenderer = renderer.code.bind(renderer);
-        renderer.code = function(code, language, escaped) {
-            if (language === 'mermaid') {
-                return '<div class="mermaid">' + code + '</div>';
-            }
-            return originalCodeRenderer(code, language, escaped);
-        };
-
-        document.getElementById('content').innerHTML = marked.parse(markdown, { renderer: renderer });
-        
-        mermaid.initialize({ startOnLoad: true, theme: 'default' });
-    </script>
+    <script src="process-doc-renderer.js"></script>
 </body>
 </html>
