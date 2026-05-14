@@ -1302,8 +1302,22 @@ function Get-SapLicenseInfo {
     }
     
     try {
-        $licensePath = 'C:\ANG\Lizenzen\B01.txt'
-        if (-not (Test-Path $licensePath)) {
+        # Try multiple possible locations (with fallback paths)
+        $licensePaths = @(
+            'C:\ANG\Lizenzen\B01.txt',
+            'C:\ANG\Lizenz\B01.txt',
+            'C:\ANG\B01.txt'
+        )
+        
+        $licensePath = $null
+        foreach ($path in $licensePaths) {
+            if (Test-Path $path) {
+                $licensePath = $path
+                break
+            }
+        }
+        
+        if (-not $licensePath) {
             return $licenseInfo
         }
         
