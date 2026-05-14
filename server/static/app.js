@@ -8,6 +8,27 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function resolveHostOsIcon(osValue) {
+  const osRaw = asText(osValue || "", "").toLowerCase();
+  if (osRaw.includes("windows")) {
+    return { iconName: "windows.png", osLabel: "Windows" };
+  }
+
+  const distroMappings = [
+    { iconName: "ubuntu.png", keywords: ["ubuntu"] },
+    { iconName: "debian.png", keywords: ["debian"] },
+    { iconName: "suse.png", keywords: ["suse", "opensuse", "sles"] },
+  ];
+
+  for (const mapping of distroMappings) {
+    if (mapping.keywords.some((keyword) => osRaw.includes(keyword))) {
+      return { iconName: mapping.iconName, osLabel: "Linux" };
+    }
+  }
+
+  return { iconName: "linux.png", osLabel: "Linux" };
+}
+
 const ANALYSIS_RANGE_STORAGE_KEY = "monitoring.analysisHours";
 const THEME_STORAGE_KEY = "monitoring.theme";
 const HOST_FILTERS_STORAGE_KEY_PREFIX = "monitoring.hostFilters.";
@@ -6121,11 +6142,11 @@ function renderSingleHostCard(host) {
   const chipClass = openCriticalAlertCount > 0 ? "host-alert-chip critical" : "host-alert-chip";
   const alertChip = hasOpenAlerts ? `<span class="${chipClass}">🔔 ${openAlertCount}</span>` : "";
 
-  const osRaw = asText(host.os || "").toLowerCase();
+  const osIconInfo = resolveHostOsIcon(host.os);
   const countryCode = asText(host.country_code || "", "").toUpperCase();
   const countryCodeLower = countryCode.toLowerCase();
-  const iconName = osRaw.includes("windows") ? "windows.png" : "linux.png";
-  const osLabel = osRaw.includes("windows") ? "Windows" : "Linux";
+  const iconName = osIconInfo.iconName;
+  const osLabel = osIconInfo.osLabel;
   const osIcon = `<img src="icons/${iconName}" class="host-os-icon" alt="${osLabel}" title="${escapeHtml(asText(host.os))}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${iconName}';}">`;
   const flagIcon = countryCode
     ? `<img src="icons/${countryCode}.png" class="host-flag-icon" alt="${countryCode}" title="Land: ${countryCode}" onerror="if(!this.dataset.fallback1){this.dataset.fallback1='1';this.src='/icons/${countryCode}.png';return;}if(!this.dataset.fallback2){this.dataset.fallback2='1';this.src='/icons/${countryCodeLower}.png';return;}if(!this.dataset.fallback3){this.dataset.fallback3='1';this.src='/icons/${countryCodeLower}.svg';return;}this.style.display='none'">`
@@ -7730,9 +7751,9 @@ function renderInactiveHosts(data) {
     const displayName = host.display_name || host.hostname;
     const showHostname = displayName !== host.hostname;
     
-    // Determine OS icon
-    const osFamily = host.os.toLowerCase().includes("windows") ? "windows" : "linux";
-    const osIconSrc = `icons/${osFamily}.png`;
+    const osIconInfo = resolveHostOsIcon(host.os);
+    const osIconName = osIconInfo.iconName;
+    const osIconSrc = `icons/${osIconName}`;
     
     // Determine country icon
     const countryCode = (host.country_code || "").toUpperCase();
@@ -7750,7 +7771,7 @@ function renderInactiveHosts(data) {
         <div class="ih-host-info">
           <div class="ih-host-icons">
             ${countryIconSrc ? `<img src="${countryIconSrc}" class="ih-host-icon" alt="${escapeHtml(host.country_code)}" onerror="if(!this.dataset.fallback1){this.dataset.fallback1='1';this.src='/icons/${countryCode}.png';return;}if(!this.dataset.fallback2){this.dataset.fallback2='1';this.src='/icons/${countryIconFallback}.png';return;}if(!this.dataset.fallback3){this.dataset.fallback3='1';this.src='/icons/${countryIconFallback}.svg';return;}this.style.display='none';" />` : ""}
-            <img src="${osIconSrc}" class="ih-host-icon" alt="${escapeHtml(host.os)}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${osFamily}.png';}" />
+            <img src="${osIconSrc}" class="ih-host-icon" alt="${escapeHtml(host.os)}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${osIconName}';}" />
           </div>
           <div class="ih-host-details">
             <span class="ih-hostname">${escapeHtml(displayName)}${showHostname ? ` <span class="ih-hostname-sub">(${escapeHtml(host.hostname)})</span>` : ""}</span>
