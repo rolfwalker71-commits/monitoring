@@ -144,6 +144,79 @@ json_number_or_null() {
   fi
 }
 
+collect_sap_license_json() {
+  local license_path=""
+  local available="false"
+  local hardware_key=""
+  local instno=""
+  local expiration=""
+  local system_nr=""
+  local customer_name=""
+  local customer_no=""
+  local file_mtime_utc=""
+  
+  # Try multiple possible locations (with fallback paths)
+  local license_paths=(
+    "/usr/sap/SAPBusinessOne/B1_SHF/Lizenzen/B01.txt"
+    "/usr/sap/SAPBusinessOne/B1_SHF/Lizenz/B01.txt"
+  )
+  
+  for path in "${license_paths[@]}"; do
+    if [[ -f "$path" ]]; then
+      license_path="$path"
+      break
+    fi
+  done
+  
+  if [[ -z "$license_path" ]]; then
+    printf '{"available":false,"hardware_key":"","instno":"","expiration":"","system_nr":"","customer_name":"","customer_no":"","file_mtime_utc":""}'
+    return
+  fi
+  
+  # Get file modification time in UTC
+  if command -v stat >/dev/null 2>&1; then
+    file_mtime_utc="$(stat -c %Y "$license_path" 2>/dev/null | xargs -I {} date -u -d "@{}" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "")"
+  fi
+  
+  local content=""
+  if [[ -r "$license_path" ]]; then
+    content="$(cat "$license_path" 2>/dev/null || echo "")"
+  fi
+  
+  if [[ -z "$content" ]]; then
+    printf '{"available":false,"hardware_key":"","instno":"","expiration":"","system_nr":"","customer_name":"","customer_no":"","file_mtime_utc":"%s"}' "$(json_escape "$file_mtime_utc")"
+    return
+  fi
+  
+  # Try to extract from block format first, otherwise use whole content
+  local block_content="$content"
+  if [[ "$content" =~ -----[[:space:]]*Begin[[:space:]]+SAP[[:space:]]+License[[:space:]]*-----(.*)-----[[:space:]]*End[[:space:]]+SAP[[:space:]]+License[[:space:]]*----- ]]; then
+    block_content="${BASH_REMATCH[1]}"
+  fi
+  
+  # Extract license fields from content (works for both block and plain key=value format)
+  [[ "$block_content" =~ HARDWARE-KEY[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && hardware_key="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  [[ "$block_content" =~ INSTNO[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && instno="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  [[ "$block_content" =~ EXPIRATION[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && expiration="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  [[ "$block_content" =~ SYSTEM-NR[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && system_nr="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  [[ "$block_content" =~ CUSTOMER-NAME[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && customer_name="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  [[ "$block_content" =~ CUSTOMER-NO[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && customer_no="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  
+  if [[ -n "$hardware_key" ]] || [[ -n "$instno" ]]; then
+    available="true"
+  fi
+  
+  printf '{"available":%s,"hardware_key":"%s","instno":"%s","expiration":"%s","system_nr":"%s","customer_name":"%s","customer_no":"%s","file_mtime_utc":"%s"}' \
+    "$available" \
+    "$(json_escape "$hardware_key")" \
+    "$(json_escape "$instno")" \
+    "$(json_escape "$expiration")" \
+    "$(json_escape "$system_nr")" \
+    "$(json_escape "$customer_name")" \
+    "$(json_escape "$customer_no")" \
+    "$(json_escape "$file_mtime_utc")"
+}
+
 collect_sap_business_one_json() {
   local catalina_path="$SAP_B1_CATALINA_OUT_PATH"
   local businessone_dir="$SAP_B1_BUSINESSONE_LOG_DIR"
@@ -2561,6 +2634,7 @@ CONTAINERS_JSON="$(collect_containers_json)"
 AGENT_UPDATE_JSON="$(collect_update_log_json)"
 AGENT_CONFIG_JSON="$(collect_agent_config_json)"
 LARGE_FILES_JSON="$(collect_large_files_json)"
+SAP_LICENSE_JSON="$(collect_sap_license_json)"
 SAP_BUSINESS_ONE_JSON="$(collect_sap_business_one_json)"
 HANA_INFO_JSON="$(collect_hana_version_json)"
 HANA_ADDONS_JSON="$(collect_hana_addons_json)"
@@ -2640,6 +2714,7 @@ PAYLOAD=$(cat <<EOF
   "agent_update": ${AGENT_UPDATE_JSON},
   "agent_config": ${AGENT_CONFIG_JSON},
   "large_files": ${LARGE_FILES_JSON},
+  "sap_license": ${SAP_LICENSE_JSON},
   "sap_business_one": ${SAP_BUSINESS_ONE_JSON},
   "hana_info": ${HANA_INFO_JSON},
   "hana_addons": ${HANA_ADDONS_JSON},
