@@ -311,15 +311,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.141**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.141**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.142**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.142**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
-| 1.4.141 | 14.05.2026 | Move SAP license info from header into SAP B1 dropdown section (open when filled, closed when empty) |
+| 1.4.142 | 14.05.2026 | Move SAP license info from header into SAP B1 dropdown section (open when filled, closed when empty) |
 | 1.4.139 | 14.05.2026 | Prevent wrapping in license values and tighten label width |
 | 1.4.138 | 14.05.2026 | Reduce spacing between license labels and values even further |
 | 1.4.137 | 14.05.2026 | Reduce font sizes in license panel and hide license title |

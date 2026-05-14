@@ -5377,8 +5377,8 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
           const name = asText(entry.name, "-");
           const memoryGb = Number(entry.memory_gb || 0);
           const memoryText = Number.isFinite(memoryGb) ? `${memoryGb.toFixed(2)} GB` : "-";
-          // Fett, wenn Name auf _P oder _P[Zahl] endet
-          const isProject = /_P(\d+)?$/i.test(name);
+          // Fett, wenn Name auf _P/_P[Zahl] endet oder PROD enthaelt
+          const isProject = /_P(\d+)?$/i.test(name) || /PROD/i.test(name);
           return `
             <tr>
               <td${isProject ? ' style="font-weight:bold"' : ''}>${escapeHtml(name)}</td>
