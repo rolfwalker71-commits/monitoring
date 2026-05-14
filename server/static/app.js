@@ -4284,7 +4284,7 @@ function renderSapB1ExtensionsSection(payload) {
     if (bodyHtml) {
       extContent = `
         <div class="table-wrap">
-          <table class="report-subtable">
+          <table class="report-subtable sap-addon-subtable">
             <thead><tr><th>AddOnName</th><th>Version</th></tr></thead>
             <tbody>${bodyHtml}</tbody>
           </table>
@@ -4311,7 +4311,7 @@ function renderSapB1ExtensionsSection(payload) {
     if (sariBodyHtml) {
       sariContent = `
         <div class="table-wrap">
-          <table class="report-subtable">
+          <table class="report-subtable sap-addon-subtable">
             <thead><tr><th>AName</th><th>AddOnVer</th></tr></thead>
             <tbody>${sariBodyHtml}</tbody>
           </table>
@@ -4343,7 +4343,7 @@ function renderSapB1ExtensionsSection(payload) {
     if (bodyHtml) {
       hanaLightweightContent = `
         <div class="table-wrap">
-          <table class="report-subtable">
+          <table class="report-subtable sap-addon-subtable">
             <thead><tr><th>Name</th><th>Version</th></tr></thead>
             <tbody>${bodyHtml}</tbody>
           </table>
@@ -4380,7 +4380,7 @@ function renderSapB1ExtensionsSection(payload) {
     if (bodyHtml) {
       hanaLegacyContent = `
         <div class="table-wrap">
-          <table class="report-subtable">
+          <table class="report-subtable sap-addon-subtable">
             <thead><tr><th>Name</th><th>Version</th></tr></thead>
             <tbody>${bodyHtml}</tbody>
           </table>

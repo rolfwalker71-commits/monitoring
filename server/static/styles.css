@@ -4426,6 +4426,28 @@ body[data-theme="dark"] .trend-progress-bar {
   width: 44%;
 }
 
+.sap-addon-subtable th {
+  font-family: var(--kv-label-family);
+  font-size: var(--kv-label-size);
+  font-weight: var(--kv-label-weight);
+  letter-spacing: var(--kv-label-letter);
+  color: var(--kv-label-color);
+}
+
+.sap-addon-subtable td {
+  font-family: var(--kv-label-family);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.sap-addon-subtable td:last-child {
+  font-family: var(--kv-value-family);
+  font-size: var(--kv-value-size);
+  font-weight: var(--kv-value-weight);
+  color: var(--kv-value-color);
+}
+
 .containers-table {
   table-layout: auto;
   width: 100%;
