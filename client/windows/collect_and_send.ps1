@@ -1330,32 +1330,34 @@ function Get-SapLicenseInfo {
             return $licenseInfo
         }
         
-        # Extract first occurrence only of license block
+        # Try to extract from block format first, otherwise use whole content
+        $blockContent = $content
         if ($content -match '-----\s*Begin SAP License\s*-----([^-]*?)-----\s*End SAP License\s*-----') {
-            $block = $Matches[1]
-            
-            if ($block -match 'HARDWARE-KEY\s*=\s*([^\r\n]+)') {
-                $licenseInfo.hardware_key = $Matches[1].Trim()
-            }
-            if ($block -match 'INSTNO\s*=\s*([^\r\n]+)') {
-                $licenseInfo.instno = $Matches[1].Trim()
-            }
-            if ($block -match 'EXPIRATION\s*=\s*([^\r\n]+)') {
-                $licenseInfo.expiration = $Matches[1].Trim()
-            }
-            if ($block -match 'SYSTEM-NR\s*=\s*([^\r\n]+)') {
-                $licenseInfo.system_nr = $Matches[1].Trim()
-            }
-            if ($block -match 'CUSTOMER-NAME\s*=\s*([^\r\n]+)') {
-                $licenseInfo.customer_name = $Matches[1].Trim()
-            }
-            if ($block -match 'CUSTOMER-NO\s*=\s*([^\r\n]+)') {
-                $licenseInfo.customer_no = $Matches[1].Trim()
-            }
-            
-            if ($licenseInfo.hardware_key -or $licenseInfo.instno) {
-                $licenseInfo.available = $true
-            }
+            $blockContent = $Matches[1]
+        }
+        
+        # Extract license fields from content (works for both block and plain key=value format)
+        if ($blockContent -match 'HARDWARE-KEY\s*=\s*([^\r\n]+)') {
+            $licenseInfo.hardware_key = $Matches[1].Trim()
+        }
+        if ($blockContent -match 'INSTNO\s*=\s*([^\r\n]+)') {
+            $licenseInfo.instno = $Matches[1].Trim()
+        }
+        if ($blockContent -match 'EXPIRATION\s*=\s*([^\r\n]+)') {
+            $licenseInfo.expiration = $Matches[1].Trim()
+        }
+        if ($blockContent -match 'SYSTEM-NR\s*=\s*([^\r\n]+)') {
+            $licenseInfo.system_nr = $Matches[1].Trim()
+        }
+        if ($blockContent -match 'CUSTOMER-NAME\s*=\s*([^\r\n]+)') {
+            $licenseInfo.customer_name = $Matches[1].Trim()
+        }
+        if ($blockContent -match 'CUSTOMER-NO\s*=\s*([^\r\n]+)') {
+            $licenseInfo.customer_no = $Matches[1].Trim()
+        }
+        
+        if ($licenseInfo.hardware_key -or $licenseInfo.instno) {
+            $licenseInfo.available = $true
         }
     } catch {
         # Silently ignore any license read errors
