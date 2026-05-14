@@ -3,9 +3,18 @@
 .SYNOPSIS
     Collects system metrics and sends them to the monitoring server.
     Mirrors the Linux collect_and_send.sh payload format exactly.
+
+.PARAMETER NoJitter
+    Skip startup jitter sleep (useful for manual tests).
+
+.PARAMETER JitterMaxSec
+    Override maximum jitter delay for this run (in seconds).
 #>
 [CmdletBinding()]
-param()
+param(
+    [switch]$NoJitter,
+    [int]$JitterMaxSec = 0
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -137,7 +146,10 @@ $ServerUrl = $cfg['SERVER_URL']
 $ApiKey    = if ($cfg.ContainsKey('API_KEY') -and $cfg['API_KEY']) { $cfg['API_KEY'] } elseif ($cfg.ContainsKey('X_API_KEY')) { $cfg['X_API_KEY'] } else { '' }
 $SendJitterMaxSec = 300
 
-if ($env:SEND_JITTER_MAX_SEC -match '^\d+$') {
+if ($JitterMaxSec -gt 0) {
+    # Command-line parameter takes precedence
+    $SendJitterMaxSec = $JitterMaxSec
+} elseif ($env:SEND_JITTER_MAX_SEC -match '^\d+$') {
     $SendJitterMaxSec = [int]$env:SEND_JITTER_MAX_SEC
 } elseif ($cfg.ContainsKey('SEND_JITTER_MAX_SEC') -and ($cfg['SEND_JITTER_MAX_SEC'] -match '^\d+$')) {
     $SendJitterMaxSec = [int]$cfg['SEND_JITTER_MAX_SEC']
@@ -1386,7 +1398,7 @@ $cpuInfoList = @(Get-CimInstance -ClassName Win32_Processor)
 $agentId     = if ($cfg.ContainsKey('AGENT_ID')      -and $cfg['AGENT_ID'])      { $cfg['AGENT_ID'] }      else { $hostnameValue }
 $displayName = if ($cfg.ContainsKey('DISPLAY_NAME')  -and $cfg['DISPLAY_NAME'])  { $cfg['DISPLAY_NAME'] }  else { $hostnameValue }
 
-if ($SendJitterMaxSec -gt 0) {
+if (-not $NoJitter -and $SendJitterMaxSec -gt 0) {
     $jitterIdentity = "$hostnameValue$agentId"
     $hashProvider = [System.Security.Cryptography.SHA256]::Create()
     try {
