@@ -9858,21 +9858,13 @@ function renderSystemOverviewAddons(payload) {
     const legacyCount = legacyRows.length;
     const sqlTotalCount = extCount + legacyCount;
 
-    const extContent = extCount > 0
-      ? `<ul class="so-addon-list">${renderListItems(extRows, "AddOnName", "Version")}</ul>`
-      : '<p class="so-addon-empty">Keine</p>';
+    if (sqlTotalCount > 0) {
+      const extContent = `<ul class="so-addon-list">${renderListItems(extRows, "AddOnName", "Version")}</ul>`;
+      const legacyContent = `<ul class="so-addon-list">${renderListItems(legacyRows, "AName", "AddOnVer")}</ul>`;
+      const sqlSummary = `SQL AddOns (${extCount} LW / ${legacyCount} Legacy)`;
+      const openAttr = state.systemOverviewAddonsExpanded === true ? " open" : "";
 
-    const legacyContent = legacyCount > 0
-      ? `<ul class="so-addon-list">${renderListItems(legacyRows, "AName", "AddOnVer")}</ul>`
-      : '<p class="so-addon-empty">Keine</p>';
-
-    const sqlSummary = sqlTotalCount > 0
-      ? `SQL AddOns (${extCount} LW / ${legacyCount} Legacy)`
-      : "SQL AddOns (keine)";
-
-    const openAttr = state.systemOverviewAddonsExpanded === true ? " open" : "";
-
-    result += `
+      result += `
     <details class="so-addon-details"${openAttr}>
       <summary>${escapeHtml(sqlSummary)}</summary>
       <div class="so-addon-grid">
@@ -9886,6 +9878,7 @@ function renderSystemOverviewAddons(payload) {
         </div>
       </div>
     </details>`;
+    }
   }
 
   // HANA AddOns (Linux or unknown OS)
@@ -9896,21 +9889,13 @@ function renderSystemOverviewAddons(payload) {
     const hanaLegacyCount = hanaLegacy.length;
     const hanaTotalCount = hanaLightCount + hanaLegacyCount;
 
-    const hanaLightContent = hanaLightCount > 0
-      ? `<ul class="so-addon-list">${renderListItems(hanaLightweight, "name", "version")}</ul>`
-      : '<p class="so-addon-empty">Keine</p>';
+    if (hanaTotalCount > 0) {
+      const hanaLightContent = `<ul class="so-addon-list">${renderListItems(hanaLightweight, "name", "version")}</ul>`;
+      const hanaLegacyContent = `<ul class="so-addon-list">${renderListItems(hanaLegacy, "name", "version")}</ul>`;
+      const hanaSummary = `HANA AddOns (${hanaLightCount} LW / ${hanaLegacyCount} Legacy)`;
+      const openAttr = state.systemOverviewAddonsExpanded === true ? " open" : "";
 
-    const hanaLegacyContent = hanaLegacyCount > 0
-      ? `<ul class="so-addon-list">${renderListItems(hanaLegacy, "name", "version")}</ul>`
-      : '<p class="so-addon-empty">Keine</p>';
-
-    const hanaSummary = hanaTotalCount > 0
-      ? `HANA AddOns (${hanaLightCount} LW / ${hanaLegacyCount} Legacy)`
-      : "HANA AddOns (keine)";
-
-    const openAttr = state.systemOverviewAddonsExpanded === true ? " open" : "";
-
-    result += `
+      result += `
     <details class="so-addon-details"${openAttr}>
       <summary>${escapeHtml(hanaSummary)}</summary>
       <div class="so-addon-grid">
@@ -9924,6 +9909,7 @@ function renderSystemOverviewAddons(payload) {
         </div>
       </div>
     </details>`;
+    }
   }
 
   return result;
@@ -10045,11 +10031,11 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
       <td class="so-host-cell">
         <div class="so-host-title">${hostTitle}</div>
         <div class="so-host-short">${shortHostname}</div>
-        <div class="so-host-addons">${addOnSection}</div>
+        ${addOnSection ? `<div class="so-host-addons">${addOnSection}</div>` : ""}
       </td>
       <td>
         <div class="so-cell-main">${osReleaseDisplay}</div>
-        <div class="so-os-license">${licenseInfoSection}</div>
+        ${licenseInfoSection ? `<div class="so-os-license">${licenseInfoSection}</div>` : ""}
       </td>
       <td>
         <div class="so-cell-main">${cpuCores} vCPU</div>
