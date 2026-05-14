@@ -75,6 +75,7 @@ const state = {
   hostOsFilter: "all",
   hostCountryFilter: "all",
   systemOverviewCountryFilter: "all",
+  systemOverviewSearchQuery: "",
   systemOverviewAddonsExpanded: false,
   viewMode: "overview",
   userSettingsSubMode: "password",
@@ -8877,6 +8878,13 @@ function wireEvents() {
       await loadSystemOverview();
     });
   }
+  const systemOverviewSearchInput = document.getElementById("systemOverviewSearchInput");
+  if (systemOverviewSearchInput) {
+    systemOverviewSearchInput.addEventListener("input", async () => {
+      state.systemOverviewSearchQuery = String(systemOverviewSearchInput.value || "").trim();
+      await loadSystemOverview();
+    });
+  }
   const hostConfigChangesTabButton = document.getElementById("hostConfigChangesTabButton");
   if (hostConfigChangesTabButton) {
     hostConfigChangesTabButton.addEventListener("click", async () => {
@@ -10068,8 +10076,13 @@ async function loadSystemOverview() {
   const container = document.getElementById("systemOverviewContainer");
   const statsEl = document.getElementById("systemOverviewStats");
   const filterEl = document.getElementById("systemOverviewCountryFilter");
+  const searchEl = document.getElementById("systemOverviewSearchInput");
   updateSystemOverviewAddonsToggleButton();
   if (!container) return;
+
+  if (searchEl) {
+    searchEl.value = String(state.systemOverviewSearchQuery || "");
+  }
 
   container.innerHTML = '<p class="muted">Lade Systemdaten...</p>';
   if (statsEl) statsEl.textContent = "";
@@ -10084,26 +10097,12 @@ async function loadSystemOverview() {
     renderSystemOverviewCountryFilter(allCountries);
 
     const activeCountryFilter = String(state.systemOverviewCountryFilter || "all");
+    const searchQuery = String(state.systemOverviewSearchQuery || "").trim().toLowerCase();
     const filteredEntries = Object.entries(byCountry)
       .filter(([country]) => activeCountryFilter === "all" || String(country).toUpperCase() === activeCountryFilter)
       .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
 
-    const total = filteredEntries.reduce((sum, [, osMap]) => {
-      return sum + Object.values(osMap || {}).reduce((osSum, customerMap) => {
-        return osSum + Object.values(customerMap || {}).reduce((customerSum, hosts) => {
-          return customerSum + (Array.isArray(hosts) ? hosts.length : 0);
-        }, 0);
-      }, 0);
-    }, 0);
-
-    if (statsEl) {
-      const scope = activeCountryFilter === "all" ? "Alle Länder" : activeCountryFilter;
-      statsEl.textContent = `${total} Systeme (${scope})`;
-    }
-    if (!total) {
-      container.innerHTML = '<p class="muted">Keine Systeme vorhanden.</p>';
-      return;
-    }
+    let total = 0;
 
     const countrySections = filteredEntries
       .map(([country, osMap], countryIndex) => {
@@ -10116,18 +10115,41 @@ async function loadSystemOverview() {
           .map(([osName, customerMap], osIndex) => {
             const osIconPath = getOsIconPath(osName);
             const osImg = osIconPath ? `<img src="${osIconPath}" alt="${escapeHtml(osName)}" class="so-os-icon" />` : `<span>${getOsEmoji(osName)}</span>`;
-            const osHostCount = Object.values(customerMap || {}).reduce((sum, hosts) => sum + (Array.isArray(hosts) ? hosts.length : 0), 0);
             
             const customers = Object.entries(customerMap || {})
               .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
               .map(([customer, hosts]) => {
-                const rowHtml = (Array.isArray(hosts) ? hosts : [])
+                const matchingHosts = (Array.isArray(hosts) ? hosts : []).filter((host) => {
+                  if (!searchQuery) {
+                    return true;
+                  }
+                  const payload = host && typeof host.payload === "object" ? host.payload : {};
+                  const haystack = [
+                    host?.hostname,
+                    host?.display_name,
+                    payload?.display_name,
+                    payload?.hostname,
+                    payload?.agent_id,
+                    customer,
+                    osName,
+                    country
+                  ].map((v) => String(v || "").toLowerCase()).join(" ");
+                  return haystack.includes(searchQuery);
+                });
+
+                if (!matchingHosts.length) {
+                  return "";
+                }
+
+                total += matchingHosts.length;
+
+                const rowHtml = matchingHosts
                   .map((host) => formatSystemOverviewTableRow(host, osName, customer, SAP_B1_VERSION_MAP, true))
                   .join("");
 
                 return `
                   <div class="system-overview-customer-block">
-                    <div class="so-customer-title">👥 ${escapeHtml(customer)} (${Array.isArray(hosts) ? hosts.length : 0})</div>
+                    <div class="so-customer-title">👥 ${escapeHtml(customer)} (${matchingHosts.length})</div>
                     <div class="system-overview-table-wrap">
                       <table class="system-overview-table">
                         <thead>
@@ -10146,7 +10168,13 @@ async function loadSystemOverview() {
                   </div>
                 `;
               })
+              .filter(Boolean)
               .join("");
+
+            const osHostCount = (customers.match(/<tr class=/g) || []).length;
+            if (!osHostCount) {
+              return "";
+            }
             
             const osId = `so-os-${countryIndex}-${osIndex}`;
             return `
@@ -10159,7 +10187,12 @@ async function loadSystemOverview() {
               </section>
             `;
           })
+          .filter(Boolean)
           .join("");
+
+        if (!osSections) {
+          return "";
+        }
 
         const countryId = `so-country-${countryIndex}`;
         return `
@@ -10172,7 +10205,19 @@ async function loadSystemOverview() {
           </section>
         `;
       })
+      .filter(Boolean)
       .join("");
+
+    if (statsEl) {
+      const scope = activeCountryFilter === "all" ? "Alle Länder" : activeCountryFilter;
+      const withSearch = searchQuery ? ` | Suche: "${state.systemOverviewSearchQuery}"` : "";
+      statsEl.textContent = `${total} Systeme (${scope})${withSearch}`;
+    }
+
+    if (!total) {
+      container.innerHTML = '<p class="muted">Keine Systeme für den aktuellen Filter gefunden.</p>';
+      return;
+    }
 
     container.innerHTML = `<div class="system-overview-tree">${countrySections}</div>`;
     
