@@ -4424,6 +4424,54 @@ function renderSapB1ExtensionsSection(payload) {
   `;
 }
 
+function renderSapLicenseInfoSection(payload) {
+  const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : {};
+  const toText = (value) => asText(value, "");
+
+  const expirationRaw = toText(sapLicense.expiration);
+  const expiration = /^\d{8}$/.test(expirationRaw)
+    ? `${expirationRaw.substring(6, 8)}.${expirationRaw.substring(4, 6)}.${expirationRaw.substring(0, 4)}`
+    : (expirationRaw || "-");
+
+  const fields = [
+    { label: "HW-Key", value: toText(sapLicense.hardware_key) },
+    { label: "Installationsnummer", value: toText(sapLicense.instno) },
+    { label: "Systemnummer", value: toText(sapLicense.system_nr) },
+    { label: "Kundennummer", value: toText(sapLicense.customer_no) },
+    { label: "Lizenznehmer", value: toText(sapLicense.customer_name) },
+    { label: "Gültig bis", value: expiration }
+  ];
+
+  const hasData = fields.some((field) => field.value && field.value !== "-");
+  const fileMtimeUtc = toText(sapLicense.file_mtime_utc);
+  const fileMtimeLabel = fileMtimeUtc ? formatUtcPlus2(fileMtimeUtc) : "-";
+
+  if (!hasData) {
+    return `
+      <details class="sap-b1-raw-details">
+        <summary class="sap-b1-raw-summary">Lizenzinfos</summary>
+        <div class="sap-license-list-wrap">
+          <p class="muted">Keine Lizenzinfos im Payload vorhanden.</p>
+        </div>
+      </details>
+    `;
+  }
+
+  const rowsHtml = fields
+    .map((field) => `<p class="sap-license-list-item"><strong>${escapeHtml(field.label)}</strong><span>${escapeHtml(field.value || "-")}</span></p>`)
+    .join("");
+
+  return `
+    <details class="sap-b1-raw-details" open>
+      <summary class="sap-b1-raw-summary">Lizenzinfos</summary>
+      <div class="sap-license-list-wrap">
+        <div class="sap-license-list">${rowsHtml}</div>
+        <p class="sap-license-list-meta">Datei-Stand B01.txt: <span>${escapeHtml(fileMtimeLabel)}</span></p>
+      </div>
+    </details>
+  `;
+}
+
 
 function renderSapB1VersionMapCard() {
   const sortedEntries = Array.from(SAP_B1_VERSION_MAP.entries())
@@ -4542,6 +4590,8 @@ function renderSapB1CombinedCard(payload) {
   return `
     <section class="detail-card sap-b1-card sap-b1-combined-card">
       <h4>SAP B1</h4>
+
+      ${renderSapLicenseInfoSection(payload)}
 
       <details class="sap-b1-raw-details" open>
         <summary class="sap-b1-raw-summary">AddOns</summary>
@@ -5681,33 +5731,6 @@ function renderReportCard(report) {
     </div>
   `;
 
-  const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : {};
-  const licenseAvailable = sapLicense.available === true || sapLicense.available === "true";
-  const licenseFileMtimeUtc = asText(sapLicense.file_mtime_utc || "", "");
-  const licenseFileMtimeLabel = licenseFileMtimeUtc ? formatUtcPlus2(licenseFileMtimeUtc) : "-";
-  const licenseExpiration = sapLicense.expiration && /^\d{8}$/.test(String(sapLicense.expiration))
-    ? `${String(sapLicense.expiration).substring(6,8)}.${String(sapLicense.expiration).substring(4,6)}.${String(sapLicense.expiration).substring(0,4)}`
-    : asText(sapLicense.expiration || "-");
-
-  const licenseHeaderPanel = licenseAvailable ? `
-    <section class="report-license-panel report-license-panel--header" aria-label="SAP Lizenz">
-      <div class="report-license-title">SAP Lizenz</div>
-      <div class="report-license-columns">
-        <div class="report-license-column">
-          <p class="report-license-item"><strong>HW-Key</strong><span>${escapeHtml(asText(sapLicense.hardware_key || "-"))}</span></p>
-          <p class="report-license-item"><strong>Installationsnummer</strong><span>${escapeHtml(asText(sapLicense.instno || "-"))}</span></p>
-          <p class="report-license-item"><strong>Systemnummer</strong><span>${escapeHtml(asText(sapLicense.system_nr || "-"))}</span></p>
-        </div>
-        <div class="report-license-column">
-          <p class="report-license-item"><strong>Kundennummer</strong><span>${escapeHtml(asText(sapLicense.customer_no || "-"))}</span></p>
-          <p class="report-license-item"><strong>Lizenznehmer</strong><span>${escapeHtml(asText(sapLicense.customer_name || "-"))}</span></p>
-          <p class="report-license-item"><strong>Gültig bis</strong><span>${escapeHtml(licenseExpiration)}</span></p>
-        </div>
-      </div>
-      <p class="report-license-meta">Datei-Stand B01.txt: <span>${escapeHtml(licenseFileMtimeLabel)}</span></p>
-    </section>
-  ` : "";
-
   const networkGroup = `
     <div class="meta-group">
       <div class="meta-group-title">Netzwerk</div>
@@ -5808,7 +5831,6 @@ function renderReportCard(report) {
           <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}${reportDeliveryLag !== "-" ? ` <span class="report-detail-chip report-delivery-chip">⏱️ ${escapeHtml(reportDeliveryLag)}</span>` : ""}</p>
           ${(sapB1Summary !== "-" || hanaInfoMeta !== "-" || hanaSid) ? `<p class="report-sap-meta">${sapB1Summary !== "-" ? `<span class="sap-hana-chip sap-b1-chip" title="SAP Feature Pack">${escapeHtml(sapB1Summary.replace(/<[^>]+>/g, ""))}</span>` : ""}${hanaInfoMeta !== "-" ? (() => { const short = hanaInfoMeta.split(".").slice(0, 3).join("."); return `<span class="sap-hana-chip hana-chip" title="${escapeHtml(hanaInfoMeta)}">${escapeHtml(short)}</span>`; })() : ""}${hanaSid ? `<span class="sap-hana-chip hana-sid-chip" title="HANA SID">${escapeHtml(hanaSid)}</span>` : ""}</p>` : ""}
         </div>
-        ${licenseHeaderPanel}
         <div class="report-header-meta">
           <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
           <span class="${chipClass}">${chipText}</span>

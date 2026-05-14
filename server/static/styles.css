@@ -5167,6 +5167,46 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   border-radius: 0 0 8px 8px;
 }
 
+.sap-license-list-wrap {
+  padding: 8px 12px 10px;
+  border-top: 1px solid #e2ecf8;
+}
+
+.sap-license-list {
+  display: grid;
+  gap: 4px;
+}
+
+.sap-license-list-item {
+  margin: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.sap-license-list-item strong {
+  font-size: 11px;
+  font-weight: 600;
+  color: #3e5f8d;
+  line-height: 1.15;
+}
+
+.sap-license-list-item span {
+  font-size: 12px;
+  font-weight: 700;
+  color: #122038;
+  line-height: 1.15;
+}
+
+.sap-license-list-meta {
+  margin: 6px 0 0;
+  font-size: 10px;
+  color: #5f78a0;
+}
+
+.sap-license-list-meta span {
+  font-weight: 600;
+}
+
 .sap-vmap-copy-btn {
   float: right;
   margin-left: 12px;
@@ -5833,6 +5873,22 @@ body[data-theme="dark"] .cron-details {
 body[data-theme="dark"] .sap-b1-card {
   border-color: #1d4ed8;
   background: linear-gradient(180deg, #10233f 0%, #0f1d34 100%);
+}
+
+body[data-theme="dark"] .sap-license-list-wrap {
+  border-top-color: #2d4a6e;
+}
+
+body[data-theme="dark"] .sap-license-list-item strong {
+  color: #9ec3ea;
+}
+
+body[data-theme="dark"] .sap-license-list-item span {
+  color: #d8e4f3;
+}
+
+body[data-theme="dark"] .sap-license-list-meta {
+  color: #94b0d1;
 }
 
 body[data-theme="dark"] .sap-b1-item {
