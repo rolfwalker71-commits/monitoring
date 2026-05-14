@@ -326,14 +326,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.17**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.17**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.18**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.18**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.5.18  | 14.05.2026 | Make process HTML docs work fully offline by vendoring marked and mermaid locally instead of loading them from CDN |
 | 1.5.17  | 14.05.2026 | Restore the Markdown source files for all process documents after the Mermaid HTML rendering fix |
 | 1.5.16  | 14.05.2026 | Fix Mermaid rendering in process HTML docs by replacing the brittle inline marked renderer with a shared DOM-based Mermaid transformer |
 | 1.5.15  | 14.05.2026 | Add HTML versions for all process documents with Mermaid rendering and include detailed docs for processes 1-8 |
