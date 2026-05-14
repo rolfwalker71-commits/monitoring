@@ -35,7 +35,7 @@ body {
   background: linear-gradient(180deg, #ffffff 0%, #e8f0f9 100%);
   min-height: 100vh;
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 body[data-theme="dark"] {
@@ -1517,8 +1517,8 @@ body[data-theme="dark"] .hosts-column {
 
 .sidebar-card-header h3 {
   margin: 0;
-  font-size: 22px;
-  font-weight: 900;
+  font-size: 17px;
+  font-weight: 700;
   color: #ffffff;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1741,8 +1741,8 @@ body[data-theme="dark"] .section-head .report-meta-row .count {
 
 .title-row h3 {
   margin: 0;
-  font-size: 26px;
-  font-weight: 800;
+  font-size: 20px;
+  font-weight: 600;
 }
 
 button {
@@ -3134,8 +3134,8 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-item strong,
 .host-item .host-title-line,
 .host-item .host-title-line span {
-  font-size: 18px;
-  font-weight: 900;
+  font-size: 14px;
+  font-weight: 700;
   line-height: 1.1;
 }
 
@@ -3145,7 +3145,7 @@ body[data-theme="dark"] .trend-progress-bar {
   justify-content: space-between;
   width: 100%;
   padding-right: 30px;
-  min-height: 34px;
+  min-height: 26px;
 }
 
 .host-title-line span {
