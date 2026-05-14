@@ -5788,7 +5788,7 @@ function renderReportCard(report) {
     detailContent = renderDatabasesSection(payload);
   }
 
-  const showMetaGroups = section === "overview";
+  const showMetaGroups = section === "overview" || section === "sap-b1-systeminfo";
 
   return `
     <article class="report-card">
