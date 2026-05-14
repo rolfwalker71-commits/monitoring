@@ -5,7 +5,13 @@
     return;
   }
 
-  const markdown = markdownEl.textContent || "";
+  function decodeHtmlEntities(text) {
+    const textarea = document.createElement("textarea");
+    textarea.innerHTML = String(text || "");
+    return textarea.value;
+  }
+
+  const markdown = decodeHtmlEntities(markdownEl.textContent || "");
   contentEl.innerHTML = marked.parse(markdown);
 
   const mermaidCodeBlocks = Array.from(contentEl.querySelectorAll("pre > code")).filter((codeEl) => {

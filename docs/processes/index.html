@@ -67,6 +67,39 @@
       font-size: 14px;
       line-height: 1.45;
     }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .doc-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .doc-meta .chip {
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
   </style>
 </head>
 <body>
@@ -74,30 +107,35 @@
     <section class="hero">
       <h1>📚 Prozessdokumente (HTML)</h1>
       <p>Alle Prozessbeschreibungen als HTML mit Mermaid-Diagrammen. Jede Seite rendert die Diagramme direkt im Browser.</p>
+      <div class="meta-row">
+        <span class="chip">📦 Offline-faehig</span>
+        <span class="chip">🧭 Mermaid lokal eingebettet</span>
+        <span class="chip">🕒 Stand: v1.5.19 · 14.05.2026</span>
+      </div>
     </section>
 
     <section class="card">
       <h2>Grundprozesse</h2>
       <div class="grid">
-        <a class="doc" href="mailversand-prozess.html"><span class="title">📧 Mailversand Prozess</span><span class="desc">OAuth/Graph, Instant Alerts, Reminder und Digests.</span></a>
-        <a class="doc" href="alert-handling-gesamtprozess.html"><span class="title">🚨 Alert Handling Gesamtprozess</span><span class="desc">Lifecycle von open/escalated bis resolved inkl. Aktionen.</span></a>
-        <a class="doc" href="backfill-prozess.html"><span class="title">♻️ Backfill Prozess</span><span class="desc">Historische Rekonstruktion von Config- und DB-Lifecycle-Daten.</span></a>
-        <a class="doc" href="datenholung-prozess.html"><span class="title">📥 Datenholung Prozess</span><span class="desc">Ingest von Reports sowie Command-Resultaten.</span></a>
-        <a class="doc" href="db-schreiben-prozess.html"><span class="title">🗃️ Schreiben in die Datenbank</span><span class="desc">Persistenzpipeline und Folgeprozesse nach Report-Ingest.</span></a>
+        <a class="doc" href="mailversand-prozess.html"><span class="title">📧 Mailversand Prozess</span><span class="desc">OAuth/Graph, Instant Alerts, Reminder und Digests.</span><span class="doc-meta"><span class="chip">Offline</span><span class="chip">HTML + MD</span></span></a>
+        <a class="doc" href="alert-handling-gesamtprozess.html"><span class="title">🚨 Alert Handling Gesamtprozess</span><span class="desc">Lifecycle von open/escalated bis resolved inkl. Aktionen.</span><span class="doc-meta"><span class="chip">Offline</span><span class="chip">HTML + MD</span></span></a>
+        <a class="doc" href="backfill-prozess.html"><span class="title">♻️ Backfill Prozess</span><span class="desc">Historische Rekonstruktion von Config- und DB-Lifecycle-Daten.</span><span class="doc-meta"><span class="chip">Offline</span><span class="chip">HTML + MD</span></span></a>
+        <a class="doc" href="datenholung-prozess.html"><span class="title">📥 Datenholung Prozess</span><span class="desc">Ingest von Reports sowie Command-Resultaten.</span><span class="doc-meta"><span class="chip">Offline</span><span class="chip">HTML + MD</span></span></a>
+        <a class="doc" href="db-schreiben-prozess.html"><span class="title">🗃️ Schreiben in die Datenbank</span><span class="desc">Persistenzpipeline und Folgeprozesse nach Report-Ingest.</span><span class="doc-meta"><span class="chip">Offline</span><span class="chip">HTML + MD</span></span></a>
       </div>
     </section>
 
     <section class="card">
       <h2>Erweiterte Prozesse (1-8)</h2>
       <div class="grid">
-        <a class="doc" href="remote-command-lifecycle.html"><span class="title">🎛 Remote-Command Lifecycle</span><span class="desc">Queue, Polling, TTL, Expire und Resultat-Rueckmeldung.</span></a>
-        <a class="doc" href="oauth-lifecycle.html"><span class="title">🔐 OAuth Lifecycle</span><span class="desc">Connect, Callback, Token-Refresh und Disconnect.</span></a>
-        <a class="doc" href="alert-routing-matrix.html"><span class="title">📬 Alert Routing Matrix</span><span class="desc">Wer bekommt welchen Alert ueber welchen Kanal.</span></a>
-        <a class="doc" href="datenaufbewahrung-pruning.html"><span class="title">🧹 Datenaufbewahrung und Pruning</span><span class="desc">Retention, Aufraeumlogik und Datenkonsistenz.</span></a>
-        <a class="doc" href="backup-restore-prozess.html"><span class="title">💾 Backup und Restore Prozess</span><span class="desc">Backup-Jobs, Download-Fluss und sicheres Restore.</span></a>
-        <a class="doc" href="agent-self-update-e2e.html"><span class="title">🔄 Agent Self-Update End-to-End</span><span class="desc">Linux/Windows Updatepfad inklusive Bootstrap.</span></a>
-        <a class="doc" href="api-key-grace-mode.html"><span class="title">🛡 API-Key und Grace-Mode</span><span class="desc">Authentisierung und Grace-Verhalten fuer bekannte Hosts.</span></a>
-        <a class="doc" href="visibility-blacklist-auswirkungen.html"><span class="title">👁 Visibility/Blacklist Auswirkungen</span><span class="desc">Filtereffekte auf Alerts, Trends und Uebersichten.</span></a>
+        <a class="doc" href="remote-command-lifecycle.html"><span class="title">🎛 Remote-Command Lifecycle</span><span class="desc">Queue, Polling, TTL, Expire und Resultat-Rueckmeldung.</span><span class="doc-meta"><span class="chip">Offline</span><span class="chip">HTML + MD</span></span></a>
+        <a class="doc" href="oauth-lifecycle.html"><span class="title">🔐 OAuth Lifecycle</span><span class="desc">Connect, Callback, Token-Refresh und Disconnect.</span><span class="doc-meta"><span class="chip">Offline</span><span class="chip">HTML + MD</span></span></a>
+        <a class="doc" href="alert-routing-matrix.html"><span class="title">📬 Alert Routing Matrix</span><span class="desc">Wer bekommt welchen Alert ueber welchen Kanal.</span><span class="doc-meta"><span class="chip">Offline</span><span class="chip">HTML + MD</span></span></a>
+        <a class="doc" href="datenaufbewahrung-pruning.html"><span class="title">🧹 Datenaufbewahrung und Pruning</span><span class="desc">Retention, Aufraeumlogik und Datenkonsistenz.</span><span class="doc-meta"><span class="chip">Offline</span><span class="chip">HTML + MD</span></span></a>
+        <a class="doc" href="backup-restore-prozess.html"><span class="title">💾 Backup und Restore Prozess</span><span class="desc">Backup-Jobs, Download-Fluss und sicheres Restore.</span><span class="doc-meta"><span class="chip">Offline</span><span class="chip">HTML + MD</span></span></a>
+        <a class="doc" href="agent-self-update-e2e.html"><span class="title">🔄 Agent Self-Update End-to-End</span><span class="desc">Linux/Windows Updatepfad inklusive Bootstrap.</span><span class="doc-meta"><span class="chip">Offline</span><span class="chip">HTML + MD</span></span></a>
+        <a class="doc" href="api-key-grace-mode.html"><span class="title">🛡 API-Key und Grace-Mode</span><span class="desc">Authentisierung und Grace-Verhalten fuer bekannte Hosts.</span><span class="doc-meta"><span class="chip">Offline</span><span class="chip">HTML + MD</span></span></a>
+        <a class="doc" href="visibility-blacklist-auswirkungen.html"><span class="title">👁 Visibility/Blacklist Auswirkungen</span><span class="desc">Filtereffekte auf Alerts, Trends und Uebersichten.</span><span class="doc-meta"><span class="chip">Offline</span><span class="chip">HTML + MD</span></span></a>
       </div>
     </section>
   </main>
