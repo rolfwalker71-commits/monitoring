@@ -5681,6 +5681,23 @@ function renderReportCard(report) {
     </div>
   `;
 
+  const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : {};
+  const licenseAvailable = sapLicense.available === true || sapLicense.available === "true";
+  
+  const licenseGroup = licenseAvailable ? `
+    <div class="meta-group">
+      <div class="meta-group-title">SAP Lizenz</div>
+      <div class="meta-group-content">
+        ${renderMetaItem("HW", "Hardware Key", sapLicense.hardware_key)}
+        ${renderMetaItem("Inst", "Installations Nummer", sapLicense.instno)}
+        ${renderMetaItem("Exp", "Gültig bis", sapLicense.expiration ? (() => { const d = sapLicense.expiration; return d.length === 8 && /^\d{8}$/.test(d) ? d.substring(6,8) + "." + d.substring(4,6) + "." + d.substring(0,4) : d; })() : "-")}
+        ${renderMetaItem("SysNr", "System Nummer", sapLicense.system_nr)}
+        ${renderMetaItem("Kunde", "Lizenznehmer", sapLicense.customer_name)}
+        ${renderMetaItem("KdNr", "Kundennummer", sapLicense.customer_no)}
+      </div>
+    </div>
+  ` : "";
+
   const networkGroup = `
     <div class="meta-group">
       <div class="meta-group-title">Netzwerk</div>
@@ -5792,6 +5809,7 @@ function renderReportCard(report) {
         ${systemGroup}
         ${resourcesGroup}
         ${networkGroup}
+        ${licenseGroup}
       </div>` : ""}
       ${detailContent}
     </article>

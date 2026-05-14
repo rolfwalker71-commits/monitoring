@@ -1278,6 +1278,62 @@ function Get-TopProcessEntries {
     return ($entries -join ',')
 }
 
+function Get-SapLicenseInfo {
+    $licenseInfo = @{
+        available = $false
+        hardware_key = ""
+        instno = ""
+        expiration = ""
+        system_nr = ""
+        customer_name = ""
+        customer_no = ""
+    }
+    
+    try {
+        $licensePath = 'C:\ANG\Lizenzen\B01.txt'
+        if (-not (Test-Path $licensePath)) {
+            return $licenseInfo
+        }
+        
+        $content = [System.IO.File]::ReadAllText($licensePath, [System.Text.Encoding]::UTF8)
+        if (-not $content) {
+            return $licenseInfo
+        }
+        
+        # Extract first occurrence only of license block
+        if ($content -match '-----\s*Begin SAP License\s*-----([^-]*?)-----\s*End SAP License\s*-----') {
+            $block = $Matches[1]
+            
+            if ($block -match 'HARDWARE-KEY\s*=\s*([^\r\n]+)') {
+                $licenseInfo.hardware_key = $Matches[1].Trim()
+            }
+            if ($block -match 'INSTNO\s*=\s*([^\r\n]+)') {
+                $licenseInfo.instno = $Matches[1].Trim()
+            }
+            if ($block -match 'EXPIRATION\s*=\s*([^\r\n]+)') {
+                $licenseInfo.expiration = $Matches[1].Trim()
+            }
+            if ($block -match 'SYSTEM-NR\s*=\s*([^\r\n]+)') {
+                $licenseInfo.system_nr = $Matches[1].Trim()
+            }
+            if ($block -match 'CUSTOMER-NAME\s*=\s*([^\r\n]+)') {
+                $licenseInfo.customer_name = $Matches[1].Trim()
+            }
+            if ($block -match 'CUSTOMER-NO\s*=\s*([^\r\n]+)') {
+                $licenseInfo.customer_no = $Matches[1].Trim()
+            }
+            
+            if ($licenseInfo.hardware_key -or $licenseInfo.instno) {
+                $licenseInfo.available = $true
+            }
+        }
+    } catch {
+        # Silently ignore any license read errors
+    }
+    
+    return $licenseInfo
+}
+
 function Get-ContainerEntries {
     $entries = @()
     $available = $false
@@ -1484,6 +1540,7 @@ $agentConfigJson = Get-AgentConfigBlock
 $sapB1Json       = Get-SapB1PayloadBlock
 $sqlServerJson   = Get-SqlServerInfoBlock
 $largeFilesJson  = '{"enabled":false,"status":"unsupported","filesystems":[]}'
+$licenseInfo     = Get-SapLicenseInfo
 
 Invoke-RemoteCommands
 Invoke-PrioritySelfUpdate
@@ -1520,6 +1577,13 @@ $scriptPathEsc   = ConvertTo-JsonString $scriptPath
 $embeddedVerEsc  = ConvertTo-JsonString $EmbeddedAgentVersion
 $fileVerEsc      = ConvertTo-JsonString $versionFileValue
 $versionFilePathEsc = ConvertTo-JsonString $VersionFile
+$licenseAvailableStr = if ($licenseInfo.available) { 'true' } else { 'false' }
+$hardwareKeyEsc = ConvertTo-JsonString $licenseInfo.hardware_key
+$instnoEsc = ConvertTo-JsonString $licenseInfo.instno
+$expirationEsc = ConvertTo-JsonString $licenseInfo.expiration
+$systemNrEsc = ConvertTo-JsonString $licenseInfo.system_nr
+$customerNameEsc = ConvertTo-JsonString $licenseInfo.customer_name
+$customerNoEsc = ConvertTo-JsonString $licenseInfo.customer_no
 
 $payload = @"
 {
@@ -1587,7 +1651,16 @@ $payload = @"
     "agent_config": $agentConfigJson,
     "sap_business_one": $sapB1Json,
     "sql_server_info": $sqlServerJson,
-    "large_files": $largeFilesJson
+    "large_files": $largeFilesJson,
+    "sap_license": {
+        "available": $licenseAvailableStr,
+        "hardware_key": "$hardwareKeyEsc",
+        "instno": "$instnoEsc",
+        "expiration": "$expirationEsc",
+        "system_nr": "$systemNrEsc",
+        "customer_name": "$customerNameEsc",
+        "customer_no": "$customerNoEsc"
+    }
 }
 "@
 
