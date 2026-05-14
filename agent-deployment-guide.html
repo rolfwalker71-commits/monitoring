@@ -7,7 +7,7 @@
   <style>
     :root {
       --bg: #eef4fb;
-      --panel: rgba(255, 255, 255, 0.92);
+      --panel: rgba(255, 255, 255, 0.94);
       --panel-strong: #ffffff;
       --text: #1f2a3a;
       --muted: #5a6c84;
@@ -91,7 +91,7 @@
 
     h2 {
       font-size: 24px;
-      font-weight: 750;
+      font-weight: 760;
     }
 
     h3 {
@@ -117,32 +117,18 @@
       margin-top: 8px;
     }
 
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      width: fit-content;
-      padding: 6px 12px;
-      border-radius: 999px;
-      background: #f4f8fd;
-      border: 1px solid var(--line);
-      color: #334155;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .card {
-      padding: 22px 24px;
-      display: grid;
-      gap: 14px;
+    .grid-3 {
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     }
 
     .two-col {
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     }
 
-    .grid-3 {
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    .card {
+      padding: 22px 24px;
+      display: grid;
+      gap: 14px;
     }
 
     .subcard {
@@ -162,6 +148,20 @@
     .subcard.warn {
       border-color: rgba(182, 106, 0, 0.28);
       background: linear-gradient(180deg, rgba(182, 106, 0, 0.06), rgba(255, 255, 255, 0.96));
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: #eef4ff;
+      color: #1d4ed8;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
 
     .kvs {
@@ -208,6 +208,7 @@
       font-size: 12px;
       line-height: 1.5;
       border: 1px solid rgba(148, 163, 184, 0.22);
+      white-space: pre-wrap;
     }
 
     .callout {
@@ -244,16 +245,16 @@
     }
 
     th,
-            <p>Diese Seite ist in zwei getrennte Welten aufgebaut: zuerst Windows, danach Linux. Beide Bereiche folgen dem gleichen Ablauf: neue Agents deployen, einzelne Skripte beziehen, bestehende Agents updaten, Daten manuell senden, Lizenzpfade, Payload-Quellen und wichtige Defaults.</p>
+    td {
       padding: 11px 12px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid #e8eef5;
+      font-size: 13px;
     }
 
     th {
       background: #f4f8fd;
-              <div class="subcard ok">
-                <h3>Linux</h3>
-                <p>Installiert nach <strong>/opt/monitoring-agent</strong>, Konfiguration unter <strong>/etc/monitoring-agent/agent.conf</strong>, Queue unter <strong>/var/lib/monitoring-agent/queue</strong>.</p>
-              </div>
       color: #334155;
       font-weight: 700;
     }
@@ -262,383 +263,192 @@
       border-bottom: 0;
     }
 
-            <h2>Ablauf pro Welt</h2>
-      display: inline-flex;
-      align-items: center;
-                <span class="tag">1. Deploy</span>
-                <p>Ein neuer Host zieht das Install-Skript und erstellt damit die lokale Installation samt Konfiguration, Logs, Queue und Scheduler/Cron.</p>
-      background: #eef4ff;
-      color: #1d4ed8;
-                <span class="tag">2. Einzelne Skripte</span>
-                <p>Jedes Kernskript kann direkt vom Server-Endpunkt <strong>/updates</strong> geholt werden, zum Beispiel für Reparatur, Debugging oder manuelle Verteilung.</p>
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-                <span class="tag">3. Betrieb</span>
-                <p>Danach folgen Update, manuelles Senden, Lizenz- und Datenquellen. Beide Agents senden an <strong>/api/v1/agent-report</strong> und verwenden lokale Queue-Dateien bei Fehlern.</p>
-    .muted {
-      color: var(--muted);
-    }
-
     .footer-note {
-            <h2>1. Windows</h2>
+      font-size: 12px;
       color: var(--muted);
     }
 
-                <pre>$tmp = "$env:TEMP\install_agent.ps1"
-      (New-Object System.Net.WebClient).DownloadFile(
-        'https://monitoring.example.com/updates/client/windows/install_agent.ps1',
-        $tmp
-      )
+    @media (max-width: 720px) {
+      .page {
+        width: min(100% - 18px, 1180px);
+        margin-top: 12px;
+      }
 
-      powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmp `
-        -ServerUrl 'https://monitoring.example.com' `
-        -ApiKey 'MEIN_KEY' `
-        -AgentId 'HOST01' `
-        -DisplayName 'Produktiv Host' `
-        -IntervalMinutes 15 `
-        -UpdateHours 6</pre>
+      .hero,
+      .card {
         padding: 18px;
-                  <div class="kv"><div class="kv-label">Installationspfad</div><div class="kv-value">C:\ProgramData\monitoring-agent</div></div>
-                  <div class="kv"><div class="kv-label">Config</div><div class="kv-value">C:\ProgramData\monitoring-agent\agent.conf</div></div>
-                  <div class="kv"><div class="kv-label">Queue</div><div class="kv-value">C:\ProgramData\monitoring-agent\queue</div></div>
-                  <div class="kv"><div class="kv-label">Tasks</div><div class="kv-value">monitoring-agent-collect, monitoring-agent-update</div></div>
+        border-radius: 18px;
+      }
+    }
+  </style>
 </head>
 <body>
   <main class="page">
     <section class="hero">
       <div class="eyebrow">Monitoring Agent Guide</div>
       <h1>Deployment, Update und Payload-Referenz</h1>
-      <p>Diese Seite fasst zusammen, wie neue Agents installiert werden, wie bestehende Agents aktualisiert werden, wie die Datenübermittlung funktioniert, welche Parameter es gibt und welche Lizenz- bzw. HANA/SAP-Quellen die Linux- und Windows-Agents tatsächlich verwenden.</p>
+      <p>Diese Seite ist in zwei getrennte Welten aufgebaut: zuerst Windows, danach Linux. Beide Bereiche folgen dem gleichen Ablauf: neue Agents deployen, einzelne Skripte beziehen, bestehende Agents updaten, Daten manuell senden, Lizenzpfade, Payload-Quellen und wichtige Defaults.</p>
       <div class="hero-grid">
         <div class="subcard ok">
-                    <tr><td><code>-ServerUrl</code></td><td>Pflichtparameter. Basis-URL des Monitoring-Servers.</td></tr>
-                    <tr><td><code>-ApiKey</code></td><td>Optionaler API-Key.</td></tr>
-                    <tr><td><code>-AgentId</code></td><td>Explizite Agent-ID.</td></tr>
-                    <tr><td><code>-DisplayName</code></td><td>Anzeigename in der UI.</td></tr>
-                    <tr><td><code>-IntervalMinutes</code></td><td>Collect-Intervall, 1 bis 59.</td></tr>
-                    <tr><td><code>-UpdateHours</code></td><td>Update-Intervall, 1 bis 24.</td></tr>
-                    <tr><td><code>-RawBaseUrl</code></td><td>Explizite Update-Basis, sonst <code>ServerUrl/updates</code>.</td></tr>
+          <h3>1. Windows</h3>
+          <p>Installiert nach <strong>C:\ProgramData\monitoring-agent</strong>, mit Scheduled Tasks für Collect und Update sowie lokaler Queue im selben Basisverzeichnis.</p>
+        </div>
+        <div class="subcard ok">
+          <h3>2. Linux</h3>
+          <p>Installiert nach <strong>/opt/monitoring-agent</strong>, Konfiguration unter <strong>/etc/monitoring-agent/agent.conf</strong> und Queue unter <strong>/var/lib/monitoring-agent/queue</strong>.</p>
+        </div>
+        <div class="subcard warn">
+          <h3>Wichtiger Unterschied</h3>
           <p><strong>HANA-Abfragen existieren aktuell nur im Linux-Agent.</strong> Der Windows-Agent liest SAP-B1-/SQL-Server-Daten, aber keine HANA/hdbsql-Queries.</p>
         </div>
       </div>
     </section>
 
     <section class="card">
-      <h2>Schnellübersicht</h2>
-                <h3>Einzelne Skripte direkt holen</h3>
-                <pre># Kernskripte direkt vom Server holen
-      $base = 'https://monitoring.example.com/updates/client/windows'
-      $target = 'C:\ProgramData\monitoring-agent'
-
-      (New-Object System.Net.WebClient).DownloadFile("$base/collect_and_send.ps1", "$target\collect_and_send.ps1")
-      (New-Object System.Net.WebClient).DownloadFile("$base/self_update.ps1", "$target\self_update.ps1")
-      (New-Object System.Net.WebClient).DownloadFile("$base/bootstrap_agent.ps1", "$env:TEMP\bootstrap_agent.ps1")
-      (New-Object System.Net.WebClient).DownloadFile("$base/install_agent.ps1", "$env:TEMP\install_agent.ps1")
-      (New-Object System.Net.WebClient).DownloadFile("$base/setup_harvest_sql_user.ps1", "$target\setup_harvest_sql_user.ps1")
-      (New-Object System.Net.WebClient).DownloadFile("$base/collect_and_scan_sap_tables.ps1", "$target\collect_and_scan_sap_tables.ps1")
-      (New-Object System.Net.WebClient).DownloadFile("$base/bulk_update_agents.ps1", "$env:TEMP\bulk_update_agents.ps1")</pre>
-                <table>
-                  <thead>
-                    <tr><th>Skript</th><th>Typischer Zweck</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr><td><code>install_agent.ps1</code></td><td>Neuinstallation eines Windows-Agents.</td></tr>
-                    <tr><td><code>bootstrap_agent.ps1</code></td><td>Bestehende Installation reparieren oder frisch bootstrapen.</td></tr>
-                    <tr><td><code>collect_and_send.ps1</code></td><td>Metriken sammeln und Payload an den Server senden.</td></tr>
-                    <tr><td><code>self_update.ps1</code></td><td>In-Place-Update der Agent-Dateien.</td></tr>
-                    <tr><td><code>setup_harvest_sql_user.ps1</code></td><td>Harvest-SQL-User für SAP/SQL-Scan vorbereiten.</td></tr>
-                    <tr><td><code>collect_and_scan_sap_tables.ps1</code></td><td>Separater SAP-Tabellen-Scan.</td></tr>
-                    <tr><td><code>bulk_update_agents.ps1</code></td><td>Mehrere Windows-Agents aktualisieren.</td></tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="subcard">
+      <h2>Ablauf pro Welt</h2>
       <div class="grid-3">
-                <pre># Bestehende Installation reparieren / Kernskripte neu ziehen
-      powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\bootstrap_agent.ps1 `
-        -ServerUrl https://monitoring.example.com `
-        -DisableJitter
-
-      # Direktes In-Place-Update über self_update
-      powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
-        C:\ProgramData\monitoring-agent\self_update.ps1</pre>
         <div class="subcard">
-                  <li><strong>bootstrap_agent.ps1</strong> erkennt, ob bereits eine Installation existiert, und aktualisiert dann Skripte in place.</li>
-                  <li>Wenn keine gültige Installation gefunden wird, zieht <strong>bootstrap_agent.ps1</strong> das aktuelle <code>install_agent.ps1</code> vom Server und installiert neu.</li>
+          <span class="tag">1. Deploy</span>
+          <p>Ein neuer Host zieht das Install-Skript und erstellt damit die lokale Installation samt Konfiguration, Logs, Queue und Scheduler/Cron.</p>
+        </div>
+        <div class="subcard">
+          <span class="tag">2. Einzelne Skripte</span>
+          <p>Jedes Kernskript kann direkt vom Server-Endpunkt <strong>/updates</strong> geholt werden, zum Beispiel für Reparatur, Debugging oder manuelle Verteilung.</p>
+        </div>
+        <div class="subcard">
+          <span class="tag">3. Betrieb</span>
+          <p>Danach folgen Update, manuelles Senden, Lizenz- und Datenquellen. Beide Agents senden an <strong>/api/v1/agent-report</strong> und verwenden lokale Queue-Dateien bei Fehlern.</p>
         </div>
       </div>
-            </div>
-
-            <div class="two-col">
     </section>
 
-                <pre># Normaler manueller Lauf ohne Jitter
-      powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
-        C:\ProgramData\monitoring-agent\collect_and_send.ps1 -NoJitter
+    <section class="card">
+      <h2>1. Windows</h2>
 
-      # Jitter für diesen Lauf überschreiben
-      powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
-        C:\ProgramData\monitoring-agent\collect_and_send.ps1 -JitterMaxSec 30
+      <div class="two-col">
+        <div class="subcard">
+          <h3>Neu deployen</h3>
+          <pre>$tmp = "$env:TEMP\install_agent.ps1"
+(New-Object System.Net.WebClient).DownloadFile(
+  'https://monitoring.example.com/updates/client/windows/install_agent.ps1',
+  $tmp
+)
 
-      # Payload nur anzeigen, nicht senden
-      powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
-        C:\ProgramData\monitoring-agent\collect_and_send.ps1 -DebugPayload</pre>
-    --api-key MEIN_KEY \
-    --agent-id host.example.local \
-    --display-name "Produktiv Host" \
-    --interval-minutes 15 \
-    --update-hours 6</pre>
-                    <tr><td><code>-NoJitter</code></td><td>Überspringt den Start-Delay.</td></tr>
-                    <tr><td><code>-JitterMaxSec</code></td><td>Setzt einen maximalen Jitter für diesen Lauf.</td></tr>
-                    <tr><td><code>-DebugPayload</code></td><td>Gibt den JSON-Payload auf stdout aus statt ihn zu senden.</td></tr>
-            <div class="kv"><div class="kv-label">Config</div><div class="kv-value">/etc/monitoring-agent/agent.conf</div></div>
-            <div class="kv"><div class="kv-label">Queue</div><div class="kv-value">/var/lib/monitoring-agent/queue</div></div>
-                <div class="callout"><strong>Queue:</strong> Fehlgeschlagene Reports landen in <code>C:\ProgramData\monitoring-agent\queue</code> und werden später erneut gesendet.</div>
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmp `
+  -ServerUrl 'https://monitoring.example.com' `
+  -ApiKey 'MEIN_KEY' `
+  -AgentId 'HOST01' `
+  -DisplayName 'Produktiv Host' `
+  -IntervalMinutes 15 `
+  -UpdateHours 6</pre>
+          <div class="kvs">
+            <div class="kv"><div class="kv-label">Installationspfad</div><div class="kv-value">C:\ProgramData\monitoring-agent</div></div>
+            <div class="kv"><div class="kv-label">Config</div><div class="kv-value">C:\ProgramData\monitoring-agent\agent.conf</div></div>
+            <div class="kv"><div class="kv-label">Queue</div><div class="kv-value">C:\ProgramData\monitoring-agent\queue</div></div>
+            <div class="kv"><div class="kv-label">Tasks</div><div class="kv-value">monitoring-agent-collect, monitoring-agent-update</div></div>
           </div>
-            </thead>
-                <h3>Lizenzfile-Pfade</h3>
-                <ul>
-                  <li><code>C:\ANG\Lizenzen\B01.txt</code></li>
-                  <li><code>C:\ANG\Lizenz\B01.txt</code></li>
-                  <li><code>C:\ANG\B01.txt</code></li>
-                </ul>
-                <p>Der Windows-Agent nimmt den ersten vorhandenen Pfad und extrahiert daraus <strong>HARDWARE-KEY</strong>, <strong>INSTNO</strong>, <strong>EXPIRATION</strong>, <strong>SYSTEM-NR</strong>, <strong>CUSTOMER-NAME</strong> und <strong>CUSTOMER-NO</strong>.</p>
-              </div>
-            </div>
-
-            <div class="two-col">
-              <div class="subcard">
-                <h3>Payload-Quellen</h3>
-                <p>Der Windows-Agent füllt den SAP-B1-Teil aktuell über SQL Server und lokale SAP-Dateien, <strong>nicht</strong> über HANA / <code>hdbsql</code>.</p>
-                <pre># SAP B1 Version aus XML
-      C:\Program Files\SAP\SAP Business One DI API\Conf\InstallationConfigMSSQL.xml
-
-      # Extensions
-      SELECT AddOnName, Version
-      FROM [SLDModel.SLDData].[dbo].[Extensions]
-      ORDER BY AddOnName;
-
-      # SARI AddOns
-      SELECT AName, AddOnVer
-      FROM [SBO-COMMON].[dbo].[SARI]
-      ORDER BY AName;
-
-      # Fallback-Datenbankname
-      [SBOCOMMON].[dbo].[SARI]</pre>
         </div>
         <div class="subcard">
-              <div class="subcard">
-                <h3>Nützliche Defaults aus der Config</h3>
-                <pre>SERVER_URL="https://monitoring.example.com"
-      API_KEY="..."
-      INSTALL_DIR="C:\ProgramData\monitoring-agent"
-      UPDATE_HOURS="6"
-      PRIORITY_UPDATE_CHECK_MINUTES="60"
-      SEND_JITTER_MAX_SEC="300"
-      HARVEST_SQL_SERVER="localhost"
-      HARVEST_SQL_USER="harvest"
-      HARVEST_SQL_PASSWORD="..."
-      ENABLE_SAP_SCAN="1"</pre>
-              </div>
           <h3>Install-Parameter</h3>
           <table>
             <thead>
               <tr><th>Parameter</th><th>Bedeutung</th></tr>
-            <h2>2. Linux</h2>
+            </thead>
             <tbody>
               <tr><td><code>-ServerUrl</code></td><td>Pflichtparameter. Basis-URL des Monitoring-Servers.</td></tr>
+              <tr><td><code>-ApiKey</code></td><td>Optionaler API-Key.</td></tr>
+              <tr><td><code>-AgentId</code></td><td>Explizite Agent-ID.</td></tr>
+              <tr><td><code>-DisplayName</code></td><td>Anzeigename in der UI.</td></tr>
+              <tr><td><code>-IntervalMinutes</code></td><td>Collect-Intervall, 1 bis 59.</td></tr>
+              <tr><td><code>-UpdateHours</code></td><td>Update-Intervall, 1 bis 24.</td></tr>
+              <tr><td><code>-RawBaseUrl</code></td><td>Explizite Update-Basis, sonst <code>ServerUrl/updates</code>.</td></tr>
+            </tbody>
+          </table>
         </div>
-                <h3>Neu deployen</h3>
-                <pre>curl -fsSL https://monitoring.example.com/updates/client/linux/install_agent.sh \
-        | sudo bash -s -- \
-          --server-url https://monitoring.example.com \
-          --api-key MEIN_KEY \
-          --agent-id host.example.local \
-          --display-name "Produktiv Host" \
-          --interval-minutes 15 \
-          --update-hours 6</pre>
-                <div class="kvs">
-                  <div class="kv"><div class="kv-label">Installationspfad</div><div class="kv-value">/opt/monitoring-agent</div></div>
-                  <div class="kv"><div class="kv-label">Config</div><div class="kv-value">/etc/monitoring-agent/agent.conf</div></div>
-                  <div class="kv"><div class="kv-label">Queue</div><div class="kv-value">/var/lib/monitoring-agent/queue</div></div>
-                  <div class="kv"><div class="kv-label">Logs</div><div class="kv-value">/var/log/monitoring-agent.log, /var/log/monitoring-agent-update.log</div></div>
-                </div>
-            <li><code>C:\ANG\Lizenz\B01.txt</code></li>
+      </div>
 
-                <h3>Install-Parameter</h3>
-                <table>
-                  <thead>
-                    <tr><th>Parameter</th><th>Bedeutung</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr><td><code>--server-url</code></td><td>Pflichtparameter. Basis-URL des Monitoring-Servers.</td></tr>
-                    <tr><td><code>--api-key</code></td><td>Optionaler API-Key für die REST-Calls.</td></tr>
-                    <tr><td><code>--agent-id</code></td><td>Explizite Agent-ID, sonst Hostname/FQDN.</td></tr>
-                    <tr><td><code>--display-name</code></td><td>Anzeigename in der UI.</td></tr>
-                    <tr><td><code>--interval-minutes</code></td><td>Collect-Intervall, erlaubt 1 bis 59.</td></tr>
-                    <tr><td><code>--update-hours</code></td><td>Update-Intervall, erlaubt 1 bis 24.</td></tr>
-                    <tr><td><code>--collect-script-url</code></td><td>Überschreibt die URL für collect_and_send.sh.</td></tr>
-                    <tr><td><code>--raw-base-url</code></td><td>Explizite Update-Basis, sonst <code>SERVER_URL/updates</code>.</td></tr>
-                    <tr><td><code>--insecure-tls</code></td><td>Aktiviert <code>curl --insecure</code>; nur für kaputte CA-Ketten.</td></tr>
-                  </tbody>
-                </table>
-ORDER BY MEMORY_GB DESC;</pre>
-          <ul>
+      <div class="two-col">
+        <div class="subcard">
+          <h3>Einzelne Skripte direkt holen</h3>
+          <pre>$base = 'https://monitoring.example.com/updates/client/windows'
+$target = 'C:\ProgramData\monitoring-agent'
 
-            <div class="two-col">
-              <div class="subcard">
-                <h3>Einzelne Skripte direkt holen</h3>
-                <pre># Kernskripte direkt vom Server holen
-      base="https://monitoring.example.com/updates/client/linux"
-
-      curl -fsSL "$base/install_agent.sh" -o /tmp/install_agent.sh
-      curl -fsSL "$base/collect_and_send.sh" -o /tmp/collect_and_send.sh
-      curl -fsSL "$base/self_update.sh" -o /tmp/self_update.sh
-      curl -fsSL "$base/repair_agent_conf.sh" -o /tmp/repair_agent_conf.sh
-
-      chmod +x /tmp/install_agent.sh /tmp/collect_and_send.sh /tmp/self_update.sh /tmp/repair_agent_conf.sh</pre>
-                <table>
-                  <thead>
-                    <tr><th>Skript</th><th>Typischer Zweck</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr><td><code>install_agent.sh</code></td><td>Neuinstallation eines Linux-Agents.</td></tr>
-                    <tr><td><code>collect_and_send.sh</code></td><td>Metriken sammeln und Payload an den Server senden.</td></tr>
-                    <tr><td><code>self_update.sh</code></td><td>In-Place-Update der Agent-Dateien.</td></tr>
-                    <tr><td><code>repair_agent_conf.sh</code></td><td>Fehlende Config-Werte und HANA-Defaults nachziehen.</td></tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="subcard">
-                <h3>Bestehende Agents updaten</h3>
-                <pre># Reguläres In-Place-Update
-      sudo CONFIG_FILE=/etc/monitoring-agent/agent.conf \
-        AGENT_VERSION_FILE=/opt/monitoring-agent/AGENT_VERSION \
-        /opt/monitoring-agent/self_update.sh
-
-      # Config reparieren / Defaults nachziehen
-      sudo SERVER_URL=https://monitoring.example.com \
-        /opt/monitoring-agent/repair_agent_conf.sh</pre>
-                <ul>
-                  <li><strong>self_update.sh</strong> lädt <code>collect_and_send.sh</code>, <code>self_update.sh</code> und <code>AGENT_VERSION</code> erneut vom Server.</li>
-                  <li><strong>repair_agent_conf.sh</strong> setzt fehlende Standardwerte wie <code>HANA_SID</code>, <code>HANA_ADDONS_USER</code> und Ports nach.</li>
-                </ul>
-              </div>
-            </div>
-
-            <div class="two-col">
-              <div class="subcard">
-                <h3>Daten manuell übermitteln</h3>
-                <pre># Normaler manueller Lauf ohne Jitter
-      sudo /opt/monitoring-agent/collect_and_send.sh --no-jitter
-
-      # Mit explizitem Maximal-Jitter nur für diesen Lauf
-      sudo /opt/monitoring-agent/collect_and_send.sh --jitter-max-sec 30
-
-      # Hilfe anzeigen
-      sudo /opt/monitoring-agent/collect_and_send.sh --help</pre>
-                <table>
-                  <thead>
-                    <tr><th>Parameter</th><th>Bedeutung</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr><td><code>--no-jitter</code></td><td>Überspringt den deterministischen Start-Delay.</td></tr>
-                    <tr><td><code>--jitter-max-sec N</code></td><td>Setzt den maximalen Jitter für genau diesen Lauf.</td></tr>
-                  </tbody>
-                </table>
-                <div class="callout"><strong>Hinweis:</strong> Linux hat aktuell keinen eingebauten <code>--print-payload</code>-Parameter. Bei Sendeproblemen landet der JSON-Report in der Queue unter <code>/var/lib/monitoring-agent/queue</code>.</div>
-              </div>
-              <div class="subcard">
-                <h3>Lizenzfile-Pfade</h3>
-                <ul>
-                  <li><code>/usr/sap/SAPBusinessOne/B1_SHF/Lizenzen/B01.txt</code></li>
-                  <li><code>/usr/sap/SAPBusinessOne/B1_SHF/Lizenz/B01.txt</code></li>
-                </ul>
-                <p>Der Linux-Agent nimmt den ersten vorhandenen Pfad und extrahiert daraus Felder wie <strong>HARDWARE-KEY</strong>, <strong>INSTNO</strong>, <strong>EXPIRATION</strong>, <strong>SYSTEM-NR</strong>, <strong>CUSTOMER-NAME</strong> und <strong>CUSTOMER-NO</strong>.</p>
-              </div>
-            </div>
-
-            <div class="two-col">
-              <div class="subcard">
-                <h3>Payload-Quellen</h3>
-                <div class="callout"><strong>Version / Branch:</strong> Der Linux-Agent ruft <code>HDB version</code> auf, bevorzugt als <code>&lt;sid&gt;adm</code>. Die SID wird bei Bedarf aus <code>/hana/shared/&lt;SID&gt;</code> auto-detektiert.</div>
-                <pre># HANA-Version
-      HDB version
-
-      # HANA AddOns (Lightweight)
-      SELECT "NAME", "Version" FROM "SLDDATA"."EXTENSIONS";
-
-      # HANA AddOns (Legacy)
-      SELECT "AName", "AddOnVer" FROM "SBOCOMMON"."SARI";
-
-      # HANA DB Memory pro Schema
-      SELECT SCHEMA_NAME,
-             ROUND(SUM(MEMORY_SIZE_IN_TOTAL) / 1024 / 1024 / 1024, 2) AS MEMORY_GB
-      FROM M_CS_TABLES
-      WHERE UPPER(SCHEMA_NAME) NOT LIKE 'SAP%'
-        AND UPPER(SCHEMA_NAME) NOT IN ('SLDDATA','SBOCOMMON','LANDSCAPE')
-        AND SCHEMA_NAME NOT LIKE '\_%' ESCAPE '\'
-      GROUP BY SCHEMA_NAME
-      HAVING SUM(MEMORY_SIZE_IN_TOTAL) &gt; 0
-      ORDER BY MEMORY_GB DESC;</pre>
-                <ul>
-                  <li>Transport über <strong>hdbsql</strong> als <code>&lt;sid&gt;adm</code>.</li>
-                  <li>Default-Credentials: <code>HARVEST</code> / konfigurierbares Passwort in <code>agent.conf</code>.</li>
-                  <li>Default-Host/Port: <code>127.0.0.1:30015</code>, mit automatischer 3xx15-Port-Erkennung und lokalen Probe-Fallbacks.</li>
-                </ul>
-              </div>
-              <div class="subcard">
-                <h3>Nützliche Defaults aus der Config</h3>
-                <pre>SERVER_URL="https://monitoring.example.com"
-      API_KEY="..."
-      HANA_SID="BUP"
-      HANA_ADDONS_ENABLED="1"
-      HANA_ADDONS_USER="HARVEST"
-      HANA_ADDONS_PASSWORD="..."
-      HANA_ADDONS_HOST="127.0.0.1"
-      HANA_ADDONS_PORT="30015"
-      UPDATE_HOURS="6"
-      PRIORITY_UPDATE_CHECK_MINUTES="60"</pre>
-              </div>
-            </div>
-          </section>
-
-          <section class="card">
-            <h2>Gemeinsame Datenübermittlung</h2>
-            <div class="two-col">
-              <div class="subcard">
-                <h3>Ziel-Endpoints</h3>
-                <div class="kvs">
-                  <div class="kv"><div class="kv-label">Report Upload</div><div class="kv-value">POST /api/v1/agent-report</div></div>
-                  <div class="kv"><div class="kv-label">Command Polling</div><div class="kv-value">GET /api/v1/agent-commands</div></div>
-                  <div class="kv"><div class="kv-label">Command Result</div><div class="kv-value">POST /api/v1/agent-command-result</div></div>
-                </div>
-                <ul>
-                  <li>Falls konfiguriert, wird der API-Key als Header <strong>X-Api-Key</strong> mitgesendet.</li>
-                  <li>Wenn das Senden fehlschlägt, wird der Payload lokal als JSON gepuffert und beim nächsten Lauf erneut versucht.</li>
-                </ul>
-              </div>
-              <div class="subcard">
-                <h3>Queue-Verhalten</h3>
-                <table>
-                  <thead>
-                    <tr><th>OS</th><th>Queue-Pfad</th><th>Verhalten</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr><td>Windows</td><td><code>C:\ProgramData\monitoring-agent\queue</code></td><td>Fehlgeschlagene Reports werden als <code>*.json</code> gespeichert und vor dem neuen Sendelauf geflusht.</td></tr>
-                    <tr><td>Linux</td><td><code>/var/lib/monitoring-agent/queue</code></td><td>Fehlgeschlagene Reports werden als <code>*.json</code> gespeichert und später nachgesendet.</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <p class="footer-note">Diese HTML-Doku basiert direkt auf den aktuellen Skripten in <code>client/linux</code> und <code>client/windows</code>.</p>
-            <li>Default-Credentials: <code>HARVEST</code> / konfigurierbares Passwort in <code>agent.conf</code>.</li>
-            <li>Default-Host/Port: <code>127.0.0.1:30015</code>, mit automatischer 3xx15-Port-Erkennung und lokalen Probe-Fallbacks.</li>
-          </ul>
+(New-Object System.Net.WebClient).DownloadFile("$base/collect_and_send.ps1", "$target\collect_and_send.ps1")
+(New-Object System.Net.WebClient).DownloadFile("$base/self_update.ps1", "$target\self_update.ps1")
+(New-Object System.Net.WebClient).DownloadFile("$base/bootstrap_agent.ps1", "$env:TEMP\bootstrap_agent.ps1")
+(New-Object System.Net.WebClient).DownloadFile("$base/install_agent.ps1", "$env:TEMP\install_agent.ps1")
+(New-Object System.Net.WebClient).DownloadFile("$base/setup_harvest_sql_user.ps1", "$target\setup_harvest_sql_user.ps1")
+(New-Object System.Net.WebClient).DownloadFile("$base/collect_and_scan_sap_tables.ps1", "$target\collect_and_scan_sap_tables.ps1")
+(New-Object System.Net.WebClient).DownloadFile("$base/bulk_update_agents.ps1", "$env:TEMP\bulk_update_agents.ps1")</pre>
+          <table>
+            <thead>
+              <tr><th>Skript</th><th>Typischer Zweck</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>install_agent.ps1</code></td><td>Neuinstallation eines Windows-Agents.</td></tr>
+              <tr><td><code>bootstrap_agent.ps1</code></td><td>Bestehende Installation reparieren oder frisch bootstrapen.</td></tr>
+              <tr><td><code>collect_and_send.ps1</code></td><td>Metriken sammeln und Payload an den Server senden.</td></tr>
+              <tr><td><code>self_update.ps1</code></td><td>In-Place-Update der Agent-Dateien.</td></tr>
+              <tr><td><code>setup_harvest_sql_user.ps1</code></td><td>Harvest-SQL-User für SAP/SQL-Scan vorbereiten.</td></tr>
+              <tr><td><code>collect_and_scan_sap_tables.ps1</code></td><td>Separater SAP-Tabellen-Scan.</td></tr>
+              <tr><td><code>bulk_update_agents.ps1</code></td><td>Mehrere Windows-Agents aktualisieren.</td></tr>
+            </tbody>
+          </table>
         </div>
         <div class="subcard">
-          <h3>Windows: keine HANA-Abfragen im Agent</h3>
-          <p>Der Windows-Agent füllt den SAP-B1-Teil aktuell über SQL Server und lokale SAP-Dateien, <strong>nicht</strong> über HANA / <code>hdbsql</code>.</p>
+          <h3>Bestehende Agents updaten</h3>
+          <pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\bootstrap_agent.ps1 `
+  -ServerUrl https://monitoring.example.com `
+  -DisableJitter
+
+# Direktes In-Place-Update über self_update
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+  C:\ProgramData\monitoring-agent\self_update.ps1</pre>
+          <ul>
+            <li><strong>bootstrap_agent.ps1</strong> erkennt, ob bereits eine Installation existiert, und aktualisiert dann Skripte in place.</li>
+            <li>Wenn keine gültige Installation gefunden wird, zieht <strong>bootstrap_agent.ps1</strong> das aktuelle <code>install_agent.ps1</code> vom Server und installiert neu.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="subcard">
+          <h3>Daten manuell übermitteln</h3>
+          <pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+  C:\ProgramData\monitoring-agent\collect_and_send.ps1 -NoJitter
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+  C:\ProgramData\monitoring-agent\collect_and_send.ps1 -JitterMaxSec 30
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+  C:\ProgramData\monitoring-agent\collect_and_send.ps1 -DebugPayload</pre>
+          <table>
+            <thead>
+              <tr><th>Parameter</th><th>Bedeutung</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>-NoJitter</code></td><td>Überspringt den Start-Delay.</td></tr>
+              <tr><td><code>-JitterMaxSec</code></td><td>Setzt einen maximalen Jitter für diesen Lauf.</td></tr>
+              <tr><td><code>-DebugPayload</code></td><td>Gibt den JSON-Payload auf stdout aus statt ihn zu senden.</td></tr>
+            </tbody>
+          </table>
+          <div class="callout"><strong>Queue:</strong> Fehlgeschlagene Reports landen in <code>C:\ProgramData\monitoring-agent\queue</code> und werden später erneut gesendet.</div>
+        </div>
+        <div class="subcard">
+          <h3>Lizenzfile-Pfade</h3>
+          <ul>
+            <li><code>C:\ANG\Lizenzen\B01.txt</code></li>
+            <li><code>C:\ANG\Lizenz\B01.txt</code></li>
+            <li><code>C:\ANG\B01.txt</code></li>
+          </ul>
+          <p>Der Windows-Agent nimmt den ersten vorhandenen Pfad und extrahiert daraus <strong>HARDWARE-KEY</strong>, <strong>INSTNO</strong>, <strong>EXPIRATION</strong>, <strong>SYSTEM-NR</strong>, <strong>CUSTOMER-NAME</strong> und <strong>CUSTOMER-NO</strong>.</p>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="subcard">
+          <h3>Payload-Quellen</h3>
+          <p>Der Windows-Agent füllt den SAP-B1-Teil aktuell über SQL Server und lokale SAP-Dateien, <strong>nicht</strong> über HANA / <code>hdbsql</code>.</p>
           <pre># SAP B1 Version aus XML
 C:\Program Files\SAP\SAP Business One DI API\Conf\InstallationConfigMSSQL.xml
 
@@ -654,16 +464,164 @@ ORDER BY AName;
 
 # Fallback-Datenbankname
 [SBOCOMMON].[dbo].[SARI]</pre>
-          <div class="callout"><strong>Praktisch:</strong> Wenn du für Windows HANA dokumentieren willst, muss das erst implementiert werden. Die bestehenden Windows-Skripte greifen aktuell nur auf SQL-Server-/SAP-B1-Quellen zu.</div>
+          <div class="callout"><strong>Praktisch:</strong> Wenn du für Windows HANA dokumentieren willst, muss das erst implementiert werden. Die bestehenden Windows-Skripte greifen aktuell nur auf SQL-Server-/SAP-B1-Quellen zu.</div>
+        </div>
+        <div class="subcard">
+          <h3>Nützliche Defaults aus der Config</h3>
+          <pre>SERVER_URL="https://monitoring.example.com"
+API_KEY="..."
+INSTALL_DIR="C:\ProgramData\monitoring-agent"
+UPDATE_HOURS="6"
+PRIORITY_UPDATE_CHECK_MINUTES="60"
+SEND_JITTER_MAX_SEC="300"
+HARVEST_SQL_SERVER="localhost"
+HARVEST_SQL_USER="harvest"
+HARVEST_SQL_PASSWORD="..."
+ENABLE_SAP_SCAN="1"</pre>
         </div>
       </div>
     </section>
 
     <section class="card">
-      <h2>Nützliche Defaults aus der Config</h2>
+      <h2>2. Linux</h2>
+
       <div class="two-col">
         <div class="subcard">
-          <h3>Linux</h3>
+          <h3>Neu deployen</h3>
+          <pre>curl -fsSL https://monitoring.example.com/updates/client/linux/install_agent.sh \
+  | sudo bash -s -- \
+    --server-url https://monitoring.example.com \
+    --api-key MEIN_KEY \
+    --agent-id host.example.local \
+    --display-name "Produktiv Host" \
+    --interval-minutes 15 \
+    --update-hours 6</pre>
+          <div class="kvs">
+            <div class="kv"><div class="kv-label">Installationspfad</div><div class="kv-value">/opt/monitoring-agent</div></div>
+            <div class="kv"><div class="kv-label">Config</div><div class="kv-value">/etc/monitoring-agent/agent.conf</div></div>
+            <div class="kv"><div class="kv-label">Queue</div><div class="kv-value">/var/lib/monitoring-agent/queue</div></div>
+            <div class="kv"><div class="kv-label">Logs</div><div class="kv-value">/var/log/monitoring-agent.log, /var/log/monitoring-agent-update.log</div></div>
+          </div>
+        </div>
+        <div class="subcard">
+          <h3>Install-Parameter</h3>
+          <table>
+            <thead>
+              <tr><th>Parameter</th><th>Bedeutung</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>--server-url</code></td><td>Pflichtparameter. Basis-URL des Monitoring-Servers.</td></tr>
+              <tr><td><code>--api-key</code></td><td>Optionaler API-Key für die REST-Calls.</td></tr>
+              <tr><td><code>--agent-id</code></td><td>Explizite Agent-ID, sonst Hostname/FQDN.</td></tr>
+              <tr><td><code>--display-name</code></td><td>Anzeigename in der UI.</td></tr>
+              <tr><td><code>--interval-minutes</code></td><td>Collect-Intervall, erlaubt 1 bis 59.</td></tr>
+              <tr><td><code>--update-hours</code></td><td>Update-Intervall, erlaubt 1 bis 24.</td></tr>
+              <tr><td><code>--collect-script-url</code></td><td>Überschreibt die URL für collect_and_send.sh.</td></tr>
+              <tr><td><code>--raw-base-url</code></td><td>Explizite Update-Basis, sonst <code>SERVER_URL/updates</code>.</td></tr>
+              <tr><td><code>--insecure-tls</code></td><td>Aktiviert <code>curl --insecure</code>; nur für kaputte CA-Ketten.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="subcard">
+          <h3>Einzelne Skripte direkt holen</h3>
+          <pre>base="https://monitoring.example.com/updates/client/linux"
+
+curl -fsSL "$base/install_agent.sh" -o /tmp/install_agent.sh
+curl -fsSL "$base/collect_and_send.sh" -o /tmp/collect_and_send.sh
+curl -fsSL "$base/self_update.sh" -o /tmp/self_update.sh
+curl -fsSL "$base/repair_agent_conf.sh" -o /tmp/repair_agent_conf.sh
+
+chmod +x /tmp/install_agent.sh /tmp/collect_and_send.sh /tmp/self_update.sh /tmp/repair_agent_conf.sh</pre>
+          <table>
+            <thead>
+              <tr><th>Skript</th><th>Typischer Zweck</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>install_agent.sh</code></td><td>Neuinstallation eines Linux-Agents.</td></tr>
+              <tr><td><code>collect_and_send.sh</code></td><td>Metriken sammeln und Payload an den Server senden.</td></tr>
+              <tr><td><code>self_update.sh</code></td><td>In-Place-Update der Agent-Dateien.</td></tr>
+              <tr><td><code>repair_agent_conf.sh</code></td><td>Fehlende Config-Werte und HANA-Defaults nachziehen.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="subcard">
+          <h3>Bestehende Agents updaten</h3>
+          <pre>sudo CONFIG_FILE=/etc/monitoring-agent/agent.conf \
+  AGENT_VERSION_FILE=/opt/monitoring-agent/AGENT_VERSION \
+  /opt/monitoring-agent/self_update.sh
+
+sudo SERVER_URL=https://monitoring.example.com \
+  /opt/monitoring-agent/repair_agent_conf.sh</pre>
+          <ul>
+            <li><strong>self_update.sh</strong> lädt <code>collect_and_send.sh</code>, <code>self_update.sh</code> und <code>AGENT_VERSION</code> erneut vom Server.</li>
+            <li><strong>repair_agent_conf.sh</strong> setzt fehlende Standardwerte wie <code>HANA_SID</code>, <code>HANA_ADDONS_USER</code> und Ports nach.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="subcard">
+          <h3>Daten manuell übermitteln</h3>
+          <pre>sudo /opt/monitoring-agent/collect_and_send.sh --no-jitter
+
+sudo /opt/monitoring-agent/collect_and_send.sh --jitter-max-sec 30
+
+sudo /opt/monitoring-agent/collect_and_send.sh --help</pre>
+          <table>
+            <thead>
+              <tr><th>Parameter</th><th>Bedeutung</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>--no-jitter</code></td><td>Überspringt den deterministischen Start-Delay.</td></tr>
+              <tr><td><code>--jitter-max-sec N</code></td><td>Setzt den maximalen Jitter für genau diesen Lauf.</td></tr>
+            </tbody>
+          </table>
+          <div class="callout"><strong>Hinweis:</strong> Linux hat aktuell keinen eingebauten <code>--print-payload</code>-Parameter. Bei Sendeproblemen landet der JSON-Report in der Queue unter <code>/var/lib/monitoring-agent/queue</code>.</div>
+        </div>
+        <div class="subcard">
+          <h3>Lizenzfile-Pfade</h3>
+          <ul>
+            <li><code>/usr/sap/SAPBusinessOne/B1_SHF/Lizenzen/B01.txt</code></li>
+            <li><code>/usr/sap/SAPBusinessOne/B1_SHF/Lizenz/B01.txt</code></li>
+          </ul>
+          <p>Der Linux-Agent nimmt den ersten vorhandenen Pfad und extrahiert daraus <strong>HARDWARE-KEY</strong>, <strong>INSTNO</strong>, <strong>EXPIRATION</strong>, <strong>SYSTEM-NR</strong>, <strong>CUSTOMER-NAME</strong> und <strong>CUSTOMER-NO</strong>.</p>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="subcard">
+          <h3>Payload-Quellen</h3>
+          <div class="callout"><strong>Version / Branch:</strong> Der Linux-Agent ruft <code>HDB version</code> auf, bevorzugt als <code>&lt;sid&gt;adm</code>. Die SID wird bei Bedarf aus <code>/hana/shared/&lt;SID&gt;</code> auto-detektiert.</div>
+          <pre># HANA-Version
+HDB version
+
+# HANA AddOns (Lightweight)
+SELECT "NAME", "Version" FROM "SLDDATA"."EXTENSIONS";
+
+# HANA AddOns (Legacy)
+SELECT "AName", "AddOnVer" FROM "SBOCOMMON"."SARI";
+
+# HANA DB Memory pro Schema
+SELECT SCHEMA_NAME,
+       ROUND(SUM(MEMORY_SIZE_IN_TOTAL) / 1024 / 1024 / 1024, 2) AS MEMORY_GB
+FROM M_CS_TABLES
+WHERE UPPER(SCHEMA_NAME) NOT LIKE 'SAP%'
+  AND UPPER(SCHEMA_NAME) NOT IN ('SLDDATA','SBOCOMMON','LANDSCAPE')
+  AND SCHEMA_NAME NOT LIKE '\_%' ESCAPE '\'
+GROUP BY SCHEMA_NAME
+HAVING SUM(MEMORY_SIZE_IN_TOTAL) &gt; 0
+ORDER BY MEMORY_GB DESC;</pre>
+          <ul>
+            <li>Transport über <strong>hdbsql</strong> als <code>&lt;sid&gt;adm</code>.</li>
+            <li>Default-Credentials: <code>HARVEST</code> / konfigurierbares Passwort in <code>agent.conf</code>.</li>
+            <li>Default-Host/Port: <code>127.0.0.1:30015</code>, mit automatischer 3xx15-Port-Erkennung und lokalen Probe-Fallbacks.</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h3>Nützliche Defaults aus der Config</h3>
           <pre>SERVER_URL="https://monitoring.example.com"
 API_KEY="..."
 HANA_SID="BUP"
@@ -675,18 +633,35 @@ HANA_ADDONS_PORT="30015"
 UPDATE_HOURS="6"
 PRIORITY_UPDATE_CHECK_MINUTES="60"</pre>
         </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Gemeinsame Datenübermittlung</h2>
+      <div class="two-col">
         <div class="subcard">
-          <h3>Windows</h3>
-          <pre>SERVER_URL="https://monitoring.example.com"
-API_KEY="..."
-INSTALL_DIR="C:\ProgramData\monitoring-agent"
-UPDATE_HOURS="6"
-PRIORITY_UPDATE_CHECK_MINUTES="60"
-SEND_JITTER_MAX_SEC="300"
-HARVEST_SQL_SERVER="localhost"
-HARVEST_SQL_USER="harvest"
-HARVEST_SQL_PASSWORD="..."
-ENABLE_SAP_SCAN="1"</pre>
+          <h3>Ziel-Endpoints</h3>
+          <div class="kvs">
+            <div class="kv"><div class="kv-label">Report Upload</div><div class="kv-value">POST /api/v1/agent-report</div></div>
+            <div class="kv"><div class="kv-label">Command Polling</div><div class="kv-value">GET /api/v1/agent-commands</div></div>
+            <div class="kv"><div class="kv-label">Command Result</div><div class="kv-value">POST /api/v1/agent-command-result</div></div>
+          </div>
+          <ul>
+            <li>Falls konfiguriert, wird der API-Key als Header <strong>X-Api-Key</strong> mitgesendet.</li>
+            <li>Wenn das Senden fehlschlägt, wird der Payload lokal als JSON gepuffert und beim nächsten Lauf erneut versucht.</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h3>Queue-Verhalten</h3>
+          <table>
+            <thead>
+              <tr><th>OS</th><th>Queue-Pfad</th><th>Verhalten</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Windows</td><td><code>C:\ProgramData\monitoring-agent\queue</code></td><td>Fehlgeschlagene Reports werden als <code>*.json</code> gespeichert und vor dem neuen Sendelauf geflusht.</td></tr>
+              <tr><td>Linux</td><td><code>/var/lib/monitoring-agent/queue</code></td><td>Fehlgeschlagene Reports werden als <code>*.json</code> gespeichert und später nachgesendet.</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
       <p class="footer-note">Diese HTML-Doku basiert direkt auf den aktuellen Skripten in <code>client/linux</code> und <code>client/windows</code>.</p>
