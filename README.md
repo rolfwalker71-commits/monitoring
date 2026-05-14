@@ -311,14 +311,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.137**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.89**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.138**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.138**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.4.138 | 14.05.2026 | Reduce spacing between license labels and values even further |
 | 1.4.137 | 14.05.2026 | Reduce font sizes in license panel and hide license title |
 | 1.4.137 | 14.05.2026 | Add SAP license extraction for Linux (collect_and_send.sh) from /usr/sap/SAPBusinessOne/B1_SHF/Lizenz* paths |
 | 1.4.137 | 14.05.2026 | Reduce font sizes in license panel and hide license title |
