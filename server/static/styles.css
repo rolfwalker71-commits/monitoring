@@ -5244,19 +5244,19 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
 }
 
 .sap-license-list-item strong {
-  font-family: var(--kv-label-family);
-  font-size: var(--kv-label-size);
-  font-weight: var(--kv-label-weight);
-  letter-spacing: var(--kv-label-letter);
-  color: var(--kv-label-color);
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: inherit;
   line-height: 1.15;
 }
 
 .sap-license-list-item span {
-  font-family: var(--kv-value-family);
-  font-size: var(--kv-value-size);
-  font-weight: var(--kv-value-weight);
-  color: var(--kv-value-color);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
   line-height: 1.15;
 }
 
@@ -7673,22 +7673,22 @@ body[data-theme="dark"] .backup-row--hana td {
   margin: 0;
   font-size: 11px;
   line-height: 1.2;
-  color: var(--kv-label-color);
+  color: inherit;
 }
 
 .so-license-label {
-  font-family: var(--kv-label-family);
-  font-size: var(--kv-label-size);
-  font-weight: var(--kv-label-weight);
-  letter-spacing: var(--kv-label-letter);
-  color: var(--kv-label-color);
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: inherit;
 }
 
 .so-license-value {
-  font-family: var(--kv-value-family);
-  font-size: var(--kv-value-size);
-  font-weight: var(--kv-value-weight);
-  color: var(--kv-value-color);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
 }
 
 body[data-theme="dark"] .so-addon-details {
@@ -7716,12 +7716,14 @@ body[data-theme="dark"] .so-addon-more summary {
 }
 
 body[data-theme="dark"] .so-license-list li,
-body[data-theme="dark"] .so-license-label {
-  color: #9fb3cc;
+body[data-theme="dark"] .so-license-label,
+body[data-theme="dark"] .sap-license-list-item strong {
+  color: inherit;
 }
 
-body[data-theme="dark"] .so-license-value {
-  color: #e2edf8;
+body[data-theme="dark"] .so-license-value,
+body[data-theme="dark"] .sap-license-list-item span {
+  color: #9fb3cc;
 }
 
 .so-row-clickable {
