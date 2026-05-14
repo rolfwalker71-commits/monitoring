@@ -20,7 +20,7 @@
   --kv-label-letter: 0;
   --kv-label-color: #1e293b;
   --kv-value-family: "IBM Plex Mono", monospace;
-  --kv-value-size: 10px;
+  --kv-value-size: 11px;
   --kv-value-weight: 700;
   --kv-value-color: #64748b;
 }
@@ -7627,7 +7627,7 @@ body[data-theme="dark"] .backup-row--hana td {
 .so-addon-version {
   color: #64748b;
   font-family: "IBM Plex Mono", monospace;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
 }
