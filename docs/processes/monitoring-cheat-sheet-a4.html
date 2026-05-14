@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitoring Cheat Sheet A4</title>
+  <style>
+    :root {
+      --paper: #ffffff;
+      --ink: #1d2433;
+      --muted: #59657c;
+      --line: #cfd9e6;
+      --blue: #2f68c5;
+      --green: #1e8b68;
+      --amber: #d4851c;
+      --rose: #c15353;
+      --sky: #eef5ff;
+      --mint: #eefaf5;
+      --sand: #fff6e8;
+      --blush: #fff0f0;
+      --mono: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
+      --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+
+    @page {
+      size: A4 portrait;
+      margin: 10mm;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--ink);
+      background: #e9eef6;
+    }
+
+    .sheet {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto;
+      padding: 10mm;
+      background: var(--paper);
+      display: grid;
+      gap: 8mm;
+    }
+
+    .hero,
+    .section,
+    .tile,
+    .flow-card {
+      border: 1.6px solid var(--line);
+      border-radius: 18px;
+      background: #fff;
+    }
+
+    .hero,
+    .section {
+      padding: 6mm;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #f6fbff, #fffaf1 62%);
+      display: grid;
+      gap: 4mm;
+    }
+
+    .hero-top,
+    .meta-row,
+    .grid-2,
+    .grid-3,
+    .flow,
+    .quick-grid {
+      display: grid;
+      gap: 4mm;
+    }
+
+    .hero-top {
+      grid-template-columns: 1fr auto;
+      align-items: start;
+    }
+
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .flow { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    .badge {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1.4px solid var(--line);
+      background: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; line-height: 1.05; }
+    h2 { font-size: 16px; line-height: 1.15; }
+    h3 { font-size: 12px; line-height: 1.2; }
+    p, li { font-size: 11px; line-height: 1.45; color: var(--muted); }
+    strong { color: var(--ink); }
+
+    .muted { color: var(--muted); }
+
+    .tile,
+    .flow-card {
+      padding: 4mm;
+      display: grid;
+      gap: 2.5mm;
+    }
+
+    .tile.blue, .flow-card.blue { background: var(--sky); }
+    .tile.green, .flow-card.green { background: var(--mint); }
+    .tile.amber, .flow-card.amber { background: var(--sand); }
+    .tile.rose, .flow-card.rose { background: var(--blush); }
+
+    ul {
+      margin: 0;
+      padding-left: 4mm;
+      display: grid;
+      gap: 1.6mm;
+    }
+
+    .flow-card {
+      min-height: 34mm;
+      position: relative;
+    }
+
+    .flow-card .num {
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1;
+      color: var(--ink);
+    }
+
+    .kv {
+      display: grid;
+      gap: 2mm;
+    }
+
+    .kv-row {
+      display: grid;
+      grid-template-columns: 32mm 1fr;
+      gap: 3mm;
+      align-items: start;
+    }
+
+    .kv-label {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--ink);
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 6px;
+      background: rgba(47, 104, 197, 0.08);
+      color: var(--blue);
+      border: 1px solid rgba(47, 104, 197, 0.14);
+    }
+
+    pre {
+      margin: 0;
+      padding: 4mm;
+      border-radius: 14px;
+      background: #152034;
+      color: #eef5ff;
+      font-family: var(--mono);
+      font-size: 9.6px;
+      line-height: 1.35;
+      overflow: hidden;
+      white-space: pre-wrap;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6mm;
+      border-top: 1px solid var(--line);
+      padding-top: 4mm;
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    @media screen {
+      body { padding: 14px; }
+      .sheet { box-shadow: 0 18px 48px rgba(20, 31, 51, 0.16); }
+    }
+
+    @media print {
+      body { background: #fff; }
+      .sheet {
+        width: auto;
+        min-height: auto;
+        margin: 0;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="sheet">
+    <section class="hero">
+      <div class="hero-top">
+        <div>
+          <span class="badge">Monitoring Cheat Sheet · A4</span>
+          <h1>Deploy, Collect, Alert, Update auf einer Seite</h1>
+        </div>
+        <span class="badge">v1.5.22 · Druckfreundlich</span>
+      </div>
+      <p>Verdichtete Referenz für Betrieb und Störungsanalyse. Diese Seite ist für A4-Druck optimiert und zeigt nur die Kernpfade, Skripte und Parameter.</p>
+      <div class="grid-3">
+        <div class="tile blue"><h3>Windows Basis</h3><p><strong>Pfad:</strong> C:\ProgramData\monitoring-agent<br><strong>Tasks:</strong> collect, update</p></div>
+        <div class="tile green"><h3>Linux Basis</h3><p><strong>Pfad:</strong> /opt/monitoring-agent<br><strong>Cron:</strong> collect, update</p></div>
+        <div class="tile amber"><h3>Server Ziel</h3><p><strong>Ingest:</strong> <code>/api/v1/agent-report</code><br><strong>Updates:</strong> <code>/updates</code></p></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>End-to-End Ablauf</h2>
+      <div class="flow">
+        <article class="flow-card amber"><div class="num">01</div><h3>Deploy</h3><p>Install-Skript legt Config, Pfade, Queue und Scheduler/Cron an.</p></article>
+        <article class="flow-card blue"><div class="num">02</div><h3>Collect</h3><p><code>collect_and_send</code> sammelt Host-, FS-, DB- und SAP-Daten.</p></article>
+        <article class="flow-card amber"><div class="num">03</div><h3>Queue</h3><p>Bei Verbindungsfehlern wird lokal zwischengespeichert.</p></article>
+        <article class="flow-card green"><div class="num">04</div><h3>Ingest</h3><p>Server validiert JSON, Pflichtfelder und Auth/Grace-Mode.</p></article>
+        <article class="flow-card rose"><div class="num">05</div><h3>Alert</h3><p>DB-Write, Thresholds, Routing, Mail/Telegram und Reminder.</p></article>
+        <article class="flow-card blue"><div class="num">06</div><h3>Update</h3><p><code>self_update</code> lädt Skripte und Agent-Version neu vom Server.</p></article>
+      </div>
+    </section>
+
+    <section class="grid-2">
+      <article class="section">
+        <h2>Wichtige Skripte</h2>
+        <div class="grid-2">
+          <div class="tile blue">
+            <h3>Windows</h3>
+            <ul>
+              <li><strong>install_agent.ps1</strong> für Neuinstallation</li>
+              <li><strong>bootstrap_agent.ps1</strong> für Repair/Rebootstrap</li>
+              <li><strong>collect_and_send.ps1</strong> für Datensammlung</li>
+              <li><strong>self_update.ps1</strong> für In-Place-Update</li>
+            </ul>
+          </div>
+          <div class="tile green">
+            <h3>Linux</h3>
+            <ul>
+              <li><strong>install_agent.sh</strong> für Neuinstallation</li>
+              <li><strong>collect_and_send.sh</strong> für Datensammlung</li>
+              <li><strong>self_update.sh</strong> für Update</li>
+              <li><strong>repair_agent_conf.sh</strong> für Config-Fix</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <article class="section">
+        <h2>Wichtige Parameter</h2>
+        <div class="kv">
+          <div class="kv-row"><div class="kv-label">Pflicht</div><p><code>ServerUrl</code> / <code>--server-url</code> bestimmt das Zielsystem.</p></div>
+          <div class="kv-row"><div class="kv-label">Auth</div><p><code>ApiKey</code> / <code>--api-key</code> für abgesicherte Agent-Calls.</p></div>
+          <div class="kv-row"><div class="kv-label">Rhythmus</div><p><code>IntervalMinutes</code> / <code>--interval-minutes</code> für Collect-Takt.</p></div>
+          <div class="kv-row"><div class="kv-label">Updates</div><p><code>UpdateHours</code> / <code>--update-hours</code> für Self-Update-Takt.</p></div>
+          <div class="kv-row"><div class="kv-label">Sonderfall</div><p><code>RawBaseUrl</code>, <code>--collect-script-url</code>, <code>--insecure-tls</code> nur für Bootstrap-/TLS-Sonderwege.</p></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid-2">
+      <article class="section">
+        <h2>Schnellbefehle</h2>
+        <pre>Windows Collect:
+C:\ProgramData\monitoring-agent\collect_and_send.ps1 -NoJitter
+
+Windows Update:
+powershell.exe -ExecutionPolicy Bypass -File C:\ProgramData\monitoring-agent\self_update.ps1
+
+Linux Collect:
+sudo /opt/monitoring-agent/collect_and_send.sh --no-jitter
+
+Linux Update:
+sudo /opt/monitoring-agent/self_update.sh</pre>
+      </article>
+      <article class="section">
+        <h2>Debug-Reihenfolge</h2>
+        <ul>
+          <li><strong>Deploy-Fehler:</strong> Installation, Config, Task/Cron prüfen</li>
+          <li><strong>Keine Daten:</strong> Collector manuell starten, Logs und Queue prüfen</li>
+          <li><strong>Reject im Server:</strong> API-Key, Pflichtfelder, Grace-Mode prüfen</li>
+          <li><strong>Kein Alarm:</strong> Threshold, Blacklist, Mute/Ack, Routing prüfen</li>
+          <li><strong>Kein Update:</strong> <code>/updates</code>, lokale Version und Update-Logs prüfen</li>
+        </ul>
+      </article>
+    </section>
+
+    <div class="footer">
+      <span>Quelle für Details: Prozess-HTMLs, agent-deployment-guide.html, server/receiver.py</span>
+      <span>Monitoring · Cheat Sheet A4</span>
+    </div>
+  </main>
+</body>
+</html>

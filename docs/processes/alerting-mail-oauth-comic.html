@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alerting, Mail und OAuth Comic</title>
+  <style>
+    :root {
+      --bg: #f7f5ff;
+      --ink: #1f2235;
+      --muted: #58607c;
+      --paper: #fffdfd;
+      --paper-2: #f6f1ff;
+      --violet: #8b5cf6;
+      --sky: #53a6ff;
+      --gold: #ffcf53;
+      --mint: #47c09a;
+      --rose: #ff6a84;
+      --line: #1f2235;
+      --shadow: 8px 8px 0 rgba(31, 34, 53, 0.14);
+      --mono: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
+      --sans: "Trebuchet MS", "Avenir Next", "IBM Plex Sans", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top right, rgba(139, 92, 246, 0.18), transparent 24%),
+        radial-gradient(circle at bottom left, rgba(83, 166, 255, 0.14), transparent 22%),
+        linear-gradient(180deg, #fffefe 0%, var(--bg) 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image: linear-gradient(rgba(255,255,255,0.18) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.18) 1px, transparent 1px);
+      background-size: 20px 20px;
+      opacity: 0.35;
+    }
+
+    .page {
+      position: relative;
+      width: min(1240px, calc(100% - 28px));
+      margin: 20px auto 40px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--paper);
+      border: 3px solid var(--line);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+
+    .hero {
+      display: grid;
+      gap: 14px;
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.18), rgba(255,255,255,0.96) 44%), var(--paper);
+    }
+
+    .hero-top, .grid-3, .grid-2, .strip, .legend {
+      display: grid;
+      gap: 14px;
+    }
+
+    .hero-top {
+      grid-template-columns: 1fr auto;
+      align-items: start;
+    }
+
+    .grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .grid-2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+    .strip { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+
+    .stamp, .chip {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 3px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: clamp(2rem, 6vw, 4rem); line-height: 1.04; max-width: 760px; }
+    h2 { font-size: clamp(1.1rem, 3vw, 1.8rem); }
+    h3 { font-size: 1.08rem; }
+    p, li { color: var(--muted); line-height: 1.5; }
+    strong { color: var(--ink); }
+
+    .speech, .card, .strip-card {
+      border: 3px solid var(--line);
+      border-radius: 24px;
+      background: #fff;
+      box-shadow: 6px 6px 0 rgba(31, 34, 53, 0.12);
+    }
+
+    .speech, .card, .strip-card { padding: 16px; }
+
+    .speech {
+      position: relative;
+      background: var(--paper-2);
+      display: grid;
+      gap: 10px;
+    }
+
+    .speech::after {
+      content: "";
+      position: absolute;
+      left: 30px;
+      bottom: -16px;
+      width: 22px;
+      height: 22px;
+      background: var(--paper-2);
+      border-right: 3px solid var(--line);
+      border-bottom: 3px solid var(--line);
+      transform: rotate(45deg);
+    }
+
+    .accent-violet { background: rgba(139, 92, 246, 0.12); }
+    .accent-sky { background: rgba(83, 166, 255, 0.12); }
+    .accent-gold { background: rgba(255, 207, 83, 0.18); }
+    .accent-mint { background: rgba(71, 192, 154, 0.14); }
+    .accent-rose { background: rgba(255, 106, 132, 0.12); }
+
+    .strip-card {
+      position: relative;
+      min-height: 190px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .strip-card::before {
+      content: attr(data-sfx);
+      position: absolute;
+      top: -14px;
+      right: 12px;
+      padding: 5px 10px;
+      border: 3px solid var(--line);
+      border-radius: 999px;
+      background: var(--gold);
+      font-size: 12px;
+      font-weight: 900;
+      transform: rotate(7deg);
+    }
+
+    .num { font-size: 30px; font-weight: 900; line-height: 1; }
+
+    .card-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+
+    .kvs { display: grid; gap: 10px; }
+    .kv {
+      padding: 12px 14px;
+      border: 2px solid var(--line);
+      border-radius: 18px;
+      background: #fff;
+      display: grid;
+      gap: 4px;
+    }
+
+    .kv-label {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    code, pre { font-family: var(--mono); }
+    code {
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: rgba(83, 166, 255, 0.1);
+      border: 1px solid rgba(83, 166, 255, 0.24);
+      color: #235ead;
+    }
+
+    pre {
+      margin: 0;
+      padding: 14px;
+      border-radius: 18px;
+      background: #171d2f;
+      color: #edf4ff;
+      border: 3px solid var(--line);
+      overflow: auto;
+      white-space: pre-wrap;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .legend {
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .legend .card { display: grid; gap: 8px; }
+
+    .footer-note { text-align: center; font-size: 13px; }
+
+    @media (max-width: 720px) {
+      .page { width: min(100%, calc(100% - 16px)); margin: 10px auto 24px; }
+      .panel { padding: 16px; border-radius: 22px; }
+      .hero-top { grid-template-columns: 1fr; }
+      .strip-card::before { position: static; width: fit-content; margin-bottom: 4px; transform: none; }
+      .speech::after { left: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="panel hero">
+      <div class="hero-top">
+        <div class="stamp">KAPOW! Alerting / Mail / OAuth</div>
+        <div class="stamp">Offline HTML · v1.5.22</div>
+      </div>
+      <div class="speech">
+        <h1>Comic-Überblick für Alarme, Routing, Token und Versand</h1>
+        <p>Diese Seite bündelt den heikelsten Pfad im System: wie ein kritischer Zustand zu einem offenen Alert wird, wie Routing und Mail greifen und wie OAuth den Versand stabil hält.</p>
+      </div>
+      <div class="grid-3">
+        <article class="card accent-rose"><span class="chip">🚨 Alert</span><h3>Threshold verletzt</h3><p>Ein Report liefert kritische Werte und triggert die Alert-Bewertung.</p></article>
+        <article class="card accent-sky"><span class="chip">📬 Mail</span><h3>Routing entscheidet</h3><p>Subscriptions, Severity und Kanäle bestimmen, wer benachrichtigt wird.</p></article>
+        <article class="card accent-violet"><span class="chip">🔐 OAuth</span><h3>Token muss leben</h3><p>Ohne gültigen Access Token gibt es keinen Versand über Microsoft Graph.</p></article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="card-title">
+        <h2>1. Alert-to-Mail Ablauf in 6 Panels</h2>
+        <span class="chip">CRASH! Kritischer Pfad</span>
+      </div>
+      <div class="strip">
+        <article class="strip-card accent-rose" data-sfx="BEEP">
+          <div class="num">01</div>
+          <h3>Threshold verletzt</h3>
+          <p>Server bewertet Report-Daten gegen Warning/Critical-Regeln.</p>
+        </article>
+        <article class="strip-card accent-gold" data-sfx="CLICK">
+          <div class="num">02</div>
+          <h3>Alert öffnen/ändern</h3>
+          <p>Open, escalate, acknowledge, mute oder resolve je nach Zustand.</p>
+        </article>
+        <article class="strip-card accent-sky" data-sfx="SWISH">
+          <div class="num">03</div>
+          <h3>Routing prüfen</h3>
+          <p>Host-Subscription, Severity und Kanal-Matrix entscheiden Mail/Telegram.</p>
+        </article>
+        <article class="strip-card accent-violet" data-sfx="TOKEN">
+          <div class="num">04</div>
+          <h3>OAuth Access Token</h3>
+          <p><code>ensure_microsoft_access_token</code> refresht bei Bedarf den User-Token.</p>
+        </article>
+        <article class="strip-card accent-mint" data-sfx="SEND">
+          <div class="num">05</div>
+          <h3>Graph Versand</h3>
+          <p><code>send_microsoft_mail</code> oder <code>send_microsoft_mail_multi</code> ruft <code>/me/sendMail</code>.</p>
+        </article>
+        <article class="strip-card accent-gold" data-sfx="LOOP">
+          <div class="num">06</div>
+          <h3>Reminder / Digest</h3>
+          <p>Offene Alerts können später erneut als Reminder oder Digest erscheinen.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="grid-2">
+      <article class="panel">
+        <div class="card-title">
+          <h2>2. Was steuert den Alarm?</h2>
+          <span class="chip">🧭 Alerting</span>
+        </div>
+        <ul>
+          <li><strong>Severity:</strong> Warning, Critical oder Escalated bestimmen Priorität.</li>
+          <li><strong>Mute/Ack:</strong> Unterdrücken Versand oder markieren aktive Bearbeitung.</li>
+          <li><strong>Blacklist/Visibility:</strong> Kann einzelne Filesysteme komplett aus der Kette nehmen.</li>
+          <li><strong>Resolution:</strong> Normalisierte Werte schließen offene Alerts automatisch.</li>
+        </ul>
+        <pre>Wichtige Stellen im Code:
+- update_alerts_for_report
+- evaluate_severity_for_thresholds
+- maybe_send_alert_message
+- maybe_send_alert_reminders</pre>
+      </article>
+
+      <article class="panel">
+        <div class="card-title">
+          <h2>3. Was steuert den Versand?</h2>
+          <span class="chip">📨 Mail Routing</span>
+        </div>
+        <div class="kvs">
+          <div class="kv accent-sky"><div class="kv-label">Instant Alert</div><p>Sofort nach Alert-Event, wenn Kanal und Mindest-Schweregrad passen.</p></div>
+          <div class="kv accent-mint"><div class="kv-label">Reminder</div><p>Periodisch für weiterhin offene Alerts.</p></div>
+          <div class="kv accent-violet"><div class="kv-label">Digest</div><p>Gebündelte Übersicht aus dem Scheduler, <code>last_sent</code> nur bei Erfolg.</p></div>
+          <div class="kv accent-gold"><div class="kv-label">Customer Alert</div><p>Spezialfall mit dediziertem Trigger und Test-Endpunkt.</p></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid-2">
+      <article class="panel">
+        <div class="card-title">
+          <h2>4. OAuth Kurzlogik</h2>
+          <span class="chip">🔐 Token Leben</span>
+        </div>
+        <ul>
+          <li><strong>Connect:</strong> User verbindet Microsoft-Konto über den OAuth Flow.</li>
+          <li><strong>Callback:</strong> Server speichert Refresh-/Access-Daten.</li>
+          <li><strong>Refresh:</strong> Vor Versand wird ein frischer Access Token sichergestellt.</li>
+          <li><strong>Disconnect:</strong> Verbindung kann wieder entfernt werden; Versand stoppt dann sauber.</li>
+        </ul>
+        <pre>Wichtige Funktionen:
+- ensure_microsoft_access_token
+- send_microsoft_mail
+- send_microsoft_mail_multi
+- maybe_send_scheduled_user_mails</pre>
+      </article>
+
+      <article class="panel">
+        <div class="card-title">
+          <h2>5. Fehlerbild → erste Prüfung</h2>
+          <span class="chip">🛠 Debug</span>
+        </div>
+        <div class="legend">
+          <article class="card accent-rose"><h3>Alert fehlt</h3><p>Thresholds, Blacklist und Alert-Update-Pfad prüfen.</p></article>
+          <article class="card accent-sky"><h3>Mail fehlt</h3><p>Routing-Matrix, Severity-Filter und Empfängereinstellungen prüfen.</p></article>
+          <article class="card accent-violet"><h3>OAuth defekt</h3><p>Token-Refresh, Connect-Status und Callback-Daten prüfen.</p></article>
+          <article class="card accent-mint"><h3>Reminder fehlt</h3><p>Open-Status, Scheduler-Intervall und letzte Versandmarke prüfen.</p></article>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel footer-note">
+      <p>Vertiefung dazu in mailversand-prozess.html, alert-handling-gesamtprozess.html, oauth-lifecycle.html und alert-routing-matrix.html.</p>
+    </section>
+  </main>
+</body>
+</html>

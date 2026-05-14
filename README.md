@@ -309,6 +309,8 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 - **[agent-deployment-guide.html](agent-deployment-guide.html)** – Practical deployment guide for Linux and Windows agents with install/update commands, parameters, license file paths, and current HANA/SAP payload sources
 - **[docs/processes/index.html](docs/processes/index.html)** – HTML-Startseite fuer alle Prozessdokumente (mit Mermaid-Rendering)
 - **[docs/processes/monitoring-cheat-sheet-comic.html](docs/processes/monitoring-cheat-sheet-comic.html)** – Grafisches Cheat-Sheet im Comicstil fuer Kernprozesse, Agent-Skripte, Parameter und Debug-Routen
+- **[docs/processes/monitoring-cheat-sheet-a4.html](docs/processes/monitoring-cheat-sheet-a4.html)** – Druckfreundliche A4-Version des Ops-Cheat-Sheets fuer Ausdruck und Einsatzmappe
+- **[docs/processes/alerting-mail-oauth-comic.html](docs/processes/alerting-mail-oauth-comic.html)** – Comicartige Schnellreferenz fuer Alert-Lifecycle, Mail-Routing, OAuth und Reminder/Digests
 - **[docs/processes/mailversand-prozess.html](docs/processes/mailversand-prozess.html)** – Mailversand mit OAuth/Graph, Instant-Alerts, Reminder und Scheduled Digests
 - **[docs/processes/alert-handling-gesamtprozess.html](docs/processes/alert-handling-gesamtprozess.html)** – Voller Alert-Lifecycle inklusive Debounce, Mute/Ack/Close und Eskalation
 - **[docs/processes/backfill-prozess.html](docs/processes/backfill-prozess.html)** – Historische Rekonstruktion fuer Host-Config und Database-Lifecycle
@@ -327,14 +329,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.21**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.21**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.22**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.22**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.5.22  | 14.05.2026 | Add a printable A4 cheat sheet, a dedicated alerting/mail/OAuth comic page, and visual preview tiles on the process docs start page |
 | 1.5.21  | 14.05.2026 | Unify the process HTML docs with a shared stylesheet and add a comic-style monitoring cheat sheet for key processes, scripts and parameters |
 | 1.5.20  | 14.05.2026 | Remove the temporary local Mermaid validation script from the repository and keep the documentation release clean |
 | 1.5.19  | 14.05.2026 | Fix Mermaid syntax errors in process HTML docs by decoding embedded Markdown before rendering, and extend the process docs index with offline/update metadata |
