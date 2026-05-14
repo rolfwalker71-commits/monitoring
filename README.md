@@ -311,14 +311,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.120**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.88**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.122**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.89**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.4.122 | 14.05.2026 | Trend-Digest respektiert jetzt die gewählten Metrik-Kategorien (CPU/RAM/SWAP/Filesystem) auch in API, Testmail und geplantem Versand |
 | 1.4.121 | 13.05.2026 | Fix database lifecycle changelog tracking and backfill for SQL/HANA payloads |
 | 1.4.120 | 12.05.2026 | Fix user settings wiring: Trend Digest metrics + Host Interests now persist via user-preferences endpoint; mail profile save no longer resets digest selections |
 | 1.4.119 | 12.05.2026 | Daily Trend Digest filters blacklisted filesystems (e.g. /hana/shared/.snapshot) |

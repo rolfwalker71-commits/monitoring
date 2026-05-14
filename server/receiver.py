@@ -2190,6 +2190,17 @@ def parse_host_csv(value: object) -> set[str]:
     }
 
 
+def parse_critical_trends_metrics(value: object) -> set[str]:
+    allowed = {"cpu", "memory", "swap", "filesystem"}
+    parsed = {
+        str(item or "").strip().lower()
+        for item in str(value or "").split(",")
+        if str(item or "").strip()
+    }
+    selected = parsed & allowed
+    return selected or {"filesystem"}
+
+
 def get_user_trend_host_scope(conn: sqlite3.Connection, username: str) -> tuple[set[str] | None, set[str]]:
     preferences = get_user_preferences(conn, username)
     interested_hosts = parse_host_csv(preferences.get("host_interest_hosts", ""))
@@ -2225,6 +2236,7 @@ def collect_critical_trends(
     hidden_mountpoints_by_host: dict[str, set[str]] | None = None,
     allowed_hostnames: set[str] | None = None,
     prioritized_hostnames: set[str] | None = None,
+    selected_metrics: set[str] | None = None,
 ) -> list[dict]:
     cutoff_iso = utc_hours_ago_iso(hours)
     blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
@@ -2240,10 +2252,14 @@ def collect_critical_trends(
             if keys:
                 hidden_normalized_by_host[host] = keys
 
+    selected = (selected_metrics or {"filesystem"}) & {"cpu", "memory", "swap", "filesystem"}
+    if not selected:
+        selected = {"filesystem"}
+
     resource_metrics = [
-        ("cpu_usage_percent", "CPU %"),
-        ("memory_used_percent", "RAM %"),
-        ("swap_used_percent", "Swap %"),
+        ("cpu", "cpu_usage_percent", "CPU %"),
+        ("memory", "memory_used_percent", "RAM %"),
+        ("swap", "swap_used_percent", "Swap %"),
     ]
 
     def linear_regression_projected(values: list[float]) -> float | None:
@@ -2352,7 +2368,9 @@ def collect_critical_trends(
                     fs_series[mountpoint] = []
                 fs_series[mountpoint].append(used_percent)
 
-        for key, label in resource_metrics:
+        for metric_group, key, label in resource_metrics:
+            if metric_group not in selected:
+                continue
             values = resource_series[key]
             projected = linear_regression_projected(values)
             level = trend_level(projected)
@@ -2375,36 +2393,37 @@ def collect_critical_trends(
                 }
             )
 
-        for mountpoint, values in fs_series.items():
-            if mountpoint in muted_mountpoints:
-                continue
-            if blacklist_patterns and is_filesystem_blacklisted_by_patterns(mountpoint, blacklist_patterns):
-                continue
-            mountpoint_key = normalize_mountpoint_key(mountpoint)
-            # Skip filesystem if it's hidden in user's visibility settings
-            if hidden_normalized_by_host and hostname in hidden_normalized_by_host:
-                if mountpoint_key in hidden_normalized_by_host[hostname]:
+        if "filesystem" in selected:
+            for mountpoint, values in fs_series.items():
+                if mountpoint in muted_mountpoints:
                     continue
-            projected = linear_regression_projected(values)
-            level = trend_level(projected)
-            if not level:
-                continue
-            current = values[-1] if values else None
-            warnings.append(
-                {
-                    "hostname": hostname,
-                    "display_name": host_display_name,
-                    "primary_ip": host_primary_ip,
-                    "metric": mountpoint,
-                    "metric_key": "filesystem",
-                    "type": "filesystem",
-                    "current": round(current, 1) if current is not None else None,
-                    "projected": round(float(projected), 1),
-                    "level": level,
-                    "country_code": host_country_code,
-                    "os_family": host_os_family,
-                }
-            )
+                if blacklist_patterns and is_filesystem_blacklisted_by_patterns(mountpoint, blacklist_patterns):
+                    continue
+                mountpoint_key = normalize_mountpoint_key(mountpoint)
+                # Skip filesystem if it's hidden in user's visibility settings
+                if hidden_normalized_by_host and hostname in hidden_normalized_by_host:
+                    if mountpoint_key in hidden_normalized_by_host[hostname]:
+                        continue
+                projected = linear_regression_projected(values)
+                level = trend_level(projected)
+                if not level:
+                    continue
+                current = values[-1] if values else None
+                warnings.append(
+                    {
+                        "hostname": hostname,
+                        "display_name": host_display_name,
+                        "primary_ip": host_primary_ip,
+                        "metric": mountpoint,
+                        "metric_key": "filesystem",
+                        "type": "filesystem",
+                        "current": round(current, 1) if current is not None else None,
+                        "projected": round(float(projected), 1),
+                        "level": level,
+                        "country_code": host_country_code,
+                        "os_family": host_os_family,
+                    }
+                )
 
     warnings.sort(
         key=lambda item: (
@@ -5428,6 +5447,8 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
 
         if send_trend:
             trend_allowed_hosts, trend_prioritized_hosts = get_user_trend_host_scope(conn, username)
+            preferences = get_user_preferences(conn, username)
+            trend_selected_metrics = parse_critical_trends_metrics(preferences.get("critical_trends_metrics", "filesystem"))
             # Build hidden mountpoints dict for this user
             all_hostnames = {
                 row[0]
@@ -5451,6 +5472,7 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
                 hidden_mountpoints_by_host,
                 allowed_hostnames=trend_allowed_hosts,
                 prioritized_hostnames=trend_prioritized_hosts,
+                selected_metrics=trend_selected_metrics,
             )
             trend_ok, _trend_details = send_microsoft_mail(
                 access_token,
@@ -7475,6 +7497,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             project_hours = parse_int(query, "project_hours", default=72, min_value=1, max_value=24 * 7)
             
             with sqlite3.connect(DB_PATH) as conn:
+                preferences = get_user_preferences(conn, username)
+                selected_metrics = parse_critical_trends_metrics(preferences.get("critical_trends_metrics", "filesystem"))
                 # Get all hosts and their hidden filesystems for this user
                 all_hostnames = {
                     row[0]
@@ -7491,7 +7515,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     if hidden:
                         hidden_mountpoints_by_host[hostname] = hidden
                 
-                warnings = collect_critical_trends(conn, hours, hidden_mountpoints_by_host)
+                warnings = collect_critical_trends(
+                    conn,
+                    hours,
+                    hidden_mountpoints_by_host,
+                    selected_metrics=selected_metrics,
+                )
 
             self._send_json(HTTPStatus.OK, {
                 "hours": hours,
@@ -8803,6 +8832,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": details or "oauth unavailable"})
                     return
                 if endpoint_mode == "trends":
+                    preferences = get_user_preferences(conn, username)
+                    trend_allowed_hosts, trend_prioritized_hosts = get_user_trend_host_scope(conn, username)
+                    selected_metrics = parse_critical_trends_metrics(preferences.get("critical_trends_metrics", "filesystem"))
                     # Build hidden mountpoints dict for this user
                     all_hostnames = {
                         row[0]
@@ -8811,13 +8843,24 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             (utc_hours_ago_iso(72),),
                         ).fetchall()
                     }
+                    if trend_allowed_hosts is not None:
+                        all_hostnames = {hostname for hostname in all_hostnames if hostname in trend_allowed_hosts}
                     hidden_mountpoints_by_host = {}
                     for hostname in all_hostnames:
-                        hidden = get_filesystem_visibility_hidden(conn, username, hostname, "critical-trends")
+                        hidden_critical = get_filesystem_visibility_hidden(conn, username, hostname, "critical-trends")
+                        hidden_fs_focus = get_filesystem_visibility_hidden(conn, username, hostname, "fs-focus")
+                        hidden = sorted({*(hidden_critical or []), *(hidden_fs_focus or [])}, key=lambda item: str(item).lower())
                         if hidden:
                             hidden_mountpoints_by_host[hostname] = hidden
-                    
-                    warnings = collect_critical_trends(conn, 72, hidden_mountpoints_by_host)
+
+                    warnings = collect_critical_trends(
+                        conn,
+                        72,
+                        hidden_mountpoints_by_host,
+                        allowed_hostnames=trend_allowed_hosts,
+                        prioritized_hostnames=trend_prioritized_hosts,
+                        selected_metrics=selected_metrics,
+                    )
                     mail_ok, mail_details = send_microsoft_mail(
                         access_token,
                         recipient,
