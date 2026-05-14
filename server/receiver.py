@@ -7314,12 +7314,43 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             limit = parse_int(query, "limit", default=10, min_value=1, max_value=200)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
+            jump_to_utc_raw = query.get("jump_to_utc", [""])[0].strip()
+
+            jump_to_utc_iso = ""
+            if jump_to_utc_raw:
+                try:
+                    jump_dt = datetime.fromisoformat(jump_to_utc_raw.replace("Z", "+00:00"))
+                    if jump_dt.tzinfo is None:
+                        jump_dt = jump_dt.replace(tzinfo=timezone.utc)
+                    else:
+                        jump_dt = jump_dt.astimezone(timezone.utc)
+                    jump_to_utc_iso = jump_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+                except ValueError:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "jump_to_utc must be a valid ISO datetime"})
+                    return
 
             with sqlite3.connect(DB_PATH) as conn:
                 total_reports = conn.execute(
                     "SELECT COUNT(*) FROM reports WHERE hostname = ?",
                     (hostname,),
                 ).fetchone()[0]
+
+                bounds_row = conn.execute(
+                    "SELECT MIN(received_at_utc), MAX(received_at_utc) FROM reports WHERE hostname = ?",
+                    (hostname,),
+                ).fetchone()
+                oldest_report_at_utc = str((bounds_row[0] if bounds_row else "") or "")
+                newest_report_at_utc = str((bounds_row[1] if bounds_row else "") or "")
+
+                if jump_to_utc_iso and total_reports > 0:
+                    jump_offset = conn.execute(
+                        "SELECT COUNT(*) FROM reports WHERE hostname = ? AND received_at_utc > ?",
+                        (hostname, jump_to_utc_iso),
+                    ).fetchone()[0]
+                    if jump_offset >= total_reports:
+                        offset = max(0, total_reports - 1)
+                    else:
+                        offset = max(0, jump_offset)
 
                 rows = conn.execute(
                     """
@@ -7358,6 +7389,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "limit": limit,
                     "offset": offset,
                     "total_reports": total_reports,
+                    "oldest_report_at_utc": oldest_report_at_utc,
+                    "newest_report_at_utc": newest_report_at_utc,
                     "hostname": hostname,
                     "reports": reports,
                 },

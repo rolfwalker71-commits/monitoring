@@ -311,14 +311,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.153**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.153**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.154**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.154**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.4.154 | 14.05.2026 | Fix Meldungen datetime jump by honoring jump_to_utc in host-reports API and trigger jump reliably on picker input |
 | 1.4.153 | 14.05.2026 | Add Systemübersicht host text search (combinable with country filter) and compact pill-style overview action buttons |
 | 1.4.152 | 14.05.2026 | Match Lizenzinfos typography exactly to neighboring AddOns pattern (label normal, value mono) |
 | 1.4.151 | 14.05.2026 | Align SAP B1 AddOns table section typography to AddOns label/value reference (Name/Version table) |

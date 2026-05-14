@@ -9597,6 +9597,13 @@ function wireEvents() {
     reportJumpDateTimeInput.addEventListener("change", async () => {
       await jumpToReportDateTime();
     });
+    reportJumpDateTimeInput.addEventListener("input", async () => {
+      const value = String(reportJumpDateTimeInput.value || "").trim();
+      if (value.length < 16) {
+        return;
+      }
+      await jumpToReportDateTime();
+    });
     reportJumpDateTimeInput.addEventListener("keydown", async (event) => {
       if (event.key !== "Enter") {
         return;
