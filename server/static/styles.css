@@ -4478,6 +4478,49 @@ body[data-theme="dark"] .trend-progress-bar {
   margin: 4px 0 0 0;
 }
 
+.report-license-panel {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #b9d7f7;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f5faff 0%, #eef6ff 100%);
+}
+
+.report-license-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #1d4f91;
+  margin-bottom: 8px;
+}
+
+.report-license-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+}
+
+.report-license-item {
+  margin: 0;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.report-license-item strong {
+  flex: 0 0 145px;
+  font-size: 12px;
+  color: #3e5f8d;
+}
+
+.report-license-item span {
+  min-width: 0;
+  word-break: break-word;
+  color: #122038;
+}
+
 .sap-hana-chip {
   display: inline-block;
   font-size: 11px;
@@ -4521,6 +4564,23 @@ body[data-theme="dark"] .hana-sid-chip {
   background: #1e1040;
   color: #c09af5;
   border-color: #4a2888;
+}
+
+body[data-theme="dark"] .report-license-panel {
+  border-color: #345c85;
+  background: linear-gradient(180deg, #102033 0%, #0d1a2b 100%);
+}
+
+body[data-theme="dark"] .report-license-title {
+  color: #8ec1f1;
+}
+
+body[data-theme="dark"] .report-license-item strong {
+  color: #9ec3ea;
+}
+
+body[data-theme="dark"] .report-license-item span {
+  color: #d8e4f3;
 }
 
 @media (max-width: 1100px) {
@@ -5448,6 +5508,15 @@ body[data-theme="dark"] th {
   .report-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .report-license-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .report-license-item strong {
+    flex-basis: 130px;
   }
 
   .analysis-header {

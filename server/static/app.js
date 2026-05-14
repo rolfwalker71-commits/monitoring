@@ -5683,6 +5683,23 @@ function renderReportCard(report) {
 
   const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : {};
   const licenseAvailable = sapLicense.available === true || sapLicense.available === "true";
+  const licenseExpiration = sapLicense.expiration && /^\d{8}$/.test(String(sapLicense.expiration))
+    ? `${String(sapLicense.expiration).substring(6,8)}.${String(sapLicense.expiration).substring(4,6)}.${String(sapLicense.expiration).substring(0,4)}`
+    : asText(sapLicense.expiration || "-");
+
+  const licenseHeaderPanel = licenseAvailable ? `
+    <section class="report-license-panel" aria-label="SAP Lizenz">
+      <div class="report-license-title">SAP Lizenz</div>
+      <div class="report-license-grid">
+        <p class="report-license-item"><strong>Hardware Key</strong><span>${escapeHtml(asText(sapLicense.hardware_key || "-"))}</span></p>
+        <p class="report-license-item"><strong>System Nummer</strong><span>${escapeHtml(asText(sapLicense.system_nr || "-"))}</span></p>
+        <p class="report-license-item"><strong>Installations Nummer</strong><span>${escapeHtml(asText(sapLicense.instno || "-"))}</span></p>
+        <p class="report-license-item"><strong>Lizenznehmer</strong><span>${escapeHtml(asText(sapLicense.customer_name || "-"))}</span></p>
+        <p class="report-license-item"><strong>Kundennummer</strong><span>${escapeHtml(asText(sapLicense.customer_no || "-"))}</span></p>
+        <p class="report-license-item"><strong>Gueltig bis</strong><span>${escapeHtml(licenseExpiration)}</span></p>
+      </div>
+    </section>
+  ` : "";
   
   const licenseGroup = licenseAvailable ? `
     <div class="meta-group">
@@ -5693,7 +5710,7 @@ function renderReportCard(report) {
         ${renderMetaItem("Inst", "Installations Nummer", sapLicense.instno)}
         ${renderMetaItem("Kunde", "Lizenznehmer", sapLicense.customer_name)}
         ${renderMetaItem("KdNr", "Kundennummer", sapLicense.customer_no)}
-        ${renderMetaItem("Exp", "Gültig bis", sapLicense.expiration ? (() => { const d = sapLicense.expiration; return d.length === 8 && /^\d{8}$/.test(d) ? d.substring(6,8) + "." + d.substring(4,6) + "." + d.substring(0,4) : d; })() : "-")}
+        ${renderMetaItem("Exp", "Gueltig bis", licenseExpiration)}
       </div>
     </div>
   ` : "";
@@ -5788,7 +5805,7 @@ function renderReportCard(report) {
     detailContent = renderDatabasesSection(payload);
   }
 
-  const showMetaGroups = section === "overview" || section === "sap-b1-systeminfo";
+  const showMetaGroups = section === "overview";
 
   return `
     <article class="report-card">
@@ -5803,6 +5820,8 @@ function renderReportCard(report) {
           <span class="${chipClass}">${chipText}</span>
         </div>
       </div>
+
+      ${licenseHeaderPanel}
 
       ${showMetaGroups ? `<div class="meta-groups">
         ${agentGroup}
