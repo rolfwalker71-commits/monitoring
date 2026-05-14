@@ -311,7 +311,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.135**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.4.136**)
 - Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.4.89**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
@@ -319,8 +319,10 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
-| 1.4.135 | 14.05.2026 | Add SAP license extraction for Linux (collect_and_send.sh) from /usr/sap/SAPBusinessOne/B1_SHF/Lizenz* paths |
-| 1.4.135 | 14.05.2026 | Add SAP license information extraction and display (Hardware Key, Instno, Expiration, System Nr, Customer Name, Customer No) |
+| 1.4.136 | 14.05.2026 | Reduce font sizes in license panel and hide license title |
+| 1.4.136 | 14.05.2026 | Add SAP license extraction for Linux (collect_and_send.sh) from /usr/sap/SAPBusinessOne/B1_SHF/Lizenz* paths |
+| 1.4.136 | 14.05.2026 | Reduce font sizes in license panel and hide license title |
+| 1.4.136 | 14.05.2026 | Add SAP license information extraction and display (Hardware Key, Instno, Expiration, System Nr, Customer Name, Customer No) |
 | 1.4.122 | 14.05.2026 | Trend-Digest respektiert jetzt die gewählten Metrik-Kategorien (CPU/RAM/SWAP/Filesystem) auch in API, Testmail und geplantem Versand |
 | 1.4.121 | 13.05.2026 | Fix database lifecycle changelog tracking and backfill for SQL/HANA payloads |
 | 1.4.120 | 12.05.2026 | Fix user settings wiring: Trend Digest metrics + Host Interests now persist via user-preferences endpoint; mail profile save no longer resets digest selections |
@@ -381,7 +383,7 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
-### 1.4.135 (14.05.2026)
+### 1.4.136 (14.05.2026)
 - Add SAP license information extraction and display (Hardware Key, Instno, Expiration, System Nr, Customer Name, Customer No)
 
 ### v1.4.75 (11. Mai 2026)

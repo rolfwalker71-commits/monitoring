@@ -4494,6 +4494,7 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .report-license-title {
+  display: none;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -4523,7 +4524,7 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .report-license-item strong {
   flex: 0 0 108px;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 500;
   color: #3e5f8d;
 }
@@ -4532,7 +4533,7 @@ body[data-theme="dark"] .trend-progress-bar {
   min-width: 0;
   word-break: break-word;
   color: #122038;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
 }
 
@@ -4542,7 +4543,7 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .report-license-meta {
   margin: 3px 0 0;
-  font-size: 9px;
+  font-size: 8px;
   color: #5f78a0;
 }
 
