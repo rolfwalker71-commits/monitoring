@@ -9838,14 +9838,22 @@ function renderSystemOverviewAddons(payload) {
   }
 
   const renderListItems = (rows, nameKey, versionKey) => {
-    const listRows = rows.slice(0, 8).map((row) => {
+    const maxVisible = 10;
+    const renderRow = (row) => {
       const name = escapeHtml(asText(row?.[nameKey], "-"));
       const versionRaw = asText(row?.[versionKey], "").trim();
       const version = versionRaw ? escapeHtml(versionRaw) : "";
       return `<li>${name}${version ? ` <span class="so-addon-version">${version}</span>` : ""}</li>`;
-    }).join("");
-    const rest = rows.length > 8 ? `<li class="so-addon-rest">+${rows.length - 8} weitere</li>` : "";
-    return `${listRows}${rest}`;
+    };
+
+    const visibleRowsHtml = rows.slice(0, maxVisible).map(renderRow).join("");
+    if (rows.length <= maxVisible) {
+      return visibleRowsHtml;
+    }
+
+    const hiddenRowsHtml = rows.slice(maxVisible).map(renderRow).join("");
+    const hiddenCount = rows.length - maxVisible;
+    return `${visibleRowsHtml}<li class="so-addon-more"><details><summary>+${hiddenCount} weitere</summary><ul class="so-addon-list so-addon-list-nested">${hiddenRowsHtml}</ul></details></li>`;
   };
 
   let result = "";
@@ -9941,7 +9949,7 @@ function renderSystemOverviewLicenseInfos(payload) {
 
   const openAttr = state.systemOverviewAddonsExpanded === true ? " open" : "";
   const rowsHtml = rows.map((entry) => {
-    return `<li><strong>${escapeHtml(entry.label)}:</strong> <span>${escapeHtml(entry.value)}</span></li>`;
+    return `<li><strong class="so-license-label">${escapeHtml(entry.label)}:</strong> <span class="so-license-value">${escapeHtml(entry.value)}</span></li>`;
   }).join("");
 
   return `
