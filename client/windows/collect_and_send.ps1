@@ -9,11 +9,15 @@
 
 .PARAMETER JitterMaxSec
     Override maximum jitter delay for this run (in seconds).
+
+.PARAMETER DebugPayload
+    Print JSON payload to stdout instead of sending it (useful for debugging).
 #>
 [CmdletBinding()]
 param(
     [switch]$NoJitter,
-    [int]$JitterMaxSec = 0
+    [int]$JitterMaxSec = 0,
+    [switch]$DebugPayload
 )
 
 Set-StrictMode -Version Latest
@@ -1690,7 +1694,13 @@ $payload = @"
 }
 "@
 
-# ---- Send ----
+# ---- Debug output or Send ----
+if ($DebugPayload) {
+    Write-Host "=== DEBUG PAYLOAD ===" 
+    Write-Host $payload
+    exit 0
+}
+
 try {
     Send-Payload $payload
 } catch {
