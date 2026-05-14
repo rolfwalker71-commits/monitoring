@@ -4520,18 +4520,22 @@ body[data-theme="dark"] .trend-progress-bar {
   gap: 1px;
   align-items: center;
   min-width: 0;
+  overflow: hidden;
 }
 
 .report-license-item strong {
-  flex: 0 0 108px;
+  flex: 0 0 96px;
   font-size: 9px;
   font-weight: 500;
   color: #3e5f8d;
+  white-space: nowrap;
 }
 
 .report-license-item span {
   min-width: 0;
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: #122038;
   font-size: 9px;
   font-weight: 700;
@@ -5550,7 +5554,7 @@ body[data-theme="dark"] th {
   }
 
   .report-license-item strong {
-    flex-basis: 112px;
+    flex-basis: 96px;
   }
 
   .analysis-header {
