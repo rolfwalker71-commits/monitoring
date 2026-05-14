@@ -4517,8 +4517,8 @@ body[data-theme="dark"] .trend-progress-bar {
 .report-license-item {
   margin: 0;
   display: flex;
-  gap: 5px;
-  align-items: baseline;
+  gap: 2px;
+  align-items: center;
   min-width: 0;
 }
 
