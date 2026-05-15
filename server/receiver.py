@@ -530,6 +530,7 @@ def init_db() -> None:
                 triggered_at_utc TEXT NOT NULL,
                 reason TEXT NOT NULL DEFAULT '',
                 report_id INTEGER,
+                instance_name TEXT NOT NULL DEFAULT 'MSSQLSERVER',
                 UNIQUE(hostname, database_name, action, report_id)
             )
             """
@@ -540,6 +541,13 @@ def init_db() -> None:
             ON database_lifecycle(hostname, triggered_at_utc DESC)
             """
         )
+        # Migration: Add instance_name column if missing (for old databases)
+        existing_database_lifecycle_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(database_lifecycle)").fetchall()
+        }
+        if "instance_name" not in existing_database_lifecycle_columns:
+            conn.execute("ALTER TABLE database_lifecycle ADD COLUMN instance_name TEXT NOT NULL DEFAULT 'MSSQLSERVER'")
         conn.execute(
             """
             INSERT INTO alarm_settings (
@@ -1761,16 +1769,32 @@ def log_database_lifecycle_event(
     report_id: int | None = None,
     triggered_at_utc: str | None = None,
 ) -> None:
-    """Log database creation/deletion/rename events."""
+    """Log database creation/deletion/rename events.
+    
+    Supports composite keys in format 'INSTANCE::DBNAME' to track multiple SQL instances.
+    If database_name contains '::', it will be split to extract instance_name.
+    """
     event_time_utc = str(triggered_at_utc or "").strip() or utc_now_iso()
+    
+    # Parse composite key "INSTANCE::DBNAME" if present, otherwise default to "MSSQLSERVER"
+    instance_name = "MSSQLSERVER"
+    db_name = database_name
+    if "::" in database_name:
+        parts = database_name.split("::", 1)
+        instance_name = str(parts[0] or "MSSQLSERVER").strip() or "MSSQLSERVER"
+        db_name = str(parts[1] or "").strip()
+    
+    if not db_name:
+        return  # Skip empty database names
+    
     conn.execute(
         """
         INSERT OR IGNORE INTO database_lifecycle (
-            hostname, database_name, action, triggered_by, triggered_at_utc, reason, report_id
+            hostname, database_name, action, triggered_by, triggered_at_utc, reason, report_id, instance_name
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (hostname, database_name, action, triggered_by, event_time_utc, reason, report_id),
+        (hostname, db_name, action, triggered_by, event_time_utc, reason, report_id, instance_name),
     )
 
 
@@ -1781,13 +1805,17 @@ def _extract_database_inventory(payload: dict) -> set[str]:
     inventory: set[str] = set()
     system_db_names = {"master", "model", "msdb", "tempdb"}
 
-    def _add_name(raw_name: object, *, allow_system: bool = True) -> None:
+    def _add_name(raw_name: object, *, allow_system: bool = True, instance_name: str = "") -> None:
         name = str(raw_name or "").strip()
         if not name:
             return
         if not allow_system and name.lower() in system_db_names:
             return
-        inventory.add(name)
+        # Use composite key "INSTANCE::DBNAME" when instance_name is available to support multiple instances
+        if instance_name:
+            inventory.add(f"{instance_name}::{name}")
+        else:
+            inventory.add(name)
 
     legacy_databases = payload.get("databases")
     if isinstance(legacy_databases, dict):
@@ -1805,15 +1833,16 @@ def _extract_database_inventory(payload: dict) -> set[str]:
     for instance in sql_instances:
         if not isinstance(instance, dict):
             continue
+        instance_name = str(instance.get("name", "")).strip() or "MSSQLSERVER"
         databases = instance.get("databases") if isinstance(instance.get("databases"), list) else []
         for db_entry in databases:
             if not isinstance(db_entry, dict):
-                _add_name(db_entry, allow_system=False)
+                _add_name(db_entry, allow_system=False, instance_name=instance_name)
                 continue
             db_name = db_entry.get("name")
             if bool(db_entry.get("system_db")):
                 continue
-            _add_name(db_name, allow_system=False)
+            _add_name(db_name, allow_system=False, instance_name=instance_name)
 
     hana_info = payload.get("sap_hana") if isinstance(payload.get("sap_hana"), dict) else {}
     hana_schemas = hana_info.get("schemas") if isinstance(hana_info.get("schemas"), list) else []
@@ -1887,7 +1916,7 @@ def get_database_lifecycle_for_host(
     """Get database lifecycle events for a host."""
     rows = conn.execute(
         """
-        SELECT id, database_name, action, triggered_by, triggered_at_utc, reason
+        SELECT id, database_name, action, triggered_by, triggered_at_utc, reason, COALESCE(instance_name, 'MSSQLSERVER')
         FROM database_lifecycle
         WHERE hostname = ?
         ORDER BY triggered_at_utc DESC
@@ -1908,6 +1937,7 @@ def get_database_lifecycle_for_host(
                 "triggered_by": row[3],
                 "triggered_at_utc": row[4],
                 "reason": row[5],
+                "instance_name": row[6],
             }
             for row in rows
         ],
@@ -2002,27 +2032,49 @@ def backfill_database_lifecycle(conn: sqlite3.Connection, days: int = 7) -> dict
 
         # Insert events for new databases
         for db_name in new_dbs:
+            # Parse composite key "INSTANCE::DBNAME" if present
+            instance_name = "MSSQLSERVER"
+            clean_db_name = db_name
+            if "::" in db_name:
+                parts = db_name.split("::", 1)
+                instance_name = str(parts[0] or "MSSQLSERVER").strip() or "MSSQLSERVER"
+                clean_db_name = str(parts[1] or "").strip()
+            
+            if not clean_db_name:
+                continue
+            
             conn.execute(
                 """
                 INSERT OR IGNORE INTO database_lifecycle (
-                    hostname, database_name, action, triggered_by, triggered_at_utc, reason, report_id
+                    hostname, database_name, action, triggered_by, triggered_at_utc, reason, report_id, instance_name
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (hostname, db_name, "create", "system", report_time_utc, "Detected in backfill", report_id),
+                (hostname, clean_db_name, "create", "system", report_time_utc, "Detected in backfill", report_id, instance_name),
             )
             inserted_events += 1
 
         # Insert events for deleted databases
         for db_name in deleted_dbs:
+            # Parse composite key "INSTANCE::DBNAME" if present
+            instance_name = "MSSQLSERVER"
+            clean_db_name = db_name
+            if "::" in db_name:
+                parts = db_name.split("::", 1)
+                instance_name = str(parts[0] or "MSSQLSERVER").strip() or "MSSQLSERVER"
+                clean_db_name = str(parts[1] or "").strip()
+            
+            if not clean_db_name:
+                continue
+            
             conn.execute(
                 """
                 INSERT OR IGNORE INTO database_lifecycle (
-                    hostname, database_name, action, triggered_by, triggered_at_utc, reason, report_id
+                    hostname, database_name, action, triggered_by, triggered_at_utc, reason, report_id, instance_name
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (hostname, db_name, "delete", "system", report_time_utc, "Detected in backfill", report_id),
+                (hostname, clean_db_name, "delete", "system", report_time_utc, "Detected in backfill", report_id, instance_name),
             )
             inserted_events += 1
 

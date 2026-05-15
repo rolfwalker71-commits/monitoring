@@ -329,14 +329,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.22**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.22**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.5.23**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.5.23**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.5.23  | 15.05.2026 | Support multiple SQL Server instances with instance_name tracking in database inventory and lifecycle; display instance info in DB overview table |
 | 1.5.22  | 14.05.2026 | Add a printable A4 cheat sheet, a dedicated alerting/mail/OAuth comic page, and visual preview tiles on the process docs start page |
 | 1.5.21  | 14.05.2026 | Unify the process HTML docs with a shared stylesheet and add a comic-style monitoring cheat sheet for key processes, scripts and parameters |
 | 1.5.20  | 14.05.2026 | Remove the temporary local Mermaid validation script from the repository and keep the documentation release clean |

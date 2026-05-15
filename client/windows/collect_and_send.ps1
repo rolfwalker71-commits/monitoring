@@ -423,6 +423,7 @@ GROUP BY database_name, [type]
                     $lastDiffBackup = if ($bk.ContainsKey('I')) { ConvertTo-JsonString $bk['I'] } else { '' }
                     $lastLogBackup = if ($bk.ContainsKey('L')) { ConvertTo-JsonString $bk['L'] } else { '' }
                     $dbJson  = '{"name":' + (ConvertTo-JsonString $db.name | ForEach-Object { '"' + $_ + '"' }) +
+                               ',"instance_name":"' + (ConvertTo-JsonString $instanceName) + '"' +
                                ',"system_db":' + $isSystemText +
                                ',"state":"'          + (ConvertTo-JsonString $db.state)           + '"' +
                                ',"recovery_model":"' + (ConvertTo-JsonString $db.recovery_model)  + '"' +

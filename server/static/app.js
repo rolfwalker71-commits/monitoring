@@ -5312,6 +5312,7 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
           } else {
             const rows = dbs.map((db) => {
               const name = asText(db.name, "-");
+              const instanceName = asText(db.instance_name, instName);
               const isSystem = db.system_db === true;
               const state = asText(db.state, "-");
               const recovery = asText(db.recovery_model, "-");
@@ -5330,8 +5331,12 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
 
               const stateClass = state.toLowerCase() === "online" ? "" : " db-state-warn";
               const systemClass = isSystem ? " db-row-system" : "";
+              const instanceCol = instances.length > 1 
+                ? `<td class="db-instance-cell">${escapeHtml(instanceName)}</td>`
+                : '';
               return `
                 <tr class="${stateClass}${systemClass}">
+                  ${instanceCol}
                   <td>${escapeHtml(name)}${isSystem ? ' <span class="db-sys-badge">sys</span>' : ""}</td>
                   <td>${escapeHtml(state)}</td>
                   <td>${escapeHtml(recovery)}</td>
@@ -5339,11 +5344,13 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
                   <td class="db-bk-cell">${fmtBk(fullBk)}</td>
                 </tr>`;
             }).join("");
+            const instanceHeaderCol = instances.length > 1 ? '<th class="db-instance-cell">Instanz</th>' : '';
             dbTableHtml = `
               <div class="table-wrap">
                 <table class="db-table">
                   <thead>
                     <tr>
+                      ${instanceHeaderCol}
                       <th>Datenbank</th>
                       <th>Status</th>
                       <th>Recovery</th>
