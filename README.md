@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.46  | 16.05.2026 | Fix visual alignment of the SQL grant code snippet in terminal view by removing unintended indentation and tidying related CSS |
 | 1.6.45  | 16.05.2026 | Refresh OpenAPI spec: add missing admin endpoints (login events, database stats, database vacuum), mark public/no-username-password endpoints clearly, and update API doc versioning |
 | 1.6.44  | 16.05.2026 | Add a terminal-style SQL backup hint with the required sa-run grant snippet when DB sizes are missing in the SQL overview |
 | 1.6.43  | 16.05.2026 | Add a subtle SQL/HANA license hint in the Lizenzinfos block that clarifies the required filename B01.txt and the searched paths on Windows and Linux |

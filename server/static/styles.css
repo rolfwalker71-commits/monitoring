@@ -6046,9 +6046,6 @@ body[data-theme="dark"] .fs-bar-wrap {
 .db-size-hint-text {
   margin: 0 0 6px;
 }
-.db-size-hint-sql {
-  margin-top: 0;
-}
 .db-size-hint .terminal-viewer-section {
   padding: 2px 0 0;
 }
