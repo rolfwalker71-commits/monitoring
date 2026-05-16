@@ -98,6 +98,7 @@
                 <button id="hostConfigChangesTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="hostConfigChangesView">Changelog</button>
                 <button id="agentSourceStatusTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="agentSourceStatusView">Agent Quelle</button>
                 <button id="globalAdminAlertSubsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminAlertSubsView">Alert Abos</button>
+                <button id="globalAdminLoginAuditTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminLoginAuditView">Login Changelog</button>
                 <button id="globalAdminSettingsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminSettingsView">Admin Settings</button>
               </div>
             </div>
@@ -307,6 +308,36 @@
                 </div>
                 <div id="adminAlertSubscriptionsContainer">
                   <p class="muted">Noch keine Daten geladen.</p>
+                </div>
+              </section>
+            </div>
+
+            <div id="globalAdminLoginAuditView" class="hidden" role="tabpanel" aria-labelledby="globalAdminLoginAuditTabButton">
+              <section class="settings-subsection">
+                <div class="settings-subsection-head">
+                  <h5>Login Changelog (Admin)</h5>
+                  <p class="count compact">Die letzten 50 Web-Logins mit Benutzer, Zeit und IP</p>
+                </div>
+                <div class="alarm-settings-actions">
+                  <button id="reloadAdminLoginAuditButton" type="button">Aktualisieren</button>
+                  <p id="adminLoginAuditStatus" class="count compact"></p>
+                </div>
+                <div class="table-wrap user-management-table-wrap">
+                  <table class="user-management-table admin-login-audit-table">
+                    <thead>
+                      <tr>
+                        <th>Zeit</th>
+                        <th>Benutzer</th>
+                        <th>IP</th>
+                        <th>Methode</th>
+                      </tr>
+                    </thead>
+                    <tbody id="adminLoginAuditRows">
+                      <tr>
+                        <td colspan="4" class="muted">Noch keine Daten geladen.</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </section>
             </div>
@@ -821,10 +852,6 @@
             <div class="hosts-column-scroll">
               <div class="sidebar-card-header">
                 <h3>🖥️ Hosts</h3>
-                <div id="activeUsersBar" class="active-users-bar active-users-bar-inline hidden">
-                  <span class="active-users-label">Aktiv:</span>
-                  <div id="activeUsersList" class="active-users-list"></div>
-                </div>
                 <p id="hostCount" class="count"></p>
               </div>
               <section id="hostToolsHeader" class="sidebar-tools hidden">

@@ -1541,9 +1541,9 @@ body[data-theme="dark"] .hosts-column {
 /* Sidebar card header: title + count on same line */
 .sidebar-card-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    "title users"
+    "title"
     "count count";
   align-items: center;
   column-gap: var(--space-2);
@@ -1560,11 +1560,6 @@ body[data-theme="dark"] .hosts-column {
   font-weight: 800;
   color: #1f3555;
   letter-spacing: 0.01em;
-}
-
-.sidebar-card-header .active-users-bar-inline {
-  grid-area: users;
-  justify-self: end;
 }
 
 .sidebar-card-header .count {
@@ -5760,13 +5755,7 @@ body[data-theme="dark"] th {
     grid-template-columns: 1fr;
     grid-template-areas:
       "title"
-      "users"
       "count";
-  }
-
-  .sidebar-card-header .active-users-bar-inline {
-    justify-self: start;
-    justify-content: flex-start;
   }
 
   .layout {

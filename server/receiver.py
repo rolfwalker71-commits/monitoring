@@ -321,6 +321,25 @@ def init_db() -> None:
             )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS web_login_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                logged_at_utc TEXT NOT NULL,
+                username TEXT NOT NULL,
+                display_name_snapshot TEXT NOT NULL DEFAULT '',
+                source_ip TEXT NOT NULL DEFAULT '',
+                auth_method TEXT NOT NULL DEFAULT 'password',
+                user_agent TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_web_login_events_time
+            ON web_login_events(logged_at_utc DESC)
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS agent_commands (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 created_at_utc TEXT NOT NULL,
@@ -981,6 +1000,63 @@ def list_active_web_sessions(conn: sqlite3.Connection) -> list[dict]:
         }
         for row in rows
         if str(row[0] or "").strip()
+    ]
+
+
+def record_web_login_event(
+    conn: sqlite3.Connection,
+    username: str,
+    display_name: str,
+    source_ip: str,
+    auth_method: str,
+    user_agent: str,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO web_login_events (
+            logged_at_utc,
+            username,
+            display_name_snapshot,
+            source_ip,
+            auth_method,
+            user_agent
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            utc_now_iso(),
+            str(username or "").strip(),
+            str(display_name or "").strip(),
+            str(source_ip or "").strip(),
+            str(auth_method or "password").strip() or "password",
+            str(user_agent or "").strip(),
+        ),
+    )
+
+
+def list_web_login_events(conn: sqlite3.Connection, limit: int = 50) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT logged_at_utc,
+               username,
+               display_name_snapshot,
+               source_ip,
+               auth_method
+        FROM web_login_events
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (max(1, min(int(limit or 50), 200)),),
+    ).fetchall()
+    return [
+        {
+            "logged_at_utc": str(row[0] or ""),
+            "username": str(row[1] or ""),
+            "display_name": str(row[2] or ""),
+            "source_ip": str(row[3] or ""),
+            "auth_method": str(row[4] or "password"),
+        }
+        for row in rows
     ]
 
 
@@ -6894,6 +6970,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             host = (self.headers.get("Host", "") or "").strip() or "localhost"
         return f"{scheme}://{host}"
 
+    def _request_client_ip(self) -> str:
+        forwarded_for = (self.headers.get("X-Forwarded-For", "") or "").split(",")[0].strip()
+        if forwarded_for:
+            return forwarded_for
+        real_ip = (self.headers.get("X-Real-IP", "") or "").strip()
+        if real_ip:
+            return real_ip
+        return str((self.client_address or [""])[0] or "")
+
     def _absolute_url(self, path: str) -> str:
         return f"{self._external_base_url()}{path}"
 
@@ -7136,6 +7221,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "telegram_available": bool(alarm_settings.get("telegram_enabled")) and bool(str(alarm_settings.get("telegram_bot_token", "") or "").strip()),
                     },
                 )
+            return
+
+        if parsed.path == "/api/v1/admin/login-events":
+            if not self._require_admin_session():
+                return
+            query = parse_qs(parsed.query)
+            limit = parse_int(query, "limit", default=50, min_value=1, max_value=200)
+            with sqlite3.connect(DB_PATH) as conn:
+                entries = list_web_login_events(conn, limit)
+            self._send_json(HTTPStatus.OK, {"count": len(entries), "entries": entries})
             return
 
         if parsed.path == "/api/v1/oauth-settings":
@@ -8461,6 +8556,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     return
 
                 token, expires_at = create_web_session(conn, username)
+                record_web_login_event(
+                    conn,
+                    username=username,
+                    display_name=str(user.get("display_name", "") or ""),
+                    source_ip=self._request_client_ip(),
+                    auth_method="password",
+                    user_agent=str(self.headers.get("User-Agent", "") or ""),
+                )
                 conn.commit()
 
             self._send_json(

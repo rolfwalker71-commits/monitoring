@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.8   | 16.05.2026 | Remove the active-user chip from the sidebar header and add an admin-only login changelog view showing the latest 50 logins with timestamp, user, and source IP |
 | 1.6.7   | 16.05.2026 | Render overview and single-report side menus as one shared card with row-style items instead of individual card-like menu buttons |
 | 1.6.6   | 16.05.2026 | Move the sidebar content higher by removing the "Hosts und Historie" heading and relocating active-user info into the sidebar header on the right |
 | 1.6.5   | 16.05.2026 | Soften the global button palette and normalize button heights app-wide (including user-management actions) for a calmer, more consistent UI |
