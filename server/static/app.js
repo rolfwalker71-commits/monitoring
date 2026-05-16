@@ -5638,16 +5638,17 @@ function renderAgentConfig(agentConfigBlock) {
   if (!available && entries.length === 0) {
     return `<p class="muted">Keine Agent-Konfiguration übertragen.</p>`;
   }
-  const rows = entries.map(e => {
-    const k = escapeHtml(asText(e.key));
-    const v = asText(e.value) === "***"
-      ? `<span style="color:#94a3b8;font-style:italic;">***</span>`
-      : `<span>${escapeHtml(asText(e.value))}</span>`;
-    return `<tr><td style="padding:4px 10px 4px 0;color:#64748b;white-space:nowrap;vertical-align:top;">${k}</td><td style="padding:4px 0;word-break:break-all;">${v}</td></tr>`;
-  }).join("");
+  const lines = entries.map((entry) => {
+    const key = escapeHtml(asText(entry.key));
+    const rawValue = asText(entry.value);
+    const value = rawValue === "***"
+      ? `<span class="agent-config-secret">***</span>`
+      : `<span class="agent-config-value">${escapeHtml(rawValue)}</span>`;
+    return `<span class="agent-config-key">${key}</span>=${value}`;
+  }).join("\n");
   return `
     <p class="count compact">Pfad: ${escapeHtml(path || "-")}</p>
-    <table style="width:100%;border-collapse:collapse;font-size:12px;font-family:monospace;">${rows}</table>
+    <pre class="log-viewer agent-config-viewer">${lines || "Konfigurationsdatei ist vorhanden, enthält aber aktuell keine Einträge."}</pre>
   `;
 }
 

@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.35  | 16.05.2026 | Increase visible left/right/bottom padding in the Agent Update Log viewer and render agent.conf in the same terminal-style block for consistent readability |
 | 1.6.34  | 16.05.2026 | Add extra left/right/bottom padding inside the Agent Update Log viewer for improved readability |
 | 1.6.33  | 16.05.2026 | Enlarge emoji/text in the three top status chips and render their numeric counts in IBM Plex Mono for clearer telemetry styling |
 | 1.6.32  | 16.05.2026 | Ensure the three left status chips in the top action row use the same visual height as the three right icon buttons |

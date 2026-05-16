@@ -2789,7 +2789,7 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .log-viewer {
   margin: 8px 0 0;
-  padding: 12px 16px 16px;
+  padding: 14px 20px 18px;
   border-radius: 10px;
   border: 1px solid #cbd5e1;
   background: #0f172a;
@@ -2801,6 +2801,23 @@ body[data-theme="dark"] .trend-progress-bar {
   word-break: break-word;
   max-height: 420px;
   overflow: auto;
+}
+
+.agent-config-viewer {
+  margin-bottom: 2px;
+}
+
+.agent-config-key {
+  color: #93c5fd;
+}
+
+.agent-config-value {
+  color: #e2e8f0;
+}
+
+.agent-config-secret {
+  color: #94a3b8;
+  font-style: italic;
 }
 
 .host-search-box {
