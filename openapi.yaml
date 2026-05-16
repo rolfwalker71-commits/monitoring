@@ -1,14 +1,24 @@
 openapi: 3.0.3
 info:
   title: Monitoring Receiver API
-  version: 1.1.100
-  description: >-
+  version: 1.6.45
+  description: |-
     OpenAPI spec for the Monitoring server endpoints in receiver.py.
-    Most /api/v1 endpoints require an authenticated web session cookie,
-    except the agent endpoints used by collectors (X-Api-Key header).
+    Most /api/v1 endpoints require an authenticated web session cookie.
+
+    Public visibility (no username/password required) at a glance:
+    - GET /health (no auth)
+    - GET /api/v1/session (no auth; session status only)
+    - GET /oauth/microsoft/callback (OAuth redirect endpoint)
+    - Agent endpoints with X-Api-Key instead of username/password:
+      - GET /api/v1/agent-commands
+      - POST /api/v1/agent-command-result
+      - POST /api/v1/agent-report
 servers:
   - url: http://localhost:8080
 tags:
+  - name: Public
+    description: Endpoints callable without username/password (no auth or X-Api-Key)
   - name: Auth
   - name: User
   - name: Admin
@@ -22,7 +32,7 @@ tags:
 paths:
   /health:
     get:
-      tags: [Auth]
+      tags: [Auth, Public]
       summary: Health check
       operationId: getHealth
       responses:
@@ -38,7 +48,7 @@ paths:
 
   /api/v1/session:
     get:
-      tags: [Auth]
+      tags: [Auth, Public]
       summary: Current web session
       operationId: getSession
       responses:
@@ -566,7 +576,7 @@ paths:
 
   /api/v1/agent-commands:
     get:
-      tags: [Agent]
+      tags: [Agent, Public]
       summary: Agent pulls pending commands for itself
       operationId: getAgentCommands
       security:
@@ -607,7 +617,7 @@ paths:
 
   /api/v1/agent-command-result:
     post:
-      tags: [Agent]
+      tags: [Agent, Public]
       summary: Agent reports command execution result
       operationId: postAgentCommandResult
       security:
@@ -645,7 +655,7 @@ paths:
 
   /api/v1/agent-report:
     post:
-      tags: [Agent]
+      tags: [Agent, Public]
       summary: Submit monitoring report from agent
       operationId: postAgentReport
       security:
@@ -1227,6 +1237,112 @@ paths:
         '400':
           $ref: '#/components/responses/ErrorBadRequest'
 
+  /api/v1/admin/login-events:
+    get:
+      tags: [Admin]
+      summary: List recent web login events (admin)
+      operationId: getAdminLoginEvents
+      security:
+        - CookieAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
+      responses:
+        '200':
+          description: Recent login events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer, example: 25 }
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        logged_at_utc: { type: string, format: date-time }
+                        username: { type: string, example: admin }
+                        display_name: { type: string, example: Admin User }
+                        source_ip: { type: string, example: 192.168.1.44 }
+                        auth_method: { type: string, example: password }
+        '401':
+          $ref: '#/components/responses/ErrorUnauthorized'
+
+  /api/v1/admin/database-stats:
+    get:
+      tags: [Admin]
+      summary: Get SQLite maintenance stats (admin)
+      operationId: getAdminDatabaseStats
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Current database maintenance stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  stats:
+                    type: object
+                    properties:
+                      retention_days: { type: integer, example: 42 }
+                      reports_total: { type: integer, example: 31857 }
+                      hosts_with_reports: { type: integer, example: 34 }
+                      hosts_total: { type: integer, example: 34 }
+                      oldest_report_utc: { type: string, format: date-time }
+                      newest_report_utc: { type: string, format: date-time }
+                      avg_payload_bytes: { type: number, example: 16670.2 }
+                      max_payload_bytes: { type: integer, example: 71869 }
+                      alerts_total: { type: integer, example: 1200 }
+                      alerts_open: { type: integer, example: 17 }
+                      db_file_bytes: { type: integer, example: 562298880 }
+                      wal_file_bytes: { type: integer, example: 0 }
+                      shm_file_bytes: { type: integer, example: 32768 }
+                      total_file_bytes: { type: integer, example: 562331648 }
+                      page_size: { type: integer, example: 4096 }
+                      page_count: { type: integer, example: 137280 }
+                      freelist_count: { type: integer, example: 1024 }
+                      used_pages: { type: integer, example: 136256 }
+                      free_ratio: { type: number, example: 0.0075 }
+        '401':
+          $ref: '#/components/responses/ErrorUnauthorized'
+
+  /api/v1/admin/database-vacuum:
+    post:
+      tags: [Admin]
+      summary: Run manual SQLite VACUUM (admin)
+      operationId: postAdminDatabaseVacuum
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: VACUUM finished
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  message: { type: string, example: VACUUM abgeschlossen }
+                  result:
+                    type: object
+                    properties:
+                      reclaimed_bytes: { type: integer, example: 10485760 }
+                      duration_ms: { type: integer, example: 2140 }
+                      before:
+                        type: object
+                        additionalProperties: true
+                      after:
+                        type: object
+                        additionalProperties: true
+        '401':
+          $ref: '#/components/responses/ErrorUnauthorized'
+
   /api/v1/session/refresh:
     get:
       tags: [Auth]
@@ -1735,7 +1851,7 @@ paths:
 
   /oauth/microsoft/callback:
     get:
-      tags: [OAuth]
+      tags: [OAuth, Public]
       summary: Microsoft OAuth2 callback (redirect from Microsoft)
       operationId: getOauthMicrosoftCallback
       parameters:
