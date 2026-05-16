@@ -2788,7 +2788,7 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .log-viewer {
-  margin: 8px 0 0;
+  margin: 0;
   padding: 14px 20px 18px;
   border-radius: 10px;
   border: 1px solid #cbd5e1;
@@ -2805,6 +2805,14 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .agent-config-viewer {
   margin-bottom: 2px;
+}
+
+.terminal-viewer-section {
+  padding: 4px 14px 14px;
+}
+
+.terminal-viewer-section > .count.compact {
+  margin: 0 0 10px;
 }
 
 .agent-config-key {

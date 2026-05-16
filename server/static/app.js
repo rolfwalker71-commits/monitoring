@@ -5647,8 +5647,10 @@ function renderAgentConfig(agentConfigBlock) {
     return `<span class="agent-config-key">${key}</span>=${value}`;
   }).join("\n");
   return `
-    <p class="count compact">Pfad: ${escapeHtml(path || "-")}</p>
-    <pre class="log-viewer agent-config-viewer">${lines || "Konfigurationsdatei ist vorhanden, enthält aber aktuell keine Einträge."}</pre>
+    <div class="terminal-viewer-section">
+      <p class="count compact">Pfad: ${escapeHtml(path || "-")}</p>
+      <pre class="log-viewer agent-config-viewer">${lines || "Konfigurationsdatei ist vorhanden, enthält aber aktuell keine Einträge."}</pre>
+    </div>
   `;
 }
 
@@ -5668,8 +5670,10 @@ function renderAgentUpdateLog(agentUpdateBlock) {
   }
 
   return `
-    <p class="count compact">Pfad: ${escapeHtml(path || "-")} | Zeilen: ${Number.isFinite(lineCount) ? lineCount : allLines.length} (letzte 10)</p>
-    <pre class="log-viewer">${escapeHtml(lines.join("\n") || "Log-Datei ist vorhanden, enthaelt aber aktuell keine Zeilen.")}</pre>
+    <div class="terminal-viewer-section">
+      <p class="count compact">Pfad: ${escapeHtml(path || "-")} | Zeilen: ${Number.isFinite(lineCount) ? lineCount : allLines.length} (letzte 10)</p>
+      <pre class="log-viewer">${escapeHtml(lines.join("\n") || "Log-Datei ist vorhanden, enthaelt aber aktuell keine Zeilen.")}</pre>
+    </div>
   `;
 }
 
