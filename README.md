@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.19  | 16.05.2026 | Tighten top-header vertical spacing further, increase gap between "System Health Dashboard" and the version line, and normalize logout chip height to match the other top-header chips |
 | 1.6.18  | 16.05.2026 | Update all outgoing mail templates to match header branding: "System Health Dashboard" in one line and replace second-line "Dashboard" with version-only display |
 | 1.6.17  | 16.05.2026 | Refine top header layout: title changed to "System Health Dashboard" on one line, second line reduced to version info only, typography made slightly smaller/bolder, and vertical header padding tightened |
 | 1.6.16  | 16.05.2026 | Enlarge the top-right ANG logo in the header by ~30%, rename header title to "System Health", and apply the same branding text update across all digest/instant mail templates |

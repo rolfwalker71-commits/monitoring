@@ -192,7 +192,7 @@ body[data-theme="dark"] {
   background: linear-gradient(135deg, #f0f6ff 0%, #e8f2ff 100%);
   border: 1px solid #c7d9f0;
   border-radius: 14px;
-  padding: 6px 18px;
+  padding: 2px 16px;
 }
 
 .brand-tools {
@@ -290,7 +290,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .subtitle-meta {
-  margin: 1px 0 0;
+  margin: 5px 0 0;
   color: #64748b;
   font-size: 11px;
   font-weight: 700;
@@ -334,14 +334,18 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 .brand-user-badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   background: #dbeafe;
   color: #1e40af;
   border-radius: 20px;
-  padding: 4px 12px;
+  height: 30px;
+  padding: 0 12px;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
+  box-sizing: border-box;
 }
 
 .brand-user-badge::before {
