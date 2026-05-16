@@ -189,8 +189,8 @@ body[data-theme="dark"] {
   align-items: center;
   gap: 32px;
   margin-bottom: 10px;
-  background: linear-gradient(120deg, #F7A600 0%, #EF9F00 100%);
-  border: 1px solid #D08D05;
+  background: linear-gradient(135deg, #f0f6ff 0%, #e8f2ff 100%);
+  border: 1px solid #c7d9f0;
   border-radius: 14px;
   padding: 2px 16px;
 }
