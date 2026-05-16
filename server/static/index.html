@@ -797,7 +797,7 @@
                   <div class="alarm-settings-grid">
                     <label class="checkbox-line">
                       <input id="telegramEnabledInput" type="checkbox" />
-                      Telegram aktivieren
+                      Globales Telegram aktivieren
                     </label>
                     <label class="checkbox-line">
                       <input id="inactiveHostAlertEnabledInput" type="checkbox" />
@@ -818,12 +818,14 @@
                       <input id="inactiveHostAlertHoursInput" type="number" min="1" max="168" step="1" />
                     </label>
                     <label>
-                      Telegram Bot Token
+                      Globaler Telegram Bot Token
                       <input id="telegramBotTokenInput" type="text" placeholder="123456:ABC..." />
+                      <span class="settings-helper-text">Systemweiter Bot fuer Telegram-Versand.</span>
                     </label>
                     <label>
-                      Telegram Chat ID
+                      Globale Telegram Chat ID (optional)
                       <input id="telegramChatIdInput" type="text" placeholder="-1001234567890" />
+                      <span class="settings-helper-text">Gemeinsamer Team-Channel; persoenliche Chat IDs werden pro Benutzer gesetzt.</span>
                     </label>
                   </div>
                 </div>
@@ -835,7 +837,7 @@
                       <input id="aiTroubleshootEnabledInput" type="checkbox" />
                       KI Analyse aktivieren
                     </label>
-                    <label class="alarm-settings-grid-span2">
+                      Persoenliche Telegram Chat ID
                       OpenAI API Key
                       <input id="openaiApiKeyInput" type="password" placeholder="sk-... (leer lassen um bestehenden zu behalten)" autocomplete="new-password" />
                       <span id="openaiApiKeyIsSetHint" class="count compact" style="margin-top:2px"></span>

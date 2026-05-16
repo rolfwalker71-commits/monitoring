@@ -493,6 +493,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.61 (16. Mai 2026)
+
+- **Telegram-Settings im UI praezisiert**: Globaler Bot/Channel klar von persoenlicher Telegram Chat ID getrennt beschriftet.
+- **Benachrichtigungsbereich verstaendlicher**: Hinweise im Admin-Panel erklaeren, dass Bot Token systemweit ist und persoenliche Chat IDs pro Benutzer gepflegt werden.
+
 ### v1.6.60 (16. Mai 2026)
 
 - **Separates Telegram Heads-Up Intervall**: In den globalen Alarm-Einstellungen gibt es jetzt ein eigenes Feld fuer Telegram-Reminder, unabhaengig vom Mail-Intervall.
