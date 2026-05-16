@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.3   | 16.05.2026 | Restore and emphasize the light/dark mode switch in the header so it remains clearly visible and usable in both themes |
 | 1.6.2   | 16.05.2026 | Wrap overview/detail navigation menus in card-style containers matching the new sidebar filter/search card design, including aligned dark-mode styling |
 | 1.6.1   | 16.05.2026 | Extend the clean enterprise design language app-wide: unified chip sizes/colors, card-style grouping for related sections, and cohesive light/dark visual refinements without logic changes |
 | 1.6.0   | 16.05.2026 | Apply host sidebar design direction A (Clean Enterprise): improved visual hierarchy, consistent spacing tokens, clearer host card states, and refined typography for headers/filters/cards |

@@ -326,7 +326,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
-  margin-left: 6px;
+  margin-left: auto;
 }
 
 .brand-user-badge {
@@ -366,25 +366,29 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 /* ── Dark Mode Toggle Switch ──────────────────────────────── */
 .theme-toggle {
-  display: inline-flex;
+  display: inline-flex !important;
+  visibility: visible;
+  opacity: 1;
   align-items: center;
   gap: 6px;
-  background: transparent;
-  border: 1px solid #c8d5e6;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
+  border: 1px solid #9fb8d8;
   border-radius: 999px;
   padding: 3px 10px 3px 4px;
   cursor: pointer;
-  color: #42526e;
+  color: #2f4968;
   font-size: 12px;
-  font-weight: 600;
-  height: 28px;
+  font-weight: 700;
+  height: 30px;
   white-space: nowrap;
-  transition: border-color 140ms ease, background 140ms ease;
+  box-shadow: 0 2px 6px rgba(30, 58, 95, 0.1);
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
 }
 
 .theme-toggle:hover {
-  border-color: #9fb8d8;
-  background: #f0f6ff;
+  border-color: #6f97c8;
+  background: #ffffff;
+  box-shadow: 0 4px 10px rgba(30, 58, 95, 0.14);
 }
 
 .theme-toggle-track {
@@ -6719,13 +6723,16 @@ body[data-theme="dark"] .brand-logout-btn:hover {
 }
 
 body[data-theme="dark"] .theme-toggle {
-  border-color: #2a3c59;
-  color: #a9bfd9;
+  border-color: #3b5c84;
+  background: linear-gradient(180deg, #1c3150 0%, #172a45 100%);
+  color: #d4e6fb;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 body[data-theme="dark"] .theme-toggle:hover {
-  border-color: #4a6f9f;
-  background: #1a2b42;
+  border-color: #5d86b8;
+  background: #223a5c;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 
 /* ── Dark Mode: Settings & misc ───────────────────────────── */
