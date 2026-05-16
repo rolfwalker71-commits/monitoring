@@ -68,7 +68,6 @@
 
       <section id="appPanel" class="panel hidden">
         <div class="panel-header">
-          <h2>Hosts und Historie</h2>
           <div class="panel-actions">
             <span id="headerAlertChip" class="header-stat-chip header-stat-chip-alert hidden" title="Globale offene Alerts (Alle)">🚨 <span id="headerAlertCount">0</span> <span class="header-chip-scope">Alle</span></span>
             <span id="headerTrendsChip" class="header-stat-chip header-stat-chip-warn hidden" title="Kritische Trends (24h)">📈 <span id="headerTrendsCount">0</span> <span class="header-chip-scope">24h</span></span>
@@ -78,10 +77,6 @@
             <button id="openAlarmSettingsButton" class="btn-emoji-pill" type="button" title="Einstellungen">⚙️</button>
             <button id="refreshButton" class="btn-emoji-pill" title="Neu laden">↻</button>
           </div>
-        </div>
-        <div id="activeUsersBar" class="active-users-bar hidden">
-          <span class="active-users-label">Aktiv angemeldet:</span>
-          <div id="activeUsersList" class="active-users-list"></div>
         </div>
 
         <div id="globalView" class="view-section hidden settings-view">
@@ -826,6 +821,10 @@
             <div class="hosts-column-scroll">
               <div class="sidebar-card-header">
                 <h3>🖥️ Hosts</h3>
+                <div id="activeUsersBar" class="active-users-bar active-users-bar-inline hidden">
+                  <span class="active-users-label">Aktiv:</span>
+                  <div id="activeUsersList" class="active-users-list"></div>
+                </div>
                 <p id="hostCount" class="count"></p>
               </div>
               <section id="hostToolsHeader" class="sidebar-tools hidden">

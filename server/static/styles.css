@@ -444,14 +444,16 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 }
 
 .panel-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+  width: 100%;
 }
 
 .active-users-bar {
@@ -461,6 +463,17 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   flex-wrap: wrap;
   margin: -4px 0 14px;
   color: var(--muted);
+}
+
+.active-users-bar-inline {
+  margin: 0;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.active-users-bar-inline .active-users-label {
+  letter-spacing: 0.02em;
+  text-transform: none;
 }
 
 .active-users-label {
@@ -1527,16 +1540,21 @@ body[data-theme="dark"] .hosts-column {
 
 /* Sidebar card header: title + count on same line */
 .sidebar-card-header {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "title users"
+    "count count";
+  align-items: center;
+  column-gap: var(--space-2);
+  row-gap: var(--space-1);
   margin-bottom: var(--space-2);
   padding-bottom: var(--space-2);
   border-bottom: 1px solid #d8e4f2;
 }
 
 .sidebar-card-header h3 {
+  grid-area: title;
   margin: 0;
   font-size: 20px;
   font-weight: 800;
@@ -1544,7 +1562,13 @@ body[data-theme="dark"] .hosts-column {
   letter-spacing: 0.01em;
 }
 
+.sidebar-card-header .active-users-bar-inline {
+  grid-area: users;
+  justify-self: end;
+}
+
 .sidebar-card-header .count {
+  grid-area: count;
   font-size: 11px;
   color: #5f7792;
   text-align: left;
@@ -5726,6 +5750,23 @@ body[data-theme="dark"] th {
   .panel-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .panel-actions {
+    justify-content: flex-start;
+  }
+
+  .sidebar-card-header {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "title"
+      "users"
+      "count";
+  }
+
+  .sidebar-card-header .active-users-bar-inline {
+    justify-self: start;
+    justify-content: flex-start;
   }
 
   .layout {
