@@ -493,6 +493,13 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.58 (16. Mai 2026)
+
+- **Globale Alarm-Einstellungen sauber verdrahtet**: Backend persistiert jetzt alle Felder aus dem Admin-Panel konsistent (inkl. CPU/RAM-Schwellen, Inaktive-Hosts-Optionen und KI-Parameter).
+- **Fix fuer verlorene Inaktive-Hosts-Einstellung**: `Inaktive Hosts alarmieren` und `Inaktiv ab (Stunden)` bleiben nach Speichern/Neuladen erhalten.
+- **API-Response vervollstaendigt**: `GET/POST /api/v1/alarm-settings` liefern jetzt die vollstaendige Feldmenge fuer das UI.
+- **OpenAI-Key sicher behandelt**: Key bleibt serverseitig erhalten, wenn das Feld leer bleibt; API liefert nur `openai_api_key_is_set` statt Klartext.
+
 ### 1.4.137 (14.05.2026)
 - Add SAP license information extraction and display (Hardware Key, Instno, Expiration, System Nr, Customer Name, Customer No)
 

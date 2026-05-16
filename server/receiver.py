@@ -166,7 +166,22 @@ def init_db() -> None:
                 telegram_enabled INTEGER NOT NULL,
                 telegram_bot_token TEXT NOT NULL,
                 telegram_chat_id TEXT NOT NULL,
-                updated_at_utc TEXT NOT NULL
+                updated_at_utc TEXT NOT NULL,
+                alert_reminder_interval_hours INTEGER NOT NULL DEFAULT 0,
+                cpu_warning_threshold_percent REAL NOT NULL DEFAULT 80,
+                cpu_critical_threshold_percent REAL NOT NULL DEFAULT 95,
+                cpu_alert_window_reports INTEGER NOT NULL DEFAULT 4,
+                ram_warning_threshold_percent REAL NOT NULL DEFAULT 85,
+                ram_critical_threshold_percent REAL NOT NULL DEFAULT 95,
+                ram_alert_window_reports INTEGER NOT NULL DEFAULT 4,
+                inactive_host_alert_enabled INTEGER NOT NULL DEFAULT 0,
+                inactive_host_alert_hours INTEGER NOT NULL DEFAULT 3,
+                ai_troubleshoot_enabled INTEGER NOT NULL DEFAULT 1,
+                openai_api_key TEXT NOT NULL DEFAULT '',
+                openai_model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+                openai_timeout_sec INTEGER NOT NULL DEFAULT 12,
+                openai_max_tokens INTEGER NOT NULL DEFAULT 1200,
+                ai_troubleshoot_cache_ttl_sec INTEGER NOT NULL DEFAULT 600
             )
             """
         )
@@ -182,6 +197,34 @@ def init_db() -> None:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN critical_trigger_immediate INTEGER NOT NULL DEFAULT 1")
         if "alert_reminder_interval_hours" not in existing_alarm_columns:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN alert_reminder_interval_hours INTEGER NOT NULL DEFAULT 0")
+        if "cpu_warning_threshold_percent" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN cpu_warning_threshold_percent REAL NOT NULL DEFAULT 80")
+        if "cpu_critical_threshold_percent" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN cpu_critical_threshold_percent REAL NOT NULL DEFAULT 95")
+        if "cpu_alert_window_reports" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN cpu_alert_window_reports INTEGER NOT NULL DEFAULT 4")
+        if "ram_warning_threshold_percent" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN ram_warning_threshold_percent REAL NOT NULL DEFAULT 85")
+        if "ram_critical_threshold_percent" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN ram_critical_threshold_percent REAL NOT NULL DEFAULT 95")
+        if "ram_alert_window_reports" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN ram_alert_window_reports INTEGER NOT NULL DEFAULT 4")
+        if "inactive_host_alert_enabled" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN inactive_host_alert_enabled INTEGER NOT NULL DEFAULT 0")
+        if "inactive_host_alert_hours" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN inactive_host_alert_hours INTEGER NOT NULL DEFAULT 3")
+        if "ai_troubleshoot_enabled" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN ai_troubleshoot_enabled INTEGER NOT NULL DEFAULT 1")
+        if "openai_api_key" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN openai_api_key TEXT NOT NULL DEFAULT ''")
+        if "openai_model" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN openai_model TEXT NOT NULL DEFAULT 'gpt-4o-mini'")
+        if "openai_timeout_sec" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN openai_timeout_sec INTEGER NOT NULL DEFAULT 12")
+        if "openai_max_tokens" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN openai_max_tokens INTEGER NOT NULL DEFAULT 1200")
+        if "ai_troubleshoot_cache_ttl_sec" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN ai_troubleshoot_cache_ttl_sec INTEGER NOT NULL DEFAULT 600")
 
         existing_alert_columns = {
             str(row[1])
@@ -580,9 +623,24 @@ def init_db() -> None:
                 telegram_enabled,
                 telegram_bot_token,
                 telegram_chat_id,
-                updated_at_utc
+                updated_at_utc,
+                alert_reminder_interval_hours,
+                cpu_warning_threshold_percent,
+                cpu_critical_threshold_percent,
+                cpu_alert_window_reports,
+                ram_warning_threshold_percent,
+                ram_critical_threshold_percent,
+                ram_alert_window_reports,
+                inactive_host_alert_enabled,
+                inactive_host_alert_hours,
+                ai_troubleshoot_enabled,
+                openai_api_key,
+                openai_model,
+                openai_timeout_sec,
+                openai_max_tokens,
+                ai_troubleshoot_cache_ttl_sec
             )
-            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO NOTHING
             """,
             (
@@ -595,6 +653,21 @@ def init_db() -> None:
                 TELEGRAM_BOT_TOKEN_DEFAULT,
                 TELEGRAM_CHAT_ID_DEFAULT,
                 utc_now_iso(),
+                0,
+                80.0,
+                95.0,
+                4,
+                85.0,
+                95.0,
+                4,
+                0,
+                3,
+                1,
+                "",
+                "gpt-4o-mini",
+                12,
+                1200,
+                600,
             ),
         )
 
@@ -5829,7 +5902,21 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
         SELECT warning_threshold_percent, critical_threshold_percent,
                warning_consecutive_hits, warning_window_minutes, critical_trigger_immediate,
                telegram_enabled, telegram_bot_token, telegram_chat_id, updated_at_utc,
-               COALESCE(alert_reminder_interval_hours, 0)
+               COALESCE(alert_reminder_interval_hours, 0),
+               COALESCE(cpu_warning_threshold_percent, 80),
+               COALESCE(cpu_critical_threshold_percent, 95),
+               COALESCE(cpu_alert_window_reports, 4),
+               COALESCE(ram_warning_threshold_percent, 85),
+               COALESCE(ram_critical_threshold_percent, 95),
+               COALESCE(ram_alert_window_reports, 4),
+               COALESCE(inactive_host_alert_enabled, 0),
+               COALESCE(inactive_host_alert_hours, 3),
+               COALESCE(ai_troubleshoot_enabled, 1),
+               COALESCE(openai_api_key, ''),
+               COALESCE(openai_model, 'gpt-4o-mini'),
+               COALESCE(openai_timeout_sec, 12),
+               COALESCE(openai_max_tokens, 1200),
+               COALESCE(ai_troubleshoot_cache_ttl_sec, 600)
         FROM alarm_settings
         WHERE id = 1
         """
@@ -5847,6 +5934,20 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
             "telegram_chat_id": TELEGRAM_CHAT_ID_DEFAULT,
             "updated_at_utc": "",
             "alert_reminder_interval_hours": 0,
+            "cpu_warning_threshold_percent": 80.0,
+            "cpu_critical_threshold_percent": 95.0,
+            "cpu_alert_window_reports": 4,
+            "ram_warning_threshold_percent": 85.0,
+            "ram_critical_threshold_percent": 95.0,
+            "ram_alert_window_reports": 4,
+            "inactive_host_alert_enabled": False,
+            "inactive_host_alert_hours": 3,
+            "ai_troubleshoot_enabled": True,
+            "openai_api_key": "",
+            "openai_model": "gpt-4o-mini",
+            "openai_timeout_sec": 12,
+            "openai_max_tokens": 1200,
+            "ai_troubleshoot_cache_ttl_sec": 600,
         }
 
     return {
@@ -5860,6 +5961,20 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
         "telegram_chat_id": str(row[7] or ""),
         "updated_at_utc": str(row[8] or ""),
         "alert_reminder_interval_hours": max(0, int(row[9] or 0)) if row[9] is not None else 0,
+        "cpu_warning_threshold_percent": clamp_threshold(row[10], 1, 99, 80.0),
+        "cpu_critical_threshold_percent": clamp_threshold(row[11], 1, 100, 95.0),
+        "cpu_alert_window_reports": max(2, min(24, int(row[12] or 4))) if row[12] is not None else 4,
+        "ram_warning_threshold_percent": clamp_threshold(row[13], 1, 99, 85.0),
+        "ram_critical_threshold_percent": clamp_threshold(row[14], 1, 100, 95.0),
+        "ram_alert_window_reports": max(2, min(24, int(row[15] or 4))) if row[15] is not None else 4,
+        "inactive_host_alert_enabled": coerce_bool(row[16]),
+        "inactive_host_alert_hours": max(1, min(168, int(row[17] or 3))) if row[17] is not None else 3,
+        "ai_troubleshoot_enabled": coerce_bool(row[18]),
+        "openai_api_key": str(row[19] or ""),
+        "openai_model": str(row[20] or "gpt-4o-mini"),
+        "openai_timeout_sec": max(3, min(60, int(row[21] or 12))) if row[21] is not None else 12,
+        "openai_max_tokens": max(256, min(4000, int(row[22] or 1200))) if row[22] is not None else 1200,
+        "ai_troubleshoot_cache_ttl_sec": max(30, min(3600, int(row[23] or 600))) if row[23] is not None else 600,
     }
 
 
@@ -5893,6 +6008,84 @@ def normalize_alarm_settings_payload(payload: dict, existing: dict | None = None
         warning_window = 15
     warning_window = max(1, min(warning_window, 240))
 
+    try:
+        cpu_warning = float(payload.get("cpu_warning_threshold_percent", base.get("cpu_warning_threshold_percent", 80.0)))
+    except (TypeError, ValueError):
+        cpu_warning = 80.0
+    cpu_warning = clamp_threshold(cpu_warning, 1, 99, 80.0)
+
+    try:
+        cpu_critical = float(payload.get("cpu_critical_threshold_percent", base.get("cpu_critical_threshold_percent", 95.0)))
+    except (TypeError, ValueError):
+        cpu_critical = 95.0
+    cpu_critical = clamp_threshold(cpu_critical, 1, 100, 95.0)
+    if cpu_critical <= cpu_warning:
+        cpu_critical = min(100.0, cpu_warning + 1.0)
+
+    try:
+        cpu_window_reports = int(payload.get("cpu_alert_window_reports", base.get("cpu_alert_window_reports", 4)))
+    except (TypeError, ValueError):
+        cpu_window_reports = 4
+    cpu_window_reports = max(2, min(cpu_window_reports, 24))
+
+    try:
+        ram_warning = float(payload.get("ram_warning_threshold_percent", base.get("ram_warning_threshold_percent", 85.0)))
+    except (TypeError, ValueError):
+        ram_warning = 85.0
+    ram_warning = clamp_threshold(ram_warning, 1, 99, 85.0)
+
+    try:
+        ram_critical = float(payload.get("ram_critical_threshold_percent", base.get("ram_critical_threshold_percent", 95.0)))
+    except (TypeError, ValueError):
+        ram_critical = 95.0
+    ram_critical = clamp_threshold(ram_critical, 1, 100, 95.0)
+    if ram_critical <= ram_warning:
+        ram_critical = min(100.0, ram_warning + 1.0)
+
+    try:
+        ram_window_reports = int(payload.get("ram_alert_window_reports", base.get("ram_alert_window_reports", 4)))
+    except (TypeError, ValueError):
+        ram_window_reports = 4
+    ram_window_reports = max(2, min(ram_window_reports, 24))
+
+    try:
+        reminder_interval = int(payload.get("alert_reminder_interval_hours", base.get("alert_reminder_interval_hours", 0)) or 0)
+    except (TypeError, ValueError):
+        reminder_interval = 0
+    reminder_interval = max(0, min(reminder_interval, 168))
+
+    try:
+        inactive_hours = int(payload.get("inactive_host_alert_hours", base.get("inactive_host_alert_hours", 3)) or 3)
+    except (TypeError, ValueError):
+        inactive_hours = 3
+    inactive_hours = max(1, min(inactive_hours, 168))
+
+    existing_openai_key = str(base.get("openai_api_key", "") or "").strip()
+    incoming_openai_key = str(payload.get("openai_api_key", "") or "").strip()
+    effective_openai_key = incoming_openai_key if incoming_openai_key else existing_openai_key
+
+    openai_model = str(payload.get("openai_model", base.get("openai_model", "gpt-4o-mini")) or "gpt-4o-mini").strip()
+    if not openai_model:
+        openai_model = "gpt-4o-mini"
+
+    try:
+        openai_timeout_sec = int(payload.get("openai_timeout_sec", base.get("openai_timeout_sec", 12)) or 12)
+    except (TypeError, ValueError):
+        openai_timeout_sec = 12
+    openai_timeout_sec = max(3, min(openai_timeout_sec, 60))
+
+    try:
+        openai_max_tokens = int(payload.get("openai_max_tokens", base.get("openai_max_tokens", 1200)) or 1200)
+    except (TypeError, ValueError):
+        openai_max_tokens = 1200
+    openai_max_tokens = max(256, min(openai_max_tokens, 4000))
+
+    try:
+        ai_cache_ttl = int(payload.get("ai_troubleshoot_cache_ttl_sec", base.get("ai_troubleshoot_cache_ttl_sec", 600)) or 600)
+    except (TypeError, ValueError):
+        ai_cache_ttl = 600
+    ai_cache_ttl = max(30, min(ai_cache_ttl, 3600))
+
     return {
         "warning_threshold_percent": warning,
         "critical_threshold_percent": critical,
@@ -5902,8 +6095,29 @@ def normalize_alarm_settings_payload(payload: dict, existing: dict | None = None
         "telegram_enabled": coerce_bool(payload.get("telegram_enabled", base.get("telegram_enabled", False))),
         "telegram_bot_token": str(payload.get("telegram_bot_token", base.get("telegram_bot_token", "")) or "").strip(),
         "telegram_chat_id": str(payload.get("telegram_chat_id", base.get("telegram_chat_id", "")) or "").strip(),
-        "alert_reminder_interval_hours": max(0, min(int(payload.get("alert_reminder_interval_hours", base.get("alert_reminder_interval_hours", 0)) or 0), 168)),
+        "alert_reminder_interval_hours": reminder_interval,
+        "cpu_warning_threshold_percent": cpu_warning,
+        "cpu_critical_threshold_percent": cpu_critical,
+        "cpu_alert_window_reports": cpu_window_reports,
+        "ram_warning_threshold_percent": ram_warning,
+        "ram_critical_threshold_percent": ram_critical,
+        "ram_alert_window_reports": ram_window_reports,
+        "inactive_host_alert_enabled": coerce_bool(payload.get("inactive_host_alert_enabled", base.get("inactive_host_alert_enabled", False))),
+        "inactive_host_alert_hours": inactive_hours,
+        "ai_troubleshoot_enabled": coerce_bool(payload.get("ai_troubleshoot_enabled", base.get("ai_troubleshoot_enabled", True))),
+        "openai_api_key": effective_openai_key,
+        "openai_model": openai_model,
+        "openai_timeout_sec": openai_timeout_sec,
+        "openai_max_tokens": openai_max_tokens,
+        "ai_troubleshoot_cache_ttl_sec": ai_cache_ttl,
     }
+
+
+def alarm_settings_public_view(settings: dict) -> dict:
+    public = dict(settings or {})
+    openai_key = str(public.pop("openai_api_key", "") or "")
+    public["openai_api_key_is_set"] = bool(openai_key.strip())
+    return public
 
 
 def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
@@ -5924,9 +6138,23 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             telegram_bot_token,
             telegram_chat_id,
             updated_at_utc,
-            alert_reminder_interval_hours
+            alert_reminder_interval_hours,
+            cpu_warning_threshold_percent,
+            cpu_critical_threshold_percent,
+            cpu_alert_window_reports,
+            ram_warning_threshold_percent,
+            ram_critical_threshold_percent,
+            ram_alert_window_reports,
+            inactive_host_alert_enabled,
+            inactive_host_alert_hours,
+            ai_troubleshoot_enabled,
+            openai_api_key,
+            openai_model,
+            openai_timeout_sec,
+            openai_max_tokens,
+            ai_troubleshoot_cache_ttl_sec
         )
-        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             warning_threshold_percent = excluded.warning_threshold_percent,
             critical_threshold_percent = excluded.critical_threshold_percent,
@@ -5937,7 +6165,21 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             telegram_bot_token = excluded.telegram_bot_token,
             telegram_chat_id = excluded.telegram_chat_id,
             updated_at_utc = excluded.updated_at_utc,
-            alert_reminder_interval_hours = excluded.alert_reminder_interval_hours
+            alert_reminder_interval_hours = excluded.alert_reminder_interval_hours,
+            cpu_warning_threshold_percent = excluded.cpu_warning_threshold_percent,
+            cpu_critical_threshold_percent = excluded.cpu_critical_threshold_percent,
+            cpu_alert_window_reports = excluded.cpu_alert_window_reports,
+            ram_warning_threshold_percent = excluded.ram_warning_threshold_percent,
+            ram_critical_threshold_percent = excluded.ram_critical_threshold_percent,
+            ram_alert_window_reports = excluded.ram_alert_window_reports,
+            inactive_host_alert_enabled = excluded.inactive_host_alert_enabled,
+            inactive_host_alert_hours = excluded.inactive_host_alert_hours,
+            ai_troubleshoot_enabled = excluded.ai_troubleshoot_enabled,
+            openai_api_key = excluded.openai_api_key,
+            openai_model = excluded.openai_model,
+            openai_timeout_sec = excluded.openai_timeout_sec,
+            openai_max_tokens = excluded.openai_max_tokens,
+            ai_troubleshoot_cache_ttl_sec = excluded.ai_troubleshoot_cache_ttl_sec
         """,
         (
             normalized["warning_threshold_percent"],
@@ -5950,6 +6192,20 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             normalized["telegram_chat_id"],
             now_utc,
             normalized["alert_reminder_interval_hours"],
+            normalized["cpu_warning_threshold_percent"],
+            normalized["cpu_critical_threshold_percent"],
+            normalized["cpu_alert_window_reports"],
+            normalized["ram_warning_threshold_percent"],
+            normalized["ram_critical_threshold_percent"],
+            normalized["ram_alert_window_reports"],
+            1 if normalized["inactive_host_alert_enabled"] else 0,
+            normalized["inactive_host_alert_hours"],
+            1 if normalized["ai_troubleshoot_enabled"] else 0,
+            normalized["openai_api_key"],
+            normalized["openai_model"],
+            normalized["openai_timeout_sec"],
+            normalized["openai_max_tokens"],
+            normalized["ai_troubleshoot_cache_ttl_sec"],
         ),
     )
 
@@ -8567,7 +8823,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 settings = get_alarm_settings(conn)
 
-            self._send_json(HTTPStatus.OK, settings)
+            self._send_json(HTTPStatus.OK, alarm_settings_public_view(settings))
             return
 
         if parsed.path == "/api/v1/alert-mutes":
@@ -8877,7 +9133,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "status": "stored",
-                    "settings": stored,
+                    "settings": alarm_settings_public_view(stored),
                 },
             )
             return
