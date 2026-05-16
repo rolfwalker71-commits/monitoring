@@ -2255,16 +2255,17 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 .admin-only-hint {
   display: inline-flex;
   align-items: center;
-  margin-left: 6px;
-  padding: 0 6px;
-  min-height: 16px;
+  margin-left: 5px;
+  padding: 0 5px;
+  min-height: 14px;
   border-radius: 999px;
-  border: 1px solid #cad8ec;
-  background: #eef4fc;
-  color: #4b6588;
-  font-size: 10px;
-  font-weight: 700;
+  border: 1px solid #d8e2ef;
+  background: #f4f7fb;
+  color: #667c99;
+  font-size: 9px;
+  font-weight: 600;
   letter-spacing: 0.02em;
+  line-height: 1;
   white-space: nowrap;
 }
 
@@ -2317,9 +2318,9 @@ body[data-theme="dark"] .overview-sidebar-item.active {
   box-shadow: inset 3px 0 0 #6f96c3;
 }
 body[data-theme="dark"] .admin-only-hint {
-  border-color: #45638a;
-  background: #1d314d;
-  color: #aac4e5;
+  border-color: #3e5573;
+  background: #1b2a3d;
+  color: #94a9c4;
 }
 body[data-theme="dark"] .overview-sidebar-divider {
   background: #2b3f5c;
