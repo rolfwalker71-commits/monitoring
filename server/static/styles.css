@@ -8,7 +8,7 @@
   --btn-primary-bg-hover: #356188;
   --btn-primary-border: #3f6ea3;
   --btn-primary-text: #f4f8ff;
-  --btn-height: 30px;
+  --btn-height: 24px;
   --chip-height: 20px;
   --line: #c9d8ec;
   --ok: #16a34a;
@@ -217,7 +217,7 @@ body {
 
 .brand-tools .btn-secondary,
 .brand-tools .global-update-chip {
-  min-height: 30px;
+  min-height: var(--btn-height);
   padding: 0 14px;
   font-size: 12px;
   border-radius: 999px;
@@ -1817,7 +1817,7 @@ button {
   color: #42526e;
   border: 1px solid #c8d5e6;
   border-radius: 999px;
-  min-height: 30px;
+  min-height: var(--btn-height);
   padding: 0 12px;
   font-weight: 600;
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
@@ -2937,7 +2937,7 @@ body[data-theme="dark"] .trend-progress-bar {
 .global-update-chip {
   width: 100%;
   border-radius: 999px;
-  min-height: 30px;
+  min-height: var(--btn-height);
   padding: 0 12px;
   background: linear-gradient(135deg, #2b5f8f 0%, #3a6ea1 100%);
   color: #eef6ff;
@@ -7584,7 +7584,7 @@ body[data-theme="dark"] .backup-row--hana td {
   background: linear-gradient(180deg, #f8fbff 0%, #edf4ff 100%);
   color: #1f3b63;
   border-radius: 10px;
-  min-height: var(--chip-height);
+  min-height: var(--btn-height);
   padding: 0 8px;
   display: inline-flex;
   align-items: center;
@@ -7668,7 +7668,7 @@ body[data-theme="dark"] .backup-row--hana td {
   background: #f8fbff;
   color: #1f3b63;
   border-radius: 999px;
-  min-height: var(--chip-height);
+  min-height: var(--btn-height);
   padding: 0 8px;
   font-size: 12px;
   font-weight: 600;
@@ -8438,6 +8438,16 @@ body[data-theme="dark"] .search-input-compact::placeholder {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.01em;
+}
+
+.btn-secondary,
+.view-back-chip,
+.global-update-chip,
+.host-group-toggle,
+.icon-filter-chip,
+.so-country-filter-btn,
+.system-overview-toggle {
+  min-height: var(--btn-height);
 }
 
 .stat-chip,
