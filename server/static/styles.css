@@ -4648,10 +4648,25 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
   content: "▶";
   display: inline-block;
   width: 16px;
+.brand-session-badge {
+  background: #e0f2fe;
+  color: #0c4a6e;
+  border: 1px solid #bae6fd;
+  min-width: 150px;
+  justify-content: center;
+}
+.brand-session-badge::before {
+  content: "⏳";
+}
   font-size: 10px;
   text-align: center;
   transition: transform 0.2s ease;
   flex-shrink: 0;
+body[data-theme="dark"] .brand-session-badge {
+  background: #0f2f44;
+  color: #cbe9ff;
+  border-color: #1d4f6c;
+}
 }
 
 .host-config-change-group[open] > .host-config-change-summary::before {

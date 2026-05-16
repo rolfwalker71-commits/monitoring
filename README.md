@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.56  | 16.05.2026 | Add live session remaining-time badge in header and harden session keepalive flow (cookie-based refresh endpoint, session expiry returned by /api/v1/session, login/focus/visibility refresh watchdog) |
 | 1.6.55  | 16.05.2026 | Change web inactivity timeout from 60 to 30 minutes (sliding timeout) and make it configurable via MONITORING_WEB_SESSION_INACTIVITY_MINUTES |
 | 1.6.54  | 16.05.2026 | Fix web session timeout behavior: authenticated requests now refresh session activity/expiry server-side, so active usage and regular dashboard refreshes no longer cause unexpected 401 logouts |
 | 1.6.53  | 16.05.2026 | Refine Systemübersicht AddOn mode filtering: in AddOn > Kunde > OS view the search input now acts as an AddOn-name filter (with mode-specific placeholder and stats label), while default Land > OS > Host keeps broad search |

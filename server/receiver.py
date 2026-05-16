@@ -754,6 +754,11 @@ def utc_hours_ago_iso(hours: int) -> str:
     return cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def utc_minutes_ago_iso(minutes: int) -> str:
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+    return cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def read_build_version() -> str:
     try:
         value = BUILD_VERSION_PATH.read_text(encoding="utf-8").strip()
@@ -7233,11 +7238,20 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             username = self._web_session_username()
             is_admin = False
             display_name = ""
+            expires_at_utc = ""
             if username:
+                token = self._cookie_value(WEB_SESSION_COOKIE)
                 with sqlite3.connect(DB_PATH) as conn:
                     user = get_web_user(conn, username)
                     is_admin = bool(user and user.get("is_admin"))
                     display_name = str((user or {}).get("display_name", "") or "")
+                    if token:
+                        row = conn.execute(
+                            "SELECT expires_at_utc FROM web_sessions WHERE session_token = ? AND username = ?",
+                            (token, username),
+                        ).fetchone()
+                        if row:
+                            expires_at_utc = str(row[0] or "")
             self._send_json(
                 HTTPStatus.OK,
                 {
@@ -7245,6 +7259,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "username": username,
                     "display_name": display_name,
                     "is_admin": is_admin,
+                    "expires_at_utc": expires_at_utc,
+                    "inactivity_timeout_minutes": WEB_SESSION_INACTIVITY_MINUTES,
                 },
             )
             return
@@ -7324,23 +7340,29 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not username:
                 self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "Not authenticated"})
                 return
-            session_token = self.headers.get("Authorization", "").replace("Bearer ", "")
+            session_token = self.headers.get("Authorization", "").replace("Bearer ", "").strip()
+            if not session_token:
+                session_token = self._cookie_value(WEB_SESSION_COOKIE)
             if not session_token:
                 self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "No session token"})
                 return
             now_iso = utc_now_iso()
             expires_iso = web_session_expires_iso()
             with sqlite3.connect(DB_PATH) as conn:
-                conn.execute(
+                result = conn.execute(
                     "UPDATE web_sessions SET last_activity_at_utc = ?, expires_at_utc = ? WHERE session_token = ?",
                     (now_iso, expires_iso, session_token),
                 )
                 conn.commit()
+            if result.rowcount <= 0:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "Session not found"})
+                return
             self._send_json(
                 HTTPStatus.OK,
                 {
                     "username": username,
                     "expires_at_utc": expires_iso,
+                    "inactivity_timeout_minutes": WEB_SESSION_INACTIVITY_MINUTES,
                 },
             )
             return

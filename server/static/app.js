@@ -76,6 +76,9 @@ let autoRefreshInProgress = false;
 let autoRefreshCurrentIntervalSec = 480;
 let autoRefreshLastRefreshAt = null;
 let autoRefreshCountdownTimerId = null;
+let sessionRefreshTimerId = null;
+let sessionCountdownTimerId = null;
+const SESSION_REFRESH_INTERVAL_SECONDS = 240;
 
 const state = {
   hostLimit: 500,
@@ -127,6 +130,8 @@ const state = {
   authUser: "",
   authDisplayName: "",
   isAuthenticated: false,
+  sessionExpiresAtUtc: "",
+  sessionInactivityTimeoutMinutes: 30,
   visibleHosts: 0,
   hiddenHosts: 0,
   hiddenHostsCollapsed: true,
@@ -585,14 +590,16 @@ function updateSummaryStrip() {
   }
 }
 
-let sessionRefreshTimerId = null;
-
 function startSessionRefreshTimer() {
+  if (!state.isAuthenticated) {
+    return;
+  }
   stopSessionRefreshTimer();
-  // Refresh session every 8 minutes (480 seconds)
+  // Keep the sliding inactivity timeout alive proactively.
+  void refreshSession();
   sessionRefreshTimerId = window.setInterval(() => {
     void refreshSession();
-  }, 8 * 60 * 1000);
+  }, SESSION_REFRESH_INTERVAL_SECONDS * 1000);
 }
 
 function stopSessionRefreshTimer() {
@@ -603,23 +610,102 @@ function stopSessionRefreshTimer() {
 }
 
 async function refreshSession() {
-  const sessionToken = localStorage.getItem("sessionToken");
-  if (!sessionToken) {
+  if (!state.isAuthenticated) {
     return;
   }
   try {
     const response = await fetch("/api/v1/session/refresh", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${sessionToken}`,
-        "Content-Type": "application/json",
-      },
+      credentials: "same-origin",
     });
     if (!response.ok) {
       console.warn("Session refresh failed:", response.status);
+      if (response.status === 401) {
+        setAuthUiState(false);
+        setLoginStatus("Session abgelaufen. Bitte neu anmelden.", true);
+      }
+      return;
     }
+    const data = await response.json().catch(() => ({}));
+    updateSessionExpiry(
+      asText(data.expires_at_utc, ""),
+      Number.parseInt(String(data.inactivity_timeout_minutes || ""), 10)
+    );
   } catch (error) {
     console.warn("Session refresh error:", error);
+  }
+}
+
+function parseUtcIso(value) {
+  const raw = asText(value, "").trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function formatSessionRemaining(seconds) {
+  const safeSeconds = Math.max(0, Number.parseInt(String(seconds || 0), 10) || 0);
+  const h = Math.floor(safeSeconds / 3600);
+  const m = Math.floor((safeSeconds % 3600) / 60);
+  const s = safeSeconds % 60;
+  if (h > 0) {
+    return `${h}h ${String(m).padStart(2, "0")}m`;
+  }
+  return `${m}m ${String(s).padStart(2, "0")}s`;
+}
+
+function renderSessionStatus() {
+  const badge = document.getElementById("brandSessionBadge");
+  if (!badge) {
+    return;
+  }
+  if (!state.isAuthenticated) {
+    badge.classList.add("hidden");
+    badge.textContent = "";
+    return;
+  }
+
+  const expiry = parseUtcIso(state.sessionExpiresAtUtc);
+  if (!expiry) {
+    badge.classList.remove("hidden");
+    badge.textContent = `Session`;
+    return;
+  }
+
+  const secondsLeft = Math.max(0, Math.floor((expiry.getTime() - Date.now()) / 1000));
+  const timeoutMinutes = Number.isFinite(state.sessionInactivityTimeoutMinutes)
+    ? Math.max(1, Math.floor(state.sessionInactivityTimeoutMinutes))
+    : 30;
+  badge.classList.remove("hidden");
+  badge.textContent = `Session ${formatSessionRemaining(secondsLeft)} (${timeoutMinutes}m)`;
+}
+
+function stopSessionCountdownTimer() {
+  if (sessionCountdownTimerId !== null) {
+    window.clearInterval(sessionCountdownTimerId);
+    sessionCountdownTimerId = null;
+  }
+}
+
+function startSessionCountdownTimer() {
+  stopSessionCountdownTimer();
+  renderSessionStatus();
+  sessionCountdownTimerId = window.setInterval(() => {
+    renderSessionStatus();
+  }, 1000);
+}
+
+function updateSessionExpiry(expiresAtUtc, inactivityTimeoutMinutes = null) {
+  state.sessionExpiresAtUtc = asText(expiresAtUtc, "");
+  const parsedMinutes = Number.parseInt(String(inactivityTimeoutMinutes ?? ""), 10);
+  if (Number.isFinite(parsedMinutes) && parsedMinutes > 0) {
+    state.sessionInactivityTimeoutMinutes = parsedMinutes;
+  }
+  if (state.isAuthenticated) {
+    startSessionCountdownTimer();
+  } else {
+    stopSessionCountdownTimer();
   }
 }
 
@@ -1308,6 +1394,7 @@ function setAuthUiState(authenticated) {
   const appPanel = document.getElementById("appPanel");
   const hostToolsHeader = document.getElementById("hostToolsHeader");
   const brandUserBadge = document.getElementById("brandUserBadge");
+  const brandSessionBadge = document.getElementById("brandSessionBadge");
   const logoutButton = document.getElementById("logoutButton");
   loginOverlay.classList.toggle("hidden", authenticated);
   appPanel.classList.toggle("hidden", !authenticated);
@@ -1323,7 +1410,18 @@ function setAuthUiState(authenticated) {
   if (logoutButton) {
     logoutButton.classList.toggle("hidden", !authenticated);
   }
+  if (brandSessionBadge) {
+    brandSessionBadge.classList.toggle("hidden", !authenticated);
+  }
   state.isAuthenticated = authenticated;
+  if (authenticated) {
+    startSessionRefreshTimer();
+    startSessionCountdownTimer();
+  } else {
+    stopSessionRefreshTimer();
+    stopSessionCountdownTimer();
+    state.sessionExpiresAtUtc = "";
+  }
   if (!authenticated) {
     state.isAdmin = false;
     state.userProfileLoaded = false;
@@ -1334,6 +1432,7 @@ function setAuthUiState(authenticated) {
     state.adminAlertAvailableHosts = [];
     state.adminAlertTelegramAvailable = false;
   }
+  renderSessionStatus();
   updateFilesystemVisibilityButtons();
   updateAdminSettingsVisibility();
 }
@@ -1450,6 +1549,10 @@ async function ensureAuthenticatedSession() {
     state.authUser = asText(session.username, "");
     state.authDisplayName = asText(session.display_name, "");
     state.isAdmin = session.is_admin === true;
+    updateSessionExpiry(
+      asText(session.expires_at_utc, ""),
+      Number.parseInt(String(session.inactivity_timeout_minutes || ""), 10)
+    );
     setAuthUiState(session.authenticated === true);
     if (session.authenticated === true) {
       loadHostFilterPreferences();
@@ -1494,10 +1597,18 @@ async function loginWebClient() {
   }
 
   state.authUser = asText(data.username, username);
+  updateSessionExpiry(
+    asText(data.expires_at_utc, ""),
+    Number.parseInt(String(data.inactivity_timeout_minutes || ""), 10)
+  );
   try {
     const session = await fetchSessionState();
     state.isAdmin = session.is_admin === true;
     state.authDisplayName = asText(session.display_name, "");
+    updateSessionExpiry(
+      asText(session.expires_at_utc, ""),
+      Number.parseInt(String(session.inactivity_timeout_minutes || ""), 10)
+    );
   } catch {
     state.isAdmin = false;
   }
@@ -1517,6 +1628,8 @@ async function logoutWebClient() {
     // ignore network errors – session will be cleared server-side anyway
   }
   stopAutoRefreshTimer();
+  stopSessionRefreshTimer();
+  stopSessionCountdownTimer();
   updateAutoRefreshStatus(null);
   state.authUser = "";
   state.isAdmin = false;
@@ -1527,6 +1640,7 @@ async function logoutWebClient() {
     brandUserBadge.textContent = "";
   }
   state.authDisplayName = "";
+  state.sessionExpiresAtUtc = "";
 }
 
 async function changePassword() {
@@ -9711,6 +9825,7 @@ function wireEvents() {
     }
     await refreshDashboard({ preserveScroll: false });
     startAutoRefreshTimer();
+    startSessionRefreshTimer();
   });
 
   document.getElementById("loginPasswordInput").addEventListener("keydown", async (event) => {
@@ -9723,6 +9838,7 @@ function wireEvents() {
     }
     await refreshDashboard({ preserveScroll: false });
     startAutoRefreshTimer();
+    startSessionRefreshTimer();
   });
 
   document.getElementById("logoutButton").addEventListener("click", async () => {
@@ -10121,6 +10237,26 @@ function wireEvents() {
     persistHostFilterPreferences();
     state.hostOffset = 0;
     await loadHosts();
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden || !state.isAuthenticated) {
+      return;
+    }
+    if (sessionRefreshTimerId === null) {
+      startSessionRefreshTimer();
+    }
+    void refreshSession();
+  });
+
+  window.addEventListener("focus", () => {
+    if (!state.isAuthenticated) {
+      return;
+    }
+    if (sessionRefreshTimerId === null) {
+      startSessionRefreshTimer();
+    }
+    void refreshSession();
   });
 
 }
