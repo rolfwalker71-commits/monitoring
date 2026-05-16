@@ -141,6 +141,7 @@ const state = {
   hostFilterNoMatches: false,
   hostInterestMode: "all",
   hostInterestHosts: new Set(),
+  hostInterestsLoadedFor: "",
   hostInterestSearchQuery: "",
   adminAlertSubscriptionsLoaded: false,
   adminAlertSubscriptionsUsers: [],
@@ -300,6 +301,7 @@ async function loadUserPreferences() {
         .map((item) => item.trim())
         .filter((item) => item.length > 0)
     );
+    state.hostInterestsLoadedFor = String(state.authDisplayName || state.authUser || "").trim();
     updateCriticalTrendsMetricsCheckboxes();
     renderHostInterestsEditor();
   } catch (_error) {
@@ -311,6 +313,7 @@ function resetUserScopedPreferences() {
   state.criticalTrendsMetrics = ["filesystem"];
   state.hostInterestMode = "all";
   state.hostInterestHosts = new Set();
+  state.hostInterestsLoadedFor = "";
   updateCriticalTrendsMetricsCheckboxes();
   renderHostInterestsEditor();
 }
@@ -1096,6 +1099,7 @@ function updateUserSettingsSubMode() {
 function renderHostInterestsEditor() {
   const listEl = document.getElementById("hostInterestsList");
   const summaryEl = document.getElementById("hostInterestsSummary");
+  const loadedForEl = document.getElementById("hostInterestsLoadedFor");
   if (!listEl) {
     return;
   }
@@ -1119,6 +1123,11 @@ function renderHostInterestsEditor() {
   if (summaryEl) {
     const modeLabel = normalizeHostInterestMode(state.hostInterestMode).replaceAll("_", " ");
     summaryEl.textContent = `${state.hostInterestHosts.size} markiert | Modus: ${modeLabel}`;
+  }
+  if (loadedForEl) {
+    loadedForEl.textContent = state.hostInterestsLoadedFor
+      ? `Geladene Präferenzen: ${state.hostInterestsLoadedFor}`
+      : "Geladene Präferenzen: -";
   }
 
   if (allHosts.length === 0) {

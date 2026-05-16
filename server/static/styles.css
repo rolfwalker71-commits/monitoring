@@ -1244,6 +1244,11 @@ body[data-theme="dark"] .agent-update-admin-table tbody tr:nth-child(2n) td:nth-
   font-size: 12px;
 }
 
+.host-interests-loaded-for {
+  margin-top: 2px;
+  opacity: 0.86;
+}
+
 .settings-fieldset-label {
   font-size: 12px;
   font-weight: 600;
@@ -7316,6 +7321,10 @@ body[data-theme="dark"] .host-interest-name {
 
 body[data-theme="dark"] .host-interest-hostname {
   color: #8fa8c4;
+}
+
+body[data-theme="dark"] .host-interests-loaded-for {
+  opacity: 0.92;
 }
 
 body[data-theme="dark"] .agent-update-status-row {

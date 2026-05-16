@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.49  | 16.05.2026 | Add a Host-Interessen guard label that shows which user's preferences are currently loaded, making user-context mismatches immediately visible |
 | 1.6.48  | 16.05.2026 | Fix host-interest preferences leaking across user switches by resetting user-scoped state on auth transitions and reloading preferences per logged-in user |
 | 1.6.47  | 16.05.2026 | Finalize SQL terminal code snippet alignment by switching to an explicit newline string (removes indentation artifacts between lines) |
 | 1.6.46  | 16.05.2026 | Fix visual alignment of the SQL grant code snippet in terminal view by removing unintended indentation and tidying related CSS |
