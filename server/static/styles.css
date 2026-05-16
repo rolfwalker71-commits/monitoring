@@ -1798,7 +1798,7 @@ button {
   transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
 
-button:hover:not(.host-item) {
+button:hover:not(.host-item):not(.overview-sidebar-item) {
   background: var(--btn-primary-bg-hover);
   border-color: var(--btn-primary-border);
   box-shadow: 0 4px 10px rgba(30, 58, 95, 0.16);
