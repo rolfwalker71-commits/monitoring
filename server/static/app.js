@@ -6979,9 +6979,9 @@ function renderSelectedHostControls(host) {
     : "";
 
   return `
+    ${customerChip}
     ${renderApiKeyChip(host)}
     <span class="selected-host-meta-chip" title="Gesendete Meldungen">📦 ${reportCount}</span>
-    ${customerChip}
     <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👀" : "🫣"}</button>
     <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
   `;
