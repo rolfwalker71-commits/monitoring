@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.5.26  | 16.05.2026 | Restore host card title to bold (900), increase OS icon size in cards, and fix alert chip footer alignment in compact card layout |
 | 1.5.25  | 16.05.2026 | Refine host card typography and icon density (smaller title, reduced OS icon size), add SAP chip fallback rendering, and add a one-time debug guard for missing chip rows |
 | 1.5.24  | 16.05.2026 | Compact host cards in the sidebar by tightening spacing and merging value chips/alert chip into a single footer row while preserving all card information |
 | 1.5.23  | 15.05.2026 | Support multiple SQL Server instances with instance_name tracking in database inventory and lifecycle; display instance info in DB overview table |

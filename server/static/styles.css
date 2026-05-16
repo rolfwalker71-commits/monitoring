@@ -3109,8 +3109,8 @@ body[data-theme="dark"] .trend-progress-bar {
   position: absolute;
   top: 6px;
   right: 10px;
-  width: 17px;
-  height: 17px;
+  width: 21px;
+  height: 21px;
   object-fit: contain;
   opacity: 0.75;
   pointer-events: none;
@@ -3137,7 +3137,7 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-item .host-title-line,
 .host-item .host-title-line span {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 900;
   line-height: 1.05;
 }
 
@@ -3170,12 +3170,13 @@ body[data-theme="dark"] .trend-progress-bar {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 0;
+  min-width: 0;
 }
 
 .host-card-footer {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 6px;
   margin-top: 2px;
   min-height: 18px;
@@ -3191,6 +3192,8 @@ body[data-theme="dark"] .trend-progress-bar {
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.01em;
+  white-space: nowrap;
+  justify-self: end;
 }
 
 .host-alert-chip.critical {
