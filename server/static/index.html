@@ -792,13 +792,29 @@
                   </div>
                 </div>
 
-                <div class="alarm-settings-card alarm-settings-card--wide">
-                  <div class="alarm-settings-card-title">&#x1F514; Benachrichtigungen</div>
+                <div class="alarm-settings-card">
+                  <div class="alarm-settings-card-title">&#x1F4E8; Telegram (Global)</div>
                   <div class="alarm-settings-grid">
-                    <label class="checkbox-line">
+                    <label class="checkbox-line alarm-settings-grid-span2">
                       <input id="telegramEnabledInput" type="checkbox" />
                       Globales Telegram aktivieren
                     </label>
+                    <label class="alarm-settings-grid-span2">
+                      Globaler Telegram Bot Token
+                      <input id="telegramBotTokenInput" type="text" placeholder="123456:ABC..." />
+                      <span class="settings-helper-text">Systemweiter Bot fuer Telegram-Versand.</span>
+                    </label>
+                    <label class="alarm-settings-grid-span2">
+                      Globale Telegram Chat ID (optional)
+                      <input id="telegramChatIdInput" type="text" placeholder="-1001234567890" />
+                      <span class="settings-helper-text">Gemeinsamer Team-Channel; persoenliche Chat IDs werden pro Benutzer gesetzt.</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="alarm-settings-card alarm-settings-card--wide">
+                  <div class="alarm-settings-card-title">&#x1F514; Benachrichtigungen</div>
+                  <div class="alarm-settings-grid">
                     <label class="checkbox-line">
                       <input id="inactiveHostAlertEnabledInput" type="checkbox" />
                       Inaktive Hosts alarmieren
@@ -816,16 +832,6 @@
                     <label>
                       Inaktiv ab (Stunden)
                       <input id="inactiveHostAlertHoursInput" type="number" min="1" max="168" step="1" />
-                    </label>
-                    <label>
-                      Globaler Telegram Bot Token
-                      <input id="telegramBotTokenInput" type="text" placeholder="123456:ABC..." />
-                      <span class="settings-helper-text">Systemweiter Bot fuer Telegram-Versand.</span>
-                    </label>
-                    <label>
-                      Globale Telegram Chat ID (optional)
-                      <input id="telegramChatIdInput" type="text" placeholder="-1001234567890" />
-                      <span class="settings-helper-text">Gemeinsamer Team-Channel; persoenliche Chat IDs werden pro Benutzer gesetzt.</span>
                     </label>
                   </div>
                 </div>

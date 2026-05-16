@@ -493,6 +493,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.62 (16. Mai 2026)
+
+- **Globales Telegram in eigene Karte verschoben**: Bot Token, globale Chat ID und Telegram an/aus stehen jetzt in einer separaten Telegram-Karte neben den Schwellwert-Karten.
+- **Benachrichtigungskarte vereinfacht**: Der Bereich enthaelt nun nur noch Heads-Up-/Inaktiv-Logik und ist dadurch deutlich uebersichtlicher.
+
 ### v1.6.61 (16. Mai 2026)
 
 - **Telegram-Settings im UI praezisiert**: Globaler Bot/Channel klar von persoenlicher Telegram Chat ID getrennt beschriftet.
