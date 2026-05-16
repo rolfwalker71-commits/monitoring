@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.31  | 16.05.2026 | Top action row refinement: align first three status chips to the left, keep icon buttons right-aligned, and increase those three chip heights to match the adjacent action buttons |
 | 1.6.30  | 16.05.2026 | Reduce global button height to 24px while keeping chips slimmer at 20px; applies to primary/secondary controls, overview country filter, and system overview toggle |
 | 1.6.29  | 16.05.2026 | Fix Systemübersicht regression after chip refactor: repair broken country-flag CSS block (flags visible again, no oversized AT card) and reduce global chip target height to 20px |
 | 1.6.28  | 16.05.2026 | Slim down chip heights globally (including System Overview country filter chips and AddOns toggle) for a more compact UI |
