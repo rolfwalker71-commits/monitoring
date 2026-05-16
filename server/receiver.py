@@ -152,8 +152,8 @@ def init_db() -> None:
                 customer_alert_mountpoints TEXT NOT NULL DEFAULT '',
                 customer_alert_min_severity TEXT NOT NULL DEFAULT 'critical',
                 customer_id INTEGER,
-                FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE SET NULL,
-                updated_at_utc TEXT NOT NULL
+                updated_at_utc TEXT NOT NULL,
+                FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE SET NULL
             )
             """
         )

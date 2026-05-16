@@ -493,6 +493,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.67 (16. Mai 2026)
+
+- **Hotfix Service-Start**: SQL-Syntaxfehler in der `host_settings`-Tabellendefinition behoben, der den Receiver beim Start mit `sqlite3.OperationalError` beendet hat.
+- **Init-DB wieder stabil**: Monitoring-Service startet nach dem Update wieder normal.
+
 ### v1.6.66 (16. Mai 2026)
 
 - **Kundenstamm eingefuehrt**: Neue Kunden werden zentral gespeichert und koennen Hosts sauber zugeordnet werden.
