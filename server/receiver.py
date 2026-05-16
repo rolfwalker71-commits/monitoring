@@ -53,7 +53,7 @@ TELEGRAM_BOT_TOKEN_DEFAULT = os.getenv("MONITORING_TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID_DEFAULT = os.getenv("MONITORING_TELEGRAM_CHAT_ID", "")
 WEB_DEFAULT_USERNAME = os.getenv("MONITORING_WEB_USER", "admin")
 WEB_DEFAULT_PASSWORD = os.getenv("MONITORING_WEB_PASSWORD", "ChangeMe!2026")
-WEB_SESSION_TTL_HOURS = 12
+WEB_SESSION_INACTIVITY_MINUTES = max(5, int(os.getenv("MONITORING_WEB_SESSION_INACTIVITY_MINUTES", "30")))
 WEB_SESSION_COOKIE = "monitoring_session"
 MIN_PASSWORD_LENGTH = 8
 MICROSOFT_PROVIDER = "microsoft"
@@ -710,7 +710,7 @@ def init_db() -> None:
 
         resolve_open_blacklisted_alerts(conn, get_filesystem_blacklist_pattern_strings(conn))
 
-        session_cutoff_iso = utc_hours_ago_iso(1)
+        session_cutoff_iso = utc_minutes_ago_iso(WEB_SESSION_INACTIVITY_MINUTES)
         conn.execute(
             "DELETE FROM web_sessions WHERE last_activity_at_utc <= ?",
             (session_cutoff_iso,),
@@ -724,6 +724,14 @@ def init_db() -> None:
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def web_session_cutoff_iso() -> str:
+    return utc_minutes_ago_iso(WEB_SESSION_INACTIVITY_MINUTES)
+
+
+def web_session_expires_iso() -> str:
+    return (datetime.now(timezone.utc) + timedelta(minutes=WEB_SESSION_INACTIVITY_MINUTES)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def format_mail_datetime(value: str | None = None) -> str:
@@ -1038,9 +1046,8 @@ def create_web_session(conn: sqlite3.Connection, username: str) -> tuple[str, st
     now = datetime.now(timezone.utc)
     session_token = secrets.token_urlsafe(32)
     now_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
-    # Session expires 1 hour after last activity (inactivity timeout)
-    expires = now + timedelta(hours=1)
-    expires_iso = expires.strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Session expires after configured inactivity timeout.
+    expires_iso = web_session_expires_iso()
     conn.execute(
         """
         INSERT INTO web_sessions (session_token, username, created_at_utc, expires_at_utc, last_activity_at_utc)
@@ -1058,14 +1065,12 @@ def create_web_session(conn: sqlite3.Connection, username: str) -> tuple[str, st
 
 
 def list_active_web_sessions(conn: sqlite3.Connection) -> list[dict]:
-    now = datetime.now(timezone.utc)
-    one_hour_ago = now - timedelta(hours=1)
-    one_hour_ago_iso = one_hour_ago.strftime("%Y-%m-%dT%H:%M:%SZ")
-    
-    # Delete sessions that have been inactive for more than 1 hour
+    session_cutoff_iso = web_session_cutoff_iso()
+
+    # Delete sessions that have been inactive longer than the configured timeout.
     conn.execute(
         "DELETE FROM web_sessions WHERE last_activity_at_utc <= ?",
-        (one_hour_ago_iso,),
+        (session_cutoff_iso,),
     )
     rows = conn.execute(
         """
@@ -1080,7 +1085,7 @@ def list_active_web_sessions(conn: sqlite3.Connection) -> list[dict]:
         GROUP BY s.username, u.display_name
         ORDER BY s.username COLLATE NOCASE ASC
         """,
-        (one_hour_ago_iso,),
+        (session_cutoff_iso,),
     ).fetchall()
     return [
         {
@@ -7090,7 +7095,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return ""
 
         with sqlite3.connect(DB_PATH) as conn:
-            session_cutoff_iso = utc_hours_ago_iso(1)
+            session_cutoff_iso = web_session_cutoff_iso()
             conn.execute(
                 "DELETE FROM web_sessions WHERE last_activity_at_utc <= ?",
                 (session_cutoff_iso,),
@@ -7106,7 +7111,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             ).fetchone()
             if row:
                 now_iso = utc_now_iso()
-                expires_iso = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                expires_iso = web_session_expires_iso()
                 conn.execute(
                     "UPDATE web_sessions SET last_activity_at_utc = ?, expires_at_utc = ? WHERE session_token = ?",
                     (now_iso, expires_iso, token),
@@ -7324,7 +7329,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "No session token"})
                 return
             now_iso = utc_now_iso()
-            expires_iso = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            expires_iso = web_session_expires_iso()
             with sqlite3.connect(DB_PATH) as conn:
                 conn.execute(
                     "UPDATE web_sessions SET last_activity_at_utc = ?, expires_at_utc = ? WHERE session_token = ?",
