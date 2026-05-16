@@ -365,6 +365,19 @@
                 <span id="dbOpsProgressLabel" class="db-ops-progress-label"></span>
               </div>
 
+              <div class="db-maintenance-panel">
+                <div class="db-maintenance-head">
+                  <h6>DB Wartung (SQLite)</h6>
+                  <div class="db-maintenance-actions">
+                    <button id="refreshDatabaseStatsButton" class="btn-secondary-compact" type="button" title="DB Kennzahlen neu laden">↻</button>
+                    <button id="vacuumDatabaseButton" class="btn-secondary" type="button" title="SQLite VACUUM ausführen">🧹 VACUUM</button>
+                  </div>
+                </div>
+                <p id="dbMaintenanceStatus" class="count compact">Lade DB Kennzahlen...</p>
+                <div id="dbMaintenanceStats" class="db-maintenance-stats-grid"></div>
+                <p id="dbMaintenanceEffect" class="count compact"></p>
+              </div>
+
               <div class="agent-update-admin-status">
                 <div class="agent-update-admin-status-head">
                   <h6>Agent Update Status (Alle Hosts)</h6>

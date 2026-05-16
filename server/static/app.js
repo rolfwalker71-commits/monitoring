@@ -6832,6 +6832,91 @@ async function restoreDatabaseFromFile(file, onProgress) {
   });
 }
 
+function formatInteger(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num)) return "0";
+  return Math.round(num).toLocaleString("de-DE");
+}
+
+function setDbMaintenanceStatus(message, isError = false) {
+  const el = document.getElementById("dbMaintenanceStatus");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle("error", !!isError);
+}
+
+function renderDbMaintenanceStats(stats) {
+  const el = document.getElementById("dbMaintenanceStats");
+  if (!el) return;
+  const data = stats && typeof stats === "object" ? stats : {};
+
+  const rows = [
+    ["DB gesamt", formatBytes(data.total_file_bytes || 0)],
+    ["DB Datei", formatBytes(data.db_file_bytes || 0)],
+    ["WAL", formatBytes(data.wal_file_bytes || 0)],
+    ["Reports", formatInteger(data.reports_total || 0)],
+    ["Hosts (Reports)", formatInteger(data.hosts_with_reports || 0)],
+    ["Hosts (Settings)", formatInteger(data.hosts_total || 0)],
+    ["Alerts offen", formatInteger(data.alerts_open || 0)],
+    ["Payload Ø", formatBytes(data.avg_payload_bytes || 0)],
+    ["Payload max", formatBytes(data.max_payload_bytes || 0)],
+    ["Retention", `${formatInteger(data.retention_days || 0)} Tage`],
+    ["Ältester Report", formatUtcPlus2(data.oldest_report_utc || "") || "-"],
+    ["Neuester Report", formatUtcPlus2(data.newest_report_utc || "") || "-"],
+  ];
+
+  el.innerHTML = rows
+    .map(([label, value]) => `<div class="db-maintenance-stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value || "-"))}</strong></div>`)
+    .join("");
+}
+
+function renderDbMaintenanceEffect(result) {
+  const el = document.getElementById("dbMaintenanceEffect");
+  if (!el) return;
+  if (!result || typeof result !== "object") {
+    el.textContent = "";
+    return;
+  }
+  const reclaimed = Number(result.reclaimed_bytes || 0);
+  const durationMs = Number(result.duration_ms || 0);
+  if (!Number.isFinite(reclaimed) || !Number.isFinite(durationMs)) {
+    el.textContent = "";
+    return;
+  }
+  const signed = reclaimed >= 0 ? `-${formatBytes(reclaimed)}` : `+${formatBytes(Math.abs(reclaimed))}`;
+  const seconds = (durationMs / 1000).toFixed(1);
+  el.textContent = `Letzter VACUUM Effekt: ${signed} | Dauer: ${seconds}s`;
+}
+
+async function loadAdminDatabaseStats() {
+  const response = await fetch("/api/v1/admin/database-stats", {
+    method: "GET",
+    credentials: "same-origin",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  const stats = data && typeof data.stats === "object" ? data.stats : {};
+  renderDbMaintenanceStats(stats);
+  setDbMaintenanceStatus(`Stand: ${formatUtcPlus2(new Date().toISOString())}`);
+  return stats;
+}
+
+async function runAdminDatabaseVacuum() {
+  const response = await fetch("/api/v1/admin/database-vacuum", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({}),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return data && typeof data.result === "object" ? data.result : {};
+}
+
 async function exportGlobalAlertsCsv() {
   const severity = String(state.globalSeverityFilter || "all").trim().toLowerCase();
   const severityParam = (severity && severity !== "all")
@@ -9480,6 +9565,70 @@ function wireEvents() {
         fixAlertStatusButton.disabled = false;
         fixAlertStatusButton.textContent = "🔧 Alert-Status korrigieren";
       }
+    });
+  }
+
+  const refreshDatabaseStatsButton = document.getElementById("refreshDatabaseStatsButton");
+  if (refreshDatabaseStatsButton) {
+    refreshDatabaseStatsButton.addEventListener("click", async () => {
+      refreshDatabaseStatsButton.disabled = true;
+      setDbMaintenanceStatus("Lade DB Kennzahlen...");
+      try {
+        await loadAdminDatabaseStats();
+      } catch (error) {
+        setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
+      } finally {
+        refreshDatabaseStatsButton.disabled = false;
+      }
+    });
+  }
+
+  const vacuumDatabaseButton = document.getElementById("vacuumDatabaseButton");
+  if (vacuumDatabaseButton) {
+    vacuumDatabaseButton.addEventListener("click", async () => {
+      const confirmed = window.confirm(
+        "SQLite VACUUM jetzt starten?\n\nWährenddessen kann die Oberfläche kurz langsamer reagieren."
+      );
+      if (!confirmed) return;
+
+      const progressEl = document.getElementById("dbOpsProgress");
+      const barEl = document.getElementById("dbOpsProgressBar");
+      const labelEl = document.getElementById("dbOpsProgressLabel");
+
+      vacuumDatabaseButton.disabled = true;
+      if (refreshDatabaseStatsButton) refreshDatabaseStatsButton.disabled = true;
+      progressEl.classList.remove("hidden");
+      barEl.style.width = "40%";
+      barEl.classList.add("db-ops-progress-bar--indeterminate");
+      labelEl.className = "db-ops-progress-label";
+      labelEl.textContent = "VACUUM läuft...";
+      setDbMaintenanceStatus("VACUUM läuft...");
+
+      try {
+        const result = await runAdminDatabaseVacuum();
+        renderDbMaintenanceStats(result.after || {});
+        renderDbMaintenanceEffect(result);
+        setDbMaintenanceStatus("VACUUM abgeschlossen.");
+        barEl.classList.remove("db-ops-progress-bar--indeterminate");
+        barEl.style.width = "100%";
+        labelEl.className = "db-ops-progress-label success";
+        labelEl.textContent = "VACUUM erfolgreich abgeschlossen.";
+        setTimeout(() => progressEl.classList.add("hidden"), 3500);
+      } catch (error) {
+        barEl.classList.remove("db-ops-progress-bar--indeterminate");
+        labelEl.className = "db-ops-progress-label error";
+        labelEl.textContent = `Fehler: ${error.message}`;
+        setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
+      } finally {
+        vacuumDatabaseButton.disabled = false;
+        if (refreshDatabaseStatsButton) refreshDatabaseStatsButton.disabled = false;
+      }
+    });
+  }
+
+  if (state.isAdmin) {
+    void loadAdminDatabaseStats().catch((error) => {
+      setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
     });
   }
 

@@ -23,7 +23,7 @@ receiver.py  ← ThreadingHTTPServer auf Port 8080
   Web-Dashboard (Vanilla JS / CSS / HTML)
 ```
 
-- **Agent** läuft per Cron (Standard: alle 5 Minuten) und sendet ein JSON-Paket mit System-Metriken an den Server.
+- **Agent** läuft per Cron/Scheduled Task (Standard: alle 15 Minuten) und sendet ein JSON-Paket mit System-Metriken an den Server; zusätzliche Startverzögerung durch Jitter ist separat (max. 300 Sekunden).
 - **Server** (`receiver.py`) nimmt Daten entgegen, wertet Schwellwerte aus, schreibt Alerts in die DB und stellt eine REST-API sowie ein Web-Dashboard bereit.
 - **Dashboard** (`app.js`) ist eine Single-Page-App (PWA) ohne Framework. Läuft offline-fähig per Service Worker.
 
@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.40  | 16.05.2026 | Switch report retention to 6 weeks (42 days), correct default agent interval docs to 15 minutes, and add Admin DB maintenance panel with live database stats plus manual VACUUM and visible before/after effect |
 | 1.6.39  | 16.05.2026 | Improve SAP B1 Version-Referenztabelle rendering with a true terminal-themed HTML table (clean columns, sticky header, better readability) |
 | 1.6.38  | 16.05.2026 | Stabilize web login by self-healing a missing login-audit table and expand terminal keyword coloring with granular token classes across all terminal cards (including SAP/HANA sections) |
 | 1.6.37  | 16.05.2026 | Render Root Crontab and cron.d excerpts in the same dark terminal style as Agent Update Log and agent.conf |

@@ -44,7 +44,8 @@ OPENAPI_SPEC_PATH = BASE_DIR.parent / "openapi.yaml"
 UPDATES_DIR = BASE_DIR.parent / "updates"
 API_KEY = os.getenv("MONITORING_API_KEY", "")
 API_KEY_GRACE_ALLOW_KNOWN_HOSTS = os.getenv("MONITORING_API_KEY_GRACE_ALLOW_KNOWN_HOSTS", "1").strip().lower() in {"1", "true", "yes", "on"}
-MAX_REPORTS_PER_HOST = int(os.getenv("MONITORING_MAX_REPORTS_PER_HOST", "1344"))
+REPORT_RETENTION_DAYS = max(1, int(os.getenv("MONITORING_REPORT_RETENTION_DAYS", "42")))
+MAX_REPORTS_PER_HOST = max(0, int(os.getenv("MONITORING_MAX_REPORTS_PER_HOST", "0")))
 WARNING_THRESHOLD_PERCENT = float(os.getenv("MONITORING_WARNING_THRESHOLD", "80"))
 CRITICAL_THRESHOLD_PERCENT = float(os.getenv("MONITORING_CRITICAL_THRESHOLD", "90"))
 TELEGRAM_ENABLED_DEFAULT = os.getenv("MONITORING_TELEGRAM_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
@@ -929,6 +930,97 @@ def _restore_database_from_bytes(raw_bytes: bytes) -> tuple[bool, str]:
                     path.unlink()
                 except OSError:
                     pass
+
+
+def _sqlite_sidecar_paths(db_path: Path) -> tuple[Path, Path]:
+    return (
+        db_path.parent / f"{db_path.name}-wal",
+        db_path.parent / f"{db_path.name}-shm",
+    )
+
+
+def collect_database_maintenance_stats(conn: sqlite3.Connection) -> dict[str, object]:
+    reports_row = conn.execute(
+        """
+        SELECT
+            COUNT(*) AS reports_total,
+            COUNT(DISTINCT hostname) AS hosts_with_reports,
+            MIN(received_at_utc) AS oldest_report_utc,
+            MAX(received_at_utc) AS newest_report_utc,
+            AVG(LENGTH(payload_json)) AS avg_payload_bytes,
+            MAX(LENGTH(payload_json)) AS max_payload_bytes
+        FROM reports
+        """
+    ).fetchone()
+    alerts_row = conn.execute(
+        """
+        SELECT
+            COUNT(*) AS alerts_total,
+            SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS alerts_open
+        FROM alerts
+        """
+    ).fetchone()
+    hosts_total_row = conn.execute("SELECT COUNT(DISTINCT hostname) FROM host_settings").fetchone()
+
+    page_size = int((conn.execute("PRAGMA page_size").fetchone() or [0])[0] or 0)
+    page_count = int((conn.execute("PRAGMA page_count").fetchone() or [0])[0] or 0)
+    freelist_count = int((conn.execute("PRAGMA freelist_count").fetchone() or [0])[0] or 0)
+    used_pages = max(0, page_count - freelist_count)
+
+    db_file_bytes = int(DB_PATH.stat().st_size) if DB_PATH.exists() else 0
+    wal_path, shm_path = _sqlite_sidecar_paths(DB_PATH)
+    wal_file_bytes = int(wal_path.stat().st_size) if wal_path.exists() else 0
+    shm_file_bytes = int(shm_path.stat().st_size) if shm_path.exists() else 0
+    total_file_bytes = db_file_bytes + wal_file_bytes + shm_file_bytes
+
+    free_ratio = (float(freelist_count) / float(page_count)) if page_count > 0 else 0.0
+
+    return {
+        "retention_days": int(REPORT_RETENTION_DAYS),
+        "reports_total": int((reports_row[0] or 0) if reports_row else 0),
+        "hosts_with_reports": int((reports_row[1] or 0) if reports_row else 0),
+        "hosts_total": int((hosts_total_row[0] or 0) if hosts_total_row else 0),
+        "oldest_report_utc": str((reports_row[2] or "") if reports_row else ""),
+        "newest_report_utc": str((reports_row[3] or "") if reports_row else ""),
+        "avg_payload_bytes": float((reports_row[4] or 0.0) if reports_row else 0.0),
+        "max_payload_bytes": int((reports_row[5] or 0) if reports_row else 0),
+        "alerts_total": int((alerts_row[0] or 0) if alerts_row else 0),
+        "alerts_open": int((alerts_row[1] or 0) if alerts_row else 0),
+        "db_file_bytes": db_file_bytes,
+        "wal_file_bytes": wal_file_bytes,
+        "shm_file_bytes": shm_file_bytes,
+        "total_file_bytes": total_file_bytes,
+        "page_size": page_size,
+        "page_count": page_count,
+        "freelist_count": freelist_count,
+        "used_pages": used_pages,
+        "free_ratio": free_ratio,
+    }
+
+
+def run_database_vacuum() -> dict[str, object]:
+    started_at = datetime.now(timezone.utc)
+    with sqlite3.connect(DB_PATH) as conn_before:
+        before = collect_database_maintenance_stats(conn_before)
+
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.isolation_level = None
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        conn.execute("VACUUM")
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+
+    with sqlite3.connect(DB_PATH) as conn_after:
+        after = collect_database_maintenance_stats(conn_after)
+
+    duration_ms = int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000)
+    reclaimed_bytes = int(before.get("total_file_bytes", 0) or 0) - int(after.get("total_file_bytes", 0) or 0)
+
+    return {
+        "before": before,
+        "after": after,
+        "reclaimed_bytes": reclaimed_bytes,
+        "duration_ms": duration_ms,
+    }
 
 
 def hash_password(password: str, salt_hex: str) -> str:
@@ -6558,7 +6650,33 @@ def resolve_open_alerts_for_host(conn: sqlite3.Connection, hostname: str, report
 
 
 def prune_reports_for_host(conn: sqlite3.Connection, hostname: str, keep_count: int) -> None:
-    keep_count = max(1, int(keep_count))
+    keep_count = max(0, int(keep_count))
+    retention_days = max(1, int(REPORT_RETENTION_DAYS))
+    cutoff_iso = (datetime.now(timezone.utc) - timedelta(days=retention_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    conn.execute(
+        """
+        UPDATE alerts
+        SET report_id = NULL
+        WHERE report_id IN (
+            SELECT id
+            FROM reports
+            WHERE hostname = ? AND received_at_utc < ?
+        )
+        """,
+        (hostname, cutoff_iso),
+    )
+    conn.execute(
+        """
+        DELETE FROM reports
+        WHERE hostname = ? AND received_at_utc < ?
+        """,
+        (hostname, cutoff_iso),
+    )
+
+    if keep_count <= 0:
+        return
+
     conn.execute(
         """
         UPDATE alerts
@@ -7280,6 +7398,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 entries = list_web_login_events(conn, limit)
             self._send_json(HTTPStatus.OK, {"count": len(entries), "entries": entries})
+            return
+
+        if parsed.path == "/api/v1/admin/database-stats":
+            if not self._require_admin_session():
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                stats = collect_database_maintenance_stats(conn)
+            self._send_json(HTTPStatus.OK, {"status": "ok", "stats": stats})
             return
 
         if parsed.path == "/api/v1/oauth-settings":
@@ -10051,6 +10177,26 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             self._send_json(HTTPStatus.OK, result)
+            return
+
+        if path == "/api/v1/admin/database-vacuum":
+            if not self._require_admin_session():
+                return
+
+            try:
+                result = run_database_vacuum()
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "message": "VACUUM abgeschlossen",
+                    "result": result,
+                },
+            )
             return
 
         if path != "/api/v1/agent-report":

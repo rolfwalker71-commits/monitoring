@@ -4,7 +4,8 @@ Kurzbeschreibung: Wie Reports pro Host begrenzt werden und welche Auswirkungen a
 
 ## Kernregel
 
-- MONITORING_MAX_REPORTS_PER_HOST steuert, wie viele Reports pro Host erhalten bleiben.
+- MONITORING_REPORT_RETENTION_DAYS steuert die zeitliche Aufbewahrung der Einzelmeldungen pro Host (Standard: 42 Tage = 6 Wochen).
+- MONITORING_MAX_REPORTS_PER_HOST ist optional als zusaetzliche Obergrenze aktiv (0 = deaktiviert).
 - Pruning laeuft im Report-Ingest direkt nach dem Insert.
 
 ## Ablauf
@@ -12,10 +13,13 @@ Kurzbeschreibung: Wie Reports pro Host begrenzt werden und welche Auswirkungen a
 ```mermaid
 flowchart TD
     A[Neuer Report INSERT] --> B[prune_reports_for_host]
-    B --> C[alte report ids bestimmen]
-    C --> D[alerts.report_id fuer alte ids auf NULL]
-    D --> E[alte reports loeschen]
-    E --> F[neueste Reports bleiben erhalten]
+    B --> C[cutoff auf jetzt minus Retention-Tage]
+    C --> D[alerts.report_id fuer ablaufende ids auf NULL]
+    D --> E[reports aelter als cutoff loeschen]
+    E --> F{optional count cap aktiv?}
+    F -->|ja| G[zusaetzlich auf keep_count kuerzen]
+    F -->|nein| H[neueste Reports innerhalb Retention bleiben erhalten]
+    G --> H
 ```
 
 ## Warum zuerst report_id auf NULL?
