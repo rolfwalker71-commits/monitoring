@@ -1410,6 +1410,41 @@ def upsert_customer(conn: sqlite3.Connection, customer_name: object, maringo_pro
     return customer
 
 
+def update_customer_by_id(
+    conn: sqlite3.Connection,
+    customer_id: object,
+    customer_name: object,
+    maringo_project_number: object,
+) -> dict:
+    try:
+        cid = int(str(customer_id or 0))
+    except (TypeError, ValueError):
+        cid = 0
+    if cid <= 0:
+        raise ValueError("Ungültige Kunden-ID.")
+    name = normalize_customer_name(customer_name)
+    if not name:
+        raise ValueError("customer_name fehlt.")
+    project_no = normalize_maringo_project_number(maringo_project_number)
+    clash = conn.execute(
+        "SELECT id FROM customers WHERE LOWER(customer_name) = LOWER(?) AND id != ?",
+        (name, cid),
+    ).fetchone()
+    if clash:
+        raise ValueError(f'Ein Kunde mit dem Namen "{name}" existiert bereits.')
+    now_utc = utc_now_iso()
+    conn.execute(
+        "UPDATE customers SET customer_name = ?, maringo_project_number = ?, updated_at_utc = ? WHERE id = ?",
+        (name, project_no, now_utc, cid),
+    )
+    if conn.execute("SELECT changes()").fetchone()[0] == 0:
+        raise ValueError("Kunde nicht gefunden.")
+    customer = get_customer_by_id(conn, cid)
+    if not customer:
+        raise ValueError("Kunde konnte nicht geladen werden.")
+    return customer
+
+
 def password_meets_policy(password: str) -> bool:
     return len(str(password or "")) >= MIN_PASSWORD_LENGTH
 
@@ -4278,6 +4313,7 @@ def collect_customer_overview(conn: sqlite3.Connection) -> dict:
 
         if customer_key not in grouped:
             grouped[customer_key] = {
+                "customer_id": int(row[6]) if row[6] is not None else None,
                 "customer_name": customer_name,
                 "maringo_project_number": customer_project,
                 "hosts": [],
@@ -11026,6 +11062,43 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             conn.commit()
 
         self._send_json(HTTPStatus.CREATED, {"status": "stored"})
+
+
+    def do_PATCH(self) -> None:
+        parsed = urlparse(self.path)
+        path = parsed.path.rstrip("/") or "/"
+
+        m = re.match(r"^/api/v1/customers/(\d+)$", path)
+        if m:
+            customer_id = int(m.group(1))
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid payload"})
+                return
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    customer = update_customer_by_id(
+                        conn,
+                        customer_id,
+                        payload.get("customer_name", ""),
+                        payload.get("maringo_project_number", ""),
+                    )
+                    conn.commit()
+                self._send_json(HTTPStatus.OK, {"status": "updated", "customer": customer})
+            except ValueError as exc:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            return
+
+        self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
 
 def main() -> None:

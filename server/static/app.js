@@ -9027,6 +9027,7 @@ function renderCustomerOverview(data) {
   return customers.map((customer) => {
     const customerName = asText(customer?.customer_name, "Ohne Kunde");
     const projectNo = asText(customer?.maringo_project_number, "");
+    const customerId = Number(customer?.customer_id || 0) || null;
     const hosts = Array.isArray(customer?.hosts) ? customer.hosts : [];
     const detailsOpen = Number(customer?.critical_alert_count || 0) > 0 || Number(customer?.missing_backup_count || 0) > 0 ? " open" : "";
     const hostRows = hosts.map((host) => {
@@ -9058,6 +9059,7 @@ function renderCustomerOverview(data) {
         <span class="customer-overview-chip">Offen: ${Number(customer?.open_alert_count || 0)}</span>
         <span class="customer-overview-chip">Kritisch: ${Number(customer?.critical_alert_count || 0)}</span>
         <span class="customer-overview-chip ${Number(customer?.missing_backup_count || 0) > 0 ? "warn" : "ok"}">Backup-Lücken: ${Number(customer?.missing_backup_count || 0)}</span>
+        ${customerId ? `<button type="button" class="customer-overview-edit-btn" data-action="edit-customer" data-customer-id="${customerId}" data-customer-name="${escapeHtml(customerName)}" data-customer-project="${escapeHtml(projectNo)}" title="Kunde bearbeiten">✏️</button>` : ""}
       </summary>
       <div class="table-wrap">
         <table class="report-subtable customer-overview-table">
@@ -9090,6 +9092,84 @@ async function loadCustomerOverview() {
   } catch (error) {
     listEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
   }
+}
+
+async function openCustomerEditorDialog({ customerId, currentName, currentProject }) {
+  const modal = document.createElement("div");
+  modal.className = "host-meta-modal";
+  modal.innerHTML = `<div class="host-meta-modal-backdrop"></div>
+    <div class="host-meta-modal-inner" role="dialog" aria-modal="true" aria-label="Kunde bearbeiten">
+      <div class="chart-drill-header">
+        <div class="chart-drill-title">Kunde bearbeiten</div>
+        <button type="button" class="btn-secondary btn-secondary--compact" data-action="cancel">Schließen</button>
+      </div>
+      <div class="chart-drill-body host-meta-modal-body">
+        <div class="host-meta-modal-grid">
+          <label>Kundenname
+            <input id="customerEditorNameInput" type="text" placeholder="z.B. Mecasonics GmbH" value="${escapeHtml(currentName || "")}" />
+          </label>
+          <label>Maringo Projektnummer (optional)
+            <input id="customerEditorProjectInput" type="text" placeholder="z.B. MAR-12345" value="${escapeHtml(currentProject || "")}" />
+          </label>
+        </div>
+        <div class="host-meta-modal-actions">
+          <button type="button" class="btn-secondary" data-action="cancel">Abbrechen</button>
+          <button type="button" class="btn-primary" data-action="save">Speichern</button>
+        </div>
+        <p id="customerEditorError" class="settings-status error" style="display:none;"></p>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  const nameInput = modal.querySelector("#customerEditorNameInput");
+  const projectInput = modal.querySelector("#customerEditorProjectInput");
+  const errorEl = modal.querySelector("#customerEditorError");
+  if (nameInput) nameInput.focus();
+
+  return await new Promise((resolve) => {
+    let closed = false;
+    const close = (result) => {
+      if (closed) return;
+      closed = true;
+      modal.remove();
+      resolve(result);
+    };
+    modal.addEventListener("click", async (e) => {
+      const action = e.target.closest("[data-action]")?.dataset.action;
+      if (action === "cancel") { close(null); return; }
+      if (action === "save") {
+        const newName = String(nameInput?.value || "").trim();
+        const newProject = String(projectInput?.value || "").trim();
+        if (!newName) {
+          if (errorEl) { errorEl.textContent = "Kundenname darf nicht leer sein."; errorEl.style.display = ""; }
+          nameInput?.focus();
+          return;
+        }
+        const saveBtn = modal.querySelector("[data-action='save']");
+        if (saveBtn) saveBtn.disabled = true;
+        try {
+          const resp = await fetch(`/api/v1/customers/${encodeURIComponent(customerId)}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ customer_name: newName, maringo_project_number: newProject }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok) {
+            if (errorEl) { errorEl.textContent = data.error || ("HTTP " + resp.status); errorEl.style.display = ""; }
+            if (saveBtn) saveBtn.disabled = false;
+            return;
+          }
+          close(data.customer || true);
+        } catch (err) {
+          if (errorEl) { errorEl.textContent = err.message || "Unbekannter Fehler."; errorEl.style.display = ""; }
+          if (saveBtn) saveBtn.disabled = false;
+        }
+      }
+    });
+    modal.querySelector(".host-meta-modal-backdrop")?.addEventListener("click", () => close(null));
+    modal.addEventListener("keydown", (e) => { if (e.key === "Escape") close(null); });
+  });
 }
 
 function getDateGroupLabel(isoDateStr) {
@@ -10007,6 +10087,21 @@ function wireEvents() {
   if (refreshCustomerOverviewButton) {
     refreshCustomerOverviewButton.addEventListener("click", async () => {
       await loadCustomerOverview();
+    });
+  }
+  const customerOverviewListEl = document.getElementById("customerOverviewList");
+  if (customerOverviewListEl) {
+    customerOverviewListEl.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-action='edit-customer']");
+      if (!btn) return;
+      e.stopPropagation();
+      e.preventDefault();
+      const customerId = Number(btn.dataset.customerId || 0);
+      const currentName = String(btn.dataset.customerName || "");
+      const currentProject = String(btn.dataset.customerProject || "");
+      if (!customerId) return;
+      const result = await openCustomerEditorDialog({ customerId, currentName, currentProject });
+      if (result) await loadCustomerOverview();
     });
   }
   const customerOverviewSearchInput = document.getElementById("customerOverviewSearchInput");

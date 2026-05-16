@@ -492,7 +492,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
-\n### v1.6.70 (16. Mai 2026)\
+
+### v1.6.71 (16. Mai 2026)
+
+- **Kundennamen nachträglich bearbeiten**: Im Kunden-Tab erscheint bei jedem Kunden ein ✏️-Button. Klick öffnet einen Dialog zum Ändern von Name und Maringo-Projektnummer (PATCH `/api/v1/customers/<id>`).
+
+
 \
 - **Chips einheitlich gross**: Alle Chips und Buttons in der Host-Kopfzeile haben jetzt dieselbe Hoehe wie der "Export JSON"-Button (24px, gleicher Border-Radius).\
 - **Kundenchip als erstes Element**: Der Kunden-Chip steht jetzt ganz links in der Kontrollleiste vor API, Meldungsanzahl und den Action-Buttons.

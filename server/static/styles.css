@@ -7908,6 +7908,30 @@ body[data-theme="dark"] .dir-deep-subdir-title::before {
   color: #166534;
 }
 
+.customer-overview-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s, background 0.15s;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.customer-overview-edit-btn:hover {
+  opacity: 1;
+  background: #f1f5f9;
+}
+
 .customer-overview-table .customer-overview-host-title {
   font-weight: 700;
 }
