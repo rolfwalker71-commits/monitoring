@@ -10284,10 +10284,11 @@ function updateSystemOverviewAddonsToggleButton() {
   button.setAttribute("aria-pressed", expanded ? "true" : "false");
 }
 
-function renderSystemOverviewAddons(payload) {
+function renderSystemOverviewAddons(payload, addonFilterQuery = "") {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const hana = payload && typeof payload.hana_addons === "object" ? payload.hana_addons : null;
   const osField = (payload?.os || "").toLowerCase();
+  const normalizedAddonQuery = String(addonFilterQuery || "").trim().toLowerCase();
   
   // Determine which addons to show based on OS
   const isWindows = osField.includes("windows");
@@ -10323,12 +10324,34 @@ function renderSystemOverviewAddons(payload) {
     return `${visibleRowsHtml}<li class="so-addon-more"><details><summary>+${hiddenCount} weitere</summary><ul class="so-addon-list so-addon-list-nested">${hiddenRowsHtml}</ul></details></li>`;
   };
 
+  const filterAddonRows = (rows, nameKey, versionKey) => {
+    const sourceRows = Array.isArray(rows) ? rows : [];
+    if (!normalizedAddonQuery) {
+      return { rows: sourceRows, hasMatch: false };
+    }
+
+    const matched = sourceRows.filter((row) => {
+      const haystack = `${asText(row?.[nameKey], "")} ${asText(row?.[versionKey], "")}`.toLowerCase();
+      return haystack.includes(normalizedAddonQuery);
+    });
+
+    if (matched.length > 0) {
+      return { rows: matched, hasMatch: true };
+    }
+    return { rows: sourceRows, hasMatch: false };
+  };
+
   let result = "";
 
   // SQL AddOns (Windows or unknown OS)
   if (sapToShow) {
-    const extRows = Array.isArray(sapToShow?.extensions?.rows) ? sapToShow.extensions.rows : [];
-    const legacyRows = Array.isArray(sapToShow?.sari_addons?.rows) ? sapToShow.sari_addons.rows : [];
+    const extRaw = Array.isArray(sapToShow?.extensions?.rows) ? sapToShow.extensions.rows : [];
+    const legacyRaw = Array.isArray(sapToShow?.sari_addons?.rows) ? sapToShow.sari_addons.rows : [];
+    const extFiltered = filterAddonRows(extRaw, "AddOnName", "Version");
+    const legacyFiltered = filterAddonRows(legacyRaw, "AName", "AddOnVer");
+    const sqlHasAddonMatch = extFiltered.hasMatch || legacyFiltered.hasMatch;
+    const extRows = sqlHasAddonMatch ? extFiltered.rows : extRaw;
+    const legacyRows = sqlHasAddonMatch ? legacyFiltered.rows : legacyRaw;
     const extCount = extRows.length;
     const legacyCount = legacyRows.length;
     const sqlTotalCount = extCount + legacyCount;
@@ -10358,8 +10381,13 @@ function renderSystemOverviewAddons(payload) {
 
   // HANA AddOns (Linux or unknown OS)
   if (hanaToShow) {
-    const hanaLightweight = Array.isArray(hanaToShow?.lightweight) ? hanaToShow.lightweight : [];
-    const hanaLegacy = Array.isArray(hanaToShow?.legacy) ? hanaToShow.legacy : [];
+    const hanaLightRaw = Array.isArray(hanaToShow?.lightweight) ? hanaToShow.lightweight : [];
+    const hanaLegacyRaw = Array.isArray(hanaToShow?.legacy) ? hanaToShow.legacy : [];
+    const hanaLightFiltered = filterAddonRows(hanaLightRaw, "name", "version");
+    const hanaLegacyFiltered = filterAddonRows(hanaLegacyRaw, "name", "version");
+    const hanaHasAddonMatch = hanaLightFiltered.hasMatch || hanaLegacyFiltered.hasMatch;
+    const hanaLightweight = hanaHasAddonMatch ? hanaLightFiltered.rows : hanaLightRaw;
+    const hanaLegacy = hanaHasAddonMatch ? hanaLegacyFiltered.rows : hanaLegacyRaw;
     const hanaLightCount = hanaLightweight.length;
     const hanaLegacyCount = hanaLegacy.length;
     const hanaTotalCount = hanaLightCount + hanaLegacyCount;
@@ -10518,7 +10546,7 @@ function renderSystemOverviewCountryFilter(countryCodes) {
   });
 }
 
-function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap, onRowClick) {
+function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap, onRowClick, searchQuery = "") {
   if (!host) return "";
 
   const hostnameRaw = String(host.hostname || "-");
@@ -10541,7 +10569,7 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
   const lastUpdate = formatSystemOverviewLastUpdate(host.last_update);
   const statusBadge = formatSystemOverviewStatus(host);
   const payload = host.payload || {};
-  const addOnSection = renderSystemOverviewAddons(payload);
+  const addOnSection = renderSystemOverviewAddons(payload, searchQuery);
   const licenseInfoSection = renderSystemOverviewLicenseInfos(payload);
 
   const rowClickClass = onRowClick ? "so-row-clickable" : "";
@@ -10655,7 +10683,7 @@ async function loadSystemOverview() {
                 total += matchingHosts.length;
 
                 const rowHtml = matchingHosts
-                  .map((host) => formatSystemOverviewTableRow(host, osName, customer, SAP_B1_VERSION_MAP, true))
+                  .map((host) => formatSystemOverviewTableRow(host, osName, customer, SAP_B1_VERSION_MAP, true, searchQuery))
                   .join("");
 
                 return `

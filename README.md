@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.51  | 16.05.2026 | Refine Systemübersicht AddOn search behavior: when the search term matches AddOn names/versions, show only matching AddOns in the host AddOn lists instead of the full list |
 | 1.6.50  | 16.05.2026 | Extend Systemübersicht search to include SQL/HANA AddOn names and versions, and update the search placeholder to reflect AddOn lookup |
 | 1.6.49  | 16.05.2026 | Add a Host-Interessen guard label that shows which user's preferences are currently loaded, making user-context mismatches immediately visible |
 | 1.6.48  | 16.05.2026 | Fix host-interest preferences leaking across user switches by resetting user-scoped state on auth transitions and reloading preferences per logged-in user |
