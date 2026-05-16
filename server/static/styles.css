@@ -2008,6 +2008,14 @@ body[data-theme="dark"] .section-head .report-meta-row .count {
   color: #9eb7d4;
 }
 
+body[data-theme="dark"] .report-count-inline {
+  color: #9eb7d4;
+}
+
+body[data-theme="dark"] .title-tools-sep {
+  background: #2e4a6a;
+}
+
 .title-row {
   display: flex;
   align-items: center;
@@ -2020,6 +2028,16 @@ body[data-theme="dark"] .section-head .report-meta-row .count {
   align-items: center;
   gap: 6px;
   margin-left: auto;
+  flex-wrap: nowrap;
+}
+
+.title-tools-sep {
+  display: inline-block;
+  width: 1px;
+  height: 18px;
+  background: #d1dce9;
+  border-radius: 1px;
+  flex-shrink: 0;
 }
 
 .title-row h3 {
@@ -2129,6 +2147,16 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   font-size: 15px;
   line-height: 1;
   text-align: center;
+}
+
+.btn-icon--compact {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  font-size: 13px;
+  border-radius: 8px;
 }
 
 .btn-icon:hover {
@@ -2335,8 +2363,15 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  margin-left: auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+.report-count-inline {
+  margin: 0;
+  font-size: 11px;
+  color: #5f7792;
+  line-height: 1.2;
+  min-height: 0;
 }
 
 .selected-host-meta-chip {

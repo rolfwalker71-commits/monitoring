@@ -7027,6 +7027,9 @@ function updateSelectedHostControls() {
   if (!controls) {
     return;
   }
+  const sep = controls.nextElementSibling?.classList.contains("title-tools-sep")
+    ? controls.nextElementSibling
+    : null;
 
   const selectedHost = Array.isArray(state.hosts)
     ? state.hosts.find((host) => asText(host.hostname) === state.selectedHost)
@@ -7035,11 +7038,13 @@ function updateSelectedHostControls() {
   if (!state.selectedHost || !selectedHost) {
     controls.innerHTML = "";
     controls.classList.add("hidden");
+    if (sep) sep.style.display = "none";
     return;
   }
 
   controls.innerHTML = renderSelectedHostControls(selectedHost);
   controls.classList.remove("hidden");
+  if (sep) sep.style.display = "";
   wireHostActionButtons(controls);
 }
 

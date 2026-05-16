@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.72 (16. Mai 2026)
+
+- **Chips in Titelzeile**: API-Chip, Meldungsanzahl-Chip, Kunden-Chip und Action-Buttons sind jetzt in der Titelzeile eingebaut statt in einer zweiten Reihe — die Header-Karte bleibt gleich hoch.
+- **Trennlinie** zwischen Chips-Gruppe und Refresh/Export-Tools.
+- **✏️-Button kompakt** (24px, passend zu den Chips).
+
 ### v1.6.71 (16. Mai 2026)
 
 - **Kundennamen nachträglich bearbeiten**: Im Kunden-Tab erscheint bei jedem Kunden ein ✏️-Button. Klick öffnet einen Dialog zum Ändern von Name und Maringo-Projektnummer (PATCH `/api/v1/customers/<id>`).
