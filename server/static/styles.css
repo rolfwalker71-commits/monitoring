@@ -1410,6 +1410,26 @@ body[data-theme="dark"] .agent-update-admin-table tbody tr:nth-child(2n) td:nth-
   background: #eef6ff;
 }
 
+.admin-sub-country-row td {
+  background: #f8fbff;
+  border-top: 1px solid #d8e6f7;
+  border-bottom: 1px solid #d8e6f7;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.admin-sub-country-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f3f73;
+}
+
+.admin-sub-country-count {
+  margin-left: 8px;
+  font-size: 11px;
+  color: #64748b;
+}
+
 .admin-sub-host-cell strong {
   display: block;
 }
@@ -7016,6 +7036,20 @@ body[data-theme="dark"] .admin-sub-user-chip.is-admin {
 
 body[data-theme="dark"] .admin-alert-subscriptions-table tr.has-change td {
   background: #132235;
+}
+
+body[data-theme="dark"] .admin-sub-country-row td {
+  background: #12233a;
+  border-top-color: #274263;
+  border-bottom-color: #274263;
+}
+
+body[data-theme="dark"] .admin-sub-country-title {
+  color: #bfdbfe;
+}
+
+body[data-theme="dark"] .admin-sub-country-count {
+  color: #94a3b8;
 }
 
 body[data-theme="dark"] .admin-alert-sub-controls label {

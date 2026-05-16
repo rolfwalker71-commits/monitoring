@@ -2307,6 +2307,11 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     return la.localeCompare(lb);
   });
 
+  const normalizeCountryCode = (value) => {
+    const normalized = String(value || "").trim().toUpperCase();
+    return /^[A-Z]{2}$/.test(normalized) ? normalized : "";
+  };
+
   const originalSubscriptions = new Map();
   const currentSubscriptions = new Map();
 
@@ -2434,7 +2439,24 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
       if (hosts.length === 0) {
         return '<tr data-row-type="host"><td colspan="3" class="muted">Keine Hosts vorhanden.</td></tr>';
       }
-      return hosts.map((host) => {
+      const groupedByCountry = new Map();
+      for (const host of hosts) {
+        const countryCode = normalizeCountryCode(host.country_code) || "__NONE__";
+        if (!groupedByCountry.has(countryCode)) groupedByCountry.set(countryCode, []);
+        groupedByCountry.get(countryCode).push(host);
+      }
+
+      const countryCodes = Array.from(groupedByCountry.keys()).sort((a, b) => {
+        if (a === "__NONE__") return 1;
+        if (b === "__NONE__") return -1;
+        return a.localeCompare(b);
+      });
+
+      return countryCodes.map((countryCode) => {
+        const hostsInCountry = groupedByCountry.get(countryCode) || [];
+        const countryLabel = countryCode === "__NONE__" ? "Ohne Land" : countryCode;
+
+        const hostRows = hostsInCountry.map((host) => {
         const hostnameRaw = String(host.hostname || "").trim();
         const displayNameRaw = String(host.display_name || hostnameRaw || "").trim();
         const hostname = escapeHtml(hostnameRaw);
@@ -2464,11 +2486,19 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
           </label>`;
         }).join("");
 
-        return `<tr data-row-type="host" data-hostname="${hostname}" data-display-name="${displayName}">
+        return `<tr data-row-type="host" data-country-code="${escapeHtml(countryCode)}" data-hostname="${hostname}" data-display-name="${displayName}">
           <td class="admin-sub-host-cell">${hostLabel}${rowActions}</td>
           <td><div class="admin-sub-user-stack">${renderChannelRows("mail")}</div></td>
           <td><div class="admin-sub-user-stack">${renderChannelRows("telegram")}</div></td>
         </tr>`;
+        }).join("");
+
+        return `<tr data-row-type="country" data-country-code="${escapeHtml(countryCode)}" class="admin-sub-country-row">
+          <td colspan="3">
+            <span class="admin-sub-country-title">Land: ${escapeHtml(countryLabel)}</span>
+            <span class="admin-sub-country-count">${hostsInCountry.length} Host${hostsInCountry.length === 1 ? "" : "s"}</span>
+          </td>
+        </tr>${hostRows}`;
       }).join("");
     };
 
@@ -2554,7 +2584,12 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     const onlyChanged = document.getElementById("adminAlertSubsOnlyChangedInput")?.checked === true;
     const viewMode = state.adminAlertSubscriptionsViewMode === "user" ? "user" : "host";
     const rowsEls = Array.from(container.querySelectorAll("tbody tr[data-row-type]"));
-    for (const row of rowsEls) {
+    const dataRows = rowsEls.filter((row) => {
+      const rowType = String(row.dataset.rowType || "");
+      return viewMode === "user" ? rowType === "user" : rowType === "host";
+    });
+
+    for (const row of dataRows) {
       let hostMatch = true;
       let userMatch = true;
       if (viewMode === "user") {
@@ -2582,6 +2617,20 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
           chip.classList.toggle("admin-sub-chip-hidden", !showChip);
         }
       }
+    }
+
+    const countryRows = rowsEls.filter((row) => String(row.dataset.rowType || "") === "country");
+    for (const countryRow of countryRows) {
+      if (viewMode !== "host") {
+        countryRow.classList.add("admin-sub-row-hidden");
+        continue;
+      }
+      const countryCode = String(countryRow.dataset.countryCode || "");
+      const hasVisibleHost = dataRows.some((hostRow) => {
+        return String(hostRow.dataset.countryCode || "") === countryCode
+          && !hostRow.classList.contains("admin-sub-row-hidden");
+      });
+      countryRow.classList.toggle("admin-sub-row-hidden", !hasVisibleHost);
     }
   };
 

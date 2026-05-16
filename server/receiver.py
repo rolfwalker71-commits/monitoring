@@ -2433,9 +2433,18 @@ def delete_filesystem_blacklist_pattern(conn: sqlite3.Connection, pattern_id: in
 def list_available_alert_hosts(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         """
-        SELECT DISTINCT r.hostname, COALESCE(h.display_name_override, '')
+        SELECT r.hostname,
+               COALESCE(h.display_name_override, ''),
+               COALESCE(h.country_code_override, ''),
+               COALESCE(r.payload_json, '{}')
         FROM reports r
         LEFT JOIN host_settings h ON h.hostname = r.hostname
+        JOIN (
+            SELECT hostname, MAX(id) AS latest_id
+            FROM reports
+            WHERE COALESCE(hostname, '') != ''
+            GROUP BY hostname
+        ) latest ON latest.latest_id = r.id
         WHERE COALESCE(r.hostname, '') != ''
         ORDER BY LOWER(COALESCE(NULLIF(h.display_name_override, ''), r.hostname)), LOWER(r.hostname)
         """
@@ -2444,6 +2453,7 @@ def list_available_alert_hosts(conn: sqlite3.Connection) -> list[dict]:
         {
             "hostname": str(row[0] or ""),
             "display_name": str(row[1] or "") if str(row[1] or "").strip() else str(row[0] or ""),
+            "country_code": normalize_country_code(str(row[2] or "")) or extract_country_code_from_payload(parse_payload_json(str(row[3] or "{}"))),
         }
         for row in rows
         if str(row[0] or "").strip()

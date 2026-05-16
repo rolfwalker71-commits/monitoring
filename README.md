@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.65 (16. Mai 2026)
+
+- **Alert-Abos nach Land gruppiert**: In der Host-Ansicht sind Hosts jetzt in Ländergruppen zusammengefasst.
+- **Bessere Uebersicht bei vielen Hosts**: Pro Land wird ein klarer Gruppenkopf mit Host-Anzahl angezeigt.
+- **Filter sauber integriert**: Such-/Benutzer-/"Nur Aenderungen"-Filter blenden ganze Laendergruppen automatisch aus, wenn darin kein sichtbarer Host mehr passt.
+
 ### v1.6.64 (16. Mai 2026)
 
 - **Alert-Abos mit umschaltbarer Ansicht**: Admin-Bereich kann jetzt zwischen Host-Ansicht und User-Ansicht wechseln.
