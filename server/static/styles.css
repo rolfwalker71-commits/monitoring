@@ -3109,8 +3109,8 @@ body[data-theme="dark"] .trend-progress-bar {
   position: absolute;
   top: 6px;
   right: 10px;
-  width: 24px;
-  height: 24px;
+  width: 17px;
+  height: 17px;
   object-fit: contain;
   opacity: 0.75;
   pointer-events: none;
@@ -3136,8 +3136,8 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-item strong,
 .host-item .host-title-line,
 .host-item .host-title-line span {
-  font-size: 16px;
-  font-weight: 900;
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1.05;
 }
 

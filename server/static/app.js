@@ -130,6 +130,7 @@ const state = {
   hiddenHosts: 0,
   hiddenHostsCollapsed: true,
   hiddenHostMutedAlertsCollapsed: {},
+  hostChipDebugLoggedHosts: new Set(),
   mutedAlertsByHost: {},
   latestAgentRelease: "",
   agentUpdateStatusLoaded: false,
@@ -6171,6 +6172,7 @@ function renderSingleHostCard(host) {
   const sapFeaturePack = cleanHostValue(
     sapVersionInfo.mapping?.featurePack
       || (sapReleaseRaw.toUpperCase().startsWith("FP") ? sapReleaseRaw : "")
+      || sapReleaseRaw
   );
   const hanaReleaseRaw = cleanHostValue(host.hana_release || host.hana_version || "");
   const hanaReleaseValue = hanaReleaseRaw
@@ -6188,6 +6190,24 @@ function renderSingleHostCard(host) {
       ? `<span class="host-value-chip host-value-chip--sid" title="HANA SID">${escapeHtml(hanaSidValue)}</span>`
       : "",
   ].filter(Boolean).join("");
+
+  const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
+  const hanaRawForDebug = asText(host.hana_release || host.hana_version || "", "").trim();
+  const sidRawForDebug = asText(host.hana_sid || "", "").trim();
+  const hasRawChipCandidate = [sapRawForDebug, hanaRawForDebug, sidRawForDebug].some((value) => value && value !== "-");
+  if (hasRawChipCandidate && !valueChipStack) {
+    const debugKey = asText(host.hostname || "", "").trim();
+    if (debugKey && !state.hostChipDebugLoggedHosts.has(debugKey)) {
+      state.hostChipDebugLoggedHosts.add(debugKey);
+      console.warn("[host-card-chips] Raw values present but no chips rendered", {
+        hostname: debugKey,
+        sap_release: sapRawForDebug,
+        hana_release: hanaRawForDebug,
+        hana_sid: sidRawForDebug,
+      });
+    }
+  }
+
   const footerContent = valueChipStack || alertChip
     ? `<div class="host-card-footer">${valueChipStack ? `<span class="host-card-actions">${valueChipStack}</span>` : ""}${alertChip}</div>`
     : "";
