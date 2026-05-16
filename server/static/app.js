@@ -10429,6 +10429,56 @@ function renderSystemOverviewLicenseInfos(payload) {
   `;
 }
 
+function collectSystemOverviewAddonSearchText(payload) {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  const tokens = [];
+
+  const sap = payload.sap_business_one && typeof payload.sap_business_one === "object"
+    ? payload.sap_business_one
+    : null;
+  const hana = payload.hana_addons && typeof payload.hana_addons === "object"
+    ? payload.hana_addons
+    : null;
+
+  const pushValue = (value) => {
+    const text = String(value || "").trim();
+    if (text) tokens.push(text.toLowerCase());
+  };
+
+  if (sap) {
+    const extRows = Array.isArray(sap.extensions?.rows) ? sap.extensions.rows : [];
+    extRows.forEach((row) => {
+      pushValue(row?.AddOnName);
+      pushValue(row?.Version);
+    });
+
+    const legacyRows = Array.isArray(sap.sari_addons?.rows) ? sap.sari_addons.rows : [];
+    legacyRows.forEach((row) => {
+      pushValue(row?.AName);
+      pushValue(row?.AddOnVer);
+    });
+  }
+
+  if (hana) {
+    const lightweight = Array.isArray(hana.lightweight) ? hana.lightweight : [];
+    lightweight.forEach((row) => {
+      pushValue(row?.name);
+      pushValue(row?.version);
+    });
+
+    const legacy = Array.isArray(hana.legacy) ? hana.legacy : [];
+    legacy.forEach((row) => {
+      pushValue(row?.name);
+      pushValue(row?.version);
+    });
+  }
+
+  return tokens.join(" ");
+}
+
 function renderSystemOverviewCountryFilter(countryCodes) {
   const filterEl = document.getElementById("systemOverviewCountryFilter");
   if (!filterEl) return;
@@ -10583,6 +10633,7 @@ async function loadSystemOverview() {
                     return true;
                   }
                   const payload = host && typeof host.payload === "object" ? host.payload : {};
+                  const addonText = collectSystemOverviewAddonSearchText(payload);
                   const haystack = [
                     host?.hostname,
                     host?.display_name,
@@ -10591,7 +10642,8 @@ async function loadSystemOverview() {
                     payload?.agent_id,
                     customer,
                     osName,
-                    country
+                    country,
+                    addonText
                   ].map((v) => String(v || "").toLowerCase()).join(" ");
                   return haystack.includes(searchQuery);
                 });
