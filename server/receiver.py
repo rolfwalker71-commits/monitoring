@@ -168,6 +168,7 @@ def init_db() -> None:
                 telegram_chat_id TEXT NOT NULL,
                 updated_at_utc TEXT NOT NULL,
                 alert_reminder_interval_hours INTEGER NOT NULL DEFAULT 0,
+                alert_telegram_reminder_interval_hours INTEGER NOT NULL DEFAULT 0,
                 cpu_warning_threshold_percent REAL NOT NULL DEFAULT 80,
                 cpu_critical_threshold_percent REAL NOT NULL DEFAULT 95,
                 cpu_alert_window_reports INTEGER NOT NULL DEFAULT 4,
@@ -197,6 +198,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN critical_trigger_immediate INTEGER NOT NULL DEFAULT 1")
         if "alert_reminder_interval_hours" not in existing_alarm_columns:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN alert_reminder_interval_hours INTEGER NOT NULL DEFAULT 0")
+        if "alert_telegram_reminder_interval_hours" not in existing_alarm_columns:
+            conn.execute("ALTER TABLE alarm_settings ADD COLUMN alert_telegram_reminder_interval_hours INTEGER NOT NULL DEFAULT 0")
         if "cpu_warning_threshold_percent" not in existing_alarm_columns:
             conn.execute("ALTER TABLE alarm_settings ADD COLUMN cpu_warning_threshold_percent REAL NOT NULL DEFAULT 80")
         if "cpu_critical_threshold_percent" not in existing_alarm_columns:
@@ -242,6 +245,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE alerts ADD COLUMN closed_by TEXT")
         if "last_reminder_sent_utc" not in existing_alert_columns:
             conn.execute("ALTER TABLE alerts ADD COLUMN last_reminder_sent_utc TEXT")
+        if "last_telegram_reminder_sent_utc" not in existing_alert_columns:
+            conn.execute("ALTER TABLE alerts ADD COLUMN last_telegram_reminder_sent_utc TEXT")
 
         conn.execute(
             """
@@ -625,6 +630,7 @@ def init_db() -> None:
                 telegram_chat_id,
                 updated_at_utc,
                 alert_reminder_interval_hours,
+                alert_telegram_reminder_interval_hours,
                 cpu_warning_threshold_percent,
                 cpu_critical_threshold_percent,
                 cpu_alert_window_reports,
@@ -640,7 +646,7 @@ def init_db() -> None:
                 openai_max_tokens,
                 ai_troubleshoot_cache_ttl_sec
             )
-            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO NOTHING
             """,
             (
@@ -653,6 +659,7 @@ def init_db() -> None:
                 TELEGRAM_BOT_TOKEN_DEFAULT,
                 TELEGRAM_CHAT_ID_DEFAULT,
                 utc_now_iso(),
+                0,
                 0,
                 80.0,
                 95.0,
@@ -5610,23 +5617,23 @@ def send_microsoft_mail_multi(
 
 def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
     alarm_settings = get_alarm_settings(conn)
-    interval_hours = int(alarm_settings.get("alert_reminder_interval_hours") or 0)
-    if interval_hours <= 0:
+    mail_interval_hours = int(alarm_settings.get("alert_reminder_interval_hours") or 0)
+    telegram_interval_hours = int(alarm_settings.get("alert_telegram_reminder_interval_hours") or 0)
+    if mail_interval_hours <= 0 and telegram_interval_hours <= 0:
         return
 
     now_utc_dt = datetime.now(timezone.utc)
-    cutoff_iso = (now_utc_dt - timedelta(hours=interval_hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    cutoff_mail_iso = (now_utc_dt - timedelta(hours=mail_interval_hours)).strftime("%Y-%m-%dT%H:%M:%SZ") if mail_interval_hours > 0 else ""
+    cutoff_telegram_iso = (now_utc_dt - timedelta(hours=telegram_interval_hours)).strftime("%Y-%m-%dT%H:%M:%SZ") if telegram_interval_hours > 0 else ""
 
     open_alerts = conn.execute(
         """
-        SELECT id, hostname, mountpoint, severity, used_percent
+        SELECT id, hostname, mountpoint, severity, used_percent,
+               created_at_utc, last_reminder_sent_utc, last_telegram_reminder_sent_utc
         FROM alerts
         WHERE status = 'open'
-          AND created_at_utc <= ?
-          AND (last_reminder_sent_utc IS NULL OR last_reminder_sent_utc <= ?)
         ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, used_percent DESC
-        """,
-        (cutoff_iso, cutoff_iso),
+        """
     ).fetchall()
 
     if not open_alerts:
@@ -5637,7 +5644,7 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
     blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
 
     try:
-        user_rows = conn.execute(
+        mail_user_rows = conn.execute(
             """
             SELECT u.username, COALESCE(s.alert_instant_min_severity, 'warning')
             FROM web_users u
@@ -5647,11 +5654,31 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
               AND COALESCE(s.email_enabled, 0) = 1
               AND COALESCE(s.email_recipient, '') != ''
             """
-        ).fetchall()
+        ).fetchall() if mail_interval_hours > 0 else []
     except Exception:
-        return
+        mail_user_rows = []
 
-    if not user_rows:
+    telegram_enabled = bool(alarm_settings.get("telegram_enabled"))
+    telegram_bot_token = str(alarm_settings.get("telegram_bot_token", "") or "").strip()
+    telegram_channel_available = telegram_interval_hours > 0 and telegram_enabled and bool(telegram_bot_token)
+
+    try:
+        telegram_user_rows = conn.execute(
+            """
+            SELECT u.username,
+                   COALESCE(s.alert_instant_min_severity, 'warning'),
+                   COALESCE(s.alert_telegram_chat_id, '')
+            FROM web_users u
+            JOIN web_user_settings s ON s.username = u.username
+            WHERE COALESCE(u.is_disabled, 0) = 0
+              AND COALESCE(s.alert_instant_telegram_enabled, 0) = 1
+              AND COALESCE(s.alert_telegram_chat_id, '') != ''
+            """
+        ).fetchall() if telegram_channel_available else []
+    except Exception:
+        telegram_user_rows = []
+
+    if not mail_user_rows and not telegram_user_rows:
         return
 
     for alert_row in open_alerts:
@@ -5660,6 +5687,23 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
         mountpoint = str(alert_row[2] or "")
         severity = str(alert_row[3] or "warning")
         used_percent = float(alert_row[4] or 0)
+        created_at_utc = str(alert_row[5] or "")
+        last_mail_reminder_sent_utc = str(alert_row[6] or "")
+        last_telegram_reminder_sent_utc = str(alert_row[7] or "")
+
+        due_mail = (
+            mail_interval_hours > 0
+            and created_at_utc <= cutoff_mail_iso
+            and (not last_mail_reminder_sent_utc or last_mail_reminder_sent_utc <= cutoff_mail_iso)
+        )
+        due_telegram = (
+            telegram_channel_available
+            and created_at_utc <= cutoff_telegram_iso
+            and (not last_telegram_reminder_sent_utc or last_telegram_reminder_sent_utc <= cutoff_telegram_iso)
+        )
+
+        if not due_mail and not due_telegram:
+            continue
 
         if is_filesystem_blacklisted_by_patterns(mountpoint, blacklist_patterns):
             conn.execute(
@@ -5679,69 +5723,115 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
         ).fetchone()
         reported_at_utc = str(reported_row[0] or "") if reported_row else now_utc_iso
 
-        sent_to_anyone = False
-        for urow in user_rows:
-            username = str(urow[0] or "").strip()
-            min_severity = str(urow[1] or "warning").strip().lower()
-            if not username:
-                continue
-            if min_severity == "critical" and severity != "critical":
-                continue
+        sent_mail_to_anyone = False
+        sent_telegram_to_anyone = False
 
-            sub = conn.execute(
-                "SELECT notify_mail FROM web_user_alert_subscriptions WHERE username = ? AND hostname = ?",
-                (username, hostname),
-            ).fetchone()
-            if not sub or not bool(sub[0]):
-                continue
-
-            user_settings = get_web_user_settings(conn, username)
-            recipient = user_settings.get("email_recipient", "").strip()
-            if not recipient:
-                continue
-            all_recipients = resolve_user_alert_mail_recipients(user_settings, severity)
-            if not all_recipients:
-                continue
-
-            try:
-                ok_token, access_token, _err = ensure_microsoft_access_token(conn, username)
-                if not ok_token:
+        if due_mail:
+            for urow in mail_user_rows:
+                username = str(urow[0] or "").strip()
+                min_severity = str(urow[1] or "warning").strip().lower()
+                if not username:
                     continue
-                graph_cid, graph_attachment = build_alert_usage_graph_attachment(
-                    conn, hostname, mountpoint, severity=severity, hours=24
-                )
-                graph_attachments = [graph_attachment] if graph_attachment else []
-                subject = f"[Monitoring] [HEADS-UP] Offener Alert: {html.escape(str(host_ctx.get('display_name', hostname)))}"
-                body = alert_instant_mail_html(
-                    username,
-                    "reminder",
-                    hostname,
-                    mountpoint,
-                    severity,
-                    used_percent,
-                    display_name=str(host_ctx.get("display_name", "") or ""),
-                    primary_ip=str(host_ctx.get("primary_ip", "") or ""),
-                    country_code=str(host_ctx.get("country_code", "") or ""),
-                    os_family=str(host_ctx.get("os_family", "linux") or "linux"),
-                    reported_at_utc=reported_at_utc,
-                    graph_cid=graph_cid or "",
-                )
-                send_microsoft_mail_multi(
-                    access_token,
-                    all_recipients,
-                    subject,
-                    body,
-                    content_type="HTML",
-                    attachments=graph_attachments,
-                    sender_address=str(user_settings.get("email_sender", "") or "").strip(),
-                )
-                sent_to_anyone = True
-            except Exception:
-                pass
+                if min_severity == "critical" and severity != "critical":
+                    continue
 
-        if sent_to_anyone:
+                sub = conn.execute(
+                    "SELECT notify_mail FROM web_user_alert_subscriptions WHERE username = ? AND hostname = ?",
+                    (username, hostname),
+                ).fetchone()
+                if not sub or not bool(sub[0]):
+                    continue
+
+                user_settings = get_web_user_settings(conn, username)
+                recipient = user_settings.get("email_recipient", "").strip()
+                if not recipient:
+                    continue
+                all_recipients = resolve_user_alert_mail_recipients(user_settings, severity)
+                if not all_recipients:
+                    continue
+
+                try:
+                    ok_token, access_token, _err = ensure_microsoft_access_token(conn, username)
+                    if not ok_token:
+                        continue
+                    graph_cid, graph_attachment = build_alert_usage_graph_attachment(
+                        conn, hostname, mountpoint, severity=severity, hours=24
+                    )
+                    graph_attachments = [graph_attachment] if graph_attachment else []
+                    subject = f"[Monitoring] [HEADS-UP] Offener Alert: {html.escape(str(host_ctx.get('display_name', hostname)))}"
+                    body = alert_instant_mail_html(
+                        username,
+                        "reminder",
+                        hostname,
+                        mountpoint,
+                        severity,
+                        used_percent,
+                        display_name=str(host_ctx.get("display_name", "") or ""),
+                        primary_ip=str(host_ctx.get("primary_ip", "") or ""),
+                        country_code=str(host_ctx.get("country_code", "") or ""),
+                        os_family=str(host_ctx.get("os_family", "linux") or "linux"),
+                        reported_at_utc=reported_at_utc,
+                        graph_cid=graph_cid or "",
+                    )
+                    send_microsoft_mail_multi(
+                        access_token,
+                        all_recipients,
+                        subject,
+                        body,
+                        content_type="HTML",
+                        attachments=graph_attachments,
+                        sender_address=str(user_settings.get("email_sender", "") or "").strip(),
+                    )
+                    sent_mail_to_anyone = True
+                except Exception:
+                    pass
+
+        if due_telegram:
+            title = str(host_ctx.get("display_name", "") or "").strip() or hostname
+            now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
+            sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
+
+            for trow in telegram_user_rows:
+                username = str(trow[0] or "").strip()
+                min_severity = str(trow[1] or "warning").strip().lower()
+                chat_id = str(trow[2] or "").strip()
+                if not username or not chat_id:
+                    continue
+                if min_severity == "critical" and severity != "critical":
+                    continue
+
+                sub = conn.execute(
+                    "SELECT notify_telegram FROM web_user_alert_subscriptions WHERE username = ? AND hostname = ?",
+                    (username, hostname),
+                ).fetchone()
+                if not sub or not bool(sub[0]):
+                    continue
+
+                text = (
+                    "⏰ HEADS-UP REMINDER\n"
+                    f"👤 {username}\n"
+                    f"🖥️ {title} ({hostname})\n"
+                    f"📂 {mountpoint}\n"
+                    f"{sev_icon} {severity}\n"
+                    f"📊 {used_percent:.1f}%\n"
+                    f"🕐 {now_local}"
+                )
+
+                try:
+                    telegram_ok, _telegram_details = telegram_send_to_chat(telegram_bot_token, chat_id, text)
+                    if telegram_ok:
+                        sent_telegram_to_anyone = True
+                except Exception:
+                    pass
+
+        if sent_mail_to_anyone:
             conn.execute(
                 "UPDATE alerts SET last_reminder_sent_utc = ? WHERE id = ?",
+                (now_utc_iso, alert_id),
+            )
+        if sent_telegram_to_anyone:
+            conn.execute(
+                "UPDATE alerts SET last_telegram_reminder_sent_utc = ? WHERE id = ?",
                 (now_utc_iso, alert_id),
             )
 
@@ -5903,6 +5993,7 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
                warning_consecutive_hits, warning_window_minutes, critical_trigger_immediate,
                telegram_enabled, telegram_bot_token, telegram_chat_id, updated_at_utc,
                COALESCE(alert_reminder_interval_hours, 0),
+             COALESCE(alert_telegram_reminder_interval_hours, 0),
                COALESCE(cpu_warning_threshold_percent, 80),
                COALESCE(cpu_critical_threshold_percent, 95),
                COALESCE(cpu_alert_window_reports, 4),
@@ -5934,6 +6025,7 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
             "telegram_chat_id": TELEGRAM_CHAT_ID_DEFAULT,
             "updated_at_utc": "",
             "alert_reminder_interval_hours": 0,
+            "alert_telegram_reminder_interval_hours": 0,
             "cpu_warning_threshold_percent": 80.0,
             "cpu_critical_threshold_percent": 95.0,
             "cpu_alert_window_reports": 4,
@@ -5961,20 +6053,21 @@ def get_alarm_settings(conn: sqlite3.Connection) -> dict:
         "telegram_chat_id": str(row[7] or ""),
         "updated_at_utc": str(row[8] or ""),
         "alert_reminder_interval_hours": max(0, int(row[9] or 0)) if row[9] is not None else 0,
-        "cpu_warning_threshold_percent": clamp_threshold(row[10], 1, 99, 80.0),
-        "cpu_critical_threshold_percent": clamp_threshold(row[11], 1, 100, 95.0),
-        "cpu_alert_window_reports": max(2, min(24, int(row[12] or 4))) if row[12] is not None else 4,
-        "ram_warning_threshold_percent": clamp_threshold(row[13], 1, 99, 85.0),
-        "ram_critical_threshold_percent": clamp_threshold(row[14], 1, 100, 95.0),
-        "ram_alert_window_reports": max(2, min(24, int(row[15] or 4))) if row[15] is not None else 4,
-        "inactive_host_alert_enabled": coerce_bool(row[16]),
-        "inactive_host_alert_hours": max(1, min(168, int(row[17] or 3))) if row[17] is not None else 3,
-        "ai_troubleshoot_enabled": coerce_bool(row[18]),
-        "openai_api_key": str(row[19] or ""),
-        "openai_model": str(row[20] or "gpt-4o-mini"),
-        "openai_timeout_sec": max(3, min(60, int(row[21] or 12))) if row[21] is not None else 12,
-        "openai_max_tokens": max(256, min(4000, int(row[22] or 1200))) if row[22] is not None else 1200,
-        "ai_troubleshoot_cache_ttl_sec": max(30, min(3600, int(row[23] or 600))) if row[23] is not None else 600,
+        "alert_telegram_reminder_interval_hours": max(0, int(row[10] or 0)) if row[10] is not None else 0,
+        "cpu_warning_threshold_percent": clamp_threshold(row[11], 1, 99, 80.0),
+        "cpu_critical_threshold_percent": clamp_threshold(row[12], 1, 100, 95.0),
+        "cpu_alert_window_reports": max(2, min(24, int(row[13] or 4))) if row[13] is not None else 4,
+        "ram_warning_threshold_percent": clamp_threshold(row[14], 1, 99, 85.0),
+        "ram_critical_threshold_percent": clamp_threshold(row[15], 1, 100, 95.0),
+        "ram_alert_window_reports": max(2, min(24, int(row[16] or 4))) if row[16] is not None else 4,
+        "inactive_host_alert_enabled": coerce_bool(row[17]),
+        "inactive_host_alert_hours": max(1, min(168, int(row[18] or 3))) if row[18] is not None else 3,
+        "ai_troubleshoot_enabled": coerce_bool(row[19]),
+        "openai_api_key": str(row[20] or ""),
+        "openai_model": str(row[21] or "gpt-4o-mini"),
+        "openai_timeout_sec": max(3, min(60, int(row[22] or 12))) if row[22] is not None else 12,
+        "openai_max_tokens": max(256, min(4000, int(row[23] or 1200))) if row[23] is not None else 1200,
+        "ai_troubleshoot_cache_ttl_sec": max(30, min(3600, int(row[24] or 600))) if row[24] is not None else 600,
     }
 
 
@@ -6055,6 +6148,12 @@ def normalize_alarm_settings_payload(payload: dict, existing: dict | None = None
     reminder_interval = max(0, min(reminder_interval, 168))
 
     try:
+        telegram_reminder_interval = int(payload.get("alert_telegram_reminder_interval_hours", base.get("alert_telegram_reminder_interval_hours", 0)) or 0)
+    except (TypeError, ValueError):
+        telegram_reminder_interval = 0
+    telegram_reminder_interval = max(0, min(telegram_reminder_interval, 168))
+
+    try:
         inactive_hours = int(payload.get("inactive_host_alert_hours", base.get("inactive_host_alert_hours", 3)) or 3)
     except (TypeError, ValueError):
         inactive_hours = 3
@@ -6096,6 +6195,7 @@ def normalize_alarm_settings_payload(payload: dict, existing: dict | None = None
         "telegram_bot_token": str(payload.get("telegram_bot_token", base.get("telegram_bot_token", "")) or "").strip(),
         "telegram_chat_id": str(payload.get("telegram_chat_id", base.get("telegram_chat_id", "")) or "").strip(),
         "alert_reminder_interval_hours": reminder_interval,
+        "alert_telegram_reminder_interval_hours": telegram_reminder_interval,
         "cpu_warning_threshold_percent": cpu_warning,
         "cpu_critical_threshold_percent": cpu_critical,
         "cpu_alert_window_reports": cpu_window_reports,
@@ -6139,6 +6239,7 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             telegram_chat_id,
             updated_at_utc,
             alert_reminder_interval_hours,
+            alert_telegram_reminder_interval_hours,
             cpu_warning_threshold_percent,
             cpu_critical_threshold_percent,
             cpu_alert_window_reports,
@@ -6154,7 +6255,7 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             openai_max_tokens,
             ai_troubleshoot_cache_ttl_sec
         )
-        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             warning_threshold_percent = excluded.warning_threshold_percent,
             critical_threshold_percent = excluded.critical_threshold_percent,
@@ -6166,6 +6267,7 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             telegram_chat_id = excluded.telegram_chat_id,
             updated_at_utc = excluded.updated_at_utc,
             alert_reminder_interval_hours = excluded.alert_reminder_interval_hours,
+            alert_telegram_reminder_interval_hours = excluded.alert_telegram_reminder_interval_hours,
             cpu_warning_threshold_percent = excluded.cpu_warning_threshold_percent,
             cpu_critical_threshold_percent = excluded.cpu_critical_threshold_percent,
             cpu_alert_window_reports = excluded.cpu_alert_window_reports,
@@ -6192,6 +6294,7 @@ def save_alarm_settings(conn: sqlite3.Connection, payload: dict) -> dict:
             normalized["telegram_chat_id"],
             now_utc,
             normalized["alert_reminder_interval_hours"],
+            normalized["alert_telegram_reminder_interval_hours"],
             normalized["cpu_warning_threshold_percent"],
             normalized["cpu_critical_threshold_percent"],
             normalized["cpu_alert_window_reports"],

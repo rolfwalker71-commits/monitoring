@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.60 (16. Mai 2026)
+
+- **Separates Telegram Heads-Up Intervall**: In den globalen Alarm-Einstellungen gibt es jetzt ein eigenes Feld fuer Telegram-Reminder, unabhaengig vom Mail-Intervall.
+- **Mail und Telegram entkoppelt**: Offene Alerts fuehren nun getrennte Reminder-Zeitstempel pro Kanal, damit unterschiedliche Intervalle sauber parallel funktionieren.
+- **UI klar erweitert**: Benachrichtigungsbereich zeigt jetzt Mail- und Telegram-Heads-Up als zwei separate, kanalbezogene Intervalle.
+
 ### v1.6.59 (16. Mai 2026)
 
 - **Heads-Up Intervall im UI praezisiert**: Beschriftung klar als Mail-Intervall markiert.
