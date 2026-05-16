@@ -150,6 +150,7 @@ const state = {
   hostInterestsLoadedFor: "",
   hostInterestSearchQuery: "",
   adminAlertSubscriptionsLoaded: false,
+  adminAlertSubscriptionsViewMode: "host",
   adminAlertSubscriptionsUsers: [],
   adminAlertAvailableHosts: [],
   adminAlertTelegramAvailable: false,
@@ -1428,6 +1429,7 @@ function setAuthUiState(authenticated) {
     state.oauthSettingsLoaded = false;
     state.userManagementLoaded = false;
     state.adminAlertSubscriptionsLoaded = false;
+    state.adminAlertSubscriptionsViewMode = "host";
     state.adminAlertSubscriptionsUsers = [];
     state.adminAlertAvailableHosts = [];
     state.adminAlertTelegramAvailable = false;
@@ -2305,19 +2307,39 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     return la.localeCompare(lb);
   });
 
-  const userSubscriptionMaps = new Map();
+  const originalSubscriptions = new Map();
+  const currentSubscriptions = new Map();
+
+  const ensureHostEntry = (targetMap, username, hostname) => {
+    if (!targetMap.has(username)) {
+      targetMap.set(username, new Map());
+    }
+    const hostMap = targetMap.get(username);
+    if (!hostMap.has(hostname)) {
+      hostMap.set(hostname, { hostname, notify_mail: true, notify_telegram: true });
+    }
+    return hostMap.get(hostname);
+  };
+
   for (const userEntry of usersSorted) {
-    const subMap = new Map();
+    const username = String(userEntry.username || "").trim();
+    if (!username) continue;
+    for (const host of hosts) {
+      const hostname = String(host.hostname || "").trim();
+      if (!hostname) continue;
+      ensureHostEntry(originalSubscriptions, username, hostname);
+      ensureHostEntry(currentSubscriptions, username, hostname);
+    }
     for (const sub of Array.isArray(userEntry.subscriptions) ? userEntry.subscriptions : []) {
       const hostname = String(sub.hostname || "").trim();
-      if (hostname) {
-        subMap.set(hostname, {
-          notify_mail: sub.notify_mail !== false,
-          notify_telegram: sub.notify_telegram !== false,
-        });
-      }
+      if (!hostname) continue;
+      const originalEntry = ensureHostEntry(originalSubscriptions, username, hostname);
+      originalEntry.notify_mail = sub.notify_mail !== false;
+      originalEntry.notify_telegram = sub.notify_telegram !== false;
+      const currentEntry = ensureHostEntry(currentSubscriptions, username, hostname);
+      currentEntry.notify_mail = originalEntry.notify_mail;
+      currentEntry.notify_telegram = originalEntry.notify_telegram;
     }
-    userSubscriptionMaps.set(String(userEntry.username || ""), subMap);
   }
 
   const userOptions = usersSorted
@@ -2328,47 +2350,14 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     })
     .join("");
 
-  const rows = hosts.length === 0
-    ? '<tr><td colspan="3" class="muted">Keine Hosts vorhanden.</td></tr>'
-    : hosts.map((host) => {
-        const hostnameRaw = String(host.hostname || "").trim();
-        const displayNameRaw = String(host.display_name || hostnameRaw || "").trim();
-        const hostname = escapeHtml(hostnameRaw);
-        const displayName = escapeHtml(displayNameRaw || hostnameRaw);
-        const hostLabel = displayNameRaw && hostnameRaw && displayNameRaw !== hostnameRaw
-          ? `<strong>${displayName}</strong><span class="global-hostname-sub">(${hostname})</span>`
-          : `<strong>${displayName || hostname}</strong>`;
-
-        const rowActions = `<div class="admin-sub-row-actions">
-          <button type="button" class="admin-sub-row-bulk" data-hostname="${hostname}" data-channel="mail" data-value="on">Mail alle an</button>
-          <button type="button" class="admin-sub-row-bulk" data-hostname="${hostname}" data-channel="mail" data-value="off">Mail alle aus</button>
-          <button type="button" class="admin-sub-row-bulk" data-hostname="${hostname}" data-channel="telegram" data-value="on" ${telegramAvailable ? "" : "disabled"}>Telegram alle an</button>
-          <button type="button" class="admin-sub-row-bulk" data-hostname="${hostname}" data-channel="telegram" data-value="off" ${telegramAvailable ? "" : "disabled"}>Telegram alle aus</button>
-        </div>`;
-
-        const renderChannelRows = (channel) => usersSorted.map((userEntry) => {
-          const usernameRaw = String(userEntry.username || "");
-          const username = escapeHtml(usernameRaw);
-          const subMap = userSubscriptionMaps.get(usernameRaw) || new Map();
-          const sub = subMap.get(hostnameRaw);
-          const enabled = channel === "mail"
-            ? (sub ? sub.notify_mail !== false : true)
-            : (sub ? sub.notify_telegram !== false : true);
-          const disabled = channel === "telegram" && !telegramAvailable;
-          return `<label class="admin-sub-user-chip${userEntry.is_admin ? " is-admin" : ""}${disabled ? " is-disabled" : ""}" data-username="${username}">
-            <input type="checkbox" class="admin-sub-cb" data-username="${username}" data-hostname="${hostname}" data-channel="${channel}" data-original-checked="${enabled ? "1" : "0"}" ${enabled ? "checked" : ""} ${disabled ? "disabled" : ""}>
-            <span class="admin-sub-user-name">${username}</span>
-          </label>`;
-        }).join("");
-
-        return `<tr data-hostname="${hostname}" data-display-name="${displayName}">
-          <td class="admin-sub-host-cell">${hostLabel}${rowActions}</td>
-          <td><div class="admin-sub-user-stack">${renderChannelRows("mail")}</div></td>
-          <td><div class="admin-sub-user-stack">${renderChannelRows("telegram")}</div></td>
-        </tr>`;
-      }).join("");
-
   container.innerHTML = `<div class="admin-alert-sub-controls">
+    <label>
+      Ansicht
+      <select id="adminAlertSubsViewModeSelect">
+        <option value="host">Host-Ansicht</option>
+        <option value="user">User-Ansicht</option>
+      </select>
+    </label>
     <label>
       Hostsuche
       <input id="adminAlertSubsHostSearchInput" type="text" placeholder="Host oder Anzeigename" />
@@ -2391,15 +2380,158 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
       <button type="button" class="btn-secondary" id="adminAlertSubsBulkTelegramOffButton" ${telegramAvailable ? "" : "disabled"}>Sichtbar: Telegram aus</button>
     </div>
   </div>
-  <div class="table-wrap user-management-table-wrap">
-    <table class="user-management-table admin-alert-subscriptions-table">
-      <thead><tr><th>Host</th><th>Mail</th><th>Telegram</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div>`;
+  <div id="adminAlertSubscriptionsTableWrap"></div>`;
+
+  const getCurrentEntry = (username, hostname) => {
+    const userMap = currentSubscriptions.get(username);
+    if (!userMap) return { hostname, notify_mail: true, notify_telegram: true };
+    return userMap.get(hostname) || { hostname, notify_mail: true, notify_telegram: true };
+  };
+
+  const getOriginalEntry = (username, hostname) => {
+    const userMap = originalSubscriptions.get(username);
+    if (!userMap) return { hostname, notify_mail: true, notify_telegram: true };
+    return userMap.get(hostname) || { hostname, notify_mail: true, notify_telegram: true };
+  };
+
+  const captureCurrentFromDom = () => {
+    container.querySelectorAll(".admin-sub-cb[data-username][data-hostname][data-channel]").forEach((checkbox) => {
+      const username = String(checkbox.dataset.username || "");
+      const hostname = String(checkbox.dataset.hostname || "");
+      const channel = String(checkbox.dataset.channel || "");
+      if (!username || !hostname || (channel !== "mail" && channel !== "telegram")) return;
+      const entry = ensureHostEntry(currentSubscriptions, username, hostname);
+      if (channel === "mail") entry.notify_mail = checkbox.checked;
+      if (channel === "telegram") entry.notify_telegram = checkbox.checked;
+    });
+  };
+
+  const wireDynamicTableEvents = () => {
+    container.querySelectorAll(".admin-sub-cb").forEach((checkbox) => {
+      checkbox.addEventListener("change", () => {
+        markUnsavedStatus();
+      });
+    });
+
+    container.querySelectorAll(".admin-sub-row-bulk[data-scope][data-channel][data-value]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const scope = button.dataset.scope || "";
+        const key = scope === "user" ? (button.dataset.username || "") : (button.dataset.hostname || "");
+        const channel = button.dataset.channel || "";
+        const enabled = button.dataset.value === "on";
+        if (!key || (scope !== "host" && scope !== "user") || (channel !== "mail" && channel !== "telegram")) return;
+        applyRowBulk(scope, key, channel, enabled);
+      });
+    });
+  };
+
+  const renderTable = () => {
+    const tableWrap = document.getElementById("adminAlertSubscriptionsTableWrap");
+    if (!tableWrap) return;
+    const viewMode = state.adminAlertSubscriptionsViewMode === "user" ? "user" : "host";
+
+    const renderHostRows = () => {
+      if (hosts.length === 0) {
+        return '<tr data-row-type="host"><td colspan="3" class="muted">Keine Hosts vorhanden.</td></tr>';
+      }
+      return hosts.map((host) => {
+        const hostnameRaw = String(host.hostname || "").trim();
+        const displayNameRaw = String(host.display_name || hostnameRaw || "").trim();
+        const hostname = escapeHtml(hostnameRaw);
+        const displayName = escapeHtml(displayNameRaw || hostnameRaw);
+        const hostLabel = displayNameRaw && hostnameRaw && displayNameRaw !== hostnameRaw
+          ? `<strong>${displayName}</strong><span class="global-hostname-sub">(${hostname})</span>`
+          : `<strong>${displayName || hostname}</strong>`;
+
+        const rowActions = `<div class="admin-sub-row-actions">
+          <button type="button" class="admin-sub-row-bulk" data-scope="host" data-hostname="${hostname}" data-channel="mail" data-value="on">Mail alle an</button>
+          <button type="button" class="admin-sub-row-bulk" data-scope="host" data-hostname="${hostname}" data-channel="mail" data-value="off">Mail alle aus</button>
+          <button type="button" class="admin-sub-row-bulk" data-scope="host" data-hostname="${hostname}" data-channel="telegram" data-value="on" ${telegramAvailable ? "" : "disabled"}>Telegram alle an</button>
+          <button type="button" class="admin-sub-row-bulk" data-scope="host" data-hostname="${hostname}" data-channel="telegram" data-value="off" ${telegramAvailable ? "" : "disabled"}>Telegram alle aus</button>
+        </div>`;
+
+        const renderChannelRows = (channel) => usersSorted.map((userEntry) => {
+          const usernameRaw = String(userEntry.username || "");
+          const username = escapeHtml(usernameRaw);
+          const currentEntry = getCurrentEntry(usernameRaw, hostnameRaw);
+          const originalEntry = getOriginalEntry(usernameRaw, hostnameRaw);
+          const enabled = channel === "mail" ? currentEntry.notify_mail : currentEntry.notify_telegram;
+          const originalEnabled = channel === "mail" ? originalEntry.notify_mail : originalEntry.notify_telegram;
+          const disabled = channel === "telegram" && !telegramAvailable;
+          return `<label class="admin-sub-user-chip${userEntry.is_admin ? " is-admin" : ""}${disabled ? " is-disabled" : ""}" data-username="${username}">
+            <input type="checkbox" class="admin-sub-cb" data-username="${username}" data-hostname="${hostname}" data-channel="${channel}" data-original-checked="${originalEnabled ? "1" : "0"}" ${enabled ? "checked" : ""} ${disabled ? "disabled" : ""}>
+            <span class="admin-sub-user-name">${username}</span>
+          </label>`;
+        }).join("");
+
+        return `<tr data-row-type="host" data-hostname="${hostname}" data-display-name="${displayName}">
+          <td class="admin-sub-host-cell">${hostLabel}${rowActions}</td>
+          <td><div class="admin-sub-user-stack">${renderChannelRows("mail")}</div></td>
+          <td><div class="admin-sub-user-stack">${renderChannelRows("telegram")}</div></td>
+        </tr>`;
+      }).join("");
+    };
+
+    const renderUserRows = () => {
+      if (usersSorted.length === 0) {
+        return '<tr data-row-type="user"><td colspan="3" class="muted">Keine Benutzer vorhanden.</td></tr>';
+      }
+      return usersSorted.map((userEntry) => {
+        const usernameRaw = String(userEntry.username || "").trim();
+        const username = escapeHtml(usernameRaw);
+        const rowActions = `<div class="admin-sub-row-actions">
+          <button type="button" class="admin-sub-row-bulk" data-scope="user" data-username="${username}" data-channel="mail" data-value="on">Mail alle Hosts an</button>
+          <button type="button" class="admin-sub-row-bulk" data-scope="user" data-username="${username}" data-channel="mail" data-value="off">Mail alle Hosts aus</button>
+          <button type="button" class="admin-sub-row-bulk" data-scope="user" data-username="${username}" data-channel="telegram" data-value="on" ${telegramAvailable ? "" : "disabled"}>Telegram alle Hosts an</button>
+          <button type="button" class="admin-sub-row-bulk" data-scope="user" data-username="${username}" data-channel="telegram" data-value="off" ${telegramAvailable ? "" : "disabled"}>Telegram alle Hosts aus</button>
+        </div>`;
+
+        const hostSearchBlob = hosts.map((host) => {
+          return `${String(host.display_name || "")} ${String(host.hostname || "")}`.toLowerCase();
+        }).join(" ");
+
+        const renderChannelRows = (channel) => hosts.map((host) => {
+          const hostnameRaw = String(host.hostname || "").trim();
+          const displayNameRaw = String(host.display_name || hostnameRaw || "").trim();
+          const displayName = escapeHtml(displayNameRaw || hostnameRaw);
+          const hostname = escapeHtml(hostnameRaw);
+          const currentEntry = getCurrentEntry(usernameRaw, hostnameRaw);
+          const originalEntry = getOriginalEntry(usernameRaw, hostnameRaw);
+          const enabled = channel === "mail" ? currentEntry.notify_mail : currentEntry.notify_telegram;
+          const originalEnabled = channel === "mail" ? originalEntry.notify_mail : originalEntry.notify_telegram;
+          const disabled = channel === "telegram" && !telegramAvailable;
+          const hostLabel = displayNameRaw && hostnameRaw && displayNameRaw !== hostnameRaw
+            ? `${displayName} (${hostname})`
+            : `${displayName || hostname}`;
+          return `<label class="admin-sub-user-chip${disabled ? " is-disabled" : ""}" data-hostname="${hostname}">
+            <input type="checkbox" class="admin-sub-cb" data-username="${username}" data-hostname="${hostname}" data-channel="${channel}" data-original-checked="${originalEnabled ? "1" : "0"}" ${enabled ? "checked" : ""} ${disabled ? "disabled" : ""}>
+            <span class="admin-sub-user-name">${hostLabel}</span>
+          </label>`;
+        }).join("");
+
+        return `<tr data-row-type="user" data-username="${username}" data-host-search="${escapeHtml(hostSearchBlob)}">
+          <td class="admin-sub-host-cell"><strong>${username}</strong>${rowActions}</td>
+          <td><div class="admin-sub-user-stack">${renderChannelRows("mail")}</div></td>
+          <td><div class="admin-sub-user-stack">${renderChannelRows("telegram")}</div></td>
+        </tr>`;
+      }).join("");
+    };
+
+    const rows = viewMode === "user" ? renderUserRows() : renderHostRows();
+    const firstColTitle = viewMode === "user" ? "Benutzer" : "Host";
+
+    tableWrap.innerHTML = `<div class="table-wrap user-management-table-wrap">
+      <table class="user-management-table admin-alert-subscriptions-table">
+        <thead><tr><th>${firstColTitle}</th><th>Mail</th><th>Telegram</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+    wireDynamicTableEvents();
+  };
 
   const refreshChangedState = () => {
-    const allRows = Array.from(container.querySelectorAll("tbody tr[data-hostname]"));
+    const allRows = Array.from(container.querySelectorAll("tbody tr[data-row-type]"));
     let changedCount = 0;
     for (const checkbox of container.querySelectorAll(".admin-sub-cb")) {
       const originalChecked = checkbox.dataset.originalChecked === "1";
@@ -2420,23 +2552,35 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     const hostQuery = String(document.getElementById("adminAlertSubsHostSearchInput")?.value || "").trim().toLowerCase();
     const selectedUser = String(document.getElementById("adminAlertSubsUserFilterSelect")?.value || "").trim();
     const onlyChanged = document.getElementById("adminAlertSubsOnlyChangedInput")?.checked === true;
-    const rowsEls = Array.from(container.querySelectorAll("tbody tr[data-hostname]"));
+    const viewMode = state.adminAlertSubscriptionsViewMode === "user" ? "user" : "host";
+    const rowsEls = Array.from(container.querySelectorAll("tbody tr[data-row-type]"));
     for (const row of rowsEls) {
-      const hostname = String(row.dataset.hostname || "").toLowerCase();
-      const displayName = String(row.dataset.displayName || "").toLowerCase();
-      const hostMatch = !hostQuery || hostname.includes(hostQuery) || displayName.includes(hostQuery);
-      const userMatch = !selectedUser || Array.from(row.querySelectorAll(".admin-sub-cb[data-username]")).some((cb) => {
-        return String(cb.dataset.username || "") === selectedUser;
-      });
+      let hostMatch = true;
+      let userMatch = true;
+      if (viewMode === "user") {
+        const hostSearchBlob = String(row.dataset.hostSearch || "").toLowerCase();
+        hostMatch = !hostQuery || hostSearchBlob.includes(hostQuery);
+        const rowUser = String(row.dataset.username || "");
+        userMatch = !selectedUser || rowUser === selectedUser;
+      } else {
+        const hostname = String(row.dataset.hostname || "").toLowerCase();
+        const displayName = String(row.dataset.displayName || "").toLowerCase();
+        hostMatch = !hostQuery || hostname.includes(hostQuery) || displayName.includes(hostQuery);
+        userMatch = !selectedUser || Array.from(row.querySelectorAll(".admin-sub-cb[data-username]")).some((cb) => {
+          return String(cb.dataset.username || "") === selectedUser;
+        });
+      }
       const changedMatch = !onlyChanged || !!row.querySelector(".admin-sub-cb.is-changed");
       const showRow = hostMatch && userMatch && changedMatch;
       row.classList.toggle("admin-sub-row-hidden", !showRow);
 
-      const chips = row.querySelectorAll(".admin-sub-user-chip[data-username]");
-      for (const chip of chips) {
-        const chipUser = chip.getAttribute("data-username") || "";
-        const showChip = !selectedUser || chipUser === selectedUser;
-        chip.classList.toggle("admin-sub-chip-hidden", !showChip);
+      if (viewMode === "host") {
+        const chips = row.querySelectorAll(".admin-sub-user-chip[data-username]");
+        for (const chip of chips) {
+          const chipUser = chip.getAttribute("data-username") || "";
+          const showChip = !selectedUser || chipUser === selectedUser;
+          chip.classList.toggle("admin-sub-chip-hidden", !showChip);
+        }
       }
     }
   };
@@ -2453,7 +2597,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
 
   const applyBulkToVisible = (channel, enabled) => {
     const selectedUser = String(document.getElementById("adminAlertSubsUserFilterSelect")?.value || "").trim();
-    const rowsEls = Array.from(container.querySelectorAll("tbody tr[data-hostname]"));
+    const rowsEls = Array.from(container.querySelectorAll("tbody tr[data-row-type]"));
     let changedAny = false;
     for (const row of rowsEls) {
       if (row.classList.contains("admin-sub-row-hidden")) continue;
@@ -2473,15 +2617,18 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     }
   };
 
-  const applyRowBulk = (hostname, channel, enabled) => {
-    const row = container.querySelector(`tbody tr[data-hostname="${hostname}"]`);
-    if (!row) return;
+  const applyRowBulk = (scope, key, channel, enabled) => {
+    const rows = Array.from(container.querySelectorAll("tbody tr[data-row-type]"));
     let changedAny = false;
-    for (const toggle of row.querySelectorAll(`.admin-sub-cb[data-channel="${channel}"]`)) {
-      if (toggle.disabled) continue;
-      if (toggle.checked !== enabled) {
-        toggle.checked = enabled;
-        changedAny = true;
+    for (const row of rows) {
+      if (scope === "host" && String(row.dataset.hostname || "") !== key) continue;
+      if (scope === "user" && String(row.dataset.username || "") !== key) continue;
+      for (const toggle of row.querySelectorAll(`.admin-sub-cb[data-channel="${channel}"]`)) {
+        if (toggle.disabled) continue;
+        if (toggle.checked !== enabled) {
+          toggle.checked = enabled;
+          changedAny = true;
+        }
       }
     }
     if (changedAny) {
@@ -2489,17 +2636,22 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     }
   };
 
-  container.querySelectorAll(".admin-sub-cb").forEach((checkbox) => {
-    checkbox.addEventListener("change", () => {
-      markUnsavedStatus();
-    });
-  });
-
   const hostSearchInput = document.getElementById("adminAlertSubsHostSearchInput");
   if (hostSearchInput) hostSearchInput.addEventListener("input", () => applyFilters());
 
   const userFilterSelect = document.getElementById("adminAlertSubsUserFilterSelect");
   if (userFilterSelect) userFilterSelect.addEventListener("change", () => applyFilters());
+
+  const viewModeSelect = document.getElementById("adminAlertSubsViewModeSelect");
+  if (viewModeSelect) {
+    viewModeSelect.value = state.adminAlertSubscriptionsViewMode === "user" ? "user" : "host";
+    viewModeSelect.addEventListener("change", () => {
+      captureCurrentFromDom();
+      state.adminAlertSubscriptionsViewMode = viewModeSelect.value === "user" ? "user" : "host";
+      renderTable();
+      markUnsavedStatus();
+    });
+  }
 
   const onlyChangedInput = document.getElementById("adminAlertSubsOnlyChangedInput");
   if (onlyChangedInput) onlyChangedInput.addEventListener("change", () => applyFilters());
@@ -2513,16 +2665,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
   const bulkTelegramOffButton = document.getElementById("adminAlertSubsBulkTelegramOffButton");
   if (bulkTelegramOffButton) bulkTelegramOffButton.addEventListener("click", () => applyBulkToVisible("telegram", false));
 
-  container.querySelectorAll(".admin-sub-row-bulk[data-hostname][data-channel][data-value]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const hostname = button.dataset.hostname || "";
-      const channel = button.dataset.channel || "";
-      const enabled = button.dataset.value === "on";
-      if (!hostname || (channel !== "mail" && channel !== "telegram")) return;
-      applyRowBulk(hostname, channel, enabled);
-    });
-  });
-
+  renderTable();
   refreshChangedState();
   applyFilters();
 }
@@ -2575,20 +2718,8 @@ async function saveAdminAlertSubscriptions() {
       throw new Error(data.error || "HTTP " + response.status);
     }
   }
-  container.querySelectorAll(".admin-sub-cb").forEach((checkbox) => {
-    checkbox.dataset.originalChecked = checkbox.checked ? "1" : "0";
-    checkbox.classList.remove("is-changed");
-    const chip = checkbox.closest(".admin-sub-user-chip");
-    if (chip) chip.classList.remove("has-change");
-  });
-  container.querySelectorAll("tbody tr[data-hostname]").forEach((row) => {
-    row.classList.remove("has-change");
-  });
-  if (document.getElementById("adminAlertSubsOnlyChangedInput")?.checked === true) {
-    container.querySelectorAll("tbody tr[data-hostname]").forEach((row) => {
-      row.classList.add("admin-sub-row-hidden");
-    });
-  }
+  state.adminAlertSubscriptionsLoaded = false;
+  await loadAdminAlertSubscriptions(true);
   setAdminAlertSubscriptionsStatus("Abos gespeichert.");
 }
 

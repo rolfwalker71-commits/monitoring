@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.64 (16. Mai 2026)
+
+- **Alert-Abos mit umschaltbarer Ansicht**: Admin-Bereich kann jetzt zwischen Host-Ansicht und User-Ansicht wechseln.
+- **Skalierung fuer viele Benutzer verbessert**: Gleiche Abo-Daten lassen sich je nach Aufgabe host-zentriert oder benutzer-zentriert bearbeiten.
+- **Unsaved-Changes bleiben beim Ansichtswechsel erhalten**: Nicht gespeicherte Checkbox-Aenderungen gehen beim Wechsel Host/User nicht verloren.
+
 ### v1.6.63 (16. Mai 2026)
 
 - **Alert-Abos besser bedienbar**: Hostsuche, Benutzerfilter und Option "Nur Aenderungen" im Admin-Abo-Bereich hinzugefuegt.
