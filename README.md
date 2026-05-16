@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.10  | 16.05.2026 | Fix host sidebar header overlap by placing "Hosts" top-left and the host count line bottom-right with compact, non-overlapping spacing |
 | 1.6.9   | 16.05.2026 | Add clear "Nur Admin" hint badges to all visible admin-only menu options while keeping non-admin-hidden entries unchanged |
 | 1.6.8   | 16.05.2026 | Remove the active-user chip from the sidebar header and add an admin-only login changelog view showing the latest 50 logins with timestamp, user, and source IP |
 | 1.6.7   | 16.05.2026 | Render overview and single-report side menus as one shared card with row-style items instead of individual card-like menu buttons |
