@@ -8454,6 +8454,11 @@ body[data-theme="dark"] .search-input-compact::placeholder {
   min-height: var(--btn-height);
 }
 
+/* Keep the 3 top status chips equal to the neighboring icon buttons. */
+.panel-actions .header-stat-chip {
+  min-height: 30px;
+}
+
 .stat-chip,
 .header-stat-chip,
 .selected-host-meta-chip,
