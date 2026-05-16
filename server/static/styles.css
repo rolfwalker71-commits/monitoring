@@ -192,7 +192,7 @@ body[data-theme="dark"] {
   background: linear-gradient(135deg, #f0f6ff 0%, #e8f2ff 100%);
   border: 1px solid #c7d9f0;
   border-radius: 14px;
-  padding: 12px 18px;
+  padding: 6px 18px;
 }
 
 .brand-tools {
@@ -283,27 +283,20 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .brand-text h1 {
   margin: 0;
-  font-size: 32px;
-  line-height: 1.05;
-  letter-spacing: 0.4px;
+  font-size: 29px;
+  line-height: 1.02;
+  letter-spacing: 0.25px;
+  font-weight: 900;
 }
 
 .subtitle-meta {
-  margin: 4px 0 0;
+  margin: 1px 0 0;
   color: #64748b;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 700;
   display: flex;
   align-items: flex-end;
-  gap: 10px;
-}
-
-.brand-subtitle-title {
-  font-size: 32px;
-  line-height: 1.05;
-  letter-spacing: 0.4px;
-  font-weight: 700;
-  color: #253347;
+  gap: 8px;
 }
 
 .brand-platforms {
@@ -326,7 +319,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .brand-version {
-  margin-left: 10px;
+  margin-left: 0;
   white-space: nowrap;
 }
 
