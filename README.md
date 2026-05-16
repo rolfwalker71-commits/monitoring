@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.2   | 16.05.2026 | Wrap overview/detail navigation menus in card-style containers matching the new sidebar filter/search card design, including aligned dark-mode styling |
 | 1.6.1   | 16.05.2026 | Extend the clean enterprise design language app-wide: unified chip sizes/colors, card-style grouping for related sections, and cohesive light/dark visual refinements without logic changes |
 | 1.6.0   | 16.05.2026 | Apply host sidebar design direction A (Clean Enterprise): improved visual hierarchy, consistent spacing tokens, clearer host card states, and refined typography for headers/filters/cards |
 | 1.5.26  | 16.05.2026 | Restore host card title to bold (900), increase OS icon size in cards, and fix alert chip footer alignment in compact card layout |
