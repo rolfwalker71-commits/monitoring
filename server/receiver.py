@@ -1011,43 +1011,92 @@ def record_web_login_event(
     auth_method: str,
     user_agent: str,
 ) -> None:
-    conn.execute(
-        """
-        INSERT INTO web_login_events (
-            logged_at_utc,
-            username,
-            display_name_snapshot,
-            source_ip,
-            auth_method,
-            user_agent
+    try:
+        conn.execute(
+            """
+            INSERT INTO web_login_events (
+                logged_at_utc,
+                username,
+                display_name_snapshot,
+                source_ip,
+                auth_method,
+                user_agent
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                utc_now_iso(),
+                str(username or "").strip(),
+                str(display_name or "").strip(),
+                str(source_ip or "").strip(),
+                str(auth_method or "password").strip() or "password",
+                str(user_agent or "").strip(),
+            ),
         )
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            utc_now_iso(),
-            str(username or "").strip(),
-            str(display_name or "").strip(),
-            str(source_ip or "").strip(),
-            str(auth_method or "password").strip() or "password",
-            str(user_agent or "").strip(),
-        ),
-    )
+    except sqlite3.OperationalError as exc:
+        if "no such table: web_login_events" not in str(exc).lower():
+            raise
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS web_login_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                logged_at_utc TEXT NOT NULL,
+                username TEXT NOT NULL,
+                display_name_snapshot TEXT NOT NULL DEFAULT '',
+                source_ip TEXT NOT NULL DEFAULT '',
+                auth_method TEXT NOT NULL DEFAULT 'password',
+                user_agent TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_web_login_events_time
+            ON web_login_events(logged_at_utc DESC)
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO web_login_events (
+                logged_at_utc,
+                username,
+                display_name_snapshot,
+                source_ip,
+                auth_method,
+                user_agent
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                utc_now_iso(),
+                str(username or "").strip(),
+                str(display_name or "").strip(),
+                str(source_ip or "").strip(),
+                str(auth_method or "password").strip() or "password",
+                str(user_agent or "").strip(),
+            ),
+        )
 
 
 def list_web_login_events(conn: sqlite3.Connection, limit: int = 50) -> list[dict]:
-    rows = conn.execute(
-        """
-        SELECT logged_at_utc,
-               username,
-               display_name_snapshot,
-               source_ip,
-               auth_method
-        FROM web_login_events
-        ORDER BY id DESC
-        LIMIT ?
-        """,
-        (max(1, min(int(limit or 50), 200)),),
-    ).fetchall()
+    try:
+        rows = conn.execute(
+            """
+            SELECT logged_at_utc,
+                   username,
+                   display_name_snapshot,
+                   source_ip,
+                   auth_method
+            FROM web_login_events
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (max(1, min(int(limit or 50), 200)),),
+        ).fetchall()
+    except sqlite3.OperationalError as exc:
+        if "no such table: web_login_events" not in str(exc).lower():
+            raise
+        return []
     return [
         {
             "logged_at_utc": str(row[0] or ""),

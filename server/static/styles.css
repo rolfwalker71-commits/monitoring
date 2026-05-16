@@ -2803,6 +2803,78 @@ body[data-theme="dark"] .trend-progress-bar {
   overflow: auto;
 }
 
+.terminal-token-comment {
+  color: #64748b;
+}
+
+.terminal-token-muted {
+  color: #dbeafe;
+}
+
+.terminal-token-heading {
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.terminal-token-field {
+  color: #93c5fd;
+  font-weight: 700;
+}
+
+.terminal-token-separator {
+  color: #64748b;
+}
+
+.terminal-token-key {
+  color: #93c5fd;
+  font-weight: 700;
+}
+
+.terminal-token-system {
+  color: #facc15;
+  font-weight: 700;
+}
+
+.terminal-token-path {
+  color: #7dd3fc;
+}
+
+.terminal-token-date {
+  color: #fdba74;
+}
+
+.terminal-token-metric {
+  color: #22d3ee;
+  font-weight: 700;
+}
+
+.terminal-token-version {
+  color: #f9a8d4;
+}
+
+.terminal-token-size {
+  color: #c4b5fd;
+}
+
+.terminal-token-info {
+  color: #38bdf8;
+}
+
+.terminal-token-good {
+  color: #4ade80;
+  font-weight: 700;
+}
+
+.terminal-token-warn {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+.terminal-token-bad {
+  color: #f87171;
+  font-weight: 700;
+}
+
 .agent-config-viewer {
   margin-bottom: 2px;
 }
@@ -5463,6 +5535,22 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   border-radius: 0 0 8px 8px;
 }
 
+.sap-b1-raw-details > .terminal-viewer-section {
+  border-top: 1px solid #d4e4f7;
+}
+
+.sap-b1-combined-card .sap-b1-raw-details > .terminal-viewer-section {
+  border-top-color: #e2ecf8;
+}
+
+.sap-b1-raw-details > .terminal-viewer-section .count.compact {
+  margin-top: 2px;
+}
+
+.sap-vmap-terminal {
+  tab-size: 2;
+}
+
 .sap-license-list-wrap {
   padding: 8px 12px 10px;
   border-top: 1px solid #e2ecf8;
@@ -6235,6 +6323,78 @@ body[data-theme="dark"] .sap-b1-size-label {
 
 body[data-theme="dark"] .sap-b1-size-value {
   color: #e2e8f0;
+}
+
+body[data-theme="dark"] .terminal-token-comment {
+  color: #7c93b6;
+}
+
+body[data-theme="dark"] .terminal-token-muted {
+  color: #dbeafe;
+}
+
+body[data-theme="dark"] .terminal-token-heading {
+  color: #f8fafc;
+}
+
+body[data-theme="dark"] .terminal-token-field {
+  color: #93c5fd;
+}
+
+body[data-theme="dark"] .terminal-token-separator {
+  color: #7c93b6;
+}
+
+body[data-theme="dark"] .terminal-token-key {
+  color: #93c5fd;
+}
+
+body[data-theme="dark"] .terminal-token-system {
+  color: #facc15;
+}
+
+body[data-theme="dark"] .terminal-token-path {
+  color: #67e8f9;
+}
+
+body[data-theme="dark"] .terminal-token-date {
+  color: #fdba74;
+}
+
+body[data-theme="dark"] .terminal-token-metric {
+  color: #22d3ee;
+}
+
+body[data-theme="dark"] .terminal-token-version {
+  color: #f9a8d4;
+}
+
+body[data-theme="dark"] .terminal-token-size {
+  color: #c4b5fd;
+}
+
+body[data-theme="dark"] .terminal-token-info {
+  color: #38bdf8;
+}
+
+body[data-theme="dark"] .terminal-token-good {
+  color: #4ade80;
+}
+
+body[data-theme="dark"] .terminal-token-warn {
+  color: #fbbf24;
+}
+
+body[data-theme="dark"] .terminal-token-bad {
+  color: #f87171;
+}
+
+body[data-theme="dark"] .sap-b1-raw-details > .terminal-viewer-section {
+  border-top-color: #2d4a6e;
+}
+
+body[data-theme="dark"] .sap-b1-combined-card .sap-b1-raw-details > .terminal-viewer-section {
+  border-top-color: #2a3c59;
 }
 
 body[data-theme="dark"] .detail-card:hover {

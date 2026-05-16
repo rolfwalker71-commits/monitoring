@@ -4185,13 +4185,121 @@ function renderSapPathSizeItem(title, item, missingText) {
   `;
 }
 
+function formatTerminalOutput(text, fallback = "-") {
+  const source = asText(text, "");
+  const lines = source ? source.split("\n") : [fallback];
+  return lines.map((line) => formatTerminalOutputLine(line)).join("\n");
+}
+
+function formatTerminalOutputLine(line) {
+  if (!line) {
+    return "";
+  }
+  if (/^\s*#/.test(line)) {
+    return `<span class="terminal-token-comment">${escapeHtml(line)}</span>`;
+  }
+
+  const trimmed = line.trim();
+  if (/^\[[^\]]+\]$/.test(trimmed)) {
+    const leadingWhitespace = line.match(/^\s*/)?.[0] || "";
+    return `${escapeHtml(leadingWhitespace)}<span class="terminal-token-heading">${escapeHtml(trimmed)}</span>`;
+  }
+
+  const keyValueMatch = line.match(/^(\s*)([A-Z][A-Z0-9_ ]*)(=)(.*)$/);
+  if (keyValueMatch) {
+    const [, leadingWhitespace, key, separator, rawValue] = keyValueMatch;
+    return `${escapeHtml(leadingWhitespace)}<span class="terminal-token-field">${escapeHtml(key.trimEnd())}</span><span class="terminal-token-separator">${escapeHtml(separator)}</span>${formatTerminalInline(rawValue)}`;
+  }
+
+  return formatTerminalInline(line);
+}
+
+function formatTerminalInline(text) {
+  const tokenRe = /(\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?\b|\b\d+(?:\.\d+)?%\b|\b(?:ERROR|ERR|WARN(?:ING)?|FAIL(?:ED)?|CRIT(?:ICAL)?|FATAL|MISSING|UNAVAILABLE|DISABLED|INACTIVE|ABSENT|NOT_FOUND)\b|\b(?:OK|SUCCESS|DONE|RUNNING|AVAILABLE|ENABLED|ACTIVE|PRESENT)\b|\b(?:INFO|DEBUG|TRACE|NOTICE)\b|\b(?:TRUE|FALSE|YES|NO|JA|NEIN)\b|\b(?:SAP|HANA|SQL|SARI|CATALINA|BUSINESSONE|BUSINESS_ONE|FEATURE_PACK|PATCH_LEVEL|SID|BRANCH|BUILD|RELEASE|VERSION|STATUS|PATH|SIZE|ERROR|MESSAGE)\b|\b[A-Z][A-Z0-9_]{2,}(?==)|\b\d+(?:\.\d+){1,}\b|\b\d+(?:KB|MB|GB|TB|PB)\b|(?:[A-Za-z]:\\[^\s]+|\/[^\s]+))/gi;
+  let result = "";
+  let lastIndex = 0;
+  let match;
+
+  while ((match = tokenRe.exec(text)) !== null) {
+    const [token] = match;
+    result += escapeHtml(text.slice(lastIndex, match.index));
+    result += renderTerminalToken(token);
+    lastIndex = match.index + token.length;
+  }
+
+  result += escapeHtml(text.slice(lastIndex));
+  return result;
+}
+
+function renderTerminalToken(token) {
+  const value = String(token || "");
+  const upperValue = value.toUpperCase();
+  let className = "terminal-token-muted";
+
+  if (/^\[[^\]]+\]$/.test(value)) {
+    className = "terminal-token-heading";
+  } else if (/^(PATH|STATUS|SIZE|VERSION|SID|BRANCH|BUILD|FEATURE_PACK|PATCH_LEVEL|RELEASE|ERROR|MESSAGE)$/i.test(value)) {
+    className = "terminal-token-field";
+  } else if (/^(SAP|HANA|SQL|SARI|CATALINA|BUSINESSONE|BUSINESS_ONE)$/i.test(value)) {
+    className = "terminal-token-system";
+  } else if (/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?$/i.test(value)) {
+    className = "terminal-token-date";
+  } else if (/^\d+(?:\.\d+)?%$/i.test(value)) {
+    className = "terminal-token-metric";
+  } else if (/^(ERROR|ERR|WARN(?:ING)?|FAIL(?:ED)?|CRIT(?:ICAL)?|FATAL|MISSING|UNAVAILABLE|DISABLED|INACTIVE|ABSENT|NOT_FOUND|FALSE|NO|NEIN)$/i.test(value)) {
+    className = upperValue.startsWith("WARN") ? "terminal-token-warn" : "terminal-token-bad";
+  } else if (/^(OK|SUCCESS|DONE|RUNNING|AVAILABLE|ENABLED|ACTIVE|PRESENT|TRUE|YES|JA)$/i.test(value)) {
+    className = "terminal-token-good";
+  } else if (/^(INFO|DEBUG|TRACE|NOTICE)$/i.test(value)) {
+    className = "terminal-token-info";
+  } else if (/^[A-Z][A-Z0-9_]{2,}$/.test(value)) {
+    className = "terminal-token-key";
+  } else if (/^\d+(?:\.\d+){1,}$/.test(value)) {
+    className = "terminal-token-version";
+  } else if (/^\d+(?:KB|MB|GB|TB|PB)$/i.test(value)) {
+    className = "terminal-token-size";
+  } else if (/^(?:[A-Za-z]:\\|\/)/.test(value)) {
+    className = "terminal-token-path";
+  }
+
+  return `<span class="${className}">${escapeHtml(value)}</span>`;
+}
+
+function renderTerminalViewer(content, metaLine = "", extraClasses = "") {
+  const metaHtml = metaLine ? `<p class="count compact">${escapeHtml(metaLine)}</p>` : "";
+  const classSuffix = extraClasses ? ` ${extraClasses}` : "";
+  return `
+    <div class="terminal-viewer-section">
+      ${metaHtml}
+      <pre class="log-viewer${classSuffix}">${formatTerminalOutput(content)}</pre>
+    </div>
+  `;
+}
+
+function formatSapPathSizeTerminalEntry(title, block, missingText) {
+  const item = block && typeof block === "object" ? block : {};
+  const pathValue = asText(item.path, "-");
+  const exists = item.exists === true;
+  const sizeNumber = Number(item.size_bytes);
+  const sizeText = exists
+    ? (Number.isFinite(sizeNumber) && sizeNumber >= 0 ? formatBytes(sizeNumber) : "n/a")
+    : missingText;
+
+  return [
+    `[${title}]`,
+    `PATH=${pathValue || "-"}`,
+    `STATUS=${exists ? "PRESENT" : "MISSING"}`,
+    `SIZE=${sizeText || "-"}`,
+  ].join("\n");
+}
+
 function renderSapBusinessOneCard(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   if (!sap) {
     return `
       <section class="detail-card sap-b1-card">
         <h4>SAP Business One Files / Ordner</h4>
-        <p class="muted">Keine SAP-Business-One-Daten im Payload vorhanden.</p>
+        ${renderTerminalViewer("STATUS=UNAVAILABLE\nMESSAGE=Keine SAP-Business-One-Daten im Payload vorhanden.")}
       </section>
     `;
   }
@@ -4199,10 +4307,10 @@ function renderSapBusinessOneCard(payload) {
   return `
     <section class="detail-card sap-b1-card">
       <h4>SAP Business One Files / Ordner</h4>
-      <div class="sap-b1-grid">
-        ${renderSapPathSizeItem("catalina.out", sap.catalina_out, "Datei nicht vorhanden")}
-        ${renderSapPathSizeItem("BusinessOne Log Ordner", sap.businessone_log_dir, "Ordner nicht vorhanden")}
-      </div>
+      ${renderTerminalViewer([
+        formatSapPathSizeTerminalEntry("catalina.out", sap.catalina_out, "Datei nicht vorhanden"),
+        formatSapPathSizeTerminalEntry("BusinessOne Log Ordner", sap.businessone_log_dir, "Ordner nicht vorhanden"),
+      ].join("\n\n"), "Zwei SAP-B1-Pfade geprueft")}
     </section>
   `;
 }
@@ -4543,17 +4651,13 @@ function renderSapLicenseInfoSection(payload) {
 function renderSapB1VersionMapCard() {
   const sortedEntries = Array.from(SAP_B1_VERSION_MAP.entries())
     .sort(([a], [b]) => b.localeCompare(a));
-  const rows = sortedEntries.map(([build, info]) => `
-    <tr>
-      <td class="sap-vmap-build">${escapeHtml(build)}</td>
-      <td>${escapeHtml(info.featurePack)}</td>
-      <td>${escapeHtml(info.patchLevel)}</td>
-      <td class="sap-vmap-date">${escapeHtml(info.releaseDate)}</td>
-    </tr>`).join("");
-
   const copyText = sortedEntries
     .map(([build, info]) => `${build}\t${info.featurePack}\t${info.patchLevel}\t${info.releaseDate}`)
     .join("\n");
+  const versionMapTerminal = [
+    "BUILD\tFEATURE_PACK\tPATCH_LEVEL\tRELEASE",
+    ...sortedEntries.map(([build, info]) => `${build}\t${info.featurePack}\t${info.patchLevel}\t${info.releaseDate}`),
+  ].join("\n");
 
   return `
     <details class="sap-b1-raw-details">
@@ -4561,19 +4665,7 @@ function renderSapB1VersionMapCard() {
         SAP B1 Version-Referenztabelle (${SAP_B1_VERSION_MAP.size} Einträge) 📋
         <button class="sap-vmap-copy-btn" type="button" title="In Zwischenablage kopieren" data-copy="${escapeHtml(copyText)}">📋 Kopieren</button>
       </summary>
-      <div class="table-wrap" style="margin-top:8px;">
-        <table class="report-subtable sap-vmap-table">
-          <thead>
-            <tr>
-              <th>Build</th>
-              <th>Feature Pack</th>
-              <th>Patch Level</th>
-              <th>Release</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
+      ${renderTerminalViewer(versionMapTerminal, `${SAP_B1_VERSION_MAP.size} Referenzeintraege`, "sap-vmap-terminal")}
     </details>
   `;
 }
@@ -4607,13 +4699,12 @@ function renderSapB1CombinedCard(payload) {
   // Files / Ordner section
   let filesContent;
   if (!sap) {
-    filesContent = `<p class="muted">Keine SAP-Business-One-Daten im Payload vorhanden.</p>`;
+    filesContent = renderTerminalViewer("STATUS=UNAVAILABLE\nMESSAGE=Keine SAP-Business-One-Daten im Payload vorhanden.");
   } else {
-    filesContent = `
-      <div class="sap-b1-grid">
-        ${renderSapPathSizeItem("catalina.out", sap.catalina_out, "Datei nicht vorhanden")}
-        ${renderSapPathSizeItem("BusinessOne Log Ordner", sap.businessone_log_dir, "Ordner nicht vorhanden")}
-      </div>`;
+    filesContent = renderTerminalViewer([
+      formatSapPathSizeTerminalEntry("catalina.out", sap.catalina_out, "Datei nicht vorhanden"),
+      formatSapPathSizeTerminalEntry("BusinessOne Log Ordner", sap.businessone_log_dir, "Ordner nicht vorhanden"),
+    ].join("\n\n"), "Zwei SAP-B1-Pfade geprueft");
   }
 
   // HANA section
@@ -4627,32 +4718,27 @@ function renderSapB1CombinedCard(payload) {
 
   let hanaInfoRows;
   if (!hanaInfo) {
-    hanaInfoRows = `<p class="muted">Kein HANA-Scan im Payload (Agent-Update erforderlich)</p>`;
+    hanaInfoRows = renderTerminalViewer("STATUS=UNAVAILABLE\nMESSAGE=Kein HANA-Scan im Payload (Agent-Update erforderlich)");
   } else if (!hanaAvailable) {
-    hanaInfoRows = `<p class="muted">HANA nicht gefunden${hanaError ? " — " + escapeHtml(hanaError) : ""}</p>`;
+    hanaInfoRows = renderTerminalViewer(`STATUS=MISSING\nERROR=${hanaError || "HANA nicht gefunden"}`);
   } else {
-    hanaInfoRows = `
-      <table class="sap-b1-info-table">
-        <tbody>
-          ${hanaSid ? `<tr><th>SID</th><td>${escapeHtml(hanaSid)}</td></tr>` : ""}
-          ${hanaVersion ? `<tr><th>Version</th><td>${escapeHtml(hanaVersion)}</td></tr>` : ""}
-          ${hanaBranch ? `<tr><th>Branch</th><td>${escapeHtml(hanaBranch)}</td></tr>` : ""}
-        </tbody>
-      </table>`;
+    hanaInfoRows = renderTerminalViewer([
+      "STATUS=AVAILABLE",
+      hanaSid ? `SID=${hanaSid}` : "",
+      hanaVersion ? `VERSION=${hanaVersion}` : "",
+      hanaBranch ? `BRANCH=${hanaBranch}` : "",
+    ].filter(Boolean).join("\n"));
   }
 
   // Version map section
   const sortedEntries = Array.from(SAP_B1_VERSION_MAP.entries()).sort(([a], [b]) => b.localeCompare(a));
-  const vmapRows = sortedEntries.map(([build, info]) => `
-    <tr>
-      <td class="sap-vmap-build">${escapeHtml(build)}</td>
-      <td>${escapeHtml(info.featurePack)}</td>
-      <td>${escapeHtml(info.patchLevel)}</td>
-      <td class="sap-vmap-date">${escapeHtml(info.releaseDate)}</td>
-    </tr>`).join("");
   const copyText = sortedEntries
     .map(([build, info]) => `${build}\t${info.featurePack}\t${info.patchLevel}\t${info.releaseDate}`)
     .join("\n");
+  const versionMapTerminal = [
+    "BUILD\tFEATURE_PACK\tPATCH_LEVEL\tRELEASE",
+    ...sortedEntries.map(([build, info]) => `${build}\t${info.featurePack}\t${info.patchLevel}\t${info.releaseDate}`),
+  ].join("\n");
 
   return `
     <section class="detail-card sap-b1-card sap-b1-combined-card">
@@ -4674,14 +4760,14 @@ function renderSapB1CombinedCard(payload) {
 
       <details class="sap-b1-raw-details">
         <summary class="sap-b1-raw-summary">SAP B1 Setup Roh-Output</summary>
-        <pre class="sap-b1-raw-output">${escapeHtml(rawOutput || "-")}</pre>
+        ${renderTerminalViewer(rawOutput || "-")}
       </details>
 
       ${isLinux ? `
       <details class="sap-b1-raw-details">
         <summary class="sap-b1-raw-summary">HANA Versions-Scan</summary>
         ${hanaInfoRows}
-        ${hanaRawOutput ? `<pre class="sap-b1-raw-output">${escapeHtml(hanaRawOutput)}</pre>` : ""}
+        ${hanaRawOutput ? renderTerminalViewer(hanaRawOutput, "Roh-Output") : ""}
       </details>
       ` : ""}
 
@@ -4697,14 +4783,7 @@ function renderSapB1CombinedCard(payload) {
           SAP B1 Version-Referenztabelle (${SAP_B1_VERSION_MAP.size} Einträge) 📋
           <button class="sap-vmap-copy-btn" type="button" title="In Zwischenablage kopieren" data-copy="${escapeHtml(copyText)}">📋 Kopieren</button>
         </summary>
-        <div class="table-wrap" style="margin-top:8px;">
-          <table class="report-subtable sap-vmap-table">
-            <thead>
-              <tr><th>Build</th><th>Feature Pack</th><th>Patch Level</th><th>Release</th></tr>
-            </thead>
-            <tbody>${vmapRows}</tbody>
-          </table>
-        </div>
+        ${renderTerminalViewer(versionMapTerminal, `${SAP_B1_VERSION_MAP.size} Referenzeintraege`, "sap-vmap-terminal")}
       </details>
     </section>
   `;
@@ -4733,19 +4812,16 @@ function renderSapB1SystemInfoCard(payload) {
 
   let hanaInfoRows = "";
   if (!hanaInfo) {
-    hanaInfoRows = `<p class="muted">Kein HANA-Scan im Payload (Agent-Update erforderlich)</p>`;
+    hanaInfoRows = renderTerminalViewer("STATUS=UNAVAILABLE\nMESSAGE=Kein HANA-Scan im Payload (Agent-Update erforderlich)");
   } else if (!hanaAvailable) {
-    hanaInfoRows = `<p class="muted">HANA nicht gefunden${hanaError ? " — " + escapeHtml(hanaError) : ""}</p>`;
+    hanaInfoRows = renderTerminalViewer(`STATUS=MISSING\nERROR=${hanaError || "HANA nicht gefunden"}`);
   } else {
-    hanaInfoRows = `
-      <table class="sap-b1-info-table">
-        <tbody>
-          ${hanaSid ? `<tr><th>SID</th><td>${escapeHtml(hanaSid)}</td></tr>` : ""}
-          ${hanaVersion ? `<tr><th>Version</th><td>${escapeHtml(hanaVersion)}</td></tr>` : ""}
-          ${hanaBranch ? `<tr><th>Branch</th><td>${escapeHtml(hanaBranch)}</td></tr>` : ""}
-        </tbody>
-      </table>
-    `;
+    hanaInfoRows = renderTerminalViewer([
+      "STATUS=AVAILABLE",
+      hanaSid ? `SID=${hanaSid}` : "",
+      hanaVersion ? `VERSION=${hanaVersion}` : "",
+      hanaBranch ? `BRANCH=${hanaBranch}` : "",
+    ].filter(Boolean).join("\n"));
   }
 
   return `
@@ -4754,12 +4830,12 @@ function renderSapB1SystemInfoCard(payload) {
       <div class="sap-b1-grid">
         <details class="sap-b1-raw-details">
           <summary class="sap-b1-raw-summary">SAP B1 Setup Roh-Output</summary>
-          <pre class="sap-b1-raw-output">${escapeHtml(rawOutput || "-")}</pre>
+          ${renderTerminalViewer(rawOutput || "-")}
         </details>
         <details class="sap-b1-raw-details">
           <summary class="sap-b1-raw-summary">HANA Versions-Scan</summary>
           ${hanaInfoRows}
-          ${hanaRawOutput ? `<pre class="sap-b1-raw-output">${escapeHtml(hanaRawOutput)}</pre>` : ""}
+          ${hanaRawOutput ? renderTerminalViewer(hanaRawOutput, "Roh-Output") : ""}
         </details>
       </div>
     </section>
@@ -5670,10 +5746,10 @@ function renderAgentUpdateLog(agentUpdateBlock) {
   }
 
   return `
-    <div class="terminal-viewer-section">
-      <p class="count compact">Pfad: ${escapeHtml(path || "-")} | Zeilen: ${Number.isFinite(lineCount) ? lineCount : allLines.length} (letzte 10)</p>
-      <pre class="log-viewer">${escapeHtml(lines.join("\n") || "Log-Datei ist vorhanden, enthaelt aber aktuell keine Zeilen.")}</pre>
-    </div>
+    ${renderTerminalViewer(
+      lines.join("\n") || "Log-Datei ist vorhanden, enthaelt aber aktuell keine Zeilen.",
+      `Pfad: ${path || "-"} | Zeilen: ${Number.isFinite(lineCount) ? lineCount : allLines.length} (letzte 10)`
+    )}
   `;
 }
 
@@ -5712,7 +5788,7 @@ function formatCronTabSummary(cronInfo) {
   if (lines === 0) return escapeHtml("leer (keine aktiven Einträge)");
   const content = typeof rc.content === "string" ? rc.content : "";
   const activeLines = content.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#")).join("\n");
-  return `<details class="cron-details"><summary>${escapeHtml(lines + " aktive Einträge")}</summary><pre class="log-viewer cron-content">${escapeHtml(activeLines || content)}</pre></details>`;
+  return `<details class="cron-details"><summary>${escapeHtml(lines + " aktive Einträge")}</summary><pre class="log-viewer cron-content">${formatTerminalOutput(activeLines || content)}</pre></details>`;
 }
 
 function formatCronDSummary(cronInfo) {
@@ -5726,7 +5802,7 @@ function formatCronDSummary(cronInfo) {
   const fileBlocks = files.map((f) => {
     const name = escapeHtml(f && f.name ? f.name : "unbekannt");
     const content = f && typeof f.content === "string" ? f.content : "";
-    return `<details class="cron-details"><summary>${name}</summary><pre class="log-viewer cron-content">${escapeHtml(content)}</pre></details>`;
+    return `<details class="cron-details"><summary>${name}</summary><pre class="log-viewer cron-content">${formatTerminalOutput(content)}</pre></details>`;
   }).join("");
   return `${escapeHtml(count + " Datei" + (count !== 1 ? "en" : ""))} ${fileBlocks}`;
 }
