@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.69 (16. Mai 2026)
+
+- **Hotfix 502 nach Login**: Absturz im Endpoint `/api/v1/hosts` behoben (Spalten-Mismatch zwischen SQL-Query und Python-Mapping).
+- **Hostkarten wieder sichtbar**: Laden der Hostliste funktioniert wieder stabil.
+- **Bleistift wieder nutzbar**: Da Hosts wieder geladen werden, ist der Host-Bearbeiten-Flow wieder erreichbar.
+
 ### v1.6.68 (16. Mai 2026)
 
 - **Neue Kunden-Auswertung (Global-Tab)**: Eigene Ansicht "Kunden" mit Kennzahlen je Kunde fuer Hosts, offene Alerts, kritische Alerts und Backup-Luecken.

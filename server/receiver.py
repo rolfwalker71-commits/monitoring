@@ -8233,7 +8233,18 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 ).fetchall()
 
                 settings_rows = conn.execute(
-                    "SELECT hostname, display_name_override, COALESCE(country_code_override, ''), COALESCE(is_favorite, 0), COALESCE(is_hidden, 0) FROM host_settings"
+                    """
+                    SELECT h.hostname,
+                           h.display_name_override,
+                           COALESCE(h.country_code_override, ''),
+                           COALESCE(h.is_favorite, 0),
+                           COALESCE(h.is_hidden, 0),
+                           h.customer_id,
+                           COALESCE(c.customer_name, ''),
+                           COALESCE(c.maringo_project_number, '')
+                    FROM host_settings h
+                    LEFT JOIN customers c ON c.id = h.customer_id
+                    """
                 ).fetchall()
 
             settings_map = {
