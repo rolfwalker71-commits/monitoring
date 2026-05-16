@@ -1683,47 +1683,45 @@ body[data-theme="dark"] .hosts-column {
 
 /* Detail header card — same palette as the sidebar */
 .section-head {
-  background: linear-gradient(180deg, #a0aab6 0%, #8e99a8 100%);
-  border: 1px solid #6a7585;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f9ff 100%);
+  border: 1px solid #cbdcf0;
   border-radius: 14px;
   padding: 12px 16px 10px;
   margin-bottom: 10px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 4px 10px rgba(148, 163, 184, 0.24),
-    0 10px 24px rgba(148, 163, 184, 0.22);
-  color: #1a2233;
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 8px 20px rgba(30, 58, 95, 0.1);
+  color: #1f3555;
 }
 .section-head .title-row h3 {
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  color: #29466a;
+  text-shadow: none;
 }
 .section-head .auto-refresh-status,
 .section-head .auto-refresh-last-update {
-  color: #dce8f5;
+  color: #5f7792;
 }
 .section-head .report-meta-row .count {
-  color: #dce8f5;
+  color: #5f7792;
 }
 body[data-theme="dark"] .section-head {
-  background: linear-gradient(180deg, #6b7480 0%, #5a636f 100%);
-  border-color: #0a0a0a;
+  background: linear-gradient(180deg, #18283f 0%, #14233a 100%);
+  border-color: #2a3d5a;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    2px 3px 0 #3a3a3a,
-    3px 5px 8px rgba(0, 0, 0, 0.2);
-  color: #e2e8f0;
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 10px 24px rgba(0, 0, 0, 0.35);
+  color: #d6e6fb;
 }
 body[data-theme="dark"] .section-head .title-row h3 {
-  color: #f0f4ff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  color: #d6e6fb;
+  text-shadow: none;
 }
 body[data-theme="dark"] .section-head .auto-refresh-status,
 body[data-theme="dark"] .section-head .auto-refresh-last-update {
-  color: #c8d8ee;
+  color: #9eb7d4;
 }
 body[data-theme="dark"] .section-head .report-meta-row .count {
-  color: #c8d8ee;
+  color: #9eb7d4;
 }
 
 .title-row {
@@ -8250,4 +8248,203 @@ body[data-theme="dark"] .search-input-compact {
 
 body[data-theme="dark"] .search-input-compact::placeholder {
   color: #64748b;
+}
+
+/* App-wide clean enterprise unification */
+.analysis-panel,
+.alerts-panel,
+.settings-subsection,
+.alarm-settings-card,
+.settings-logic-help-card,
+.system-overview-customer-block,
+.ct-host-card,
+.ih-host-card,
+.backup-host-card,
+.host-config-change-group,
+.table-wrap {
+  border: 1px solid #cbdcf0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f9ff 100%);
+  box-shadow: 0 8px 18px rgba(30, 58, 95, 0.08);
+}
+
+.analysis-header,
+.settings-subsection-head,
+.host-config-change-summary,
+.host-config-change-date-summary {
+  border-bottom: 1px solid #d8e4f2;
+}
+
+.analysis-panel,
+.alerts-panel,
+.settings-subsection,
+.alarm-settings-card,
+.settings-logic-help-card,
+.system-overview-customer-block,
+.ct-host-card,
+.ih-host-card,
+.backup-host-card,
+.host-config-change-group {
+  padding: var(--space-3);
+}
+
+.btn-secondary,
+.view-back-chip,
+.global-update-chip,
+.host-group-toggle,
+.icon-filter-chip,
+.stat-chip,
+.header-stat-chip,
+.selected-host-meta-chip,
+.agent-update-status-badge,
+.agent-source-status-badge,
+.host-alert-chip,
+.so-card-alert-badge {
+  min-height: 24px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.stat-chip,
+.header-stat-chip,
+.selected-host-meta-chip,
+.agent-update-status-badge,
+.agent-source-status-badge,
+.so-card-alert-badge {
+  border: 1px solid #c3d6ec;
+  background: #ffffff;
+  color: #315177;
+}
+
+.host-alert-chip {
+  border-color: #ef9f9f;
+  background: #fff0f0;
+  color: #9f2a2a;
+}
+
+.host-alert-chip.critical,
+.header-stat-chip-alert,
+.so-card-alert-badge-critical {
+  border-color: #ea7b7b;
+  background: #ffe5e5;
+  color: #a82525;
+}
+
+.header-stat-chip-warn,
+.stat-chip.delayed,
+.so-card-alert-badge-warning {
+  border-color: #efc171;
+  background: #fff6e4;
+  color: #9a6411;
+}
+
+.header-stat-chip-inactive,
+.so-card-alert-badge-ok,
+.stat-chip.live {
+  border-color: #9ed8b8;
+  background: #edf9f2;
+  color: #1f6a3c;
+}
+
+.table-wrap {
+  padding: 0;
+  overflow: auto;
+}
+
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+th {
+  background: #eef4fd;
+  color: #29466a;
+  font-weight: 700;
+}
+
+tbody tr:nth-child(odd) td {
+  background: #fcfeff;
+}
+
+tbody tr:nth-child(even) td {
+  background: #f7fbff;
+}
+
+body[data-theme="dark"] .analysis-panel,
+body[data-theme="dark"] .alerts-panel,
+body[data-theme="dark"] .settings-subsection,
+body[data-theme="dark"] .alarm-settings-card,
+body[data-theme="dark"] .settings-logic-help-card,
+body[data-theme="dark"] .system-overview-customer-block,
+body[data-theme="dark"] .ct-host-card,
+body[data-theme="dark"] .ih-host-card,
+body[data-theme="dark"] .backup-host-card,
+body[data-theme="dark"] .host-config-change-group,
+body[data-theme="dark"] .table-wrap {
+  border-color: #2b3f5c;
+  background: linear-gradient(180deg, #14253c 0%, #102036 100%);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+body[data-theme="dark"] .analysis-header,
+body[data-theme="dark"] .settings-subsection-head,
+body[data-theme="dark"] .host-config-change-summary,
+body[data-theme="dark"] .host-config-change-date-summary {
+  border-bottom-color: #2b3f5c;
+}
+
+body[data-theme="dark"] .stat-chip,
+body[data-theme="dark"] .header-stat-chip,
+body[data-theme="dark"] .selected-host-meta-chip,
+body[data-theme="dark"] .agent-update-status-badge,
+body[data-theme="dark"] .agent-source-status-badge,
+body[data-theme="dark"] .so-card-alert-badge {
+  border-color: #355072;
+  background: #1a2e49;
+  color: #d4e6fb;
+}
+
+body[data-theme="dark"] .host-alert-chip {
+  border-color: #bd5a5a;
+  background: #4a1f1f;
+  color: #ffd3d3;
+}
+
+body[data-theme="dark"] .host-alert-chip.critical,
+body[data-theme="dark"] .header-stat-chip-alert,
+body[data-theme="dark"] .so-card-alert-badge-critical {
+  border-color: #d66767;
+  background: #5a2020;
+  color: #ffc1c1;
+}
+
+body[data-theme="dark"] .header-stat-chip-warn,
+body[data-theme="dark"] .stat-chip.delayed,
+body[data-theme="dark"] .so-card-alert-badge-warning {
+  border-color: #c79a45;
+  background: #4e3a16;
+  color: #ffd890;
+}
+
+body[data-theme="dark"] .header-stat-chip-inactive,
+body[data-theme="dark"] .so-card-alert-badge-ok,
+body[data-theme="dark"] .stat-chip.live {
+  border-color: #3e8a61;
+  background: #163a28;
+  color: #b6f3d4;
+}
+
+body[data-theme="dark"] th {
+  background: #1f3552;
+  color: #d4e6fb;
+}
+
+body[data-theme="dark"] tbody tr:nth-child(odd) td {
+  background: #12263e;
+}
+
+body[data-theme="dark"] tbody tr:nth-child(even) td {
+  background: #102238;
 }
