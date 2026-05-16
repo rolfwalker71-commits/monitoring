@@ -1088,14 +1088,11 @@ function updateUserSettingsSubMode() {
 function renderHostInterestsEditor() {
   const listEl = document.getElementById("hostInterestsList");
   const summaryEl = document.getElementById("hostInterestsSummary");
-  const modeSelect = document.getElementById("hostInterestModeSelect");
   if (!listEl) {
     return;
   }
 
-  if (modeSelect) {
-    modeSelect.value = normalizeHostInterestMode(state.hostInterestMode);
-  }
+  syncHostInterestModeControls();
 
   const allHosts = [...(state.hosts || [])].sort((a, b) => {
     const nameA = String(a.display_name || a.hostname || "").toLowerCase();
@@ -1383,6 +1380,37 @@ function updateAdminSettingsVisibility() {
   if (state.userSettingsSubMode !== "password" && state.userSettingsSubMode !== "channels" && state.userSettingsSubMode !== "digests" && state.userSettingsSubMode !== "hosts") {
     state.userSettingsSubMode = "password";
     updateUserSettingsSubMode();
+  }
+}
+
+function syncHostInterestModeControls() {
+  const normalizedMode = normalizeHostInterestMode(state.hostInterestMode);
+  const settingsSelect = document.getElementById("hostInterestModeSelect");
+  const sidebarSelect = document.getElementById("hostSidebarInterestModeSelect");
+  if (settingsSelect) {
+    settingsSelect.value = normalizedMode;
+  }
+  if (sidebarSelect) {
+    sidebarSelect.value = normalizedMode;
+  }
+}
+
+async function saveHostInterestsPreferences() {
+  const preferencesPayload = {
+    critical_trends_metrics: state.criticalTrendsMetrics.join(","),
+    host_interest_mode: normalizeHostInterestMode(state.hostInterestMode),
+    host_interest_hosts: [...state.hostInterestHosts].sort().join(","),
+  };
+  const prefsResponse = await fetch("/api/v1/user-preferences", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(preferencesPayload),
+  });
+  const prefsData = await prefsResponse.json().catch(() => ({}));
+  if (!prefsResponse.ok) {
+    throw new Error(prefsData.error || ("HTTP " + prefsResponse.status));
   }
 }
 
@@ -1770,22 +1798,9 @@ async function saveUserProfile() {
     throw new Error(data.error || ("HTTP " + response.status));
   }
 
-  const preferencesPayload = {
-    critical_trends_metrics: digestMetrics.join(","),
-    host_interest_mode: normalizeHostInterestMode(document.getElementById("hostInterestModeSelect")?.value || state.hostInterestMode),
-    host_interest_hosts: [...state.hostInterestHosts].sort().join(","),
-  };
-  const prefsResponse = await fetch("/api/v1/user-preferences", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(preferencesPayload),
-  });
-  const prefsData = await prefsResponse.json().catch(() => ({}));
-  if (!prefsResponse.ok) {
-    throw new Error(prefsData.error || ("HTTP " + prefsResponse.status));
-  }
+  state.hostInterestMode = normalizeHostInterestMode(document.getElementById("hostInterestModeSelect")?.value || state.hostInterestMode);
+  syncHostInterestModeControls();
+  await saveHostInterestsPreferences();
   state.criticalTrendsMetrics = digestMetrics;
   updateCriticalTrendsMetricsCheckboxes();
 
@@ -9875,7 +9890,22 @@ function wireEvents() {
   if (hostInterestModeSelect) {
     hostInterestModeSelect.addEventListener("change", async (event) => {
       state.hostInterestMode = normalizeHostInterestMode(event.target?.value || "all");
+      syncHostInterestModeControls();
       renderHostInterestsEditor();
+      await loadHosts({ preserveScroll: true });
+    });
+  }
+  const hostSidebarInterestModeSelect = document.getElementById("hostSidebarInterestModeSelect");
+  if (hostSidebarInterestModeSelect) {
+    hostSidebarInterestModeSelect.addEventListener("change", async (event) => {
+      state.hostInterestMode = normalizeHostInterestMode(event.target?.value || "all");
+      syncHostInterestModeControls();
+      renderHostInterestsEditor();
+      try {
+        await saveHostInterestsPreferences();
+      } catch (error) {
+        setHostInterestsStatus(`Modus konnte nicht gespeichert werden: ${error.message}`, true);
+      }
       await loadHosts({ preserveScroll: true });
     });
   }
