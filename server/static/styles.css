@@ -5,7 +5,7 @@
   --muted: #64748b;
   --accent: #1e40af;
   --btn-primary-bg: #2f5f96;
-  --btn-primary-bg-hover: #284f7f;
+  --btn-primary-bg-hover: #376896;
   --btn-primary-border: #3f6ea3;
   --btn-primary-text: #f4f8ff;
   --btn-height: 30px;
@@ -54,7 +54,7 @@ body[data-theme="dark"] {
   --line: #24344d;
   --accent: #3b82f6;
   --btn-primary-bg: #2b4b74;
-  --btn-primary-bg-hover: #345c8e;
+  --btn-primary-bg-hover: #33587f;
   --btn-primary-border: #4f78ac;
   --btn-primary-text: #dcecff;
   --kv-label-color: #c8dbf7;
@@ -2236,14 +2236,14 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   white-space: nowrap;
 }
 .overview-sidebar-item:hover {
-  background: #eaf2fd;
-  color: #1f3f65;
+  background: #f1f5fb;
+  color: #365575;
 }
 .overview-sidebar-item.active {
-  background: #ddeafb;
-  color: #173a63;
+  background: #e8eff9;
+  color: #294b72;
   font-weight: 700;
-  box-shadow: inset 3px 0 0 #7ea4d0;
+  box-shadow: inset 3px 0 0 #97b1d2;
 }
 .osi-icon {
   font-size: 14px;
@@ -2310,12 +2310,12 @@ body[data-theme="dark"] .overview-sidebar-item {
 }
 body[data-theme="dark"] .overview-sidebar-item:hover,
 body[data-theme="dark"] .overview-sidebar-item.active {
-  background: #1d3452;
-  color: #d4e6fb;
+  background: #22374f;
+  color: #c9dcf2;
 }
 body[data-theme="dark"] .overview-sidebar-item.active {
-  background: #243f62;
-  box-shadow: inset 3px 0 0 #6f96c3;
+  background: #2a425f;
+  box-shadow: inset 3px 0 0 #7899be;
 }
 body[data-theme="dark"] .admin-only-hint {
   border-color: #3e5573;
@@ -2376,9 +2376,9 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .tab-button:hover:not(.active):not(.alert-active) {
-  background: #f2f7fd;
-  color: #3f5d82;
-  border-color: #d9e4f2;
+  background: #f7faff;
+  color: #506a8a;
+  border-color: #dee7f3;
   box-shadow: none;
 }
 
@@ -2428,8 +2428,8 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 .view-tabs .tab-button:hover:not(.active):not(.alert-active) {
   background: transparent;
-  border-color: #a3b8d6;
-  color: #2d4f7a;
+  border-color: #b6c7dd;
+  color: #3f5f85;
   box-shadow: none;
 }
 .view-tabs .tab-button.active {
@@ -2458,8 +2458,8 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .subview-tabs .tab-button:hover:not(.active):not(.alert-active) {
   background: transparent;
-  border-color: #a3b8d6;
-  color: #2d4f7a;
+  border-color: #b6c7dd;
+  color: #3f5f85;
   box-shadow: none;
 }
 
@@ -6731,9 +6731,9 @@ body[data-theme="dark"] .tab-button {
 }
 
 body[data-theme="dark"] .tab-button:hover:not(.active):not(.alert-active) {
-  background: #1a2b42;
-  color: #9fb8d8;
-  border-color: #2a3c59;
+  background: #1d2d42;
+  color: #a8bdd7;
+  border-color: #30455f;
 }
 
 body[data-theme="dark"] .tab-button.active {

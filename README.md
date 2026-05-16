@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.12  | 16.05.2026 | Soften global hover tones across navigation/buttons and remove the misplaced "Nur Admin" hint from the overview notification menu item |
 | 1.6.11  | 16.05.2026 | Optimize "Nur Admin" badges globally with reduced height, smaller typography, and subtler light/dark color tones |
 | 1.6.10  | 16.05.2026 | Fix host sidebar header overlap by placing "Hosts" top-left and the host count line bottom-right with compact, non-overlapping spacing |
 | 1.6.9   | 16.05.2026 | Add clear "Nur Admin" hint badges to all visible admin-only menu options while keeping non-admin-hidden entries unchanged |
