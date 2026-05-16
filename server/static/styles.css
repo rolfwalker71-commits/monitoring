@@ -2005,7 +2005,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 }
 
 .view-tabs-shell {
-  margin: 8px 0 0;
+  margin: 8px 0 14px;
   padding: 0;
   border: none;
   border-bottom: 2px solid #d4dff0;
@@ -2014,7 +2014,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 }
 
 .subview-tabs-shell {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   padding: 0;
   border: none;
   border-bottom: 2px solid #d4dff0;
@@ -2084,7 +2084,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
-  margin: 0 0 10px;
+  margin: 0 0 14px;
 }
 .subview-controls-row .subview-tabs-shell {
   margin: 0;
