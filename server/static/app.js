@@ -5435,6 +5435,8 @@ function renderDatabasesSection(payload) {
         const sqlOriginalLogin = asText(inst.sql_original_login, "");
         const sqlSuserSname = asText(inst.sql_suser_sname, "");
         const masterFilesRows = Number(inst.master_files_rows || 0);
+        const sqlSizeHintSnippet = String.raw`GRANT VIEW SERVER STATE TO [NT AUTHORITY\SYSTEM];
+      GRANT VIEW ANY DEFINITION TO [NT AUTHORITY\SYSTEM];`;
         const sqlGrantSnippet = String.raw`-- 1) Logins anlegen (falls noch nicht vorhanden)
 IF SUSER_ID(N'NT-AUTORITÄT\SYSTEM') IS NULL
     CREATE LOGIN [NT-AUTORITÄT\SYSTEM] FROM WINDOWS;
@@ -5536,6 +5538,11 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
                   </thead>
                   <tbody>${rows}</tbody>
                 </table>
+              </div>
+              <div class="db-size-hint">
+                <p class="db-size-hint-title">Hinweis bei fehlenden DB-Grössen</p>
+                <p class="db-size-hint-text">Wenn in der SQL-Backup-Übersicht keine DB-Grössen angezeigt werden, dieses Skript mit dem <strong>sa</strong>-User ausführen:</p>
+                ${renderTerminalViewer(sqlSizeHintSnippet, "mit sa ausführen", "db-size-hint-terminal")}
               </div>`;
           }
         }

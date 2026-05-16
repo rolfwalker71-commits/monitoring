@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.44  | 16.05.2026 | Add a terminal-style SQL backup hint with the required sa-run grant snippet when DB sizes are missing in the SQL overview |
 | 1.6.43  | 16.05.2026 | Add a subtle SQL/HANA license hint in the Lizenzinfos block that clarifies the required filename B01.txt and the searched paths on Windows and Linux |
 | 1.6.42  | 16.05.2026 | Replace inline Nur-Admin chips with orange admin-only tab styling and an in-app legend for admin-exclusive sections |
 | 1.6.41  | 16.05.2026 | Add direct host-interest mode control to the sidebar so saved interesting hosts can be applied immediately from the host list |
