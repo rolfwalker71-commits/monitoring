@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.37  | 16.05.2026 | Render Root Crontab and cron.d excerpts in the same dark terminal style as Agent Update Log and agent.conf |
 | 1.6.36  | 16.05.2026 | Add real outer spacing around terminal-style Agent Update Log and agent.conf blocks by wrapping them in a padded shell; keeps visible left/right/bottom gap inside the collapsible cards |
 | 1.6.35  | 16.05.2026 | Increase visible left/right/bottom padding in the Agent Update Log viewer and render agent.conf in the same terminal-style block for consistent readability |
 | 1.6.34  | 16.05.2026 | Add extra left/right/bottom padding inside the Agent Update Log viewer for improved readability |

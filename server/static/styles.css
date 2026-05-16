@@ -5368,15 +5368,12 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
 
 .cron-content {
   margin: 0;
-  padding: 8px 12px;
   border-top: 1px solid #d4e4f7;
-  font-size: 11px;
-  font-family: monospace;
+  font-size: 12px;
+  font-family: "IBM Plex Mono", "Consolas", monospace;
   white-space: pre-wrap;
-  word-break: break-all;
-  background: #f8fafc;
-  color: #1e3a5f;
-  max-height: 200px;
+  word-break: break-word;
+  max-height: 260px;
   overflow-y: auto;
 }
 
@@ -5387,8 +5384,6 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
 
 [data-theme="dark"] .cron-content {
   border-color: #2d4a6e;
-  background: #0f1c33;
-  color: #c8d8f0;
 }
 
 .sap-b1-raw-details {

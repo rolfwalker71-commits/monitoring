@@ -5712,7 +5712,7 @@ function formatCronTabSummary(cronInfo) {
   if (lines === 0) return escapeHtml("leer (keine aktiven Einträge)");
   const content = typeof rc.content === "string" ? rc.content : "";
   const activeLines = content.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#")).join("\n");
-  return `<details class="cron-details"><summary>${escapeHtml(lines + " aktive Einträge")}</summary><pre class="cron-content">${escapeHtml(activeLines || content)}</pre></details>`;
+  return `<details class="cron-details"><summary>${escapeHtml(lines + " aktive Einträge")}</summary><pre class="log-viewer cron-content">${escapeHtml(activeLines || content)}</pre></details>`;
 }
 
 function formatCronDSummary(cronInfo) {
@@ -5726,7 +5726,7 @@ function formatCronDSummary(cronInfo) {
   const fileBlocks = files.map((f) => {
     const name = escapeHtml(f && f.name ? f.name : "unbekannt");
     const content = f && typeof f.content === "string" ? f.content : "";
-    return `<details class="cron-details"><summary>${name}</summary><pre class="cron-content">${escapeHtml(content)}</pre></details>`;
+    return `<details class="cron-details"><summary>${name}</summary><pre class="log-viewer cron-content">${escapeHtml(content)}</pre></details>`;
   }).join("");
   return `${escapeHtml(count + " Datei" + (count !== 1 ? "en" : ""))} ${fileBlocks}`;
 }
