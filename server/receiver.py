@@ -7104,6 +7104,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 """,
                 (token,),
             ).fetchone()
+            if row:
+                now_iso = utc_now_iso()
+                expires_iso = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                conn.execute(
+                    "UPDATE web_sessions SET last_activity_at_utc = ?, expires_at_utc = ? WHERE session_token = ?",
+                    (now_iso, expires_iso, token),
+                )
             conn.commit()
 
         if not row:
