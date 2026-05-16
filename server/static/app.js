@@ -6160,6 +6160,7 @@ function renderSingleHostCard(host) {
     : "host-status-bar host-status-bar--ok";
   const chipClass = openCriticalAlertCount > 0 ? "host-alert-chip critical" : "host-alert-chip";
   const alertChip = hasOpenAlerts ? `<span class="${chipClass}">🔔 ${openAlertCount}</span>` : "";
+  const metaAlertChip = hasOpenAlerts ? `<span class="${chipClass} host-alert-chip--meta">🔔 ${openAlertCount}</span>` : "";
 
   const osIconInfo = resolveHostOsIcon(host.os);
   const countryCode = asText(host.country_code || "", "").toUpperCase();
@@ -6219,8 +6220,8 @@ function renderSingleHostCard(host) {
     }
   }
 
-  const footerContent = valueChipStack || alertChip
-    ? `<div class="host-card-footer">${valueChipStack ? `<span class="host-card-actions">${valueChipStack}</span>` : ""}${alertChip}</div>`
+  const footerContent = valueChipStack
+    ? `<div class="host-card-footer"><span class="host-card-actions">${valueChipStack}</span></div>`
     : "";
 
   let mutedAlertsSection = "";
@@ -6262,7 +6263,7 @@ function renderSingleHostCard(host) {
         <span>${escapeHtml(displayName)}</span>
       </strong>
       <span class="host-meta-line">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))}</span>
-      <span class="host-meta-line">🧷 ${escapeHtml(asText(host.agent_version))} &nbsp;·&nbsp; 🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
+      <span class="host-meta-line host-meta-line--with-alert"><span class="host-meta-text">🧷 ${escapeHtml(asText(host.agent_version))} &nbsp;·&nbsp; 🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>${metaAlertChip}</span>
       ${footerContent}
       ${mutedAlertsSection}
       ${osIcon}

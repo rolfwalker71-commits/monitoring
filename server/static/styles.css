@@ -3627,6 +3627,24 @@ body[data-theme="dark"] .trend-progress-bar {
   color: #6d829d;
 }
 
+.host-meta-line--with-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.host-meta-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.host-alert-chip--meta {
+  flex: 0 0 auto;
+}
+
 
 
 .host-item.selected {
