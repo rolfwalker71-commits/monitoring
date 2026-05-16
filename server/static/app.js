@@ -6188,6 +6188,9 @@ function renderSingleHostCard(host) {
       ? `<span class="host-value-chip host-value-chip--sid" title="HANA SID">${escapeHtml(hanaSidValue)}</span>`
       : "",
   ].filter(Boolean).join("");
+  const footerContent = valueChipStack || alertChip
+    ? `<div class="host-card-footer">${valueChipStack ? `<span class="host-card-actions">${valueChipStack}</span>` : ""}${alertChip}</div>`
+    : "";
 
   let mutedAlertsSection = "";
   if (isHidden && hasMutedAlerts) {
@@ -6229,8 +6232,7 @@ function renderSingleHostCard(host) {
       </strong>
       <span class="host-meta-line">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))}</span>
       <span class="host-meta-line">🧷 ${escapeHtml(asText(host.agent_version))} &nbsp;·&nbsp; 🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>
-      ${valueChipStack ? `<span class="host-card-actions">${valueChipStack}</span>` : ""}
-      ${alertChip}
+      ${footerContent}
       ${mutedAlertsSection}
       ${osIcon}
     </article>

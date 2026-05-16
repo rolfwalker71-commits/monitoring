@@ -3048,10 +3048,10 @@ body[data-theme="dark"] .trend-progress-bar {
   background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
   color: var(--text);
   border-radius: 10px;
-  padding: 5px 46px 5px 8px;
+  padding: 4px 44px 4px 8px;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
   position: relative;
   cursor: pointer;
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
@@ -3107,10 +3107,10 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-os-icon {
   position: absolute;
-  top: 8px;
+  top: 6px;
   right: 10px;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   object-fit: contain;
   opacity: 0.75;
   pointer-events: none;
@@ -3118,10 +3118,10 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-flag-icon {
   position: absolute;
-  bottom: 7px;
+  bottom: 5px;
   right: 8px;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   object-fit: contain;
   background: transparent;
   pointer-events: none;
@@ -3136,9 +3136,9 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-item strong,
 .host-item .host-title-line,
 .host-item .host-title-line span {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 900;
-  line-height: 1.1;
+  line-height: 1.05;
 }
 
 .host-title-line {
@@ -3146,8 +3146,8 @@ body[data-theme="dark"] .trend-progress-bar {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding-right: 30px;
-  min-height: 34px;
+  padding-right: 28px;
+  min-height: 28px;
 }
 
 .host-title-line span {
@@ -3169,18 +3169,26 @@ body[data-theme="dark"] .trend-progress-bar {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 4px;
-  min-height: 20px;
+  margin-top: 0;
+}
+
+.host-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 2px;
+  min-height: 18px;
 }
 
 .host-alert-chip {
   display: inline-block;
-  padding: 2px 9px;
+  padding: 1px 8px;
   border-radius: 999px;
   border: 1px solid #f87171;
   background: #fee2e2;
   color: #991b1b;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.01em;
 }
@@ -3535,8 +3543,8 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .host-item .host-meta-line {
-  font-size: 10px;
-  line-height: 1.15;
+  font-size: 9px;
+  line-height: 1.1;
 }
 
 

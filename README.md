@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.5.24  | 16.05.2026 | Compact host cards in the sidebar by tightening spacing and merging value chips/alert chip into a single footer row while preserving all card information |
 | 1.5.23  | 15.05.2026 | Support multiple SQL Server instances with instance_name tracking in database inventory and lifecycle; display instance info in DB overview table |
 | 1.5.22  | 14.05.2026 | Add a printable A4 cheat sheet, a dedicated alerting/mail/OAuth comic page, and visual preview tiles on the process docs start page |
 | 1.5.21  | 14.05.2026 | Unify the process HTML docs with a shared stylesheet and add a comic-style monitoring cheat sheet for key processes, scripts and parameters |
