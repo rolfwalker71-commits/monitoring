@@ -160,7 +160,28 @@ const state = {
   agentSourceStatusLoaded: false,
   filesystemBlacklistPatterns: [],
   showBlacklistedFilesystems: false,
+  sapB1VmapDirty: false,
+  sapB1VmapBeforeUnloadWired: false,
 };
+
+function hasSapB1VersionMapUnsavedChanges() {
+  return state.viewMode === "global" && state.globalSubMode === "admin-settings" && state.sapB1VmapDirty;
+}
+
+function markSapB1VersionMapDirty(isDirty) {
+  state.sapB1VmapDirty = Boolean(isDirty);
+}
+
+function confirmDiscardSapB1VersionMapChanges() {
+  if (!hasSapB1VersionMapUnsavedChanges()) {
+    return true;
+  }
+  const ok = window.confirm("Ungespeicherte Änderungen in der SAP B1 Version Map verwerfen?");
+  if (ok) {
+    markSapB1VersionMapDirty(false);
+  }
+  return ok;
+}
 
 function normalizeHostInterestMode(value) {
   const mode = String(value || "all").trim().toLowerCase();
@@ -2548,6 +2569,7 @@ function renderSapB1VersionMapAdminSection() {
 function wireSapB1VersionMapAdminSection(container) {
   const section = (container || document).querySelector("#sapB1VersionMapAdminSection");
   if (!section) return;
+  markSapB1VersionMapDirty(false);
 
   function getTableEntries() {
     return Array.from(section.querySelectorAll("#sapB1VmapAdminBody tr")).map(tr => ({
@@ -2569,11 +2591,19 @@ function wireSapB1VersionMapAdminSection(container) {
       <td><button type="button" class="vmap-del-btn" title="Zeile löschen">🗑</button></td>`;
     tbody.insertBefore(tr, tbody.firstChild);
     tr.querySelector("input").focus();
+    markSapB1VersionMapDirty(true);
   });
 
   section.addEventListener("click", (e) => {
     if (e.target.classList.contains("vmap-del-btn")) {
       e.target.closest("tr")?.remove();
+      markSapB1VersionMapDirty(true);
+    }
+  });
+
+  section.addEventListener("input", (e) => {
+    if (e.target instanceof Element && e.target.classList.contains("vmap-input")) {
+      markSapB1VersionMapDirty(true);
     }
   });
 
@@ -2598,6 +2628,7 @@ function wireSapB1VersionMapAdminSection(container) {
       SAP_B1_VERSION_MAP = new Map(
         entries.map(e => [e.build, { featurePack: e.feature_pack, patchLevel: e.patch_level, releaseDate: e.release_date }])
       );
+      markSapB1VersionMapDirty(false);
       status.textContent = `✅ ${data.saved} Einträge gespeichert`;
     } catch (err) {
       status.textContent = `❌ ${err.message}`;
@@ -8677,6 +8708,28 @@ async function loadGlobalAlertsOverview(options = {}) {
 }
 
 function wireEvents() {
+  if (!state.sapB1VmapBeforeUnloadWired) {
+    window.addEventListener("beforeunload", (event) => {
+      if (!hasSapB1VersionMapUnsavedChanges()) {
+        return;
+      }
+      event.preventDefault();
+      event.returnValue = "";
+    });
+    state.sapB1VmapBeforeUnloadWired = true;
+  }
+
+  document.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target.closest("#overviewTabButton, #reportsTabButton, #globalViewButton, #globalAlertsTabButton, #criticalTrendsTabButton, #inactiveHostsTabButton, #backupStatusTabButton, #systemOverviewTabButton, #hostConfigChangesTabButton, #agentSourceStatusTabButton, #globalAdminAlertSubsTabButton, #globalAdminLoginAuditTabButton, #globalAdminSettingsTabButton, #headerAlertChip, #headerTrendsChip, #headerInactiveChip") : null;
+    if (!target) {
+      return;
+    }
+    if (!confirmDiscardSapB1VersionMapChanges()) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
+
   const themeToggleButton = document.getElementById("themeToggleButton");
   if (themeToggleButton) {
     themeToggleButton.addEventListener("click", () => {
