@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.13  | 16.05.2026 | Tighten vertical spacing between "Hosts" title and host stats, and move reset from "X" to a compact "Filter löschen" chip below title (left of host stats) while keeping existing reset logic |
 | 1.6.12  | 16.05.2026 | Soften global hover tones across navigation/buttons and remove the misplaced "Nur Admin" hint from the overview notification menu item |
 | 1.6.11  | 16.05.2026 | Optimize "Nur Admin" badges globally with reduced height, smaller typography, and subtler light/dark color tones |
 | 1.6.10  | 16.05.2026 | Fix host sidebar header overlap by placing "Hosts" top-left and the host count line bottom-right with compact, non-overlapping spacing |
