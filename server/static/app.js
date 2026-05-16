@@ -4621,6 +4621,12 @@ function renderSapB1ExtensionsSection(payload) {
 function renderSapLicenseInfoSection(payload) {
   const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : {};
   const toText = (value) => asText(value, "");
+  const locationHintHtml = `
+    <div class="sap-license-location-hint">
+      <p><strong>SQL</strong>: gesucht wird <code>B01.txt</code> unter <code>C:\\ANG\\Lizenzen\\B01.txt</code>, <code>C:\\ANG\\Lizenz\\B01.txt</code> oder <code>C:\\ANG\\B01.txt</code>.</p>
+      <p><strong>HANA</strong>: gesucht wird <code>B01.txt</code> unter <code>/usr/sap/SAPBusinessOne/B1_SHF/Lizenzen/B01.txt</code> oder <code>/usr/sap/SAPBusinessOne/B1_SHF/Lizenz/B01.txt</code>.</p>
+    </div>
+  `;
 
   const expirationRaw = toText(sapLicense.expiration);
   const expiration = /^\d{8}$/.test(expirationRaw)
@@ -4646,6 +4652,7 @@ function renderSapLicenseInfoSection(payload) {
         <summary class="sap-b1-raw-summary">Lizenzinfos</summary>
         <div class="sap-license-list-wrap">
           <p class="muted">Keine Lizenzinfos im Payload vorhanden.</p>
+          ${locationHintHtml}
         </div>
       </details>
     `;
@@ -4661,6 +4668,7 @@ function renderSapLicenseInfoSection(payload) {
       <div class="sap-license-list-wrap">
         <div class="sap-license-list">${rowsHtml}</div>
         <p class="sap-license-list-meta">Datei-Stand B01.txt: <span>${escapeHtml(fileMtimeLabel)}</span></p>
+        ${locationHintHtml}
       </div>
     </details>
   `;
