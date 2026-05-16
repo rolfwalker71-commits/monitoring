@@ -9,6 +9,7 @@
   --btn-primary-border: #3f6ea3;
   --btn-primary-text: #f4f8ff;
   --btn-height: 30px;
+  --chip-height: 22px;
   --line: #c9d8ec;
   --ok: #16a34a;
   --ok-bg: #dcfce7;
@@ -7656,7 +7657,8 @@ body[data-theme="dark"] .backup-row--hana td {
   background: #f8fbff;
   color: #1f3b63;
   border-radius: 999px;
-  padding: 3px 9px;
+  min-height: var(--chip-height);
+  padding: 0 9px;
   font-size: 12px;
   font-weight: 600;
   display: inline-flex;
@@ -7682,8 +7684,8 @@ body[data-theme="dark"] .backup-row--hana td {
   object-fit: cover;
   border-radius: 2px;
   border: 1px solid rgba(15, 23, 42, 0.15);
-}
-
+  min-height: var(--chip-height);
+  padding: 0 10px;
 .system-overview-table th,
 .system-overview-table td {
   padding: 7px 6px;
@@ -8401,8 +8403,10 @@ body[data-theme="dark"] .search-input-compact::placeholder {
 .agent-update-status-badge,
 .agent-source-status-badge,
 .host-alert-chip,
-.so-card-alert-badge {
-  min-height: 24px;
+.so-card-alert-badge,
+.so-country-filter-btn,
+.system-overview-toggle {
+  min-height: var(--chip-height);
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;

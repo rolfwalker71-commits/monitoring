@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.28  | 16.05.2026 | Slim down chip heights globally (including System Overview country filter chips and AddOns toggle) for a more compact UI |
 | 1.6.27  | 16.05.2026 | Add unsaved-changes guard for SAP B1 Version Map editor: confirm before leaving admin tab and browser warning on reload/close until changes are saved |
 | 1.6.26  | 16.05.2026 | Fix SAP B1 Version Map persistence UX: reload map after successful auth and refresh admin editor from server to avoid stale pre-login defaults |
 | 1.6.25  | 16.05.2026 | Enhance hover effects on all button components: increase box-shadow intensity, deeper background colors, and improved visual feedback |
