@@ -9,13 +9,12 @@
   --btn-primary-border: #3f6ea3;
   --btn-primary-text: #f4f8ff;
   --btn-height: 30px;
-  --chip-height: 22px;
+  --chip-height: 20px;
   --line: #c9d8ec;
   --ok: #16a34a;
   --ok-bg: #dcfce7;
   --ok-border: #86efac;
   --warn: #d97706;
-  --warn-bg: #fef3c7;
   --warn-border: #fcd34d;
   --crit: #dc2626;
   --crit-bg: #fee2e2;
@@ -46,8 +45,8 @@ body {
   color: var(--text);
   font-size: 14px;
 }
-
-body[data-theme="dark"] {
+    min-height: var(--chip-height);
+    padding: 0 8px;
   --bg: #0d1728;
   --panel: #111b2f;
   --text: #e6edf7;
@@ -59,7 +58,7 @@ body[data-theme="dark"] {
   --btn-primary-border: #4f78ac;
   --btn-primary-text: #dcecff;
   --kv-label-color: #c8dbf7;
-  --kv-value-color: #9fb3cc;
+    padding: 0 8px;
   color-scheme: dark;
   background: radial-gradient(circle at top left, #1b2b45 0%, var(--bg) 48%);
 }
@@ -68,11 +67,23 @@ body[data-theme="dark"] {
   font-family: var(--kv-label-family);
   font-size: var(--kv-label-size);
   font-weight: var(--kv-label-weight);
+    min-width: 14px;
   letter-spacing: var(--kv-label-letter);
+    display: block;
   color: var(--kv-label-color);
 }
+  }
 
-.kv-value {
+  .so-country-header .so-country-flag,
+  .system-overview-toggle .so-country-flag,
+  .so-country-filter-btn img {
+    width: 14px;
+    height: 10px;
+    min-width: 14px;
+    max-width: 14px;
+    max-height: 10px;
+    object-fit: cover;
+    display: inline-block;
   font-family: var(--kv-value-family);
   font-size: var(--kv-value-size);
   font-weight: var(--kv-value-weight);
@@ -7573,8 +7584,8 @@ body[data-theme="dark"] .backup-row--hana td {
   background: linear-gradient(180deg, #f8fbff 0%, #edf4ff 100%);
   color: #1f3b63;
   border-radius: 10px;
-  min-height: 34px;
-  padding: 6px 10px;
+  min-height: var(--chip-height);
+  padding: 0 8px;
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
@@ -7658,7 +7669,7 @@ body[data-theme="dark"] .backup-row--hana td {
   color: #1f3b63;
   border-radius: 999px;
   min-height: var(--chip-height);
-  padding: 0 9px;
+  padding: 0 8px;
   font-size: 12px;
   font-weight: 600;
   display: inline-flex;
@@ -7679,13 +7690,29 @@ body[data-theme="dark"] .backup-row--hana td {
 }
 
 .so-country-filter-flag {
-  width: 16px;
-  height: 12px;
+  width: 14px;
+  height: 10px;
+  min-width: 14px;
+  max-width: 14px;
+  max-height: 10px;
   object-fit: cover;
+  display: block;
   border-radius: 2px;
   border: 1px solid rgba(15, 23, 42, 0.15);
-  min-height: var(--chip-height);
-  padding: 0 10px;
+}
+
+.so-country-header .so-country-flag,
+.system-overview-toggle .so-country-flag,
+.so-country-filter-btn img {
+  width: 14px;
+  height: 10px;
+  min-width: 14px;
+  max-width: 14px;
+  max-height: 10px;
+  object-fit: cover;
+  display: inline-block;
+}
+
 .system-overview-table th,
 .system-overview-table td {
   padding: 7px 6px;
