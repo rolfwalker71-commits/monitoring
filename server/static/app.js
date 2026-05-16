@@ -4654,10 +4654,6 @@ function renderSapB1VersionMapCard() {
   const copyText = sortedEntries
     .map(([build, info]) => `${build}\t${info.featurePack}\t${info.patchLevel}\t${info.releaseDate}`)
     .join("\n");
-  const versionMapTerminal = [
-    "BUILD\tFEATURE_PACK\tPATCH_LEVEL\tRELEASE",
-    ...sortedEntries.map(([build, info]) => `${build}\t${info.featurePack}\t${info.patchLevel}\t${info.releaseDate}`),
-  ].join("\n");
 
   return `
     <details class="sap-b1-raw-details">
@@ -4665,8 +4661,44 @@ function renderSapB1VersionMapCard() {
         SAP B1 Version-Referenztabelle (${SAP_B1_VERSION_MAP.size} Einträge) 📋
         <button class="sap-vmap-copy-btn" type="button" title="In Zwischenablage kopieren" data-copy="${escapeHtml(copyText)}">📋 Kopieren</button>
       </summary>
-      ${renderTerminalViewer(versionMapTerminal, `${SAP_B1_VERSION_MAP.size} Referenzeintraege`, "sap-vmap-terminal")}
+      ${renderSapVersionMapTerminalTable(sortedEntries, `${SAP_B1_VERSION_MAP.size} Referenzeintraege`)}
     </details>
+  `;
+}
+
+function renderSapVersionMapTerminalTable(sortedEntries, metaLine = "") {
+  const rowsHtml = sortedEntries.map(([build, info]) => {
+    const featurePack = asText(info?.featurePack, "-");
+    const patchLevel = asText(info?.patchLevel, "-");
+    const releaseDate = asText(info?.releaseDate, "-");
+    return `
+      <tr>
+        <td class="sap-vmap-col-build">${escapeHtml(build)}</td>
+        <td>${escapeHtml(featurePack)}</td>
+        <td>${escapeHtml(patchLevel)}</td>
+        <td class="sap-vmap-col-release">${escapeHtml(releaseDate)}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const metaHtml = metaLine ? `<p class="count compact">${escapeHtml(metaLine)}</p>` : "";
+  return `
+    <div class="terminal-viewer-section sap-vmap-terminal-section">
+      ${metaHtml}
+      <div class="sap-vmap-terminal-wrap" role="region" aria-label="SAP B1 Version Referenztabelle">
+        <table class="sap-vmap-terminal-table">
+          <thead>
+            <tr>
+              <th>BUILD</th>
+              <th>FEATURE_PACK</th>
+              <th>PATCH_LEVEL</th>
+              <th>RELEASE</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
   `;
 }
 
@@ -4735,10 +4767,6 @@ function renderSapB1CombinedCard(payload) {
   const copyText = sortedEntries
     .map(([build, info]) => `${build}\t${info.featurePack}\t${info.patchLevel}\t${info.releaseDate}`)
     .join("\n");
-  const versionMapTerminal = [
-    "BUILD\tFEATURE_PACK\tPATCH_LEVEL\tRELEASE",
-    ...sortedEntries.map(([build, info]) => `${build}\t${info.featurePack}\t${info.patchLevel}\t${info.releaseDate}`),
-  ].join("\n");
 
   return `
     <section class="detail-card sap-b1-card sap-b1-combined-card">
@@ -4783,7 +4811,7 @@ function renderSapB1CombinedCard(payload) {
           SAP B1 Version-Referenztabelle (${SAP_B1_VERSION_MAP.size} Einträge) 📋
           <button class="sap-vmap-copy-btn" type="button" title="In Zwischenablage kopieren" data-copy="${escapeHtml(copyText)}">📋 Kopieren</button>
         </summary>
-        ${renderTerminalViewer(versionMapTerminal, `${SAP_B1_VERSION_MAP.size} Referenzeintraege`, "sap-vmap-terminal")}
+        ${renderSapVersionMapTerminalTable(sortedEntries, `${SAP_B1_VERSION_MAP.size} Referenzeintraege`)}
       </details>
     </section>
   `;

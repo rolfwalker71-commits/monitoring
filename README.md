@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.39  | 16.05.2026 | Improve SAP B1 Version-Referenztabelle rendering with a true terminal-themed HTML table (clean columns, sticky header, better readability) |
 | 1.6.38  | 16.05.2026 | Stabilize web login by self-healing a missing login-audit table and expand terminal keyword coloring with granular token classes across all terminal cards (including SAP/HANA sections) |
 | 1.6.37  | 16.05.2026 | Render Root Crontab and cron.d excerpts in the same dark terminal style as Agent Update Log and agent.conf |
 | 1.6.36  | 16.05.2026 | Add real outer spacing around terminal-style Agent Update Log and agent.conf blocks by wrapping them in a padded shell; keeps visible left/right/bottom gap inside the collapsible cards |

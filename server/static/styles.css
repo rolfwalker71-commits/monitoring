@@ -5547,8 +5547,58 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   margin-top: 2px;
 }
 
-.sap-vmap-terminal {
-  tab-size: 2;
+.sap-vmap-terminal-section {
+  padding-top: 6px;
+}
+
+.sap-vmap-terminal-wrap {
+  margin: 0;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #0f172a;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.sap-vmap-terminal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "IBM Plex Mono", "Consolas", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #dbeafe;
+}
+
+.sap-vmap-terminal-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  background: #0b1326;
+  color: #93c5fd;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 8px 12px;
+  border-bottom: 1px solid #1e293b;
+}
+
+.sap-vmap-terminal-table tbody td {
+  padding: 6px 12px;
+  border-bottom: 1px solid #1e293b;
+  white-space: nowrap;
+}
+
+.sap-vmap-terminal-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.sap-vmap-terminal-table .sap-vmap-col-build {
+  color: #f9a8d4;
+  font-weight: 700;
+}
+
+.sap-vmap-terminal-table .sap-vmap-col-release {
+  color: #fdba74;
 }
 
 .sap-license-list-wrap {
@@ -6395,6 +6445,20 @@ body[data-theme="dark"] .sap-b1-raw-details > .terminal-viewer-section {
 
 body[data-theme="dark"] .sap-b1-combined-card .sap-b1-raw-details > .terminal-viewer-section {
   border-top-color: #2a3c59;
+}
+
+body[data-theme="dark"] .sap-vmap-terminal-wrap {
+  border-color: #2d4a6e;
+  background: #0b1630;
+}
+
+body[data-theme="dark"] .sap-vmap-terminal-table thead th {
+  background: #081125;
+  border-bottom-color: #233a5f;
+}
+
+body[data-theme="dark"] .sap-vmap-terminal-table tbody td {
+  border-bottom-color: #233a5f;
 }
 
 body[data-theme="dark"] .detail-card:hover {
