@@ -1327,6 +1327,7 @@ function updateAdminSettingsVisibility() {
   const globalAdminAlertSubsTab = document.getElementById("globalAdminAlertSubsTabButton");
   const globalAdminLoginAuditTab = document.getElementById("globalAdminLoginAuditTabButton");
   const globalAdminSettingsTab = document.getElementById("globalAdminSettingsTabButton");
+  const adminOnlyTabsLegend = document.getElementById("adminOnlyTabsLegend");
   const globalAdminOpsSection = document.getElementById("globalAdminOpsSection");
   const hostConfigChangesBackfillButton = document.getElementById("backfillHostConfigChangesButton");
   const hostConfigChangesBackfillStatus = document.getElementById("hostConfigChangesBackfillStatus");
@@ -1347,6 +1348,9 @@ function updateAdminSettingsVisibility() {
   }
   if (globalAdminSettingsTab) {
     globalAdminSettingsTab.classList.toggle("hidden", !state.isAdmin);
+  }
+  if (adminOnlyTabsLegend) {
+    adminOnlyTabsLegend.classList.toggle("hidden", !state.isAdmin);
   }
   if (globalAdminOpsSection) {
     globalAdminOpsSection.classList.toggle("hidden", !state.isAdmin);

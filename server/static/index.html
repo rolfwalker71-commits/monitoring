@@ -96,10 +96,11 @@
                 <button id="systemOverviewTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="systemOverviewView">Systemübersicht</button>
                 <button id="hostConfigChangesTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="hostConfigChangesView">Changelog</button>
                 <button id="agentSourceStatusTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="agentSourceStatusView">Agent Quelle</button>
-                <button id="globalAdminAlertSubsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminAlertSubsView">Alert Abos <span class="admin-only-hint">Nur Admin</span></button>
-                <button id="globalAdminLoginAuditTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminLoginAuditView">Login Changelog <span class="admin-only-hint">Nur Admin</span></button>
-                <button id="globalAdminSettingsTabButton" type="button" class="tab-button hidden" role="tab" aria-selected="false" aria-controls="globalAdminSettingsView">Admin Settings <span class="admin-only-hint">Nur Admin</span></button>
+                <button id="globalAdminAlertSubsTabButton" type="button" class="tab-button admin-only-tab hidden" role="tab" aria-selected="false" aria-controls="globalAdminAlertSubsView">Alert Abos</button>
+                <button id="globalAdminLoginAuditTabButton" type="button" class="tab-button admin-only-tab hidden" role="tab" aria-selected="false" aria-controls="globalAdminLoginAuditView">Login Changelog</button>
+                <button id="globalAdminSettingsTabButton" type="button" class="tab-button admin-only-tab hidden" role="tab" aria-selected="false" aria-controls="globalAdminSettingsView">Admin Settings</button>
               </div>
+              <p id="adminOnlyTabsLegend" class="admin-tab-legend hidden"><span class="admin-tab-legend-swatch" aria-hidden="true"></span> Orange markierte Register sind nur für Admins sichtbar.</p>
             </div>
 
             <div id="globalAlertsView" role="tabpanel" aria-labelledby="globalAlertsTabButton">

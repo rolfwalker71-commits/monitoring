@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.42  | 16.05.2026 | Replace inline Nur-Admin chips with orange admin-only tab styling and an in-app legend for admin-exclusive sections |
 | 1.6.41  | 16.05.2026 | Add direct host-interest mode control to the sidebar so saved interesting hosts can be applied immediately from the host list |
 | 1.6.40  | 16.05.2026 | Switch report retention to 6 weeks (42 days), correct default agent interval docs to 15 minutes, and add Admin DB maintenance panel with live database stats plus manual VACUUM and visible before/after effect |
 | 1.6.39  | 16.05.2026 | Improve SAP B1 Version-Referenztabelle rendering with a true terminal-themed HTML table (clean columns, sticky header, better readability) |
