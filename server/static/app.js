@@ -98,6 +98,7 @@ const state = {
   systemOverviewCountryFilter: "all",
   systemOverviewSearchQuery: "",
   systemOverviewAddonsExpanded: false,
+  systemOverviewSortMode: "country-os-host",
   viewMode: "overview",
   userSettingsSubMode: "password",
   overviewSection: "main",
@@ -9253,6 +9254,16 @@ function wireEvents() {
       await loadSystemOverview();
     });
   }
+  const toggleSystemOverviewSortModeButton = document.getElementById("toggleSystemOverviewSortModeButton");
+  if (toggleSystemOverviewSortModeButton) {
+    toggleSystemOverviewSortModeButton.addEventListener("click", async () => {
+      state.systemOverviewSortMode = state.systemOverviewSortMode === "addon-customer-os"
+        ? "country-os-host"
+        : "addon-customer-os";
+      updateSystemOverviewSortModeButton();
+      await loadSystemOverview();
+    });
+  }
   const systemOverviewSearchInput = document.getElementById("systemOverviewSearchInput");
   if (systemOverviewSearchInput) {
     systemOverviewSearchInput.addEventListener("input", async () => {
@@ -10284,6 +10295,63 @@ function updateSystemOverviewAddonsToggleButton() {
   button.setAttribute("aria-pressed", expanded ? "true" : "false");
 }
 
+function updateSystemOverviewSortModeButton() {
+  const button = document.getElementById("toggleSystemOverviewSortModeButton");
+  if (!button) {
+    return;
+  }
+  const addonMode = state.systemOverviewSortMode === "addon-customer-os";
+  button.textContent = addonMode ? "Sort: AddOn > Kunde > OS" : "Sort: Land > OS > Host";
+  button.setAttribute("aria-pressed", addonMode ? "true" : "false");
+}
+
+function collectSystemOverviewHostAddonLabels(host) {
+  const payload = host && typeof host.payload === "object" ? host.payload : {};
+  const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
+  const hana = payload && typeof payload.hana_addons === "object" ? payload.hana_addons : null;
+  const osField = String(payload?.os || "").toLowerCase();
+
+  const isWindows = osField.includes("windows");
+  const isLinux = osField.includes("linux");
+  const showSql = !isLinux;
+  const showHana = !isWindows;
+
+  const labels = [];
+  const seen = new Set();
+
+  const pushPair = (primaryValue, secondaryValue) => {
+    const pair = normalizeAddonPair(primaryValue, secondaryValue);
+    const name = asText(pair?.name, "").trim();
+    if (!name) {
+      return;
+    }
+    const version = asText(pair?.version, "").trim();
+    const label = version ? `${name} ${version}` : name;
+    const key = label.toLowerCase();
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    labels.push(label);
+  };
+
+  if (showSql && sap) {
+    const extRows = Array.isArray(sap?.extensions?.rows) ? sap.extensions.rows : [];
+    extRows.forEach((row) => pushPair(row?.AddOnName, row?.Version));
+    const legacyRows = Array.isArray(sap?.sari_addons?.rows) ? sap.sari_addons.rows : [];
+    legacyRows.forEach((row) => pushPair(row?.AName, row?.AddOnVer));
+  }
+
+  if (showHana && hana) {
+    const lightRows = Array.isArray(hana?.lightweight) ? hana.lightweight : [];
+    lightRows.forEach((row) => pushPair(row?.name, row?.version));
+    const legacyRows = Array.isArray(hana?.legacy) ? hana.legacy : [];
+    legacyRows.forEach((row) => pushPair(row?.name, row?.version));
+  }
+
+  return labels.sort((a, b) => a.localeCompare(b, "de", { sensitivity: "base", numeric: true }));
+}
+
 function renderSystemOverviewAddons(payload, addonFilterQuery = "") {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const hana = payload && typeof payload.hana_addons === "object" ? payload.hana_addons : null;
@@ -10327,18 +10395,21 @@ function renderSystemOverviewAddons(payload, addonFilterQuery = "") {
   const filterAddonRows = (rows, nameKey, versionKey) => {
     const sourceRows = Array.isArray(rows) ? rows : [];
     if (!normalizedAddonQuery) {
-      return { rows: sourceRows, hasMatch: false };
+      return sourceRows;
     }
 
-    const matched = sourceRows.filter((row) => {
+    return sourceRows.filter((row) => {
       const haystack = `${asText(row?.[nameKey], "")} ${asText(row?.[versionKey], "")}`.toLowerCase();
       return haystack.includes(normalizedAddonQuery);
     });
+  };
 
-    if (matched.length > 0) {
-      return { rows: matched, hasMatch: true };
+  const renderAddonColumn = (title, rows, nameKey, versionKey) => {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return "";
     }
-    return { rows: sourceRows, hasMatch: false };
+    const content = `<ul class="so-addon-list">${renderListItems(rows, nameKey, versionKey)}</ul>`;
+    return `<div class="so-addon-col"><h6>${escapeHtml(title)}</h6>${content}</div>`;
   };
 
   let result = "";
@@ -10347,18 +10418,17 @@ function renderSystemOverviewAddons(payload, addonFilterQuery = "") {
   if (sapToShow) {
     const extRaw = Array.isArray(sapToShow?.extensions?.rows) ? sapToShow.extensions.rows : [];
     const legacyRaw = Array.isArray(sapToShow?.sari_addons?.rows) ? sapToShow.sari_addons.rows : [];
-    const extFiltered = filterAddonRows(extRaw, "AddOnName", "Version");
-    const legacyFiltered = filterAddonRows(legacyRaw, "AName", "AddOnVer");
-    const sqlHasAddonMatch = extFiltered.hasMatch || legacyFiltered.hasMatch;
-    const extRows = sqlHasAddonMatch ? extFiltered.rows : extRaw;
-    const legacyRows = sqlHasAddonMatch ? legacyFiltered.rows : legacyRaw;
+    const extRows = filterAddonRows(extRaw, "AddOnName", "Version");
+    const legacyRows = filterAddonRows(legacyRaw, "AName", "AddOnVer");
     const extCount = extRows.length;
     const legacyCount = legacyRows.length;
     const sqlTotalCount = extCount + legacyCount;
 
     if (sqlTotalCount > 0) {
-      const extContent = `<ul class="so-addon-list">${renderListItems(extRows, "AddOnName", "Version")}</ul>`;
-      const legacyContent = `<ul class="so-addon-list">${renderListItems(legacyRows, "AName", "AddOnVer")}</ul>`;
+      const columns = [
+        renderAddonColumn("Lightweight", extRows, "AddOnName", "Version"),
+        renderAddonColumn("Legacy", legacyRows, "AName", "AddOnVer"),
+      ].filter(Boolean).join("");
       const sqlSummary = `SQL AddOns (${extCount} LW / ${legacyCount} Legacy)`;
       const openAttr = state.systemOverviewAddonsExpanded === true ? " open" : "";
 
@@ -10366,14 +10436,7 @@ function renderSystemOverviewAddons(payload, addonFilterQuery = "") {
     <details class="so-addon-details"${openAttr}>
       <summary>${escapeHtml(sqlSummary)}</summary>
       <div class="so-addon-grid">
-        <div class="so-addon-col">
-          <h6>Lightweight</h6>
-          ${extContent}
-        </div>
-        <div class="so-addon-col">
-          <h6>Legacy</h6>
-          ${legacyContent}
-        </div>
+        ${columns}
       </div>
     </details>`;
     }
@@ -10383,18 +10446,17 @@ function renderSystemOverviewAddons(payload, addonFilterQuery = "") {
   if (hanaToShow) {
     const hanaLightRaw = Array.isArray(hanaToShow?.lightweight) ? hanaToShow.lightweight : [];
     const hanaLegacyRaw = Array.isArray(hanaToShow?.legacy) ? hanaToShow.legacy : [];
-    const hanaLightFiltered = filterAddonRows(hanaLightRaw, "name", "version");
-    const hanaLegacyFiltered = filterAddonRows(hanaLegacyRaw, "name", "version");
-    const hanaHasAddonMatch = hanaLightFiltered.hasMatch || hanaLegacyFiltered.hasMatch;
-    const hanaLightweight = hanaHasAddonMatch ? hanaLightFiltered.rows : hanaLightRaw;
-    const hanaLegacy = hanaHasAddonMatch ? hanaLegacyFiltered.rows : hanaLegacyRaw;
+    const hanaLightweight = filterAddonRows(hanaLightRaw, "name", "version");
+    const hanaLegacy = filterAddonRows(hanaLegacyRaw, "name", "version");
     const hanaLightCount = hanaLightweight.length;
     const hanaLegacyCount = hanaLegacy.length;
     const hanaTotalCount = hanaLightCount + hanaLegacyCount;
 
     if (hanaTotalCount > 0) {
-      const hanaLightContent = `<ul class="so-addon-list">${renderListItems(hanaLightweight, "name", "version")}</ul>`;
-      const hanaLegacyContent = `<ul class="so-addon-list">${renderListItems(hanaLegacy, "name", "version")}</ul>`;
+      const columns = [
+        renderAddonColumn("Lightweight", hanaLightweight, "name", "version"),
+        renderAddonColumn("Legacy", hanaLegacy, "name", "version"),
+      ].filter(Boolean).join("");
       const hanaSummary = `HANA AddOns (${hanaLightCount} LW / ${hanaLegacyCount} Legacy)`;
       const openAttr = state.systemOverviewAddonsExpanded === true ? " open" : "";
 
@@ -10402,14 +10464,7 @@ function renderSystemOverviewAddons(payload, addonFilterQuery = "") {
     <details class="so-addon-details"${openAttr}>
       <summary>${escapeHtml(hanaSummary)}</summary>
       <div class="so-addon-grid">
-        <div class="so-addon-col">
-          <h6>Lightweight</h6>
-          ${hanaLightContent}
-        </div>
-        <div class="so-addon-col">
-          <h6>Legacy</h6>
-          ${hanaLegacyContent}
-        </div>
+        ${columns}
       </div>
     </details>`;
     }
@@ -10615,6 +10670,7 @@ async function loadSystemOverview() {
   const filterEl = document.getElementById("systemOverviewCountryFilter");
   const searchEl = document.getElementById("systemOverviewSearchInput");
   updateSystemOverviewAddonsToggleButton();
+  updateSystemOverviewSortModeButton();
   if (!container) return;
 
   if (searchEl) {
@@ -10639,126 +10695,267 @@ async function loadSystemOverview() {
       .filter(([country]) => activeCountryFilter === "all" || String(country).toUpperCase() === activeCountryFilter)
       .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
 
-    let total = 0;
-
-    const countrySections = filteredEntries
-      .map(([country, osMap], countryIndex) => {
-        const countryCode = country;
-        const flagIconPath = getCountryFlagIconPath(countryCode);
-        const flagImg = flagIconPath ? `<img src="${flagIconPath}" alt="${escapeHtml(country)}" class="so-country-flag" />` : "";
-        
-        const osSections = Object.entries(osMap || {})
-          .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
-          .map(([osName, customerMap], osIndex) => {
-            const osIconPath = getOsIconPath(osName);
-            const osImg = osIconPath ? `<img src="${osIconPath}" alt="${escapeHtml(osName)}" class="so-os-icon" />` : `<span>${getOsEmoji(osName)}</span>`;
-            
-            const customers = Object.entries(customerMap || {})
-              .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
-              .map(([customer, hosts]) => {
-                const matchingHosts = (Array.isArray(hosts) ? hosts : []).filter((host) => {
-                  if (!searchQuery) {
-                    return true;
-                  }
-                  const payload = host && typeof host.payload === "object" ? host.payload : {};
-                  const addonText = collectSystemOverviewAddonSearchText(payload);
-                  const haystack = [
-                    host?.hostname,
-                    host?.display_name,
-                    payload?.display_name,
-                    payload?.hostname,
-                    payload?.agent_id,
-                    customer,
-                    osName,
-                    country,
-                    addonText
-                  ].map((v) => String(v || "").toLowerCase()).join(" ");
-                  return haystack.includes(searchQuery);
-                });
-
-                if (!matchingHosts.length) {
-                  return "";
-                }
-
-                total += matchingHosts.length;
-
-                const rowHtml = matchingHosts
-                  .map((host) => formatSystemOverviewTableRow(host, osName, customer, SAP_B1_VERSION_MAP, true, searchQuery))
-                  .join("");
-
-                return `
-                  <div class="system-overview-customer-block">
-                    <div class="so-customer-title">👥 ${escapeHtml(customer)} (${matchingHosts.length})</div>
-                    <div class="system-overview-table-wrap">
-                      <table class="system-overview-table">
-                        <thead>
-                          <tr>
-                            <th>Host</th>
-                            <th>OS</th>
-                            <th>CPU</th>
-                            <th>RAM / Modell</th>
-                            <th>SAP / DB</th>
-                            <th>Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>${rowHtml}</tbody>
-                      </table>
-                    </div>
-                  </div>
-                `;
-              })
-              .filter(Boolean)
-              .join("");
-
-            const osHostCount = (customers.match(/<tr class=/g) || []).length;
-            if (!osHostCount) {
-              return "";
+    const filteredHostEntries = [];
+    filteredEntries.forEach(([country, osMap]) => {
+      Object.entries(osMap || {}).forEach(([osName, customerMap]) => {
+        Object.entries(customerMap || {}).forEach(([customer, hosts]) => {
+          (Array.isArray(hosts) ? hosts : []).forEach((host) => {
+            const payload = host && typeof host.payload === "object" ? host.payload : {};
+            const addonText = collectSystemOverviewAddonSearchText(payload);
+            const haystack = [
+              host?.hostname,
+              host?.display_name,
+              payload?.display_name,
+              payload?.hostname,
+              payload?.agent_id,
+              customer,
+              osName,
+              country,
+              addonText,
+            ].map((v) => String(v || "").toLowerCase()).join(" ");
+            if (searchQuery && !haystack.includes(searchQuery)) {
+              return;
             }
-            
-            const osId = `so-os-${countryIndex}-${osIndex}`;
-            return `
-              <section class="system-overview-os-group">
-                <button class="system-overview-toggle" type="button" data-target-id="${osId}" aria-expanded="true">
-                  <span class="system-overview-chevron">▼</span>
-                  <span class="so-os-header">${osImg} ${escapeHtml(osName)} (${osHostCount})</span>
-                </button>
-                <div id="${osId}" class="system-overview-customer-list">${customers}</div>
-              </section>
-            `;
-          })
-          .filter(Boolean)
-          .join("");
+            filteredHostEntries.push({ country, osName, customer, host });
+          });
+        });
+      });
+    });
 
-        if (!osSections) {
-          return "";
+    const uniqueHostCount = new Set(filteredHostEntries.map((entry) => String(entry.host?.hostname || ""))).size;
+    let displayedHostCount = uniqueHostCount;
+    let treeHtml = "";
+
+    if (state.systemOverviewSortMode === "addon-customer-os") {
+      const addonMap = new Map();
+      const displayedHostnames = new Set();
+
+      filteredHostEntries.forEach((entry) => {
+        const labels = collectSystemOverviewHostAddonLabels(entry.host);
+        if (!labels.length) {
+          return;
         }
 
-        const countryId = `so-country-${countryIndex}`;
-        return `
-          <section class="system-overview-country-group">
-            <button class="system-overview-toggle" type="button" data-target-id="${countryId}" aria-expanded="true">
-              <span class="system-overview-chevron">▼</span>
-              <span class="so-country-header">${flagImg} ${escapeHtml(country)}</span>
-            </button>
-            <div id="${countryId}" class="system-overview-os-list">${osSections}</div>
-          </section>
-        `;
-      })
-      .filter(Boolean)
-      .join("");
+        labels.forEach((label) => {
+          const addonKey = String(label || "").trim();
+          if (!addonKey) {
+            return;
+          }
+          if (!addonMap.has(addonKey)) {
+            addonMap.set(addonKey, new Map());
+          }
+          const customerMap = addonMap.get(addonKey);
+          const customerKey = String(entry.customer || "-");
+          if (!customerMap.has(customerKey)) {
+            customerMap.set(customerKey, new Map());
+          }
+          const osMap = customerMap.get(customerKey);
+          const osKey = String(entry.osName || "-");
+          if (!osMap.has(osKey)) {
+            osMap.set(osKey, []);
+          }
+          osMap.get(osKey).push(entry);
+          displayedHostnames.add(String(entry.host?.hostname || ""));
+        });
+      });
+
+      displayedHostCount = displayedHostnames.size;
+
+      const sortedAddons = Array.from(addonMap.entries())
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true }));
+
+      treeHtml = sortedAddons
+        .map(([addonLabel, customerMap], addonIndex) => {
+          const customerSections = Array.from(customerMap.entries())
+            .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true }))
+            .map(([customer, osMap], customerIndex) => {
+              const osSections = Array.from(osMap.entries())
+                .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true }))
+                .map(([osName, entries], osIndex) => {
+                  const osIconPath = getOsIconPath(osName);
+                  const osImg = osIconPath ? `<img src="${osIconPath}" alt="${escapeHtml(osName)}" class="so-os-icon" />` : `<span>${getOsEmoji(osName)}</span>`;
+                  const rowHtml = entries
+                    .sort((left, right) => String(left.host?.display_name || left.host?.hostname || "").localeCompare(String(right.host?.display_name || right.host?.hostname || ""), "de", { sensitivity: "base", numeric: true }))
+                    .map((entry) => formatSystemOverviewTableRow(entry.host, entry.osName, entry.customer, SAP_B1_VERSION_MAP, true, searchQuery))
+                    .join("");
+                  const osId = `so-addon-os-${addonIndex}-${customerIndex}-${osIndex}`;
+                  return `
+                    <section class="system-overview-os-group">
+                      <button class="system-overview-toggle" type="button" data-target-id="${osId}" aria-expanded="true">
+                        <span class="system-overview-chevron">▼</span>
+                        <span class="so-os-header">${osImg} ${escapeHtml(osName)} (${entries.length})</span>
+                      </button>
+                      <div id="${osId}" class="system-overview-customer-list">
+                        <div class="system-overview-table-wrap">
+                          <table class="system-overview-table">
+                            <thead>
+                              <tr>
+                                <th>Host</th>
+                                <th>OS</th>
+                                <th>CPU</th>
+                                <th>RAM / Modell</th>
+                                <th>SAP / DB</th>
+                                <th>Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>${rowHtml}</tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </section>
+                  `;
+                })
+                .join("");
+
+              const customerHostCount = Array.from(osMap.values()).reduce((sum, entries) => sum + entries.length, 0);
+              const customerId = `so-addon-customer-${addonIndex}-${customerIndex}`;
+              return `
+                <section class="system-overview-country-group">
+                  <button class="system-overview-toggle" type="button" data-target-id="${customerId}" aria-expanded="true">
+                    <span class="system-overview-chevron">▼</span>
+                    <span class="so-country-header">👥 ${escapeHtml(customer)} (${customerHostCount})</span>
+                  </button>
+                  <div id="${customerId}" class="system-overview-os-list">${osSections}</div>
+                </section>
+              `;
+            })
+            .join("");
+
+          const addonEntryCount = Array.from(customerMap.values())
+            .reduce((sum, osMap) => sum + Array.from(osMap.values()).reduce((innerSum, entries) => innerSum + entries.length, 0), 0);
+          const addonId = `so-addon-${addonIndex}`;
+          return `
+            <section class="system-overview-country-group">
+              <button class="system-overview-toggle" type="button" data-target-id="${addonId}" aria-expanded="true">
+                <span class="system-overview-chevron">▼</span>
+                <span class="so-country-header">🧩 ${escapeHtml(addonLabel)} (${addonEntryCount})</span>
+              </button>
+              <div id="${addonId}" class="system-overview-os-list">${customerSections}</div>
+            </section>
+          `;
+        })
+        .join("");
+    } else {
+      treeHtml = filteredEntries
+        .map(([country, osMap], countryIndex) => {
+          const countryCode = country;
+          const flagIconPath = getCountryFlagIconPath(countryCode);
+          const flagImg = flagIconPath ? `<img src="${flagIconPath}" alt="${escapeHtml(country)}" class="so-country-flag" />` : "";
+
+          const osSections = Object.entries(osMap || {})
+            .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+            .map(([osName, customerMap], osIndex) => {
+              const osIconPath = getOsIconPath(osName);
+              const osImg = osIconPath ? `<img src="${osIconPath}" alt="${escapeHtml(osName)}" class="so-os-icon" />` : `<span>${getOsEmoji(osName)}</span>`;
+
+              const customers = Object.entries(customerMap || {})
+                .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+                .map(([customer, hosts]) => {
+                  const matchingHosts = (Array.isArray(hosts) ? hosts : []).filter((host) => {
+                    const payload = host && typeof host.payload === "object" ? host.payload : {};
+                    const addonText = collectSystemOverviewAddonSearchText(payload);
+                    const haystack = [
+                      host?.hostname,
+                      host?.display_name,
+                      payload?.display_name,
+                      payload?.hostname,
+                      payload?.agent_id,
+                      customer,
+                      osName,
+                      country,
+                      addonText,
+                    ].map((v) => String(v || "").toLowerCase()).join(" ");
+                    if (!searchQuery) {
+                      return true;
+                    }
+                    return haystack.includes(searchQuery);
+                  });
+
+                  if (!matchingHosts.length) {
+                    return "";
+                  }
+
+                  const rowHtml = matchingHosts
+                    .map((host) => formatSystemOverviewTableRow(host, osName, customer, SAP_B1_VERSION_MAP, true, searchQuery))
+                    .join("");
+
+                  return `
+                    <div class="system-overview-customer-block">
+                      <div class="so-customer-title">👥 ${escapeHtml(customer)} (${matchingHosts.length})</div>
+                      <div class="system-overview-table-wrap">
+                        <table class="system-overview-table">
+                          <thead>
+                            <tr>
+                              <th>Host</th>
+                              <th>OS</th>
+                              <th>CPU</th>
+                              <th>RAM / Modell</th>
+                              <th>SAP / DB</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>${rowHtml}</tbody>
+                        </table>
+                      </div>
+                    </div>
+                  `;
+                })
+                .filter(Boolean)
+                .join("");
+
+              const osHostCount = (customers.match(/<tr class=/g) || []).length;
+              if (!osHostCount) {
+                return "";
+              }
+
+              const osId = `so-os-${countryIndex}-${osIndex}`;
+              return `
+                <section class="system-overview-os-group">
+                  <button class="system-overview-toggle" type="button" data-target-id="${osId}" aria-expanded="true">
+                    <span class="system-overview-chevron">▼</span>
+                    <span class="so-os-header">${osImg} ${escapeHtml(osName)} (${osHostCount})</span>
+                  </button>
+                  <div id="${osId}" class="system-overview-customer-list">${customers}</div>
+                </section>
+              `;
+            })
+            .filter(Boolean)
+            .join("");
+
+          if (!osSections) {
+            return "";
+          }
+
+          const countryId = `so-country-${countryIndex}`;
+          return `
+            <section class="system-overview-country-group">
+              <button class="system-overview-toggle" type="button" data-target-id="${countryId}" aria-expanded="true">
+                <span class="system-overview-chevron">▼</span>
+                <span class="so-country-header">${flagImg} ${escapeHtml(country)}</span>
+              </button>
+              <div id="${countryId}" class="system-overview-os-list">${osSections}</div>
+            </section>
+          `;
+        })
+        .filter(Boolean)
+        .join("");
+    }
 
     if (statsEl) {
       const scope = activeCountryFilter === "all" ? "Alle Länder" : activeCountryFilter;
       const withSearch = searchQuery ? ` | Suche: "${state.systemOverviewSearchQuery}"` : "";
-      statsEl.textContent = `${total} Systeme (${scope})${withSearch}`;
+      const modeLabel = state.systemOverviewSortMode === "addon-customer-os"
+        ? " | Sicht: AddOn > Kunde > OS"
+        : " | Sicht: Land > OS > Host";
+      statsEl.textContent = `${displayedHostCount} Systeme (${scope})${withSearch}${modeLabel}`;
     }
 
-    if (!total) {
+    if (!displayedHostCount || !treeHtml) {
       container.innerHTML = '<p class="muted">Keine Systeme für den aktuellen Filter gefunden.</p>';
       return;
     }
 
-    container.innerHTML = `<div class="system-overview-tree">${countrySections}</div>`;
+    container.innerHTML = `<div class="system-overview-tree">${treeHtml}</div>`;
     
     // Expand/Collapse handlers
     container.querySelectorAll(".system-overview-toggle").forEach((button) => {
