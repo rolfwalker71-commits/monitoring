@@ -2969,19 +2969,32 @@ body[data-theme="dark"] .trend-progress-bar {
 .header-stat-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   border-radius: 999px;
-  padding: 0 9px;
+  padding: 0 10px;
   min-height: 34px;
-  font-size: 0.92rem;
+  font-size: 1rem;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
 }
 
+.header-chip-icon {
+  font-size: 1.02rem;
+  line-height: 1;
+}
+
+.header-chip-count {
+  font-family: var(--kv-value-family);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
 .header-chip-scope {
-  font-size: 0.46rem;
+  font-size: 0.58rem;
   line-height: 1;
   opacity: 0.88;
   font-weight: 700;

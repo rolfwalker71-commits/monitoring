@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.33  | 16.05.2026 | Enlarge emoji/text in the three top status chips and render their numeric counts in IBM Plex Mono for clearer telemetry styling |
 | 1.6.32  | 16.05.2026 | Ensure the three left status chips in the top action row use the same visual height as the three right icon buttons |
 | 1.6.31  | 16.05.2026 | Top action row refinement: align first three status chips to the left, keep icon buttons right-aligned, and increase those three chip heights to match the adjacent action buttons |
 | 1.6.30  | 16.05.2026 | Reduce global button height to 24px while keeping chips slimmer at 20px; applies to primary/secondary controls, overview country filter, and system overview toggle |
