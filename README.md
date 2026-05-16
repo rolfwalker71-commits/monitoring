@@ -493,6 +493,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.59 (16. Mai 2026)
+
+- **Heads-Up Intervall im UI praezisiert**: Beschriftung klar als Mail-Intervall markiert.
+- **Klarstellung fuer Betrieb**: Das globale Heads-Up-Intervall gilt fuer wiederholte Mail-Heads-Ups bei offenen Alerts, nicht fuer Telegram.
+
 ### v1.6.58 (16. Mai 2026)
 
 - **Globale Alarm-Einstellungen sauber verdrahtet**: Backend persistiert jetzt alle Felder aus dem Admin-Panel konsistent (inkl. CPU/RAM-Schwellen, Inaktive-Hosts-Optionen und KI-Parameter).
