@@ -307,6 +307,14 @@ async function loadUserPreferences() {
   }
 }
 
+function resetUserScopedPreferences() {
+  state.criticalTrendsMetrics = ["filesystem"];
+  state.hostInterestMode = "all";
+  state.hostInterestHosts = new Set();
+  updateCriticalTrendsMetricsCheckboxes();
+  renderHostInterestsEditor();
+}
+
 function updateCriticalTrendsMetricsCheckboxes() {
   const checkboxByMetric = {
     cpu: ["ctMetricCpu", "digestMetricCpu"],
@@ -1484,6 +1492,8 @@ async function loginWebClient() {
     state.isAdmin = false;
   }
   loadHostFilterPreferences();
+  resetUserScopedPreferences();
+  await loadUserPreferences();
   setLoginStatus("Anmeldung erfolgreich.");
   setAuthUiState(true);
   passwordInput.value = "";
@@ -1500,6 +1510,7 @@ async function logoutWebClient() {
   updateAutoRefreshStatus(null);
   state.authUser = "";
   state.isAdmin = false;
+  resetUserScopedPreferences();
   setAuthUiState(false);
   const brandUserBadge = document.getElementById("brandUserBadge");
   if (brandUserBadge) {
