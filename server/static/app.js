@@ -2760,13 +2760,15 @@ async function loadGlobalAdminSettingsPanel(force = false) {
   if (!state.isAdmin) {
     return;
   }
+  await loadSapB1VersionMap();
   await loadAlarmSettings(force);
   await loadOauthSettings(force);
   await loadWebUsers(force);
   await loadFilesystemBlacklist(force);
   // Render SAP B1 version map editor (idempotent — skip if already rendered)
   const container = document.getElementById("globalAdminSettingsContainer");
-  if (container && !container.querySelector("#sapB1VersionMapAdminSection")) {
+  if (container) {
+    container.querySelector("#sapB1VersionMapAdminSection")?.remove();
     container.insertAdjacentHTML("beforeend", renderSapB1VersionMapAdminSection());
     wireSapB1VersionMapAdminSection(container);
   }
@@ -9768,6 +9770,7 @@ async function init() {
     setLoginStatus("Bitte anmelden, um den Webclient zu nutzen.");
     return;
   }
+  await loadSapB1VersionMap();
   // sapB1VersionMapPromise runs in background — hosts render immediately,
   // SAP badges fill in once the map is ready
   sapB1VersionMapPromise.then(() => {

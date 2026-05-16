@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.26  | 16.05.2026 | Fix SAP B1 Version Map persistence UX: reload map after successful auth and refresh admin editor from server to avoid stale pre-login defaults |
 | 1.6.25  | 16.05.2026 | Enhance hover effects on all button components: increase box-shadow intensity, deeper background colors, and improved visual feedback |
 | 1.6.20  | 16.05.2026 | Reposition host-card alert info chip to the metadata row (right-aligned) and remove it from the footer row to reduce unnecessary line wraps and card height growth |
 | 1.6.19  | 16.05.2026 | Tighten top-header vertical spacing further, increase gap between "System Health Dashboard" and the version line, and normalize logout chip height to match the other top-header chips |
