@@ -6965,10 +6965,16 @@ function renderSelectedHostControls(host) {
   const isFavorite = Boolean(host.is_favorite);
   const isHidden = Boolean(host.is_hidden);
   const reportCount = Number(host.report_count || 0).toLocaleString("de-DE");
+  const customerName = asText(host.customer_name || "", "").trim();
+  const customerProject = asText(host.customer_maringo_project_number || "", "").trim();
+  const customerChip = customerName
+    ? `<span class="selected-host-meta-chip" title="Kunde${customerProject ? ` · Maringo ${escapeHtml(customerProject)}` : ""}">🏢 ${escapeHtml(customerName)}${customerProject ? ` · ${escapeHtml(customerProject)}` : ""}</span>`
+    : "";
 
   return `
     ${renderApiKeyChip(host)}
     <span class="selected-host-meta-chip" title="Gesendete Meldungen">📦 ${reportCount}</span>
+    ${customerChip}
     <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👀" : "🫣"}</button>
     <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
   `;
@@ -7854,38 +7860,207 @@ async function editDisplayName() {
     return;
   }
 
-  const nextValue = window.prompt(
-    `Sprechenden Titel für ${state.selectedHost} setzen. Leer lassen entfernt den Override.`,
-    state.selectedDisplayName || state.selectedHost,
-  );
-
-  if (nextValue === null) {
-    return;
+  const [hostSettingsResp, customersResp] = await Promise.all([
+    fetch(`/api/v1/host-settings?hostname=${encodeURIComponent(state.selectedHost)}`),
+    fetch("/api/v1/customers"),
+  ]);
+  if (!hostSettingsResp.ok) {
+    throw new Error("Host-Einstellungen konnten nicht geladen werden (HTTP " + hostSettingsResp.status + ")");
+  }
+  if (!customersResp.ok) {
+    throw new Error("Kundenliste konnte nicht geladen werden (HTTP " + customersResp.status + ")");
   }
 
-  const currentHost = Array.isArray(state.hosts)
-    ? state.hosts.find((item) => asText(item.hostname, "") === state.selectedHost)
-    : null;
-  const currentCountryCode = currentHost ? asText(currentHost.country_code || "", "") : "";
-  const nextCountryCodeRaw = window.prompt(
-    `2-stelliges Länderkürzel für ${state.selectedHost} (z.B. CH, DE). Leer entfernt den Override.`,
-    currentCountryCode,
-  );
-  if (nextCountryCodeRaw === null) {
-    return;
-  }
-  const nextCountryCode = nextCountryCodeRaw.trim().toUpperCase();
-  if (nextCountryCode && !/^[A-Z]{2}$/.test(nextCountryCode)) {
-    throw new Error("Länderkürzel muss genau 2 Buchstaben haben (z.B. CH).");
+  const hostSettings = await hostSettingsResp.json();
+  const customersPayload = await customersResp.json();
+  const customers = Array.isArray(customersPayload.customers) ? customersPayload.customers : [];
+
+  const result = await openHostMetadataEditorDialog({
+    hostname: state.selectedHost,
+    currentDisplayName: asText(hostSettings.display_name_override, state.selectedDisplayName || state.selectedHost),
+    currentCountryCode: asText(hostSettings.country_code_override, ""),
+    currentCustomerId: hostSettings.customer_id,
+    currentCustomerName: asText(hostSettings.customer_name, ""),
+    currentCustomerProjectNo: asText(hostSettings.customer_maringo_project_number, ""),
+    customers,
+  });
+  if (!result) return;
+
+  let customerId = null;
+  if (result.customerMode === "existing") {
+    customerId = Number(result.existingCustomerId || 0);
+    if (!Number.isFinite(customerId) || customerId <= 0) {
+      throw new Error("Bitte einen gültigen Kunden auswählen.");
+    }
+  } else if (result.customerMode === "new") {
+    const createResp = await fetch("/api/v1/customers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customer_name: result.newCustomerName,
+        maringo_project_number: result.newCustomerProjectNo,
+      }),
+    });
+    const createData = await createResp.json().catch(() => ({}));
+    if (!createResp.ok) {
+      throw new Error(createData.error || ("HTTP " + createResp.status));
+    }
+    customerId = Number(createData?.customer?.id || 0);
+    if (!Number.isFinite(customerId) || customerId <= 0) {
+      throw new Error("Kunde konnte nicht angelegt werden.");
+    }
   }
 
   await saveHostSettings(state.selectedHost, {
-    display_name_override: nextValue.trim(),
-    country_code_override: nextCountryCode,
+    display_name_override: result.displayName,
+    country_code_override: result.countryCode,
+    customer_id: customerId,
   });
 
   await loadHosts();
   await loadReportsForHost();
+}
+
+async function openHostMetadataEditorDialog({
+  hostname,
+  currentDisplayName,
+  currentCountryCode,
+  currentCustomerId,
+  currentCustomerName,
+  currentCustomerProjectNo,
+  customers,
+}) {
+  const sortedCustomers = (Array.isArray(customers) ? customers : [])
+    .slice()
+    .sort((a, b) => String(a.customer_name || "").localeCompare(String(b.customer_name || ""), undefined, { sensitivity: "base" }));
+
+  const modal = document.createElement("div");
+  modal.className = "host-meta-modal";
+  modal.innerHTML = `<div class="host-meta-modal-backdrop"></div>
+    <div class="host-meta-modal-inner" role="dialog" aria-modal="true" aria-label="Host bearbeiten">
+      <div class="chart-drill-header">
+        <div class="chart-drill-title">Host bearbeiten: ${escapeHtml(hostname || "")}</div>
+        <button type="button" class="btn-secondary btn-secondary--compact" data-action="cancel">Schließen</button>
+      </div>
+      <div class="chart-drill-body host-meta-modal-body">
+        <div class="host-meta-modal-grid">
+          <label>Sprechender Titel
+            <input id="hostMetaDisplayNameInput" type="text" placeholder="z.B. Kunde XY PROD" value="${escapeHtml(currentDisplayName || "")}" />
+          </label>
+          <label>Land (2-stellig)
+            <input id="hostMetaCountryCodeInput" type="text" maxlength="2" placeholder="CH, DE ..." value="${escapeHtml((currentCountryCode || "").toUpperCase())}" />
+          </label>
+          <label>Kunde
+            <select id="hostMetaCustomerSelect">
+              <option value="__none__">Kein Kunde</option>
+              ${sortedCustomers.map((item) => {
+                const id = Number(item.id || 0);
+                const name = String(item.customer_name || "");
+                const project = String(item.maringo_project_number || "");
+                const selected = currentCustomerId === id ? "selected" : "";
+                const label = project ? `${name} (Maringo: ${project})` : name;
+                return `<option value="${id}" ${selected}>${escapeHtml(label)}</option>`;
+              }).join("")}
+              <option value="__new__">+ Neuer Kunde ...</option>
+            </select>
+          </label>
+        </div>
+        <div id="hostMetaNewCustomerWrap" class="host-meta-new-customer hidden">
+          <label>Neuer Kundenname
+            <input id="hostMetaNewCustomerNameInput" type="text" placeholder="Kundenname" value="${escapeHtml(currentCustomerId ? "" : (currentCustomerName || ""))}" />
+          </label>
+          <label>Maringo Projektnummer (optional)
+            <input id="hostMetaNewCustomerProjectInput" type="text" placeholder="z.B. MAR-12345" value="${escapeHtml(currentCustomerId ? "" : (currentCustomerProjectNo || ""))}" />
+          </label>
+        </div>
+        <p class="settings-helper-text">Hinweis: Bestehende Kunden bitte aus dem Dropdown wählen, um Dubletten zu vermeiden.</p>
+        <div class="host-meta-modal-actions">
+          <button type="button" class="btn-secondary" data-action="cancel">Abbrechen</button>
+          <button type="button" class="btn-primary" data-action="save">Speichern</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+
+  const selectEl = modal.querySelector("#hostMetaCustomerSelect");
+  const wrapNew = modal.querySelector("#hostMetaNewCustomerWrap");
+  const displayNameInput = modal.querySelector("#hostMetaDisplayNameInput");
+  const countryCodeInput = modal.querySelector("#hostMetaCountryCodeInput");
+  const newCustomerNameInput = modal.querySelector("#hostMetaNewCustomerNameInput");
+  const newCustomerProjectInput = modal.querySelector("#hostMetaNewCustomerProjectInput");
+
+  const updateNewSection = () => {
+    if (!selectEl || !wrapNew) return;
+    wrapNew.classList.toggle("hidden", selectEl.value !== "__new__");
+  };
+  updateNewSection();
+  if (selectEl) selectEl.addEventListener("change", updateNewSection);
+
+  if (displayNameInput) displayNameInput.focus();
+
+  return await new Promise((resolve) => {
+    let closed = false;
+    const close = (value) => {
+      if (closed) return;
+      closed = true;
+      modal.remove();
+      resolve(value);
+    };
+
+    modal.querySelectorAll("[data-action='cancel']").forEach((button) => {
+      button.addEventListener("click", () => close(null));
+    });
+    modal.querySelector(".host-meta-modal-backdrop")?.addEventListener("click", () => close(null));
+
+    modal.querySelector("[data-action='save']")?.addEventListener("click", () => {
+      const displayName = String(displayNameInput?.value || "").trim();
+      const countryCode = String(countryCodeInput?.value || "").trim().toUpperCase();
+      if (countryCode && !/^[A-Z]{2}$/.test(countryCode)) {
+        window.alert("Länderkürzel muss genau 2 Buchstaben haben (z.B. CH). ");
+        countryCodeInput?.focus();
+        return;
+      }
+
+      const customerSelectValue = String(selectEl?.value || "__none__");
+      let customerMode = "none";
+      let existingCustomerId = null;
+      let newCustomerName = "";
+      let newCustomerProjectNo = "";
+
+      if (customerSelectValue === "__new__") {
+        customerMode = "new";
+        newCustomerName = String(newCustomerNameInput?.value || "").trim();
+        newCustomerProjectNo = String(newCustomerProjectInput?.value || "").trim();
+        if (!newCustomerName) {
+          window.alert("Bitte einen Kundennamen für den neuen Kunden eingeben.");
+          newCustomerNameInput?.focus();
+          return;
+        }
+      } else if (customerSelectValue !== "__none__") {
+        customerMode = "existing";
+        existingCustomerId = Number(customerSelectValue);
+      }
+
+      close({
+        displayName,
+        countryCode,
+        customerMode,
+        existingCustomerId,
+        newCustomerName,
+        newCustomerProjectNo,
+      });
+    });
+
+    const onEsc = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        document.removeEventListener("keydown", onEsc);
+        close(null);
+      }
+    };
+    document.addEventListener("keydown", onEsc, { once: true });
+  });
 }
 
 async function loadAnalysisForHost() {

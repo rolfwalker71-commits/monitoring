@@ -125,6 +125,23 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS customers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer_name TEXT NOT NULL,
+                maringo_project_number TEXT NOT NULL DEFAULT '',
+                created_at_utc TEXT NOT NULL,
+                updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_name_ci
+            ON customers (LOWER(customer_name))
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS host_settings (
                 hostname TEXT PRIMARY KEY,
                 display_name_override TEXT,
@@ -134,6 +151,8 @@ def init_db() -> None:
                 customer_alert_emails TEXT NOT NULL DEFAULT '',
                 customer_alert_mountpoints TEXT NOT NULL DEFAULT '',
                 customer_alert_min_severity TEXT NOT NULL DEFAULT 'critical',
+                customer_id INTEGER,
+                FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE SET NULL,
                 updated_at_utc TEXT NOT NULL
             )
             """
@@ -154,6 +173,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE host_settings ADD COLUMN customer_alert_mountpoints TEXT NOT NULL DEFAULT ''")
         if "customer_alert_min_severity" not in existing_host_columns:
             conn.execute("ALTER TABLE host_settings ADD COLUMN customer_alert_min_severity TEXT NOT NULL DEFAULT 'critical'")
+        if "customer_id" not in existing_host_columns:
+            conn.execute("ALTER TABLE host_settings ADD COLUMN customer_id INTEGER")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS alarm_settings (
@@ -1293,6 +1314,100 @@ def list_web_login_events(conn: sqlite3.Connection, limit: int = 50) -> list[dic
 
 def normalize_username(value: object) -> str:
     return str(value or "").strip()
+
+
+def normalize_customer_name(value: object) -> str:
+    return " ".join(str(value or "").strip().split())
+
+
+def normalize_maringo_project_number(value: object) -> str:
+    return str(value or "").strip()
+
+
+def list_customers(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT id, customer_name, COALESCE(maringo_project_number, ''), created_at_utc, updated_at_utc
+        FROM customers
+        ORDER BY LOWER(customer_name), id
+        """
+    ).fetchall()
+    return [
+        {
+            "id": int(row[0]),
+            "customer_name": str(row[1] or ""),
+            "maringo_project_number": str(row[2] or ""),
+            "created_at_utc": str(row[3] or ""),
+            "updated_at_utc": str(row[4] or ""),
+        }
+        for row in rows
+    ]
+
+
+def get_customer_by_id(conn: sqlite3.Connection, customer_id: object) -> dict | None:
+    try:
+        cid = int(customer_id)
+    except (TypeError, ValueError):
+        return None
+    if cid <= 0:
+        return None
+    row = conn.execute(
+        """
+        SELECT id, customer_name, COALESCE(maringo_project_number, ''), created_at_utc, updated_at_utc
+        FROM customers
+        WHERE id = ?
+        """,
+        (cid,),
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        "id": int(row[0]),
+        "customer_name": str(row[1] or ""),
+        "maringo_project_number": str(row[2] or ""),
+        "created_at_utc": str(row[3] or ""),
+        "updated_at_utc": str(row[4] or ""),
+    }
+
+
+def upsert_customer(conn: sqlite3.Connection, customer_name: object, maringo_project_number: object = "") -> dict:
+    name = normalize_customer_name(customer_name)
+    project_no = normalize_maringo_project_number(maringo_project_number)
+    if not name:
+        raise ValueError("customer_name missing")
+
+    existing = conn.execute(
+        """
+        SELECT id, customer_name, COALESCE(maringo_project_number, '')
+        FROM customers
+        WHERE LOWER(customer_name) = LOWER(?)
+        LIMIT 1
+        """,
+        (name,),
+    ).fetchone()
+
+    now_utc = utc_now_iso()
+    if existing:
+        customer_id = int(existing[0])
+        if project_no and project_no != str(existing[2] or ""):
+            conn.execute(
+                "UPDATE customers SET maringo_project_number = ?, updated_at_utc = ? WHERE id = ?",
+                (project_no, now_utc, customer_id),
+            )
+    else:
+        conn.execute(
+            """
+            INSERT INTO customers (customer_name, maringo_project_number, created_at_utc, updated_at_utc)
+            VALUES (?, ?, ?, ?)
+            """,
+            (name, project_no, now_utc, now_utc),
+        )
+        customer_id = int(conn.execute("SELECT last_insert_rowid()").fetchone()[0])
+
+    customer = get_customer_by_id(conn, customer_id)
+    if not customer:
+        raise ValueError("customer save failed")
+    return customer
 
 
 def password_meets_policy(password: str) -> bool:
@@ -6971,15 +7086,19 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
     row = conn.execute(
         """
         SELECT
-          display_name_override,
-          COALESCE(country_code_override, ''),
-          COALESCE(is_favorite, 0),
-          COALESCE(is_hidden, 0),
-          COALESCE(customer_alert_emails, ''),
-          COALESCE(customer_alert_mountpoints, ''),
-          COALESCE(customer_alert_min_severity, 'critical')
-        FROM host_settings
-        WHERE hostname = ?
+                    COALESCE(h.display_name_override, ''),
+                    COALESCE(h.country_code_override, ''),
+                    COALESCE(h.is_favorite, 0),
+                    COALESCE(h.is_hidden, 0),
+                    COALESCE(h.customer_alert_emails, ''),
+                    COALESCE(h.customer_alert_mountpoints, ''),
+                    COALESCE(h.customer_alert_min_severity, 'critical'),
+                    h.customer_id,
+                    COALESCE(c.customer_name, ''),
+                    COALESCE(c.maringo_project_number, '')
+                FROM host_settings h
+                LEFT JOIN customers c ON c.id = h.customer_id
+                WHERE h.hostname = ?
         """,
         (hostname,),
     ).fetchone()
@@ -6992,6 +7111,9 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
             "customer_alert_emails": "",
             "customer_alert_mountpoints": "",
             "customer_alert_min_severity": "critical",
+            "customer_id": None,
+            "customer_name": "",
+            "customer_maringo_project_number": "",
         }
     customer_alert_min_severity = str(row[6] or "critical").strip().lower()
     if customer_alert_min_severity not in {"warning", "critical"}:
@@ -7004,6 +7126,9 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
         "customer_alert_emails": str(row[4] or "").strip(),
         "customer_alert_mountpoints": str(row[5] or "").strip(),
         "customer_alert_min_severity": customer_alert_min_severity,
+        "customer_id": int(row[7]) if row[7] is not None else None,
+        "customer_name": str(row[8] or "").strip(),
+        "customer_maringo_project_number": str(row[9] or "").strip(),
     }
 
 
@@ -7778,6 +7903,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.OK, {"users": list_web_users(conn)})
             return
 
+        if parsed.path == "/api/v1/customers":
+            with sqlite3.connect(DB_PATH) as conn:
+                self._send_json(HTTPStatus.OK, {"customers": list_customers(conn)})
+            return
+
         if parsed.path == "/api/v1/admin/user-alert-subscriptions":
             if not self._require_admin_session():
                 return
@@ -7857,7 +7987,18 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     (limit,),
                 ).fetchall()
                 settings_rows = conn.execute(
-                    "SELECT hostname, display_name_override, COALESCE(country_code_override, ''), COALESCE(is_favorite, 0), COALESCE(is_hidden, 0) FROM host_settings"
+                    """
+                    SELECT h.hostname,
+                           h.display_name_override,
+                           COALESCE(h.country_code_override, ''),
+                           COALESCE(h.is_favorite, 0),
+                           COALESCE(h.is_hidden, 0),
+                           h.customer_id,
+                           COALESCE(c.customer_name, ''),
+                           COALESCE(c.maringo_project_number, '')
+                    FROM host_settings h
+                    LEFT JOIN customers c ON c.id = h.customer_id
+                    """
                 ).fetchall()
 
             reports = []
@@ -7962,6 +8103,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "country_code_override": normalize_country_code(row[2]),
                     "is_favorite": bool(int(row[3] or 0)),
                     "is_hidden": bool(int(row[4] or 0)),
+                    "customer_id": int(row[5]) if row[5] is not None else None,
+                    "customer_name": str(row[6] or ""),
+                    "customer_maringo_project_number": str(row[7] or ""),
                 }
                 for row in settings_rows
             }
@@ -8009,6 +8153,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "ram_gb": release_info["ram_gb"],
                         "is_favorite": bool(host_settings.get("is_favorite", False)),
                         "is_hidden": bool(host_settings.get("is_hidden", False)),
+                        "customer_id": host_settings.get("customer_id"),
+                        "customer_name": str(host_settings.get("customer_name", "") or ""),
+                        "customer_maringo_project_number": str(host_settings.get("customer_maringo_project_number", "") or ""),
                         "agent_api_key_status": str((latest_payload.get("agent_api_key") or {}).get("status", "off")),
                     }
                 )
@@ -8143,6 +8290,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "customer_alert_emails": host_settings["customer_alert_emails"],
                     "customer_alert_mountpoints": host_settings["customer_alert_mountpoints"],
                     "customer_alert_min_severity": host_settings["customer_alert_min_severity"],
+                    "customer_id": host_settings["customer_id"],
+                    "customer_name": host_settings["customer_name"],
+                    "customer_maringo_project_number": host_settings["customer_maringo_project_number"],
                 },
             )
             return
@@ -9942,6 +10092,35 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/v1/customers":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid payload"})
+                return
+
+            customer_name = payload.get("customer_name", "")
+            maringo_project_number = payload.get("maringo_project_number", "")
+
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    customer = upsert_customer(conn, customer_name, maringo_project_number)
+                    conn.commit()
+                self._send_json(HTTPStatus.OK, {"status": "stored", "customer": customer})
+            except ValueError as exc:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            return
+
         if path == "/api/v1/host-settings":
             content_length = int(self.headers.get("Content-Length", "0"))
             if content_length <= 0:
@@ -9963,6 +10142,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             has_customer_alert_emails = "customer_alert_emails" in payload
             has_customer_alert_mountpoints = "customer_alert_mountpoints" in payload
             has_customer_alert_min_severity = "customer_alert_min_severity" in payload
+            has_customer_id = "customer_id" in payload
 
             if not hostname:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
@@ -9976,6 +10156,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 or has_customer_alert_emails
                 or has_customer_alert_mountpoints
                 or has_customer_alert_min_severity
+                or has_customer_id
             ):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no host setting provided"})
                 return
@@ -9989,6 +10170,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 customer_alert_emails = current["customer_alert_emails"]
                 customer_alert_mountpoints = current["customer_alert_mountpoints"]
                 customer_alert_min_severity = current["customer_alert_min_severity"]
+                customer_id = current["customer_id"]
 
                 if has_display_name:
                     display_name_override = str(payload.get("display_name_override", "")).strip()
@@ -10011,6 +10193,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     if customer_alert_min_severity not in {"warning", "critical"}:
                         self._send_json(HTTPStatus.BAD_REQUEST, {"error": "customer_alert_min_severity must be warning or critical"})
                         return
+                if has_customer_id:
+                    raw_customer_id = payload.get("customer_id")
+                    if raw_customer_id in (None, "", 0, "0"):
+                        customer_id = None
+                    else:
+                        customer = get_customer_by_id(conn, raw_customer_id)
+                        if customer is None:
+                            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "customer_id not found"})
+                            return
+                        customer_id = int(customer["id"])
 
                 if (
                     display_name_override
@@ -10020,6 +10212,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     or customer_alert_emails
                     or customer_alert_mountpoints
                     or customer_alert_min_severity != "critical"
+                    or customer_id is not None
                 ):
                     conn.execute(
                         """
@@ -10032,9 +10225,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                           customer_alert_emails,
                           customer_alert_mountpoints,
                           customer_alert_min_severity,
+                                                    customer_id,
                           updated_at_utc
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(hostname) DO UPDATE SET
                           display_name_override = excluded.display_name_override,
                           country_code_override = excluded.country_code_override,
@@ -10043,6 +10237,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                           customer_alert_emails = excluded.customer_alert_emails,
                           customer_alert_mountpoints = excluded.customer_alert_mountpoints,
                           customer_alert_min_severity = excluded.customer_alert_min_severity,
+                                                    customer_id = excluded.customer_id,
                           updated_at_utc = excluded.updated_at_utc
                         """,
                         (
@@ -10054,6 +10249,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             customer_alert_emails,
                             customer_alert_mountpoints,
                             customer_alert_min_severity,
+                            customer_id,
                             utc_now_iso(),
                         ),
                     )
@@ -10062,6 +10258,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
                 if is_hidden:
                     resolve_open_alerts_for_host(conn, hostname, None)
+
+                stored_host_settings = get_host_settings(conn, hostname)
 
                 conn.commit()
 
@@ -10077,6 +10275,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "customer_alert_emails": customer_alert_emails,
                     "customer_alert_mountpoints": customer_alert_mountpoints,
                     "customer_alert_min_severity": customer_alert_min_severity,
+                    "customer_id": stored_host_settings.get("customer_id"),
+                    "customer_name": stored_host_settings.get("customer_name", ""),
+                    "customer_maringo_project_number": stored_host_settings.get("customer_maringo_project_number", ""),
                 },
             )
             return

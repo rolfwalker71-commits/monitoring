@@ -493,6 +493,13 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.66 (16. Mai 2026)
+
+- **Kundenstamm eingefuehrt**: Neue Kunden werden zentral gespeichert und koennen Hosts sauber zugeordnet werden.
+- **Host-Bearbeiten erweitert**: Der ✏️-Dialog kann jetzt Titel, Land und Kunde in einer Maske bearbeiten.
+- **Dropdown statt Freitext-Dubletten**: Bestehende Kunden sind auswaehlbar; alternativ kann ein neuer Kunde direkt angelegt werden.
+- **Optionale Maringo-Projektnummer**: Beim Anlegen eines Kunden kann eine Maringo-Projektnummer mitgespeichert werden.
+
 ### v1.6.65 (16. Mai 2026)
 
 - **Alert-Abos nach Land gruppiert**: In der Host-Ansicht sind Hosts jetzt in Ländergruppen zusammengefasst.
