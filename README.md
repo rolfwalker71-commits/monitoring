@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.22  | 16.05.2026 | Replace top-header gradient with exactly two non-blue ANG logo colors (#F7A600 -> #EF9F00) as requested |
 | 1.6.21  | 16.05.2026 | Apply ANG-logo-inspired color gradient to the top header (blue/turquoise/yellow direction) while preserving readability and existing layout |
 | 1.6.20  | 16.05.2026 | Reposition host-card alert info chip to the metadata row (right-aligned) and remove it from the footer row to reduce unnecessary line wraps and card height growth |
 | 1.6.19  | 16.05.2026 | Tighten top-header vertical spacing further, increase gap between "System Health Dashboard" and the version line, and normalize logout chip height to match the other top-header chips |
