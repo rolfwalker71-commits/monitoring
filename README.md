@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.16  | 16.05.2026 | Enlarge the top-right ANG logo in the header by ~30%, rename header title to "System Health", and apply the same branding text update across all digest/instant mail templates |
 | 1.6.15  | 16.05.2026 | Further soften global hover colors (sidebar, tabs, and primary button hover states) for a calmer visual response |
 | 1.6.14  | 16.05.2026 | Remove the filter-reset control completely (UI + JS) and keep host filtering manual-only as requested |
 | 1.6.13  | 16.05.2026 | Tighten vertical spacing between "Hosts" title and host stats, and move reset from "X" to a compact "Filter löschen" chip below title (left of host stats) while keeping existing reset logic |

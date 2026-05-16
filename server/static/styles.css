@@ -266,9 +266,9 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .brand-partner-logo {
-  width: 76px;
-  height: 76px;
-  flex: 0 0 76px;
+  width: 100px;
+  height: 100px;
+  flex: 0 0 100px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4877,6 +4877,12 @@ body[data-theme="dark"] .report-license-meta {
     width: 62px;
     height: 62px;
     flex-basis: 62px;
+  }
+
+  .brand-partner-logo {
+    width: 80px;
+    height: 80px;
+    flex-basis: 80px;
   }
 
   .filesystem-charts {
