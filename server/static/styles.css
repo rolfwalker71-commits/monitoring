@@ -231,8 +231,8 @@ body[data-theme="dark"] {
 
 .btn-emoji-pill:hover:not(:disabled) {
   background: #ffffff;
-  border-color: #9fb8d8;
-  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.1);
+  border-color: #8fb0d0;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
 }
 
 body[data-theme="dark"] .btn-emoji-pill {
@@ -244,7 +244,8 @@ body[data-theme="dark"] .btn-emoji-pill {
 
 body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   background: #213551;
-  border-color: #4a6f9f;
+  border-color: #5d8bc4;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
 }
 
 .app-logo {
@@ -1812,9 +1813,9 @@ button {
 
 .btn-secondary:hover:not(:disabled) {
   background: #ffffff;
-  border-color: #9fb8d8;
+  border-color: #8fb0d0;
   color: #1e293b;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
 }
 
 .btn-secondary--compact {
@@ -2229,8 +2230,8 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   white-space: nowrap;
 }
 .overview-sidebar-item:hover {
-  background: #f6f9fd;
-  color: #4a6584;
+  background: #f0f4f8;
+  color: #3d5373;
 }
 .overview-sidebar-item.active {
   background: #e8eff9;
@@ -2303,7 +2304,7 @@ body[data-theme="dark"] .overview-sidebar-item {
 }
 body[data-theme="dark"] .overview-sidebar-item:hover,
 body[data-theme="dark"] .overview-sidebar-item.active {
-  background: #1f3043;
+  background: #254152;
   color: #b8cde5;
 }
 body[data-theme="dark"] .overview-sidebar-item.active {
@@ -6302,9 +6303,10 @@ body[data-theme="dark"] .btn-secondary {
 }
 
 body[data-theme="dark"] .btn-secondary:hover:not(:disabled) {
-  background: #213551;
-  border-color: #4a6f9f;
+  background: #274168;
+  border-color: #5d8bc4;
   color: #ffffff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
 
 body[data-theme="dark"] .btn-secondary-pill-compact {

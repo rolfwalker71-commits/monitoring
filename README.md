@@ -337,7 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
-| 1.6.24  | 16.05.2026 | Remove generic button:hover rule entirely; all button hover effects now controlled by specific component styles |
+| 1.6.25  | 16.05.2026 | Enhance hover effects on all button components: increase box-shadow intensity, deeper background colors, and improved visual feedback |
 | 1.6.20  | 16.05.2026 | Reposition host-card alert info chip to the metadata row (right-aligned) and remove it from the footer row to reduce unnecessary line wraps and card height growth |
 | 1.6.19  | 16.05.2026 | Tighten top-header vertical spacing further, increase gap between "System Health Dashboard" and the version line, and normalize logout chip height to match the other top-header chips |
 | 1.6.18  | 16.05.2026 | Update all outgoing mail templates to match header branding: "System Health Dashboard" in one line and replace second-line "Dashboard" with version-only display |
