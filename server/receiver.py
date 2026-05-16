@@ -4191,6 +4191,145 @@ def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) ->
     }
 
 
+def collect_customer_overview(conn: sqlite3.Connection) -> dict:
+    known_hosts = get_known_hostnames(conn)
+    if not known_hosts:
+        return {
+            "generated_at": utc_now_iso(),
+            "total_customers": 0,
+            "total_hosts": 0,
+            "customers": [],
+        }
+
+    placeholders = ",".join("?" for _ in known_hosts)
+    latest_rows = conn.execute(
+        f"""
+        SELECT r.hostname,
+               r.received_at_utc,
+               r.payload_json,
+               COALESCE(h.display_name_override, ''),
+               COALESCE(h.country_code_override, ''),
+               COALESCE(h.is_hidden, 0),
+               h.customer_id,
+               COALESCE(c.customer_name, ''),
+               COALESCE(c.maringo_project_number, '')
+        FROM reports r
+        LEFT JOIN host_settings h ON h.hostname = r.hostname
+        LEFT JOIN customers c ON c.id = h.customer_id
+        JOIN (
+            SELECT hostname, MAX(id) AS latest_id
+            FROM reports
+            WHERE hostname IN ({placeholders})
+            GROUP BY hostname
+        ) latest ON latest.latest_id = r.id
+        ORDER BY LOWER(COALESCE(NULLIF(c.customer_name, ''), 'Ohne Kunde')),
+                 LOWER(COALESCE(NULLIF(h.display_name_override, ''), r.hostname)),
+                 LOWER(r.hostname)
+        """,
+        tuple(known_hosts),
+    ).fetchall()
+
+    alert_counts_rows = conn.execute(
+        """
+        SELECT a.hostname,
+               SUM(CASE WHEN a.status = 'open' THEN 1 ELSE 0 END) AS open_count,
+               SUM(CASE WHEN a.status = 'open' AND a.severity = 'critical' THEN 1 ELSE 0 END) AS critical_count
+        FROM alerts a
+        WHERE NOT EXISTS (
+          SELECT 1 FROM muted_alert_rules m
+          WHERE m.hostname = a.hostname AND m.mountpoint = a.mountpoint
+        )
+        GROUP BY a.hostname
+        """
+    ).fetchall()
+    alert_counts_by_host = {
+        str(row[0] or ""): {
+            "open": int(row[1] or 0),
+            "critical": int(row[2] or 0),
+        }
+        for row in alert_counts_rows
+        if str(row[0] or "").strip()
+    }
+
+    backup_overview = collect_backup_status_overview(conn, 24)
+    backup_missing_by_host = {
+        str(item.get("hostname") or ""): bool(item.get("has_missing_backup", False))
+        for item in backup_overview.get("hosts", [])
+        if isinstance(item, dict) and str(item.get("hostname") or "").strip()
+    }
+
+    grouped: dict[str, dict] = {}
+    for row in latest_rows:
+        hostname = str(row[0] or "").strip()
+        if not hostname:
+            continue
+        if bool(int(row[5] or 0)):
+            continue
+
+        payload = parse_payload_json(str(row[2] or "{}"))
+        display_name = str(row[3] or "").strip() or hostname
+        country_override = normalize_country_code(str(row[4] or ""))
+        country_code = country_override or extract_country_code_from_payload(payload)
+        country_code = normalize_country_code(country_code)
+
+        customer_name = str(row[7] or "").strip() or "Ohne Kunde"
+        customer_key = customer_name.lower()
+        customer_project = str(row[8] or "").strip()
+
+        if customer_key not in grouped:
+            grouped[customer_key] = {
+                "customer_name": customer_name,
+                "maringo_project_number": customer_project,
+                "hosts": [],
+                "hosts_count": 0,
+                "open_alert_count": 0,
+                "critical_alert_count": 0,
+                "missing_backup_count": 0,
+            }
+        elif customer_project and not grouped[customer_key].get("maringo_project_number"):
+            grouped[customer_key]["maringo_project_number"] = customer_project
+
+        alert_counts = alert_counts_by_host.get(hostname, {"open": 0, "critical": 0})
+        has_missing_backup = bool(backup_missing_by_host.get(hostname, False))
+
+        grouped[customer_key]["hosts"].append(
+            {
+                "hostname": hostname,
+                "display_name": display_name,
+                "country_code": country_code,
+                "report_time_utc": str(row[1] or ""),
+                "open_alert_count": int(alert_counts.get("open", 0)),
+                "critical_alert_count": int(alert_counts.get("critical", 0)),
+                "has_missing_backup": has_missing_backup,
+            }
+        )
+        grouped[customer_key]["hosts_count"] += 1
+        grouped[customer_key]["open_alert_count"] += int(alert_counts.get("open", 0))
+        grouped[customer_key]["critical_alert_count"] += int(alert_counts.get("critical", 0))
+        if has_missing_backup:
+            grouped[customer_key]["missing_backup_count"] += 1
+
+    customers = sorted(
+        grouped.values(),
+        key=lambda item: str(item.get("customer_name", "")).lower(),
+    )
+    for customer in customers:
+        customer["hosts"] = sorted(
+            customer.get("hosts", []),
+            key=lambda host: (
+                str(host.get("display_name", "")).lower(),
+                str(host.get("hostname", "")).lower(),
+            ),
+        )
+
+    return {
+        "generated_at": utc_now_iso(),
+        "total_customers": len(customers),
+        "total_hosts": sum(int(item.get("hosts_count", 0)) for item in customers),
+        "customers": customers,
+    }
+
+
 def export_alerts_rows(conn: sqlite3.Connection, *, status: str | None = None, severity: str | None = None) -> list[dict]:
     status_filter = str(status or "").strip().lower()
     if status_filter not in {"active", "resolved", "all"}:
@@ -8709,6 +8848,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
             with sqlite3.connect(DB_PATH) as conn:
                 data = collect_backup_status_overview(conn, hours)
+            self._send_json(HTTPStatus.OK, data)
+            return
+
+        if parsed.path == "/api/v1/customer-overview":
+            with sqlite3.connect(DB_PATH) as conn:
+                data = collect_customer_overview(conn)
             self._send_json(HTTPStatus.OK, data)
             return
 

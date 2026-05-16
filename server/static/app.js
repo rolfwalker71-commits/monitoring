@@ -165,6 +165,8 @@ const state = {
   backupStatusFilterSql: false,
   backupStatusFilterHana: false,
   backupStatusCountryFilter: "all",
+  customerOverviewData: null,
+  customerOverviewSearchQuery: "",
   agentSourceStatusLoaded: false,
   filesystemBlacklistPatterns: [],
   showBlacklistedFilesystems: false,
@@ -1107,6 +1109,7 @@ function updateGlobalSubMode() {
   const inactiveHostsView = document.getElementById("inactiveHostsView");
   const systemOverviewView = document.getElementById("systemOverviewView");
   const backupStatusView = document.getElementById("backupStatusView");
+  const customerOverviewView = document.getElementById("customerOverviewView");
   const hostConfigChangesView = document.getElementById("hostConfigChangesView");
   const agentSourceStatusView = document.getElementById("agentSourceStatusView");
   const globalAdminAlertSubsView = document.getElementById("globalAdminAlertSubsView");
@@ -1117,6 +1120,7 @@ function updateGlobalSubMode() {
   const inactiveHostsTabButton = document.getElementById("inactiveHostsTabButton");
   const systemOverviewTabButton = document.getElementById("systemOverviewTabButton");
   const backupStatusTabButton = document.getElementById("backupStatusTabButton");
+  const customerOverviewTabButton = document.getElementById("customerOverviewTabButton");
   const hostConfigChangesTabButton = document.getElementById("hostConfigChangesTabButton");
   const agentSourceStatusTabButton = document.getElementById("agentSourceStatusTabButton");
   const globalAdminAlertSubsTabButton = document.getElementById("globalAdminAlertSubsTabButton");
@@ -1128,6 +1132,7 @@ function updateGlobalSubMode() {
   const inactiveActive = state.globalSubMode === "inactive-hosts";
   const systemOverviewActive = state.globalSubMode === "system-overview";
   const backupActive = state.globalSubMode === "backup-status";
+  const customerOverviewActive = state.globalSubMode === "customer-overview";
   const hostConfigChangesActive = state.globalSubMode === "host-config-changes";
   const agentSourceStatusActive = state.globalSubMode === "agent-source-status";
   const adminAlertSubsActive = state.globalSubMode === "admin-alert-subs";
@@ -1139,6 +1144,7 @@ function updateGlobalSubMode() {
   if (inactiveHostsView) inactiveHostsView.classList.toggle("hidden", !inactiveActive);
   if (systemOverviewView) systemOverviewView.classList.toggle("hidden", !systemOverviewActive);
   if (backupStatusView) backupStatusView.classList.toggle("hidden", !backupActive);
+  if (customerOverviewView) customerOverviewView.classList.toggle("hidden", !customerOverviewActive);
   if (hostConfigChangesView) hostConfigChangesView.classList.toggle("hidden", !hostConfigChangesActive);
   if (agentSourceStatusView) agentSourceStatusView.classList.toggle("hidden", !agentSourceStatusActive);
   if (globalAdminAlertSubsView) globalAdminAlertSubsView.classList.toggle("hidden", !adminAlertSubsActive);
@@ -1149,6 +1155,7 @@ function updateGlobalSubMode() {
   if (inactiveHostsTabButton) { inactiveHostsTabButton.classList.toggle("active", inactiveActive); inactiveHostsTabButton.setAttribute("aria-selected", inactiveActive ? "true" : "false"); }
   if (systemOverviewTabButton) { systemOverviewTabButton.classList.toggle("active", systemOverviewActive); systemOverviewTabButton.setAttribute("aria-selected", systemOverviewActive ? "true" : "false"); }
   if (backupStatusTabButton) { backupStatusTabButton.classList.toggle("active", backupActive); backupStatusTabButton.setAttribute("aria-selected", backupActive ? "true" : "false"); }
+  if (customerOverviewTabButton) { customerOverviewTabButton.classList.toggle("active", customerOverviewActive); customerOverviewTabButton.setAttribute("aria-selected", customerOverviewActive ? "true" : "false"); }
   if (hostConfigChangesTabButton) { hostConfigChangesTabButton.classList.toggle("active", hostConfigChangesActive); hostConfigChangesTabButton.setAttribute("aria-selected", hostConfigChangesActive ? "true" : "false"); }
   if (agentSourceStatusTabButton) { agentSourceStatusTabButton.classList.toggle("active", agentSourceStatusActive); agentSourceStatusTabButton.setAttribute("aria-selected", agentSourceStatusActive ? "true" : "false"); }
   if (globalAdminAlertSubsTabButton) { globalAdminAlertSubsTabButton.classList.toggle("active", adminAlertSubsActive); globalAdminAlertSubsTabButton.setAttribute("aria-selected", adminAlertSubsActive ? "true" : "false"); }
@@ -8986,6 +8993,105 @@ async function loadBackupStatus() {
   }
 }
 
+function renderCustomerOverview(data) {
+  const customersAll = Array.isArray(data?.customers) ? data.customers : [];
+  const query = String(state.customerOverviewSearchQuery || "").trim().toLowerCase();
+  const customers = !query
+    ? customersAll
+    : customersAll.filter((customer) => {
+      const customerName = String(customer?.customer_name || "").toLowerCase();
+      const projectNo = String(customer?.maringo_project_number || "").toLowerCase();
+      if (customerName.includes(query) || projectNo.includes(query)) return true;
+      const hosts = Array.isArray(customer?.hosts) ? customer.hosts : [];
+      return hosts.some((host) => {
+        const displayName = String(host?.display_name || "").toLowerCase();
+        const hostname = String(host?.hostname || "").toLowerCase();
+        return displayName.includes(query) || hostname.includes(query);
+      });
+    });
+
+  const summaryEl = document.getElementById("customerOverviewSummary");
+  const totalCustomers = customers.length;
+  const totalHosts = customers.reduce((sum, item) => sum + Number(item?.hosts_count || 0), 0);
+  const totalOpen = customers.reduce((sum, item) => sum + Number(item?.open_alert_count || 0), 0);
+  const totalCritical = customers.reduce((sum, item) => sum + Number(item?.critical_alert_count || 0), 0);
+  const totalBackupMissing = customers.reduce((sum, item) => sum + Number(item?.missing_backup_count || 0), 0);
+  if (summaryEl) {
+    summaryEl.textContent = `${totalCustomers} Kunde(n) · ${totalHosts} Hosts · ${totalOpen} offene Alerts (${totalCritical} kritisch) · ${totalBackupMissing} Host(s) ohne aktuelles Backup`;
+  }
+
+  if (customers.length === 0) {
+    return '<p class="muted">Keine Kundendaten für den aktuellen Filter.</p>';
+  }
+
+  return customers.map((customer) => {
+    const customerName = asText(customer?.customer_name, "Ohne Kunde");
+    const projectNo = asText(customer?.maringo_project_number, "");
+    const hosts = Array.isArray(customer?.hosts) ? customer.hosts : [];
+    const detailsOpen = Number(customer?.critical_alert_count || 0) > 0 || Number(customer?.missing_backup_count || 0) > 0 ? " open" : "";
+    const hostRows = hosts.map((host) => {
+      const hostName = asText(host?.display_name || host?.hostname, "-");
+      const hostname = asText(host?.hostname, "-");
+      const countryCode = asText(host?.country_code, "").toUpperCase();
+      const countryBadge = /^[A-Z]{2}$/.test(countryCode)
+        ? `<span class="customer-overview-host-country">${escapeHtml(countryCode)}</span>`
+        : '<span class="customer-overview-host-country muted">--</span>';
+      const openAlerts = Number(host?.open_alert_count || 0);
+      const criticalAlerts = Number(host?.critical_alert_count || 0);
+      const missingBackup = Boolean(host?.has_missing_backup);
+      const backupText = missingBackup ? "kein aktuelles Backup" : "Backup ok";
+      const backupClass = missingBackup ? "is-missing" : "is-ok";
+      return `<tr>
+        <td><div class="customer-overview-host-title">${escapeHtml(hostName)}</div><div class="muted">${escapeHtml(hostname)}</div></td>
+        <td class="center">${countryBadge}</td>
+        <td class="center">${openAlerts}</td>
+        <td class="center">${criticalAlerts}</td>
+        <td class="center"><span class="customer-overview-backup ${backupClass}">${backupText}</span></td>
+      </tr>`;
+    }).join("");
+
+    return `<details class="customer-overview-card"${detailsOpen}>
+      <summary class="customer-overview-head">
+        <span class="customer-overview-title">${escapeHtml(customerName)}</span>
+        ${projectNo ? `<span class="customer-overview-project">Maringo: ${escapeHtml(projectNo)}</span>` : ""}
+        <span class="customer-overview-chip">Hosts: ${Number(customer?.hosts_count || 0)}</span>
+        <span class="customer-overview-chip">Offen: ${Number(customer?.open_alert_count || 0)}</span>
+        <span class="customer-overview-chip">Kritisch: ${Number(customer?.critical_alert_count || 0)}</span>
+        <span class="customer-overview-chip ${Number(customer?.missing_backup_count || 0) > 0 ? "warn" : "ok"}">Backup-Lücken: ${Number(customer?.missing_backup_count || 0)}</span>
+      </summary>
+      <div class="table-wrap">
+        <table class="report-subtable customer-overview-table">
+          <thead>
+            <tr>
+              <th>Host</th>
+              <th class="center">Land</th>
+              <th class="center">Alerts offen</th>
+              <th class="center">kritisch</th>
+              <th class="center">Backup</th>
+            </tr>
+          </thead>
+          <tbody>${hostRows}</tbody>
+        </table>
+      </div>
+    </details>`;
+  }).join("");
+}
+
+async function loadCustomerOverview() {
+  const listEl = document.getElementById("customerOverviewList");
+  if (!listEl) return;
+  listEl.innerHTML = '<p class="muted">Lade Daten…</p>';
+  try {
+    const response = await fetch("/api/v1/customer-overview", { credentials: "same-origin" });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    state.customerOverviewData = data;
+    listEl.innerHTML = renderCustomerOverview(data);
+  } catch (error) {
+    listEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
+  }
+}
+
 function getDateGroupLabel(isoDateStr) {
   if (!isoDateStr) return "Unbekannt";
   const itemDate = new Date(isoDateStr + "Z");
@@ -9617,7 +9723,7 @@ function wireEvents() {
   }
 
   document.addEventListener("click", (event) => {
-    const target = event.target instanceof Element ? event.target.closest("#overviewTabButton, #reportsTabButton, #globalViewButton, #globalAlertsTabButton, #criticalTrendsTabButton, #inactiveHostsTabButton, #backupStatusTabButton, #systemOverviewTabButton, #hostConfigChangesTabButton, #agentSourceStatusTabButton, #globalAdminAlertSubsTabButton, #globalAdminLoginAuditTabButton, #globalAdminSettingsTabButton, #headerAlertChip, #headerTrendsChip, #headerInactiveChip") : null;
+    const target = event.target instanceof Element ? event.target.closest("#overviewTabButton, #reportsTabButton, #globalViewButton, #globalAlertsTabButton, #criticalTrendsTabButton, #inactiveHostsTabButton, #backupStatusTabButton, #systemOverviewTabButton, #customerOverviewTabButton, #hostConfigChangesTabButton, #agentSourceStatusTabButton, #globalAdminAlertSubsTabButton, #globalAdminLoginAuditTabButton, #globalAdminSettingsTabButton, #headerAlertChip, #headerTrendsChip, #headerInactiveChip") : null;
     if (!target) {
       return;
     }
@@ -9889,6 +9995,30 @@ function wireEvents() {
       await loadSystemOverview();
     });
   }
+  const customerOverviewTabButton = document.getElementById("customerOverviewTabButton");
+  if (customerOverviewTabButton) {
+    customerOverviewTabButton.addEventListener("click", async () => {
+      state.globalSubMode = "customer-overview";
+      updateGlobalSubMode();
+      await loadCustomerOverview();
+    });
+  }
+  const refreshCustomerOverviewButton = document.getElementById("refreshCustomerOverviewButton");
+  if (refreshCustomerOverviewButton) {
+    refreshCustomerOverviewButton.addEventListener("click", async () => {
+      await loadCustomerOverview();
+    });
+  }
+  const customerOverviewSearchInput = document.getElementById("customerOverviewSearchInput");
+  if (customerOverviewSearchInput) {
+    customerOverviewSearchInput.addEventListener("input", () => {
+      state.customerOverviewSearchQuery = String(customerOverviewSearchInput.value || "").trim();
+      const listEl = document.getElementById("customerOverviewList");
+      if (listEl && state.customerOverviewData) {
+        listEl.innerHTML = renderCustomerOverview(state.customerOverviewData);
+      }
+    });
+  }
   const refreshSystemOverviewButton = document.getElementById("refreshSystemOverviewButton");
   if (refreshSystemOverviewButton) {
     refreshSystemOverviewButton.addEventListener("click", async () => {
@@ -10002,6 +10132,7 @@ function wireEvents() {
     else if (state.globalSubMode === "inactive-hosts") await loadInactiveHosts();
     else if (state.globalSubMode === "system-overview") await loadSystemOverview();
     else if (state.globalSubMode === "backup-status") await loadBackupStatus();
+    else if (state.globalSubMode === "customer-overview") await loadCustomerOverview();
     else if (state.globalSubMode === "host-config-changes") await loadHostConfigChanges();
     else if (state.globalSubMode === "agent-source-status") await loadAgentSourceStatus();
     else if (state.globalSubMode === "admin-alert-subs") await loadAdminAlertSubscriptions();

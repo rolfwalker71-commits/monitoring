@@ -95,6 +95,7 @@
                 <button id="inactiveHostsTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="inactiveHostsView">Inaktive Hosts</button>
                 <button id="backupStatusTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="backupStatusView">Backup Stati</button>
                 <button id="systemOverviewTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="systemOverviewView">Systemübersicht</button>
+                <button id="customerOverviewTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="customerOverviewView">Kunden</button>
                 <button id="hostConfigChangesTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="hostConfigChangesView">Changelog</button>
                 <button id="agentSourceStatusTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="agentSourceStatusView">Agent Quelle</button>
                 <button id="globalAdminAlertSubsTabButton" type="button" class="tab-button admin-only-tab hidden" role="tab" aria-selected="false" aria-controls="globalAdminAlertSubsView">Alert Abos</button>
@@ -244,6 +245,17 @@
                 <button id="refreshSystemOverviewButton" type="button" class="btn-secondary btn-secondary-pill-compact">Neu laden</button>
               </div>
               <div id="systemOverviewContainer" class="system-overview-host-list">
+                <p class="muted">Lade Daten…</p>
+              </div>
+            </div>
+
+            <div id="customerOverviewView" class="hidden" role="tabpanel" aria-labelledby="customerOverviewTabButton">
+              <div class="inactive-hosts-toolbar">
+                <span id="customerOverviewSummary" class="count compact"></span>
+                <input id="customerOverviewSearchInput" type="text" class="search-input-compact" placeholder="Kunde, Maringo-Nr., Host suchen..." />
+                <button id="refreshCustomerOverviewButton" type="button" class="btn-secondary btn-secondary-pill-compact">Neu laden</button>
+              </div>
+              <div id="customerOverviewList" class="customer-overview-list">
                 <p class="muted">Lade Daten…</p>
               </div>
             </div>

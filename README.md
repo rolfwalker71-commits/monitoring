@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.68 (16. Mai 2026)
+
+- **Neue Kunden-Auswertung (Global-Tab)**: Eigene Ansicht "Kunden" mit Kennzahlen je Kunde fuer Hosts, offene Alerts, kritische Alerts und Backup-Luecken.
+- **Drilldown pro Kunde**: Aufklappbare Hostliste je Kunde inklusive Land, Alert-Zahlen und Backup-Status.
+- **Suche integriert**: Filter nach Kunde, Maringo-Projektnummer sowie Hostname/Hosttitel direkt in der Kundenansicht.
+
 ### v1.6.67 (16. Mai 2026)
 
 - **Hotfix Service-Start**: SQL-Syntaxfehler in der `host_settings`-Tabellendefinition behoben, der den Receiver beim Start mit `sqlite3.OperationalError` beendet hat.
