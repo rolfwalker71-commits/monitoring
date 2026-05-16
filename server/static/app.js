@@ -5435,8 +5435,7 @@ function renderDatabasesSection(payload) {
         const sqlOriginalLogin = asText(inst.sql_original_login, "");
         const sqlSuserSname = asText(inst.sql_suser_sname, "");
         const masterFilesRows = Number(inst.master_files_rows || 0);
-        const sqlSizeHintSnippet = String.raw`GRANT VIEW SERVER STATE TO [NT AUTHORITY\SYSTEM];
-      GRANT VIEW ANY DEFINITION TO [NT AUTHORITY\SYSTEM];`;
+        const sqlSizeHintSnippet = "GRANT VIEW SERVER STATE TO [NT AUTHORITY\\SYSTEM];\nGRANT VIEW ANY DEFINITION TO [NT AUTHORITY\\SYSTEM];";
         const sqlGrantSnippet = String.raw`-- 1) Logins anlegen (falls noch nicht vorhanden)
 IF SUSER_ID(N'NT-AUTORITÄT\SYSTEM') IS NULL
     CREATE LOGIN [NT-AUTORITÄT\SYSTEM] FROM WINDOWS;
