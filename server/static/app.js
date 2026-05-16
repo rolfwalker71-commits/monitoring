@@ -9730,19 +9730,6 @@ function wireEvents() {
     await loadHosts();
   });
 
-  document.getElementById("hostFiltersResetButton").addEventListener("click", async () => {
-    state.hostSearchQuery = "";
-    state.hostAlertFilter = "all";
-    state.hostMutedFilter = "all";
-    state.hostOsFilter = "all";
-    state.hostCountryFilter = "all";
-    state.hostOffset = 0;
-    persistHostFilterPreferences();
-    document.getElementById("hostSearchInput").value = "";
-    document.getElementById("hostAlertFilterSelect").value = "all";
-    document.getElementById("hostMutedFilterSelect").value = "all";
-    await loadHosts();
-  });
 }
 
 async function init() {
