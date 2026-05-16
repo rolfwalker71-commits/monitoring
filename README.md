@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.63 (16. Mai 2026)
+
+- **Alert-Abos besser bedienbar**: Hostsuche, Benutzerfilter und Option "Nur Aenderungen" im Admin-Abo-Bereich hinzugefuegt.
+- **Bulk-Aktionen erweitert**: Sammelaktionen fuer sichtbare Eintraege (Mail/Telegram an/aus) sowie pro Host (Mail/Telegram alle an/aus).
+- **Aenderungen klar sichtbar**: Geaenderte Checkboxen/Zeilen werden visuell markiert und der Status zeigt die Anzahl ungespeicherter Aenderungen.
+
 ### v1.6.62 (16. Mai 2026)
 
 - **Globales Telegram in eigene Karte verschoben**: Bot Token, globale Chat ID und Telegram an/aus stehen jetzt in einer separaten Telegram-Karte neben den Schwellwert-Karten.

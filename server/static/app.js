@@ -2320,6 +2320,14 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     userSubscriptionMaps.set(String(userEntry.username || ""), subMap);
   }
 
+  const userOptions = usersSorted
+    .map((userEntry) => {
+      const usernameRaw = String(userEntry.username || "").trim();
+      const username = escapeHtml(usernameRaw);
+      return `<option value="${username}">${username}</option>`;
+    })
+    .join("");
+
   const rows = hosts.length === 0
     ? '<tr><td colspan="3" class="muted">Keine Hosts vorhanden.</td></tr>'
     : hosts.map((host) => {
@@ -2331,6 +2339,13 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
           ? `<strong>${displayName}</strong><span class="global-hostname-sub">(${hostname})</span>`
           : `<strong>${displayName || hostname}</strong>`;
 
+        const rowActions = `<div class="admin-sub-row-actions">
+          <button type="button" class="admin-sub-row-bulk" data-hostname="${hostname}" data-channel="mail" data-value="on">Mail alle an</button>
+          <button type="button" class="admin-sub-row-bulk" data-hostname="${hostname}" data-channel="mail" data-value="off">Mail alle aus</button>
+          <button type="button" class="admin-sub-row-bulk" data-hostname="${hostname}" data-channel="telegram" data-value="on" ${telegramAvailable ? "" : "disabled"}>Telegram alle an</button>
+          <button type="button" class="admin-sub-row-bulk" data-hostname="${hostname}" data-channel="telegram" data-value="off" ${telegramAvailable ? "" : "disabled"}>Telegram alle aus</button>
+        </div>`;
+
         const renderChannelRows = (channel) => usersSorted.map((userEntry) => {
           const usernameRaw = String(userEntry.username || "");
           const username = escapeHtml(usernameRaw);
@@ -2340,31 +2355,176 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
             ? (sub ? sub.notify_mail !== false : true)
             : (sub ? sub.notify_telegram !== false : true);
           const disabled = channel === "telegram" && !telegramAvailable;
-          return `<label class="admin-sub-user-chip${userEntry.is_admin ? " is-admin" : ""}${disabled ? " is-disabled" : ""}">
-            <input type="checkbox" class="admin-sub-cb" data-username="${username}" data-hostname="${hostname}" data-channel="${channel}" ${enabled ? "checked" : ""} ${disabled ? "disabled" : ""}>
+          return `<label class="admin-sub-user-chip${userEntry.is_admin ? " is-admin" : ""}${disabled ? " is-disabled" : ""}" data-username="${username}">
+            <input type="checkbox" class="admin-sub-cb" data-username="${username}" data-hostname="${hostname}" data-channel="${channel}" data-original-checked="${enabled ? "1" : "0"}" ${enabled ? "checked" : ""} ${disabled ? "disabled" : ""}>
             <span class="admin-sub-user-name">${username}</span>
           </label>`;
         }).join("");
 
-        return `<tr>
-          <td class="admin-sub-host-cell">${hostLabel}</td>
+        return `<tr data-hostname="${hostname}" data-display-name="${displayName}">
+          <td class="admin-sub-host-cell">${hostLabel}${rowActions}</td>
           <td><div class="admin-sub-user-stack">${renderChannelRows("mail")}</div></td>
           <td><div class="admin-sub-user-stack">${renderChannelRows("telegram")}</div></td>
         </tr>`;
       }).join("");
 
-  container.innerHTML = `<div class="table-wrap user-management-table-wrap">
+  container.innerHTML = `<div class="admin-alert-sub-controls">
+    <label>
+      Hostsuche
+      <input id="adminAlertSubsHostSearchInput" type="text" placeholder="Host oder Anzeigename" />
+    </label>
+    <label>
+      Benutzerfilter
+      <select id="adminAlertSubsUserFilterSelect">
+        <option value="">Alle Benutzer</option>
+        ${userOptions}
+      </select>
+    </label>
+    <label class="checkbox-line">
+      <input id="adminAlertSubsOnlyChangedInput" type="checkbox" />
+      Nur Änderungen
+    </label>
+    <div class="admin-sub-bulk-group">
+      <button type="button" class="btn-secondary" id="adminAlertSubsBulkMailOnButton">Sichtbar: Mail an</button>
+      <button type="button" class="btn-secondary" id="adminAlertSubsBulkMailOffButton">Sichtbar: Mail aus</button>
+      <button type="button" class="btn-secondary" id="adminAlertSubsBulkTelegramOnButton" ${telegramAvailable ? "" : "disabled"}>Sichtbar: Telegram an</button>
+      <button type="button" class="btn-secondary" id="adminAlertSubsBulkTelegramOffButton" ${telegramAvailable ? "" : "disabled"}>Sichtbar: Telegram aus</button>
+    </div>
+  </div>
+  <div class="table-wrap user-management-table-wrap">
     <table class="user-management-table admin-alert-subscriptions-table">
       <thead><tr><th>Host</th><th>Mail</th><th>Telegram</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
   </div>`;
 
+  const refreshChangedState = () => {
+    const allRows = Array.from(container.querySelectorAll("tbody tr[data-hostname]"));
+    let changedCount = 0;
+    for (const checkbox of container.querySelectorAll(".admin-sub-cb")) {
+      const originalChecked = checkbox.dataset.originalChecked === "1";
+      const isChanged = checkbox.checked !== originalChecked;
+      checkbox.classList.toggle("is-changed", isChanged);
+      const chip = checkbox.closest(".admin-sub-user-chip");
+      if (chip) chip.classList.toggle("has-change", isChanged);
+      if (isChanged) changedCount += 1;
+    }
+    for (const row of allRows) {
+      const rowHasChange = !!row.querySelector(".admin-sub-cb.is-changed");
+      row.classList.toggle("has-change", rowHasChange);
+    }
+    return changedCount;
+  };
+
+  const applyFilters = () => {
+    const hostQuery = String(document.getElementById("adminAlertSubsHostSearchInput")?.value || "").trim().toLowerCase();
+    const selectedUser = String(document.getElementById("adminAlertSubsUserFilterSelect")?.value || "").trim();
+    const onlyChanged = document.getElementById("adminAlertSubsOnlyChangedInput")?.checked === true;
+    const rowsEls = Array.from(container.querySelectorAll("tbody tr[data-hostname]"));
+    for (const row of rowsEls) {
+      const hostname = String(row.dataset.hostname || "").toLowerCase();
+      const displayName = String(row.dataset.displayName || "").toLowerCase();
+      const hostMatch = !hostQuery || hostname.includes(hostQuery) || displayName.includes(hostQuery);
+      const userMatch = !selectedUser || Array.from(row.querySelectorAll(".admin-sub-cb[data-username]")).some((cb) => {
+        return String(cb.dataset.username || "") === selectedUser;
+      });
+      const changedMatch = !onlyChanged || !!row.querySelector(".admin-sub-cb.is-changed");
+      const showRow = hostMatch && userMatch && changedMatch;
+      row.classList.toggle("admin-sub-row-hidden", !showRow);
+
+      const chips = row.querySelectorAll(".admin-sub-user-chip[data-username]");
+      for (const chip of chips) {
+        const chipUser = chip.getAttribute("data-username") || "";
+        const showChip = !selectedUser || chipUser === selectedUser;
+        chip.classList.toggle("admin-sub-chip-hidden", !showChip);
+      }
+    }
+  };
+
+  const markUnsavedStatus = () => {
+    const changedCount = refreshChangedState();
+    applyFilters();
+    if (changedCount > 0) {
+      setAdminAlertSubscriptionsStatus(`Ungespeicherte Änderungen (${changedCount}).`);
+    } else {
+      setAdminAlertSubscriptionsStatus("Keine Änderungen.");
+    }
+  };
+
+  const applyBulkToVisible = (channel, enabled) => {
+    const selectedUser = String(document.getElementById("adminAlertSubsUserFilterSelect")?.value || "").trim();
+    const rowsEls = Array.from(container.querySelectorAll("tbody tr[data-hostname]"));
+    let changedAny = false;
+    for (const row of rowsEls) {
+      if (row.classList.contains("admin-sub-row-hidden")) continue;
+      const toggles = Array.from(row.querySelectorAll(`.admin-sub-cb[data-channel="${channel}"]`));
+      for (const toggle of toggles) {
+        const username = toggle.dataset.username || "";
+        if (selectedUser && username !== selectedUser) continue;
+        if (toggle.disabled) continue;
+        if (toggle.checked !== enabled) {
+          toggle.checked = enabled;
+          changedAny = true;
+        }
+      }
+    }
+    if (changedAny) {
+      markUnsavedStatus();
+    }
+  };
+
+  const applyRowBulk = (hostname, channel, enabled) => {
+    const row = container.querySelector(`tbody tr[data-hostname="${hostname}"]`);
+    if (!row) return;
+    let changedAny = false;
+    for (const toggle of row.querySelectorAll(`.admin-sub-cb[data-channel="${channel}"]`)) {
+      if (toggle.disabled) continue;
+      if (toggle.checked !== enabled) {
+        toggle.checked = enabled;
+        changedAny = true;
+      }
+    }
+    if (changedAny) {
+      markUnsavedStatus();
+    }
+  };
+
   container.querySelectorAll(".admin-sub-cb").forEach((checkbox) => {
     checkbox.addEventListener("change", () => {
-      setAdminAlertSubscriptionsStatus("Ungespeicherte Änderungen.");
+      markUnsavedStatus();
     });
   });
+
+  const hostSearchInput = document.getElementById("adminAlertSubsHostSearchInput");
+  if (hostSearchInput) hostSearchInput.addEventListener("input", () => applyFilters());
+
+  const userFilterSelect = document.getElementById("adminAlertSubsUserFilterSelect");
+  if (userFilterSelect) userFilterSelect.addEventListener("change", () => applyFilters());
+
+  const onlyChangedInput = document.getElementById("adminAlertSubsOnlyChangedInput");
+  if (onlyChangedInput) onlyChangedInput.addEventListener("change", () => applyFilters());
+
+  const bulkMailOnButton = document.getElementById("adminAlertSubsBulkMailOnButton");
+  if (bulkMailOnButton) bulkMailOnButton.addEventListener("click", () => applyBulkToVisible("mail", true));
+  const bulkMailOffButton = document.getElementById("adminAlertSubsBulkMailOffButton");
+  if (bulkMailOffButton) bulkMailOffButton.addEventListener("click", () => applyBulkToVisible("mail", false));
+  const bulkTelegramOnButton = document.getElementById("adminAlertSubsBulkTelegramOnButton");
+  if (bulkTelegramOnButton) bulkTelegramOnButton.addEventListener("click", () => applyBulkToVisible("telegram", true));
+  const bulkTelegramOffButton = document.getElementById("adminAlertSubsBulkTelegramOffButton");
+  if (bulkTelegramOffButton) bulkTelegramOffButton.addEventListener("click", () => applyBulkToVisible("telegram", false));
+
+  container.querySelectorAll(".admin-sub-row-bulk[data-hostname][data-channel][data-value]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const hostname = button.dataset.hostname || "";
+      const channel = button.dataset.channel || "";
+      const enabled = button.dataset.value === "on";
+      if (!hostname || (channel !== "mail" && channel !== "telegram")) return;
+      applyRowBulk(hostname, channel, enabled);
+    });
+  });
+
+  refreshChangedState();
+  applyFilters();
 }
 
 async function saveAdminAlertSubscriptions() {
@@ -2414,6 +2574,20 @@ async function saveAdminAlertSubscriptions() {
     if (!response.ok) {
       throw new Error(data.error || "HTTP " + response.status);
     }
+  }
+  container.querySelectorAll(".admin-sub-cb").forEach((checkbox) => {
+    checkbox.dataset.originalChecked = checkbox.checked ? "1" : "0";
+    checkbox.classList.remove("is-changed");
+    const chip = checkbox.closest(".admin-sub-user-chip");
+    if (chip) chip.classList.remove("has-change");
+  });
+  container.querySelectorAll("tbody tr[data-hostname]").forEach((row) => {
+    row.classList.remove("has-change");
+  });
+  if (document.getElementById("adminAlertSubsOnlyChangedInput")?.checked === true) {
+    container.querySelectorAll("tbody tr[data-hostname]").forEach((row) => {
+      row.classList.add("admin-sub-row-hidden");
+    });
   }
   setAdminAlertSubscriptionsStatus("Abos gespeichert.");
 }
