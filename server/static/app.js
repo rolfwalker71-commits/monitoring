@@ -10305,6 +10305,17 @@ function updateSystemOverviewSortModeButton() {
   button.setAttribute("aria-pressed", addonMode ? "true" : "false");
 }
 
+function updateSystemOverviewSearchInputMode() {
+  const input = document.getElementById("systemOverviewSearchInput");
+  if (!input) {
+    return;
+  }
+  const addonMode = state.systemOverviewSortMode === "addon-customer-os";
+  input.placeholder = addonMode
+    ? "AddOn-Name filtern..."
+    : "Host/Kunde/OS/AddOn suchen...";
+}
+
 function collectSystemOverviewHostAddonLabels(host) {
   const payload = host && typeof host.payload === "object" ? host.payload : {};
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
@@ -10671,6 +10682,7 @@ async function loadSystemOverview() {
   const searchEl = document.getElementById("systemOverviewSearchInput");
   updateSystemOverviewAddonsToggleButton();
   updateSystemOverviewSortModeButton();
+  updateSystemOverviewSearchInputMode();
   if (!container) return;
 
   if (searchEl) {
@@ -10695,26 +10707,29 @@ async function loadSystemOverview() {
       .filter(([country]) => activeCountryFilter === "all" || String(country).toUpperCase() === activeCountryFilter)
       .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
 
+    const isAddonSortMode = state.systemOverviewSortMode === "addon-customer-os";
     const filteredHostEntries = [];
     filteredEntries.forEach(([country, osMap]) => {
       Object.entries(osMap || {}).forEach(([osName, customerMap]) => {
         Object.entries(customerMap || {}).forEach(([customer, hosts]) => {
           (Array.isArray(hosts) ? hosts : []).forEach((host) => {
             const payload = host && typeof host.payload === "object" ? host.payload : {};
-            const addonText = collectSystemOverviewAddonSearchText(payload);
-            const haystack = [
-              host?.hostname,
-              host?.display_name,
-              payload?.display_name,
-              payload?.hostname,
-              payload?.agent_id,
-              customer,
-              osName,
-              country,
-              addonText,
-            ].map((v) => String(v || "").toLowerCase()).join(" ");
-            if (searchQuery && !haystack.includes(searchQuery)) {
-              return;
+            if (!isAddonSortMode && searchQuery) {
+              const addonText = collectSystemOverviewAddonSearchText(payload);
+              const haystack = [
+                host?.hostname,
+                host?.display_name,
+                payload?.display_name,
+                payload?.hostname,
+                payload?.agent_id,
+                customer,
+                osName,
+                country,
+                addonText,
+              ].map((v) => String(v || "").toLowerCase()).join(" ");
+              if (!haystack.includes(searchQuery)) {
+                return;
+              }
             }
             filteredHostEntries.push({ country, osName, customer, host });
           });
@@ -10726,12 +10741,13 @@ async function loadSystemOverview() {
     let displayedHostCount = uniqueHostCount;
     let treeHtml = "";
 
-    if (state.systemOverviewSortMode === "addon-customer-os") {
+    if (isAddonSortMode) {
       const addonMap = new Map();
       const displayedHostnames = new Set();
 
       filteredHostEntries.forEach((entry) => {
-        const labels = collectSystemOverviewHostAddonLabels(entry.host);
+        const labels = collectSystemOverviewHostAddonLabels(entry.host)
+          .filter((label) => !searchQuery || String(label || "").toLowerCase().includes(searchQuery));
         if (!labels.length) {
           return;
         }
@@ -10943,7 +10959,11 @@ async function loadSystemOverview() {
 
     if (statsEl) {
       const scope = activeCountryFilter === "all" ? "Alle Länder" : activeCountryFilter;
-      const withSearch = searchQuery ? ` | Suche: "${state.systemOverviewSearchQuery}"` : "";
+      const withSearch = searchQuery
+        ? (isAddonSortMode
+          ? ` | AddOn-Filter: "${state.systemOverviewSearchQuery}"`
+          : ` | Suche: "${state.systemOverviewSearchQuery}"`)
+        : "";
       const modeLabel = state.systemOverviewSortMode === "addon-customer-os"
         ? " | Sicht: AddOn > Kunde > OS"
         : " | Sicht: Land > OS > Host";

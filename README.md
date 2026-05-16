@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.53  | 16.05.2026 | Refine Systemübersicht AddOn mode filtering: in AddOn > Kunde > OS view the search input now acts as an AddOn-name filter (with mode-specific placeholder and stats label), while default Land > OS > Host keeps broad search |
 | 1.6.52  | 16.05.2026 | Add a Systemübersicht sort-mode toggle in the existing view: keep default Land/OS/Host grouping and provide an optional AddOn/Kunde/OS grouping on demand |
 | 1.6.51  | 16.05.2026 | Refine Systemübersicht AddOn search behavior: when the search term matches AddOn names/versions, show only matching AddOns in the host AddOn lists instead of the full list |
 | 1.6.50  | 16.05.2026 | Extend Systemübersicht search to include SQL/HANA AddOn names and versions, and update the search placeholder to reflect AddOn lookup |
