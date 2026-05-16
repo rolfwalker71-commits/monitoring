@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.5   | 16.05.2026 | Soften the global button palette and normalize button heights app-wide (including user-management actions) for a calmer, more consistent UI |
 | 1.6.4   | 16.05.2026 | Increase vertical spacing below overview/report tab headings so section titles no longer stick to controls beneath |
 | 1.6.3   | 16.05.2026 | Restore and emphasize the light/dark mode switch in the header so it remains clearly visible and usable in both themes |
 | 1.6.2   | 16.05.2026 | Wrap overview/detail navigation menus in card-style containers matching the new sidebar filter/search card design, including aligned dark-mode styling |

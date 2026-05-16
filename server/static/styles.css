@@ -4,6 +4,11 @@
   --text: #1f2937;
   --muted: #64748b;
   --accent: #1e40af;
+  --btn-primary-bg: #2f5f96;
+  --btn-primary-bg-hover: #284f7f;
+  --btn-primary-border: #3f6ea3;
+  --btn-primary-text: #f4f8ff;
+  --btn-height: 30px;
   --line: #c9d8ec;
   --ok: #16a34a;
   --ok-bg: #dcfce7;
@@ -48,6 +53,10 @@ body[data-theme="dark"] {
   --muted: #9fb3cc;
   --line: #24344d;
   --accent: #3b82f6;
+  --btn-primary-bg: #2b4b74;
+  --btn-primary-bg-hover: #345c8e;
+  --btn-primary-border: #4f78ac;
+  --btn-primary-text: #dcecff;
   --kv-label-color: #c8dbf7;
   --kv-value-color: #9fb3cc;
   color-scheme: dark;
@@ -1200,6 +1209,13 @@ body[data-theme="dark"] .agent-update-admin-table tbody tr:nth-child(2n) td:nth-
   flex-wrap: wrap;
 }
 
+.user-management-actions button {
+  min-height: 28px;
+  padding: 0 12px;
+  font-size: 11px;
+  line-height: 26px;
+}
+
 .user-flag-pill {
   display: inline-flex;
   align-items: center;
@@ -1749,18 +1765,24 @@ body[data-theme="dark"] .section-head .report-meta-row .count {
 }
 
 button {
-  border: 0;
-  background: var(--accent);
-  color: #fff;
-  padding: 7px 11px;
+  border: 1px solid var(--btn-primary-border);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  min-height: var(--btn-height);
+  padding: 0 12px;
+  line-height: calc(var(--btn-height) - 2px);
   border-radius: 999px;
   cursor: pointer;
   font-size: 12px;
-  transition: background-color 140ms ease;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(30, 58, 95, 0.12);
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
 
 button:hover:not(.host-item) {
-  background: #1d4ed8;
+  background: var(--btn-primary-bg-hover);
+  border-color: var(--btn-primary-border);
+  box-shadow: 0 4px 10px rgba(30, 58, 95, 0.16);
 }
 
 /* Secondary / ghost button */
@@ -1769,10 +1791,10 @@ button:hover:not(.host-item) {
   color: #42526e;
   border: 1px solid #c8d5e6;
   border-radius: 999px;
-  min-height: 44px;
-  padding: 0 16px;
+  min-height: 30px;
+  padding: 0 12px;
   font-weight: 600;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
 }
 
 .btn-secondary:hover:not(:disabled) {
@@ -1784,27 +1806,27 @@ button:hover:not(.host-item) {
 
 .btn-secondary--compact {
   min-height: unset;
-  height: 26px;
-  padding: 0 12px;
-  font-size: 12px;
-  line-height: 24px;
+  height: 24px;
+  padding: 0 10px;
+  font-size: 11px;
+  line-height: 22px;
 }
 
 .btn-secondary-pill-compact {
-  min-height: 30px;
-  height: 30px;
-  padding: 0 12px;
+  min-height: 26px;
+  height: 26px;
+  padding: 0 10px;
   border-radius: 999px;
-  font-size: 12px;
-  line-height: 28px;
+  font-size: 11px;
+  line-height: 24px;
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
 }
 
 #exportHostReportsButton.btn-secondary--compact {
-  height: 28px;
+  height: 24px;
   padding: 0 10px;
   font-size: 11px;
-  line-height: 26px;
+  line-height: 22px;
   border-radius: 10px;
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
 }
@@ -2867,13 +2889,13 @@ body[data-theme="dark"] .trend-progress-bar {
 .global-update-chip {
   width: 100%;
   border-radius: 999px;
-  min-height: 32px;
+  min-height: 30px;
   padding: 0 12px;
-  background: linear-gradient(135deg, #0f766e 0%, #0ea5e9 100%);
-  color: #fff;
+  background: linear-gradient(135deg, #2b5f8f 0%, #3a6ea1 100%);
+  color: #eef6ff;
   font-weight: 700;
   letter-spacing: 0.01em;
-  box-shadow: 0 10px 22px rgba(14, 165, 233, 0.22);
+  box-shadow: 0 4px 10px rgba(35, 78, 126, 0.2);
 }
 
 .global-update-chip-inline {
@@ -2884,7 +2906,7 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .global-update-chip:hover:not(:disabled) {
-  background: linear-gradient(135deg, #0d9488 0%, #0284c7 100%);
+  background: linear-gradient(135deg, #285884 0%, #356593 100%);
 }
 
 .global-update-chip:disabled {
