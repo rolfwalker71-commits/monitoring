@@ -5687,7 +5687,7 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   margin: 0;
   border-radius: 10px;
   border: 1px solid #cbd5e1;
-  background: #0f172a;
+  background: #050b1a;
   max-height: 420px;
   overflow: auto;
 }
@@ -5718,6 +5718,15 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   padding: 6px 12px;
   border-bottom: 1px solid #1e293b;
   white-space: nowrap;
+  color: #dbeafe;
+}
+
+.sap-vmap-terminal-table tbody tr:nth-child(odd) td {
+  background: #0b1428;
+}
+
+.sap-vmap-terminal-table tbody tr:nth-child(even) td {
+  background: #0d1730;
 }
 
 .sap-vmap-terminal-table tbody tr:last-child td {
@@ -5725,12 +5734,20 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
 }
 
 .sap-vmap-terminal-table .sap-vmap-col-build {
-  color: #f9a8d4;
+  color: #f472b6;
   font-weight: 700;
 }
 
+.sap-vmap-terminal-table .sap-vmap-col-feature {
+  color: #bfdbfe;
+}
+
+.sap-vmap-terminal-table .sap-vmap-col-patch {
+  color: #93c5fd;
+}
+
 .sap-vmap-terminal-table .sap-vmap-col-release {
-  color: #fdba74;
+  color: #fb923c;
 }
 
 .sap-license-list-wrap {
@@ -6636,7 +6653,7 @@ body[data-theme="dark"] .sap-b1-combined-card .sap-b1-raw-details > .terminal-vi
 
 body[data-theme="dark"] .sap-vmap-terminal-wrap {
   border-color: #2d4a6e;
-  background: #0b1630;
+  background: #050b1a;
 }
 
 body[data-theme="dark"] .sap-vmap-terminal-table thead th {
@@ -6646,6 +6663,15 @@ body[data-theme="dark"] .sap-vmap-terminal-table thead th {
 
 body[data-theme="dark"] .sap-vmap-terminal-table tbody td {
   border-bottom-color: #233a5f;
+  color: #dbeafe;
+}
+
+body[data-theme="dark"] .sap-vmap-terminal-table tbody tr:nth-child(odd) td {
+  background: #0b1428;
+}
+
+body[data-theme="dark"] .sap-vmap-terminal-table tbody tr:nth-child(even) td {
+  background: #0d1730;
 }
 
 body[data-theme="dark"] .detail-card:hover {
