@@ -1069,6 +1069,55 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   color: #dc2626;
 }
 
+#backupAutomationStatus.error {
+  color: #dc2626;
+}
+
+.backup-automation-grid {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.backup-automation-grid .settings-checkbox-inline {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #d8e2f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 7px 9px;
+}
+
+.backup-automation-grid .settings-field-wrap {
+  border: 1px solid #d8e2f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 7px 9px;
+}
+
+.backup-automation-grid .settings-field-wrap > span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.backup-automation-sftp-head {
+  margin-top: 10px;
+}
+
+.backup-automation-sftp-head h6 {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.backup-automation-sftp-head p {
+  margin: 2px 0 0;
+}
+
 .agent-update-admin-status {
   margin-top: 14px;
   border: 1px solid #d8e2f0;
@@ -1255,6 +1304,16 @@ body[data-theme="dark"] .db-maintenance-chart-label {
 
 body[data-theme="dark"] .db-maintenance-chart-line {
   stroke: #60a5fa;
+}
+
+body[data-theme="dark"] .backup-automation-grid .settings-checkbox-inline,
+body[data-theme="dark"] .backup-automation-grid .settings-field-wrap {
+  background: #15243c;
+  border-color: #2b3b56;
+}
+
+body[data-theme="dark"] .backup-automation-grid .settings-field-wrap > span {
+  color: #93a9c4;
 }
 
 body[data-theme="dark"] .delta-positive {

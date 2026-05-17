@@ -172,6 +172,7 @@ const state = {
   showBlacklistedFilesystems: false,
   sapB1VmapDirty: false,
   sapB1VmapBeforeUnloadWired: false,
+  backupAutomationLoaded: false,
 };
 
 function hasSapB1VersionMapUnsavedChanges() {
@@ -3312,10 +3313,16 @@ async function loadGlobalAdminSettingsPanel(force = false) {
     return;
   }
   setDbMaintenanceStatus("Lade DB Kennzahlen-Verlauf...");
+  setBackupAutomationStatus("Lade Backup-Automation...");
   try {
     await loadAdminDatabaseStats();
   } catch (error) {
     setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
+  }
+  try {
+    await loadAdminBackupAutomation();
+  } catch (error) {
+    setBackupAutomationStatus(`Fehler: ${error.message}`, true);
   }
   await loadSapB1VersionMap();
   await loadAlarmSettings(force);
@@ -7398,6 +7405,13 @@ function setDbMaintenanceStatus(message, isError = false) {
   el.classList.toggle("error", !!isError);
 }
 
+function setBackupAutomationStatus(message, isError = false) {
+  const el = document.getElementById("backupAutomationStatus");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle("error", !!isError);
+}
+
 function renderDbMaintenanceStats(stats) {
   const el = document.getElementById("dbMaintenanceStats");
   if (!el) return;
@@ -7558,6 +7572,122 @@ function renderDbMaintenanceEffect(result) {
   const signed = reclaimed >= 0 ? `-${formatBytes(reclaimed)}` : `+${formatBytes(Math.abs(reclaimed))}`;
   const seconds = (durationMs / 1000).toFixed(1);
   el.textContent = `Letzter VACUUM Effekt: ${signed} | Dauer: ${seconds}s`;
+}
+
+function updateBackupAutomationAuthModeUi() {
+  const mode = String(document.getElementById("backupAutomationSftpAuthMode")?.value || "key").toLowerCase();
+  const keyWrap = document.getElementById("backupAutomationSftpKeyPathWrap");
+  const passwordWrap = document.getElementById("backupAutomationSftpPasswordWrap");
+  if (keyWrap) keyWrap.classList.toggle("hidden", mode !== "key");
+  if (passwordWrap) passwordWrap.classList.toggle("hidden", mode !== "password");
+}
+
+function applyBackupAutomationSettingsToInputs(settings) {
+  document.getElementById("backupAutomationLocalEnabled").checked = !!settings.local_enabled;
+  document.getElementById("backupAutomationIntervalHours").value = String(settings.local_interval_hours || 12);
+  document.getElementById("backupAutomationRetentionDays").value = String(settings.local_retention_days || 7);
+  document.getElementById("backupAutomationTargetDir").value = String(settings.local_target_dir || "auto_db_backups");
+  document.getElementById("backupAutomationSftpEnabled").checked = !!settings.sftp_enabled;
+  document.getElementById("backupAutomationSftpHost").value = String(settings.sftp_host || "");
+  document.getElementById("backupAutomationSftpPort").value = String(settings.sftp_port || 22);
+  document.getElementById("backupAutomationSftpUsername").value = String(settings.sftp_username || "");
+  document.getElementById("backupAutomationSftpRemotePath").value = String(settings.sftp_remote_path || "");
+  document.getElementById("backupAutomationSftpAuthMode").value = settings.sftp_auth_mode === "password" ? "password" : "key";
+  document.getElementById("backupAutomationSftpKeyPath").value = String(settings.sftp_key_path || "");
+  document.getElementById("backupAutomationSftpPassword").value = String(settings.sftp_password || "");
+  updateBackupAutomationAuthModeUi();
+}
+
+function readBackupAutomationSettingsFromInputs() {
+  return {
+    local_enabled: !!document.getElementById("backupAutomationLocalEnabled")?.checked,
+    local_interval_hours: Number(document.getElementById("backupAutomationIntervalHours")?.value || 12),
+    local_retention_days: Number(document.getElementById("backupAutomationRetentionDays")?.value || 7),
+    local_target_dir: String(document.getElementById("backupAutomationTargetDir")?.value || "auto_db_backups").trim(),
+    sftp_enabled: !!document.getElementById("backupAutomationSftpEnabled")?.checked,
+    sftp_host: String(document.getElementById("backupAutomationSftpHost")?.value || "").trim(),
+    sftp_port: Number(document.getElementById("backupAutomationSftpPort")?.value || 22),
+    sftp_username: String(document.getElementById("backupAutomationSftpUsername")?.value || "").trim(),
+    sftp_remote_path: String(document.getElementById("backupAutomationSftpRemotePath")?.value || "").trim(),
+    sftp_auth_mode: String(document.getElementById("backupAutomationSftpAuthMode")?.value || "key"),
+    sftp_key_path: String(document.getElementById("backupAutomationSftpKeyPath")?.value || "").trim(),
+    sftp_password: String(document.getElementById("backupAutomationSftpPassword")?.value || ""),
+  };
+}
+
+function renderBackupAutomationRuns(rows) {
+  const body = document.getElementById("backupAutomationRunsRows");
+  if (!body) return;
+  const list = Array.isArray(rows) ? rows : [];
+  if (list.length === 0) {
+    body.innerHTML = '<tr><td colspan="6" class="muted">Noch keine Backup-Läufe vorhanden.</td></tr>';
+    return;
+  }
+  body.innerHTML = list.map((row) => {
+    const finished = formatUtcPlus2(row.finished_at_utc || "") || "-";
+    const source = String(row.trigger_source || "-");
+    const status = String(row.status || "-");
+    const filePath = String(row.backup_path || "-");
+    const size = Number(row.backup_size_bytes || 0);
+    const error = String(row.error_message || "");
+    const statusClass = status === "ok" ? "delta-positive" : (status === "error" ? "delta-negative" : "delta-neutral");
+    return `<tr>
+      <td>${escapeHtml(finished)}</td>
+      <td>${escapeHtml(source)}</td>
+      <td><span class="${statusClass}">${escapeHtml(status)}</span></td>
+      <td>${escapeHtml(filePath)}</td>
+      <td>${escapeHtml(formatBytes(size))}</td>
+      <td>${escapeHtml(error || "-")}</td>
+    </tr>`;
+  }).join("");
+}
+
+async function loadAdminBackupAutomation() {
+  const response = await fetch("/api/v1/admin/backup-automation", {
+    method: "GET",
+    credentials: "same-origin",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  const settings = data && typeof data.settings === "object" ? data.settings : {};
+  const runs = Array.isArray(data?.recent_runs) ? data.recent_runs : [];
+  applyBackupAutomationSettingsToInputs(settings);
+  renderBackupAutomationRuns(runs);
+  state.backupAutomationLoaded = true;
+  const updated = settings.updated_at_utc ? formatUtcPlus2(settings.updated_at_utc) : "-";
+  setBackupAutomationStatus(`Lokales Backup: ${settings.local_enabled ? "aktiv" : "inaktiv"} · Intervall: ${settings.local_interval_hours || 12}h · Retention: ${settings.local_retention_days || 7} Tage · Letztes Settings-Update: ${updated}`);
+  return data;
+}
+
+async function saveAdminBackupAutomationSettings() {
+  const payload = readBackupAutomationSettingsFromInputs();
+  const response = await fetch("/api/v1/admin/backup-automation/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return data;
+}
+
+async function triggerAdminAutoBackupNow() {
+  const response = await fetch("/api/v1/admin/backup-automation/trigger-local", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({}),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return data;
 }
 
 async function loadAdminDatabaseStats() {
@@ -10665,6 +10795,9 @@ function wireEvents() {
 
   const vacuumDatabaseButton = document.getElementById("vacuumDatabaseButton");
   const triggerDatabaseStatsButton = document.getElementById("triggerDatabaseStatsButton");
+  const saveBackupAutomationSettingsButton = document.getElementById("saveBackupAutomationSettingsButton");
+  const triggerAutoBackupNowButton = document.getElementById("triggerAutoBackupNowButton");
+  const backupAutomationSftpAuthMode = document.getElementById("backupAutomationSftpAuthMode");
 
   if (triggerDatabaseStatsButton) {
     triggerDatabaseStatsButton.addEventListener("click", async () => {
@@ -10725,9 +10858,55 @@ function wireEvents() {
     });
   }
 
+  if (backupAutomationSftpAuthMode) {
+    backupAutomationSftpAuthMode.addEventListener("change", () => {
+      updateBackupAutomationAuthModeUi();
+    });
+  }
+
+  if (saveBackupAutomationSettingsButton) {
+    saveBackupAutomationSettingsButton.addEventListener("click", async () => {
+      saveBackupAutomationSettingsButton.disabled = true;
+      if (triggerAutoBackupNowButton) triggerAutoBackupNowButton.disabled = true;
+      setBackupAutomationStatus("Speichere Backup-Automation...");
+      try {
+        const result = await saveAdminBackupAutomationSettings();
+        if (result && typeof result.settings === "object") {
+          applyBackupAutomationSettingsToInputs(result.settings);
+        }
+        await loadAdminBackupAutomation();
+      } catch (error) {
+        setBackupAutomationStatus(`Fehler: ${error.message}`, true);
+      } finally {
+        saveBackupAutomationSettingsButton.disabled = false;
+        if (triggerAutoBackupNowButton) triggerAutoBackupNowButton.disabled = false;
+      }
+    });
+  }
+
+  if (triggerAutoBackupNowButton) {
+    triggerAutoBackupNowButton.addEventListener("click", async () => {
+      triggerAutoBackupNowButton.disabled = true;
+      if (saveBackupAutomationSettingsButton) saveBackupAutomationSettingsButton.disabled = true;
+      setBackupAutomationStatus("Starte lokales Backup...");
+      try {
+        await triggerAdminAutoBackupNow();
+        await loadAdminBackupAutomation();
+      } catch (error) {
+        setBackupAutomationStatus(`Fehler: ${error.message}`, true);
+      } finally {
+        triggerAutoBackupNowButton.disabled = false;
+        if (saveBackupAutomationSettingsButton) saveBackupAutomationSettingsButton.disabled = false;
+      }
+    });
+  }
+
   if (state.isAdmin) {
     void loadAdminDatabaseStats().catch((error) => {
       setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
+    });
+    void loadAdminBackupAutomation().catch((error) => {
+      setBackupAutomationStatus(`Fehler: ${error.message}`, true);
     });
   }
 

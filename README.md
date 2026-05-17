@@ -493,6 +493,14 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.80 (17. Mai 2026)
+
+- **Automatische DB-Backups**: Lokale SQLite-Backups laufen jetzt automatisch im Hintergrund (Default: alle 12 Stunden).
+- **Retention eingebaut**: Alte automatische Backup-Dateien werden automatisch nach der konfigurierten Aufbewahrungszeit (Default: 7 Tage) bereinigt.
+- **Admin-API ergänzt**: Neue Endpoints für Backup-Automation (`GET/POST /api/v1/admin/backup-automation`, manueller Trigger für lokales Backup).
+- **Admin-UI erweitert**: Neuer Bereich "Backup Automation (lokal + sFTP vorbereitet)" mit Settings, Sofort-Backup-Button und Laufhistorie.
+- **sFTP vorbereitet**: sFTP-Konfigurationsfelder werden gespeichert (Host/Port/User/Path/Auth), Upload-Logik folgt in einem späteren Schritt.
+
 ### v1.6.79 (17. Mai 2026)
 
 - **Charts mit Skala**: Dezente horizontale Gitternetzlinien und Y-Achsenwerte pro Chart ergänzt.

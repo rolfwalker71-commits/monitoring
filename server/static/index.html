@@ -411,6 +411,95 @@
                 <p id="dbMaintenanceEffect" class="count compact"></p>
               </div>
 
+              <div class="db-maintenance-panel">
+                <div class="db-maintenance-head">
+                  <h6>Backup Automation (lokal + sFTP vorbereitet)</h6>
+                  <div class="db-maintenance-actions">
+                    <button id="triggerAutoBackupNowButton" class="btn-secondary" type="button" title="Lokales Backup sofort ausführen">💾 Jetzt sichern</button>
+                    <button id="saveBackupAutomationSettingsButton" class="btn-secondary" type="button" title="Backup-Automation speichern">💾 Einstellungen speichern</button>
+                  </div>
+                </div>
+                <p id="backupAutomationStatus" class="count compact">Lade Backup-Automation...</p>
+                <div class="backup-automation-grid">
+                  <label class="settings-checkbox-inline">
+                    <input id="backupAutomationLocalEnabled" type="checkbox" />
+                    Lokales Backup aktiv (Default: alle 12h)
+                  </label>
+                  <label class="settings-field-wrap">
+                    <span>Intervall (Stunden)</span>
+                    <input id="backupAutomationIntervalHours" type="number" min="1" max="168" class="settings-input" />
+                  </label>
+                  <label class="settings-field-wrap">
+                    <span>Retention (Tage)</span>
+                    <input id="backupAutomationRetentionDays" type="number" min="1" max="365" class="settings-input" />
+                  </label>
+                  <label class="settings-field-wrap">
+                    <span>Backup-Verzeichnis (unter server/data)</span>
+                    <input id="backupAutomationTargetDir" type="text" class="settings-input" placeholder="auto_db_backups" />
+                  </label>
+                </div>
+
+                <div class="backup-automation-sftp-head">
+                  <h6>sFTP Vorbereitung</h6>
+                  <p class="count compact">Konfiguration wird gespeichert, Upload folgt in einem späteren Schritt.</p>
+                </div>
+                <div class="backup-automation-grid">
+                  <label class="settings-checkbox-inline">
+                    <input id="backupAutomationSftpEnabled" type="checkbox" />
+                    sFTP Upload zukünftig aktivieren
+                  </label>
+                  <label class="settings-field-wrap">
+                    <span>sFTP Host</span>
+                    <input id="backupAutomationSftpHost" type="text" class="settings-input" placeholder="sftp.example.com" />
+                  </label>
+                  <label class="settings-field-wrap">
+                    <span>sFTP Port</span>
+                    <input id="backupAutomationSftpPort" type="number" min="1" max="65535" class="settings-input" />
+                  </label>
+                  <label class="settings-field-wrap">
+                    <span>sFTP Benutzer</span>
+                    <input id="backupAutomationSftpUsername" type="text" class="settings-input" />
+                  </label>
+                  <label class="settings-field-wrap">
+                    <span>Remote Pfad</span>
+                    <input id="backupAutomationSftpRemotePath" type="text" class="settings-input" placeholder="/incoming/monitoring" />
+                  </label>
+                  <label class="settings-field-wrap">
+                    <span>Auth Modus</span>
+                    <select id="backupAutomationSftpAuthMode" class="settings-input">
+                      <option value="key">SSH Key</option>
+                      <option value="password">Passwort</option>
+                    </select>
+                  </label>
+                  <label class="settings-field-wrap" id="backupAutomationSftpKeyPathWrap">
+                    <span>Key Pfad</span>
+                    <input id="backupAutomationSftpKeyPath" type="text" class="settings-input" placeholder="/home/monitor/.ssh/id_ed25519" />
+                  </label>
+                  <label class="settings-field-wrap" id="backupAutomationSftpPasswordWrap">
+                    <span>Passwort</span>
+                    <input id="backupAutomationSftpPassword" type="password" class="settings-input" autocomplete="new-password" />
+                  </label>
+                </div>
+
+                <div class="agent-update-admin-table-wrap db-maintenance-history-wrap">
+                  <table class="agent-update-admin-table db-maintenance-history-table">
+                    <thead>
+                      <tr>
+                        <th>Zeit Ende</th>
+                        <th>Quelle</th>
+                        <th>Status</th>
+                        <th>Datei</th>
+                        <th>Größe</th>
+                        <th>Fehler</th>
+                      </tr>
+                    </thead>
+                    <tbody id="backupAutomationRunsRows">
+                      <tr><td colspan="6" class="muted">Lade Backup-Läufe...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               <div class="agent-update-admin-status">
                 <div class="agent-update-admin-status-head">
                   <h6>Agent Update Status (Alle Hosts)</h6>
