@@ -6711,7 +6711,12 @@ function filterAndSortHosts(hosts) {
     filtered = hosts.filter((host) => {
       const displayName = (host.display_name || host.hostname || "").toLowerCase();
       const hostname = (host.hostname || "").toLowerCase();
-      return displayName.includes(query) || hostname.includes(query);
+      const customerName = (host.customer_name || "").toLowerCase();
+      const customerProject = (host.customer_maringo_project_number || "").toLowerCase();
+      return displayName.includes(query)
+        || hostname.includes(query)
+        || customerName.includes(query)
+        || customerProject.includes(query);
     });
   }
 

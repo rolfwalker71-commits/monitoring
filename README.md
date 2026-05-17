@@ -493,6 +493,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.83 (17. Mai 2026)
+
+- **Host-Suche erweitert**: Die bestehende Suche im Hosts-Bereich durchsucht jetzt zusätzlich Kundendaten.
+- **Neu durchsuchbar**: Neben Hostname/Anzeigename werden jetzt auch `customer_name` und `customer_maringo_project_number` berücksichtigt.
+
 ### v1.6.82 (17. Mai 2026)
 
 - **Auto-Backups sichtbar im Admin-Bereich**: Läufe der automatischen Backups werden tabellarisch angezeigt.
