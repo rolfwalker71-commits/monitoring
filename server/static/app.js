@@ -7099,9 +7099,6 @@ function renderSingleHostCard(host) {
       ? `<span class="host-value-chip host-value-chip--sid" title="HANA SID">${escapeHtml(hanaSidValue)}</span>`
       : "",
   ].filter(Boolean).join("");
-  const customerTitleLine = customerNameValue
-    ? `<div class="host-customer-title-line"><span class="host-value-chip host-value-chip--customer-title" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span></div>`
-    : "";
   const lastReportInfo = formatHostLastReportAge(host.last_report_utc || host.last_seen_utc);
   const agentVersionVisual = getHostAgentVersionVisual(host.agent_version, state.latestAgentRelease);
   const statusBarClass = lastReportInfo.statusClass === "host-last-report-dot--critical"
@@ -7121,8 +7118,11 @@ function renderSingleHostCard(host) {
   const hostAgentVersionText = asText(host.agent_version, "-");
   const latestAgentVersionText = asText(state.latestAgentRelease, "-");
   const agentStatusLogic = "Logik: rot = Major/Minor abweichend oder Patch-Diff >= 5; gruen = gleicher Major/Minor + Patch-Diff < 5; grau = Vergleich nicht moeglich.";
-  const agentTopBar = agentVersionVisual.dotClassName === "host-agent-version-dot--red"
-    ? `<div class="host-agent-top-bar" title="Host meldet AGENT_VERSION: ${escapeHtml(hostAgentVersionText)} | Referenz: ${escapeHtml(latestAgentVersionText)} | ${escapeHtml(agentVersionVisual.title)} | ${agentStatusLogic}" aria-hidden="true"></div>`
+  const agentBadge = agentVersionVisual.dotClassName === "host-agent-version-dot--red"
+    ? `<span class="host-agent-mini-badge" title="Host meldet AGENT_VERSION: ${escapeHtml(hostAgentVersionText)} | Referenz: ${escapeHtml(latestAgentVersionText)} | ${escapeHtml(agentVersionVisual.title)} | ${agentStatusLogic}">AGENT ALT</span>`
+    : "";
+  const customerTitleLine = (customerNameValue || agentBadge)
+    ? `<div class="host-customer-title-line">${customerNameValue ? `<span class="host-value-chip host-value-chip--customer-title" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span>` : ""}${agentBadge}</div>`
     : "";
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
@@ -7180,7 +7180,6 @@ function renderSingleHostCard(host) {
   return `
     <article class="${selectedClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">
       <div class="${statusBarClass}" title="${escapeHtml(statusBarTitle)}" aria-hidden="true"></div>
-      ${agentTopBar}
       ${alertSideBar}
       ${flagIcon}
       ${customerTitleLine}

@@ -3904,7 +3904,30 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .host-customer-title-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
   padding: 4px 0 8px 0;
+}
+
+.host-agent-mini-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 14px;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px solid #fca5a5;
+  background: #fff1f2;
+  color: #9f1239;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  text-transform: uppercase;
+  opacity: 0.82;
 }
 
 .host-detail-line {
@@ -4512,16 +4535,6 @@ body[data-theme="dark"] .trend-progress-bar {
   right: 0;
   width: 4px;
   border-radius: 0 12px 12px 0;
-  background: #f43f5e;
-}
-
-.host-agent-top-bar {
-  position: absolute;
-  top: 0;
-  left: 4px;
-  right: 4px;
-  height: 3px;
-  border-radius: 10px 10px 0 0;
   background: #f43f5e;
 }
 
