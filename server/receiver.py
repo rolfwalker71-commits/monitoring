@@ -550,6 +550,39 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS db_maintenance_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bucket_start_utc TEXT NOT NULL UNIQUE,
+                computed_at_utc TEXT NOT NULL,
+                retention_days INTEGER NOT NULL,
+                reports_total INTEGER NOT NULL,
+                hosts_with_reports INTEGER NOT NULL,
+                hosts_total INTEGER NOT NULL,
+                alerts_open INTEGER NOT NULL,
+                avg_payload_bytes REAL NOT NULL,
+                max_payload_bytes INTEGER NOT NULL,
+                db_file_bytes INTEGER NOT NULL,
+                wal_file_bytes INTEGER NOT NULL,
+                shm_file_bytes INTEGER NOT NULL,
+                total_file_bytes INTEGER NOT NULL,
+                page_size INTEGER NOT NULL,
+                page_count INTEGER NOT NULL,
+                freelist_count INTEGER NOT NULL,
+                used_pages INTEGER NOT NULL,
+                free_ratio REAL NOT NULL,
+                oldest_report_utc TEXT NOT NULL,
+                newest_report_utc TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_db_maintenance_history_bucket
+            ON db_maintenance_history(bucket_start_utc DESC)
+            """
+        )
+        conn.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_filesystem_visibility_host_section
             ON filesystem_visibility(hostname, section)
             """
@@ -1135,6 +1168,264 @@ def run_database_vacuum() -> dict[str, object]:
         "reclaimed_bytes": reclaimed_bytes,
         "duration_ms": duration_ms,
     }
+
+
+def _maintenance_bucket_start_utc(now_utc: datetime | None = None) -> datetime:
+    ref_utc = now_utc or datetime.now(timezone.utc)
+    local_now = ref_utc.astimezone(SCHEDULE_TIMEZONE)
+    bucket_hour = (local_now.hour // 3) * 3
+    local_bucket = local_now.replace(hour=bucket_hour, minute=0, second=0, microsecond=0)
+    return local_bucket.astimezone(timezone.utc)
+
+
+def _insert_db_maintenance_snapshot_if_missing(
+    conn: sqlite3.Connection,
+    *,
+    bucket_start_utc: datetime,
+) -> bool:
+    bucket_iso = bucket_start_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+    exists = conn.execute(
+        "SELECT 1 FROM db_maintenance_history WHERE bucket_start_utc = ? LIMIT 1",
+        (bucket_iso,),
+    ).fetchone()
+    if exists:
+        return False
+
+    stats = collect_database_maintenance_stats(conn)
+    conn.execute(
+        """
+        INSERT INTO db_maintenance_history (
+            bucket_start_utc,
+            computed_at_utc,
+            retention_days,
+            reports_total,
+            hosts_with_reports,
+            hosts_total,
+            alerts_open,
+            avg_payload_bytes,
+            max_payload_bytes,
+            db_file_bytes,
+            wal_file_bytes,
+            shm_file_bytes,
+            total_file_bytes,
+            page_size,
+            page_count,
+            freelist_count,
+            used_pages,
+            free_ratio,
+            oldest_report_utc,
+            newest_report_utc
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            bucket_iso,
+            utc_now_iso(),
+            int(stats.get("retention_days", REPORT_RETENTION_DAYS) or REPORT_RETENTION_DAYS),
+            int(stats.get("reports_total", 0) or 0),
+            int(stats.get("hosts_with_reports", 0) or 0),
+            int(stats.get("hosts_total", 0) or 0),
+            int(stats.get("alerts_open", 0) or 0),
+            float(stats.get("avg_payload_bytes", 0.0) or 0.0),
+            int(stats.get("max_payload_bytes", 0) or 0),
+            int(stats.get("db_file_bytes", 0) or 0),
+            int(stats.get("wal_file_bytes", 0) or 0),
+            int(stats.get("shm_file_bytes", 0) or 0),
+            int(stats.get("total_file_bytes", 0) or 0),
+            int(stats.get("page_size", 0) or 0),
+            int(stats.get("page_count", 0) or 0),
+            int(stats.get("freelist_count", 0) or 0),
+            int(stats.get("used_pages", 0) or 0),
+            float(stats.get("free_ratio", 0.0) or 0.0),
+            str(stats.get("oldest_report_utc", "") or ""),
+            str(stats.get("newest_report_utc", "") or ""),
+        ),
+    )
+    return True
+
+
+def _ensure_db_maintenance_snapshot(conn: sqlite3.Connection, *, force_if_empty: bool = False) -> None:
+    if force_if_empty:
+        row = conn.execute("SELECT 1 FROM db_maintenance_history LIMIT 1").fetchone()
+        if not row:
+            _insert_db_maintenance_snapshot_if_missing(
+                conn,
+                bucket_start_utc=_maintenance_bucket_start_utc(),
+            )
+            conn.commit()
+            return
+
+    _insert_db_maintenance_snapshot_if_missing(
+        conn,
+        bucket_start_utc=_maintenance_bucket_start_utc(),
+    )
+    conn.commit()
+
+
+def _coerce_number(value: object) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _forecast_linear_14d(history: list[dict], key: str) -> dict[str, object] | None:
+    if len(history) < 2:
+        return None
+
+    points: list[tuple[float, float]] = []
+    first_dt: datetime | None = None
+    last_dt: datetime | None = None
+    last_value = 0.0
+    for row in history:
+        bucket_iso = str(row.get("bucket_start_utc", "") or "")
+        try:
+            dt = datetime.fromisoformat(bucket_iso.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if first_dt is None:
+            first_dt = dt
+        last_dt = dt
+        x_hours = (dt - first_dt).total_seconds() / 3600.0
+        y = _coerce_number(row.get(key, 0))
+        last_value = y
+        points.append((x_hours, y))
+
+    if len(points) < 2 or first_dt is None or last_dt is None:
+        return None
+
+    n = float(len(points))
+    sum_x = sum(p[0] for p in points)
+    sum_y = sum(p[1] for p in points)
+    sum_xx = sum(p[0] * p[0] for p in points)
+    sum_xy = sum(p[0] * p[1] for p in points)
+    denom = (n * sum_xx) - (sum_x * sum_x)
+    if abs(denom) < 1e-9:
+        return None
+
+    slope = ((n * sum_xy) - (sum_x * sum_y)) / denom
+    intercept = (sum_y - (slope * sum_x)) / n
+
+    horizon_hours = 14.0 * 24.0
+    last_x = (last_dt - first_dt).total_seconds() / 3600.0
+    target_x = last_x + horizon_hours
+    projected = max(0.0, intercept + slope * target_x)
+    delta = projected - last_value
+
+    return {
+        "metric": key,
+        "current": last_value,
+        "projected_14d": projected,
+        "delta_14d": delta,
+        "slope_per_day": slope * 24.0,
+    }
+
+
+def build_db_maintenance_dashboard(conn: sqlite3.Connection) -> dict[str, object]:
+    rows = conn.execute(
+        """
+        SELECT bucket_start_utc,
+               computed_at_utc,
+               retention_days,
+               reports_total,
+               hosts_with_reports,
+               hosts_total,
+               alerts_open,
+               avg_payload_bytes,
+               max_payload_bytes,
+               db_file_bytes,
+               wal_file_bytes,
+               shm_file_bytes,
+               total_file_bytes,
+               page_size,
+               page_count,
+               freelist_count,
+               used_pages,
+               free_ratio,
+               oldest_report_utc,
+               newest_report_utc
+        FROM db_maintenance_history
+        ORDER BY bucket_start_utc ASC
+        LIMIT 240
+        """
+    ).fetchall()
+
+    history: list[dict[str, object]] = []
+    for row in rows:
+        history.append(
+            {
+                "bucket_start_utc": str(row[0] or ""),
+                "computed_at_utc": str(row[1] or ""),
+                "retention_days": int(row[2] or 0),
+                "reports_total": int(row[3] or 0),
+                "hosts_with_reports": int(row[4] or 0),
+                "hosts_total": int(row[5] or 0),
+                "alerts_open": int(row[6] or 0),
+                "avg_payload_bytes": float(row[7] or 0.0),
+                "max_payload_bytes": int(row[8] or 0),
+                "db_file_bytes": int(row[9] or 0),
+                "wal_file_bytes": int(row[10] or 0),
+                "shm_file_bytes": int(row[11] or 0),
+                "total_file_bytes": int(row[12] or 0),
+                "page_size": int(row[13] or 0),
+                "page_count": int(row[14] or 0),
+                "freelist_count": int(row[15] or 0),
+                "used_pages": int(row[16] or 0),
+                "free_ratio": float(row[17] or 0.0),
+                "oldest_report_utc": str(row[18] or ""),
+                "newest_report_utc": str(row[19] or ""),
+            }
+        )
+
+    latest_stats = history[-1] if history else collect_database_maintenance_stats(conn)
+
+    recent_rows: list[dict[str, object]] = []
+    recent_src = history[-20:]
+    for idx, row in enumerate(recent_src):
+        prev = recent_src[idx - 1] if idx > 0 else None
+        total_now = int(row.get("total_file_bytes", 0) or 0)
+        reports_now = int(row.get("reports_total", 0) or 0)
+        alerts_now = int(row.get("alerts_open", 0) or 0)
+        recent_rows.append(
+            {
+                **row,
+                "delta_total_file_bytes": None if prev is None else total_now - int(prev.get("total_file_bytes", 0) or 0),
+                "delta_reports_total": None if prev is None else reports_now - int(prev.get("reports_total", 0) or 0),
+                "delta_alerts_open": None if prev is None else alerts_now - int(prev.get("alerts_open", 0) or 0),
+            }
+        )
+
+    forecasts: dict[str, dict[str, object]] = {}
+    for metric in ("total_file_bytes", "reports_total", "alerts_open", "wal_file_bytes"):
+        forecast = _forecast_linear_14d(history, metric)
+        if forecast:
+            forecasts[metric] = forecast
+
+    now_local = datetime.now(SCHEDULE_TIMEZONE)
+    next_bucket_local = now_local.replace(minute=0, second=0, microsecond=0)
+    while (next_bucket_local.hour % 3) != 0 or next_bucket_local <= now_local:
+        next_bucket_local += timedelta(hours=1)
+
+    return {
+        "stats": latest_stats,
+        "history": history,
+        "recent_rows": recent_rows,
+        "forecasts": forecasts,
+        "schedule": {
+            "timezone": SCHEDULE_TIMEZONE_NAME,
+            "interval_hours": 3,
+            "next_bucket_local": next_bucket_local.isoformat(),
+        },
+    }
+
+
+def _db_maintenance_scheduler_loop() -> None:
+    while True:
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                _ensure_db_maintenance_snapshot(conn)
+        except Exception as exc:
+            print(f"[db-maintenance-scheduler] {exc}")
+        threading.Event().wait(60)
 
 
 def hash_password(password: str, salt_hex: str) -> str:
@@ -8112,8 +8403,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not self._require_admin_session():
                 return
             with sqlite3.connect(DB_PATH) as conn:
-                stats = collect_database_maintenance_stats(conn)
-            self._send_json(HTTPStatus.OK, {"status": "ok", "stats": stats})
+                _ensure_db_maintenance_snapshot(conn, force_if_empty=True)
+                payload = build_db_maintenance_dashboard(conn)
+            self._send_json(HTTPStatus.OK, {"status": "ok", **payload})
             return
 
         if parsed.path == "/api/v1/oauth-settings":
@@ -11108,6 +11400,19 @@ def main() -> None:
     args = parser.parse_args()
 
     init_db()
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            _ensure_db_maintenance_snapshot(conn, force_if_empty=True)
+    except Exception as exc:
+        print(f"[startup] db maintenance snapshot failed: {exc}")
+
+    scheduler_thread = threading.Thread(
+        target=_db_maintenance_scheduler_loop,
+        name="db-maintenance-scheduler",
+        daemon=True,
+    )
+    scheduler_thread.start()
+
     server = ThreadingHTTPServer((args.host, args.port), MonitoringHandler)
     print(f"Monitoring receiver running on http://{args.host}:{args.port}")
     server.serve_forever()

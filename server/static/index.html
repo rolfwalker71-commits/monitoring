@@ -100,7 +100,7 @@
                 <button id="agentSourceStatusTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="agentSourceStatusView">Agent Quelle</button>
                 <button id="globalAdminAlertSubsTabButton" type="button" class="tab-button admin-only-tab hidden" role="tab" aria-selected="false" aria-controls="globalAdminAlertSubsView">Alert Abos</button>
                 <button id="globalAdminLoginAuditTabButton" type="button" class="tab-button admin-only-tab hidden" role="tab" aria-selected="false" aria-controls="globalAdminLoginAuditView">Login Changelog</button>
-                <button id="globalAdminSettingsTabButton" type="button" class="tab-button admin-only-tab hidden" role="tab" aria-selected="false" aria-controls="globalAdminSettingsView">Admin Settings</button>
+                <button id="globalAdminSettingsTabButton" type="button" class="tab-button admin-only-tab hidden" role="tab" aria-selected="false" aria-controls="globalAdminSettingsView">Admin</button>
               </div>
               <p id="adminOnlyTabsLegend" class="admin-tab-legend hidden"><span class="admin-tab-legend-swatch" aria-hidden="true"></span> Orange markierte Register sind nur für Admins sichtbar.</p>
             </div>
@@ -384,12 +384,30 @@
                 <div class="db-maintenance-head">
                   <h6>DB Wartung (SQLite)</h6>
                   <div class="db-maintenance-actions">
-                    <button id="refreshDatabaseStatsButton" class="btn-secondary-compact" type="button" title="DB Kennzahlen neu laden">↻</button>
                     <button id="vacuumDatabaseButton" class="btn-secondary" type="button" title="SQLite VACUUM ausführen">🧹 VACUUM</button>
                   </div>
                 </div>
-                <p id="dbMaintenanceStatus" class="count compact">Lade DB Kennzahlen...</p>
+                <p id="dbMaintenanceStatus" class="count compact">Lade DB Kennzahlen-Verlauf...</p>
                 <div id="dbMaintenanceStats" class="db-maintenance-stats-grid"></div>
+                <div id="dbMaintenanceCharts" class="db-maintenance-charts"></div>
+                <div class="agent-update-admin-table-wrap db-maintenance-history-wrap">
+                  <table class="agent-update-admin-table db-maintenance-history-table">
+                    <thead>
+                      <tr>
+                        <th>Zeit</th>
+                        <th>DB gesamt</th>
+                        <th>Δ DB</th>
+                        <th>Reports</th>
+                        <th>Δ Reports</th>
+                        <th>Alerts offen</th>
+                        <th>Δ Alerts</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dbMaintenanceHistoryRows">
+                      <tr><td colspan="7" class="muted">Lade Verlauf...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
                 <p id="dbMaintenanceEffect" class="count compact"></p>
               </div>
 

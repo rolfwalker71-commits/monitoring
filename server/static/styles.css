@@ -903,6 +903,66 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   gap: 8px;
 }
 
+.db-maintenance-charts {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 8px;
+}
+
+.db-maintenance-chart-card {
+  border: 1px solid #d8e2f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px;
+}
+
+.db-maintenance-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.db-maintenance-chart-head strong {
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.db-maintenance-chart-head span {
+  font-size: 11px;
+  color: #4b5563;
+}
+
+.db-maintenance-chart-svg {
+  width: 100%;
+  height: 120px;
+  display: block;
+}
+
+.db-maintenance-chart-axis {
+  stroke: #cbd5e1;
+  stroke-width: 1;
+}
+
+.db-maintenance-chart-line {
+  fill: none;
+  stroke: #2563eb;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.db-maintenance-history-wrap {
+  margin-top: 10px;
+  max-height: 320px;
+}
+
+.db-maintenance-history-table {
+  min-width: 760px;
+}
+
 .db-maintenance-stat {
   border: 1px solid #d8e2f0;
   border-radius: 8px;
@@ -1062,6 +1122,27 @@ body[data-theme="dark"] .db-maintenance-stat > span {
 
 body[data-theme="dark"] .db-maintenance-stat > strong {
   color: #dbeafe;
+}
+
+body[data-theme="dark"] .db-maintenance-chart-card {
+  background: #15243c;
+  border-color: #2b3b56;
+}
+
+body[data-theme="dark"] .db-maintenance-chart-head strong {
+  color: #dbeafe;
+}
+
+body[data-theme="dark"] .db-maintenance-chart-head span {
+  color: #93a9c4;
+}
+
+body[data-theme="dark"] .db-maintenance-chart-axis {
+  stroke: #3f5677;
+}
+
+body[data-theme="dark"] .db-maintenance-chart-line {
+  stroke: #60a5fa;
 }
 
 body[data-theme="dark"] .agent-update-admin-table thead th:nth-child(1),

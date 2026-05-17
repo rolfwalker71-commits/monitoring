@@ -493,6 +493,15 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.73 (17. Mai 2026)
+
+- **Admin-Tab umbenannt**: Registerkarte heißt jetzt **Admin** statt "Admin Settings".
+- **Admin-Bereiche verschoben**: "Admin Aktionen", "DB Wartung (SQLite)" und "Agent Update Status" sind jetzt im Admin-Tab gruppiert.
+- **DB-Kennzahlen automatisiert**: Kennzahlen werden automatisch in eine Historien-Tabelle geschrieben (alle 3 Stunden, Zeitzone konfigurierbar), inklusive Start-Snapshot.
+- **Kein manueller Kennzahlen-Refresh mehr**: Der manuelle ↻-Button wurde entfernt.
+- **Charts + 14-Tage-Trendanalyse**: Visualisierung der wichtigsten Kennzahlen und lineare 2-Wochen-Prognose im DB-Wartungsbereich.
+- **Verlaufstabelle**: Anzeige der letzten 20 Historienzeilen inklusive Veränderung zur vorherigen Zeile (+/-).
+
 ### v1.6.72 (16. Mai 2026)
 
 - **Chips in Titelzeile**: API-Chip, Meldungsanzahl-Chip, Kunden-Chip und Action-Buttons sind jetzt in der Titelzeile eingebaut statt in einer zweiten Reihe — die Header-Karte bleibt gleich hoch.

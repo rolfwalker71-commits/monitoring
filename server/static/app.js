@@ -2811,6 +2811,7 @@ function mountAdminSettingsIntoGlobalView() {
     return;
   }
   const sections = [
+    document.getElementById("globalAdminOpsSection"),
     document.getElementById("adminOauthSettingsSection"),
     document.getElementById("adminUserManagementSection"),
     document.getElementById("globalAlarmSettingsSection"),
@@ -7416,6 +7417,104 @@ function renderDbMaintenanceStats(stats) {
     .join("");
 }
 
+function formatSignedInteger(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "-";
+  const rounded = Math.round(num);
+  if (rounded === 0) return "0";
+  return `${rounded > 0 ? "+" : "-"}${Math.abs(rounded).toLocaleString("de-DE")}`;
+}
+
+function formatSignedBytes(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "-";
+  if (Math.abs(num) < 1) return "0 B";
+  const prefix = num > 0 ? "+" : "-";
+  return `${prefix}${formatBytes(Math.abs(num))}`;
+}
+
+function renderDbMaintenanceCharts(history, forecasts) {
+  const el = document.getElementById("dbMaintenanceCharts");
+  if (!el) return;
+  const rows = Array.isArray(history) ? history : [];
+  if (rows.length < 2) {
+    el.innerHTML = '<p class="muted">Noch zu wenige Datenpunkte für Charts. Nach dem nächsten 3h-Lauf erscheinen Verläufe.</p>';
+    return;
+  }
+
+  const chartDefs = [
+    { key: "total_file_bytes", title: "DB gesamt", formatter: (v) => formatBytes(v) },
+    { key: "reports_total", title: "Reports", formatter: (v) => formatInteger(v) },
+    { key: "alerts_open", title: "Alerts offen", formatter: (v) => formatInteger(v) },
+    { key: "wal_file_bytes", title: "WAL", formatter: (v) => formatBytes(v) },
+  ];
+
+  const renderLine = (values) => {
+    const width = 360;
+    const height = 120;
+    const pad = 12;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = Math.max(1, max - min);
+    const points = values.map((v, i) => {
+      const x = pad + (i * ((width - pad * 2) / Math.max(1, values.length - 1)));
+      const y = height - pad - (((v - min) / span) * (height - pad * 2));
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(" ");
+    return { width, height, points, min, max };
+  };
+
+  el.innerHTML = chartDefs.map((def) => {
+    const values = rows.map((row) => Number(row?.[def.key] || 0));
+    const line = renderLine(values);
+    const latest = values[values.length - 1];
+    const first = values[0];
+    const delta = latest - first;
+    const forecast = forecasts && typeof forecasts === "object" ? forecasts[def.key] : null;
+    const forecastText = forecast && typeof forecast === "object"
+      ? `14d Trend: ${formatSignedInteger(forecast.delta_14d)} (${def.formatter(forecast.projected_14d || 0)})`
+      : "14d Trend: n/a";
+
+    return `<div class="db-maintenance-chart-card">
+      <div class="db-maintenance-chart-head">
+        <strong>${escapeHtml(def.title)}</strong>
+        <span>${escapeHtml(def.formatter(latest || 0))} (${escapeHtml(formatSignedInteger(delta))})</span>
+      </div>
+      <svg viewBox="0 0 ${line.width} ${line.height}" class="db-maintenance-chart-svg" role="img" aria-label="${escapeHtml(def.title)} Verlauf">
+        <line x1="12" y1="${line.height - 12}" x2="${line.width - 12}" y2="${line.height - 12}" class="db-maintenance-chart-axis"></line>
+        <polyline points="${line.points}" class="db-maintenance-chart-line"></polyline>
+      </svg>
+      <p class="count compact">Min: ${escapeHtml(def.formatter(line.min))} · Max: ${escapeHtml(def.formatter(line.max))}</p>
+      <p class="count compact">${escapeHtml(forecastText)}</p>
+    </div>`;
+  }).join("");
+}
+
+function renderDbMaintenanceHistoryRows(rows) {
+  const body = document.getElementById("dbMaintenanceHistoryRows");
+  if (!body) return;
+  const list = Array.isArray(rows) ? rows.slice().reverse() : [];
+  if (list.length === 0) {
+    body.innerHTML = '<tr><td colspan="7" class="muted">Noch keine Verlaufsdaten vorhanden.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = list.map((row) => {
+    const time = formatUtcPlus2(row.bucket_start_utc || "") || "-";
+    return `<tr>
+      <td>${escapeHtml(time)}</td>
+      <td>${escapeHtml(formatBytes(row.total_file_bytes || 0))}</td>
+      <td>${escapeHtml(formatSignedBytes(row.delta_total_file_bytes))}</td>
+      <td>${escapeHtml(formatInteger(row.reports_total || 0))}</td>
+      <td>${escapeHtml(formatSignedInteger(row.delta_reports_total))}</td>
+      <td>${escapeHtml(formatInteger(row.alerts_open || 0))}</td>
+      <td>${escapeHtml(formatSignedInteger(row.delta_alerts_open))}</td>
+    </tr>`;
+  }).join("");
+}
+
 function renderDbMaintenanceEffect(result) {
   const el = document.getElementById("dbMaintenanceEffect");
   if (!el) return;
@@ -7444,8 +7543,18 @@ async function loadAdminDatabaseStats() {
     throw new Error(data.error || ("HTTP " + response.status));
   }
   const stats = data && typeof data.stats === "object" ? data.stats : {};
+  const history = Array.isArray(data?.history) ? data.history : [];
+  const recentRows = Array.isArray(data?.recent_rows) ? data.recent_rows : [];
+  const forecasts = data && typeof data.forecasts === "object" ? data.forecasts : {};
+  const schedule = data && typeof data.schedule === "object" ? data.schedule : {};
   renderDbMaintenanceStats(stats);
-  setDbMaintenanceStatus(`Stand: ${formatUtcPlus2(new Date().toISOString())}`);
+  renderDbMaintenanceCharts(history, forecasts);
+  renderDbMaintenanceHistoryRows(recentRows);
+  const lastBucket = history.length > 0 ? formatUtcPlus2(history[history.length - 1]?.bucket_start_utc || "") : "-";
+  const nextLocal = schedule?.next_bucket_local
+    ? new Date(schedule.next_bucket_local).toLocaleString("de-CH", { timeZone: schedule.timezone || "Europe/Zurich" })
+    : "-";
+  setDbMaintenanceStatus(`Letzter Lauf: ${lastBucket} · Nächster 3h-Lauf: ${nextLocal} (${schedule.timezone || "Europe/Zurich"})`);
   return stats;
 }
 
@@ -10512,21 +10621,6 @@ function wireEvents() {
     });
   }
 
-  const refreshDatabaseStatsButton = document.getElementById("refreshDatabaseStatsButton");
-  if (refreshDatabaseStatsButton) {
-    refreshDatabaseStatsButton.addEventListener("click", async () => {
-      refreshDatabaseStatsButton.disabled = true;
-      setDbMaintenanceStatus("Lade DB Kennzahlen...");
-      try {
-        await loadAdminDatabaseStats();
-      } catch (error) {
-        setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
-      } finally {
-        refreshDatabaseStatsButton.disabled = false;
-      }
-    });
-  }
-
   const vacuumDatabaseButton = document.getElementById("vacuumDatabaseButton");
   if (vacuumDatabaseButton) {
     vacuumDatabaseButton.addEventListener("click", async () => {
@@ -10540,7 +10634,6 @@ function wireEvents() {
       const labelEl = document.getElementById("dbOpsProgressLabel");
 
       vacuumDatabaseButton.disabled = true;
-      if (refreshDatabaseStatsButton) refreshDatabaseStatsButton.disabled = true;
       progressEl.classList.remove("hidden");
       barEl.style.width = "40%";
       barEl.classList.add("db-ops-progress-bar--indeterminate");
@@ -10565,7 +10658,6 @@ function wireEvents() {
         setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
       } finally {
         vacuumDatabaseButton.disabled = false;
-        if (refreshDatabaseStatsButton) refreshDatabaseStatsButton.disabled = false;
       }
     });
   }
