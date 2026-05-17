@@ -4250,7 +4250,8 @@ body[data-theme="dark"] .trend-progress-bar {
 .alert-action-buttons {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  white-space: nowrap;
 }
 
 .alert-ack-btn {
@@ -4258,7 +4259,7 @@ body[data-theme="dark"] .trend-progress-bar {
   border: none;
   cursor: pointer;
   font-size: 14px;
-  padding: 2px 4px;
+  padding: 2px 3px;
   border-radius: 4px;
   color: #64748b;
   opacity: 0.75;
@@ -4281,7 +4282,7 @@ body[data-theme="dark"] .trend-progress-bar {
   border: none;
   cursor: pointer;
   font-size: 14px;
-  padding: 2px 4px;
+  padding: 2px 3px;
   border-radius: 4px;
   color: #64748b;
   opacity: 0.65;

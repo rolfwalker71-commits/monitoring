@@ -1,4 +1,5 @@
 # Monitoring – Server & Agent
+- v1.6.158: global alerts table column widths optimized; action buttons compacted to avoid right-edge overflow/clipping.
 
 Zentrales Monitoring-System für Linux- und Windows-Hosts, betrieben als selbst-gehosteter Web-Service auf einer Synology NAS.
 
