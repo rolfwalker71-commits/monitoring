@@ -522,6 +522,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.137 (17. Mai 2026)
+
+- **Reihe 2 nachgezogen**: Die Meldungsanzeige "Meldung X von Y" wurde auf dieselbe Hoehe wie die Chips/Buttons (24px) gesetzt.
+- **Header-Zeilen konsistent**: Erste und zweite Header-Zeile verwenden nun durchgaengig dieselbe Kontrollhoehe.
+
 ### v1.6.136 (17. Mai 2026)
 
 - **Header-Hoehen vereinheitlicht**: Chips und Buttons im Host-Headerbereich auf die Hoehe von "Export JSON" (24px) angeglichen.
