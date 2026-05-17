@@ -2651,8 +2651,8 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 88px;
-  height: 88px;
+  width: 62px;
+  height: 62px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2676,8 +2676,8 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 
 @media (max-width: 1180px) {
   .report-header-os-logo-wrap {
-    width: 74px;
-    height: 74px;
+    width: 52px;
+    height: 52px;
   }
 
   .report-meta-row {
