@@ -7173,8 +7173,7 @@ function renderSingleHostCard(host) {
       <div class="${statusBarClass}"></div>
       ${flagIcon}
       ${customerTitleLine}
-      <span class="host-meta-line host-meta-line--primary"><span class="host-meta-text">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))} &nbsp;·&nbsp; <span class="host-agent-version-dot host-agent-version-dot--compact ${agentVersionVisual.dotClassName}" title="${escapeHtml(agentVersionVisual.title)}" aria-hidden="true"></span></span></span>
-      <span class="host-meta-line host-meta-line--with-alert"><span class="host-meta-text"><span class="host-last-report" title="${escapeHtml(lastReportInfo.title)}"><span class="host-last-report-dot ${lastReportInfo.statusClass}" aria-hidden="true"></span> ${escapeHtml(lastReportInfo.label)}</span></span>${metaAlertChip}</span>
+      <span class="host-meta-line host-meta-line--primary host-meta-line--with-alert"><span class="host-meta-text">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))} &nbsp;·&nbsp; <span class="host-last-report-dot host-last-report-dot--inline ${lastReportInfo.statusClass}" title="${escapeHtml(lastReportInfo.title)}" aria-hidden="true"></span></span>${metaAlertChip}</span>
       ${footerContent}
       ${mutedAlertsSection}
       ${osIcon}

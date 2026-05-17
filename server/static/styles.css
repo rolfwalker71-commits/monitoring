@@ -4454,6 +4454,13 @@ body[data-theme="dark"] .trend-progress-bar {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
 }
 
+.host-last-report-dot--inline {
+  width: 11px;
+  height: 11px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
 .host-last-report-dot--ok {
   background: #22c55e;
   border-color: #16a34a;
