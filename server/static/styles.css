@@ -3952,7 +3952,7 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-value-chip--hana,
 .host-value-chip--sid {
   border-color: #9fb9de;
-  background: #dbe9fb;
+  background: rgba(255, 255, 255, 0.62);
   color: #27466d;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   font-size: 12px;

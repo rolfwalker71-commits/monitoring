@@ -522,6 +522,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.141 (17. Mai 2026)
+
+- **Host-Chips transparenter gemacht**: SAP/HANA/SID-Chips (z. B. FP2602, 2.00.087, ANG) verwenden jetzt einen weiss-transparenten Hintergrund.
+
 ### v1.6.140 (17. Mai 2026)
 
 - **sFTP Testfunktion eingebaut**: Neuer Admin-Button "sFTP testen" prueft Verbindung und fuehrt einen echten Test-Upload (put + rm) im Zielpfad aus.
