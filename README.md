@@ -1,5 +1,4 @@
 # Monitoring – Server & Agent
-- v1.6.158: global alerts table column widths optimized; action buttons compacted to avoid right-edge overflow/clipping.
 
 Zentrales Monitoring-System für Linux- und Windows-Hosts, betrieben als selbst-gehosteter Web-Service auf einer Synology NAS.
 
@@ -524,6 +523,15 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
  
+### v1.6.159 (17. Mai 2026)
+
+- **Changelog-Block bereinigt**: Der v1.6.158-Eintrag wurde aus dem Dateikopf in den Abschnitt `Changelog (Agent)` verschoben.
+
+### v1.6.158 (17. Mai 2026)
+
+- **Global-Alerts Spaltenbreiten optimiert**: `Host`, `Mountpoint`, `Aktiv seit` und `Aktion` neu austariert, damit rechte Inhalte nicht mehr aus dem Rahmen laufen.
+- **Actions kompakter gemacht**: Geringerer Button-Abstand/Padding und `nowrap` fuer die Aktionsgruppe, damit die rechte Spalte stabil bleibt.
+
 ### v1.6.157 (17. Mai 2026)
 
 - **Hotfix Receiver-Start**: Syntaxfehler in der CSV-Export-Quoting-Zeile behoben (`receiver.py`), der zu `status=1/FAILURE` beim Service-Start fuehren konnte.
