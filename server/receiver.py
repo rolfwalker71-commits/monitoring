@@ -3855,7 +3855,14 @@ def collect_critical_trends(
 
         last_payload = parse_payload_json(rows[-1][0])
         host_settings = conn.execute(
-            "SELECT COALESCE(display_name_override, ''), COALESCE(country_code_override, '') FROM host_settings WHERE hostname = ?",
+            """
+            SELECT COALESCE(h.display_name_override, ''),
+                   COALESCE(h.country_code_override, ''),
+                   COALESCE(c.customer_name, '')
+            FROM host_settings h
+            LEFT JOIN customers c ON c.id = h.customer_id
+            WHERE h.hostname = ?
+            """,
             (hostname,),
         ).fetchone()
         muted_mountpoints = {
@@ -3867,6 +3874,7 @@ def collect_critical_trends(
         }
         display_name_override = str(host_settings[0] or "").strip() if host_settings else ""
         country_code_override = normalize_country_code(host_settings[1] if host_settings else "")
+        host_customer_name = str(host_settings[2] or "").strip() if host_settings else ""
         host_display_name = effective_display_name(last_payload, display_name_override, hostname)
         host_country_code = country_code_override or extract_country_code_from_payload(last_payload)
         host_os_family = normalize_os_family(last_payload.get("os", ""))
@@ -3921,6 +3929,7 @@ def collect_critical_trends(
                 {
                     "hostname": hostname,
                     "display_name": host_display_name,
+                    "customer_name": host_customer_name,
                     "primary_ip": host_primary_ip,
                     "metric": label,
                     "metric_key": key,
@@ -3953,6 +3962,7 @@ def collect_critical_trends(
                     {
                         "hostname": hostname,
                         "display_name": host_display_name,
+                        "customer_name": host_customer_name,
                         "primary_ip": host_primary_ip,
                         "metric": mountpoint,
                         "metric_key": "filesystem",

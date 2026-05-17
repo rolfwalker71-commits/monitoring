@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
  
+### v1.6.160 (17. Mai 2026)
+
+- **Kundenname in Critical-Trends sichtbar**: In den Trend-Karten wird der Kunde nun vorne in der Kopfzeile angezeigt (oberhalb vor dem Hostnamen), wie in der angefragten Ansicht.
+
 ### v1.6.159 (17. Mai 2026)
 
 - **Changelog-Block bereinigt**: Der v1.6.158-Eintrag wurde aus dem Dateikopf in den Abschnitt `Changelog (Agent)` verschoben.

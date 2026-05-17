@@ -9330,6 +9330,7 @@ function renderCriticalTrends(data) {
     const hostBadge = hostCrit > 0
       ? `<span class="ct-host-badge ct-badge-crit">Kritisch</span>`
       : `<span class="ct-host-badge ct-badge-warn">Warnung</span>`;
+    const customerName = asText(items[0].customer_name || "");
     const displayName = items[0].display_name || hostname;
     const showHostname = displayName !== hostname;
 
@@ -9362,7 +9363,10 @@ function renderCriticalTrends(data) {
     return `
       <div class="ct-host-card ct-host-card-${hostCrit > 0 ? "crit" : "warn"}">
         <div class="ct-host-header">
-          <span class="ct-hostname">${escapeHtml(displayName)}${showHostname ? ` <span class="ct-hostname-sub">(${escapeHtml(hostname)})</span>` : ""}</span>
+          <span class="ct-host-title-block">
+            ${customerName ? `<span class="ct-host-customer">${escapeHtml(customerName)}</span>` : ""}
+            <span class="ct-hostname">${escapeHtml(displayName)}${showHostname ? ` <span class="ct-hostname-sub">(${escapeHtml(hostname)})</span>` : ""}</span>
+          </span>
           ${hostBadge}
           <span class="ct-host-meta">${hostCrit > 0 ? hostCrit + " kritisch" : ""}${hostCrit > 0 && hostWarn > 0 ? ", " : ""}${hostWarn > 0 ? hostWarn + " Warnung" : ""}</span>
         </div>
