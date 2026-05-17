@@ -2495,13 +2495,11 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   table-layout: fixed;
 }
 
-#overviewConfigChangelogSection,
-#overviewDatabaseLifecycleSection {
+#overviewConfigChangelogSection {
   padding: 6px 4px;
 }
 
-#overviewConfigChangelogSection .table-wrap,
-#overviewDatabaseLifecycleSection .table-wrap {
+#overviewConfigChangelogSection .table-wrap {
   width: 100%;
   margin: 0;
   padding: 0;
@@ -2535,31 +2533,6 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 #overviewConfigChangelogSection th:nth-child(2) { width: 31%; }
 #overviewConfigChangelogSection th:nth-child(3) { width: 31%; }
 #overviewConfigChangelogSection th:nth-child(4) { width: 22%; }
-
-#overviewDatabaseLifecycleSection table {
-  table-layout: auto;
-  width: 100%;
-  font-size: 11px;
-}
-
-#overviewDatabaseLifecycleSection td,
-#overviewDatabaseLifecycleSection th {
-  padding: 4px 5px;
-  font-size: 11px;
-  word-break: break-word;
-  white-space: normal;
-}
-
-#overviewDatabaseLifecycleSection th {
-  font-size: 11px;
-  font-weight: 700;
-}
-
-#overviewDatabaseLifecycleSection th:nth-child(1) { width: 18%; }
-#overviewDatabaseLifecycleSection th:nth-child(2) { width: 12%; }
-#overviewDatabaseLifecycleSection th:nth-child(3) { width: 15%; }
-#overviewDatabaseLifecycleSection th:nth-child(4) { width: 20%; }
-#overviewDatabaseLifecycleSection th:nth-child(5) { width: 35%; }
 
 .report-subtable {
   table-layout: auto;

@@ -1389,12 +1389,10 @@ function updateOverviewSection() {
   const mainSection = document.getElementById("overviewMainSection");
   const filesystemSection = document.getElementById("overviewFilesystemSection");
   const notificationSection = document.getElementById("overviewNotificationSection");
-  const databaseLifecycleSection = document.getElementById("overviewDatabaseLifecycleSection");
   const configChangelogSection = document.getElementById("overviewConfigChangelogSection");
   const mainTabButton = document.getElementById("overviewMainTabButton");
   const filesystemTabButton = document.getElementById("overviewFilesystemTabButton");
   const notificationTabButton = document.getElementById("overviewNotificationTabButton");
-  const databaseLifecycleTabButton = document.getElementById("overviewDatabaseLifecycleTabButton");
   const configChangelogTabButton = document.getElementById("overviewConfigChangelogTabButton");
 
   if (!mainSection || !filesystemSection || !mainTabButton || !filesystemTabButton) {
@@ -1404,25 +1402,21 @@ function updateOverviewSection() {
   const showMain = state.overviewSection === "main";
   const showFilesystem = state.overviewSection === "filesystem";
   const showNotification = state.overviewSection === "notification";
-  const showDatabaseLifecycle = state.overviewSection === "database-lifecycle";
   const showConfigChangelog = state.overviewSection === "config-changelog";
 
   mainSection.classList.toggle("hidden", !showMain);
   filesystemSection.classList.toggle("hidden", !showFilesystem);
   if (notificationSection) notificationSection.classList.toggle("hidden", !showNotification);
-  if (databaseLifecycleSection) databaseLifecycleSection.classList.toggle("hidden", !showDatabaseLifecycle);
   if (configChangelogSection) configChangelogSection.classList.toggle("hidden", !showConfigChangelog);
 
   mainTabButton.classList.toggle("active", showMain);
   filesystemTabButton.classList.toggle("active", showFilesystem);
   if (notificationTabButton) notificationTabButton.classList.toggle("active", showNotification);
-  if (databaseLifecycleTabButton) databaseLifecycleTabButton.classList.toggle("active", showDatabaseLifecycle);
   if (configChangelogTabButton) configChangelogTabButton.classList.toggle("active", showConfigChangelog);
   
   mainTabButton.setAttribute("aria-selected", showMain ? "true" : "false");
   filesystemTabButton.setAttribute("aria-selected", showFilesystem ? "true" : "false");
   if (notificationTabButton) notificationTabButton.setAttribute("aria-selected", showNotification ? "true" : "false");
-  if (databaseLifecycleTabButton) databaseLifecycleTabButton.setAttribute("aria-selected", showDatabaseLifecycle ? "true" : "false");
   if (configChangelogTabButton) configChangelogTabButton.setAttribute("aria-selected", showConfigChangelog ? "true" : "false");
 }
 
@@ -8185,7 +8179,6 @@ function wireHostListInteractions() {
       loadReportsForHost();
       loadAnalysisForHost();
       loadAlertsForHost();
-      loadDatabaseLifecycleForHost();
       loadConfigChangelogForHost();
       loadAndRenderCustomerNotificationPanel(hostname);
     });
@@ -9136,75 +9129,6 @@ async function loadAlertsForHost() {
   }
 }
 
-async function loadDatabaseLifecycleForHost() {
-  const databaseLifecycleRows = document.getElementById("databaseLifecycleRows");
-  const databaseLifecycleSummary = document.getElementById("databaseLifecycleSummary");
-  const pagingStatus = document.getElementById("databaseLifecyclePagingStatus");
-  const loadMoreBtn = document.getElementById("databaseLifecycleLoadMoreButton");
-
-  if (!state.selectedHost) {
-    databaseLifecycleSummary.textContent = "";
-    databaseLifecycleRows.innerHTML = state.hostFilterNoMatches
-      ? "<tr><td colspan=\"5\" class=\"muted\">Keine Daten zum Suchfilter vorhanden.</td></tr>"
-      : "<tr><td colspan=\"5\"><div class=\"empty-state\"><span>🗄️</span><p>Wähle einen Host, um den Datenbank-Verlauf zu sehen.</p></div></td></tr>";
-    pagingStatus.textContent = "";
-    loadMoreBtn.classList.add("hidden");
-    return;
-  }
-
-  databaseLifecycleRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Lade Datenbank-Verlauf...</td></tr>";
-  databaseLifecycleSummary.textContent = "";
-  pagingStatus.textContent = "";
-
-  try {
-    const hostNameParam = encodeURIComponent(state.selectedHost);
-    const resp = await fetch(`/api/v1/database-lifecycle?hostname=${hostNameParam}&limit=100&offset=0`);
-
-    if (!resp.ok) {
-      throw new Error("HTTP " + resp.status);
-    }
-
-    const data = await resp.json();
-    const events = data.events || [];
-    const total = data.total || 0;
-    const returned = data.returned || 0;
-
-    databaseLifecycleSummary.textContent = `Insgesamt: ${total} Ereignisse`;
-
-    if (events.length === 0) {
-      databaseLifecycleRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Keine Ereignisse vorhanden.</td></tr>";
-      pagingStatus.textContent = "";
-      loadMoreBtn.classList.add("hidden");
-      return;
-    }
-
-    databaseLifecycleRows.innerHTML = events
-      .map((item) => {
-        const actionBadgeClass = item.action === "create" ? "badge-success" : item.action === "delete" ? "badge-danger" : "badge-info";
-        const actionLabel = item.action === "create" ? "✨ Erstellt" : item.action === "delete" ? "🗑️ Gelöscht" : "Umbenenannt";
-        const triggeredByLabel = item.triggered_by === "system" ? "🖥️ System" : item.triggered_by === "admin" ? "👤 Admin" : "🤖 Agent";
-        const reason = asText(item.reason || "-");
-
-        return `
-          <tr>
-            <td>${escapeHtml(asText(item.database_name))}</td>
-            <td><span class="badge ${actionBadgeClass}">${actionLabel}</span></td>
-            <td>${triggeredByLabel}</td>
-            <td>${escapeHtml(formatUtcPlus2(item.triggered_at_utc))}</td>
-            <td>${escapeHtml(reason)}</td>
-          </tr>
-        `;
-      })
-      .join("");
-
-    pagingStatus.textContent = `Zeige ${returned} von ${total}`;
-    loadMoreBtn.classList.toggle("hidden", returned >= total);
-  } catch (error) {
-    databaseLifecycleRows.innerHTML = `<tr><td colspan="5" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
-    loadMoreBtn.classList.add("hidden");
-  }
-}
-
 async function loadConfigChangelogForHost() {
   const configChangelogRows = document.getElementById("configChangelogRows");
   const configChangelogSummary = document.getElementById("configChangelogSummary");
@@ -9215,13 +9139,13 @@ async function loadConfigChangelogForHost() {
     configChangelogSummary.textContent = "";
     configChangelogRows.innerHTML = state.hostFilterNoMatches
       ? "<tr><td colspan=\"5\" class=\"muted\">Keine Daten zum Suchfilter vorhanden.</td></tr>"
-      : "<tr><td colspan=\"5\"><div class=\"empty-state\"><span>📝</span><p>Wähle einen Host, um das Änderungsprotokoll zu sehen.</p></div></td></tr>";
+      : "<tr><td colspan=\"5\"><div class=\"empty-state\"><span>📝</span><p>Wähle einen Host, um den Changelog zu sehen.</p></div></td></tr>";
     pagingStatus.textContent = "";
     loadMoreBtn.classList.add("hidden");
     return;
   }
 
-  configChangelogRows.innerHTML = "<tr><td colspan=\"4\" class=\"muted\">Lade Änderungen...</td></tr>";
+  configChangelogRows.innerHTML = "<tr><td colspan=\"4\" class=\"muted\">Lade Changelog...</td></tr>";
   configChangelogSummary.textContent = "";
   pagingStatus.textContent = "";
 
@@ -9238,10 +9162,10 @@ async function loadConfigChangelogForHost() {
     const total = data.total || 0;
     const returned = data.returned || 0;
 
-    configChangelogSummary.textContent = `Insgesamt: ${total} Änderungen`;
+    configChangelogSummary.textContent = `Insgesamt: ${total} Changelog-Einträge`;
 
     if (items.length === 0) {
-      configChangelogRows.innerHTML = "<tr><td colspan=\"4\" class=\"muted\">Keine Änderungen vorhanden.</td></tr>";
+      configChangelogRows.innerHTML = "<tr><td colspan=\"4\" class=\"muted\">Keine Changelog-Einträge vorhanden.</td></tr>";
       pagingStatus.textContent = "";
       loadMoreBtn.classList.add("hidden");
       return;
@@ -10075,7 +9999,7 @@ async function loadHostConfigChanges() {
     const data = await response.json();
     const items = Array.isArray(data.items) ? data.items : [];
     if (summaryEl) {
-      summaryEl.textContent = `${items.length} Änderung(en) in den letzten ${hours}h`;
+      summaryEl.textContent = `${items.length} Changelog-Eintrag/Einträge in den letzten ${hours}h`;
     }
 
     if (!items.length) {
@@ -10150,15 +10074,15 @@ async function loadHostConfigChanges() {
         ? ` (Land: ${state.hostConfigChangesCountryFilter})`
         : "";
       const searchMsg = state.hostConfigChangesSearchQuery ? ` - gefiltert` : "";
-      summaryEl.textContent = `${filteredCount} Änderung(en) in den letzten ${hours}h${countryMsg}${searchMsg}`;
+      summaryEl.textContent = `${filteredCount} Changelog-Eintrag/Einträge in den letzten ${hours}h${countryMsg}${searchMsg}`;
     }
 
     if (!filteredItems.length) {
       const reason = state.hostConfigChangesSearchQuery
-        ? `Keine Änderungen gefunden für "${state.hostConfigChangesSearchQuery}"`
+        ? `Keine Changelog-Einträge gefunden für "${state.hostConfigChangesSearchQuery}"`
         : state.hostConfigChangesCountryFilter && state.hostConfigChangesCountryFilter !== "all"
-          ? `Keine Änderungen für Land ${state.hostConfigChangesCountryFilter}`
-          : "Keine Änderungen im gewählten Zeitraum.";
+          ? `Keine Changelog-Einträge für Land ${state.hostConfigChangesCountryFilter}`
+          : "Keine Changelog-Einträge im gewählten Zeitraum.";
       groupsEl.innerHTML = `<p class="muted">${escapeHtml(reason)}</p>`;
       return;
     }
@@ -10248,7 +10172,7 @@ async function loadHostConfigChanges() {
                   ${hostGroup.country_code && getCountryFlagIconPath(hostGroup.country_code)
                     ? `<span class="host-config-country-badge" title="Land: ${escapeHtml(hostGroup.country_code)}"><img src="${getCountryFlagIconPath(hostGroup.country_code)}" class="host-config-country-flag" alt="${escapeHtml(hostGroup.country_code)}" /></span>`
                     : ""}
-                  <span class="host-config-change-count">${sortedItems.length} Änderung(en)</span>
+                  <span class="host-config-change-count">${sortedItems.length} Changelog-Eintrag/Einträge</span>
                 </summary>
                 <div class="table-wrap host-config-changes-wrap">
                   <table>
@@ -10272,7 +10196,7 @@ async function loadHostConfigChanges() {
           <details class="host-config-change-date-group" ${autoExpandGroups ? "open" : ""}>
             <summary class="host-config-change-date-summary">
               <span class="host-config-date-label">${escapeHtml(customerGroup.customerName)}</span>
-              <span class="host-config-date-count">${customerGroup.items.length} Änderung(en)</span>
+              <span class="host-config-date-count">${customerGroup.items.length} Changelog-Eintrag/Einträge</span>
             </summary>
             <div class="host-config-date-group-content">
               ${hostRowsHtml}
@@ -10387,7 +10311,7 @@ async function runCombinedBackfill(days = 7) {
     setHostConfigChangesBackfillStatus(message, false);
     await loadHostConfigChanges();
     if (state.selectedHost) {
-      await loadDatabaseLifecycleForHost();
+      await loadConfigChangelogForHost();
     }
   } catch (error) {
     setHostConfigChangesBackfillStatus(`Backfill Fehler: ${error.message}`, true);
@@ -11606,14 +11530,6 @@ function wireEvents() {
     // Reload panel for current host when switching to this tab
     if (state.selectedHost) {
       loadAndRenderCustomerNotificationPanel(state.selectedHost);
-    }
-  });
-
-  document.getElementById("overviewDatabaseLifecycleTabButton").addEventListener("click", () => {
-    state.overviewSection = "database-lifecycle";
-    updateOverviewSection();
-    if (state.selectedHost) {
-      loadDatabaseLifecycleForHost();
     }
   });
 

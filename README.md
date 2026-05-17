@@ -523,6 +523,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.167 (17. Mai 2026)
+
+- **Changelog Vereinheitlichung**: DB-Lifecycle-Events (Erstellen/Loeschen) sind jetzt im globalen Changelog und im hostspezifischen Changelog enthalten (zusammen mit Hardware-Metriken und AddOn-Aenderungen).
+- **Host UI bereinigt**: Der separate Bereich "DB-Verlauf" wurde entfernt; der Sidebar-Bereich "Aenderungen" wurde in "Changelog" umbenannt.
+
 ### v1.6.166 (17. Mai 2026)
 
 - **Host-Aenderungsprotokoll AddOns**: Der Host-spezifische Tab "Aenderungen" zeigt jetzt auch SAP/HANA AddOn-Versionsaenderungen (LW/Legacy) direkt im Kunden-Host-Changelog an.

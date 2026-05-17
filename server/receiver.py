@@ -3424,6 +3424,109 @@ def get_database_lifecycle_for_host(
     }
 
 
+def _format_database_lifecycle_name(database_name: object, instance_name: object) -> str:
+    db_name = str(database_name or "").strip() or "-"
+    instance = str(instance_name or "").strip() or "MSSQLSERVER"
+    if instance.upper() == "MSSQLSERVER":
+        return db_name
+    return f"{instance}::{db_name}"
+
+
+def _database_lifecycle_values(action: str, database_display_name: str) -> tuple[str, str, str]:
+    normalized = str(action or "").strip().lower()
+    if normalized == "create":
+        return "DB erstellt", "-", database_display_name
+    if normalized == "delete":
+        return "DB gelöscht", database_display_name, "-"
+    if normalized == "rename":
+        return "DB umbenannt", "-", database_display_name
+    return f"DB {normalized or 'event'}", "-", database_display_name
+
+
+def _collect_database_lifecycle_change_items_for_host(conn: sqlite3.Connection, hostname: str) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT id,
+               triggered_at_utc,
+               database_name,
+               action,
+               COALESCE(instance_name, 'MSSQLSERVER')
+        FROM database_lifecycle
+        WHERE hostname = ?
+        ORDER BY triggered_at_utc DESC, id DESC
+        """,
+        (hostname,),
+    ).fetchall()
+
+    items: list[dict] = []
+    for row in rows:
+        database_display_name = _format_database_lifecycle_name(row[2], row[4])
+        action_label, old_value, new_value = _database_lifecycle_values(str(row[3] or ""), database_display_name)
+        items.append(
+            {
+                "id": int(row[0] or 0),
+                "detected_at_utc": str(row[1] or ""),
+                "field_key": f"db_lifecycle::{str(row[3] or '').strip().lower()}::{database_display_name}",
+                "field_label": action_label,
+                "old_value": old_value,
+                "new_value": new_value,
+                "source": "database-lifecycle",
+            }
+        )
+
+    return items
+
+
+def _collect_database_lifecycle_change_items(conn: sqlite3.Connection, hours: int, limit: int) -> list[dict]:
+    cutoff_iso = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    rows = conn.execute(
+        """
+        SELECT dl.id,
+               dl.triggered_at_utc,
+               dl.hostname,
+               dl.database_name,
+               dl.action,
+               COALESCE(dl.instance_name, 'MSSQLSERVER'),
+               COALESCE(h.display_name_override, ''),
+               COALESCE(h.country_code_override, ''),
+               COALESCE(cust.customer_name, '')
+        FROM database_lifecycle dl
+        LEFT JOIN host_settings h ON h.hostname = dl.hostname
+        LEFT JOIN customers cust ON cust.id = h.customer_id
+        WHERE dl.triggered_at_utc >= ?
+        ORDER BY dl.triggered_at_utc DESC, dl.id DESC
+        LIMIT ?
+        """,
+        (cutoff_iso, limit),
+    ).fetchall()
+
+    items: list[dict] = []
+    for row in rows:
+        hostname = str(row[2] or "")
+        display_override = str(row[6] or "").strip()
+        country_code = normalize_country_code(str(row[7] or ""))
+        customer_name = str(row[8] or "").strip()
+        database_display_name = _format_database_lifecycle_name(row[3], row[5])
+        action_label, old_value, new_value = _database_lifecycle_values(str(row[4] or ""), database_display_name)
+        items.append(
+            {
+                "id": int(row[0] or 0),
+                "detected_at_utc": str(row[1] or ""),
+                "hostname": hostname,
+                "display_name": display_override or hostname,
+                "customer_name": customer_name,
+                "field_key": f"db_lifecycle::{str(row[4] or '').strip().lower()}::{database_display_name}",
+                "field_label": action_label,
+                "old_value": old_value,
+                "new_value": new_value,
+                "source": "database-lifecycle",
+                "country_code": country_code,
+            }
+        )
+
+    return items
+
+
 def get_host_config_changes_for_host(
     conn: sqlite3.Connection,
     hostname: str,
@@ -3465,7 +3568,12 @@ def get_host_config_changes_for_host(
     addon_items = _collect_sap_addon_change_items_for_host(conn, hostname)
     if addon_items:
         items.extend(addon_items)
-        items.sort(key=lambda item: (str(item.get("detected_at_utc") or ""), int(item.get("id") or 0)), reverse=True)
+
+    db_items = _collect_database_lifecycle_change_items_for_host(conn, hostname)
+    if db_items:
+        items.extend(db_items)
+
+    items.sort(key=lambda item: (str(item.get("detected_at_utc") or ""), int(item.get("id") or 0)), reverse=True)
 
     total = len(items)
     paged_items = items[safe_offset : safe_offset + safe_limit]
@@ -4808,7 +4916,7 @@ def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit:
                r.payload_json,
                COALESCE(h.display_name_override, ''),
                COALESCE(h.country_code_override, ''),
-               COALESCE(cust.name, '')
+               COALESCE(cust.customer_name, '')
         FROM reports r
         LEFT JOIN host_settings h ON h.hostname = r.hostname
         LEFT JOIN customers cust ON cust.id = h.customer_id
@@ -4884,7 +4992,7 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
                chg.new_value,
                COALESCE(chg.source, 'agent-report'),
                COALESCE(h.country_code_override, ''),
-               COALESCE(cust.name, '')
+               COALESCE(cust.customer_name, '')
         FROM host_config_changes chg
         LEFT JOIN host_settings h ON h.hostname = chg.hostname
         LEFT JOIN customers cust ON cust.id = h.customer_id
@@ -4920,6 +5028,12 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
     addon_items = _collect_sap_addon_change_items(conn, window_hours, row_limit)
     if addon_items:
         items.extend(addon_items)
+
+    db_items = _collect_database_lifecycle_change_items(conn, window_hours, row_limit)
+    if db_items:
+        items.extend(db_items)
+
+    if addon_items or db_items:
         items.sort(key=lambda item: (str(item.get("detected_at_utc") or ""), int(item.get("id") or 0)), reverse=True)
         items = items[:row_limit]
 
