@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.112 | 17.05.2026 | Host cards: unblock customer-name chip scaling by excluding value chips from generic span font override; increase customer chip text to 22px |
 | 1.6.111 | 17.05.2026 | Host cards: replace "AGENT ALT" text chip with a tiny circular red indicator dot aligned with the customer row |
 | 1.6.110 | 17.05.2026 | Host cards: replace top red agent frame with a very small, subtle "AGENT ALT" badge in the customer row (only shown when agent status is red) |
 | 1.6.109 | 17.05.2026 | Host cards: replace inline agent status dot with top-edge red bar shown only for red agent-status (outdated), freeing space for long hostnames |

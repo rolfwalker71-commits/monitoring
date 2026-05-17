@@ -3887,7 +3887,7 @@ body[data-theme="dark"] .trend-progress-bar {
   border-color: #7dd3fc;
   background: #e0f2fe;
   color: #0369a1;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 900;
   padding: 3px 12px;
   max-width: 100%;
@@ -4382,7 +4382,7 @@ body[data-theme="dark"] .trend-progress-bar {
   border-color: #fecaca;
 }
 
-.host-item span {
+.host-item span:not(.host-value-chip):not(.host-agent-mini-dot) {
   color: var(--muted);
   font-size: 11px;
 }
