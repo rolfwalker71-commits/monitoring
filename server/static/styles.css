@@ -3884,8 +3884,9 @@ body[data-theme="dark"] .trend-progress-bar {
   border-color: #fcd34d;
   background: #fffbeb;
   color: #92400e;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
+  padding: 2px 10px;
   max-width: 100%;
   overflow: visible;
   text-overflow: clip;
@@ -4410,6 +4411,12 @@ body[data-theme="dark"] .trend-progress-bar {
   border-radius: 999px;
   border: 1px solid transparent;
   flex: 0 0 auto;
+}
+
+.host-agent-version-dot--compact {
+  width: 11px;
+  height: 11px;
+  vertical-align: middle;
 }
 
 .host-agent-version-dot--green {
