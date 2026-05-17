@@ -7118,11 +7118,11 @@ function renderSingleHostCard(host) {
   const hostAgentVersionText = asText(host.agent_version, "-");
   const latestAgentVersionText = asText(state.latestAgentRelease, "-");
   const agentStatusLogic = "Logik: rot = Major/Minor abweichend oder Patch-Diff >= 5; gruen = gleicher Major/Minor + Patch-Diff < 5; grau = Vergleich nicht moeglich.";
-  const agentBadge = agentVersionVisual.dotClassName === "host-agent-version-dot--red"
-    ? `<span class="host-agent-mini-badge" title="Host meldet AGENT_VERSION: ${escapeHtml(hostAgentVersionText)} | Referenz: ${escapeHtml(latestAgentVersionText)} | ${escapeHtml(agentVersionVisual.title)} | ${agentStatusLogic}">AGENT ALT</span>`
+  const agentDot = agentVersionVisual.dotClassName === "host-agent-version-dot--red"
+    ? `<span class="host-agent-mini-dot" title="Host meldet AGENT_VERSION: ${escapeHtml(hostAgentVersionText)} | Referenz: ${escapeHtml(latestAgentVersionText)} | ${escapeHtml(agentVersionVisual.title)} | ${agentStatusLogic}" aria-hidden="true"></span>`
     : "";
-  const customerTitleLine = (customerNameValue || agentBadge)
-    ? `<div class="host-customer-title-line">${customerNameValue ? `<span class="host-value-chip host-value-chip--customer-title" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span>` : ""}${agentBadge}</div>`
+  const customerTitleLine = (customerNameValue || agentDot)
+    ? `<div class="host-customer-title-line">${customerNameValue ? `<span class="host-value-chip host-value-chip--customer-title" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span>` : ""}${agentDot}</div>`
     : "";
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
