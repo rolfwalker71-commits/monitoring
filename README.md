@@ -493,6 +493,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.90 (17. Mai 2026)
+
+- **Systemübersicht-Anzeige korrigiert**: In der Host-Zeile wird wieder der echte Host-Name angezeigt statt erneut des Kunden-Namens.
+- **Hierarchie visuell eindeutig**: Dadurch ist die Struktur wieder klar als `Land → Kunde → Host` erkennbar.
+
 ### v1.6.89 (17. Mai 2026)
 
 - **Backup Stati: Kunden standardmäßig zugeklappt**: Die Kundenebene startet jetzt immer geschlossen.

@@ -11990,7 +11990,7 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
   const hostnameRaw = String(host.hostname || "-");
   const hostname = escapeHtml(hostnameRaw);
   const shortHostname = escapeHtml(formatShortHostname(hostnameRaw));
-  const hostTitle = escapeHtml(String(customerName || host.display_name || "-").trim() || "-");
+  const hostTitle = escapeHtml(String(host.display_name || host.hostname || "-").trim() || "-");
   const osEmoji = getOsEmoji(osName);
   const osRelease = parseOsRelease(host.payload || {}, osName);
   const osReleaseDisplay = escapeHtml(osRelease || String(osName || "-").trim() || "-");
