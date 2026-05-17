@@ -2660,7 +2660,20 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   z-index: 1;
 }
 
+.report-header-os-logo-wrap::before {
+  content: "";
+  position: absolute;
+  width: 76%;
+  height: 76%;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(38, 77, 121, 0.16) 0%, rgba(38, 77, 121, 0.04) 62%, rgba(38, 77, 121, 0) 100%);
+  filter: blur(4px);
+  z-index: 0;
+}
+
 .report-header-os-logo {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   object-fit: contain;

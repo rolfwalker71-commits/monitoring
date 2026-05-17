@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.127 | 17.05.2026 | Report header: add a subtle background shadow/halo behind the centered OS logo for softer separation |
 | 1.6.126 | 17.05.2026 | Report header: reduce centered OS logo size by roughly 30% for a less dominant visual footprint |
 | 1.6.125 | 17.05.2026 | Report header polish: push second-row chips further to the right edge and reduce centered OS logo size for better balance |
 | 1.6.124 | 17.05.2026 | Report header: remove auto-refresh countdown and last-refresh timestamp indicators from the title tools row |
