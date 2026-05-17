@@ -523,6 +523,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.129 (17. Mai 2026)
+
+- **Header-Layout reorganisiert**: API-Key und Report-Count Chips in die erste Zeile verschoben (neben Title).
+- **Zweite Zeile neu strukturiert**: Kundenname bleibt auf der linken Seite, Buttons (Visibility/Favorite) auf der rechten.
+- **Verbesserte Raumaufteilung**: Klarere visuelle Trennung zwischen Kontroll-Elementen und Daten-Informationen.
+
 ### v1.6.97 (17. Mai 2026)
 
 - **Kundenname-Chip größer**: Schrift jetzt 16px (vorher 14px) für mehr Prominenz.

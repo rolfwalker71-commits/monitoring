@@ -7224,6 +7224,19 @@ function renderApiKeyChip(host) {
   return `<span class="host-apikey-chip ${apiKeyChipMod}" title="${escapeHtml(apiKeyChipTitle)}">API</span>`;
 }
 
+function renderHeaderFirstRowControls(host) {
+  if (!host) {
+    return "";
+  }
+
+  const reportCount = Number(host.report_count || 0).toLocaleString("de-DE");
+
+  return `
+    ${renderApiKeyChip(host)}
+    <span class="selected-host-meta-chip" title="Gesendete Meldungen">📦 ${reportCount}</span>
+  `;
+}
+
 function renderSelectedHostControls(host) {
   if (!host) {
     return "";
@@ -7232,15 +7245,13 @@ function renderSelectedHostControls(host) {
   const hostname = asText(host.hostname);
   const isFavorite = Boolean(host.is_favorite);
   const isHidden = Boolean(host.is_hidden);
-  const reportCount = Number(host.report_count || 0).toLocaleString("de-DE");
 
   return `
-    ${renderApiKeyChip(host)}
-    <span class="selected-host-meta-chip" title="Gesendete Meldungen">📦 ${reportCount}</span>
     <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👀" : "🫣"}</button>
     <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
   `;
 }
+
 
 function renderSelectedHostCustomerChip(host) {
   if (!host) {
@@ -7348,7 +7359,29 @@ function wireHostActionButtons(root) {
   }
 }
 
+function updateHeaderFirstRowControls() {
+  const container = document.getElementById("headerFirstRowControls");
+  if (!container) {
+    return;
+  }
+
+  const selectedHost = Array.isArray(state.hosts)
+    ? state.hosts.find((host) => asText(host.hostname) === state.selectedHost)
+    : null;
+
+  if (!selectedHost) {
+    container.innerHTML = "";
+    container.classList.add("hidden");
+    return;
+  }
+
+  container.innerHTML = renderHeaderFirstRowControls(selectedHost);
+  container.classList.remove("hidden");
+}
+
 function updateSelectedHostControls() {
+  updateHeaderFirstRowControls();
+
   const controls = document.getElementById("selectedHostControls");
   if (!controls) {
     return;

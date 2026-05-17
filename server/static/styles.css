@@ -2292,6 +2292,13 @@ body[data-theme="dark"] .title-tools-sep {
   flex-wrap: nowrap;
 }
 
+.header-first-row-controls {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 .title-tools-sep {
   display: inline-block;
   width: 1px;
