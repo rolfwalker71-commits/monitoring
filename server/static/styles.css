@@ -8190,6 +8190,10 @@ body[data-theme="dark"] .global-host-label {
   color: #d9e8ff;
 }
 
+body[data-theme="dark"] .global-host-customer {
+  color: #d9e8ff;
+}
+
 body[data-theme="dark"] .host-config-changes-wrap table td {
   color: #d9e8ff;
 }

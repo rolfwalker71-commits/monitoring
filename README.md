@@ -522,6 +522,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.155 (17. Mai 2026)
+
+- **Dark Mode Lesbarkeit korrigiert**: Der Kundenname in der Global-Alerts-Ansicht nutzt jetzt im Dark Mode eine helle Schriftfarbe, damit er nicht mehr mit dem Hintergrund verschmilzt.
+
 ### v1.6.154 (17. Mai 2026)
 
 - **Alerts-Zeile typografisch angepasst**: Kundenname jetzt gross und fett wie die bisherige Hostzeile, Hostbezeichnung darunter 2px kleiner und nicht mehr fett.
