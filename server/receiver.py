@@ -3435,9 +3435,9 @@ def _format_database_lifecycle_name(database_name: object, instance_name: object
 def _database_lifecycle_values(action: str, database_display_name: str) -> tuple[str, str, str]:
     normalized = str(action or "").strip().lower()
     if normalized == "create":
-        return "DB erstellt", "-", database_display_name
+        return "✨ DB erstellt", "-", database_display_name
     if normalized == "delete":
-        return "DB gelöscht", database_display_name, "-"
+        return "🗑️ DB gelöscht", database_display_name, "-"
     if normalized == "rename":
         return "DB umbenannt", "-", database_display_name
     return f"DB {normalized or 'event'}", "-", database_display_name

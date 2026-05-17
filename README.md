@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.168 (17. Mai 2026)
+
+- **DB-Changelog Symbole**: Im globalen und im hostbasierten Changelog zeigen DB-Lifecycle-Eintraege wieder die bekannten Icons direkt im Text: `✨ DB erstellt` und `🗑️ DB geloescht`.
+
 ### v1.6.167 (17. Mai 2026)
 
 - **Changelog Vereinheitlichung**: DB-Lifecycle-Events (Erstellen/Loeschen) sind jetzt im globalen Changelog und im hostspezifischen Changelog enthalten (zusammen mit Hardware-Metriken und AddOn-Aenderungen).
