@@ -7422,6 +7422,13 @@ function formatSignedBytes(value) {
   return `${prefix}${formatBytes(Math.abs(num))}`;
 }
 
+function deltaSignClass(value) {
+  if (value === null || value === undefined || value === "") return "delta-neutral";
+  const num = Number(value);
+  if (!Number.isFinite(num) || Math.abs(num) < 1e-9) return "delta-neutral";
+  return num > 0 ? "delta-positive" : "delta-negative";
+}
+
 function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
   const el = document.getElementById("dbMaintenanceCharts");
   if (!el) return;
@@ -7505,14 +7512,20 @@ function renderDbMaintenanceHistoryRows(rows) {
 
   body.innerHTML = list.map((row) => {
     const time = formatUtcPlus2(row.bucket_start_utc || "") || "-";
+    const deltaDbText = formatSignedBytes(row.delta_total_file_bytes);
+    const deltaReportsText = formatSignedInteger(row.delta_reports_total);
+    const deltaAlertsText = formatSignedInteger(row.delta_alerts_open);
+    const deltaDbClass = deltaSignClass(row.delta_total_file_bytes);
+    const deltaReportsClass = deltaSignClass(row.delta_reports_total);
+    const deltaAlertsClass = deltaSignClass(row.delta_alerts_open);
     return `<tr>
       <td>${escapeHtml(time)}</td>
       <td>${escapeHtml(formatBytes(row.total_file_bytes || 0))}</td>
-      <td>${escapeHtml(formatSignedBytes(row.delta_total_file_bytes))}</td>
+      <td><span class="${deltaDbClass}">${escapeHtml(deltaDbText)}</span></td>
       <td>${escapeHtml(formatInteger(row.reports_total || 0))}</td>
-      <td>${escapeHtml(formatSignedInteger(row.delta_reports_total))}</td>
+      <td><span class="${deltaReportsClass}">${escapeHtml(deltaReportsText)}</span></td>
       <td>${escapeHtml(formatInteger(row.alerts_open || 0))}</td>
-      <td>${escapeHtml(formatSignedInteger(row.delta_alerts_open))}</td>
+      <td><span class="${deltaAlertsClass}">${escapeHtml(deltaAlertsText)}</span></td>
     </tr>`;
   }).join("");
 }

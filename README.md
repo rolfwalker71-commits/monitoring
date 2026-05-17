@@ -493,6 +493,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.78 (17. Mai 2026)
+
+- **Delta-Farben im DB-Verlauf**: Positive Delta-Werte werden jetzt grün, negative rot dargestellt.
+- **Dark-Theme berücksichtigt**: Angepasste Grün-/Rot-Töne für gute Lesbarkeit in dunkler Ansicht.
+
 ### v1.6.77 (17. Mai 2026)
 
 - **Manueller Trigger in der UI**: Neuer Button `↻ Jetzt berechnen` im Bereich `DB Wartung (SQLite)`.

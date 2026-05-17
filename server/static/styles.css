@@ -1017,6 +1017,20 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   min-width: 760px;
 }
 
+.delta-positive {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.delta-negative {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.delta-neutral {
+  color: inherit;
+}
+
 .db-maintenance-stat {
   border: 1px solid #d8e2f0;
   border-radius: 8px;
@@ -1221,6 +1235,14 @@ body[data-theme="dark"] .db-maintenance-chart-axis {
 
 body[data-theme="dark"] .db-maintenance-chart-line {
   stroke: #60a5fa;
+}
+
+body[data-theme="dark"] .delta-positive {
+  color: #4ade80;
+}
+
+body[data-theme="dark"] .delta-negative {
+  color: #f87171;
 }
 
 body[data-theme="dark"] .agent-update-admin-table thead th:nth-child(1),
