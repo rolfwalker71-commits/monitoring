@@ -522,6 +522,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.136 (17. Mai 2026)
+
+- **Header-Hoehen vereinheitlicht**: Chips und Buttons im Host-Headerbereich auf die Hoehe von "Export JSON" (24px) angeglichen.
+- **Refresh-Dropdown angepasst**: Intervall-Select hat nun dieselbe Kompakthoehe wie die benachbarten Controls.
+
 ### v1.6.135 (17. Mai 2026)
 
 - **Header-Zeile 2 rechts gebuendelt**: Alle Chips der zweiten Zeile werden zur rechten Seite verschoben.
