@@ -7048,15 +7048,14 @@ function renderSingleHostCard(host) {
   const displayName = asText(host.display_name || host.hostname);
   const selectedClass = hostname === state.selectedHost ? "host-item selected" : "host-item";
   const openAlertCount = Number(host.open_alert_count || 0);
-  const openCriticalAlertCount = Number(host.open_critical_alert_count || 0);
   const hasOpenAlerts = openAlertCount > 0;
   const isFavorite = Boolean(host.is_favorite);
   const isHidden = Boolean(host.is_hidden);
   const hiddenClass = isHidden ? " host-item-hidden" : "";
   const favoriteClass = isFavorite ? " host-item-favorite" : "";
-  const chipClass = openCriticalAlertCount > 0 ? "host-alert-chip critical" : "host-alert-chip";
-  const alertChip = hasOpenAlerts ? `<span class="${chipClass}">🔔 ${openAlertCount}</span>` : "";
-  const metaAlertChip = hasOpenAlerts ? `<span class="${chipClass} host-alert-chip--meta">🔔 ${openAlertCount}</span>` : "";
+  const alertSideBar = hasOpenAlerts
+    ? `<div class="host-alert-side-bar" title="Offene Alerts: ${openAlertCount}" aria-hidden="true"></div>`
+    : "";
 
   const osIconInfo = resolveHostOsIcon(host.os);
   const countryCode = asText(host.country_code || "", "").toUpperCase();
@@ -7171,9 +7170,10 @@ function renderSingleHostCard(host) {
   return `
     <article class="${selectedClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">
       <div class="${statusBarClass}"></div>
+      ${alertSideBar}
       ${flagIcon}
       ${customerTitleLine}
-      <span class="host-meta-line host-meta-line--primary host-meta-line--with-alert"><span class="host-meta-text">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))} &nbsp;·&nbsp; <span class="host-agent-version-dot host-agent-version-dot--compact ${agentVersionVisual.dotClassName}" title="${escapeHtml(agentVersionVisual.title)}" aria-hidden="true"></span></span>${metaAlertChip}</span>
+      <span class="host-meta-line host-meta-line--primary host-meta-line--with-alert"><span class="host-meta-text">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))} &nbsp;·&nbsp; <span class="host-agent-version-dot host-agent-version-dot--compact ${agentVersionVisual.dotClassName}" title="${escapeHtml(agentVersionVisual.title)}" aria-hidden="true"></span></span></span>
       ${footerContent}
       ${mutedAlertsSection}
       ${osIcon}

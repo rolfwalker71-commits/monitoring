@@ -4505,6 +4505,16 @@ body[data-theme="dark"] .trend-progress-bar {
   border-radius: 12px 0 0 12px;
 }
 
+.host-alert-side-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 4px;
+  border-radius: 0 12px 12px 0;
+  background: #f43f5e;
+}
+
 .host-status-bar--ok {
   opacity: 0.3;
 }
