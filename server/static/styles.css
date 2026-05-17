@@ -3880,9 +3880,30 @@ body[data-theme="dark"] .trend-progress-bar {
   max-width: 190px;
 }
 
+.host-value-chip--customer-title {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 14px;
+  font-weight: 900;
+}
+
 .host-card-footer--customer {
   padding: 4px 8px 0 0;
   background: transparent;
+}
+
+.host-customer-title-line {
+  padding: 4px 0 8px 0;
+}
+
+.host-detail-line {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+  word-break: break-word;
+  padding-top: 4px;
 }
 
 .host-customer-line {

@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.96 (17. Mai 2026)
+
+- **Host-Karte umstrukturiert**: Kundenname-Chip rückt nach oben (größere, intensivere Schrift), Hostbezeichnung nach unten (klein).
+- **Verbesserte visuelle Hierarchie**: Kundenname ist jetzt das prominenteste Element, Hostbezeichnung untergeordnet.
+- **Chip-Styling für Kundenname**: Der Chip oben hat nun 14px Schrift und Weight 900 für maximale Betonung.
+
 ### v1.6.95 (17. Mai 2026)
 
 - **Kunden-Name auf separate Zeile**: Der Kunden-Chip wird konsequent auf einer eigenen Zeile unterhalb der SAP/HANA-Chips angezeigt.
