@@ -522,6 +522,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.147 (17. Mai 2026)
+
+- **"Agent Quelle" jetzt Admin-Only**: Der Menüpunkt ist nun nur für Admins sichtbar; Nicht-Admins werden bei direkter Submode-Auswahl automatisch auf "Globale Alerts" zurückgeführt.
+
 ### v1.6.146 (17. Mai 2026)
 
 - **Hinweistexte in Sidebar-Navigation**: Unter "Container" steht nun klein "Nur wo Docker läuft", unter "Export" "Nur Linux Systeme".

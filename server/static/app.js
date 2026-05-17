@@ -1572,6 +1572,7 @@ function updateAdminSettingsVisibility() {
   const adminOauthSection = document.getElementById("adminOauthSettingsSection");
   const adminUserSection = document.getElementById("adminUserManagementSection");
   const globalAlarmSettingsSection = document.getElementById("globalAlarmSettingsSection");
+  const agentSourceStatusTab = document.getElementById("agentSourceStatusTabButton");
   const globalAdminAlertSubsTab = document.getElementById("globalAdminAlertSubsTabButton");
   const globalAdminLoginAuditTab = document.getElementById("globalAdminLoginAuditTabButton");
   const globalAdminSettingsTab = document.getElementById("globalAdminSettingsTabButton");
@@ -1587,6 +1588,9 @@ function updateAdminSettingsVisibility() {
   }
   if (globalAlarmSettingsSection) {
     globalAlarmSettingsSection.classList.toggle("hidden", !state.isAdmin);
+  }
+  if (agentSourceStatusTab) {
+    agentSourceStatusTab.classList.toggle("hidden", !state.isAdmin);
   }
   if (globalAdminAlertSubsTab) {
     globalAdminAlertSubsTab.classList.toggle("hidden", !state.isAdmin);
@@ -1618,6 +1622,10 @@ function updateAdminSettingsVisibility() {
     }
   }
   if (!state.isAdmin && state.globalSubMode === "admin-alert-subs") {
+    state.globalSubMode = "global-alerts";
+    updateGlobalSubMode();
+  }
+  if (!state.isAdmin && state.globalSubMode === "agent-source-status") {
     state.globalSubMode = "global-alerts";
     updateGlobalSubMode();
   }
