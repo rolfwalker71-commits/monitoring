@@ -7575,6 +7575,20 @@ async function runAdminDatabaseVacuum() {
   return data && typeof data.result === "object" ? data.result : {};
 }
 
+async function triggerAdminDatabaseStatsNow() {
+  const response = await fetch("/api/v1/admin/database-stats/trigger", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({}),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return data;
+}
+
 async function exportGlobalAlertsCsv() {
   const severity = String(state.globalSeverityFilter || "all").trim().toLowerCase();
   const severityParam = (severity && severity !== "all")
@@ -10625,6 +10639,25 @@ function wireEvents() {
   }
 
   const vacuumDatabaseButton = document.getElementById("vacuumDatabaseButton");
+  const triggerDatabaseStatsButton = document.getElementById("triggerDatabaseStatsButton");
+
+  if (triggerDatabaseStatsButton) {
+    triggerDatabaseStatsButton.addEventListener("click", async () => {
+      triggerDatabaseStatsButton.disabled = true;
+      if (vacuumDatabaseButton) vacuumDatabaseButton.disabled = true;
+      setDbMaintenanceStatus("DB Kennzahlen werden neu berechnet...");
+      try {
+        await triggerAdminDatabaseStatsNow();
+        await loadAdminDatabaseStats();
+      } catch (error) {
+        setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
+      } finally {
+        triggerDatabaseStatsButton.disabled = false;
+        if (vacuumDatabaseButton) vacuumDatabaseButton.disabled = false;
+      }
+    });
+  }
+
   if (vacuumDatabaseButton) {
     vacuumDatabaseButton.addEventListener("click", async () => {
       const confirmed = window.confirm(
@@ -10637,6 +10670,7 @@ function wireEvents() {
       const labelEl = document.getElementById("dbOpsProgressLabel");
 
       vacuumDatabaseButton.disabled = true;
+      if (triggerDatabaseStatsButton) triggerDatabaseStatsButton.disabled = true;
       progressEl.classList.remove("hidden");
       barEl.style.width = "40%";
       barEl.classList.add("db-ops-progress-bar--indeterminate");
@@ -10646,7 +10680,7 @@ function wireEvents() {
 
       try {
         const result = await runAdminDatabaseVacuum();
-        renderDbMaintenanceStats(result.after || {});
+        await loadAdminDatabaseStats();
         renderDbMaintenanceEffect(result);
         setDbMaintenanceStatus("VACUUM abgeschlossen.");
         barEl.classList.remove("db-ops-progress-bar--indeterminate");
@@ -10661,6 +10695,7 @@ function wireEvents() {
         setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
       } finally {
         vacuumDatabaseButton.disabled = false;
+        if (triggerDatabaseStatsButton) triggerDatabaseStatsButton.disabled = false;
       }
     });
   }

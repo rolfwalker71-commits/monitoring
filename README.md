@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.77 (17. Mai 2026)
+
+- **Manueller Trigger in der UI**: Neuer Button `↻ Jetzt berechnen` im Bereich `DB Wartung (SQLite)`.
+- **Direktaufruf des Trigger-Endpoints**: Der Button ruft `POST /api/v1/admin/database-stats/trigger` auf und lädt Charts/Verlauf unmittelbar neu.
+- **Saubere Sperrlogik**: Während `VACUUM` oder manuellem Rechnen sind die jeweiligen Buttons gegenseitig deaktiviert.
+
 ### v1.6.76 (17. Mai 2026)
 
 - **DB-Berechnungsintervall auf 2h** umgestellt (statt 3h).
