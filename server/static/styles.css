@@ -3859,9 +3859,9 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-value-chip--sap,
 .host-value-chip--hana,
 .host-value-chip--sid {
-  border-color: #bfd2ee;
-  background: #edf4ff;
-  color: #3a557a;
+  border-color: #9fb9de;
+  background: #dbe9fb;
+  color: #27466d;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   font-size: 12px;
   font-weight: 900;

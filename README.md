@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.122 | 17.05.2026 | Host cards: render SAP/HANA/SID chips in a slightly darker blue palette for better contrast |
 | 1.6.121 | 17.05.2026 | Host cards: hide left status bar when report state is green; unify SAP/HANA/SID chip style with identical, slightly larger bold typography |
 | 1.6.120 | 17.05.2026 | Host cards: reduce green bias by using one unified pastel color for SAP/HANA/SID row and separate pastel colors for Prod/Test row; align Prod/Test chip typography and sizing |
 | 1.6.119 | 17.05.2026 | Host card ordering: sort primarily alphabetically by customer_name (empty customer names last), then by host display/hostname |
