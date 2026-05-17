@@ -533,6 +533,28 @@
                     </tbody>
                   </table>
                 </div>
+
+                <div class="agent-update-admin-status-head" style="margin-top:1rem;">
+                  <h6>Hosts mit stark veralteter Agent-Version (&ge;5 Versionen zurück)</h6>
+                </div>
+                <p id="agentVersionLagSummary" class="count compact">Lade Versionsvergleich...</p>
+                <div class="agent-update-admin-table-wrap">
+                  <table class="agent-update-admin-table">
+                    <thead>
+                      <tr>
+                        <th>Host</th>
+                        <th>Agent (Host)</th>
+                        <th>Aktuell (Repo)</th>
+                        <th>Rückstand</th>
+                        <th>Letzter Report</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="agentVersionLagTableBody">
+                      <tr><td colspan="6" class="muted">Lade Daten...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </section>
           </div>

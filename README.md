@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.92 (17. Mai 2026)
+
+- **Neue Admin-Übersicht für veraltete Agenten**: Zeigt Hosts, deren Agent-Version mindestens 5 Versionen hinter der aktuellen Repo-Agent-Version liegt.
+- **Self-Update-Früherkennung**: Major/Minor-Abweichungen werden ebenfalls als potentiell kritischer Rückstand markiert.
+- **Direkt im Admin-Bereich**: Die neue Tabelle ist im Abschnitt „Agent Update Status (Alle Hosts)“ integriert.
+
 ### v1.6.91 (17. Mai 2026)
 
 - **Systemübersicht: Kundenebene standardmäßig zugeklappt**: Unter jedem Land starten Kunden jetzt geschlossen.

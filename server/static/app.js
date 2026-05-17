@@ -976,10 +976,94 @@ function renderAgentUpdateStatusTableRows(hosts) {
     .join("");
 }
 
+function getAgentVersionLagInfo(latestVersion, hostVersion) {
+  const latestPartsRaw = parseVersionParts(latestVersion);
+  const hostPartsRaw = parseVersionParts(hostVersion);
+  if (!latestPartsRaw || !hostPartsRaw) {
+    return { isBehind: false, steps: null, majorMinorDifferent: false };
+  }
+
+  const compare = compareSemverLike(hostVersion, latestVersion);
+  if (compare === null || compare >= 0) {
+    return { isBehind: false, steps: 0, majorMinorDifferent: false };
+  }
+
+  const latestParts = [latestPartsRaw[0] || 0, latestPartsRaw[1] || 0, latestPartsRaw[2] || 0];
+  const hostParts = [hostPartsRaw[0] || 0, hostPartsRaw[1] || 0, hostPartsRaw[2] || 0];
+  const sameMajorMinor = latestParts[0] === hostParts[0] && latestParts[1] === hostParts[1];
+  if (sameMajorMinor) {
+    return {
+      isBehind: true,
+      steps: Math.max(0, latestParts[2] - hostParts[2]),
+      majorMinorDifferent: false,
+    };
+  }
+
+  return { isBehind: true, steps: null, majorMinorDifferent: true };
+}
+
+function renderLaggingAgentVersionRows(hosts, latestVersion, threshold = 5) {
+  if (!Array.isArray(hosts) || hosts.length === 0) {
+    return '<tr><td colspan="6" class="muted">Keine Hostdaten vorhanden.</td></tr>';
+  }
+
+  const laggingHosts = hosts
+    .map((host) => {
+      const lagInfo = getAgentVersionLagInfo(latestVersion, host?.agent_version || "");
+      return { host, lagInfo };
+    })
+    .filter(({ lagInfo }) => lagInfo.isBehind && (lagInfo.majorMinorDifferent || Number(lagInfo.steps || 0) >= threshold))
+    .sort((left, right) => {
+      const leftWeight = left.lagInfo.majorMinorDifferent ? 999999 : Number(left.lagInfo.steps || 0);
+      const rightWeight = right.lagInfo.majorMinorDifferent ? 999999 : Number(right.lagInfo.steps || 0);
+      if (leftWeight !== rightWeight) return rightWeight - leftWeight;
+
+      const leftReport = Date.parse(asText(left.host?.last_report_utc || "")) || 0;
+      const rightReport = Date.parse(asText(right.host?.last_report_utc || "")) || 0;
+      if (leftReport !== rightReport) return rightReport - leftReport;
+
+      return asText(left.host?.display_name || left.host?.hostname).localeCompare(asText(right.host?.display_name || right.host?.hostname));
+    });
+
+  if (!laggingHosts.length) {
+    return '<tr><td colspan="6" class="muted">Keine Hosts mit mindestens 5 Versionen Rückstand gefunden.</td></tr>';
+  }
+
+  return laggingHosts.map(({ host, lagInfo }) => {
+    const displayName = asText(host?.display_name || host?.hostname, "-");
+    const hostname = asText(host?.hostname, "-");
+    const hostVersion = asText(host?.agent_version || "-", "-");
+    const lastReport = host?.last_report_utc ? formatUtcPlus2(host.last_report_utc) : "-";
+    const status = asText(host?.command_status || "idle").toLowerCase();
+    const lagText = lagInfo.majorMinorDifferent
+      ? "Major/Minor abweichend"
+      : `${Number(lagInfo.steps || 0)} Versionen`;
+
+    return `
+      <tr>
+        <td>
+          <div class="agent-update-admin-host">
+            <strong>${escapeHtml(displayName)}</strong>
+            <span class="agent-update-admin-hostname">${escapeHtml(hostname)}</span>
+          </div>
+        </td>
+        <td>${escapeHtml(hostVersion)}</td>
+        <td>${escapeHtml(asText(latestVersion, "-"))}</td>
+        <td>${escapeHtml(lagText)}</td>
+        <td>${escapeHtml(lastReport)}</td>
+        <td><span class="agent-update-status-badge ${escapeHtml(status)}">${escapeHtml(updateStatusBadgeLabel(status))}</span></td>
+      </tr>
+    `;
+  }).join("");
+}
+
 async function loadAgentUpdateStatus() {
   const summaryEl = document.getElementById("agentUpdateStatusSummary");
   const listEl = document.getElementById("agentUpdateStatusList");
   const tableBodyEl = document.getElementById("agentUpdateStatusTableBody");
+  const lagSummaryEl = document.getElementById("agentVersionLagSummary");
+  const lagTableBodyEl = document.getElementById("agentVersionLagTableBody");
+  const lagThreshold = 5;
   if (!summaryEl) {
     return;
   }
@@ -991,6 +1075,12 @@ async function loadAgentUpdateStatus() {
   if (tableBodyEl) {
     tableBodyEl.innerHTML = '<tr><td colspan="12" class="muted">Lade Daten...</td></tr>';
   }
+  if (lagSummaryEl) {
+    lagSummaryEl.textContent = "Lade Versionsvergleich...";
+  }
+  if (lagTableBodyEl) {
+    lagTableBodyEl.innerHTML = '<tr><td colspan="6" class="muted">Lade Daten...</td></tr>';
+  }
 
   try {
     const response = await fetch("/api/v1/agent-update-status");
@@ -999,13 +1089,34 @@ async function loadAgentUpdateStatus() {
     }
 
     const data = await response.json();
+    const latestVersion = asText(state.latestAgentRelease, "-");
+    const hosts = Array.isArray(data.hosts) ? data.hosts : [];
     const summary = data.summary || {};
     summaryEl.textContent = `Status: ${Number(summary.pending || 0)} pending | ${Number(summary.completed || 0)} completed | ${Number(summary.failed || 0)} failed | ${Number(summary.expired || 0)} expired | ${Number(summary.idle || 0)} idle. ${asText(data.default_schedule_note)}`;
     if (listEl) {
-      listEl.innerHTML = renderAgentUpdateStatusRows(data.hosts || []);
+      listEl.innerHTML = renderAgentUpdateStatusRows(hosts);
     }
     if (tableBodyEl) {
-      tableBodyEl.innerHTML = renderAgentUpdateStatusTableRows(data.hosts || []);
+      tableBodyEl.innerHTML = renderAgentUpdateStatusTableRows(hosts);
+    }
+
+    if (lagSummaryEl) {
+      if (latestVersion === "-") {
+        lagSummaryEl.textContent = "Repo-Agent-Version nicht verfügbar. Vergleich derzeit nicht möglich.";
+      } else {
+        const laggingCount = hosts.filter((host) => {
+          const info = getAgentVersionLagInfo(latestVersion, host?.agent_version || "");
+          return info.isBehind && (info.majorMinorDifferent || Number(info.steps || 0) >= lagThreshold);
+        }).length;
+        lagSummaryEl.textContent = `${laggingCount} Host(s) sind mindestens ${lagThreshold} Versionen hinter ${latestVersion}.`;
+      }
+    }
+    if (lagTableBodyEl) {
+      if (latestVersion === "-") {
+        lagTableBodyEl.innerHTML = '<tr><td colspan="6" class="muted">Repo-Agent-Version nicht verfügbar.</td></tr>';
+      } else {
+        lagTableBodyEl.innerHTML = renderLaggingAgentVersionRows(hosts, latestVersion, lagThreshold);
+      }
     }
     state.agentUpdateStatusLoaded = true;
   } catch (error) {
@@ -1015,6 +1126,12 @@ async function loadAgentUpdateStatus() {
     }
     if (tableBodyEl) {
       tableBodyEl.innerHTML = '<tr><td colspan="12" class="muted">Fehler beim Laden der Statusdaten.</td></tr>';
+    }
+    if (lagSummaryEl) {
+      lagSummaryEl.textContent = `Versionsvergleich konnte nicht geladen werden: ${error.message}`;
+    }
+    if (lagTableBodyEl) {
+      lagTableBodyEl.innerHTML = '<tr><td colspan="6" class="muted">Fehler beim Laden der Versionsdaten.</td></tr>';
     }
   }
 }
