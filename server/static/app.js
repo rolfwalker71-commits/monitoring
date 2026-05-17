@@ -10487,6 +10487,7 @@ async function loadGlobalAlertsOverview(options = {}) {
       .map((item) => {
         const severityClass = item.severity === "critical" ? "severity-critical" : "severity-warning";
         const hostDisplayName = asText(item.display_name || item.hostname);
+        const customerName = asText(item.customer_name || "");
         const hostName = asText(item.hostname);
         const isMuted = Boolean(item.is_muted);
         const isAcknowledged = Boolean(item.is_acknowledged);
@@ -10511,6 +10512,7 @@ async function loadGlobalAlertsOverview(options = {}) {
           <tr class="${isMuted ? "alert-row-muted" : ""}${isClosed ? " alert-row-closed" : ""}">
             <td>
               <div class="global-host-cell">
+                ${customerName ? `<span class="global-host-customer">${escapeHtml(customerName)}</span>` : ""}
                 <span class="global-host-label">${escapeHtml(hostDisplayName)}</span>
                 <span class="global-hostname-sub">(${escapeHtml(hostName)})</span>
                 <span class="global-hostname-sub alert-id-sub">#${item.id}</span>

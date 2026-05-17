@@ -522,6 +522,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.151 (17. Mai 2026)
+
+- **Kunde in Global-Alerts sichtbar**: In der Alerts-Ansicht steht der Kundenname jetzt oberhalb der Hostbezeichnung, damit offene Alerts schneller zugeordnet werden koennen.
+
 ### v1.6.150 (17. Mai 2026)
 
 - **Inaktive-Hosts Versand implementiert**: Bei aktivierter Option werden inaktive Hosts jetzt tatsaechlich als Benachrichtigung versendet (Mail + Telegram), inklusive Deduplizierung pro Host/Channel, damit pro Inaktiv-Phase nicht mehrfach gesendet wird.

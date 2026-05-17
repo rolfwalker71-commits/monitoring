@@ -4077,16 +4077,18 @@ def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | 
 
     hostnames = sorted({str(row[1] or "") for row in rows if str(row[1] or "")})
     display_names: dict[str, str] = {}
+    customer_names: dict[str, str] = {}
     country_codes: dict[str, str] = {}
     os_families: dict[str, str] = {}
     if hostnames:
         placeholders = ",".join("?" for _ in hostnames)
         settings_rows = conn.execute(
-            f"SELECT hostname, display_name_override, COALESCE(country_code_override, '') FROM host_settings WHERE hostname IN ({placeholders})",
+            f"SELECT h.hostname, h.display_name_override, COALESCE(h.country_code_override, ''), COALESCE(c.customer_name, '') FROM host_settings h LEFT JOIN customers c ON c.id = h.customer_id WHERE h.hostname IN ({placeholders})",
             tuple(hostnames),
         ).fetchall()
         overrides = {str(item[0]): str(item[1] or "") for item in settings_rows}
         country_overrides = {str(item[0]): normalize_country_code(item[2]) for item in settings_rows}
+        customer_overrides = {str(item[0]): str(item[3] or "").strip() for item in settings_rows}
 
         latest_payload_rows = conn.execute(
             f"""
@@ -4113,6 +4115,7 @@ def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | 
         for hostname in hostnames:
             payload = payload_by_hostname.get(hostname, {})
             display_names[hostname] = effective_display_name(payload, overrides.get(hostname, ""), hostname)
+            customer_names[hostname] = customer_overrides.get(hostname, "")
             country_codes[hostname] = country_overrides.get(hostname, "") or extract_country_code_from_payload(payload)
             os_families[hostname] = normalize_os_family(payload.get("os", ""))
     else:
@@ -4123,6 +4126,7 @@ def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | 
             "id": int(row[0] or 0),
             "hostname": str(row[1] or ""),
             "display_name": display_names.get(str(row[1] or ""), str(row[1] or "")),
+            "customer_name": customer_names.get(str(row[1] or ""), ""),
             "primary_ip": primary_ip_by_hostname.get(str(row[1] or ""), ""),
             "mountpoint": str(row[2] or ""),
             "severity": str(row[3] or "warning"),

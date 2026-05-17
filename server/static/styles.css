@@ -5322,6 +5322,13 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
   line-height: 1.1;
 }
 
+.global-host-customer {
+  font-size: 11px;
+  font-weight: 700;
+  color: #5b6f89;
+  line-height: 1.1;
+}
+
 .global-hostname-sub {
   font-size: 11px;
   color: #64748b;
