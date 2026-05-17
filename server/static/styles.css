@@ -2280,13 +2280,13 @@ body[data-theme="dark"] .title-tools-sep {
 .title-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   flex-wrap: nowrap;
 }
 .title-row h3 {
   flex-shrink: 0;
-  order: 1;
+  margin-right: auto;
 }
 .title-row-tools {
   display: inline-flex;
@@ -2295,7 +2295,6 @@ body[data-theme="dark"] .title-tools-sep {
   gap: 6px;
   flex-wrap: nowrap;
   flex-shrink: 0;
-  order: 3;
 }
 
 .header-first-row-controls {
@@ -2304,7 +2303,8 @@ body[data-theme="dark"] .title-tools-sep {
   flex-wrap: wrap;
   align-items: center;
   flex-shrink: 0;
-  order: 2;
+  margin-left: auto;
+  margin-right: 6px;
 }
 
 .title-tools-sep {
@@ -2627,14 +2627,13 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px 16px;
   margin-top: 4px;
   padding-left: 0;
 }
 .report-meta-row .count {
   margin: 0;
-  order: 3;
   margin-left: auto;
 }
 
@@ -2643,7 +2642,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   align-items: center;
   min-height: 24px;
   flex-shrink: 0;
-  order: 1;
+  order: auto;
 }
 
 .selected-host-controls {
@@ -2651,7 +2650,8 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   align-items: center;
   justify-content: flex-start;
   flex-shrink: 0;
-  order: 2;
+  order: auto;
+  gap: 6px;
   gap: 6px;
   flex-wrap: wrap;
   margin-left: auto;
