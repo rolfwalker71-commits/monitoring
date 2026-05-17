@@ -493,6 +493,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.94 (17. Mai 2026)
+
+- **Host-Karte um Kunden-Chip erweitert**: In der unteren Chip-Zeile wird bei zugewiesenem Kunden jetzt ein zusätzlicher Kunden-Chip angezeigt.
+- **Kunden-Icon angepasst**: Der Chip verwendet das Firmengebäude-Emoji `🏢` (statt Personen-Emoji).
+
 ### v1.6.93 (17. Mai 2026)
 
 - **Systemübersicht Kundengruppe korrigiert**: Die 2. Ebene verwendet jetzt den echten `customer_name` statt Host-Anzeigename.

@@ -7004,6 +7004,11 @@ function renderSingleHostCard(host) {
     ? hanaReleaseRaw.split(".").slice(0, 3).join(".") || hanaReleaseRaw
     : "";
   const hanaSidValue = cleanHostValue(host.hana_sid || "");
+  const customerNameValue = cleanHostValue(host.customer_name || "");
+  const customerProjectValue = cleanHostValue(host.customer_maringo_project_number || "");
+  const customerChipLabel = customerProjectValue
+    ? `${customerNameValue} · ${customerProjectValue}`
+    : customerNameValue;
   const valueChipStack = [
     sapFeaturePack
       ? `<span class="host-value-chip host-value-chip--sap" title="SAP Feature Pack">${escapeHtml(sapFeaturePack)}</span>`
@@ -7013,6 +7018,9 @@ function renderSingleHostCard(host) {
       : "",
     hanaSidValue
       ? `<span class="host-value-chip host-value-chip--sid" title="HANA SID">${escapeHtml(hanaSidValue)}</span>`
+      : "",
+    customerNameValue
+      ? `<span class="host-value-chip host-value-chip--customer" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span>`
       : "",
   ].filter(Boolean).join("");
 

@@ -3873,6 +3873,13 @@ body[data-theme="dark"] .trend-progress-bar {
   color: #5b21b6;
 }
 
+.host-value-chip--customer {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+  max-width: 190px;
+}
+
 .host-item-hidden {
   background: linear-gradient(180deg, #f8fbff 0%, #f3f7fd 100%);
   border-style: dashed;
