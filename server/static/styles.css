@@ -2646,6 +2646,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   min-height: 24px;
   flex-shrink: 0;
   order: 1;
+  transform: translateY(-1px);
 }
 
 .selected-host-controls {

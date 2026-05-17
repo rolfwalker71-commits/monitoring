@@ -522,6 +522,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.138 (17. Mai 2026)
+
+- **Kundenchip in Reihe 2 angehoben**: Der Kundenname-Chip wurde leicht nach oben versetzt, damit er visuell auf derselben Hoehe wie die Nachbar-Controls sitzt.
+
 ### v1.6.137 (17. Mai 2026)
 
 - **Reihe 2 nachgezogen**: Die Meldungsanzeige "Meldung X von Y" wurde auf dieselbe Hoehe wie die Chips/Buttons (24px) gesetzt.
