@@ -4417,6 +4417,7 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .host-agent-version-dot--compact {
+  display: inline-block;
   width: 11px;
   height: 11px;
   vertical-align: middle;
