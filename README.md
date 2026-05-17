@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.88 (17. Mai 2026)
+
+- **Changelog-Hierarchie angepasst**: Im Changelog-Bereich ist die erste Ebene jetzt `Kunde`.
+- **Neue zweite Ebene `Host`**: Unter jedem Kunden werden die einzelnen Hosts separat gruppiert angezeigt.
+- **Datums-Topgruppe entfernt**: Die vorherige oberste Gruppierung nach Datum entfällt zugunsten der Kundenstruktur.
+
 ### v1.6.87 (17. Mai 2026)
 
 - **Systemübersicht weiter vereinfacht**: In der Standardsicht ist die Hierarchie jetzt nur noch `Land → Kunde`.

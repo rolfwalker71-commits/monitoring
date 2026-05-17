@@ -9790,40 +9790,42 @@ async function loadHostConfigChanges() {
       return;
     }
 
-    // Group by date
-    let dateGroups = groupByDateAndHost(filteredItems);
-    if (!dateGroups.length && filteredItems.length) {
-      // Keep entries visible even if timestamps are malformed or missing.
-      dateGroups = [{ dateLabel: "Heute", items: filteredItems }];
-    }
+    // Group by customer -> host.
+    const itemsByCustomer = new Map();
+    filteredItems.forEach((item) => {
+      const hostname = asText(item.hostname, "-");
+      const customerName = asText(item.display_name || hostname, "-");
+      if (!itemsByCustomer.has(customerName)) {
+        itemsByCustomer.set(customerName, { customerName, items: [] });
+      }
+      itemsByCustomer.get(customerName).items.push(item);
+    });
+
+    const customerGroups = Array.from(itemsByCustomer.values()).sort((a, b) => {
+      return String(a.customerName || "").toLowerCase().localeCompare(String(b.customerName || "").toLowerCase(), "de", { sensitivity: "base", numeric: true });
+    });
 
     // Auto-expand for active search and for 24h quick-review refresh workflow.
-    const autoExpandGroupsByDate = !!state.hostConfigChangesSearchQuery || Number(hours) <= 24;
+    const autoExpandGroups = !!state.hostConfigChangesSearchQuery || Number(hours) <= 24;
 
-    groupsEl.innerHTML = dateGroups
-      .map((dateGroup) => {
+    groupsEl.innerHTML = customerGroups
+      .map((customerGroup) => {
         const itemsByHost = new Map();
-        dateGroup.items.forEach((item) => {
+        customerGroup.items.forEach((item) => {
           const hostname = asText(item.hostname, "-");
-          const displayName = asText(item.display_name || hostname, "-");
-          const key = `${displayName}\u0000${hostname}`;
-          if (!itemsByHost.has(key)) {
-            itemsByHost.set(key, { displayName, hostname, items: [], country_code: asText(item.country_code, "") });
+          const countryCode = asText(item.country_code, "");
+          if (!itemsByHost.has(hostname)) {
+            itemsByHost.set(hostname, { hostname, items: [], country_code: countryCode });
           }
-          itemsByHost.get(key).items.push(item);
+          itemsByHost.get(hostname).items.push(item);
         });
 
-        const hostGroups = [...itemsByHost.values()].sort((a, b) => {
-          const nameA = String(a.displayName || a.hostname).toLowerCase();
-          const nameB = String(b.displayName || b.hostname).toLowerCase();
-          const byName = nameA.localeCompare(nameB);
-          if (byName !== 0) return byName;
-          return String(a.hostname).toLowerCase().localeCompare(String(b.hostname).toLowerCase());
+        const hostGroups = Array.from(itemsByHost.values()).sort((a, b) => {
+          return String(a.hostname || "").toLowerCase().localeCompare(String(b.hostname || "").toLowerCase(), "de", { sensitivity: "base", numeric: true });
         });
 
         const hostRowsHtml = hostGroups
           .map((hostGroup) => {
-            const showHost = hostGroup.displayName !== hostGroup.hostname;
             const sortedItems = [...hostGroup.items].sort((left, right) => {
               return String(right.detected_at_utc || "").localeCompare(String(left.detected_at_utc || ""));
             });
@@ -9863,10 +9865,9 @@ async function loadHostConfigChanges() {
             }).join("");
 
             return `
-              <details class="host-config-change-group" ${autoExpandGroupsByDate ? "open" : ""}>
+              <details class="host-config-change-group" ${autoExpandGroups ? "open" : ""}>
                 <summary class="host-config-change-summary">
-                  <span class="global-host-label">${escapeHtml(hostGroup.displayName)}</span>
-                  ${showHost ? `<span class="global-hostname-sub">(${escapeHtml(hostGroup.hostname)})</span>` : ""}
+                  <span class="global-host-label">${escapeHtml(hostGroup.hostname)}</span>
                   ${hostGroup.country_code && getCountryFlagIconPath(hostGroup.country_code)
                     ? `<span class="host-config-country-badge" title="Land: ${escapeHtml(hostGroup.country_code)}"><img src="${getCountryFlagIconPath(hostGroup.country_code)}" class="host-config-country-flag" alt="${escapeHtml(hostGroup.country_code)}" /></span>`
                     : ""}
@@ -9891,10 +9892,10 @@ async function loadHostConfigChanges() {
           .join("");
 
         return `
-          <details class="host-config-change-date-group" ${autoExpandGroupsByDate ? "open" : ""}>
+          <details class="host-config-change-date-group" ${autoExpandGroups ? "open" : ""}>
             <summary class="host-config-change-date-summary">
-              <span class="host-config-date-label">${escapeHtml(dateGroup.dateLabel)}</span>
-              <span class="host-config-date-count">${dateGroup.items.length} Änderung(en)</span>
+              <span class="host-config-date-label">${escapeHtml(customerGroup.customerName)}</span>
+              <span class="host-config-date-count">${customerGroup.items.length} Änderung(en)</span>
             </summary>
             <div class="host-config-date-group-content">
               ${hostRowsHtml}
