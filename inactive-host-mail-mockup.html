@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mockup - Inaktive Hosts Mail</title>
+  <style>
+    body {
+      margin: 0;
+      background: #ffffff;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: #0f172a;
+      padding: 24px;
+    }
+    .mail {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid #d9dce3;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .mail-header {
+      padding: 18px 20px;
+      background-color: #eaf4ff;
+      background-image: linear-gradient(180deg, #f4faff, #e6f1ff);
+      color: #17324d;
+      border-bottom: 1px solid #cfe0f5;
+    }
+    .mail-title {
+      margin: 0;
+      font-size: 22px;
+      color: #17324d;
+    }
+    .mail-meta {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #5f7590;
+      font-weight: 600;
+    }
+    .mail-body {
+      padding: 18px 20px;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #1f2937;
+    }
+    .summary {
+      margin: 0 0 14px 0;
+    }
+    .warning-chip {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: #fee2e2;
+      color: #991b1b;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    thead tr {
+      background: #f8fafc;
+    }
+    th {
+      text-align: left;
+      padding: 8px;
+      border: 1px solid #dbe3ef;
+      font-weight: 700;
+      color: #334155;
+    }
+    td {
+      padding: 10px 8px;
+      border-bottom: 1px solid #e2e8f0;
+      vertical-align: middle;
+    }
+    td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .host-name {
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .host-meta {
+      margin-top: 2px;
+      font-size: 12px;
+      color: #64748b;
+    }
+    .sev-critical {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #fee2e2;
+      color: #991b1b;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .note {
+      margin-top: 14px;
+      color: #475569;
+      font-size: 13px;
+    }
+    .mail-footer {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid #e2e8f0;
+      text-align: right;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <article class="mail">
+    <header class="mail-header">
+      <h2 class="mail-title">Inaktive Hosts Alert</h2>
+      <div class="mail-meta">Benutzer: demo.admin | Schwellwert: 3h | Zeit: 17.05.2026 15:28</div>
+    </header>
+
+    <section class="mail-body">
+      <p class="summary">
+        Es wurden <strong>4</strong> Hosts ohne neue Meldung erkannt.
+        <span class="warning-chip">Handlungsbedarf</span>
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Host</th>
+            <th>Letzte Meldung</th>
+            <th>Inaktiv seit</th>
+            <th>Primary IP</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div class="host-name">hana-prod-01</div>
+              <div class="host-meta">DE | kunde-x-gmbh | linux</div>
+            </td>
+            <td>17.05.2026 09:11</td>
+            <td class="num">6.3 h</td>
+            <td>10.20.0.14</td>
+            <td><span class="sev-critical">DOWN</span></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="host-name">app-node-03</div>
+              <div class="host-meta">CH | kundex-ag | linux</div>
+            </td>
+            <td>17.05.2026 10:45</td>
+            <td class="num">4.8 h</td>
+            <td>10.30.2.8</td>
+            <td><span class="sev-critical">DOWN</span></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="host-name">sql-edge-07</div>
+              <div class="host-meta">AT | kunde-z-gmbh | windows</div>
+            </td>
+            <td>17.05.2026 11:12</td>
+            <td class="num">4.3 h</td>
+            <td>10.50.1.90</td>
+            <td><span class="sev-critical">DOWN</span></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="host-name">sap-b1-gw-02</div>
+              <div class="host-meta">DE | kunde-y-gmbh | linux</div>
+            </td>
+            <td>17.05.2026 12:04</td>
+            <td class="num">3.4 h</td>
+            <td>10.20.10.5</td>
+            <td><span class="sev-critical">DOWN</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="note">
+        Hinweis: Ein Host gilt als inaktiv, wenn seit dem Schwellwert keine neue Meldung eingegangen ist.
+      </p>
+
+      <div class="mail-footer">System Health Dashboard</div>
+    </section>
+  </article>
+</body>
+</html>

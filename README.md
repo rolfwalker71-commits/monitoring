@@ -522,6 +522,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.148 (17. Mai 2026)
+
+- **Inaktive-Hosts-Mail Mockup hinzugefuegt**: Neues Entwurfs-HTML unter `inactive-host-mail-mockup.html` im gleichen visuellen Stil wie die bestehenden Digest-Mails, mit Fokus auf Host-Down/Inaktiv-Informationen.
+
 ### v1.6.147 (17. Mai 2026)
 
 - **"Agent Quelle" jetzt Admin-Only**: Der Menüpunkt ist nun nur für Admins sichtbar; Nicht-Admins werden bei direkter Submode-Auswahl automatisch auf "Globale Alerts" zurückgeführt.
