@@ -32,6 +32,33 @@
       font-size: 22px;
       color: #17324d;
     }
+    .mail-brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+    .mail-brand-logo {
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
+      flex: 0 0 44px;
+    }
+    .mail-brand-text {
+      line-height: 1.15;
+    }
+    .mail-brand-title {
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: .4px;
+      color: #17324d;
+    }
+    .mail-brand-version {
+      margin-top: 2px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #5f7590;
+    }
     .mail-meta {
       margin-top: 6px;
       font-size: 12px;
@@ -112,11 +139,47 @@
       font-size: 12px;
       font-weight: 600;
     }
+    .mail-footer-logo {
+      display: inline-block;
+      width: 110px;
+      max-width: 110px;
+      height: auto;
+    }
+    .telegram-preview {
+      max-width: 900px;
+      margin: 18px auto 0 auto;
+      border: 1px solid #d9dce3;
+      border-radius: 14px;
+      background: #f8fafc;
+      padding: 16px 18px;
+    }
+    .telegram-preview h3 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+      color: #0f172a;
+    }
+    .telegram-bubble {
+      background: #ffffff;
+      border: 1px solid #dbe3ef;
+      border-left: 4px solid #2563eb;
+      border-radius: 10px;
+      padding: 12px 13px;
+      font-size: 13px;
+      line-height: 1.45;
+      white-space: pre-line;
+    }
   </style>
 </head>
 <body>
   <article class="mail">
     <header class="mail-header">
+      <div class="mail-brand">
+        <img class="mail-brand-logo" src="server/static/icons/logo.png" alt="Monitoring App Logo">
+        <div class="mail-brand-text">
+          <div class="mail-brand-title">System Health Dashboard</div>
+          <div class="mail-brand-version">v1.6.148</div>
+        </div>
+      </div>
       <h2 class="mail-title">Inaktive Hosts Alert</h2>
       <div class="mail-meta">Benutzer: demo.admin | Schwellwert: 3h | Zeit: 17.05.2026 15:28</div>
     </header>
@@ -185,8 +248,25 @@
         Hinweis: Ein Host gilt als inaktiv, wenn seit dem Schwellwert keine neue Meldung eingegangen ist.
       </p>
 
-      <div class="mail-footer">System Health Dashboard</div>
+      <div class="mail-footer">
+        <img class="mail-footer-logo" src="server/static/icons/ANG.png" alt="ANG Logo">
+      </div>
     </section>
   </article>
+
+  <section class="telegram-preview">
+    <h3>Telegram Nachricht (Entwurf)</h3>
+    <div class="telegram-bubble">🚨 Inaktive Hosts erkannt
+
+Schwellwert: 3h
+Betroffene Hosts: 4
+
+1) hana-prod-01 (DE) - 6.3h inaktiv - letzte Meldung 09:11
+2) app-node-03 (CH) - 4.8h inaktiv - letzte Meldung 10:45
+3) sql-edge-07 (AT) - 4.3h inaktiv - letzte Meldung 11:12
+4) sap-b1-gw-02 (DE) - 3.4h inaktiv - letzte Meldung 12:04
+
+Bitte Host-Erreichbarkeit und Agent-Status pruefen.</div>
+  </section>
 </body>
 </html>

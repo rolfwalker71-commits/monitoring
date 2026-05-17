@@ -522,6 +522,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.149 (17. Mai 2026)
+
+- **Inaktive-Hosts Mockup erweitert**: App-Logo im Header und ANG-Logo im Footer eingebaut, plus Telegram-Nachrichtenentwurf unterhalb des Mail-Layouts ergänzt.
+
 ### v1.6.148 (17. Mai 2026)
 
 - **Inaktive-Hosts-Mail Mockup hinzugefuegt**: Neues Entwurfs-HTML unter `inactive-host-mail-mockup.html` im gleichen visuellen Stil wie die bestehenden Digest-Mails, mit Fokus auf Host-Down/Inaktiv-Informationen.
