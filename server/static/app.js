@@ -7019,10 +7019,10 @@ function renderSingleHostCard(host) {
     hanaSidValue
       ? `<span class="host-value-chip host-value-chip--sid" title="HANA SID">${escapeHtml(hanaSidValue)}</span>`
       : "",
-    customerNameValue
-      ? `<span class="host-value-chip host-value-chip--customer" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span>`
-      : "",
   ].filter(Boolean).join("");
+  const customerLine = customerNameValue
+    ? `<span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span>`
+    : "";
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
   const hanaRawForDebug = asText(host.hana_release || host.hana_version || "", "").trim();
@@ -7043,6 +7043,9 @@ function renderSingleHostCard(host) {
 
   const footerContent = valueChipStack
     ? `<div class="host-card-footer"><span class="host-card-actions">${valueChipStack}</span></div>`
+    : "";
+  const customerFooter = customerLine
+    ? `<div class="host-card-footer host-card-footer--customer">${customerLine}</div>`
     : "";
 
   let mutedAlertsSection = "";
@@ -7086,6 +7089,7 @@ function renderSingleHostCard(host) {
       <span class="host-meta-line">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))}</span>
       <span class="host-meta-line host-meta-line--with-alert"><span class="host-meta-text">🧷 ${escapeHtml(asText(host.agent_version))} &nbsp;·&nbsp; 🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>${metaAlertChip}</span>
       ${footerContent}
+      ${customerFooter}
       ${mutedAlertsSection}
       ${osIcon}
     </article>

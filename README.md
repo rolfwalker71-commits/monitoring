@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.95 (17. Mai 2026)
+
+- **Kunden-Name auf separate Zeile**: Der Kunden-Chip wird konsequent auf einer eigenen Zeile unterhalb der SAP/HANA-Chips angezeigt.
+- **Bessere optische Hierarchie**: Kleinere (10px) und fettere Schrift (Weight 700) für konsistente visuelle Trennung.
+- **Konsistentes Layout**: Kunden-Information ist jetzt unabhängig von anderen Chip-Kombinationen immer auf derselben Position.
+
 ### v1.6.94 (17. Mai 2026)
 
 - **Host-Karte um Kunden-Chip erweitert**: In der unteren Chip-Zeile wird bei zugewiesenem Kunden jetzt ein zusätzlicher Kunden-Chip angezeigt.

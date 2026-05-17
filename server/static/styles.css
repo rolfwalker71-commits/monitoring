@@ -3880,6 +3880,19 @@ body[data-theme="dark"] .trend-progress-bar {
   max-width: 190px;
 }
 
+.host-card-footer--customer {
+  padding: 4px 8px 0 0;
+  background: transparent;
+}
+
+.host-customer-line {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #92400e;
+  word-break: break-word;
+}
+
 .host-item-hidden {
   background: linear-gradient(180deg, #f8fbff 0%, #f3f7fd 100%);
   border-style: dashed;
