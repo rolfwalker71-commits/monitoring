@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.87 (17. Mai 2026)
+
+- **Systemübersicht weiter vereinfacht**: In der Standardsicht ist die Hierarchie jetzt nur noch `Land → Kunde`.
+- **OS-Zwischenebene entfernt**: Hosts eines Kunden werden unabhängig vom Betriebssystem in einer gemeinsamen Tabelle angezeigt.
+- **Sicht-/Sorttexte angepasst**: Labels zeigen in der Standardsicht jetzt konsistent `Land > Kunde`.
+
 ### v1.6.86 (17. Mai 2026)
 
 - **Systemübersicht-Hierarchie neu aufgebaut**: In der Standardsicht ist die Gruppierung jetzt `Land → Kunde → OS`.

@@ -11672,7 +11672,7 @@ function updateSystemOverviewSortModeButton() {
     return;
   }
   const addonMode = state.systemOverviewSortMode === "addon-customer-os";
-  button.textContent = addonMode ? "Sort: AddOn > Kunde > OS" : "Sort: Land > Kunde > OS";
+  button.textContent = addonMode ? "Sort: AddOn > Kunde > OS" : "Sort: Land > Kunde";
   button.setAttribute("aria-pressed", addonMode ? "true" : "false");
 }
 
@@ -12271,54 +12271,17 @@ async function loadSystemOverview() {
           const customerSections = Array.from(customerMapByCountry.entries())
             .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true }))
             .map(([customer, osMapForCustomer], customerIndex) => {
-              const osSections = Array.from(osMapForCustomer.entries())
-                .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true }))
-                .map(([osName, hostsForOs], osIndex) => {
-                  const osIconPath = getOsIconPath(osName);
-                  const osImg = osIconPath ? `<img src="${osIconPath}" alt="${escapeHtml(osName)}" class="so-os-icon" />` : `<span>${getOsEmoji(osName)}</span>`;
-                  const sortedHosts = (Array.isArray(hostsForOs) ? hostsForOs : [])
-                    .slice()
-                    .sort((left, right) => String(left?.display_name || left?.hostname || "").localeCompare(String(right?.display_name || right?.hostname || ""), "de", { sensitivity: "base", numeric: true }));
-                  if (!sortedHosts.length) {
-                    return "";
-                  }
-                  const rowHtml = sortedHosts
-                    .map((host) => formatSystemOverviewTableRow(host, osName, customer, SAP_B1_VERSION_MAP, true, searchQuery))
-                    .join("");
+              const customerHostEntries = Array.from(osMapForCustomer.entries())
+                .flatMap(([osName, hostsForOs]) => (Array.isArray(hostsForOs) ? hostsForOs : []).map((host) => ({ host, osName })))
+                .sort((left, right) => String(left.host?.display_name || left.host?.hostname || "").localeCompare(String(right.host?.display_name || right.host?.hostname || ""), "de", { sensitivity: "base", numeric: true }));
 
-                  const osId = `so-os-${countryIndex}-${customerIndex}-${osIndex}`;
-                  return `
-                    <section class="system-overview-os-group">
-                      <button class="system-overview-toggle" type="button" data-target-id="${osId}" aria-expanded="true">
-                        <span class="system-overview-chevron">▼</span>
-                        <span class="so-os-header">${osImg} ${escapeHtml(osName)} (${sortedHosts.length})</span>
-                      </button>
-                      <div id="${osId}" class="system-overview-customer-list">
-                        <div class="system-overview-table-wrap">
-                          <table class="system-overview-table">
-                            <thead>
-                              <tr>
-                                <th>Host</th>
-                                <th>OS</th>
-                                <th>CPU</th>
-                                <th>RAM / Modell</th>
-                                <th>SAP / DB</th>
-                                <th>Status</th>
-                              </tr>
-                            </thead>
-                            <tbody>${rowHtml}</tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </section>
-                  `;
-                })
-                .filter(Boolean)
-                .join("");
-
-              if (!osSections) {
+              if (!customerHostEntries.length) {
                 return "";
               }
+
+              const rowHtml = customerHostEntries
+                .map((entry) => formatSystemOverviewTableRow(entry.host, entry.osName, customer, SAP_B1_VERSION_MAP, true, searchQuery))
+                .join("");
 
               const customerHostCount = Array.from(osMapForCustomer.values()).reduce(
                 (sum, hostList) => sum + (Array.isArray(hostList) ? hostList.length : 0),
@@ -12331,7 +12294,23 @@ async function loadSystemOverview() {
                     <span class="system-overview-chevron">▼</span>
                     <span class="so-country-header">👥 ${escapeHtml(customer)} (${customerHostCount})</span>
                   </button>
-                  <div id="${customerId}" class="system-overview-os-list">${osSections}</div>
+                  <div id="${customerId}" class="system-overview-customer-list">
+                    <div class="system-overview-table-wrap">
+                      <table class="system-overview-table">
+                        <thead>
+                          <tr>
+                            <th>Host</th>
+                            <th>OS</th>
+                            <th>CPU</th>
+                            <th>RAM / Modell</th>
+                            <th>SAP / DB</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>${rowHtml}</tbody>
+                      </table>
+                    </div>
+                  </div>
                 </section>
               `;
             })
@@ -12366,7 +12345,7 @@ async function loadSystemOverview() {
         : "";
       const modeLabel = state.systemOverviewSortMode === "addon-customer-os"
         ? " | Sicht: AddOn > Kunde > OS"
-        : " | Sicht: Land > Kunde > OS";
+        : " | Sicht: Land > Kunde";
       statsEl.textContent = `${displayedHostCount} Systeme (${scope})${withSearch}${modeLabel}`;
     }
 
