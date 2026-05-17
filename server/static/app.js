@@ -7053,9 +7053,6 @@ function renderSingleHostCard(host) {
   const isHidden = Boolean(host.is_hidden);
   const hiddenClass = isHidden ? " host-item-hidden" : "";
   const favoriteClass = isFavorite ? " host-item-favorite" : "";
-  const alertSideBar = hasOpenAlerts
-    ? `<div class="host-alert-side-bar" title="Offene Alerts: ${openAlertCount}" aria-hidden="true"></div>`
-    : "";
 
   const osIconInfo = resolveHostOsIcon(host.os);
   const countryCode = asText(host.country_code || "", "").toUpperCase();
@@ -7114,6 +7111,14 @@ function renderSingleHostCard(host) {
       : lastReportInfo.statusClass === "host-last-report-dot--ok"
         ? "host-status-bar host-status-bar--report-ok"
         : "host-status-bar host-status-bar--report-unknown";
+  const statusBarTitle = lastReportInfo.label.startsWith("Report vor")
+    ? `Letzter ${lastReportInfo.label}`
+    : lastReportInfo.title;
+  const alertSideBar = hasOpenAlerts
+    ? `<div class="host-alert-side-bar" title="${openAlertCount} Alerts" aria-hidden="true"></div>`
+    : "";
+  const hostAgentVersionText = asText(host.agent_version, "-");
+  const agentDotTitle = `Host meldet AGENT_VERSION: ${hostAgentVersionText}`;
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
   const hanaRawForDebug = asText(host.hana_release || host.hana_version || "", "").trim();
@@ -7169,11 +7174,11 @@ function renderSingleHostCard(host) {
 
   return `
     <article class="${selectedClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">
-      <div class="${statusBarClass}"></div>
+      <div class="${statusBarClass}" title="${escapeHtml(statusBarTitle)}" aria-hidden="true"></div>
       ${alertSideBar}
       ${flagIcon}
       ${customerTitleLine}
-      <span class="host-meta-line host-meta-line--primary host-meta-line--with-alert"><span class="host-meta-text">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))} &nbsp;·&nbsp; <span class="host-agent-version-dot host-agent-version-dot--compact ${agentVersionVisual.dotClassName}" title="${escapeHtml(agentVersionVisual.title)}" aria-hidden="true"></span></span></span>
+      <span class="host-meta-line host-meta-line--primary host-meta-line--with-alert"><span class="host-meta-text">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))} &nbsp;·&nbsp; <span class="host-agent-version-dot host-agent-version-dot--compact ${agentVersionVisual.dotClassName}" title="${escapeHtml(agentDotTitle)}" aria-hidden="true"></span></span></span>
       ${footerContent}
       ${mutedAlertsSection}
       ${osIcon}
