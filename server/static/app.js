@@ -576,6 +576,10 @@ function startAutoRefreshTimer() {
 }
 
 function startAutoRefreshCountdown() {
+  const statusEl = document.getElementById("autoRefreshStatus");
+  if (!statusEl) {
+    return;
+  }
   if (autoRefreshCountdownTimerId !== null) {
     window.clearInterval(autoRefreshCountdownTimerId);
   }

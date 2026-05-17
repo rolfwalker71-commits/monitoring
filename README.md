@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.124 | 17.05.2026 | Report header: remove auto-refresh countdown and last-refresh timestamp indicators from the title tools row |
 | 1.6.123 | 17.05.2026 | Report header: shift complete second row to the right and add a large centered OS PNG logo spanning both header rows |
 | 1.6.122 | 17.05.2026 | Host cards: render SAP/HANA/SID chips in a slightly darker blue palette for better contrast |
 | 1.6.121 | 17.05.2026 | Host cards: hide left status bar when report state is green; unify SAP/HANA/SID chip style with identical, slightly larger bold typography |
