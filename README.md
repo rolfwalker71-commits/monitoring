@@ -522,6 +522,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.150 (17. Mai 2026)
+
+- **Inaktive-Hosts Versand implementiert**: Bei aktivierter Option werden inaktive Hosts jetzt tatsaechlich als Benachrichtigung versendet (Mail + Telegram), inklusive Deduplizierung pro Host/Channel, damit pro Inaktiv-Phase nicht mehrfach gesendet wird.
+- **Neue Inaktive-Hosts Mailvorlage**: Branded HTML-Mail mit App-Logo im Header, ANG-Logo im Footer und Host-Tabelle (letzte Meldung, Inaktivdauer, Status DOWN).
+
 ### v1.6.149 (17. Mai 2026)
 
 - **Inaktive-Hosts Mockup erweitert**: App-Logo im Header und ANG-Logo im Footer eingebaut, plus Telegram-Nachrichtenentwurf unterhalb des Mail-Layouts ergänzt.

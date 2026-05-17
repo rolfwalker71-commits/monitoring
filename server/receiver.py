@@ -303,6 +303,17 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS inactive_host_notification_state (
+                hostname TEXT PRIMARY KEY,
+                last_report_time_utc TEXT NOT NULL DEFAULT '',
+                last_mail_notified_report_time_utc TEXT NOT NULL DEFAULT '',
+                last_telegram_notified_report_time_utc TEXT NOT NULL DEFAULT '',
+                updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS host_config_snapshot (
                 hostname TEXT PRIMARY KEY,
                 os_release TEXT NOT NULL DEFAULT '-',
@@ -6206,6 +6217,94 @@ def alert_instant_mail_html(
     )
 
 
+def inactive_hosts_mail_subject(hosts: list[dict], threshold_hours: int) -> str:
+    count = len(hosts or [])
+    label = "Host" if count == 1 else "Hosts"
+    return f"[Monitoring] [KRITISCH] Inaktive {label}: {count} (>{threshold_hours}h)"
+
+
+def inactive_hosts_mail_html(username: str, hosts: list[dict], threshold_hours: int) -> str:
+    app_logo_uri = app_logo_data_uri()
+    ang_logo_uri = ang_logo_data_uri()
+    build_version = html.escape(read_build_version())
+    header_meta = f"Benutzer: {username} | Schwellwert: {threshold_hours}h | Zeit: {format_mail_datetime()}"
+
+    row_parts: list[str] = []
+    for item in hosts:
+        hostname = str(item.get("hostname") or "")
+        display_name = str(item.get("display_name") or hostname)
+        primary_ip = str(item.get("primary_ip") or "-")
+        country_code = str(item.get("country_code") or "")
+        os_value = str(item.get("os") or "")
+        os_family = normalize_os_family(os_value)
+        last_report_time_utc = str(item.get("last_report_time_utc") or "")
+        hours_inactive = float(item.get("hours_inactive") or 0)
+        row_parts.append(
+            "<tr style='background:#fff1f2;'>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><div style='font-weight:600;'>{html.escape(display_name)}</div><div style='margin-top:3px;font-size:12px;color:#64748b;'>Host: {html.escape(hostname)} | IP: {html.escape(primary_ip)}</div>{host_badges_html(country_code, os_family)}</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;font-variant-numeric:tabular-nums;'>{html.escape(format_mail_datetime(last_report_time_utc))}</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums;'><strong>{hours_inactive:.1f} h</strong></td>"
+            "<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><span style='display:inline-block;padding:2px 8px;border-radius:999px;background:#fee2e2;color:#991b1b;font-weight:700;'>DOWN</span></td>"
+            "</tr>"
+        )
+    rows_html = "".join(row_parts)
+    if not rows_html:
+        rows_html = "<tr><td colspan='4' style='padding:12px 8px;text-align:left;color:#475569;'>Keine inaktiven Hosts gefunden.</td></tr>"
+
+    return (
+        "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
+        "<div style='max-width:900px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;'>"
+        "<div style='padding:18px 20px;background-color:#eaf4ff;background-image:linear-gradient(180deg,#f4faff,#e6f1ff);color:#17324d;border-bottom:1px solid #cfe0f5;'>"
+        f"{mail_branding_header_html(app_logo_uri, build_version, header_meta)}"
+        "<h2 style='margin:0 0 6px 0;font-size:22px;color:#17324d;'>Inaktive Hosts Alert</h2>"
+        "</div>"
+        "<div style='padding:18px 20px;'>"
+        f"<p style='margin:0 0 14px 0;font-size:14px;'>Es wurden <strong>{len(hosts)}</strong> Hosts ohne neue Meldung erkannt.</p>"
+        "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
+        "<thead><tr style='background:#f8fafc;'>"
+        "<th style='text-align:left;padding:8px;border:1px solid #dbe3ef;'>Host</th>"
+        "<th style='text-align:left;padding:8px;border:1px solid #dbe3ef;'>Letzte Meldung</th>"
+        "<th style='text-align:right;padding:8px;border:1px solid #dbe3ef;'>Inaktiv seit</th>"
+        "<th style='text-align:left;padding:8px;border:1px solid #dbe3ef;'>Status</th>"
+        "</tr></thead>"
+        f"<tbody>{rows_html}</tbody>"
+        "</table>"
+        "<p style='margin:12px 0 0 0;font-size:12px;color:#64748b;'>Hinweis: Ein Host gilt als inaktiv, wenn seit dem Schwellwert keine neue Meldung eingegangen ist.</p>"
+        f"<div style='margin-top:18px;padding-top:14px;border-top:1px solid #e2e8f0;text-align:right;'><img src='{ang_logo_uri}' alt='ANG' width='110' style='display:inline-block;max-width:110px;height:auto;'></div>"
+        "</div>"
+        "</div>"
+        "</body></html>"
+    )
+
+
+def inactive_hosts_telegram_text(username: str, hosts: list[dict], threshold_hours: int) -> str:
+    lines = [
+        "🚨 Inaktive Hosts erkannt",
+        "",
+        f"👤 {username}",
+        f"Schwellwert: {threshold_hours}h",
+        f"Betroffene Hosts: {len(hosts)}",
+        "",
+    ]
+
+    max_items = 10
+    for idx, item in enumerate(hosts[:max_items], start=1):
+        display_name = str(item.get("display_name") or item.get("hostname") or "-")
+        country = str(item.get("country_code") or "--")
+        hours_inactive = float(item.get("hours_inactive") or 0)
+        last_report = format_mail_datetime(str(item.get("last_report_time_utc") or ""))
+        lines.append(
+            f"{idx}) {display_name} ({country}) - {hours_inactive:.1f}h inaktiv - letzte Meldung {last_report}"
+        )
+
+    remaining = len(hosts) - max_items
+    if remaining > 0:
+        lines.append(f"... +{remaining} weitere Hosts")
+
+    lines.extend(["", "Bitte Host-Erreichbarkeit und Agent-Status pruefen."])
+    return "\n".join(lines)
+
+
 def send_instant_alert_mails_to_users(
     conn: sqlite3.Connection,
     event_type: str,
@@ -7155,6 +7254,215 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                 "UPDATE alerts SET last_telegram_reminder_sent_utc = ? WHERE id = ?",
                 (now_utc_iso, alert_id),
             )
+
+
+def maybe_send_inactive_host_notifications(conn: sqlite3.Connection) -> None:
+    alarm_settings = get_alarm_settings(conn)
+    if not bool(alarm_settings.get("inactive_host_alert_enabled", False)):
+        return
+
+    try:
+        threshold_hours = int(alarm_settings.get("inactive_host_alert_hours", 3) or 3)
+    except (TypeError, ValueError):
+        threshold_hours = 3
+    threshold_hours = max(1, min(168, threshold_hours))
+
+    inactive_hosts = collect_inactive_hosts(conn, threshold_hours)
+    if not inactive_hosts:
+        return
+
+    now_utc_iso = utc_now_iso()
+    state_rows = conn.execute(
+        """
+        SELECT hostname,
+               COALESCE(last_mail_notified_report_time_utc, ''),
+               COALESCE(last_telegram_notified_report_time_utc, '')
+        FROM inactive_host_notification_state
+        """
+    ).fetchall()
+    state_by_host = {
+        str(row[0] or ""): {
+            "mail": str(row[1] or ""),
+            "telegram": str(row[2] or ""),
+        }
+        for row in state_rows
+        if str(row[0] or "")
+    }
+
+    due_mail_hosts = [
+        item for item in inactive_hosts
+        if state_by_host.get(str(item.get("hostname") or ""), {}).get("mail", "") != str(item.get("last_report_time_utc") or "")
+    ]
+    due_telegram_hosts = [
+        item for item in inactive_hosts
+        if state_by_host.get(str(item.get("hostname") or ""), {}).get("telegram", "") != str(item.get("last_report_time_utc") or "")
+    ]
+    if not due_mail_hosts and not due_telegram_hosts:
+        return
+
+    for item in inactive_hosts:
+        hostname = str(item.get("hostname") or "")
+        if not hostname:
+            continue
+        conn.execute(
+            """
+            INSERT INTO inactive_host_notification_state (
+                hostname,
+                last_report_time_utc,
+                last_mail_notified_report_time_utc,
+                last_telegram_notified_report_time_utc,
+                updated_at_utc
+            )
+            VALUES (?, ?, '', '', ?)
+            ON CONFLICT(hostname) DO UPDATE SET
+                last_report_time_utc = excluded.last_report_time_utc,
+                updated_at_utc = excluded.updated_at_utc
+            """,
+            (hostname, str(item.get("last_report_time_utc") or ""), now_utc_iso),
+        )
+
+    sent_mail_hostnames: set[str] = set()
+    sent_telegram_hostnames: set[str] = set()
+
+    if due_mail_hosts:
+        try:
+            mail_user_rows = conn.execute(
+                """
+                SELECT u.username, COALESCE(s.alert_instant_min_severity, 'warning')
+                FROM web_users u
+                JOIN web_user_settings s ON s.username = u.username
+                WHERE COALESCE(u.is_disabled, 0) = 0
+                  AND COALESCE(s.alert_instant_mail_enabled, 0) = 1
+                  AND COALESCE(s.email_enabled, 0) = 1
+                  AND COALESCE(s.email_recipient, '') != ''
+                """
+            ).fetchall()
+        except Exception:
+            mail_user_rows = []
+
+        for row in mail_user_rows:
+            username = str(row[0] or "").strip()
+            min_severity = str(row[1] or "warning").strip().lower()
+            if not username:
+                continue
+            if min_severity == "critical":
+                # Inactive host is always treated as critical; keep user preference handling explicit.
+                pass
+
+            user_settings = get_web_user_settings(conn, username)
+            all_recipients = resolve_user_alert_mail_recipients(user_settings, "critical")
+            if not all_recipients:
+                continue
+
+            subscribed_rows = conn.execute(
+                """
+                SELECT hostname
+                FROM web_user_alert_subscriptions
+                WHERE username = ? AND COALESCE(notify_mail, 0) = 1
+                """,
+                (username,),
+            ).fetchall()
+            subscribed_hosts = {str(sub_row[0] or "") for sub_row in subscribed_rows if str(sub_row[0] or "")}
+            selected_hosts = [
+                item for item in due_mail_hosts
+                if str(item.get("hostname") or "") in subscribed_hosts
+            ]
+            if not selected_hosts:
+                continue
+
+            ok_token, access_token, _details = ensure_microsoft_access_token(conn, username)
+            if not ok_token:
+                continue
+
+            mail_ok, _mail_details = send_microsoft_mail_multi(
+                access_token,
+                all_recipients,
+                inactive_hosts_mail_subject(selected_hosts, threshold_hours),
+                inactive_hosts_mail_html(username, selected_hosts, threshold_hours),
+                content_type="HTML",
+                sender_address=str(user_settings.get("email_sender", "") or "").strip(),
+            )
+            if mail_ok:
+                sent_mail_hostnames.update(str(item.get("hostname") or "") for item in selected_hosts)
+
+    telegram_enabled = bool(alarm_settings.get("telegram_enabled", False))
+    telegram_bot_token = str(alarm_settings.get("telegram_bot_token", "") or "").strip()
+    if due_telegram_hosts and telegram_enabled and telegram_bot_token:
+        try:
+            telegram_user_rows = conn.execute(
+                """
+                SELECT u.username,
+                       COALESCE(s.alert_instant_min_severity, 'warning'),
+                       COALESCE(s.alert_telegram_chat_id, '')
+                FROM web_users u
+                JOIN web_user_settings s ON s.username = u.username
+                WHERE COALESCE(u.is_disabled, 0) = 0
+                  AND COALESCE(s.alert_instant_telegram_enabled, 0) = 1
+                  AND COALESCE(s.alert_telegram_chat_id, '') != ''
+                """
+            ).fetchall()
+        except Exception:
+            telegram_user_rows = []
+
+        for row in telegram_user_rows:
+            username = str(row[0] or "").strip()
+            min_severity = str(row[1] or "warning").strip().lower()
+            chat_id = str(row[2] or "").strip()
+            if not username or not chat_id:
+                continue
+            if min_severity == "critical":
+                # Inactive host is always treated as critical; keep user preference handling explicit.
+                pass
+
+            subscribed_rows = conn.execute(
+                """
+                SELECT hostname
+                FROM web_user_alert_subscriptions
+                WHERE username = ? AND COALESCE(notify_telegram, 0) = 1
+                """,
+                (username,),
+            ).fetchall()
+            subscribed_hosts = {str(sub_row[0] or "") for sub_row in subscribed_rows if str(sub_row[0] or "")}
+            selected_hosts = [
+                item for item in due_telegram_hosts
+                if str(item.get("hostname") or "") in subscribed_hosts
+            ]
+            if not selected_hosts:
+                continue
+
+            telegram_ok, _telegram_details = telegram_send_to_chat(
+                telegram_bot_token,
+                chat_id,
+                inactive_hosts_telegram_text(username, selected_hosts, threshold_hours),
+            )
+            if telegram_ok:
+                sent_telegram_hostnames.update(str(item.get("hostname") or "") for item in selected_hosts)
+
+    for hostname in sent_mail_hostnames:
+        host_item = next((item for item in inactive_hosts if str(item.get("hostname") or "") == hostname), None)
+        if not host_item:
+            continue
+        conn.execute(
+            """
+            UPDATE inactive_host_notification_state
+            SET last_mail_notified_report_time_utc = ?, updated_at_utc = ?
+            WHERE hostname = ?
+            """,
+            (str(host_item.get("last_report_time_utc") or ""), now_utc_iso, hostname),
+        )
+
+    for hostname in sent_telegram_hostnames:
+        host_item = next((item for item in inactive_hosts if str(item.get("hostname") or "") == hostname), None)
+        if not host_item:
+            continue
+        conn.execute(
+            """
+            UPDATE inactive_host_notification_state
+            SET last_telegram_notified_report_time_utc = ?, updated_at_utc = ?
+            WHERE hostname = ?
+            """,
+            (str(host_item.get("last_report_time_utc") or ""), now_utc_iso, hostname),
+        )
 
 
 def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
@@ -12482,6 +12790,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             else:
                 update_alerts_for_report(conn, hostname, report_id, filesystems, alarm_settings)
             maybe_send_alert_reminders(conn)
+            maybe_send_inactive_host_notifications(conn)
             maybe_send_scheduled_user_mails(conn)
             conn.commit()
 
