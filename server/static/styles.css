@@ -3967,24 +3967,26 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-os-icon {
   position: absolute;
-  top: 6px;
+  top: 18px;
   right: 10px;
   width: 21px;
   height: 21px;
   object-fit: contain;
   opacity: 0.75;
   pointer-events: none;
+  transform: translateY(-50%);
 }
 
 .host-flag-icon {
   position: absolute;
-  bottom: 5px;
+  top: calc(100% - 18px);
   right: 8px;
   width: 24px;
   height: 24px;
   object-fit: contain;
   background: transparent;
   pointer-events: none;
+  transform: translateY(-50%);
 }
 
 .host-item:hover {
