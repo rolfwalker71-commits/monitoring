@@ -522,6 +522,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+
+### v1.6.163 (17. Mai 2026)
+
+- **Critical-Trends Chips**: Fehlenden `.ct-badge`-Selektor ergaenzt – jetzt erscheinen "Kritisch" und "Warnung" beide als einheitliche Chips.
+- **Kundenname kleiner**: Schriftgroesse in den Trend-Karten von 20px auf 14px reduziert.
  
 ### v1.6.162 (17. Mai 2026)
 
