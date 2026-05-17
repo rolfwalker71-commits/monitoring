@@ -493,6 +493,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.89 (17. Mai 2026)
+
+- **Backup Stati: Kunden standardmäßig zugeklappt**: Die Kundenebene startet jetzt immer geschlossen.
+- **Unabhängig vom Status**: Kein automatisches Aufklappen mehr bei fehlenden aktuellen Backups.
+
 ### v1.6.88 (17. Mai 2026)
 
 - **Changelog-Hierarchie angepasst**: Im Changelog-Bereich ist die erste Ebene jetzt `Kunde`.

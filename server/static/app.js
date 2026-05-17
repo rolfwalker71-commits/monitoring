@@ -9339,7 +9339,7 @@ function renderBackupStatus(data) {
     const currentDirs = Number(group.currentDirs || 0);
     const totalDirs = Number(group.totalDirs || 0);
     const missingDirs = Math.max(0, totalDirs - currentDirs);
-    const groupOpenAttr = missingHosts > 0 ? " open" : "";
+    const groupOpenAttr = "";
     const groupClass = missingHosts > 0
       ? "backup-customer-summary backup-customer-summary--missing"
       : "backup-customer-summary backup-customer-summary--ok";
