@@ -493,6 +493,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.93 (17. Mai 2026)
+
+- **Systemübersicht Kundengruppe korrigiert**: Die 2. Ebene verwendet jetzt den echten `customer_name` statt Host-Anzeigename.
+- **Hierarchie wieder korrekt**: Anzeige ist jetzt konsistent `Land → Kunde → Hosts`.
+
 ### v1.6.92 (17. Mai 2026)
 
 - **Neue Admin-Übersicht für veraltete Agenten**: Zeigt Hosts, deren Agent-Version mindestens 5 Versionen hinter der aktuellen Repo-Agent-Version liegt.

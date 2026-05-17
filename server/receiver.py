@@ -4779,14 +4779,19 @@ def collect_system_overview(conn: sqlite3.Connection) -> dict:
     placeholders = ",".join("?" for _ in hostnames)
     settings_rows = conn.execute(
         f"""
-        SELECT hostname, display_name_override, COALESCE(country_code_override, '')
-        FROM host_settings
+        SELECT h.hostname,
+               h.display_name_override,
+               COALESCE(h.country_code_override, ''),
+               COALESCE(c.customer_name, '')
+        FROM host_settings h
+        LEFT JOIN customers c ON c.id = h.customer_id
         WHERE hostname IN ({placeholders})
         """,
         tuple(hostnames),
     ).fetchall()
     override_names = {str(row[0] or ""): str(row[1] or "") for row in settings_rows}
     override_countries = {str(row[0] or ""): normalize_country_code(str(row[2] or "")) for row in settings_rows}
+    customer_names = {str(row[0] or ""): str(row[3] or "").strip() for row in settings_rows}
 
     latest_rows = conn.execute(
         f"""
@@ -4815,7 +4820,7 @@ def collect_system_overview(conn: sqlite3.Connection) -> dict:
 
         country = override_countries.get(hostname, "") or extract_country_code_from_payload(payload) or "XX"
         os_family = normalize_os_family(payload.get("os", ""))
-        customer = effective_display_name(payload, override_names.get(hostname, ""), hostname)
+        customer = customer_names.get(hostname, "") or "Ohne Kunde"
 
         release_info = _extract_sap_hana_ram(payload)
         cpu_info = _extract_cpu_overview(payload)
