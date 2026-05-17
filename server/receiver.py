@@ -164,6 +164,7 @@ def init_db() -> None:
                 customer_alert_mountpoints TEXT NOT NULL DEFAULT '',
                 customer_alert_min_severity TEXT NOT NULL DEFAULT 'critical',
                 customer_id INTEGER,
+                environment_type TEXT NOT NULL DEFAULT '',
                 updated_at_utc TEXT NOT NULL,
                 FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE SET NULL
             )
@@ -187,6 +188,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE host_settings ADD COLUMN customer_alert_min_severity TEXT NOT NULL DEFAULT 'critical'")
         if "customer_id" not in existing_host_columns:
             conn.execute("ALTER TABLE host_settings ADD COLUMN customer_id INTEGER")
+        if "environment_type" not in existing_host_columns:
+            conn.execute("ALTER TABLE host_settings ADD COLUMN environment_type TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS alarm_settings (
@@ -8203,6 +8206,7 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
                     COALESCE(h.customer_alert_mountpoints, ''),
                     COALESCE(h.customer_alert_min_severity, 'critical'),
                     h.customer_id,
+                    COALESCE(h.environment_type, ''),
                     COALESCE(c.customer_name, ''),
                     COALESCE(c.maringo_project_number, '')
                 FROM host_settings h
@@ -8221,12 +8225,16 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
             "customer_alert_mountpoints": "",
             "customer_alert_min_severity": "critical",
             "customer_id": None,
+            "environment_type": "",
             "customer_name": "",
             "customer_maringo_project_number": "",
         }
     customer_alert_min_severity = str(row[6] or "critical").strip().lower()
     if customer_alert_min_severity not in {"warning", "critical"}:
         customer_alert_min_severity = "critical"
+    environment_type = str(row[8] or "").strip().lower()
+    if environment_type not in {"", "prod", "test"}:
+        environment_type = ""
     return {
         "display_name_override": str(row[0] or "").strip(),
         "country_code_override": normalize_country_code(row[1]),
@@ -8236,8 +8244,9 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
         "customer_alert_mountpoints": str(row[5] or "").strip(),
         "customer_alert_min_severity": customer_alert_min_severity,
         "customer_id": int(row[7]) if row[7] is not None else None,
-        "customer_name": str(row[8] or "").strip(),
-        "customer_maringo_project_number": str(row[9] or "").strip(),
+        "environment_type": environment_type,
+        "customer_name": str(row[9] or "").strip(),
+        "customer_maringo_project_number": str(row[10] or "").strip(),
     }
 
 
@@ -9255,6 +9264,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                            COALESCE(h.is_favorite, 0),
                            COALESCE(h.is_hidden, 0),
                            h.customer_id,
+                              COALESCE(h.environment_type, ''),
                            COALESCE(c.customer_name, ''),
                            COALESCE(c.maringo_project_number, '')
                     FROM host_settings h
@@ -9362,6 +9372,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                            COALESCE(h.is_favorite, 0),
                            COALESCE(h.is_hidden, 0),
                            h.customer_id,
+                              COALESCE(h.environment_type, ''),
                            COALESCE(c.customer_name, ''),
                            COALESCE(c.maringo_project_number, '')
                     FROM host_settings h
@@ -9376,8 +9387,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "is_favorite": bool(int(row[3] or 0)),
                     "is_hidden": bool(int(row[4] or 0)),
                     "customer_id": int(row[5]) if row[5] is not None else None,
-                    "customer_name": str(row[6] or ""),
-                    "customer_maringo_project_number": str(row[7] or ""),
+                    "environment_type": str(row[6] or "").strip().lower(),
+                    "customer_name": str(row[7] or ""),
+                    "customer_maringo_project_number": str(row[8] or ""),
                 }
                 for row in settings_rows
             }
@@ -9428,6 +9440,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "customer_id": host_settings.get("customer_id"),
                         "customer_name": str(host_settings.get("customer_name", "") or ""),
                         "customer_maringo_project_number": str(host_settings.get("customer_maringo_project_number", "") or ""),
+                        "environment_type": str(host_settings.get("environment_type", "") or ""),
                         "agent_api_key_status": str((latest_payload.get("agent_api_key") or {}).get("status", "off")),
                     }
                 )
@@ -9563,6 +9576,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "customer_alert_mountpoints": host_settings["customer_alert_mountpoints"],
                     "customer_alert_min_severity": host_settings["customer_alert_min_severity"],
                     "customer_id": host_settings["customer_id"],
+                    "environment_type": host_settings["environment_type"],
                     "customer_name": host_settings["customer_name"],
                     "customer_maringo_project_number": host_settings["customer_maringo_project_number"],
                 },
@@ -11435,6 +11449,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             has_customer_alert_mountpoints = "customer_alert_mountpoints" in payload
             has_customer_alert_min_severity = "customer_alert_min_severity" in payload
             has_customer_id = "customer_id" in payload
+            has_environment_type = "environment_type" in payload
 
             if not hostname:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
@@ -11449,6 +11464,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 or has_customer_alert_mountpoints
                 or has_customer_alert_min_severity
                 or has_customer_id
+                or has_environment_type
             ):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no host setting provided"})
                 return
@@ -11463,6 +11479,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 customer_alert_mountpoints = current["customer_alert_mountpoints"]
                 customer_alert_min_severity = current["customer_alert_min_severity"]
                 customer_id = current["customer_id"]
+                environment_type = current["environment_type"]
 
                 if has_display_name:
                     display_name_override = str(payload.get("display_name_override", "")).strip()
@@ -11495,6 +11512,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "customer_id not found"})
                             return
                         customer_id = int(customer["id"])
+                if has_environment_type:
+                    raw_environment_type = str(payload.get("environment_type", "") or "").strip().lower()
+                    if raw_environment_type in {"prod", "prod."}:
+                        environment_type = "prod"
+                    elif raw_environment_type == "test":
+                        environment_type = "test"
+                    elif raw_environment_type in {"", "none"}:
+                        environment_type = ""
+                    else:
+                        self._send_json(HTTPStatus.BAD_REQUEST, {"error": "environment_type must be empty, prod or test"})
+                        return
 
                 if (
                     display_name_override
@@ -11505,6 +11533,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     or customer_alert_mountpoints
                     or customer_alert_min_severity != "critical"
                     or customer_id is not None
+                    or environment_type
                 ):
                     conn.execute(
                         """
@@ -11518,9 +11547,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                           customer_alert_mountpoints,
                           customer_alert_min_severity,
                                                     customer_id,
+                                                    environment_type,
                           updated_at_utc
                         )
-                                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(hostname) DO UPDATE SET
                           display_name_override = excluded.display_name_override,
                           country_code_override = excluded.country_code_override,
@@ -11530,6 +11560,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                           customer_alert_mountpoints = excluded.customer_alert_mountpoints,
                           customer_alert_min_severity = excluded.customer_alert_min_severity,
                                                     customer_id = excluded.customer_id,
+                                                    environment_type = excluded.environment_type,
                           updated_at_utc = excluded.updated_at_utc
                         """,
                         (
@@ -11542,6 +11573,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             customer_alert_mountpoints,
                             customer_alert_min_severity,
                             customer_id,
+                            environment_type,
                             utc_now_iso(),
                         ),
                     )
@@ -11568,6 +11600,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "customer_alert_mountpoints": customer_alert_mountpoints,
                     "customer_alert_min_severity": customer_alert_min_severity,
                     "customer_id": stored_host_settings.get("customer_id"),
+                    "environment_type": stored_host_settings.get("environment_type", ""),
                     "customer_name": stored_host_settings.get("customer_name", ""),
                     "customer_maringo_project_number": stored_host_settings.get("customer_maringo_project_number", ""),
                 },

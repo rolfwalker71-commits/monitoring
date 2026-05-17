@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.116 | 17.05.2026 | Host metadata: add host-level Umgebung dropdown (Prod./Test) and render environment chip below SAP/HANA/SID chips (Prod.=greenish, Test=yellowish) |
 | 1.6.115 | 17.05.2026 | Host cards: reduce customer-name chip font size from 16px to 14px to further reduce visual dominance |
 | 1.6.114 | 17.05.2026 | Host cards: reduce customer-name chip typography from 22px to 16px for less dominant visual weight |
 | 1.6.113 | 17.05.2026 | Host Config Changelog: remove synthetic SAP AddOn "init" events so 24h view shows only real version deltas (fixes false recent changes with old values) |

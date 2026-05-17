@@ -7099,6 +7099,12 @@ function renderSingleHostCard(host) {
       ? `<span class="host-value-chip host-value-chip--sid" title="HANA SID">${escapeHtml(hanaSidValue)}</span>`
       : "",
   ].filter(Boolean).join("");
+  const environmentType = asText(host.environment_type, "").trim().toLowerCase();
+  const environmentChip = environmentType === "prod"
+    ? '<span class="host-value-chip host-value-chip--env host-value-chip--env-prod" title="Host-Umgebung">Prod.</span>'
+    : environmentType === "test"
+      ? '<span class="host-value-chip host-value-chip--env host-value-chip--env-test" title="Host-Umgebung">Test</span>'
+      : "";
   const lastReportInfo = formatHostLastReportAge(host.last_report_utc || host.last_seen_utc);
   const agentVersionVisual = getHostAgentVersionVisual(host.agent_version, state.latestAgentRelease);
   const statusBarClass = lastReportInfo.statusClass === "host-last-report-dot--critical"
@@ -7142,8 +7148,8 @@ function renderSingleHostCard(host) {
     }
   }
 
-  const footerContent = valueChipStack
-    ? `<div class="host-card-footer"><span class="host-card-actions">${valueChipStack}</span></div>`
+  const footerContent = (valueChipStack || environmentChip)
+    ? `<div class="host-card-footer-wrap">${valueChipStack ? `<div class="host-card-footer"><span class="host-card-actions">${valueChipStack}</span></div>` : ""}${environmentChip ? `<div class="host-card-env-row">${environmentChip}</div>` : ""}</div>`
     : "";
 
   let mutedAlertsSection = "";
@@ -8462,6 +8468,7 @@ async function editDisplayName() {
     hostname: state.selectedHost,
     currentDisplayName: asText(hostSettings.display_name_override, state.selectedDisplayName || state.selectedHost),
     currentCountryCode: asText(hostSettings.country_code_override, ""),
+    currentEnvironmentType: asText(hostSettings.environment_type, ""),
     currentCustomerId: hostSettings.customer_id,
     currentCustomerName: asText(hostSettings.customer_name, ""),
     currentCustomerProjectNo: asText(hostSettings.customer_maringo_project_number, ""),
@@ -8497,6 +8504,7 @@ async function editDisplayName() {
   await saveHostSettings(state.selectedHost, {
     display_name_override: result.displayName,
     country_code_override: result.countryCode,
+    environment_type: result.environmentType,
     customer_id: customerId,
   });
 
@@ -8508,6 +8516,7 @@ async function openHostMetadataEditorDialog({
   hostname,
   currentDisplayName,
   currentCountryCode,
+  currentEnvironmentType,
   currentCustomerId,
   currentCustomerName,
   currentCustomerProjectNo,
@@ -8532,6 +8541,13 @@ async function openHostMetadataEditorDialog({
           </label>
           <label>Land (2-stellig)
             <input id="hostMetaCountryCodeInput" type="text" maxlength="2" placeholder="CH, DE ..." value="${escapeHtml((currentCountryCode || "").toUpperCase())}" />
+          </label>
+          <label>Umgebung
+            <select id="hostMetaEnvironmentTypeSelect">
+              <option value="">Keine Angabe</option>
+              <option value="prod" ${String(currentEnvironmentType || "").toLowerCase() === "prod" ? "selected" : ""}>Prod.</option>
+              <option value="test" ${String(currentEnvironmentType || "").toLowerCase() === "test" ? "selected" : ""}>Test</option>
+            </select>
           </label>
           <label>Kunde
             <select id="hostMetaCustomerSelect">
@@ -8570,6 +8586,7 @@ async function openHostMetadataEditorDialog({
   const wrapNew = modal.querySelector("#hostMetaNewCustomerWrap");
   const displayNameInput = modal.querySelector("#hostMetaDisplayNameInput");
   const countryCodeInput = modal.querySelector("#hostMetaCountryCodeInput");
+  const environmentTypeSelect = modal.querySelector("#hostMetaEnvironmentTypeSelect");
   const newCustomerNameInput = modal.querySelector("#hostMetaNewCustomerNameInput");
   const newCustomerProjectInput = modal.querySelector("#hostMetaNewCustomerProjectInput");
 
@@ -8599,6 +8616,7 @@ async function openHostMetadataEditorDialog({
     modal.querySelector("[data-action='save']")?.addEventListener("click", () => {
       const displayName = String(displayNameInput?.value || "").trim();
       const countryCode = String(countryCodeInput?.value || "").trim().toUpperCase();
+      const environmentType = String(environmentTypeSelect?.value || "").trim().toLowerCase();
       if (countryCode && !/^[A-Z]{2}$/.test(countryCode)) {
         window.alert("Länderkürzel muss genau 2 Buchstaben haben (z.B. CH). ");
         countryCodeInput?.focus();
@@ -8628,6 +8646,7 @@ async function openHostMetadataEditorDialog({
       close({
         displayName,
         countryCode,
+        environmentType,
         customerMode,
         existingCustomerId,
         newCustomerName,
