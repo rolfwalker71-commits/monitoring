@@ -8064,6 +8064,21 @@ async function triggerAdminAutoBackupNow() {
   return data;
 }
 
+async function testAdminBackupAutomationSftp() {
+  const payload = readBackupAutomationSettingsFromInputs();
+  const response = await fetch("/api/v1/admin/backup-automation/test-sftp", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return data;
+}
+
 async function loadAdminDatabaseStats() {
   const response = await fetch("/api/v1/admin/database-stats", {
     method: "GET",
@@ -11288,6 +11303,7 @@ function wireEvents() {
   const triggerDatabaseStatsButton = document.getElementById("triggerDatabaseStatsButton");
   const saveBackupAutomationSettingsButton = document.getElementById("saveBackupAutomationSettingsButton");
   const triggerAutoBackupNowButton = document.getElementById("triggerAutoBackupNowButton");
+  const testBackupAutomationSftpButton = document.getElementById("testBackupAutomationSftpButton");
   const backupAutomationSftpAuthMode = document.getElementById("backupAutomationSftpAuthMode");
 
   if (triggerDatabaseStatsButton) {
@@ -11388,6 +11404,25 @@ function wireEvents() {
       } finally {
         triggerAutoBackupNowButton.disabled = false;
         if (saveBackupAutomationSettingsButton) saveBackupAutomationSettingsButton.disabled = false;
+      }
+    });
+  }
+
+  if (testBackupAutomationSftpButton) {
+    testBackupAutomationSftpButton.addEventListener("click", async () => {
+      testBackupAutomationSftpButton.disabled = true;
+      if (saveBackupAutomationSettingsButton) saveBackupAutomationSettingsButton.disabled = true;
+      if (triggerAutoBackupNowButton) triggerAutoBackupNowButton.disabled = true;
+      setBackupAutomationStatus("Teste sFTP Verbindung und Upload...");
+      try {
+        const result = await testAdminBackupAutomationSftp();
+        setBackupAutomationStatus(String(result?.message || "sFTP Test erfolgreich."));
+      } catch (error) {
+        setBackupAutomationStatus(`Fehler: ${error.message}`, true);
+      } finally {
+        testBackupAutomationSftpButton.disabled = false;
+        if (saveBackupAutomationSettingsButton) saveBackupAutomationSettingsButton.disabled = false;
+        if (triggerAutoBackupNowButton) triggerAutoBackupNowButton.disabled = false;
       }
     });
   }

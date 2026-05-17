@@ -522,6 +522,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.140 (17. Mai 2026)
+
+- **sFTP Testfunktion eingebaut**: Neuer Admin-Button "sFTP testen" prueft Verbindung und fuehrt einen echten Test-Upload (put + rm) im Zielpfad aus.
+- **Backend-Endpoint ergaenzt**: `/api/v1/admin/backup-automation/test-sftp` mit Validierung fuer Host/Port/User/Auth und klaren Fehlermeldungen.
+- **Auth-Unterstuetzung**: SSH-Key direkt unterstuetzt; Passwort-Modus wird ueber `sshpass` getestet (falls auf dem Server vorhanden).
+
 ### v1.6.139 (17. Mai 2026)
 
 - **Kundenchip nach links verschoben**: Der Kundenname-Chip steht in Reihe 2 jetzt ganz links unter der Host-Bezeichnung.

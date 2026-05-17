@@ -12,7 +12,10 @@ import re
 import secrets
 import shutil
 import sqlite3
+import subprocess
+import tempfile
 import threading
+import socket
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -1347,6 +1350,122 @@ def save_backup_automation_settings(conn: sqlite3.Connection, payload: dict) -> 
         ),
     )
     return get_backup_automation_settings(conn)
+
+
+def _sftp_batch_quote(value: str) -> str:
+    return '"' + str(value or "").replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def run_sftp_upload_test(payload: dict[str, object]) -> dict[str, object]:
+    sftp_host = str(payload.get("sftp_host", "") or "").strip()
+    sftp_port = _coerce_int(payload.get("sftp_port", 22), 22, 1, 65535)
+    sftp_username = str(payload.get("sftp_username", "") or "").strip()
+    sftp_remote_path = str(payload.get("sftp_remote_path", "") or "").strip()
+    sftp_auth_mode_raw = str(payload.get("sftp_auth_mode", "key") or "key").strip().lower()
+    sftp_auth_mode = "password" if sftp_auth_mode_raw == "password" else "key"
+    sftp_key_path = str(payload.get("sftp_key_path", "") or "").strip()
+    sftp_password = str(payload.get("sftp_password", "") or "")
+
+    if not sftp_host:
+        raise ValueError("sFTP Host fehlt")
+    if not sftp_username:
+        raise ValueError("sFTP Benutzer fehlt")
+    if not sftp_remote_path:
+        raise ValueError("Remote Pfad fehlt")
+
+    try:
+        with socket.create_connection((sftp_host, sftp_port), timeout=6):
+            pass
+    except OSError as exc:
+        raise RuntimeError(f"sFTP Host/Port nicht erreichbar: {exc}")
+
+    if shutil.which("sftp") is None:
+        raise RuntimeError("Systembefehl 'sftp' nicht gefunden")
+
+    if sftp_auth_mode == "key":
+        if not sftp_key_path:
+            raise ValueError("Key Pfad fehlt (Auth Modus: SSH Key)")
+        key_path = Path(sftp_key_path).expanduser()
+        if not key_path.exists() or not key_path.is_file():
+            raise ValueError("Key Datei nicht gefunden")
+        if not os.access(key_path, os.R_OK):
+            raise ValueError("Key Datei ist nicht lesbar")
+    else:
+        if not sftp_password:
+            raise ValueError("Passwort fehlt (Auth Modus: Passwort)")
+        if shutil.which("sshpass") is None:
+            raise RuntimeError("Passwort-Test erfordert 'sshpass' auf dem Server")
+
+    BACKUP_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    local_name = f"monitoring-sftp-test-{timestamp}.txt"
+    remote_name = f"monitoring-sftp-test-{timestamp}.txt"
+
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, dir=str(BACKUP_TEMP_DIR), prefix="sftp-test-", suffix=".txt") as tmp:
+        tmp.write(f"Monitoring SFTP test at {utc_now_iso()}\n")
+        local_path = Path(tmp.name)
+
+    try:
+        batch_lines = [
+            f"cd {_sftp_batch_quote(sftp_remote_path)}",
+            f"put {_sftp_batch_quote(str(local_path))} {_sftp_batch_quote(remote_name)}",
+            f"ls {_sftp_batch_quote(remote_name)}",
+            f"rm {_sftp_batch_quote(remote_name)}",
+            "bye",
+        ]
+        batch_input = "\n".join(batch_lines) + "\n"
+
+        sftp_command = [
+            "sftp",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "ConnectTimeout=8",
+            "-P",
+            str(sftp_port),
+        ]
+
+        env = os.environ.copy()
+        if sftp_auth_mode == "key":
+            sftp_command.extend(["-o", "BatchMode=yes", "-i", str(Path(sftp_key_path).expanduser())])
+        else:
+            sftp_command.extend(["-o", "BatchMode=no"])
+            sftp_command = ["sshpass", "-e"] + sftp_command
+            env["SSHPASS"] = sftp_password
+
+        sftp_command.append(f"{sftp_username}@{sftp_host}")
+
+        proc = subprocess.run(
+            sftp_command,
+            input=batch_input,
+            text=True,
+            capture_output=True,
+            timeout=30,
+            env=env,
+        )
+        if proc.returncode != 0:
+            details = (proc.stderr or proc.stdout or "").strip()
+            if len(details) > 600:
+                details = details[:600] + "..."
+            raise RuntimeError(f"sFTP Test fehlgeschlagen: {details or 'unbekannter Fehler'}")
+
+        return {
+            "status": "ok",
+            "message": "sFTP Test erfolgreich (Upload + Entfernen der Testdatei abgeschlossen)",
+            "details": {
+                "host": sftp_host,
+                "port": sftp_port,
+                "username": sftp_username,
+                "remote_path": sftp_remote_path,
+                "auth_mode": sftp_auth_mode,
+                "remote_test_file": remote_name,
+            },
+        }
+    finally:
+        try:
+            local_path.unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 def list_backup_automation_runs(conn: sqlite3.Connection, limit: int = 20) -> list[dict[str, object]]:
@@ -12143,6 +12262,40 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "recent_runs": runs,
                 },
             )
+            return
+
+        if path == "/api/v1/admin/backup-automation/test-sftp":
+            if not self._require_admin_session():
+                return
+
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "json object required"})
+                return
+
+            try:
+                result = run_sftp_upload_test(payload)
+            except ValueError as exc:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                return
+            except RuntimeError as exc:
+                self._send_json(HTTPStatus.BAD_GATEWAY, {"error": str(exc)})
+                return
+            except subprocess.TimeoutExpired:
+                self._send_json(HTTPStatus.GATEWAY_TIMEOUT, {"error": "sFTP Test Timeout"})
+                return
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
+            self._send_json(HTTPStatus.OK, result)
             return
 
         if path == "/api/v1/admin/fix-alert-status":
