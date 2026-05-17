@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
  
+### v1.6.161 (17. Mai 2026)
+
+- **Mute-Icone statusorientiert**: In den Alert-Aktionen zeigt `🔇` jetzt den stummgeschalteten Status und `🔔` den aktiven (nicht stummgeschalteten) Status.
+
 ### v1.6.160 (17. Mai 2026)
 
 - **Kundenname in Critical-Trends sichtbar**: In den Trend-Karten wird der Kunde nun vorne in der Kopfzeile angezeigt (oberhalb vor dem Hostnamen), wie in der angefragten Ansicht.
