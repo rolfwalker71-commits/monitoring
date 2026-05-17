@@ -7111,14 +7111,16 @@ function renderSingleHostCard(host) {
       : lastReportInfo.statusClass === "host-last-report-dot--ok"
         ? "host-status-bar host-status-bar--report-ok"
         : "host-status-bar host-status-bar--report-unknown";
+  const statusBarLogicText = "Logik: gruen < 15 Min, orange 15-44 Min, rot ab 45 Min, grau wenn unbekannt.";
   const statusBarTitle = lastReportInfo.label.startsWith("Report vor")
-    ? `Letzter ${lastReportInfo.label}`
-    : lastReportInfo.title;
+    ? `Letzter ${lastReportInfo.label} | ${statusBarLogicText}`
+    : `${lastReportInfo.title} | ${statusBarLogicText}`;
   const alertSideBar = hasOpenAlerts
-    ? `<div class="host-alert-side-bar" title="${openAlertCount} Alerts" aria-hidden="true"></div>`
+    ? `<div class="host-alert-side-bar" title="${openAlertCount} Alerts | Logik: Balken nur sichtbar bei > 0 Alerts." aria-hidden="true"></div>`
     : "";
   const hostAgentVersionText = asText(host.agent_version, "-");
-  const agentDotTitle = `Host meldet AGENT_VERSION: ${hostAgentVersionText}`;
+  const latestAgentVersionText = asText(state.latestAgentRelease, "-");
+  const agentDotTitle = `Host meldet AGENT_VERSION: ${hostAgentVersionText} | Referenz: ${latestAgentVersionText} | ${agentVersionVisual.title} | Logik: gruen = gleicher Major/Minor + Patch-Diff < 5, rot = Major/Minor abweichend oder Patch-Diff >= 5, grau = Vergleich nicht moeglich.`;
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
   const hanaRawForDebug = asText(host.hana_release || host.hana_version || "", "").trim();
