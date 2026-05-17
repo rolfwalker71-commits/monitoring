@@ -4535,44 +4535,7 @@ def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit:
                         "country_code": country_code,
                     }
                 )
-        elif current_snapshot:
-            # First seen snapshot within the selected window: surface as newly discovered
-            # so AddOn information appears in changelog even without a later version delta.
-            addon_names = sorted(current_snapshot.keys(), key=lambda x: x.lower())
-            for addon_name in addon_names:
-                new_version = str(current_snapshot.get(addon_name, "-") or "-")
-
-                label_source = "Lightweight Extension"
-                plain_name = addon_name
-                if addon_name.startswith("extensions::"):
-                    plain_name = addon_name.split("::", 1)[1]
-                    label_source = "LW"
-                elif addon_name.startswith("sari::"):
-                    plain_name = addon_name.split("::", 1)[1]
-                    label_source = "Legacy"
-                elif addon_name.startswith("hana_extensions::"):
-                    plain_name = addon_name.split("::", 1)[1]
-                    label_source = "HANA LW"
-                elif addon_name.startswith("hana_sari::"):
-                    plain_name = addon_name.split("::", 1)[1]
-                    label_source = "HANA Legacy"
-
-                display_override = str(row[4] or "").strip()
-                country_code = normalize_country_code(str(row[5] or ""))
-                changes.append(
-                    {
-                        "id": report_id,
-                        "detected_at_utc": detected_at_utc,
-                        "hostname": hostname,
-                        "display_name": display_override or hostname,
-                        "field_key": f"sap_addon::{addon_name}",
-                        "field_label": f"{label_source}: {plain_name}",
-                        "old_value": "-",
-                        "new_value": new_version,
-                        "source": "agent-report:addon-init",
-                        "country_code": country_code,
-                    }
-                )
+        # No synthetic "init" entries: changelog should only show real deltas.
 
         previous_by_host[hostname] = current_snapshot
 
