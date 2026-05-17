@@ -522,6 +522,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.139 (17. Mai 2026)
+
+- **Kundenchip nach links verschoben**: Der Kundenname-Chip steht in Reihe 2 jetzt ganz links unter der Host-Bezeichnung.
+- **Rechte Gruppe beibehalten**: Host-Controls und Meldungszaehler bleiben rechts ausgerichtet.
+
 ### v1.6.138 (17. Mai 2026)
 
 - **Kundenchip in Reihe 2 angehoben**: Der Kundenname-Chip wurde leicht nach oben versetzt, damit er visuell auf derselben Hoehe wie die Nachbar-Controls sitzt.
