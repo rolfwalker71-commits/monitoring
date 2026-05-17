@@ -2286,6 +2286,7 @@ body[data-theme="dark"] .title-tools-sep {
 }
 .title-row h3 {
   flex-shrink: 0;
+  order: 1;
 }
 .title-row-tools {
   display: inline-flex;
@@ -2294,7 +2295,7 @@ body[data-theme="dark"] .title-tools-sep {
   gap: 6px;
   flex-wrap: nowrap;
   flex-shrink: 0;
-  margin-left: auto;
+  order: 3;
 }
 
 .header-first-row-controls {
@@ -2303,6 +2304,7 @@ body[data-theme="dark"] .title-tools-sep {
   flex-wrap: wrap;
   align-items: center;
   flex-shrink: 0;
+  order: 2;
 }
 
 .title-tools-sep {
@@ -2632,6 +2634,8 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 }
 .report-meta-row .count {
   margin: 0;
+  order: 3;
+  margin-left: auto;
 }
 
 .report-customer-chip-wrap {
@@ -2639,13 +2643,15 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   align-items: center;
   min-height: 24px;
   flex-shrink: 0;
+  order: 1;
 }
 
 .selected-host-controls {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   flex-shrink: 0;
+  order: 2;
   gap: 6px;
   flex-wrap: wrap;
   margin-left: auto;
