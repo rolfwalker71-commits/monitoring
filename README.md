@@ -522,6 +522,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.135 (17. Mai 2026)
+
+- **Header-Zeile 2 rechts gebuendelt**: Alle Chips der zweiten Zeile werden zur rechten Seite verschoben.
+- **Meldungsanzeige gruppiert**: Kunden- und Host-Controls stehen direkt neben "Meldung X von Y".
+
 @@### v1.6.134 (17. Mai 2026)
 @@
 @@- **Zweite Zeile neu angeordnet**: Kundenname → Buttons → Meldungs-Info (via CSS order).
