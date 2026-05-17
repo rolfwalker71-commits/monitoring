@@ -522,6 +522,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.154 (17. Mai 2026)
+
+- **Alerts-Zeile typografisch angepasst**: Kundenname jetzt gross und fett wie die bisherige Hostzeile, Hostbezeichnung darunter 2px kleiner und nicht mehr fett.
+
 ### v1.6.153 (17. Mai 2026)
 
 - **Alerts-Ansicht startet mit quittierten Alerts**: Das Häkchen `Quittierte anzeigen` ist nun standardmaessig aktiv und die Tabelle zeigt beim Start auch quittierte Eintraege.
