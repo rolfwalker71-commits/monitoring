@@ -2635,6 +2635,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 .report-meta-row .count {
   margin: 0;
   margin-left: auto;
+  order: 3;
 }
 
 .report-customer-chip-wrap {
@@ -2642,7 +2643,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   align-items: center;
   min-height: 24px;
   flex-shrink: 0;
-  order: auto;
+  order: 1;
 }
 
 .selected-host-controls {
@@ -2650,7 +2651,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   align-items: center;
   justify-content: flex-start;
   flex-shrink: 0;
-  order: auto;
+  order: 2;
   gap: 6px;
   gap: 6px;
   flex-wrap: wrap;
