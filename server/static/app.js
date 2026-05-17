@@ -7120,7 +7120,10 @@ function renderSingleHostCard(host) {
     : "";
   const hostAgentVersionText = asText(host.agent_version, "-");
   const latestAgentVersionText = asText(state.latestAgentRelease, "-");
-  const agentDotTitle = `Host meldet AGENT_VERSION: ${hostAgentVersionText} | Referenz: ${latestAgentVersionText} | ${agentVersionVisual.title} | Logik: gruen = gleicher Major/Minor + Patch-Diff < 5, rot = Major/Minor abweichend oder Patch-Diff >= 5, grau = Vergleich nicht moeglich.`;
+  const agentStatusLogic = "Logik: rot = Major/Minor abweichend oder Patch-Diff >= 5; gruen = gleicher Major/Minor + Patch-Diff < 5; grau = Vergleich nicht moeglich.";
+  const agentTopBar = agentVersionVisual.dotClassName === "host-agent-version-dot--red"
+    ? `<div class="host-agent-top-bar" title="Host meldet AGENT_VERSION: ${escapeHtml(hostAgentVersionText)} | Referenz: ${escapeHtml(latestAgentVersionText)} | ${escapeHtml(agentVersionVisual.title)} | ${agentStatusLogic}" aria-hidden="true"></div>`
+    : "";
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
   const hanaRawForDebug = asText(host.hana_release || host.hana_version || "", "").trim();
@@ -7177,10 +7180,11 @@ function renderSingleHostCard(host) {
   return `
     <article class="${selectedClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">
       <div class="${statusBarClass}" title="${escapeHtml(statusBarTitle)}" aria-hidden="true"></div>
+      ${agentTopBar}
       ${alertSideBar}
       ${flagIcon}
       ${customerTitleLine}
-      <span class="host-meta-line host-meta-line--primary host-meta-line--with-alert"><span class="host-meta-text">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))} &nbsp;·&nbsp; <span class="host-agent-version-dot host-agent-version-dot--compact ${agentVersionVisual.dotClassName}" title="${escapeHtml(agentDotTitle)}" aria-hidden="true"></span></span></span>
+      <span class="host-meta-line host-meta-line--primary host-meta-line--with-alert"><span class="host-meta-text">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))}</span></span>
       ${footerContent}
       ${mutedAlertsSection}
       ${osIcon}

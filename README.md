@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.109 | 17.05.2026 | Host cards: replace inline agent status dot with top-edge red bar shown only for red agent-status (outdated), freeing space for long hostnames |
 | 1.6.108 | 17.05.2026 | Host card tooltips now include explicit color/threshold logic for left status bar, right alert bar visibility rule, and agent-dot version comparison logic |
 | 1.6.107 | 17.05.2026 | Host card tooltips: left status bar now shows last-report age, right alert bar shows alert count, and agent status dot shows host-reported AGENT_VERSION |
 | 1.6.106 | 17.05.2026 | Host cards: remove in-card alert chip and indicate open alerts with a right-side red vertical bar only |
