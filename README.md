@@ -522,6 +522,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.143 (17. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
 ### v1.6.142 (17. Mai 2026)
 
 - **Backup-Run Tabelle erweitert**: Neue Spalte `sFTP` zeigt im UI pro Lauf an, ob die Datei hochgeladen wurde (`ja`/`nein`).

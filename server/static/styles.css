@@ -3294,12 +3294,12 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .ct-host-card-crit .ct-host-header {
-  background: linear-gradient(90deg, #fff1f2 0%, #fff8f8 100%);
+  background: linear-gradient(180deg, #fff1f2 0%, #fff8f8 100%);
   border-bottom-color: #fecaca;
 }
 
 .ct-host-card-warn .ct-host-header {
-  background: linear-gradient(90deg, #fffbeb 0%, #fffef5 100%);
+  background: linear-gradient(180deg, #fffbeb 0%, #fffef5 100%);
   border-bottom-color: #fde68a;
 }
 
@@ -7983,12 +7983,12 @@ body[data-theme="dark"] .ct-host-header {
 }
 
 body[data-theme="dark"] .ct-host-card-crit .ct-host-header {
-  background: linear-gradient(90deg, #1f1212 0%, #1a1010 100%);
+  background: linear-gradient(180deg, #1f1212 0%, #1a1010 100%);
   border-bottom-color: #7f1d1d;
 }
 
 body[data-theme="dark"] .ct-host-card-warn .ct-host-header {
-  background: linear-gradient(90deg, #1f1a0c 0%, #1a1508 100%);
+  background: linear-gradient(180deg, #1f1a0c 0%, #1a1508 100%);
   border-bottom-color: #78350f;
 }
 
