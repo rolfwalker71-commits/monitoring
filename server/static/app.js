@@ -9414,6 +9414,28 @@ async function loadBackupStatus() {
   }
 }
 
+function expandAllBackupStatusCustomers() {
+  const listEl = document.getElementById("backupStatusList");
+  if (!listEl) return;
+  listEl.querySelectorAll("details.backup-customer-group").forEach((detailsEl) => {
+    detailsEl.open = true;
+  });
+}
+
+function expandAllSystemOverviewGroups() {
+  const container = document.getElementById("systemOverviewContainer");
+  if (!container) return;
+  container.querySelectorAll(".system-overview-toggle").forEach((button) => {
+    const targetId = String(button.getAttribute("data-target-id") || "");
+    const target = targetId ? document.getElementById(targetId) : null;
+    if (!target) return;
+    target.classList.remove("hidden");
+    button.setAttribute("aria-expanded", "true");
+    const chevron = button.querySelector(".system-overview-chevron");
+    if (chevron) chevron.textContent = "▼";
+  });
+}
+
 function renderCustomerOverview(data) {
   const customersAll = Array.isArray(data?.customers) ? data.customers : [];
   const query = String(state.customerOverviewSearchQuery || "").trim().toLowerCase();
@@ -10444,6 +10466,12 @@ function wireEvents() {
       await loadBackupStatus();
     });
   }
+  const expandAllBackupStatusButton = document.getElementById("expandAllBackupStatusButton");
+  if (expandAllBackupStatusButton) {
+    expandAllBackupStatusButton.addEventListener("click", () => {
+      expandAllBackupStatusCustomers();
+    });
+  }
   const backupStatusFilterSql = document.getElementById("backupStatusFilterSql");
   if (backupStatusFilterSql) {
     backupStatusFilterSql.addEventListener("change", async () => {
@@ -10540,6 +10568,12 @@ function wireEvents() {
   if (refreshSystemOverviewButton) {
     refreshSystemOverviewButton.addEventListener("click", async () => {
       await loadSystemOverview();
+    });
+  }
+  const expandAllSystemOverviewButton = document.getElementById("expandAllSystemOverviewButton");
+  if (expandAllSystemOverviewButton) {
+    expandAllSystemOverviewButton.addEventListener("click", () => {
+      expandAllSystemOverviewGroups();
     });
   }
   const toggleSystemOverviewAddonsButton = document.getElementById("toggleSystemOverviewAddonsButton");
@@ -12199,11 +12233,11 @@ async function loadSystemOverview() {
               const customerId = `so-addon-customer-${addonIndex}-${customerIndex}`;
               return `
                 <section class="system-overview-country-group">
-                  <button class="system-overview-toggle" type="button" data-target-id="${customerId}" aria-expanded="true">
-                    <span class="system-overview-chevron">▼</span>
+                  <button class="system-overview-toggle" type="button" data-target-id="${customerId}" aria-expanded="false">
+                    <span class="system-overview-chevron">▶</span>
                     <span class="so-country-header">👥 ${escapeHtml(customer)} (${customerHostCount})</span>
                   </button>
-                  <div id="${customerId}" class="system-overview-os-list">${osSections}</div>
+                  <div id="${customerId}" class="system-overview-os-list hidden">${osSections}</div>
                 </section>
               `;
             })
@@ -12291,11 +12325,11 @@ async function loadSystemOverview() {
               const customerId = `so-customer-${countryIndex}-${customerIndex}`;
               return `
                 <section class="system-overview-country-group">
-                  <button class="system-overview-toggle" type="button" data-target-id="${customerId}" aria-expanded="true">
-                    <span class="system-overview-chevron">▼</span>
+                  <button class="system-overview-toggle" type="button" data-target-id="${customerId}" aria-expanded="false">
+                    <span class="system-overview-chevron">▶</span>
                     <span class="so-country-header">👥 ${escapeHtml(customer)} (${customerHostCount})</span>
                   </button>
-                  <div id="${customerId}" class="system-overview-customer-list">
+                  <div id="${customerId}" class="system-overview-customer-list hidden">
                     <div class="system-overview-table-wrap">
                       <table class="system-overview-table">
                         <thead>

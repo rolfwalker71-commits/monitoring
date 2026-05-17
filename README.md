@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.91 (17. Mai 2026)
+
+- **Systemübersicht: Kundenebene standardmäßig zugeklappt**: Unter jedem Land starten Kunden jetzt geschlossen.
+- **Neuer Button `Alles aufklappen` (Systemübersicht)**: Öffnet alle Gruppen auf einmal.
+- **Neuer Button `Alles aufklappen` (Backup Stati)**: Öffnet alle Kunden-Gruppen auf einmal.
+
 ### v1.6.90 (17. Mai 2026)
 
 - **Systemübersicht-Anzeige korrigiert**: In der Host-Zeile wird wieder der echte Host-Name angezeigt statt erneut des Kunden-Namens.
