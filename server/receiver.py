@@ -1081,15 +1081,11 @@ def _create_database_backup_job() -> dict:
     backup_path = BACKUP_TEMP_DIR / f"{job_id}.db"
 
     try:
-        # Copy main database file
-        shutil.copy2(DB_PATH, backup_path)
-        # Also copy WAL and SHM files if they exist (for WAL-mode databases)
-        for suffix in ("-wal", "-shm"):
-            wal_path = DB_PATH.parent / f"{DB_PATH.name}{suffix}"
-            if wal_path.exists():
-                backup_wal_path = backup_path.parent / f"{backup_path.name}{suffix}"
-                shutil.copy2(wal_path, backup_wal_path)
-    except OSError as exc:
+        # Use SQLite's online backup API — WAL-aware and consistent even under concurrent writes
+        with sqlite3.connect(DB_PATH) as src_conn:
+            with sqlite3.connect(backup_path) as dst_conn:
+                src_conn.backup(dst_conn)
+    except (OSError, sqlite3.Error) as exc:
         return {"status": "error", "error": f"backup copy failed: {exc}"}
 
     with _backup_jobs_lock:

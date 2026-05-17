@@ -522,6 +522,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.145 (17. Mai 2026)
+
+- **Konsistentes manuelles Backup**: `_create_database_backup_job` verwendet jetzt `Connection.backup()` statt rohem `shutil.copy2` — WAL-aware, keine Inkonsistenz durch zeitversetzte Kopien von `.db`, `-wal` und `-shm`.
+
 ### v1.6.144 (17. Mai 2026)
 
 - **Automatischer sFTP Upload integriert**: Nach lokalem Backup wird die erzeugte Datei bei aktivierter sFTP-Konfiguration automatisch auf den Zielserver hochgeladen (manuell + Scheduler).
