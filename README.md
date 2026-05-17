@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.75 (17. Mai 2026)
+
+- **DB-Kennzahlen als Charts**: Die bisherigen Kennzahlen-Karten wurden durch 6 KPI-Charts ersetzt.
+- **Trendindikatoren**: Jeder Chart zeigt Trendpfeil (steigend/fallend/stabil), aktuelles Niveau und 3h-Delta.
+- **Responsive Reihenlayout**: Auf großen Screens 6 Charts in einer Reihe, bei weniger Platz automatische Verteilung auf 2 Reihen (3+3), mobil weiter reduziert.
+
 ### v1.6.74 (17. Mai 2026)
 
 - **Hotfix Admin-Load**: DB-Kennzahlen-Verlauf wird beim Öffnen des Admin-Tabs jetzt aktiv geladen (nicht nur beim initialen App-Start).

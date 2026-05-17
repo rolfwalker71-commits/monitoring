@@ -7401,26 +7401,7 @@ function setDbMaintenanceStatus(message, isError = false) {
 function renderDbMaintenanceStats(stats) {
   const el = document.getElementById("dbMaintenanceStats");
   if (!el) return;
-  const data = stats && typeof stats === "object" ? stats : {};
-
-  const rows = [
-    ["DB gesamt", formatBytes(data.total_file_bytes || 0)],
-    ["DB Datei", formatBytes(data.db_file_bytes || 0)],
-    ["WAL", formatBytes(data.wal_file_bytes || 0)],
-    ["Reports", formatInteger(data.reports_total || 0)],
-    ["Hosts (Reports)", formatInteger(data.hosts_with_reports || 0)],
-    ["Hosts (Settings)", formatInteger(data.hosts_total || 0)],
-    ["Alerts offen", formatInteger(data.alerts_open || 0)],
-    ["Payload Ø", formatBytes(data.avg_payload_bytes || 0)],
-    ["Payload max", formatBytes(data.max_payload_bytes || 0)],
-    ["Retention", `${formatInteger(data.retention_days || 0)} Tage`],
-    ["Ältester Report", formatUtcPlus2(data.oldest_report_utc || "") || "-"],
-    ["Neuester Report", formatUtcPlus2(data.newest_report_utc || "") || "-"],
-  ];
-
-  el.innerHTML = rows
-    .map(([label, value]) => `<div class="db-maintenance-stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value || "-"))}</strong></div>`)
-    .join("");
+  el.innerHTML = "";
 }
 
 function formatSignedInteger(value) {
@@ -7451,10 +7432,12 @@ function renderDbMaintenanceCharts(history, forecasts) {
   }
 
   const chartDefs = [
-    { key: "total_file_bytes", title: "DB gesamt", formatter: (v) => formatBytes(v) },
-    { key: "reports_total", title: "Reports", formatter: (v) => formatInteger(v) },
-    { key: "alerts_open", title: "Alerts offen", formatter: (v) => formatInteger(v) },
-    { key: "wal_file_bytes", title: "WAL", formatter: (v) => formatBytes(v) },
+    { key: "total_file_bytes", title: "DB gesamt", formatter: (v) => formatBytes(v), deltaFormatter: (v) => formatSignedBytes(v) },
+    { key: "wal_file_bytes", title: "WAL", formatter: (v) => formatBytes(v), deltaFormatter: (v) => formatSignedBytes(v) },
+    { key: "reports_total", title: "Reports", formatter: (v) => formatInteger(v), deltaFormatter: (v) => formatSignedInteger(v) },
+    { key: "avg_payload_bytes", title: "Payload Ø", formatter: (v) => formatBytes(v), deltaFormatter: (v) => formatSignedBytes(v) },
+    { key: "alerts_open", title: "Alerts offen", formatter: (v) => formatInteger(v), deltaFormatter: (v) => formatSignedInteger(v) },
+    { key: "free_ratio", title: "Free Ratio", formatter: (v) => `${(Number(v || 0) * 100).toFixed(1)}%`, deltaFormatter: (v) => `${Number(v || 0) >= 0 ? "+" : "-"}${Math.abs(Number(v || 0) * 100).toFixed(2)}%` },
   ];
 
   const renderLine = (values) => {
@@ -7472,22 +7455,35 @@ function renderDbMaintenanceCharts(history, forecasts) {
     return { width, height, points, min, max };
   };
 
+  const trendIndicator = (deltaValue) => {
+    const n = Number(deltaValue || 0);
+    if (!Number.isFinite(n) || Math.abs(n) < 1e-9) {
+      return { arrow: "→", cls: "flat", label: "stabil" };
+    }
+    if (n > 0) {
+      return { arrow: "↑", cls: "up", label: "steigend" };
+    }
+    return { arrow: "↓", cls: "down", label: "fallend" };
+  };
+
   el.innerHTML = chartDefs.map((def) => {
     const values = rows.map((row) => Number(row?.[def.key] || 0));
     const line = renderLine(values);
     const latest = values[values.length - 1];
-    const first = values[0];
-    const delta = latest - first;
+    const prev = values.length > 1 ? values[values.length - 2] : latest;
+    const delta3h = latest - prev;
     const forecast = forecasts && typeof forecasts === "object" ? forecasts[def.key] : null;
+    const trend = trendIndicator(forecast?.delta_14d ?? delta3h);
     const forecastText = forecast && typeof forecast === "object"
-      ? `14d Trend: ${formatSignedInteger(forecast.delta_14d)} (${def.formatter(forecast.projected_14d || 0)})`
+      ? `14d: ${def.deltaFormatter ? def.deltaFormatter(forecast.delta_14d) : formatSignedInteger(forecast.delta_14d)} · Ziel: ${def.formatter(forecast.projected_14d || 0)}`
       : "14d Trend: n/a";
 
     return `<div class="db-maintenance-chart-card">
       <div class="db-maintenance-chart-head">
         <strong>${escapeHtml(def.title)}</strong>
-        <span>${escapeHtml(def.formatter(latest || 0))} (${escapeHtml(formatSignedInteger(delta))})</span>
+        <span class="db-trend-chip ${trend.cls}" title="Trendindikator">${trend.arrow} ${escapeHtml(trend.label)}</span>
       </div>
+      <p class="count compact db-chart-main-value">${escapeHtml(def.formatter(latest || 0))} · Δ3h ${escapeHtml(def.deltaFormatter ? def.deltaFormatter(delta3h) : formatSignedInteger(delta3h))}</p>
       <svg viewBox="0 0 ${line.width} ${line.height}" class="db-maintenance-chart-svg" role="img" aria-label="${escapeHtml(def.title)} Verlauf">
         <line x1="12" y1="${line.height - 12}" x2="${line.width - 12}" y2="${line.height - 12}" class="db-maintenance-chart-axis"></line>
         <polyline points="${line.points}" class="db-maintenance-chart-line"></polyline>

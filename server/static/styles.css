@@ -906,8 +906,26 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 .db-maintenance-charts {
   margin-top: 10px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(6, minmax(170px, 1fr));
   gap: 8px;
+}
+
+@media (max-width: 1800px) {
+  .db-maintenance-charts {
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .db-maintenance-charts {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .db-maintenance-charts {
+    grid-template-columns: 1fr;
+  }
 }
 
 .db-maintenance-chart-card {
@@ -933,6 +951,42 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 .db-maintenance-chart-head span {
   font-size: 11px;
   color: #4b5563;
+}
+
+.db-chart-main-value {
+  margin: 0 0 4px;
+  font-weight: 700;
+}
+
+.db-trend-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.db-trend-chip.up {
+  color: #166534;
+  border-color: #86efac;
+  background: #dcfce7;
+}
+
+.db-trend-chip.down {
+  color: #9a3412;
+  border-color: #fdba74;
+  background: #ffedd5;
+}
+
+.db-trend-chip.flat {
+  color: #334155;
+  border-color: #cbd5e1;
+  background: #f1f5f9;
 }
 
 .db-maintenance-chart-svg {
@@ -1135,6 +1189,30 @@ body[data-theme="dark"] .db-maintenance-chart-head strong {
 
 body[data-theme="dark"] .db-maintenance-chart-head span {
   color: #93a9c4;
+}
+
+body[data-theme="dark"] .db-trend-chip {
+  color: #cbd5e1;
+  border-color: #475569;
+  background: #1e293b;
+}
+
+body[data-theme="dark"] .db-trend-chip.up {
+  color: #bbf7d0;
+  border-color: #166534;
+  background: #052e16;
+}
+
+body[data-theme="dark"] .db-trend-chip.down {
+  color: #fed7aa;
+  border-color: #9a3412;
+  background: #431407;
+}
+
+body[data-theme="dark"] .db-trend-chip.flat {
+  color: #cbd5e1;
+  border-color: #64748b;
+  background: #1f2937;
 }
 
 body[data-theme="dark"] .db-maintenance-chart-axis {
