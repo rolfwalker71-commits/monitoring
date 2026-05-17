@@ -7273,6 +7273,42 @@ function updateReportCustomerChip() {
   chipWrap.classList.remove("hidden");
 }
 
+function updateReportHeaderOsLogo(host) {
+  const wrap = document.getElementById("reportHeaderOsLogoWrap");
+  const img = document.getElementById("reportHeaderOsLogo");
+  if (!wrap || !img) {
+    return;
+  }
+
+  if (!host) {
+    img.removeAttribute("src");
+    img.removeAttribute("title");
+    img.alt = "";
+    wrap.classList.add("hidden");
+    return;
+  }
+
+  const osInfo = resolveHostOsIcon(host.os);
+  const iconName = asText(osInfo.iconName, "linux.png");
+  const osLabel = asText(osInfo.osLabel, "OS");
+  const osTitle = asText(host.os, osLabel);
+  img.src = `icons/${iconName}`;
+  img.alt = osLabel;
+  img.title = osTitle;
+  img.onerror = function onReportHeaderLogoError() {
+    if (!this.dataset.fallback) {
+      this.dataset.fallback = "1";
+      this.src = `/icons/${iconName}`;
+      return;
+    }
+    this.onerror = null;
+    this.style.display = "none";
+    wrap.classList.add("hidden");
+  };
+  img.style.display = "block";
+  wrap.classList.remove("hidden");
+}
+
 function wireHostActionButtons(root) {
   if (!root) {
     return;
@@ -7322,6 +7358,7 @@ function updateSelectedHostControls() {
     controls.innerHTML = "";
     controls.classList.add("hidden");
     updateReportCustomerChip();
+    updateReportHeaderOsLogo(null);
     return;
   }
 
@@ -7329,6 +7366,7 @@ function updateSelectedHostControls() {
   controls.classList.remove("hidden");
   wireHostActionButtons(controls);
   updateReportCustomerChip();
+  updateReportHeaderOsLogo(selectedHost);
 }
 
 async function saveHostSettings(hostname, partialSettings) {

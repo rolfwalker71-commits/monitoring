@@ -2236,6 +2236,7 @@ body[data-theme="dark"] .hosts-column {
     inset 0 1px 0 rgba(255, 255, 255, 0.6),
     0 8px 20px rgba(30, 58, 95, 0.1);
   color: #1f3555;
+  position: relative;
 }
 .section-head .title-row h3 {
   color: #29466a;
@@ -2614,6 +2615,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   justify-content: flex-start;
   gap: 8px 16px;
   margin-top: 4px;
+  padding-left: 210px;
 }
 .report-meta-row .count {
   margin: 0;
@@ -2641,6 +2643,55 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   min-height: 0;
   margin-left: auto;
   text-align: right;
+}
+
+.report-header-os-logo-wrap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 112px;
+  height: 112px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.report-header-os-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 14px rgba(30, 58, 95, 0.2));
+  opacity: 0.9;
+}
+
+.title-row,
+.report-meta-row {
+  position: relative;
+  z-index: 2;
+}
+
+@media (max-width: 1180px) {
+  .report-header-os-logo-wrap {
+    width: 92px;
+    height: 92px;
+  }
+
+  .report-meta-row {
+    padding-left: 160px;
+  }
+}
+
+@media (max-width: 940px) {
+  .report-header-os-logo-wrap {
+    display: none;
+  }
+
+  .report-meta-row {
+    padding-left: 0;
+  }
 }
 
 .backup-run-link {
