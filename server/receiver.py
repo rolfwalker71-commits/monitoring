@@ -5824,6 +5824,25 @@ def mail_branding_header_html(app_logo_uri: str, build_version: str, meta_text: 
     )
 
 
+def branded_info_mail_html(username: str, title: str, body_html: str) -> str:
+    app_logo_uri = app_logo_data_uri()
+    ang_logo_uri = ang_logo_data_uri()
+    build_version = html.escape(read_build_version())
+    header_meta = f"Benutzer: {username} | Zeit: {format_mail_datetime()}"
+    return (
+        "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
+        "<div style='max-width:760px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;'>"
+        "<div style='padding:18px 20px;background-color:#eaf4ff;background-image:linear-gradient(180deg,#f4faff,#e6f1ff);color:#17324d;border-bottom:1px solid #cfe0f5;'>"
+        f"{mail_branding_header_html(app_logo_uri, build_version, header_meta)}"
+        f"<h2 style='margin:10px 0 0 0;font-size:22px;color:#17324d;'>{html.escape(title)}</h2>"
+        "</div>"
+        f"<div style='padding:18px 20px;font-size:14px;line-height:1.5;color:#1f2937;'>{body_html}</div>"
+        f"<div style='padding:0 20px 16px 20px;border-top:1px solid #e2e8f0;text-align:right;'><img src='{ang_logo_uri}' alt='ANG' width='110' style='display:inline-block;max-width:110px;height:auto;'></div>"
+        "</div>"
+        "</body></html>"
+    )
+
+
 def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
@@ -10951,13 +10970,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         self._send_json(HTTPStatus.BAD_REQUEST, {"error": details or "oauth unavailable"})
                         return
                     subject = f"[TEST] Host Alert Abo für {host_context.get('display_name', hostname)}"
-                    body = (
-                        "<html><body>"
-                        f"<p>Test für Host Alert Abo.</p>"
-                        f"<p>User: <strong>{html.escape(username)}</strong></p>"
-                        f"<p>Host: <strong>{html.escape(str(host_context.get('display_name', hostname)))}</strong> ({html.escape(hostname)})</p>"
-                        f"<p>Zeit: {html.escape(format_mail_datetime())}</p>"
-                        "</body></html>"
+                    body = branded_info_mail_html(
+                        username,
+                        "Test Host Alert Abo",
+                        (
+                            "<p>Test für Host Alert Abo.</p>"
+                            f"<p>User: <strong>{html.escape(username)}</strong></p>"
+                            f"<p>Host: <strong>{html.escape(str(host_context.get('display_name', hostname)))}</strong> ({html.escape(hostname)})</p>"
+                        ),
                     )
                     mail_ok, mail_details = send_microsoft_mail(
                         access_token,
@@ -11104,36 +11124,48 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     overview = collect_backup_status_overview(conn, 24)
                     missing = int(overview.get("missing_count") or 0)
                     total = int(overview.get("total") or 0)
-                    lines = [
-                        "[TEST] Backup-Status Übersicht",
-                        f"Benutzer: {username}",
-                        f"Zeit: {utc_now_iso()}",
-                        f"Hosts mit fehlendem Backup: {missing} von {total}",
-                    ]
+                    missing_hosts: list[str] = []
                     for item in overview.get("items", [])[:20]:
                         if not isinstance(item, dict):
                             continue
                         if not bool(item.get("has_missing_backup")):
                             continue
-                        lines.append(f"- {str(item.get('display_name') or item.get('hostname') or '?')}")
+                        missing_hosts.append(str(item.get("display_name") or item.get("hostname") or "?"))
+                    if missing_hosts:
+                        missing_items_html = "".join(
+                            f"<li>{html.escape(name)}</li>" for name in missing_hosts
+                        )
+                        missing_block_html = f"<p>Betroffene Hosts:</p><ul>{missing_items_html}</ul>"
+                    else:
+                        missing_block_html = "<p>Aktuell keine fehlenden Backups erkannt.</p>"
+                    backup_body = branded_info_mail_html(
+                        username,
+                        "Test Backup-Status Übersicht",
+                        (
+                            f"<p>Hosts mit fehlendem Backup: <strong>{missing}</strong> von <strong>{total}</strong>.</p>"
+                            f"{missing_block_html}"
+                        ),
+                    )
                     mail_ok, mail_details = send_microsoft_mail(
                         access_token,
                         recipient,
                         f"[TEST] Backup Status: {missing}/{total} mit Luecken",
-                        "\n".join(lines),
+                        backup_body,
+                        content_type="HTML",
                         sender_address=sender_address,
                     )
                 else:
+                    generic_body = branded_info_mail_html(
+                        username,
+                        "Test Monitoring OAuth Mail",
+                        "<p>Wenn diese Mail ankommt, funktioniert Microsoft Graph OAuth.</p>",
+                    )
                     mail_ok, mail_details = send_microsoft_mail(
                         access_token,
                         recipient,
                         "[TEST] Monitoring OAuth Mail",
-                        (
-                            "Monitoring OAuth Test\n"
-                            f"Benutzer: {username}\n"
-                            f"Zeit: {utc_now_iso()}\n"
-                            "Wenn diese Mail ankommt, funktioniert Microsoft Graph OAuth."
-                        ),
+                        generic_body,
+                        content_type="HTML",
                         sender_address=sender_address,
                     )
                 conn.commit()
@@ -11360,13 +11392,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
                 host_context = collect_host_mail_context(conn, hostname) if hostname else {"display_name": "(ohne Host)", "hostname": ""}
                 subject = f"[TEST] Kundenalarm {str(host_context.get('display_name') or hostname or '')}"
-                body = (
-                    "<html><body>"
-                    "<p>Dies ist ein Test für den Kundenalarm.</p>"
-                    f"<p>Host: <strong>{html.escape(str(host_context.get('display_name') or hostname or '-'))}</strong></p>"
-                    f"<p>Ausgeloest von: {html.escape(username)}</p>"
-                    f"<p>Zeit: {html.escape(format_mail_datetime())}</p>"
-                    "</body></html>"
+                body = branded_info_mail_html(
+                    username,
+                    "Test Kundenalarm",
+                    (
+                        "<p>Dies ist ein Test für den Kundenalarm.</p>"
+                        f"<p>Host: <strong>{html.escape(str(host_context.get('display_name') or hostname or '-'))}</strong></p>"
+                        f"<p>Ausgeloest von: <strong>{html.escape(username)}</strong></p>"
+                    ),
                 )
                 ok_send, send_details = send_microsoft_mail_multi(
                     access_token,
