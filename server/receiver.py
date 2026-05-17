@@ -1356,7 +1356,7 @@ def _sftp_batch_quote(value: str) -> str:
     return '"' + str(value or "").replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def run_sftp_upload_test(payload: dict[str, object]) -> dict[str, object]:
+def _resolve_sftp_config(payload: dict[str, object]) -> dict[str, object]:
     sftp_host = str(payload.get("sftp_host", "") or "").strip()
     sftp_port = _coerce_int(payload.get("sftp_port", 22), 22, 1, 65535)
     sftp_username = str(payload.get("sftp_username", "") or "").strip()
@@ -1396,9 +1396,86 @@ def run_sftp_upload_test(payload: dict[str, object]) -> dict[str, object]:
         if shutil.which("sshpass") is None:
             raise RuntimeError("Passwort-Test erfordert 'sshpass' auf dem Server")
 
+    return {
+        "host": sftp_host,
+        "port": sftp_port,
+        "username": sftp_username,
+        "remote_path": sftp_remote_path,
+        "auth_mode": sftp_auth_mode,
+        "key_path": sftp_key_path,
+        "password": sftp_password,
+    }
+
+
+def _run_sftp_batch(sftp_cfg: dict[str, object], batch_lines: list[str], *, timeout_seconds: int = 30, error_prefix: str = "sFTP Aktion fehlgeschlagen") -> None:
+    sftp_command = [
+        "sftp",
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+        "-o",
+        "ConnectTimeout=8",
+        "-P",
+        str(int(sftp_cfg.get("port") or 22)),
+    ]
+
+    env = os.environ.copy()
+    auth_mode = str(sftp_cfg.get("auth_mode") or "key")
+    if auth_mode == "key":
+        sftp_command.extend(["-o", "BatchMode=yes", "-i", str(Path(str(sftp_cfg.get("key_path") or "")).expanduser())])
+    else:
+        sftp_command.extend(["-o", "BatchMode=no"])
+        sftp_command = ["sshpass", "-e"] + sftp_command
+        env["SSHPASS"] = str(sftp_cfg.get("password") or "")
+
+    sftp_command.append(f"{sftp_cfg.get('username')}@{sftp_cfg.get('host')}")
+    batch_input = "\n".join(batch_lines) + "\n"
+
+    proc = subprocess.run(
+        sftp_command,
+        input=batch_input,
+        text=True,
+        capture_output=True,
+        timeout=timeout_seconds,
+        env=env,
+    )
+    if proc.returncode != 0:
+        details = (proc.stderr or proc.stdout or "").strip()
+        if len(details) > 600:
+            details = details[:600] + "..."
+        raise RuntimeError(f"{error_prefix}: {details or 'unbekannter Fehler'}")
+
+
+def upload_backup_file_to_sftp(payload: dict[str, object], local_file_path: Path, remote_filename: str | None = None) -> dict[str, object]:
+    sftp_cfg = _resolve_sftp_config(payload)
+
+    local_path = Path(local_file_path)
+    if not local_path.exists() or not local_path.is_file():
+        raise ValueError("Lokale Backup-Datei nicht gefunden")
+
+    remote_name = str(remote_filename or local_path.name).strip() or local_path.name
+    batch_lines = [
+        f"cd {_sftp_batch_quote(str(sftp_cfg['remote_path']))}",
+        f"put {_sftp_batch_quote(str(local_path))} {_sftp_batch_quote(remote_name)}",
+        f"ls {_sftp_batch_quote(remote_name)}",
+        "bye",
+    ]
+    _run_sftp_batch(sftp_cfg, batch_lines, error_prefix="sFTP Upload fehlgeschlagen")
+
+    return {
+        "host": str(sftp_cfg.get("host") or ""),
+        "port": int(sftp_cfg.get("port") or 22),
+        "username": str(sftp_cfg.get("username") or ""),
+        "remote_path": str(sftp_cfg.get("remote_path") or ""),
+        "auth_mode": str(sftp_cfg.get("auth_mode") or "key"),
+        "remote_filename": remote_name,
+    }
+
+
+def run_sftp_upload_test(payload: dict[str, object]) -> dict[str, object]:
+    sftp_cfg = _resolve_sftp_config(payload)
+
     BACKUP_TEMP_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    local_name = f"monitoring-sftp-test-{timestamp}.txt"
     remote_name = f"monitoring-sftp-test-{timestamp}.txt"
 
     with tempfile.NamedTemporaryFile(mode="w", delete=False, dir=str(BACKUP_TEMP_DIR), prefix="sftp-test-", suffix=".txt") as tmp:
@@ -1407,57 +1484,23 @@ def run_sftp_upload_test(payload: dict[str, object]) -> dict[str, object]:
 
     try:
         batch_lines = [
-            f"cd {_sftp_batch_quote(sftp_remote_path)}",
+            f"cd {_sftp_batch_quote(str(sftp_cfg['remote_path']))}",
             f"put {_sftp_batch_quote(str(local_path))} {_sftp_batch_quote(remote_name)}",
             f"ls {_sftp_batch_quote(remote_name)}",
             f"rm {_sftp_batch_quote(remote_name)}",
             "bye",
         ]
-        batch_input = "\n".join(batch_lines) + "\n"
-
-        sftp_command = [
-            "sftp",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            "ConnectTimeout=8",
-            "-P",
-            str(sftp_port),
-        ]
-
-        env = os.environ.copy()
-        if sftp_auth_mode == "key":
-            sftp_command.extend(["-o", "BatchMode=yes", "-i", str(Path(sftp_key_path).expanduser())])
-        else:
-            sftp_command.extend(["-o", "BatchMode=no"])
-            sftp_command = ["sshpass", "-e"] + sftp_command
-            env["SSHPASS"] = sftp_password
-
-        sftp_command.append(f"{sftp_username}@{sftp_host}")
-
-        proc = subprocess.run(
-            sftp_command,
-            input=batch_input,
-            text=True,
-            capture_output=True,
-            timeout=30,
-            env=env,
-        )
-        if proc.returncode != 0:
-            details = (proc.stderr or proc.stdout or "").strip()
-            if len(details) > 600:
-                details = details[:600] + "..."
-            raise RuntimeError(f"sFTP Test fehlgeschlagen: {details or 'unbekannter Fehler'}")
+        _run_sftp_batch(sftp_cfg, batch_lines, error_prefix="sFTP Test fehlgeschlagen")
 
         return {
             "status": "ok",
             "message": "sFTP Test erfolgreich (Upload + Entfernen der Testdatei abgeschlossen)",
             "details": {
-                "host": sftp_host,
-                "port": sftp_port,
-                "username": sftp_username,
-                "remote_path": sftp_remote_path,
-                "auth_mode": sftp_auth_mode,
+                "host": str(sftp_cfg.get("host") or ""),
+                "port": int(sftp_cfg.get("port") or 22),
+                "username": str(sftp_cfg.get("username") or ""),
+                "remote_path": str(sftp_cfg.get("remote_path") or ""),
+                "auth_mode": str(sftp_cfg.get("auth_mode") or "key"),
                 "remote_test_file": remote_name,
             },
         }
@@ -1539,6 +1582,16 @@ def _run_local_automated_backup(settings: dict[str, object], trigger_source: str
             except OSError:
                 pass
 
+    uploaded_sftp = False
+    upload_error_message = ""
+    upload_details: dict[str, object] | None = None
+    if bool(settings.get("sftp_enabled", False)):
+        try:
+            upload_details = upload_backup_file_to_sftp(settings, backup_file, backup_file.name)
+            uploaded_sftp = True
+        except Exception as exc:
+            upload_error_message = str(exc)
+
     finished_at = utc_now_iso()
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
@@ -1552,7 +1605,7 @@ def _run_local_automated_backup(settings: dict[str, object], trigger_source: str
                 backup_size_bytes,
                 uploaded_sftp,
                 error_message
-            ) VALUES (?, ?, ?, 'ok', ?, ?, 0, '')
+            ) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)
             """,
             (
                 started_at,
@@ -1560,6 +1613,8 @@ def _run_local_automated_backup(settings: dict[str, object], trigger_source: str
                 trigger_source,
                 str(backup_file.relative_to(DATA_DIR)),
                 size_bytes,
+                1 if uploaded_sftp else 0,
+                upload_error_message,
             ),
         )
         conn.commit()
@@ -1571,6 +1626,9 @@ def _run_local_automated_backup(settings: dict[str, object], trigger_source: str
         "backup_path": str(backup_file.relative_to(DATA_DIR)),
         "backup_size_bytes": size_bytes,
         "pruned_count": pruned_count,
+        "uploaded_sftp": uploaded_sftp,
+        "sftp_error": upload_error_message,
+        "sftp_details": upload_details,
     }
 
 

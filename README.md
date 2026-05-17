@@ -522,6 +522,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.144 (17. Mai 2026)
+
+- **Automatischer sFTP Upload integriert**: Nach lokalem Backup wird die erzeugte Datei bei aktivierter sFTP-Konfiguration automatisch auf den Zielserver hochgeladen (manuell + Scheduler).
+- **Run-Status erweitert**: `uploaded_sftp` wird nun korrekt gesetzt; Upload-Fehler werden im Lauf als Fehlertext gespeichert.
+
 ### v1.6.143 (17. Mai 2026)
 
 - **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
