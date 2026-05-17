@@ -6920,6 +6920,92 @@ function hiddenHostMutedAlertsToggleLabel(collapsed) {
   return collapsed ? "▸" : "▾";
 }
 
+function formatHostLastReportAge(reportUtcValue) {
+  const raw = asText(reportUtcValue, "").trim();
+  if (!raw || raw === "-") {
+    return {
+      label: "kein Report",
+      statusClass: "host-last-report-dot--unknown",
+      title: "Noch kein Report empfangen",
+    };
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return {
+      label: "Zeitstempel ungueltig",
+      statusClass: "host-last-report-dot--unknown",
+      title: `Ungültiger Zeitstempel: ${raw}`,
+    };
+  }
+
+  const nowMs = Date.now();
+  const ageMinutes = Math.max(0, Math.floor((nowMs - parsed.getTime()) / 60000));
+
+  let statusClass = "host-last-report-dot--ok";
+  if (ageMinutes >= 45) {
+    statusClass = "host-last-report-dot--critical";
+  } else if (ageMinutes >= 15) {
+    statusClass = "host-last-report-dot--warning";
+  }
+
+  let ageLabel = "gerade eben";
+  if (ageMinutes >= 1440) {
+    const days = Math.floor(ageMinutes / 1440);
+    const remHours = Math.floor((ageMinutes % 1440) / 60);
+    ageLabel = `${days}d ${remHours}h`;
+  } else if (ageMinutes >= 60) {
+    const hours = Math.floor(ageMinutes / 60);
+    const remMinutes = ageMinutes % 60;
+    ageLabel = remMinutes > 0 ? `${hours}h ${remMinutes}m` : `${hours}h`;
+  } else if (ageMinutes > 0) {
+    ageLabel = `${ageMinutes} Min.`;
+  }
+
+  const exactText = formatUtcPlus2(raw);
+  return {
+    label: `Report vor ${ageLabel}`,
+    statusClass,
+    title: `Letzter Report: ${exactText}`,
+  };
+}
+
+function getHostAgentVersionVisual(hostVersion, referenceVersion) {
+  const hostText = asText(hostVersion, "-");
+  const refText = asText(referenceVersion, "").trim();
+  const hostParts = parseVersionParts(hostText);
+  const refParts = parseVersionParts(refText);
+
+  if (!hostParts || !refParts) {
+    return {
+      dotClassName: "host-agent-version-dot--unknown",
+      title: "Versionsvergleich nicht verfügbar",
+    };
+  }
+
+  const hostMajor = hostParts[0] || 0;
+  const hostMinor = hostParts[1] || 0;
+  const hostPatch = hostParts[2] || 0;
+  const refMajor = refParts[0] || 0;
+  const refMinor = refParts[1] || 0;
+  const refPatch = refParts[2] || 0;
+
+  const sameMajorMinor = hostMajor === refMajor && hostMinor === refMinor;
+  if (!sameMajorMinor) {
+    return {
+      dotClassName: "host-agent-version-dot--red",
+      title: `Abweichung zur Referenz ${refText}: Major/Minor unterschiedlich`,
+    };
+  }
+
+  const patchDiff = Math.abs(refPatch - hostPatch);
+  const dotClassName = patchDiff < 5 ? "host-agent-version-dot--green" : "host-agent-version-dot--red";
+  return {
+    dotClassName,
+    title: `Abweichung zur Referenz ${refText}: ${patchDiff}`,
+  };
+}
+
 async function loadAlertMutes() {
   try {
     const response = await fetch("/api/v1/alert-mutes");
@@ -7024,6 +7110,8 @@ function renderSingleHostCard(host) {
     ? `<div class="host-customer-title-line"><span class="host-value-chip host-value-chip--customer-title" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span></div>`
     : "";
   const detailLine = `<span class="host-detail-line">${escapeHtml(displayName)}</span>`;
+  const lastReportInfo = formatHostLastReportAge(host.last_report_utc || host.last_seen_utc);
+  const agentVersionVisual = getHostAgentVersionVisual(host.agent_version, state.latestAgentRelease);
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
   const hanaRawForDebug = asText(host.hana_release || host.hana_version || "", "").trim();
@@ -7083,7 +7171,7 @@ function renderSingleHostCard(host) {
       ${flagIcon}
       ${customerTitleLine}
       <span class="host-meta-line">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))}</span>
-      <span class="host-meta-line host-meta-line--with-alert"><span class="host-meta-text">🧷 ${escapeHtml(asText(host.agent_version))} &nbsp;·&nbsp; 🕒 ${escapeHtml(formatUtcPlus2(host.last_seen_utc))}</span>${metaAlertChip}</span>
+      <span class="host-meta-line host-meta-line--with-alert"><span class="host-meta-text">🧷 <span class="host-agent-version" title="${escapeHtml(agentVersionVisual.title)}"><span class="host-agent-version-dot ${agentVersionVisual.dotClassName}" aria-hidden="true"></span>${escapeHtml(asText(host.agent_version))}</span> &nbsp;·&nbsp; <span class="host-last-report" title="${escapeHtml(lastReportInfo.title)}"><span class="host-last-report-dot ${lastReportInfo.statusClass}" aria-hidden="true"></span>${escapeHtml(lastReportInfo.label)}</span></span>${metaAlertChip}</span>
       ${footerContent}
       ${detailLine}
       ${mutedAlertsSection}

@@ -4381,6 +4381,74 @@ body[data-theme="dark"] .trend-progress-bar {
   white-space: nowrap;
 }
 
+.host-agent-version {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+  color: inherit;
+}
+
+.host-agent-version-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  flex: 0 0 auto;
+}
+
+.host-agent-version-dot--green {
+  background: #22c55e;
+  border-color: #16a34a;
+}
+
+.host-agent-version-dot--red {
+  background: #f43f5e;
+  border-color: #e11d48;
+}
+
+.host-agent-version-dot--unknown {
+  background: #94a3b8;
+  border-color: #64748b;
+}
+
+.host-last-report {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.host-last-report-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
+.host-last-report-dot--ok {
+  background: #22c55e;
+  border-color: #16a34a;
+}
+
+.host-last-report-dot--warning {
+  background: #fb923c;
+  border-color: #ea580c;
+}
+
+.host-last-report-dot--critical {
+  background: #f43f5e;
+  border-color: #e11d48;
+}
+
+.host-last-report-dot--unknown {
+  background: #94a3b8;
+  border-color: #64748b;
+}
+
 .host-alert-chip--meta {
   flex: 0 0 auto;
 }
