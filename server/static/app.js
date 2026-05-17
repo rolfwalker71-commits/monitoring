@@ -7964,7 +7964,7 @@ function renderBackupAutomationRuns(rows) {
   if (!body) return;
   const list = Array.isArray(rows) ? rows : [];
   if (list.length === 0) {
-    body.innerHTML = '<tr><td colspan="8" class="muted">Noch keine Backup-Läufe vorhanden.</td></tr>';
+    body.innerHTML = '<tr><td colspan="9" class="muted">Noch keine Backup-Läufe vorhanden.</td></tr>';
     return;
   }
 
@@ -7996,9 +7996,11 @@ function renderBackupAutomationRuns(rows) {
     const status = String(row.status || "-");
     const filePath = String(row.backup_path || "-");
     const size = Number(row.backup_size_bytes || 0);
+    const uploadedSftp = !!row.uploaded_sftp;
     const error = String(row.error_message || "");
     const runId = Number(row.id || 0);
     const statusClass = status === "ok" ? "delta-positive" : (status === "error" ? "delta-negative" : "delta-neutral");
+    const uploadedClass = uploadedSftp ? "delta-positive" : "delta-neutral";
     const canDownload = runId > 0 && status === "ok" && filePath && filePath !== "-";
     const downloadHtml = canDownload
       ? `<a class="backup-run-link" href="/api/v1/admin/backup-automation/download?run_id=${encodeURIComponent(String(runId))}" title="Backup herunterladen">Download</a>`
@@ -8011,6 +8013,7 @@ function renderBackupAutomationRuns(rows) {
       <td>${escapeHtml(filePath)}</td>
       <td>${escapeHtml(formatBytes(size))}</td>
       <td>${downloadHtml}</td>
+      <td><span class="${uploadedClass}">${uploadedSftp ? "ja" : "nein"}</span></td>
       <td>${escapeHtml(error || "-")}</td>
     </tr>`;
   }).join("");

@@ -522,6 +522,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.142 (17. Mai 2026)
+
+- **Backup-Run Tabelle erweitert**: Neue Spalte `sFTP` zeigt im UI pro Lauf an, ob die Datei hochgeladen wurde (`ja`/`nein`).
+
 ### v1.6.141 (17. Mai 2026)
 
 - **Host-Chips transparenter gemacht**: SAP/HANA/SID-Chips (z. B. FP2602, 2.00.087, ANG) verwenden jetzt einen weiss-transparenten Hintergrund.
