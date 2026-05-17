@@ -5801,10 +5801,34 @@ def host_badges_html(country_code: object, os_family: object) -> str:
     )
 
 
+def mail_branding_header_html(app_logo_uri: str, build_version: str, meta_text: str = "") -> str:
+    safe_meta = html.escape(str(meta_text or "").strip())
+    meta_html = (
+        f"<div style='margin-top:10px;font-size:13px;color:#5f7590;'>{safe_meta}</div>"
+        if safe_meta
+        else ""
+    )
+    return (
+        "<table role='presentation' cellpadding='0' cellspacing='0' border='0' style='border-collapse:collapse;width:100%;'>"
+        "<tr>"
+        "<td width='72' style='width:72px;padding:0 30px 0 0;vertical-align:middle;'>"
+        f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;border:0;outline:none;text-decoration:none;'>"
+        "</td>"
+        "<td style='vertical-align:middle;'>"
+        "<div style='font-size:20px;font-weight:900;letter-spacing:.4px;line-height:1.1;'>System Health Dashboard</div>"
+        f"<div style='font-size:12px;font-weight:700;color:#5f7590;line-height:1.2;'>v{build_version}</div>"
+        "</td>"
+        "</tr>"
+        "</table>"
+        f"{meta_html}"
+    )
+
+
 def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
     build_version = html.escape(read_build_version())
+    header_meta = f"Benutzer: {username} | Fenster: letzte {hours}h | Zeit: {format_mail_datetime()}"
     rows_html = "".join(
         (
             "<tr>"
@@ -5824,15 +5848,8 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:900px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;'>"
         "<div style='padding:18px 20px;background-color:#eaf4ff;background-image:linear-gradient(180deg,#f4faff,#e6f1ff);color:#17324d;border-bottom:1px solid #cfe0f5;'>"
-        "<div style='display:flex;align-items:center;gap:22px;margin-bottom:12px;'>"
-        f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;'>"
-        "<div>"
-        "<div style='font-size:20px;font-weight:900;letter-spacing:.4px;line-height:1.1;'>System Health Dashboard</div>"
-        f"<div style='font-size:12px;font-weight:700;color:#5f7590;line-height:1.2;'>v{build_version}</div>"
-        "</div>"
-        "</div>"
+        f"{mail_branding_header_html(app_logo_uri, build_version, header_meta)}"
         "<h2 style='margin:0 0 6px 0;font-size:22px;color:#17324d;'>Daily Trend Digest</h2>"
-        f"<div style='font-size:13px;color:#5f7590;'>Benutzer: {html.escape(username)} | Fenster: letzte {hours}h | Zeit: {html.escape(format_mail_datetime())}</div>"
         "</div>"
         "<div style='padding:18px 20px;'>"
         f"<p style='margin:0 0 14px 0;font-size:14px;'>Es wurden <strong>{len(warnings)}</strong> trend-kritische Signale erkannt.</p>"
@@ -5863,6 +5880,7 @@ def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
     build_version = html.escape(read_build_version())
+    header_meta = f"Benutzer: {username} | Zeit: {format_mail_datetime()}"
     graph_lookup = graph_cids or {}
     row_parts: list[str] = []
     for item in alerts:
@@ -5898,14 +5916,7 @@ def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:900px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;'>"
         "<div style='padding:18px 20px;background-color:#eaf4ff;background-image:linear-gradient(180deg,#f4faff,#e6f1ff);color:#17324d;border-bottom:1px solid #cfe0f5;'>"
-        "<div style='display:flex;align-items:center;gap:22px;margin-bottom:12px;'>"
-        f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;'>"
-        "<div>"
-        "<div style='font-size:20px;font-weight:900;letter-spacing:.4px;line-height:1.1;'>System Health Dashboard</div>"
-        f"<div style='font-size:12px;font-weight:700;color:#5f7590;line-height:1.2;'>v{build_version}</div>"
-        "</div>"
-        f"<div style='font-size:13px;color:#5f7590;'>Benutzer: {html.escape(username)} | Zeit: {html.escape(format_mail_datetime())}</div>"
-        "</div>"
+        f"{mail_branding_header_html(app_logo_uri, build_version, header_meta)}"
         "<div style='padding:18px 20px;'>"
         f"<p style='margin:0 0 14px 0;font-size:14px;'>Aktuell <strong>{len(alerts)}</strong> offene, nicht stummgeschaltete Alarme.</p>"
         "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
@@ -5991,6 +6002,7 @@ def alert_instant_mail_html(
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
     build_version = html.escape(read_build_version())
+    header_meta = f"Benutzer: {username} | Zeit: {format_mail_datetime()}"
     reported_at = format_mail_datetime(reported_at_utc)
     graph_alt = html.escape(f"Auslastungsverlauf {customer_title}: {mountpoint}")
     graph_block = (
@@ -6006,14 +6018,7 @@ def alert_instant_mail_html(
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:700px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;'>"
         "<div style='padding:18px 20px;background-color:#eaf4ff;background-image:linear-gradient(180deg,#f4faff,#e6f1ff);color:#17324d;border-bottom:1px solid #cfe0f5;'>"
-        "<div style='display:flex;align-items:center;gap:22px;margin-bottom:12px;'>"
-        f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;'>"
-        "<div>"
-        "<div style='font-size:20px;font-weight:900;letter-spacing:.4px;line-height:1.1;'>System Health Dashboard</div>"
-        f"<div style='font-size:12px;font-weight:700;color:#5f7590;line-height:1.2;'>v{build_version}</div>"
-        "</div>"
-        "</div>"
-        f"<div style='font-size:12px;color:#5f7590;margin-bottom:8px;'>Benutzer: {html.escape(username)} | {html.escape(format_mail_datetime())}</div>"
+        f"{mail_branding_header_html(app_logo_uri, build_version, header_meta)}"
         f"<h1 style='margin:0;font-size:34px;line-height:1.05;font-weight:800;letter-spacing:.2px;color:#17324d;'>{html.escape(customer_title)}</h1>"
         f"<div style='margin-top:6px;font-size:14px;color:#5f7590;'>Host: {html.escape(hostname)}</div>"
         f"<div style='margin-top:4px;font-size:13px;color:#5f7590;'>IP: {html.escape(primary_ip or '-')}</div>"
@@ -6289,7 +6294,7 @@ def oauth_is_configured(settings: dict) -> bool:
         and str(settings.get("microsoft_client_secret", "")).strip()
     )
 
-    
+
 def build_user_mail_logic_help() -> dict:
     return {
         "channels": {

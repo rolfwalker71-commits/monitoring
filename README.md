@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.99  | 17.05.2026 | Unify all branded HTML mail headers with one Outlook-friendly table layout and increase logo-to-title spacing for consistent rendering across Trend Digest, Alert Digest, and Instant Alert mails |
 | 1.6.98  | 17.05.2026 | Host cards: replace fixed last-seen timestamp with traffic-light recency indicator (green/orange/red + relative age text) and add an agent-version status dot (green/red/gray) before the version while keeping the original text color |
 | 1.6.57  | 16.05.2026 | Fix SAP B1 terminal version table readability by enforcing dark terminal row backgrounds and higher-contrast column colors (prevents global zebra table styles from washing out text) |
 | 1.6.56  | 16.05.2026 | Add live session remaining-time badge in header and harden session keepalive flow (cookie-based refresh endpoint, session expiry returned by /api/v1/session, login/focus/visibility refresh watchdog) |
