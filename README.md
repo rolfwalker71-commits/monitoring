@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.166 (17. Mai 2026)
+
+- **Host-Aenderungsprotokoll AddOns**: Der Host-spezifische Tab "Aenderungen" zeigt jetzt auch SAP/HANA AddOn-Versionsaenderungen (LW/Legacy) direkt im Kunden-Host-Changelog an.
+
 ### v1.6.165 (17. Mai 2026)
 
 - **Changelog Filter**: Neuer "3 Tage" Zeitraumfilter hinzugefuegt; ist jetzt auch der Standard beim Seitenaufruf.

@@ -3431,6 +3431,9 @@ def get_host_config_changes_for_host(
     offset: int = 0,
 ) -> dict:
     """Get host config changes for a specific host."""
+    safe_limit = max(1, min(int(limit or 100), 1000))
+    safe_offset = max(0, int(offset or 0))
+
     rows = conn.execute(
         """
         SELECT c.id,
@@ -3442,29 +3445,35 @@ def get_host_config_changes_for_host(
         FROM host_config_changes c
         WHERE c.hostname = ?
         ORDER BY c.detected_at_utc DESC
-        LIMIT ? OFFSET ?
         """,
-        (hostname, limit, offset),
-    ).fetchall()
-    total = conn.execute(
-        "SELECT COUNT(*) FROM host_config_changes WHERE hostname = ?",
         (hostname,),
-    ).fetchone()[0]
+    ).fetchall()
+
+    items = [
+        {
+            "id": row[0],
+            "detected_at_utc": row[1],
+            "field_key": row[2],
+            "field_label": HOST_CONFIG_FIELD_LABELS.get(row[2], row[2]),
+            "old_value": row[3] or "-",
+            "new_value": row[4] or "-",
+            "source": row[5],
+        }
+        for row in rows
+    ]
+
+    addon_items = _collect_sap_addon_change_items_for_host(conn, hostname)
+    if addon_items:
+        items.extend(addon_items)
+        items.sort(key=lambda item: (str(item.get("detected_at_utc") or ""), int(item.get("id") or 0)), reverse=True)
+
+    total = len(items)
+    paged_items = items[safe_offset : safe_offset + safe_limit]
+
     return {
-        "items": [
-            {
-                "id": row[0],
-                "detected_at_utc": row[1],
-                "field_key": row[2],
-                "field_label": HOST_CONFIG_FIELD_LABELS.get(row[2], row[2]),
-                "old_value": row[3] or "-",
-                "new_value": row[4] or "-",
-                "source": row[5],
-            }
-            for row in rows
-        ],
+        "items": paged_items,
         "total": total,
-        "returned": len(rows),
+        "returned": len(paged_items),
     }
 
 
@@ -4724,6 +4733,71 @@ def _extract_sap_addon_snapshot(payload: dict) -> dict[str, str]:
     return snapshot
 
 
+def _describe_sap_addon_key(addon_name: str) -> tuple[str, str]:
+    label_source = "Lightweight Extension"
+    plain_name = addon_name
+    if addon_name.startswith("extensions::"):
+        plain_name = addon_name.split("::", 1)[1]
+        label_source = "LW"
+    elif addon_name.startswith("sari::"):
+        plain_name = addon_name.split("::", 1)[1]
+        label_source = "Legacy"
+    elif addon_name.startswith("hana_extensions::"):
+        plain_name = addon_name.split("::", 1)[1]
+        label_source = "HANA LW"
+    elif addon_name.startswith("hana_sari::"):
+        plain_name = addon_name.split("::", 1)[1]
+        label_source = "HANA Legacy"
+    return label_source, plain_name
+
+
+def _collect_sap_addon_change_items_for_host(conn: sqlite3.Connection, hostname: str) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT id, received_at_utc, payload_json
+        FROM reports
+        WHERE hostname = ?
+        ORDER BY id ASC
+        """,
+        (hostname,),
+    ).fetchall()
+
+    previous_snapshot: dict[str, str] | None = None
+    changes: list[dict] = []
+
+    for row in rows:
+        report_id = int(row[0] or 0)
+        detected_at_utc = str(row[1] or "")
+        payload = parse_payload_json(str(row[2] or "{}"))
+        current_snapshot = _extract_sap_addon_snapshot(payload)
+
+        if previous_snapshot is not None:
+            addon_names = sorted(set(previous_snapshot.keys()) | set(current_snapshot.keys()), key=lambda x: x.lower())
+            for addon_name in addon_names:
+                old_version = str(previous_snapshot.get(addon_name, "-") or "-")
+                new_version = str(current_snapshot.get(addon_name, "-") or "-")
+                if old_version == new_version:
+                    continue
+
+                label_source, plain_name = _describe_sap_addon_key(addon_name)
+                changes.append(
+                    {
+                        "id": report_id,
+                        "detected_at_utc": detected_at_utc,
+                        "field_key": f"sap_addon::{addon_name}",
+                        "field_label": f"{label_source}: {plain_name}",
+                        "old_value": old_version,
+                        "new_value": new_version,
+                        "source": "agent-report:addon",
+                    }
+                )
+
+        previous_snapshot = current_snapshot
+
+    changes.sort(key=lambda item: (str(item.get("detected_at_utc") or ""), int(item.get("id") or 0)), reverse=True)
+    return changes
+
+
 def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit: int) -> list[dict]:
     cutoff_iso = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
     rows = conn.execute(
@@ -4766,20 +4840,7 @@ def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit:
                 if old_version == new_version:
                     continue
 
-                label_source = "Lightweight Extension"
-                plain_name = addon_name
-                if addon_name.startswith("extensions::"):
-                    plain_name = addon_name.split("::", 1)[1]
-                    label_source = "LW"
-                elif addon_name.startswith("sari::"):
-                    plain_name = addon_name.split("::", 1)[1]
-                    label_source = "Legacy"
-                elif addon_name.startswith("hana_extensions::"):
-                    plain_name = addon_name.split("::", 1)[1]
-                    label_source = "HANA LW"
-                elif addon_name.startswith("hana_sari::"):
-                    plain_name = addon_name.split("::", 1)[1]
-                    label_source = "HANA Legacy"
+                label_source, plain_name = _describe_sap_addon_key(addon_name)
 
                 display_override = str(row[4] or "").strip()
                 country_code = normalize_country_code(str(row[5] or ""))
@@ -4828,7 +4889,7 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
         LEFT JOIN host_settings h ON h.hostname = chg.hostname
         LEFT JOIN customers cust ON cust.id = h.customer_id
         WHERE chg.detected_at_utc >= ?
-        ORDER BY c.detected_at_utc DESC, c.id DESC
+        ORDER BY chg.detected_at_utc DESC, chg.id DESC
         LIMIT ?
         """,
         (cutoff_iso, row_limit),
