@@ -2643,6 +2643,17 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   text-align: right;
 }
 
+.backup-run-link {
+  color: #1d4ed8;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.backup-run-link:hover,
+.backup-run-link:focus-visible {
+  text-decoration: underline;
+}
+
 .selected-host-meta-chip {
   display: inline-flex;
   align-items: center;

@@ -1344,7 +1344,8 @@ def list_backup_automation_runs(conn: sqlite3.Connection, limit: int = 20) -> li
     safe_limit = max(1, min(100, int(limit or 20)))
     rows = conn.execute(
         """
-        SELECT started_at_utc,
+        SELECT id,
+               started_at_utc,
                finished_at_utc,
                trigger_source,
                status,
@@ -1360,14 +1361,15 @@ def list_backup_automation_runs(conn: sqlite3.Connection, limit: int = 20) -> li
     ).fetchall()
     return [
         {
-            "started_at_utc": str(row[0] or ""),
-            "finished_at_utc": str(row[1] or ""),
-            "trigger_source": str(row[2] or ""),
-            "status": str(row[3] or ""),
-            "backup_path": str(row[4] or ""),
-            "backup_size_bytes": int(row[5] or 0),
-            "uploaded_sftp": bool(int(row[6] or 0)),
-            "error_message": str(row[7] or ""),
+            "id": int(row[0] or 0),
+            "started_at_utc": str(row[1] or ""),
+            "finished_at_utc": str(row[2] or ""),
+            "trigger_source": str(row[3] or ""),
+            "status": str(row[4] or ""),
+            "backup_path": str(row[5] or ""),
+            "backup_size_bytes": int(row[6] or 0),
+            "uploaded_sftp": bool(int(row[7] or 0)),
+            "error_message": str(row[8] or ""),
         }
         for row in rows
     ]
@@ -8955,6 +8957,56 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "status": "ok",
                     "settings": settings,
                     "recent_runs": runs,
+                },
+            )
+            return
+
+        if parsed.path == "/api/v1/admin/backup-automation/download":
+            if not self._require_admin_session():
+                return
+            query = parse_qs(parsed.query)
+            run_id = parse_int(query, "run_id", default=0, min_value=1)
+            if run_id <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "run_id query parameter is required"})
+                return
+
+            with sqlite3.connect(DB_PATH) as conn:
+                row = conn.execute(
+                    """
+                    SELECT backup_path, status
+                    FROM backup_automation_runs
+                    WHERE id = ?
+                    """,
+                    (run_id,),
+                ).fetchone()
+
+            if not row:
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup run not found"})
+                return
+
+            backup_path = str(row[0] or "").strip()
+            status = str(row[1] or "").strip().lower()
+            if not backup_path or status != "ok":
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "no downloadable backup for this run"})
+                return
+
+            file_path = (DATA_DIR / backup_path).resolve()
+            try:
+                file_path.relative_to(DATA_DIR.resolve())
+            except ValueError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid backup path"})
+                return
+
+            if not file_path.exists() or not file_path.is_file():
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup file not found"})
+                return
+
+            self._send_file(
+                file_path,
+                "application/octet-stream",
+                extra_headers={
+                    "Content-Disposition": f'attachment; filename="{file_path.name}"',
+                    "Cache-Control": "no-store",
                 },
             )
             return

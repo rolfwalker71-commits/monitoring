@@ -493,6 +493,13 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.82 (17. Mai 2026)
+
+- **Auto-Backups sichtbar im Admin-Bereich**: Läufe der automatischen Backups werden tabellarisch angezeigt.
+- **Tabellenfelder erweitert**: Datum, Uhrzeit, Quelle, Status, Datei, Größe, Link und Fehler werden pro Lauf gelistet.
+- **Direkter Download-Link**: Jeder erfolgreiche Lauf enthält jetzt einen klickbaren Download-Link zur zugehörigen Backup-Datei.
+- **Sicherer Download-Endpoint**: Neuer Admin-Endpoint `GET /api/v1/admin/backup-automation/download?run_id=...` mit Pfadvalidierung.
+
 ### v1.6.81 (17. Mai 2026)
 
 - **Masken-Layout angepasst**: "Meldung X von Y" ist jetzt in der zweiten Zeile rechts ausgerichtet.

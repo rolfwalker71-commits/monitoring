@@ -7651,23 +7651,53 @@ function renderBackupAutomationRuns(rows) {
   if (!body) return;
   const list = Array.isArray(rows) ? rows : [];
   if (list.length === 0) {
-    body.innerHTML = '<tr><td colspan="6" class="muted">Noch keine Backup-Läufe vorhanden.</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" class="muted">Noch keine Backup-Läufe vorhanden.</td></tr>';
     return;
   }
+
+  const formatRunDate = (isoText) => {
+    const raw = String(isoText || "").trim();
+    if (!raw) return "-";
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return "-";
+    return parsed.toLocaleDateString("de-CH", { timeZone: "Europe/Zurich" });
+  };
+
+  const formatRunTime = (isoText) => {
+    const raw = String(isoText || "").trim();
+    if (!raw) return "-";
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return "-";
+    return parsed.toLocaleTimeString("de-CH", {
+      timeZone: "Europe/Zurich",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  };
+
   body.innerHTML = list.map((row) => {
-    const finished = formatUtcPlus2(row.finished_at_utc || "") || "-";
+    const finishedDate = formatRunDate(row.finished_at_utc || "");
+    const finishedTime = formatRunTime(row.finished_at_utc || "");
     const source = String(row.trigger_source || "-");
     const status = String(row.status || "-");
     const filePath = String(row.backup_path || "-");
     const size = Number(row.backup_size_bytes || 0);
     const error = String(row.error_message || "");
+    const runId = Number(row.id || 0);
     const statusClass = status === "ok" ? "delta-positive" : (status === "error" ? "delta-negative" : "delta-neutral");
+    const canDownload = runId > 0 && status === "ok" && filePath && filePath !== "-";
+    const downloadHtml = canDownload
+      ? `<a class="backup-run-link" href="/api/v1/admin/backup-automation/download?run_id=${encodeURIComponent(String(runId))}" title="Backup herunterladen">Download</a>`
+      : "-";
     return `<tr>
-      <td>${escapeHtml(finished)}</td>
+      <td>${escapeHtml(finishedDate)}</td>
+      <td>${escapeHtml(finishedTime)}</td>
       <td>${escapeHtml(source)}</td>
       <td><span class="${statusClass}">${escapeHtml(status)}</span></td>
       <td>${escapeHtml(filePath)}</td>
       <td>${escapeHtml(formatBytes(size))}</td>
+      <td>${downloadHtml}</td>
       <td>${escapeHtml(error || "-")}</td>
     </tr>`;
   }).join("");
