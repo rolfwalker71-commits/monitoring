@@ -493,6 +493,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.74 (17. Mai 2026)
+
+- **Hotfix Admin-Load**: DB-Kennzahlen-Verlauf wird beim Öffnen des Admin-Tabs jetzt aktiv geladen (nicht nur beim initialen App-Start).
+- **Symptom behoben**: Der Bereich bleibt nicht mehr auf "Lade DB Kennzahlen-Verlauf..." stehen, wenn Login/Admin-Status erst nach dem Bootstrapping verfügbar ist.
+
 ### v1.6.73 (17. Mai 2026)
 
 - **Admin-Tab umbenannt**: Registerkarte heißt jetzt **Admin** statt "Admin Settings".

@@ -3311,6 +3311,12 @@ async function loadGlobalAdminSettingsPanel(force = false) {
   if (!state.isAdmin) {
     return;
   }
+  setDbMaintenanceStatus("Lade DB Kennzahlen-Verlauf...");
+  try {
+    await loadAdminDatabaseStats();
+  } catch (error) {
+    setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
+  }
   await loadSapB1VersionMap();
   await loadAlarmSettings(force);
   await loadOauthSettings(force);
