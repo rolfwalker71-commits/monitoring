@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
  
+### v1.6.162 (17. Mai 2026)
+
+- **Critical-Trends Kundenzeile ohne Platzhalter**: In der Kundenzeile der Trend-Karten wird bei fehlendem Kundenwert kein `-` mehr angezeigt (kein Fallback auf Dash).
+
 ### v1.6.161 (17. Mai 2026)
 
 - **Mute-Icone statusorientiert**: In den Alert-Aktionen zeigt `🔇` jetzt den stummgeschalteten Status und `🔔` den aktiven (nicht stummgeschalteten) Status.

@@ -9330,7 +9330,7 @@ function renderCriticalTrends(data) {
     const hostBadge = hostCrit > 0
       ? `<span class="ct-host-badge ct-badge-crit">Kritisch</span>`
       : `<span class="ct-host-badge ct-badge-warn">Warnung</span>`;
-    const customerName = asText(items[0].customer_name || "");
+    const customerName = asText(items[0].customer_name, "");
     const displayName = items[0].display_name || hostname;
     const showHostname = displayName !== hostname;
 
