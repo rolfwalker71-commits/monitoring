@@ -493,6 +493,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.81 (17. Mai 2026)
+
+- **Masken-Layout angepasst**: "Meldung X von Y" ist jetzt in der zweiten Zeile rechts ausgerichtet.
+- **Kunden-Chip verschoben**: Der Kunden-Chip wurde aus der oberen Titelzeile in die zweite Zeile an die frühere Position der Meldungsanzeige verschoben.
+
 ### v1.6.80 (17. Mai 2026)
 
 - **Automatische DB-Backups**: Lokale SQLite-Backups laufen jetzt automatisch im Hintergrund (Default: alle 12 Stunden).

@@ -2611,11 +2611,18 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: 8px 16px;
   margin-top: 4px;
 }
 .report-meta-row .count {
   margin: 0;
+}
+
+.report-customer-chip-wrap {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
 }
 
 .selected-host-controls {
@@ -2632,6 +2639,8 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   color: #5f7792;
   line-height: 1.2;
   min-height: 0;
+  margin-left: auto;
+  text-align: right;
 }
 
 .selected-host-meta-chip {
