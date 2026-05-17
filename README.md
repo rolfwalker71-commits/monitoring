@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.76 (17. Mai 2026)
+
+- **DB-Berechnungsintervall auf 2h** umgestellt (statt 3h).
+- **UI dynamisch angepasst**: Status- und Delta-Texte zeigen jetzt das effektive Intervall (z. B. Δ2h, Nächster 2h-Lauf).
+- **Manueller Trigger ergänzt**: Neuer Admin-Endpoint `POST /api/v1/admin/database-stats/trigger` berechnet den aktuellen Bucket sofort neu und liefert das aktualisierte Dashboard zurück.
+
 ### v1.6.75 (17. Mai 2026)
 
 - **DB-Kennzahlen als Charts**: Die bisherigen Kennzahlen-Karten wurden durch 6 KPI-Charts ersetzt.

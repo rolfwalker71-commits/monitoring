@@ -7422,12 +7422,12 @@ function formatSignedBytes(value) {
   return `${prefix}${formatBytes(Math.abs(num))}`;
 }
 
-function renderDbMaintenanceCharts(history, forecasts) {
+function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
   const el = document.getElementById("dbMaintenanceCharts");
   if (!el) return;
   const rows = Array.isArray(history) ? history : [];
   if (rows.length < 2) {
-    el.innerHTML = '<p class="muted">Noch zu wenige Datenpunkte für Charts. Nach dem nächsten 3h-Lauf erscheinen Verläufe.</p>';
+    el.innerHTML = `<p class="muted">Noch zu wenige Datenpunkte für Charts. Nach dem nächsten ${escapeHtml(String(intervalHours))}h-Lauf erscheinen Verläufe.</p>`;
     return;
   }
 
@@ -7471,9 +7471,9 @@ function renderDbMaintenanceCharts(history, forecasts) {
     const line = renderLine(values);
     const latest = values[values.length - 1];
     const prev = values.length > 1 ? values[values.length - 2] : latest;
-    const delta3h = latest - prev;
+    const deltaWindow = latest - prev;
     const forecast = forecasts && typeof forecasts === "object" ? forecasts[def.key] : null;
-    const trend = trendIndicator(forecast?.delta_14d ?? delta3h);
+    const trend = trendIndicator(forecast?.delta_14d ?? deltaWindow);
     const forecastText = forecast && typeof forecast === "object"
       ? `14d: ${def.deltaFormatter ? def.deltaFormatter(forecast.delta_14d) : formatSignedInteger(forecast.delta_14d)} · Ziel: ${def.formatter(forecast.projected_14d || 0)}`
       : "14d Trend: n/a";
@@ -7483,7 +7483,7 @@ function renderDbMaintenanceCharts(history, forecasts) {
         <strong>${escapeHtml(def.title)}</strong>
         <span class="db-trend-chip ${trend.cls}" title="Trendindikator">${trend.arrow} ${escapeHtml(trend.label)}</span>
       </div>
-      <p class="count compact db-chart-main-value">${escapeHtml(def.formatter(latest || 0))} · Δ3h ${escapeHtml(def.deltaFormatter ? def.deltaFormatter(delta3h) : formatSignedInteger(delta3h))}</p>
+      <p class="count compact db-chart-main-value">${escapeHtml(def.formatter(latest || 0))} · Δ${escapeHtml(String(intervalHours))}h ${escapeHtml(def.deltaFormatter ? def.deltaFormatter(deltaWindow) : formatSignedInteger(deltaWindow))}</p>
       <svg viewBox="0 0 ${line.width} ${line.height}" class="db-maintenance-chart-svg" role="img" aria-label="${escapeHtml(def.title)} Verlauf">
         <line x1="12" y1="${line.height - 12}" x2="${line.width - 12}" y2="${line.height - 12}" class="db-maintenance-chart-axis"></line>
         <polyline points="${line.points}" class="db-maintenance-chart-line"></polyline>
@@ -7549,14 +7549,15 @@ async function loadAdminDatabaseStats() {
   const recentRows = Array.isArray(data?.recent_rows) ? data.recent_rows : [];
   const forecasts = data && typeof data.forecasts === "object" ? data.forecasts : {};
   const schedule = data && typeof data.schedule === "object" ? data.schedule : {};
+  const intervalHours = Math.max(1, Number(schedule?.interval_hours || 2));
   renderDbMaintenanceStats(stats);
-  renderDbMaintenanceCharts(history, forecasts);
+  renderDbMaintenanceCharts(history, forecasts, intervalHours);
   renderDbMaintenanceHistoryRows(recentRows);
   const lastBucket = history.length > 0 ? formatUtcPlus2(history[history.length - 1]?.bucket_start_utc || "") : "-";
   const nextLocal = schedule?.next_bucket_local
     ? new Date(schedule.next_bucket_local).toLocaleString("de-CH", { timeZone: schedule.timezone || "Europe/Zurich" })
     : "-";
-  setDbMaintenanceStatus(`Letzter Lauf: ${lastBucket} · Nächster 3h-Lauf: ${nextLocal} (${schedule.timezone || "Europe/Zurich"})`);
+  setDbMaintenanceStatus(`Letzter Lauf: ${lastBucket} · Nächster ${intervalHours}h-Lauf: ${nextLocal} (${schedule.timezone || "Europe/Zurich"})`);
   return stats;
 }
 

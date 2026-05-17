@@ -71,6 +71,7 @@ MICROSOFT_OAUTH_SCOPES = [
 DEFAULT_TREND_DIGEST_TIME = "08:00"
 DEFAULT_ALERT_DIGEST_TIME = "08:05"
 SCHEDULE_TIMEZONE_NAME = os.getenv("MONITORING_SCHEDULE_TIMEZONE", "Europe/Zurich").strip() or "Europe/Zurich"
+DB_MAINTENANCE_INTERVAL_HOURS = max(1, min(24, int(os.getenv("MONITORING_DB_MAINT_INTERVAL_HOURS", "2") or "2")))
 try:
     SCHEDULE_TIMEZONE = ZoneInfo(SCHEDULE_TIMEZONE_NAME)
 except ZoneInfoNotFoundError:
@@ -1173,9 +1174,87 @@ def run_database_vacuum() -> dict[str, object]:
 def _maintenance_bucket_start_utc(now_utc: datetime | None = None) -> datetime:
     ref_utc = now_utc or datetime.now(timezone.utc)
     local_now = ref_utc.astimezone(SCHEDULE_TIMEZONE)
-    bucket_hour = (local_now.hour // 3) * 3
+    bucket_hour = (local_now.hour // DB_MAINTENANCE_INTERVAL_HOURS) * DB_MAINTENANCE_INTERVAL_HOURS
     local_bucket = local_now.replace(hour=bucket_hour, minute=0, second=0, microsecond=0)
     return local_bucket.astimezone(timezone.utc)
+
+
+def _upsert_db_maintenance_snapshot_for_bucket(
+    conn: sqlite3.Connection,
+    *,
+    bucket_start_utc: datetime,
+) -> dict[str, object]:
+    bucket_iso = bucket_start_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+    stats = collect_database_maintenance_stats(conn)
+    conn.execute(
+        """
+        INSERT INTO db_maintenance_history (
+            bucket_start_utc,
+            computed_at_utc,
+            retention_days,
+            reports_total,
+            hosts_with_reports,
+            hosts_total,
+            alerts_open,
+            avg_payload_bytes,
+            max_payload_bytes,
+            db_file_bytes,
+            wal_file_bytes,
+            shm_file_bytes,
+            total_file_bytes,
+            page_size,
+            page_count,
+            freelist_count,
+            used_pages,
+            free_ratio,
+            oldest_report_utc,
+            newest_report_utc
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(bucket_start_utc) DO UPDATE SET
+            computed_at_utc = excluded.computed_at_utc,
+            retention_days = excluded.retention_days,
+            reports_total = excluded.reports_total,
+            hosts_with_reports = excluded.hosts_with_reports,
+            hosts_total = excluded.hosts_total,
+            alerts_open = excluded.alerts_open,
+            avg_payload_bytes = excluded.avg_payload_bytes,
+            max_payload_bytes = excluded.max_payload_bytes,
+            db_file_bytes = excluded.db_file_bytes,
+            wal_file_bytes = excluded.wal_file_bytes,
+            shm_file_bytes = excluded.shm_file_bytes,
+            total_file_bytes = excluded.total_file_bytes,
+            page_size = excluded.page_size,
+            page_count = excluded.page_count,
+            freelist_count = excluded.freelist_count,
+            used_pages = excluded.used_pages,
+            free_ratio = excluded.free_ratio,
+            oldest_report_utc = excluded.oldest_report_utc,
+            newest_report_utc = excluded.newest_report_utc
+        """,
+        (
+            bucket_iso,
+            utc_now_iso(),
+            int(stats.get("retention_days", REPORT_RETENTION_DAYS) or REPORT_RETENTION_DAYS),
+            int(stats.get("reports_total", 0) or 0),
+            int(stats.get("hosts_with_reports", 0) or 0),
+            int(stats.get("hosts_total", 0) or 0),
+            int(stats.get("alerts_open", 0) or 0),
+            float(stats.get("avg_payload_bytes", 0.0) or 0.0),
+            int(stats.get("max_payload_bytes", 0) or 0),
+            int(stats.get("db_file_bytes", 0) or 0),
+            int(stats.get("wal_file_bytes", 0) or 0),
+            int(stats.get("shm_file_bytes", 0) or 0),
+            int(stats.get("total_file_bytes", 0) or 0),
+            int(stats.get("page_size", 0) or 0),
+            int(stats.get("page_count", 0) or 0),
+            int(stats.get("freelist_count", 0) or 0),
+            int(stats.get("used_pages", 0) or 0),
+            float(stats.get("free_ratio", 0.0) or 0.0),
+            str(stats.get("oldest_report_utc", "") or ""),
+            str(stats.get("newest_report_utc", "") or ""),
+        ),
+    )
+    return stats
 
 
 def _insert_db_maintenance_snapshot_if_missing(
@@ -1259,6 +1338,19 @@ def _ensure_db_maintenance_snapshot(conn: sqlite3.Connection, *, force_if_empty:
         bucket_start_utc=_maintenance_bucket_start_utc(),
     )
     conn.commit()
+
+
+def trigger_db_maintenance_snapshot_now(conn: sqlite3.Connection) -> dict[str, object]:
+    bucket_start_utc = _maintenance_bucket_start_utc()
+    stats = _upsert_db_maintenance_snapshot_for_bucket(
+        conn,
+        bucket_start_utc=bucket_start_utc,
+    )
+    conn.commit()
+    return {
+        "bucket_start_utc": bucket_start_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "stats": stats,
+    }
 
 
 def _coerce_number(value: object) -> float:
@@ -1402,7 +1494,7 @@ def build_db_maintenance_dashboard(conn: sqlite3.Connection) -> dict[str, object
 
     now_local = datetime.now(SCHEDULE_TIMEZONE)
     next_bucket_local = now_local.replace(minute=0, second=0, microsecond=0)
-    while (next_bucket_local.hour % 3) != 0 or next_bucket_local <= now_local:
+    while (next_bucket_local.hour % DB_MAINTENANCE_INTERVAL_HOURS) != 0 or next_bucket_local <= now_local:
         next_bucket_local += timedelta(hours=1)
 
     return {
@@ -1412,7 +1504,7 @@ def build_db_maintenance_dashboard(conn: sqlite3.Connection) -> dict[str, object
         "forecasts": forecasts,
         "schedule": {
             "timezone": SCHEDULE_TIMEZONE_NAME,
-            "interval_hours": 3,
+            "interval_hours": DB_MAINTENANCE_INTERVAL_HOURS,
             "next_bucket_local": next_bucket_local.isoformat(),
         },
     }
@@ -11283,6 +11375,29 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "status": "ok",
                     "message": "VACUUM abgeschlossen",
                     "result": result,
+                },
+            )
+            return
+
+        if path == "/api/v1/admin/database-stats/trigger":
+            if not self._require_admin_session():
+                return
+
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    snapshot = trigger_db_maintenance_snapshot_now(conn)
+                    payload = build_db_maintenance_dashboard(conn)
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "message": "DB Kennzahlen manuell neu berechnet",
+                    "triggered": snapshot,
+                    **payload,
                 },
             )
             return
