@@ -523,6 +523,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.130 (17. Mai 2026)
+
+- **Erste Zeile umgestaltet**: API/Count Chips nun nach rechts neben den Refresh-Tools.
+- **Zweite Zeile optimiert**: Kundenname ganz links, Buttons (Visibility/Favorite) ganz rechts.
+- **Verbesserte visuelle Balance**: Klarere Trennung zwischen Kontroll-Elementen und Meta-Informationen.
+
 ### v1.6.129 (17. Mai 2026)
 
 - **Header-Layout reorganisiert**: API-Key und Report-Count Chips in die erste Zeile verschoben (neben Title).
