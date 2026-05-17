@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.86 (17. Mai 2026)
+
+- **Systemübersicht-Hierarchie neu aufgebaut**: In der Standardsicht ist die Gruppierung jetzt `Land → Kunde → OS`.
+- **Kundenebene als zweite Stufe**: Pro Land werden zuerst die Kunden gruppiert und danach die jeweiligen Betriebssysteme.
+- **Sort-/Sichttexte aktualisiert**: Button- und Statistik-Label zeigen jetzt konsistent `Land > Kunde > OS` an.
+
 ### v1.6.85 (17. Mai 2026)
 
 - **Backup-Status mit zusätzlicher Hierarchie**: Neue Top-Gruppierung nach Kunde im Bereich "Backup Stati".

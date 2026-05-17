@@ -11672,7 +11672,7 @@ function updateSystemOverviewSortModeButton() {
     return;
   }
   const addonMode = state.systemOverviewSortMode === "addon-customer-os";
-  button.textContent = addonMode ? "Sort: AddOn > Kunde > OS" : "Sort: Land > OS > Host";
+  button.textContent = addonMode ? "Sort: AddOn > Kunde > OS" : "Sort: Land > Kunde > OS";
   button.setAttribute("aria-pressed", addonMode ? "true" : "false");
 }
 
@@ -12229,87 +12229,116 @@ async function loadSystemOverview() {
           const flagIconPath = getCountryFlagIconPath(countryCode);
           const flagImg = flagIconPath ? `<img src="${flagIconPath}" alt="${escapeHtml(country)}" class="so-country-flag" />` : "";
 
-          const osSections = Object.entries(osMap || {})
-            .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
-            .map(([osName, customerMap], osIndex) => {
-              const osIconPath = getOsIconPath(osName);
-              const osImg = osIconPath ? `<img src="${osIconPath}" alt="${escapeHtml(osName)}" class="so-os-icon" />` : `<span>${getOsEmoji(osName)}</span>`;
+          const customerMapByCountry = new Map();
+          Object.entries(osMap || {}).forEach(([osName, customerMap]) => {
+            Object.entries(customerMap || {}).forEach(([customer, hosts]) => {
+              const matchingHosts = (Array.isArray(hosts) ? hosts : []).filter((host) => {
+                const payload = host && typeof host.payload === "object" ? host.payload : {};
+                const addonText = collectSystemOverviewAddonSearchText(payload);
+                const haystack = [
+                  host?.hostname,
+                  host?.display_name,
+                  payload?.display_name,
+                  payload?.hostname,
+                  payload?.agent_id,
+                  customer,
+                  osName,
+                  country,
+                  addonText,
+                ].map((v) => String(v || "").toLowerCase()).join(" ");
+                if (!searchQuery) {
+                  return true;
+                }
+                return haystack.includes(searchQuery);
+              });
 
-              const customers = Object.entries(customerMap || {})
-                .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
-                .map(([customer, hosts]) => {
-                  const matchingHosts = (Array.isArray(hosts) ? hosts : []).filter((host) => {
-                    const payload = host && typeof host.payload === "object" ? host.payload : {};
-                    const addonText = collectSystemOverviewAddonSearchText(payload);
-                    const haystack = [
-                      host?.hostname,
-                      host?.display_name,
-                      payload?.display_name,
-                      payload?.hostname,
-                      payload?.agent_id,
-                      customer,
-                      osName,
-                      country,
-                      addonText,
-                    ].map((v) => String(v || "").toLowerCase()).join(" ");
-                    if (!searchQuery) {
-                      return true;
-                    }
-                    return haystack.includes(searchQuery);
-                  });
+              if (!matchingHosts.length) {
+                return;
+              }
 
-                  if (!matchingHosts.length) {
+              const customerKey = String(customer || "-");
+              if (!customerMapByCountry.has(customerKey)) {
+                customerMapByCountry.set(customerKey, new Map());
+              }
+              const osMapForCustomer = customerMapByCountry.get(customerKey);
+              if (!osMapForCustomer.has(osName)) {
+                osMapForCustomer.set(osName, []);
+              }
+              osMapForCustomer.get(osName).push(...matchingHosts);
+            });
+          });
+
+          const customerSections = Array.from(customerMapByCountry.entries())
+            .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true }))
+            .map(([customer, osMapForCustomer], customerIndex) => {
+              const osSections = Array.from(osMapForCustomer.entries())
+                .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true }))
+                .map(([osName, hostsForOs], osIndex) => {
+                  const osIconPath = getOsIconPath(osName);
+                  const osImg = osIconPath ? `<img src="${osIconPath}" alt="${escapeHtml(osName)}" class="so-os-icon" />` : `<span>${getOsEmoji(osName)}</span>`;
+                  const sortedHosts = (Array.isArray(hostsForOs) ? hostsForOs : [])
+                    .slice()
+                    .sort((left, right) => String(left?.display_name || left?.hostname || "").localeCompare(String(right?.display_name || right?.hostname || ""), "de", { sensitivity: "base", numeric: true }));
+                  if (!sortedHosts.length) {
                     return "";
                   }
-
-                  const rowHtml = matchingHosts
+                  const rowHtml = sortedHosts
                     .map((host) => formatSystemOverviewTableRow(host, osName, customer, SAP_B1_VERSION_MAP, true, searchQuery))
                     .join("");
 
+                  const osId = `so-os-${countryIndex}-${customerIndex}-${osIndex}`;
                   return `
-                    <div class="system-overview-customer-block">
-                      <div class="so-customer-title">👥 ${escapeHtml(customer)} (${matchingHosts.length})</div>
-                      <div class="system-overview-table-wrap">
-                        <table class="system-overview-table">
-                          <thead>
-                            <tr>
-                              <th>Host</th>
-                              <th>OS</th>
-                              <th>CPU</th>
-                              <th>RAM / Modell</th>
-                              <th>SAP / DB</th>
-                              <th>Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>${rowHtml}</tbody>
-                        </table>
+                    <section class="system-overview-os-group">
+                      <button class="system-overview-toggle" type="button" data-target-id="${osId}" aria-expanded="true">
+                        <span class="system-overview-chevron">▼</span>
+                        <span class="so-os-header">${osImg} ${escapeHtml(osName)} (${sortedHosts.length})</span>
+                      </button>
+                      <div id="${osId}" class="system-overview-customer-list">
+                        <div class="system-overview-table-wrap">
+                          <table class="system-overview-table">
+                            <thead>
+                              <tr>
+                                <th>Host</th>
+                                <th>OS</th>
+                                <th>CPU</th>
+                                <th>RAM / Modell</th>
+                                <th>SAP / DB</th>
+                                <th>Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>${rowHtml}</tbody>
+                          </table>
+                        </div>
                       </div>
-                    </div>
+                    </section>
                   `;
                 })
                 .filter(Boolean)
                 .join("");
 
-              const osHostCount = (customers.match(/<tr class=/g) || []).length;
-              if (!osHostCount) {
+              if (!osSections) {
                 return "";
               }
 
-              const osId = `so-os-${countryIndex}-${osIndex}`;
+              const customerHostCount = Array.from(osMapForCustomer.values()).reduce(
+                (sum, hostList) => sum + (Array.isArray(hostList) ? hostList.length : 0),
+                0,
+              );
+              const customerId = `so-customer-${countryIndex}-${customerIndex}`;
               return `
-                <section class="system-overview-os-group">
-                  <button class="system-overview-toggle" type="button" data-target-id="${osId}" aria-expanded="true">
+                <section class="system-overview-country-group">
+                  <button class="system-overview-toggle" type="button" data-target-id="${customerId}" aria-expanded="true">
                     <span class="system-overview-chevron">▼</span>
-                    <span class="so-os-header">${osImg} ${escapeHtml(osName)} (${osHostCount})</span>
+                    <span class="so-country-header">👥 ${escapeHtml(customer)} (${customerHostCount})</span>
                   </button>
-                  <div id="${osId}" class="system-overview-customer-list">${customers}</div>
+                  <div id="${customerId}" class="system-overview-os-list">${osSections}</div>
                 </section>
               `;
             })
             .filter(Boolean)
             .join("");
 
-          if (!osSections) {
+          if (!customerSections) {
             return "";
           }
 
@@ -12320,7 +12349,7 @@ async function loadSystemOverview() {
                 <span class="system-overview-chevron">▼</span>
                 <span class="so-country-header">${flagImg} ${escapeHtml(country)}</span>
               </button>
-              <div id="${countryId}" class="system-overview-os-list">${osSections}</div>
+              <div id="${countryId}" class="system-overview-os-list">${customerSections}</div>
             </section>
           `;
         })
@@ -12337,7 +12366,7 @@ async function loadSystemOverview() {
         : "";
       const modeLabel = state.systemOverviewSortMode === "addon-customer-os"
         ? " | Sicht: AddOn > Kunde > OS"
-        : " | Sicht: Land > OS > Host";
+        : " | Sicht: Land > Kunde > OS";
       statsEl.textContent = `${displayedHostCount} Systeme (${scope})${withSearch}${modeLabel}`;
     }
 
