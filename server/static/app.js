@@ -7450,16 +7450,20 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
   const renderLine = (values) => {
     const width = 360;
     const height = 120;
-    const pad = 12;
+    const padLeft = 44;
+    const padRight = 12;
+    const padTop = 8;
+    const padBottom = 12;
     const min = Math.min(...values);
     const max = Math.max(...values);
     const span = Math.max(1, max - min);
+    const toY = (v) => height - padBottom - (((v - min) / span) * (height - padTop - padBottom));
     const points = values.map((v, i) => {
-      const x = pad + (i * ((width - pad * 2) / Math.max(1, values.length - 1)));
-      const y = height - pad - (((v - min) / span) * (height - pad * 2));
+      const x = padLeft + (i * ((width - padLeft - padRight) / Math.max(1, values.length - 1)));
+      const y = toY(v);
       return `${x.toFixed(2)},${y.toFixed(2)}`;
     }).join(" ");
-    return { width, height, points, min, max };
+    return { width, height, points, min, max, padLeft, padRight, padTop, padBottom, toY };
   };
 
   const trendIndicator = (deltaValue) => {
@@ -7484,6 +7488,13 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
     const forecastText = forecast && typeof forecast === "object"
       ? `14d: ${def.deltaFormatter ? def.deltaFormatter(forecast.delta_14d) : formatSignedInteger(forecast.delta_14d)} · Ziel: ${def.formatter(forecast.projected_14d || 0)}`
       : "14d Trend: n/a";
+    const ticks = [0, 0.25, 0.5, 0.75, 1];
+    const gridMarkup = ticks.map((t) => {
+      const y = line.padTop + ((line.height - line.padTop - line.padBottom) * t);
+      const value = line.max - ((line.max - line.min) * t);
+      const label = def.formatter(value);
+      return `<line x1="${line.padLeft}" y1="${y.toFixed(2)}" x2="${(line.width - line.padRight).toFixed(2)}" y2="${y.toFixed(2)}" class="db-maintenance-chart-grid"></line><text x="4" y="${(y + 3).toFixed(2)}" class="db-maintenance-chart-label">${escapeHtml(String(label))}</text>`;
+    }).join("");
 
     return `<div class="db-maintenance-chart-card">
       <div class="db-maintenance-chart-head">
@@ -7492,7 +7503,8 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
       </div>
       <p class="count compact db-chart-main-value">${escapeHtml(def.formatter(latest || 0))} · Δ${escapeHtml(String(intervalHours))}h ${escapeHtml(def.deltaFormatter ? def.deltaFormatter(deltaWindow) : formatSignedInteger(deltaWindow))}</p>
       <svg viewBox="0 0 ${line.width} ${line.height}" class="db-maintenance-chart-svg" role="img" aria-label="${escapeHtml(def.title)} Verlauf">
-        <line x1="12" y1="${line.height - 12}" x2="${line.width - 12}" y2="${line.height - 12}" class="db-maintenance-chart-axis"></line>
+        ${gridMarkup}
+        <line x1="${line.padLeft}" y1="${line.height - line.padBottom}" x2="${line.width - line.padRight}" y2="${line.height - line.padBottom}" class="db-maintenance-chart-axis"></line>
         <polyline points="${line.points}" class="db-maintenance-chart-line"></polyline>
       </svg>
       <p class="count compact">Min: ${escapeHtml(def.formatter(line.min))} · Max: ${escapeHtml(def.formatter(line.max))}</p>

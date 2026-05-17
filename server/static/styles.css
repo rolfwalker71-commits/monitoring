@@ -1000,6 +1000,18 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   stroke-width: 1;
 }
 
+.db-maintenance-chart-grid {
+  stroke: #e2e8f0;
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+
+.db-maintenance-chart-label {
+  fill: #64748b;
+  font-size: 9px;
+  font-weight: 600;
+}
+
 .db-maintenance-chart-line {
   fill: none;
   stroke: #2563eb;
@@ -1231,6 +1243,14 @@ body[data-theme="dark"] .db-trend-chip.flat {
 
 body[data-theme="dark"] .db-maintenance-chart-axis {
   stroke: #3f5677;
+}
+
+body[data-theme="dark"] .db-maintenance-chart-grid {
+  stroke: #2b3b56;
+}
+
+body[data-theme="dark"] .db-maintenance-chart-label {
+  fill: #8ba4c1;
 }
 
 body[data-theme="dark"] .db-maintenance-chart-line {

@@ -493,6 +493,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.79 (17. Mai 2026)
+
+- **Charts mit Skala**: Dezente horizontale Gitternetzlinien und Y-Achsenwerte pro Chart ergänzt.
+- **Bessere Lesbarkeit**: Skalen sind bewusst zurückhaltend gestaltet und in Light/Dark-Theme abgestimmt.
+
 ### v1.6.78 (17. Mai 2026)
 
 - **Delta-Farben im DB-Verlauf**: Positive Delta-Werte werden jetzt grün, negative rot dargestellt.
