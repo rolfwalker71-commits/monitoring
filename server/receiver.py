@@ -4870,16 +4870,22 @@ def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) ->
         f"""
         SELECT r.hostname, r.received_at_utc, r.payload_json,
                COALESCE(h.display_name_override, ''),
-               COALESCE(h.country_code_override, '')
+               COALESCE(h.country_code_override, ''),
+               h.customer_id,
+               COALESCE(c.customer_name, ''),
+               COALESCE(c.maringo_project_number, '')
         FROM reports r
         LEFT JOIN host_settings h ON h.hostname = r.hostname
+        LEFT JOIN customers c ON c.id = h.customer_id
         JOIN (
             SELECT hostname, MAX(id) AS latest_id
             FROM reports
             WHERE hostname IN ({placeholders})
             GROUP BY hostname
         ) latest ON latest.latest_id = r.id
-        ORDER BY LOWER(COALESCE(NULLIF(h.display_name_override, ''), r.hostname)), LOWER(r.hostname)
+        ORDER BY LOWER(COALESCE(NULLIF(c.customer_name, ''), 'Ohne Kunde')),
+                 LOWER(COALESCE(NULLIF(h.display_name_override, ''), r.hostname)),
+                 LOWER(r.hostname)
         """,
         tuple(known_hosts),
     ).fetchall()
@@ -4896,6 +4902,9 @@ def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) ->
         payload = parse_payload_json(str(row[2] or "{}"))
         display_name = str(row[3] or "").strip() or hostname
         country_override = normalize_country_code(str(row[4] or ""))
+        customer_id = int(row[5]) if row[5] is not None else None
+        customer_name = str(row[6] or "").strip()
+        customer_project = str(row[7] or "").strip()
         country_code = country_override or extract_country_code_from_payload(payload) or ""
         country_code = normalize_country_code(country_code)
 
@@ -5040,6 +5049,9 @@ def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) ->
                 "hostname": hostname,
                 "display_name": display_name,
                 "country_code": country_code,
+                "customer_id": customer_id,
+                "customer_name": customer_name,
+                "customer_maringo_project_number": customer_project,
                 "has_hana": has_hana,
                 "has_sql": sql_user_db_count > 0,
                 "sql_user_db_count": sql_user_db_count,

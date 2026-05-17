@@ -9202,7 +9202,8 @@ function renderBackupStatus(data) {
   if (hosts.length === 0) {
     return "<p class=\"muted\">Keine Hosts im aktuellen Filter.</p>";
   }
-  return hosts.map((host) => {
+
+  const renderHostCard = (host) => {
     const displayName = asText(host.display_name || host.hostname, "-");
     const hostname = asText(host.hostname, "-");
     const isToday = host.is_today_report !== false;
@@ -9297,6 +9298,74 @@ function renderBackupStatus(data) {
           </table>
         </div>
       </details>`;
+  };
+
+  const customerGroups = new Map();
+  hosts.forEach((host) => {
+    const customerName = asText(host?.customer_name, "").trim() || "Ohne Kunde";
+    const customerProject = asText(host?.customer_maringo_project_number, "").trim();
+    const customerIdRaw = Number(host?.customer_id || 0);
+    const customerId = Number.isFinite(customerIdRaw) && customerIdRaw > 0 ? customerIdRaw : null;
+    const key = `${customerName.toLowerCase()}\u0000${customerProject.toLowerCase()}\u0000${customerId || ""}`;
+    if (!customerGroups.has(key)) {
+      customerGroups.set(key, {
+        customerName,
+        customerProject,
+        customerId,
+        hosts: [],
+        missingHosts: 0,
+        totalDirs: 0,
+        currentDirs: 0,
+      });
+    }
+    const group = customerGroups.get(key);
+    const dirs = Array.isArray(host?.dirs) ? host.dirs : [];
+    const currentCount = dirs.filter((item) => item?.has_today_backup === true).length;
+    group.hosts.push(host);
+    group.totalDirs += dirs.length;
+    group.currentDirs += currentCount;
+    if (Boolean(host?.has_missing_backup)) {
+      group.missingHosts += 1;
+    }
+  });
+
+  const sortedGroups = Array.from(customerGroups.values()).sort((a, b) => {
+    return String(a.customerName || "").localeCompare(String(b.customerName || ""), undefined, { sensitivity: "base" });
+  });
+
+  return sortedGroups.map((group) => {
+    const hostsCount = group.hosts.length;
+    const missingHosts = Number(group.missingHosts || 0);
+    const currentDirs = Number(group.currentDirs || 0);
+    const totalDirs = Number(group.totalDirs || 0);
+    const missingDirs = Math.max(0, totalDirs - currentDirs);
+    const groupOpenAttr = missingHosts > 0 ? " open" : "";
+    const groupClass = missingHosts > 0
+      ? "backup-customer-summary backup-customer-summary--missing"
+      : "backup-customer-summary backup-customer-summary--ok";
+    const projectHtml = group.customerProject
+      ? `<span class="backup-customer-project">Maringo: ${escapeHtml(group.customerProject)}</span>`
+      : "";
+    const hostCardsHtml = group.hosts
+      .slice()
+      .sort((left, right) => {
+        const nameLeft = String(left?.display_name || left?.hostname || "").toLowerCase();
+        const nameRight = String(right?.display_name || right?.hostname || "").toLowerCase();
+        return nameLeft.localeCompare(nameRight);
+      })
+      .map((host) => renderHostCard(host))
+      .join("");
+
+    return `<details class="backup-customer-group"${groupOpenAttr}>
+      <summary class="${groupClass}">
+        <span class="backup-customer-name">🏢 ${escapeHtml(group.customerName)}</span>
+        ${projectHtml}
+        <span class="backup-customer-chip">Hosts: ${hostsCount}</span>
+        <span class="backup-customer-chip backup-customer-chip--ok">Aktuelle Backups: ${currentDirs}</span>
+        <span class="backup-customer-chip backup-customer-chip--missing">kein aktuelles Backup: ${missingDirs}</span>
+      </summary>
+      <div class="backup-customer-body">${hostCardsHtml}</div>
+    </details>`;
   }).join("");
 }
 

@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.85 (17. Mai 2026)
+
+- **Backup-Status mit zusätzlicher Hierarchie**: Neue Top-Gruppierung nach Kunde im Bereich "Backup Stati".
+- **Struktur Kunde → Hosts**: Unter jedem Kunden werden die zugehörigen Host-Karten wie bisher angezeigt.
+- **Kunden-Kennzahlen in Summary**: Pro Kundengruppe werden Host-Anzahl sowie aktuelle vs. fehlende Backups aggregiert dargestellt.
+
 ### v1.6.84 (17. Mai 2026)
 
 - **Telegram Quick Actions zurück**: Alert-Nachrichten enthalten wieder einen direkten Button zum Quittieren.
