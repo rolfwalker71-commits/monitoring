@@ -522,6 +522,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.152 (17. Mai 2026)
+
+- **Kundenname in Global-Alerts korrigiert**: Die Alerts-Ansicht bezieht den Kunden jetzt aus dem gleichen Host-Settings/Customer-Join wie die anderen Übersichten, damit dort nicht nur ein Platzhalter angezeigt wird.
+
 ### v1.6.151 (17. Mai 2026)
 
 - **Kunde in Global-Alerts sichtbar**: In der Alerts-Ansicht steht der Kundenname jetzt oberhalb der Hostbezeichnung, damit offene Alerts schneller zugeordnet werden koennen.

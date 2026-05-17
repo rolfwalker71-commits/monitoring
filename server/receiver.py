@@ -10631,10 +10631,18 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 if hostnames:
                     placeholders = ",".join("?" for _ in hostnames)
                     settings_rows = conn.execute(
-                        f"SELECT hostname, display_name_override FROM host_settings WHERE hostname IN ({placeholders})",
+                        f"""
+                        SELECT h.hostname,
+                               h.display_name_override,
+                               COALESCE(c.customer_name, '')
+                        FROM host_settings h
+                        LEFT JOIN customers c ON c.id = h.customer_id
+                        WHERE h.hostname IN ({placeholders})
+                        """,
                         tuple(hostnames),
                     ).fetchall()
                     overrides = {str(item[0]): str(item[1] or "") for item in settings_rows}
+                    customer_names = {str(item[0]): str(item[2] or "").strip() for item in settings_rows}
 
                     latest_payload_rows = conn.execute(
                         f"""
@@ -10661,6 +10669,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             overrides.get(hostname, ""),
                             hostname,
                         )
+                        if not customer_names.get(hostname):
+                            host_settings = get_host_settings(conn, hostname)
+                            customer_names[hostname] = str(host_settings.get("customer_name", "") or "").strip()
 
             alerts = []
             with sqlite3.connect(DB_PATH) as conn_mute:
@@ -10676,6 +10687,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "id": row[0],
                         "hostname": hostname,
                         "display_name": display_names.get(hostname, hostname),
+                        "customer_name": customer_names.get(hostname, "") or "Ohne Kunde",
                         "mountpoint": mountpoint,
                         "severity": row[3],
                         "used_percent": row[4],
