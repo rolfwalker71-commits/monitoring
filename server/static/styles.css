@@ -2611,7 +2611,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px 16px;
   margin-top: 4px;
 }
@@ -2628,9 +2628,9 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 .selected-host-controls {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 6px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .report-count-inline {
