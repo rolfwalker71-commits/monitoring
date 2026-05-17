@@ -7054,9 +7054,6 @@ function renderSingleHostCard(host) {
   const isHidden = Boolean(host.is_hidden);
   const hiddenClass = isHidden ? " host-item-hidden" : "";
   const favoriteClass = isFavorite ? " host-item-favorite" : "";
-  const statusBarClass = openCriticalAlertCount > 0 ? "host-status-bar host-status-bar--critical"
-    : openAlertCount > 0 ? "host-status-bar host-status-bar--warning"
-    : "host-status-bar host-status-bar--ok";
   const chipClass = openCriticalAlertCount > 0 ? "host-alert-chip critical" : "host-alert-chip";
   const alertChip = hasOpenAlerts ? `<span class="${chipClass}">🔔 ${openAlertCount}</span>` : "";
   const metaAlertChip = hasOpenAlerts ? `<span class="${chipClass} host-alert-chip--meta">🔔 ${openAlertCount}</span>` : "";
@@ -7109,9 +7106,15 @@ function renderSingleHostCard(host) {
   const customerTitleLine = customerNameValue
     ? `<div class="host-customer-title-line"><span class="host-value-chip host-value-chip--customer-title" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span></div>`
     : "";
-  const detailLine = `<span class="host-detail-line">${escapeHtml(displayName)}</span>`;
   const lastReportInfo = formatHostLastReportAge(host.last_report_utc || host.last_seen_utc);
   const agentVersionVisual = getHostAgentVersionVisual(host.agent_version, state.latestAgentRelease);
+  const statusBarClass = lastReportInfo.statusClass === "host-last-report-dot--critical"
+    ? "host-status-bar host-status-bar--report-critical"
+    : lastReportInfo.statusClass === "host-last-report-dot--warning"
+      ? "host-status-bar host-status-bar--report-warning"
+      : lastReportInfo.statusClass === "host-last-report-dot--ok"
+        ? "host-status-bar host-status-bar--report-ok"
+        : "host-status-bar host-status-bar--report-unknown";
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
   const hanaRawForDebug = asText(host.hana_release || host.hana_version || "", "").trim();
@@ -7170,10 +7173,9 @@ function renderSingleHostCard(host) {
       <div class="${statusBarClass}"></div>
       ${flagIcon}
       ${customerTitleLine}
-      <span class="host-meta-line">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))}</span>
-      <span class="host-meta-line host-meta-line--with-alert"><span class="host-meta-text">🧷 <span class="host-agent-version" title="${escapeHtml(agentVersionVisual.title)}"><span class="host-agent-version-dot ${agentVersionVisual.dotClassName}" aria-hidden="true"></span>${escapeHtml(asText(host.agent_version))}</span> &nbsp;·&nbsp; <span class="host-last-report" title="${escapeHtml(lastReportInfo.title)}"><span class="host-last-report-dot ${lastReportInfo.statusClass}" aria-hidden="true"></span>${escapeHtml(lastReportInfo.label)}</span></span>${metaAlertChip}</span>
+      <span class="host-meta-line host-meta-line--primary">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))} &nbsp;·&nbsp; 🧷 <span class="host-agent-version host-agent-version--compact" title="${escapeHtml(agentVersionVisual.title)}"><span class="host-agent-version-dot ${agentVersionVisual.dotClassName}" aria-hidden="true"></span>${escapeHtml(asText(host.agent_version))}</span></span>
+      <span class="host-meta-line host-meta-line--with-alert"><span class="host-meta-text"><span class="host-last-report" title="${escapeHtml(lastReportInfo.title)}">${escapeHtml(lastReportInfo.label)}</span></span>${metaAlertChip}</span>
       ${footerContent}
-      ${detailLine}
       ${mutedAlertsSection}
       ${osIcon}
     </article>

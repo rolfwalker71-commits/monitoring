@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.101 | 17.05.2026 | Refine host card compact layout: remove bottom host-label row, move agent-version status indicator into the upper meta row, and repurpose the left card stripe to show last-report recency status (green/orange/red/gray) while keeping report-age text in-row |
 | 1.6.100 | 17.05.2026 | Apply the unified Outlook-safe branded mail header to remaining test/info HTML mails as well (Host Alert subscription test, Customer Alert test, OAuth test mail, and Backup test mail), including improved logo-to-title spacing everywhere |
 | 1.6.99  | 17.05.2026 | Unify all branded HTML mail headers with one Outlook-friendly table layout and increase logo-to-title spacing for consistent rendering across Trend Digest, Alert Digest, and Instant Alert mails |
 | 1.6.98  | 17.05.2026 | Host cards: replace fixed last-seen timestamp with traffic-light recency indicator (green/orange/red + relative age text) and add an agent-version status dot (green/red/gray) before the version while keeping the original text color |

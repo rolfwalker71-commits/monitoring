@@ -3886,6 +3886,12 @@ body[data-theme="dark"] .trend-progress-bar {
   color: #92400e;
   font-size: 16px;
   font-weight: 900;
+  max-width: 100%;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.2;
+  justify-content: flex-start;
 }
 
 .host-card-footer--customer {
@@ -4367,6 +4373,10 @@ body[data-theme="dark"] .trend-progress-bar {
   color: #6d829d;
 }
 
+.host-meta-line--primary {
+  font-size: 11px;
+}
+
 .host-meta-line--with-alert {
   display: flex;
   align-items: center;
@@ -4387,6 +4397,11 @@ body[data-theme="dark"] .trend-progress-bar {
   gap: 5px;
   font-weight: 700;
   color: inherit;
+}
+
+.host-agent-version--compact {
+  gap: 4px;
+  font-size: 10px;
 }
 
 .host-agent-version-dot {
@@ -4415,7 +4430,7 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-last-report {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 0;
   max-width: 100%;
   vertical-align: middle;
 }
@@ -4474,6 +4489,23 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-status-bar--ok {
   opacity: 0.3;
+}
+
+.host-status-bar--report-ok {
+  background: #22c55e;
+}
+
+.host-status-bar--report-warning {
+  background: #fb923c;
+}
+
+.host-status-bar--report-critical {
+  background: #f43f5e;
+}
+
+.host-status-bar--report-unknown {
+  background: #94a3b8;
+  opacity: 0.85;
 }
 
 body[data-theme="dark"] .sidebar-card-header {
