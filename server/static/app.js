@@ -10428,7 +10428,7 @@ async function loadGlobalAlertsOverview(options = {}) {
   const closedQuery = state.globalShowClosed ? "" : "&closed=no";
 
   if (updateList && rowsEl && !append) {
-    rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Lade globale Alerts...</td></tr>";
+    rowsEl.innerHTML = "<tr><td colspan=\"8\" class=\"muted\">Lade globale Alerts...</td></tr>";
   }
   if (updateList && summaryEl && !append) {
     summaryEl.textContent = "";
@@ -10477,7 +10477,7 @@ async function loadGlobalAlertsOverview(options = {}) {
     summaryEl.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}`;
 
     if (!append && alerts.length === 0) {
-      rowsEl.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Keine offenen Alerts für den gesetzten Filter.</td></tr>";
+      rowsEl.innerHTML = "<tr><td colspan=\"8\" class=\"muted\">Keine offenen Alerts für den gesetzten Filter.</td></tr>";
       if (loadMoreButton) loadMoreButton.classList.add("hidden");
       if (pagingStatus) pagingStatus.textContent = "0 / 0";
       return;
@@ -10521,6 +10521,8 @@ async function loadGlobalAlertsOverview(options = {}) {
             <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
             <td>${renderAlertMountpointLabel(item.mountpoint, 56)}</td>
             <td>${formatPercent(item.used_percent)}</td>
+            <td>${formatPercent(item.current_used_percent)}</td>
+            <td>${formatPercent(item.delta_used_percent)}</td>
             <td title="Zuletzt gesehen: ${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}">${escapeHtml(formatUtcPlus2(item.created_at_utc))}${ackMeta}${closeMeta}</td>
             <td><div class="alert-action-buttons">${muteBtn}${ackBtn}${closeBtn}</div></td>
           </tr>
@@ -10574,11 +10576,11 @@ async function loadGlobalAlertsOverview(options = {}) {
       });
     });
   } catch (error) {
-    rowsEl.innerHTML = `<tr><td colspan="6" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+    rowsEl.innerHTML = `<tr><td colspan="8" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
     globalAlertsTabButton.textContent = "Globale Alerts";
     globalAlertsTabButton.classList.remove("alert-active");
     if (updateList && rowsEl) {
-      rowsEl.innerHTML = `<tr><td colspan="6" class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</td></tr>`;
+      rowsEl.innerHTML = `<tr><td colspan="8" class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</td></tr>`;
     }
   }
 }

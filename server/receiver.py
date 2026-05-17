@@ -4055,6 +4055,50 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
     return inactive_hosts
 
 
+def _collect_latest_report_usage_by_host(conn: sqlite3.Connection, hostnames: list[str]) -> dict[str, dict[str, float]]:
+    if not hostnames:
+        return {}
+
+    placeholders = ",".join("?" for _ in hostnames)
+    latest_rows = conn.execute(
+        f"""
+        SELECT hostname, payload_json
+        FROM reports
+        WHERE id IN (
+            SELECT MAX(id)
+            FROM reports
+            WHERE hostname IN ({placeholders})
+            GROUP BY hostname
+        )
+        """,
+        tuple(hostnames),
+    ).fetchall()
+
+    usage_by_host: dict[str, dict[str, float]] = {}
+    for row in latest_rows:
+        hostname = str(row[0] or "").strip()
+        if not hostname:
+            continue
+        payload = parse_payload_json(str(row[1] or "{}"))
+        filesystems = payload.get("filesystems", [])
+        if not isinstance(filesystems, list):
+            continue
+        usage_by_mountpoint: dict[str, float] = {}
+        for fs in filesystems:
+            if not isinstance(fs, dict):
+                continue
+            mountpoint = str(fs.get("mountpoint", "") or "").strip()
+            if not mountpoint:
+                continue
+            try:
+                used_percent = float(fs.get("used_percent"))
+            except (TypeError, ValueError):
+                continue
+            usage_by_mountpoint[normalize_mountpoint_key(mountpoint)] = used_percent
+        usage_by_host[hostname] = usage_by_mountpoint
+    return usage_by_host
+
+
 def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | None = None) -> list[dict]:
     rows = conn.execute(
         """
@@ -4080,6 +4124,7 @@ def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | 
     customer_names: dict[str, str] = {}
     country_codes: dict[str, str] = {}
     os_families: dict[str, str] = {}
+    latest_usage_by_host = _collect_latest_report_usage_by_host(conn, hostnames)
     if hostnames:
         placeholders = ",".join("?" for _ in hostnames)
         settings_rows = conn.execute(
@@ -4121,23 +4166,37 @@ def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | 
     else:
         primary_ip_by_hostname = {}
 
-    return [
-        {
-            "id": int(row[0] or 0),
-            "hostname": str(row[1] or ""),
-            "display_name": display_names.get(str(row[1] or ""), str(row[1] or "")),
-            "customer_name": customer_names.get(str(row[1] or ""), ""),
-            "primary_ip": primary_ip_by_hostname.get(str(row[1] or ""), ""),
-            "mountpoint": str(row[2] or ""),
-            "severity": str(row[3] or "warning"),
-            "used_percent": float(row[4] or 0),
-            "created_at_utc": str(row[5] or ""),
-            "last_seen_at_utc": str(row[6] or ""),
-            "country_code": country_codes.get(str(row[1] or ""), ""),
-            "os_family": os_families.get(str(row[1] or ""), "linux"),
-        }
-        for row in rows
-    ]
+    result = []
+    for row in rows:
+        hostname = str(row[1] or "")
+        mountpoint = str(row[2] or "")
+        current_used_percent = None
+        host_usage = latest_usage_by_host.get(hostname, {})
+        if mountpoint:
+            current_used_percent = host_usage.get(normalize_mountpoint_key(mountpoint))
+        delta_used_percent = None
+        if current_used_percent is not None:
+            delta_used_percent = float(current_used_percent) - float(row[4] or 0)
+
+        result.append(
+            {
+                "id": int(row[0] or 0),
+                "hostname": hostname,
+                "display_name": display_names.get(hostname, hostname),
+                "customer_name": customer_names.get(hostname, ""),
+                "primary_ip": primary_ip_by_hostname.get(hostname, ""),
+                "mountpoint": mountpoint,
+                "severity": str(row[3] or "warning"),
+                "used_percent": float(row[4] or 0),
+                "current_used_percent": current_used_percent,
+                "delta_used_percent": delta_used_percent,
+                "created_at_utc": str(row[5] or ""),
+                "last_seen_at_utc": str(row[6] or ""),
+                "country_code": country_codes.get(hostname, ""),
+                "os_family": os_families.get(hostname, "linux"),
+            }
+        )
+    return result
 
 
 def _safe_attachment_token(value: str, fallback: str) -> str:
@@ -5410,19 +5469,31 @@ def export_alerts_rows(conn: sqlite3.Connection, *, status: str | None = None, s
         tuple(params),
     ).fetchall()
     blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
+    hostnames = sorted({str(row[1] or "") for row in rows if str(row[1] or "")})
+    latest_usage_by_host = _collect_latest_report_usage_by_host(conn, hostnames)
 
     result: list[dict] = []
     for row in rows:
+        hostname = str(row[1] or "")
         mountpoint = str(row[2] or "")
         if is_filesystem_blacklisted_by_patterns(mountpoint, blacklist_patterns):
             continue
+        current_used_percent = None
+        host_usage = latest_usage_by_host.get(hostname, {})
+        if mountpoint:
+            current_used_percent = host_usage.get(normalize_mountpoint_key(mountpoint))
+        delta_used_percent = None
+        if current_used_percent is not None:
+            delta_used_percent = abs(float(current_used_percent) - float(row[4] or 0.0))
         result.append(
             {
                 "id": int(row[0] or 0),
-                "hostname": str(row[1] or ""),
+                "hostname": hostname,
                 "mountpoint": mountpoint,
                 "severity": str(row[3] or "warning"),
                 "used_percent": float(row[4] or 0.0),
+                "current_used_percent": current_used_percent,
+                "delta_used_percent": delta_used_percent,
                 "created_at_utc": str(row[5] or ""),
                 "last_seen_at_utc": str(row[6] or ""),
                 "resolved_at_utc": str(row[7] or ""),
@@ -10511,15 +10582,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 rows = export_alerts_rows(conn, status=status, severity=severity)
 
-            header = "id,hostname,mountpoint,severity,used_percent,created_at_utc,last_seen_at_utc,resolved_at_utc\n"
+            header = "id,hostname,mountpoint,severity,used_percent,current_used_percent,delta_used_percent,created_at_utc,last_seen_at_utc,resolved_at_utc\n"
             lines = [header]
             for item in rows:
+                current_used_percent = item.get("current_used_percent")
+                delta_used_percent = item.get("delta_used_percent")
+                current_used_percent_text = "" if current_used_percent is None else format(float(current_used_percent), ".2f")
+                delta_used_percent_text = "" if delta_used_percent is None else format(float(delta_used_percent), ".2f")
                 line = (
                     f"{int(item.get('id', 0))},"
-                    f"\"{str(item.get('hostname', '')).replace('"', '""')}\","
-                    f"\"{str(item.get('mountpoint', '')).replace('"', '""')}\","
+                    f"\"{str(item.get('hostname', '')).replace('"', '""")}\","
+                    f"\"{str(item.get('mountpoint', '')).replace('"', '""")}\","
                     f"{str(item.get('severity', 'warning'))},"
                     f"{float(item.get('used_percent', 0.0)):.2f},"
+                    f"{current_used_percent_text},"
+                    f"{delta_used_percent_text},"
                     f"{str(item.get('created_at_utc', ''))},"
                     f"{str(item.get('last_seen_at_utc', ''))},"
                     f"{str(item.get('resolved_at_utc', ''))}\n"
@@ -10673,6 +10750,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             host_settings = get_host_settings(conn, hostname)
                             customer_names[hostname] = str(host_settings.get("customer_name", "") or "").strip()
 
+                latest_usage_by_host = _collect_latest_report_usage_by_host(conn, hostnames)
+
             alerts = []
             with sqlite3.connect(DB_PATH) as conn_mute:
                 muted_pairs = {
@@ -10682,6 +10761,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             for row in rows:
                 hostname = str(row[1] or "")
                 mountpoint = str(row[2] or "")
+                current_used_percent = None
+                if mountpoint:
+                    current_used_percent = latest_usage_by_host.get(hostname, {}).get(normalize_mountpoint_key(mountpoint))
+                delta_used_percent = None
+                if current_used_percent is not None:
+                    delta_used_percent = abs(float(current_used_percent) - float(row[4] or 0.0))
                 alerts.append(
                     {
                         "id": row[0],
@@ -10691,6 +10776,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "mountpoint": mountpoint,
                         "severity": row[3],
                         "used_percent": row[4],
+                        "current_used_percent": current_used_percent,
+                        "delta_used_percent": delta_used_percent,
                         "status": row[5],
                         "created_at_utc": row[6],
                         "last_seen_at_utc": row[7],
