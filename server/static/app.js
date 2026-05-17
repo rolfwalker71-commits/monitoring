@@ -7123,6 +7123,9 @@ function renderSingleHostCard(host) {
   const statusBarTitle = lastReportInfo.label.startsWith("Report vor")
     ? `Letzter ${lastReportInfo.label} | ${statusBarLogicText}`
     : `${lastReportInfo.title} | ${statusBarLogicText}`;
+  const statusBarHtml = lastReportInfo.statusClass === "host-last-report-dot--ok"
+    ? ""
+    : `<div class="${statusBarClass}" title="${escapeHtml(statusBarTitle)}" aria-hidden="true"></div>`;
   const alertSideBar = hasOpenAlerts
     ? `<div class="host-alert-side-bar" title="${openAlertCount} Alerts | Logik: Balken nur sichtbar bei > 0 Alerts." aria-hidden="true"></div>`
     : "";
@@ -7190,7 +7193,7 @@ function renderSingleHostCard(host) {
 
   return `
     <article class="${selectedClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">
-      <div class="${statusBarClass}" title="${escapeHtml(statusBarTitle)}" aria-hidden="true"></div>
+      ${statusBarHtml}
       ${alertSideBar}
       ${flagIcon}
       ${customerTitleLine}

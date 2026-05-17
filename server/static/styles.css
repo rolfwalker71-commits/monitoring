@@ -3856,24 +3856,16 @@ body[data-theme="dark"] .trend-progress-bar {
   white-space: nowrap;
 }
 
-.host-value-chip--sap {
-  border-color: #bfd2ee;
-  background: #edf4ff;
-  color: #3a557a;
-  font-family: "IBM Plex Mono", monospace;
-}
-
-.host-value-chip--hana {
-  border-color: #bfd2ee;
-  background: #edf4ff;
-  color: #3a557a;
-  font-family: "IBM Plex Mono", monospace;
-}
-
+.host-value-chip--sap,
+.host-value-chip--hana,
 .host-value-chip--sid {
   border-color: #bfd2ee;
   background: #edf4ff;
   color: #3a557a;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.1;
 }
 
 .host-value-chip--env {
