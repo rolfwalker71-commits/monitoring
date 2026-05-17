@@ -4733,9 +4733,11 @@ def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit:
                r.hostname,
                r.payload_json,
                COALESCE(h.display_name_override, ''),
-               COALESCE(h.country_code_override, '')
+               COALESCE(h.country_code_override, ''),
+               COALESCE(cust.name, '')
         FROM reports r
         LEFT JOIN host_settings h ON h.hostname = r.hostname
+        LEFT JOIN customers cust ON cust.id = h.customer_id
         WHERE r.received_at_utc >= ?
         ORDER BY r.hostname COLLATE NOCASE ASC, r.id ASC
         """,
@@ -4781,12 +4783,14 @@ def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit:
 
                 display_override = str(row[4] or "").strip()
                 country_code = normalize_country_code(str(row[5] or ""))
+                customer_name = str(row[6] or "").strip()
                 changes.append(
                     {
                         "id": report_id,
                         "detected_at_utc": detected_at_utc,
                         "hostname": hostname,
                         "display_name": display_override or hostname,
+                        "customer_name": customer_name,
                         "field_key": f"sap_addon::{addon_name}",
                         "field_label": f"{label_source}: {plain_name}",
                         "old_value": old_version,
@@ -4810,18 +4814,20 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
 
     rows = conn.execute(
         """
-        SELECT c.id,
-               c.detected_at_utc,
-               c.hostname,
+        SELECT chg.id,
+               chg.detected_at_utc,
+               chg.hostname,
                COALESCE(h.display_name_override, ''),
-               c.field_key,
-               c.old_value,
-               c.new_value,
-               COALESCE(c.source, 'agent-report'),
-               COALESCE(h.country_code_override, '')
-        FROM host_config_changes c
-        LEFT JOIN host_settings h ON h.hostname = c.hostname
-        WHERE c.detected_at_utc >= ?
+               chg.field_key,
+               chg.old_value,
+               chg.new_value,
+               COALESCE(chg.source, 'agent-report'),
+               COALESCE(h.country_code_override, ''),
+               COALESCE(cust.name, '')
+        FROM host_config_changes chg
+        LEFT JOIN host_settings h ON h.hostname = chg.hostname
+        LEFT JOIN customers cust ON cust.id = h.customer_id
+        WHERE chg.detected_at_utc >= ?
         ORDER BY c.detected_at_utc DESC, c.id DESC
         LIMIT ?
         """,
@@ -4833,12 +4839,14 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
         hostname = str(row[2] or "")
         display_override = str(row[3] or "").strip()
         country_code = normalize_country_code(str(row[8] or ""))
+        customer_name = str(row[9] or "").strip()
         items.append(
             {
                 "id": int(row[0] or 0),
                 "detected_at_utc": str(row[1] or ""),
                 "hostname": hostname,
                 "display_name": display_override or hostname,
+                "customer_name": customer_name,
                 "field_key": str(row[4] or ""),
                 "field_label": HOST_CONFIG_FIELD_LABELS.get(str(row[4] or ""), str(row[4] or "")),
                 "old_value": str(row[5] or "-"),

@@ -10166,12 +10166,14 @@ async function loadHostConfigChanges() {
     // Group by customer -> host.
     const itemsByCustomer = new Map();
     filteredItems.forEach((item) => {
-      const hostname = asText(item.hostname, "-");
-      const customerName = asText(item.display_name || hostname, "-");
-      if (!itemsByCustomer.has(customerName)) {
-        itemsByCustomer.set(customerName, { customerName, items: [] });
+      const hostname = asText(item.hostname, "");
+      const displayName = asText(item.display_name, "") || hostname;
+      const customerName = asText(item.customer_name, "") || displayName;
+      const groupKey = customerName;
+      if (!itemsByCustomer.has(groupKey)) {
+        itemsByCustomer.set(groupKey, { customerName, items: [] });
       }
-      itemsByCustomer.get(customerName).items.push(item);
+      itemsByCustomer.get(groupKey).items.push(item);
     });
 
     const customerGroups = Array.from(itemsByCustomer.values()).sort((a, b) => {
@@ -10185,16 +10187,17 @@ async function loadHostConfigChanges() {
       .map((customerGroup) => {
         const itemsByHost = new Map();
         customerGroup.items.forEach((item) => {
-          const hostname = asText(item.hostname, "-");
+          const hostname = asText(item.hostname, "");
+          const displayName = asText(item.display_name, "") || hostname;
           const countryCode = asText(item.country_code, "");
           if (!itemsByHost.has(hostname)) {
-            itemsByHost.set(hostname, { hostname, items: [], country_code: countryCode });
+            itemsByHost.set(hostname, { hostname, displayName, items: [], country_code: countryCode });
           }
           itemsByHost.get(hostname).items.push(item);
         });
 
         const hostGroups = Array.from(itemsByHost.values()).sort((a, b) => {
-          return String(a.hostname || "").toLowerCase().localeCompare(String(b.hostname || "").toLowerCase(), "de", { sensitivity: "base", numeric: true });
+          return String(a.displayName || "").toLowerCase().localeCompare(String(b.displayName || "").toLowerCase(), "de", { sensitivity: "base", numeric: true });
         });
 
         const hostRowsHtml = hostGroups
@@ -10237,10 +10240,11 @@ async function loadHostConfigChanges() {
               `;
             }).join("");
 
+            const showHostSub = hostGroup.displayName !== hostGroup.hostname;
             return `
               <details class="host-config-change-group" ${autoExpandGroups ? "open" : ""}>
                 <summary class="host-config-change-summary">
-                  <span class="global-host-label">${escapeHtml(hostGroup.hostname)}</span>
+                  <span class="global-host-label">${escapeHtml(hostGroup.displayName)}${showHostSub ? ` <span class="global-hostname-sub">(${escapeHtml(hostGroup.hostname)})</span>` : ""}</span>
                   ${hostGroup.country_code && getCountryFlagIconPath(hostGroup.country_code)
                     ? `<span class="host-config-country-badge" title="Land: ${escapeHtml(hostGroup.country_code)}"><img src="${getCountryFlagIconPath(hostGroup.country_code)}" class="host-config-country-flag" alt="${escapeHtml(hostGroup.country_code)}" /></span>`
                     : ""}

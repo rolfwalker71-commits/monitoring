@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.164 (17. Mai 2026)
+
+- **Changelog Kundengroupierung**: Kunde ist jetzt die oberste Gruppierungsebene; Host-Display-Name (mit Hostname als Untertitel) ist die zweite Ebene. Backend gibt `customer_name` zurueck (via JOIN auf `customers`).
+
 ### v1.6.163 (17. Mai 2026)
 
 - **Critical-Trends Chips**: Fehlenden `.ct-badge`-Selektor ergaenzt – jetzt erscheinen "Kritisch" und "Warnung" beide als einheitliche Chips.
