@@ -110,7 +110,7 @@ const state = {
   criticalTrendsProjectHours: 72,
   criticalTrendsMetrics: ["filesystem"],
   inactiveHostsHours: 1,
-  hostConfigChangesHours: 720,
+  hostConfigChangesHours: 72,
   hostConfigChangesSearchQuery: "",
   hostConfigChangesCountryFilter: "all",
   hostConfigChangesAvailableCountries: [],

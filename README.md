@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.165 (17. Mai 2026)
+
+- **Changelog Filter**: Neuer "3 Tage" Zeitraumfilter hinzugefuegt; ist jetzt auch der Standard beim Seitenaufruf.
+
 ### v1.6.164 (17. Mai 2026)
 
 - **Changelog Kundengroupierung**: Kunde ist jetzt die oberste Gruppierungsebene; Host-Display-Name (mit Hostname als Untertitel) ist die zweite Ebene. Backend gibt `customer_name` zurueck (via JOIN auf `customers`).
