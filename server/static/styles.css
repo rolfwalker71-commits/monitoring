@@ -2529,10 +2529,10 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   word-break: break-all;
 }
 
-#overviewConfigChangelogSection th:nth-child(1) { width: 16%; }
-#overviewConfigChangelogSection th:nth-child(2) { width: 31%; }
-#overviewConfigChangelogSection th:nth-child(3) { width: 31%; }
-#overviewConfigChangelogSection th:nth-child(4) { width: 22%; }
+#overviewConfigChangelogSection th:nth-child(1) { width: 36%; }
+#overviewConfigChangelogSection th:nth-child(2) { width: 24%; }
+#overviewConfigChangelogSection th:nth-child(3) { width: 24%; }
+#overviewConfigChangelogSection th:nth-child(4) { width: 16%; }
 
 .report-subtable {
   table-layout: auto;
@@ -5329,26 +5329,26 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
 
 .host-config-changes-wrap table th:nth-child(1),
 .host-config-changes-wrap table td:nth-child(1) {
-  width: 20%;
-  min-width: 130px;
+  width: 18%;
+  min-width: 120px;
 }
 
 .host-config-changes-wrap table th:nth-child(2),
 .host-config-changes-wrap table td:nth-child(2) {
-  width: 20%;
-  min-width: 150px;
+  width: 38%;
+  min-width: 240px;
 }
 
 .host-config-changes-wrap table th:nth-child(3),
 .host-config-changes-wrap table td:nth-child(3) {
-  width: 30%;
-  min-width: 200px;
+  width: 22%;
+  min-width: 160px;
 }
 
 .host-config-changes-wrap table th:nth-child(4),
 .host-config-changes-wrap table td:nth-child(4) {
-  width: 30%;
-  min-width: 200px;
+  width: 22%;
+  min-width: 160px;
 }
 
 .host-config-changes-wrap table td:nth-child(3),

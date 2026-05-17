@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.170 (17. Mai 2026)
+
+- **Changelog Spaltenbreiten**: Die Feld-Spalte wurde im Host- und Global-Changelog deutlich vergroessert; die Spalten "Alter Wert" und "Neuer Wert" wurden entsprechend verkleinert, damit Feldnamen besser vollstaendig sichtbar sind.
+
 ### v1.6.169 (17. Mai 2026)
 
 - **Hardware-Changelog Symbol**: Hardware-basierte Changelog-Felder zeigen jetzt zusaetzlich das Computersymbol direkt im Feldnamen, z. B. `💻 CPU Cores`, `💻 RAM (GB)`, `💻 Kernel`.
