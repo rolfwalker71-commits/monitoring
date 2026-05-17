@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.103 | 17.05.2026 | Host cards: restore last-report traffic-light dot (green/orange/red) as second meta row, remove paperclip emoji, change customer name chip to light blue (20px), apply subtle radial gradient to cards matching login mask style |
 | 1.6.102 | 17.05.2026 | Further compact host cards: remove the "Report vor" row and hide agent version text, keep only a small status dot in the top meta row, and increase customer name chip typography for better readability |
 | 1.6.101 | 17.05.2026 | Refine host card compact layout: remove bottom host-label row, move agent-version status indicator into the upper meta row, and repurpose the left card stripe to show last-report recency status (green/orange/red/gray) while keeping report-age text in-row |
 | 1.6.100 | 17.05.2026 | Apply the unified Outlook-safe branded mail header to remaining test/info HTML mails as well (Host Alert subscription test, Customer Alert test, OAuth test mail, and Backup test mail), including improved logo-to-title spacing everywhere |
