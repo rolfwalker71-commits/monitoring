@@ -522,6 +522,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+@@### v1.6.134 (17. Mai 2026)
+@@
+@@- **Zweite Zeile neu angeordnet**: Kundenname → Buttons → Meldungs-Info (via CSS order).
+@@- **Verbesserte Lesbarkeit**: Klarere Abfolge der Informationen von links nach rechts.
+@@
 
 ### v1.6.130 (17. Mai 2026)
 
