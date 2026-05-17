@@ -4490,11 +4490,11 @@ HOST_CONFIG_TRACKED_FIELDS = (
 )
 
 HOST_CONFIG_FIELD_LABELS = {
-    "os_release": "OS Release",
-    "kernel_release": "Kernel",
-    "cpu_cores": "CPU Cores",
-    "cpu_model_name": "CPU Modell",
-    "ram_gb": "RAM (GB)",
+    "os_release": "💻 OS Release",
+    "kernel_release": "💻 Kernel",
+    "cpu_cores": "💻 CPU Cores",
+    "cpu_model_name": "💻 CPU Modell",
+    "ram_gb": "💻 RAM (GB)",
     "sap_release": "SAP Release",
     "hana_release": "HANA Release",
     "hana_sid": "HANA SID",

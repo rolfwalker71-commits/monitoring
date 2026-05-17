@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.169 (17. Mai 2026)
+
+- **Hardware-Changelog Symbol**: Hardware-basierte Changelog-Felder zeigen jetzt zusaetzlich das Computersymbol direkt im Feldnamen, z. B. `💻 CPU Cores`, `💻 RAM (GB)`, `💻 Kernel`.
+
 ### v1.6.168 (17. Mai 2026)
 
 - **DB-Changelog Symbole**: Im globalen und im hostbasierten Changelog zeigen DB-Lifecycle-Eintraege wieder die bekannten Icons direkt im Text: `✨ DB erstellt` und `🗑️ DB geloescht`.
