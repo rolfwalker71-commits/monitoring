@@ -18,6 +18,8 @@ $ErrorActionPreference = 'Stop'
 $ConfigFile = if ($env:CONFIG_FILE) { $env:CONFIG_FILE } else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $HarvestUser = 'harvest'
 $HarvestPassword = '0djKUt&xbLK0AYr'
+$SetupAdminUser = ''
+$SetupAdminPassword = ''
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -32,6 +34,13 @@ foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
     } elseif ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(\S+)\s*$') {
         $cfg[$Matches[1]] = $Matches[2]
     }
+}
+
+if ($cfg.ContainsKey('HARVEST_SETUP_SQL_ADMIN_USER') -and $cfg['HARVEST_SETUP_SQL_ADMIN_USER']) {
+    $SetupAdminUser = [string]$cfg['HARVEST_SETUP_SQL_ADMIN_USER']
+}
+if ($cfg.ContainsKey('HARVEST_SETUP_SQL_ADMIN_PASSWORD') -and $cfg['HARVEST_SETUP_SQL_ADMIN_PASSWORD']) {
+    $SetupAdminPassword = [string]$cfg['HARVEST_SETUP_SQL_ADMIN_PASSWORD']
 }
 
 function Get-SqlConnection {
@@ -188,39 +197,88 @@ function Setup-HarvestUser {
         user_exists = $false
         permissions_granted = $false
         accessible_databases = @()
+        warnings = @()
+        admin_connection = ''
         error = ''
     }
 
     $conn = $null
     try {
-        # Connect as admin (integrated auth)
-        $conn = Get-SqlConnection -Server $SqlServer -Database 'master'
-        $conn.Open()
+        # Connect as admin (integrated auth first, optional SQL admin fallback)
+        $adminAttempts = @(@{ Label = 'Integrated Security'; User = ''; Password = '' })
+        if ($SetupAdminUser -and $SetupAdminPassword) {
+            $adminAttempts += @{ Label = "SQL Login ($SetupAdminUser)"; User = $SetupAdminUser; Password = $SetupAdminPassword }
+        }
+
+        $adminConnectErrors = New-Object System.Collections.Generic.List[string]
+        foreach ($attempt in $adminAttempts) {
+            try {
+                if ($conn) { $conn.Dispose(); $conn = $null }
+                $conn = Get-SqlConnection -Server $SqlServer -Database 'master' -User ([string]$attempt.User) -Password ([string]$attempt.Password)
+                $conn.Open()
+                $result.admin_connection = [string]$attempt.Label
+                break
+            } catch {
+                $adminConnectErrors.Add("$($attempt.Label): $($_.Exception.Message)")
+            }
+        }
+
+        if (-not $conn -or $conn.State -ne [System.Data.ConnectionState]::Open) {
+            $hint = ""
+            if (-not ($SetupAdminUser -and $SetupAdminPassword)) {
+                $hint = " Hint: Configure HARVEST_SETUP_SQL_ADMIN_USER/HARVEST_SETUP_SQL_ADMIN_PASSWORD in agent.conf for SQL-auth setup fallback."
+            }
+            $result.error = "No admin connection possible. $($adminConnectErrors -join ' | ')$hint"
+            return $result
+        }
 
         # Check if login exists
-        $loginExists = Invoke-SqlScalar -Connection $conn -Query "SELECT COUNT(*) FROM sys.syslogins WHERE name = '$HarvestUser'"
+        $loginExists = Invoke-SqlScalar -Connection $conn -Query "SELECT COUNT(*) FROM sys.server_principals WHERE name = '$HarvestUser'"
         $result.user_exists = [int]$loginExists -gt 0
 
         if (-not $result.user_exists) {
             # Create login with SQL auth
             $escapedPwd = $HarvestPassword.Replace("'", "''")
-            [void](Invoke-SqlNonQuery -Connection $conn -Query "CREATE LOGIN [$HarvestUser] WITH PASSWORD = N'$escapedPwd'")
-            $result.user_created = $true
+            try {
+                [void](Invoke-SqlNonQuery -Connection $conn -Query "CREATE LOGIN [$HarvestUser] WITH PASSWORD = N'$escapedPwd'")
+                $result.user_created = $true
+                $result.user_exists = $true
+            } catch {
+                $result.error = "Failed to create login [$HarvestUser] on $SqlServer using $($result.admin_connection): $($_.Exception.Message)"
+                return $result
+            }
         }
 
-        # Grant server-level permissions
-        [void](Invoke-SqlNonQuery -Connection $conn -Query "GRANT VIEW SERVER STATE TO [$HarvestUser]")
-        [void](Invoke-SqlNonQuery -Connection $conn -Query "GRANT VIEW ANY DEFINITION TO [$HarvestUser]")
-        $result.permissions_granted = $true
+        # Grant server-level permissions (best effort; continue if grantor lacks rights)
+        $serverGrantOk = $true
+        foreach ($grantQuery in @(
+            "GRANT VIEW SERVER STATE TO [$HarvestUser]",
+            "GRANT VIEW ANY DEFINITION TO [$HarvestUser]"
+        )) {
+            try {
+                [void](Invoke-SqlNonQuery -Connection $conn -Query $grantQuery)
+            } catch {
+                $serverGrantOk = $false
+                $result.warnings += "Server grant skipped: $($_.Exception.Message)"
+            }
+        }
 
-        # Grant database-level read rights for all online non-system databases.
+        # Grant database-level read rights for all online non-system databases (best effort).
+        $dbGrantFailures = 0
         $targetDbs = Invoke-SqlQuery -Connection $conn -Query "SELECT name FROM sys.databases WHERE state_desc = 'ONLINE' AND database_id > 4 ORDER BY name"
         foreach ($dbRow in @($targetDbs.Rows)) {
             $dbName = [string]$dbRow['name']
             if (-not $dbName) { continue }
             $safeDbName = $dbName.Replace(']', ']]')
-            [void](Invoke-SqlNonQuery -Connection $conn -Query "USE [$safeDbName]; IF USER_ID(N'$HarvestUser') IS NULL CREATE USER [$HarvestUser] FOR LOGIN [$HarvestUser]; ALTER ROLE [db_datareader] ADD MEMBER [$HarvestUser];")
+            try {
+                [void](Invoke-SqlNonQuery -Connection $conn -Query "USE [$safeDbName]; IF USER_ID(N'$HarvestUser') IS NULL CREATE USER [$HarvestUser] FOR LOGIN [$HarvestUser]; ALTER ROLE [db_datareader] ADD MEMBER [$HarvestUser];")
+            } catch {
+                $dbGrantFailures += 1
+                $result.warnings += "Database grant skipped for [$dbName]: $($_.Exception.Message)"
+            }
         }
+
+        $result.permissions_granted = $serverGrantOk -and ($dbGrantFailures -eq 0)
 
         # Find accessible databases
         $conn.Close()
@@ -330,10 +388,21 @@ foreach ($server in $serverCandidates) {
         }
         if ($result.permissions_granted) {
             Write-Host "   - Permissions granted"
+        } else {
+            Write-Host "   - Permissions partially granted (best effort)"
+        }
+        if ($result.admin_connection) {
+            Write-Host "   - Admin connection: $($result.admin_connection)"
+        }
+        foreach ($w in @($result.warnings)) {
+            Write-Host "   - Warning: $w"
         }
         Write-Host "   - Accessible databases: $($result.accessible_databases -join ', ')"
         break
     } else {
+        foreach ($w in @($result.warnings)) {
+            Write-Host "   - Warning: $w"
+        }
         Write-Host "[ERROR] Setup failed on $server (${attemptSeconds}s): $($result.error)"
     }
 }

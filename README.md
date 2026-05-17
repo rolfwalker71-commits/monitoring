@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.171 (17. Mai 2026)
+
+- **Harvest SQL Setup robuster**: `setup_harvest_sql_user.ps1` behandelt Auth-/Rechteprobleme jetzt besser (GRANT als Best-Effort mit Warnungen statt hartem Abbruch) und unterstuetzt optionalen SQL-Admin-Fallback via `HARVEST_SETUP_SQL_ADMIN_USER` + `HARVEST_SETUP_SQL_ADMIN_PASSWORD` in `agent.conf`.
+
 ### v1.6.170 (17. Mai 2026)
 
 - **Changelog Spaltenbreiten**: Die Feld-Spalte wurde im Host- und Global-Changelog deutlich vergroessert; die Spalten "Alter Wert" und "Neuer Wert" wurden entsprechend verkleinert, damit Feldnamen besser vollstaendig sichtbar sind.
