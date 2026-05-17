@@ -76,6 +76,12 @@ DB_MAINTENANCE_INTERVAL_HOURS = max(1, min(24, int(os.getenv("MONITORING_DB_MAIN
 AUTO_BACKUP_DEFAULT_ENABLED = os.getenv("MONITORING_AUTO_BACKUP_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
 AUTO_BACKUP_DEFAULT_INTERVAL_HOURS = max(1, min(168, int(os.getenv("MONITORING_AUTO_BACKUP_INTERVAL_HOURS", "12") or "12")))
 AUTO_BACKUP_DEFAULT_RETENTION_DAYS = max(1, min(365, int(os.getenv("MONITORING_AUTO_BACKUP_RETENTION_DAYS", "7") or "7")))
+TELEGRAM_ACTION_BASE_URL = os.getenv(
+    "MONITORING_TELEGRAM_ACTION_BASE_URL",
+    os.getenv("MONITORING_PUBLIC_BASE_URL", ""),
+).strip().rstrip("/")
+TELEGRAM_ACTION_SIGNING_SECRET = os.getenv("MONITORING_TELEGRAM_ACTION_SIGNING_SECRET", "").strip()
+TELEGRAM_ACTION_TTL_MINUTES = max(10, min(10080, int(os.getenv("MONITORING_TELEGRAM_ACTION_TTL_MINUTES", "1440") or "1440")))
 try:
     SCHEDULE_TIMEZONE = ZoneInfo(SCHEDULE_TIMEZONE_NAME)
 except ZoneInfoNotFoundError:
@@ -6178,7 +6184,8 @@ def send_instant_alert_telegram_to_users(
             f"📊 {used_percent:.1f}%\n"
             f"🕐 {now_local}"
         )
-        telegram_send_to_chat(bot_token, chat_id, text)
+        reply_markup = build_telegram_alert_reply_markup(bot_token, hostname, mountpoint, event_type)
+        telegram_send_to_chat(bot_token, chat_id, text, reply_markup=reply_markup)
 
 
 def get_oauth_settings(conn: sqlite3.Connection) -> dict:
@@ -6946,7 +6953,13 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                 )
 
                 try:
-                    telegram_ok, _telegram_details = telegram_send_to_chat(telegram_bot_token, chat_id, text)
+                    reply_markup = build_telegram_alert_reply_markup(telegram_bot_token, hostname, mountpoint, "reminder")
+                    telegram_ok, _telegram_details = telegram_send_to_chat(
+                        telegram_bot_token,
+                        chat_id,
+                        text,
+                        reply_markup=reply_markup,
+                    )
                     if telegram_ok:
                         sent_telegram_to_anyone = True
                 except Exception:
@@ -7471,12 +7484,97 @@ def _build_multipart(fields: dict, files: dict) -> tuple[bytes, str]:
     return body, f"multipart/form-data; boundary={boundary.decode()}"
 
 
-def telegram_send_to_chat(bot_token: str, chat_id: str, text: str) -> tuple[bool, str]:
+def _telegram_action_secret(bot_token: str) -> str:
+    seed = TELEGRAM_ACTION_SIGNING_SECRET.strip() or str(bot_token or "").strip() or WEB_DEFAULT_PASSWORD
+    return seed
+
+
+def _sign_telegram_alert_action(action: str, hostname: str, mountpoint: str, expires_ts: int, bot_token: str) -> str:
+    message = f"{action}\n{hostname}\n{mountpoint}\n{expires_ts}".encode("utf-8")
+    secret = _telegram_action_secret(bot_token).encode("utf-8")
+    return hmac.new(secret, message, hashlib.sha256).hexdigest()
+
+
+def build_telegram_alert_action_url(action: str, hostname: str, mountpoint: str, bot_token: str) -> str:
+    action_name = str(action or "").strip().lower()
+    if action_name not in {"ack", "close"}:
+        return ""
+    base_url = TELEGRAM_ACTION_BASE_URL
+    if not base_url:
+        return ""
+    safe_hostname = str(hostname or "").strip()
+    safe_mountpoint = str(mountpoint or "").strip()
+    if not safe_hostname or not safe_mountpoint:
+        return ""
+    expires_ts = int(datetime.now(timezone.utc).timestamp()) + (TELEGRAM_ACTION_TTL_MINUTES * 60)
+    signature = _sign_telegram_alert_action(action_name, safe_hostname, safe_mountpoint, expires_ts, bot_token)
+    query = parse.urlencode(
+        {
+            "a": action_name,
+            "h": safe_hostname,
+            "m": safe_mountpoint,
+            "e": str(expires_ts),
+            "s": signature,
+        }
+    )
+    return f"{base_url}/api/v1/telegram/alert-action?{query}"
+
+
+def build_telegram_alert_reply_markup(bot_token: str, hostname: str, mountpoint: str, event_type: str) -> dict | None:
+    if event_type == "resolved":
+        return None
+    ack_url = build_telegram_alert_action_url("ack", hostname, mountpoint, bot_token)
+    close_url = build_telegram_alert_action_url("close", hostname, mountpoint, bot_token)
+    if not ack_url and not close_url:
+        return None
+    buttons = []
+    if ack_url:
+        buttons.append({"text": "Quittieren", "url": ack_url})
+    if close_url:
+        buttons.append({"text": "Schliessen", "url": close_url})
+    if not buttons:
+        return None
+    return {"inline_keyboard": [buttons]}
+
+
+def verify_telegram_alert_action_query(query: dict, bot_token: str) -> tuple[bool, str, str, str, str]:
+    action = str(query.get("a", [""])[0] or "").strip().lower()
+    hostname = str(query.get("h", [""])[0] or "").strip()
+    mountpoint = str(query.get("m", [""])[0] or "").strip()
+    signature = str(query.get("s", [""])[0] or "").strip().lower()
+    expires_raw = str(query.get("e", [""])[0] or "").strip()
+
+    if action not in {"ack", "close"}:
+        return False, "", "", "", "Ungültige Aktion"
+    if not hostname or not mountpoint:
+        return False, "", "", "", "Hostname oder Mountpoint fehlt"
+    if not signature or not expires_raw:
+        return False, "", "", "", "Signatur fehlt"
+
+    try:
+        expires_ts = int(expires_raw)
+    except ValueError:
+        return False, "", "", "", "Ablaufzeit ungültig"
+
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    if expires_ts < now_ts:
+        return False, "", "", "", "Aktion ist abgelaufen"
+
+    expected = _sign_telegram_alert_action(action, hostname, mountpoint, expires_ts, bot_token)
+    if not hmac.compare_digest(signature, expected):
+        return False, "", "", "", "Signatur ungültig"
+
+    return True, action, hostname, mountpoint, ""
+
+
+def telegram_send_to_chat(bot_token: str, chat_id: str, text: str, reply_markup: dict | None = None) -> tuple[bool, str]:
     # Try sendPhoto with logo as thumbnail; fall back to sendMessage on any error
     if _LOGO_PATH.is_file():
         try:
             photo_data = _LOGO_PATH.read_bytes()
             fields = {"chat_id": chat_id, "caption": text[:1024]}
+            if reply_markup:
+                fields["reply_markup"] = json.dumps(reply_markup, separators=(",", ":"))
             files = {"photo": (_LOGO_PATH.name, photo_data, "image/png")}
             body, content_type = _build_multipart(fields, files)
             endpoint = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
@@ -7495,6 +7593,7 @@ def telegram_send_to_chat(bot_token: str, chat_id: str, text: str) -> tuple[bool
             "chat_id": chat_id,
             "text": text,
             "disable_web_page_preview": "true",
+            **({"reply_markup": json.dumps(reply_markup, separators=(",", ":"))} if reply_markup else {}),
         }
     ).encode("utf-8")
 
@@ -7550,7 +7649,10 @@ def maybe_send_alert_message(
             f"📊 {used_percent:.1f}%\n"
             f"🕐 {now_local}"
         )
-        telegram_send(settings, text)
+        bot_token = str(settings.get("telegram_bot_token", "") or "").strip()
+        chat_id = str(settings.get("telegram_chat_id", "") or "").strip()
+        reply_markup = build_telegram_alert_reply_markup(bot_token, hostname, mountpoint, event_type)
+        telegram_send_to_chat(bot_token, chat_id, text, reply_markup=reply_markup)
     if conn is not None:
         send_instant_alert_telegram_to_users(
             conn,
@@ -9008,6 +9110,91 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "Content-Disposition": f'attachment; filename="{file_path.name}"',
                     "Cache-Control": "no-store",
                 },
+            )
+            return
+
+        if parsed.path == "/api/v1/telegram/alert-action":
+            query = parse_qs(parsed.query)
+            with sqlite3.connect(DB_PATH) as conn:
+                alarm_settings = get_alarm_settings(conn)
+                bot_token = str(alarm_settings.get("telegram_bot_token", "") or "").strip()
+                valid, action, hostname, mountpoint, error_message = verify_telegram_alert_action_query(query, bot_token)
+                if not valid:
+                    self._send_html(
+                        HTTPStatus.BAD_REQUEST,
+                        (
+                            "<!doctype html><html lang=\"de\"><head><meta charset=\"utf-8\">"
+                            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+                            "<title>Telegram Aktion</title></head><body>"
+                            f"<h3>Aktion nicht möglich</h3><p>{html.escape(error_message or 'Ungültiger Link')}</p>"
+                            "</body></html>"
+                        ),
+                    )
+                    return
+
+                target = conn.execute(
+                    """
+                    SELECT id
+                    FROM alerts
+                    WHERE hostname = ? AND mountpoint = ? AND status = 'open'
+                    ORDER BY id DESC
+                    LIMIT 1
+                    """,
+                    (hostname, mountpoint),
+                ).fetchone()
+
+                if not target:
+                    self._send_html(
+                        HTTPStatus.OK,
+                        (
+                            "<!doctype html><html lang=\"de\"><head><meta charset=\"utf-8\">"
+                            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+                            "<title>Telegram Aktion</title></head><body>"
+                            "<h3>Hinweis</h3><p>Alert ist bereits erledigt oder nicht mehr offen.</p>"
+                            "</body></html>"
+                        ),
+                    )
+                    return
+
+                alert_id = int(target[0])
+                now_utc = utc_now_iso()
+                if action == "ack":
+                    conn.execute(
+                        """
+                        UPDATE alerts
+                        SET ack_note = COALESCE(NULLIF(ack_note, ''), 'Telegram Quick Action'),
+                            ack_by = 'telegram',
+                            ack_at_utc = ?
+                        WHERE id = ?
+                        """,
+                        (now_utc, alert_id),
+                    )
+                    action_label = "quittiert"
+                else:
+                    conn.execute(
+                        """
+                        UPDATE alerts
+                        SET status = 'resolved',
+                            closed_at_utc = ?,
+                            closed_by = 'telegram'
+                        WHERE id = ?
+                        """,
+                        (now_utc, alert_id),
+                    )
+                    action_label = "geschlossen"
+
+                conn.commit()
+
+            self._send_html(
+                HTTPStatus.OK,
+                (
+                    "<!doctype html><html lang=\"de\"><head><meta charset=\"utf-8\">"
+                    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+                    "<title>Telegram Aktion</title></head><body>"
+                    f"<h3>Erfolg</h3><p>Alert wurde {html.escape(action_label)}.</p>"
+                    f"<p><strong>Host:</strong> {html.escape(hostname)}<br><strong>Mountpoint:</strong> {html.escape(mountpoint)}</p>"
+                    "</body></html>"
+                ),
             )
             return
 

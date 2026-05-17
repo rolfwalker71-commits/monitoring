@@ -493,6 +493,13 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.84 (17. Mai 2026)
+
+- **Telegram Quick Actions zurück**: Alert-Nachrichten enthalten wieder einen direkten Button zum Quittieren.
+- **Neu: Schliessen aus Telegram**: Zusätzlich gibt es nun einen zweiten Button zum direkten Schliessen des Alerts.
+- **Signierter Action-Link**: Neue verifizierte Endpoint-Verarbeitung über `GET /api/v1/telegram/alert-action` mit Ablaufzeit und HMAC-Signatur.
+- **Gilt für Instant + Reminder**: Buttons werden bei offenen/escalated Alerts und Heads-Up-Reminder-Nachrichten angehängt.
+
 ### v1.6.83 (17. Mai 2026)
 
 - **Host-Suche erweitert**: Die bestehende Suche im Hosts-Bereich durchsucht jetzt zusätzlich Kundendaten.
