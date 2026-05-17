@@ -493,6 +493,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.97 (17. Mai 2026)
+
+- **Kundenname-Chip größer**: Schrift jetzt 16px (vorher 14px) für mehr Prominenz.
+- **Hostbezeichnung kleiner**: Von 10px auf 9px für bessere Gewichtung der Hierarchie.
+- **Verbesserte visuelle Balance**: Kundenname dominiert noch stärker, Details sind untergeordnet.
+
 ### v1.6.96 (17. Mai 2026)
 
 - **Host-Karte umstrukturiert**: Kundenname-Chip rückt nach oben (größere, intensivere Schrift), Hostbezeichnung nach unten (klein).

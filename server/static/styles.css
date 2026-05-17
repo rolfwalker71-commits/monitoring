@@ -3884,7 +3884,7 @@ body[data-theme="dark"] .trend-progress-bar {
   border-color: #fcd34d;
   background: #fffbeb;
   color: #92400e;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 900;
 }
 
@@ -3899,7 +3899,7 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-detail-line {
   display: block;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   color: #64748b;
   word-break: break-word;
