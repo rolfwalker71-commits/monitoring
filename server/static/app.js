@@ -120,7 +120,7 @@ const state = {
   globalAlertsOffset: 0,
   globalAlertsTotal: 0,
   globalAlertsPageSize: 100,
-  globalShowAcknowledged: false,
+  globalShowAcknowledged: true,
   globalShowClosed: false,
   hostAlertsCollapsed: false,
   globalSeverityFilter: "all",

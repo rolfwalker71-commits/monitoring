@@ -522,6 +522,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.153 (17. Mai 2026)
+
+- **Alerts-Ansicht startet mit quittierten Alerts**: Das Häkchen `Quittierte anzeigen` ist nun standardmaessig aktiv und die Tabelle zeigt beim Start auch quittierte Eintraege.
+
 ### v1.6.152 (17. Mai 2026)
 
 - **Kundenname in Global-Alerts korrigiert**: Die Alerts-Ansicht bezieht den Kunden jetzt aus dem gleichen Host-Settings/Customer-Join wie die anderen Übersichten, damit dort nicht nur ein Platzhalter angezeigt wird.
