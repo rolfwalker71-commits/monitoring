@@ -6880,10 +6880,15 @@ function filterAndSortHosts(hosts) {
       }
     }
 
-    const favoriteA = Boolean(a.is_favorite) ? 1 : 0;
-    const favoriteB = Boolean(b.is_favorite) ? 1 : 0;
-    if (favoriteA !== favoriteB) {
-      return favoriteB - favoriteA;
+    const customerA = String(a.customer_name || "").trim();
+    const customerB = String(b.customer_name || "").trim();
+    const hasCustomerA = customerA.length > 0;
+    const hasCustomerB = customerB.length > 0;
+    if (hasCustomerA !== hasCustomerB) {
+      return hasCustomerA ? -1 : 1;
+    }
+    if (customerA !== customerB) {
+      return customerA.localeCompare(customerB, "de", { sensitivity: "base" });
     }
 
     const nameA = (a.display_name || a.hostname || "").toLowerCase();

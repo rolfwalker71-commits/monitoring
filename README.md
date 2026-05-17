@@ -337,6 +337,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.119 | 17.05.2026 | Host card ordering: sort primarily alphabetically by customer_name (empty customer names last), then by host display/hostname |
 | 1.6.118 | 17.05.2026 | Report header layout: move selected-host control chips (API, report count, visibility, favorite) from top title row to second meta row for cleaner spacing |
 | 1.6.117 | 17.05.2026 | Host cards: align top-right OS icon and bottom-right country flag vertically with their corresponding content rows for a cleaner visual balance |
 | 1.6.116 | 17.05.2026 | Host metadata: add host-level Umgebung dropdown (Prod./Test) and render environment chip below SAP/HANA/SID chips (Prod.=greenish, Test=yellowish) |
