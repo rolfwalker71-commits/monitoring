@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
  
+### v1.6.157 (17. Mai 2026)
+
+- **Hotfix Receiver-Start**: Syntaxfehler in der CSV-Export-Quoting-Zeile behoben (`receiver.py`), der zu `status=1/FAILURE` beim Service-Start fuehren konnte.
+
 ### v1.6.156
 - Alerts table now includes current value and absolute delta columns; alerts API and CSV export include current_used_percent and delta_used_percent.
 ### v1.6.155 (17. Mai 2026)

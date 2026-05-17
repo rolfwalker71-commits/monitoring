@@ -10591,8 +10591,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 delta_used_percent_text = "" if delta_used_percent is None else format(float(delta_used_percent), ".2f")
                 line = (
                     f"{int(item.get('id', 0))},"
-                    f"\"{str(item.get('hostname', '')).replace('"', '""")}\","
-                    f"\"{str(item.get('mountpoint', '')).replace('"', '""")}\","
+                    f"\"{str(item.get('hostname', '')).replace('"', '""')}\","
+                    f"\"{str(item.get('mountpoint', '')).replace('"', '""')}\","
                     f"{str(item.get('severity', 'warning'))},"
                     f"{float(item.get('used_percent', 0.0)):.2f},"
                     f"{current_used_percent_text},"
