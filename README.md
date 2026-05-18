@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.185 (18. Mai 2026)
+
+- **Pull Scripts**: pull-server.sh und pull-server-only.sh liefern jetzt auch ui-next.html, ui-next.css und ui-next.js aus, damit /ui-next nach einem Server-Update funktioniert.
 
 ### v1.6.184
 
