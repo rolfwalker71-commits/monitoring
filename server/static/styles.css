@@ -3962,6 +3962,13 @@ body[data-theme="dark"] .trend-progress-bar {
   cursor: pointer;
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
+.host-item.host-item--env-prod {
+  border-color: #8fb0d4;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(30, 64, 175, 0.14) 0%, transparent 50%),
+    radial-gradient(circle at 0% 100%, rgba(15, 23, 42, 0.14) 0%, transparent 52%),
+    linear-gradient(180deg, #d6e7f7 0%, #bfd6ed 100%);
+}
 
 /* SAP/HANA chips in the bottom actions row: inline flow */
 .host-card-actions .host-value-chip {
@@ -4685,6 +4692,14 @@ body[data-theme="dark"] .trend-progress-bar {
   border-color: #7fa4cf;
   background: linear-gradient(180deg, #f0f6ff 0%, #e7f0fc 100%);
   box-shadow: inset 0 0 0 1px #8ab0db, 0 10px 24px rgba(30, 58, 95, 0.16);
+}
+.host-item.host-item--env-prod.selected {
+  border-color: #6f96c4;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(30, 64, 175, 0.2) 0%, transparent 52%),
+    radial-gradient(circle at 0% 100%, rgba(15, 23, 42, 0.18) 0%, transparent 55%),
+    linear-gradient(180deg, #cfe1f4 0%, #b4cee8 100%);
+  box-shadow: inset 0 0 0 1px #7fa7d3, 0 10px 24px rgba(30, 58, 95, 0.16);
 }
 
 .host-status-bar {
@@ -7724,6 +7739,13 @@ body[data-theme="dark"] .host-item {
   border-color: #334d6e;
   background: linear-gradient(180deg, #1e3050 0%, #172543 100%);
 }
+body[data-theme="dark"] .host-item.host-item--env-prod {
+  border-color: #4d6f97;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(96, 165, 250, 0.18) 0%, transparent 50%),
+    radial-gradient(circle at 0% 100%, rgba(15, 23, 42, 0.35) 0%, transparent 55%),
+    linear-gradient(180deg, #223a5d 0%, #1a2d4a 100%);
+}
 
 body[data-theme="dark"] .host-item-hidden {
   background: linear-gradient(180deg, #141e2f 0%, #111828 100%);
@@ -7742,9 +7764,30 @@ body[data-theme="dark"] .host-item.selected {
   background: linear-gradient(180deg, #1a2f4a 0%, #162641 100%);
   box-shadow: inset 0 0 0 1px #3b82f6;
 }
+body[data-theme="dark"] .host-item.host-item--env-prod.selected {
+  border-color: #4f91f8;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(96, 165, 250, 0.24) 0%, transparent 50%),
+    radial-gradient(circle at 0% 100%, rgba(15, 23, 42, 0.4) 0%, transparent 58%),
+    linear-gradient(180deg, #26436a 0%, #1f3353 100%);
+  box-shadow: inset 0 0 0 1px #4f91f8;
+}
 
 body[data-theme="dark"] .host-group-title {
   color: #7a9bbf;
+}
+.selected-host-meta-chip--env {
+  font-weight: 900;
+}
+.selected-host-meta-chip--env-prod {
+  border-color: #9fd7b8;
+  background: #e9f8ef;
+  color: #1d6a46;
+}
+.selected-host-meta-chip--env-test {
+  border-color: #f1c28a;
+  background: #fff2e2;
+  color: #8a4c14;
 }
 
 body[data-theme="dark"] .host-group-toggle {
@@ -10236,6 +10279,16 @@ body[data-theme="dark"] .so-card-alert-badge {
   border-color: #355072;
   background: #1a2e49;
   color: #d4e6fb;
+}
+body[data-theme="dark"] .selected-host-meta-chip--env-prod {
+  border-color: #3ea26f;
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
+}
+body[data-theme="dark"] .selected-host-meta-chip--env-test {
+  border-color: #d97706;
+  background: rgba(217, 119, 6, 0.2);
+  color: #fdba74;
 }
 
 body[data-theme="dark"] .host-alert-chip {

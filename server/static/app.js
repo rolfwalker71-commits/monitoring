@@ -7156,6 +7156,8 @@ function renderSingleHostCard(host) {
   const hasOpenAlerts = openAlertCount > 0;
   const isFavorite = Boolean(host.is_favorite);
   const isHidden = Boolean(host.is_hidden);
+  const environmentType = asText(host.environment_type, "").trim().toLowerCase();
+  const envCardClass = environmentType === "prod" ? " host-item--env-prod" : "";
   const hiddenClass = isHidden ? " host-item-hidden" : "";
   const favoriteClass = isFavorite ? " host-item-favorite" : "";
 
@@ -7206,12 +7208,6 @@ function renderSingleHostCard(host) {
       ? `<span class="host-value-chip host-value-chip--sid" title="HANA SID">${escapeHtml(hanaSidValue)}</span>`
       : "",
   ].filter(Boolean).join("");
-  const environmentType = asText(host.environment_type, "").trim().toLowerCase();
-  const environmentChip = environmentType === "prod"
-    ? '<span class="host-value-chip host-value-chip--env host-value-chip--env-prod" title="Host-Umgebung">Prod.</span>'
-    : environmentType === "test"
-      ? '<span class="host-value-chip host-value-chip--env host-value-chip--env-test" title="Host-Umgebung">Test</span>'
-      : "";
   const lastReportInfo = formatHostLastReportAge(host.last_report_utc || host.last_seen_utc);
   const agentVersionVisual = getHostAgentVersionVisual(host.agent_version, state.latestAgentRelease);
   const statusBarClass = lastReportInfo.statusClass === "host-last-report-dot--critical"
@@ -7258,8 +7254,8 @@ function renderSingleHostCard(host) {
     }
   }
 
-  const footerContent = (valueChipStack || environmentChip)
-    ? `<div class="host-card-footer-wrap">${valueChipStack ? `<div class="host-card-footer"><span class="host-card-actions">${valueChipStack}</span></div>` : ""}${environmentChip ? `<div class="host-card-env-row">${environmentChip}</div>` : ""}</div>`
+  const footerContent = valueChipStack
+    ? `<div class="host-card-footer-wrap"><div class="host-card-footer"><span class="host-card-actions">${valueChipStack}</span></div></div>`
     : "";
 
   let mutedAlertsSection = "";
@@ -7292,7 +7288,7 @@ function renderSingleHostCard(host) {
   }
 
   return `
-    <article class="${selectedClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">
+    <article class="${selectedClass}${envCardClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">
       ${statusBarHtml}
       ${alertSideBar}
       ${flagIcon}
@@ -7326,9 +7322,19 @@ function renderHeaderFirstRowControls(host) {
   }
 
   const reportCount = Number(host.report_count || 0).toLocaleString("de-DE");
+  const environmentType = asText(host.environment_type, "").trim().toLowerCase();
+  const envLabel = environmentType === "prod"
+    ? "Prod."
+    : environmentType === "test"
+      ? "Test"
+      : "";
+  const envChip = envLabel
+    ? `<span class="selected-host-meta-chip selected-host-meta-chip--env selected-host-meta-chip--env-${escapeHtml(environmentType)}" title="Host-Umgebung">${escapeHtml(envLabel)}</span>`
+    : "";
 
   return `
     ${renderApiKeyChip(host)}
+    ${envChip}
     <span class="selected-host-meta-chip" title="Gesendete Meldungen">📦 ${reportCount}</span>
   `;
 }

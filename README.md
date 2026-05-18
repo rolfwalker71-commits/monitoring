@@ -522,6 +522,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+
+### v1.6.153 (18. Mai 2026)
+
+- **Hostkarte Umgebung**: `Prod/Test` wird nicht mehr als Chip in der Hostkarte gezeigt; `Prod/Test` erscheint im Detail-Header. Prod-Hosts erhalten stattdessen einen navy-bläulichen Kartenhintergrund, Test bleibt beim bisherigen Hintergrund.
 n### v1.6.152 (18. Mai 2026)
 
 - **Hostkarte Layout**: Kundenname wird als normale Info (mit Emoji) dargestellt; darunter wird die Hostbezeichnung als zusätzliche Zeile angezeigt.
