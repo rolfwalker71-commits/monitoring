@@ -93,6 +93,29 @@ function wireTopButtons() {
   });
 }
 
+function openLegacyStart(route) {
+  const target = `/?start=${encodeURIComponent(route)}`;
+  window.location.assign(target);
+}
+
+function wireLegacyShortcuts() {
+  const byId = {
+    nextOpenUserSettings: "settings-password",
+    nextOpenGlobalView: "global-alerts",
+    nextOpenGlobalAlerts: "global-alerts",
+    nextOpenCriticalTrends: "global-critical-trends",
+    nextOpenInactiveHosts: "global-inactive-hosts",
+    nextOpenAlarmSettings: "alarm-settings",
+    nextOpenAdminSettings: "global-admin-settings",
+  };
+
+  for (const [id, route] of Object.entries(byId)) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.addEventListener("click", () => openLegacyStart(route));
+  }
+}
+
 function wireFilters() {
   const search = document.getElementById("nextHostSearch");
   const country = document.getElementById("nextCountryFilter");
@@ -613,6 +636,7 @@ async function loadVersion() {
 
 async function init() {
   wireTopButtons();
+  wireLegacyShortcuts();
   wireFilters();
   wirePaging();
   wireTabs();

@@ -63,6 +63,17 @@
   margin-bottom: 10px;
 }
 
+.next-nav-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 8px;
+  border: 1px solid #d6e1ee;
+  border-radius: 10px;
+  background: #f7fbff;
+}
+
 .next-country-select {
   min-width: 128px;
   max-width: 160px;

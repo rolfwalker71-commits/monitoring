@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.190 (18. Mai 2026)
+
+- **UI Shortcuts**: ui-next now has missing menu shortcuts for Benutzereinstellungen, globale Ansicht, globale Alerts, kritische Trends, inaktive Hosts, Alarm-Einstellungen, Admin-Einstellungen.
+- **Deep-linking**: legacy UI now supports '?start=...' deep-link routing from ui-next.
 n### v1.6.189 (18. Mai 2026)
 
 - **Host Visibility**: ui-next now respects host is_hidden and hides hidden hosts by default again; status line now indicates hidden host count.

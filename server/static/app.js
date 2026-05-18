@@ -3563,6 +3563,115 @@ function consumeOauthStatusFromUrl() {
   };
 }
 
+function consumeStartRouteFromUrl() {
+  const url = new URL(window.location.href);
+  const startRoute = String(url.searchParams.get("start") || "").trim().toLowerCase();
+  if (!startRoute) {
+    return "";
+  }
+  url.searchParams.delete("start");
+  window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ""));
+  return startRoute;
+}
+
+async function applyStartRoute(startRoute) {
+  const route = String(startRoute || "").trim().toLowerCase();
+  if (!route) {
+    return;
+  }
+
+  if (route === "settings-password") {
+    state.viewMode = "settings";
+    state.userSettingsSubMode = "password";
+    updateViewMode();
+    await loadSettingsPanel(true);
+    return;
+  }
+
+  if (route === "settings-channels") {
+    state.viewMode = "settings";
+    state.userSettingsSubMode = "channels";
+    updateViewMode();
+    await loadSettingsPanel(true);
+    return;
+  }
+
+  if (route === "settings-digests") {
+    state.viewMode = "settings";
+    state.userSettingsSubMode = "digests";
+    updateViewMode();
+    await loadSettingsPanel(true);
+    return;
+  }
+
+  if (route === "settings-hosts") {
+    state.viewMode = "settings";
+    state.userSettingsSubMode = "hosts";
+    updateViewMode();
+    await loadSettingsPanel(true);
+    renderHostInterestsEditor();
+    return;
+  }
+
+  if (route === "alarm-settings") {
+    if (state.isAdmin) {
+      state.viewMode = "global";
+      state.globalSubMode = "admin-settings";
+      updateViewMode();
+      updateGlobalSubMode();
+      await loadGlobalAdminSettingsPanel(true);
+      return;
+    }
+    state.viewMode = "settings";
+    state.userSettingsSubMode = "password";
+    updateViewMode();
+    await loadSettingsPanel(true);
+    return;
+  }
+
+  if (route === "global-critical-trends") {
+    state.viewMode = "global";
+    state.globalSubMode = "critical-trends";
+    updateViewMode();
+    updateGlobalSubMode();
+    await loadCriticalTrends();
+    return;
+  }
+
+  if (route === "global-inactive-hosts") {
+    state.viewMode = "global";
+    state.globalSubMode = "inactive-hosts";
+    updateViewMode();
+    updateGlobalSubMode();
+    await loadInactiveHosts();
+    return;
+  }
+
+  if (route === "global-admin-settings") {
+    if (!state.isAdmin) {
+      state.viewMode = "global";
+      state.globalSubMode = "global-alerts";
+      updateViewMode();
+      updateGlobalSubMode();
+      await loadGlobalAlertsOverview();
+      return;
+    }
+    state.viewMode = "global";
+    state.globalSubMode = "admin-settings";
+    updateViewMode();
+    updateGlobalSubMode();
+    await loadGlobalAdminSettingsPanel(true);
+    return;
+  }
+
+  // default: global alert overview
+  state.viewMode = "global";
+  state.globalSubMode = "global-alerts";
+  updateViewMode();
+  updateGlobalSubMode();
+  await loadGlobalAlertsOverview();
+}
+
 async function saveAlarmSettings() {
   const warningInput = document.getElementById("warningThresholdInput");
   const criticalInput = document.getElementById("criticalThresholdInput");
@@ -12005,6 +12114,7 @@ async function init() {
     if (arSelect) arSelect.value = String(autoRefreshCurrentIntervalSec);
   updateAutoRefreshStatus(null);
   const oauthResult = consumeOauthStatusFromUrl();
+  const startRoute = consumeStartRouteFromUrl();
 
   // Start version fetch and auth check in parallel — neither depends on the other
   const webclientVersionPromise = loadWebclientVersion().catch((error) => {
@@ -12054,6 +12164,8 @@ async function init() {
       oauthResult.status !== "success",
     );
     await loadSettingsPanel(true);
+  } else if (startRoute) {
+    await applyStartRoute(startRoute);
   }
   await refreshDashboard({ preserveScroll: false });
   await loadAgentUpdateStatus();
