@@ -524,6 +524,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.168 (18. Mai 2026)
+
+- **Hostkarten CSS Hotfix**: Defekten Chip-Style-Block (fehlende Klammer) korrigiert, der zu kaputtem Karten-Layout und falsch dargestellten Icons fuehrte.
+
 ### v1.6.167 (18. Mai 2026)
 
 - **Hostkarten Typografie**: Kundenname in der Hostkarte weiter vergroessert; die drei unteren SAP/HANA/SID-Chips kleiner und mit weniger fetter Schrift dargestellt.

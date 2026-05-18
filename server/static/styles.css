@@ -4000,20 +4000,18 @@ body[data-theme="dark"] .trend-progress-bar {
   background: linear-gradient(180deg, #e9f1f9 0%, #d9e6f3 100%);
   color: #2f4f6f;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  font-size: 12px;
-  font-weight: 900;
   line-height: 1.1;
   border-radius: 4px;
   font-size: 10px;
   font-weight: 500;
+}
+
 .host-value-chip--env {
   min-height: 15px;
   font-size: 11px;
   padding: 1px 8px;
   line-height: 1.1;
-  min-height: 16px;
   min-width: 52px;
-  padding: 1px 10px;
   justify-content: center;
 }
 
