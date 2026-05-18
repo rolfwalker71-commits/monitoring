@@ -5863,39 +5863,39 @@ body[data-theme="dark"] .brand-session-badge {
 }
 
 .sap-b1-chip {
-  background: #e0f0ff;
-  color: #1a5fa8;
-  border: 1px solid #b3d8f7;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #ea580c;
 }
 
 .hana-chip {
-  background: #e6f9ee;
-  color: #1a7a44;
-  border: 1px solid #9de0bc;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #ea580c;
 }
 
 .hana-sid-chip {
-  background: #f0eaff;
-  color: #5b2daa;
-  border: 1px solid #c9b0f0;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #ea580c;
 }
 
 body[data-theme="dark"] .sap-b1-chip {
-  background: #0e2d4a;
-  color: #7cc4f5;
-  border-color: #1e5080;
+  background: rgba(234, 88, 12, 0.15);
+  color: #fb923c;
+  border-color: #ea580c;
 }
 
 body[data-theme="dark"] .hana-chip {
-  background: #0a2e1a;
-  color: #5cd68a;
-  border-color: #1a5c34;
+  background: rgba(234, 88, 12, 0.15);
+  color: #fb923c;
+  border-color: #ea580c;
 }
 
 body[data-theme="dark"] .hana-sid-chip {
-  background: #1e1040;
-  color: #c09af5;
-  border-color: #4a2888;
+  background: rgba(234, 88, 12, 0.15);
+  color: #fb923c;
+  border-color: #ea580c;
 }
 
 body[data-theme="dark"] .report-license-panel {

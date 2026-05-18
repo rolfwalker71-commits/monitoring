@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.145 (18. Mai 2026)
+
+- **Einzelmeldung Chip-Farben**: SAP Feature Pack, HANA Release und HANA SID in der Einzelmeldung jetzt im gleichen Orangeton wie in der Hostkarte.
+
 ### v1.6.144 (18. Mai 2026)
 
 - **Chip Colors**: SAP Feature Pack, HANA Release, and HANA SID chips now use consistent orange color scheme across all views
