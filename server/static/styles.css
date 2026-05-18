@@ -3868,6 +3868,7 @@ body[data-theme="dark"] .trend-progress-bar {
   min-height: 56px !important;
   border-left-color: #fbbf24 !important;
   border-left-width: 4px !important;
+  padding-right: 30px !important;
 }
 
 #headerLicenseChip.hidden {
@@ -3920,6 +3921,13 @@ body[data-theme="dark"] .trend-progress-bar {
 .header-license-copy-btn:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+.header-license-copy-btn-floating {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
 }
 
 .header-license-grid {
