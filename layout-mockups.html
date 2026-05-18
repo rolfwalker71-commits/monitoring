@@ -110,6 +110,49 @@
             flex-wrap: wrap;
         }
 
+        .utility-row {
+            flex: 1 0 100%;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            border-top: 1px solid #e7eef7;
+            padding-top: 8px;
+            margin-top: 2px;
+        }
+
+        .utility-search {
+            min-width: 240px;
+            flex: 1 1 320px;
+            border: 1px solid #c8d9eb;
+            border-radius: 8px;
+            background: #f8fbff;
+            color: #3c5875;
+            font-size: 12px;
+            padding: 6px 9px;
+        }
+
+        .utility-pill {
+            border: 1px solid #c5d7ea;
+            border-radius: 8px;
+            background: #eef5ff;
+            color: #315070;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 5px 8px;
+        }
+
+        .utility-settings {
+            margin-left: auto;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .utility-settings .utility-pill {
+            background: #fff;
+        }
+
         .top-title { font-size: 16px; font-weight: 700; }
         .top-meta { font-size: 12px; color: var(--muted); }
 
@@ -350,6 +393,17 @@
                         </div>
                     </div>
                     <div class="top-meta">Stand 18.05.2026 17:41 · Zeitraum Changelog 3 Tage · 27 Hosts</div>
+                    <div class="utility-row">
+                        <div class="utility-search">🔎 Suche: Host / Kunde / OS / AddOn</div>
+                        <span class="utility-pill">Schnellfilter: Severity alle</span>
+                        <span class="utility-pill">Schnellfilter: Land CH+DE</span>
+                        <span class="utility-pill">Schnellfilter: Changelog 3 Tage</span>
+                        <div class="utility-settings">
+                            <span class="utility-pill">👤 Benutzer Settings</span>
+                            <span class="utility-pill">🌐 Global Settings</span>
+                            <span class="utility-pill">🛠 Admin Settings</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="layout">
                     <aside class="side">
@@ -453,6 +507,17 @@
                         </div>
                     </div>
                     <div class="top-meta">View: Host Detail · Alerts lokal: 1 kritisch</div>
+                    <div class="utility-row">
+                        <div class="utility-search">🔎 Host-Suche: Journal / Prozesse / Mountpoints / DB</div>
+                        <span class="utility-pill">Schnellfilter: Sektion Overview</span>
+                        <span class="utility-pill">Schnellfilter: Nur Warn/Kritisch</span>
+                        <span class="utility-pill">Schnellfilter: Zeitraum 24h</span>
+                        <div class="utility-settings">
+                            <span class="utility-pill">👤 Benutzer Settings</span>
+                            <span class="utility-pill">🌐 Global Settings</span>
+                            <span class="utility-pill">🛠 Admin Settings</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="layout">
                     <aside class="side">
@@ -554,6 +619,17 @@
                         </div>
                     </div>
                     <div class="top-meta">Filter: Land all · Suchfeld aktiv · Changelog 3 Tage</div>
+                    <div class="utility-row">
+                        <div class="utility-search">🔎 Suche links: Host / Kunde · Suche rechts: Detailinhalt</div>
+                        <span class="utility-pill">Schnellfilter: Nur aktive Alerts</span>
+                        <span class="utility-pill">Schnellfilter: Inaktiv &gt; 1h</span>
+                        <span class="utility-pill">Schnellfilter: Nur HANA Hosts</span>
+                        <div class="utility-settings">
+                            <span class="utility-pill">👤 Benutzer Settings</span>
+                            <span class="utility-pill">🌐 Global Settings</span>
+                            <span class="utility-pill">🛠 Admin Settings</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="layout">
                     <aside class="side">

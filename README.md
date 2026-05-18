@@ -524,6 +524,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.174
+
+- **Mockups**: Mockups now explicitly show search, quick filters, and user/global/admin settings placement in all three variants.
+
 ### v1.6.173 (18. Mai 2026)
 
 - **Mockups konkretisiert (3 Versionen)**: `layout-mockups.html` zeigt jetzt drei realitaetsnahe Endbild-Varianten mit den aktuellen Informationsgruppen der bestehenden UI: (A) vollstaendige Global-Overview ohne Host-Selektion, (B) vollstaendige Einzelhost-Detailansicht (Overview/Journal/Prozesse/Container/Netzwerk/Filesystems/Databases), (C) Split-View mit Hostliste links und globalem Kontext rechts.
