@@ -524,6 +524,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.173 (18. Mai 2026)
+
+- **Mockups konkretisiert (3 Versionen)**: `layout-mockups.html` zeigt jetzt drei realitaetsnahe Endbild-Varianten mit den aktuellen Informationsgruppen der bestehenden UI: (A) vollstaendige Global-Overview ohne Host-Selektion, (B) vollstaendige Einzelhost-Detailansicht (Overview/Journal/Prozesse/Container/Netzwerk/Filesystems/Databases), (C) Split-View mit Hostliste links und globalem Kontext rechts.
+
 ### v1.6.172 (18. Mai 2026)
 
 - **Layout-Mockups modernisiert**: Neue visuelle Vergleichsseite mit zwei Richtungen umgesetzt (`Calm Professional` und `Data-First Compact`) zur Bewertung der Punkte 1-4: ruhiger Hintergrund, vereinfachte Sidebar-Karten, mehr Weissraum und modernere KPI-Karten.

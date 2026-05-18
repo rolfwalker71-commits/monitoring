@@ -3,448 +3,618 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitoring UI Mockups - Punkte 1 bis 4</title>
+    <title>Monitoring UI Mockups - Drei konkrete Endbilder</title>
     <style>
         :root {
-            --bg-page: #edf3f9;
+            --bg: #eaf1f8;
             --panel: #ffffff;
-            --panel-border: #d6e1ee;
-            --text: #1f344b;
-            --muted: #60758c;
-            --ok: #2f855a;
-            --warn: #b7791f;
-            --crit: #c53030;
-            --accent: #2b6cb0;
+            --line: #d4dfec;
+            --line-soft: #e6eef7;
+            --txt: #1d344d;
+            --muted: #5f748a;
+            --ok: #25885a;
+            --warn: #b06b11;
+            --crit: #bf2e2e;
+            --chip: #eef5fd;
+            --chip-line: #c6d8ec;
+            --blue: #2b6cb0;
         }
 
         * { box-sizing: border-box; }
+
         body {
             margin: 0;
-            padding: 28px;
+            padding: 26px;
             font-family: "Segoe UI", "Noto Sans", sans-serif;
-            background: linear-gradient(180deg, #f3f7fc 0%, var(--bg-page) 100%);
-            color: var(--text);
+            color: var(--txt);
+            background: radial-gradient(circle at 20% -10%, #f7fbff 0%, #edf4fb 42%, var(--bg) 100%);
         }
 
         h1 {
-            margin: 0 0 18px;
-            font-size: 28px;
+            margin: 0 0 10px;
+            font-size: 30px;
             letter-spacing: 0.01em;
         }
 
         .intro {
             margin: 0 0 24px;
-            color: #4e647c;
-            max-width: 980px;
+            color: #4b647f;
+            max-width: 1100px;
             line-height: 1.45;
         }
 
         .mockup {
             background: var(--panel);
-            border: 1px solid var(--panel-border);
+            border: 1px solid var(--line);
             border-radius: 16px;
-            padding: 18px;
             margin-bottom: 24px;
-            box-shadow: 0 10px 26px rgba(30, 62, 96, 0.08);
+            box-shadow: 0 12px 30px rgba(38, 67, 98, 0.08);
+            overflow: hidden;
+        }
+
+        .mockup-head {
+            padding: 16px 16px 12px;
+            border-bottom: 1px solid var(--line-soft);
+            background: linear-gradient(180deg, #fcfeff 0%, #f2f8ff 100%);
         }
 
         .mockup h2 {
-            margin: 0 0 10px;
+            margin: 0 0 8px;
             font-size: 20px;
-            color: #173455;
+            color: #173b62;
         }
 
-        .pill-row {
+        .mockup-sub {
+            margin: 0;
+            color: #56718d;
+            font-size: 13px;
+        }
+
+        .badge-row {
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
-            margin-bottom: 14px;
+            margin-top: 10px;
         }
 
-        .pill {
-            border: 1px solid #c9d8e8;
+        .badge {
             border-radius: 999px;
+            border: 1px solid var(--chip-line);
+            background: var(--chip);
+            color: #365678;
             padding: 4px 10px;
             font-size: 12px;
-            color: #35516d;
-            background: #f7fbff;
+            font-weight: 600;
+        }
+
+        .surface {
+            padding: 14px;
+            background: linear-gradient(180deg, #f7fbff 0%, #eef5fc 100%);
+        }
+
+        .app-frame {
+            border: 1px solid #cfdeee;
+            border-radius: 14px;
+            overflow: hidden;
+            background: #f9fcff;
+        }
+
+        .top {
+            padding: 11px 13px;
+            border-bottom: 1px solid var(--line-soft);
+            background: #fff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .top-title { font-size: 16px; font-weight: 700; }
+        .top-meta { font-size: 12px; color: var(--muted); }
+
+        .chipline {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 6px;
+        }
+
+        .state-chip {
+            border-radius: 999px;
+            padding: 3px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            border: 1px solid #c3d5e8;
+            background: #f1f7ff;
+            color: #365472;
         }
 
         .layout {
-            border: 1px solid #dbe6f2;
-            border-radius: 14px;
-            overflow: hidden;
-            background: #f7fbff;
-        }
-
-        .topbar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 14px;
-            border-bottom: 1px solid #deebf7;
-            background: #ffffff;
-            gap: 12px;
-        }
-
-        .topbar .title {
-            font-size: 16px;
-            font-weight: 700;
-        }
-
-        .topbar .meta {
-            font-size: 12px;
-            color: var(--muted);
-        }
-
-        .main {
             display: grid;
-            grid-template-columns: 290px 1fr;
-            min-height: 540px;
+            grid-template-columns: 300px 1fr;
+            min-height: 560px;
         }
 
-        .sidebar {
-            border-right: 1px solid #deebf7;
-            background: linear-gradient(180deg, #f8fbff 0%, #f1f7ff 100%);
-            padding: 12px;
+        .side {
+            border-right: 1px solid var(--line-soft);
+            padding: 10px;
             display: grid;
-            gap: 10px;
+            gap: 8px;
             align-content: start;
+            background: linear-gradient(180deg, #f8fbff 0%, #f1f7ff 100%);
         }
 
-        .host-card {
-            border: 1px solid #d1deed;
-            border-radius: 12px;
-            background: #ffffff;
-            padding: 10px 10px 9px;
+        .host {
+            border: 1px solid #cedceb;
+            border-radius: 11px;
+            background: #fff;
+            padding: 8px;
             display: grid;
-            gap: 6px;
+            gap: 5px;
         }
 
-        .host-title {
-            font-size: 14px;
+        .host.active {
+            border-color: #8fb6df;
+            box-shadow: inset 0 0 0 1px #afccea;
+        }
+
+        .host .line1 {
+            font-size: 13px;
             font-weight: 700;
             display: flex;
             justify-content: space-between;
             gap: 8px;
-            color: #243f5a;
         }
 
-        .host-sub {
-            font-size: 12px;
+        .host .line2 {
+            font-size: 11px;
             color: var(--muted);
             display: flex;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
         }
 
-        .host-chip-row {
+        .host .line3 {
             display: flex;
             gap: 6px;
             flex-wrap: wrap;
-            margin-top: 2px;
         }
 
-        .hchip {
-            border-radius: 6px;
-            border: 1px solid #bfd3e8;
-            background: #eaf3ff;
-            color: #2d4f75;
-            font-size: 11px;
+        .tiny {
+            border: 1px solid #c7d8ea;
+            border-radius: 7px;
+            background: #edf5ff;
+            padding: 2px 6px;
+            font-size: 10px;
+            color: #325070;
             font-weight: 600;
-            padding: 2px 8px;
         }
 
-        .content {
-            padding: 14px;
+        .main {
+            padding: 12px;
             display: grid;
-            gap: 16px;
+            gap: 12px;
             align-content: start;
         }
 
-        .kpi-grid {
+        .tabbar {
+            display: flex;
+            gap: 7px;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            border: 1px solid #c4d6e9;
+            border-radius: 8px;
+            background: #fff;
+            color: #2f4c6b;
+            padding: 4px 9px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .tab.active {
+            background: #eaf3ff;
+            border-color: #93b8dd;
+            color: #1f4264;
+        }
+
+        .cards4 {
             display: grid;
             grid-template-columns: repeat(4, minmax(120px, 1fr));
-            gap: 14px;
+            gap: 10px;
         }
 
-        .kpi {
-            border: 1px solid #d2dfed;
-            background: #ffffff;
-            border-radius: 12px;
-            padding: 10px;
+        .metric {
+            border: 1px solid #d1dfed;
+            border-left: 4px solid #4a86bc;
+            background: #fff;
+            border-radius: 10px;
+            padding: 8px;
             display: grid;
-            gap: 6px;
-            box-shadow: 0 4px 14px rgba(35, 70, 105, 0.06);
+            gap: 4px;
         }
 
-        .kpi .k-title {
-            font-size: 11px;
-            color: var(--muted);
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            font-weight: 700;
+        .metric.ok { border-left-color: var(--ok); }
+        .metric.warn { border-left-color: var(--warn); }
+        .metric.crit { border-left-color: var(--crit); }
+
+        .metric .k { font-size: 10px; color: var(--muted); text-transform: uppercase; font-weight: 700; }
+        .metric .v { font-size: 27px; line-height: 1; font-weight: 800; }
+        .metric .t { font-size: 11px; color: var(--muted); }
+
+        .grid2 {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 10px;
         }
 
-        .kpi .k-value {
-            font-size: 30px;
-            font-weight: 800;
-            line-height: 1;
-            color: #1d3550;
+        .panel {
+            border: 1px solid #d6e3f1;
+            border-radius: 10px;
+            background: #fff;
+            padding: 10px;
         }
 
-        .kpi .k-trend {
-            font-size: 12px;
-            color: var(--muted);
-        }
-
-        .kpi.ok { border-left: 5px solid var(--ok); }
-        .kpi.warn { border-left: 5px solid var(--warn); }
-        .kpi.crit { border-left: 5px solid var(--crit); }
-        .kpi.neutral { border-left: 5px solid #4a89c2; }
-
-        .section {
-            background: #ffffff;
-            border: 1px solid #d8e4f0;
-            border-radius: 12px;
-            padding: 12px;
-        }
-
-        .section-title {
+        .panel h3 {
+            margin: 0 0 8px;
             font-size: 14px;
-            font-weight: 700;
-            margin-bottom: 10px;
+            color: #274b71;
         }
 
         .table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 13px;
+            font-size: 12px;
         }
 
         .table th,
         .table td {
             text-align: left;
-            border-bottom: 1px solid #e4edf6;
-            padding: 10px 8px;
+            padding: 7px 6px;
+            border-bottom: 1px solid #e4edf7;
+            vertical-align: top;
         }
 
         .table th {
-            font-size: 12px;
-            color: #526981;
+            color: #55708c;
+            font-size: 11px;
             background: #f8fbff;
         }
 
-        .alerts-empty,
-        .alerts-active {
-            border-radius: 10px;
-            padding: 12px;
-            font-size: 14px;
-            font-weight: 700;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .alerts-empty {
-            border: 1px solid #b9e7c9;
-            background: #eafbf1;
-            color: #23643f;
-        }
-
-        .alerts-active {
-            border: 1px solid #f8b7b7;
-            background: #fff1f1;
-            color: #9b1c1c;
-        }
-
-        .note {
-            margin-top: 10px;
+        .list {
+            margin: 0;
+            padding-left: 18px;
             font-size: 12px;
-            color: #5e7187;
-            line-height: 1.45;
-        }
-
-        .variant-b .layout {
-            background: linear-gradient(180deg, #f4f8fc 0%, #edf4fb 100%);
-        }
-
-        .variant-b .sidebar {
-            background: #f2f7fd;
-            gap: 8px;
-            padding: 10px;
-        }
-
-        .variant-b .host-card {
-            padding: 8px 9px;
+            color: #334f6d;
+            display: grid;
             gap: 5px;
         }
 
-        .variant-b .host-title {
-            font-size: 13px;
-        }
+        .tag-ok { color: var(--ok); font-weight: 700; }
+        .tag-warn { color: var(--warn); font-weight: 700; }
+        .tag-crit { color: var(--crit); font-weight: 700; }
 
-        .variant-b .host-sub {
-            font-size: 11px;
-        }
-
-        .variant-b .kpi-grid {
-            gap: 10px;
-        }
-
-        .variant-b .kpi {
-            border-radius: 10px;
-            padding: 9px;
-        }
-
-        .variant-b .kpi .k-value {
-            font-size: 26px;
-        }
-
-        .legend {
-            display: grid;
-            gap: 6px;
+        .foot {
             margin-top: 10px;
             font-size: 12px;
-            color: #4e647a;
+            color: #516a84;
+            line-height: 1.4;
         }
 
-        @media (max-width: 1100px) {
-            .main { grid-template-columns: 1fr; }
-            .sidebar { border-right: 0; border-bottom: 1px solid #deebf7; }
-            .kpi-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+        .version-b .layout { grid-template-columns: 320px 1fr; }
+
+        .version-c .layout { grid-template-columns: 270px 1fr; }
+
+        .dense .panel,
+        .dense .metric,
+        .dense .host { border-radius: 9px; }
+
+        @media (max-width: 1200px) {
+            .layout,
+            .version-b .layout,
+            .version-c .layout { grid-template-columns: 1fr; }
+            .side { border-right: 0; border-bottom: 1px solid var(--line-soft); }
+            .cards4 { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+            .grid2 { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
     <h1>Monitoring UI Mockups</h1>
-    <p class="intro">Zwei visuelle Richtungen für die Punkte 1 bis 4: ruhigerer Hintergrund, vereinfachte Sidebar, mehr Weissraum und modernisierte KPI-Karten. Beide Mockups sind absichtlich statisch, um das Look-and-Feel schnell zu vergleichen.</p>
+    <p class="intro">Drei konkrete Endbild-Varianten mit den heutigen Inhaltsgruppen: Global Alerts, Kritische Trends, Inaktive Hosts, Backup-Stati, Systemuebersicht, Changelog plus Einzelhost-Sektionen (Overview, Journal, Prozesse, Container, Netzwerk, Filesystems, Databases).</p>
 
-    <section class="mockup variant-a">
-        <h2>Variante A - Calm Professional</h2>
-        <div class="pill-row">
-            <span class="pill">1 Hintergrund beruhigt</span>
-            <span class="pill">2 Sidebar kompakter</span>
-            <span class="pill">3 Mehr Weissraum</span>
-            <span class="pill">4 KPI modernisiert</span>
-        </div>
-
-        <div class="layout">
-            <div class="topbar">
-                <div class="title">System Health Dashboard</div>
-                <div class="meta">Stand: 18.05.2026 17:24 · 27 Hosts</div>
+    <section class="mockup version-a">
+        <div class="mockup-head">
+            <h2>Version A - Global Overview mit voller Informationsbreite</h2>
+            <p class="mockup-sub">Nutzungsszenario: Kein Host selektiert, Fokus auf systemweite Lage.</p>
+            <div class="badge-row">
+                <span class="badge">Globale Alerts</span>
+                <span class="badge">Kritische Trends</span>
+                <span class="badge">Inaktive Hosts</span>
+                <span class="badge">Backup Stati</span>
+                <span class="badge">Systemuebersicht</span>
+                <span class="badge">DB Changelog</span>
             </div>
-            <div class="main">
-                <aside class="sidebar">
-                    <article class="host-card">
-                        <div class="host-title"><span>Rinco · SAP Produktiv</span><span>🔴</span></div>
-                        <div class="host-sub"><span>MIL-SQL-008</span><span>172.20.31.120</span></div>
-                        <div class="host-chip-row"><span class="hchip">FP2408 HF1</span><span class="hchip">2.00.059</span><span class="hchip">HZI</span></div>
-                    </article>
-                    <article class="host-card">
-                        <div class="host-title"><span>Kanadevia · SAP Test</span><span>🟢</span></div>
-                        <div class="host-sub"><span>SA1180005</span><span>172.23.247.85</span></div>
-                        <div class="host-chip-row"><span class="hchip">FP2408 HF1</span><span class="hchip">2.00.059</span><span class="hchip">HZI</span></div>
-                    </article>
-                    <article class="host-card">
-                        <div class="host-title"><span>Aeschlimann · SQL</span><span>🟡</span></div>
-                        <div class="host-sub"><span>prod-mssql-01</span><span>10.13.151.11</span></div>
-                        <div class="host-chip-row"><span class="hchip">SQL 2019 SP3</span><span class="hchip">64 GB</span></div>
-                    </article>
-                </aside>
-
-                <div class="content">
-                    <section class="kpi-grid">
-                        <article class="kpi ok"><div class="k-title">CPU</div><div class="k-value">34%</div><div class="k-trend">Trend: stabil</div></article>
-                        <article class="kpi warn"><div class="k-title">RAM</div><div class="k-value">78%</div><div class="k-trend">+5% seit 24h</div></article>
-                        <article class="kpi neutral"><div class="k-title">SWAP</div><div class="k-value">12%</div><div class="k-trend">unauffällig</div></article>
-                        <article class="kpi crit"><div class="k-title">Alerts</div><div class="k-value">3</div><div class="k-trend">1 kritisch</div></article>
-                    </section>
-
-                    <section class="section">
-                        <div class="section-title">Aktive Alerts</div>
-                        <div class="alerts-active"><span>⚠️ 3 Alerts benötigen Aufmerksamkeit</span><span>2 Warnung · 1 Kritisch</span></div>
-                        <table class="table" style="margin-top:12px;">
-                            <thead><tr><th>Host</th><th>Bereich</th><th>Status</th><th>Zuletzt</th></tr></thead>
-                            <tbody>
-                                <tr><td>MIL-SQL-008</td><td>Filesystem</td><td>Kritisch</td><td>17:19</td></tr>
-                                <tr><td>prod-mssql-01</td><td>CPU</td><td>Warnung</td><td>17:17</td></tr>
-                                <tr><td>sap-hana-prod-02</td><td>RAM</td><td>Warnung</td><td>17:15</td></tr>
-                            </tbody>
-                        </table>
-                    </section>
+        </div>
+        <div class="surface">
+            <div class="app-frame">
+                <div class="top">
+                    <div>
+                        <div class="top-title">System Health Dashboard</div>
+                        <div class="chipline">
+                            <span class="state-chip">🚨 Alerts 3</span>
+                            <span class="state-chip">📈 Trends 2</span>
+                            <span class="state-chip">💤 Inaktiv 4</span>
+                        </div>
+                    </div>
+                    <div class="top-meta">Stand 18.05.2026 17:41 · Zeitraum Changelog 3 Tage · 27 Hosts</div>
+                </div>
+                <div class="layout">
+                    <aside class="side">
+                        <div class="tabbar">
+                            <span class="tab active">Global</span>
+                            <span class="tab">Host</span>
+                        </div>
+                        <article class="host">
+                            <div class="line1"><span>Filter aktiv</span><span>🌐</span></div>
+                            <div class="line2"><span>Land: CH+DE</span><span>Severity: alle</span></div>
+                        </article>
+                        <article class="host">
+                            <div class="line1"><span>Globale Alerts</span><span class="tag-crit">3</span></div>
+                            <div class="line2"><span>kritisch: 1</span><span>warning: 2</span></div>
+                        </article>
+                        <article class="host">
+                            <div class="line1"><span>Inaktive Hosts</span><span class="tag-warn">4</span></div>
+                            <div class="line2"><span>1h: 4</span><span>3h: 2</span></div>
+                        </article>
+                        <article class="host">
+                            <div class="line1"><span>Backup Status</span><span class="tag-ok">OK</span></div>
+                            <div class="line2"><span>SQL: 18</span><span>HANA: 7</span></div>
+                        </article>
+                    </aside>
+                    <main class="main">
+                        <div class="tabbar">
+                            <span class="tab active">Globale Alerts</span>
+                            <span class="tab">Kritische Trends</span>
+                            <span class="tab">Inaktive Hosts</span>
+                            <span class="tab">Backup Stati</span>
+                            <span class="tab">Systemuebersicht</span>
+                            <span class="tab">Changelog</span>
+                        </div>
+                        <div class="cards4">
+                            <article class="metric crit"><span class="k">Offene Alerts</span><span class="v">3</span><span class="t">1 kritisch / 2 warning</span></article>
+                            <article class="metric warn"><span class="k">Kritische Trends</span><span class="v">2</span><span class="t">24h Projektion aktiv</span></article>
+                            <article class="metric"><span class="k">Inaktive Hosts</span><span class="v">4</span><span class="t">Schwelle 1h</span></article>
+                            <article class="metric ok"><span class="k">Hosts Healthy</span><span class="v">23</span><span class="t">von 27 total</span></article>
+                        </div>
+                        <div class="grid2">
+                            <section class="panel">
+                                <h3>Alerts Tabelle (global)</h3>
+                                <table class="table">
+                                    <thead><tr><th>Host</th><th>Severity</th><th>Mountpoint</th><th>Aktuell</th><th>Aktiv seit</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>MIL-SQL-008</td><td class="tag-crit">critical</td><td>/hana/data</td><td>94%</td><td>16:55</td></tr>
+                                        <tr><td>prod-mssql-01</td><td class="tag-warn">warning</td><td>C:</td><td>86%</td><td>16:42</td></tr>
+                                        <tr><td>sap-hana-prod-02</td><td class="tag-warn">warning</td><td>/var</td><td>81%</td><td>16:37</td></tr>
+                                    </tbody>
+                                </table>
+                            </section>
+                            <section class="panel">
+                                <h3>Kritische Trends + Inaktive Hosts</h3>
+                                <ul class="list">
+                                    <li>📈 prod-mssql-01 CPU steigt linear, Projektion 8h: 97%</li>
+                                    <li>📈 sap-hana-prod-02 RAM steigt, Projektion 24h: 92%</li>
+                                    <li>💤 KundeY · sap-app-11 inaktiv seit 2h 18m</li>
+                                    <li>💤 KundeX · bi-gateway-03 inaktiv seit 1h 29m</li>
+                                </ul>
+                                <h3 style="margin-top:10px;">DB Changelog (3 Tage)</h3>
+                                <table class="table">
+                                    <thead><tr><th>Zeit</th><th>Host</th><th>Feld</th><th>Aktion</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>17:11</td><td>sap-hana-prod-02</td><td>HANA Schema FINREP</td><td>➕ erstellt</td></tr>
+                                        <tr><td>16:49</td><td>prod-mssql-01</td><td>SQL Version</td><td>🔄 geaendert</td></tr>
+                                    </tbody>
+                                </table>
+                            </section>
+                        </div>
+                    </main>
                 </div>
             </div>
-        </div>
-
-        <div class="legend">
-            <div><strong>Schwerpunkt:</strong> ruhiger Gesamteindruck, hohe Lesbarkeit, klare Priorisierung Alerts.</div>
-            <div><strong>Einsatz:</strong> ideal als sichere Evolution der bestehenden UI.</div>
+            <div class="foot"><strong>Bildwirkung:</strong> ruhiger, klarer und trotzdem kompletter Global-Informationsstand ohne Host-Fokus.</div>
         </div>
     </section>
 
-    <section class="mockup variant-b">
-        <h2>Variante B - Data-First Compact</h2>
-        <div class="pill-row">
-            <span class="pill">1 Hintergrund neutral</span>
-            <span class="pill">2 Sidebar dichter</span>
-            <span class="pill">3 Horizontaler Weissraum</span>
-            <span class="pill">4 KPI mit stärkerem Statussignal</span>
-        </div>
-
-        <div class="layout">
-            <div class="topbar">
-                <div class="title">Monitoring Control View</div>
-                <div class="meta">Filter: 3 Tage · 3 offene Alerts</div>
+    <section class="mockup version-b">
+        <div class="mockup-head">
+            <h2>Version B - Einzelhost Detailseite mit allen Sektionen</h2>
+            <p class="mockup-sub">Nutzungsszenario: Ein Host ist selektiert, Diagnose und Deep-Dive stehen im Mittelpunkt.</p>
+            <div class="badge-row">
+                <span class="badge">Overview</span>
+                <span class="badge">Journal</span>
+                <span class="badge">Prozesse</span>
+                <span class="badge">Container</span>
+                <span class="badge">Netzwerk</span>
+                <span class="badge">Filesystems</span>
+                <span class="badge">Databases</span>
             </div>
-            <div class="main">
-                <aside class="sidebar">
-                    <article class="host-card">
-                        <div class="host-title"><span>Rinco · SAP Produktiv</span><span>🔴</span></div>
-                        <div class="host-sub"><span>MIL-SQL-008</span><span>17:18</span></div>
-                    </article>
-                    <article class="host-card">
-                        <div class="host-title"><span>Kanadevia · SAP Test</span><span>🟢</span></div>
-                        <div class="host-sub"><span>SA1180005</span><span>17:17</span></div>
-                    </article>
-                    <article class="host-card">
-                        <div class="host-title"><span>Aeschlimann · SQL</span><span>🟡</span></div>
-                        <div class="host-sub"><span>prod-mssql-01</span><span>17:15</span></div>
-                    </article>
-                    <article class="host-card">
-                        <div class="host-title"><span>HZI · Reporting</span><span>🟢</span></div>
-                        <div class="host-sub"><span>app-server-03</span><span>17:12</span></div>
-                    </article>
-                </aside>
-
-                <div class="content">
-                    <section class="kpi-grid">
-                        <article class="kpi crit"><div class="k-title">CPU Peak</div><div class="k-value">91%</div><div class="k-trend">+12% / 1h</div></article>
-                        <article class="kpi warn"><div class="k-title">RAM Peak</div><div class="k-value">84%</div><div class="k-trend">+4% / 1h</div></article>
-                        <article class="kpi neutral"><div class="k-title">Swap Peak</div><div class="k-value">22%</div><div class="k-trend">+1% / 1h</div></article>
-                        <article class="kpi ok"><div class="k-title">Healthy Hosts</div><div class="k-value">24</div><div class="k-trend">von 27 gesamt</div></article>
-                    </section>
-
-                    <section class="section">
-                        <div class="section-title">Alerts Snapshot</div>
-                        <div class="alerts-empty">✅ Keine neuen Alerts in den letzten 30 Minuten<span>Auto-Refresh aktiv</span></div>
-                        <table class="table" style="margin-top:12px;">
-                            <thead><tr><th>Host</th><th>Metrik</th><th>Wert</th><th>Trend</th></tr></thead>
-                            <tbody>
-                                <tr><td>MIL-SQL-008</td><td>CPU</td><td>91%</td><td>steigend</td></tr>
-                                <tr><td>prod-mssql-01</td><td>RAM</td><td>84%</td><td>stabil</td></tr>
-                                <tr><td>sap-hana-prod-02</td><td>IO Wait</td><td>12%</td><td>fallend</td></tr>
-                            </tbody>
-                        </table>
-                    </section>
+        </div>
+        <div class="surface">
+            <div class="app-frame">
+                <div class="top">
+                    <div>
+                        <div class="top-title">Host: MIL-SQL-008 (Rinco · SAP Produktiv)</div>
+                        <div class="chipline">
+                            <span class="state-chip">🪟 Windows</span>
+                            <span class="state-chip">SQL 2019 SP3</span>
+                            <span class="state-chip">🧩 FP2408 HF1</span>
+                            <span class="state-chip">🕒 letzte Meldung 17:39</span>
+                        </div>
+                    </div>
+                    <div class="top-meta">View: Host Detail · Alerts lokal: 1 kritisch</div>
+                </div>
+                <div class="layout">
+                    <aside class="side">
+                        <article class="host active">
+                            <div class="line1"><span>MIL-SQL-008</span><span class="tag-crit">🔴</span></div>
+                            <div class="line2"><span>172.20.31.120</span><span>CH</span></div>
+                            <div class="line3"><span class="tiny">HZI</span><span class="tiny">2.00.059</span><span class="tiny">SID PRD</span></div>
+                        </article>
+                        <article class="host">
+                            <div class="line1"><span>Host Alerts</span><span class="tag-crit">1</span></div>
+                            <div class="line2"><span>Filesystem kritisch</span></div>
+                        </article>
+                        <article class="host">
+                            <div class="line1"><span>Agent Update</span><span class="tag-ok">idle</span></div>
+                            <div class="line2"><span>v1.6.172</span><span>letzte Ausf. 16:10</span></div>
+                        </article>
+                    </aside>
+                    <main class="main dense">
+                        <div class="tabbar">
+                            <span class="tab active">Overview</span>
+                            <span class="tab">Journal</span>
+                            <span class="tab">Prozesse</span>
+                            <span class="tab">Container</span>
+                            <span class="tab">Netzwerk</span>
+                            <span class="tab">Filesystems</span>
+                            <span class="tab">Databases</span>
+                        </div>
+                        <div class="cards4">
+                            <article class="metric warn"><span class="k">CPU</span><span class="v">82%</span><span class="t">Peak 91%</span></article>
+                            <article class="metric warn"><span class="k">RAM</span><span class="v">79%</span><span class="t">48/64 GB</span></article>
+                            <article class="metric"><span class="k">SWAP</span><span class="v">11%</span><span class="t">stabil</span></article>
+                            <article class="metric crit"><span class="k">FS C:</span><span class="v">94%</span><span class="t">kritische Grenze</span></article>
+                        </div>
+                        <div class="grid2">
+                            <section class="panel">
+                                <h3>Overview + Databases</h3>
+                                <table class="table">
+                                    <tbody>
+                                        <tr><th>OS</th><td>Windows Server 2022</td><th>Uptime</th><td>16 Tage</td></tr>
+                                        <tr><th>SAP</th><td>B1 10.0 FP2408 HF1</td><th>HANA</th><td>2.00.059 / SID PRD</td></tr>
+                                        <tr><th>SQL</th><td>2019 SP3 CU26</td><th>Agent</th><td>1.6.172</td></tr>
+                                    </tbody>
+                                </table>
+                                <h3 style="margin-top:10px;">Filesystems</h3>
+                                <table class="table">
+                                    <thead><tr><th>Mount</th><th>Used</th><th>Status</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>C:</td><td>94%</td><td class="tag-crit">critical</td></tr>
+                                        <tr><td>D:</td><td>61%</td><td class="tag-ok">ok</td></tr>
+                                        <tr><td>E:</td><td>72%</td><td class="tag-warn">warning</td></tr>
+                                    </tbody>
+                                </table>
+                            </section>
+                            <section class="panel">
+                                <h3>Journal + Prozesse + Container + Netzwerk</h3>
+                                <ul class="list">
+                                    <li>📕 Journal: 4 Warnungen in letzter Stunde (Disk/Backup)</li>
+                                    <li>⚙️ Prozess: sqlservr.exe 38% CPU / 7.8 GB RAM</li>
+                                    <li>⚙️ Prozess: b1service.exe 15% CPU / 2.1 GB RAM</li>
+                                    <li>📦 Container: Kein Docker/Podman aktiv</li>
+                                    <li>🌐 NIC: Ethernet0 TX 1.2 GB / RX 4.8 GB</li>
+                                </ul>
+                                <h3 style="margin-top:10px;">Host-Changelog (3 Tage)</h3>
+                                <table class="table">
+                                    <thead><tr><th>Zeit</th><th>Feld</th><th>Wert alt → neu</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>16:49</td><td>SQL Version</td><td>CU25 → CU26</td></tr>
+                                        <tr><td>14:12</td><td>RAM</td><td>48 GB → 64 GB</td></tr>
+                                    </tbody>
+                                </table>
+                            </section>
+                        </div>
+                    </main>
                 </div>
             </div>
+            <div class="foot"><strong>Bildwirkung:</strong> Diagnosefreundlich, alles fuer Einzelmeldung und Deep-Dive in einer klaren Host-Perspektive.</div>
         </div>
+    </section>
 
-        <div class="legend">
-            <div><strong>Schwerpunkt:</strong> hohe Datendichte bei klaren KPI-Signalen.</div>
-            <div><strong>Einsatz:</strong> gut für Ops-Teams mit Fokus auf schnelle Trend-/Alarm-Entscheide.</div>
+    <section class="mockup version-c">
+        <div class="mockup-head">
+            <h2>Version C - Split View (Hostliste links, Kontext rechts)</h2>
+            <p class="mockup-sub">Nutzungsszenario: schneller Wechsel zwischen Host-Einzelmeldung und globalem Kontext ohne Seitenwechsel.</p>
+            <div class="badge-row">
+                <span class="badge">Hostliste bleibt sichtbar</span>
+                <span class="badge">Detail rechts</span>
+                <span class="badge">Global-Kontext unten</span>
+            </div>
+        </div>
+        <div class="surface">
+            <div class="app-frame">
+                <div class="top">
+                    <div>
+                        <div class="top-title">Control Split</div>
+                        <div class="chipline">
+                            <span class="state-chip">Auswahl: MIL-SQL-008</span>
+                            <span class="state-chip">Alerts global 3</span>
+                            <span class="state-chip">Inaktive Hosts 4</span>
+                        </div>
+                    </div>
+                    <div class="top-meta">Filter: Land all · Suchfeld aktiv · Changelog 3 Tage</div>
+                </div>
+                <div class="layout">
+                    <aside class="side">
+                        <article class="host active">
+                            <div class="line1"><span>Rinco · MIL-SQL-008</span><span>🔴</span></div>
+                            <div class="line2"><span>Windows</span><span>17:39</span></div>
+                        </article>
+                        <article class="host">
+                            <div class="line1"><span>Kanadevia · SA1180005</span><span>🟢</span></div>
+                            <div class="line2"><span>Linux</span><span>17:37</span></div>
+                        </article>
+                        <article class="host">
+                            <div class="line1"><span>Aeschlimann · prod-mssql-01</span><span>🟡</span></div>
+                            <div class="line2"><span>Windows</span><span>17:35</span></div>
+                        </article>
+                        <article class="host">
+                            <div class="line1"><span>KundeY · sap-hana-prod-02</span><span>🟡</span></div>
+                            <div class="line2"><span>Linux</span><span>17:33</span></div>
+                        </article>
+                    </aside>
+                    <main class="main">
+                        <div class="cards4">
+                            <article class="metric crit"><span class="k">Host Alerts</span><span class="v">1</span><span class="t">Filesystem C:</span></article>
+                            <article class="metric warn"><span class="k">CPU Host</span><span class="v">82%</span><span class="t">steigend</span></article>
+                            <article class="metric"><span class="k">RAM Host</span><span class="v">79%</span><span class="t">48/64 GB</span></article>
+                            <article class="metric ok"><span class="k">Backup Host</span><span class="v">OK</span><span class="t">letzter Lauf 03:10</span></article>
+                        </div>
+                        <div class="grid2">
+                            <section class="panel">
+                                <h3>Host Detail (kompakt)</h3>
+                                <table class="table">
+                                    <tbody>
+                                        <tr><th>OS</th><td>Windows Server 2022</td><th>IP</th><td>172.20.31.120</td></tr>
+                                        <tr><th>SAP</th><td>FP2408 HF1</td><th>HANA SID</th><td>PRD</td></tr>
+                                        <tr><th>SQL</th><td>2019 SP3 CU26</td><th>Agent</th><td>1.6.172</td></tr>
+                                    </tbody>
+                                </table>
+                                <h3 style="margin-top:10px;">Top Journal/Prozesse</h3>
+                                <ul class="list">
+                                    <li>Warnung: C: ueberschreitet 90%</li>
+                                    <li>sqlservr.exe CPU 38%</li>
+                                    <li>Backup-Job erfolgreich 03:10</li>
+                                </ul>
+                            </section>
+                            <section class="panel">
+                                <h3>Globaler Kontext bleibt sichtbar</h3>
+                                <table class="table">
+                                    <thead><tr><th>Bereich</th><th>Status</th><th>Top-Eintrag</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>Globale Alerts</td><td class="tag-crit">3 offen</td><td>MIL-SQL-008 /hana/data 94%</td></tr>
+                                        <tr><td>Inaktive Hosts</td><td class="tag-warn">4 Hosts</td><td>kundeY-sap-app-11 seit 2h18m</td></tr>
+                                        <tr><td>DB Changelog</td><td class="tag-ok">12 Eintraege</td><td>FINREP Schema erstellt</td></tr>
+                                        <tr><td>Kritische Trends</td><td class="tag-warn">2 Hosts</td><td>prod-mssql-01 CPU steigend</td></tr>
+                                    </tbody>
+                                </table>
+                            </section>
+                        </div>
+                    </main>
+                </div>
+            </div>
+            <div class="foot"><strong>Bildwirkung:</strong> schnellster operativer Modus, weil Auswahl und Kontext gleichzeitig sichtbar bleiben.</div>
         </div>
     </section>
 </body>
