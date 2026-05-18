@@ -522,6 +522,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+
+### v1.6.150 (18. Mai 2026)
+
+- **Filesystem Drilldown Close Fix**: Das `X`, der Backdrop und `Escape` schließen das Filesystem-Drilldown jetzt zuverlässig, auch wenn das Modal-Markup erst nach dem Script geladen wird.
 n### v1.6.149 (18. Mai 2026)
 
 - **Filesystem Chart Drilldown Fix**: Klick auf FS-Chart öffnet nun zuverlässig das korrekt selektierte Chart; Drilldown-Fenster lässt sich wieder sauber schließen.

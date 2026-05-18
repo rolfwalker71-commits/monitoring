@@ -10715,6 +10715,36 @@ function wireEvents() {
     }
   }, true);
 
+  document.addEventListener("click", (event) => {
+    const element = event.target instanceof Element ? event.target : null;
+    if (!element) {
+      return;
+    }
+
+    if (element.closest("#chartDrillCloseBtn")) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeChartDrillModal();
+      return;
+    }
+
+    if (element.matches("#chartDrillModal .chart-drill-backdrop")) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeChartDrillModal();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") {
+      return;
+    }
+    const modal = document.getElementById("chartDrillModal");
+    if (modal && !modal.classList.contains("hidden")) {
+      closeChartDrillModal();
+    }
+  });
+
   const themeToggleButton = document.getElementById("themeToggleButton");
   if (themeToggleButton) {
     themeToggleButton.addEventListener("click", () => {
@@ -10735,23 +10765,6 @@ function wireEvents() {
         startAutoRefreshTimer();
         if (autoRefreshLastRefreshAt) startAutoRefreshCountdown();
       }
-    });
-  }
-
-  const chartDrillCloseBtn = document.getElementById("chartDrillCloseBtn");
-  if (chartDrillCloseBtn) {
-    chartDrillCloseBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      closeChartDrillModal();
-    });
-  }
-  const chartDrillBackdrop = document.querySelector("#chartDrillModal .chart-drill-backdrop");
-  if (chartDrillBackdrop) {
-    chartDrillBackdrop.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      closeChartDrillModal();
     });
   }
 
