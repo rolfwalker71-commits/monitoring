@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.143 (21. Mai 2026)
+
+- **Host Interests Auto-Sync**: When user selects hosts, mail subscriptions are automatically activated for those hosts. When hosts are deselected, mail subscriptions are disabled.
+
 ### v1.6.142 (18. Mai 2026)
 
 - **UI Text**: Bereich "Login Changelog" in der Globalansicht auf "Anmeldungen" umbenannt.

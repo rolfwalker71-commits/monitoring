@@ -1669,6 +1669,74 @@ async function saveHostInterestsPreferences() {
   if (!prefsResponse.ok) {
     throw new Error(prefsData.error || ("HTTP " + prefsResponse.status));
   }
+
+  // Auto-sync mail subscriptions for selected hosts
+  try {
+    const subsResponse = await fetch("/api/v1/user-alert-subscriptions", {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+    const currentSubs = subsResponse.ok ? await subsResponse.json() : [];
+    
+    // Build new subscriptions: sync selected hosts with notify_mail=true
+    const newSubs = [];
+    const selectedHosts = new Set(state.hostInterestHosts);
+    
+    // For each currently subscribed host, preserve other settings
+    for (const sub of currentSubs) {
+      const hostname = String(sub.hostname || "").trim();
+      if (!hostname) continue;
+      
+      if (selectedHosts.has(hostname)) {
+        // Keep subscription and ensure notify_mail is true
+        newSubs.push({
+          hostname: hostname,
+          notify_mail: true,
+          notify_telegram: Boolean(sub.notify_telegram || false),
+        });
+        selectedHosts.delete(hostname); // Mark as processed
+      } else {
+        // Host was deselected: disable notify_mail
+        newSubs.push({
+          hostname: hostname,
+          notify_mail: false,
+          notify_telegram: Boolean(sub.notify_telegram || false),
+        });
+      }
+    }
+    
+    // Add new subscriptions for any newly selected hosts
+    for (const hostname of selectedHosts) {
+      newSubs.push({
+        hostname: hostname,
+        notify_mail: true,
+        notify_telegram: false,
+      });
+    }
+    
+    // Save updated subscriptions
+    if (newSubs.length > 0) {
+      const updateResponse = await fetch("/api/v1/user-alert-subscriptions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscriptions: newSubs }),
+      });
+      
+      if (updateResponse.ok) {
+        // Show notification about auto-activated mail subscriptions
+        const activatedHosts = Array.from(state.hostInterestHosts).sort();
+        if (activatedHosts.length > 0) {
+          const message = activatedHosts.length === 1
+            ? `Mail-Abo automatisch aktiviert für: ${activatedHosts[0]}`
+            : `Mail-Abos automatisch aktiviert für ${activatedHosts.length} Hosts`;
+          showToast("success", message, 4000);
+        }
+      }
+    }
+  } catch (err) {
+    // Silently fail subscription sync - preferences are already saved
+    console.debug("Subscription sync failed:", err);
+  }
 }
 
 async function fetchSessionState() {
