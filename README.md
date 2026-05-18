@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.203 (18. Mai 2026)
+
+- **License Card Redesign**: Lizenzkarte mit vereinfachter Struktur neu aufgebaut; 3x2 Grid-Layout mit allen 6 Lizenzfeldern, gleiche Höhe und gelber Balken wie andere Header-Chips.
 n### v1.6.202 (18. Mai 2026)
 
 - **License Card Border**: Linker Balken von Orange zu Gelb geändert (Farbcodierung passt besser zum System-Theme).
