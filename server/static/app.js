@@ -12624,7 +12624,7 @@ async function loadSystemOverview() {
               const customerId = `so-addon-customer-${addonIndex}-${customerIndex}`;
               return `
                 <section class="system-overview-country-group">
-                  <button class="system-overview-toggle" type="button" data-target-id="${customerId}" aria-expanded="false">
+                  <button class="system-overview-toggle system-overview-toggle--customer" type="button" data-target-id="${customerId}" aria-expanded="false">
                     <span class="system-overview-chevron">▶</span>
                     <span class="so-country-header">👥 ${escapeHtml(customer)} (${customerHostCount})</span>
                   </button>
@@ -12716,7 +12716,7 @@ async function loadSystemOverview() {
               const customerId = `so-customer-${countryIndex}-${customerIndex}`;
               return `
                 <section class="system-overview-country-group">
-                  <button class="system-overview-toggle" type="button" data-target-id="${customerId}" aria-expanded="false">
+                  <button class="system-overview-toggle system-overview-toggle--customer" type="button" data-target-id="${customerId}" aria-expanded="false">
                     <span class="system-overview-chevron">▶</span>
                     <span class="so-country-header">👥 ${escapeHtml(customer)} (${customerHostCount})</span>
                   </button>

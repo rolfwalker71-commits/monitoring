@@ -9232,6 +9232,21 @@ body[data-theme="dark"] .backup-row--hana td {
   flex: 0 0 12px;
 }
 
+.system-overview-toggle--customer {
+  width: auto;
+  max-width: calc(100% - 24px);
+  padding: 0 10px;
+  border-radius: 8px;
+  border-color: #d5e0ee;
+  background: rgba(245, 249, 255, 0.65);
+  box-shadow: none;
+}
+
+.system-overview-toggle--customer:hover:not(:disabled) {
+  background: rgba(250, 252, 255, 0.9);
+  border-color: #bfd0e6;
+}
+
 .system-overview-os-list,
 .system-overview-customer-list {
   display: block;
@@ -9636,6 +9651,17 @@ body[data-theme="dark"] .system-overview-toggle:hover:not(:disabled) {
 
 body[data-theme="dark"] .system-overview-toggle .system-overview-chevron {
   color: #93c5fd;
+}
+
+body[data-theme="dark"] .system-overview-toggle--customer {
+  border-color: #355274;
+  background: rgba(24, 40, 63, 0.78);
+  box-shadow: none;
+}
+
+body[data-theme="dark"] .system-overview-toggle--customer:hover:not(:disabled) {
+  border-color: #45678f;
+  background: rgba(28, 46, 72, 0.9);
 }
 
 body[data-theme="dark"] .system-overview-customer-block {

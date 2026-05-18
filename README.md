@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.140 (18. Mai 2026)
+
+- **Kundenansicht UI**: Kunden-Toggle-Zeilen entschärft (weniger Chip-Optik) und nicht mehr über volle Breite bis zum rechten Rand.
+
 ### v1.6.139 (18. Mai 2026)
 
 - **Journal Fehler Fix**: Ersten Buchstaben der Meldung nicht mehr abschneiden (Off-by-one bei short-iso Zeitstempel-Parsing).
