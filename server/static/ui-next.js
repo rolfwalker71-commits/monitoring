@@ -26,6 +26,7 @@ function shortTime(iso) {
 
 const state = {
   hosts: [],
+  sapVersionMap: new Map(),
   selectedHost: "",
   hostFilterMode: "all",
   hostSearch: "",
@@ -39,6 +40,32 @@ const state = {
   dbLifecycle: null,
   activeTab: "overview",
 };
+
+function resolveSapReleaseDisplay(sapRelease) {
+  if (!sapRelease) return "SAP -";
+  const releaseText = String(sapRelease).trim();
+  if (!releaseText) return "SAP -";
+
+  const buildMatch = releaseText.match(/\d+\.\d+\.\d+/);
+  const buildKey = buildMatch ? buildMatch[0] : releaseText;
+  const versionInfo = state.sapVersionMap.get(buildKey);
+  if (versionInfo?.featurePack) {
+    return versionInfo.featurePack;
+  }
+
+  return releaseText;
+}
+
+function resolveHostSapChip(host) {
+  const raw = asText(
+    host?.sap_feature_pack
+      || host?.sap_release
+      || host?.sap_version
+      || "",
+    ""
+  );
+  return resolveSapReleaseDisplay(raw);
+}
 
 async function apiGet(path) {
   const response = await fetch(path, { credentials: "same-origin" });
@@ -178,6 +205,7 @@ function matchesHostFilter(host) {
     host.customer_name,
     host.os,
     host.sap_feature_pack,
+    host.sap_release,
     host.hana_release,
   ]
     .map((v) => String(v || "").toLowerCase())
@@ -249,6 +277,7 @@ function renderHosts() {
       const customerName = asText(host.customer_name, "Ohne Kunde");
       const hostName = asText(host.hostname, "-");
       const hostIp = asText(host.primary_ip || host.ip_address || host.ip || host.ipv4, "-");
+      const sapChip = resolveHostSapChip(host);
       return `
         <article class="next-host-item ${active}" data-host="${escapeHtml(host.hostname)}">
           <p class="next-host-customer">${escapeHtml(customerName)}</p>
@@ -259,7 +288,7 @@ function renderHosts() {
           <p class="next-host-meta">${escapeHtml(hostName)} · ${escapeHtml(hostIp)}</p>
           <div class="next-host-chips">
             <span class="next-chip">${escapeHtml(asText(host.os, "OS -"))}</span>
-            <span class="next-chip">${escapeHtml(asText(host.sap_feature_pack, "SAP -"))}</span>
+            <span class="next-chip">${escapeHtml(sapChip)}</span>
             <span class="next-chip">${escapeHtml(asText(host.hana_release, "HANA -"))}</span>
           </div>
         </article>
@@ -519,6 +548,24 @@ async function loadHosts() {
   renderHosts();
 }
 
+async function loadSapB1VersionMap() {
+  try {
+    const data = await apiGet("/api/v1/sap-b1-version-map");
+    const entries = Array.isArray(data?.entries) ? data.entries : [];
+    state.sapVersionMap = new Map(
+      entries
+        .map((entry) => {
+          const build = String(entry?.build || "").trim();
+          if (!build) return null;
+          return [build, { featurePack: String(entry?.feature_pack || "").trim() }];
+        })
+        .filter(Boolean)
+    );
+  } catch (error) {
+    state.sapVersionMap = new Map();
+  }
+}
+
 async function loadSelectedHostData() {
   if (!state.selectedHost) {
     state.currentReport = null;
@@ -593,6 +640,7 @@ async function init() {
 
   await loadKpis();
   await loadOwnHosts();
+  await loadSapB1VersionMap();
   await loadHosts();
   await loadSelectedHostData();
 }

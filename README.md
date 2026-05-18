@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.188 (18. Mai 2026)
+
+- **SAP Versioning**: ui-next now resolves SAP release/build to Feature Pack using SAP B1 version map (/api/v1/sap-b1-version-map), matching old UI behavior.
 n### v1.6.187 (18. Mai 2026)
 
 - **UI Layout**: In ui-next Host-Cards wurde die Header-Reihenfolge angepasst: Kundenname oben, dann Host-Bezeichnung, gefolgt von Hostname + IP.
