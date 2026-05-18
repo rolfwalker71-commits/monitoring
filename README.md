@@ -524,6 +524,13 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.183 (18. Mai 2026)
+
+- **Parallel UI (Variante B) live**: Neue, separate Parallel-Oberflaeche unter `/ui-next` umgesetzt, ohne die bestehende Hauptseite zu veraendern.
+- **Header beibehalten**: Der bestehende Brand-Header wurde im neuen Layout uebernommen.
+- **KPI-Leiste wie Screenshot**: Vier Kennzahlen-Karten (Offene Alerts, Kritische Trends, Inaktive Hosts, Hosts Healthy) werden direkt unter dem Header dargestellt.
+- **Detailansicht mit Historie**: Links Hostliste mit Filtern/Suche, rechts Host-Detailtabs (`Overview`, `Datenbanken`, `SAP B1`, `Filesystems`) inkl. Blaettern durch Reports (Neueste/Neuer/Aelter).
+
 ### v1.6.182 (18. Mai 2026)
 
 - **Detail-Mockups erweitert**: `layout-mockups.html` enthaelt jetzt drei zusaetzliche konkrete Detailansichten fuer die Parallel-UI-Planung: (1) Datenbanken, (2) SAP B1, (3) Filesystems. Alle drei enthalten realistische Inhaltsbloecke inkl. Suche, Schnellfilter sowie Benutzer-/Global-/Admin-Settings.

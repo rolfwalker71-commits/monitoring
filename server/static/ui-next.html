@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Monitoring Parallel UI - Variante B</title>
+    <link rel="stylesheet" href="/styles.css?v=__ASSET_VERSION__" />
+    <link rel="stylesheet" href="/ui-next.css?v=__ASSET_VERSION__" />
+  </head>
+  <body>
+    <main class="container">
+      <div class="brand-header">
+        <div class="app-logo" aria-hidden="true">
+          <img src="/icons/logo.png" alt="Monitoring" />
+        </div>
+        <div class="brand-text">
+          <h1>System Health Dashboard</h1>
+          <p class="subtitle-meta">
+            <span class="brand-version">v<span id="nextVersion">-</span></span>
+            <span class="brand-platforms" aria-label="Linux und Windows">
+              <img class="brand-platform-icon" src="/icons/linux.png" alt="Linux" />
+              <img class="brand-platform-icon" src="/icons/windows.png" alt="Windows" />
+            </span>
+            <span class="next-badge">Parallel UI · Variante B</span>
+          </p>
+        </div>
+        <div class="brand-user">
+          <span id="nextUserBadge" class="brand-user-badge hidden"></span>
+          <button id="nextBackButton" class="brand-user-badge" type="button" title="Zur bisherigen Ansicht">↩ Bestehende UI</button>
+          <button id="nextLogoutButton" class="brand-user-badge brand-logout-btn hidden" type="button" title="Abmelden">🚪 Abmelden</button>
+        </div>
+        <div class="brand-partner-logo" aria-hidden="true">
+          <img src="/icons/ANG.png" alt="ANG" />
+        </div>
+      </div>
+
+      <section id="nextLoginGate" class="panel next-login-gate hidden">
+        <h2>Anmeldung erforderlich</h2>
+        <p>Bitte zuerst in der bestehenden Oberfläche anmelden.</p>
+        <button id="nextOpenMainLogin" class="btn-secondary" type="button">Zur Hauptansicht</button>
+      </section>
+
+      <section id="nextApp" class="panel hidden">
+        <div class="next-kpis" id="nextKpiRow">
+          <article class="next-kpi next-kpi-alert">
+            <h3>OFFENE ALERTS</h3>
+            <p class="value" id="kpiAlerts">-</p>
+            <p class="sub" id="kpiAlertsSub">-</p>
+          </article>
+          <article class="next-kpi next-kpi-trend">
+            <h3>KRITISCHE TRENDS</h3>
+            <p class="value" id="kpiTrends">-</p>
+            <p class="sub" id="kpiTrendsSub">-</p>
+          </article>
+          <article class="next-kpi next-kpi-inactive">
+            <h3>INAKTIVE HOSTS</h3>
+            <p class="value" id="kpiInactive">-</p>
+            <p class="sub" id="kpiInactiveSub">-</p>
+          </article>
+          <article class="next-kpi next-kpi-healthy">
+            <h3>HOSTS HEALTHY</h3>
+            <p class="value" id="kpiHealthy">-</p>
+            <p class="sub" id="kpiHealthySub">-</p>
+          </article>
+        </div>
+
+        <div class="next-toolbar">
+          <input id="nextHostSearch" class="search-input-compact" type="text" placeholder="Host/Kunde/OS suchen..." />
+          <button class="btn-secondary" id="nextFilterAll" type="button">Alle</button>
+          <button class="btn-secondary" id="nextFilterAlerts" type="button">Mit Alerts</button>
+          <button class="btn-secondary" id="nextFilterCritical" type="button">Nur Kritisch</button>
+          <span id="nextStatusText" class="count compact"></span>
+        </div>
+
+        <div class="next-layout">
+          <aside class="next-hosts">
+            <div id="nextHostList" class="next-host-list"></div>
+          </aside>
+
+          <section class="next-detail">
+            <div class="next-detail-head">
+              <div>
+                <h2 id="nextHostTitle">-</h2>
+                <p id="nextHostMeta" class="count compact"></p>
+              </div>
+              <div class="next-paging">
+                <button id="nextNewestReport" class="btn-secondary" type="button">Neueste</button>
+                <button id="nextNewerReport" class="btn-secondary" type="button">Neuer</button>
+                <button id="nextOlderReport" class="btn-secondary" type="button">Aelter</button>
+                <span id="nextReportPos" class="count compact"></span>
+              </div>
+            </div>
+
+            <div class="next-tabs">
+              <button data-tab="overview" class="tab-button active" type="button">Overview</button>
+              <button data-tab="databases" class="tab-button" type="button">Datenbanken</button>
+              <button data-tab="sap" class="tab-button" type="button">SAP B1</button>
+              <button data-tab="filesystems" class="tab-button" type="button">Filesystems</button>
+            </div>
+
+            <div id="nextDetailBody" class="next-detail-body"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script src="/ui-next.js?v=__ASSET_VERSION__"></script>
+  </body>
+</html>
