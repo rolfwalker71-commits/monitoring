@@ -3977,9 +3977,9 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-value-chip--sap,
 .host-value-chip--hana,
 .host-value-chip--sid {
-  border-color: #9fb9de;
-  background: rgba(255, 255, 255, 0.62);
-  color: #27466d;
+  border-color: #ea580c;
+  background: #fffbeb;
+  color: #92400e;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   font-size: 12px;
   font-weight: 900;
@@ -7772,9 +7772,9 @@ body[data-theme="dark"] .admin-sub-user-chip.is-admin {
 body[data-theme="dark"] .host-value-chip--sap,
 body[data-theme="dark"] .host-value-chip--hana,
 body[data-theme="dark"] .host-value-chip--sid {
-  border-color: rgba(255, 179, 71, 0.3);
-  background: rgba(255, 179, 71, 0.35);
-  color: #ffb347;
+  border-color: #ea580c;
+  background: rgba(234, 88, 12, 0.15);
+  color: #fb923c;
 }
 
 body[data-theme="dark"] .host-value-chip--customer-title {
