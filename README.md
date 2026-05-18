@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.177 (18. Mai 2026)
+
+- **Hostkarten-Gradient auf Markenfarben**: Der Hintergrundverlauf der einzelnen Hostkarte wurde auf die gewuenschten Farben `#006285` und `#f7a600` umgestellt und insgesamt leicht dunkler abgestimmt.
+
 ### v1.6.176 (18. Mai 2026)
 
 - **Hostkarten-Hintergrund leicht dunkler**: Der bestehende Verlauf auf der einzelnen Hostkarte wurde in den gleichen Farbtönen beibehalten, aber dezent dunkler abgestimmt, damit die Karten etwas mehr Tiefe und Kontrast haben.
