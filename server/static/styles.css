@@ -3936,9 +3936,9 @@ body[data-theme="dark"] .trend-progress-bar {
   text-align: left;
   border: 1px solid #c8dbee;
   background:
-    radial-gradient(circle at 100% 0%, rgba(247, 166, 0, 0.20) 0%, transparent 52%),
-    radial-gradient(circle at 0% 100%, rgba(0, 98, 133, 0.24) 0%, transparent 54%),
-    linear-gradient(180deg, #eaf4f8 0%, #d9e8ef 100%);
+    radial-gradient(circle at 100% 0%, rgba(14, 165, 233, 0.11) 0%, transparent 50%),
+    radial-gradient(circle at 0% 100%, rgba(30, 64, 175, 0.08) 0%, transparent 50%),
+    linear-gradient(180deg, #f7fbff 0%, #eaf3ff 100%);
   color: var(--text);
   border-radius: 12px;
   padding: 6px 44px 6px 10px;

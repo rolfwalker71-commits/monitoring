@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.180 (18. Mai 2026)
+
+- **Hostkarten-Hintergrund zurueckgesetzt**: Der eigentliche Kartenhintergrund wurde auf den Stand vor der letzten Farbumstellung zurueckgestellt. Die aktuellen Pillenfarben (Kunde/SAP/HANA/SID) bleiben unveraendert.
+
 ### v1.6.179 (18. Mai 2026)
 
 - **Chip-Farben vereinheitlicht**: In der vorletzten Hostkarten-Reihe nutzen jetzt alle drei Chips (SAP, HANA, SID) den gleichen Stil/Farbton `#f7a600`.
