@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.186 (18. Mai 2026)
+
+- **Performance**: pull-server-only.sh überspringt jetzt standardmäßig die teure Re-Download-Verifizierung (VERIFY_SYNC=0) und nutzt konfigurierbare parallele Downloads (MAX_PARALLEL_DOWNLOADS, Standard 8); strikte Verifizierung weiterhin über VERIFY_SYNC=1 möglich.
 n### v1.6.185 (18. Mai 2026)
 
 - **Pull Scripts**: pull-server.sh und pull-server-only.sh liefern jetzt auch ui-next.html, ui-next.css und ui-next.js aus, damit /ui-next nach einem Server-Update funktioniert.

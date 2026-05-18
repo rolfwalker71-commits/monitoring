@@ -89,6 +89,12 @@ EOF
 
 echo "Installiere Serverteil nach: $TARGET_DIR"
 
+# Speed/strictness tuning:
+# - VERIFY_SYNC=1 enables costly re-download + hash verification.
+# - MAX_PARALLEL_DOWNLOADS controls concurrent downloads.
+VERIFY_SYNC="${VERIFY_SYNC:-0}"
+MAX_PARALLEL_DOWNLOADS="${MAX_PARALLEL_DOWNLOADS:-8}"
+
 mkdir -p "$TARGET_DIR/server/static/icons" "$TARGET_DIR/server/data" "$TARGET_DIR/updates/client/windows" "$TARGET_DIR/updates/client/linux"
 
 if ! COMMIT_META_JSON="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE/commits/main")"; then
@@ -233,29 +239,33 @@ client/linux/install_agent.sh
 client/linux/self_update.sh
 "
 
-# Parallele downloads: bis zu 4 gleichzeitig
+# Parallele downloads: standardmaessig bis zu 8 gleichzeitig
 FILE_COUNT="$(printf '%s\n' "$FILES_LIST" | sed '/^$/d' | wc -l | tr -d ' ')"
-echo "Lade ${FILE_COUNT} Dateien parallel (max 4 gleichzeitig)..."
-if ! printf '%s\n' "$FILES_LIST" | sed '/^$/d' | xargs -P 4 -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"'; then
+echo "Lade ${FILE_COUNT} Dateien parallel (max ${MAX_PARALLEL_DOWNLOADS} gleichzeitig)..."
+if ! printf '%s\n' "$FILES_LIST" | sed '/^$/d' | xargs -P "$MAX_PARALLEL_DOWNLOADS" -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"'; then
   echo "Fehler bei parallelen Downloads" >&2
   exit 1
 fi
 echo "Dateien geladen ✓"
 
-echo "Pruefe heruntergeladene Dateien gegen gepinnten Commit..."
-VERIFY_ERRORS=0
-while IFS= read -r source_path; do
-  [ -n "$source_path" ] || continue
-  if ! verify_synced_file "$source_path" "$TARGET_DIR/$source_path"; then
-    VERIFY_ERRORS=$((VERIFY_ERRORS + 1))
-  fi
-done < <(printf '%s\n' "$FILES_LIST" | sed '/^$/d')
+if [ "$VERIFY_SYNC" = "1" ]; then
+  echo "Pruefe heruntergeladene Dateien gegen gepinnten Commit (VERIFY_SYNC=1)..."
+  VERIFY_ERRORS=0
+  while IFS= read -r source_path; do
+    [ -n "$source_path" ] || continue
+    if ! verify_synced_file "$source_path" "$TARGET_DIR/$source_path"; then
+      VERIFY_ERRORS=$((VERIFY_ERRORS + 1))
+    fi
+  done < <(printf '%s\n' "$FILES_LIST" | sed '/^$/d')
 
-if [ "$VERIFY_ERRORS" -gt 0 ]; then
-  echo "Verifikation fehlgeschlagen: $VERIFY_ERRORS Datei(en) stimmen nicht mit dem gepinnten Commit ueberein." >&2
-  exit 1
+  if [ "$VERIFY_ERRORS" -gt 0 ]; then
+    echo "Verifikation fehlgeschlagen: $VERIFY_ERRORS Datei(en) stimmen nicht mit dem gepinnten Commit ueberein." >&2
+    exit 1
+  fi
+  echo "Verifikation erfolgreich ✓ Alle Dateien entsprechen Commit $SHA"
+else
+  echo "Verifikation uebersprungen (VERIFY_SYNC=0, Standard fuer schnellen Pull)"
 fi
-echo "Verifikation erfolgreich ✓ Alle Dateien entsprechen Commit $SHA"
 
 # Mirror update payloads to /updates so agents can update from SERVER_URL.
 cp -f "$TARGET_DIR/BUILD_VERSION" "$TARGET_DIR/updates/BUILD_VERSION"
