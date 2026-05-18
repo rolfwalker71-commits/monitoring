@@ -6699,6 +6699,7 @@ function renderReportCard(report) {
   const cpuCores = Number(cpu.cores ?? cpu.core_count ?? cpu.logical_cores ?? payload.cpu_cores);
   const cpuModelName = asText(cpu.model_name || cpu.model || cpu.name || payload.cpu_model_name || "-");
   const defaultNicIpv4 = resolveDefaultNicIpv4(report, payload, network);
+  const technicalHostname = asText(report.hostname || payload.hostname);
   const deliveryMode = asText(report.delivery_mode || payload.delivery_mode || "live", "live").toLowerCase();
   const isDelayed = deliveryMode === "delayed" || payload.is_delayed === true;
   const chipClass = isDelayed ? "delivery-chip delayed" : "delivery-chip live";
