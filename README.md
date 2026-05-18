@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.187 (18. Mai 2026)
+
+- **UI Layout**: In ui-next Host-Cards wurde die Header-Reihenfolge angepasst: Kundenname oben, dann Host-Bezeichnung, gefolgt von Hostname + IP.
 n### v1.6.186 (18. Mai 2026)
 
 - **Performance**: pull-server-only.sh überspringt jetzt standardmäßig die teure Re-Download-Verifizierung (VERIFY_SYNC=0) und nutzt konfigurierbare parallele Downloads (MAX_PARALLEL_DOWNLOADS, Standard 8); strikte Verifizierung weiterhin über VERIFY_SYNC=1 möglich.

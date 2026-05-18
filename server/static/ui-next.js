@@ -246,13 +246,17 @@ function renderHosts() {
     .map((host) => {
       const active = host.hostname === state.selectedHost ? "active" : "";
       const alertText = asNum(host.open_alert_count, 0) > 0 ? `🚨 ${host.open_alert_count}` : "OK";
+      const customerName = asText(host.customer_name, "Ohne Kunde");
+      const hostName = asText(host.hostname, "-");
+      const hostIp = asText(host.primary_ip || host.ip_address || host.ip || host.ipv4, "-");
       return `
         <article class="next-host-item ${active}" data-host="${escapeHtml(host.hostname)}">
+          <p class="next-host-customer">${escapeHtml(customerName)}</p>
           <h4>
             <span>${escapeHtml(asText(host.display_name, host.hostname))}</span>
             <span>${escapeHtml(alertText)}</span>
           </h4>
-          <p class="next-host-meta">${escapeHtml(host.hostname)} · ${escapeHtml(asText(host.customer_name, "Ohne Kunde"))}</p>
+          <p class="next-host-meta">${escapeHtml(hostName)} · ${escapeHtml(hostIp)}</p>
           <div class="next-host-chips">
             <span class="next-chip">${escapeHtml(asText(host.os, "OS -"))}</span>
             <span class="next-chip">${escapeHtml(asText(host.sap_feature_pack, "SAP -"))}</span>
