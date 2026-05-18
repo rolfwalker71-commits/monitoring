@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.197 (18. Mai 2026)
+
+- **Old UI SAP card alignment**: Titel der 3 SAP-Karten an die dargestellten Werte angepasst und Kartenhöhe/Position im Report-Header korrigiert (kompakter, auf Höhe zwischen Hostbezeichnung links und Datum rechts).
 n### v1.6.196 (18. Mai 2026)
 
 - **Old UI SAP header cards**: Kleine SAP/HANA Chips unter dem Hostnamen im Report-Header durch 3 große Karten im ui-next-Stil ersetzt (Feature Pack, Patch Level, Build) und responsiv/dark-mode-fähig gestaltet.

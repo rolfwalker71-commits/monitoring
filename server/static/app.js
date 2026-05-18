@@ -6891,21 +6891,21 @@ function renderReportCard(report) {
         <div class="report-header-left">
           <h3>${escapeHtml(title)}</h3>
           <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}${reportDeliveryLag !== "-" ? ` <span class="report-detail-chip report-delivery-chip">⏱️ ${escapeHtml(reportDeliveryLag)}</span>` : ""}</p>
-          ${hasKpiCardData ? `<div class="report-sap-kpi-row">
-            <article class="report-sap-kpi-card report-sap-kpi-card--feature" title="Feature Pack">
-              <h4>FEATURE PACK</h4>
-              <p>${escapeHtml(featurePackKpiValue)}</p>
-            </article>
-            <article class="report-sap-kpi-card report-sap-kpi-card--patch" title="Patch Level">
-              <h4>PATCH LEVEL</h4>
-              <p>${escapeHtml(patchLevelKpiValue)}</p>
-            </article>
-            <article class="report-sap-kpi-card report-sap-kpi-card--build" title="Build">
-              <h4>BUILD</h4>
-              <p>${escapeHtml(buildKpiValue)}</p>
-            </article>
-          </div>` : ""}
         </div>
+        ${hasKpiCardData ? `<div class="report-sap-kpi-row">
+          <article class="report-sap-kpi-card report-sap-kpi-card--feature" title="Feature Pack">
+            <h4>FEATURE PACK</h4>
+            <p>${escapeHtml(featurePackKpiValue)}</p>
+          </article>
+          <article class="report-sap-kpi-card report-sap-kpi-card--patch" title="HANA Release">
+            <h4>HANA RELEASE</h4>
+            <p>${escapeHtml(patchLevelKpiValue)}</p>
+          </article>
+          <article class="report-sap-kpi-card report-sap-kpi-card--build" title="HANA SID">
+            <h4>HANA SID</h4>
+            <p>${escapeHtml(buildKpiValue)}</p>
+          </article>
+        </div>` : ""}
         <div class="report-header-meta">
           <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
           <span class="${chipClass}">${chipText}</span>

@@ -5777,8 +5777,8 @@ body[data-theme="dark"] .brand-session-badge {
 
 .report-header {
   display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: flex-start;
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 560px) auto;
+  align-items: center;
   gap: 12px;
   margin-bottom: 6px;
 }
@@ -5800,6 +5800,7 @@ body[data-theme="dark"] .brand-session-badge {
   align-items: flex-end;
   gap: 6px;
   flex-shrink: 0;
+  align-self: center;
 }
 
 .report-subtitle {
@@ -5831,43 +5832,54 @@ body[data-theme="dark"] .brand-session-badge {
 
 .report-sap-kpi-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(150px, 1fr));
-  gap: 10px;
-  margin: 8px 0 0;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 0;
+  align-self: center;
 }
 
 .report-sap-kpi-card {
   border: 1px solid #c9d6e6;
-  border-radius: 14px;
+  border-radius: 12px;
   background: linear-gradient(180deg, #f3f5f7 0%, #eceff3 100%);
-  padding: 10px 12px;
-  min-height: 88px;
+  padding: 7px 10px;
+  min-height: 62px;
   box-sizing: border-box;
 }
 
 .report-sap-kpi-card h4 {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.02em;
   color: #607892;
   line-height: 1;
 }
 
 .report-sap-kpi-card p {
-  margin: 8px 0 0;
-  font-size: 44px;
+  margin: 6px 0 0;
+  font-size: 22px;
   line-height: 1;
   font-weight: 800;
   color: #16324e;
 }
 
 @media (max-width: 980px) {
+  .report-header {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
   .report-sap-kpi-row {
-    grid-template-columns: repeat(3, minmax(120px, 1fr));
+    grid-template-columns: repeat(3, minmax(110px, 1fr));
+    width: 100%;
+  }
+
+  .report-header-meta {
+    align-items: flex-start;
   }
 
   .report-sap-kpi-card p {
-    font-size: 36px;
+    font-size: 20px;
   }
 }
 
@@ -5877,11 +5889,11 @@ body[data-theme="dark"] .brand-session-badge {
   }
 
   .report-sap-kpi-card {
-    min-height: 74px;
+    min-height: 58px;
   }
 
   .report-sap-kpi-card p {
-    font-size: 30px;
+    font-size: 18px;
   }
 }
 
