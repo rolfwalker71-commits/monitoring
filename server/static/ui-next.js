@@ -185,6 +185,8 @@ function wireTabs() {
 }
 
 function matchesHostFilter(host) {
+  if (Boolean(host?.is_hidden)) return false;
+
   if (state.hostFilterMode === "alerts" && asNum(host.open_alert_count, 0) <= 0) return false;
   if (state.hostFilterMode === "critical" && asNum(host.open_critical_alert_count, 0) <= 0) return false;
 
@@ -257,7 +259,10 @@ function renderHosts() {
   if (!container) return;
 
   const visible = state.hosts.filter(matchesHostFilter);
-  status.textContent = `${visible.length} von ${state.hosts.length} Hosts`;
+  const hiddenTotal = state.hosts.filter((host) => Boolean(host?.is_hidden)).length;
+  status.textContent = hiddenTotal > 0
+    ? `${visible.length} von ${state.hosts.length - hiddenTotal} Hosts (${hiddenTotal} ausgeblendet)`
+    : `${visible.length} von ${state.hosts.length} Hosts`;
 
   if (visible.length === 0) {
     container.innerHTML = '<p class="next-muted">Keine Hosts mit aktuellem Filter.</p>';

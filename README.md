@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.189 (18. Mai 2026)
+
+- **Host Visibility**: ui-next now respects host is_hidden and hides hidden hosts by default again; status line now indicates hidden host count.
 n### v1.6.188 (18. Mai 2026)
 
 - **SAP Versioning**: ui-next now resolves SAP release/build to Feature Pack using SAP B1 version map (/api/v1/sap-b1-version-map), matching old UI behavior.
