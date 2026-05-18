@@ -4104,7 +4104,7 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-customer-line {
   display: block;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 800;
   color: #0f3f5f;
   word-break: break-word;
@@ -4566,7 +4566,7 @@ body[data-theme="dark"] .trend-progress-bar {
   border-color: #fecaca;
 }
 
-.host-item span:not(.host-value-chip):not(.host-agent-mini-dot) {
+.host-item .host-meta-line span:not(.host-value-chip):not(.host-agent-mini-dot) {
   color: var(--muted);
   font-size: 11px;
 }
