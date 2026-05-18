@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Monitoring Dashboard</title>
-    <link rel="stylesheet" href="/styles.css?v=__ASSET_VERSION__" />
+    <title>System Infoboard</title>
+    <link rel="stylesheet" href="/styles.css?v=__ASSET_VERSION__&uihotfix=20260518a" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#1e3a5f" />
     <link rel="apple-touch-icon" href="/icons/pwa-icon-192.png" />
@@ -16,7 +16,7 @@
           <div class="login-logo" aria-hidden="true">
             <img src="icons/logo.png" alt="Monitoring" />
           </div>
-          <p class="login-product-title">System Health Dashboard</p>
+          <p class="login-product-title">System Infoboard</p>
           <h2>Webclient Anmeldung</h2>
           <p class="muted">Monitoring Zugang mit Session-Schutz</p>
         </div>
@@ -42,7 +42,7 @@
           <img src="icons/logo.png" alt="Monitoring" />
         </div>
         <div class="brand-text">
-          <h1>System Health Dashboard</h1>
+          <h1>System Infoboard</h1>
           <p class="subtitle-meta">
             <span class="brand-version">v<span id="webclientVersion">-</span></span>
             <span class="brand-platforms" aria-label="Linux und Windows">
@@ -69,9 +69,9 @@
       <section id="appPanel" class="panel hidden">
         <div class="panel-header">
           <div class="panel-actions">
-            <span id="headerAlertChip" class="header-stat-chip header-stat-chip-alert hidden" title="Globale offene Alerts (Alle)"><span class="header-chip-icon">🚨</span> <span id="headerAlertCount" class="header-chip-count">0</span> <span class="header-chip-scope">Alle</span></span>
-            <span id="headerTrendsChip" class="header-stat-chip header-stat-chip-warn hidden" title="Kritische Trends (24h)"><span class="header-chip-icon">📈</span> <span id="headerTrendsCount" class="header-chip-count">0</span> <span class="header-chip-scope">24h</span></span>
-            <span id="headerInactiveChip" class="header-stat-chip header-stat-chip-inactive hidden" title="Inaktive Hosts (1h)"><span class="header-chip-icon">💤</span> <span id="headerInactiveCount" class="header-chip-count">0</span> <span class="header-chip-scope">1h</span></span>
+            <span id="headerAlertChip" class="header-stat-chip header-stat-chip-alert hidden" title="Globale offene Alerts (Alle)"><span class="header-chip-label">OFFENE ALERTS</span><span id="headerAlertCount" class="header-chip-count">0</span><span class="header-chip-scope">Alle</span></span>
+            <span id="headerTrendsChip" class="header-stat-chip header-stat-chip-warn hidden" title="Kritische Trends (24h)"><span class="header-chip-label">KRITISCHE TRENDS</span><span id="headerTrendsCount" class="header-chip-count">0</span><span class="header-chip-scope">24h</span></span>
+            <span id="headerInactiveChip" class="header-stat-chip header-stat-chip-inactive hidden" title="Inaktive Hosts (1h)"><span class="header-chip-label">INAKTIVE HOSTS</span><span id="headerInactiveCount" class="header-chip-count">0</span><span class="header-chip-scope">Schwelle 1h</span></span>
             <button id="openUserSettingsButton" class="btn-emoji-pill" type="button" title="Benutzereinstellungen">👤</button>
             <button id="globalViewButton" class="btn-emoji-pill" type="button" title="Globale Ansichten">🌐</button>
             <button id="openAlarmSettingsButton" class="btn-emoji-pill" type="button" title="Einstellungen">⚙️</button>
@@ -1031,22 +1031,6 @@
                   <div class="host-search-box">
                     <input id="hostSearchInput" type="text" placeholder="Suchen..." class="search-input" />
                   </div>
-                  <label class="host-filter-control" for="hostAlertFilterSelect">
-                    <span>Alerts</span>
-                    <select id="hostAlertFilterSelect">
-                      <option value="all" selected>Alle</option>
-                      <option value="with-alerts">Mit Alerts</option>
-                      <option value="without-alerts">Ohne Alerts</option>
-                    </select>
-                  </label>
-                  <label class="host-filter-control" for="hostMutedFilterSelect">
-                    <span>Muted</span>
-                    <select id="hostMutedFilterSelect">
-                      <option value="all" selected>Alle</option>
-                      <option value="with-muted">Mit muted Alerts</option>
-                      <option value="without-muted">Ohne muted Alerts</option>
-                    </select>
-                  </label>
                   <label class="host-filter-control" for="hostSidebarInterestModeSelect">
                     <span>Interessen</span>
                     <select id="hostSidebarInterestModeSelect">
@@ -1307,21 +1291,19 @@
                   <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="databases"><span class="osi-icon">🗃️</span> Datenbanken</button>
                 </nav>
                 <div class="overview-content">
-                  <div class="pager pager-top">
-                    <button id="reportsPrevButtonTop" type="button">Vorherige Meldung</button>
-                    <button id="reportsNextButtonTop" type="button">Nächste Meldung</button>
-                  </div>
                   <div class="pager report-jump-row">
+                    <button id="reportsPrevButtonTop" class="report-nav-btn" type="button">Zurück</button>
+                    <button id="reportsNextButtonTop" class="report-nav-btn" type="button">Vor</button>
                     <label class="report-jump-control" for="reportJumpDateTimeInput">
                       <input id="reportJumpDateTimeInput" type="datetime-local" step="60" />
                     </label>
-                    <button id="reportJumpLatestButton" type="button">Aktuellste Meldung</button>
+                    <button id="reportJumpLatestButton" class="report-nav-btn" type="button">Aktuellste</button>
                     <p id="reportJumpBounds" class="count compact"></p>
                   </div>
                   <div id="reportList" class="report-list"></div>
                   <div class="pager">
-                    <button id="reportsPrevButton" type="button">Vorherige Meldung</button>
-                    <button id="reportsNextButton" type="button">Nächste Meldung</button>
+                    <button id="reportsPrevButton" class="report-nav-btn" type="button">Zurück</button>
+                    <button id="reportsNextButton" class="report-nav-btn" type="button">Vor</button>
                   </div>
                 </div><!-- /.overview-content -->
               </div><!-- /.overview-layout -->

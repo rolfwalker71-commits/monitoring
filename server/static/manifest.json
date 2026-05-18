@@ -1,7 +1,7 @@
 {
-  "name": "Monitoring Dashboard",
+  "name": "System Infoboard",
   "short_name": "Monitoring",
-  "description": "Server-Monitoring Dashboard",
+  "description": "System Infoboard",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f0f4fa",

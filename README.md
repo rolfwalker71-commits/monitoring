@@ -523,6 +523,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.200 (18. Mai 2026)
+
+- **Branding**: App-Name auf "System Infoboard" aktualisiert (Header, Login, PWA, Mail-Branding).
+- **Telegram**: Telegram-Alarmtexte enthalten jetzt ebenfalls das neue Branding.
+- **Old UI SAP-Karten**: Zusätzliche Lizenz-Karte oben integriert; zeigt alle verfügbaren Lizenzfelder kompakt ("Gültig bis" optional).
 n### v1.6.199 (18. Mai 2026)
 
 - **Old UI report hotfix**: JavaScript-Fehler "technicalHostname is not defined" in der Report-Ansicht behoben.

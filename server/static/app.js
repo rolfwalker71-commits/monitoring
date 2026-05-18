@@ -94,8 +94,6 @@ const state = {
   selectedHost: "",
   selectedDisplayName: "",
   hostSearchQuery: "",
-  hostAlertFilter: "all",
-  hostMutedFilter: "all",
   hostOsFilter: "all",
   hostCountryFilter: "all",
   systemOverviewCountryFilter: "all",
@@ -269,8 +267,6 @@ function persistAnalysisRangePreference() {
 
 function loadHostFilterPreferences() {
   state.hostSearchQuery = "";
-  state.hostAlertFilter = "all";
-  state.hostMutedFilter = "all";
   state.hostOsFilter = "all";
   state.hostCountryFilter = "all";
 
@@ -284,8 +280,6 @@ function loadHostFilterPreferences() {
     if (!raw) return;
     const saved = JSON.parse(raw);
     if (saved.hostSearchQuery !== undefined) state.hostSearchQuery = String(saved.hostSearchQuery);
-    if (saved.hostAlertFilter !== undefined) state.hostAlertFilter = String(saved.hostAlertFilter);
-    if (saved.hostMutedFilter !== undefined) state.hostMutedFilter = String(saved.hostMutedFilter);
     if (saved.hostOsFilter !== undefined) state.hostOsFilter = String(saved.hostOsFilter);
     if (saved.hostCountryFilter !== undefined) state.hostCountryFilter = String(saved.hostCountryFilter);
   } catch (_error) {
@@ -380,8 +374,6 @@ function persistHostFilterPreferences() {
   try {
     window.localStorage.setItem(`${HOST_FILTERS_STORAGE_KEY_PREFIX}${username}`, JSON.stringify({
       hostSearchQuery: state.hostSearchQuery,
-      hostAlertFilter: state.hostAlertFilter,
-      hostMutedFilter: state.hostMutedFilter,
       hostOsFilter: state.hostOsFilter,
       hostCountryFilter: state.hostCountryFilter,
     }));
@@ -6744,14 +6736,40 @@ function renderReportCard(report) {
   const featurePackKpiValue = sapFeaturePackChip || "-";
   const patchLevelKpiValue = hanaVersionChip || "-";
   const buildKpiValue = hanaSidChip || "-";
+  const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : {};
+  const licenseExpirationRaw = asText(sapLicense.expiration, "").trim();
+  const licenseExpiration = /^\d{8}$/.test(licenseExpirationRaw)
+    ? `${licenseExpirationRaw.substring(6, 8)}.${licenseExpirationRaw.substring(4, 6)}.${licenseExpirationRaw.substring(0, 4)}`
+    : licenseExpirationRaw;
+  const licenseFields = [
+    { label: "HW-Key", value: asText(sapLicense.hardware_key, "").trim() || "-" },
+    { label: "Installationsnummer", value: asText(sapLicense.instno, "").trim() || "-" },
+    { label: "Systemnummer", value: asText(sapLicense.system_nr, "").trim() || "-" },
+    { label: "Kundennummer", value: asText(sapLicense.customer_no, "").trim() || "-" },
+    { label: "Lizenznehmer", value: asText(sapLicense.customer_name, "").trim() || "-" }
+  ];
+  if (licenseExpiration) {
+    licenseFields.push({ label: "Gültig bis", value: licenseExpiration });
+  }
+  const hasLicenseKpiData = licenseFields.some((field) => field.value && field.value !== "-");
+  const licenseFieldsHtml = licenseFields
+    .map((field) => `<div class="report-sap-kpi-license-item"><span class="report-sap-kpi-license-label">${escapeHtml(field.label)}</span><span class="report-sap-kpi-license-value">${escapeHtml(field.value)}</span></div>`)
+    .join("");
+  const reportTimestampFull = asText(
+    formatUtcPlus2(report.received_at_utc || payload.timestamp_utc),
+    "-"
+  ).trim();
+  const reportTimestampParts = reportTimestampFull.split(",");
+  const reportTimestampDate = asText(reportTimestampParts.shift(), reportTimestampFull).trim();
+  const reportTimestampTime = asText(reportTimestampParts.join(","), "").trim();
 
   // Helper function to render meta-group items
-  function renderMetaItem(tag, label, value) {
-    return `<p class="meta-group-item"><strong class="kv-label"><span class="meta-label-tag">${tag}</span> ${label}</strong><span class="kv-value">${escapeHtml(asText(value || "-"))}</span></p>`;
+  function renderMetaItem(label, value) {
+    return `<p class="meta-group-item"><strong class="kv-label">${label}</strong><span class="kv-value">${escapeHtml(asText(value || "-"))}</span></p>`;
   }
 
-  function renderMetaItemHtml(tag, label, html) {
-    return `<p class="meta-group-item"><strong class="kv-label"><span class="meta-label-tag">${tag}</span> ${label}</strong><span class="kv-value">${html}</span></p>`;
+  function renderMetaItemHtml(label, html) {
+    return `<p class="meta-group-item"><strong class="kv-label">${label}</strong><span class="kv-value">${html}</span></p>`;
   }
 
   // Build grouped meta sections
@@ -6759,9 +6777,9 @@ function renderReportCard(report) {
     <div class="meta-group">
       <div class="meta-group-title">Agent-Info</div>
       <div class="meta-group-content">
-        ${renderMetaItem("ID", "Agent ID", report.agent_id || payload.agent_id)}
-        ${renderMetaItem("Ver", "Version", payload.agent_version)}
-        ${renderMetaItem("Key", "API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}
+        ${renderMetaItem("Agent ID", report.agent_id || payload.agent_id)}
+        ${renderMetaItem("Version", payload.agent_version)}
+        ${renderMetaItem("API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}
       </div>
     </div>
   `;
@@ -6770,10 +6788,10 @@ function renderReportCard(report) {
     <div class="meta-group">
       <div class="meta-group-title">System</div>
       <div class="meta-group-content">
-        ${renderMetaItem("OS", "OS", payload.os)}
-        ${renderMetaItem("Ker", "Kernel", payload.kernel)}
-        ${renderMetaItem("Up", "Uptime", formatUptime(payload.uptime_seconds))}
-        ${renderMetaItem("Q", "Queue", queueDepth + " Dateien")}
+        ${renderMetaItem("OS", payload.os)}
+        ${renderMetaItem("Kernel", payload.kernel)}
+        ${renderMetaItem("Uptime", formatUptime(payload.uptime_seconds))}
+        ${renderMetaItem("Queue", queueDepth + " Dateien")}
       </div>
     </div>
   `;
@@ -6782,11 +6800,11 @@ function renderReportCard(report) {
     <div class="meta-group">
       <div class="meta-group-title">Ressourcen</div>
       <div class="meta-group-content">
-        ${renderMetaItem("CPU", "CPU", formatPercent(cpu.usage_percent) + " | load " + formatNumber(cpu.load_avg_1, 2) + " / " + formatNumber(cpu.load_avg_5, 2) + " / " + formatNumber(cpu.load_avg_15, 2))}
-        ${renderMetaItem("CPU", "Kerne", Number.isFinite(cpuCores) && cpuCores > 0 ? String(Math.floor(cpuCores)) : "-")}
-        ${renderMetaItem("CPU", "Modell", cpuModelName)}
-        ${renderMetaItem("RAM", "RAM", formatPercent(memory.used_percent) + " | " + formatKilobytes(memory.used_kb) + " / " + formatKilobytes(memory.total_kb))}
-        ${renderMetaItem("Swap", "Swap", formatPercent(swap.used_percent) + " | " + formatKilobytes(swap.used_kb) + " / " + formatKilobytes(swap.total_kb))}
+        ${renderMetaItem("CPU", formatPercent(cpu.usage_percent) + " | load " + formatNumber(cpu.load_avg_1, 2) + " / " + formatNumber(cpu.load_avg_5, 2) + " / " + formatNumber(cpu.load_avg_15, 2))}
+        ${renderMetaItem("Kerne", Number.isFinite(cpuCores) && cpuCores > 0 ? String(Math.floor(cpuCores)) : "-")}
+        ${renderMetaItem("Modell", cpuModelName)}
+        ${renderMetaItem("RAM", formatPercent(memory.used_percent) + " | " + formatKilobytes(memory.used_kb) + " / " + formatKilobytes(memory.total_kb))}
+        ${renderMetaItem("Swap", formatPercent(swap.used_percent) + " | " + formatKilobytes(swap.used_kb) + " / " + formatKilobytes(swap.total_kb))}
       </div>
     </div>
   `;
@@ -6795,11 +6813,11 @@ function renderReportCard(report) {
     <div class="meta-group">
       <div class="meta-group-title">Netzwerk</div>
       <div class="meta-group-content">
-        ${renderMetaItem("IP", "Primary IP", report.primary_ip || payload.primary_ip)}
-        ${renderMetaItem("NIC", "Std. NIC IP", defaultNicIpv4 || "-")}
-        ${renderMetaItem("IF", "Default NIC", network.default_interface)}
-        ${renderMetaItem("GW", "Default GW", network.default_gateway)}
-        ${renderMetaItemHtml("DNS", "DNS", formatDnsServers(network.dns_servers))}
+        ${renderMetaItem("Primary IP", report.primary_ip || payload.primary_ip)}
+        ${renderMetaItem("Std. NIC IP", defaultNicIpv4 || "-")}
+        ${renderMetaItem("Default NIC", network.default_interface)}
+        ${renderMetaItem("Default GW", network.default_gateway)}
+        ${renderMetaItemHtml("DNS", formatDnsServers(network.dns_servers))}
       </div>
     </div>
   `;
@@ -6886,7 +6904,7 @@ function renderReportCard(report) {
   return `
     <article class="report-card">
       <div class="report-header">
-        ${hasKpiCardData ? `<div class="report-sap-kpi-row">
+        ${(hasKpiCardData || hasLicenseKpiData) ? `<div class="report-sap-kpi-row">
           <article class="report-sap-kpi-card report-sap-kpi-card--feature" title="Feature Pack">
             <h4>FEATURE PACK</h4>
             <p>${escapeHtml(featurePackKpiValue)}</p>
@@ -6899,9 +6917,13 @@ function renderReportCard(report) {
             <h4>HANA SID</h4>
             <p>${escapeHtml(buildKpiValue)}</p>
           </article>
+          ${hasLicenseKpiData ? `<article class="report-sap-kpi-card report-sap-kpi-card--license" title="SAP B1 Lizenzinfo">
+            <h4>LIZENZ</h4>
+            <div class="report-sap-kpi-license-grid">${licenseFieldsHtml}</div>
+          </article>` : ""}
         </div>` : ""}
         <div class="report-header-meta">
-          <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
+          <span class="report-time"><span class="report-time-date">${escapeHtml(reportTimestampDate)}</span>${reportTimestampTime ? `<span class="report-time-clock">${escapeHtml(reportTimestampTime)}</span>` : ""}</span>
           <span class="${chipClass}">${chipText}</span>
         </div>
       </div>
@@ -7038,8 +7060,6 @@ function renderHostIconFilters(hosts) {
 
 function filterAndSortHosts(hosts) {
   const query = state.hostSearchQuery.toLowerCase().trim();
-  const alertFilter = String(state.hostAlertFilter || "all");
-  const mutedFilter = String(state.hostMutedFilter || "all");
   const osFilter = String(state.hostOsFilter || "all");
   const countryFilter = String(state.hostCountryFilter || "all").toUpperCase();
 
@@ -7054,26 +7074,6 @@ function filterAndSortHosts(hosts) {
         || hostname.includes(query)
         || customerName.includes(query)
         || customerProject.includes(query);
-    });
-  }
-
-  if (alertFilter === "with-alerts") {
-    filtered = filtered.filter((host) => Number(host.open_alert_count || 0) > 0);
-  } else if (alertFilter === "without-alerts") {
-    filtered = filtered.filter((host) => Number(host.open_alert_count || 0) <= 0);
-  }
-
-  if (mutedFilter === "with-muted") {
-    filtered = filtered.filter((host) => {
-      const hostname = asText(host.hostname, "");
-      const muted = Array.isArray(state.mutedAlertsByHost[hostname]) ? state.mutedAlertsByHost[hostname] : [];
-      return muted.length > 0;
-    });
-  } else if (mutedFilter === "without-muted") {
-    filtered = filtered.filter((host) => {
-      const hostname = asText(host.hostname, "");
-      const muted = Array.isArray(state.mutedAlertsByHost[hostname]) ? state.mutedAlertsByHost[hostname] : [];
-      return muted.length === 0;
     });
   }
 
@@ -7130,8 +7130,6 @@ function splitHosts(hosts) {
 function hasActiveHostFilters() {
   return Boolean(
     String(state.hostSearchQuery || "").trim().length > 0
-    || String(state.hostAlertFilter || "all") !== "all"
-    || String(state.hostMutedFilter || "all") !== "all"
     || String(state.hostOsFilter || "all") !== "all"
     || String(state.hostCountryFilter || "all") !== "all"
   );
@@ -8684,9 +8682,15 @@ async function loadReportsForHost(options = {}) {
       }
     }
     if (reportJumpBounds) {
-      reportJumpBounds.textContent = oldestReportAtUtc
-        ? `Erste Nachricht: ${formatUtcPlus2(oldestReportAtUtc)}`
-        : "";
+      if (oldestReportAtUtc) {
+        const oldestReportText = asText(formatUtcPlus2(oldestReportAtUtc), "-").trim();
+        const oldestReportParts = oldestReportText.split(",");
+        const oldestReportDate = asText(oldestReportParts.shift(), oldestReportText).trim();
+        const oldestReportTime = asText(oldestReportParts.join(","), "").trim();
+        reportJumpBounds.innerHTML = `<span class="report-jump-label">Erste Nachricht:</span><span class="report-jump-value">${escapeHtml(oldestReportDate)}${oldestReportTime ? `<br>${escapeHtml(oldestReportTime)}` : ""}</span>`;
+      } else {
+        reportJumpBounds.textContent = "";
+      }
     }
     if (Number.isFinite(Number(data.offset))) {
       state.reportOffset = Math.max(0, Number(data.offset));
@@ -12081,20 +12085,6 @@ function wireEvents() {
     await loadHosts();
   });
 
-  document.getElementById("hostAlertFilterSelect").addEventListener("change", async (event) => {
-    state.hostAlertFilter = String(event.target?.value || "all");
-    persistHostFilterPreferences();
-    state.hostOffset = 0;
-    await loadHosts();
-  });
-
-  document.getElementById("hostMutedFilterSelect").addEventListener("change", async (event) => {
-    state.hostMutedFilter = String(event.target?.value || "all");
-    persistHostFilterPreferences();
-    state.hostOffset = 0;
-    await loadHosts();
-  });
-
   document.addEventListener("visibilitychange", () => {
     if (document.hidden || !state.isAuthenticated) {
       return;
@@ -12143,8 +12133,6 @@ async function init() {
   document.getElementById("criticalTrendsProjectSelect").value = String(state.criticalTrendsProjectHours);
   document.getElementById("inactiveHostsRangeSelect").value = String(state.inactiveHostsHours);
   document.getElementById("globalSeverityFilter").value = state.globalSeverityFilter;
-  document.getElementById("hostAlertFilterSelect").value = state.hostAlertFilter;
-  document.getElementById("hostMutedFilterSelect").value = state.hostMutedFilter;
   document.getElementById("hostSearchInput").value = state.hostSearchQuery;
   document.getElementById("loginUsernameInput").value = "";
   document.getElementById("loginPasswordInput").value = "";
@@ -12161,8 +12149,6 @@ async function init() {
       renderHosts(state.hosts);
     }
   });
-  document.getElementById("hostAlertFilterSelect").value = state.hostAlertFilter;
-  document.getElementById("hostMutedFilterSelect").value = state.hostMutedFilter;
   document.getElementById("hostSearchInput").value = state.hostSearchQuery;
   if (oauthResult) {
     state.viewMode = "settings";

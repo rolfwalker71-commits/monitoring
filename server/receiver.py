@@ -6371,7 +6371,7 @@ def mail_branding_header_html(
         f"<img src='{app_logo_uri}' alt='Monitoring' width='44' height='44' style='display:block;width:44px;height:44px;border:0;outline:none;text-decoration:none;'>"
         "</td>"
         "<td style='vertical-align:middle;'>"
-        "<div style='font-size:20px;font-weight:900;letter-spacing:.4px;line-height:1.1;'>System Health Dashboard</div>"
+        "<div style='font-size:20px;font-weight:900;letter-spacing:.4px;line-height:1.1;'>System Infoboard</div>"
         f"<div style='font-size:12px;font-weight:700;color:#5f7590;line-height:1.2;'>v{build_version}</div>"
         "</td>"
         "</tr>"
@@ -6693,6 +6693,8 @@ def inactive_hosts_mail_html(username: str, hosts: list[dict], threshold_hours: 
 
 def inactive_hosts_telegram_text(username: str, hosts: list[dict], threshold_hours: int) -> str:
     lines = [
+        "System Infoboard",
+        "",
         "🚨 Inaktive Hosts erkannt",
         "",
         f"👤 {username}",
@@ -6870,6 +6872,8 @@ def send_instant_alert_telegram_to_users(
 
         sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
         text = (
+            "System Infoboard\n"
+            "\n"
             f"{icon}\n"
             f"👤 {username}\n"
             f"🖥️ {title} ({hostname})\n"
