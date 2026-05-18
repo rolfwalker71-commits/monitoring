@@ -523,9 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
-### v1.6.137 (18. Mai 2026)
+### v1.6.138 (18. Mai 2026)
 
-- **Kundennamen Font-Größe**: Reduziert von 14px auf 12px für bessere Platznutzung bei längeren Namen.
+- **Kundennamen Font-Größe**: Angepasst auf 13px für bessere Platznutzung bei längeren Namen.
 
 ### v1.6.136 (18. Mai 2026)
 
