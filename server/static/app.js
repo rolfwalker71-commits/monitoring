@@ -9537,6 +9537,8 @@ function renderInactiveHosts(data) {
 
   const cards = inactive_hosts.map((host) => {
     const displayName = host.display_name || host.hostname;
+    const customerName = asText(host.customer_name || "").trim();
+    const displayTitle = customerName ? `${customerName} · ${displayName}` : displayName;
     const showHostname = displayName !== host.hostname;
     
     const osIconInfo = resolveHostOsIcon(host.os);
@@ -9562,7 +9564,7 @@ function renderInactiveHosts(data) {
             <img src="${osIconSrc}" class="ih-host-icon" alt="${escapeHtml(host.os)}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${osIconName}';}" />
           </div>
           <div class="ih-host-details">
-            <span class="ih-hostname">${escapeHtml(displayName)}${showHostname ? ` <span class="ih-hostname-sub">(${escapeHtml(host.hostname)})</span>` : ""}</span>
+            <span class="ih-hostname">${escapeHtml(displayTitle)}${showHostname ? ` <span class="ih-hostname-sub">(${escapeHtml(host.hostname)})</span>` : ""}</span>
             <div class="ih-meta-row">
               <span class="ih-meta-item">Letzter Kontakt: <span class="ih-last-seen">${escapeHtml(lastSeenText)}</span></span>
               <span class="ih-meta-item"><span class="ih-hours-badge ${hoursClass}">${host.hours_inactive.toFixed(1)}h inaktiv</span></span>

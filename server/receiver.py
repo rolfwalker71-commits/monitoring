@@ -4246,16 +4246,25 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
         primary_ip = str(payload.get("primary_ip", "") or "")
 
         host_settings = conn.execute(
-            "SELECT display_name_override, country_code_override FROM host_settings WHERE hostname = ?",
+            """
+            SELECT hs.display_name_override,
+                   hs.country_code_override,
+                   COALESCE(c.customer_name, '')
+            FROM host_settings hs
+            LEFT JOIN customers c ON c.id = hs.customer_id
+            WHERE hs.hostname = ?
+            """,
             (hostname,),
         ).fetchone()
         if host_settings:
             override_name = host_settings[0]
             country_code = host_settings[1]
+            customer_name = str(host_settings[2] or "").strip()
             if override_name:
                 display_name = override_name
         else:
             country_code = ""
+            customer_name = ""
 
         open_alerts = conn.execute(
             "SELECT COUNT(*) FROM alerts WHERE hostname = ? AND status = 'open'",
@@ -4274,6 +4283,7 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
         inactive_hosts.append({
             "hostname": hostname,
             "display_name": display_name,
+            "customer_name": customer_name,
             "last_report_time_utc": last_report_time_utc,
             "hours_inactive": round(hours_inactive, 1),
             "os": os_name,

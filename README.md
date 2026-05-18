@@ -524,6 +524,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.165 (18. Mai 2026)
+
+- **Inaktive Hosts**: Kundenname wird in der Inaktive-Hosts-Karte jetzt vor dem Hostnamen angezeigt (z. B. `Kunde · Anzeigename`).
+
 ### v1.6.164 (18. Mai 2026)
 
 - **DB Changelog UI**: Bei HANA-Eintraegen in der Aktionsspalte wird jetzt nur noch `erstellt/geloescht` mit Emoji gezeigt (ohne das Wort `Schema`). Zusaetzlich wurde Spalte 1 verschmälert, damit Spalte 2 weiter nach rechts rueckt.
