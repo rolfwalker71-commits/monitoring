@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.148 (18. Mai 2026)
+
+- **Server Pull (Linux Installer)**: `pull-server-only.sh` lädt und spiegelt jetzt auch `client/linux/install_agent.sh` nach `updates/client/linux/install_agent.sh`.
+
 ### v1.6.147 (18. Mai 2026)
 
 - **Einzelmeldung Chip-Design**: SAP/HANA Chips in der Einzelmeldung verwenden jetzt exakt dieselben Hostkarten-Klassen und damit das identische Pill-Design.
