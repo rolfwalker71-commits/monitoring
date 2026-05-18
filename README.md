@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.151 (18. Mai 2026)
+
+- **Host-Interessen**: Kundenname wird in der Liste jetzt als erste Zusatzinformation pro Zeile angezeigt.
+
 ### v1.6.150 (18. Mai 2026)
 
 - **Filesystem Drilldown Close Fix**: Das `X`, der Backdrop und `Escape` schließen das Filesystem-Drilldown jetzt zuverlässig, auch wenn das Modal-Markup erst nach dem Script geladen wird.

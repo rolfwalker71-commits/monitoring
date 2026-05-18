@@ -1356,10 +1356,12 @@ function renderHostInterestsEditor() {
   listEl.innerHTML = visibleHosts.map((host) => {
     const hostname = String(host.hostname || "");
     const displayName = String(host.display_name || hostname || "");
+    const customerName = String(host.customer_name || "").trim() || "Ohne Kunde";
     const checked = state.hostInterestHosts.has(hostname) ? "checked" : "";
     return `
       <label class="host-interest-item">
         <input type="checkbox" data-host-interest-host="${escapeHtml(hostname)}" ${checked} />
+        <span class="host-interest-customer">${escapeHtml(customerName)}</span>
         <span class="host-interest-name">${escapeHtml(displayName)}</span>
         <span class="host-interest-hostname">(${escapeHtml(hostname)})</span>
       </label>
