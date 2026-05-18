@@ -3870,6 +3870,10 @@ body[data-theme="dark"] .trend-progress-bar {
   border-left-width: 4px !important;
 }
 
+#headerLicenseChip.hidden {
+  display: none !important;
+}
+
 .header-stat-chip-license {
   border-left-color: #fbbf24 !important;
   border-left-width: 4px !important;
@@ -3890,6 +3894,32 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .header-stat-chip-license:hover {
   transform: none;
+}
+
+.header-license-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid #b6c6d8;
+  border-radius: 999px;
+  background: #f4f8fc;
+  color: #42526e;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.header-license-copy-btn:hover:not(:disabled) {
+  background: #ffffff;
+  border-color: #8fb0d0;
+}
+
+.header-license-copy-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .header-license-grid {

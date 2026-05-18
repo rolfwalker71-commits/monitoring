@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.207 (18. Mai 2026)
+
+- **License Card Height**: Maximale Hoehe der Lizenzkarte von 150px auf 100px reduziert (overflow-y: auto).
 n### v1.6.206 (18. Mai 2026)
 
 - **License Card Position**: Lizenzkarte ins horizontale Zentrum des Headers verschoben; Karteninhalt linksbündig.
