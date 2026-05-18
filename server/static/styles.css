@@ -2570,8 +2570,8 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   font-weight: 700;
 }
 
-#overviewDatabaseChangelogSection th:nth-child(1) { width: 30%; }
-#overviewDatabaseChangelogSection th:nth-child(2) { width: 16%; }
+#overviewDatabaseChangelogSection th:nth-child(1) { width: 24%; }
+#overviewDatabaseChangelogSection th:nth-child(2) { width: 22%; }
 #overviewDatabaseChangelogSection th:nth-child(3) { width: 16%; }
 #overviewDatabaseChangelogSection th:nth-child(4) { width: 20%; }
 #overviewDatabaseChangelogSection th:nth-child(5) { width: 18%; }

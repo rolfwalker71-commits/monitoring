@@ -524,6 +524,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.164 (18. Mai 2026)
+
+- **DB Changelog UI**: Bei HANA-Eintraegen in der Aktionsspalte wird jetzt nur noch `erstellt/geloescht` mit Emoji gezeigt (ohne das Wort `Schema`). Zusaetzlich wurde Spalte 1 verschmälert, damit Spalte 2 weiter nach rechts rueckt.
+
 ### v1.6.163 (18. Mai 2026)
 
 - **Startup-Rebuild Stabilitaet**: Changelog-Backfill verarbeitet Reports jetzt streamend statt mit `fetchall` und schreibt zusaetzlich in Intervallen Zwischen-Commits, um OOM-Spitzen beim 18-Tage-Neuaufbau zu vermeiden.

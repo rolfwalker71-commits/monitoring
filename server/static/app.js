@@ -9367,7 +9367,7 @@ async function loadDatabaseLifecycleForHost() {
         const instanceName = asText(item.instance_name || "MSSQLSERVER");
         const isHana = instanceName.toUpperCase() === "HANA";
         const actionLabel = isHana
-          ? (item.action === "create" ? "✨ Schema erstellt" : item.action === "delete" ? "🗑️ Schema gelöscht" : "Schema umbenannt")
+          ? (item.action === "create" ? "✨ erstellt" : item.action === "delete" ? "🗑️ gelöscht" : "umbenannt")
           : (item.action === "create" ? "✨ Erstellt" : item.action === "delete" ? "🗑️ Gelöscht" : "Umbenannt");
         const dbLabel = isHana
           ? `Schema: ${dbName}`
