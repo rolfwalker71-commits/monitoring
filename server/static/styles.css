@@ -4003,7 +4003,7 @@ body[data-theme="dark"] .trend-progress-bar {
   font-size: 12px;
   font-weight: 900;
   line-height: 1.1;
-  border-radius: 8px;
+  border-radius: 4px;
 }
 
 .host-value-chip--env {
@@ -4060,7 +4060,7 @@ body[data-theme="dark"] .trend-progress-bar {
   border-color: #9fb7cf;
   background: linear-gradient(180deg, #e9f1f9 0%, #d9e6f3 100%);
   color: #2f4f6f;
-  border-radius: 8px;
+  border-radius: 4px;
 }
 
 .host-card-footer--customer {

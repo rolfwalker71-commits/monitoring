@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.156 (18. Mai 2026)
+
+- **Hostkarten Chips**: Eckenradius der SAP/HANA/SID-Chips weiter reduziert (noch kantiger).
+
 ### v1.6.155 (18. Mai 2026)
 
 - **Hostkarten Chips**: SAP/HANA/SID-Chips visuell auf eine blau abgestimmte Farbkombi umgestellt und mit kleinerem Eckenradius (weniger rund) versehen.
