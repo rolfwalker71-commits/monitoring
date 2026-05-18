@@ -6226,8 +6226,29 @@ def host_badges_html(country_code: object, os_family: object) -> str:
     )
 
 
-def mail_branding_header_html(app_logo_uri: str, build_version: str, meta_text: str = "") -> str:
+def mail_branding_header_html(
+    app_logo_uri: str,
+    build_version: str,
+    meta_text: str = "",
+    customer_name: str = "",
+    host_label: str = "",
+) -> str:
     safe_meta = html.escape(str(meta_text or "").strip())
+    safe_customer = html.escape(str(customer_name or "").strip())
+    safe_host = html.escape(str(host_label or "").strip())
+    customer_host_html = ""
+    if safe_customer:
+        host_html = (
+            f"<div style='margin-top:4px;font-size:14px;font-weight:600;line-height:1.25;color:#5f7590;'>{safe_host}</div>"
+            if safe_host
+            else ""
+        )
+        customer_host_html = (
+            "<div style='margin-top:12px;'>"
+            f"<div style='font-size:34px;line-height:1.05;font-weight:800;letter-spacing:.2px;color:#17324d;'>{safe_customer}</div>"
+            f"{host_html}"
+            "</div>"
+        )
     meta_html = (
         f"<div style='margin-top:10px;font-size:13px;color:#5f7590;'>{safe_meta}</div>"
         if safe_meta
@@ -6245,11 +6266,18 @@ def mail_branding_header_html(app_logo_uri: str, build_version: str, meta_text: 
         "</td>"
         "</tr>"
         "</table>"
+        f"{customer_host_html}"
         f"{meta_html}"
     )
 
 
-def branded_info_mail_html(username: str, title: str, body_html: str) -> str:
+def branded_info_mail_html(
+    username: str,
+    title: str,
+    body_html: str,
+    customer_name: str = "",
+    host_label: str = "",
+) -> str:
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
     build_version = html.escape(read_build_version())
@@ -6258,7 +6286,7 @@ def branded_info_mail_html(username: str, title: str, body_html: str) -> str:
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:760px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;'>"
         "<div style='padding:18px 20px;background-color:#eaf4ff;background-image:linear-gradient(180deg,#f4faff,#e6f1ff);color:#17324d;border-bottom:1px solid #cfe0f5;'>"
-        f"{mail_branding_header_html(app_logo_uri, build_version, header_meta)}"
+        f"{mail_branding_header_html(app_logo_uri, build_version, header_meta, customer_name, host_label)}"
         f"<h2 style='margin:10px 0 0 0;font-size:22px;color:#17324d;'>{html.escape(title)}</h2>"
         "</div>"
         f"<div style='padding:18px 20px;font-size:14px;line-height:1.5;color:#1f2937;'>{body_html}</div>"
@@ -6406,6 +6434,7 @@ def alert_instant_mail_html(
     severity: str,
     used_percent: float,
     display_name: str = "",
+    customer_name: str = "",
     primary_ip: str = "",
     country_code: str = "",
     os_family: str = "linux",
@@ -6426,7 +6455,8 @@ def alert_instant_mail_html(
         "reminder": "Heads-Up: Alert noch offen",
     }.get(event_type, "Alarm")
     used_str = f"{used_percent:.1f}"
-    customer_title = display_name.strip() or hostname
+    host_title = display_name.strip() or hostname
+    customer_title = str(customer_name or "").strip() or host_title
     normalized_country_code = normalize_country_code(country_code)
     country_badge = normalized_country_code if normalized_country_code else "--"
     normalized_os_family = normalize_os_family(os_family)
@@ -6462,9 +6492,8 @@ def alert_instant_mail_html(
         "<html><body style='margin:0;background:#ffffff;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;'>"
         "<div style='max-width:700px;margin:24px auto;background:#ffffff;border:1px solid #d9dce3;border-radius:14px;overflow:hidden;'>"
         "<div style='padding:18px 20px;background-color:#eaf4ff;background-image:linear-gradient(180deg,#f4faff,#e6f1ff);color:#17324d;border-bottom:1px solid #cfe0f5;'>"
-        f"{mail_branding_header_html(app_logo_uri, build_version, header_meta)}"
-        f"<h1 style='margin:0;font-size:34px;line-height:1.05;font-weight:800;letter-spacing:.2px;color:#17324d;'>{html.escape(customer_title)}</h1>"
-        f"<div style='margin-top:6px;font-size:14px;color:#5f7590;'>Host: {html.escape(hostname)}</div>"
+        f"{mail_branding_header_html(app_logo_uri, build_version, header_meta, customer_title, host_title)}"
+        f"<div style='margin-top:6px;font-size:13px;color:#5f7590;'>Technischer Host: {html.escape(hostname)}</div>"
         f"<div style='margin-top:4px;font-size:13px;color:#5f7590;'>IP: {html.escape(primary_ip or '-')}</div>"
         "<div style='margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;'>"
         f"<span style='display:inline-flex;align-items:center;padding:3px 6px;border-radius:999px;background:transparent;'>{os_icon_html}</span>"
@@ -6656,6 +6685,7 @@ def send_instant_alert_mails_to_users(
                 severity,
                 used_percent,
                 display_name=str(host_context.get("display_name", "") or ""),
+                customer_name=str(host_context.get("customer_name", "") or ""),
                 primary_ip=str(host_context.get("primary_ip", "") or ""),
                 country_code=str(host_context.get("country_code", "") or ""),
                 os_family=str(host_context.get("os_family", "linux") or "linux"),
@@ -7456,6 +7486,7 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                         severity,
                         used_percent,
                         display_name=str(host_ctx.get("display_name", "") or ""),
+                        customer_name=str(host_ctx.get("customer_name", "") or ""),
                         primary_ip=str(host_ctx.get("primary_ip", "") or ""),
                         country_code=str(host_ctx.get("country_code", "") or ""),
                         os_family=str(host_ctx.get("os_family", "linux") or "linux"),
@@ -8554,11 +8585,19 @@ def ang_logo_data_uri() -> str:
 
 def collect_host_mail_context(conn: sqlite3.Connection, hostname: str) -> dict:
     settings_row = conn.execute(
-        "SELECT COALESCE(display_name_override, ''), COALESCE(country_code_override, '') FROM host_settings WHERE hostname = ?",
+        """
+        SELECT COALESCE(h.display_name_override, ''),
+               COALESCE(h.country_code_override, ''),
+               COALESCE(c.customer_name, '')
+        FROM host_settings h
+        LEFT JOIN customers c ON c.id = h.customer_id
+        WHERE h.hostname = ?
+        """,
         (hostname,),
     ).fetchone()
     display_name_override = str(settings_row[0] or "").strip() if settings_row else ""
     country_code_override = normalize_country_code(settings_row[1] if settings_row else "")
+    customer_name = str(settings_row[2] or "").strip() if settings_row else ""
 
     latest_payload_row = conn.execute(
         "SELECT payload_json FROM reports WHERE hostname = ? ORDER BY id DESC LIMIT 1",
@@ -8573,6 +8612,7 @@ def collect_host_mail_context(conn: sqlite3.Connection, hostname: str) -> dict:
     primary_ip = str(latest_payload.get("primary_ip", "") or "").strip()
     return {
         "display_name": display_name,
+        "customer_name": customer_name,
         "country_code": country_code,
         "os_name": os_name,
         "os_family": os_family,
@@ -11739,6 +11779,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             f"<p>User: <strong>{html.escape(username)}</strong></p>"
                             f"<p>Host: <strong>{html.escape(str(host_context.get('display_name', hostname)))}</strong> ({html.escape(hostname)})</p>"
                         ),
+                        customer_name=str(host_context.get("customer_name", "") or ""),
+                        host_label=str(host_context.get("display_name", hostname) or hostname),
                     )
                     mail_ok, mail_details = send_microsoft_mail(
                         access_token,
@@ -12151,7 +12193,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     return
                 user_settings = get_web_user_settings(conn, username)
 
-                host_context = collect_host_mail_context(conn, hostname) if hostname else {"display_name": "(ohne Host)", "hostname": ""}
+                host_context = collect_host_mail_context(conn, hostname) if hostname else {"display_name": "(ohne Host)", "hostname": "", "customer_name": ""}
                 subject = f"[TEST] Kundenalarm {str(host_context.get('display_name') or hostname or '')}"
                 body = branded_info_mail_html(
                     username,
@@ -12161,6 +12203,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         f"<p>Host: <strong>{html.escape(str(host_context.get('display_name') or hostname or '-'))}</strong></p>"
                         f"<p>Ausgeloest von: <strong>{html.escape(username)}</strong></p>"
                     ),
+                    customer_name=str(host_context.get("customer_name", "") or ""),
+                    host_label=str(host_context.get("display_name") or hostname or "-"),
                 )
                 ok_send, send_details = send_microsoft_mail_multi(
                     access_token,

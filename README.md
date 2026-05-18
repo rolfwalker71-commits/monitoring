@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.174 (18. Mai 2026)
+
+- **Mail-Header Kunde + Host**: In ausgehenden hostbezogenen Mails wird der Kunde jetzt im Header prominent angezeigt (gleiche Groesse wie bisherige Host-Hauptzeile), die Hostbezeichnung darunter deutlich kleiner. Die Darstellung wurde zentralisiert und in Instant-/Reminder-Alerts sowie hostbezogenen Testmails vereinheitlicht.
+
 ### v1.6.173 (18. Mai 2026)
 
 - **DB Changelog HANA-Schema**: HANA-Einträge werden im DB Changelog jetzt explizit als Schema behandelt/angezeigt (inkl. Aktionstext für Schema erstellt/gelöscht). SQL-Datenbanken bleiben unverändert im bisherigen Format.
