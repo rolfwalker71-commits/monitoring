@@ -7193,6 +7193,8 @@ function renderSingleHostCard(host) {
   const customerChipLabel = customerProjectValue
     ? `${customerNameValue} · ${customerProjectValue}`
     : customerNameValue;
+  const shortHostname = hostname.split(".")[0];
+  const hostDesignationLabel = cleanHostValue(displayName || shortHostname) || shortHostname;
   const valueChipStack = [
     sapFeaturePack
       ? `<span class="host-value-chip host-value-chip--sap" title="SAP Feature Pack">${escapeHtml(sapFeaturePack)}</span>`
@@ -7236,7 +7238,7 @@ function renderSingleHostCard(host) {
     ? `<span class="host-agent-mini-dot" title="Host meldet AGENT_VERSION: ${escapeHtml(hostAgentVersionText)} | Referenz: ${escapeHtml(latestAgentVersionText)} | ${escapeHtml(agentVersionVisual.title)} | ${agentStatusLogic}" aria-hidden="true"></span>`
     : "";
   const customerTitleLine = (customerNameValue || agentDot)
-    ? `<div class="host-customer-title-line">${customerNameValue ? `<span class="host-value-chip host-value-chip--customer-title" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span>` : ""}${agentDot}</div>`
+    ? `<div class="host-customer-title-line">${customerNameValue ? `<span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span><span class="host-detail-line">🖥️ ${escapeHtml(hostDesignationLabel)}</span></span>` : ""}${agentDot}</div>`
     : "";
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
@@ -7288,8 +7290,6 @@ function renderSingleHostCard(host) {
       </section>
     `;
   }
-
-  const shortHostname = hostname.split(".")[0];
 
   return `
     <article class="${selectedClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">

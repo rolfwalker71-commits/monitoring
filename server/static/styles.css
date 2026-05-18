@@ -4061,10 +4061,17 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-customer-title-line {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 6px;
-  padding: 4px 0 8px 0;
+  padding: 4px 0 6px 0;
+}
+
+.host-customer-text-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .host-agent-mini-dot {
@@ -4090,9 +4097,9 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-customer-line {
   display: block;
-  font-size: 10px;
-  font-weight: 700;
-  color: #92400e;
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f3f5f;
   word-break: break-word;
 }
 
@@ -7793,6 +7800,14 @@ body[data-theme="dark"] .host-value-chip--customer-title {
   border-color: rgba(59, 130, 246, 0.25);
   background: rgba(59, 130, 246, 0.2);
   color: #93c5fd;
+}
+
+body[data-theme="dark"] .host-customer-line {
+  color: #bfdbfe;
+}
+
+body[data-theme="dark"] .host-detail-line {
+  color: #8fa8c4;
 }
 
 body[data-theme="dark"] .admin-alert-subscriptions-table tr.has-change td {

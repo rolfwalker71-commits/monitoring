@@ -522,6 +522,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.152 (18. Mai 2026)
+
+- **Hostkarte Layout**: Kundenname wird als normale Info (mit Emoji) dargestellt; darunter wird die Hostbezeichnung als zusätzliche Zeile angezeigt.
 
 ### v1.6.151 (18. Mai 2026)
 
