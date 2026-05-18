@@ -354,6 +354,50 @@
         .dense .metric,
         .dense .host { border-radius: 9px; }
 
+        .detail-tabs {
+            display: flex;
+            gap: 7px;
+            flex-wrap: wrap;
+            margin-bottom: 4px;
+        }
+
+        .detail-flag {
+            border: 1px solid #c9daeb;
+            border-radius: 8px;
+            background: #f3f8ff;
+            color: #355372;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 8px;
+        }
+
+        .kv-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(120px, 1fr));
+            gap: 8px;
+        }
+
+        .kv {
+            border: 1px solid #d7e4f1;
+            border-radius: 8px;
+            background: #fff;
+            padding: 8px;
+        }
+
+        .kv .label {
+            font-size: 10px;
+            color: var(--muted);
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .kv .value {
+            margin-top: 2px;
+            font-size: 15px;
+            font-weight: 800;
+            color: #1f3f60;
+        }
+
         @media (max-width: 1200px) {
             .layout,
             .version-b .layout,
@@ -361,6 +405,7 @@
             .side { border-right: 0; border-bottom: 1px solid var(--line-soft); }
             .cards4 { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
             .grid2 { grid-template-columns: 1fr; }
+            .kv-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
         }
     </style>
 </head>
@@ -691,6 +736,317 @@
                 </div>
             </div>
             <div class="foot"><strong>Bildwirkung:</strong> schnellster operativer Modus, weil Auswahl und Kontext gleichzeitig sichtbar bleiben.</div>
+        </div>
+    </section>
+
+    <section class="mockup">
+        <div class="mockup-head">
+            <h2>Detail Mockup 1 - Datenbanken</h2>
+            <p class="mockup-sub">Fokus auf SQL/HANA Instanzen, DB/Schema-Lifecycle, Backup-Relevanz und Changelog auf Datenbank-Ebene.</p>
+            <div class="badge-row">
+                <span class="badge">SQL + HANA kombiniert</span>
+                <span class="badge">Schema-Liste</span>
+                <span class="badge">DB Changelog Timeline</span>
+                <span class="badge">Backup Relevanz</span>
+            </div>
+        </div>
+        <div class="surface">
+            <div class="app-frame">
+                <div class="top">
+                    <div>
+                        <div class="top-title">Databases Detail - MIL-SQL-008</div>
+                        <div class="chipline">
+                            <span class="state-chip">SQL 2019 SP3 CU26</span>
+                            <span class="state-chip">HANA 2.00.059</span>
+                            <span class="state-chip">3 aktive Schemas</span>
+                        </div>
+                    </div>
+                    <div class="top-meta">Ansicht: Host Detail / Databases</div>
+                    <div class="utility-row">
+                        <div class="utility-search">🔎 Suche: DB Name / Schema / SID / Version</div>
+                        <span class="utility-pill">Schnellfilter: Nur geaendert (3 Tage)</span>
+                        <span class="utility-pill">Schnellfilter: Nur produktiv</span>
+                        <div class="utility-settings">
+                            <span class="utility-pill">👤 Benutzer Settings</span>
+                            <span class="utility-pill">🌐 Global Settings</span>
+                            <span class="utility-pill">🛠 Admin Settings</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="layout">
+                    <aside class="side">
+                        <article class="host active">
+                            <div class="line1"><span>MIL-SQL-008</span><span class="tag-crit">🔴</span></div>
+                            <div class="line2"><span>Rinco</span><span>17:39</span></div>
+                            <div class="line3"><span class="tiny">SQL+HANA</span><span class="tiny">SID PRD</span></div>
+                        </article>
+                        <article class="host">
+                            <div class="line1"><span>DB Alerts</span><span class="tag-warn">2</span></div>
+                            <div class="line2"><span>1 storage, 1 version drift</span></div>
+                        </article>
+                    </aside>
+                    <main class="main">
+                        <div class="detail-tabs">
+                            <span class="detail-flag">Instanzen</span>
+                            <span class="detail-flag">Schemas</span>
+                            <span class="detail-flag">DB Changelog</span>
+                            <span class="detail-flag">Backup Bezug</span>
+                        </div>
+                        <div class="kv-grid">
+                            <article class="kv"><div class="label">SQL Instanzen</div><div class="value">2</div></article>
+                            <article class="kv"><div class="label">HANA Instanzen</div><div class="value">1</div></article>
+                            <article class="kv"><div class="label">Schema Aenderungen 72h</div><div class="value">4</div></article>
+                            <article class="kv"><div class="label">Backup kritisch</div><div class="value">1</div></article>
+                        </div>
+                        <div class="grid2">
+                            <section class="panel">
+                                <h3>Instanzen / Versionen</h3>
+                                <table class="table">
+                                    <thead><tr><th>Typ</th><th>Name</th><th>Version</th><th>Status</th><th>Zuletzt geaendert</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>SQL</td><td>SQLSERVER01</td><td>2019 SP3 CU26</td><td class="tag-ok">ok</td><td>16:49</td></tr>
+                                        <tr><td>HANA</td><td>PRD</td><td>2.00.059</td><td class="tag-warn">warning</td><td>17:11</td></tr>
+                                    </tbody>
+                                </table>
+                                <h3 style="margin-top:10px;">Schemas (HANA)</h3>
+                                <table class="table">
+                                    <thead><tr><th>Schema</th><th>Status</th><th>Owner</th><th>Aktion</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>FINREP</td><td class="tag-ok">active</td><td>SAPABAP1</td><td>➕ erstellt</td></tr>
+                                        <tr><td>Z_ARCHIVE</td><td class="tag-warn">inactive</td><td>SAPSYS</td><td>🗑 geloescht</td></tr>
+                                    </tbody>
+                                </table>
+                            </section>
+                            <section class="panel">
+                                <h3>DB Changelog Timeline</h3>
+                                <table class="table">
+                                    <thead><tr><th>Zeit</th><th>Bereich</th><th>Feld</th><th>Alt → Neu</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>17:11</td><td>HANA</td><td>Schema FINREP</td><td>- → erstellt</td></tr>
+                                        <tr><td>16:49</td><td>SQL</td><td>Version</td><td>CU25 → CU26</td></tr>
+                                        <tr><td>14:03</td><td>HANA</td><td>AddOn</td><td>2.00.058 → 2.00.059</td></tr>
+                                    </tbody>
+                                </table>
+                                <h3 style="margin-top:10px;">Backup Bezug</h3>
+                                <ul class="list">
+                                    <li>SQL Full Backup: 03:10 erfolgreich</li>
+                                    <li>HANA Log Backup: 17:20 erfolgreich</li>
+                                    <li class="tag-warn">Retention-Check: 1 Policy verletzt</li>
+                                </ul>
+                            </section>
+                        </div>
+                    </main>
+                </div>
+            </div>
+            <div class="foot"><strong>Zielbild:</strong> Datenbank-Themen sind als eigene Detaildomäne klar trennbar und trotzdem mit Changelog/Backup verbunden.</div>
+        </div>
+    </section>
+
+    <section class="mockup">
+        <div class="mockup-head">
+            <h2>Detail Mockup 2 - SAP B1 Sektion</h2>
+            <p class="mockup-sub">Fokus auf Build/Feature Pack/Patchlevel, Service-Zustand, AddOns und letzte Systemereignisse.</p>
+            <div class="badge-row">
+                <span class="badge">B1 Version Mapping</span>
+                <span class="badge">Services + Health</span>
+                <span class="badge">AddOn Status</span>
+                <span class="badge">Aenderungshistorie</span>
+            </div>
+        </div>
+        <div class="surface">
+            <div class="app-frame">
+                <div class="top">
+                    <div>
+                        <div class="top-title">SAP B1 Detail - SA1180005</div>
+                        <div class="chipline">
+                            <span class="state-chip">B1 10.0 FP2408 HF1</span>
+                            <span class="state-chip">Company DB: HZI_PRD</span>
+                            <span class="state-chip">Services healthy</span>
+                        </div>
+                    </div>
+                    <div class="top-meta">Ansicht: Host Detail / SAP B1</div>
+                    <div class="utility-row">
+                        <div class="utility-search">🔎 Suche: AddOn / Company DB / Service / Version</div>
+                        <span class="utility-pill">Schnellfilter: Nur kritische Services</span>
+                        <span class="utility-pill">Schnellfilter: Nur Version Changes</span>
+                        <div class="utility-settings">
+                            <span class="utility-pill">👤 Benutzer Settings</span>
+                            <span class="utility-pill">🌐 Global Settings</span>
+                            <span class="utility-pill">🛠 Admin Settings</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="layout">
+                    <aside class="side">
+                        <article class="host active">
+                            <div class="line1"><span>SA1180005</span><span class="tag-ok">🟢</span></div>
+                            <div class="line2"><span>Kanadevia</span><span>17:37</span></div>
+                            <div class="line3"><span class="tiny">SAP B1</span><span class="tiny">FP2408</span></div>
+                        </article>
+                        <article class="host">
+                            <div class="line1"><span>B1 Alerts</span><span class="tag-ok">0</span></div>
+                            <div class="line2"><span>letzte 24h keine kritischen Events</span></div>
+                        </article>
+                    </aside>
+                    <main class="main">
+                        <div class="detail-tabs">
+                            <span class="detail-flag">Version Mapping</span>
+                            <span class="detail-flag">Services</span>
+                            <span class="detail-flag">AddOns</span>
+                            <span class="detail-flag">B1 Changelog</span>
+                        </div>
+                        <div class="kv-grid">
+                            <article class="kv"><div class="label">Build</div><div class="value">10.00.2408</div></article>
+                            <article class="kv"><div class="label">Feature Pack</div><div class="value">FP2408</div></article>
+                            <article class="kv"><div class="label">Patchlevel</div><div class="value">HF1</div></article>
+                            <article class="kv"><div class="label">Aktive AddOns</div><div class="value">7</div></article>
+                        </div>
+                        <div class="grid2">
+                            <section class="panel">
+                                <h3>SAP B1 Service Health</h3>
+                                <table class="table">
+                                    <thead><tr><th>Service</th><th>Status</th><th>Restart</th><th>CPU</th><th>RAM</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>B1 Server Tools</td><td class="tag-ok">running</td><td>vor 6 Tagen</td><td>4%</td><td>620 MB</td></tr>
+                                        <tr><td>SLD Service</td><td class="tag-ok">running</td><td>vor 8 Tagen</td><td>1%</td><td>210 MB</td></tr>
+                                        <tr><td>License Manager</td><td class="tag-ok">running</td><td>vor 8 Tagen</td><td>&lt;1%</td><td>95 MB</td></tr>
+                                    </tbody>
+                                </table>
+                                <h3 style="margin-top:10px;">Company DB Mapping</h3>
+                                <table class="table">
+                                    <thead><tr><th>Company</th><th>DB</th><th>Mandant</th><th>Status</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>HZI AG</td><td>HZI_PRD</td><td>CH</td><td class="tag-ok">ok</td></tr>
+                                        <tr><td>HZI Test</td><td>HZI_TST</td><td>CH</td><td class="tag-ok">ok</td></tr>
+                                    </tbody>
+                                </table>
+                            </section>
+                            <section class="panel">
+                                <h3>AddOns + letzte Aenderungen</h3>
+                                <table class="table">
+                                    <thead><tr><th>AddOn</th><th>Version</th><th>Status</th><th>Zuletzt geaendert</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>beas</td><td>2026.04</td><td class="tag-ok">enabled</td><td>16:02</td></tr>
+                                        <tr><td>B1 Usability Package</td><td>2026.02</td><td class="tag-ok">enabled</td><td>15:41</td></tr>
+                                        <tr><td>Boyum Print</td><td>4.19</td><td class="tag-warn">update pending</td><td>13:17</td></tr>
+                                    </tbody>
+                                </table>
+                                <h3 style="margin-top:10px;">B1 Changelog (3 Tage)</h3>
+                                <ul class="list">
+                                    <li>Feature Pack unveraendert: FP2408</li>
+                                    <li>Patchlevel geaendert: HF0 → HF1</li>
+                                    <li class="tag-warn">AddOn Boyum Print pending update</li>
+                                </ul>
+                            </section>
+                        </div>
+                    </main>
+                </div>
+            </div>
+            <div class="foot"><strong>Zielbild:</strong> SAP B1 Informationen sind operational klar lesbar und direkt mit Servicezustand + AddOn-Lebenszyklus verbunden.</div>
+        </div>
+    </section>
+
+    <section class="mockup">
+        <div class="mockup-head">
+            <h2>Detail Mockup 3 - Filesystems</h2>
+            <p class="mockup-sub">Fokus auf belegte Mountpoints, Trend-/Projektion, Drilldown auf betroffene Pfade und Alert-Historie.</p>
+            <div class="badge-row">
+                <span class="badge">Top Risiko Mountpoints</span>
+                <span class="badge">Projektion 8h/24h</span>
+                <span class="badge">Drilldown Verzeichnisse</span>
+                <span class="badge">Alert Verlauf</span>
+            </div>
+        </div>
+        <div class="surface">
+            <div class="app-frame">
+                <div class="top">
+                    <div>
+                        <div class="top-title">Filesystem Detail - prod-mssql-01</div>
+                        <div class="chipline">
+                            <span class="state-chip">3 Mountpoints monitored</span>
+                            <span class="state-chip">1 kritisch / 1 warning</span>
+                            <span class="state-chip">Trendfenster 24h</span>
+                        </div>
+                    </div>
+                    <div class="top-meta">Ansicht: Host Detail / Filesystems</div>
+                    <div class="utility-row">
+                        <div class="utility-search">🔎 Suche: Mountpoint / Pfad / Alerttext</div>
+                        <span class="utility-pill">Schnellfilter: Nur kritisch/warning</span>
+                        <span class="utility-pill">Schnellfilter: Projektion &gt; 90%</span>
+                        <div class="utility-settings">
+                            <span class="utility-pill">👤 Benutzer Settings</span>
+                            <span class="utility-pill">🌐 Global Settings</span>
+                            <span class="utility-pill">🛠 Admin Settings</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="layout">
+                    <aside class="side">
+                        <article class="host active">
+                            <div class="line1"><span>prod-mssql-01</span><span class="tag-warn">🟡</span></div>
+                            <div class="line2"><span>Aeschlimann</span><span>17:35</span></div>
+                            <div class="line3"><span class="tiny">Windows</span><span class="tiny">SQL</span></div>
+                        </article>
+                        <article class="host">
+                            <div class="line1"><span>FS Alerts</span><span class="tag-crit">2</span></div>
+                            <div class="line2"><span>C: kritisch / E: warning</span></div>
+                        </article>
+                    </aside>
+                    <main class="main">
+                        <div class="detail-tabs">
+                            <span class="detail-flag">Auslastung jetzt</span>
+                            <span class="detail-flag">Trend + Projektion</span>
+                            <span class="detail-flag">Pfad Drilldown</span>
+                            <span class="detail-flag">Alert Historie</span>
+                        </div>
+                        <div class="kv-grid">
+                            <article class="kv"><div class="label">Mountpoints</div><div class="value">3</div></article>
+                            <article class="kv"><div class="label">Kritische</div><div class="value">1</div></article>
+                            <article class="kv"><div class="label">Warning</div><div class="value">1</div></article>
+                            <article class="kv"><div class="label">Projektion 24h &gt;90%</div><div class="value">2</div></article>
+                        </div>
+                        <div class="grid2">
+                            <section class="panel">
+                                <h3>Mountpoint Uebersicht</h3>
+                                <table class="table">
+                                    <thead><tr><th>Mount</th><th>Used</th><th>Trend</th><th>Proj. 8h</th><th>Status</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>C:</td><td>94%</td><td>steigend</td><td>96%</td><td class="tag-crit">critical</td></tr>
+                                        <tr><td>D:</td><td>61%</td><td>stabil</td><td>62%</td><td class="tag-ok">ok</td></tr>
+                                        <tr><td>E:</td><td>82%</td><td>steigend</td><td>88%</td><td class="tag-warn">warning</td></tr>
+                                    </tbody>
+                                </table>
+                                <h3 style="margin-top:10px;">Drilldown C: Top Verzeichnisse</h3>
+                                <table class="table">
+                                    <thead><tr><th>Pfad</th><th>Groesse</th><th>Delta 24h</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>C:\ProgramData\SAP\Archive</td><td>182 GB</td><td>+17 GB</td></tr>
+                                        <tr><td>C:\MSSQL\Logs</td><td>94 GB</td><td>+4 GB</td></tr>
+                                    </tbody>
+                                </table>
+                            </section>
+                            <section class="panel">
+                                <h3>Filesystem Alert Verlauf</h3>
+                                <table class="table">
+                                    <thead><tr><th>Zeit</th><th>Mount</th><th>Schwelle</th><th>Wert</th><th>Aktion</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>17:29</td><td>C:</td><td>&gt;90%</td><td>94%</td><td>Alert offen</td></tr>
+                                        <tr><td>16:58</td><td>E:</td><td>&gt;80%</td><td>82%</td><td>Alert offen</td></tr>
+                                        <tr><td>14:20</td><td>D:</td><td>&gt;80%</td><td>79%</td><td>geschlossen</td></tr>
+                                    </tbody>
+                                </table>
+                                <h3 style="margin-top:10px;">Empfohlene Aktionen</h3>
+                                <ul class="list">
+                                    <li class="tag-crit">C: Archivrotation heute ausfuehren</li>
+                                    <li class="tag-warn">E: Wachstum pruefen, Cleanup planen</li>
+                                    <li>D: keine Aktion notwendig</li>
+                                </ul>
+                            </section>
+                        </div>
+                    </main>
+                </div>
+            </div>
+            <div class="foot"><strong>Zielbild:</strong> Filesystem-Risiken werden schneller priorisierbar, inklusive sofortiger Drilldown- und Aktionssicht.</div>
         </div>
     </section>
 </body>

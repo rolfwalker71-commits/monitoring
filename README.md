@@ -524,6 +524,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.182 (18. Mai 2026)
+
+- **Detail-Mockups erweitert**: `layout-mockups.html` enthaelt jetzt drei zusaetzliche konkrete Detailansichten fuer die Parallel-UI-Planung: (1) Datenbanken, (2) SAP B1, (3) Filesystems. Alle drei enthalten realistische Inhaltsbloecke inkl. Suche, Schnellfilter sowie Benutzer-/Global-/Admin-Settings.
+
 ### v1.6.181 (18. Mai 2026)
 
 - **Mockups Bedienlogik konkretisiert**: In allen drei Mockup-Varianten wurden Suche, Schnellfilter sowie Benutzer-/Global-/Admin-Settings als eigene Utility-Leiste sichtbar positioniert, damit die spaetere Navigation eindeutig ist.
