@@ -3845,8 +3845,10 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 #headerLicenseChip.header-stat-chip {
-  display: flex !important;
+  display: inline-flex !important;
   align-items: center !important;
+  justify-content: flex-start !important;
+  flex-direction: row !important;
   height: 56px !important;
   min-height: 56px !important;
   max-height: 56px !important;
@@ -3854,13 +3856,16 @@ body[data-theme="dark"] .trend-progress-bar {
   border-left-width: 4px !important;
   padding: 6px 8px !important;
   gap: 0 !important;
-  flex-wrap: nowrap;
+  flex-wrap: nowrap !important;
+  line-height: 56px !important;
 }
 
 #headerLicenseChip {
-  display: flex !important;
+  display: inline-flex !important;
+  align-items: center !important;
   height: 56px !important;
   min-height: 56px !important;
+  max-height: 56px !important;
   border-left-color: #fbbf24 !important;
   border-left-width: 4px !important;
 }

@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.204 (18. Mai 2026)
+
+- **License Card Height Fix**: Lizenzkarte nun mit korrekter 56px Höhe wie andere Header-Chips; 3x2 Grid-Layout mit gleichmäßigen Reihenabständen.
 n### v1.6.203 (18. Mai 2026)
 
 - **License Card Redesign**: Lizenzkarte mit vereinfachter Struktur neu aufgebaut; 3x2 Grid-Layout mit allen 6 Lizenzfeldern, gleiche Höhe und gelber Balken wie andere Header-Chips.
