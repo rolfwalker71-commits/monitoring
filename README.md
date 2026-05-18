@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.158 (18. Mai 2026)
+
+- **DB Changelog (HANA Schema)**: Erkennung auf aktuelles Payload-Feld `hana_db_info.schemas` erweitert (mit Legacy-Fallbacks), damit neu angelegte HANA-Schemas im DB-Changelog korrekt als erstellt erscheinen.
+
 ### v1.6.157 (18. Mai 2026)
 
 - **Hostkarte Typografie**: Kundenname in der Hostkarte um weitere 2px vergrößert.

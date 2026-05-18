@@ -3322,11 +3322,21 @@ def _extract_database_inventory(payload: dict) -> set[str]:
                 continue
             _add_name(db_name, allow_system=False, instance_name=instance_name)
 
-    hana_info = payload.get("sap_hana") if isinstance(payload.get("sap_hana"), dict) else {}
+    hana_info_candidates = [
+        payload.get("hana_db_info"),
+        payload.get("sap_hana"),
+        payload.get("hana_info"),
+    ]
+    hana_info = next((item for item in hana_info_candidates if isinstance(item, dict)), {})
     hana_schemas = hana_info.get("schemas") if isinstance(hana_info.get("schemas"), list) else []
     for schema_entry in hana_schemas:
         if isinstance(schema_entry, dict):
-            _add_name(schema_entry.get("name"), instance_name="HANA")
+            _add_name(
+                schema_entry.get("name")
+                or schema_entry.get("schema")
+                or schema_entry.get("schema_name"),
+                instance_name="HANA",
+            )
         else:
             _add_name(schema_entry, instance_name="HANA")
 
