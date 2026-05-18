@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.210 (18. Mai 2026)
+
+- **License Card Spacing**: Abstand zwischen erster und zweiter Spalte leicht reduziert (feineres Tuning).
 n### v1.6.209 (18. Mai 2026)
 
 - **License Card Layout-Fix**: Clipboard-Icon aus dem Grid-Flow entfernt und als Floating-Button oben rechts positioniert, damit die Kartenstruktur stabil bleibt.
