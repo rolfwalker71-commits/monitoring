@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.195 (18. Mai 2026)
+
+- **Old UI header cards**: Die drei oberen Status-Chips nutzen jetzt den moderneren UI-next-Look mit kompakter Card-Optik, linker Farbakzentkante sowie angepasster Dark-Mode-/Mobile-Darstellung.
 n### v1.6.194 (18. Mai 2026)
 
 - **UI old refresh**: Obere 3 Status-Chips als kompakte moderne Statuskarten gestaltet (bessere Lesbarkeit, Karten-Look, konsistente Größe im Header).

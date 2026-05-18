@@ -3774,25 +3774,28 @@ body[data-theme="dark"] .trend-progress-bar {
 .header-stat-chip {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
-  border-radius: 18px;
-  padding: 8px 12px;
-  min-height: 44px;
+  border-radius: 12px;
+  padding: 8px 11px;
+  min-height: 42px;
   min-width: 116px;
-  font-size: 0.98rem;
+  font-size: 0.9rem;
   font-weight: 800;
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
-  border: 1.5px solid transparent;
-  box-shadow: 0 6px 14px rgba(22, 49, 86, 0.11);
-  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+  border: 1px solid #cfd8e3;
+  border-left-width: 4px;
+  background: linear-gradient(180deg, #f7f9fb 0%, #eff3f7 100%);
+  color: #1f3f5f;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 2px 8px rgba(22, 49, 86, 0.08);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
 
 .header-stat-chip:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(22, 49, 86, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 6px 14px rgba(22, 49, 86, 0.14);
 }
 
 .header-chip-icon {
@@ -3802,36 +3805,43 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .header-chip-count {
   font-family: var(--kv-value-family);
-  font-size: 1.24rem;
+  font-size: 1.18rem;
   font-weight: 800;
   line-height: 1;
   letter-spacing: 0;
 }
 
 .header-chip-scope {
-  font-size: 1rem;
+  font-size: 0.82rem;
   line-height: 1;
-  opacity: 0.95;
+  opacity: 1;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+  color: #60748d;
 }
 
 .header-stat-chip-alert {
-  background: linear-gradient(180deg, #fff3f3 0%, #ffe7e7 100%);
-  color: #b42424;
-  border-color: #f08b8b;
+  border-left-color: #cf2f2f;
 }
 
 .header-stat-chip-warn {
-  background: linear-gradient(180deg, #fff8ea 0%, #ffefcc 100%);
-  color: #9a6211;
-  border-color: #e5c36a;
+  border-left-color: #c2790f;
 }
 
 .header-stat-chip-inactive {
-  background: linear-gradient(180deg, #ecf9f1 0%, #ddf3e7 100%);
-  color: #1d7f53;
-  border-color: #8bcfad;
+  border-left-color: #2a74b5;
+}
+
+.header-stat-chip-alert .header-chip-icon {
+  color: #b42424;
+}
+
+.header-stat-chip-warn .header-chip-icon {
+  color: #9a6211;
+}
+
+.header-stat-chip-inactive .header-chip-icon {
+  color: #2a74b5;
 }
 
 .agent-update-status-list {
@@ -7115,6 +7125,11 @@ body[data-theme="dark"] th {
     width: 100%;
   }
 
+  .panel-actions .header-stat-chip {
+    min-width: 104px;
+    padding: 7px 9px;
+  }
+
   .alarm-settings-grid {
     grid-template-columns: 1fr;
   }
@@ -10188,9 +10203,9 @@ body[data-theme="dark"] .search-input-compact::placeholder {
 
 /* Top status elements use card styling and should not be normalized as tiny chips. */
 .panel-actions .header-stat-chip {
-  min-height: 44px;
+  min-height: 42px;
   min-width: 116px;
-  border-radius: 18px;
+  border-radius: 12px;
 }
 
 .stat-chip,
@@ -10210,14 +10225,20 @@ body[data-theme="dark"] .search-input-compact::placeholder {
 }
 
 .host-alert-chip.critical,
-.header-stat-chip-alert,
 .so-card-alert-badge-critical {
   border-color: #ea7b7b;
   background: #ffe5e5;
   color: #a82525;
 }
 
+.header-stat-chip-alert,
 .header-stat-chip-warn,
+.header-stat-chip-inactive {
+  border-color: #cfd8e3;
+  background: linear-gradient(180deg, #f7f9fb 0%, #eff3f7 100%);
+  color: #1f3f5f;
+}
+
 .stat-chip.delayed,
 .so-card-alert-badge-warning {
   border-color: #efc171;
@@ -10225,12 +10246,23 @@ body[data-theme="dark"] .search-input-compact::placeholder {
   color: #9a6411;
 }
 
-.header-stat-chip-inactive,
 .so-card-alert-badge-ok,
 .stat-chip.live {
   border-color: #9ed8b8;
   background: #edf9f2;
   color: #1f6a3c;
+}
+
+.header-stat-chip-alert {
+  border-left-color: #cf2f2f;
+}
+
+.header-stat-chip-warn {
+  border-left-color: #c2790f;
+}
+
+.header-stat-chip-inactive {
+  border-left-color: #2a74b5;
 }
 
 .table-wrap {
@@ -10307,14 +10339,36 @@ body[data-theme="dark"] .host-alert-chip {
 }
 
 body[data-theme="dark"] .host-alert-chip.critical,
-body[data-theme="dark"] .header-stat-chip-alert,
 body[data-theme="dark"] .so-card-alert-badge-critical {
   border-color: #d66767;
   background: #5a2020;
   color: #ffc1c1;
 }
 
+body[data-theme="dark"] .header-stat-chip-alert,
 body[data-theme="dark"] .header-stat-chip-warn,
+body[data-theme="dark"] .header-stat-chip-inactive {
+  border-color: #355072;
+  background: linear-gradient(180deg, #1a2e49 0%, #14263f 100%);
+  color: #d4e6fb;
+}
+
+body[data-theme="dark"] .header-stat-chip-alert {
+  border-left-color: #d66767;
+}
+
+body[data-theme="dark"] .header-stat-chip-warn {
+  border-left-color: #c79a45;
+}
+
+body[data-theme="dark"] .header-stat-chip-inactive {
+  border-left-color: #4f9cd0;
+}
+
+body[data-theme="dark"] .header-chip-scope {
+  color: #9db3cc;
+}
+
 body[data-theme="dark"] .stat-chip.delayed,
 body[data-theme="dark"] .so-card-alert-badge-warning {
   border-color: #c79a45;
@@ -10322,7 +10376,6 @@ body[data-theme="dark"] .so-card-alert-badge-warning {
   color: #ffd890;
 }
 
-body[data-theme="dark"] .header-stat-chip-inactive,
 body[data-theme="dark"] .so-card-alert-badge-ok,
 body[data-theme="dark"] .stat-chip.live {
   border-color: #3e8a61;
