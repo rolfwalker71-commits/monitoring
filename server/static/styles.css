@@ -4034,7 +4034,9 @@ body[data-theme="dark"] .trend-progress-bar {
   justify-content: flex-start;
 }
 
-.host-value-chip--hana {
+.host-value-chip--sap,
+.host-value-chip--hana,
+.host-value-chip--sid {
   border-color: #c78200;
   background: #f7a600;
   color: #3b2a00;

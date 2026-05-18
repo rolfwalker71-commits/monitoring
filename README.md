@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.179 (18. Mai 2026)
+
+- **Chip-Farben vereinheitlicht**: In der vorletzten Hostkarten-Reihe nutzen jetzt alle drei Chips (SAP, HANA, SID) den gleichen Stil/Farbton `#f7a600`.
+
 ### v1.6.178 (18. Mai 2026)
 
 - **Hostkarten-Pillenfarben angepasst**: Die Kundennamen-Pille im Hostkartenkopf nutzt jetzt `#006285`; die HANA-Pillen in der unteren Chip-Reihe wurden auf `#f7a600` umgestellt.
