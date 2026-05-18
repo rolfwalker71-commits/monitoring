@@ -3963,11 +3963,11 @@ body[data-theme="dark"] .trend-progress-bar {
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 .host-item.host-item--env-prod {
-  border-color: #8fb0d4;
+  border-color: #9fbddd;
   background:
-    radial-gradient(circle at 100% 0%, rgba(30, 64, 175, 0.14) 0%, transparent 50%),
-    radial-gradient(circle at 0% 100%, rgba(15, 23, 42, 0.14) 0%, transparent 52%),
-    linear-gradient(180deg, #d6e7f7 0%, #bfd6ed 100%);
+    radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.12) 0%, transparent 52%),
+    radial-gradient(circle at 0% 100%, rgba(30, 64, 175, 0.11) 0%, transparent 55%),
+    linear-gradient(180deg, #e3effb 0%, #cfe2f5 100%);
 }
 
 /* SAP/HANA chips in the bottom actions row: inline flow */
@@ -4104,7 +4104,7 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-customer-line {
   display: block;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 800;
   color: #0f3f5f;
   word-break: break-word;
@@ -4694,12 +4694,12 @@ body[data-theme="dark"] .trend-progress-bar {
   box-shadow: inset 0 0 0 1px #8ab0db, 0 10px 24px rgba(30, 58, 95, 0.16);
 }
 .host-item.host-item--env-prod.selected {
-  border-color: #6f96c4;
+  border-color: #86a9cf;
   background:
-    radial-gradient(circle at 100% 0%, rgba(30, 64, 175, 0.2) 0%, transparent 52%),
-    radial-gradient(circle at 0% 100%, rgba(15, 23, 42, 0.18) 0%, transparent 55%),
-    linear-gradient(180deg, #cfe1f4 0%, #b4cee8 100%);
-  box-shadow: inset 0 0 0 1px #7fa7d3, 0 10px 24px rgba(30, 58, 95, 0.16);
+    radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.16) 0%, transparent 52%),
+    radial-gradient(circle at 0% 100%, rgba(30, 64, 175, 0.14) 0%, transparent 56%),
+    linear-gradient(180deg, #dbeaf8 0%, #c6dcef 100%);
+  box-shadow: inset 0 0 0 1px #97b7da, 0 10px 24px rgba(30, 58, 95, 0.16);
 }
 
 .host-status-bar {

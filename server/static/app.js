@@ -7234,7 +7234,7 @@ function renderSingleHostCard(host) {
     ? `<span class="host-agent-mini-dot" title="Host meldet AGENT_VERSION: ${escapeHtml(hostAgentVersionText)} | Referenz: ${escapeHtml(latestAgentVersionText)} | ${escapeHtml(agentVersionVisual.title)} | ${agentStatusLogic}" aria-hidden="true"></span>`
     : "";
   const customerTitleLine = (customerNameValue || agentDot)
-    ? `<div class="host-customer-title-line">${customerNameValue ? `<span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span><span class="host-detail-line">🖥️ ${escapeHtml(hostDesignationLabel)}</span></span>` : ""}${agentDot}</div>`
+    ? `<div class="host-customer-title-line">${customerNameValue ? `<span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span><span class="host-detail-line">🏷️ ${escapeHtml(hostDesignationLabel)}</span></span>` : ""}${agentDot}</div>`
     : "";
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();

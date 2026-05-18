@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.154 (18. Mai 2026)
+
+- **Hostkarte Feinschliff**: Prod-Gradient aufgehellt (weiterhin klar von Test unterscheidbar), Firmenname größer dargestellt und Hostbezeichnung mit `🏷️` statt bisherigem Emoji.
+
 ### v1.6.153 (18. Mai 2026)
 
 - **Hostkarte Umgebung**: `Prod/Test` wird nicht mehr als Chip in der Hostkarte gezeigt; `Prod/Test` erscheint im Detail-Header. Prod-Hosts erhalten stattdessen einen navy-bläulichen Kartenhintergrund, Test bleibt beim bisherigen Hintergrund.
