@@ -524,6 +524,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.171 (18. Mai 2026)
+
+- **Hostkarten Typografie Feinschliff**: Kundenname wieder reduziert und die darunterliegende Host-Zeile groesser/staerker gesetzt, damit die Proportionen ausgeglichener sind.
+
 ### v1.6.170 (18. Mai 2026)
 
 - **Hostkarte Kundenname Fix**: Uebergreifender `span`-Selector hat den Kundennamen auf `11px`/muted ueberschrieben. Regel auf Metazeile eingeschraenkt und Kundenname auf `20px` gesetzt.

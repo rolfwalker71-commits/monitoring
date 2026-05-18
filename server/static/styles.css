@@ -4095,16 +4095,16 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-detail-line {
   display: block;
-  font-size: 9px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   color: #64748b;
   word-break: break-word;
-  padding-top: 4px;
+  padding-top: 5px;
 }
 
 .host-customer-line {
   display: block;
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 800;
   color: #0f3f5f;
   word-break: break-word;
