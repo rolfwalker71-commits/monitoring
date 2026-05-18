@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.175 (18. Mai 2026)
+
+- **Host-Kundenpille vereinheitlicht**: Die Kunden-Pille im Host-Kartenkopf nutzt jetzt immer die volle verfuegbare Breite (unabhaengig von der Textlaenge). Dadurch erscheinen alle Karten im Headerbereich einheitlicher ausgerichtet.
+
 ### v1.6.174 (18. Mai 2026)
 
 - **Mail-Header Kunde + Host**: In ausgehenden hostbezogenen Mails wird der Kunde jetzt im Header prominent angezeigt (gleiche Groesse wie bisherige Host-Hauptzeile), die Hostbezeichnung darunter deutlich kleiner. Die Darstellung wurde zentralisiert und in Instant-/Reminder-Alerts sowie hostbezogenen Testmails vereinheitlicht.
