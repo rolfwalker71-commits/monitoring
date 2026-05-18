@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.202 (18. Mai 2026)
+
+- **License Card Border**: Linker Balken von Orange zu Gelb geändert (Farbcodierung passt besser zum System-Theme).
 n### v1.6.201 (18. Mai 2026)
 
 - **Old UI Header**: SAP-Lizenzinfos in den oberen Statuskarten-Bereich verschoben (neben Offene Alerts, gleiche Kartenoptik mit gelbem linken Balken).

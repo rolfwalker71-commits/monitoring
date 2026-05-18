@@ -3845,7 +3845,7 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .header-stat-chip-license {
-  border-left-color: #c2790f;
+  border-left-color: #fbbf24;
   min-width: 520px;
   cursor: default;
 }
@@ -3858,15 +3858,22 @@ body[data-theme="dark"] .trend-progress-bar {
   width: 100%;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1px 3px;
+  gap: 2px 4px;
+  height: 100%;
+}
+
+.header-license-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .header-license-item {
   min-width: 0;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 2px;
-  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .header-license-label {
@@ -3874,17 +3881,19 @@ body[data-theme="dark"] .trend-progress-bar {
   line-height: 1;
   color: #4a6687;
   font-weight: 700;
-  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .header-license-value {
   min-width: 0;
-  font-size: 11px;
-  line-height: 1.05;
+  font-size: 12px;
+  line-height: 1.1;
   color: #1f3f5f;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-family: "IBM Plex Mono", monospace;
 }
 
 .agent-update-status-list {
