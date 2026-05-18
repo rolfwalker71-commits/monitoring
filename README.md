@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.198 (18. Mai 2026)
+
+- **Old UI SAP card spacing**: Hostbezeichnung und Unterzeile aus dem Report-Header entfernt, damit die 3 großen SAP-Infokarten mehr Platz bekommen und den Header-Bereich dominieren.
 n### v1.6.197 (18. Mai 2026)
 
 - **Old UI SAP card alignment**: Titel der 3 SAP-Karten an die dargestellten Werte angepasst und Kartenhöhe/Position im Report-Header korrigiert (kompakter, auf Höhe zwischen Hostbezeichnung links und Datum rechts).

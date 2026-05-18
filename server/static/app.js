@@ -6699,13 +6699,10 @@ function renderReportCard(report) {
   const cpuCores = Number(cpu.cores ?? cpu.core_count ?? cpu.logical_cores ?? payload.cpu_cores);
   const cpuModelName = asText(cpu.model_name || cpu.model || cpu.name || payload.cpu_model_name || "-");
   const defaultNicIpv4 = resolveDefaultNicIpv4(report, payload, network);
-  const title = asText(report.display_name || payload.display_name || report.hostname || payload.hostname);
-  const technicalHostname = asText(report.hostname || payload.hostname);
   const deliveryMode = asText(report.delivery_mode || payload.delivery_mode || "live", "live").toLowerCase();
   const isDelayed = deliveryMode === "delayed" || payload.is_delayed === true;
   const chipClass = isDelayed ? "delivery-chip delayed" : "delivery-chip live";
   const chipText = isDelayed ? "DELAYED" : "LIVE";
-  const reportDeliveryLag = deliveryLagLabel(report.delivery_lag_sec ?? payload.delivery_lag_sec);
   const queueDepth = queueDepthLabel(payload.queue_depth);
   const section = normalizeReportSection(state.reportSection);
   const selectedHostMeta = Array.isArray(state.hosts)
@@ -6888,10 +6885,6 @@ function renderReportCard(report) {
   return `
     <article class="report-card">
       <div class="report-header">
-        <div class="report-header-left">
-          <h3>${escapeHtml(title)}</h3>
-          <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}${reportDeliveryLag !== "-" ? ` <span class="report-detail-chip report-delivery-chip">⏱️ ${escapeHtml(reportDeliveryLag)}</span>` : ""}</p>
-        </div>
         ${hasKpiCardData ? `<div class="report-sap-kpi-row">
           <article class="report-sap-kpi-card report-sap-kpi-card--feature" title="Feature Pack">
             <h4>FEATURE PACK</h4>

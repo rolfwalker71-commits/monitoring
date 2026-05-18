@@ -5777,21 +5777,10 @@ body[data-theme="dark"] .brand-session-badge {
 
 .report-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(420px, 560px) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   margin-bottom: 6px;
-}
-
-.report-header-left {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.report-header h3 {
-  margin: 0;
-  font-size: 20px;
 }
 
 .report-header-meta {
@@ -5803,39 +5792,13 @@ body[data-theme="dark"] .brand-session-badge {
   align-self: center;
 }
 
-.report-subtitle {
-  margin: 2px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.report-detail-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 7px;
-  border-radius: 20px;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.report-delivery-chip {
-  background: #eef7ff;
-  color: #1d4f91;
-  border: 1px solid #bfdcff;
-}
-
 .report-sap-kpi-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(120px, 1fr));
   gap: 8px;
   margin: 0;
   align-self: center;
+  width: 100%;
 }
 
 .report-sap-kpi-card {
