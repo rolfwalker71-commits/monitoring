@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.137 (18. Mai 2026)
+
+- **Kundennamen Font-Größe**: Reduziert von 14px auf 12px für bessere Platznutzung bei längeren Namen.
+
 ### v1.6.136 (18. Mai 2026)
 
 - **Chip Farben**: SAP/HANA/SID und Kundennamen Chips transparenter und heller gestaltet für bessere Harmonie mit Hostkarten-Hintergrund.
