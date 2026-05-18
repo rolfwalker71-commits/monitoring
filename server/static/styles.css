@@ -4225,7 +4225,7 @@ body[data-theme="dark"] .trend-progress-bar {
   align-items: flex-start;
   justify-content: space-between;
   gap: 6px;
-  padding: 4px 0 6px 0;
+  padding: 2px 0 2px 0;
 }
 
 .host-customer-text-block {
