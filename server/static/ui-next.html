@@ -66,9 +66,13 @@
 
         <div class="next-toolbar">
           <input id="nextHostSearch" class="search-input-compact" type="text" placeholder="Host/Kunde/OS suchen..." />
+          <select id="nextCountryFilter" class="search-input-compact next-country-select" aria-label="Land Filter">
+            <option value="all">Land: Alle</option>
+          </select>
           <button class="btn-secondary" id="nextFilterAll" type="button">Alle</button>
           <button class="btn-secondary" id="nextFilterAlerts" type="button">Mit Alerts</button>
           <button class="btn-secondary" id="nextFilterCritical" type="button">Nur Kritisch</button>
+          <button class="btn-secondary" id="nextFilterOwn" type="button">Eigene Hosts</button>
           <span id="nextStatusText" class="count compact"></span>
         </div>
 

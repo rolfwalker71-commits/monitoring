@@ -63,6 +63,18 @@
   margin-bottom: 10px;
 }
 
+.next-country-select {
+  min-width: 128px;
+  max-width: 160px;
+}
+
+.next-toolbar .btn-secondary.active {
+  border-color: #88afd6;
+  background: #e9f3ff;
+  color: #1f466d;
+  font-weight: 700;
+}
+
 .next-layout {
   display: grid;
   grid-template-columns: 330px 1fr;

@@ -524,6 +524,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.184
+
+- **UI-Next**: Added country filters and own hosts filter to the parallel UI.
+
 ### v1.6.183 (18. Mai 2026)
 
 - **Parallel UI (Variante B) live**: Neue, separate Parallel-Oberflaeche unter `/ui-next` umgesetzt, ohne die bestehende Hauptseite zu veraendern.

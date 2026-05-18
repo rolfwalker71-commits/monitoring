@@ -29,6 +29,9 @@ const state = {
   selectedHost: "",
   hostFilterMode: "all",
   hostSearch: "",
+  countryFilter: "all",
+  ownHostsOnly: false,
+  ownHosts: new Set(),
   reportOffset: 0,
   totalReports: 0,
   currentReport: null,
@@ -65,26 +68,62 @@ function wireTopButtons() {
 
 function wireFilters() {
   const search = document.getElementById("nextHostSearch");
+  const country = document.getElementById("nextCountryFilter");
   const all = document.getElementById("nextFilterAll");
   const alerts = document.getElementById("nextFilterAlerts");
   const critical = document.getElementById("nextFilterCritical");
+  const own = document.getElementById("nextFilterOwn");
 
   search?.addEventListener("input", (event) => {
     state.hostSearch = String(event.target.value || "").trim().toLowerCase();
     renderHosts();
   });
+
+  country?.addEventListener("change", (event) => {
+    state.countryFilter = String(event.target.value || "all");
+    renderHosts();
+  });
+
   all?.addEventListener("click", () => {
     state.hostFilterMode = "all";
+    updateFilterButtons();
     renderHosts();
   });
   alerts?.addEventListener("click", () => {
     state.hostFilterMode = "alerts";
+    updateFilterButtons();
     renderHosts();
   });
   critical?.addEventListener("click", () => {
     state.hostFilterMode = "critical";
+    updateFilterButtons();
     renderHosts();
   });
+  own?.addEventListener("click", () => {
+    state.ownHostsOnly = !state.ownHostsOnly;
+    updateFilterButtons();
+    renderHosts();
+  });
+
+  updateFilterButtons();
+}
+
+function updateFilterButtons() {
+  const byMode = {
+    all: document.getElementById("nextFilterAll"),
+    alerts: document.getElementById("nextFilterAlerts"),
+    critical: document.getElementById("nextFilterCritical"),
+  };
+  for (const [mode, button] of Object.entries(byMode)) {
+    if (button) {
+      button.classList.toggle("active", mode === state.hostFilterMode);
+    }
+  }
+
+  const own = document.getElementById("nextFilterOwn");
+  if (own) {
+    own.classList.toggle("active", state.ownHostsOnly);
+  }
 }
 
 function wirePaging() {
@@ -122,6 +161,16 @@ function matchesHostFilter(host) {
   if (state.hostFilterMode === "alerts" && asNum(host.open_alert_count, 0) <= 0) return false;
   if (state.hostFilterMode === "critical" && asNum(host.open_critical_alert_count, 0) <= 0) return false;
 
+  if (state.countryFilter !== "all") {
+    const hostCountry = String(host.country_code || "").trim().toUpperCase();
+    if (hostCountry !== state.countryFilter) return false;
+  }
+
+  if (state.ownHostsOnly) {
+    const hostKey = String(host.hostname || "").trim().toLowerCase();
+    if (!state.ownHosts.has(hostKey)) return false;
+  }
+
   if (!state.hostSearch) return true;
   const blob = [
     host.display_name,
@@ -135,6 +184,43 @@ function matchesHostFilter(host) {
     .join(" ");
 
   return blob.includes(state.hostSearch);
+}
+
+function renderCountryFilter() {
+  const select = document.getElementById("nextCountryFilter");
+  if (!select) return;
+
+  const countries = new Set();
+  for (const host of state.hosts) {
+    const cc = String(host.country_code || "").trim().toUpperCase();
+    if (cc) countries.add(cc);
+  }
+
+  const sorted = [...countries].sort((a, b) => a.localeCompare(b));
+  const previous = state.countryFilter;
+  const hasPrev = previous === "all" || sorted.includes(previous);
+  if (!hasPrev) state.countryFilter = "all";
+
+  select.innerHTML = [
+    '<option value="all">Land: Alle</option>',
+    ...sorted.map((cc) => `<option value="${escapeHtml(cc)}">Land: ${escapeHtml(cc)}</option>`),
+  ].join("");
+  select.value = state.countryFilter;
+}
+
+async function loadOwnHosts() {
+  try {
+    const prefs = await apiGet("/api/v1/user-preferences");
+    const raw = String(prefs?.host_interest_hosts || "");
+    state.ownHosts = new Set(
+      raw
+        .split(",")
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean)
+    );
+  } catch (error) {
+    state.ownHosts = new Set();
+  }
 }
 
 function renderHosts() {
@@ -425,6 +511,7 @@ async function loadHosts() {
     state.selectedHost = state.hosts[0].hostname;
   }
 
+  renderCountryFilter();
   renderHosts();
 }
 
@@ -501,6 +588,7 @@ async function init() {
   logoutBtn.classList.remove("hidden");
 
   await loadKpis();
+  await loadOwnHosts();
   await loadHosts();
   await loadSelectedHostData();
 }
