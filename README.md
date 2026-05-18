@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.192 (18. Mai 2026)
+
+- **ui-next host card status**: (OK/alert) moved back to top row next to customer name, no longer one line too low.
 n### v1.6.191 (18. Mai 2026)
 
 - **ui-next host card typography**: swapped: customer name larger, host designation smaller.

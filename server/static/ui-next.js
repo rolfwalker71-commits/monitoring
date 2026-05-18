@@ -308,11 +308,11 @@ function renderHosts() {
       const sapChip = resolveHostSapChip(host);
       return `
         <article class="next-host-item ${active}" data-host="${escapeHtml(host.hostname)}">
-          <p class="next-host-customer">${escapeHtml(customerName)}</p>
-          <h4>
-            <span>${escapeHtml(asText(host.display_name, host.hostname))}</span>
-            <span>${escapeHtml(alertText)}</span>
-          </h4>
+          <div class="next-host-head">
+            <p class="next-host-customer">${escapeHtml(customerName)}</p>
+            <span class="next-host-health">${escapeHtml(alertText)}</span>
+          </div>
+          <h4>${escapeHtml(asText(host.display_name, host.hostname))}</h4>
           <p class="next-host-meta">${escapeHtml(hostName)} · ${escapeHtml(hostIp)}</p>
           <div class="next-host-chips">
             <span class="next-chip">${escapeHtml(asText(host.os, "OS -"))}</span>

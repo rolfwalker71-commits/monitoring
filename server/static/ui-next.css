@@ -125,8 +125,13 @@
   margin: 0 0 4px;
   font-size: 11px;
   color: #1f3f5f;
+}
+
+.next-host-head {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
+  gap: 8px;
 }
 
 .next-host-customer {
@@ -136,6 +141,13 @@
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: #47617c;
+}
+
+.next-host-health {
+  font-size: 12px;
+  font-weight: 800;
+  color: #1f3f5f;
+  white-space: nowrap;
 }
 
 .next-host-meta {
