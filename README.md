@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.205 (18. Mai 2026)
+
+- **License Card Styling**: Lizenzkarte: Labels kleiner und leichter, Werte extra-fett (800), mehr Spaltenabstand, Inhalte horizontal zentriert.
 n### v1.6.204 (18. Mai 2026)
 
 - **License Card Height Fix**: Lizenzkarte nun mit korrekter 56px Höhe wie andere Header-Chips; 3x2 Grid-Layout mit gleichmäßigen Reihenabständen.
