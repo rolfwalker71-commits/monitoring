@@ -6736,25 +6736,6 @@ function renderReportCard(report) {
   const featurePackKpiValue = sapFeaturePackChip || "-";
   const patchLevelKpiValue = hanaVersionChip || "-";
   const buildKpiValue = hanaSidChip || "-";
-  const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : {};
-  const licenseExpirationRaw = asText(sapLicense.expiration, "").trim();
-  const licenseExpiration = /^\d{8}$/.test(licenseExpirationRaw)
-    ? `${licenseExpirationRaw.substring(6, 8)}.${licenseExpirationRaw.substring(4, 6)}.${licenseExpirationRaw.substring(0, 4)}`
-    : licenseExpirationRaw;
-  const licenseFields = [
-    { label: "HW-Key", value: asText(sapLicense.hardware_key, "").trim() || "-" },
-    { label: "Installationsnummer", value: asText(sapLicense.instno, "").trim() || "-" },
-    { label: "Systemnummer", value: asText(sapLicense.system_nr, "").trim() || "-" },
-    { label: "Kundennummer", value: asText(sapLicense.customer_no, "").trim() || "-" },
-    { label: "Lizenznehmer", value: asText(sapLicense.customer_name, "").trim() || "-" }
-  ];
-  if (licenseExpiration) {
-    licenseFields.push({ label: "Gültig bis", value: licenseExpiration });
-  }
-  const hasLicenseKpiData = licenseFields.some((field) => field.value && field.value !== "-");
-  const licenseFieldsHtml = licenseFields
-    .map((field) => `<div class="report-sap-kpi-license-item"><span class="report-sap-kpi-license-label">${escapeHtml(field.label)}</span><span class="report-sap-kpi-license-value">${escapeHtml(field.value)}</span></div>`)
-    .join("");
   const reportTimestampFull = asText(
     formatUtcPlus2(report.received_at_utc || payload.timestamp_utc),
     "-"
@@ -6904,7 +6885,7 @@ function renderReportCard(report) {
   return `
     <article class="report-card">
       <div class="report-header">
-        ${(hasKpiCardData || hasLicenseKpiData) ? `<div class="report-sap-kpi-row">
+        ${hasKpiCardData ? `<div class="report-sap-kpi-row">
           <article class="report-sap-kpi-card report-sap-kpi-card--feature" title="Feature Pack">
             <h4>FEATURE PACK</h4>
             <p>${escapeHtml(featurePackKpiValue)}</p>
@@ -6917,10 +6898,6 @@ function renderReportCard(report) {
             <h4>HANA SID</h4>
             <p>${escapeHtml(buildKpiValue)}</p>
           </article>
-          ${hasLicenseKpiData ? `<article class="report-sap-kpi-card report-sap-kpi-card--license" title="SAP B1 Lizenzinfo">
-            <h4>LIZENZ</h4>
-            <div class="report-sap-kpi-license-grid">${licenseFieldsHtml}</div>
-          </article>` : ""}
         </div>` : ""}
         <div class="report-header-meta">
           <span class="report-time"><span class="report-time-date">${escapeHtml(reportTimestampDate)}</span>${reportTimestampTime ? `<span class="report-time-clock">${escapeHtml(reportTimestampTime)}</span>` : ""}</span>
@@ -8642,6 +8619,7 @@ async function loadReportsForHost(options = {}) {
     list.innerHTML = state.hostFilterNoMatches
       ? "<p class=\"muted\">Keine Daten zum Suchfilter vorhanden.</p>"
       : "<p class=\"muted\">Bitte einen Host auswählen, um Daten zu laden.</p>";
+    updateHeaderStatChips();
     updatePagerButtons();
     return;
   }
@@ -8705,6 +8683,7 @@ async function loadReportsForHost(options = {}) {
       if (reportJumpDateInput) {
         reportJumpDateInput.value = "";
       }
+      updateHeaderStatChips();
       updatePagerButtons();
       return;
     }
@@ -8716,10 +8695,12 @@ async function loadReportsForHost(options = {}) {
     state.currentReport = reports[0];
     list.innerHTML = renderReportCard(state.currentReport);
     wireSapVersionMapCopyButtons(list);
+    updateHeaderStatChips();
     updatePagerButtons();
   } catch (error) {
     state.currentReport = null;
     list.innerHTML = `<p class=\"muted\">Fehler: ${escapeHtml(error.message)}</p>`;
+    updateHeaderStatChips();
   }
 }
 
@@ -10637,6 +10618,14 @@ function updateHeaderStatChips() {
   const trendsCount = document.getElementById("headerTrendsCount");
   const inactiveChip = document.getElementById("headerInactiveChip");
   const inactiveCount = document.getElementById("headerInactiveCount");
+  const licenseChip = document.getElementById("headerLicenseChip");
+  const licenseHw = document.getElementById("headerLicenseHw");
+  const licenseInst = document.getElementById("headerLicenseInst");
+  const licenseSystem = document.getElementById("headerLicenseSystem");
+  const licenseCustomer = document.getElementById("headerLicenseCustomer");
+  const licenseHolder = document.getElementById("headerLicenseHolder");
+  const licenseExpiry = document.getElementById("headerLicenseExpiry");
+  const licenseExpiryItem = document.getElementById("headerLicenseExpiryItem");
   if (alertChip && alertCount) {
     alertCount.textContent = String(state.globalOpenAlertsCount);
     alertChip.classList.toggle("hidden", state.globalOpenAlertsCount === 0);
@@ -10648,6 +10637,41 @@ function updateHeaderStatChips() {
   if (inactiveChip && inactiveCount) {
     inactiveCount.textContent = String(state.inactiveHostsCount);
     inactiveChip.classList.toggle("hidden", state.inactiveHostsCount === 0);
+  }
+  if (licenseChip) {
+    const payload = state.currentReport && typeof state.currentReport.payload === "object" ? state.currentReport.payload : {};
+    const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : {};
+    const hw = asText(sapLicense.hardware_key, "").trim();
+    const inst = asText(sapLicense.instno, "").trim();
+    const system = asText(sapLicense.system_nr, "").trim();
+    const customerNo = asText(sapLicense.customer_no, "").trim();
+    const holder = asText(sapLicense.customer_name, "").trim();
+    const expiryRaw = asText(sapLicense.expiration, "").trim();
+    const expiry = /^\d{8}$/.test(expiryRaw)
+      ? `${expiryRaw.substring(6, 8)}.${expiryRaw.substring(4, 6)}.${expiryRaw.substring(0, 4)}`
+      : expiryRaw;
+    const hasData = [hw, inst, system, customerNo, holder, expiry].some((entry) => Boolean(entry));
+    licenseChip.classList.toggle("hidden", !hasData);
+    if (hasData) {
+      if (licenseHw) licenseHw.textContent = hw || "-";
+      if (licenseInst) licenseInst.textContent = inst || "-";
+      if (licenseSystem) licenseSystem.textContent = system || "-";
+      if (licenseCustomer) licenseCustomer.textContent = customerNo || "-";
+      if (licenseHolder) licenseHolder.textContent = holder || "-";
+      if (licenseExpiry) licenseExpiry.textContent = expiry || "-";
+      if (licenseExpiryItem) licenseExpiryItem.classList.toggle("hidden", !expiry);
+      const titleLines = [
+        `HW-Key: ${hw || "-"}`,
+        `Installationsnummer: ${inst || "-"}`,
+        `Systemnummer: ${system || "-"}`,
+        `Kundennummer: ${customerNo || "-"}`,
+        `Lizenznehmer: ${holder || "-"}`,
+      ];
+      if (expiry) {
+        titleLines.push(`Gültig bis: ${expiry}`);
+      }
+      licenseChip.title = titleLines.join("\n");
+    }
   }
 }
 
@@ -10840,7 +10864,7 @@ function wireEvents() {
   }
 
   document.addEventListener("click", (event) => {
-    const target = event.target instanceof Element ? event.target.closest("#overviewTabButton, #reportsTabButton, #globalViewButton, #globalAlertsTabButton, #criticalTrendsTabButton, #inactiveHostsTabButton, #backupStatusTabButton, #systemOverviewTabButton, #hostConfigChangesTabButton, #agentSourceStatusTabButton, #globalAdminAlertSubsTabButton, #globalAdminLoginAuditTabButton, #globalAdminSettingsTabButton, #headerAlertChip, #headerTrendsChip, #headerInactiveChip") : null;
+    const target = event.target instanceof Element ? event.target.closest("#overviewTabButton, #reportsTabButton, #globalViewButton, #globalAlertsTabButton, #criticalTrendsTabButton, #inactiveHostsTabButton, #backupStatusTabButton, #systemOverviewTabButton, #hostConfigChangesTabButton, #agentSourceStatusTabButton, #globalAdminAlertSubsTabButton, #globalAdminLoginAuditTabButton, #globalAdminSettingsTabButton, #headerAlertChip, #headerTrendsChip, #headerInactiveChip, #headerLicenseChip") : null;
     if (!target) {
       return;
     }

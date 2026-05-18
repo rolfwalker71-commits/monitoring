@@ -523,6 +523,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.201 (18. Mai 2026)
+
+- **Old UI Header**: SAP-Lizenzinfos in den oberen Statuskarten-Bereich verschoben (neben Offene Alerts, gleiche Kartenoptik mit gelbem linken Balken).
+- **Layout**: Spaltenabstände innerhalb der Lizenzkarte deutlich verkleinert und Schrift kompakter gemacht.
+- **Bereinigung**: Zusätzliche Lizenzkarte im Report-Kopf entfernt; SAP-B1-Bereich bleibt weiterhin erhalten.
 n### v1.6.200 (18. Mai 2026)
 
 - **Branding**: App-Name auf "System Infoboard" aktualisiert (Header, Login, PWA, Mail-Branding).
