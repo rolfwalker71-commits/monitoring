@@ -2646,6 +2646,7 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 .report-meta-row .count {
   margin: 0;
   order: 3;
+  margin-left: auto;
 }
 
 .report-customer-chip-wrap {
@@ -2654,7 +2655,6 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   min-height: 24px;
   flex-shrink: 0;
   order: 1;
-  margin-right: auto;
 }
 
 .selected-host-controls {
@@ -4017,9 +4017,9 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .host-value-chip--customer-title {
-  border-color: #004d68;
-  background: #006285;
-  color: #f8fbff;
+  border-color: rgba(0, 77, 104, 0.3);
+  background: rgba(0, 98, 133, 0.38);
+  color: #1e5a7a;
   display: flex;
   flex: 1 1 auto;
   width: 100%;
@@ -4037,9 +4037,9 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-value-chip--sap,
 .host-value-chip--hana,
 .host-value-chip--sid {
-  border-color: #c78200;
-  background: #f7a600;
-  color: #3b2a00;
+  border-color: rgba(199, 130, 0, 0.35);
+  background: rgba(247, 166, 0, 0.45);
+  color: #8b6b1a;
 }
 
 .host-card-footer--customer {
@@ -7767,6 +7767,20 @@ body[data-theme="dark"] .admin-sub-user-chip {
 
 body[data-theme="dark"] .admin-sub-user-chip.is-admin {
   box-shadow: inset 0 0 0 1px #3b5f8a;
+}
+
+body[data-theme="dark"] .host-value-chip--sap,
+body[data-theme="dark"] .host-value-chip--hana,
+body[data-theme="dark"] .host-value-chip--sid {
+  border-color: rgba(255, 179, 71, 0.3);
+  background: rgba(255, 179, 71, 0.35);
+  color: #ffb347;
+}
+
+body[data-theme="dark"] .host-value-chip--customer-title {
+  border-color: rgba(59, 130, 246, 0.25);
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
 }
 
 body[data-theme="dark"] .admin-alert-subscriptions-table tr.has-change td {
