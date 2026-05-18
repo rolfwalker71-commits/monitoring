@@ -13288,7 +13288,7 @@ def main() -> None:
     args = parser.parse_args()
 
     init_db()
-    startup_rebuild_days = parse_positive_int(os.getenv("MONITORING_REBUILD_CHANGELOG_DAYS", ""), default=0, max_value=365)
+    startup_rebuild_days = parse_positive_int(os.getenv("MONITORING_REBUILD_CHANGELOG_DAYS", ""), default=18, max_value=365)
     if args.rebuild_changelog_days > 0:
         startup_rebuild_days = args.rebuild_changelog_days
     if startup_rebuild_days > 0:
