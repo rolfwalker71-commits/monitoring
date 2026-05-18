@@ -524,6 +524,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.166 (18. Mai 2026)
+
+- **Inaktive Hosts Anzeige**: Platzhalterwerte wie `-`/`--` werden beim Kundennamen nicht mehr vor den Hostnamen gesetzt.
+
 ### v1.6.165 (18. Mai 2026)
 
 - **Inaktive Hosts**: Kundenname wird in der Inaktive-Hosts-Karte jetzt vor dem Hostnamen angezeigt (z. B. `Kunde · Anzeigename`).

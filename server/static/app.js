@@ -9537,8 +9537,9 @@ function renderInactiveHosts(data) {
 
   const cards = inactive_hosts.map((host) => {
     const displayName = host.display_name || host.hostname;
-    const customerName = asText(host.customer_name || "").trim();
-    const displayTitle = customerName ? `${customerName} · ${displayName}` : displayName;
+    const customerNameRaw = asText(host.customer_name || "").trim();
+    const hasRealCustomerName = customerNameRaw && customerNameRaw !== "-" && customerNameRaw !== "--";
+    const displayTitle = hasRealCustomerName ? `${customerNameRaw} · ${displayName}` : displayName;
     const showHostname = displayName !== host.hostname;
     
     const osIconInfo = resolveHostOsIcon(host.os);
