@@ -9266,14 +9266,17 @@ async function loadDatabaseLifecycleForHost() {
     databaseLifecycleRows.innerHTML = events
       .map((item) => {
         const actionBadgeClass = item.action === "create" ? "badge-success" : item.action === "delete" ? "badge-danger" : "badge-info";
-        const actionLabel = item.action === "create" ? "✨ Erstellt" : item.action === "delete" ? "🗑️ Gelöscht" : "Umbenannt";
         const triggeredByLabel = item.triggered_by === "system" ? "🖥️ System" : item.triggered_by === "admin" ? "👤 Admin" : "🤖 Agent";
         const reason = asText(item.reason || "-");
         const dbName = asText(item.database_name || "-");
         const instanceName = asText(item.instance_name || "MSSQLSERVER");
-        const dbLabel = instanceName && instanceName.toUpperCase() !== "MSSQLSERVER"
-          ? `${instanceName}::${dbName}`
-          : dbName;
+        const isHana = instanceName.toUpperCase() === "HANA";
+        const actionLabel = isHana
+          ? (item.action === "create" ? "✨ Schema erstellt" : item.action === "delete" ? "🗑️ Schema gelöscht" : "Schema umbenannt")
+          : (item.action === "create" ? "✨ Erstellt" : item.action === "delete" ? "🗑️ Gelöscht" : "Umbenannt");
+        const dbLabel = isHana
+          ? `Schema: ${dbName}`
+          : (instanceName && instanceName.toUpperCase() !== "MSSQLSERVER" ? `${instanceName}::${dbName}` : dbName);
 
         return `
           <tr>

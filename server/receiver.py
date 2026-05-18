@@ -3326,9 +3326,9 @@ def _extract_database_inventory(payload: dict) -> set[str]:
     hana_schemas = hana_info.get("schemas") if isinstance(hana_info.get("schemas"), list) else []
     for schema_entry in hana_schemas:
         if isinstance(schema_entry, dict):
-            _add_name(schema_entry.get("name"))
+            _add_name(schema_entry.get("name"), instance_name="HANA")
         else:
-            _add_name(schema_entry)
+            _add_name(schema_entry, instance_name="HANA")
 
     return inventory
 
@@ -3427,19 +3427,30 @@ def get_database_lifecycle_for_host(
 def _format_database_lifecycle_name(database_name: object, instance_name: object) -> str:
     db_name = str(database_name or "").strip() or "-"
     instance = str(instance_name or "").strip() or "MSSQLSERVER"
+    if instance.upper() == "HANA":
+        return db_name
     if instance.upper() == "MSSQLSERVER":
         return db_name
     return f"{instance}::{db_name}"
 
 
-def _database_lifecycle_values(action: str, database_display_name: str) -> tuple[str, str, str]:
+def _database_lifecycle_values(action: str, database_display_name: str, instance_name: object = "MSSQLSERVER") -> tuple[str, str, str]:
     normalized = str(action or "").strip().lower()
+    is_hana_schema = str(instance_name or "").strip().upper() == "HANA"
     if normalized == "create":
+        if is_hana_schema:
+            return "✨ HANA Schema erstellt", "-", database_display_name
         return "✨ DB erstellt", "-", database_display_name
     if normalized == "delete":
+        if is_hana_schema:
+            return "🗑️ HANA Schema gelöscht", database_display_name, "-"
         return "🗑️ DB gelöscht", database_display_name, "-"
     if normalized == "rename":
+        if is_hana_schema:
+            return "HANA Schema umbenannt", "-", database_display_name
         return "DB umbenannt", "-", database_display_name
+    if is_hana_schema:
+        return f"HANA Schema {normalized or 'event'}", "-", database_display_name
     return f"DB {normalized or 'event'}", "-", database_display_name
 
 
@@ -3461,7 +3472,7 @@ def _collect_database_lifecycle_change_items_for_host(conn: sqlite3.Connection, 
     items: list[dict] = []
     for row in rows:
         database_display_name = _format_database_lifecycle_name(row[2], row[4])
-        action_label, old_value, new_value = _database_lifecycle_values(str(row[3] or ""), database_display_name)
+        action_label, old_value, new_value = _database_lifecycle_values(str(row[3] or ""), database_display_name, row[4])
         items.append(
             {
                 "id": int(row[0] or 0),
@@ -3507,7 +3518,7 @@ def _collect_database_lifecycle_change_items(conn: sqlite3.Connection, hours: in
         country_code = normalize_country_code(str(row[7] or ""))
         customer_name = str(row[8] or "").strip()
         database_display_name = _format_database_lifecycle_name(row[3], row[5])
-        action_label, old_value, new_value = _database_lifecycle_values(str(row[4] or ""), database_display_name)
+        action_label, old_value, new_value = _database_lifecycle_values(str(row[4] or ""), database_display_name, row[5])
         items.append(
             {
                 "id": int(row[0] or 0),

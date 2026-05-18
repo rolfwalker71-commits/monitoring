@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.173 (18. Mai 2026)
+
+- **DB Changelog HANA-Schema**: HANA-Einträge werden im DB Changelog jetzt explizit als Schema behandelt/angezeigt (inkl. Aktionstext für Schema erstellt/gelöscht). SQL-Datenbanken bleiben unverändert im bisherigen Format.
+
 ### v1.6.172 (18. Mai 2026)
 
 - **Host-Changelog getrennt**: Im hostbasierten Bereich wurde ein separater Menüpunkt `DB Changelog` wieder eingeführt. DB-Änderungen werden dort angezeigt; der hostbasierte Standard-`Changelog` zeigt wieder nur Konfig-/Hardware- und AddOn-Änderungen.
