@@ -524,6 +524,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.172 (18. Mai 2026)
+
+- **Layout-Mockups modernisiert**: Neue visuelle Vergleichsseite mit zwei Richtungen umgesetzt (`Calm Professional` und `Data-First Compact`) zur Bewertung der Punkte 1-4: ruhiger Hintergrund, vereinfachte Sidebar-Karten, mehr Weissraum und modernere KPI-Karten.
+
 ### v1.6.171 (18. Mai 2026)
 
 - **Hostkarten Typografie Feinschliff**: Kundenname wieder reduziert und die darunterliegende Host-Zeile groesser/staerker gesetzt, damit die Proportionen ausgeglichener sind.
