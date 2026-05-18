@@ -123,7 +123,7 @@
 
 .next-host-item h4 {
   margin: 0 0 4px;
-  font-size: 13px;
+  font-size: 11px;
   color: #1f3f5f;
   display: flex;
   justify-content: space-between;
@@ -131,7 +131,7 @@
 
 .next-host-customer {
   margin: 0 0 3px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.03em;
   text-transform: uppercase;

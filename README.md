@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.191 (18. Mai 2026)
+
+- **ui-next host card typography**: swapped: customer name larger, host designation smaller.
 n### v1.6.190 (18. Mai 2026)
 
 - **UI Shortcuts**: ui-next now has missing menu shortcuts for Benutzereinstellungen, globale Ansicht, globale Alerts, kritische Trends, inaktive Hosts, Alarm-Einstellungen, Admin-Einstellungen.
