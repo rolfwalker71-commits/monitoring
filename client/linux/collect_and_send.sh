@@ -2051,7 +2051,7 @@ collect_journal_errors_json() {
   while IFS= read -r line; do
     [[ -n "$line" ]] || continue
     timestamp="${line:0:25}"
-    message="${line:26}"
+    message="${line:25}"
     entry=$(cat <<EOF
 {"time":"$(json_escape "$timestamp")","priority":"err","unit":"-","message":"$(json_escape "$message")"}
 EOF

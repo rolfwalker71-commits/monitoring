@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.139 (18. Mai 2026)
+
+- **Journal Fehler Fix**: Ersten Buchstaben der Meldung nicht mehr abschneiden (Off-by-one bei short-iso Zeitstempel-Parsing).
+
 ### v1.6.138 (18. Mai 2026)
 
 - **Kundennamen Font-Größe**: Angepasst auf 13px für bessere Platznutzung bei längeren Namen.
