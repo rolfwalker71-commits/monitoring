@@ -7285,15 +7285,8 @@ function renderSingleHostCard(host) {
   const alertSideBar = hasOpenAlerts
     ? `<div class="host-alert-side-bar" title="${openAlertCount} Alerts | Logik: Balken nur sichtbar bei > 0 Alerts." aria-hidden="true"></div>`
     : "";
-  const hostAgentVersionText = asText(host.agent_version, "-");
-  const latestAgentVersionText = asText(state.latestAgentRelease, "-");
-  const agentLagInfo = getAgentVersionLagInfo(latestAgentVersionText, hostAgentVersionText);
-  const agentLagCount = Number(agentLagInfo.steps || 0);
-  const agentLagChip = agentLagInfo.isBehind && Number.isFinite(agentLagCount) && agentLagCount > 0
-    ? `<span class="host-agent-lag-chip" title="Host meldet AGENT_VERSION: ${escapeHtml(hostAgentVersionText)} | Referenz: ${escapeHtml(latestAgentVersionText)} | Rückstand: ${agentLagCount} Version${agentLagCount === 1 ? "" : "en"}">${agentLagCount}</span>`
-    : "";
-  const customerTitleLine = (customerNameValue || agentLagChip)
-    ? `<div class="host-customer-title-line">${customerNameValue ? `<span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span><span class="host-detail-line">🏷️ ${escapeHtml(hostDesignationLabel)}</span></span>` : ""}${agentLagChip}</div>`
+  const customerTitleLine = customerNameValue
+    ? `<div class="host-customer-title-line"><span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span><span class="host-detail-line">🏷️ ${escapeHtml(hostDesignationLabel)}</span></span></div>`
     : "";
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();

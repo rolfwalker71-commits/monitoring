@@ -320,7 +320,7 @@ fi
 
 ICON_COUNT="$(wc -l < "$ICON_NAMES_FILE" | tr -d ' ')"
 echo "Lade ${ICON_COUNT} PNG-Icons parallel..."
-if ! sed 's#^#server/static/icons/#' "$ICON_NAMES_FILE" | xargs -P 4 -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"'; then
+if ! sed 's#^#server/static/icons/#' "$ICON_NAMES_FILE" | xargs -P "$MAX_PARALLEL_DOWNLOADS" -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"'; then
   echo "Fehler bei Icon-Downloads (nicht kritisch)" >&2
 fi
 echo "Icons geladen ✓"

@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.214 (18. Mai 2026)
+
+- **pull-server-only**: PNG-Icon-Downloads auf denselben Parallelwert wie Standarddateien umgestellt (MAX_PARALLEL_DOWNLOADS, standardmäßig 8).
+- **Hostkarte**: Testweise eingebauten Versionsrückstands-Zahlenchip wieder ersatzlos entfernt.
 n### v1.6.213 (18. Mai 2026)
 
 - **Hostkarten Versionsindikator**: Roten Punkt durch runden Zahlen-Chip ersetzt; zeigt den Versionsrückstand (Anzahl Versionen) nur bei Rückstand > 0.

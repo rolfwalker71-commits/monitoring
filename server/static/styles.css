@@ -723,7 +723,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 .host-meta-modal-inner {
   position: relative;
   z-index: 1;
-  width: min(680px, 100%);
+  width: min(720px, 100%);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -4233,24 +4233,6 @@ body[data-theme="dark"] .trend-progress-bar {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-}
-
-.host-agent-lag-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 6px;
-  margin-left: auto;
-  border-radius: 999px;
-  border: 1px solid #fb7185;
-  background: #ffe4ea;
-  color: #b91c1c;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1;
 }
 
 .host-detail-line {
@@ -8560,12 +8542,6 @@ body[data-theme="dark"] .theme-toggle:hover {
   border-color: #5d86b8;
   background: #223a5c;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
-
-body[data-theme="dark"] .host-agent-lag-chip {
-  border-color: #f43f5e;
-  background: rgba(244, 63, 94, 0.18);
-  color: #fecdd3;
-}
 }
 
 /* ── Dark Mode: Settings & misc ───────────────────────────── */
