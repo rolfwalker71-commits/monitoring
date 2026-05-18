@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.211 (18. Mai 2026)
+
+- **License Card Spacing**: Abstand zwischen erster und zweiter Spalte nochmals deutlich verkleinert (fast ohne Zusatzabstand).
 n### v1.6.210 (18. Mai 2026)
 
 - **License Card Spacing**: Abstand zwischen erster und zweiter Spalte leicht reduziert (feineres Tuning).
