@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.172 (18. Mai 2026)
+
+- **Host-Changelog getrennt**: Im hostbasierten Bereich wurde ein separater Menüpunkt `DB Changelog` wieder eingeführt. DB-Änderungen werden dort angezeigt; der hostbasierte Standard-`Changelog` zeigt wieder nur Konfig-/Hardware- und AddOn-Änderungen.
+
 ### v1.6.171 (17. Mai 2026)
 
 - **Harvest SQL Setup robuster**: `setup_harvest_sql_user.ps1` behandelt Auth-/Rechteprobleme jetzt besser (GRANT als Best-Effort mit Warnungen statt hartem Abbruch) und unterstuetzt optionalen SQL-Admin-Fallback via `HARVEST_SETUP_SQL_ADMIN_USER` + `HARVEST_SETUP_SQL_ADMIN_PASSWORD` in `agent.conf`.

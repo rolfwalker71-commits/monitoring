@@ -3569,10 +3569,6 @@ def get_host_config_changes_for_host(
     if addon_items:
         items.extend(addon_items)
 
-    db_items = _collect_database_lifecycle_change_items_for_host(conn, hostname)
-    if db_items:
-        items.extend(db_items)
-
     items.sort(key=lambda item: (str(item.get("detected_at_utc") or ""), int(item.get("id") or 0)), reverse=True)
 
     total = len(items)

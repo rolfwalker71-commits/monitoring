@@ -1389,10 +1389,12 @@ function updateOverviewSection() {
   const mainSection = document.getElementById("overviewMainSection");
   const filesystemSection = document.getElementById("overviewFilesystemSection");
   const notificationSection = document.getElementById("overviewNotificationSection");
+  const databaseChangelogSection = document.getElementById("overviewDatabaseChangelogSection");
   const configChangelogSection = document.getElementById("overviewConfigChangelogSection");
   const mainTabButton = document.getElementById("overviewMainTabButton");
   const filesystemTabButton = document.getElementById("overviewFilesystemTabButton");
   const notificationTabButton = document.getElementById("overviewNotificationTabButton");
+  const databaseChangelogTabButton = document.getElementById("overviewDatabaseChangelogTabButton");
   const configChangelogTabButton = document.getElementById("overviewConfigChangelogTabButton");
 
   if (!mainSection || !filesystemSection || !mainTabButton || !filesystemTabButton) {
@@ -1402,21 +1404,25 @@ function updateOverviewSection() {
   const showMain = state.overviewSection === "main";
   const showFilesystem = state.overviewSection === "filesystem";
   const showNotification = state.overviewSection === "notification";
+  const showDatabaseChangelog = state.overviewSection === "database-changelog";
   const showConfigChangelog = state.overviewSection === "config-changelog";
 
   mainSection.classList.toggle("hidden", !showMain);
   filesystemSection.classList.toggle("hidden", !showFilesystem);
   if (notificationSection) notificationSection.classList.toggle("hidden", !showNotification);
+  if (databaseChangelogSection) databaseChangelogSection.classList.toggle("hidden", !showDatabaseChangelog);
   if (configChangelogSection) configChangelogSection.classList.toggle("hidden", !showConfigChangelog);
 
   mainTabButton.classList.toggle("active", showMain);
   filesystemTabButton.classList.toggle("active", showFilesystem);
   if (notificationTabButton) notificationTabButton.classList.toggle("active", showNotification);
+  if (databaseChangelogTabButton) databaseChangelogTabButton.classList.toggle("active", showDatabaseChangelog);
   if (configChangelogTabButton) configChangelogTabButton.classList.toggle("active", showConfigChangelog);
   
   mainTabButton.setAttribute("aria-selected", showMain ? "true" : "false");
   filesystemTabButton.setAttribute("aria-selected", showFilesystem ? "true" : "false");
   if (notificationTabButton) notificationTabButton.setAttribute("aria-selected", showNotification ? "true" : "false");
+  if (databaseChangelogTabButton) databaseChangelogTabButton.setAttribute("aria-selected", showDatabaseChangelog ? "true" : "false");
   if (configChangelogTabButton) configChangelogTabButton.setAttribute("aria-selected", showConfigChangelog ? "true" : "false");
 }
 
@@ -8179,6 +8185,7 @@ function wireHostListInteractions() {
       loadReportsForHost();
       loadAnalysisForHost();
       loadAlertsForHost();
+      loadDatabaseLifecycleForHost();
       loadConfigChangelogForHost();
       loadAndRenderCustomerNotificationPanel(hostname);
     });
@@ -9206,6 +9213,84 @@ async function loadConfigChangelogForHost() {
     loadMoreBtn.classList.toggle("hidden", returned >= total);
   } catch (error) {
     configChangelogRows.innerHTML = `<tr><td colspan="4" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
+    loadMoreBtn.classList.add("hidden");
+  }
+}
+
+async function loadDatabaseLifecycleForHost() {
+  const databaseLifecycleRows = document.getElementById("databaseLifecycleRows");
+  const databaseLifecycleSummary = document.getElementById("databaseLifecycleSummary");
+  const pagingStatus = document.getElementById("databaseLifecyclePagingStatus");
+  const loadMoreBtn = document.getElementById("databaseLifecycleLoadMoreButton");
+
+  if (!databaseLifecycleRows || !databaseLifecycleSummary || !pagingStatus || !loadMoreBtn) {
+    return;
+  }
+
+  if (!state.selectedHost) {
+    databaseLifecycleSummary.textContent = "";
+    databaseLifecycleRows.innerHTML = state.hostFilterNoMatches
+      ? "<tr><td colspan=\"5\" class=\"muted\">Keine Daten zum Suchfilter vorhanden.</td></tr>"
+      : "<tr><td colspan=\"5\"><div class=\"empty-state\"><span>🗄️</span><p>Wähle einen Host, um den DB Changelog zu sehen.</p></div></td></tr>";
+    pagingStatus.textContent = "";
+    loadMoreBtn.classList.add("hidden");
+    return;
+  }
+
+  databaseLifecycleRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Lade DB Changelog...</td></tr>";
+  databaseLifecycleSummary.textContent = "";
+  pagingStatus.textContent = "";
+
+  try {
+    const hostNameParam = encodeURIComponent(state.selectedHost);
+    const resp = await fetch(`/api/v1/database-lifecycle?hostname=${hostNameParam}&limit=100&offset=0`);
+
+    if (!resp.ok) {
+      throw new Error("HTTP " + resp.status);
+    }
+
+    const data = await resp.json();
+    const events = data.events || [];
+    const total = data.total || 0;
+    const returned = data.returned || 0;
+
+    databaseLifecycleSummary.textContent = `Insgesamt: ${total} DB-Changelog-Einträge`;
+
+    if (events.length === 0) {
+      databaseLifecycleRows.innerHTML = "<tr><td colspan=\"5\" class=\"muted\">Keine DB-Changelog-Einträge vorhanden.</td></tr>";
+      pagingStatus.textContent = "";
+      loadMoreBtn.classList.add("hidden");
+      return;
+    }
+
+    databaseLifecycleRows.innerHTML = events
+      .map((item) => {
+        const actionBadgeClass = item.action === "create" ? "badge-success" : item.action === "delete" ? "badge-danger" : "badge-info";
+        const actionLabel = item.action === "create" ? "✨ Erstellt" : item.action === "delete" ? "🗑️ Gelöscht" : "Umbenannt";
+        const triggeredByLabel = item.triggered_by === "system" ? "🖥️ System" : item.triggered_by === "admin" ? "👤 Admin" : "🤖 Agent";
+        const reason = asText(item.reason || "-");
+        const dbName = asText(item.database_name || "-");
+        const instanceName = asText(item.instance_name || "MSSQLSERVER");
+        const dbLabel = instanceName && instanceName.toUpperCase() !== "MSSQLSERVER"
+          ? `${instanceName}::${dbName}`
+          : dbName;
+
+        return `
+          <tr>
+            <td>${escapeHtml(dbLabel)}</td>
+            <td><span class="badge ${actionBadgeClass}">${actionLabel}</span></td>
+            <td>${triggeredByLabel}</td>
+            <td>${escapeHtml(formatUtcPlus2(item.triggered_at_utc))}</td>
+            <td>${escapeHtml(reason)}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    pagingStatus.textContent = `Zeige ${returned} von ${total}`;
+    loadMoreBtn.classList.toggle("hidden", returned >= total);
+  } catch (error) {
+    databaseLifecycleRows.innerHTML = `<tr><td colspan="5" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
     loadMoreBtn.classList.add("hidden");
   }
 }
@@ -11530,6 +11615,14 @@ function wireEvents() {
     // Reload panel for current host when switching to this tab
     if (state.selectedHost) {
       loadAndRenderCustomerNotificationPanel(state.selectedHost);
+    }
+  });
+
+  document.getElementById("overviewDatabaseChangelogTabButton").addEventListener("click", () => {
+    state.overviewSection = "database-changelog";
+    updateOverviewSection();
+    if (state.selectedHost) {
+      loadDatabaseLifecycleForHost();
     }
   });
 

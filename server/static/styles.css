@@ -2529,6 +2529,41 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   word-break: break-all;
 }
 
+#overviewDatabaseChangelogSection {
+  padding: 6px 4px;
+}
+
+#overviewDatabaseChangelogSection .table-wrap {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#overviewDatabaseChangelogSection table {
+  table-layout: auto;
+  width: 100%;
+  font-size: 10px;
+}
+
+#overviewDatabaseChangelogSection td,
+#overviewDatabaseChangelogSection th {
+  padding: 3px 4px;
+  font-size: 10px;
+  word-break: break-word;
+  white-space: normal;
+}
+
+#overviewDatabaseChangelogSection th {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+#overviewDatabaseChangelogSection th:nth-child(1) { width: 30%; }
+#overviewDatabaseChangelogSection th:nth-child(2) { width: 16%; }
+#overviewDatabaseChangelogSection th:nth-child(3) { width: 16%; }
+#overviewDatabaseChangelogSection th:nth-child(4) { width: 20%; }
+#overviewDatabaseChangelogSection th:nth-child(5) { width: 18%; }
+
 #overviewConfigChangelogSection th:nth-child(1) { width: 36%; }
 #overviewConfigChangelogSection th:nth-child(2) { width: 24%; }
 #overviewConfigChangelogSection th:nth-child(3) { width: 24%; }
