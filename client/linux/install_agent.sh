@@ -248,7 +248,7 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 
 # Non-interactive post-install self-test: run collector and updater once immediately.
-if ! CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$INSTALL_DIR/AGENT_VERSION" AGENT_QUEUE_DIR="$AGENT_QUEUE_DIR" "$INSTALL_DIR/collect_and_send.sh" >> "$LOG_FILE" 2>&1; then
+if ! CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$INSTALL_DIR/AGENT_VERSION" AGENT_QUEUE_DIR="$AGENT_QUEUE_DIR" "$INSTALL_DIR/collect_and_send.sh" --no-jitter >> "$LOG_FILE" 2>&1; then
   SELF_TEST_STATUS="collect_failed"
   echo "Warning: collect_and_send self-test failed (agent is still installed)." >&2
   if grep -q "curl: (60)" "$LOG_FILE" 2>/dev/null; then

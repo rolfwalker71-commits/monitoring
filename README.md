@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.160 (18. Mai 2026)
+
+- **Installer Jitter**: Initialer Install-Selbsttest laeuft jetzt ohne Jitter (`collect_and_send --no-jitter`), damit die Installation nicht bis zu 5 Minuten verzoegert wird. Reguläre geplante Laeufe behalten Jitter bei.
+
 ### v1.6.159 (18. Mai 2026)
 
 - **Hostkarte Typografie**: Chip-Schrift auf normal (nicht fett) umgestellt und Kundenname nochmals um +2px vergrößert.
