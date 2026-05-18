@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.206 (18. Mai 2026)
+
+- **License Card Position**: Lizenzkarte ins horizontale Zentrum des Headers verschoben; Karteninhalt linksbündig.
 n### v1.6.205 (18. Mai 2026)
 
 - **License Card Styling**: Lizenzkarte: Labels kleiner und leichter, Werte extra-fett (800), mehr Spaltenabstand, Inhalte horizontal zentriert.
