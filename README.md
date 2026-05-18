@@ -524,6 +524,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.169 (18. Mai 2026)
+
+- **Hostkarte Typografie**: Kundenname in der Hostkarte nochmals deutlich vergroessert, damit er visuell klarer dominiert.
+
 ### v1.6.168 (18. Mai 2026)
 
 - **Hostkarten CSS Hotfix**: Defekten Chip-Style-Block (fehlende Klammer) korrigiert, der zu kaputtem Karten-Layout und falsch dargestellten Icons fuehrte.
