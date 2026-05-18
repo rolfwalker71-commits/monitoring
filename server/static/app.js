@@ -6775,7 +6775,7 @@ function renderReportCard(report) {
         <div class="report-header-left">
           <h3>${escapeHtml(title)}</h3>
           <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}${reportDeliveryLag !== "-" ? ` <span class="report-detail-chip report-delivery-chip">⏱️ ${escapeHtml(reportDeliveryLag)}</span>` : ""}</p>
-          ${(sapFeaturePackChip || hanaVersionChip || hanaSidChip) ? `<p class="report-sap-meta">${sapFeaturePackChip ? `<span class="sap-hana-chip sap-b1-chip" title="SAP Feature Pack">${escapeHtml(sapFeaturePackChip)}</span>` : ""}${hanaVersionChip ? `<span class="sap-hana-chip hana-chip" title="HANA Release: ${escapeHtml(hanaVersionRaw)}">${escapeHtml(hanaVersionChip)}</span>` : ""}${hanaSidChip ? `<span class="sap-hana-chip hana-sid-chip" title="HANA SID">${escapeHtml(hanaSidChip)}</span>` : ""}</p>` : ""}
+          ${(sapFeaturePackChip || hanaVersionChip || hanaSidChip) ? `<p class="report-sap-meta">${sapFeaturePackChip ? `<span class="host-value-chip host-value-chip--sap" title="SAP Feature Pack">${escapeHtml(sapFeaturePackChip)}</span>` : ""}${hanaVersionChip ? `<span class="host-value-chip host-value-chip--hana" title="HANA Release: ${escapeHtml(hanaVersionRaw)}">${escapeHtml(hanaVersionChip)}</span>` : ""}${hanaSidChip ? `<span class="host-value-chip host-value-chip--sid" title="HANA SID">${escapeHtml(hanaSidChip)}</span>` : ""}</p>` : ""}
         </div>
         <div class="report-header-meta">
           <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>

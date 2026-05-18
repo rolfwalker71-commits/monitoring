@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.147 (18. Mai 2026)
+
+- **Einzelmeldung Chip-Design**: SAP/HANA Chips in der Einzelmeldung verwenden jetzt exakt dieselben Hostkarten-Klassen und damit das identische Pill-Design.
+
 ### v1.6.146 (18. Mai 2026)
 
 - **Einzelmeldung Chip-Rendering Fix**: SAP/HANA Chips werden in der Einzelmeldung wieder zuverlässig angezeigt (Fallback auf Host-Metadaten, wenn Report-Felder fehlen).
