@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.213 (18. Mai 2026)
+
+- **Hostkarten Versionsindikator**: Roten Punkt durch runden Zahlen-Chip ersetzt; zeigt den Versionsrückstand (Anzahl Versionen) nur bei Rückstand > 0.
 n### v1.6.212 (18. Mai 2026)
 
 - **Hostkarten Layout**: Vertikalen Abstand zwischen Hostbezeichnung und der darunterliegenden IP-/Meta-Zeile reduziert.

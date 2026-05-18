@@ -7170,42 +7170,6 @@ function formatHostLastReportAge(reportUtcValue) {
   };
 }
 
-function getHostAgentVersionVisual(hostVersion, referenceVersion) {
-  const hostText = asText(hostVersion, "-");
-  const refText = asText(referenceVersion, "").trim();
-  const hostParts = parseVersionParts(hostText);
-  const refParts = parseVersionParts(refText);
-
-  if (!hostParts || !refParts) {
-    return {
-      dotClassName: "host-agent-version-dot--unknown",
-      title: "Versionsvergleich nicht verfügbar",
-    };
-  }
-
-  const hostMajor = hostParts[0] || 0;
-  const hostMinor = hostParts[1] || 0;
-  const hostPatch = hostParts[2] || 0;
-  const refMajor = refParts[0] || 0;
-  const refMinor = refParts[1] || 0;
-  const refPatch = refParts[2] || 0;
-
-  const sameMajorMinor = hostMajor === refMajor && hostMinor === refMinor;
-  if (!sameMajorMinor) {
-    return {
-      dotClassName: "host-agent-version-dot--red",
-      title: `Abweichung zur Referenz ${refText}: Major/Minor unterschiedlich`,
-    };
-  }
-
-  const patchDiff = Math.abs(refPatch - hostPatch);
-  const dotClassName = patchDiff < 5 ? "host-agent-version-dot--green" : "host-agent-version-dot--red";
-  return {
-    dotClassName,
-    title: `Abweichung zur Referenz ${refText}: ${patchDiff}`,
-  };
-}
-
 async function loadAlertMutes() {
   try {
     const response = await fetch("/api/v1/alert-mutes");
@@ -7304,7 +7268,6 @@ function renderSingleHostCard(host) {
       : "",
   ].filter(Boolean).join("");
   const lastReportInfo = formatHostLastReportAge(host.last_report_utc || host.last_seen_utc);
-  const agentVersionVisual = getHostAgentVersionVisual(host.agent_version, state.latestAgentRelease);
   const statusBarClass = lastReportInfo.statusClass === "host-last-report-dot--critical"
     ? "host-status-bar host-status-bar--report-critical"
     : lastReportInfo.statusClass === "host-last-report-dot--warning"
@@ -7324,12 +7287,13 @@ function renderSingleHostCard(host) {
     : "";
   const hostAgentVersionText = asText(host.agent_version, "-");
   const latestAgentVersionText = asText(state.latestAgentRelease, "-");
-  const agentStatusLogic = "Logik: rot = Major/Minor abweichend oder Patch-Diff >= 5; gruen = gleicher Major/Minor + Patch-Diff < 5; grau = Vergleich nicht moeglich.";
-  const agentDot = agentVersionVisual.dotClassName === "host-agent-version-dot--red"
-    ? `<span class="host-agent-mini-dot" title="Host meldet AGENT_VERSION: ${escapeHtml(hostAgentVersionText)} | Referenz: ${escapeHtml(latestAgentVersionText)} | ${escapeHtml(agentVersionVisual.title)} | ${agentStatusLogic}" aria-hidden="true"></span>`
+  const agentLagInfo = getAgentVersionLagInfo(latestAgentVersionText, hostAgentVersionText);
+  const agentLagCount = Number(agentLagInfo.steps || 0);
+  const agentLagChip = agentLagInfo.isBehind && Number.isFinite(agentLagCount) && agentLagCount > 0
+    ? `<span class="host-agent-lag-chip" title="Host meldet AGENT_VERSION: ${escapeHtml(hostAgentVersionText)} | Referenz: ${escapeHtml(latestAgentVersionText)} | Rückstand: ${agentLagCount} Version${agentLagCount === 1 ? "" : "en"}">${agentLagCount}</span>`
     : "";
-  const customerTitleLine = (customerNameValue || agentDot)
-    ? `<div class="host-customer-title-line">${customerNameValue ? `<span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span><span class="host-detail-line">🏷️ ${escapeHtml(hostDesignationLabel)}</span></span>` : ""}${agentDot}</div>`
+  const customerTitleLine = (customerNameValue || agentLagChip)
+    ? `<div class="host-customer-title-line">${customerNameValue ? `<span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span><span class="host-detail-line">🏷️ ${escapeHtml(hostDesignationLabel)}</span></span>` : ""}${agentLagChip}</div>`
     : "";
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
