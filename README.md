@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.157 (18. Mai 2026)
+
+- **Hostkarte Typografie**: Kundenname in der Hostkarte um weitere 2px vergrößert.
+
 ### v1.6.156 (18. Mai 2026)
 
 - **Hostkarten Chips**: Eckenradius der SAP/HANA/SID-Chips weiter reduziert (noch kantiger).
