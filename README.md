@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.155 (18. Mai 2026)
+
+- **Hostkarten Chips**: SAP/HANA/SID-Chips visuell auf eine blau abgestimmte Farbkombi umgestellt und mit kleinerem Eckenradius (weniger rund) versehen.
+
 ### v1.6.154 (18. Mai 2026)
 
 - **Hostkarte Feinschliff**: Prod-Gradient aufgehellt (weiterhin klar von Test unterscheidbar), Firmenname größer dargestellt und Hostbezeichnung mit `🏷️` statt bisherigem Emoji.

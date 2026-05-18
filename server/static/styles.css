@@ -3996,13 +3996,14 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-value-chip--sap,
 .host-value-chip--hana,
 .host-value-chip--sid {
-  border-color: #ea580c;
-  background: #fffbeb;
-  color: #92400e;
+  border-color: #9fb7cf;
+  background: linear-gradient(180deg, #e9f1f9 0%, #d9e6f3 100%);
+  color: #2f4f6f;
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   font-size: 12px;
   font-weight: 900;
   line-height: 1.1;
+  border-radius: 8px;
 }
 
 .host-value-chip--env {
@@ -4056,9 +4057,10 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-value-chip--sap,
 .host-value-chip--hana,
 .host-value-chip--sid {
-  border-color: rgba(199, 130, 0, 0.35);
-  background: rgba(247, 166, 0, 0.45);
-  color: #8b6b1a;
+  border-color: #9fb7cf;
+  background: linear-gradient(180deg, #e9f1f9 0%, #d9e6f3 100%);
+  color: #2f4f6f;
+  border-radius: 8px;
 }
 
 .host-card-footer--customer {
@@ -7834,9 +7836,9 @@ body[data-theme="dark"] .admin-sub-user-chip.is-admin {
 body[data-theme="dark"] .host-value-chip--sap,
 body[data-theme="dark"] .host-value-chip--hana,
 body[data-theme="dark"] .host-value-chip--sid {
-  border-color: #ea580c;
-  background: rgba(234, 88, 12, 0.15);
-  color: #fb923c;
+  border-color: rgba(147, 197, 253, 0.45);
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.24) 0%, rgba(30, 64, 175, 0.28) 100%);
+  color: #dbeafe;
 }
 
 body[data-theme="dark"] .host-value-chip--customer-title {
