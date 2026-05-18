@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.178 (18. Mai 2026)
+
+- **Hostkarten-Pillenfarben angepasst**: Die Kundennamen-Pille im Hostkartenkopf nutzt jetzt `#006285`; die HANA-Pillen in der unteren Chip-Reihe wurden auf `#f7a600` umgestellt.
+
 ### v1.6.177 (18. Mai 2026)
 
 - **Hostkarten-Gradient auf Markenfarben**: Der Hintergrundverlauf der einzelnen Hostkarte wurde auf die gewuenschten Farben `#006285` und `#f7a600` umgestellt und insgesamt leicht dunkler abgestimmt.

@@ -4017,9 +4017,9 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .host-value-chip--customer-title {
-  border-color: #7dd3fc;
-  background: #e0f2fe;
-  color: #0369a1;
+  border-color: #004d68;
+  background: #006285;
+  color: #f8fbff;
   display: flex;
   flex: 1 1 auto;
   width: 100%;
@@ -4032,6 +4032,12 @@ body[data-theme="dark"] .trend-progress-bar {
   white-space: normal;
   line-height: 1.2;
   justify-content: flex-start;
+}
+
+.host-value-chip--hana {
+  border-color: #c78200;
+  background: #f7a600;
+  color: #3b2a00;
 }
 
 .host-card-footer--customer {
