@@ -3774,54 +3774,64 @@ body[data-theme="dark"] .trend-progress-bar {
 .header-stat-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  border-radius: 999px;
-  padding: 0 10px;
-  min-height: 34px;
-  font-size: 1rem;
-  font-weight: 700;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 18px;
+  padding: 8px 12px;
+  min-height: 44px;
+  min-width: 116px;
+  font-size: 0.98rem;
+  font-weight: 800;
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
+  border: 1.5px solid transparent;
+  box-shadow: 0 6px 14px rgba(22, 49, 86, 0.11);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.header-stat-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(22, 49, 86, 0.16);
 }
 
 .header-chip-icon {
-  font-size: 1.02rem;
+  font-size: 1.08rem;
   line-height: 1;
 }
 
 .header-chip-count {
   font-family: var(--kv-value-family);
-  font-size: 1rem;
+  font-size: 1.24rem;
   font-weight: 800;
   line-height: 1;
   letter-spacing: 0;
 }
 
 .header-chip-scope {
-  font-size: 0.58rem;
+  font-size: 1rem;
   line-height: 1;
-  opacity: 0.88;
+  opacity: 0.95;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 
 .header-stat-chip-alert {
-  background: rgba(220, 38, 38, 0.15);
-  color: #dc2626;
-  border: 1.5px solid rgba(220, 38, 38, 0.35);
+  background: linear-gradient(180deg, #fff3f3 0%, #ffe7e7 100%);
+  color: #b42424;
+  border-color: #f08b8b;
 }
 
 .header-stat-chip-warn {
-  background: rgba(217, 119, 6, 0.15);
-  color: #b45309;
-  border: 1.5px solid rgba(217, 119, 6, 0.35);
+  background: linear-gradient(180deg, #fff8ea 0%, #ffefcc 100%);
+  color: #9a6211;
+  border-color: #e5c36a;
 }
 
 .header-stat-chip-inactive {
-  background: rgba(37, 99, 235, 0.14);
-  color: #1d4ed8;
-  border: 1.5px solid rgba(37, 99, 235, 0.35);
+  background: linear-gradient(180deg, #ecf9f1 0%, #ddf3e7 100%);
+  color: #1d7f53;
+  border-color: #8bcfad;
 }
 
 .agent-update-status-list {
@@ -10152,7 +10162,6 @@ body[data-theme="dark"] .search-input-compact::placeholder {
 .host-group-toggle,
 .icon-filter-chip,
 .stat-chip,
-.header-stat-chip,
 .selected-host-meta-chip,
 .agent-update-status-badge,
 .agent-source-status-badge,
@@ -10177,13 +10186,14 @@ body[data-theme="dark"] .search-input-compact::placeholder {
   min-height: var(--btn-height);
 }
 
-/* Keep the 3 top status chips equal to the neighboring icon buttons. */
+/* Top status elements use card styling and should not be normalized as tiny chips. */
 .panel-actions .header-stat-chip {
-  min-height: 30px;
+  min-height: 44px;
+  min-width: 116px;
+  border-radius: 18px;
 }
 
 .stat-chip,
-.header-stat-chip,
 .selected-host-meta-chip,
 .agent-update-status-badge,
 .agent-source-status-badge,
@@ -10271,7 +10281,6 @@ body[data-theme="dark"] .host-config-change-date-summary {
 }
 
 body[data-theme="dark"] .stat-chip,
-body[data-theme="dark"] .header-stat-chip,
 body[data-theme="dark"] .selected-host-meta-chip,
 body[data-theme="dark"] .agent-update-status-badge,
 body[data-theme="dark"] .agent-source-status-badge,

@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.194 (18. Mai 2026)
+
+- **UI old refresh**: Obere 3 Status-Chips als kompakte moderne Statuskarten gestaltet (bessere Lesbarkeit, Karten-Look, konsistente Größe im Header).
 n### v1.6.193 (18. Mai 2026)
 
 - **ui-next refinements**: Datenbanken-Tab lists actual SQL databases; SAP B1 tab reads real sap_business_one payload fields (FP/PL/Build) and includes detailed license/AddOn info.
