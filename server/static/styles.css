@@ -4005,7 +4005,7 @@ body[data-theme="dark"] .trend-progress-bar {
   line-height: 1.1;
   border-radius: 4px;
 }
-
+  font-weight: 400;
 .host-value-chip--env {
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   font-size: 11px;
@@ -4106,7 +4106,7 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-customer-line {
   display: block;
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 800;
   color: #0f3f5f;
   word-break: break-word;
