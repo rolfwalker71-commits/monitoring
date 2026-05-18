@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.193 (18. Mai 2026)
+
+- **ui-next refinements**: Datenbanken-Tab lists actual SQL databases; SAP B1 tab reads real sap_business_one payload fields (FP/PL/Build) and includes detailed license/AddOn info.
 n### v1.6.192 (18. Mai 2026)
 
 - **ui-next host card status**: (OK/alert) moved back to top row next to customer name, no longer one line too low.

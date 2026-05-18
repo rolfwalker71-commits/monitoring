@@ -393,6 +393,42 @@ function renderDatabases() {
   const hanaSchemas = Array.isArray(hanaInfo.schemas) ? hanaInfo.schemas : [];
   const lifecycle = Array.isArray(state.dbLifecycle?.items) ? state.dbLifecycle.items : [];
 
+  const sqlDatabases = [];
+  for (const instance of sqlInstances) {
+    const instanceName = asText(instance?.name, "MSSQLSERVER");
+    const databases = Array.isArray(instance?.databases) ? instance.databases : [];
+    for (const db of databases) {
+      sqlDatabases.push({
+        instance: asText(db?.instance_name, instanceName),
+        name: asText(db?.name, "-"),
+        state: asText(db?.state, "-"),
+        recovery: asText(db?.recovery_model, "-"),
+      });
+    }
+  }
+
+  if (sqlDatabases.length === 0) {
+    const legacy = payload?.databases;
+    if (Array.isArray(legacy)) {
+      for (const entry of legacy) {
+        if (typeof entry === "string") {
+          sqlDatabases.push({ instance: "-", name: asText(entry, "-"), state: "-", recovery: "-" });
+        } else if (entry && typeof entry === "object") {
+          sqlDatabases.push({
+            instance: asText(entry?.instance_name || entry?.instance, "-"),
+            name: asText(entry?.name, "-"),
+            state: asText(entry?.state, "-"),
+            recovery: asText(entry?.recovery_model, "-"),
+          });
+        }
+      }
+    } else if (legacy && typeof legacy === "object") {
+      for (const name of Object.keys(legacy)) {
+        sqlDatabases.push({ instance: "-", name: asText(name, "-"), state: "-", recovery: "-" });
+      }
+    }
+  }
+
   return `
     <div class="next-panels">
       <section class="next-panel">
@@ -402,6 +438,13 @@ function renderDatabases() {
           <tbody>
             ${sqlInstances.map((instance) => `<tr><td>SQL</td><td>${escapeHtml(asText(instance?.name, "MSSQLSERVER"))}</td><td>${escapeHtml(asText(instance?.version, "-"))}</td></tr>`).join("") || "<tr><td colspan=\"3\">Keine SQL Instanzen</td></tr>"}
             <tr><td>HANA</td><td>${escapeHtml(asText(hanaInfo?.sid, "-"))}</td><td>${escapeHtml(asText(hanaInfo?.version, "-"))}</td></tr>
+          </tbody>
+        </table>
+        <h3 style="margin-top:10px;">SQL Datenbanken</h3>
+        <table class="next-table">
+          <thead><tr><th>Instanz</th><th>Datenbank</th><th>Status</th><th>Recovery</th></tr></thead>
+          <tbody>
+            ${sqlDatabases.slice(0, 80).map((db) => `<tr><td>${escapeHtml(asText(db?.instance, "-"))}</td><td>${escapeHtml(asText(db?.name, "-"))}</td><td>${escapeHtml(asText(db?.state, "-"))}</td><td>${escapeHtml(asText(db?.recovery, "-"))}</td></tr>`).join("") || "<tr><td colspan=\"4\">Keine SQL Datenbanken</td></tr>"}
           </tbody>
         </table>
         <h3 style="margin-top:10px;">HANA Schemas</h3>
@@ -430,20 +473,124 @@ function renderDatabases() {
 
 function renderSapB1() {
   const payload = getPayload();
-  const sap = payload?.sap_b1_systeminfo && typeof payload.sap_b1_systeminfo === "object"
-    ? payload.sap_b1_systeminfo
-    : payload?.sap_b1 && typeof payload.sap_b1 === "object"
-      ? payload.sap_b1
-      : {};
+  const sap = payload?.sap_business_one && typeof payload.sap_business_one === "object"
+    ? payload.sap_business_one
+    : payload?.sap_b1_systeminfo && typeof payload.sap_b1_systeminfo === "object"
+      ? payload.sap_b1_systeminfo
+      : payload?.sap_b1 && typeof payload.sap_b1 === "object"
+        ? payload.sap_b1
+        : {};
 
-  const components = Array.isArray(sap?.server_components_version) ? sap.server_components_version : [];
-  const addons = Array.isArray(sap?.addons) ? sap.addons : [];
+  const versionBlock = sap?.server_components_version && typeof sap.server_components_version === "object"
+    ? sap.server_components_version
+    : null;
+  const versionText = asText(versionBlock?.version, "");
+  const versionMatch = versionText.match(/(10\.00\.\d{3})\s+(PL\s*\d{1,2}(?:\s*HF\d+)?)?/i);
+  const build = versionMatch ? asText(versionMatch[1], "") : "";
+  const patchFromVersion = versionMatch && versionMatch[2]
+    ? String(versionMatch[2]).replace(/\s+/g, " ").toUpperCase()
+    : "";
+  const mapped = build ? state.sapVersionMap.get(build) : null;
+
+  const featurePack = asText(
+    mapped?.featurePack
+      || sap?.feature_pack
+      || sap?.release
+      || (build ? resolveSapReleaseDisplay(build) : ""),
+    "-"
+  );
+  const patchLevel = asText(mapped?.patchLevel || sap?.patch_level || patchFromVersion, "-");
+  const buildDisplay = asText(build || sap?.version || sap?.build, "-");
+
+  const extRows = Array.isArray(sap?.extensions?.rows) ? sap.extensions.rows : [];
+  const sariRows = Array.isArray(sap?.sari_addons?.rows) ? sap.sari_addons.rows : [];
+  const genericAddons = Array.isArray(sap?.addons) ? sap.addons : [];
+  const hanaLight = Array.isArray(payload?.hana_addons?.lightweight) ? payload.hana_addons.lightweight : [];
+  const hanaLegacy = Array.isArray(payload?.hana_addons?.legacy) ? payload.hana_addons.legacy : [];
+  const sapLicense = payload?.sap_license && typeof payload.sap_license === "object"
+    ? payload.sap_license
+    : sap?.sap_license && typeof sap.sap_license === "object"
+      ? sap.sap_license
+      : {};
+  const addons = [];
+  for (const row of extRows) {
+    addons.push({
+      source: "SQL Lightweight",
+      name: asText(row?.AddOnName, "-"),
+      version: asText(row?.Version, "-"),
+      status: "enabled",
+    });
+  }
+  for (const row of sariRows) {
+    addons.push({
+      source: "SQL Legacy",
+      name: asText(row?.AName, "-"),
+      version: asText(row?.AddOnVer, "-"),
+      status: "enabled",
+    });
+  }
+  for (const row of genericAddons) {
+    addons.push({
+      source: "SAP Generic",
+      name: asText(row?.name, "-"),
+      version: asText(row?.version, "-"),
+      status: asText(row?.status, "enabled"),
+    });
+  }
+  for (const row of hanaLight) {
+    addons.push({
+      source: "HANA Lightweight",
+      name: asText(row?.name, "-"),
+      version: asText(row?.version, "-"),
+      status: "HANA-LW",
+    });
+  }
+  for (const row of hanaLegacy) {
+    addons.push({
+      source: "HANA Legacy",
+      name: asText(row?.name, "-"),
+      version: asText(row?.version, "-"),
+      status: "HANA-Legacy",
+    });
+  }
+
+  const components = [];
+  if (versionBlock) {
+    components.push({ name: "Server Components", version: asText(versionBlock?.version, "-") });
+    if (asText(versionBlock?.setup_path, "") !== "") {
+      components.push({ name: "Setup Path", version: asText(versionBlock?.setup_path, "-") });
+    }
+  } else if (Array.isArray(sap?.server_components_version)) {
+    for (const entry of sap.server_components_version) {
+      if (typeof entry === "string") {
+        components.push({ name: "Component", version: asText(entry, "-") });
+      } else {
+        components.push({ name: asText(entry?.name, "-"), version: asText(entry?.version, "-") });
+      }
+    }
+  }
+
+  const rawExpiration = asText(sapLicense?.expiration, "");
+  const formattedExpiration = /^\d{8}$/.test(rawExpiration)
+    ? `${rawExpiration.substring(6, 8)}.${rawExpiration.substring(4, 6)}.${rawExpiration.substring(0, 4)}`
+    : asText(rawExpiration, "-");
+  const licenseRows = [
+    ["HW-Key", asText(sapLicense?.hardware_key, "-")],
+    ["Installationsnummer", asText(sapLicense?.instno, "-")],
+    ["Systemnummer", asText(sapLicense?.system_nr, "-")],
+    ["Kundennummer", asText(sapLicense?.customer_no, "-")],
+    ["Lizenznehmer", asText(sapLicense?.customer_name, "-")],
+    ["Gueltig bis", formattedExpiration],
+  ].filter(([, value]) => value && value !== "-");
+
+  const fileMtime = asText(sapLicense?.file_mtime_utc, "");
+  const fileMtimeLabel = fileMtime ? shortTime(fileMtime) : "-";
 
   return `
     <div class="next-grid-4">
-      <article class="next-stat"><div class="label">Feature Pack</div><div class="value">${escapeHtml(asText(sap?.feature_pack || sap?.release || "-"))}</div></article>
-      <article class="next-stat"><div class="label">Patch Level</div><div class="value">${escapeHtml(asText(sap?.patch_level || "-"))}</div></article>
-      <article class="next-stat"><div class="label">Build</div><div class="value">${escapeHtml(asText(sap?.version || sap?.build || "-"))}</div></article>
+      <article class="next-stat"><div class="label">Feature Pack</div><div class="value">${escapeHtml(featurePack)}</div></article>
+      <article class="next-stat"><div class="label">Patch Level</div><div class="value">${escapeHtml(patchLevel)}</div></article>
+      <article class="next-stat"><div class="label">Build</div><div class="value">${escapeHtml(buildDisplay)}</div></article>
       <article class="next-stat"><div class="label">AddOns</div><div class="value">${addons.length}</div></article>
     </div>
     <div class="next-panels">
@@ -464,9 +611,17 @@ function renderSapB1() {
       <section class="next-panel">
         <h3>AddOn Status</h3>
         <table class="next-table">
-          <thead><tr><th>AddOn</th><th>Version</th><th>Status</th></tr></thead>
+          <thead><tr><th>Quelle</th><th>AddOn</th><th>Version</th><th>Status</th></tr></thead>
           <tbody>
-            ${addons.slice(0, 20).map((entry) => `<tr><td>${escapeHtml(asText(entry?.name, "-"))}</td><td>${escapeHtml(asText(entry?.version, "-"))}</td><td>${escapeHtml(asText(entry?.status, "enabled"))}</td></tr>`).join("") || "<tr><td colspan=\"3\">Keine AddOn-Daten</td></tr>"}
+            ${addons.slice(0, 60).map((entry) => `<tr><td>${escapeHtml(asText(entry?.source, "-"))}</td><td>${escapeHtml(asText(entry?.name, "-"))}</td><td>${escapeHtml(asText(entry?.version, "-"))}</td><td>${escapeHtml(asText(entry?.status, "enabled"))}</td></tr>`).join("") || "<tr><td colspan=\"4\">Keine AddOn-Daten</td></tr>"}
+          </tbody>
+        </table>
+        <h3 style="margin-top:10px;">Lizenzinfos</h3>
+        <table class="next-table">
+          <thead><tr><th>Feld</th><th>Wert</th></tr></thead>
+          <tbody>
+            ${licenseRows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("") || "<tr><td colspan=\"2\">Keine Lizenzinfos</td></tr>"}
+            <tr><td>Datei-Stand B01.txt</td><td>${escapeHtml(fileMtimeLabel)}</td></tr>
           </tbody>
         </table>
       </section>
@@ -585,7 +740,14 @@ async function loadSapB1VersionMap() {
         .map((entry) => {
           const build = String(entry?.build || "").trim();
           if (!build) return null;
-          return [build, { featurePack: String(entry?.feature_pack || "").trim() }];
+          return [
+            build,
+            {
+              featurePack: String(entry?.feature_pack || "").trim(),
+              patchLevel: String(entry?.patch_level || "").trim(),
+              releaseDate: String(entry?.release_date || "").trim(),
+            },
+          ];
         })
         .filter(Boolean)
     );
