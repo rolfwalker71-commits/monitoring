@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.141 (18. Mai 2026)
+
+- **Globalansicht**: Bereich "Kunden" (Tab + View + Event-Verkabelung) vollständig entfernt.
+
 ### v1.6.140 (18. Mai 2026)
 
 - **Kundenansicht UI**: Kunden-Toggle-Zeilen entschärft (weniger Chip-Optik) und nicht mehr über volle Breite bis zum rechten Rand.

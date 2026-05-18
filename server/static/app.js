@@ -165,8 +165,6 @@ const state = {
   backupStatusFilterSql: false,
   backupStatusFilterHana: false,
   backupStatusCountryFilter: "all",
-  customerOverviewData: null,
-  customerOverviewSearchQuery: "",
   agentSourceStatusLoaded: false,
   filesystemBlacklistPatterns: [],
   showBlacklistedFilesystems: false,
@@ -1226,12 +1224,15 @@ function updateViewMode() {
 }
 
 function updateGlobalSubMode() {
+  if (state.globalSubMode === "customer-overview") {
+    state.globalSubMode = "global-alerts";
+  }
+
   const globalAlertsView = document.getElementById("globalAlertsView");
   const criticalTrendsView = document.getElementById("criticalTrendsView");
   const inactiveHostsView = document.getElementById("inactiveHostsView");
   const systemOverviewView = document.getElementById("systemOverviewView");
   const backupStatusView = document.getElementById("backupStatusView");
-  const customerOverviewView = document.getElementById("customerOverviewView");
   const hostConfigChangesView = document.getElementById("hostConfigChangesView");
   const agentSourceStatusView = document.getElementById("agentSourceStatusView");
   const globalAdminAlertSubsView = document.getElementById("globalAdminAlertSubsView");
@@ -1242,7 +1243,6 @@ function updateGlobalSubMode() {
   const inactiveHostsTabButton = document.getElementById("inactiveHostsTabButton");
   const systemOverviewTabButton = document.getElementById("systemOverviewTabButton");
   const backupStatusTabButton = document.getElementById("backupStatusTabButton");
-  const customerOverviewTabButton = document.getElementById("customerOverviewTabButton");
   const hostConfigChangesTabButton = document.getElementById("hostConfigChangesTabButton");
   const agentSourceStatusTabButton = document.getElementById("agentSourceStatusTabButton");
   const globalAdminAlertSubsTabButton = document.getElementById("globalAdminAlertSubsTabButton");
@@ -1254,7 +1254,6 @@ function updateGlobalSubMode() {
   const inactiveActive = state.globalSubMode === "inactive-hosts";
   const systemOverviewActive = state.globalSubMode === "system-overview";
   const backupActive = state.globalSubMode === "backup-status";
-  const customerOverviewActive = state.globalSubMode === "customer-overview";
   const hostConfigChangesActive = state.globalSubMode === "host-config-changes";
   const agentSourceStatusActive = state.globalSubMode === "agent-source-status";
   const adminAlertSubsActive = state.globalSubMode === "admin-alert-subs";
@@ -1266,7 +1265,6 @@ function updateGlobalSubMode() {
   if (inactiveHostsView) inactiveHostsView.classList.toggle("hidden", !inactiveActive);
   if (systemOverviewView) systemOverviewView.classList.toggle("hidden", !systemOverviewActive);
   if (backupStatusView) backupStatusView.classList.toggle("hidden", !backupActive);
-  if (customerOverviewView) customerOverviewView.classList.toggle("hidden", !customerOverviewActive);
   if (hostConfigChangesView) hostConfigChangesView.classList.toggle("hidden", !hostConfigChangesActive);
   if (agentSourceStatusView) agentSourceStatusView.classList.toggle("hidden", !agentSourceStatusActive);
   if (globalAdminAlertSubsView) globalAdminAlertSubsView.classList.toggle("hidden", !adminAlertSubsActive);
@@ -1277,7 +1275,6 @@ function updateGlobalSubMode() {
   if (inactiveHostsTabButton) { inactiveHostsTabButton.classList.toggle("active", inactiveActive); inactiveHostsTabButton.setAttribute("aria-selected", inactiveActive ? "true" : "false"); }
   if (systemOverviewTabButton) { systemOverviewTabButton.classList.toggle("active", systemOverviewActive); systemOverviewTabButton.setAttribute("aria-selected", systemOverviewActive ? "true" : "false"); }
   if (backupStatusTabButton) { backupStatusTabButton.classList.toggle("active", backupActive); backupStatusTabButton.setAttribute("aria-selected", backupActive ? "true" : "false"); }
-  if (customerOverviewTabButton) { customerOverviewTabButton.classList.toggle("active", customerOverviewActive); customerOverviewTabButton.setAttribute("aria-selected", customerOverviewActive ? "true" : "false"); }
   if (hostConfigChangesTabButton) { hostConfigChangesTabButton.classList.toggle("active", hostConfigChangesActive); hostConfigChangesTabButton.setAttribute("aria-selected", hostConfigChangesActive ? "true" : "false"); }
   if (agentSourceStatusTabButton) { agentSourceStatusTabButton.classList.toggle("active", agentSourceStatusActive); agentSourceStatusTabButton.setAttribute("aria-selected", agentSourceStatusActive ? "true" : "false"); }
   if (globalAdminAlertSubsTabButton) { globalAdminAlertSubsTabButton.classList.toggle("active", adminAlertSubsActive); globalAdminAlertSubsTabButton.setAttribute("aria-selected", adminAlertSubsActive ? "true" : "false"); }
@@ -10618,7 +10615,7 @@ function wireEvents() {
   }
 
   document.addEventListener("click", (event) => {
-    const target = event.target instanceof Element ? event.target.closest("#overviewTabButton, #reportsTabButton, #globalViewButton, #globalAlertsTabButton, #criticalTrendsTabButton, #inactiveHostsTabButton, #backupStatusTabButton, #systemOverviewTabButton, #customerOverviewTabButton, #hostConfigChangesTabButton, #agentSourceStatusTabButton, #globalAdminAlertSubsTabButton, #globalAdminLoginAuditTabButton, #globalAdminSettingsTabButton, #headerAlertChip, #headerTrendsChip, #headerInactiveChip") : null;
+    const target = event.target instanceof Element ? event.target.closest("#overviewTabButton, #reportsTabButton, #globalViewButton, #globalAlertsTabButton, #criticalTrendsTabButton, #inactiveHostsTabButton, #backupStatusTabButton, #systemOverviewTabButton, #hostConfigChangesTabButton, #agentSourceStatusTabButton, #globalAdminAlertSubsTabButton, #globalAdminLoginAuditTabButton, #globalAdminSettingsTabButton, #headerAlertChip, #headerTrendsChip, #headerInactiveChip") : null;
     if (!target) {
       return;
     }
@@ -10896,45 +10893,6 @@ function wireEvents() {
       await loadSystemOverview();
     });
   }
-  const customerOverviewTabButton = document.getElementById("customerOverviewTabButton");
-  if (customerOverviewTabButton) {
-    customerOverviewTabButton.addEventListener("click", async () => {
-      state.globalSubMode = "customer-overview";
-      updateGlobalSubMode();
-      await loadCustomerOverview();
-    });
-  }
-  const refreshCustomerOverviewButton = document.getElementById("refreshCustomerOverviewButton");
-  if (refreshCustomerOverviewButton) {
-    refreshCustomerOverviewButton.addEventListener("click", async () => {
-      await loadCustomerOverview();
-    });
-  }
-  const customerOverviewListEl = document.getElementById("customerOverviewList");
-  if (customerOverviewListEl) {
-    customerOverviewListEl.addEventListener("click", async (e) => {
-      const btn = e.target.closest("[data-action='edit-customer']");
-      if (!btn) return;
-      e.stopPropagation();
-      e.preventDefault();
-      const customerId = Number(btn.dataset.customerId || 0);
-      const currentName = String(btn.dataset.customerName || "");
-      const currentProject = String(btn.dataset.customerProject || "");
-      if (!customerId) return;
-      const result = await openCustomerEditorDialog({ customerId, currentName, currentProject });
-      if (result) await loadCustomerOverview();
-    });
-  }
-  const customerOverviewSearchInput = document.getElementById("customerOverviewSearchInput");
-  if (customerOverviewSearchInput) {
-    customerOverviewSearchInput.addEventListener("input", () => {
-      state.customerOverviewSearchQuery = String(customerOverviewSearchInput.value || "").trim();
-      const listEl = document.getElementById("customerOverviewList");
-      if (listEl && state.customerOverviewData) {
-        listEl.innerHTML = renderCustomerOverview(state.customerOverviewData);
-      }
-    });
-  }
   const refreshSystemOverviewButton = document.getElementById("refreshSystemOverviewButton");
   if (refreshSystemOverviewButton) {
     refreshSystemOverviewButton.addEventListener("click", async () => {
@@ -11054,7 +11012,6 @@ function wireEvents() {
     else if (state.globalSubMode === "inactive-hosts") await loadInactiveHosts();
     else if (state.globalSubMode === "system-overview") await loadSystemOverview();
     else if (state.globalSubMode === "backup-status") await loadBackupStatus();
-    else if (state.globalSubMode === "customer-overview") await loadCustomerOverview();
     else if (state.globalSubMode === "host-config-changes") await loadHostConfigChanges();
     else if (state.globalSubMode === "agent-source-status") await loadAgentSourceStatus();
     else if (state.globalSubMode === "admin-alert-subs") await loadAdminAlertSubscriptions();
