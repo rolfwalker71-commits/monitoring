@@ -279,6 +279,7 @@ Der Server erfasst automatisch, wann Datenbanken auf HANA-Systemen erstellt oder
 - **Globale DB-Historik**: Alle Datenbanken pro Mandant und Datum
 - **Host-spezifische DB-Historie**: Datenbanken pro einzelnem Host mit Zeitpunkte
 - **Backfill-Funktion**: Historische Daten aus alten Reports nachträglich einspeisen (`POST /api/v1/host-config-changes/backfill`)
+- **Greenfield-Rebuild beim Start**: Optionaler Einmal-Trigger per `--rebuild-changelog-days 15` oder `MONITORING_REBUILD_CHANGELOG_DAYS=15`. Der Server löscht dann die vorhandenen Changelog-Tabellen, baut sie aus den letzten 15 Tagen neu auf und merkt sich den Abschluss, damit der Lauf nicht erneut ausgeführt wird.
 
 ### Config Changelog (v1.4.93+)
 
@@ -522,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+
+### v1.6.161 (18. Mai 2026)
+
+- **Changelog Rebuild beim Start**: Optionaler Einmal-Trigger fuer einen Greenfield-Neuaufbau aus den letzten 15 Tagen eingebaut. Dabei werden die bestehenden Changelog-Tabellen geloescht und aus den Reports neu aufgebaut.
 
 ### v1.6.160 (18. Mai 2026)
 

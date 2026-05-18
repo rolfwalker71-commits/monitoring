@@ -106,6 +106,16 @@ def parse_int(query: dict, key: str, default: int, min_value: int, max_value: in
     return max(min_value, min(value, max_value))
 
 
+def parse_positive_int(value: object, default: int = 0, max_value: int = 365) -> int:
+    try:
+        parsed = int(str(value or "").strip())
+    except (TypeError, ValueError):
+        return default
+    if parsed <= 0:
+        return default
+    return min(parsed, max_value)
+
+
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
@@ -326,6 +336,18 @@ def init_db() -> None:
                 hana_sid TEXT NOT NULL DEFAULT '-',
                 sql_release TEXT NOT NULL DEFAULT '-',
                 updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS changelog_rebuild_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                completed_at_utc TEXT NOT NULL,
+                days INTEGER NOT NULL,
+                reports_scanned INTEGER NOT NULL DEFAULT 0,
+                inserted_host_config_changes INTEGER NOT NULL DEFAULT 0,
+                inserted_database_lifecycle_events INTEGER NOT NULL DEFAULT 0
             )
             """
         )
@@ -3696,6 +3718,68 @@ def backfill_database_lifecycle(conn: sqlite3.Connection, days: int = 7) -> dict
     return {
         "reports_scanned": report_count,
         "inserted_events": inserted_events,
+    }
+
+
+def rebuild_changelog_history(conn: sqlite3.Connection, days: int = 15) -> dict:
+    """Reset changelog tables and rebuild them from the last N report days.
+
+    This is intended as a one-time startup migration for hosts that need a clean
+    greenfield rebuild of the changelog state.
+    """
+    window_days = max(1, min(int(days or 15), 365))
+
+    existing_state = conn.execute(
+        "SELECT completed_at_utc, days FROM changelog_rebuild_state WHERE id = 1"
+    ).fetchone()
+    if existing_state:
+        return {
+            "status": "skipped",
+            "completed_at_utc": str(existing_state[0] or ""),
+            "days": int(existing_state[1] or 0),
+        }
+
+    conn.execute("DELETE FROM host_config_changes")
+    conn.execute("DELETE FROM database_lifecycle")
+    conn.execute("DELETE FROM host_config_snapshot")
+
+    config_result = backfill_host_config_changes(conn, days=window_days)
+    db_result = backfill_database_lifecycle(conn, days=window_days)
+
+    completed_at_utc = utc_now_iso()
+    conn.execute(
+        """
+        INSERT INTO changelog_rebuild_state (
+            id,
+            completed_at_utc,
+            days,
+            reports_scanned,
+            inserted_host_config_changes,
+            inserted_database_lifecycle_events
+        )
+        VALUES (1, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            completed_at_utc = excluded.completed_at_utc,
+            days = excluded.days,
+            reports_scanned = excluded.reports_scanned,
+            inserted_host_config_changes = excluded.inserted_host_config_changes,
+            inserted_database_lifecycle_events = excluded.inserted_database_lifecycle_events
+        """,
+        (
+            completed_at_utc,
+            window_days,
+            int(config_result.get("reports_scanned", 0) or 0),
+            int(config_result.get("inserted_changes", 0) or 0),
+            int(db_result.get("inserted_events", 0) or 0),
+        ),
+    )
+
+    return {
+        "status": "rebuilt",
+        "completed_at_utc": completed_at_utc,
+        "days": window_days,
+        "config_result": config_result,
+        "database_result": db_result,
     }
 
 
@@ -13195,9 +13279,30 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Simple monitoring receiver")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind")
     parser.add_argument("--port", default=8080, type=int, help="Port to bind")
+    parser.add_argument(
+        "--rebuild-changelog-days",
+        default=0,
+        type=int,
+        help="Reset changelog tables and rebuild them from the last N report days once at startup",
+    )
     args = parser.parse_args()
 
     init_db()
+    startup_rebuild_days = parse_positive_int(os.getenv("MONITORING_REBUILD_CHANGELOG_DAYS", ""), default=0, max_value=365)
+    if args.rebuild_changelog_days > 0:
+        startup_rebuild_days = args.rebuild_changelog_days
+    if startup_rebuild_days > 0:
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                rebuild_result = rebuild_changelog_history(conn, days=startup_rebuild_days)
+                conn.commit()
+            print(
+                "[startup] changelog rebuild: "
+                f"{rebuild_result.get('status')} (days={rebuild_result.get('days')}, "
+                f"completed_at_utc={rebuild_result.get('completed_at_utc')})"
+            )
+        except Exception as exc:
+            print(f"[startup] changelog rebuild failed: {exc}")
     try:
         with sqlite3.connect(DB_PATH) as conn:
             _ensure_db_maintenance_snapshot(conn, force_if_empty=True)
