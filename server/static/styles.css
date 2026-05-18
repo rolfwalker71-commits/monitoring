@@ -5829,11 +5829,60 @@ body[data-theme="dark"] .brand-session-badge {
   border: 1px solid #bfdcff;
 }
 
-.report-sap-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin: 4px 0 0 0;
+.report-sap-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 8px 0 0;
+}
+
+.report-sap-kpi-card {
+  border: 1px solid #c9d6e6;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f3f5f7 0%, #eceff3 100%);
+  padding: 10px 12px;
+  min-height: 88px;
+  box-sizing: border-box;
+}
+
+.report-sap-kpi-card h4 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: #607892;
+  line-height: 1;
+}
+
+.report-sap-kpi-card p {
+  margin: 8px 0 0;
+  font-size: 44px;
+  line-height: 1;
+  font-weight: 800;
+  color: #16324e;
+}
+
+@media (max-width: 980px) {
+  .report-sap-kpi-row {
+    grid-template-columns: repeat(3, minmax(120px, 1fr));
+  }
+
+  .report-sap-kpi-card p {
+    font-size: 36px;
+  }
+}
+
+@media (max-width: 760px) {
+  .report-sap-kpi-row {
+    grid-template-columns: 1fr;
+  }
+
+  .report-sap-kpi-card {
+    min-height: 74px;
+  }
+
+  .report-sap-kpi-card p {
+    font-size: 30px;
+  }
 }
 
 .report-license-panel {
@@ -5955,6 +6004,19 @@ body[data-theme="dark"] .hana-sid-chip {
 body[data-theme="dark"] .report-license-panel {
   border-color: #345c85;
   background: linear-gradient(180deg, #102033 0%, #0d1a2b 100%);
+}
+
+body[data-theme="dark"] .report-sap-kpi-card {
+  border-color: #355072;
+  background: linear-gradient(180deg, #1a2e49 0%, #14263f 100%);
+}
+
+body[data-theme="dark"] .report-sap-kpi-card h4 {
+  color: #9db3cc;
+}
+
+body[data-theme="dark"] .report-sap-kpi-card p {
+  color: #d4e6fb;
 }
 
 body[data-theme="dark"] .report-license-title {

@@ -6742,6 +6742,10 @@ function renderReportCard(report) {
       || selectedHostMeta?.hana_sid
       || ""
   ).trim();
+  const hasKpiCardData = Boolean(sapFeaturePackChip || hanaVersionChip || hanaSidChip);
+  const featurePackKpiValue = sapFeaturePackChip || "-";
+  const patchLevelKpiValue = hanaVersionChip || "-";
+  const buildKpiValue = hanaSidChip || "-";
 
   // Helper function to render meta-group items
   function renderMetaItem(tag, label, value) {
@@ -6887,7 +6891,20 @@ function renderReportCard(report) {
         <div class="report-header-left">
           <h3>${escapeHtml(title)}</h3>
           <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}${reportDeliveryLag !== "-" ? ` <span class="report-detail-chip report-delivery-chip">⏱️ ${escapeHtml(reportDeliveryLag)}</span>` : ""}</p>
-          ${(sapFeaturePackChip || hanaVersionChip || hanaSidChip) ? `<p class="report-sap-meta">${sapFeaturePackChip ? `<span class="host-value-chip host-value-chip--sap" title="SAP Feature Pack">${escapeHtml(sapFeaturePackChip)}</span>` : ""}${hanaVersionChip ? `<span class="host-value-chip host-value-chip--hana" title="HANA Release: ${escapeHtml(hanaVersionRaw)}">${escapeHtml(hanaVersionChip)}</span>` : ""}${hanaSidChip ? `<span class="host-value-chip host-value-chip--sid" title="HANA SID">${escapeHtml(hanaSidChip)}</span>` : ""}</p>` : ""}
+          ${hasKpiCardData ? `<div class="report-sap-kpi-row">
+            <article class="report-sap-kpi-card report-sap-kpi-card--feature" title="Feature Pack">
+              <h4>FEATURE PACK</h4>
+              <p>${escapeHtml(featurePackKpiValue)}</p>
+            </article>
+            <article class="report-sap-kpi-card report-sap-kpi-card--patch" title="Patch Level">
+              <h4>PATCH LEVEL</h4>
+              <p>${escapeHtml(patchLevelKpiValue)}</p>
+            </article>
+            <article class="report-sap-kpi-card report-sap-kpi-card--build" title="Build">
+              <h4>BUILD</h4>
+              <p>${escapeHtml(buildKpiValue)}</p>
+            </article>
+          </div>` : ""}
         </div>
         <div class="report-header-meta">
           <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
