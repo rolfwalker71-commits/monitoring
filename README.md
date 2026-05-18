@@ -524,6 +524,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.167 (18. Mai 2026)
+
+- **Hostkarten Typografie**: Kundenname in der Hostkarte weiter vergroessert; die drei unteren SAP/HANA/SID-Chips kleiner und mit weniger fetter Schrift dargestellt.
+
 ### v1.6.166 (18. Mai 2026)
 
 - **Inaktive Hosts Anzeige**: Platzhalterwerte wie `-`/`--` werden beim Kundennamen nicht mehr vor den Hostnamen gesetzt.
