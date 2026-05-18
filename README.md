@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.144 (18. Mai 2026)
+
+- **Chip Colors**: SAP Feature Pack, HANA Release, and HANA SID chips now use consistent orange color scheme across all views
+
 ### v1.6.143 (21. Mai 2026)
 
 - **Host Interests Auto-Sync**: When user selects hosts, mail subscriptions are automatically activated for those hosts. When hosts are deselected, mail subscriptions are disabled.
