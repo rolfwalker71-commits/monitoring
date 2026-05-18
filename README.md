@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.146 (18. Mai 2026)
+
+- **Einzelmeldung Chip-Rendering Fix**: SAP/HANA Chips werden in der Einzelmeldung wieder zuverlässig angezeigt (Fallback auf Host-Metadaten, wenn Report-Felder fehlen).
+
 ### v1.6.145 (18. Mai 2026)
 
 - **Einzelmeldung Chip-Farben**: SAP Feature Pack, HANA Release und HANA SID in der Einzelmeldung jetzt im gleichen Orangeton wie in der Hostkarte.

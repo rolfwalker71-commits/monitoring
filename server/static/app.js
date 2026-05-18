@@ -6596,20 +6596,40 @@ function renderReportCard(report) {
   const reportDeliveryLag = deliveryLagLabel(report.delivery_lag_sec ?? payload.delivery_lag_sec);
   const queueDepth = queueDepthLabel(payload.queue_depth);
   const section = normalizeReportSection(state.reportSection);
-  const sapB1Summary = renderSapB1SystemSummary(payload);
-  const hanaInfoMeta = (function() {
-    const hi = payload && typeof payload.hana_info === "object" ? payload.hana_info : null;
-    if (!hi || !hi.available) return "-";
-    const v = asText(hi.version, "");
-    const b = asText(hi.branch, "");
-    if (v && b) return `${v} (${b})`;
-    return v || b || "-";
-  })();
-
-  const hanaSid = (function() {
-    const hi = payload && typeof payload.hana_info === "object" ? payload.hana_info : null;
-    return hi && hi.available ? asText(hi.sid, "") : "";
-  })();
+  const selectedHostMeta = Array.isArray(state.hosts)
+    ? state.hosts.find((host) => asText(host.hostname) === technicalHostname)
+    : null;
+  const hi = payload && typeof payload.hana_info === "object" ? payload.hana_info : null;
+  const sapReleaseRaw = asText(
+    payload.sap_release
+      || payload.sap_feature_pack
+      || selectedHostMeta?.sap_release
+      || selectedHostMeta?.sap_feature_pack
+      || ""
+  ).trim();
+  const sapVersionInfo = parseSapB1Version(sapReleaseRaw);
+  const sapFeaturePackChip = asText(
+    sapVersionInfo.mapping?.featurePack
+      || (sapReleaseRaw.toUpperCase().startsWith("FP") ? sapReleaseRaw : "")
+      || sapReleaseRaw
+  ).trim();
+  const hanaVersionRaw = asText(
+    payload.hana_release
+      || payload.hana_version
+      || (hi?.available ? hi.version : "")
+      || selectedHostMeta?.hana_release
+      || selectedHostMeta?.hana_version
+      || ""
+  ).trim();
+  const hanaVersionChip = hanaVersionRaw
+    ? (hanaVersionRaw.split(".").slice(0, 3).join(".") || hanaVersionRaw)
+    : "";
+  const hanaSidChip = asText(
+    payload.hana_sid
+      || (hi?.available ? hi.sid : "")
+      || selectedHostMeta?.hana_sid
+      || ""
+  ).trim();
 
   // Helper function to render meta-group items
   function renderMetaItem(tag, label, value) {
@@ -6755,7 +6775,7 @@ function renderReportCard(report) {
         <div class="report-header-left">
           <h3>${escapeHtml(title)}</h3>
           <p class="report-subtitle">🖥️ ${escapeHtml(technicalHostname)}${reportDeliveryLag !== "-" ? ` <span class="report-detail-chip report-delivery-chip">⏱️ ${escapeHtml(reportDeliveryLag)}</span>` : ""}</p>
-          ${(sapB1Summary !== "-" || hanaInfoMeta !== "-" || hanaSid) ? `<p class="report-sap-meta">${sapB1Summary !== "-" ? `<span class="sap-hana-chip sap-b1-chip" title="SAP Feature Pack">${escapeHtml(sapB1Summary.replace(/<[^>]+>/g, ""))}</span>` : ""}${hanaInfoMeta !== "-" ? (() => { const short = hanaInfoMeta.split(".").slice(0, 3).join("."); return `<span class="sap-hana-chip hana-chip" title="${escapeHtml(hanaInfoMeta)}">${escapeHtml(short)}</span>`; })() : ""}${hanaSid ? `<span class="sap-hana-chip hana-sid-chip" title="HANA SID">${escapeHtml(hanaSid)}</span>` : ""}</p>` : ""}
+          ${(sapFeaturePackChip || hanaVersionChip || hanaSidChip) ? `<p class="report-sap-meta">${sapFeaturePackChip ? `<span class="sap-hana-chip sap-b1-chip" title="SAP Feature Pack">${escapeHtml(sapFeaturePackChip)}</span>` : ""}${hanaVersionChip ? `<span class="sap-hana-chip hana-chip" title="HANA Release: ${escapeHtml(hanaVersionRaw)}">${escapeHtml(hanaVersionChip)}</span>` : ""}${hanaSidChip ? `<span class="sap-hana-chip hana-sid-chip" title="HANA SID">${escapeHtml(hanaSidChip)}</span>` : ""}</p>` : ""}
         </div>
         <div class="report-header-meta">
           <span class="report-time">${escapeHtml(formatUtcPlus2(report.received_at_utc || payload.timestamp_utc))}</span>
