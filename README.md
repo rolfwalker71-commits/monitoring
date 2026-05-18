@@ -524,6 +524,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.163 (18. Mai 2026)
+
+- **Startup-Rebuild Stabilitaet**: Changelog-Backfill verarbeitet Reports jetzt streamend statt mit `fetchall` und schreibt zusaetzlich in Intervallen Zwischen-Commits, um OOM-Spitzen beim 18-Tage-Neuaufbau zu vermeiden.
+
 ### v1.6.161 (18. Mai 2026)
 
 - **Changelog Rebuild beim Start**: Optionaler Einmal-Trigger fuer einen Greenfield-Neuaufbau aus den letzten 15 Tagen eingebaut. Dabei werden die bestehenden Changelog-Tabellen geloescht und aus den Reports neu aufgebaut.

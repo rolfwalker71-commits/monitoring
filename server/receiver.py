@@ -3629,8 +3629,8 @@ def backfill_database_lifecycle(conn: sqlite3.Connection, days: int = 7) -> dict
     window_days = max(1, int(days or 7))
     cutoff_iso = (datetime.now(timezone.utc) - timedelta(days=window_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Get all reports within the time window, grouped by hostname and sorted
-    rows = conn.execute(
+    # Stream reports to avoid loading large payload windows into memory.
+    row_iter = conn.execute(
         """
         SELECT id, received_at_utc, hostname, payload_json
         FROM reports
@@ -3638,14 +3638,14 @@ def backfill_database_lifecycle(conn: sqlite3.Connection, days: int = 7) -> dict
         ORDER BY hostname COLLATE NOCASE ASC, received_at_utc ASC
         """,
         (cutoff_iso,),
-    ).fetchall()
+    )
 
     # Track databases per host over time
     prev_dbs_by_host: dict[str, set[str]] = {}
     report_count = 0
     inserted_events = 0
 
-    for row in rows:
+    for row in row_iter:
         report_id = int(row[0] or 0)
         report_time_utc = str(row[1] or "").strip()
         hostname = str(row[2] or "").strip()
@@ -3714,6 +3714,9 @@ def backfill_database_lifecycle(conn: sqlite3.Connection, days: int = 7) -> dict
 
         # Update state for next iteration
         prev_dbs_by_host[hostname] = current_dbs
+
+        if report_count % 1000 == 0:
+            conn.commit()
 
     return {
         "reports_scanned": report_count,
@@ -5152,7 +5155,7 @@ def backfill_host_config_changes(conn: sqlite3.Connection, days: int = 7) -> dic
     window_days = max(1, int(days or 7))
     cutoff_iso = (datetime.now(timezone.utc) - timedelta(days=window_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    rows = conn.execute(
+    row_iter = conn.execute(
         """
         SELECT id, received_at_utc, hostname, payload_json
         FROM reports
@@ -5160,14 +5163,14 @@ def backfill_host_config_changes(conn: sqlite3.Connection, days: int = 7) -> dic
         ORDER BY hostname COLLATE NOCASE ASC, id ASC
         """,
         (cutoff_iso,),
-    ).fetchall()
+    )
 
     last_snapshot_by_host: dict[str, dict[str, str]] = {}
     last_seen_at_by_host: dict[str, str] = {}
     report_count = 0
     inserted_changes = 0
 
-    for row in rows:
+    for row in row_iter:
         report_id = int(row[0] or 0)
         detected_at_utc = str(row[1] or "").strip()
         hostname = str(row[2] or "").strip()
@@ -5224,6 +5227,9 @@ def backfill_host_config_changes(conn: sqlite3.Connection, days: int = 7) -> dic
 
         last_snapshot_by_host[hostname] = current_snapshot
         last_seen_at_by_host[hostname] = detected_at_utc or utc_now_iso()
+
+        if report_count % 1000 == 0:
+            conn.commit()
 
     for hostname, snapshot in last_snapshot_by_host.items():
         updated_at_utc = last_seen_at_by_host.get(hostname, utc_now_iso())
