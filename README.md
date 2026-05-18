@@ -522,6 +522,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.149 (18. Mai 2026)
+
+- **Filesystem Chart Drilldown Fix**: Klick auf FS-Chart öffnet nun zuverlässig das korrekt selektierte Chart; Drilldown-Fenster lässt sich wieder sauber schließen.
 
 ### v1.6.148 (18. Mai 2026)
 

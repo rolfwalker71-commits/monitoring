@@ -4641,6 +4641,13 @@ function openChartDrillModal(item, latestReportTimeUtc) {
   modal.classList.remove("hidden");
 }
 
+function closeChartDrillModal() {
+  const modal = document.getElementById("chartDrillModal");
+  if (modal) {
+    modal.classList.add("hidden");
+  }
+}
+
 function closeAiTroubleshootModal() {
   const modal = document.getElementById("aiTroubleshootModal");
   if (modal) {
@@ -4766,16 +4773,10 @@ function renderFilesystemTrendCharts(filesystemTrends, latestReportTimeUtc) {
   if (!Array.isArray(filesystemTrends) || filesystemTrends.length === 0) {
     return "<p class=\"muted\">Keine Filesystem-Verlaufskurven verfügbar.</p>";
   }
-
-  const filtered = filesystemTrends.filter((item) => shouldShowFilesystemGraph(item.mountpoint));
-  if (filtered.length === 0) {
-    return "<p class=\"muted\">Keine relevanten Filesystem-Verlaufskurven verfügbar.</p>";
-  }
-  const topTrends = sortFilesystemByMountpointAscending(filtered);
   const standText = formatUtcPlus2(latestReportTimeUtc);
   const fsTrendWarnings = [];
 
-  const cards = topTrends
+  const cards = filesystemTrends
     .map((item) => {
       const points = normalizeSeries((item.series || []).map((point) => ({
         time_utc: point.time_utc,
@@ -8916,7 +8917,8 @@ async function loadAnalysisForHost() {
     updateFilesystemVisibilityButtons();
 
     const visibleTrendRows = filterFilesystemTrendsByVisibility(trendRows, state.fsFocusHiddenMountpoints);
-    const sortedTrendRows = sortFilesystemByMountpointAscending(visibleTrendRows);
+    const chartEligibleRows = visibleTrendRows.filter((row) => shouldShowFilesystemGraph(row?.mountpoint));
+    const sortedTrendRows = sortFilesystemByMountpointAscending(chartEligibleRows);
     const resourceTrends = data.resource_trends || {};
     const resourceSeries = data.resource_series || {};
     const latestMax = formatPercent(data.latest_max_used_percent);
@@ -10738,14 +10740,18 @@ function wireEvents() {
 
   const chartDrillCloseBtn = document.getElementById("chartDrillCloseBtn");
   if (chartDrillCloseBtn) {
-    chartDrillCloseBtn.addEventListener("click", () => {
-      document.getElementById("chartDrillModal").classList.add("hidden");
+    chartDrillCloseBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeChartDrillModal();
     });
   }
-  const chartDrillBackdrop = document.querySelector(".chart-drill-backdrop");
+  const chartDrillBackdrop = document.querySelector("#chartDrillModal .chart-drill-backdrop");
   if (chartDrillBackdrop) {
-    chartDrillBackdrop.addEventListener("click", () => {
-      document.getElementById("chartDrillModal").classList.add("hidden");
+    chartDrillBackdrop.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeChartDrillModal();
     });
   }
 
