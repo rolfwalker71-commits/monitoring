@@ -524,9 +524,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
-### v1.6.174
+### v1.6.181 (18. Mai 2026)
 
-- **Mockups**: Mockups now explicitly show search, quick filters, and user/global/admin settings placement in all three variants.
+- **Mockups Bedienlogik konkretisiert**: In allen drei Mockup-Varianten wurden Suche, Schnellfilter sowie Benutzer-/Global-/Admin-Settings als eigene Utility-Leiste sichtbar positioniert, damit die spaetere Navigation eindeutig ist.
 
 ### v1.6.173 (18. Mai 2026)
 
