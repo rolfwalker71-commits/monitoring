@@ -10626,6 +10626,7 @@ function updateHeaderStatChips() {
   const licenseHolder = document.getElementById("headerLicenseHolder");
   const licenseExpiry = document.getElementById("headerLicenseExpiry");
   const licenseExpiryItem = document.getElementById("headerLicenseExpiryItem");
+  const licenseCopyTechButton = document.getElementById("headerLicenseCopyTechButton");
   if (alertChip && alertCount) {
     alertCount.textContent = String(state.globalOpenAlertsCount);
     alertChip.classList.toggle("hidden", state.globalOpenAlertsCount === 0);
@@ -10641,6 +10642,8 @@ function updateHeaderStatChips() {
   if (licenseChip) {
     const payload = state.currentReport && typeof state.currentReport.payload === "object" ? state.currentReport.payload : {};
     const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : {};
+    const selectedHost = asText(state.selectedHost, "").trim();
+    const reportHost = asText(state.currentReport?.hostname, "").trim();
     const hw = asText(sapLicense.hardware_key, "").trim();
     const inst = asText(sapLicense.instno, "").trim();
     const system = asText(sapLicense.system_nr, "").trim();
@@ -10651,8 +10654,25 @@ function updateHeaderStatChips() {
       ? `${expiryRaw.substring(6, 8)}.${expiryRaw.substring(4, 6)}.${expiryRaw.substring(0, 4)}`
       : expiryRaw;
     const hasData = [hw, inst, system, customerNo, holder, expiry].some((entry) => Boolean(entry));
-    licenseChip.classList.toggle("hidden", !hasData);
-    if (hasData) {
+    const hasSelectedHost = Boolean(selectedHost);
+    const hostMatchesSelection = Boolean(hasSelectedHost && reportHost && reportHost === selectedHost);
+    const showLicenseChip = Boolean(hasData && hasSelectedHost && hostMatchesSelection);
+    const technicalCopy = [
+      `HW-Key: ${hw || "-"}`,
+      `Installationsnummer: ${inst || "-"}`,
+      `Systemnummer: ${system || "-"}`,
+    ].join("\n");
+
+    licenseChip.classList.toggle("hidden", !showLicenseChip);
+    if (licenseCopyTechButton) {
+      licenseCopyTechButton.disabled = !showLicenseChip;
+      licenseCopyTechButton.setAttribute("data-copy", showLicenseChip ? technicalCopy : "");
+      licenseCopyTechButton.title = showLicenseChip
+        ? "HW-Key, Instno und System in Zwischenablage kopieren"
+        : "Nur bei vorhandenen Lizenzdaten verfügbar";
+    }
+
+    if (showLicenseChip) {
       if (licenseHw) licenseHw.textContent = hw || "-";
       if (licenseInst) licenseInst.textContent = inst || "-";
       if (licenseSystem) licenseSystem.textContent = system || "-";
@@ -10671,8 +10691,41 @@ function updateHeaderStatChips() {
         titleLines.push(`Gültig bis: ${expiry}`);
       }
       licenseChip.title = titleLines.join("\n");
+    } else {
+      licenseChip.title = "SAP B1 Lizenzinfos";
+      if (licenseExpiryItem) licenseExpiryItem.classList.add("hidden");
     }
   }
+}
+
+function wireHeaderLicenseCopyButton() {
+  const button = document.getElementById("headerLicenseCopyTechButton");
+  if (!button || button.dataset.wired === "1") {
+    return;
+  }
+  button.dataset.wired = "1";
+  button.addEventListener("click", async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const text = String(button.getAttribute("data-copy") || "").trim();
+    if (!text) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      const original = button.textContent;
+      button.textContent = "✅";
+      setTimeout(() => {
+        button.textContent = original;
+      }, 1200);
+    } catch {
+      const original = button.textContent;
+      button.textContent = "❌";
+      setTimeout(() => {
+        button.textContent = original;
+      }, 1200);
+    }
+  });
 }
 
 async function loadGlobalAlertsOverview(options = {}) {
@@ -10852,6 +10905,8 @@ async function loadGlobalAlertsOverview(options = {}) {
 }
 
 function wireEvents() {
+  wireHeaderLicenseCopyButton();
+
   if (!state.sapB1VmapBeforeUnloadWired) {
     window.addEventListener("beforeunload", (event) => {
       if (!hasSapB1VersionMapUnsavedChanges()) {

@@ -523,6 +523,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.208 (18. Mai 2026)
+
+- **License Card Datenlogik**: Lizenzkarte wird strikt nur bei selektiertem Host und vorhandenen Lizenzdaten angezeigt.
+- **License Card Layout**: Spaltenabstand in der Lizenzkarte reduziert.
+- **Clipboard Komfort**: Neues 📋-Icon kopiert HW-Key, Installationsnummer und Systemnummer in die Zwischenablage.
 n### v1.6.207 (18. Mai 2026)
 
 - **License Card Height**: Maximale Hoehe der Lizenzkarte von 150px auf 100px reduziert (overflow-y: auto).
