@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.142 (18. Mai 2026)
+
+- **UI Text**: Bereich "Login Changelog" in der Globalansicht auf "Anmeldungen" umbenannt.
+
 ### v1.6.141 (18. Mai 2026)
 
 - **Globalansicht**: Bereich "Kunden" (Tab + View + Event-Verkabelung) vollständig entfernt.
