@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 ## Changelog (Agent)
 
+### v1.6.176 (18. Mai 2026)
+
+- **Hostkarten-Hintergrund leicht dunkler**: Der bestehende Verlauf auf der einzelnen Hostkarte wurde in den gleichen Farbtönen beibehalten, aber dezent dunkler abgestimmt, damit die Karten etwas mehr Tiefe und Kontrast haben.
+
 ### v1.6.175 (18. Mai 2026)
 
 - **Host-Kundenpille vereinheitlicht**: Die Kunden-Pille im Host-Kartenkopf nutzt jetzt immer die volle verfuegbare Breite (unabhaengig von der Textlaenge). Dadurch erscheinen alle Karten im Headerbereich einheitlicher ausgerichtet.
