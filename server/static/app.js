@@ -5543,15 +5543,6 @@ function wireSapVersionMapCopyButtons(container) {
   }
 }
 
-function renderSapB1CardHeader() {
-  return `
-    <div class="sap-b1-card-header">
-      <h4>SAP B1</h4>
-      <img class="sap-b1-logo" src="icons/sap.png" alt="SAP" loading="lazy" decoding="async" />
-    </div>
-  `;
-}
-
 function renderSapB1CombinedCard(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const versionBlock = sap && typeof sap.server_components_version === "object" ? sap.server_components_version : null;
@@ -5610,7 +5601,7 @@ function renderSapB1CombinedCard(payload) {
 
   return `
     <section class="detail-card sap-b1-card sap-b1-combined-card">
-      ${renderSapB1CardHeader()}
+      <h4>SAP B1</h4>
 
       <details class="sap-b1-raw-details" open>
         <summary class="sap-b1-raw-summary">AddOns</summary>
@@ -5660,7 +5651,7 @@ function renderSapB1SystemInfoCard(payload) {
   if (!versionBlock) {
     return `
       <section class="detail-card sap-b1-card">
-        ${renderSapB1CardHeader()}
+        <h4>SAP B1</h4>
         <p class="muted">Keine SAP Business One Versionsdaten im Payload vorhanden.</p>
       </section>
     `;
@@ -5699,7 +5690,7 @@ function renderSapB1SystemInfoCard(payload) {
 
   return `
     <section class="detail-card sap-b1-card">
-      ${renderSapB1CardHeader()}
+      <h4>SAP B1</h4>
       <div class="sap-b1-grid">
         ${sapB1RawOutputDetails}
         <details class="sap-b1-raw-details">
