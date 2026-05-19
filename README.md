@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.246 (19. Mai 2026)
+
+- **Header Logo Placement**: SAP-Logo ohne Überlappung direkt links neben den Darkmode-Schalter verschoben (kleiner Abstand, stabile Größe im Header).
+
 ### v1.6.245 (19. Mai 2026)
 
 - **Header Logo Fine-Tuning**: SAP-Logo im Top-Header aus dem normalen Layoutfluss genommen (kein Titel-Umbruch mehr) und visuell weiter Richtung Darkmode-Bereich verschoben; mobile Darstellung bleibt responsiv gestapelt.
