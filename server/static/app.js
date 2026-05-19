@@ -5570,9 +5570,14 @@ function renderSapB1CombinedCard(payload) {
   const copyText = sortedEntries
     .map(([build, info]) => `${build}\t${info.featurePack}\t${info.patchLevel}\t${info.releaseDate}`)
     .join("\n");
-  const sapB1RawOutputContent = state.isAdmin
-    ? renderTerminalViewer(rawOutput || "-")
-    : '<p class="muted">Nur für Admin-Benutzer sichtbar.</p>';
+  const sapB1RawOutputDetails = state.isAdmin
+    ? `
+      <details class="sap-b1-raw-details">
+        <summary class="sap-b1-raw-summary">SAP B1 Setup Roh-Output</summary>
+        ${renderTerminalViewer(rawOutput || "-")}
+      </details>
+      `
+    : "";
 
   return `
     <section class="detail-card sap-b1-card sap-b1-combined-card">
@@ -5592,10 +5597,7 @@ function renderSapB1CombinedCard(payload) {
       </details>
       ` : ""}
 
-      <details class="sap-b1-raw-details">
-        <summary class="sap-b1-raw-summary">SAP B1 Setup Roh-Output</summary>
-        ${sapB1RawOutputContent}
-      </details>
+      ${sapB1RawOutputDetails}
 
       ${isLinux ? `
       <details class="sap-b1-raw-details">
@@ -5657,18 +5659,20 @@ function renderSapB1SystemInfoCard(payload) {
       hanaBranch ? `BRANCH=${hanaBranch}` : "",
     ].filter(Boolean).join("\n"));
   }
-  const sapB1RawOutputContent = state.isAdmin
-    ? renderTerminalViewer(rawOutput || "-")
-    : '<p class="muted">Nur für Admin-Benutzer sichtbar.</p>';
+  const sapB1RawOutputDetails = state.isAdmin
+    ? `
+        <details class="sap-b1-raw-details">
+          <summary class="sap-b1-raw-summary">SAP B1 Setup Roh-Output</summary>
+          ${renderTerminalViewer(rawOutput || "-")}
+        </details>
+      `
+    : "";
 
   return `
     <section class="detail-card sap-b1-card">
       <h4>SAP B1</h4>
       <div class="sap-b1-grid">
-        <details class="sap-b1-raw-details">
-          <summary class="sap-b1-raw-summary">SAP B1 Setup Roh-Output</summary>
-          ${sapB1RawOutputContent}
-        </details>
+        ${sapB1RawOutputDetails}
         <details class="sap-b1-raw-details">
           <summary class="sap-b1-raw-summary">HANA Versions-Scan</summary>
           ${hanaInfoRows}

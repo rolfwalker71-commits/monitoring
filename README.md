@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.217 (19. Mai 2026)
+
+- **Admin-Sichtbarkeit SAP B1**: Admin-Unterpunkt 'SAP B1 Setup Roh-Output' wird für Nicht-Admins nun vollständig ausgeblendet (kein Hinweistext, kein Menüpunkt).
 n### v1.6.216 (19. Mai 2026)
 
 - **Admin-Sichtbarkeit SAP B1**: Unterpunkt 'SAP B1 Setup Roh-Output' auf Admin-Benutzer eingeschränkt; Nicht-Admins sehen nur einen Hinweistext.
