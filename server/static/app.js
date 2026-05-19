@@ -7278,10 +7278,6 @@ function renderSingleHostCard(host) {
     }
   }
 
-  const footerContent = valueChipStack
-    ? `<div class="host-card-footer-wrap"><div class="host-card-footer"><span class="host-card-actions">${valueChipStack}</span></div></div>`
-    : "";
-
   let mutedAlertsSection = "";
   if (isHidden && hasMutedAlerts) {
     const hostnameEncForList = encodeURIComponent(hostname);
@@ -7318,7 +7314,6 @@ function renderSingleHostCard(host) {
       ${flagIcon}
       ${customerTitleLine}
       <span class="host-meta-line host-meta-line--primary host-meta-line--with-alert"><span class="host-meta-text">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))}</span></span>
-      ${footerContent}
       ${mutedAlertsSection}
       ${osIcon}
     </article>
