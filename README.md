@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.227 (19. Mai 2026)
+
+- **Admin Login-Audit UI**: Web-Login-Liste im Admin-Bereich als auf- und zuklappbaren Bereich umgesetzt; standardmäßig zugeklappt.
+
 ### v1.6.226 (19. Mai 2026)
 
 - **Windows SQL Hotfix (Extensions)**: JOIN-Abfrage auf Alias-Syntax umgestellt (`Extensions` = `e`, `ExtensionDeployments` = `ed`), damit die AddOn-Daten aus `SLDData` wieder korrekt geliefert werden.

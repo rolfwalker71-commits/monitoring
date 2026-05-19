@@ -1655,6 +1655,43 @@ body[data-theme="dark"] .agent-update-admin-table tbody tr:nth-child(2n) td:nth-
   margin-top: 10px;
 }
 
+.admin-login-audit-details {
+  border: 1px solid #c7d3e8;
+  border-radius: 12px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.admin-login-audit-summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f3f6e;
+  padding: 10px 14px;
+  user-select: none;
+}
+
+.admin-login-audit-summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-login-audit-summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 8px;
+  transition: transform 0.16s ease;
+}
+
+.admin-login-audit-details[open] .admin-login-audit-summary::before {
+  transform: rotate(90deg);
+}
+
+.admin-login-audit-details .table-wrap {
+  margin-top: 0;
+  border-top: 1px solid #dbe5f3;
+}
+
 .user-management-table th,
 .user-management-table td {
   vertical-align: middle;
