@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.245 (19. Mai 2026)
+
+- **Header Logo Fine-Tuning**: SAP-Logo im Top-Header aus dem normalen Layoutfluss genommen (kein Titel-Umbruch mehr) und visuell weiter Richtung Darkmode-Bereich verschoben; mobile Darstellung bleibt responsiv gestapelt.
+
 ### v1.6.244 (19. Mai 2026)
 
 - **Header Logo Position**: SAP-Logo aus der Report-Navigation entfernt und im oberen Header zentriert zwischen Titelbereich links und Darkmode-Bereich rechts platziert; Größe maximal responsiv ohne Layoutbruch.

@@ -201,6 +201,7 @@ body[data-theme="dark"] {
 }
 
 .brand-header {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 32px;
@@ -283,6 +284,10 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .brand-center-sap {
+  position: absolute;
+  left: 66%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -291,9 +296,9 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .brand-center-sap-logo {
   display: block;
-  width: min(420px, 34vw);
+  width: min(360px, 28vw);
   max-width: 100%;
-  max-height: 64px;
+  max-height: 58px;
   object-fit: contain;
   opacity: 0.95;
 }
@@ -320,6 +325,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   line-height: 1.02;
   letter-spacing: 0.25px;
   font-weight: 900;
+  white-space: nowrap;
 }
 
 .subtitle-meta {
@@ -6328,6 +6334,10 @@ body[data-theme="dark"] .report-license-meta {
   }
 
   .brand-center-sap {
+    position: static;
+    left: auto;
+    top: auto;
+    transform: none;
     width: 100%;
     order: 3;
     justify-content: center;
@@ -6336,6 +6346,10 @@ body[data-theme="dark"] .report-license-meta {
   .brand-center-sap-logo {
     width: min(320px, 78vw);
     max-height: 56px;
+  }
+
+  .brand-text h1 {
+    white-space: normal;
   }
 
   .brand-user {
