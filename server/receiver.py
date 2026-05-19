@@ -9557,10 +9557,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         path: Path,
         content_type: str,
         extra_headers: dict[str, str] | None = None,
-    ) -> None:
+    ) -> bool:
         if not path.exists() or not path.is_file():
             self.send_error(HTTPStatus.NOT_FOUND, "File not found")
-            return
+            return False
 
         content = path.read_bytes()
         self.send_response(HTTPStatus.OK)
@@ -9571,6 +9571,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self.send_header(key, value)
         self.end_headers()
         self.wfile.write(content)
+        return True
 
     def _send_index_with_asset_version(self) -> None:
         path = STATIC_DIR / "index.html"
@@ -11288,7 +11289,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             file_path = Path(str(job.get("file_path") or ""))
             filename = str(job.get("filename") or "monitoring-backup.db")
-            self._send_file(
+            sent = self._send_file(
                 file_path,
                 "application/octet-stream",
                 extra_headers={
@@ -11296,6 +11297,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "Cache-Control": "no-store",
                 },
             )
+            if sent:
+                with _backup_jobs_lock:
+                    removed_job = _backup_jobs.pop(job_id, None)
+                if removed_job:
+                    removed_path = Path(str(removed_job.get("file_path", "") or ""))
+                    if removed_path.exists():
+                        try:
+                            removed_path.unlink()
+                        except OSError:
+                            pass
             return
 
         if parsed.path == "/api/v1/backup/database":

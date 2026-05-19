@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.221 (19. Mai 2026)
+
+- **DB-Backup One-Shot**: Backup-Download-Jobs werden nach erfolgreichem Download sofort invalidiert und die temporäre Backup-Datei direkt gelöscht (kein stale Job-State).
 n### v1.6.220 (19. Mai 2026)
 
 - **DB-Backup Download**: Download-Flow im Admin-Bereich auf Fetch+Blob umgestellt (statt nativer Anchor-Navigation), damit Backup-Dateien zuverlässig vollständig heruntergeladen werden und Fehler sauber erkannt werden.
