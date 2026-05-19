@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.226 (19. Mai 2026)
+
+- **Windows SQL Hotfix (Extensions)**: JOIN-Abfrage auf Alias-Syntax umgestellt (`Extensions` = `e`, `ExtensionDeployments` = `ed`), damit die AddOn-Daten aus `SLDData` wieder korrekt geliefert werden.
+
 ### v1.6.225 (19. Mai 2026)
 
 - **Extensions Query Update (Windows + Linux)**: Auslesen der AddOn-Infos aus `SLDData.Extensions` auf Join mit `ExtensionDeployments` umgestellt; in beiden Windows-Skripten, im Linux-Collector und in der Deployment-Doku konsistent nachgezogen.

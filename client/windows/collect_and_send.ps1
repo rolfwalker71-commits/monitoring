@@ -575,7 +575,7 @@ function Get-HarvestHealthStatus {
         # Read SAP B1 extensions from SLDModel.SLDData for frontend display.
         try {
             $extCmd = $conn.CreateCommand()
-            $extCmd.CommandText = "SELECT AddOnName, Version FROM [SLDModel.SLDData].[dbo].[Extensions] LEFT JOIN [SLDModel.SLDData].[dbo].[ExtensionDeployments] ON [dbo].[Extensions].[Id] = [dbo].[ExtensionDeployments].[Id]"
+            $extCmd.CommandText = "SELECT e.AddOnName, e.Version FROM [SLDModel.SLDData].[dbo].[Extensions] AS e LEFT JOIN [SLDModel.SLDData].[dbo].[ExtensionDeployments] AS ed ON ed.[Id] = e.[Id]"
             $extCmd.CommandTimeout = 10
             $extReader = $extCmd.ExecuteReader()
             try {
