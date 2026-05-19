@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.216 (19. Mai 2026)
+
+- **Admin-Sichtbarkeit SAP B1**: Unterpunkt 'SAP B1 Setup Roh-Output' auf Admin-Benutzer eingeschränkt; Nicht-Admins sehen nur einen Hinweistext.
 n### v1.6.215 (19. Mai 2026)
 
 - **SAP B1 Lizenzinfos**: Detailinhalte (HW-Key, Installationsnummer, Systemnummer, Kundennummer, Lizenznehmer, Gültigkeit, Datei-Stand) ausgeblendet; angezeigt werden nur noch die zwei SQL/HANA-Suchpfad-Infozeilen.

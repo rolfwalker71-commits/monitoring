@@ -5570,6 +5570,9 @@ function renderSapB1CombinedCard(payload) {
   const copyText = sortedEntries
     .map(([build, info]) => `${build}\t${info.featurePack}\t${info.patchLevel}\t${info.releaseDate}`)
     .join("\n");
+  const sapB1RawOutputContent = state.isAdmin
+    ? renderTerminalViewer(rawOutput || "-")
+    : '<p class="muted">Nur für Admin-Benutzer sichtbar.</p>';
 
   return `
     <section class="detail-card sap-b1-card sap-b1-combined-card">
@@ -5591,7 +5594,7 @@ function renderSapB1CombinedCard(payload) {
 
       <details class="sap-b1-raw-details">
         <summary class="sap-b1-raw-summary">SAP B1 Setup Roh-Output</summary>
-        ${renderTerminalViewer(rawOutput || "-")}
+        ${sapB1RawOutputContent}
       </details>
 
       ${isLinux ? `
@@ -5654,6 +5657,9 @@ function renderSapB1SystemInfoCard(payload) {
       hanaBranch ? `BRANCH=${hanaBranch}` : "",
     ].filter(Boolean).join("\n"));
   }
+  const sapB1RawOutputContent = state.isAdmin
+    ? renderTerminalViewer(rawOutput || "-")
+    : '<p class="muted">Nur für Admin-Benutzer sichtbar.</p>';
 
   return `
     <section class="detail-card sap-b1-card">
@@ -5661,7 +5667,7 @@ function renderSapB1SystemInfoCard(payload) {
       <div class="sap-b1-grid">
         <details class="sap-b1-raw-details">
           <summary class="sap-b1-raw-summary">SAP B1 Setup Roh-Output</summary>
-          ${renderTerminalViewer(rawOutput || "-")}
+          ${sapB1RawOutputContent}
         </details>
         <details class="sap-b1-raw-details">
           <summary class="sap-b1-raw-summary">HANA Versions-Scan</summary>
