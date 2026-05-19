@@ -414,7 +414,7 @@ function Get-FirstAvailableExtensionsJoinScanResult {
                 $conn = Get-SqlConnection -Server $serverName -Database $dbName -User $SqlUser -Password $SqlPassword
                 $conn.Open()
 
-                $query = 'SELECT DISTINCT e.AddOnName, e.Version FROM [SLDModel.SLDData].[dbo].[Extensions] AS e INNER JOIN [SLDModel.SLDData].[dbo].[ExtensionDeployments] AS ed ON ed.[Id] = e.[Id]'
+                $query = 'SELECT e.AddOnName, e.Version FROM [SLDModel.SLDData].[dbo].[Extensions] AS e INNER JOIN [SLDModel.SLDData].[dbo].[ExtensionDeployments] AS ed ON ed.[Id] = e.[Id]'
                 $dt = Invoke-SqlTable -Connection $conn -Query $query -TimeoutSec 300
                 $rows = Convert-DataTableRowsToObjectArray -DataTable $dt
                 $normalizedRows = Normalize-ScanRows -Rows $rows

@@ -108,9 +108,6 @@ Ja: Query- und Verbindungsfehler werden bereits im Payload mitgegeben und könne
   - `sap_business_one.table_scan.sbo_common_sari.error`
   - `sap_business_one.table_scan.sld_extensions.error`
 
-**Extensions-Duplikate:**  
-Bei mehreren Deployment-Einträgen für die gleiche Extension wird mit `SELECT DISTINCT` verhindert, dass Addons mehrfach in der Payload auftauchen. Diese Duplikate entstehen nicht durch die UI, sondern direkt in der SQL/HANA-Abfrage, wenn eine Extension mehrere Deployment-Zeilen hat.
-
 ### Server-Deploy bei privatem Repo
 
 Das Agent-Update selbst bleibt funktionsfaehig, weil Agenten nur noch von deinem Monitoring-Server unter `/updates` laden. Wenn das GitHub-Repo privat ist, betrifft das nur den Server-Deploy per `pull-server-only.sh`.
