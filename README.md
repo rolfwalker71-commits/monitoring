@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.215 (19. Mai 2026)
+
+- **SAP B1 Lizenzinfos**: Detailinhalte (HW-Key, Installationsnummer, Systemnummer, Kundennummer, Lizenznehmer, Gültigkeit, Datei-Stand) ausgeblendet; angezeigt werden nur noch die zwei SQL/HANA-Suchpfad-Infozeilen.
 n### v1.6.214 (18. Mai 2026)
 
 - **pull-server-only**: PNG-Icon-Downloads auf denselben Parallelwert wie Standarddateien umgestellt (MAX_PARALLEL_DOWNLOADS, standardmäßig 8).

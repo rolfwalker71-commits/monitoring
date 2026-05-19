@@ -5433,8 +5433,6 @@ function renderSapB1ExtensionsSection(payload) {
 }
 
 function renderSapLicenseInfoSection(payload) {
-  const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : {};
-  const toText = (value) => asText(value, "");
   const locationHintHtml = `
     <div class="sap-license-location-hint">
       <p><strong>SQL</strong>: gesucht wird <code>B01.txt</code> unter <code>C:\\ANG\\Lizenzen\\B01.txt</code>, <code>C:\\ANG\\Lizenz\\B01.txt</code> oder <code>C:\\ANG\\B01.txt</code>.</p>
@@ -5442,46 +5440,10 @@ function renderSapLicenseInfoSection(payload) {
     </div>
   `;
 
-  const expirationRaw = toText(sapLicense.expiration);
-  const expiration = /^\d{8}$/.test(expirationRaw)
-    ? `${expirationRaw.substring(6, 8)}.${expirationRaw.substring(4, 6)}.${expirationRaw.substring(0, 4)}`
-    : (expirationRaw || "-");
-
-  const fields = [
-    { label: "HW-Key", value: toText(sapLicense.hardware_key) },
-    { label: "Installationsnummer", value: toText(sapLicense.instno) },
-    { label: "Systemnummer", value: toText(sapLicense.system_nr) },
-    { label: "Kundennummer", value: toText(sapLicense.customer_no) },
-    { label: "Lizenznehmer", value: toText(sapLicense.customer_name) },
-    { label: "Gültig bis", value: expiration }
-  ];
-
-  const hasData = fields.some((field) => field.value && field.value !== "-");
-  const fileMtimeUtc = toText(sapLicense.file_mtime_utc);
-  const fileMtimeLabel = fileMtimeUtc ? formatUtcPlus2(fileMtimeUtc) : "-";
-
-  if (!hasData) {
-    return `
-      <details class="sap-b1-raw-details">
-        <summary class="sap-b1-raw-summary">Lizenzinfos</summary>
-        <div class="sap-license-list-wrap">
-          <p class="muted">Keine Lizenzinfos im Payload vorhanden.</p>
-          ${locationHintHtml}
-        </div>
-      </details>
-    `;
-  }
-
-  const rowsHtml = fields
-    .map((field) => `<p class="sap-license-list-item"><strong>${escapeHtml(field.label)}</strong><span>${escapeHtml(field.value || "-")}</span></p>`)
-    .join("");
-
   return `
     <details class="sap-b1-raw-details" open>
       <summary class="sap-b1-raw-summary">Lizenzinfos</summary>
       <div class="sap-license-list-wrap">
-        <div class="sap-license-list">${rowsHtml}</div>
-        <p class="sap-license-list-meta">Datei-Stand B01.txt: <span>${escapeHtml(fileMtimeLabel)}</span></p>
         ${locationHintHtml}
       </div>
     </details>
