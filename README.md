@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.224 (19. Mai 2026)
+
+- **Windows Agent**: Lizenzfile-Suchpfade korrigiert und erweitert: `C:\Program Files (x86)\SAP\SAP Business One Server\B1_SHR\Lizenz\B01.txt` und `C:\Program Files (x86)\SAP\SAP Business One Server\B1_SHR\Lizenzen\B01.txt` hinzugefügt.
 n### v1.6.223 (19. Mai 2026)
 
 - **Windows Agent**: Zusätzlicher Suchpfad für Lizenzfile (B01.txt) hinzugefügt: `C:Program Files (x86)SAPSAP Business One ServerB1_SHRB01.txt`
