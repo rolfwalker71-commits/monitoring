@@ -7807,8 +7807,8 @@ async function downloadDatabaseBackup(onProgress) {
     const status = String(statusData.status || "");
     if (status === "ready") {
       onProgress?.({ pct: null, label: "Download wird gestartet..." });
-      return triggerNativeDownload(
-        `/api/v1/backup/database/download?job_id=${encodeURIComponent(jobId)}`,
+      return triggerFileDownload(
+        `/api/v1/backup/database/download?job_id=${encodeURIComponent(jobId)}&t=${Date.now()}`,
         fallbackFilename,
       );
     }

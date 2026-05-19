@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.220 (19. Mai 2026)
+
+- **DB-Backup Download**: Download-Flow im Admin-Bereich auf Fetch+Blob umgestellt (statt nativer Anchor-Navigation), damit Backup-Dateien zuverlässig vollständig heruntergeladen werden und Fehler sauber erkannt werden.
 n### v1.6.219 (19. Mai 2026)
 
 - **Hostkarten UI**: Unterste Reihe mit den drei Infochips (z. B. SAP/HANA/SID) aus der Hostkarte entfernt; Informationen bleiben in anderen Ansichten verfügbar.
