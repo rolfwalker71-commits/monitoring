@@ -5455,7 +5455,7 @@ function renderSapB1ExtensionsSection(payload) {
 function renderSapLicenseInfoSection(payload) {
   const locationHintHtml = `
     <div class="sap-license-location-hint">
-      <p><strong>SQL</strong>: gesucht wird <code>B01.txt</code> unter <code>C:\\ANG\\Lizenzen\\B01.txt</code>, <code>C:\\ANG\\Lizenz\\B01.txt</code> oder <code>C:\\ANG\\B01.txt</code>.</p>
+      <p><strong>SQL</strong>: gesucht wird <code>B01.txt</code> unter <code>C:\\ANG\\Lizenzen\\B01.txt</code>, <code>C:\\ANG\\Lizenz\\B01.txt</code>, <code>C:\\ANG\\B01.txt</code>, <code>C:\\Program Files (x86)\\SAP\\SAP Business One Server\\B1_SHR\\Lizenz\\B01.txt</code> oder <code>C:\\Program Files (x86)\\SAP\\SAP Business One Server\\B1_SHR\\Lizenzen\\B01.txt</code>.</p>
       <p><strong>HANA</strong>: gesucht wird <code>B01.txt</code> unter <code>/usr/sap/SAPBusinessOne/B1_SHF/Lizenzen/B01.txt</code> oder <code>/usr/sap/SAPBusinessOne/B1_SHF/Lizenz/B01.txt</code>.</p>
     </div>
   `;
