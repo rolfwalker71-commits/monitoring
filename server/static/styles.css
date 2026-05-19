@@ -4917,6 +4917,32 @@ body[data-theme="dark"] .trend-progress-bar {
   background: #f43f5e;
 }
 
+.host-version-side-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 4px;
+  border-radius: 0 12px 12px 0;
+}
+
+.host-version-side-bar--ok {
+  background: #22c55e;
+}
+
+.host-version-side-bar--warning {
+  background: #fb923c;
+}
+
+.host-version-side-bar--critical {
+  background: #f43f5e;
+}
+
+.host-version-side-bar--unknown {
+  background: #94a3b8;
+  opacity: 0.85;
+}
+
 .host-status-bar--ok {
   opacity: 0.3;
 }

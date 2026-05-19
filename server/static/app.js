@@ -7135,9 +7135,9 @@ function formatHostLastReportAge(reportUtcValue) {
   const ageMinutes = Math.max(0, Math.floor((nowMs - parsed.getTime()) / 60000));
 
   let statusClass = "host-last-report-dot--ok";
-  if (ageMinutes >= 45) {
+  if (ageMinutes >= 50) {
     statusClass = "host-last-report-dot--critical";
-  } else if (ageMinutes >= 15) {
+  } else if (ageMinutes >= 20) {
     statusClass = "host-last-report-dot--warning";
   }
 
@@ -7268,16 +7268,38 @@ function renderSingleHostCard(host) {
       : lastReportInfo.statusClass === "host-last-report-dot--ok"
         ? "host-status-bar host-status-bar--report-ok"
         : "host-status-bar host-status-bar--report-unknown";
-  const statusBarLogicText = "Logik: gruen < 15 Min, orange 15-44 Min, rot ab 45 Min, grau wenn unbekannt.";
+  const statusBarLogicText = "Logik: gruen < 20 Min, orange 20-49 Min, rot ab 50 Min, grau wenn unbekannt.";
   const statusBarTitle = lastReportInfo.label.startsWith("Report vor")
     ? `Letzter ${lastReportInfo.label} | ${statusBarLogicText}`
     : `${lastReportInfo.title} | ${statusBarLogicText}`;
   const statusBarHtml = lastReportInfo.statusClass === "host-last-report-dot--ok"
     ? ""
     : `<div class="${statusBarClass}" title="${escapeHtml(statusBarTitle)}" aria-hidden="true"></div>`;
-  const alertSideBar = hasOpenAlerts
-    ? `<div class="host-alert-side-bar" title="${openAlertCount} Alerts | Logik: Balken nur sichtbar bei > 0 Alerts." aria-hidden="true"></div>`
-    : "";
+
+  const latestAgentVersion = asText(state.latestAgentRelease || "", "").trim();
+  const hostAgentVersion = asText(host.agent_version || "", "").trim();
+  const versionCompare = compareSemverLike(hostAgentVersion, latestAgentVersion);
+  const lagInfo = getAgentVersionLagInfo(latestAgentVersion, hostAgentVersion);
+  const lagSteps = Number(lagInfo?.steps || 0);
+
+  let versionSideBarClass = "host-version-side-bar host-version-side-bar--unknown";
+  let versionSideBarText = "Version nicht vergleichbar.";
+
+  if (versionCompare !== null) {
+    if (versionCompare >= 0) {
+      versionSideBarClass = "host-version-side-bar host-version-side-bar--ok";
+      versionSideBarText = "Agent-Version ist aktuell.";
+    } else if (lagInfo?.majorMinorDifferent || lagSteps >= 5) {
+      versionSideBarClass = "host-version-side-bar host-version-side-bar--critical";
+      versionSideBarText = "Agent-Version hat grossen Rueckstand (>= 5 oder Major/Minor abweichend).";
+    } else {
+      versionSideBarClass = "host-version-side-bar host-version-side-bar--warning";
+      versionSideBarText = "Agent-Version hat Rueckstand (>= 1).";
+    }
+  }
+
+  const versionSideBarTitle = `Version Host ${hostAgentVersion || "-"} vs Repo ${latestAgentVersion || "-"} | ${versionSideBarText}`;
+  const versionSideBarHtml = `<div class="${versionSideBarClass}" title="${escapeHtml(versionSideBarTitle)}" aria-hidden="true"></div>`;
   const customerTitleLine = customerNameValue
     ? `<div class="host-customer-title-line"><span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span><span class="host-detail-line">🏷️ ${escapeHtml(hostDesignationLabel)}</span></span></div>`
     : "";
@@ -7331,7 +7353,7 @@ function renderSingleHostCard(host) {
   return `
     <article class="${selectedClass}${envCardClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">
       ${statusBarHtml}
-      ${alertSideBar}
+      ${versionSideBarHtml}
       ${flagIcon}
       ${customerTitleLine}
       <span class="host-meta-line host-meta-line--primary host-meta-line--with-alert"><span class="host-meta-text">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(hostCardIp)}</span></span>
