@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.223 (19. Mai 2026)
+
+- **Windows Agent**: Zusätzlicher Suchpfad für Lizenzfile (B01.txt) hinzugefügt: `C:Program Files (x86)SAPSAP Business One ServerB1_SHRB01.txt`
 n### v1.6.222 (19. Mai 2026)
 
 - **DB-Backup Remote-502 Hardening**: Backup-Start auf asynchronen Hintergrundjob umgestellt (schnelle Start-Antwort, kein Proxy-Timeout), Dateidownload auf Chunk-Streaming umgestellt und Status/Fehler-Handling für Backup-Job verbessert.

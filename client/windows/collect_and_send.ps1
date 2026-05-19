@@ -1312,7 +1312,8 @@ function Get-SapLicenseInfo {
         $licensePaths = @(
             'C:\ANG\Lizenzen\B01.txt',
             'C:\ANG\Lizenz\B01.txt',
-            'C:\ANG\B01.txt'
+            'C:\ANG\B01.txt',
+            'C:\Program Files (x86)\SAP\SAP Business One Server\B1_SHR\B01.txt'
         )
         
         $licensePath = $null
