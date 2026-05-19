@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.240 (19. Mai 2026)
+
+- **SAP B1 UI**: Neues `sap.png` Logo im SAP-B1-Bereich als rechter Header-Akzent eingebunden (responsive, ohne Layout-Verzerrung).
+
 ### v1.6.239 (19. Mai 2026)
 
 - **SAP B1 Lizenzinfos UI**: Bereich "Lizenzinfos" startet jetzt standardmäßig zugeklappt und kann bei Bedarf aufgeklappt werden.

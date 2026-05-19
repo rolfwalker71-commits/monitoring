@@ -6587,6 +6587,29 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   border: 1px solid #93c5fd;
   background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
 }
+.sap-b1-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sap-b1-card-header h4 {
+  margin: 6px 0 4px;
+}
+.sap-b1-logo {
+  display: block;
+  width: auto;
+  max-width: 88px;
+  max-height: 24px;
+  object-fit: contain;
+  opacity: 0.95;
+}
+@media (max-width: 640px) {
+  .sap-b1-logo {
+    max-width: 72px;
+    max-height: 20px;
+  }
+}
 
 .sap-b1-grid {
   display: grid;
@@ -8068,6 +8091,9 @@ body[data-theme="dark"] .stat-chip {
   border-color: #2f4a6e;
 }
 
+body[data-theme="dark"] .sap-b1-logo {
+  opacity: 0.9;
+}
 body[data-theme="dark"] .stat-chip.live {
   background: #103225;
   color: #89ddb4;
