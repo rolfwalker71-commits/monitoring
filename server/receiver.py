@@ -8803,7 +8803,7 @@ def sap_logo_data_uri() -> str:
 
 def mail_footer_logos_html(sap_logo_uri: str, ang_logo_uri: str) -> str:
     sap_logo_html = (
-        f"<img src='{sap_logo_uri}' alt='SAP' width='84' style='display:inline-block;max-width:84px;height:auto;'>"
+        f"<img src='{sap_logo_uri}' alt='SAP' width='67' style='display:inline-block;max-width:67px;height:auto;'>"
         if sap_logo_uri
         else ""
     )
