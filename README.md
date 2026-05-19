@@ -551,6 +551,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.230 (19. Mai 2026)
+
+- **Windows SQL Query (SLDData.Extensions)**: JOIN von `LEFT JOIN` auf `INNER JOIN` umgestellt, damit nur AddOns mit passendem Deployment in den Payload übernommen werden.
+
 ### v1.6.229 (19. Mai 2026)
 
 - **README erweitert**: Payload-Snapshot-Rotation (Default 4), Standardpfade fuer Linux/Windows, Konfig-Overrides (`PAYLOAD_ARCHIVE_DIR`, `PAYLOAD_ARCHIVE_KEEP`) sowie bereits vorhandene SQL/HANA-Fehlerfelder im Payload dokumentiert.
