@@ -1032,6 +1032,77 @@ def parse_payload_json(payload_json: str) -> dict:
     return {}
 
 
+def _is_valid_ipv4(text: object) -> bool:
+    raw = str(text or "").strip()
+    if not raw:
+        return False
+    try:
+        socket.inet_aton(raw)
+    except OSError:
+        return False
+    # inet_aton accepts shortened forms; enforce dotted-quad only.
+    parts = raw.split(".")
+    if len(parts) != 4:
+        return False
+    try:
+        return all(0 <= int(part) <= 255 for part in parts)
+    except ValueError:
+        return False
+
+
+def _first_ipv4_from_value(value: object) -> str:
+    if value is None:
+        return ""
+
+    if isinstance(value, (list, tuple, set)):
+        for entry in value:
+            found = _first_ipv4_from_value(entry)
+            if found:
+                return found
+        return ""
+
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    if _is_valid_ipv4(raw):
+        return raw
+
+    for part in re.split(r"\s+", raw):
+        if _is_valid_ipv4(part):
+            return part
+    return ""
+
+
+def _resolve_std_nic_ipv4(payload: dict, fallback_primary_ip: str = "") -> str:
+    if not isinstance(payload, dict):
+        return _first_ipv4_from_value(fallback_primary_ip)
+
+    network = payload.get("network") if isinstance(payload.get("network"), dict) else {}
+    default_interface = str(network.get("default_interface", "") or "").strip()
+    interfaces = network.get("interfaces") if isinstance(network.get("interfaces"), list) else []
+
+    if default_interface and interfaces:
+        for iface in interfaces:
+            if not isinstance(iface, dict):
+                continue
+            if str(iface.get("name", "") or "") != default_interface:
+                continue
+            candidate = _first_ipv4_from_value([
+                iface.get("ipv4"),
+                iface.get("ip"),
+                iface.get("address"),
+                iface.get("addresses"),
+            ])
+            if candidate:
+                return candidate
+
+    from_primary = _first_ipv4_from_value(payload.get("primary_ip") or fallback_primary_ip)
+    if from_primary:
+        return from_primary
+
+    return _first_ipv4_from_value(payload.get("all_ips"))
+
+
 def normalize_sap_b1_version_map_entries(entries_raw: object) -> list[dict[str, str]]:
     if not isinstance(entries_raw, list):
         return []
@@ -10376,6 +10447,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "last_seen_utc": row[1],
                         "report_count": row[2],
                         "primary_ip": row[3] or "",
+                        "std_nic_ip": _resolve_std_nic_ipv4(latest_payload, str(row[3] or "")),
                         "agent_id": row[4] or "",
                         "agent_version": str(latest_payload.get("agent_version", "")),
                         "delivery_mode": str(latest_payload.get("delivery_mode", "live") or "live"),
@@ -10575,13 +10647,18 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 expire_old_agent_commands(conn)
                 host_settings_rows = conn.execute(
-                    "SELECT hostname, display_name_override FROM host_settings"
+                    """
+                    SELECT h.hostname, h.display_name_override, COALESCE(c.customer_name, '')
+                    FROM host_settings h
+                    LEFT JOIN customers c ON c.id = h.customer_id
+                    """
                 ).fetchall()
                 latest_reports = get_latest_report_rows_by_hostname(conn)
                 latest_commands = get_latest_update_command_rows(conn)
                 conn.commit()
 
             overrides = {str(row[0] or ""): str(row[1] or "") for row in host_settings_rows}
+            customer_names = {str(row[0] or ""): str(row[2] or "").strip() for row in host_settings_rows}
             hostnames = sorted(set(latest_reports.keys()) | set(latest_commands.keys()))
             hosts = []
             summary = {
@@ -10609,6 +10686,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     {
                         "hostname": hostname,
                         "display_name": effective_display_name(payload, overrides.get(hostname, ""), hostname),
+                        "customer_name": customer_names.get(hostname, ""),
                         "agent_version": str(payload.get("agent_version", "")),
                         "last_report_utc": str(latest_report.get("received_at_utc", "")),
                         "command_status": command_status,

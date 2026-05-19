@@ -910,10 +910,16 @@ function agentUpdateStatusSortWeight(status) {
 
 function renderAgentUpdateStatusTableRows(hosts) {
   if (!Array.isArray(hosts) || hosts.length === 0) {
-    return '<tr><td colspan="12" class="muted">Noch keine Host-Statusdaten vorhanden.</td></tr>';
+    return '<tr><td colspan="13" class="muted">Noch keine Host-Statusdaten vorhanden.</td></tr>';
   }
 
   const sorted = [...hosts].sort((a, b) => {
+    const aVersion = asText(a.agent_version || "");
+    const bVersion = asText(b.agent_version || "");
+    const versionCompare = compareSemverLike(bVersion, aVersion);
+    if (versionCompare !== null && versionCompare !== 0) return versionCompare;
+    if (aVersion !== bVersion) return bVersion.localeCompare(aVersion);
+
     const wa = agentUpdateStatusSortWeight(a.command_status);
     const wb = agentUpdateStatusSortWeight(b.command_status);
     if (wa !== wb) return wa - wb;
@@ -925,12 +931,15 @@ function renderAgentUpdateStatusTableRows(hosts) {
     return asText(a.display_name || a.hostname).localeCompare(asText(b.display_name || b.hostname));
   });
 
-  return sorted
-    .map((host) => {
+  const rows = [];
+  let currentVersionGroup = null;
+
+  for (const host of sorted) {
       const status = asText(host.command_status || "idle").toLowerCase();
       const displayName = asText(host.display_name || host.hostname);
       const hostname = asText(host.hostname || "-");
       const agentVersion = asText(host.agent_version || "-");
+      const customerName = asText(host.customer_name || "-") || "-";
       const lastReport = host.last_report_utc ? formatUtcPlus2(host.last_report_utc) : "-";
       const cmdCreated = host.command_created_at_utc ? formatUtcPlus2(host.command_created_at_utc) : "-";
       const cmdExecuted = host.command_executed_at_utc ? formatUtcPlus2(host.command_executed_at_utc) : "-";
@@ -945,7 +954,16 @@ function renderAgentUpdateStatusTableRows(hosts) {
         ? ` <button class="chip-btn" onclick="showHostUpdateLog(${escapeHtml(JSON.stringify(hostname))})" title="Update-Log anzeigen">Log</button>`
         : "";
 
-      return `
+      if (currentVersionGroup !== agentVersion) {
+        currentVersionGroup = agentVersion;
+        rows.push(`
+          <tr class="agent-update-admin-group-row">
+            <td colspan="13">Agent-Version ${escapeHtml(agentVersion)}</td>
+          </tr>
+        `);
+      }
+
+      rows.push(`
         <tr>
           <td><span class="agent-update-status-badge ${escapeHtml(status)}">${escapeHtml(updateStatusBadgeLabel(status))}</span></td>
           <td>
@@ -954,6 +972,7 @@ function renderAgentUpdateStatusTableRows(hosts) {
               <span class="agent-update-admin-hostname">${escapeHtml(hostname)}</span>
             </div>
           </td>
+          <td>${escapeHtml(customerName)}</td>
           <td>${escapeHtml(agentVersion)}</td>
           <td>${escapeHtml(lastReport)}</td>
           <td>${escapeHtml(cmdCreated)}</td>
@@ -965,9 +984,10 @@ function renderAgentUpdateStatusTableRows(hosts) {
           <td title="${escapeHtml(recurringHint)}">${escapeHtml(String(recurringHours))}</td>
           <td class="agent-update-admin-message">${escapeHtml(commandMessage)}${showLogBtn}</td>
         </tr>
-      `;
-    })
-    .join("");
+      `);
+  }
+
+  return rows.join("");
 }
 
 function getAgentVersionLagInfo(latestVersion, hostVersion) {
@@ -1067,7 +1087,7 @@ async function loadAgentUpdateStatus() {
     listEl.innerHTML = "";
   }
   if (tableBodyEl) {
-    tableBodyEl.innerHTML = '<tr><td colspan="12" class="muted">Lade Daten...</td></tr>';
+    tableBodyEl.innerHTML = '<tr><td colspan="13" class="muted">Lade Daten...</td></tr>';
   }
   if (lagSummaryEl) {
     lagSummaryEl.textContent = "Lade Versionsvergleich...";
@@ -1119,7 +1139,7 @@ async function loadAgentUpdateStatus() {
       listEl.innerHTML = "";
     }
     if (tableBodyEl) {
-      tableBodyEl.innerHTML = '<tr><td colspan="12" class="muted">Fehler beim Laden der Statusdaten.</td></tr>';
+      tableBodyEl.innerHTML = '<tr><td colspan="13" class="muted">Fehler beim Laden der Statusdaten.</td></tr>';
     }
     if (lagSummaryEl) {
       lagSummaryEl.textContent = `Versionsvergleich konnte nicht geladen werden: ${error.message}`;
@@ -7227,6 +7247,7 @@ function renderSingleHostCard(host) {
     ? `${customerNameValue} · ${customerProjectValue}`
     : customerNameValue;
   const shortHostname = hostname.split(".")[0];
+  const hostCardIp = asText(host.std_nic_ip || host.primary_ip);
   const hostDesignationLabel = cleanHostValue(displayName || shortHostname) || shortHostname;
   const valueChipStack = [
     sapFeaturePack
@@ -7313,7 +7334,7 @@ function renderSingleHostCard(host) {
       ${alertSideBar}
       ${flagIcon}
       ${customerTitleLine}
-      <span class="host-meta-line host-meta-line--primary host-meta-line--with-alert"><span class="host-meta-text">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(asText(host.primary_ip))}</span></span>
+      <span class="host-meta-line host-meta-line--primary host-meta-line--with-alert"><span class="host-meta-text">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(hostCardIp)}</span></span>
       ${mutedAlertsSection}
       ${osIcon}
     </article>

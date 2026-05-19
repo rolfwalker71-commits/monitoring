@@ -1203,6 +1203,14 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   word-break: break-word;
 }
 
+.agent-update-admin-group-row td {
+  background: #eef3fb;
+  color: #24456e;
+  font-weight: 700;
+  border-top: 1px solid #d1deef;
+  border-bottom: 1px solid #d1deef;
+}
+
 /* Keep context columns visible when horizontally scrolling. */
 .agent-update-admin-table thead th:nth-child(1),
 .agent-update-admin-table tbody td:nth-child(1) {
@@ -1344,6 +1352,13 @@ body[data-theme="dark"] .agent-update-admin-table tbody td:nth-child(2) {
 body[data-theme="dark"] .agent-update-admin-table tbody tr:nth-child(2n) td:nth-child(1),
 body[data-theme="dark"] .agent-update-admin-table tbody tr:nth-child(2n) td:nth-child(2) {
   background: #15243c;
+}
+
+body[data-theme="dark"] .agent-update-admin-group-row td {
+  background: #1b2d48;
+  color: #dbeafe;
+  border-top-color: #2b3b56;
+  border-bottom-color: #2b3b56;
 }
 
 .agent-update-admin-table th,
