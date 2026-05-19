@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.247 (19. Mai 2026)
+
+- **Mail-Templates (inkl. Testmails)**: Footer in allen HTML-Mailvorlagen erweitert: SAP-Logo jetzt links unten auf gleicher Höhe wie das bestehende ANG-Logo rechts unten (zentral über gemeinsame Footer-Helper-Funktion in `receiver.py`).
+
 ### v1.6.246 (19. Mai 2026)
 
 - **Header Logo Placement**: SAP-Logo ohne Überlappung direkt links neben den Darkmode-Schalter verschoben (kleiner Abstand, stabile Größe im Header).
