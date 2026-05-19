@@ -360,6 +360,73 @@ function Get-FirstAvailableTableScanResult {
     return [pscustomobject]$fallback
 }
 
+function Get-FirstAvailableExtensionsJoinScanResult {
+    param(
+        [string[]]$SqlServers,
+        [string[]]$Databases,
+        [string]$SqlUser,
+        [string]$SqlPassword
+    )
+
+    $errors = @()
+    foreach ($serverName in $SqlServers) {
+        foreach ($dbName in $Databases) {
+            $result = [ordered]@{
+                available = $false
+                sql_server = $serverName
+                database = $dbName
+                schema = 'dbo'
+                table = 'Extensions'
+                columns = @('AddOnName', 'Version')
+                column_count = 2
+                row_count = 0
+                error = ''
+                rows = @()
+            }
+
+            $conn = $null
+            try {
+                $conn = Get-SqlConnection -Server $serverName -Database $dbName -User $SqlUser -Password $SqlPassword
+                $conn.Open()
+
+                $query = 'SELECT AddOnName, Version FROM [SLDModel.SLDData].[dbo].[Extensions] LEFT JOIN [SLDModel.SLDData].[dbo].[ExtensionDeployments] ON [dbo].[Extensions].[Id] = [dbo].[ExtensionDeployments].[Id]'
+                $dt = Invoke-SqlTable -Connection $conn -Query $query -TimeoutSec 300
+                $rows = Convert-DataTableRowsToObjectArray -DataTable $dt
+                $normalizedRows = Normalize-ScanRows -Rows $rows
+
+                $result.available = $true
+                $result.rows = $normalizedRows
+                $result.row_count = @($normalizedRows).Count
+                return [pscustomobject]$result
+            } catch {
+                $msg = ($_.Exception.Message -replace '[\r\n]+', ' ')
+                $result.error = $msg
+                $errors += ("{0}/{1}: {2}" -f $serverName, $dbName, $msg)
+            } finally {
+                if ($conn) {
+                    $conn.Dispose()
+                }
+            }
+        }
+    }
+
+    $fallbackDb = if (@($Databases).Count -gt 0) { $Databases[0] } else { '' }
+    $fallbackServer = if (@($SqlServers).Count -gt 0) { $SqlServers[0] } else { '' }
+    $fallback = [ordered]@{
+        available = $false
+        sql_server = $fallbackServer
+        database = $fallbackDb
+        schema = 'dbo'
+        table = 'Extensions'
+        columns = @('AddOnName', 'Version')
+        column_count = 2
+        row_count = 0
+        error = if (@($errors).Count -gt 0) { ($errors -join ' | ') } else { 'No matching SQL server/database candidate available.' }
+        rows = @()
+    }
+    return [pscustomobject]$fallback
+}
+
 # Collector settings (temporary scan)
 $SqlServerCandidates = Get-SqlServerCandidates
 $HarvestSqlUser = if ($cfg.ContainsKey('HARVEST_SQL_USER') -and $cfg['HARVEST_SQL_USER']) { $cfg['HARVEST_SQL_USER'] } else { 'harvest' }
@@ -376,7 +443,7 @@ $extensionsDbCandidates = @('SLDModel.SLDData', 'SLDMODEL.SLDDATA')
 $sariPreferredColumns = @('AddOnId', 'NameSpace', 'AName', 'AddOnVer', 'ClientType', 'UpgChkSumX')
 $extensionsPreferredColumns = @('Id', 'Name', 'Version', 'Vendor', 'Type', 'Status', 'ClientType', 'LastUpdated')
 $sariResult = Get-FirstAvailableTableScanResult -SqlServers $SqlServerCandidates -Databases $sariDbCandidates -Schema 'dbo' -Table 'SARI' -PreferredColumns $sariPreferredColumns -SqlUser $HarvestSqlUser -SqlPassword $HarvestSqlPassword
-$extensionsResult = Get-FirstAvailableTableScanResult -SqlServers $SqlServerCandidates -Databases $extensionsDbCandidates -Schema 'dbo' -Table 'Extensions' -PreferredColumns $extensionsPreferredColumns -SqlUser $HarvestSqlUser -SqlPassword $HarvestSqlPassword
+$extensionsResult = Get-FirstAvailableExtensionsJoinScanResult -SqlServers $SqlServerCandidates -Databases $extensionsDbCandidates -SqlUser $HarvestSqlUser -SqlPassword $HarvestSqlPassword
 
 $payloadObj = [ordered]@{
     agent_id = $agentId

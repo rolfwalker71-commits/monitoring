@@ -696,7 +696,8 @@ sudo /opt/monitoring-agent/collect_and_send.sh --help</pre>
 HDB version
 
 # HANA AddOns (Lightweight)
-SELECT "NAME", "Version" FROM "SLDDATA"."EXTENSIONS";
+SELECT "NAME", "Version" FROM "SLDDATA"."EXTENSIONS"
+LEFT JOIN "SLDDATA"."EXTENSIONDEPLOYMENTS" ON "SLDDATA"."EXTENSIONDEPLOYMENTS"."ID" = "SLDDATA"."EXTENSIONS"."ID";
 
 # HANA AddOns (Legacy)
 SELECT "AName", "AddOnVer" FROM "SBOCOMMON"."SARI";

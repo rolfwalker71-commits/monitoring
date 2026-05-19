@@ -682,9 +682,9 @@ collect_hana_addons_json() {
 
     if [[ "$query_group" == "lightweight" ]]; then
       queries=(
-        'SELECT "NAME", "Version" FROM "SLDDATA"."EXTENSIONS";'
-        'SELECT "NAME", "VERSION" FROM "SLDDATA"."EXTENSIONS";'
-        'SELECT NAME, VERSION FROM "SLDDATA"."EXTENSIONS";'
+        'SELECT "NAME", "Version" FROM "SLDDATA"."EXTENSIONS" LEFT JOIN "SLDDATA"."EXTENSIONDEPLOYMENTS" ON "SLDDATA"."EXTENSIONDEPLOYMENTS"."ID" = "SLDDATA"."EXTENSIONS"."ID";'
+        'SELECT "NAME", "VERSION" FROM "SLDDATA"."EXTENSIONS" LEFT JOIN "SLDDATA"."EXTENSIONDEPLOYMENTS" ON "SLDDATA"."EXTENSIONDEPLOYMENTS"."ID" = "SLDDATA"."EXTENSIONS"."ID";'
+        'SELECT NAME, VERSION FROM "SLDDATA"."EXTENSIONS" LEFT JOIN "SLDDATA"."EXTENSIONDEPLOYMENTS" ON "SLDDATA"."EXTENSIONDEPLOYMENTS"."ID" = "SLDDATA"."EXTENSIONS"."ID";'
       )
     else
       queries=(
@@ -780,7 +780,7 @@ collect_hana_addons_json() {
     return
   fi
 
-  # Try Lightweight query: SELECT "NAME", "Version" FROM "SLDDATA"."EXTENSIONS"
+  # Try Lightweight query against SLDDATA extensions with deployment join.
   local lightweight_output=""
   local lightweight_error=""
   lightweight_output="$(run_hdbsql_query_candidates "lightweight")"

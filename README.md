@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.225 (19. Mai 2026)
+
+- **Extensions Query Update (Windows + Linux)**: Auslesen der AddOn-Infos aus `SLDData.Extensions` auf Join mit `ExtensionDeployments` umgestellt; in beiden Windows-Skripten, im Linux-Collector und in der Deployment-Doku konsistent nachgezogen.
+
 n### v1.6.224 (19. Mai 2026)
 
 - **Windows Agent**: Lizenzfile-Suchpfade korrigiert und erweitert: `C:\Program Files (x86)\SAP\SAP Business One Server\B1_SHR\Lizenz\B01.txt` und `C:\Program Files (x86)\SAP\SAP Business One Server\B1_SHR\Lizenzen\B01.txt` hinzugefügt.
