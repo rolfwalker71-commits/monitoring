@@ -4,6 +4,8 @@ set -euo pipefail
 CONFIG_FILE="${CONFIG_FILE:-/etc/monitoring-agent/agent.conf}"
 AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-/opt/monitoring-agent/AGENT_VERSION}"
 AGENT_QUEUE_DIR="${AGENT_QUEUE_DIR:-/var/lib/monitoring-agent/queue}"
+PAYLOAD_ARCHIVE_DIR="${PAYLOAD_ARCHIVE_DIR:-/var/lib/monitoring-agent/payload-history}"
+PAYLOAD_ARCHIVE_KEEP="${PAYLOAD_ARCHIVE_KEEP:-4}"
 COLLECT_LOCK_FILE="${COLLECT_LOCK_FILE:-/var/lib/monitoring-agent/collect.lock}"
 PRIORITY_UPDATE_CHECK_MINUTES="${PRIORITY_UPDATE_CHECK_MINUTES:-60}"
 PRIORITY_UPDATE_STATE_FILE="${PRIORITY_UPDATE_STATE_FILE:-/var/lib/monitoring-agent/last_priority_update_check}"
@@ -101,6 +103,7 @@ fi
 TLS_INSECURE="${TLS_INSECURE:-0}"
 
 mkdir -p "$AGENT_QUEUE_DIR"
+mkdir -p "$PAYLOAD_ARCHIVE_DIR" 2>/dev/null || true
 
 if command -v flock >/dev/null 2>&1; then
   exec 9>"$COLLECT_LOCK_FILE"
@@ -141,6 +144,30 @@ json_number_or_null() {
     printf '%s' "$value"
   else
     printf 'null'
+  fi
+}
+
+backup_payload_snapshot() {
+  local payload_data="$1"
+  local keep_count file_path
+
+  keep_count="$PAYLOAD_ARCHIVE_KEEP"
+  [[ "$keep_count" =~ ^[0-9]+$ ]] || keep_count=4
+  (( keep_count >= 0 )) || keep_count=4
+
+  mkdir -p "$PAYLOAD_ARCHIVE_DIR" 2>/dev/null || return 0
+
+  file_path="$PAYLOAD_ARCHIVE_DIR/payload-$(date -u +"%Y%m%dT%H%M%SZ")-${RANDOM}.json"
+  if ! printf '%s\n' "$payload_data" > "$file_path"; then
+    return 0
+  fi
+
+  mapfile -t __payload_files < <(find "$PAYLOAD_ARCHIVE_DIR" -maxdepth 1 -type f -name 'payload-*.json' -printf '%T@ %p\n' 2>/dev/null | sort -nr | awk '{ $1=""; sub(/^ /,""); print }')
+  if (( ${#__payload_files[@]} > keep_count )); then
+    local i
+    for (( i=keep_count; i<${#__payload_files[@]}; i++ )); do
+      rm -f -- "${__payload_files[$i]}"
+    done
   fi
 }
 
@@ -2390,6 +2417,8 @@ post_payload() {
   local http_code="000"
   local time_total="0"
   local time_connect="0"
+
+  backup_payload_snapshot "$payload_data"
 
   curl_args=(
     --silent

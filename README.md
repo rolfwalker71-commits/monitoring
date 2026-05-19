@@ -523,6 +523,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.228 (19. Mai 2026)
+
+- **Payload-Sicherung vor Versand**: Agenten speichern vor jedem Report-POST automatisch einen lokalen Payload-Snapshot und behalten standardmäßig die letzten 4 Dateien (ältere werden rotiert) für nachträgliche Fehleranalyse.
+
 ### v1.6.227 (19. Mai 2026)
 
 - **Admin Login-Audit UI**: Web-Login-Liste im Admin-Bereich als auf- und zuklappbaren Bereich umgesetzt; standardmäßig zugeklappt.

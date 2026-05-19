@@ -18,6 +18,8 @@ $ErrorActionPreference = 'Stop'
 $IC = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile = if ($env:CONFIG_FILE) { $env:CONFIG_FILE } else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
+$PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
+$PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
 $EmbeddedAgentVersion = '1.4.87'
 
 if (-not (Test-Path $ConfigFile)) {
@@ -67,6 +69,29 @@ function Invoke-ServerJsonPost {
     $wc.Headers.Add('Content-Type', 'application/json; charset=utf-8')
     if ($ApiKey) { $wc.Headers.Add('X-Api-Key', $ApiKey) }
     return $wc.UploadString($Uri, 'POST', $Body)
+}
+
+function Save-PayloadSnapshot {
+    param([string]$Body)
+
+    try {
+        if ($PayloadArchiveKeep -lt 0) {
+            return
+        }
+
+        [System.IO.Directory]::CreateDirectory($PayloadArchiveDir) | Out-Null
+        $stamp = [System.DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ', $IC)
+        $path = Join-Path $PayloadArchiveDir ("payload-{0}-{1}.json" -f $stamp, (Get-Random -Maximum 10000))
+        [System.IO.File]::WriteAllText($path, $Body, [System.Text.Encoding]::UTF8)
+
+        $files = @(Get-ChildItem -Path $PayloadArchiveDir -Filter 'payload-*.json' -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTimeUtc -Descending)
+        if ($files.Count -gt $PayloadArchiveKeep) {
+            $files | Select-Object -Skip $PayloadArchiveKeep | Remove-Item -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+        Write-Warning ("Payload snapshot could not be written: " + $_.Exception.Message)
+    }
 }
 
 function Get-SqlConnection {
@@ -466,6 +491,7 @@ $payloadJson = $payloadObj | ConvertTo-Json -Depth 20 -Compress
 $uri = ($ServerUrl.TrimEnd('/')) + '/api/v1/agent-report'
 
 try {
+    Save-PayloadSnapshot -Body $payloadJson
     Invoke-ServerJsonPost -Uri $uri -Body $payloadJson | Out-Null
     Write-Host "SAP table scan sent. $($sariResult.sql_server)/$($sariResult.database).dbo.SARI rows: $($sariResult.row_count), $($extensionsResult.sql_server)/$($extensionsResult.database).dbo.Extensions rows: $($extensionsResult.row_count)"
     if ($sariResult.error) {

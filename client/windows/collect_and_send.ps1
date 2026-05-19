@@ -44,6 +44,8 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
+$PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
+$PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
 $EmbeddedAgentVersion = '1.4.87'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
@@ -674,8 +676,32 @@ function Get-SapB1PayloadBlock {
 }
 
 function Send-Payload([string]$body) {
+    Save-PayloadSnapshot -Body $body
     $uri = ($ServerUrl.TrimEnd('/')) + '/api/v1/agent-report'
     Invoke-ServerJsonPost -Uri $uri -Body $body | Out-Null
+}
+
+function Save-PayloadSnapshot {
+    param([string]$Body)
+
+    try {
+        if ($PayloadArchiveKeep -lt 0) {
+            return
+        }
+
+        [System.IO.Directory]::CreateDirectory($PayloadArchiveDir) | Out-Null
+        $stamp = [System.DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ', $IC)
+        $path = Join-Path $PayloadArchiveDir ("payload-{0}-{1}.json" -f $stamp, (Get-Random -Maximum 10000))
+        [System.IO.File]::WriteAllText($path, $Body, [System.Text.Encoding]::UTF8)
+
+        $files = @(Get-ChildItem -Path $PayloadArchiveDir -Filter 'payload-*.json' -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTimeUtc -Descending)
+        if ($files.Count -gt $PayloadArchiveKeep) {
+            $files | Select-Object -Skip $PayloadArchiveKeep | Remove-Item -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+        Write-Warning ("Payload snapshot could not be written: " + $_.Exception.Message)
+    }
 }
 
 function Invoke-ServerJsonPost {
