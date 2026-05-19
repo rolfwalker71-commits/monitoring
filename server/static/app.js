@@ -5430,21 +5430,21 @@ function renderSapB1ExtensionsSection(payload) {
 
   return `
     ${showSql ? `
-    <details class="sap-b1-raw-details sap-b1-sub-details">
+    <details class="sap-b1-raw-details sap-b1-sub-details" open>
       <summary class="sap-b1-raw-summary">Lightweight Extensions (SQL) (${extCount})</summary>
       ${extContent}
     </details>
-    <details class="sap-b1-raw-details sap-b1-sub-details">
+    <details class="sap-b1-raw-details sap-b1-sub-details" open>
       <summary class="sap-b1-raw-summary">Legacy AddOns (SQL) (${sariCount})</summary>
       ${sariContent}
     </details>
     ` : ""}
     ${showHana && hanaAddons ? `
-    <details class="sap-b1-raw-details sap-b1-sub-details">
+    <details class="sap-b1-raw-details sap-b1-sub-details" open>
       <summary class="sap-b1-raw-summary">Lightweight Extensions (HANA) (${hanaLightweightCount})</summary>
       ${hanaLightweightContent}
     </details>
-    <details class="sap-b1-raw-details sap-b1-sub-details">
+    <details class="sap-b1-raw-details sap-b1-sub-details" open>
       <summary class="sap-b1-raw-summary">Legacy AddOns (HANA) (${hanaLegacyCount})</summary>
       ${hanaLegacyContent}
     </details>
@@ -5603,8 +5603,6 @@ function renderSapB1CombinedCard(payload) {
     <section class="detail-card sap-b1-card sap-b1-combined-card">
       <h4>SAP B1</h4>
 
-      ${renderSapLicenseInfoSection(payload)}
-
       <details class="sap-b1-raw-details" open>
         <summary class="sap-b1-raw-summary">AddOns</summary>
         ${renderSapB1ExtensionsSection(payload)}
@@ -5633,6 +5631,8 @@ function renderSapB1CombinedCard(payload) {
           ${renderHarvestStatusSection(payload)}
         </details>
         ` : ""}
+
+      ${renderSapLicenseInfoSection(payload)}
 
       <details class="sap-b1-raw-details">
         <summary class="sap-b1-raw-summary">
