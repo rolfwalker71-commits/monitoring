@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.241 (19. Mai 2026)
+
+- **SAP B1 UI Asset**: `server/static/icons/sap.png` versioniert und ausgeliefert, damit das im SAP-B1-Header eingebundene Logo zuverlässig sichtbar ist.
+
 ### v1.6.240 (19. Mai 2026)
 
 - **SAP B1 UI**: Neues `sap.png` Logo im SAP-B1-Bereich als rechter Header-Akzent eingebunden (responsive, ohne Layout-Verzerrung).
