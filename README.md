@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.248 (19. Mai 2026)
+
+- **Header SAP-Logo Größe**: SAP-Logo im Header um ca. 30% vergrößert und gleichzeitig per Max-Height begrenzt, sodass es optisch nicht höher als das ANG-Logo wird.
+
 ### v1.6.247 (19. Mai 2026)
 
 - **Mail-Templates (inkl. Testmails)**: Footer in allen HTML-Mailvorlagen erweitert: SAP-Logo jetzt links unten auf gleicher Höhe wie das bestehende ANG-Logo rechts unten (zentral über gemeinsame Footer-Helper-Funktion in `receiver.py`).

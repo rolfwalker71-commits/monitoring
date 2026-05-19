@@ -293,9 +293,9 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .brand-center-sap-logo {
   display: block;
-  width: min(128px, 12vw);
+  width: min(166px, 15.6vw);
   max-width: 100%;
-  max-height: 42px;
+  max-height: 54px;
   object-fit: contain;
   opacity: 0.95;
 }
@@ -6336,8 +6336,8 @@ body[data-theme="dark"] .report-license-meta {
   }
 
   .brand-center-sap-logo {
-    width: min(96px, 24vw);
-    max-height: 34px;
+    width: min(125px, 31vw);
+    max-height: 44px;
   }
 
   .brand-text h1 {
