@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.244 (19. Mai 2026)
+
+- **Header Logo Position**: SAP-Logo aus der Report-Navigation entfernt und im oberen Header zentriert zwischen Titelbereich links und Darkmode-Bereich rechts platziert; Größe maximal responsiv ohne Layoutbruch.
+
 ### v1.6.243 (19. Mai 2026)
 
 - **SAP B1 Logo Position**: Logo aus dem SAP-B1-Card-Header entfernt und in der Report-Navigation (bei Zurück/Vor) zentriert zwischen linkem Steuerblock und rechter Datumsinfo platziert, mit responsiver Maximalgröße ohne Layoutbruch.
