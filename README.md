@@ -551,6 +551,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.231 (19. Mai 2026)
+
+- **HANA AddOns Query**: Lightweight-Abfrage auf `INNER JOIN` umgestellt (`SLDDATA.EXTENSIONS` ↔ `SLDDATA.EXTENSIONDEPLOYMENTS`), damit nur Datensätze mit passendem Deployment geliefert werden. Deployment-Guide entsprechend aktualisiert.
+
 ### v1.6.230 (19. Mai 2026)
 
 - **Windows SQL Query (SLDData.Extensions)**: JOIN von `LEFT JOIN` auf `INNER JOIN` umgestellt, damit nur AddOns mit passendem Deployment in den Payload übernommen werden.
