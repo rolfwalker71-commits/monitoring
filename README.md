@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.239 (19. Mai 2026)
+
+- **SAP B1 Lizenzinfos UI**: Bereich "Lizenzinfos" startet jetzt standardmäßig zugeklappt und kann bei Bedarf aufgeklappt werden.
+
 ### v1.6.231 (19. Mai 2026)
 
 - **HANA AddOns Query**: Lightweight-Abfrage auf `INNER JOIN` umgestellt (`SLDDATA.EXTENSIONS` ↔ `SLDDATA.EXTENSIONDEPLOYMENTS`), damit nur Datensätze mit passendem Deployment geliefert werden. Deployment-Guide entsprechend aktualisiert.

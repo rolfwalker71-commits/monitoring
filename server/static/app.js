@@ -5461,7 +5461,7 @@ function renderSapLicenseInfoSection(payload) {
   `;
 
   return `
-    <details class="sap-b1-raw-details" open>
+    <details class="sap-b1-raw-details">
       <summary class="sap-b1-raw-summary">Lizenzinfos</summary>
       <div class="sap-license-list-wrap">
         ${locationHintHtml}
