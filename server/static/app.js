@@ -7272,9 +7272,7 @@ function renderSingleHostCard(host) {
   const statusBarTitle = lastReportInfo.label.startsWith("Report vor")
     ? `Letzter ${lastReportInfo.label} | ${statusBarLogicText}`
     : `${lastReportInfo.title} | ${statusBarLogicText}`;
-  const statusBarHtml = lastReportInfo.statusClass === "host-last-report-dot--ok"
-    ? ""
-    : `<div class="${statusBarClass}" title="${escapeHtml(statusBarTitle)}" aria-hidden="true"></div>`;
+  const statusBarHtml = `<div class="${statusBarClass}" title="${escapeHtml(statusBarTitle)}" aria-hidden="true"></div>`;
 
   const latestAgentVersion = asText(state.latestAgentRelease || "", "").trim();
   const hostAgentVersion = asText(host.agent_version || "", "").trim();
