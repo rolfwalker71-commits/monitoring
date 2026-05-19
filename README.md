@@ -108,6 +108,9 @@ Ja: Query- und Verbindungsfehler werden bereits im Payload mitgegeben und könne
   - `sap_business_one.table_scan.sbo_common_sari.error`
   - `sap_business_one.table_scan.sld_extensions.error`
 
+**Extensions-Abfrage (corrected):**  
+Die Lightweight Extensions-Abfrage nutzt die korrekte Join-Bedingung `ON ed.[Extension_Id] = e.[Id]` (Windows) bzw. `"EXTENSIONDEPLOYMENTS"."EXTENSION_ID" = "EXTENSIONS"."ID"` (Linux/HANA), um nur aktiv deployete Extensions zu zeigen – die übrigen in der Extensions-Tabelle sind historisch und nicht mehr in Verwendung.
+
 ### Server-Deploy bei privatem Repo
 
 Das Agent-Update selbst bleibt funktionsfaehig, weil Agenten nur noch von deinem Monitoring-Server unter `/updates` laden. Wenn das GitHub-Repo privat ist, betrifft das nur den Server-Deploy per `pull-server-only.sh`.
