@@ -80,6 +80,34 @@ Der Wrapper zieht die aktuellen Windows-Skripte von `/updates`, repariert eine b
 
 Agents prüfen selbständig (alle ~6 Stunden, plus bei jedem Sammellauf wenn die Version veraltet ist) die vom Server bereitgestellten Pakete unter `/updates` und aktualisieren sich automatisch. Die aktuelle Agent-Version steht in `AGENT_VERSION`.
 
+### Payload-Sicherung vor Versand
+
+Vor jedem `POST /api/v1/agent-report` speichert der Agent den ausgehenden JSON-Payload lokal als Snapshot.
+
+- Rotation: standardmäßig werden die letzten **4** Snapshots behalten, ältere Dateien werden automatisch gelöscht.
+- Linux-Pfad (Default): `/var/lib/monitoring-agent/payload-history`
+- Windows-Pfad (Default): `C:\ProgramData\monitoring-agent\payload-history`
+- Konfigurierbar über Umgebungsvariablen:
+  - `PAYLOAD_ARCHIVE_DIR` (Zielordner)
+  - `PAYLOAD_ARCHIVE_KEEP` (Anzahl zu behaltender Snapshots)
+
+Damit kann nachträglich exakt geprüft werden, was der Agent zu einem Zeitpunkt gesendet hat (z. B. bei fehlenden SQL-/HANA-Daten).
+
+### Query-Fehler im Payload (bereits vorhanden)
+
+Ja: Query- und Verbindungsfehler werden bereits im Payload mitgegeben und können in den Snapshot-Dateien analysiert werden.
+
+- Windows Hauptagent (`sap_business_one`):
+  - `harvest_status.error`
+  - `extensions.error` (aus `extensions_error`)
+  - `sari_addons.error` (aus `sari_addons_error`)
+- Linux Agent:
+  - `hana_addons.error` und `hana_addons.reason` (z. B. `auth_failed`, `query_failed`, `partial_result`)
+  - `hana_db_info.error` und `hana_db_info.reason`
+- Windows SAP-Scan (`collect_and_scan_sap_tables.ps1`):
+  - `sap_business_one.table_scan.sbo_common_sari.error`
+  - `sap_business_one.table_scan.sld_extensions.error`
+
 ### Server-Deploy bei privatem Repo
 
 Das Agent-Update selbst bleibt funktionsfaehig, weil Agenten nur noch von deinem Monitoring-Server unter `/updates` laden. Wenn das GitHub-Repo privat ist, betrifft das nur den Server-Deploy per `pull-server-only.sh`.
@@ -523,6 +551,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.229 (19. Mai 2026)
+
+- **README erweitert**: Payload-Snapshot-Rotation (Default 4), Standardpfade fuer Linux/Windows, Konfig-Overrides (`PAYLOAD_ARCHIVE_DIR`, `PAYLOAD_ARCHIVE_KEEP`) sowie bereits vorhandene SQL/HANA-Fehlerfelder im Payload dokumentiert.
+
 ### v1.6.228 (19. Mai 2026)
 
 - **Payload-Sicherung vor Versand**: Agenten speichern vor jedem Report-POST automatisch einen lokalen Payload-Snapshot und behalten standardmäßig die letzten 4 Dateien (ältere werden rotiert) für nachträgliche Fehleranalyse.
