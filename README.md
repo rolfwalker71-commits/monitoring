@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.242 (19. Mai 2026)
+
+- **Deploy (pull-server-only)**: `server/static/icons/sap.png` zur Download-Dateiliste hinzugefügt, damit das SAP-B1-Logo bei Server-Updates zuverlässig mitgezogen wird.
+
 ### v1.6.241 (19. Mai 2026)
 
 - **SAP B1 UI Asset**: `server/static/icons/sap.png` versioniert und ausgeliefert, damit das im SAP-B1-Header eingebundene Logo zuverlässig sichtbar ist.
