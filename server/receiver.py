@@ -1113,23 +1113,42 @@ def _create_database_backup_job() -> dict:
     backup_filename = f"monitoring-backup-{timestamp}.db"
     backup_path = BACKUP_TEMP_DIR / f"{job_id}.db"
 
-    try:
-        # Use SQLite's online backup API — WAL-aware and consistent even under concurrent writes
-        with sqlite3.connect(DB_PATH) as src_conn:
-            with sqlite3.connect(backup_path) as dst_conn:
-                src_conn.backup(dst_conn)
-    except (OSError, sqlite3.Error) as exc:
-        return {"status": "error", "error": f"backup copy failed: {exc}"}
-
+    created_at = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
     with _backup_jobs_lock:
         _backup_jobs[job_id] = {
-            "status": "ready",
-            "created_at_utc": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "status": "running",
+            "created_at_utc": created_at,
+            "updated_at_utc": created_at,
             "file_path": str(backup_path),
             "filename": backup_filename,
         }
 
-    return {"status": "ready", "job_id": job_id, "filename": backup_filename}
+    def _run_job() -> None:
+        try:
+            # Use SQLite's online backup API - WAL-aware and consistent under concurrent writes.
+            with sqlite3.connect(DB_PATH) as src_conn:
+                with sqlite3.connect(backup_path) as dst_conn:
+                    src_conn.backup(dst_conn)
+            with _backup_jobs_lock:
+                job = _backup_jobs.get(job_id)
+                if job is not None:
+                    job["status"] = "ready"
+                    job["updated_at_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        except (OSError, sqlite3.Error) as exc:
+            with _backup_jobs_lock:
+                job = _backup_jobs.get(job_id)
+                if job is not None:
+                    job["status"] = "error"
+                    job["error"] = f"backup copy failed: {exc}"
+                    job["updated_at_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            if backup_path.exists():
+                try:
+                    backup_path.unlink()
+                except OSError:
+                    pass
+
+    threading.Thread(target=_run_job, daemon=True).start()
+    return {"status": "started", "job_id": job_id, "filename": backup_filename}
 
 
 def _restore_database_from_bytes(raw_bytes: bytes) -> tuple[bool, str]:
@@ -9562,16 +9581,25 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self.send_error(HTTPStatus.NOT_FOUND, "File not found")
             return False
 
-        content = path.read_bytes()
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(content)))
-        if extra_headers:
-            for key, value in extra_headers.items():
-                self.send_header(key, value)
-        self.end_headers()
-        self.wfile.write(content)
-        return True
+        try:
+            content_length = path.stat().st_size
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(content_length))
+            if extra_headers:
+                for key, value in extra_headers.items():
+                    self.send_header(key, value)
+            self.end_headers()
+
+            with path.open("rb") as handle:
+                while True:
+                    chunk = handle.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+            return True
+        except OSError:
+            return False
 
     def _send_index_with_asset_version(self) -> None:
         path = STATIC_DIR / "index.html"
@@ -11236,7 +11264,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not self._require_admin_session():
                 return
             created = _create_database_backup_job()
-            if created.get("status") != "ready":
+            if created.get("status") == "error":
                 self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(created.get("error") or "backup start failed")})
                 return
             self._send_json(
@@ -11269,6 +11297,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "job_id": job_id,
                     "status": str(job.get("status") or "error"),
                     "filename": str(job.get("filename") or ""),
+                    "error": str(job.get("error") or ""),
                 },
             )
             return
@@ -11284,8 +11313,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             _cleanup_backup_jobs()
             with _backup_jobs_lock:
                 job = _backup_jobs.get(job_id)
+                if job and str(job.get("status") or "") == "ready":
+                    job = _backup_jobs.pop(job_id, None)
             if not job:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup job not found"})
+                return
+            if str(job.get("status") or "") != "ready":
+                if str(job.get("status") or "") == "error":
+                    self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(job.get("error") or "database backup failed")})
+                else:
+                    self._send_json(HTTPStatus.CONFLICT, {"error": "backup not ready yet"})
                 return
             file_path = Path(str(job.get("file_path") or ""))
             filename = str(job.get("filename") or "monitoring-backup.db")
@@ -11297,16 +11334,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "Cache-Control": "no-store",
                 },
             )
-            if sent:
-                with _backup_jobs_lock:
-                    removed_job = _backup_jobs.pop(job_id, None)
-                if removed_job:
-                    removed_path = Path(str(removed_job.get("file_path", "") or ""))
-                    if removed_path.exists():
-                        try:
-                            removed_path.unlink()
-                        except OSError:
-                            pass
+            if file_path.exists():
+                try:
+                    file_path.unlink()
+                except OSError:
+                    pass
+            if not sent:
+                return
             return
 
         if parsed.path == "/api/v1/backup/database":
