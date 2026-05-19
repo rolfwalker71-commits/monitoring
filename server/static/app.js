@@ -5572,8 +5572,8 @@ function renderSapB1CombinedCard(payload) {
     .join("\n");
   const sapB1RawOutputDetails = state.isAdmin
     ? `
-      <details class="sap-b1-raw-details">
-        <summary class="sap-b1-raw-summary">SAP B1 Setup Roh-Output</summary>
+      <details class="sap-b1-raw-details sap-b1-admin-only-subsection">
+        <summary class="sap-b1-raw-summary">SAP B1 Setup Roh-Output <span class="sap-b1-admin-badge">Admin</span></summary>
         ${renderTerminalViewer(rawOutput || "-")}
       </details>
       `
@@ -5661,8 +5661,8 @@ function renderSapB1SystemInfoCard(payload) {
   }
   const sapB1RawOutputDetails = state.isAdmin
     ? `
-        <details class="sap-b1-raw-details">
-          <summary class="sap-b1-raw-summary">SAP B1 Setup Roh-Output</summary>
+        <details class="sap-b1-raw-details sap-b1-admin-only-subsection">
+          <summary class="sap-b1-raw-summary">SAP B1 Setup Roh-Output <span class="sap-b1-admin-badge">Admin</span></summary>
           ${renderTerminalViewer(rawOutput || "-")}
         </details>
       `

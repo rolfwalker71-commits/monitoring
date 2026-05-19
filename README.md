@@ -523,6 +523,9 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+n### v1.6.218 (19. Mai 2026)
+
+- **Admin-Markierung SAP B1**: Admin-exklusive Unterpunkte bleiben für Admins sichtbar und werden nun optisch markiert (Badge + Akzent), während sie für Nicht-Admins weiterhin komplett ausgeblendet sind.
 n### v1.6.217 (19. Mai 2026)
 
 - **Admin-Sichtbarkeit SAP B1**: Admin-Unterpunkt 'SAP B1 Setup Roh-Output' wird für Nicht-Admins nun vollständig ausgeblendet (kein Hinweistext, kein Menüpunkt).
