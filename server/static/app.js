@@ -177,6 +177,8 @@ const state = {
   sapLicenseTypeMapDirty: false,
   sapB1VmapBeforeUnloadWired: false,
   backupAutomationLoaded: false,
+  // Add a new user type "readOnly" to the state
+  userType: "default", // Possible values: "default", "readOnly", "admin"
 };
 
 function hasSapB1VersionMapUnsavedChanges() {

@@ -369,6 +369,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.274 | 20.05.2026 | Add customer management UI (edit/delete customers); prepare read-only user type with restricted permissions |
 | 1.6.273 | 20.05.2026 | System-Overview table: add third-column (CPU) dropdown for translated SAP B1 license types with counts (from `sap_license.focus_license_types`) |
 | 1.6.272 | 20.05.2026 | Host overview cards: fix 🪪 badge alignment to stay consistently at far right in line 2 |
 | 1.6.271 | 20.05.2026 | Host overview cards: show 🪪 on the right side of line 2 when SAP license info is present in latest payload |
@@ -855,70 +856,75 @@ n### v1.6.185 (18. Mai 2026)
 
 ### v1.6.169 (18. Mai 2026)
 
-- **Hostkarte Typografie**: Kundenname in der Hostkarte nochmals deutlich vergroessert, damit er visuell klarer dominiert.
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.168 (18. Mai 2026)
 
-- **Hostkarten CSS Hotfix**: Defekten Chip-Style-Block (fehlende Klammer) korrigiert, der zu kaputtem Karten-Layout und falsch dargestellten Icons fuehrte.
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.167 (18. Mai 2026)
 
-- **Hostkarten Typografie**: Kundenname in der Hostkarte weiter vergroessert; die drei unteren SAP/HANA/SID-Chips kleiner und mit weniger fetter Schrift dargestellt.
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.166 (18. Mai 2026)
 
-- **Inaktive Hosts Anzeige**: Platzhalterwerte wie `-`/`--` werden beim Kundennamen nicht mehr vor den Hostnamen gesetzt.
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.165 (18. Mai 2026)
 
-- **Inaktive Hosts**: Kundenname wird in der Inaktive-Hosts-Karte jetzt vor dem Hostnamen angezeigt (z. B. `Kunde · Anzeigename`).
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.164 (18. Mai 2026)
 
-- **DB Changelog UI**: Bei HANA-Eintraegen in der Aktionsspalte wird jetzt nur noch `erstellt/geloescht` mit Emoji gezeigt (ohne das Wort `Schema`). Zusaetzlich wurde Spalte 1 verschmälert, damit Spalte 2 weiter nach rechts rueckt.
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.163 (18. Mai 2026)
 
-- **Startup-Rebuild Stabilitaet**: Changelog-Backfill verarbeitet Reports jetzt streamend statt mit `fetchall` und schreibt zusaetzlich in Intervallen Zwischen-Commits, um OOM-Spitzen beim 18-Tage-Neuaufbau zu vermeiden.
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.162 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.161 (18. Mai 2026)
 
-- **Changelog Rebuild beim Start**: Optionaler Einmal-Trigger fuer einen Greenfield-Neuaufbau aus den letzten 15 Tagen eingebaut. Dabei werden die bestehenden Changelog-Tabellen geloescht und aus den Reports neu aufgebaut.
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.160 (18. Mai 2026)
 
-- **Installer Jitter**: Initialer Install-Selbsttest laeuft jetzt ohne Jitter (`collect_and_send --no-jitter`), damit die Installation nicht bis zu 5 Minuten verzoegert wird. Reguläre geplante Laeufe behalten Jitter bei.
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.159 (18. Mai 2026)
 
-- **Hostkarte Typografie**: Chip-Schrift auf normal (nicht fett) umgestellt und Kundenname nochmals um +2px vergrößert.
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.158 (18. Mai 2026)
 
-- **DB Changelog (HANA Schema)**: Erkennung auf aktuelles Payload-Feld `hana_db_info.schemas` erweitert (mit Legacy-Fallbacks), damit neu angelegte HANA-Schemas im DB-Changelog korrekt als erstellt erscheinen.
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.157 (18. Mai 2026)
 
-- **Hostkarte Typografie**: Kundenname in der Hostkarte um weitere 2px vergrößert.
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.156 (18. Mai 2026)
 
-- **Hostkarten Chips**: Eckenradius der SAP/HANA/SID-Chips weiter reduziert (noch kantiger).
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.155 (18. Mai 2026)
 
-- **Hostkarten Chips**: SAP/HANA/SID-Chips visuell auf eine blau abgestimmte Farbkombi umgestellt und mit kleinerem Eckenradius (weniger rund) versehen.
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.154 (18. Mai 2026)
 
-- **Hostkarte Feinschliff**: Prod-Gradient aufgehellt (weiterhin klar von Test unterscheidbar), Firmenname größer dargestellt und Hostbezeichnung mit `🏷️` statt bisherigem Emoji.
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.153 (18. Mai 2026)
 
-- **Hostkarte Umgebung**: `Prod/Test` wird nicht mehr als Chip in der Hostkarte gezeigt; `Prod/Test` erscheint im Detail-Header. Prod-Hosts erhalten stattdessen einen navy-bläulichen Kartenhintergrund, Test bleibt beim bisherigen Hintergrund.
-n### v1.6.152 (18. Mai 2026)
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
-- **Hostkarte Layout**: Kundenname wird als normale Info (mit Emoji) dargestellt; darunter wird die Hostbezeichnung als zusätzliche Zeile angezeigt.
+### v1.6.152 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
 
 ### v1.6.151 (18. Mai 2026)
 
@@ -981,7 +987,7 @@ n### v1.6.149 (18. Mai 2026)
 
 ### v1.6.180 (18. Mai 2026)
 
-- **Hostkarten-Hintergrund zurueckgesetzt**: Der eigentliche Kartenhintergrund wurde auf den Stand vor der letzten Farbumstellung zurueckgestellt. Die aktuellen Pillenfarben (Kunde/SAP/HANA/SID) bleiben unveraendert.
+- **Hostkarten-Hintergrund zurueckgesetzt**: Der eigentliche Kartenhintergrund wurde auf den Stand vor der letzten Farbumstellung zurueckgesetzt. Die aktuellen Pillenfarben (Kunde/SAP/HANA/SID) bleiben unveraendert.
 
 ### v1.6.179 (18. Mai 2026)
 
@@ -1286,7 +1292,7 @@ n### v1.6.149 (18. Mai 2026)
 ### v1.6.81 (17. Mai 2026)
 
 - **Masken-Layout angepasst**: "Meldung X von Y" ist jetzt in der zweiten Zeile rechts ausgerichtet.
-- **Kunden-Chip verschoben**: Der Kunden-Chip wurde aus der oberen Titelzeile in die zweite Zeile an die frühere Position der Meldungsanzeige verschoben.
+- **Kundenchip verschoben**: Der Kunden-Chip wurde aus der oberen Titelzeile in die zweite Zeile an die frühere Position der Meldungsanzeige verschoben.
 
 ### v1.6.80 (17. Mai 2026)
 
@@ -1398,7 +1404,7 @@ n### v1.6.149 (18. Mai 2026)
 ### v1.6.62 (16. Mai 2026)
 
 - **Globales Telegram in eigene Karte verschoben**: Bot Token, globale Chat ID und Telegram an/aus stehen jetzt in einer separaten Telegram-Karte neben den Schwellwert-Karten.
-- **Benachrichtigungskarte vereinfacht**: Der Bereich enthaelt nun nur noch Heads-Up-/Inaktiv-Logik und ist dadurch deutlich uebersichtlicher.
+- **Benachrichtigungsbereich vereinfacht**: Der Bereich enthaelt nun nur noch Heads-Up-/Inaktiv-Logik und ist dadurch deutlich uebersichtlicher.
 
 ### v1.6.61 (16. Mai 2026)
 
@@ -1568,25 +1574,30 @@ n### v1.6.149 (18. Mai 2026)
 - **HANA AddOns bereinigt**: Der Agent und die UI entfernen jetzt hdbsql-Footer und doppelte Anführungszeichen aus AddOn-Zeilen.
 
 ### v1.4.46 (11. Mai 2026)
+
 - **Deploy-Zielpfad robuster (`pull-server-only.sh`)**: Ohne Parameter wird das Ziel jetzt zuerst aus der bestehenden `monitoring.service` (`WorkingDirectory`) übernommen.
 - **Fallback-Logik verbessert**: Wenn keine Unit vorhanden ist, nutzt das Skript den lokalen Repo-Pfad (falls vorhanden) statt blind `$HOME/monitoring-server`.
 - **Wirkung**: Verhindert Deploys in ein falsches Verzeichnis bei identischer UI trotz Restart/Reboot.
 
 ### v1.4.45 (11. Mai 2026)
+
 - **Deploy-Fix (`pull-server-only.sh`)**: Der Service `monitoring` wird nach dem Update jetzt automatisch neu gestartet.
 - **Sichtbarkeits-Fix für UI-Updates**: Durch den automatischen Restart greifen neue `receiver.py` Header-/Routing-Änderungen direkt, statt bis zum manuellen Restart zu warten.
 
 ### v1.4.44 (11. Mai 2026)
+
 - **Webclient-Update-Zuverlässigkeit**: No-Cache Header für `app.js`, `styles.css`, `sw.js` und `manifest.json`; Service Worker wird versionsgebunden registriert.
 - **Host-Changelog Sichtbarkeit**: HANA AddOns werden beim ersten Auftreten als `addon-init` Eintrag angezeigt (nicht erst bei spaeteren Delta-Änderungen).
 - **Darstellungsstabilität**: AddOn-Normalisierung für gemischte hdbsql-Formate bleibt erhalten, inklusive sauberer Werte ohne Timing-Footer-Artefakte.
 
 ### v1.4.43 (11. Mai 2026)
+
 - **HANA AddOns Parsing verbessert**: Linux-Agent verarbeitet nun sowohl Pipe-Format (`A|B`) als auch CSV-Format (`"A","B"`) von hdbsql robust.
 - **UI-Darstellung bereinigt**: Timing-Footer wie `rows selected (overall time...)` werden nicht mehr als AddOn-Zeile dargestellt.
 - **Host-Changelog erweitert**: Änderungen der HANA AddOns fliessen jetzt in die Host-Config-Changes ein (`HANA LW` / `HANA Legacy`) und werden sauber formatiert angezeigt.
 
 ### v1.4.42 (11. Mai 2026)
+
 - **HANA AddOns Extraction**: Neue Funktionalität für Linux Agent zur Auslesung von HANA AddOns über hdbsql
   - Lightweight Extensions aus `SLDDATA.EXTENSIONS` (Tabelle: NAME, Version)
   - Legacy AddOns aus `SBOCOMMON.SARI` (Tabelle: AName, AddOnVer)
@@ -1598,3 +1609,2695 @@ n### v1.6.149 (18. Mai 2026)
 
 ### v1.4.41 (früher)
 - AddOns Card mit subtlem Hintergrund-Gradient
+
+### v1.4.39 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.38 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.37 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.36 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.35 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.34 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.33 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.32 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.31 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.30 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.29 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.28 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.27 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.26 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.25 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.24 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.23 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.22 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.21 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.20 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.19 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.18 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.17 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.16 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.15 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.14 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.13 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.12 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.11 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.10 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.9 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.8 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.7 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.6 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.5 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.4 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.3 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.2 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.1 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.0 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.9 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.8 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.7 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.6 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.5 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.4 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.3 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.2 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.1 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.0 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.9 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.8 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.7 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.6 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.5 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.4 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.3 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.2 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.1 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.0 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.9 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.8 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.7 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.6 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.5 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.4 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.3 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.2 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.1 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.0 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.9 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.8 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.7 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.6 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.5 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.4 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.3 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.2 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.1 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.0 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v-1.6.274 (20. Mai 2026)
+
+- **Add customer management UI (edit/delete customers); prepare read-only user type with restricted permissions**
+
+---
+
+## Projektstruktur
+
+```
+client/
+  linux/
+    collect_and_send.sh    # Linux-Agent: Metriken sammeln + senden
+    install_agent.sh       # Linux-Installationsskript
+    self_update.sh         # Linux Self-Update
+  windows/
+    collect_and_send.ps1   # Windows-Agent
+    install_agent.ps1      # Windows-Installationsskript
+    self_update.ps1        # Windows Self-Update
+    bulk_update_agents.ps1 # Massenupdate für Windows-Agents
+server/
+  receiver.py              # HTTP-Server, REST-API, Alert-Engine
+  data/
+    monitoring.db          # SQLite-Datenbank (WAL)
+    sap_b1_version_map.json # SAP B1 Build-Zuordnungstabelle
+  static/
+    index.html             # Dashboard HTML
+    app.js                 # Dashboard Logik (Vanilla JS)
+    styles.css             # Dashboard Styling
+    sw.js                  # Service Worker (PWA)
+    manifest.json          # Web App Manifest
+openapi.yaml               # OpenAPI 3.0.3 Spec
+AGENT_VERSION              # Aktuelle Agent-Versionsnummer
+BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
+```
+
+---
+
+## Changelog (Agent)
+### v1.6.262 (20. Mai 2026)
+
+- **DB-Maintenance Charts**: Popup-Drilldown für vergrößerte Graphen nun nur noch per Klick auf den jeweiligen Graphen (kein Hover-Trigger mehr).
+
+### v1.6.261 (20. Mai 2026)
+
+- **DB-Maintenance Charts**: Hover auf einen Kachel-Graph öffnet einen deutlich vergrößerten Chart im Popup (mit Schließen per `X`) für besser lesbare X-/Y-Achsenwerte.
+
+### v1.6.260 (20. Mai 2026)
+
+- **DB-Chart X-Achse**: In den DB-Maintenance-Kacheln werden jetzt Datum/Uhrzeit des ersten und letzten Datenpunkts auf der horizontalen Achse angezeigt.
+
+### v1.6.259 (20. Mai 2026)
+
+- **Systemübersicht (Sort: AddOn)**: Gruppierungsansicht umgestellt auf 3 Ebenen: `AddOn-Name` -> `Version` -> `Kunde`.
+
+### v1.6.258 (20. Mai 2026)
+
+- **Systemübersicht Toolbar/Infos**: Einzeilige Informationen und Controls wieder als Chips dargestellt (u.a. Statistikzeile, Sortier-/Action-Buttons und Länderfilter).
+
+### v1.6.257 (20. Mai 2026)
+
+- **Alert Digest Mail**: Host-Detailzeile ergänzt um den Kundennamen (`Kunde: ...`) zusätzlich zur IP.
+
+### v1.6.256 (20. Mai 2026)
+
+- **Systemübersicht (Sort: AddOn)**: Beim Öffnen sind AddOn-Gruppen auf der obersten Ebene standardmäßig zugeklappt.
+
+### v1.6.255 (20. Mai 2026)
+
+- **Telegram Nachrichten erweitert**: Kundename ergänzt in allen relevanten Telegram-Texten (Inaktive Hosts, Instant Alert, Reminder und Host-Abo-Testnachricht).
+
+### v1.6.254 (20. Mai 2026)
+
+- **Daily Trend Digest Mail**: Detailzeile pro Host ergänzt um den Kundennamen (`Kunde: ...`) neben der IP.
+
+### v1.6.253 (20. Mai 2026)
+
+- **Systemübersicht UI vereinfacht**: Chip-/Pill-Optik (Hintergrund, Rahmen, Rundung) für Länderfilter, Sort-/AddOn-/Expand-/Reload-Buttons und Gruppen-Toggles in der Systemübersicht entfernt; Darstellung jetzt bewusst schlicht und flach.
+
+### v1.6.252 (20. Mai 2026)
+
+- **Inaktive Hosts Mail Reihenfolge**: In der Host-Detailzelle steht jetzt zuerst der Kunde, darunter der Anzeigename und danach Host/IP.
+
+### v1.6.251 (20. Mai 2026)
+
+- **Inaktive Hosts Mail**: Detailzeile pro Host erweitert um den Kundennamen (`Kunde: ...`) neben Host und IP.
+
+### v1.6.250 (20. Mai 2026)
+
+- **Header Session-Badge**: Sichtbaren Session-Countdown im Header entfernt; Session-Refresh- und Timeout-Logik bleiben weiterhin im Hintergrund aktiv.
+
+### v1.6.249 (19. Mai 2026)
+
+- **Mail-Footer SAP-Logo**: SAP-Logo in allen HTML-Mails (inkl. Testmail-Vorlagen) um ca. 20% verkleinert, damit das Footer-Balancing mit dem ANG-Logo harmonischer wirkt.
+
+### v1.6.248 (19. Mai 2026)
+
+- **Header SAP-Logo Größe**: SAP-Logo im Header um ca. 30% vergrößert und gleichzeitig per Max-Height begrenzt, sodass es optisch nicht höher als das ANG-Logo wird.
+
+### v1.6.247 (19. Mai 2026)
+
+- **Mail-Templates (inkl. Testmails)**: Footer in allen HTML-Mailvorlagen erweitert: SAP-Logo jetzt links unten auf gleicher Höhe wie das bestehende ANG-Logo rechts unten (zentral über gemeinsame Footer-Helper-Funktion in `receiver.py`).
+
+### v1.6.246 (19. Mai 2026)
+
+- **Header Logo Placement**: SAP-Logo ohne Überlappung direkt links neben den Darkmode-Schalter verschoben (kleiner Abstand, stabile Größe im Header).
+
+### v1.6.245 (19. Mai 2026)
+
+- **Header Logo Fine-Tuning**: SAP-Logo im Top-Header aus dem normalen Layoutfluss genommen (kein Titel-Umbruch mehr) und visuell weiter Richtung Darkmode-Bereich verschoben; mobile Darstellung bleibt responsiv gestapelt.
+
+### v1.6.244 (19. Mai 2026)
+
+- **Header Logo Position**: SAP-Logo aus der Report-Navigation entfernt und im oberen Header zentriert zwischen Titelbereich links und Darkmode-Bereich rechts platziert; Größe maximal responsiv ohne Layoutbruch.
+
+### v1.6.243 (19. Mai 2026)
+
+- **SAP B1 Logo Position**: Logo aus dem SAP-B1-Card-Header entfernt und in der Report-Navigation (bei Zurück/Vor) zentriert zwischen linkem Steuerblock und rechter Datumsinfo platziert, mit responsiver Maximalgröße ohne Layoutbruch.
+
+### v1.6.242 (19. Mai 2026)
+
+- **Deploy (pull-server-only)**: `server/static/icons/sap.png` zur Download-Dateiliste hinzugefügt, damit das SAP-B1-Logo bei Server-Updates zuverlässig mitgezogen wird.
+
+### v1.6.241 (19. Mai 2026)
+
+- **SAP B1 UI Asset**: `server/static/icons/sap.png` versioniert und ausgeliefert, damit das im SAP-B1-Header eingebundene Logo zuverlässig sichtbar ist.
+
+### v1.6.240 (19. Mai 2026)
+
+- **SAP B1 UI**: Neues `sap.png` Logo im SAP-B1-Bereich als rechter Header-Akzent eingebunden (responsive, ohne Layout-Verzerrung).
+
+### v1.6.239 (19. Mai 2026)
+
+- **SAP B1 Lizenzinfos UI**: Bereich "Lizenzinfos" startet jetzt standardmäßig zugeklappt und kann bei Bedarf aufgeklappt werden.
+
+### v1.6.231 (19. Mai 2026)
+
+- **HANA AddOns Query**: Lightweight-Abfrage auf `INNER JOIN` umgestellt (`SLDDATA.EXTENSIONS` ↔ `SLDDATA.EXTENSIONDEPLOYMENTS`), damit nur Datensätze mit passendem Deployment geliefert werden. Deployment-Guide entsprechend aktualisiert.
+
+### v1.6.230 (19. Mai 2026)
+
+- **Windows SQL Query (SLDData.Extensions)**: JOIN von `LEFT JOIN` auf `INNER JOIN` umgestellt, damit nur AddOns mit passendem Deployment in den Payload übernommen werden.
+
+### v1.6.229 (19. Mai 2026)
+
+- **README erweitert**: Payload-Snapshot-Rotation (Default 4), Standardpfade fuer Linux/Windows, Konfig-Overrides (`PAYLOAD_ARCHIVE_DIR`, `PAYLOAD_ARCHIVE_KEEP`) sowie bereits vorhandene SQL/HANA-Fehlerfelder im Payload dokumentiert.
+
+### v1.6.228 (19. Mai 2026)
+
+- **Payload-Sicherung vor Versand**: Agenten speichern vor jedem Report-POST automatisch einen lokalen Payload-Snapshot und behalten standardmäßig die letzten 4 Dateien (ältere werden rotiert) für nachträgliche Fehleranalyse.
+
+### v1.6.227 (19. Mai 2026)
+
+- **Admin Login-Audit UI**: Web-Login-Liste im Admin-Bereich als auf- und zuklappbaren Bereich umgesetzt; standardmäßig zugeklappt.
+
+### v1.6.226 (19. Mai 2026)
+
+- **Windows SQL Hotfix (Extensions)**: JOIN-Abfrage auf Alias-Syntax umgestellt (`Extensions` = `e`, `ExtensionDeployments` = `ed`), damit die AddOn-Daten aus `SLDData` wieder korrekt geliefert werden.
+
+### v1.6.225 (19. Mai 2026)
+
+- **Extensions Query Update (Windows + Linux)**: Auslesen der AddOn-Infos aus `SLDData.Extensions` auf Join mit `ExtensionDeployments` umgestellt; in beiden Windows-Skripten, im Linux-Collector und in der Deployment-Doku konsistent nachgezogen.
+
+n### v1.6.224 (19. Mai 2026)
+
+- **Windows Agent**: Lizenzfile-Suchpfade korrigiert und erweitert: `C:\Program Files (x86)\SAP\SAP Business One Server\B1_SHR\Lizenz\B01.txt` und `C:\Program Files (x86)\SAP\SAP Business One Server\B1_SHR\Lizenzen\B01.txt` hinzugefügt.
+n### v1.6.223 (19. Mai 2026)
+
+- **Windows Agent**: Zusätzlicher Suchpfad für Lizenzfile (B01.txt) hinzugefügt: `C:Program Files (x86)SAPSAP Business One ServerB1_SHRB01.txt`
+n### v1.6.222 (19. Mai 2026)
+
+- **DB-Backup Remote-502 Hardening**: Backup-Start auf asynchronen Hintergrundjob umgestellt (schnelle Start-Antwort, kein Proxy-Timeout), Dateidownload auf Chunk-Streaming umgestellt und Status/Fehler-Handling für Backup-Job verbessert.
+n### v1.6.221 (19. Mai 2026)
+
+- **DB-Backup One-Shot**: Backup-Download-Jobs werden nach erfolgreichem Download sofort invalidiert und die temporäre Backup-Datei direkt gelöscht (kein stale Job-State).
+n### v1.6.220 (19. Mai 2026)
+
+- **DB-Backup Download**: Download-Flow im Admin-Bereich auf Fetch+Blob umgestellt (statt nativer Anchor-Navigation), damit Backup-Dateien zuverlässig vollständig heruntergeladen werden und Fehler sauber erkannt werden.
+n### v1.6.219 (19. Mai 2026)
+
+- **Hostkarten UI**: Unterste Reihe mit den drei Infochips (z. B. SAP/HANA/SID) aus der Hostkarte entfernt; Informationen bleiben in anderen Ansichten verfügbar.
+n### v1.6.218 (19. Mai 2026)
+
+- **Admin-Markierung SAP B1**: Admin-exklusive Unterpunkte bleiben für Admins sichtbar und werden nun optisch markiert (Badge + Akzent), während sie für Nicht-Admins weiterhin komplett ausgeblendet sind.
+n### v1.6.217 (19. Mai 2026)
+
+- **Admin-Sichtbarkeit SAP B1**: Admin-Unterpunkt 'SAP B1 Setup Roh-Output' wird für Nicht-Admins nun vollständig ausgeblendet (kein Hinweistext, kein Menüpunkt).
+n### v1.6.216 (19. Mai 2026)
+
+- **Admin-Sichtbarkeit SAP B1**: Unterpunkt 'SAP B1 Setup Roh-Output' auf Admin-Benutzer eingeschränkt; Nicht-Admins sehen nur einen Hinweistext.
+n### v1.6.215 (19. Mai 2026)
+
+- **SAP B1 Lizenzinfos**: Detailinhalte (HW-Key, Installationsnummer, Systemnummer, Kundennummer, Lizenznehmer, Gültigkeit, Datei-Stand) ausgeblendet; angezeigt werden nur noch die zwei SQL/HANA-Suchpfad-Infozeilen.
+n### v1.6.214 (18. Mai 2026)
+
+- **pull-server-only**: PNG-Icon-Downloads auf denselben Parallelwert wie Standarddateien umgestellt (MAX_PARALLEL_DOWNLOADS, standardmäßig 8).
+- **Hostkarte**: Testweise eingebauten Versionsrückstands-Zahlenchip wieder ersatzlos entfernt.
+n### v1.6.213 (18. Mai 2026)
+
+- **Hostkarten Versionsindikator**: Roten Punkt durch runden Zahlen-Chip ersetzt; zeigt den Versionsrückstand (Anzahl Versionen) nur bei Rückstand > 0.
+n### v1.6.212 (18. Mai 2026)
+
+- **Hostkarten Layout**: Vertikalen Abstand zwischen Hostbezeichnung und der darunterliegenden IP-/Meta-Zeile reduziert.
+n### v1.6.211 (18. Mai 2026)
+
+- **License Card Spacing**: Abstand zwischen erster und zweiter Spalte nochmals deutlich verkleinert (fast ohne Zusatzabstand).
+n### v1.6.210 (18. Mai 2026)
+
+- **License Card Spacing**: Abstand zwischen erster und zweiter Spalte leicht reduziert (feineres Tuning).
+n### v1.6.209 (18. Mai 2026)
+
+- **License Card Layout-Fix**: Clipboard-Icon aus dem Grid-Flow entfernt und als Floating-Button oben rechts positioniert, damit die Kartenstruktur stabil bleibt.
+n### v1.6.208 (18. Mai 2026)
+
+- **License Card Datenlogik**: Lizenzkarte wird strikt nur bei selektiertem Host und vorhandenen Lizenzdaten angezeigt.
+- **License Card Layout**: Spaltenabstand in der Lizenzkarte reduziert.
+- **Clipboard Komfort**: Neues 📋-Icon kopiert HW-Key, Installationsnummer und Systemnummer in die Zwischenablage.
+n### v1.6.207 (18. Mai 2026)
+
+- **License Card Height**: Maximale Hoehe der Lizenzkarte von 150px auf 100px reduziert (overflow-y: auto).
+n### v1.6.206 (18. Mai 2026)
+
+- **License Card Position**: Lizenzkarte ins horizontale Zentrum des Headers verschoben; Karteninhalt linksbündig.
+n### v1.6.205 (18. Mai 2026)
+
+- **License Card Styling**: Lizenzkarte: Labels kleiner und leichter, Werte extra-fett (800), mehr Spaltenabstand, Inhalte horizontal zentriert.
+n### v1.6.204 (18. Mai 2026)
+
+- **License Card Height Fix**: Lizenzkarte nun mit korrekter 56px Höhe wie andere Header-Chips; 3x2 Grid-Layout mit gleichmäßigen Reihenabständen.
+n### v1.6.203 (18. Mai 2026)
+
+- **License Card Redesign**: Lizenzkarte mit vereinfachter Struktur neu aufgebaut; 3x2 Grid-Layout mit allen 6 Lizenzfeldern, gleiche Höhe und gelber Balken wie andere Header-Chips.
+n### v1.6.202 (18. Mai 2026)
+
+- **License Card Border**: Linker Balken von Orange zu Gelb geändert (Farbcodierung passt besser zum System-Theme).
+n### v1.6.201 (18. Mai 2026)
+
+- **Old UI Header**: SAP-Lizenzinfos in den oberen Statuskarten-Bereich verschoben (neben Offene Alerts, gleiche Kartenoptik mit gelbem linken Balken).
+- **Layout**: Spaltenabstände innerhalb der Lizenzkarte deutlich verkleinert und Schrift kompakter gemacht.
+- **Bereinigung**: Zusätzliche Lizenzkarte im Report-Kopf entfernt; SAP-B1-Bereich bleibt weiterhin erhalten.
+n### v1.6.200 (18. Mai 2026)
+
+- **Branding**: App-Name auf "System Infoboard" aktualisiert (Header, Login, PWA, Mail-Branding).
+- **Telegram**: Telegram-Alarmtexte enthalten jetzt ebenfalls das neue Branding.
+- **Old UI SAP-Karten**: Zusätzliche Lizenz-Karte oben integriert; zeigt alle verfügbaren Lizenzfelder kompakt ("Gültig bis" optional).
+n### v1.6.199 (18. Mai 2026)
+
+- **Old UI report hotfix**: JavaScript-Fehler "technicalHostname is not defined" in der Report-Ansicht behoben.
+n### v1.6.198 (18. Mai 2026)
+
+- **Old UI SAP card spacing**: Hostbezeichnung und Unterzeile aus dem Report-Header entfernt, damit die 3 großen SAP-Infokarten mehr Platz bekommen und den Header-Bereich dominieren.
+n### v1.6.197 (18. Mai 2026)
+
+- **Old UI SAP card alignment**: Titel der 3 SAP-Karten an die dargestellten Werte angepasst und Kartenhöhe/Position im Report-Header korrigiert (kompakter, auf Höhe zwischen Hostbezeichnung links und Datum rechts).
+n### v1.6.196 (18. Mai 2026)
+
+- **Old UI SAP header cards**: Kleine SAP/HANA Chips unter dem Hostnamen im Report-Header durch 3 große Karten im ui-next-Stil ersetzt (Feature Pack, Patch Level, Build) und responsiv/dark-mode-fähig gestaltet.
+n### v1.6.195 (18. Mai 2026)
+
+- **Old UI header cards**: Die drei oberen Status-Chips nutzen jetzt den moderneren UI-next-Look mit kompakter Card-Optik, linker Farbakzentkante sowie angepasster Dark-Mode-/Mobile-Darstellung.
+n### v1.6.194 (18. Mai 2026)
+
+- **UI old refresh**: Obere 3 Status-Chips als kompakte moderne Statuskarten gestaltet (bessere Lesbarkeit, Karten-Look, konsistente Größe im Header).
+n### v1.6.193 (18. Mai 2026)
+
+- **ui-next refinements**: Datenbanken-Tab lists actual SQL databases; SAP B1 tab reads real sap_business_one payload fields (FP/PL/Build) and includes detailed license/AddOn info.
+n### v1.6.192 (18. Mai 2026)
+
+- **ui-next host card status**: (OK/alert) moved back to top row next to customer name, no longer one line too low.
+n### v1.6.191 (18. Mai 2026)
+
+- **ui-next host card typography**: swapped: customer name larger, host designation smaller.
+n### v1.6.190 (18. Mai 2026)
+
+- **UI Shortcuts**: ui-next now has missing menu shortcuts for Benutzereinstellungen, globale Ansicht, globale Alerts, kritische Trends, inaktive Hosts, Alarm-Einstellungen, Admin-Einstellungen.
+- **Deep-linking**: legacy UI now supports '?start=...' deep-link routing from ui-next.
+n### v1.6.189 (18. Mai 2026)
+
+- **Host Visibility**: ui-next now respects host is_hidden and hides hidden hosts by default again; status line now indicates hidden host count.
+n### v1.6.188 (18. Mai 2026)
+
+- **SAP Versioning**: ui-next now resolves SAP release/build to Feature Pack using SAP B1 version map (/api/v1/sap-b1-version-map), matching old UI behavior.
+n### v1.6.187 (18. Mai 2026)
+
+- **UI Layout**: In ui-next Host-Cards wurde die Header-Reihenfolge angepasst: Kundenname oben, dann Host-Bezeichnung, gefolgt von Hostname + IP.
+n### v1.6.186 (18. Mai 2026)
+
+- **Performance**: pull-server-only.sh überspringt jetzt standardmäßig die teure Re-Download-Verifizierung (VERIFY_SYNC=0) und nutzt konfigurierbare parallele Downloads (MAX_PARALLEL_DOWNLOADS, Standard 8); strikte Verifizierung weiterhin über VERIFY_SYNC=1 möglich.
+n### v1.6.185 (18. Mai 2026)
+
+- **Pull Scripts**: pull-server.sh und pull-server-only.sh liefern jetzt auch ui-next.html, ui-next.css und ui-next.js aus, damit /ui-next nach einem Server-Update funktioniert.
+
+### v1.6.184
+
+- **UI-Next**: Added country filters and own hosts filter to the parallel UI.
+
+### v1.6.183 (18. Mai 2026)
+
+- **Parallel UI (Variante B) live**: Neue, separate Parallel-Oberflaeche unter `/ui-next` umgesetzt, ohne die bestehende Hauptseite zu veraendern.
+- **Header beibehalten**: Der bestehende Brand-Header wurde im neuen Layout uebernommen.
+- **KPI-Leiste wie Screenshot**: Vier Kennzahlen-Karten (Offene Alerts, Kritische Trends, Inaktive Hosts, Hosts Healthy) werden direkt unter dem Header dargestellt.
+- **Detailansicht mit Historie**: Links Hostliste mit Filtern/Suche, rechts Host-Detailtabs (`Overview`, `Datenbanken`, `SAP B1`, `Filesystems`) inkl. Blaettern durch Reports (Neueste/Neuer/Aelter).
+
+### v1.6.182 (18. Mai 2026)
+
+- **Detail-Mockups erweitert**: `layout-mockups.html` enthaelt jetzt drei zusaetzliche konkrete Detailansichten fuer die Parallel-UI-Planung: (1) Datenbanken, (2) SAP B1, (3) Filesystems. Alle drei enthalten realistische Inhaltsbloecke inkl. Suche, Schnellfilter sowie Benutzer-/Global-/Admin-Settings.
+
+### v1.6.181 (18. Mai 2026)
+
+- **Mockups Bedienlogik konkretisiert**: In allen drei Mockup-Varianten wurden Suche, Schnellfilter sowie Benutzer-/Global-/Admin-Settings als eigene Utility-Leiste sichtbar positioniert, damit die spaetere Navigation eindeutig ist.
+
+### v1.6.173 (18. Mai 2026)
+
+- **Mockups konkretisiert (3 Versionen)**: `layout-mockups.html` zeigt jetzt drei realitaetsnahe Endbild-Varianten mit den aktuellen Informationsgruppen der bestehenden UI: (A) vollstaendige Global-Overview ohne Host-Selektion, (B) vollstaendige Einzelhost-Detailansicht (Overview/Journal/Prozesse/Container/Netzwerk/Filesystems/Databases), (C) Split-View mit Hostliste links und globalem Kontext rechts.
+
+### v1.6.172 (18. Mai 2026)
+
+- **Layout-Mockups modernisiert**: Neue visuelle Vergleichsseite mit zwei Richtungen umgesetzt (`Calm Professional` und `Data-First Compact`) zur Bewertung der Punkte 1-4: ruhiger Hintergrund, vereinfachte Sidebar-Karten, mehr Weissraum und modernere KPI-Karten.
+
+### v1.6.171 (18. Mai 2026)
+
+- **Hostkarten Typografie Feinschliff**: Kundenname wieder reduziert und die darunterliegende Host-Zeile groesser/staerker gesetzt, damit die Proportionen ausgeglichener sind.
+
+### v1.6.170 (18. Mai 2026)
+
+- **Hostkarte Kundenname Fix**: Uebergreifender `span`-Selector hat den Kundennamen auf `11px`/muted ueberschrieben. Regel auf Metazeile eingeschraenkt und Kundenname auf `20px` gesetzt.
+
+### v1.6.169 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.168 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.167 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.166 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.165 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.164 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.163 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.162 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.161 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.160 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.159 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.158 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.157 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.156 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.155 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.154 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.153 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.152 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.151 (18. Mai 2026)
+
+- **Host-Interessen**: Kundenname wird in der Liste jetzt als erste Zusatzinformation pro Zeile angezeigt.
+
+### v1.6.150 (18. Mai 2026)
+
+- **Filesystem Drilldown Close Fix**: Das `X`, der Backdrop und `Escape` schließen das Filesystem-Drilldown jetzt zuverlässig, auch wenn das Modal-Markup erst nach dem Script geladen wird.
+n### v1.6.149 (18. Mai 2026)
+
+- **Filesystem Chart Drilldown Fix**: Klick auf FS-Chart öffnet nun zuverlässig das korrekt selektierte Chart; Drilldown-Fenster lässt sich wieder sauber schließen.
+
+### v1.6.148 (18. Mai 2026)
+
+- **Server Pull (Linux Installer)**: `pull-server-only.sh` lädt und spiegelt jetzt auch `client/linux/install_agent.sh` nach `updates/client/linux/install_agent.sh`.
+
+### v1.6.147 (18. Mai 2026)
+
+- **Einzelmeldung Chip-Design**: SAP/HANA Chips in der Einzelmeldung verwenden jetzt exakt dieselben Hostkarten-Klassen und damit das identische Pill-Design.
+
+### v1.6.146 (18. Mai 2026)
+
+- **Einzelmeldung Chip-Rendering Fix**: SAP/HANA Chips werden in der Einzelmeldung wieder zuverlässig angezeigt (Fallback auf Host-Metadaten, wenn Report-Felder fehlen).
+
+### v1.6.145 (18. Mai 2026)
+
+- **Einzelmeldung Chip-Farben**: SAP Feature Pack, HANA Release und HANA SID in der Einzelmeldung jetzt im gleichen Orangeton wie in der Hostkarte.
+
+### v1.6.144 (18. Mai 2026)
+
+- **Chip Colors**: SAP Feature Pack, HANA Release, and HANA SID chips now use consistent orange color scheme across all views
+
+### v1.6.143 (21. Mai 2026)
+
+- **Host Interests Auto-Sync**: When user selects hosts, mail subscriptions are automatically activated for those hosts. When hosts are deselected, mail subscriptions are disabled.
+
+### v1.6.142 (18. Mai 2026)
+
+- **UI Text**: Bereich "Login Changelog" in der Globalansicht auf "Anmeldungen" umbenannt.
+
+### v1.6.141 (18. Mai 2026)
+
+- **Globalansicht**: Bereich "Kunden" (Tab + View + Event-Verkabelung) vollständig entfernt.
+
+### v1.6.140 (18. Mai 2026)
+
+- **Kundenansicht UI**: Kunden-Toggle-Zeilen entschärft (weniger Chip-Optik) und nicht mehr über volle Breite bis zum rechten Rand.
+
+### v1.6.139 (18. Mai 2026)
+
+- **Journal Fehler Fix**: Ersten Buchstaben der Meldung nicht mehr abschneiden (Off-by-one bei short-iso Zeitstempel-Parsing).
+
+### v1.6.138 (18. Mai 2026)
+
+- **Kundennamen Font-Größe**: Angepasst auf 13px für bessere Platznutzung bei längeren Namen.
+
+### v1.6.136 (18. Mai 2026)
+
+- **Chip Farben**: SAP/HANA/SID und Kundennamen Chips transparenter und heller gestaltet für bessere Harmonie mit Hostkarten-Hintergrund.
+
+### v1.6.180 (18. Mai 2026)
+
+- **Hostkarten-Hintergrund zurueckgesetzt**: Der eigentliche Kartenhintergrund wurde auf den Stand vor der letzten Farbumstellung zurueckgesetzt. Die aktuellen Pillenfarben (Kunde/SAP/HANA/SID) bleiben unveraendert.
+
+### v1.6.179 (18. Mai 2026)
+
+- **Chip-Farben vereinheitlicht**: In der vorletzten Hostkarten-Reihe nutzen jetzt alle drei Chips (SAP, HANA, SID) den gleichen Stil/Farbton `#f7a600`.
+
+### v1.6.178 (18. Mai 2026)
+
+- **Hostkarten-Pillenfarben angepasst**: Die Kundennamen-Pille im Hostkartenkopf nutzt jetzt `#006285`; die HANA-Pillen in der unteren Chip-Reihe wurden auf `#f7a600` umgestellt.
+
+### v1.6.177 (18. Mai 2026)
+
+- **Hostkarten-Gradient auf Markenfarben**: Der Hintergrundverlauf der einzelnen Hostkarte wurde auf die gewuenschten Farben `#006285` und `#f7a600` umgestellt und insgesamt leicht dunkler abgestimmt.
+
+### v1.6.176 (18. Mai 2026)
+
+- **Hostkarten-Hintergrund leicht dunkler**: Der bestehende Verlauf auf der einzelnen Hostkarte wurde in den gleichen Farbtönen beibehalten, aber dezent dunkler abgestimmt, damit die Karten etwas mehr Tiefe und Kontrast haben.
+
+### v1.6.175 (18. Mai 2026)
+
+- **Host-Kundenpille vereinheitlicht**: Die Kunden-Pille im Host-Kartenkopf nutzt jetzt immer die volle verfuegbare Breite (unabhaengig von der Textlaenge). Dadurch erscheinen alle Karten im Headerbereich einheitlicher ausgerichtet.
+
+### v1.6.174 (18. Mai 2026)
+
+- **Mail-Header Kunde + Host**: In ausgehenden hostbezogenen Mails wird der Kunde jetzt im Header prominent angezeigt (gleiche Groesse wie bisherige Host-Hauptzeile), die Hostbezeichnung darunter deutlich kleiner. Die Darstellung wurde zentralisiert und in Instant-/Reminder-Alerts sowie hostbezogenen Testmails vereinheitlicht.
+
+### v1.6.173 (18. Mai 2026)
+
+- **DB Changelog HANA-Schema**: HANA-Einträge werden im DB Changelog jetzt explizit als Schema behandelt/angezeigt (inkl. Aktionstext für Schema erstellt/gelöscht). SQL-Datenbanken bleiben unverändert im bisherigen Format.
+
+### v1.6.172 (18. Mai 2026)
+
+- **Host-Changelog getrennt**: Im hostbasierten Bereich wurde ein separater Menüpunkt `DB Changelog` wieder eingeführt. DB-Änderungen werden dort angezeigt; der hostbasierte Standard-`Changelog` zeigt wieder nur Konfig-/Hardware- und AddOn-Änderungen.
+
+### v1.6.171 (17. Mai 2026)
+
+- **Harvest SQL Setup robuster**: `setup_harvest_sql_user.ps1` behandelt Auth-/Rechteprobleme jetzt besser (GRANT als Best-Effort mit Warnungen statt hartem Abbruch) und unterstuetzt optionalen SQL-Admin-Fallback via `HARVEST_SETUP_SQL_ADMIN_USER` + `HARVEST_SETUP_SQL_ADMIN_PASSWORD` in `agent.conf`.
+
+### v1.6.170 (17. Mai 2026)
+
+- **Changelog Spaltenbreiten**: Die Feld-Spalte wurde im Host- und Global-Changelog deutlich vergroessert; die Spalten "Alter Wert" und "Neuer Wert" wurden entsprechend verkleinert, damit Feldnamen besser vollstaendig sichtbar sind.
+
+### v1.6.169 (17. Mai 2026)
+
+- **Hardware-Changelog Symbol**: Hardware-basierte Changelog-Felder zeigen jetzt zusaetzlich das Computersymbol direkt im Feldnamen, z. B. `💻 CPU Cores`, `💻 RAM (GB)`, `💻 Kernel`.
+
+### v1.6.168 (17. Mai 2026)
+
+- **DB-Changelog Symbole**: Im globalen und im hostbasierten Changelog zeigen DB-Lifecycle-Eintraege wieder die bekannten Icons direkt im Text: `✨ DB erstellt` und `🗑️ DB geloescht`.
+
+### v1.6.167 (17. Mai 2026)
+
+- **Changelog Vereinheitlichung**: DB-Lifecycle-Events (Erstellen/Loeschen) sind jetzt im globalen Changelog und im hostspezifischen Changelog enthalten (zusammen mit Hardware-Metriken und AddOn-Aenderungen).
+- **Host UI bereinigt**: Der separate Bereich "DB-Verlauf" wurde entfernt; der Sidebar-Bereich "Aenderungen" wurde in "Changelog" umbenannt.
+
+### v1.6.166 (17. Mai 2026)
+
+- **Host-Aenderungsprotokoll AddOns**: Der Host-spezifische Tab "Aenderungen" zeigt jetzt auch SAP/HANA AddOn-Versionsaenderungen (LW/Legacy) direkt im Kunden-Host-Changelog an.
+
+### v1.6.165 (17. Mai 2026)
+
+- **Changelog Filter**: Neuer "3 Tage" Zeitraumfilter hinzugefuegt; ist jetzt auch der Standard beim Seitenaufruf.
+
+### v1.6.164 (17. Mai 2026)
+
+- **Changelog Kundengroupierung**: Kunde ist jetzt die oberste Gruppierungsebene; Host-Display-Name (mit Hostname als Untertitel) ist die zweite Ebene. Backend gibt `customer_name` zurueck (via JOIN auf `customers`).
+
+### v1.6.163 (17. Mai 2026)
+
+- **Critical-Trends Chips**: Fehlenden `.ct-badge`-Selektor ergaenzt – jetzt erscheinen "Kritisch" und "Warnung" beide als einheitliche Chips.
+- **Kundenname kleiner**: Schriftgroesse in den Trend-Karten von 20px auf 14px reduziert.
+ 
+### v1.6.162 (17. Mai 2026)
+
+- **Critical-Trends Kundenzeile ohne Platzhalter**: In der Kundenzeile der Trend-Karten wird bei fehlendem Kundenwert kein `-` mehr angezeigt (kein Fallback auf Dash).
+
+### v1.6.161 (17. Mai 2026)
+
+- **Mute-Icone statusorientiert**: In den Alert-Aktionen zeigt `🔇` jetzt den stummgeschalteten Status und `🔔` den aktiven (nicht stummgeschalteten) Status.
+
+### v1.6.160 (17. Mai 2026)
+
+- **Kundenname in Critical-Trends sichtbar**: In den Trend-Karten wird der Kunde nun vorne in der Kopfzeile angezeigt (oberhalb vor dem Hostnamen), wie in der angefragten Ansicht.
+
+### v1.6.159 (17. Mai 2026)
+
+- **Changelog-Block bereinigt**: Der v1.6.158-Eintrag wurde aus dem Dateikopf in den Abschnitt `Changelog (Agent)` verschoben.
+
+### v1.6.158 (17. Mai 2026)
+
+- **Global-Alerts Spaltenbreiten optimiert**: `Host`, `Mountpoint`, `Aktiv seit` und `Aktion` neu austariert, damit rechte Inhalte nicht mehr aus dem Rahmen laufen.
+- **Actions kompakter gemacht**: Geringerer Button-Abstand/Padding und `nowrap` fuer die Aktionsgruppe, damit die rechte Spalte stabil bleibt.
+
+### v1.6.157 (17. Mai 2026)
+
+- **Hotfix Receiver-Start**: Syntaxfehler in der CSV-Export-Quoting-Zeile behoben (`receiver.py`), der zu `status=1/FAILURE` beim Service-Start fuehren konnte.
+
+### v1.6.156
+- Alerts table now includes current value and absolute delta columns; alerts API and CSV export include current_used_percent and delta_used_percent.
+### v1.6.155 (17. Mai 2026)
+
+- **Dark Mode Lesbarkeit korrigiert**: Der Kundenname in der Global-Alerts-Ansicht nutzt jetzt im Dark Mode eine helle Schriftfarbe, damit er nicht mehr mit dem Hintergrund verschmilzt.
+
+### v1.6.154 (17. Mai 2026)
+
+- **Alerts-Zeile typografisch angepasst**: Kundenname jetzt gross und fett wie die bisherige Hostzeile, Hostbezeichnung darunter 2px kleiner und nicht mehr fett.
+
+### v1.6.153 (17. Mai 2026)
+
+- **Alerts-Ansicht startet mit quittierten Alerts**: Das Häkchen `Quittierte anzeigen` ist nun standardmaessig aktiv und die Tabelle zeigt beim Start auch quittierte Eintraege.
+
+### v1.6.152 (17. Mai 2026)
+
+- **Kundenname in Global-Alerts korrigiert**: Die Alerts-Ansicht bezieht den Kunden jetzt aus dem gleichen Host-Settings/Customer-Join wie die anderen Übersichten, damit dort nicht nur ein Platzhalter angezeigt wird.
+
+### v1.6.151 (17. Mai 2026)
+
+- **Kunde in Global-Alerts sichtbar**: In der Alerts-Ansicht steht der Kundenname jetzt oberhalb der Hostbezeichnung, damit offene Alerts schneller zugeordnet werden koennen.
+
+### v1.6.150 (17. Mai 2026)
+
+- **Inaktive-Hosts Versand implementiert**: Bei aktivierter Option werden inaktive Hosts jetzt tatsaechlich als Benachrichtigung versendet (Mail + Telegram), inklusive Deduplizierung pro Host/Channel, damit pro Inaktiv-Phase nicht mehrfach gesendet wird.
+- **Neue Inaktive-Hosts Mailvorlage**: Branded HTML-Mail mit App-Logo im Header, ANG-Logo im Footer und Host-Tabelle (letzte Meldung, Inaktivdauer, Status DOWN).
+
+### v1.6.149 (17. Mai 2026)
+
+- **Inaktive-Hosts Mockup erweitert**: App-Logo im Header und ANG-Logo im Footer eingebaut, plus Telegram-Nachrichtenentwurf unterhalb des Mail-Layouts ergänzt.
+
+### v1.6.148 (17. Mai 2026)
+
+- **Inaktive-Hosts-Mail Mockup hinzugefuegt**: Neues Entwurfs-HTML unter `inactive-host-mail-mockup.html` im gleichen visuellen Stil wie die bestehenden Digest-Mails, mit Fokus auf Host-Down/Inaktiv-Informationen.
+
+### v1.6.147 (17. Mai 2026)
+
+- **"Agent Quelle" jetzt Admin-Only**: Der Menüpunkt ist nun nur für Admins sichtbar; Nicht-Admins werden bei direkter Submode-Auswahl automatisch auf "Globale Alerts" zurückgeführt.
+
+### v1.6.146 (17. Mai 2026)
+
+- **Hinweistexte in Sidebar-Navigation**: Unter "Container" steht nun klein "Nur wo Docker läuft", unter "Export" "Nur Linux Systeme".
+
+### v1.6.145 (17. Mai 2026)
+
+- **Konsistentes manuelles Backup**: `_create_database_backup_job` verwendet jetzt `Connection.backup()` statt rohem `shutil.copy2` — WAL-aware, keine Inkonsistenz durch zeitversetzte Kopien von `.db`, `-wal` und `-shm`.
+
+### v1.6.144 (17. Mai 2026)
+
+- **Automatischer sFTP Upload integriert**: Nach lokalem Backup wird die erzeugte Datei bei aktivierter sFTP-Konfiguration automatisch auf den Zielserver hochgeladen (manuell + Scheduler).
+- **Run-Status erweitert**: `uploaded_sftp` wird nun korrekt gesetzt; Upload-Fehler werden im Lauf als Fehlertext gespeichert.
+
+### v1.6.143 (17. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.142 (17. Mai 2026)
+
+- **Backup-Run Tabelle erweitert**: Neue Spalte `sFTP` zeigt im UI pro Lauf an, ob die Datei hochgeladen wurde (`ja`/`nein`).
+
+### v1.6.141 (17. Mai 2026)
+
+- **Host-Chips transparenter gemacht**: SAP/HANA/SID-Chips (z. B. FP2602, 2.00.087, ANG) verwenden jetzt einen weiss-transparenten Hintergrund.
+
+### v1.6.140 (17. Mai 2026)
+
+- **sFTP Testfunktion eingebaut**: Neuer Admin-Button "sFTP testen" prueft Verbindung und fuehrt einen echten Test-Upload (put + rm) im Zielpfad aus.
+- **Backend-Endpoint ergaenzt**: `/api/v1/admin/backup-automation/test-sftp` mit Validierung fuer Host/Port/User/Auth und klaren Fehlermeldungen.
+- **Auth-Unterstuetzung**: SSH-Key direkt unterstuetzt; Passwort-Modus wird ueber `sshpass` getestet (falls auf dem Server vorhanden).
+
+### v1.6.139 (17. Mai 2026)
+
+- **Kundenchip nach links verschoben**: Der Kundenname-Chip steht in Reihe 2 jetzt ganz links unter der Host-Bezeichnung.
+- **Rechte Gruppe beibehalten**: Host-Controls und Meldungszaehler bleiben rechts ausgerichtet.
+
+### v1.6.138 (17. Mai 2026)
+
+- **Kundenchip in Reihe 2 angehoben**: Der Kundenname-Chip wurde leicht nach oben versetzt, damit er visuell auf derselben Hoehe wie die Nachbar-Controls sitzt.
+
+### v1.6.137 (17. Mai 2026)
+
+- **Reihe 2 nachgezogen**: Die Meldungsanzeige "Meldung X von Y" wurde auf dieselbe Hoehe wie die Chips/Buttons (24px) gesetzt.
+- **Header-Zeilen konsistent**: Erste und zweite Header-Zeile verwenden nun durchgaengig dieselbe Kontrollhoehe.
+
+### v1.6.136 (17. Mai 2026)
+
+- **Header-Hoehen vereinheitlicht**: Chips und Buttons im Host-Headerbereich auf die Hoehe von "Export JSON" (24px) angeglichen.
+- **Refresh-Dropdown angepasst**: Intervall-Select hat nun dieselbe Kompakthoehe wie die benachbarten Controls.
+
+### v1.6.135 (17. Mai 2026)
+
+- **Header-Zeile 2 rechts gebuendelt**: Alle Chips der zweiten Zeile werden zur rechten Seite verschoben.
+- **Meldungsanzeige gruppiert**: Kunden- und Host-Controls stehen direkt neben "Meldung X von Y".
+
+@@### v1.6.134 (17. Mai 2026)
+@@
+@@- **Zweite Zeile neu angeordnet**: Kundenname → Buttons → Meldungs-Info (via CSS order).
+@@- **Verbesserte Lesbarkeit**: Klarere Abfolge der Informationen von links nach rechts.
+@@
+
+### v1.6.130 (17. Mai 2026)
+
+- **Erste Zeile umgestaltet**: API/Count Chips nun nach rechts neben den Refresh-Tools.
+- **Zweite Zeile optimiert**: Kundenname ganz links, Buttons (Visibility/Favorite) ganz rechts.
+- **Verbesserte visuelle Balance**: Klarere Trennung zwischen Kontroll-Elementen und Meta-Informationen.
+
+### v1.6.129 (17. Mai 2026)
+
+- **Header-Layout reorganisiert**: API-Key und Report-Count Chips in die erste Zeile verschoben (neben Title).
+- **Zweite Zeile neu strukturiert**: Kundenname bleibt auf der linken Seite, Buttons (Visibility/Favorite) auf der rechten.
+- **Verbesserte Raumaufteilung**: Klarere visuelle Trennung zwischen Kontroll-Elementen und Daten-Informationen.
+
+### v1.6.97 (17. Mai 2026)
+
+- **Kundenname-Chip größer**: Schrift jetzt 16px (vorher 14px) für mehr Prominenz.
+- **Hostbezeichnung kleiner**: Von 10px auf 9px für bessere Gewichtung der Hierarchie.
+- **Verbesserte visuelle Balance**: Kundenname dominiert noch stärker, Details sind untergeordnet.
+
+### v1.6.96 (17. Mai 2026)
+
+- **Host-Karte umstrukturiert**: Kundenname-Chip rückt nach oben (größere, intensivere Schrift), Hostbezeichnung nach unten (klein).
+- **Verbesserte visuelle Hierarchie**: Kundenname ist jetzt das prominenteste Element, Hostbezeichnung untergeordnet.
+- **Chip-Styling für Kundenname**: Der Chip oben hat nun 14px Schrift und Weight 900 für maximale Betonung.
+
+### v1.6.95 (17. Mai 2026)
+
+- **Kunden-Name auf separate Zeile**: Der Kunden-Chip wird konsequent auf einer eigenen Zeile unterhalb der SAP/HANA-Chips angezeigt.
+- **Bessere optische Hierarchie**: Kleinere (10px) und fettere Schrift (Weight 700) für konsistente visuelle Trennung.
+- **Konsistentes Layout**: Kunden-Information ist jetzt unabhängig von anderen Chip-Kombinationen immer auf derselben Position.
+
+### v1.6.94 (17. Mai 2026)
+
+- **Host-Karte um Kunden-Chip erweitert**: In der unteren Chip-Zeile wird bei zugewiesenem Kunden jetzt ein zusätzlicher Kunden-Chip angezeigt.
+- **Kunden-Icon angepasst**: Der Chip verwendet das Firmengebäude-Emoji `🏢` (statt Personen-Emoji).
+
+### v1.6.93 (17. Mai 2026)
+
+- **Systemübersicht Kundengruppe korrigiert**: Die 2. Ebene verwendet jetzt den echten `customer_name` statt Host-Anzeigename.
+- **Hierarchie wieder korrekt**: Anzeige ist jetzt konsistent `Land → Kunde → Hosts`.
+
+### v1.6.92 (17. Mai 2026)
+
+- **Neue Admin-Übersicht für veraltete Agenten**: Zeigt Hosts, deren Agent-Version mindestens 5 Versionen hinter der aktuellen Repo-Agent-Version liegt.
+- **Self-Update-Früherkennung**: Major/Minor-Abweichungen werden ebenfalls als potentiell kritischer Rückstand markiert.
+- **Direkt im Admin-Bereich**: Die neue Tabelle ist im Abschnitt „Agent Update Status (Alle Hosts)“ integriert.
+
+### v1.6.91 (17. Mai 2026)
+
+- **Systemübersicht: Kundenebene standardmäßig zugeklappt**: Unter jedem Land starten Kunden jetzt geschlossen.
+- **Neuer Button `Alles aufklappen` (Systemübersicht)**: Öffnet alle Gruppen auf einmal.
+- **Neuer Button `Alles aufklappen` (Backup Stati)**: Öffnet alle Kunden-Gruppen auf einmal.
+
+### v1.6.90 (17. Mai 2026)
+
+- **Systemübersicht-Anzeige korrigiert**: In der Host-Zeile wird wieder der echte Host-Name angezeigt statt erneut des Kunden-Namens.
+- **Hierarchie visuell eindeutig**: Dadurch ist die Struktur wieder klar als `Land → Kunde → Host` erkennbar.
+
+### v1.6.89 (17. Mai 2026)
+
+- **Backup Stati: Kunden standardmäßig zugeklappt**: Die Kundenebene startet jetzt immer geschlossen.
+- **Unabhängig vom Status**: Kein automatisches Aufklappen mehr bei fehlenden aktuellen Backups.
+
+### v1.6.88 (17. Mai 2026)
+
+- **Changelog-Hierarchie angepasst**: Im Changelog-Bereich ist die erste Ebene jetzt `Kunde`.
+- **Neue zweite Ebene `Host`**: Unter jedem Kunden werden die einzelnen Hosts separat gruppiert angezeigt.
+- **Datums-Topgruppe entfernt**: Die vorherige oberste Gruppierung nach Datum entfällt zugunsten der Kundenstruktur.
+
+### v1.6.87 (17. Mai 2026)
+
+- **Systemübersicht weiter vereinfacht**: In der Standardsicht ist die Hierarchie jetzt nur noch `Land → Kunde`.
+- **OS-Zwischenebene entfernt**: Hosts eines Kunden werden unabhängig vom Betriebssystem in einer gemeinsamen Tabelle angezeigt.
+- **Sicht-/Sorttexte angepasst**: Labels zeigen in der Standardsicht jetzt konsistent `Land > Kunde`.
+
+### v1.6.86 (17. Mai 2026)
+
+- **Systemübersicht-Hierarchie neu aufgebaut**: In der Standardsicht ist die Gruppierung jetzt `Land → Kunde → OS`.
+- **Kundenebene als zweite Stufe**: Pro Land werden zuerst die Kunden gruppiert und danach die jeweiligen Betriebssysteme.
+- **Sort-/Sichttexte aktualisiert**: Button- und Statistik-Label zeigen jetzt konsistent `Land > Kunde > OS` an.
+
+### v1.6.85 (17. Mai 2026)
+
+- **Backup-Status mit zusätzlicher Hierarchie**: Neue Top-Gruppierung nach Kunde im Bereich "Backup Stati".
+- **Struktur Kunde → Hosts**: Unter jedem Kunden werden die zugehörigen Host-Karten wie bisher angezeigt.
+- **Kunden-Kennzahlen in Summary**: Pro Kundengruppe werden Host-Anzahl sowie aktuelle vs. fehlende Backups aggregiert dargestellt.
+
+### v1.6.84 (17. Mai 2026)
+
+- **Telegram Quick Actions zurück**: Alert-Nachrichten enthalten wieder einen direkten Button zum Quittieren.
+- **Neu: Schliessen aus Telegram**: Zusätzlich gibt es nun einen zweiten Button zum direkten Schliessen des Alerts.
+- **Signierter Action-Link**: Neue verifizierte Endpoint-Verarbeitung über `GET /api/v1/telegram/alert-action` mit Ablaufzeit und HMAC-Signatur.
+- **Gilt für Instant + Reminder**: Buttons werden bei offenen/escalated Alerts und Heads-Up-Reminder-Nachrichten angehängt.
+
+### v1.6.83 (17. Mai 2026)
+
+- **Host-Suche erweitert**: Die bestehende Suche im Hosts-Bereich durchsucht jetzt zusätzlich Kundendaten.
+- **Neu durchsuchbar**: Neben Hostname/Anzeigename werden jetzt auch `customer_name` und `customer_maringo_project_number` berücksichtigt.
+
+### v1.6.82 (17. Mai 2026)
+
+- **Auto-Backups sichtbar im Admin-Bereich**: Läufe der automatischen Backups werden tabellarisch angezeigt.
+- **Tabellenfelder erweitert**: Datum, Uhrzeit, Quelle, Status, Datei, Größe, Link und Fehler werden pro Lauf gelistet.
+- **Direkter Download-Link**: Jeder erfolgreiche Lauf enthält jetzt einen klickbaren Download-Link zur zugehörigen Backup-Datei.
+- **Sicherer Download-Endpoint**: Neuer Admin-Endpoint `GET /api/v1/admin/backup-automation/download?run_id=...` mit Pfadvalidierung.
+
+### v1.6.81 (17. Mai 2026)
+
+- **Masken-Layout angepasst**: "Meldung X von Y" ist jetzt in der zweiten Zeile rechts ausgerichtet.
+- **Kundenchip verschoben**: Der Kunden-Chip wurde aus der oberen Titelzeile in die zweite Zeile an die frühere Position der Meldungsanzeige verschoben.
+
+### v1.6.80 (17. Mai 2026)
+
+- **Automatische DB-Backups**: Lokale SQLite-Backups laufen jetzt automatisch im Hintergrund (Default: alle 12 Stunden).
+- **Retention eingebaut**: Alte automatische Backup-Dateien werden automatisch nach der konfigurierten Aufbewahrungszeit (Default: 7 Tage) bereinigt.
+- **Admin-API ergänzt**: Neue Endpoints für Backup-Automation (`GET/POST /api/v1/admin/backup-automation`, manueller Trigger für lokales Backup).
+- **Admin-UI erweitert**: Neuer Bereich "Backup Automation (lokal + sFTP vorbereitet)" mit Settings, Sofort-Backup-Button und Laufhistorie.
+- **sFTP vorbereitet**: sFTP-Konfigurationsfelder werden gespeichert (Host/Port/User/Path/Auth), Upload-Logik folgt in einem späteren Schritt.
+
+### v1.6.79 (17. Mai 2026)
+
+- **Charts mit Skala**: Dezente horizontale Gitternetzlinien und Y-Achsenwerte pro Chart ergänzt.
+- **Bessere Lesbarkeit**: Skalen sind bewusst zurückhaltend gestaltet und in Light/Dark-Theme abgestimmt.
+
+### v1.6.78 (17. Mai 2026)
+
+- **Delta-Farben im DB-Verlauf**: Positive Delta-Werte werden jetzt grün, negative rot dargestellt.
+- **Dark-Theme berücksichtigt**: Angepasste Grün-/Rot-Töne für gute Lesbarkeit in dunkler Ansicht.
+
+### v1.6.77 (17. Mai 2026)
+
+- **Manueller Trigger in der UI**: Neuer Button `↻ Jetzt berechnen` im Bereich `DB Wartung (SQLite)`.
+- **Direktaufruf des Trigger-Endpoints**: Der Button ruft `POST /api/v1/admin/database-stats/trigger` auf und lädt Charts/Verlauf unmittelbar neu.
+- **Saubere Sperrlogik**: Während `VACUUM` oder manuellem Rechnen sind die jeweiligen Buttons gegenseitig deaktiviert.
+
+### v1.6.76 (17. Mai 2026)
+
+- **DB-Berechnungsintervall auf 2h** umgestellt (statt 3h).
+- **UI dynamisch angepasst**: Status- und Delta-Texte zeigen jetzt das effektive Intervall (z. B. Δ2h, Nächster 2h-Lauf).
+- **Manueller Trigger ergänzt**: Neuer Admin-Endpoint `POST /api/v1/admin/database-stats/trigger` berechnet den aktuellen Bucket sofort neu und liefert das aktualisierte Dashboard zurück.
+
+### v1.6.75 (17. Mai 2026)
+
+- **DB-Kennzahlen als Charts**: Die bisherigen Kennzahlen-Karten wurden durch 6 KPI-Charts ersetzt.
+- **Trendindikatoren**: Jeder Chart zeigt Trendpfeil (steigend/fallend/stabil), aktuelles Niveau und 3h-Delta.
+- **Responsive Reihenlayout**: Auf großen Screens 6 Charts in einer Reihe, bei weniger Platz automatische Verteilung auf 2 Reihen (3+3), mobil weiter reduziert.
+
+### v1.6.74 (17. Mai 2026)
+
+- **Hotfix Admin-Load**: DB-Kennzahlen-Verlauf wird beim Öffnen des Admin-Tabs jetzt aktiv geladen (nicht nur beim initialen App-Start).
+- **Symptom behoben**: Der Bereich bleibt nicht mehr auf "Lade DB Kennzahlen-Verlauf..." stehen, wenn Login/Admin-Status erst nach dem Bootstrapping verfügbar ist.
+
+### v1.6.73 (17. Mai 2026)
+
+- **Admin-Tab umbenannt**: Registerkarte heißt jetzt **Admin** statt "Admin Settings".
+- **Admin-Bereiche verschoben**: "Admin Aktionen", "DB Wartung (SQLite)" und "Agent Update Status" sind jetzt im Admin-Tab gruppiert.
+- **DB-Kennzahlen automatisiert**: Kennzahlen werden automatisch in eine Historien-Tabelle geschrieben (alle 3 Stunden, Zeitzone konfigurierbar), inklusive Start-Snapshot.
+- **Kein manueller Kennzahlen-Refresh mehr**: Der manuelle ↻-Button wurde entfernt.
+- **Charts + 14-Tage-Trendanalyse**: Visualisierung der wichtigsten Kennzahlen und lineare 2-Wochen-Prognose im DB-Wartungsbereich.
+- **Verlaufstabelle**: Anzeige der letzten 20 Historienzeilen inklusive Veränderung zur vorherigen Zeile (+/-).
+
+### v1.6.72 (16. Mai 2026)
+
+- **Chips in Titelzeile**: API-Chip, Meldungsanzahl-Chip, Kunden-Chip und Action-Buttons sind jetzt in der Titelzeile eingebaut statt in einer zweiten Reihe — die Header-Karte bleibt gleich hoch.
+- **Trennlinie** zwischen Chips-Gruppe und Refresh/Export-Tools.
+- **✏️-Button kompakt** (24px, passend zu den Chips).
+
+### v1.6.71 (16. Mai 2026)
+
+- **Kundennamen nachträglich bearbeiten**: Im Kunden-Tab erscheint bei jedem Kunden ein ✏️-Button. Klick öffnet einen Dialog zum Ändern von Name und Maringo-Projektnummer (PATCH `/api/v1/customers/<id>`).
+
+
+\
+- **Chips einheitlich gross**: Alle Chips und Buttons in der Host-Kopfzeile haben jetzt dieselbe Hoehe wie der "Export JSON"-Button (24px, gleicher Border-Radius).\
+- **Kundenchip als erstes Element**: Der Kunden-Chip steht jetzt ganz links in der Kontrollleiste vor API, Meldungsanzahl und den Action-Buttons.
+
+### v1.6.69 (16. Mai 2026)
+
+- **Hotfix 502 nach Login**: Absturz im Endpoint `/api/v1/hosts` behoben (Spalten-Mismatch zwischen SQL-Query und Python-Mapping).
+- **Hostkarten wieder sichtbar**: Laden der Hostliste funktioniert wieder stabil.
+- **Bleistift wieder nutzbar**: Da Hosts wieder geladen werden, ist der Host-Bearbeiten-Flow wieder erreichbar.
+
+### v1.6.68 (16. Mai 2026)
+
+- **Neue Kunden-Auswertung (Global-Tab)**: Eigene Ansicht "Kunden" mit Kennzahlen je Kunde fuer Hosts, offene Alerts, kritische Alerts und Backup-Luecken.
+- **Drilldown pro Kunde**: Aufklappbare Hostliste je Kunde inklusive Land, Alert-Zahlen und Backup-Status.
+- **Suche integriert**: Filter nach Kunde, Maringo-Projektnummer sowie Hostname/Hosttitel direkt in der Kundenansicht.
+
+### v1.6.67 (16. Mai 2026)
+
+- **Hotfix Service-Start**: SQL-Syntaxfehler in der `host_settings`-Tabellendefinition behoben, der den Receiver beim Start mit `sqlite3.OperationalError` beendet hat.
+- **Init-DB wieder stabil**: Monitoring-Service startet nach dem Update wieder normal.
+
+### v1.6.66 (16. Mai 2026)
+
+- **Kundenstamm eingefuehrt**: Neue Kunden werden zentral gespeichert und koennen Hosts sauber zugeordnet werden.
+- **Host-Bearbeiten erweitert**: Der ✏️-Dialog kann jetzt Titel, Land und Kunde in einer Maske bearbeiten.
+- **Dropdown statt Freitext-Dubletten**: Bestehende Kunden sind auswaehlbar; alternativ kann ein neuer Kunde direkt angelegt werden.
+- **Optionale Maringo-Projektnummer**: Beim Anlegen eines Kunden kann eine Maringo-Projektnummer mitgespeichert werden.
+
+### v1.6.65 (16. Mai 2026)
+
+- **Alert-Abos nach Land gruppiert**: In der Host-Ansicht sind Hosts jetzt in Ländergruppen zusammengefasst.
+- **Bessere Uebersicht bei vielen Hosts**: Pro Land wird ein klarer Gruppenkopf mit Host-Anzahl angezeigt.
+- **Filter sauber integriert**: Such-/Benutzer-/"Nur Aenderungen"-Filter blenden ganze Laendergruppen automatisch aus, wenn darin kein sichtbarer Host mehr passt.
+
+### v1.6.64 (16. Mai 2026)
+
+- **Alert-Abos mit umschaltbarer Ansicht**: Admin-Bereich kann jetzt zwischen Host-Ansicht und User-Ansicht wechseln.
+- **Skalierung fuer viele Benutzer verbessert**: Gleiche Abo-Daten lassen sich je nach Aufgabe host-zentriert oder benutzer-zentriert bearbeiten.
+- **Unsaved-Changes bleiben beim Ansichtswechsel erhalten**: Nicht gespeicherte Checkbox-Aenderungen gehen beim Wechsel Host/User nicht verloren.
+
+### v1.6.63 (16. Mai 2026)
+
+- **Alert-Abos besser bedienbar**: Hostsuche, Benutzerfilter und Option "Nur Aenderungen" im Admin-Abo-Bereich hinzugefuegt.
+- **Bulk-Aktionen erweitert**: Sammelaktionen fuer sichtbare Eintraege (Mail/Telegram an/aus) sowie pro Host (Mail/Telegram alle an/aus).
+- **Aenderungen klar sichtbar**: Geaenderte Checkboxen/Zeilen werden visuell markiert und der Status zeigt die Anzahl ungespeicherter Aenderungen.
+
+### v1.6.62 (16. Mai 2026)
+
+- **Globales Telegram in eigene Karte verschoben**: Bot Token, globale Chat ID und Telegram an/aus stehen jetzt in einer separaten Telegram-Karte neben den Schwellwert-Karten.
+- **Benachrichtigungsbereich vereinfacht**: Der Bereich enthaelt nun nur noch Heads-Up-/Inaktiv-Logik und ist dadurch deutlich uebersichtlicher.
+
+### v1.6.61 (16. Mai 2026)
+
+- **Telegram-Settings im UI praezisiert**: Globaler Bot/Channel klar von persoenlicher Telegram Chat ID getrennt beschriftet.
+- **Benachrichtigungsbereich verstaendlicher**: Hinweise im Admin-Panel erklaeren, dass Bot Token systemweit ist und persoenliche Chat IDs pro Benutzer gepflegt werden.
+
+### v1.6.60 (16. Mai 2026)
+
+- **Separates Telegram Heads-Up Intervall**: In den globalen Alarm-Einstellungen gibt es jetzt ein eigenes Feld fuer Telegram-Reminder, unabhaengig vom Mail-Intervall.
+- **Mail und Telegram entkoppelt**: Offene Alerts fuehren nun getrennte Reminder-Zeitstempel pro Kanal, damit unterschiedliche Intervalle sauber parallel funktionieren.
+- **UI klar erweitert**: Benachrichtigungsbereich zeigt jetzt Mail- und Telegram-Heads-Up als zwei separate, kanalbezogene Intervalle.
+
+### v1.6.59 (16. Mai 2026)
+
+- **Heads-Up Intervall im UI praezisiert**: Beschriftung klar als Mail-Intervall markiert.
+- **Klarstellung fuer Betrieb**: Das globale Heads-Up-Intervall gilt fuer wiederholte Mail-Heads-Ups bei offenen Alerts, nicht fuer Telegram.
+
+### v1.6.58 (16. Mai 2026)
+
+- **Globale Alarm-Einstellungen sauber verdrahtet**: Backend persistiert jetzt alle Felder aus dem Admin-Panel konsistent (inkl. CPU/RAM-Schwellen, Inaktive-Hosts-Optionen und KI-Parameter).
+- **Fix fuer verlorene Inaktive-Hosts-Einstellung**: `Inaktive Hosts alarmieren` und `Inaktiv ab (Stunden)` bleiben nach Speichern/Neuladen erhalten.
+- **API-Response vervollstaendigt**: `GET/POST /api/v1/alarm-settings` liefern jetzt die vollstaendige Feldmenge fuer das UI.
+- **OpenAI-Key sicher behandelt**: Key bleibt serverseitig erhalten, wenn das Feld leer bleibt; API liefert nur `openai_api_key_is_set` statt Klartext.
+
+### 1.4.137 (14.05.2026)
+- Add SAP license information extraction and display (Hardware Key, Instno, Expiration, System Nr, Customer Name, Customer No)
+
+### v1.4.75 (11. Mai 2026)
+
+- **Privates GitHub-Repo unterstützt**: `pull-server-only.sh` kann Deploy-Dateien jetzt authentifiziert per GitHub-Token aus einem privaten Repo laden.
+- **Token-Quellen**: `MONITORING_GITHUB_TOKEN`, `GITHUB_TOKEN` oder `GH_TOKEN`; alternativ liest das Skript `MONITORING_GITHUB_TOKEN` aus der serverseitigen `monitoring.env`.
+- **Deploy-Hinweise erweitert**: README und `monitoring.env`-Template dokumentieren den einmaligen Token-Schritt für Server-Deploys bei privatem Repo.
+
+### v1.4.74 (11. Mai 2026)
+
+- **Agent-Quelle Ansicht optisch verdichtet**: kleinere Schrift und kompaktere Zellen für mehr Host-Zeilen auf gleicher Höhe.
+- **Breite besser genutzt**: Tabellenlayout der "Agent Quelle"-Seite auf bessere Spaltenverteilung angepasst, weniger abgeschnittene Werte.
+- **Lesbarkeit verbessert**: URL-Felder umbrechen nun kontrolliert statt früh mit Ellipsis zu enden.
+
+### v1.4.73 (11. Mai 2026)
+
+- **agent.conf Migration für bestehende Agents**: Linux- und Windows-`self_update` schreiben relevante Source-Keys jetzt aktiv nach (`SERVER_URL`, `UPDATE_BASE_URL`, `RAW_BASE_URL`) und leeren `GITHUB_REPO`.
+- **Neue Global-Seite "Agent Quelle"**: Tab mit Host-Tabelle für schnellen Umstellungsstatus auf server-only Quelle.
+- **Ampel-Checks pro Host**: `SERVER_URL`, `UPDATE_BASE_URL`, `RAW_BASE_URL`, `GITHUB_REPO` werden pro Host ausgewertet; korrekte Werte sind gruen markiert.
+- **Neuer API-Endpunkt**: `/api/v1/agent-source-status` liefert den Migrationsstatus aus der letzten gemeldeten `agent.conf` pro Host.
+
+### v1.4.72 (11. Mai 2026)
+
+- **Server-only Quelle für Install/Update**: Linux/Windows Update- und Bootstrap-Skripte nutzen jetzt ausschliesslich die konfigurierten Server-Updates (`SERVER_URL/updates` bzw. `UPDATE_BASE_URL`).
+- **Kein GitHub-Fallback mehr im Agent-Pfad**: Download-Fallbacks auf `raw.githubusercontent.com`/GitHub wurden aus den Agent-Skripten entfernt.
+- **Install-Beispiele angepasst**: Installer-Beispiele verweisen auf die eigene Server-Quelle.
+
+### v1.4.71 (11. Mai 2026)
+
+- **DB-Schema Guard für Host-Config**: Der Server stellt vor Host-Config-Tracking/Backfill jetzt runtime-sicher sicher, dass `host_config_snapshot.kernel_release` existiert.
+- **Nutzen**: Alte/extern eingespielte DBs ohne neue Spalte brechen nicht mehr bei Host-Config-Operationen.
+
+### v1.4.70 (11. Mai 2026)
+
+- **HANA AddOn-Parser tolerant gemacht**: CSV-Extraktion fällt jetzt bei Mischformaten automatisch auf die Zeilenlogik zurück, damit echte AddOn-Daten nicht mehr im `parse_failed` landen.
+- **Ziel**: die bereits wieder ankommenden Daten auch bei leicht variierendem hdbsql-Output sauber als AddOns erfassen.
+
+### v1.4.69 (11. Mai 2026)
+
+- **1.4.42-Mehrfach-Commit Abgleich umgesetzt**: HANA-Abfragepfad wurde gegen die originale 1.4.42-Kette abgeglichen und robust gemacht.
+- **Spaltennamen-Fallbacks für heterogene Hosts**: Query-Varianten für `Version/VERSION` sowie `AName/ANAME` werden automatisch probiert, um `invalid column name` auf einzelnen Hosts zu vermeiden.
+- **Verbindungs-Fallback erweitert**: Bei Connect-Fehlern wird nicht nur der Port, sondern auch Host-Ziele (`127.0.0.1`, `localhost`, Hostname/FQDN) gegen aktive `3xx15`-Listener geprobt.
+
+### v1.4.68 (11. Mai 2026)
+
+- **HANA Query-Regression gefixt**: SQL-Statements werden für `su -c` jetzt shell-sicher escaped, damit quoted Identifier wie `"Version"` und `"AName"` korrekt bei hdbsql ankommen.
+- **Fehlerbild behoben**: `invalid column name: VERSION/ANAME` durch verlorene Quotes in der Refaktorierung.
+
+### v1.4.67 (11. Mai 2026)
+
+- **Rückkehr zur 1.4.42-Verbindungsstrategie**: HANA AddOn-Queries nutzen wieder zuerst den impliziten `hdbsql`-Modus (ohne `-n`), wie im früh stabilen Stand.
+- **Fallback bleibt erhalten**: Explizites `target` und lokale `3xx15`-Port-Probe bleiben als nachgelagerter Fallback aktiv.
+- **Ziel**: Verhalten wieder an den urspruenglich funktionierenden Ablauf angleichen, ohne die neuen Diagnosepfade zu verlieren.
+
+### v1.4.66 (11. Mai 2026)
+
+- **Connection-Diagnose erweitert**: Bei `query_failed` mit Verbindungsfehler liefert der Agent jetzt zusätzlich Runtime-Listener-Infos (`listener_target`, `listeners_3xx15`, `sid`) direkt im Fehlertext.
+- **Ziel**: sofort sichtbar machen, ob auf dem Host zur Laufzeit wirklich ein SQL-Listener auf `:30015` aktiv ist.
+
+### v1.4.65 (11. Mai 2026)
+
+- **HANA Port-Fallback gehaertet**: SID-Erkennung passiert jetzt vor der SQL-Port-Autodetection, damit Instanz-basierte Ports (`3xx15`) korrekt berechnet werden.
+- **Runtime-Probe bei `connection refused`**: Bei lokalem Ziel und fehlschlagendem `30015` testet der Agent automatisch aktive lokale `3xx15`-Ports (via `ss`) und nutzt den funktionierenden Port für beide AddOn-Queries.
+
+### v1.4.64 (11. Mai 2026)
+
+- **HANA SQL-Port Auto-Detection**: Wenn `HANA_ADDONS_PORT` noch auf Default `30015` steht, erkennt der Linux-Agent die lokale Instanznummer automatisch (z. B. `HDB90`) und nutzt den passenden SQL-Port (z. B. `39015`).
+- **Verbindungs-Fix ohne manuelle Konfig**: Hosts mit abweichender Instanznummer brauchen damit kein manuelles Port-Override mehr für AddOn-Queries.
+
+### v1.4.63 (11. Mai 2026)
+
+- **HANA AddOns Regression-Hotfix**: Bei `connection failed` auf explizitem `HANA_ADDONS_HOST:HANA_ADDONS_PORT` fällt der Linux-Agent automatisch auf den frueheren impliziten `hdbsql`-Verbindungsmodus zurück.
+- **Diagnose erweitert**: Payload enthaelt jetzt `target_mode` sowie `mode=lw:...,lg:...` im Fehlertext, damit sichtbar ist, ob der Fallback aktiv war.
+
+### v1.4.62 (11. Mai 2026)
+
+- **Host-Config-Changelog erweitert**: `OS Release` und `Kernel` werden jetzt als eigene Metriken verfolgt und als Änderungen geloggt.
+- **Snapshot-Migration integriert**: Bestehende Datenbanken erhalten das neue Feld `kernel_release` automatisch beim Serverstart.
+
+### v1.4.61 (11. Mai 2026)
+
+- **HANA AddOns Connection-Fix**: `hdbsql` nutzt jetzt ein explizites Ziel (`HANA_ADDONS_HOST:HANA_ADDONS_PORT`) statt implizitem Default `localhost:30015`.
+- **Stabilerer Standard**: neue Defaults `HANA_ADDONS_HOST=127.0.0.1`, `HANA_ADDONS_PORT=30015`.
+- **Selbstheilung**: `self_update.sh` und `repair_agent_conf.sh` schreiben die neuen Felder automatisch in `agent.conf`.
+- **Bessere Diagnose**: `error` enthält jetzt zusätzlich das verwendete `target=...`.
+
+### v1.4.60 (11. Mai 2026)
+
+- **Parse-Failed Diagnose erweitert**: Bei `reason=parse_failed` liefert der Linux-Agent jetzt ein kurzes hdbsql-Snippet (`LW`/`LEG`) im Fehlertext, damit das konkrete Rohformat direkt im UI sichtbar wird.
+
+### v1.4.59 (11. Mai 2026)
+
+- **Linux HANA AddOn Parser erweitert**: Fallback erkennt jetzt zusätzlich tabellarische (`Mehrfach-Whitespace`) und `;`-getrennte hdbsql-Zeilen.
+- **Bessere Diagnose statt Silent-Empty**: Bei vorhandenem hdbsql-Output ohne erkannte Zeilen wird jetzt `reason=parse_failed` geliefert (statt irrefuehrendem `empty_result`).
+
+### v1.4.58 (11. Mai 2026)
+
+- **Self-Update Quelle stabilisiert**: Wenn `UPDATE_BASE_URL` fehlt, wird jetzt zuerst `RAW_BASE_URL` verwendet und erst danach als Fallback `SERVER_URL/updates`.
+- **Konfig fixiert**: `UPDATE_BASE_URL` wird beim Self-Update wieder in `agent.conf` geschrieben, damit kuenftige Updates konsistent von derselben Quelle kommen.
+
+### v1.4.57 (11. Mai 2026)
+
+- **Linux Repair-Skript ohne Prompts**: Das neue Repair-Skript schreibt alle relevanten Agent-Konfigurationsfelder automatisch neu, statt Werte vom Benutzer abzufragen.
+- **HANA-Felder bleiben gesetzt**: `HANA_SID` und `HANA_ADDONS_*` werden aus vorhandenen Werten bzw. Defaults wieder aufgebaut.
+
+### v1.4.56 (11. Mai 2026)
+
+- **Linux Self-Update setzt HANA-Felder neu**: Fehlende `HANA_SID` und `HANA_ADDONS_*` Eintraege werden beim Update wieder in `agent.conf` geschrieben.
+- **Konfigurations-Rehydrierung**: Wenn ein Host nur noch die Basisfelder hat, stellt der Updater die HANA-Parameter wieder her statt sie stillschweigend fehlen zu lassen.
+
+### v1.4.55 (11. Mai 2026)
+
+- **Linux Agent HANA AddOns stabilisiert**: hdbsql-Fehler wie `authentication failed` / `SQLSTATE` werden nicht mehr als AddOn-Zeilen interpretiert.
+- **Bessere Fehlerdiagnose im Payload**: Statt leerer/irrefuehrender AddOn-Listen liefert der Agent jetzt bei Query-Problemen klare `reason`-Werte (`auth_failed`, `query_failed`, `partial_result`) und eine konkrete Fehlermeldung.
+
+### v1.4.54 (11. Mai 2026)
+
+- **Einzelmeldungen Navigation repariert**: In der Reports-Ansicht funktionieren Vorherige/Naechste Meldung wieder korrekt (Paginierungs-State wiederhergestellt).
+- **HANA AddOns robuster gerendert**: HANA AddOn-Tabellen werden jetzt angezeigt, sobald Zeilen im Payload vorhanden sind, auch wenn das `available`-Flag fehlt oder inkonsistent ist.
+
+### v1.4.53 (11. Mai 2026)
+
+- **15-Minuten-Reports AddOn-Fix (UI)**: Die AddOn-Anzeige in den Host-Meldungen verarbeitet jetzt auch kombinierte HANA-Felder wie `Name","Version` und `Name",?` korrekt.
+- **Noisy hdbsql-Zeilen gefiltert**: Footer wie `rows selected` / Timing-Zeilen werden in der Report-Ansicht nicht mehr als AddOn-Eintrag verarbeitet.
+
+### v1.4.52 (11. Mai 2026)
+
+- **HANA AddOn CSV-Kombi-Fix**: Die Backend-Normalisierung splittet jetzt wieder korrekt Werte im Format `"AddOnName","Version"`, sodass Name und Version getrennt im Changelog erscheinen.
+- **Fehlende AddOn-Daten behoben**: Betroffene Hosts mit kombiniertem hdbsql-Feld zeigen AddOn-Änderungen nicht mehr als zusammengeklebten Namen mit `-` als Version.
+
+### v1.4.49 (11. Mai 2026)
+
+- **Changelog-Backfill sichtbar gemacht**: Der Button nutzt jetzt einen 30-Tage-Backfill und zeigt die resultierende 30d-Sicht direkt an, damit Hosts wie Rinco sofort auftauchen.
+- **Changelog-Pfeile bereinigt**: Die nested Summary-Elemente im Changelog blenden den nativen Marker jetzt ebenfalls aus.
+
+### v1.4.48 (11. Mai 2026)
+
+- **Changelog-Backfill per Button**: Im Changelog gibt es jetzt einen Button, der gespeicherte Reports erneut auswertet und `host_config_changes` auffuellt.
+
+### v1.4.47 (11. Mai 2026)
+
+- **HANA AddOns bereinigt**: Der Agent und die UI entfernen jetzt hdbsql-Footer und doppelte Anführungszeichen aus AddOn-Zeilen.
+
+### v1.4.46 (11. Mai 2026)
+
+- **Deploy-Zielpfad robuster (`pull-server-only.sh`)**: Ohne Parameter wird das Ziel jetzt zuerst aus der bestehenden `monitoring.service` (`WorkingDirectory`) übernommen.
+- **Fallback-Logik verbessert**: Wenn keine Unit vorhanden ist, nutzt das Skript den lokalen Repo-Pfad (falls vorhanden) statt blind `$HOME/monitoring-server`.
+- **Wirkung**: Verhindert Deploys in ein falsches Verzeichnis bei identischer UI trotz Restart/Reboot.
+
+### v1.4.45 (11. Mai 2026)
+
+- **Deploy-Fix (`pull-server-only.sh`)**: Der Service `monitoring` wird nach dem Update jetzt automatisch neu gestartet.
+- **Sichtbarkeits-Fix für UI-Updates**: Durch den automatischen Restart greifen neue `receiver.py` Header-/Routing-Änderungen direkt, statt bis zum manuellen Restart zu warten.
+
+### v1.4.44 (11. Mai 2026)
+
+- **Webclient-Update-Zuverlässigkeit**: No-Cache Header für `app.js`, `styles.css`, `sw.js` und `manifest.json`; Service Worker wird versionsgebunden registriert.
+- **Host-Changelog Sichtbarkeit**: HANA AddOns werden beim ersten Auftreten als `addon-init` Eintrag angezeigt (nicht erst bei spaeteren Delta-Änderungen).
+- **Darstellungsstabilität**: AddOn-Normalisierung für gemischte hdbsql-Formate bleibt erhalten, inklusive sauberer Werte ohne Timing-Footer-Artefakte.
+
+### v1.4.43 (11. Mai 2026)
+
+- **HANA AddOns Parsing verbessert**: Linux-Agent verarbeitet nun sowohl Pipe-Format (`A|B`) als auch CSV-Format (`"A","B"`) von hdbsql robust.
+- **UI-Darstellung bereinigt**: Timing-Footer wie `rows selected (overall time...)` werden nicht mehr als AddOn-Zeile dargestellt.
+- **Host-Changelog erweitert**: Änderungen der HANA AddOns fliessen jetzt in die Host-Config-Changes ein (`HANA LW` / `HANA Legacy`) und werden sauber formatiert angezeigt.
+
+### v1.4.42 (11. Mai 2026)
+
+- **HANA AddOns Extraction**: Neue Funktionalität für Linux Agent zur Auslesung von HANA AddOns über hdbsql
+  - Lightweight Extensions aus `SLDDATA.EXTENSIONS` (Tabelle: NAME, Version)
+  - Legacy AddOns aus `SBOCOMMON.SARI` (Tabelle: AName, AddOnVer)
+  - Read-only Abfragen mit konfigurierbarem Timeout (default: 15 Sekunden)
+  - Graceful Failure: Fehlende User/hdbsql/Timeout führen nicht zu Agent-Hängern
+- **UI Update**: AddOns-Section im System-Tab zeigt nun auch HANA Extensions separat von SQL B1 AddOns
+  - HANA Extensions (Lightweight + Legacy) collapsible unter SAP B1 AddOns
+  - Aussagekräftige Fehlermeldungen bei User-nicht-angelegt oder hdbsql nicht vorhanden
+
+### v1.4.41 (früher)
+- AddOns Card mit subtlem Hintergrund-Gradient
+
+### v1.4.39 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.38 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.37 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.36 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.35 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.34 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.33 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.32 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.31 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.30 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.29 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.28 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.27 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.26 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.25 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.24 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.23 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.22 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.21 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.20 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.19 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.18 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.17 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.16 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.15 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.14 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.13 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.12 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.11 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.10 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.9 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.8 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.7 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.6 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.5 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.4 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.3 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.2 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.1 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.4.0 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.9 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.8 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.7 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.6 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.5 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.4 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.3 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.2 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.1 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.3.0 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.9 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.8 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.7 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.6 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.5 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.4 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.3 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.2 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.1 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.2.0 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.9 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.8 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.7 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.6 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.5 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.4 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.3 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.2 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.1 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.1.0 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.9 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.8 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.7 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.6 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.5 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.4 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.3 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.2 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.1 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.0.0 (11. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v-1.6.274 (20. Mai 2026)
+
+- **Add customer management UI (edit/delete customers); prepare read-only user type with restricted permissions**
+
+---
+
+## Projektstruktur
+
+```
+client/
+  linux/
+    collect_and_send.sh    # Linux-Agent: Metriken sammeln + senden
+    install_agent.sh       # Linux-Installationsskript
+    self_update.sh         # Linux Self-Update
+  windows/
+    collect_and_send.ps1   # Windows-Agent
+    install_agent.ps1      # Windows-Installationsskript
+    self_update.ps1        # Windows Self-Update
+    bulk_update_agents.ps1 # Massenupdate für Windows-Agents
+server/
+  receiver.py              # HTTP-Server, REST-API, Alert-Engine
+  data/
+    monitoring.db          # SQLite-Datenbank (WAL)
+    sap_b1_version_map.json # SAP B1 Build-Zuordnungstabelle
+  static/
+    index.html             # Dashboard HTML
+    app.js                 # Dashboard Logik (Vanilla JS)
+    styles.css             # Dashboard Styling
+    sw.js                  # Service Worker (PWA)
+    manifest.json          # Web App Manifest
+openapi.yaml               # OpenAPI 3.0.3 Spec
+AGENT_VERSION              # Aktuelle Agent-Versionsnummer
+BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
+```
+
+---
+
+## Changelog (Agent)
+### v1.6.262 (20. Mai 2026)
+
+- **DB-Maintenance Charts**: Popup-Drilldown für vergrößerte Graphen nun nur noch per Klick auf den jeweiligen Graphen (kein Hover-Trigger mehr).
+
+### v1.6.261 (20. Mai 2026)
+
+- **DB-Maintenance Charts**: Hover auf einen Kachel-Graph öffnet einen deutlich vergrößerten Chart im Popup (mit Schließen per `X`) für besser lesbare X-/Y-Achsenwerte.
+
+### v1.6.260 (20. Mai 2026)
+
+- **DB-Chart X-Achse**: In den DB-Maintenance-Kacheln werden jetzt Datum/Uhrzeit des ersten und letzten Datenpunkts auf der horizontalen Achse angezeigt.
+
+### v1.6.259 (20. Mai 2026)
+
+- **Systemübersicht (Sort: AddOn)**: Gruppierungsansicht umgestellt auf 3 Ebenen: `AddOn-Name` -> `Version` -> `Kunde`.
+
+### v1.6.258 (20. Mai 2026)
+
+- **Systemübersicht Toolbar/Infos**: Einzeilige Informationen und Controls wieder als Chips dargestellt (u.a. Statistikzeile, Sortier-/Action-Buttons und Länderfilter).
+
+### v1.6.257 (20. Mai 2026)
+
+- **Alert Digest Mail**: Host-Detailzeile ergänzt um den Kundennamen (`Kunde: ...`) zusätzlich zur IP.
+
+### v1.6.256 (20. Mai 2026)
+
+- **Systemübersicht (Sort: AddOn)**: Beim Öffnen sind AddOn-Gruppen auf der obersten Ebene standardmäßig zugeklappt.
+
+### v1.6.255 (20. Mai 2026)
+
+- **Telegram Nachrichten erweitert**: Kundename ergänzt in allen relevanten Telegram-Texten (Inaktive Hosts, Instant Alert, Reminder und Host-Abo-Testnachricht).
+
+### v1.6.254 (20. Mai 2026)
+
+- **Daily Trend Digest Mail**: Detailzeile pro Host ergänzt um den Kundennamen (`Kunde: ...`) neben der IP.
+
+### v1.6.253 (20. Mai 2026)
+
+- **Systemübersicht UI vereinfacht**: Chip-/Pill-Optik (Hintergrund, Rahmen, Rundung) für Länderfilter, Sort-/AddOn-/Expand-/Reload-Buttons und Gruppen-Toggles in der Systemübersicht entfernt; Darstellung jetzt bewusst schlicht und flach.
+
+### v1.6.252 (20. Mai 2026)
+
+- **Inaktive Hosts Mail Reihenfolge**: In der Host-Detailzelle steht jetzt zuerst der Kunde, darunter der Anzeigename und danach Host/IP.
+
+### v1.6.251 (20. Mai 2026)
+
+- **Inaktive Hosts Mail**: Detailzeile pro Host erweitert um den Kundennamen (`Kunde: ...`) neben Host und IP.
+
+### v1.6.250 (20. Mai 2026)
+
+- **Header Session-Badge**: Sichtbaren Session-Countdown im Header entfernt; Session-Refresh- und Timeout-Logik bleiben weiterhin im Hintergrund aktiv.
+
+### v1.6.249 (19. Mai 2026)
+
+- **Mail-Footer SAP-Logo**: SAP-Logo in allen HTML-Mails (inkl. Testmail-Vorlagen) um ca. 20% verkleinert, damit das Footer-Balancing mit dem ANG-Logo harmonischer wirkt.
+
+### v1.6.248 (19. Mai 2026)
+
+- **Header SAP-Logo Größe**: SAP-Logo im Header um ca. 30% vergrößert und gleichzeitig per Max-Height begrenzt, sodass es optisch nicht höher als das ANG-Logo wird.
+
+### v1.6.247 (19. Mai 2026)
+
+- **Mail-Templates (inkl. Testmails)**: Footer in allen HTML-Mailvorlagen erweitert: SAP-Logo jetzt links unten auf gleicher Höhe wie das bestehende ANG-Logo rechts unten (zentral über gemeinsame Footer-Helper-Funktion in `receiver.py`).
+
+### v1.6.246 (19. Mai 2026)
+
+- **Header Logo Placement**: SAP-Logo ohne Überlappung direkt links neben den Darkmode-Schalter verschoben (kleiner Abstand, stabile Größe im Header).
+
+### v1.6.245 (19. Mai 2026)
+
+- **Header Logo Fine-Tuning**: SAP-Logo im Top-Header aus dem normalen Layoutfluss genommen (kein Titel-Umbruch mehr) und visuell weiter Richtung Darkmode-Bereich verschoben; mobile Darstellung bleibt responsiv gestapelt.
+
+### v1.6.244 (19. Mai 2026)
+
+- **Header Logo Position**: SAP-Logo aus der Report-Navigation entfernt und im oberen Header zentriert zwischen Titelbereich links und Darkmode-Bereich rechts platziert; Größe maximal responsiv ohne Layoutbruch.
+
+### v1.6.243 (19. Mai 2026)
+
+- **SAP B1 Logo Position**: Logo aus dem SAP-B1-Card-Header entfernt und in der Report-Navigation (bei Zurück/Vor) zentriert zwischen linkem Steuerblock und rechter Datumsinfo platziert, mit responsiver Maximalgröße ohne Layoutbruch.
+
+### v1.6.242 (19. Mai 2026)
+
+- **Deploy (pull-server-only)**: `server/static/icons/sap.png` zur Download-Dateiliste hinzugefügt, damit das SAP-B1-Logo bei Server-Updates zuverlässig mitgezogen wird.
+
+### v1.6.241 (19. Mai 2026)
+
+- **SAP B1 UI Asset**: `server/static/icons/sap.png` versioniert und ausgeliefert, damit das im SAP-B1-Header eingebundene Logo zuverlässig sichtbar ist.
+
+### v1.6.240 (19. Mai 2026)
+
+- **SAP B1 UI**: Neues `sap.png` Logo im SAP-B1-Bereich als rechter Header-Akzent eingebunden (responsive, ohne Layout-Verzerrung).
+
+### v1.6.239 (19. Mai 2026)
+
+- **SAP B1 Lizenzinfos UI**: Bereich "Lizenzinfos" startet jetzt standardmäßig zugeklappt und kann bei Bedarf aufgeklappt werden.
+
+### v1.6.231 (19. Mai 2026)
+
+- **HANA AddOns Query**: Lightweight-Abfrage auf `INNER JOIN` umgestellt (`SLDDATA.EXTENSIONS` ↔ `SLDDATA.EXTENSIONDEPLOYMENTS`), damit nur Datensätze mit passendem Deployment geliefert werden. Deployment-Guide entsprechend aktualisiert.
+
+### v1.6.230 (19. Mai 2026)
+
+- **Windows SQL Query (SLDData.Extensions)**: JOIN von `LEFT JOIN` auf `INNER JOIN` umgestellt, damit nur AddOns mit passendem Deployment in den Payload übernommen werden.
+
+### v1.6.229 (19. Mai 2026)
+
+- **README erweitert**: Payload-Snapshot-Rotation (Default 4), Standardpfade fuer Linux/Windows, Konfig-Overrides (`PAYLOAD_ARCHIVE_DIR`, `PAYLOAD_ARCHIVE_KEEP`) sowie bereits vorhandene SQL/HANA-Fehlerfelder im Payload dokumentiert.
+
+### v1.6.228 (19. Mai 2026)
+
+- **Payload-Sicherung vor Versand**: Agenten speichern vor jedem Report-POST automatisch einen lokalen Payload-Snapshot und behalten standardmäßig die letzten 4 Dateien (ältere werden rotiert) für nachträgliche Fehleranalyse.
+
+### v1.6.227 (19. Mai 2026)
+
+- **Admin Login-Audit UI**: Web-Login-Liste im Admin-Bereich als auf- und zuklappbaren Bereich umgesetzt; standardmäßig zugeklappt.
+
+### v1.6.226 (19. Mai 2026)
+
+- **Windows SQL Hotfix (Extensions)**: JOIN-Abfrage auf Alias-Syntax umgestellt (`Extensions` = `e`, `ExtensionDeployments` = `ed`), damit die AddOn-Daten aus `SLDData` wieder korrekt geliefert werden.
+
+### v1.6.225 (19. Mai 2026)
+
+- **Extensions Query Update (Windows + Linux)**: Auslesen der AddOn-Infos aus `SLDData.Extensions` auf Join mit `ExtensionDeployments` umgestellt; in beiden Windows-Skripten, im Linux-Collector und in der Deployment-Doku konsistent nachgezogen.
+
+n### v1.6.224 (19. Mai 2026)
+
+- **Windows Agent**: Lizenzfile-Suchpfade korrigiert und erweitert: `C:\Program Files (x86)\SAP\SAP Business One Server\B1_SHR\Lizenz\B01.txt` und `C:\Program Files (x86)\SAP\SAP Business One Server\B1_SHR\Lizenzen\B01.txt` hinzugefügt.
+n### v1.6.223 (19. Mai 2026)
+
+- **Windows Agent**: Zusätzlicher Suchpfad für Lizenzfile (B01.txt) hinzugefügt: `C:Program Files (x86)SAPSAP Business One ServerB1_SHRB01.txt`
+n### v1.6.222 (19. Mai 2026)
+
+- **DB-Backup Remote-502 Hardening**: Backup-Start auf asynchronen Hintergrundjob umgestellt (schnelle Start-Antwort, kein Proxy-Timeout), Dateidownload auf Chunk-Streaming umgestellt und Status/Fehler-Handling für Backup-Job verbessert.
+n### v1.6.221 (19. Mai 2026)
+
+- **DB-Backup One-Shot**: Backup-Download-Jobs werden nach erfolgreichem Download sofort invalidiert und die temporäre Backup-Datei direkt gelöscht (kein stale Job-State).
+n### v1.6.220 (19. Mai 2026)
+
+- **DB-Backup Download**: Download-Flow im Admin-Bereich auf Fetch+Blob umgestellt (statt nativer Anchor-Navigation), damit Backup-Dateien zuverlässig vollständig heruntergeladen werden und Fehler sauber erkannt werden.
+n### v1.6.219 (19. Mai 2026)
+
+- **Hostkarten UI**: Unterste Reihe mit den drei Infochips (z. B. SAP/HANA/SID) aus der Hostkarte entfernt; Informationen bleiben in anderen Ansichten verfügbar.
+n### v1.6.218 (19. Mai 2026)
+
+- **Admin-Markierung SAP B1**: Admin-exklusive Unterpunkte bleiben für Admins sichtbar und werden nun optisch markiert (Badge + Akzent), während sie für Nicht-Admins weiterhin komplett ausgeblendet sind.
+n### v1.6.217 (19. Mai 2026)
+
+- **Admin-Sichtbarkeit SAP B1**: Admin-Unterpunkt 'SAP B1 Setup Roh-Output' wird für Nicht-Admins nun vollständig ausgeblendet (kein Hinweistext, kein Menüpunkt).
+n### v1.6.216 (19. Mai 2026)
+
+- **Admin-Sichtbarkeit SAP B1**: Unterpunkt 'SAP B1 Setup Roh-Output' auf Admin-Benutzer eingeschränkt; Nicht-Admins sehen nur einen Hinweistext.
+n### v1.6.215 (19. Mai 2026)
+
+- **SAP B1 Lizenzinfos**: Detailinhalte (HW-Key, Installationsnummer, Systemnummer, Kundennummer, Lizenznehmer, Gültigkeit, Datei-Stand) ausgeblendet; angezeigt werden nur noch die zwei SQL/HANA-Suchpfad-Infozeilen.
+n### v1.6.214 (18. Mai 2026)
+
+- **pull-server-only**: PNG-Icon-Downloads auf denselben Parallelwert wie Standarddateien umgestellt (MAX_PARALLEL_DOWNLOADS, standardmäßig 8).
+- **Hostkarte**: Testweise eingebauten Versionsrückstands-Zahlenchip wieder ersatzlos entfernt.
+n### v1.6.213 (18. Mai 2026)
+
+- **Hostkarten Versionsindikator**: Roten Punkt durch runden Zahlen-Chip ersetzt; zeigt den Versionsrückstand (Anzahl Versionen) nur bei Rückstand > 0.
+n### v1.6.212 (18. Mai 2026)
+
+- **Hostkarten Layout**: Vertikalen Abstand zwischen Hostbezeichnung und der darunterliegenden IP-/Meta-Zeile reduziert.
+n### v1.6.211 (18. Mai 2026)
+
+- **License Card Spacing**: Abstand zwischen erster und zweiter Spalte nochmals deutlich verkleinert (fast ohne Zusatzabstand).
+n### v1.6.210 (18. Mai 2026)
+
+- **License Card Spacing**: Abstand zwischen erster und zweiter Spalte leicht reduziert (feineres Tuning).
+n### v1.6.209 (18. Mai 2026)
+
+- **License Card Layout-Fix**: Clipboard-Icon aus dem Grid-Flow entfernt und als Floating-Button oben rechts positioniert, damit die Kartenstruktur stabil bleibt.
+n### v1.6.208 (18. Mai 2026)
+
+- **License Card Datenlogik**: Lizenzkarte wird strikt nur bei selektiertem Host und vorhandenen Lizenzdaten angezeigt.
+- **License Card Layout**: Spaltenabstand in der Lizenzkarte reduziert.
+- **Clipboard Komfort**: Neues 📋-Icon kopiert HW-Key, Installationsnummer und Systemnummer in die Zwischenablage.
+n### v1.6.207 (18. Mai 2026)
+
+- **License Card Height**: Maximale Hoehe der Lizenzkarte von 150px auf 100px reduziert (overflow-y: auto).
+n### v1.6.206 (18. Mai 2026)
+
+- **License Card Position**: Lizenzkarte ins horizontale Zentrum des Headers verschoben; Karteninhalt linksbündig.
+n### v1.6.205 (18. Mai 2026)
+
+- **License Card Styling**: Lizenzkarte: Labels kleiner und leichter, Werte extra-fett (800), mehr Spaltenabstand, Inhalte horizontal zentriert.
+n### v1.6.204 (18. Mai 2026)
+
+- **License Card Height Fix**: Lizenzkarte nun mit korrekter 56px Höhe wie andere Header-Chips; 3x2 Grid-Layout mit gleichmäßigen Reihenabständen.
+n### v1.6.203 (18. Mai 2026)
+
+- **License Card Redesign**: Lizenzkarte mit vereinfachter Struktur neu aufgebaut; 3x2 Grid-Layout mit allen 6 Lizenzfeldern, gleiche Höhe und gelber Balken wie andere Header-Chips.
+n### v1.6.202 (18. Mai 2026)
+
+- **License Card Border**: Linker Balken von Orange zu Gelb geändert (Farbcodierung passt besser zum System-Theme).
+n### v1.6.201 (18. Mai 2026)
+
+- **Old UI Header**: SAP-Lizenzinfos in den oberen Statuskarten-Bereich verschoben (neben Offene Alerts, gleiche Kartenoptik mit gelbem linken Balken).
+- **Layout**: Spaltenabstände innerhalb der Lizenzkarte deutlich verkleinert und Schrift kompakter gemacht.
+- **Bereinigung**: Zusätzliche Lizenzkarte im Report-Kopf entfernt; SAP-B1-Bereich bleibt weiterhin erhalten.
+n### v1.6.200 (18. Mai 2026)
+
+- **Branding**: App-Name auf "System Infoboard" aktualisiert (Header, Login, PWA, Mail-Branding).
+- **Telegram**: Telegram-Alarmtexte enthalten jetzt ebenfalls das neue Branding.
+- **Old UI SAP-Karten**: Zusätzliche Lizenz-Karte oben integriert; zeigt alle verfügbaren Lizenzfelder kompakt ("Gültig bis" optional).
+n### v1.6.199 (18. Mai 2026)
+
+- **Old UI report hotfix**: JavaScript-Fehler "technicalHostname is not defined" in der Report-Ansicht behoben.
+n### v1.6.198 (18. Mai 2026)
+
+- **Old UI SAP card spacing**: Hostbezeichnung und Unterzeile aus dem Report-Header entfernt, damit die 3 großen SAP-Infokarten mehr Platz bekommen und den Header-Bereich dominieren.
+n### v1.6.197 (18. Mai 2026)
+
+- **Old UI SAP card alignment**: Titel der 3 SAP-Karten an die dargestellten Werte angepasst und Kartenhöhe/Position im Report-Header korrigiert (kompakter, auf Höhe zwischen Hostbezeichnung links und Datum rechts).
+n### v1.6.196 (18. Mai 2026)
+
+- **Old UI SAP header cards**: Kleine SAP/HANA Chips unter dem Hostnamen im Report-Header durch 3 große Karten im ui-next-Stil ersetzt (Feature Pack, Patch Level, Build) und responsiv/dark-mode-fähig gestaltet.
+n### v1.6.195 (18. Mai 2026)
+
+- **Old UI header cards**: Die drei oberen Status-Chips nutzen jetzt den moderneren UI-next-Look mit kompakter Card-Optik, linker Farbakzentkante sowie angepasster Dark-Mode-/Mobile-Darstellung.
+n### v1.6.194 (18. Mai 2026)
+
+- **UI old refresh**: Obere 3 Status-Chips als kompakte moderne Statuskarten gestaltet (bessere Lesbarkeit, Karten-Look, konsistente Größe im Header).
+n### v1.6.193 (18. Mai 2026)
+
+- **ui-next refinements**: Datenbanken-Tab lists actual SQL databases; SAP B1 tab reads real sap_business_one payload fields (FP/PL/Build) and includes detailed license/AddOn info.
+n### v1.6.192 (18. Mai 2026)
+
+- **ui-next host card status**: (OK/alert) moved back to top row next to customer name, no longer one line too low.
+n### v1.6.191 (18. Mai 2026)
+
+- **ui-next host card typography**: swapped: customer name larger, host designation smaller.
+n### v1.6.190 (18. Mai 2026)
+
+- **UI Shortcuts**: ui-next now has missing menu shortcuts for Benutzereinstellungen, globale Ansicht, globale Alerts, kritische Trends, inaktive Hosts, Alarm-Einstellungen, Admin-Einstellungen.
+- **Deep-linking**: legacy UI now supports '?start=...' deep-link routing from ui-next.
+n### v1.6.189 (18. Mai 2026)
+
+- **Host Visibility**: ui-next now respects host is_hidden and hides hidden hosts by default again; status line now indicates hidden host count.
+n### v1.6.188 (18. Mai 2026)
+
+- **SAP Versioning**: ui-next now resolves SAP release/build to Feature Pack using SAP B1 version map (/api/v1/sap-b1-version-map), matching old UI behavior.
+n### v1.6.187 (18. Mai 2026)
+
+- **UI Layout**: In ui-next Host-Cards wurde die Header-Reihenfolge angepasst: Kundenname oben, dann Host-Bezeichnung, gefolgt von Hostname + IP.
+n### v1.6.186 (18. Mai 2026)
+
+- **Performance**: pull-server-only.sh überspringt jetzt standardmäßig die teure Re-Download-Verifizierung (VERIFY_SYNC=0) und nutzt konfigurierbare parallele Downloads (MAX_PARALLEL_DOWNLOADS, Standard 8); strikte Verifizierung weiterhin über VERIFY_SYNC=1 möglich.
+n### v1.6.185 (18. Mai 2026)
+
+- **Pull Scripts**: pull-server.sh und pull-server-only.sh liefern jetzt auch ui-next.html, ui-next.css und ui-next.js aus, damit /ui-next nach einem Server-Update funktioniert.
+
+### v1.6.184
+
+- **UI-Next**: Added country filters and own hosts filter to the parallel UI.
+
+### v1.6.183 (18. Mai 2026)
+
+- **Parallel UI (Variante B) live**: Neue, separate Parallel-Oberflaeche unter `/ui-next` umgesetzt, ohne die bestehende Hauptseite zu veraendern.
+- **Header beibehalten**: Der bestehende Brand-Header wurde im neuen Layout uebernommen.
+- **KPI-Leiste wie Screenshot**: Vier Kennzahlen-Karten (Offene Alerts, Kritische Trends, Inaktive Hosts, Hosts Healthy) werden direkt unter dem Header dargestellt.
+- **Detailansicht mit Historie**: Links Hostliste mit Filtern/Suche, rechts Host-Detailtabs (`Overview`, `Datenbanken`, `SAP B1`, `Filesystems`) inkl. Blaettern durch Reports (Neueste/Neuer/Aelter).
+
+### v1.6.182 (18. Mai 2026)
+
+- **Detail-Mockups erweitert**: `layout-mockups.html` enthaelt jetzt drei zusaetzliche konkrete Detailansichten fuer die Parallel-UI-Planung: (1) Datenbanken, (2) SAP B1, (3) Filesystems. Alle drei enthalten realistische Inhaltsbloecke inkl. Suche, Schnellfilter sowie Benutzer-/Global-/Admin-Settings.
+
+### v1.6.181 (18. Mai 2026)
+
+- **Mockups Bedienlogik konkretisiert**: In allen drei Mockup-Varianten wurden Suche, Schnellfilter sowie Benutzer-/Global-/Admin-Settings als eigene Utility-Leiste sichtbar positioniert, damit die spaetere Navigation eindeutig ist.
+
+### v1.6.173 (18. Mai 2026)
+
+- **Mockups konkretisiert (3 Versionen)**: `layout-mockups.html` zeigt jetzt drei realitaetsnahe Endbild-Varianten mit den aktuellen Informationsgruppen der bestehenden UI: (A) vollstaendige Global-Overview ohne Host-Selektion, (B) vollstaendige Einzelhost-Detailansicht (Overview/Journal/Prozesse/Container/Netzwerk/Filesystems/Databases), (C) Split-View mit Hostliste links und globalem Kontext rechts.
+
+### v1.6.172 (18. Mai 2026)
+
+- **Layout-Mockups modernisiert**: Neue visuelle Vergleichsseite mit zwei Richtungen umgesetzt (`Calm Professional` und `Data-First Compact`) zur Bewertung der Punkte 1-4: ruhiger Hintergrund, vereinfachte Sidebar-Karten, mehr Weissraum und modernere KPI-Karten.
+
+### v1.6.171 (18. Mai 2026)
+
+- **Hostkarten Typografie Feinschliff**: Kundenname wieder reduziert und die darunterliegende Host-Zeile groesser/staerker gesetzt, damit die Proportionen ausgeglichener sind.
+
+### v1.6.170 (18. Mai 2026)
+
+- **Hostkarte Kundenname Fix**: Uebergreifender `span`-Selector hat den Kundennamen auf `11px`/muted ueberschrieben. Regel auf Metazeile eingeschraenkt und Kundenname auf `20px` gesetzt.
+
+### v1.6.169 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.168 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.167 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.166 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.165 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.164 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.163 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.162 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.161 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.160 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.159 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.158 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.157 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.156 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.155 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.154 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.153 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.152 (18. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.151 (18. Mai 2026)
+
+- **Host-Interessen**: Kundenname wird in der Liste jetzt als erste Zusatzinformation pro Zeile angezeigt.
+
+### v1.6.150 (18. Mai 2026)
+
+- **Filesystem Drilldown Close Fix**: Das `X`, der Backdrop und `Escape` schließen das Filesystem-Drilldown jetzt zuverlässig, auch wenn das Modal-Markup erst nach dem Script geladen wird.
+n### v1.6.149 (18. Mai 2026)
+
+- **Filesystem Chart Drilldown Fix**: Klick auf FS-Chart öffnet nun zuverlässig das korrekt selektierte Chart; Drilldown-Fenster lässt sich wieder sauber schließen.
+
+### v1.6.148 (18. Mai 2026)
+
+- **Server Pull (Linux Installer)**: `pull-server-only.sh` lädt und spiegelt jetzt auch `client/linux/install_agent.sh` nach `updates/client/linux/install_agent.sh`.
+
+### v1.6.147 (18. Mai 2026)
+
+- **Einzelmeldung Chip-Design**: SAP/HANA Chips in der Einzelmeldung verwenden jetzt exakt dieselben Hostkarten-Klassen und damit das identische Pill-Design.
+
+### v1.6.146 (18. Mai 2026)
+
+- **Einzelmeldung Chip-Rendering Fix**: SAP/HANA Chips werden in der Einzelmeldung wieder zuverlässig angezeigt (Fallback auf Host-Metadaten, wenn Report-Felder fehlen).
+
+### v1.6.145 (18. Mai 2026)
+
+- **Einzelmeldung Chip-Farben**: SAP Feature Pack, HANA Release und HANA SID in der Einzelmeldung jetzt im gleichen Orangeton wie in der Hostkarte.
+
+### v1.6.144 (18. Mai 2026)
+
+- **Chip Colors**: SAP Feature Pack, HANA Release, and HANA SID chips now use consistent orange color scheme across all views
+
+### v1.6.143 (21. Mai 2026)
+
+- **Host Interests Auto-Sync**: When user selects hosts, mail subscriptions are automatically activated for those hosts. When hosts are deselected, mail subscriptions are disabled.
+
+### v1.6.142 (18. Mai 2026)
+
+- **UI Text**: Bereich "Login Changelog" in der Globalansicht auf "Anmeldungen" umbenannt.
+
+### v1.6.141 (18. Mai 2026)
+
+- **Globalansicht**: Bereich "Kunden" (Tab + View + Event-Verkabelung) vollständig entfernt.
+
+### v1.6.140 (18. Mai 2026)
+
+- **Kundenansicht UI**: Kunden-Toggle-Zeilen entschärft (weniger Chip-Optik) und nicht mehr über volle Breite bis zum rechten Rand.
+
+### v1.6.139 (18. Mai 2026)
+
+- **Journal Fehler Fix**: Ersten Buchstaben der Meldung nicht mehr abschneiden (Off-by-one bei short-iso Zeitstempel-Parsing).
+
+### v1.6.138 (18. Mai 2026)
+
+- **Kundennamen Font-Größe**: Angepasst auf 13px für bessere Platznutzung bei längeren Namen.
+
+### v1.6.136 (18. Mai 2026)
+
+- **Chip Farben**: SAP/HANA/SID und Kundennamen Chips transparenter und heller gestaltet für bessere Harmonie mit Hostkarten-Hintergrund.
+
+### v1.6.180 (18. Mai 2026)
+
+- **Hostkarten-Hintergrund zurueckgesetzt**: Der eigentliche Kartenhintergrund wurde auf den Stand vor der letzten Farbumstellung zurueckgesetzt. Die aktuellen Pillenfarben (Kunde/SAP/HANA/SID) bleiben unveraendert.
+
+### v1.6.179 (18. Mai 2026)
+
+- **Chip-Farben vereinheitlicht**: In der vorletzten Hostkarten-Reihe nutzen jetzt alle drei Chips (SAP, HANA, SID) den gleichen Stil/Farbton `#f7a600`.
+
+### v1.6.178 (18. Mai 2026)
+
+- **Hostkarten-Pillenfarben angepasst**: Die Kundennamen-Pille im Hostkartenkopf nutzt jetzt `#006285`; die HANA-Pillen in der unteren Chip-Reihe wurden auf `#f7a600` umgestellt.
+
+### v1.6.177 (18. Mai 2026)
+
+- **Hostkarten-Gradient auf Markenfarben**: Der Hintergrundverlauf der einzelnen Hostkarte wurde auf die gewuenschten Farben `#006285` und `#f7a600` umgestellt und insgesamt leicht dunkler abgestimmt.
+
+### v1.6.176 (18. Mai 2026)
+
+- **Hostkarten-Hintergrund leicht dunkler**: Der bestehende Verlauf auf der einzelnen Hostkarte wurde in den gleichen Farbtönen beibehalten, aber dezent dunkler abgestimmt, damit die Karten etwas mehr Tiefe und Kontrast haben.
+
+### v1.6.175 (18. Mai 2026)
+
+- **Host-Kundenpille vereinheitlicht**: Die Kunden-Pille im Host-Kartenkopf nutzt jetzt immer die volle verfuegbare Breite (unabhaengig von der Textlaenge). Dadurch erscheinen alle Karten im Headerbereich einheitlicher ausgerichtet.
+
+### v1.6.174 (18. Mai 2026)
+
+- **Mail-Header Kunde + Host**: In ausgehenden hostbezogenen Mails wird der Kunde jetzt im Header prominent angezeigt (gleiche Groesse wie bisherige Host-Hauptzeile), die Hostbezeichnung darunter deutlich kleiner. Die Darstellung wurde zentralisiert und in Instant-/Reminder-Alerts sowie hostbezogenen Testmails vereinheitlicht.
+
+### v1.6.173 (18. Mai 2026)
+
+- **DB Changelog HANA-Schema**: HANA-Einträge werden im DB Changelog jetzt explizit als Schema behandelt/angezeigt (inkl. Aktionstext für Schema erstellt/gelöscht). SQL-Datenbanken bleiben unverändert im bisherigen Format.
+
+### v1.6.172 (18. Mai 2026)
+
+- **Host-Changelog getrennt**: Im hostbasierten Bereich wurde ein separater Menüpunkt `DB Changelog` wieder eingeführt. DB-Änderungen werden dort angezeigt; der hostbasierte Standard-`Changelog` zeigt wieder nur Konfig-/Hardware- und AddOn-Änderungen.
+
+### v1.6.171 (17. Mai 2026)
+
+- **Harvest SQL Setup robuster**: `setup_harvest_sql_user.ps1` behandelt Auth-/Rechteprobleme jetzt besser (GRANT als Best-Effort mit Warnungen statt hartem Abbruch) und unterstuetzt optionalen SQL-Admin-Fallback via `HARVEST_SETUP_SQL_ADMIN_USER` + `HARVEST_SETUP_SQL_ADMIN_PASSWORD` in `agent.conf`.
+
+### v1.6.170 (17. Mai 2026)
+
+- **Changelog Spaltenbreiten**: Die Feld-Spalte wurde im Host- und Global-Changelog deutlich vergroessert; die Spalten "Alter Wert" und "Neuer Wert" wurden entsprechend verkleinert, damit Feldnamen besser vollstaendig sichtbar sind.
+
+### v1.6.169 (17. Mai 2026)
+
+- **Hardware-Changelog Symbol**: Hardware-basierte Changelog-Felder zeigen jetzt zusaetzlich das Computersymbol direkt im Feldnamen, z. B. `💻 CPU Cores`, `💻 RAM (GB)`, `💻 Kernel`.
+
+### v1.6.168 (17. Mai 2026)
+
+- **DB-Changelog Symbole**: Im globalen und im hostbasierten Changelog zeigen DB-Lifecycle-Eintraege wieder die bekannten Icons direkt im Text: `✨ DB erstellt` und `🗑️ DB geloescht`.
+
+### v1.6.167 (17. Mai 2026)
+
+- **Changelog Vereinheitlichung**: DB-Lifecycle-Events (Erstellen/Loeschen) sind jetzt im globalen Changelog und im hostspezifischen Changelog enthalten (zusammen mit Hardware-Metriken und AddOn-Aenderungen).
+- **Host UI bereinigt**: Der separate Bereich "DB-Verlauf" wurde entfernt; der Sidebar-Bereich "Aenderungen" wurde in "Changelog" umbenannt.
+
+### v1.6.166 (17. Mai 2026)
+
+- **Host-Aenderungsprotokoll AddOns**: Der Host-spezifische Tab "Aenderungen" zeigt jetzt auch SAP/HANA AddOn-Versionsaenderungen (LW/Legacy) direkt im Kunden-Host-Changelog an.
+
+### v1.6.165 (17. Mai 2026)
+
+- **Changelog Filter**: Neuer "3 Tage" Zeitraumfilter hinzugefuegt; ist jetzt auch der Standard beim Seitenaufruf.
+
+### v1.6.164 (17. Mai 2026)
+
+- **Changelog Kundengroupierung**: Kunde ist jetzt die oberste Gruppierungsebene; Host-Display-Name (mit Hostname als Untertitel) ist die zweite Ebene. Backend gibt `customer_name` zurueck (via JOIN auf `customers`).
+
+### v1.6.163 (17. Mai 2026)
+
+- **Critical-Trends Chips**: Fehlenden `.ct-badge`-Selektor ergaenzt – jetzt erscheinen "Kritisch" und "Warnung" beide als einheitliche Chips.
+- **Kundenname kleiner**: Schriftgroesse in den Trend-Karten von 20px auf 14px reduziert.
+ 
+### v1.6.162 (17. Mai 2026)
+
+- **Critical-Trends Kundenzeile ohne Platzhalter**: In der Kundenzeile der Trend-Karten wird bei fehlendem Kundenwert kein `-` mehr angezeigt (kein Fallback auf Dash).
+
+### v1.6.161 (17. Mai 2026)
+
+- **Mute-Icone statusorientiert**: In den Alert-Aktionen zeigt `🔇` jetzt den stummgeschalteten Status und `🔔` den aktiven (nicht stummgeschalteten) Status.
+
+### v1.6.160 (17. Mai 2026)
+
+- **Kundenname in Critical-Trends sichtbar**: In den Trend-Karten wird der Kunde nun vorne in der Kopfzeile angezeigt (oberhalb vor dem Hostnamen), wie in der angefragten Ansicht.
+
+### v1.6.159 (17. Mai 2026)
+
+- **Changelog-Block bereinigt**: Der v1.6.158-Eintrag wurde aus dem Dateikopf in den Abschnitt `Changelog (Agent)` verschoben.
+
+### v1.6.158 (17. Mai 2026)
+
+- **Global-Alerts Spaltenbreiten optimiert**: `Host`, `Mountpoint`, `Aktiv seit` und `Aktion` neu austariert, damit rechte Inhalte nicht mehr aus dem Rahmen laufen.
+- **Actions kompakter gemacht**: Geringerer Button-Abstand/Padding und `nowrap` fuer die Aktionsgruppe, damit die rechte Spalte stabil bleibt.
+
+### v1.6.157 (17. Mai 2026)
+
+- **Hotfix Receiver-Start**: Syntaxfehler in der CSV-Export-Quoting-Zeile behoben (`receiver.py`), der zu `status=1/FAILURE` beim Service-Start fuehren konnte.
+
+### v1.6.156
+- Alerts table now includes current value and absolute delta columns; alerts API and CSV export include current_used_percent and delta_used_percent.
+### v1.6.155 (17. Mai 2026)
+
+- **Dark Mode Lesbarkeit korrigiert**: Der Kundenname in der Global-Alerts-Ansicht nutzt jetzt im Dark Mode eine helle Schriftfarbe, damit er nicht mehr mit dem Hintergrund verschmilzt.
+
+### v1.6.154 (17. Mai 2026)
+
+- **Alerts-Zeile typografisch angepasst**: Kundenname jetzt gross und fett wie die bisherige Hostzeile, Hostbezeichnung darunter 2px kleiner und nicht mehr fett.
+
+### v1.6.153 (17. Mai 2026)
+
+- **Alerts-Ansicht startet mit quittierten Alerts**: Das Häkchen `Quittierte anzeigen` ist nun standardmaessig aktiv und die Tabelle zeigt beim Start auch quittierte Eintraege.
+
+### v1.6.152 (17. Mai 2026)
+
+- **Kundenname in Global-Alerts korrigiert**: Die Alerts-Ansicht bezieht den Kunden jetzt aus dem gleichen Host-Settings/Customer-Join wie die anderen Übersichten, damit dort nicht nur ein Platzhalter angezeigt wird.
+
+### v1.6.151 (17. Mai 2026)
+
+- **Kunde in Global-Alerts sichtbar**: In der Alerts-Ansicht steht der Kundenname jetzt oberhalb der Hostbezeichnung, damit offene Alerts schneller zugeordnet werden koennen.
+
+### v1.6.150 (17. Mai 2026)
+
+- **Inaktive-Hosts Versand implementiert**: Bei aktivierter Option werden inaktive Hosts jetzt tatsaechlich als Benachrichtigung versendet (Mail + Telegram), inklusive Deduplizierung pro Host/Channel, damit pro Inaktiv-Phase nicht mehrfach gesendet wird.
+- **Neue Inaktive-Hosts Mailvorlage**: Branded HTML-Mail mit App-Logo im Header, ANG-Logo im Footer und Host-Tabelle (letzte Meldung, Inaktivdauer, Status DOWN).
+
+### v1.6.149 (17. Mai 2026)
+
+- **Inaktive-Hosts Mockup erweitert**: App-Logo im Header und ANG-Logo im Footer eingebaut, plus Telegram-Nachrichtenentwurf unterhalb des Mail-Layouts ergänzt.
+
+### v1.6.148 (17. Mai 2026)
+
+- **Inaktive-Hosts-Mail Mockup hinzugefuegt**: Neues Entwurfs-HTML unter `inactive-host-mail-mockup.html` im gleichen visuellen Stil wie die bestehenden Digest-Mails, mit Fokus auf Host-Down/Inaktiv-Informationen.
+
+### v1.6.147 (17. Mai 2026)
+
+- **"Agent Quelle" jetzt Admin-Only**: Der Menüpunkt ist nun nur für Admins sichtbar; Nicht-Admins werden bei direkter Submode-Auswahl automatisch auf "Globale Alerts" zurückgeführt.
+
+### v1.6.146 (17. Mai 2026)
+
+- **Hinweistexte in Sidebar-Navigation**: Unter "Container" steht nun klein "Nur wo Docker läuft", unter "Export" "Nur Linux Systeme".
+
+### v1.6.145 (17. Mai 2026)
+
+- **Konsistentes manuelles Backup**: `_create_database_backup_job` verwendet jetzt `Connection.backup()` statt rohem `shutil.copy2` — WAL-aware, keine Inkonsistenz durch zeitversetzte Kopien von `.db`, `-wal` und `-shm`.
+
+### v1.6.144 (17. Mai 2026)
+
+- **Automatischer sFTP Upload integriert**: Nach lokalem Backup wird die erzeugte Datei bei aktivierter sFTP-Konfiguration automatisch auf den Zielserver hochgeladen (manuell + Scheduler).
+- **Run-Status erweitert**: `uploaded_sftp` wird nun korrekt gesetzt; Upload-Fehler werden im Lauf als Fehlertext gespeichert.
+
+### v1.6.143 (17. Mai 2026)
+
+- **Hostkarten-Gradient vertikal**: Der Farbverlauf in den betroffenen Hostkarten-Kopfbereichen wurde von horizontal auf vertikal umgestellt (Light + Dark Theme).
+
+### v1.6.142 (17. Mai 2026)
+
+- **Backup-Run Tabelle erweitert**: Neue Spalte `sFTP` zeigt im UI pro Lauf an, ob die Datei hochgeladen wurde (`ja`/`nein`).
+
+### v1.6.141 (17. Mai 2026)
+
+- **Host-Chips transparenter gemacht**: SAP/HANA/SID-Chips (z. B. FP2602, 2.00.087, ANG) verwenden jetzt einen weiss-transparenten Hintergrund.
+
+### v1.6.140 (17. Mai 2026)
+
+- **sFTP Testfunktion eingebaut**: Neuer Admin-Button "sFTP testen" prueft Verbindung und fuehrt einen echten Test-Upload (put + rm) im Zielpfad aus.
+- **Backend-Endpoint ergaenzt**: `/api/v1/admin/backup-automation/test-sftp` mit Validierung fuer Host/Port/User/Auth und klaren Fehlermeldungen.
+- **Auth-Unterstuetzung**: SSH-Key direkt unterstuetzt; Passwort-Modus wird ueber `sshpass` getestet (falls auf dem Server vorhanden).
+
+### v1.6.139 (17. Mai 2026)
+
+- **Kundenchip nach links verschoben**: Der Kundenname-Chip steht in Reihe 2 jetzt ganz links unter der Host-Bezeichnung.
+- **Rechte Gruppe beibehalten**: Host-Controls und Meldungszaehler bleiben rechts ausgerichtet.
+
+### v1.6.138 (17. Mai 2026)
+
+- **Kundenchip in Reihe 2 angehoben**: Der Kundenname-Chip wurde leicht nach oben versetzt, damit er visuell auf derselben Hoehe wie die Nachbar-Controls sitzt.
+
+### v1.6.137 (17. Mai 2026)
+
+- **Reihe 2 nachgezogen**: Die Meldungsanzeige "Meldung X von Y" wurde auf dieselbe Hoehe wie die Chips/Buttons (24px) gesetzt.
+- **Header-Zeilen konsistent**: Erste und zweite Header-Zeile verwenden nun durchgaengig dieselbe Kontrollhoehe.
+
+### v1.6.136 (17. Mai 2026)
+
+- **Header-Hoehen vereinheitlicht**: Chips und Buttons im Host-Headerbereich auf die Hoehe von "Export JSON" (24px) angeglichen.
+- **Refresh-Dropdown angepasst**: Intervall-Select hat nun dieselbe Kompakthoehe wie die benachbarten Controls.
+
+### v1.6.135 (17. Mai 2026)
+
+- **Header-Zeile 2 rechts gebuendelt**: Alle Chips der zweiten Zeile werden zur rechten Seite verschoben.
+- **Meldungsanzeige gruppiert**: Kunden- und Host-Controls stehen direkt neben "Meldung X von Y".
+
+@@### v1.6.134 (17. Mai 2026)
+@@
+@@- **Zweite Zeile neu angeordnet**: Kundenname → Buttons → Meldungs-Info (via CSS order).
+@@- **Verbesserte Lesbarkeit**: Klarere Abfolge der Informationen von links nach rechts.
+@@
+
+### v1.6.130 (17. Mai 2026)
+
+- **Erste Zeile umgestaltet**: API/Count Chips nun nach rechts neben den Refresh-Tools.
+- **Zweite Zeile optimiert**: Kundenname ganz links, Buttons (Visibility/Favorite) ganz rechts.
+- **Verbesserte visuelle Balance**: Klarere Trennung zwischen Kontroll-Elementen und Meta-Informationen.
+
+### v1.6.129 (17. Mai 2026)
+
+- **Header-Layout reorganisiert**: API-Key und Report-Count Chips in die erste Zeile verschoben (neben Title).
+- **Zweite Zeile neu strukturiert**: Kundenname bleibt auf der linken Seite, Buttons (Visibility/Favorite) auf der rechten.
+- **Verbesserte Raumaufteilung**: Klarere visuelle Trennung zwischen Kontroll-Elementen und Daten-Informationen.
+
+### v1.6.97 (17. Mai 2026)
+
+- **Kundenname-Chip größer**: Schrift jetzt 16px (vorher 14px) für mehr Prominenz.
+- **Hostbezeichnung kleiner**: Von 10px auf 9px für bessere Gewichtung der Hierarchie.
+- **Verbesserte visuelle Balance**: Kundenname dominiert noch stärker, Details sind untergeordnet.
+
+### v1.6.96 (17. Mai 2026)
+
+- **Host-Karte umstrukturiert**: Kundenname-Chip rückt nach oben (größere, intensivere Schrift), Hostbezeichnung nach unten (klein).
+- **Verbesserte visuelle Hierarchie**: Kundenname ist jetzt das prominenteste Element, Hostbezeichnung untergeordnet.
+- **Chip-Styling für Kundenname**: Der Chip oben hat nun 14px Schrift und Weight 900 für maximale Betonung.
+
+### v1.6.95 (17. Mai 2026)
+
+- **Kunden-Name auf separate Zeile**: Der Kunden-Chip wird konsequent auf einer eigenen Zeile unterhalb der SAP/HANA-Chips angezeigt.
+- **Bessere optische Hierarchie**: Kleinere (10px) und fettere Schrift (Weight 700) für konsistente visuelle Trennung.
+- **Konsistentes Layout**: Kunden-Information ist jetzt unabhängig von anderen Chip-Kombinationen immer auf derselben Position.
+
+### v1.6.94 (17. Mai 2026)
+
+- **Host-Karte um Kunden-Chip erweitert**: In der unteren Chip-Zeile wird bei zugewiesenem Kunden jetzt ein zusätzlicher Kunden-Chip angezeigt.
+- **Kunden-Icon angepasst**: Der Chip verwendet das Firmengebäude-Emoji `🏢` (statt Personen-Emoji).
+
+### v1.6.93 (17. Mai 2026)
+
+- **Systemübersicht Kundengruppe korrigiert**: Die 2. Ebene verwendet jetzt den echten `customer_name` statt Host-Anzeigename.
+- **Hierarchie wieder korrekt**: Anzeige ist jetzt konsistent `Land → Kunde → Hosts`.
+
+### v1.6.92 (17. Mai 2026)
+
+- **Neue Admin-Übersicht für veraltete Agenten**: Zeigt Hosts, deren Agent-Version mindestens 5 Versionen hinter der aktuellen Repo-Agent-Version liegt.
+- **Self-Update-Früherkennung**: Major/Minor-Abweichungen werden ebenfalls als potentiell kritischer Rückstand markiert.
+- **Direkt im Admin-Bereich**: Die neue Tabelle ist im Abschnitt „Agent Update Status (Alle Hosts)“ integriert.
+
+### v1.6.91 (17. Mai 2026)
+
+- **Systemübersicht: Kundenebene standardmäßig zugeklappt**: Unter jedem Land starten Kunden jetzt geschlossen.
+- **Neuer Button `Alles aufklappen` (Systemübersicht)**: Öffnet alle Gruppen auf einmal.
+- **Neuer Button `Alles aufklappen` (Backup Stati)**: Öffnet alle Kunden-Gruppen auf einmal.
+
+### v1.6.90 (17. Mai 2026)
+
+- **Systemübersicht-Anzeige korrigiert**: In der Host-Zeile wird wieder der echte Host-Name angezeigt statt erneut des Kunden-Namens.
+- **Hierarchie visuell eindeutig**: Dadurch ist die Struktur wieder klar als `Land → Kunde → Host` erkennbar.
+
+### v1.6.89 (17. Mai 2026)
+
+- **Backup Stati: Kunden standardmäßig zugeklappt**: Die Kundenebene startet jetzt immer geschlossen.
+- **Unabhängig vom Status**: Kein automatisches Aufklappen mehr bei fehlenden aktuellen Backups.
+
+### v1.6.88 (17. Mai 2026)
+
+- **Changelog-Hierarchie angepasst**: Im Changelog-Bereich ist die erste Ebene jetzt `Kunde`.
+- **Neue zweite Ebene `Host`**: Unter jedem Kunden werden die einzelnen Hosts separat gruppiert angezeigt.
+- **Datums-Topgruppe entfernt**: Die vorherige oberste Gruppierung nach Datum entfällt zugunsten der Kundenstruktur.
+
+### v1.6.87 (17. Mai 2026)
+
+- **Systemübersicht weiter vereinfacht**: In der Standardsicht ist die Hierarchie jetzt nur noch `Land → Kunde`.
+- **OS-Zwischenebene entfernt**: Hosts eines Kunden werden unabhängig vom Betriebssystem in einer gemeinsamen Tabelle angezeigt.
+- **Sicht-/Sorttexte angepasst**: Labels zeigen in der Standardsicht jetzt konsistent `Land > Kunde`.
+
+### v1.6.86 (17. Mai 2026)
+
+- **Systemübersicht-Hierarchie neu aufgebaut**: In der Standardsicht ist die Gruppierung jetzt `Land → Kunde → OS`.
+- **Kundenebene als zweite Stufe**: Pro Land werden zuerst die Kunden gruppiert und danach die jeweiligen Betriebssysteme.
+- **Sort-/Sichttexte aktualisiert**: Button- und Statistik-Label zeigen jetzt konsistent `Land > Kunde > OS` an.
+
+### v1.6.85 (17. Mai 2026)
+
+- **Backup-Status mit zusätzlicher Hierarchie**: Neue Top-Gruppierung nach Kunde im Bereich "Backup Stati".
+- **Struktur Kunde → Hosts**: Unter jedem Kunden werden die zugehörigen Host-Karten wie bisher angezeigt.
+- **Kunden-Kennzahlen in Summary**: Pro Kundengruppe werden Host-Anzahl sowie aktuelle vs. fehlende Backups aggregiert dargestellt.
+
+### v1.6.84 (17. Mai 2026)
+
+- **Telegram Quick Actions zurück**: Alert-Nachrichten enthalten wieder einen direkten Button zum Quittieren.
+- **Neu: Schliessen aus Telegram**: Zusätzlich gibt es nun einen zweiten Button zum direkten Schliessen des Alerts.
+- **Signierter Action-Link**: Neue verifizierte Endpoint-Verarbeitung über `GET /api/v1/telegram/alert-action` mit Ablaufzeit und HMAC-Signatur.
+- **Gilt für Instant + Reminder**: Buttons werden bei offenen/escalated Alerts und Heads-Up-Reminder-Nachrichten angehängt.
+
+### v1.6.83 (17. Mai 2026)
+
+- **Host-Suche erweitert**: Die bestehende Suche im Hosts-Bereich durchsucht jetzt zusätzlich Kundendaten.
+- **Neu durchsuchbar**: Neben Hostname/Anzeigename werden jetzt auch `customer_name` und `customer_maringo_project_number` berücksichtigt.
+
+### v1.6.82 (17. Mai 2026)
+
+- **Auto-Backups sichtbar im Admin-Bereich**: Läufe der automatischen Backups werden tabellarisch angezeigt.
+- **Tabellenfelder erweitert**: Datum, Uhrzeit, Quelle, Status, Datei, Größe, Link und Fehler werden pro Lauf gelistet.
+- **Direkter Download-Link**: Jeder erfolgreiche Lauf enthält jetzt einen klickbaren Download-Link zur zugehörigen Backup-Datei.
+- **Sicherer Download-Endpoint**: Neuer Admin-Endpoint `GET /api/v1/admin/backup-automation/download?run_id=...` mit Pfadvalidierung.
+
+### v1.6.81 (17. Mai 2026)
+
+- **Masken-Layout angepasst**: "Meldung X von Y" ist jetzt in der zweiten Zeile rechts ausgerichtet.
+- **Kundenchip verschoben**: Der Kunden-Chip wurde aus der oberen Titelzeile in die zweite Zeile an die frühere Position der Meldungsanzeige verschoben.
+
+### v1.6.80 (17. Mai 2026)
+
+- **Automatische DB-Backups**: Lokale SQLite-Backups laufen jetzt automatisch im Hintergrund (Default: alle 12 Stunden).
+- **Retention eingebaut**: Alte automatische Backup-Dateien werden automatisch nach der konfigurierten Aufbewahrungszeit (Default: 7 Tage) bereinigt.
+- **Admin-API ergänzt**: Neue Endpoints für Backup-Automation (`GET/POST /api/v1/admin/backup-automation`, manueller Trigger für lokales Backup).
+- **Admin-UI erweitert**: Neuer Bereich "Backup Automation (lokal + sFTP vorbereitet)" mit Settings, Sofort-Backup-Button und Laufhistorie.
+- **sFTP vorbereitet**: sFTP-Konfigurationsfelder werden gespeichert (Host/Port/User/Path/Auth), Upload-Logik folgt in einem späteren Schritt.
+
+### v1.6.79 (17. Mai 2026)
+
+- **Charts mit Skala**: Dezente horizontale Gitternetzlinien und Y-Achsenwerte pro Chart ergänzt.
+- **Bessere Lesbarkeit**: Skalen sind bewusst zurückhaltend gestaltet und in Light/Dark-Theme abgestimmt.
+
+### v1.6.78 (17. Mai 2026)
+
+- **Delta-Farben im DB-Verlauf**: Positive Delta-Werte werden jetzt grün, negative rot dargestellt.
+- **Dark-Theme berücksichtigt**: Angepasste Grün-/Rot-Töne für gute Lesbarkeit in dunkler Ansicht.
+
+### v1.6.77 (17. Mai 2026)
+
+- **Manueller Trigger in der UI**: Neuer Button `↻ Jetzt berechnen` im Bereich `DB Wartung (SQLite)`.
+- **Direktaufruf des Trigger-Endpoints**: Der Button ruft `POST /api/v1/admin/database-stats/trigger` auf und lädt Charts/Verlauf unmittelbar neu.
+- **Saubere Sperrlogik**: Während `VACUUM` oder manuellem Rechnen sind die jeweiligen Buttons gegenseitig deaktiviert.
+
+### v1.6.76 (17. Mai 2026)
+
+- **DB-Berechnungsintervall auf 2h** umgestellt (statt 3h).
+- **UI dynamisch angepasst**: Status- und Delta-Texte zeigen jetzt das effektive Intervall (z. B. Δ2h, Nächster 2h-Lauf).
+- **Manueller Trigger ergänzt**: Neuer Admin-Endpoint `POST /api/v1/admin/database-stats/trigger` berechnet den aktuellen Bucket sofort neu und liefert das aktualisierte Dashboard zurück.
+
+### v1.6.75 (17. Mai 2026)
+
+- **DB-Kennzahlen als Charts**: Die bisherigen Kennzahlen-Karten wurden durch 6 KPI-Charts ersetzt.
+- **Trendindikatoren**: Jeder Chart zeigt Trendpfeil (steigend/fallend/stabil), aktuelles Niveau und 3h-Delta.
+- **Responsive Reihenlayout**: Auf großen Screens 6 Charts in einer Reihe, bei weniger Platz automatische Verteilung auf 2 Reihen (3+3), mobil weiter reduziert.
+
+### v1.6.74 (17. Mai 2026)
+
+- **Hotfix Admin-Load**: DB-Kennzahlen-Verlauf wird beim Öffnen des Admin-Tabs jetzt aktiv geladen (nicht nur beim initialen App-Start).
+- **Symptom behoben**: Der Bereich bleibt nicht mehr auf "Lade DB Kennzahlen-Verlauf..." stehen, wenn Login/Admin-Status erst nach dem Bootstrapping verfügbar ist.
+
+### v1.6.73 (17. Mai 2026)
+
+- **Admin-Tab umbenannt**: Registerkarte heißt jetzt **Admin** statt "Admin Settings".
+- **Admin-Bereiche verschoben**: "Admin Aktionen", "DB Wartung (SQLite)" und "Agent Update Status" sind jetzt im Admin-Tab gruppiert.
+- **DB-Kennzahlen automatisiert**: Kennzahlen werden automatisch in eine Historien-Tabelle geschrieben (alle 3 Stunden, Zeitzone konfigurierbar), inklusive Start-Snapshot.
+- **Kein manueller Kennzahlen-Refresh mehr**: Der manuelle ↻-Button wurde entfernt.
+- **Charts + 14-Tage-Trendanalyse**: Visualisierung der wichtigsten Kennzahlen und lineare 2-Wochen-Prognose im DB-Wartungsbereich.
+- **Verlaufstabelle**: Anzeige der letzten 20 Historienzeilen inklusive Veränderung zur vorherigen Zeile (+/-).
+
+### v1.6.72 (16. Mai 2026)
+
+- **Chips in Titelzeile**: API-Chip, Meldungsanzahl-Chip, Kunden-Chip und Action-Buttons sind jetzt in der Titelzeile eingebaut statt in einer zweiten Reihe — die Header-Karte bleibt gleich hoch.
+- **Trennlinie** zwischen Chips-Gruppe und Refresh/Export-Tools.
+- **✏️-Button kompakt** (24px, passend zu den Chips).
+
+### v1.6.71 (16. Mai 2026)
+
+- **Kundennamen nachträglich bearbeiten**: Im Kunden-Tab erscheint bei jedem Kunden ein ✏️-Button. Klick öffnet einen Dialog zum Ändern von Name und Maringo-Projektnummer (PATCH `/api/v1/customers/<id>`).
+
+
+\
+- **Chips einheitlich gross**: Alle Chips und Buttons in der Host-Kopfzeile haben jetzt dieselbe Hoehe wie der "Export JSON"-Button (24px, gleicher Border-Radius).\
+- **Kundenchip als erstes Element**: Der Kunden-Chip steht jetzt ganz links in der Kontrollleiste vor API, Meldungsanzahl und den Action-Buttons.
+
+### v1.6.69 (16. Mai 2026)
+
+- **Hotfix 502 nach Login**: Absturz im Endpoint `/api/v1/hosts` behoben (Spalten-Mismatch zwischen SQL-Query und Python-Mapping).
+- **Hostkarten wieder sichtbar**: Laden der Hostliste funktioniert wieder stabil.
+- **Bleistift wieder nutzbar**: Da Hosts wieder geladen werden, ist der Host-Bearbeiten-Flow wieder erreichbar.
+
+### v1.6.68 (16. Mai 2026)
+
+- **Neue Kunden-Auswertung (Global-Tab)**: Eigene Ansicht "Kunden" mit Kennzahlen je Kunde fuer Hosts, offene Alerts, kritische Alerts und Backup-Luecken.
+- **Drilldown pro Kunde**: Aufklappbare Hostliste je Kunde inklusive Land, Alert-Zahlen und Backup-Status.
+- **Suche integriert**: Filter nach Kunde, Maringo-Projektnummer sowie Hostname/Hosttitel direkt in der Kundenansicht.
+
+### v1.6.67 (16. Mai 2026)
+
+- **Hotfix Service-Start**: SQL-Syntaxfehler in der `host_settings`-Tabellendefinition behoben, der den Receiver beim Start mit `sqlite3.OperationalError` beendet hat.
+- **Init-DB wieder stabil**: Monitoring-Service startet nach dem Update wieder normal.
+
+### v1.6.66 (16. Mai 2026)
+
+- **Kundenstamm eingefuehrt**: Neue Kunden werden zentral gespeichert und koennen Hosts sauber zugeordnet werden.
+- **Host-Bearbeiten erweitert**: Der ✏️-Dialog kann jetzt Titel, Land und Kunde in einer Maske bearbeiten.
+- **Dropdown statt Freitext-Dubletten**: Bestehende Kunden sind auswaehlbar; alternativ kann ein neuer Kunde direkt angelegt werden.
+- **Optionale Maringo-Projektnummer**: Beim Anlegen eines Kunden kann eine Maringo-Projektnummer mitgespeichert werden.
+
+### v1.6.65 (16. Mai 2026)
+
+- **Alert-Abos nach Land gruppiert**: In der Host-Ansicht sind Hosts jetzt in Ländergruppen zusammengefasst.
+- **Bessere Uebersicht bei vielen Hosts**: Pro Land wird ein klarer Gruppenkopf mit Host-Anzahl angezeigt.
+- **Filter sauber integriert**: Such-/Benutzer-/"Nur Aenderungen"-Filter blenden ganze Laendergruppen automatisch aus, wenn darin kein sichtbarer Host mehr passt.
+
+### v1.6.64 (16. Mai 2026)
+
+- **Alert-Abos mit umschaltbarer Ansicht**: Admin-Bereich kann jetzt zwischen Host-Ansicht und User-Ansicht wechseln.
+- **Skalierung fuer viele Benutzer verbessert**: Gleiche Abo-Daten lassen sich je nach Aufgabe host-zentriert oder benutzer-zentriert bearbeiten.
+- **Unsaved-Changes bleiben beim Ansichtswechsel erhalten**: Nicht gespeicherte Checkbox-Aenderungen gehen beim Wechsel Host/User nicht verloren.
+
+### v1.6.63 (16. Mai 2026)
+
+- **Alert-Abos besser bedienbar**: Hostsuche, Benutzerfilter und Option "Nur Aenderungen" im Admin-Abo-Bereich hinzugefuegt.
+- **Bulk-Aktionen erweitert**: Sammelaktionen fuer sichtbare Eintraege (Mail/Telegram an/aus) sowie pro Host (Mail/Telegram alle an/aus).
+- **Aenderungen klar sichtbar**: Geaenderte Checkboxen/Zeilen werden visuell markiert und der Status zeigt die Anzahl ungespeicherter Aenderungen.
+
+### v1.6.62 (16. Mai 2026)
+
+- **Globales Telegram in eigene Karte verschoben**: Bot Token, globale Chat ID und Telegram an/aus stehen jetzt in einer separaten Telegram-Karte neben den Schwellwert-Karten.
+- **Benachrichtigungsbereich vereinfacht**: Der Bereich enthaelt nun nur noch Heads-Up-/Inaktiv-Logik und ist dadurch deutlich uebersichtlicher.
+
+### v1.6.61 (16. Mai 2026)
+
+- **Telegram-Settings im UI praezisiert**: Globaler Bot/Channel klar von persoenlicher Telegram Chat ID getrennt beschriftet.
+- **Benachrichtigungsbereich verstaendlicher**: Hinweise im Admin-Panel erklaeren, dass Bot Token systemweit ist und persoenliche Chat IDs pro Benutzer gepflegt werden.
+
+### v1.6.60 (16. Mai 2026)
+
+- **Separates Telegram Heads-Up Intervall**: In den globalen Alarm-Einstellungen gibt es jetzt ein eigenes Feld fuer Telegram-Reminder, unabhaengig vom Mail-Intervall.
+- **Mail und Telegram entkoppelt**: Offene Alerts fuehren nun getrennte Reminder-Zeitstempel pro Kanal, damit unterschiedliche Intervalle sauber parallel funktionieren.
+- **UI klar erweitert**: Benachrichtigungsbereich zeigt jetzt Mail- und Telegram-Heads-Up als zwei separate, kanalbezogene Intervalle.
+
+### v1.6.59 (16. Mai 2026)
+
+- **Heads-Up Intervall im UI praezisiert**: Beschriftung klar als Mail-Intervall markiert.
+- **Klarstellung fuer Betrieb**: Das globale Heads-Up-Intervall gilt fuer wiederholte Mail-Heads-Ups bei offenen Alerts, nicht fuer Telegram.
+
+### v1.6.58 (16. Mai 2026)
+
+- **Globale Alarm-Einstellungen sauber verdrahtet**: Backend persistiert jetzt alle Felder aus dem Admin-Panel konsistent (inkl. CPU/RAM-Schwellen, Inaktive-Hosts-Optionen und KI-Parameter).
+- **Fix fuer verlorene Inaktive-Hosts-Einstellung**: `Inaktive Hosts alarmieren` und `Inaktiv ab (Stunden)` bleiben nach Speichern/Neuladen erhalten.
+- **API-Response vervollstaendigt**: `GET/POST /api/v1/alarm-settings` liefern jetzt die vollstaendige Feldmenge fuer das UI.
+- **OpenAI-Key sicher behandelt**: Key bleibt serverseitig erhalten, wenn das Feld leer bleibt; API liefert nur `openai_api_key_is_set` statt Klartext.
+
+### 1.4.137 (14.05.2026)
+- Add SAP license information extraction and display (Hardware Key, Instno, Expiration, System Nr, Customer Name, Customer No)
+
+### v1.4.75 (11. Mai 2026)
+
+- **Privates GitHub-Repo unterstützt**: `pull-server-only.sh` kann Deploy-Dateien jetzt authentifiziert per GitHub-Token aus einem privaten Repo laden.
+- **Token-Quellen**: `MONITORING_GITHUB_TOKEN`, `GITHUB_TOKEN` oder `GH_TOKEN`; alternativ liest das Skript `MONITORING_GITHUB_TOKEN` aus der serverseitigen `monitoring.env`.
+- **Deploy-Hinweise erweitert**: README und `monitoring.env`-Template dokumentieren den einmaligen Token-Schritt für Server-Deploys bei privatem Repo.
+
+### v1.4.74 (11. Mai 2026)
+
+- **Agent-Quelle Ansicht optisch verdichtet**: kleinere Schrift und kompaktere Zellen für mehr Host-Zeilen auf gleicher Höhe.
+- **Breite besser genutzt**: Tabellenlayout der "Agent Quelle"-Seite auf bessere Spaltenverteilung angepasst, weniger abgeschnittene Werte.
+- **Lesbarkeit verbessert**: URL-Felder umbrechen nun kontrolliert statt früh mit Ellipsis zu enden.
+
+### v1.4.73 (11. Mai 2026)
+
+- **agent.conf Migration für bestehende Agents**: Linux- und Windows-`self_update` schreiben relevante Source-Keys jetzt aktiv nach (`SERVER_URL`, `UPDATE_BASE_URL`, `RAW_BASE_URL`) und leeren `GITHUB_REPO`.
+- **Neue Global-Seite "Agent Quelle"**: Tab mit Host-Tabelle für schnellen Umstellungsstatus auf server-only Quelle.
+- **Ampel-Checks pro Host**: `SERVER_URL`, `UPDATE_BASE_URL`, `RAW_BASE_URL`, `GITHUB_REPO` werden pro Host ausgewertet; korrekte Werte sind gruen markiert.
+- **Neuer API-Endpunkt**: `/api/v1/agent-source-status` liefert den Migrationsstatus aus der letzten gemeldeten `agent.conf` pro Host.
+
+### v1.4.72 (11. Mai 2026)
+
+- **Server-only Quelle für Install/Update**: Linux/Windows Update- und Bootstrap-Skripte nutzen jetzt ausschliesslich die konfigurierten Server-Updates (`SERVER_URL/updates` bzw. `UPDATE_BASE_URL`).
+- **Kein GitHub-Fallback mehr im Agent-Pfad**: Download-Fallbacks auf `raw.githubusercontent.com`/GitHub wurden aus den Agent-Skripten entfernt.
+- **Install-Beispiele angepasst**: Installer-Beispiele verweisen auf die eigene Server-Quelle.
+
+### v1.4.71 (11. Mai 2026)
+
+- **DB-Schema Guard für Host-Config**: Der Server stellt vor Host-Config-Tracking/Backfill jetzt runtime-sicher sicher, dass `host_config_snapshot.kernel_release` existiert.
+- **Nutzen**: Alte/extern eingespielte DBs ohne neue Spalte brechen nicht mehr bei Host-Config-Operationen.
+
+### v1.4.70 (11. Mai 2026)
+
+- **HANA AddOn-Parser tolerant gemacht**: CSV-Extraktion fällt jetzt bei Mischformaten automatisch auf die Zeilenlogik zurück, damit echte AddOn-Daten nicht mehr im `parse_failed` landen.
+- **Ziel**: die bereits wieder ankommenden Daten auch bei leicht variierendem hdbsql-Output sauber als AddOns erfassen.
+
+### v1.4.69 (11. Mai 2026)
+
+- **1.4.42-Mehrfach-Commit Abgleich umgesetzt**: HANA-Abfragepfad wurde gegen die originale 1.4.42-Kette abgeglichen und robust gemacht.
+- **Spaltennamen-Fallbacks für heterogene Hosts**: Query-Varianten für `Version/VERSION` sowie `AName/ANAME` werden automatisch probiert, um `invalid column name` auf einzelnen Hosts zu vermeiden.
+- **Verbindungs-Fallback erweitert**: Bei Connect-Fehlern wird nicht nur der Port, sondern auch Host-Ziele (`127.0.0.1`, `localhost`, Hostname/FQDN) gegen aktive `3xx15`-Listener geprobt.
+
+### v1.4.68 (11. Mai 2026)
+
+- **HANA Query-Regression gefixt**: SQL-Statements werden für `su -c` jetzt shell-sicher escaped, damit quoted Identifier wie `"Version"` und `"AName"` korrekt bei hdbsql ankommen.
+- **Fehlerbild behoben**: `invalid column name: VERSION/ANAME` durch verlorene Quotes in der Refaktorierung.
+
+### v1.4.67 (11. Mai 2026)
+
+- **Rückkehr zur 1.4.42-Verbindungsstrategie**: HANA AddOn-Queries nutzen wieder zuerst den impliziten `hdbsql`-Modus (ohne `-n`), wie im früh stabilen Stand.
+- **Fallback bleibt erhalten**: Explizites `target` und lokale `3xx15`-Port-Probe bleiben als nachgelagerter Fallback aktiv.
+- **Ziel**: Verhalten wieder an den urspruenglich funktionierenden Ablauf angleichen, ohne die neuen Diagnosepfade zu verlieren.
+
+### v1.4.66 (11. Mai 2026)
+
+- **Connection-Diagnose erweitert**: Bei `query_failed` mit Verbindungsfehler liefert der Agent jetzt zusätzlich Runtime-Listener-Infos (`listener_target`, `listeners_3xx15`, `sid`) direkt im Fehlertext.
+- **Ziel**: sofort sichtbar machen, ob auf dem Host zur Laufzeit wirklich ein SQL-Listener auf `:30015` aktiv ist.
+
+### v1.4.65 (11. Mai 2026)
+
+- **HANA Port-Fallback gehaertet**: SID-Erkennung passiert jetzt vor der SQL-Port-Autodetection, damit Instanz-basierte Ports (`3xx15`) korrekt berechnet werden.
+- **Runtime-Probe bei `connection refused`**: Bei lokalem Ziel und fehlschlagendem `30015` testet der Agent automatisch aktive lokale `3xx15`-Ports (via `ss`) und nutzt den funktionierenden Port für beide AddOn-Queries.
+
+### v1.4.64 (11. Mai 2026)
+
+- **HANA SQL-Port Auto-Detection**: Wenn `HANA_ADDONS_PORT` noch auf Default `30015` steht, erkennt der Linux-Agent die lokale Instanznummer automatisch

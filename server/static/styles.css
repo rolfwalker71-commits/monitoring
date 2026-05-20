@@ -3316,7 +3316,7 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 /* ── Critical Trends view ─────────────────────────────────── */
