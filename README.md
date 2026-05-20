@@ -369,6 +369,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.270 | 20.05.2026 | Add copy-to-clipboard button to SAP B1 license types display (reuses sap-vmap-copy-btn pattern) |
 | 1.6.269 | 20.05.2026 | SAP B1 license type display: count first (3-digit zero-padded), name on same line; increase spacing after header; horizontal flex layout |
 | 1.6.268 | 20.05.2026 | Fix SAP license type matching: exact match instead of substring includes(); admin UI column header updated; only show types with non-empty translation |
 | 1.6.267 | 20.05.2026 | Auto-discover ALL SAP license types from B01.txt (remove hardcoded LTD/PROFESSIONAL filter); server auto-syncs matrix when new types appear; UI shows only translated types (admin must provide mapping in license type matrix) |

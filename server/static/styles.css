@@ -7068,6 +7068,9 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   margin: 6px 0 10px;
   font-size: 10px;
   color: #5f78a0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .sap-license-list-meta span {

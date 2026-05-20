@@ -5634,6 +5634,10 @@ function renderSapLicenseInfoSection(payload) {
     })
     .filter((entry) => entry.rawType && entry.translated !== null);
 
+  const copyText = translatedFocusTypes
+    .map((entry) => `${String(entry.count).padStart(3, "0")}  ${entry.translated} (${entry.rawType})`)
+    .join("\n");
+
   const focusTypeRows = translatedFocusTypes
     .map((entry) => {
       const countPadded = String(entry.count).padStart(3, "0");
@@ -5657,7 +5661,10 @@ function renderSapLicenseInfoSection(payload) {
     <details class="sap-b1-raw-details">
       <summary class="sap-b1-raw-summary">Lizenzinfos</summary>
       <div class="sap-license-list-wrap">
-        <p class="sap-license-list-meta"><span>SAP B1 Lizenztypen (übersetzt)</span></p>
+        <p class="sap-license-list-meta">
+          <span>SAP B1 Lizenztypen (übersetzt)</span>
+          ${focusTypeRows ? `<button class="sap-vmap-copy-btn" type="button" title="In Zwischenablage kopieren" data-copy="${escapeHtml(copyText)}">📋 Kopieren</button>` : ""}
+        </p>
         ${focusTypeContent}
         ${locationHintHtml}
       </div>
