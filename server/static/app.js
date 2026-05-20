@@ -13050,9 +13050,106 @@ function renderSystemOverviewAddons(payload, addonFilterQuery = "") {
   return result;
 }
 
+function collectSystemOverviewTranslatedLicenseTypes(sapLicense) {
+  const rawFocusTypes = Array.isArray(sapLicense?.focus_license_types) ? sapLicense.focus_license_types : [];
+  if (!rawFocusTypes.length) {
+    return [];
+  }
+
+  return rawFocusTypes
+    .filter((entry) => entry && typeof entry === "object")
+    .map((entry) => {
+      const rawType = asText(entry.license_type, "").trim();
+      const upperRawType = rawType.toUpperCase();
+      let translated = null;
+      for (const mapEntry of SAP_LICENSE_TYPE_MAP) {
+        const matchText = asText(mapEntry?.matchText, "").toUpperCase();
+        if (matchText && matchText === upperRawType) {
+          translated = asText(mapEntry?.displayName, null);
+          break;
+        }
+      }
+      const countRaw = Number(entry.count);
+      const count = Number.isFinite(countRaw) ? countRaw : 0;
+      return {
+        rawType,
+        translated,
+        count,
+      };
+    })
+    .filter((entry) => entry.rawType && entry.translated !== null);
+}
+
+function hasSystemOverviewLicenseInfo(payload) {
+  const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : null;
+  if (!sapLicense) {
+    return false;
+  }
+
+  const rawExpiration = asText(sapLicense.expiration, "").trim();
+  const formattedExpiration = /^\d{8}$/.test(rawExpiration)
+    ? `${rawExpiration.substring(6, 8)}.${rawExpiration.substring(4, 6)}.${rawExpiration.substring(0, 4)}`
+    : rawExpiration;
+
+  const values = [
+    asText(sapLicense.hardware_key, "").trim(),
+    asText(sapLicense.instno, "").trim(),
+    asText(sapLicense.system_nr, "").trim(),
+    asText(sapLicense.customer_no, "").trim(),
+    asText(sapLicense.customer_name, "").trim(),
+    formattedExpiration,
+  ];
+
+  return values.some((value) => Boolean(value));
+}
+
+function buildSystemOverviewCustomerDataIndicators(hostEntries) {
+  const hosts = Array.isArray(hostEntries) ? hostEntries : [];
+  let hasAddons = false;
+  let hasLicenseFile = false;
+  let hasLicenseTypes = false;
+
+  for (const host of hosts) {
+    const payload = host && typeof host.payload === "object" ? host.payload : {};
+
+    if (!hasAddons && collectSystemOverviewHostAddonLabels(host).length > 0) {
+      hasAddons = true;
+    }
+    if (!hasLicenseFile && hasSystemOverviewLicenseInfo(payload)) {
+      hasLicenseFile = true;
+    }
+    if (!hasLicenseTypes) {
+      const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : null;
+      if (collectSystemOverviewTranslatedLicenseTypes(sapLicense).length > 0) {
+        hasLicenseTypes = true;
+      }
+    }
+
+    if (hasAddons && hasLicenseFile && hasLicenseTypes) {
+      break;
+    }
+  }
+
+  const items = [];
+  if (hasAddons) items.push({ emoji: "🧩", label: "AddOns" });
+  if (hasLicenseFile) items.push({ emoji: "📄", label: "Lizenzfile" });
+  if (hasLicenseTypes) items.push({ emoji: "🏷️", label: "Lizenztypen" });
+
+  return {
+    emojiText: items.map((item) => item.emoji).join(" "),
+    titleText: items.length > 0
+      ? `Daten vorhanden: ${items.map((item) => item.label).join(", ")}`
+      : "",
+  };
+}
+
 function renderSystemOverviewLicenseInfos(payload) {
   const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : null;
   if (!sapLicense) {
+    return "";
+  }
+
+  if (!hasSystemOverviewLicenseInfo(payload)) {
     return "";
   }
 
@@ -13091,33 +13188,7 @@ function renderSystemOverviewLicenseInfos(payload) {
 
 function renderSystemOverviewLicenseTypes(payload) {
   const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : null;
-  const rawFocusTypes = Array.isArray(sapLicense?.focus_license_types) ? sapLicense.focus_license_types : [];
-  if (!rawFocusTypes.length) {
-    return "";
-  }
-
-  const translatedFocusTypes = rawFocusTypes
-    .filter((entry) => entry && typeof entry === "object")
-    .map((entry) => {
-      const rawType = asText(entry.license_type, "").trim();
-      const upperRawType = rawType.toUpperCase();
-      let translated = null;
-      for (const mapEntry of SAP_LICENSE_TYPE_MAP) {
-        const matchText = asText(mapEntry?.matchText, "").toUpperCase();
-        if (matchText && matchText === upperRawType) {
-          translated = asText(mapEntry?.displayName, null);
-          break;
-        }
-      }
-      const countRaw = Number(entry.count);
-      const count = Number.isFinite(countRaw) ? countRaw : 0;
-      return {
-        rawType,
-        translated,
-        count,
-      };
-    })
-    .filter((entry) => entry.rawType && entry.translated !== null);
+  const translatedFocusTypes = collectSystemOverviewTranslatedLicenseTypes(sapLicense);
 
   if (!translatedFocusTypes.length) {
     return "";
@@ -13412,6 +13483,10 @@ async function loadSystemOverview() {
               const customerSections = Array.from(customerMap.entries())
                 .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true }))
                 .map(([customer, entries], customerIndex) => {
+                  const customerIndicators = buildSystemOverviewCustomerDataIndicators(entries.map((entry) => entry.host));
+                  const customerIndicatorHtml = customerIndicators.emojiText
+                    ? `<span class="so-customer-data-indicators" title="${escapeHtml(customerIndicators.titleText)}">${escapeHtml(customerIndicators.emojiText)}</span>`
+                    : "";
                   const rowHtml = entries
                     .sort((left, right) => String(left.host?.display_name || left.host?.hostname || "").localeCompare(String(right.host?.display_name || right.host?.hostname || ""), "de", { sensitivity: "base", numeric: true }))
                     .map((entry) => formatSystemOverviewTableRow(entry.host, entry.osName, entry.customer, SAP_B1_VERSION_MAP, true, searchQuery))
@@ -13421,7 +13496,7 @@ async function loadSystemOverview() {
                     <section class="system-overview-country-group">
                       <button class="system-overview-toggle system-overview-toggle--customer" type="button" data-target-id="${customerId}" aria-expanded="false">
                         <span class="system-overview-chevron">▶</span>
-                        <span class="so-country-header">👥 ${escapeHtml(customer)} (${entries.length})</span>
+                        <span class="so-country-header">👥 ${escapeHtml(customer)}${customerIndicatorHtml} (${entries.length})</span>
                       </button>
                       <div id="${customerId}" class="system-overview-customer-list hidden">
                         <div class="system-overview-table-wrap">
@@ -13538,12 +13613,16 @@ async function loadSystemOverview() {
                 (sum, hostList) => sum + (Array.isArray(hostList) ? hostList.length : 0),
                 0,
               );
+              const customerIndicators = buildSystemOverviewCustomerDataIndicators(customerHostEntries.map((entry) => entry.host));
+              const customerIndicatorHtml = customerIndicators.emojiText
+                ? `<span class="so-customer-data-indicators" title="${escapeHtml(customerIndicators.titleText)}">${escapeHtml(customerIndicators.emojiText)}</span>`
+                : "";
               const customerId = `so-customer-${countryIndex}-${customerIndex}`;
               return `
                 <section class="system-overview-country-group">
                   <button class="system-overview-toggle system-overview-toggle--customer" type="button" data-target-id="${customerId}" aria-expanded="false">
                     <span class="system-overview-chevron">▶</span>
-                    <span class="so-country-header">👥 ${escapeHtml(customer)} (${customerHostCount})</span>
+                    <span class="so-country-header">👥 ${escapeHtml(customer)}${customerIndicatorHtml} (${customerHostCount})</span>
                   </button>
                   <div id="${customerId}" class="system-overview-customer-list hidden">
                     <div class="system-overview-table-wrap">

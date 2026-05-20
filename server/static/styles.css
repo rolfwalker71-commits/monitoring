@@ -10000,6 +10000,14 @@ body[data-theme="dark"] .backup-row--hana td {
   border-color: #bfd0e6;
 }
 
+.so-customer-data-indicators {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  font-size: 12px;
+}
+
 .system-overview-os-list,
 .system-overview-customer-list {
   display: block;
@@ -10484,6 +10492,10 @@ body[data-theme="dark"] .system-overview-toggle--customer {
 body[data-theme="dark"] .system-overview-toggle--customer:hover:not(:disabled) {
   border-color: #45678f;
   background: rgba(28, 46, 72, 0.9);
+}
+
+body[data-theme="dark"] .so-customer-data-indicators {
+  opacity: 0.95;
 }
 
 body[data-theme="dark"] .system-overview-customer-block {
