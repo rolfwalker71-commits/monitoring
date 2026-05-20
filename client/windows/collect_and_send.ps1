@@ -1331,6 +1331,7 @@ function Get-SapLicenseInfo {
         customer_name = ""
         customer_no = ""
         file_mtime_utc = ""
+        focus_license_types = @()
     }
     
     try {
@@ -1389,6 +1390,37 @@ function Get-SapLicenseInfo {
         }
         if ($blockContent -match 'CUSTOMER-NO\s*=\s*([^\r\n]+)') {
             $licenseInfo.customer_no = $Matches[1].Trim()
+        }
+
+        # Extract and aggregate license types that contain LTD or PROFESSIONAL
+        $countsByType = @{}
+        $currentProductName = $null
+        foreach ($line in ($content -split "`r?`n")) {
+            if ($line -match '^\s*SWPRODUCTNAME\s*=\s*(.+?)\s*$') {
+                $currentProductName = $Matches[1].Trim()
+                continue
+            }
+            if ($line -match '^\s*SWPRODUCTLIMIT\s*=\s*(.+?)\s*$') {
+                if ($currentProductName) {
+                    $upperProductName = $currentProductName.ToUpperInvariant()
+                    if ($upperProductName.Contains('LTD') -or $upperProductName.Contains('PROFESSIONAL')) {
+                        $countValue = 0
+                        [void][int]::TryParse($Matches[1].Trim(), [ref]$countValue)
+                        if ($countsByType.ContainsKey($currentProductName)) {
+                            $countsByType[$currentProductName] += $countValue
+                        } else {
+                            $countsByType[$currentProductName] = $countValue
+                        }
+                    }
+                }
+                $currentProductName = $null
+            }
+        }
+        foreach ($licenseType in ($countsByType.Keys | Sort-Object)) {
+            $licenseInfo.focus_license_types += @{
+                license_type = [string]$licenseType
+                count = [int]$countsByType[$licenseType]
+            }
         }
         
         if ($licenseInfo.hardware_key -or $licenseInfo.instno) {
@@ -1652,6 +1684,18 @@ $systemNrEsc = ConvertTo-JsonString $licenseInfo.system_nr
 $customerNameEsc = ConvertTo-JsonString $licenseInfo.customer_name
 $customerNoEsc = ConvertTo-JsonString $licenseInfo.customer_no
 $licenseFileMtimeUtcEsc = ConvertTo-JsonString $licenseInfo.file_mtime_utc
+$focusLicenseTypeEntries = @()
+foreach ($focusType in @($licenseInfo.focus_license_types)) {
+    $focusTypeNameEsc = ConvertTo-JsonString ([string]$focusType.license_type)
+    $focusTypeCount = 0
+    try {
+        $focusTypeCount = [int]$focusType.count
+    } catch {
+        $focusTypeCount = 0
+    }
+    $focusLicenseTypeEntries += ('{"license_type":"' + $focusTypeNameEsc + '","count":' + $focusTypeCount + '}')
+}
+$focusLicenseTypesJson = '[' + ($focusLicenseTypeEntries -join ',') + ']'
 
 $payload = @"
 {
@@ -1728,7 +1772,8 @@ $payload = @"
         "system_nr": "$systemNrEsc",
         "customer_name": "$customerNameEsc",
         "customer_no": "$customerNoEsc",
-        "file_mtime_utc": "$licenseFileMtimeUtcEsc"
+        "file_mtime_utc": "$licenseFileMtimeUtcEsc",
+        "focus_license_types": $focusLicenseTypesJson
     }
 }
 "@

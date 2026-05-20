@@ -574,6 +574,21 @@ function renderSapB1() {
   const formattedExpiration = /^\d{8}$/.test(rawExpiration)
     ? `${rawExpiration.substring(6, 8)}.${rawExpiration.substring(4, 6)}.${rawExpiration.substring(0, 4)}`
     : asText(rawExpiration, "-");
+  const licenseTypeMatrix = [
+    { needle: "CRM-LTD", label: "Limited CRM" },
+    { needle: "LOGISTICS-LTD", label: "Logistics CRM" },
+    { needle: "PROFESSIONAL", label: "Professional" },
+    { needle: "FINANCE-LTD", label: "Limited Finance" },
+  ];
+  const translateLicenseType = (rawType) => {
+    const upperRawType = asText(rawType, "").toUpperCase();
+    for (const entry of licenseTypeMatrix) {
+      if (upperRawType.includes(entry.needle)) {
+        return entry.label;
+      }
+    }
+    return asText(rawType, "-");
+  };
   const licenseRows = [
     ["HW-Key", asText(sapLicense?.hardware_key, "-")],
     ["Installationsnummer", asText(sapLicense?.instno, "-")],
@@ -582,6 +597,16 @@ function renderSapB1() {
     ["Lizenznehmer", asText(sapLicense?.customer_name, "-")],
     ["Gueltig bis", formattedExpiration],
   ].filter(([, value]) => value && value !== "-");
+  const focusLicenseRows = (Array.isArray(sapLicense?.focus_license_types) ? sapLicense.focus_license_types : [])
+    .filter((entry) => entry && typeof entry === "object")
+    .map((entry) => {
+      const rawType = asText(entry?.license_type, "-");
+      const translatedType = translateLicenseType(rawType);
+      const count = asNum(entry?.count, 0);
+      const label = translatedType === rawType ? rawType : `${translatedType} (${rawType})`;
+      return [`Lizenztyp ${label}`, String(count)];
+    });
+  const visibleLicenseRows = [...licenseRows, ...focusLicenseRows];
 
   const fileMtime = asText(sapLicense?.file_mtime_utc, "");
   const fileMtimeLabel = fileMtime ? shortTime(fileMtime) : "-";
@@ -620,7 +645,7 @@ function renderSapB1() {
         <table class="next-table">
           <thead><tr><th>Feld</th><th>Wert</th></tr></thead>
           <tbody>
-            ${licenseRows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("") || "<tr><td colspan=\"2\">Keine Lizenzinfos</td></tr>"}
+            ${visibleLicenseRows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join("") || "<tr><td colspan=\"2\">Keine Lizenzinfos</td></tr>"}
             <tr><td>Datei-Stand B01.txt</td><td>${escapeHtml(fileMtimeLabel)}</td></tr>
           </tbody>
         </table>

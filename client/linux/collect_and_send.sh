@@ -181,6 +181,7 @@ collect_sap_license_json() {
   local customer_name=""
   local customer_no=""
   local file_mtime_utc=""
+  local focus_license_types_json=""
   
   # Try multiple possible locations (with fallback paths)
   local license_paths=(
@@ -196,7 +197,7 @@ collect_sap_license_json() {
   done
   
   if [[ -z "$license_path" ]]; then
-    printf '{"available":false,"hardware_key":"","instno":"","expiration":"","system_nr":"","customer_name":"","customer_no":"","file_mtime_utc":""}'
+    printf '{"available":false,"hardware_key":"","instno":"","expiration":"","system_nr":"","customer_name":"","customer_no":"","file_mtime_utc":"","focus_license_types":[]}'
     return
   fi
   
@@ -211,7 +212,7 @@ collect_sap_license_json() {
   fi
   
   if [[ -z "$content" ]]; then
-    printf '{"available":false,"hardware_key":"","instno":"","expiration":"","system_nr":"","customer_name":"","customer_no":"","file_mtime_utc":"%s"}' "$(json_escape "$file_mtime_utc")"
+    printf '{"available":false,"hardware_key":"","instno":"","expiration":"","system_nr":"","customer_name":"","customer_no":"","file_mtime_utc":"%s","focus_license_types":[]}' "$(json_escape "$file_mtime_utc")"
     return
   fi
   
@@ -228,12 +229,60 @@ collect_sap_license_json() {
   [[ "$block_content" =~ SYSTEM-NR[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && system_nr="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
   [[ "$block_content" =~ CUSTOMER-NAME[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && customer_name="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
   [[ "$block_content" =~ CUSTOMER-NO[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && customer_no="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+
+  # Extract and aggregate license types that contain LTD or PROFESSIONAL
+  while IFS=$'\t' read -r license_type license_count; do
+    [[ -n "$license_type" ]] || continue
+    [[ "$license_count" =~ ^[0-9]+$ ]] || license_count=0
+    entry=$(cat <<EOF
+{"license_type":"$(json_escape "$license_type")","count":$license_count}
+EOF
+)
+    focus_license_types_json="$(append_json_entry "$focus_license_types_json" "$entry")"
+  done < <(
+    printf '%s\n' "$content" | awk '
+      function trim(s) {
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+        return s
+      }
+      {
+        line = $0
+        eq_pos = index(line, "=")
+        if (!eq_pos) {
+          next
+        }
+        key = trim(substr(line, 1, eq_pos - 1))
+        val = trim(substr(line, eq_pos + 1))
+        key_upper = toupper(key)
+
+        if (key_upper == "SWPRODUCTNAME") {
+          current_name = val
+          next
+        }
+        if (key_upper == "SWPRODUCTLIMIT") {
+          if (current_name != "") {
+            name_upper = toupper(current_name)
+            if (index(name_upper, "LTD") > 0 || index(name_upper, "PROFESSIONAL") > 0) {
+              limit_val = (val ~ /^[0-9]+$/) ? val + 0 : 0
+              counts[current_name] += limit_val
+            }
+          }
+          current_name = ""
+        }
+      }
+      END {
+        for (name in counts) {
+          printf "%s\t%d\n", name, counts[name]
+        }
+      }
+    ' | sort
+  )
   
   if [[ -n "$hardware_key" ]] || [[ -n "$instno" ]]; then
     available="true"
   fi
   
-  printf '{"available":%s,"hardware_key":"%s","instno":"%s","expiration":"%s","system_nr":"%s","customer_name":"%s","customer_no":"%s","file_mtime_utc":"%s"}' \
+  printf '{"available":%s,"hardware_key":"%s","instno":"%s","expiration":"%s","system_nr":"%s","customer_name":"%s","customer_no":"%s","file_mtime_utc":"%s","focus_license_types":[%s]}' \
     "$available" \
     "$(json_escape "$hardware_key")" \
     "$(json_escape "$instno")" \
@@ -241,7 +290,8 @@ collect_sap_license_json() {
     "$(json_escape "$system_nr")" \
     "$(json_escape "$customer_name")" \
     "$(json_escape "$customer_no")" \
-    "$(json_escape "$file_mtime_utc")"
+    "$(json_escape "$file_mtime_utc")" \
+    "${focus_license_types_json}"
 }
 
 collect_sap_business_one_json() {
