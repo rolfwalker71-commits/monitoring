@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.261 (20. Mai 2026)
+
+- **DB-Maintenance Charts**: Hover auf einen Kachel-Graph öffnet einen deutlich vergrößerten Chart im Popup (mit Schließen per `X`) für besser lesbare X-/Y-Achsenwerte.
+
 ### v1.6.260 (20. Mai 2026)
 
 - **DB-Chart X-Achse**: In den DB-Maintenance-Kacheln werden jetzt Datum/Uhrzeit des ersten und letzten Datenpunkts auf der horizontalen Achse angezeigt.

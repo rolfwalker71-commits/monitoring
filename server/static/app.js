@@ -7967,6 +7967,72 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
     { key: "free_ratio", title: "Free Ratio", formatter: (v) => `${(Number(v || 0) * 100).toFixed(1)}%`, deltaFormatter: (v) => `${Number(v || 0) >= 0 ? "+" : "-"}${Math.abs(Number(v || 0) * 100).toFixed(2)}%` },
   ];
 
+  const openDbMaintenanceChartDrillModal = (def) => {
+    const modal = document.getElementById("chartDrillModal");
+    const titleEl = document.getElementById("chartDrillTitle");
+    const bodyEl = document.getElementById("chartDrillBody");
+    if (!modal || !titleEl || !bodyEl) return;
+
+    const values = rows.map((row) => Number(row?.[def.key] || 0));
+    if (!values.length) return;
+
+    const width = 900;
+    const height = 320;
+    const padLeft = 64;
+    const padRight = 18;
+    const padTop = 14;
+    const padBottom = 40;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = Math.max(1, max - min);
+    const toY = (v) => height - padBottom - (((v - min) / span) * (height - padTop - padBottom));
+    const points = values.map((v, i) => {
+      const x = padLeft + (i * ((width - padLeft - padRight) / Math.max(1, values.length - 1)));
+      const y = toY(v);
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(" ");
+
+    const latest = values[values.length - 1];
+    const prev = values.length > 1 ? values[values.length - 2] : latest;
+    const deltaWindow = latest - prev;
+    const forecast = forecasts && typeof forecasts === "object" ? forecasts[def.key] : null;
+    const forecastText = forecast && typeof forecast === "object"
+      ? `14d: ${def.deltaFormatter ? def.deltaFormatter(forecast.delta_14d) : formatSignedInteger(forecast.delta_14d)} · Ziel: ${def.formatter(forecast.projected_14d || 0)}`
+      : "14d Trend: n/a";
+    const ticks = [0, 0.25, 0.5, 0.75, 1];
+    const gridMarkup = ticks.map((t) => {
+      const y = padTop + ((height - padTop - padBottom) * t);
+      const value = max - ((max - min) * t);
+      const label = def.formatter(value);
+      return `<line x1="${padLeft}" y1="${y.toFixed(2)}" x2="${(width - padRight).toFixed(2)}" y2="${y.toFixed(2)}" class="db-maintenance-chart-grid"></line><text x="8" y="${(y + 4).toFixed(2)}" class="db-maintenance-chart-label">${escapeHtml(String(label))}</text>`;
+    }).join("");
+
+    const firstBucketLabel = formatUtcPlus2Short(rows[0]?.bucket_start_utc || "") || "-";
+    const lastBucketLabel = formatUtcPlus2Short(rows[rows.length - 1]?.bucket_start_utc || "") || "-";
+
+    titleEl.textContent = `${asText(def.title)} (vergrößert)`;
+    bodyEl.innerHTML = `
+      <div class="chart-drill-svg-wrap db-chart-drill-wrap">
+        <svg viewBox="0 0 ${width} ${height}" class="db-maintenance-chart-svg db-maintenance-chart-svg-drill" role="img" aria-label="${escapeHtml(def.title)} Verlauf (groß)">
+          ${gridMarkup}
+          <line x1="${padLeft}" y1="${height - padBottom}" x2="${width - padRight}" y2="${height - padBottom}" class="db-maintenance-chart-axis"></line>
+          <polyline points="${points}" class="db-maintenance-chart-line"></polyline>
+          <text x="${padLeft}" y="${height - 8}" text-anchor="start" class="db-maintenance-chart-label db-maintenance-chart-label-x">${escapeHtml(firstBucketLabel)}</text>
+          <text x="${width - padRight}" y="${height - 8}" text-anchor="end" class="db-maintenance-chart-label db-maintenance-chart-label-x">${escapeHtml(lastBucketLabel)}</text>
+        </svg>
+      </div>
+      <div class="chart-drill-stats">
+        <span class="stat-chip">Aktuell: ${escapeHtml(def.formatter(latest || 0))}</span>
+        <span class="stat-chip">Δ${escapeHtml(String(intervalHours))}h: ${escapeHtml(def.deltaFormatter ? def.deltaFormatter(deltaWindow) : formatSignedInteger(deltaWindow))}</span>
+        <span class="stat-chip">Min: ${escapeHtml(def.formatter(min))}</span>
+        <span class="stat-chip">Max: ${escapeHtml(def.formatter(max))}</span>
+        <span class="stat-chip">${escapeHtml(forecastText)}</span>
+      </div>
+    `;
+
+    modal.classList.remove("hidden");
+  };
+
   const renderLine = (values) => {
     const width = 360;
     const height = 132;
@@ -7997,7 +8063,7 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
     return { arrow: "↓", cls: "down", label: "fallend" };
   };
 
-  el.innerHTML = chartDefs.map((def) => {
+  el.innerHTML = chartDefs.map((def, index) => {
     const values = rows.map((row) => Number(row?.[def.key] || 0));
     const line = renderLine(values);
     const firstBucketLabel = formatUtcPlus2Short(rows[0]?.bucket_start_utc || "") || "-";
@@ -8018,7 +8084,7 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
       return `<line x1="${line.padLeft}" y1="${y.toFixed(2)}" x2="${(line.width - line.padRight).toFixed(2)}" y2="${y.toFixed(2)}" class="db-maintenance-chart-grid"></line><text x="4" y="${(y + 3).toFixed(2)}" class="db-maintenance-chart-label">${escapeHtml(String(label))}</text>`;
     }).join("");
 
-    return `<div class="db-maintenance-chart-card">
+    return `<div class="db-maintenance-chart-card" data-db-chart-index="${index}">
       <div class="db-maintenance-chart-head">
         <strong>${escapeHtml(def.title)}</strong>
         <span class="db-trend-chip ${trend.cls}" title="Trendindikator">${trend.arrow} ${escapeHtml(trend.label)}</span>
@@ -8035,6 +8101,21 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
       <p class="count compact">${escapeHtml(forecastText)}</p>
     </div>`;
   }).join("");
+
+  el.querySelectorAll(".db-maintenance-chart-card").forEach((card) => {
+    const idx = Number(card.getAttribute("data-db-chart-index") || -1);
+    if (!Number.isFinite(idx) || idx < 0 || idx >= chartDefs.length) {
+      return;
+    }
+    const targetSvg = card.querySelector(".db-maintenance-chart-svg");
+    if (!targetSvg) {
+      return;
+    }
+    targetSvg.style.cursor = "zoom-in";
+    targetSvg.addEventListener("mouseenter", () => {
+      openDbMaintenanceChartDrillModal(chartDefs[idx]);
+    });
+  });
 }
 
 function renderDbMaintenanceHistoryRows(rows) {
