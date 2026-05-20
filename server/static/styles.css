@@ -4420,11 +4420,25 @@ body[data-theme="dark"] .trend-progress-bar {
   padding-top: 8px;
 }
 
-.host-license-hover-types-title {
-  margin: 0 0 4px;
-  font-size: 12px;
+.host-license-hover-types-head {
+  margin: 0 0 3px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.host-license-hover-type-count-label,
+.host-license-hover-type-name-label {
+  font-size: 10px;
   font-weight: 700;
-  color: #294b71;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5f7895;
+}
+
+.host-license-hover-type-count-label {
+  min-width: 28px;
+  font-family: "IBM Plex Mono", monospace;
 }
 
 .host-license-hover-types p {
@@ -8469,8 +8483,9 @@ body[data-theme="dark"] .host-license-hover-types {
   border-top-color: #30455f;
 }
 
-body[data-theme="dark"] .host-license-hover-types-title {
-  color: #c9dcf5;
+body[data-theme="dark"] .host-license-hover-type-count-label,
+body[data-theme="dark"] .host-license-hover-type-name-label {
+  color: #93aeca;
 }
 
 body[data-theme="dark"] .host-license-hover-types p {
