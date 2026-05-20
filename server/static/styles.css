@@ -4462,6 +4462,7 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-license-hover-type-count {
   min-width: 40px;
+  font-size: 12px;
   font-family: "IBM Plex Mono", monospace;
   color: #7c2d12;
   font-weight: 700;
@@ -4477,6 +4478,7 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-license-hover-type-name {
   font-size: 12px;
+  font-family: "IBM Plex Mono", monospace;
   font-weight: 700;
   color: #28486a;
 }
@@ -4484,7 +4486,7 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-license-hover-type-raw {
   color: #6b7f97;
   font-family: "IBM Plex Mono", monospace;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .host-customer-line {
