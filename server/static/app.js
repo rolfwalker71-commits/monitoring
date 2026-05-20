@@ -7506,7 +7506,7 @@ function renderSingleHostCard(host) {
   const versionSideBarHtml = `<div class="${versionSideBarClass}" title="${escapeHtml(versionSideBarTitle)}" aria-hidden="true"></div>`;
   const hasSapLicenseInfo = Boolean(host.has_sap_license_info);
   const sapLicenseBadge = hasSapLicenseInfo
-    ? `<span class="host-license-info-badge" data-host-license-host="${escapeHtml(hostname)}" title="SAP Lizenzinfos vorhanden">🪪</span>`
+    ? `<span class="host-license-info-badge" data-host-license-host="${escapeHtml(hostname)}">🪪</span>`
     : "";
   const customerTitleLine = customerNameValue
     ? `<div class="host-customer-title-line"><span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span><span class="host-detail-line">🏷️ ${escapeHtml(hostDesignationLabel)}</span></span>${sapLicenseBadge}</div>`
