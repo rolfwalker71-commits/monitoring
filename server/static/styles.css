@@ -10829,3 +10829,50 @@ body[data-theme="dark"] tbody tr:nth-child(odd) td {
 body[data-theme="dark"] tbody tr:nth-child(even) td {
   background: #102238;
 }
+
+/* System overview: plain, no chip/pill framing */
+#systemOverviewView .btn-secondary.btn-secondary-pill-compact,
+#systemOverviewView .so-country-filter-btn,
+#systemOverviewView .system-overview-toggle,
+#systemOverviewView .system-overview-toggle--customer {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  min-height: 22px;
+  height: auto;
+  padding: 0 4px;
+}
+
+#systemOverviewView .btn-secondary.btn-secondary-pill-compact:hover:not(:disabled),
+#systemOverviewView .so-country-filter-btn:hover,
+#systemOverviewView .system-overview-toggle:hover:not(:disabled),
+#systemOverviewView .system-overview-toggle--customer:hover:not(:disabled) {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+#systemOverviewView .so-country-filter-btn.active {
+  color: #1e40af;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+#systemOverviewView .system-overview-toggle .system-overview-chevron {
+  color: currentColor;
+}
+
+body[data-theme="dark"] #systemOverviewView .btn-secondary.btn-secondary-pill-compact,
+body[data-theme="dark"] #systemOverviewView .so-country-filter-btn,
+body[data-theme="dark"] #systemOverviewView .system-overview-toggle,
+body[data-theme="dark"] #systemOverviewView .system-overview-toggle--customer,
+body[data-theme="dark"] #systemOverviewView .btn-secondary.btn-secondary-pill-compact:hover:not(:disabled),
+body[data-theme="dark"] #systemOverviewView .so-country-filter-btn:hover,
+body[data-theme="dark"] #systemOverviewView .system-overview-toggle:hover:not(:disabled),
+body[data-theme="dark"] #systemOverviewView .system-overview-toggle--customer:hover:not(:disabled) {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}

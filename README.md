@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.253 (20. Mai 2026)
+
+- **Systemübersicht UI vereinfacht**: Chip-/Pill-Optik (Hintergrund, Rahmen, Rundung) für Länderfilter, Sort-/AddOn-/Expand-/Reload-Buttons und Gruppen-Toggles in der Systemübersicht entfernt; Darstellung jetzt bewusst schlicht und flach.
+
 ### v1.6.252 (20. Mai 2026)
 
 - **Inaktive Hosts Mail Reihenfolge**: In der Host-Detailzelle steht jetzt zuerst der Kunde, darunter der Anzeigename und danach Host/IP.
