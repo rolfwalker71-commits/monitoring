@@ -222,9 +222,6 @@ server/receiver.py
 server/static/index.html
 server/static/app.js
 server/static/styles.css
-server/static/ui-next.html
-server/static/ui-next.css
-server/static/ui-next.js
 server/static/icons/sap.png
 BUILD_VERSION
 AGENT_VERSION

@@ -5453,6 +5453,49 @@ function renderSapB1ExtensionsSection(payload) {
 }
 
 function renderSapLicenseInfoSection(payload) {
+  const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : null;
+  const rawFocusTypes = Array.isArray(sapLicense?.focus_license_types) ? sapLicense.focus_license_types : [];
+  const licenseTypeMatrix = [
+    { needle: "CRM-LTD", label: "Limited CRM" },
+    { needle: "LOGISTICS-LTD", label: "Logistics CRM" },
+    { needle: "PROFESSIONAL", label: "Professional" },
+    { needle: "FINANCE-LTD", label: "Limited Finance" },
+  ];
+
+  const translatedFocusTypes = rawFocusTypes
+    .filter((entry) => entry && typeof entry === "object")
+    .map((entry) => {
+      const rawType = asText(entry.license_type, "");
+      const upperRawType = rawType.toUpperCase();
+      let translated = rawType;
+      for (const mapEntry of licenseTypeMatrix) {
+        if (upperRawType.includes(mapEntry.needle)) {
+          translated = mapEntry.label;
+          break;
+        }
+      }
+      const count = asNum(entry.count, 0);
+      return {
+        rawType,
+        translated,
+        count,
+      };
+    })
+    .filter((entry) => entry.rawType);
+
+  const focusTypeRows = translatedFocusTypes
+    .map((entry) => {
+      const label = entry.translated === entry.rawType
+        ? escapeHtml(entry.rawType)
+        : `${escapeHtml(entry.translated)} <span>(${escapeHtml(entry.rawType)})</span>`;
+      return `<p class="sap-license-list-item"><strong>${label}</strong><span>${entry.count}</span></p>`;
+    })
+    .join("");
+
+  const focusTypeContent = focusTypeRows
+    ? `<div class="sap-license-list">${focusTypeRows}</div>`
+    : '<p class="muted">Keine LTD/Professional Lizenztypen im Payload gefunden.</p>';
+
   const locationHintHtml = `
     <div class="sap-license-location-hint">
       <p><strong>SQL</strong>: gesucht wird <code>B01.txt</code> unter <code>C:\\ANG\\Lizenzen\\B01.txt</code>, <code>C:\\ANG\\Lizenz\\B01.txt</code>, <code>C:\\ANG\\B01.txt</code>, <code>C:\\Program Files (x86)\\SAP\\SAP Business One Server\\B1_SHR\\Lizenz\\B01.txt</code> oder <code>C:\\Program Files (x86)\\SAP\\SAP Business One Server\\B1_SHR\\Lizenzen\\B01.txt</code>.</p>
@@ -5464,6 +5507,8 @@ function renderSapLicenseInfoSection(payload) {
     <details class="sap-b1-raw-details">
       <summary class="sap-b1-raw-summary">Lizenzinfos</summary>
       <div class="sap-license-list-wrap">
+        <p class="sap-license-list-meta"><span>LTD/Professional Typen (Typ + Anzahl)</span></p>
+        ${focusTypeContent}
         ${locationHintHtml}
       </div>
     </details>

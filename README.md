@@ -369,6 +369,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.264 | 20.05.2026 | Move SAP B1 LTD/Professional license rendering to the live UI (Einzelmeldungen -> SAP B1 -> Lizenzinfos) and remove ui-next runtime artifacts/routes/deploy entries (`/ui-next`, `ui-next.css`, `ui-next.js`) |
 | 1.6.263 | 20.05.2026 | Extend SAP B1 Lizenzinfos on Linux and Windows agents with aggregated LTD/PROFESSIONAL license types (`focus_license_types`: type + count) and render them in Einzelmeldungen with UI translation mapping (Limited CRM, Logistics CRM, Professional, Limited Finance) |
 | 1.6.127 | 17.05.2026 | Report header: add a subtle background shadow/halo behind the centered OS logo for softer separation |
 | 1.6.126 | 17.05.2026 | Report header: reduce centered OS logo size by roughly 30% for a less dominant visual footprint |

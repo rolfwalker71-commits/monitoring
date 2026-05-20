@@ -11520,10 +11520,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_index_with_asset_version()
             return
 
-        if parsed.path == "/ui-next":
-            self._send_html_with_asset_version(STATIC_DIR / "ui-next.html")
-            return
-
         if parsed.path == "/app.js":
             self._send_file(
                 STATIC_DIR / "app.js",
@@ -11540,30 +11536,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_file(
                 STATIC_DIR / "styles.css",
                 "text/css; charset=utf-8",
-                extra_headers={
-                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-                    "Pragma": "no-cache",
-                    "Expires": "0",
-                },
-            )
-            return
-
-        if parsed.path == "/ui-next.css":
-            self._send_file(
-                STATIC_DIR / "ui-next.css",
-                "text/css; charset=utf-8",
-                extra_headers={
-                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-                    "Pragma": "no-cache",
-                    "Expires": "0",
-                },
-            )
-            return
-
-        if parsed.path == "/ui-next.js":
-            self._send_file(
-                STATIC_DIR / "ui-next.js",
-                "application/javascript; charset=utf-8",
                 extra_headers={
                     "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                     "Pragma": "no-cache",
