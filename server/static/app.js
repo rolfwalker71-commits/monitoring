@@ -7969,11 +7969,11 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
 
   const renderLine = (values) => {
     const width = 360;
-    const height = 120;
+    const height = 132;
     const padLeft = 44;
     const padRight = 12;
     const padTop = 8;
-    const padBottom = 12;
+    const padBottom = 24;
     const min = Math.min(...values);
     const max = Math.max(...values);
     const span = Math.max(1, max - min);
@@ -8000,6 +8000,8 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
   el.innerHTML = chartDefs.map((def) => {
     const values = rows.map((row) => Number(row?.[def.key] || 0));
     const line = renderLine(values);
+    const firstBucketLabel = formatUtcPlus2Short(rows[0]?.bucket_start_utc || "") || "-";
+    const lastBucketLabel = formatUtcPlus2Short(rows[rows.length - 1]?.bucket_start_utc || "") || "-";
     const latest = values[values.length - 1];
     const prev = values.length > 1 ? values[values.length - 2] : latest;
     const deltaWindow = latest - prev;
@@ -8026,6 +8028,8 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
         ${gridMarkup}
         <line x1="${line.padLeft}" y1="${line.height - line.padBottom}" x2="${line.width - line.padRight}" y2="${line.height - line.padBottom}" class="db-maintenance-chart-axis"></line>
         <polyline points="${line.points}" class="db-maintenance-chart-line"></polyline>
+        <text x="${line.padLeft}" y="${line.height - 4}" text-anchor="start" class="db-maintenance-chart-label db-maintenance-chart-label-x">${escapeHtml(firstBucketLabel)}</text>
+        <text x="${line.width - line.padRight}" y="${line.height - 4}" text-anchor="end" class="db-maintenance-chart-label db-maintenance-chart-label-x">${escapeHtml(lastBucketLabel)}</text>
       </svg>
       <p class="count compact">Min: ${escapeHtml(def.formatter(line.min))} · Max: ${escapeHtml(def.formatter(line.max))}</p>
       <p class="count compact">${escapeHtml(forecastText)}</p>

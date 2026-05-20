@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.260 (20. Mai 2026)
+
+- **DB-Chart X-Achse**: In den DB-Maintenance-Kacheln werden jetzt Datum/Uhrzeit des ersten und letzten Datenpunkts auf der horizontalen Achse angezeigt.
+
 ### v1.6.259 (20. Mai 2026)
 
 - **Systemübersicht (Sort: AddOn)**: Gruppierungsansicht umgestellt auf 3 Ebenen: `AddOn-Name` -> `Version` -> `Kunde`.
