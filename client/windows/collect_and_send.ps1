@@ -1392,7 +1392,7 @@ function Get-SapLicenseInfo {
             $licenseInfo.customer_no = $Matches[1].Trim()
         }
 
-        # Extract and aggregate license types that contain LTD or PROFESSIONAL
+        # Extract and aggregate ALL license types with their counts
         $countsByType = @{}
         $currentProductName = $null
         foreach ($line in ($content -split "`r?`n")) {
@@ -1402,15 +1402,12 @@ function Get-SapLicenseInfo {
             }
             if ($line -match '^\s*SWPRODUCTLIMIT\s*=\s*(.+?)\s*$') {
                 if ($currentProductName) {
-                    $upperProductName = $currentProductName.ToUpperInvariant()
-                    if ($upperProductName.Contains('LTD') -or $upperProductName.Contains('PROFESSIONAL')) {
-                        $countValue = 0
-                        [void][int]::TryParse($Matches[1].Trim(), [ref]$countValue)
-                        if ($countsByType.ContainsKey($currentProductName)) {
-                            $countsByType[$currentProductName] += $countValue
-                        } else {
-                            $countsByType[$currentProductName] = $countValue
-                        }
+                    $countValue = 0
+                    [void][int]::TryParse($Matches[1].Trim(), [ref]$countValue)
+                    if ($countsByType.ContainsKey($currentProductName)) {
+                        $countsByType[$currentProductName] += $countValue
+                    } else {
+                        $countsByType[$currentProductName] = $countValue
                     }
                 }
                 $currentProductName = $null

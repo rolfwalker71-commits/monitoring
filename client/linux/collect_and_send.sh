@@ -230,7 +230,7 @@ collect_sap_license_json() {
   [[ "$block_content" =~ CUSTOMER-NAME[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && customer_name="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
   [[ "$block_content" =~ CUSTOMER-NO[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && customer_no="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
 
-  # Extract and aggregate license types that contain LTD or PROFESSIONAL
+  # Extract and aggregate ALL license types
   while IFS=$'\t' read -r license_type license_count; do
     [[ -n "$license_type" ]] || continue
     [[ "$license_count" =~ ^[0-9]+$ ]] || license_count=0
@@ -261,11 +261,8 @@ EOF
         }
         if (key_upper == "SWPRODUCTLIMIT") {
           if (current_name != "") {
-            name_upper = toupper(current_name)
-            if (index(name_upper, "LTD") > 0 || index(name_upper, "PROFESSIONAL") > 0) {
-              limit_val = (val ~ /^[0-9]+$/) ? val + 0 : 0
-              counts[current_name] += limit_val
-            }
+            limit_val = (val ~ /^[0-9]+$/) ? val + 0 : 0
+            counts[current_name] += limit_val
           }
           current_name = ""
         }

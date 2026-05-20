@@ -5632,20 +5632,18 @@ function renderSapLicenseInfoSection(payload) {
         count,
       };
     })
-    .filter((entry) => entry.rawType);
+    .filter((entry) => entry.rawType && entry.translated !== entry.rawType);
 
   const focusTypeRows = translatedFocusTypes
     .map((entry) => {
-      const label = entry.translated === entry.rawType
-        ? escapeHtml(entry.rawType)
-        : `${escapeHtml(entry.translated)} <span>(${escapeHtml(entry.rawType)})</span>`;
+      const label = `${escapeHtml(entry.translated)} <span>(${escapeHtml(entry.rawType)})</span>`;
       return `<p class="sap-license-list-item"><strong>${label}</strong><span>${entry.count}</span></p>`;
     })
     .join("");
 
   const focusTypeContent = focusTypeRows
     ? `<div class="sap-license-list">${focusTypeRows}</div>`
-    : '<p class="muted">Keine LTD/Professional Lizenztypen im Payload gefunden.</p>';
+    : '<p class="muted">Lizenztypen ohne Übersetzung in der Matrix — Admin: bitte hinzufügen und übersetzen.</p>';
 
   const locationHintHtml = `
     <div class="sap-license-location-hint">
@@ -5658,7 +5656,7 @@ function renderSapLicenseInfoSection(payload) {
     <details class="sap-b1-raw-details">
       <summary class="sap-b1-raw-summary">Lizenzinfos</summary>
       <div class="sap-license-list-wrap">
-        <p class="sap-license-list-meta"><span>LTD/Professional Typen (Typ + Anzahl)</span></p>
+        <p class="sap-license-list-meta"><span>SAP B1 Lizenztypen (übersetzt)</span></p>
         ${focusTypeContent}
         ${locationHintHtml}
       </div>

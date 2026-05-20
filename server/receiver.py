@@ -1206,6 +1206,54 @@ def save_sap_license_type_map_entries(entries_raw: object) -> list[dict[str, str
     return normalized
 
 
+def auto_sync_discovered_license_types(payload: object) -> None:
+    """Auto-discover new SAP license types from agent report and add them to matrix."""
+    if not isinstance(payload, dict):
+        return
+    
+    sap_license = payload.get("sap_license")
+    if not isinstance(sap_license, dict):
+        return
+    
+    focus_license_types = sap_license.get("focus_license_types")
+    if not isinstance(focus_license_types, list):
+        return
+    
+    # Extract discovered license types
+    discovered_types = set()
+    for item in focus_license_types:
+        if isinstance(item, dict):
+            license_type = str(item.get("license_type", "")).strip()
+            if license_type:
+                discovered_types.add(license_type)
+    
+    if not discovered_types:
+        return
+    
+    # Load current matrix
+    current_matrix = load_sap_license_type_map_entries()
+    existing_match_texts = {entry.get("match_text", "").upper() for entry in current_matrix}
+    
+    # Find new types not yet in matrix
+    new_entries = []
+    for discovered_type in sorted(discovered_types):
+        if discovered_type.upper() not in existing_match_texts:
+            new_entries.append({
+                "match_text": discovered_type,
+                "display_name": discovered_type,  # Default: use license type as display name
+            })
+    
+    if not new_entries:
+        return
+    
+    # Add new entries to matrix and save
+    updated_matrix = current_matrix + new_entries
+    try:
+        save_sap_license_type_map_entries(updated_matrix)
+    except OSError:
+        pass  # Silent failure, don't block report storage
+
+
 def _cleanup_backup_jobs(max_age_minutes: int = 30) -> None:
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
     remove_ids: list[str] = []
@@ -13546,6 +13594,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             maybe_send_inactive_host_notifications(conn)
             maybe_send_scheduled_user_mails(conn)
             conn.commit()
+
+        # Auto-discover new license types from agent report
+        auto_sync_discovered_license_types(payload)
 
         self._send_json(HTTPStatus.CREATED, {"status": "stored"})
 
