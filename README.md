@@ -369,6 +369,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.273 | 20.05.2026 | System-Overview table: add third-column (CPU) dropdown for translated SAP B1 license types with counts (from `sap_license.focus_license_types`) |
 | 1.6.272 | 20.05.2026 | Host overview cards: fix 🪪 badge alignment to stay consistently at far right in line 2 |
 | 1.6.271 | 20.05.2026 | Host overview cards: show 🪪 on the right side of line 2 when SAP license info is present in latest payload |
 | 1.6.270 | 20.05.2026 | Add copy-to-clipboard button to SAP B1 license types display (reuses sap-vmap-copy-btn pattern) |

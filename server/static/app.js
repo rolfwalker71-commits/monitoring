@@ -12850,6 +12850,58 @@ function renderSystemOverviewLicenseInfos(payload) {
   `;
 }
 
+function renderSystemOverviewLicenseTypes(payload) {
+  const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : null;
+  const rawFocusTypes = Array.isArray(sapLicense?.focus_license_types) ? sapLicense.focus_license_types : [];
+  if (!rawFocusTypes.length) {
+    return "";
+  }
+
+  const translatedFocusTypes = rawFocusTypes
+    .filter((entry) => entry && typeof entry === "object")
+    .map((entry) => {
+      const rawType = asText(entry.license_type, "").trim();
+      const upperRawType = rawType.toUpperCase();
+      let translated = null;
+      for (const mapEntry of SAP_LICENSE_TYPE_MAP) {
+        const matchText = asText(mapEntry?.matchText, "").toUpperCase();
+        if (matchText && matchText === upperRawType) {
+          translated = asText(mapEntry?.displayName, null);
+          break;
+        }
+      }
+      const countRaw = Number(entry.count);
+      const count = Number.isFinite(countRaw) ? countRaw : 0;
+      return {
+        rawType,
+        translated,
+        count,
+      };
+    })
+    .filter((entry) => entry.rawType && entry.translated !== null);
+
+  if (!translatedFocusTypes.length) {
+    return "";
+  }
+
+  const openAttr = state.systemOverviewAddonsExpanded === true ? " open" : "";
+  const rowsHtml = translatedFocusTypes
+    .map((entry) => {
+      const countPadded = String(entry.count).padStart(3, "0");
+      return `<li><span class="so-license-type-count">${escapeHtml(countPadded)}</span><span class="so-license-type-name">${escapeHtml(entry.translated)} <span class="so-license-type-raw">(${escapeHtml(entry.rawType)})</span></span></li>`;
+    })
+    .join("");
+
+  return `
+    <details class="so-addon-details so-license-types-details"${openAttr}>
+      <summary>Lizenztypen (${translatedFocusTypes.length})</summary>
+      <div class="so-addon-grid">
+        <ul class="so-license-list so-license-type-list">${rowsHtml}</ul>
+      </div>
+    </details>
+  `;
+}
+
 function collectSystemOverviewAddonSearchText(payload) {
   if (!payload || typeof payload !== "object") {
     return "";
@@ -12964,6 +13016,7 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
   const payload = host.payload || {};
   const addOnSection = renderSystemOverviewAddons(payload, searchQuery);
   const licenseInfoSection = renderSystemOverviewLicenseInfos(payload);
+  const licenseTypeSection = renderSystemOverviewLicenseTypes(payload);
 
   const rowClickClass = onRowClick ? "so-row-clickable" : "";
   const rowClickAttr = onRowClick ? `data-hostname="${hostname}"` : "";
@@ -12983,6 +13036,7 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
       <td>
         <div class="so-cell-main">${cpuCores} vCPU</div>
         <div class="so-cell-sub">${cpuModel}</div>
+        ${licenseTypeSection ? `<div class="so-cpu-license-types">${licenseTypeSection}</div>` : ""}
       </td>
       <td>
         <div class="so-cell-main">${ramGb}</div>

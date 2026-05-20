@@ -10023,6 +10023,10 @@ body[data-theme="dark"] .backup-row--hana td {
   margin-top: 8px;
 }
 
+.so-cpu-license-types {
+  margin-top: 8px;
+}
+
 .so-os-spacer {
   margin-top: 3px;
   font-size: 12px;
@@ -10145,6 +10149,38 @@ body[data-theme="dark"] .backup-row--hana td {
   color: inherit;
 }
 
+.so-license-type-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.so-license-type-count {
+  min-width: 2.2em;
+  text-align: right;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.so-license-type-name {
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: inherit;
+  line-height: 1.2;
+}
+
+.so-license-type-raw {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  color: #64748b;
+}
+
 .so-license-label {
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   font-size: 11px;
@@ -10192,6 +10228,11 @@ body[data-theme="dark"] .sap-license-list-item strong {
 
 body[data-theme="dark"] .so-license-value,
 body[data-theme="dark"] .sap-license-list-item span {
+  color: #9fb3cc;
+}
+
+body[data-theme="dark"] .so-license-type-count,
+body[data-theme="dark"] .so-license-type-raw {
   color: #9fb3cc;
 }
 
