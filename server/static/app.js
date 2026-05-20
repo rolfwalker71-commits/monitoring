@@ -12867,11 +12867,11 @@ async function loadSystemOverview() {
           const addonId = `so-addon-${addonIndex}`;
           return `
             <section class="system-overview-country-group">
-              <button class="system-overview-toggle" type="button" data-target-id="${addonId}" aria-expanded="true">
-                <span class="system-overview-chevron">▼</span>
+              <button class="system-overview-toggle" type="button" data-target-id="${addonId}" aria-expanded="false">
+                <span class="system-overview-chevron">▶</span>
                 <span class="so-country-header">🧩 ${escapeHtml(addonLabel)} (${addonEntryCount})</span>
               </button>
-              <div id="${addonId}" class="system-overview-os-list">${customerSections}</div>
+              <div id="${addonId}" class="system-overview-os-list hidden">${customerSections}</div>
             </section>
           `;
         })

@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.256 (20. Mai 2026)
+
+- **Systemübersicht (Sort: AddOn)**: Beim Öffnen sind AddOn-Gruppen auf der obersten Ebene standardmäßig zugeklappt.
+
 ### v1.6.255 (20. Mai 2026)
 
 - **Telegram Nachrichten erweitert**: Kundename ergänzt in allen relevanten Telegram-Texten (Inaktive Hosts, Instant Alert, Reminder und Host-Abo-Testnachricht).
