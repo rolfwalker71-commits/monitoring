@@ -5636,8 +5636,9 @@ function renderSapLicenseInfoSection(payload) {
 
   const focusTypeRows = translatedFocusTypes
     .map((entry) => {
-      const label = `${escapeHtml(entry.translated)} <span>(${escapeHtml(entry.rawType)})</span>`;
-      return `<p class="sap-license-list-item"><strong>${label}</strong><span>${entry.count}</span></p>`;
+      const countPadded = String(entry.count).padStart(3, "0");
+      const label = `${escapeHtml(entry.translated)} <span class="sap-license-raw-type">(${escapeHtml(entry.rawType)})</span>`;
+      return `<p class="sap-license-list-item"><span class="sap-license-count">${countPadded}</span><strong>${label}</strong></p>`;
     })
     .join("");
 
