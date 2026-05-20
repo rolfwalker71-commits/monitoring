@@ -10885,15 +10885,15 @@ function updateHeaderStatChips() {
   const licenseCopyTechButton = document.getElementById("headerLicenseCopyTechButton");
   if (alertChip && alertCount) {
     alertCount.textContent = String(state.globalOpenAlertsCount);
-    alertChip.classList.toggle("hidden", state.globalOpenAlertsCount === 0);
+    alertChip.classList.remove("hidden");
   }
   if (trendsChip && trendsCount) {
     trendsCount.textContent = String(state.criticalTrendsCount);
-    trendsChip.classList.toggle("hidden", state.criticalTrendsCount === 0);
+    trendsChip.classList.remove("hidden");
   }
   if (inactiveChip && inactiveCount) {
     inactiveCount.textContent = String(state.inactiveHostsCount);
-    inactiveChip.classList.toggle("hidden", state.inactiveHostsCount === 0);
+    inactiveChip.classList.remove("hidden");
   }
   if (licenseChip) {
     const payload = state.currentReport && typeof state.currentReport.payload === "object" ? state.currentReport.payload : {};
