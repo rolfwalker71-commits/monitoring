@@ -4430,7 +4430,8 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-license-hover-types-head {
   margin: 0 0 3px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
   align-items: baseline;
   gap: 8px;
 }
@@ -4445,13 +4446,14 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .host-license-hover-type-count-label {
-  min-width: 28px;
+  min-width: 40px;
   font-family: "IBM Plex Mono", monospace;
 }
 
-.host-license-hover-types p {
+.host-license-hover-type-row {
   margin: 2px 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
   align-items: baseline;
   gap: 8px;
   color: #28486a;
@@ -4459,10 +4461,24 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .host-license-hover-type-count {
-  min-width: 28px;
+  min-width: 40px;
   font-family: "IBM Plex Mono", monospace;
   color: #7c2d12;
   font-weight: 700;
+}
+
+.host-license-hover-type-name-wrap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.host-license-hover-type-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #28486a;
 }
 
 .host-license-hover-type-raw {
@@ -8496,7 +8512,11 @@ body[data-theme="dark"] .host-license-hover-type-name-label {
   color: #93aeca;
 }
 
-body[data-theme="dark"] .host-license-hover-types p {
+body[data-theme="dark"] .host-license-hover-type-row {
+  color: #b9cfe8;
+}
+
+body[data-theme="dark"] .host-license-hover-type-name {
   color: #b9cfe8;
 }
 

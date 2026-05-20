@@ -7746,7 +7746,7 @@ function renderHostLicenseHoverPopupContent(hostname, data) {
   const typesHtml = types.length === 0
     ? ""
     : `<div class="host-license-hover-types"><div class="host-license-hover-types-head"><span class="host-license-hover-type-count-label">Anzahl</span><span class="host-license-hover-type-name-label">Lizenztyp</span></div>${types
-      .map((item) => `<p><span class=\"host-license-hover-type-count\">${String(item.count).padStart(3, "0")}</span><strong>${escapeHtml(item.displayType)}</strong><span class=\"host-license-hover-type-raw\">(${escapeHtml(item.rawType)})</span></p>`)
+      .map((item) => `<div class="host-license-hover-type-row"><span class=\"host-license-hover-type-count\">${String(item.count).padStart(3, "0")}</span><span class="host-license-hover-type-name-wrap"><span class="host-license-hover-type-name">${escapeHtml(item.displayType)}</span><span class=\"host-license-hover-type-raw\">(${escapeHtml(item.rawType)})</span></span></div>`)
       .join("")}</div>`;
 
   return `
