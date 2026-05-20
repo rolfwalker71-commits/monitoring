@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.254 (20. Mai 2026)
+
+- **Daily Trend Digest Mail**: Detailzeile pro Host ergänzt um den Kundennamen (`Kunde: ...`) neben der IP.
+
 ### v1.6.253 (20. Mai 2026)
 
 - **Systemübersicht UI vereinfacht**: Chip-/Pill-Optik (Hintergrund, Rahmen, Rundung) für Länderfilter, Sort-/AddOn-/Expand-/Reload-Buttons und Gruppen-Toggles in der Systemübersicht entfernt; Darstellung jetzt bewusst schlicht und flach.

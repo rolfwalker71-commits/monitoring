@@ -6507,7 +6507,7 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
     rows_html = "".join(
         (
             "<tr>"
-            f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:middle;'><div style='font-weight:600;'>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</div><div style='margin-top:3px;font-size:12px;color:#64748b;'>IP: {html.escape(str(item.get('primary_ip') or '-'))}</div>{host_badges_html(item.get('country_code', ''), item.get('os_family', 'linux'))}</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:middle;'><div style='font-weight:600;'>{html.escape(str(item.get('display_name') or item.get('hostname') or '-'))}</div><div style='margin-top:3px;font-size:12px;color:#64748b;'>Kunde: {html.escape(str(item.get('customer_name') or '-'))} | IP: {html.escape(str(item.get('primary_ip') or '-'))}</div>{host_badges_html(item.get('country_code', ''), item.get('os_family', 'linux'))}</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:middle;'>{html.escape(str(item.get('metric') or '-'))}</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums;'>{html.escape(str(item.get('current') if item.get('current') is not None else '-'))}%</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums;'><strong>{html.escape(str(item.get('projected') if item.get('projected') is not None else '-'))}%</strong></td>"
