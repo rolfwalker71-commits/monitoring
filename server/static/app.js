@@ -5624,7 +5624,8 @@ function renderSapLicenseInfoSection(payload) {
           break;
         }
       }
-      const count = asNum(entry.count, 0);
+      const countRaw = Number(entry.count);
+      const count = Number.isFinite(countRaw) ? countRaw : 0;
       return {
         rawType,
         translated,

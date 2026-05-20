@@ -369,6 +369,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.266 | 20.05.2026 | Fix live SAP B1 Lizenzinfos runtime regression (`asNum is not defined`) by using safe numeric conversion for `focus_license_types` counts; SAP B1 section is clickable/rendering again |
 | 1.6.265 | 20.05.2026 | Add admin-editable SAP license type translation matrix (match pattern -> display name) with persisted server API (`/api/v1/sap-license-type-map`) and apply it in live SAP B1 Lizenzinfos rendering for extracted `focus_license_types` (LTD/PROFESSIONAL) |
 | 1.6.264 | 20.05.2026 | Move SAP B1 LTD/Professional license rendering to the live UI (Einzelmeldungen -> SAP B1 -> Lizenzinfos) and remove ui-next runtime artifacts/routes/deploy entries (`/ui-next`, `ui-next.css`, `ui-next.js`) |
 | 1.6.263 | 20.05.2026 | Extend SAP B1 Lizenzinfos on Linux and Windows agents with aggregated LTD/PROFESSIONAL license types (`focus_license_types`: type + count) and render them in Einzelmeldungen with UI translation mapping (Limited CRM, Logistics CRM, Professional, Limited Finance) |
