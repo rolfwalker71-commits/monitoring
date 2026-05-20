@@ -85,6 +85,10 @@ let autoRefreshLastRefreshAt = null;
 let autoRefreshCountdownTimerId = null;
 let sessionRefreshTimerId = null;
 let sessionCountdownTimerId = null;
+let hostLicenseHoverPopupEl = null;
+let hostLicenseHoverHideTimerId = null;
+let hostLicenseHoverActiveHost = "";
+const hostLicenseHoverCache = new Map();
 const SESSION_REFRESH_INTERVAL_SECONDS = 240;
 
 const state = {
@@ -7502,7 +7506,7 @@ function renderSingleHostCard(host) {
   const versionSideBarHtml = `<div class="${versionSideBarClass}" title="${escapeHtml(versionSideBarTitle)}" aria-hidden="true"></div>`;
   const hasSapLicenseInfo = Boolean(host.has_sap_license_info);
   const sapLicenseBadge = hasSapLicenseInfo
-    ? '<span class="host-license-info-badge" title="SAP Lizenzinfos vorhanden">🪪</span>'
+    ? `<span class="host-license-info-badge" data-host-license-host="${escapeHtml(hostname)}" title="SAP Lizenzinfos vorhanden">🪪</span>`
     : "";
   const customerTitleLine = customerNameValue
     ? `<div class="host-customer-title-line"><span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span><span class="host-detail-line">🏷️ ${escapeHtml(hostDesignationLabel)}</span></span>${sapLicenseBadge}</div>`
@@ -7565,6 +7569,238 @@ function renderSingleHostCard(host) {
       ${osIcon}
     </article>
   `;
+}
+
+function formatSapLicenseExpiry(value) {
+  const raw = asText(value, "").trim();
+  if (!raw) return "";
+  if (/^\d{8}$/.test(raw)) {
+    return `${raw.substring(6, 8)}.${raw.substring(4, 6)}.${raw.substring(0, 4)}`;
+  }
+  return raw;
+}
+
+function mapSapLicenseFocusTypes(sapLicense) {
+  const rawEntries = Array.isArray(sapLicense?.focus_license_types) ? sapLicense.focus_license_types : [];
+  return rawEntries
+    .map((entry) => {
+      const rawType = asText(entry?.license_type, "").trim();
+      const count = Number.parseInt(String(entry?.count ?? 0), 10);
+      if (!rawType) return null;
+      const normalizedRaw = rawType.toUpperCase();
+      const mapped = SAP_LICENSE_TYPE_MAP.find((mapEntry) => normalizedRaw.includes(asText(mapEntry?.matchText, "").toUpperCase()));
+      return {
+        rawType,
+        displayType: asText(mapped?.displayName, rawType),
+        count: Number.isFinite(count) && count >= 0 ? count : 0,
+      };
+    })
+    .filter(Boolean);
+}
+
+async function loadHostLicenseInfoForHover(hostname) {
+  const key = asText(hostname, "").trim();
+  if (!key) {
+    return { hasData: false, message: "Kein Host angegeben." };
+  }
+  if (hostLicenseHoverCache.has(key)) {
+    return hostLicenseHoverCache.get(key);
+  }
+
+  const url = `/api/v1/host-reports?hostname=${encodeURIComponent(key)}&limit=1&offset=0`;
+  const response = await fetch(url, { credentials: "same-origin" });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const data = await response.json().catch(() => ({}));
+  const reports = Array.isArray(data?.reports) ? data.reports : [];
+  const payload = reports.length > 0 && reports[0] && typeof reports[0].payload === "object" ? reports[0].payload : {};
+  const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : null;
+  if (!sapLicense) {
+    const result = { hasData: false, message: "Keine SAP Lizenzinfos verfügbar." };
+    hostLicenseHoverCache.set(key, result);
+    return result;
+  }
+
+  const fields = {
+    hw: asText(sapLicense.hardware_key, "").trim(),
+    inst: asText(sapLicense.instno, "").trim(),
+    system: asText(sapLicense.system_nr, "").trim(),
+    customerNo: asText(sapLicense.customer_no, "").trim(),
+    holder: asText(sapLicense.customer_name, "").trim(),
+    expiry: formatSapLicenseExpiry(sapLicense.expiration),
+  };
+  const types = mapSapLicenseFocusTypes(sapLicense);
+  const hasCore = Object.values(fields).some((value) => Boolean(value));
+  const hasData = hasCore || types.length > 0;
+
+  const copyLines = [
+    `HW-Key: ${fields.hw || "-"}`,
+    `Installationsnummer: ${fields.inst || "-"}`,
+    `Systemnummer: ${fields.system || "-"}`,
+    `Kundennummer: ${fields.customerNo || "-"}`,
+    `Lizenznehmer: ${fields.holder || "-"}`,
+    `Gültig bis: ${fields.expiry || "-"}`,
+  ];
+  if (types.length > 0) {
+    copyLines.push("");
+    copyLines.push("Lizenztypen:");
+    for (const item of types) {
+      copyLines.push(`${String(item.count).padStart(3, "0")}  ${item.displayType} (${item.rawType})`);
+    }
+  }
+
+  const result = {
+    hasData,
+    message: hasData ? "" : "Keine SAP Lizenzinfos verfügbar.",
+    fields,
+    types,
+    copyText: copyLines.join("\n"),
+  };
+  hostLicenseHoverCache.set(key, result);
+  return result;
+}
+
+function ensureHostLicenseHoverPopup() {
+  if (hostLicenseHoverPopupEl) {
+    return hostLicenseHoverPopupEl;
+  }
+  const popup = document.createElement("div");
+  popup.id = "hostLicenseHoverPopup";
+  popup.className = "host-license-hover-popup hidden";
+  popup.innerHTML = "<p class=\"muted\">Lade Lizenzinfos…</p>";
+  popup.addEventListener("mouseenter", () => {
+    if (hostLicenseHoverHideTimerId !== null) {
+      window.clearTimeout(hostLicenseHoverHideTimerId);
+      hostLicenseHoverHideTimerId = null;
+    }
+  });
+  popup.addEventListener("mouseleave", () => {
+    scheduleHideHostLicenseHoverPopup();
+  });
+  popup.addEventListener("click", async (event) => {
+    const button = event.target instanceof Element ? event.target.closest("[data-host-license-copy]") : null;
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const text = asText(button.getAttribute("data-host-license-copy"), "").trim();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      const original = button.textContent;
+      button.textContent = "✅ Kopiert";
+      setTimeout(() => { button.textContent = original; }, 1200);
+    } catch {
+      button.textContent = "❌ Fehler";
+      setTimeout(() => { button.textContent = "📋 Kopieren"; }, 1200);
+    }
+  });
+  document.body.appendChild(popup);
+  hostLicenseHoverPopupEl = popup;
+  return popup;
+}
+
+function positionHostLicenseHoverPopup(anchorEl) {
+  if (!hostLicenseHoverPopupEl || !anchorEl) return;
+  const rect = anchorEl.getBoundingClientRect();
+  const popup = hostLicenseHoverPopupEl;
+  const margin = 10;
+  const left = Math.min(window.innerWidth - popup.offsetWidth - margin, Math.max(margin, rect.left - 16));
+  const topPreferred = rect.bottom + margin;
+  const top = topPreferred + popup.offsetHeight + margin > window.innerHeight
+    ? Math.max(margin, rect.top - popup.offsetHeight - margin)
+    : topPreferred;
+  popup.style.left = `${left}px`;
+  popup.style.top = `${top}px`;
+}
+
+function scheduleHideHostLicenseHoverPopup() {
+  if (hostLicenseHoverHideTimerId !== null) {
+    window.clearTimeout(hostLicenseHoverHideTimerId);
+  }
+  hostLicenseHoverHideTimerId = window.setTimeout(() => {
+    if (hostLicenseHoverPopupEl) {
+      hostLicenseHoverPopupEl.classList.add("hidden");
+    }
+    hostLicenseHoverActiveHost = "";
+  }, 180);
+}
+
+function renderHostLicenseHoverPopupContent(hostname, data) {
+  if (!data?.hasData) {
+    return `<div class="host-license-hover-head"><strong>🪪 SAP Lizenzinfos</strong><span>${escapeHtml(hostname)}</span></div><p class="muted">${escapeHtml(data?.message || "Keine SAP Lizenzinfos verfügbar.")}</p>`;
+  }
+  const f = data.fields || {};
+  const rows = [
+    ["HW-Key", f.hw || "-"],
+    ["Instno", f.inst || "-"],
+    ["System", f.system || "-"],
+    ["Kundnr", f.customerNo || "-"],
+    ["Inhaber", f.holder || "-"],
+    ["Gültig bis", f.expiry || "-"],
+  ].map(([label, value]) => `<div class="host-license-hover-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
+
+  const types = Array.isArray(data.types) ? data.types : [];
+  const typesHtml = types.length === 0
+    ? ""
+    : `<div class="host-license-hover-types"><p class="host-license-hover-types-title">Lizenztypen</p>${types
+      .map((item) => `<p><span class=\"host-license-hover-type-count\">${String(item.count).padStart(3, "0")}</span><strong>${escapeHtml(item.displayType)}</strong><span class=\"host-license-hover-type-raw\">(${escapeHtml(item.rawType)})</span></p>`)
+      .join("")}</div>`;
+
+  return `
+    <div class="host-license-hover-head">
+      <strong>🪪 SAP Lizenzinfos</strong>
+      <span>${escapeHtml(hostname)}</span>
+      <button type="button" class="header-license-copy-btn" data-host-license-copy="${escapeHtml(data.copyText || "")}">📋 Kopieren</button>
+    </div>
+    <div class="host-license-hover-grid">${rows}</div>
+    ${typesHtml}
+  `;
+}
+
+async function showHostLicenseHoverPopup(anchorEl, hostname) {
+  const key = asText(hostname, "").trim();
+  if (!anchorEl || !key) return;
+  const popup = ensureHostLicenseHoverPopup();
+  if (hostLicenseHoverHideTimerId !== null) {
+    window.clearTimeout(hostLicenseHoverHideTimerId);
+    hostLicenseHoverHideTimerId = null;
+  }
+  hostLicenseHoverActiveHost = key;
+  popup.innerHTML = `<div class="host-license-hover-head"><strong>🪪 SAP Lizenzinfos</strong><span>${escapeHtml(key)}</span></div><p class="muted">Lade Lizenzinfos…</p>`;
+  popup.classList.remove("hidden");
+  positionHostLicenseHoverPopup(anchorEl);
+
+  try {
+    const data = await loadHostLicenseInfoForHover(key);
+    if (hostLicenseHoverActiveHost !== key || !hostLicenseHoverPopupEl) {
+      return;
+    }
+    hostLicenseHoverPopupEl.innerHTML = renderHostLicenseHoverPopupContent(key, data);
+    positionHostLicenseHoverPopup(anchorEl);
+  } catch (error) {
+    if (hostLicenseHoverActiveHost !== key || !hostLicenseHoverPopupEl) {
+      return;
+    }
+    hostLicenseHoverPopupEl.innerHTML = `<div class="host-license-hover-head"><strong>🪪 SAP Lizenzinfos</strong><span>${escapeHtml(key)}</span></div><p class="muted">Fehler beim Laden: ${escapeHtml(error.message || "Unbekannt")}</p>`;
+    positionHostLicenseHoverPopup(anchorEl);
+  }
+}
+
+function wireHostLicenseInfoBadges(hostList) {
+  for (const badge of (hostList || document).querySelectorAll(".host-license-info-badge")) {
+    const hostAttr = asText(badge.getAttribute("data-host-license-host"), "").trim();
+    if (!hostAttr) continue;
+    badge.addEventListener("mouseenter", () => {
+      void showHostLicenseHoverPopup(badge, hostAttr);
+    });
+    badge.addEventListener("mousemove", () => {
+      positionHostLicenseHoverPopup(badge);
+    });
+    badge.addEventListener("mouseleave", () => {
+      scheduleHideHostLicenseHoverPopup();
+    });
+  }
 }
 
 function renderApiKeyChip(host) {
@@ -8656,6 +8892,7 @@ function wireHostListInteractions() {
   }
 
   wireHostActionButtons(hostList);
+  wireHostLicenseInfoBadges(hostList);
 
   const hiddenToggle = hostList.querySelector("#hiddenHostsToggleButton");
   if (hiddenToggle) {

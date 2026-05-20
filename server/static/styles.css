@@ -4351,6 +4351,102 @@ body[data-theme="dark"] .trend-progress-bar {
   line-height: 1;
   opacity: 0.95;
   flex-shrink: 0;
+  cursor: pointer;
+}
+
+.host-license-hover-popup {
+  position: fixed;
+  z-index: 1300;
+  width: min(520px, calc(100vw - 24px));
+  border: 1px solid #cfd8e3;
+  border-left: 4px solid #fbbf24;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f7f9fb 0%, #eff3f7 100%);
+  box-shadow: 0 12px 30px rgba(15, 31, 56, 0.25);
+  padding: 10px 12px;
+}
+
+.host-license-hover-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.host-license-hover-head strong {
+  color: #15395f;
+  font-size: 14px;
+}
+
+.host-license-hover-head > span {
+  color: #4a6687;
+  font-size: 12px;
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.host-license-hover-head .header-license-copy-btn {
+  margin-left: auto;
+}
+
+.host-license-hover-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+.host-license-hover-item span {
+  display: block;
+  font-size: 10px;
+  color: #4a6687;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.host-license-hover-item strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 19px;
+  color: #1f3f5f;
+  font-family: "IBM Plex Mono", monospace;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.host-license-hover-types {
+  margin-top: 10px;
+  border-top: 1px solid #d6e1ee;
+  padding-top: 8px;
+}
+
+.host-license-hover-types-title {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #294b71;
+}
+
+.host-license-hover-types p {
+  margin: 2px 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: #28486a;
+  font-size: 12px;
+}
+
+.host-license-hover-type-count {
+  min-width: 28px;
+  font-family: "IBM Plex Mono", monospace;
+  color: #7c2d12;
+  font-weight: 700;
+}
+
+.host-license-hover-type-raw {
+  color: #6b7f97;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
 }
 
 .host-customer-line {
@@ -8347,6 +8443,46 @@ body[data-theme="dark"] .host-detail-line {
 
 body[data-theme="dark"] .host-license-info-badge {
   opacity: 0.9;
+}
+
+body[data-theme="dark"] .host-license-hover-popup {
+  border-color: #355171;
+  border-left-color: #f59e0b;
+  background: linear-gradient(180deg, #12253a 0%, #0f1f33 100%);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+}
+
+body[data-theme="dark"] .host-license-hover-head strong {
+  color: #dbeafe;
+}
+
+body[data-theme="dark"] .host-license-hover-head > span,
+body[data-theme="dark"] .host-license-hover-item span {
+  color: #93aeca;
+}
+
+body[data-theme="dark"] .host-license-hover-item strong {
+  color: #e5f0ff;
+}
+
+body[data-theme="dark"] .host-license-hover-types {
+  border-top-color: #30455f;
+}
+
+body[data-theme="dark"] .host-license-hover-types-title {
+  color: #c9dcf5;
+}
+
+body[data-theme="dark"] .host-license-hover-types p {
+  color: #b9cfe8;
+}
+
+body[data-theme="dark"] .host-license-hover-type-count {
+  color: #fbbf24;
+}
+
+body[data-theme="dark"] .host-license-hover-type-raw {
+  color: #8da7c3;
 }
 
 body[data-theme="dark"] .admin-alert-subscriptions-table tr.has-change td {
