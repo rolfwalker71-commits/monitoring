@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.259 (20. Mai 2026)
+
+- **Systemübersicht (Sort: AddOn)**: Gruppierungsansicht umgestellt auf 3 Ebenen: `AddOn-Name` -> `Version` -> `Kunde`.
+
 ### v1.6.258 (20. Mai 2026)
 
 - **Systemübersicht Toolbar/Infos**: Einzeilige Informationen und Controls wieder als Chips dargestellt (u.a. Statistikzeile, Sortier-/Action-Buttons und Länderfilter).
