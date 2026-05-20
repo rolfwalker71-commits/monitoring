@@ -7588,10 +7588,12 @@ function mapSapLicenseFocusTypes(sapLicense) {
       const count = Number.parseInt(String(entry?.count ?? 0), 10);
       if (!rawType) return null;
       const normalizedRaw = rawType.toUpperCase();
-      const mapped = SAP_LICENSE_TYPE_MAP.find((mapEntry) => normalizedRaw.includes(asText(mapEntry?.matchText, "").toUpperCase()));
+      const mapped = SAP_LICENSE_TYPE_MAP.find((mapEntry) => normalizedRaw === asText(mapEntry?.matchText, "").toUpperCase());
+      const displayType = asText(mapped?.displayName, "").trim();
+      if (!displayType) return null;
       return {
         rawType,
-        displayType: asText(mapped?.displayName, rawType),
+        displayType,
         count: Number.isFinite(count) && count >= 0 ? count : 0,
       };
     })
