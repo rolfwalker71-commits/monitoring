@@ -4357,7 +4357,7 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-license-hover-popup {
   position: fixed;
   z-index: 1300;
-  width: min(520px, calc(100vw - 24px));
+  width: min(640px, calc(100vw - 24px));
   border: 1px solid #cfd8e3;
   border-left: 4px solid #fbbf24;
   border-radius: 12px;
@@ -4375,12 +4375,12 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-license-hover-head strong {
   color: #15395f;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .host-license-hover-head > span {
   color: #4a6687;
-  font-size: 12px;
+  font-size: 11px;
   font-family: "IBM Plex Mono", monospace;
 }
 
@@ -4396,7 +4396,7 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-license-hover-item span {
   display: block;
-  font-size: 10px;
+  font-size: 9px;
   color: #4a6687;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -4405,7 +4405,7 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-license-hover-item strong {
   display: block;
   margin-top: 2px;
-  font-size: 19px;
+  font-size: 16px;
   color: #1f3f5f;
   font-family: "IBM Plex Mono", monospace;
   line-height: 1.15;
