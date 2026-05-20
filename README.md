@@ -361,14 +361,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.6.278**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.6.278**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.6.279**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.6.279**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.279 | 20.05.2026 | Rebind customer info rendering to the selected host in the overview tab, rename the menu item to Kundeninfos, and remove the broken global customer menu entry |
 | 1.6.278 | 20.05.2026 | Keep the three header summary chips permanently visible so alert, trend, and inactive-host counts no longer disappear at zero or during refresh timing gaps |
 | 1.6.277 | 20.05.2026 | Make the new customer-changes tab visible for normal users and admins, add a dedicated global entry, and keep the panel accessible with a clear empty state when no host is selected |
 | 1.6.276 | 20.05.2026 | Hotfix server startup failure: remove accidental Flask route injection in `receiver.py`, restore `main()` entrypoint, and move `user_type` migration into proper `web_users` migration block |

@@ -1259,7 +1259,6 @@ function updateGlobalSubMode() {
   const systemOverviewView = document.getElementById("systemOverviewView");
   const backupStatusView = document.getElementById("backupStatusView");
   const hostConfigChangesView = document.getElementById("hostConfigChangesView");
-  const globalCustomerChangesView = document.getElementById("globalCustomerChangesView");
   const agentSourceStatusView = document.getElementById("agentSourceStatusView");
   const globalAdminAlertSubsView = document.getElementById("globalAdminAlertSubsView");
   const globalAdminLoginAuditView = document.getElementById("globalAdminLoginAuditView");
@@ -1270,7 +1269,6 @@ function updateGlobalSubMode() {
   const systemOverviewTabButton = document.getElementById("systemOverviewTabButton");
   const backupStatusTabButton = document.getElementById("backupStatusTabButton");
   const hostConfigChangesTabButton = document.getElementById("hostConfigChangesTabButton");
-  const globalCustomerChangesTabButton = document.getElementById("globalCustomerChangesTabButton");
   const agentSourceStatusTabButton = document.getElementById("agentSourceStatusTabButton");
   const globalAdminAlertSubsTabButton = document.getElementById("globalAdminAlertSubsTabButton");
   const globalAdminLoginAuditTabButton = document.getElementById("globalAdminLoginAuditTabButton");
@@ -1282,7 +1280,6 @@ function updateGlobalSubMode() {
   const systemOverviewActive = state.globalSubMode === "system-overview";
   const backupActive = state.globalSubMode === "backup-status";
   const hostConfigChangesActive = state.globalSubMode === "host-config-changes";
-  const customerChangesActive = state.globalSubMode === "customer-overview";
   const agentSourceStatusActive = state.globalSubMode === "agent-source-status";
   const adminAlertSubsActive = state.globalSubMode === "admin-alert-subs";
   const adminLoginAuditActive = state.globalSubMode === "admin-login-audit";
@@ -1294,7 +1291,6 @@ function updateGlobalSubMode() {
   if (systemOverviewView) systemOverviewView.classList.toggle("hidden", !systemOverviewActive);
   if (backupStatusView) backupStatusView.classList.toggle("hidden", !backupActive);
   if (hostConfigChangesView) hostConfigChangesView.classList.toggle("hidden", !hostConfigChangesActive);
-  if (globalCustomerChangesView) globalCustomerChangesView.classList.toggle("hidden", !customerChangesActive);
   if (agentSourceStatusView) agentSourceStatusView.classList.toggle("hidden", !agentSourceStatusActive);
   if (globalAdminAlertSubsView) globalAdminAlertSubsView.classList.toggle("hidden", !adminAlertSubsActive);
   if (globalAdminLoginAuditView) globalAdminLoginAuditView.classList.toggle("hidden", !adminLoginAuditActive);
@@ -1305,7 +1301,6 @@ function updateGlobalSubMode() {
   if (systemOverviewTabButton) { systemOverviewTabButton.classList.toggle("active", systemOverviewActive); systemOverviewTabButton.setAttribute("aria-selected", systemOverviewActive ? "true" : "false"); }
   if (backupStatusTabButton) { backupStatusTabButton.classList.toggle("active", backupActive); backupStatusTabButton.setAttribute("aria-selected", backupActive ? "true" : "false"); }
   if (hostConfigChangesTabButton) { hostConfigChangesTabButton.classList.toggle("active", hostConfigChangesActive); hostConfigChangesTabButton.setAttribute("aria-selected", hostConfigChangesActive ? "true" : "false"); }
-  if (globalCustomerChangesTabButton) { globalCustomerChangesTabButton.classList.toggle("active", customerChangesActive); globalCustomerChangesTabButton.setAttribute("aria-selected", customerChangesActive ? "true" : "false"); }
   if (agentSourceStatusTabButton) { agentSourceStatusTabButton.classList.toggle("active", agentSourceStatusActive); agentSourceStatusTabButton.setAttribute("aria-selected", agentSourceStatusActive ? "true" : "false"); }
   if (globalAdminAlertSubsTabButton) { globalAdminAlertSubsTabButton.classList.toggle("active", adminAlertSubsActive); globalAdminAlertSubsTabButton.setAttribute("aria-selected", adminAlertSubsActive ? "true" : "false"); }
   if (globalAdminLoginAuditTabButton) { globalAdminLoginAuditTabButton.classList.toggle("active", adminLoginAuditActive); globalAdminLoginAuditTabButton.setAttribute("aria-selected", adminLoginAuditActive ? "true" : "false"); }
@@ -3559,11 +3554,11 @@ function renderCustomerNotificationPanel(hostname, settings) {
 }
 
 async function loadAndRenderCustomerNotificationPanel(hostname) {
-  const container = document.getElementById("globalCustomerNotificationPanel") || document.getElementById("customerNotificationPanel");
+  const container = document.getElementById("customerNotificationPanel");
   if (!container) return;
   if (!hostname) {
     container.classList.remove("hidden");
-    container.innerHTML = '<p class="muted">Wähle einen Host, um die Kundenänderungen zu sehen.</p>';
+    container.innerHTML = '<p class="muted">Wähle einen Host, um die Kundeninfos zu sehen.</p>';
     return;
   }
   try {
@@ -12169,12 +12164,6 @@ function wireEvents() {
     if (state.selectedHost) {
       loadConfigChangelogForHost();
     }
-  });
-
-  document.getElementById("globalCustomerChangesTabButton").addEventListener("click", () => {
-    state.globalSubMode = "customer-overview";
-    updateGlobalSubMode();
-    loadAndRenderCustomerNotificationPanel(state.selectedHost || "");
   });
 
   document.getElementById("toggleHostAlertsPanelButton").addEventListener("click", async () => {
