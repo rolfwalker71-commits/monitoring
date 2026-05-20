@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.252 (20. Mai 2026)
+
+- **Inaktive Hosts Mail Reihenfolge**: In der Host-Detailzelle steht jetzt zuerst der Kunde, darunter der Anzeigename und danach Host/IP.
+
 ### v1.6.251 (20. Mai 2026)
 
 - **Inaktive Hosts Mail**: Detailzeile pro Host erweitert um den Kundennamen (`Kunde: ...`) neben Host und IP.

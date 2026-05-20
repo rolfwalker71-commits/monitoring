@@ -6744,6 +6744,7 @@ def inactive_hosts_mail_html(username: str, hosts: list[dict], threshold_hours: 
         hostname = str(item.get("hostname") or "")
         display_name = str(item.get("display_name") or hostname)
         customer_name = str(item.get("customer_name") or "").strip()
+        customer_label = customer_name or "Ohne Kunde"
         primary_ip = str(item.get("primary_ip") or "-")
         country_code = str(item.get("country_code") or "")
         os_value = str(item.get("os") or "")
@@ -6752,7 +6753,7 @@ def inactive_hosts_mail_html(username: str, hosts: list[dict], threshold_hours: 
         hours_inactive = float(item.get("hours_inactive") or 0)
         row_parts.append(
             "<tr style='background:#fff1f2;'>"
-            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><div style='font-weight:600;'>{html.escape(display_name)}</div><div style='margin-top:3px;font-size:12px;color:#64748b;'>Host: {html.escape(hostname)} | Kunde: {html.escape(customer_name or '-')} | IP: {html.escape(primary_ip)}</div>{host_badges_html(country_code, os_family)}</td>"
+            f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><div style='font-weight:700;'>{html.escape(customer_label)}</div><div style='margin-top:3px;font-size:12px;color:#334155;'>Anzeigename: {html.escape(display_name)}</div><div style='margin-top:3px;font-size:12px;color:#64748b;'>Host: {html.escape(hostname)} | IP: {html.escape(primary_ip)}</div>{host_badges_html(country_code, os_family)}</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;font-variant-numeric:tabular-nums;'>{html.escape(format_mail_datetime(last_report_time_utc))}</td>"
             f"<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:right;vertical-align:middle;font-variant-numeric:tabular-nums;'><strong>{hours_inactive:.1f} h</strong></td>"
             "<td style='padding:10px 8px;border-bottom:1px solid #fde2e2;text-align:left;vertical-align:middle;'><span style='display:inline-block;padding:2px 8px;border-radius:999px;background:#fee2e2;color:#991b1b;font-weight:700;'>DOWN</span></td>"
