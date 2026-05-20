@@ -10574,6 +10574,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             hosts = []
             for row in rows:
                 latest_payload = parse_payload_json(row[5] or "{}")
+                sap_license = latest_payload.get("sap_license") if isinstance(latest_payload, dict) else None
+                has_sap_license_info = False
+                if isinstance(sap_license, dict):
+                    focus_types = sap_license.get("focus_license_types")
+                    has_focus_types = isinstance(focus_types, list) and len(focus_types) > 0
+                    has_license_core = any(
+                        str(sap_license.get(field, "") or "").strip()
+                        for field in ("hardware_key", "instno", "system_nr", "customer_no", "customer_name", "expiration")
+                    )
+                    has_sap_license_info = bool(has_focus_types or has_license_core)
                 hostname = str(row[0])
                 host_settings = settings_map.get(hostname, {
                     "display_name_override": "",
@@ -10621,6 +10631,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "customer_maringo_project_number": str(host_settings.get("customer_maringo_project_number", "") or ""),
                         "environment_type": str(host_settings.get("environment_type", "") or ""),
                         "agent_api_key_status": str((latest_payload.get("agent_api_key") or {}).get("status", "off")),
+                        "has_sap_license_info": has_sap_license_info,
                     }
                 )
 

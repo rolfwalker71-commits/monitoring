@@ -4342,6 +4342,23 @@ body[data-theme="dark"] .trend-progress-bar {
   padding-top: 5px;
 }
 
+.host-detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.host-license-info-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.95;
+  flex-shrink: 0;
+}
+
 .host-customer-line {
   display: block;
   font-size: 17px;
@@ -8332,6 +8349,10 @@ body[data-theme="dark"] .host-customer-line {
 
 body[data-theme="dark"] .host-detail-line {
   color: #8fa8c4;
+}
+
+body[data-theme="dark"] .host-license-info-badge {
+  opacity: 0.9;
 }
 
 body[data-theme="dark"] .admin-alert-subscriptions-table tr.has-change td {
