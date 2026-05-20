@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.251 (20. Mai 2026)
+
+- **Inaktive Hosts Mail**: Detailzeile pro Host erweitert um den Kundennamen (`Kunde: ...`) neben Host und IP.
+
 ### v1.6.250 (20. Mai 2026)
 
 - **Header Session-Badge**: Sichtbaren Session-Countdown im Header entfernt; Session-Refresh- und Timeout-Logik bleiben weiterhin im Hintergrund aktiv.
