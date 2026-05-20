@@ -6804,11 +6804,12 @@ def inactive_hosts_telegram_text(username: str, hosts: list[dict], threshold_hou
     max_items = 10
     for idx, item in enumerate(hosts[:max_items], start=1):
         display_name = str(item.get("display_name") or item.get("hostname") or "-")
+        customer_name = str(item.get("customer_name") or "").strip() or "Ohne Kunde"
         country = str(item.get("country_code") or "--")
         hours_inactive = float(item.get("hours_inactive") or 0)
         last_report = format_mail_datetime(str(item.get("last_report_time_utc") or ""))
         lines.append(
-            f"{idx}) {display_name} ({country}) - {hours_inactive:.1f}h inaktiv - letzte Meldung {last_report}"
+            f"{idx}) {customer_name} | {display_name} ({country}) - {hours_inactive:.1f}h inaktiv - letzte Meldung {last_report}"
         )
 
     remaining = len(hosts) - max_items
@@ -6956,7 +6957,9 @@ def send_instant_alert_telegram_to_users(
         "escalated": "⬆️ ALERT ESCALATED",
         "resolved": "✅ ALERT RESOLVED",
     }.get(event_type, "⚠️ ALERT")
-    title = display_name.strip() if display_name.strip() else hostname
+    host_ctx = collect_host_mail_context(conn, hostname)
+    title = display_name.strip() if display_name.strip() else str(host_ctx.get("display_name") or hostname)
+    customer_label = str(host_ctx.get("customer_name") or "").strip() or "Ohne Kunde"
     now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
 
     for row in rows:
@@ -6974,6 +6977,7 @@ def send_instant_alert_telegram_to_users(
             "\n"
             f"{icon}\n"
             f"👤 {username}\n"
+            f"👥 {customer_label}\n"
             f"🖥️ {title} ({hostname})\n"
             f"📂 {mountpoint}\n"
             f"{sev_icon} {severity}\n"
@@ -7720,6 +7724,7 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
 
         if due_telegram:
             title = str(host_ctx.get("display_name", "") or "").strip() or hostname
+            customer_label = str(host_ctx.get("customer_name", "") or "").strip() or "Ohne Kunde"
             now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
             sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
 
@@ -7742,6 +7747,7 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                 text = (
                     "⏰ HEADS-UP REMINDER\n"
                     f"👤 {username}\n"
+                    f"👥 {customer_label}\n"
                     f"🖥️ {title} ({hostname})\n"
                     f"📂 {mountpoint}\n"
                     f"{sev_icon} {severity}\n"
@@ -8645,10 +8651,13 @@ def maybe_send_alert_message(
             "resolved": "✅ ALERT RESOLVED",
         }.get(event_type, "⚠️ ALERT")
         sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
-        title = display_name.strip() if display_name.strip() else hostname
+        host_ctx = collect_host_mail_context(conn, hostname) if conn is not None else {}
+        title = display_name.strip() if display_name.strip() else str(host_ctx.get("display_name") or hostname)
+        customer_label = str(host_ctx.get("customer_name") or "").strip() or "Ohne Kunde"
         now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
         text = (
             f"{icon}\n"
+            f"👥 {customer_label}\n"
             f"🖥️ {title} ({hostname})\n"
             f"📂 {mountpoint}\n"
             f"{sev_icon} {severity}\n"
@@ -12128,6 +12137,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     (
                         "[TEST] Host Alert Abo\n"
                         f"User: {username}\n"
+                        f"Kunde: {str(host_context.get('customer_name') or 'Ohne Kunde')}\n"
                         f"Host: {str(host_context.get('display_name', hostname))} ({hostname})\n"
                         f"Zeit: {datetime.now().astimezone().strftime('%d.%m.%Y %H:%M')}"
                     ),

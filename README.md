@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.255 (20. Mai 2026)
+
+- **Telegram Nachrichten erweitert**: Kundename ergänzt in allen relevanten Telegram-Texten (Inaktive Hosts, Instant Alert, Reminder und Host-Abo-Testnachricht).
+
 ### v1.6.254 (20. Mai 2026)
 
 - **Daily Trend Digest Mail**: Detailzeile pro Host ergänzt um den Kundennamen (`Kunde: ...`) neben der IP.
