@@ -7505,7 +7505,7 @@ function renderSingleHostCard(host) {
     ? '<span class="host-license-info-badge" title="SAP Lizenzinfos vorhanden">🪪</span>'
     : "";
   const customerTitleLine = customerNameValue
-    ? `<div class="host-customer-title-line"><span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span><span class="host-detail-row"><span class="host-detail-line">🏷️ ${escapeHtml(hostDesignationLabel)}</span>${sapLicenseBadge}</span></span></div>`
+    ? `<div class="host-customer-title-line"><span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span><span class="host-detail-line">🏷️ ${escapeHtml(hostDesignationLabel)}</span></span>${sapLicenseBadge}</div>`
     : "";
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();

@@ -4331,6 +4331,7 @@ body[data-theme="dark"] .trend-progress-bar {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1;
 }
 
 .host-detail-line {
@@ -4340,13 +4341,6 @@ body[data-theme="dark"] .trend-progress-bar {
   color: #64748b;
   word-break: break-word;
   padding-top: 5px;
-}
-
-.host-detail-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
 }
 
 .host-license-info-badge {
