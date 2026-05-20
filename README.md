@@ -361,14 +361,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.6.285**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.6.285**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.6.286**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.6.286**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.286 | 20.05.2026 | Allow customer/holder name wrapping in the SAP license hover popup so long names no longer get cut off |
 | 1.6.285 | 20.05.2026 | Refine SAP license popup list layout: add compact column labels "Anzahl" and "Lizenztyp" above entries and remove redundant "Lizenztypen" heading |
 | 1.6.284 | 20.05.2026 | Remove native browser tooltip ("SAP Lizenzinfos vorhanden") from the host-card 🪪 badge so only the custom hover popup is shown |
 | 1.6.283 | 20.05.2026 | Restrict SAP license types in host-card hover popup to only matrix-translated entries, matching the Lizenzinfos section behavior |

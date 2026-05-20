@@ -7734,13 +7734,13 @@ function renderHostLicenseHoverPopupContent(hostname, data) {
   }
   const f = data.fields || {};
   const rows = [
-    ["HW-Key", f.hw || "-"],
-    ["Instno", f.inst || "-"],
-    ["System", f.system || "-"],
-    ["Kundnr", f.customerNo || "-"],
-    ["Inhaber", f.holder || "-"],
-    ["Gültig bis", f.expiry || "-"],
-  ].map(([label, value]) => `<div class="host-license-hover-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
+    ["HW-Key", f.hw || "-", ""],
+    ["Instno", f.inst || "-", ""],
+    ["System", f.system || "-", ""],
+    ["Kundnr", f.customerNo || "-", ""],
+    ["Inhaber", f.holder || "-", "host-license-hover-item--holder"],
+    ["Gültig bis", f.expiry || "-", ""],
+  ].map(([label, value, modifierClass]) => `<div class="host-license-hover-item ${modifierClass}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
 
   const types = Array.isArray(data.types) ? data.types : [];
   const typesHtml = types.length === 0

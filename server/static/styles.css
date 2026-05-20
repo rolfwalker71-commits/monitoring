@@ -4414,6 +4414,14 @@ body[data-theme="dark"] .trend-progress-bar {
   white-space: nowrap;
 }
 
+.host-license-hover-item--holder strong {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: initial;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .host-license-hover-types {
   margin-top: 10px;
   border-top: 1px solid #d6e1ee;
