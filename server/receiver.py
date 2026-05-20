@@ -127,13 +127,6 @@ def parse_positive_int(value: object, default: int = 0, max_value: int = 365) ->
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
-        # Ensure web_users table has user_type column for user roles
-        existing_web_user_columns = {
-            str(row[1])
-            for row in conn.execute("PRAGMA table_info(web_users)").fetchall()
-        }
-        if "user_type" not in existing_web_user_columns:
-            conn.execute("ALTER TABLE web_users ADD COLUMN user_type TEXT NOT NULL DEFAULT 'default'")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS reports (
@@ -424,6 +417,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE web_users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''")
         if "created_at_utc" not in existing_web_user_columns:
             conn.execute("ALTER TABLE web_users ADD COLUMN created_at_utc TEXT NOT NULL DEFAULT ''")
+        if "user_type" not in existing_web_user_columns:
+            conn.execute("ALTER TABLE web_users ADD COLUMN user_type TEXT NOT NULL DEFAULT 'default'")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS web_sessions (
@@ -13710,24 +13705,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    
-
-# --- API endpoint: Update user type for a specific user (admin only) ---
-@app.route("/api/v1/users/<username>/type", methods=["PUT"])
-def update_user_type(username):
-    if not is_admin():
-        return jsonify({"error": "Unauthorized"}), 403
-
-    data = request.get_json()
-    new_type = data.get("user_type")
-    if new_type not in {"default", "readOnly", "admin"}:
-        return jsonify({"error": "Invalid user type"}), 400
-
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            "UPDATE web_users SET user_type = ? WHERE username = ?",
-            (new_type, username),
-        )
-
-    return jsonify({"message": "User type updated successfully"})
     main()

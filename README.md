@@ -369,6 +369,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.6.276 | 20.05.2026 | Hotfix server startup failure: remove accidental Flask route injection in `receiver.py`, restore `main()` entrypoint, and move `user_type` migration into proper `web_users` migration block |
 | 1.6.275 | 20.05.2026 | Fully implemented read-only user type and added customer management menu |
 | 1.6.274 | 20.05.2026 | Add customer management UI (edit/delete customers); prepare read-only user type with restricted permissions |
 | 1.6.273 | 20.05.2026 | System-Overview table: add third-column (CPU) dropdown for translated SAP B1 license types with counts (from `sap_license.focus_license_types`) |
