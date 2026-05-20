@@ -3424,13 +3424,13 @@ function renderSapLicenseTypeMapAdminSection() {
     <section class="settings-subsection" id="sapLicenseTypeMapAdminSection">
       <div class="settings-subsection-head">
         <h5>🪪 SAP Lizenztyp Übersetzungsmatrix</h5>
-        <p class="count compact">Substring-Matching für Lizenztypen aus B01 (mit LTD bzw. PROFESSIONAL) mit Überschreibmöglichkeit der Anzeige</p>
+        <p class="count compact">Exaktes Matching der Lizenztypen aus B01 auf Anzeigename — nur übersetzte Typen erscheinen in der UI</p>
       </div>
       <div class="table-wrap" style="margin-bottom:8px;max-height:340px;overflow-y:auto;">
         <table class="report-subtable sap-vmap-table" id="sapLicenseMapAdminTable">
           <thead>
             <tr>
-              <th>Suchmuster (enthalten)</th>
+              <th>Lizenztyp (exakt)</th>
               <th>Anzeigename in UI</th>
               <th></th>
             </tr>
@@ -5616,11 +5616,11 @@ function renderSapLicenseInfoSection(payload) {
     .map((entry) => {
       const rawType = asText(entry.license_type, "");
       const upperRawType = rawType.toUpperCase();
-      let translated = rawType;
+      let translated = null;
       for (const mapEntry of SAP_LICENSE_TYPE_MAP) {
-        const needle = asText(mapEntry?.matchText, "").toUpperCase();
-        if (needle && upperRawType.includes(needle)) {
-          translated = asText(mapEntry?.displayName, rawType);
+        const matchText = asText(mapEntry?.matchText, "").toUpperCase();
+        if (matchText && matchText === upperRawType) {
+          translated = asText(mapEntry?.displayName, null);
           break;
         }
       }
@@ -5632,7 +5632,7 @@ function renderSapLicenseInfoSection(payload) {
         count,
       };
     })
-    .filter((entry) => entry.rawType && entry.translated !== entry.rawType);
+    .filter((entry) => entry.rawType && entry.translated !== null);
 
   const focusTypeRows = translatedFocusTypes
     .map((entry) => {
