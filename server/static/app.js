@@ -8112,7 +8112,8 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
       return;
     }
     targetSvg.style.cursor = "zoom-in";
-    targetSvg.addEventListener("mouseenter", () => {
+    targetSvg.title = "Klicken zum Vergrößern";
+    targetSvg.addEventListener("click", () => {
       openDbMaintenanceChartDrillModal(chartDefs[idx]);
     });
   });

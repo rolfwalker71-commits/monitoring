@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.262 (20. Mai 2026)
+
+- **DB-Maintenance Charts**: Popup-Drilldown für vergrößerte Graphen nun nur noch per Klick auf den jeweiligen Graphen (kein Hover-Trigger mehr).
+
 ### v1.6.261 (20. Mai 2026)
 
 - **DB-Maintenance Charts**: Hover auf einen Kachel-Graph öffnet einen deutlich vergrößerten Chart im Popup (mit Schließen per `X`) für besser lesbare X-/Y-Achsenwerte.
