@@ -3523,32 +3523,21 @@ function wireSapLicenseTypeMapAdminSection(container) {
 }
 
 function renderCustomerNotificationPanel(hostname, settings) {
-  const emails = settings.customer_alert_emails || "";
-  const mountpoints = settings.customer_alert_mountpoints || "";
-  const minSeverity = settings.customer_alert_min_severity || "critical";
+  const customerId = Number(settings.customer_id || 0) || null;
+  const customerName = asText(settings.customer_name, "");
   return `<details class="customer-notif-panel detail-card" id="customerNotificationDetails" open>
-    <summary style="font-weight:700;font-size:14px;cursor:pointer;padding:4px 0;">Kundenänderungen</summary>
+    <summary style="font-weight:700;font-size:14px;cursor:pointer;padding:4px 0;">Kundeninfos</summary>
     <div style="padding:10px 0 4px 0;">
-      <p style="font-size:12px;color:#64748b;margin:0 0 10px 0;">E-Mail-Benachrichtigung bei neuen Filesystem-Alerts für diesen Host.</p>
+      <p style="font-size:12px;color:#64748b;margin:0 0 10px 0;">Kundenname des dem Host zugeordneten Kunden ändern.</p>
       <div class="alarm-settings-group">
-        <label for="custNotifEmails" class="settings-label">E-Mail-Adressen (kommagetrennt)</label>
-        <input id="custNotifEmails" type="text" class="settings-input" placeholder="kunde@example.com, weitere@example.com" value="${escapeHtml(emails)}">
-      </div>
-      <div class="alarm-settings-group">
-        <label for="custNotifMountpoints" class="settings-label">Mountpoints (kommagetrennt, leer = alle)</label>
-        <input id="custNotifMountpoints" type="text" class="settings-input" placeholder="/data, /backup" value="${escapeHtml(mountpoints)}">
-      </div>
-      <div class="alarm-settings-group">
-        <label for="custNotifMinSeverity" class="settings-label">Minimaler Schweregrad</label>
-        <select id="custNotifMinSeverity" class="settings-input">
-          <option value="warning"${minSeverity === "warning" ? " selected" : ""}>Warnung + Kritisch</option>
-          <option value="critical"${minSeverity === "critical" ? " selected" : ""}>Nur Kritisch</option>
-        </select>
+        <label for="customerNameInput" class="settings-label">Kundenname</label>
+        <input id="customerNameInput" type="text" class="settings-input" placeholder="Kundenname" value="${escapeHtml(customerName)}">
       </div>
       <div class="alarm-settings-actions">
-        <button id="saveCustomerNotifBtn" type="button" class="btn-primary btn-primary--compact">Speichern</button>
-        <span id="customerNotifStatus" class="settings-status"></span>
+        <button id="saveCustomerNameBtn" type="button" class="btn-primary btn-primary--compact">Speichern</button>
+        <span id="customerNameStatus" class="settings-status"></span>
       </div>
+      <p class="settings-helper-text">${customerId ? `Kunde-ID: ${customerId}` : "Kein Kunde für diesen Host zugeordnet."}</p>
     </div>
   </details>`;
 }
@@ -3568,27 +3557,44 @@ async function loadAndRenderCustomerNotificationPanel(hostname) {
     container.innerHTML = renderCustomerNotificationPanel(hostname, data);
     container.classList.remove("hidden");
 
-    container.querySelector("#saveCustomerNotifBtn")?.addEventListener("click", async () => {
-      const status = container.querySelector("#customerNotifStatus");
-      const emails = container.querySelector("#custNotifEmails")?.value.trim() || "";
-      const mountpoints = container.querySelector("#custNotifMountpoints")?.value.trim() || "";
-      const minSeverity = container.querySelector("#custNotifMinSeverity")?.value || "critical";
+    const saveButton = container.querySelector("#saveCustomerNameBtn");
+    const customerId = Number(data?.customer_id || 0) || null;
+    if (saveButton && !customerId) {
+      saveButton.disabled = true;
+      saveButton.title = "Nur bei einem zugeordneten Kunden verfügbar";
+    }
+
+    saveButton?.addEventListener("click", async () => {
+      const status = container.querySelector("#customerNameStatus");
+      const customerName = container.querySelector("#customerNameInput")?.value.trim() || "";
+      if (!customerName) {
+        if (status) {
+          status.textContent = "❌ Kundenname darf nicht leer sein";
+          setTimeout(() => { status.textContent = ""; }, 3000);
+        }
+        return;
+      }
+      if (!customerId) {
+        if (status) {
+          status.textContent = "❌ Kein Kunde zugeordnet";
+          setTimeout(() => { status.textContent = ""; }, 3000);
+        }
+        return;
+      }
       try {
-        const r = await fetch("/api/v1/host-settings", {
-          method: "POST",
+        const r = await fetch(`/api/v1/customers/${encodeURIComponent(customerId)}`, {
+          method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            hostname,
-            customer_alert_emails: emails,
-            customer_alert_mountpoints: mountpoints,
-            customer_alert_min_severity: minSeverity,
-          }),
+          credentials: "same-origin",
+          body: JSON.stringify({ customer_name: customerName }),
         });
         if (!r.ok) {
           const d = await r.json().catch(() => ({}));
           throw new Error(d.error || "HTTP " + r.status);
         }
         if (status) { status.textContent = "✅ Gespeichert"; setTimeout(() => { status.textContent = ""; }, 2500); }
+        state.selectedDisplayName = state.selectedDisplayName || hostname;
+        await loadHosts({ preserveScroll: true });
       } catch (err) {
         if (status) { status.textContent = `❌ ${err.message}`; setTimeout(() => { status.textContent = ""; }, 3000); }
       }
