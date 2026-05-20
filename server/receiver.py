@@ -36,6 +36,7 @@ STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "monitoring.db"
 SAP_B1_VERSION_MAP_PATH = DATA_DIR / "sap_b1_version_map.json"
+SAP_LICENSE_TYPE_MAP_PATH = DATA_DIR / "sap_license_type_map.json"
 BACKUP_TEMP_DIR = DATA_DIR / "backup_jobs"
 AUTO_BACKUP_DIR = DATA_DIR / "auto_db_backups"
 APP_LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
@@ -78,6 +79,12 @@ DEFAULT_ALERT_DIGEST_TIME = "08:05"
 SCHEDULE_TIMEZONE_NAME = os.getenv("MONITORING_SCHEDULE_TIMEZONE", "Europe/Zurich").strip() or "Europe/Zurich"
 DB_MAINTENANCE_INTERVAL_HOURS = max(1, min(24, int(os.getenv("MONITORING_DB_MAINT_INTERVAL_HOURS", "2") or "2")))
 AUTO_BACKUP_DEFAULT_ENABLED = os.getenv("MONITORING_AUTO_BACKUP_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
+DEFAULT_SAP_LICENSE_TYPE_MAP_ENTRIES = [
+    {"match_text": "CRM-LTD", "display_name": "Limited CRM"},
+    {"match_text": "LOGISTICS-LTD", "display_name": "Logistics CRM"},
+    {"match_text": "PROFESSIONAL", "display_name": "Professional"},
+    {"match_text": "FINANCE-LTD", "display_name": "Limited Finance"},
+]
 AUTO_BACKUP_DEFAULT_INTERVAL_HOURS = max(1, min(168, int(os.getenv("MONITORING_AUTO_BACKUP_INTERVAL_HOURS", "12") or "12")))
 AUTO_BACKUP_DEFAULT_RETENTION_DAYS = max(1, min(365, int(os.getenv("MONITORING_AUTO_BACKUP_RETENTION_DAYS", "7") or "7")))
 TELEGRAM_ACTION_BASE_URL = os.getenv(
@@ -1143,6 +1150,56 @@ def save_sap_b1_version_map_entries(entries_raw: object) -> list[dict[str, str]]
     normalized = normalize_sap_b1_version_map_entries(entries_raw)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     SAP_B1_VERSION_MAP_PATH.write_text(
+        json.dumps(normalized, ensure_ascii=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return normalized
+
+
+def normalize_sap_license_type_map_entries(entries_raw: object) -> list[dict[str, str]]:
+    if not isinstance(entries_raw, list):
+        return []
+    normalized: list[dict[str, str]] = []
+    seen_patterns: set[str] = set()
+    for item in entries_raw:
+        if not isinstance(item, dict):
+            continue
+        match_text = str(item.get("match_text", "") or "").strip()
+        display_name = str(item.get("display_name", "") or "").strip()
+        if not match_text:
+            continue
+        dedupe_key = match_text.upper()
+        if dedupe_key in seen_patterns:
+            continue
+        seen_patterns.add(dedupe_key)
+        normalized.append(
+            {
+                "match_text": match_text,
+                "display_name": display_name,
+            }
+        )
+    return normalized
+
+
+def load_sap_license_type_map_entries() -> list[dict[str, str]]:
+    try:
+        raw = SAP_LICENSE_TYPE_MAP_PATH.read_text(encoding="utf-8")
+    except OSError:
+        return normalize_sap_license_type_map_entries(DEFAULT_SAP_LICENSE_TYPE_MAP_ENTRIES)
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return normalize_sap_license_type_map_entries(DEFAULT_SAP_LICENSE_TYPE_MAP_ENTRIES)
+    normalized = normalize_sap_license_type_map_entries(parsed)
+    if normalized:
+        return normalized
+    return normalize_sap_license_type_map_entries(DEFAULT_SAP_LICENSE_TYPE_MAP_ENTRIES)
+
+
+def save_sap_license_type_map_entries(entries_raw: object) -> list[dict[str, str]]:
+    normalized = normalize_sap_license_type_map_entries(entries_raw)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    SAP_LICENSE_TYPE_MAP_PATH.write_text(
         json.dumps(normalized, ensure_ascii=True, indent=2) + "\n",
         encoding="utf-8",
     )
@@ -11498,6 +11555,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if parsed.path == "/api/v1/sap-license-type-map":
+            entries = load_sap_license_type_map_entries()
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "count": len(entries),
+                    "entries": entries,
+                },
+            )
+            return
+
         if parsed.path == "/api/v1/alarm-settings":
             with sqlite3.connect(DB_PATH) as conn:
                 settings = get_alarm_settings(conn)
@@ -11840,6 +11908,43 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             try:
                 saved_entries = save_sap_b1_version_map_entries(entries)
+            except OSError as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"save failed: {exc}"})
+                return
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "saved": len(saved_entries),
+                    "entries": saved_entries,
+                },
+            )
+            return
+
+        if path == "/api/v1/sap-license-type-map":
+            if not self._require_admin_session():
+                return
+
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            entries = payload.get("entries", []) if isinstance(payload, dict) else []
+            if not isinstance(entries, list):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "entries must be a list"})
+                return
+
+            try:
+                saved_entries = save_sap_license_type_map_entries(entries)
             except OSError as exc:
                 self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"save failed: {exc}"})
                 return

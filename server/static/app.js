@@ -69,6 +69,13 @@ let SAP_B1_VERSION_MAP = new Map([
   ["10.00.100", { featurePack: "FP 2005", patchLevel: "PL 00", releaseDate: "May 2020" }],
 ]);
 
+let SAP_LICENSE_TYPE_MAP = [
+  { matchText: "CRM-LTD", displayName: "Limited CRM" },
+  { matchText: "LOGISTICS-LTD", displayName: "Logistics CRM" },
+  { matchText: "PROFESSIONAL", displayName: "Professional" },
+  { matchText: "FINANCE-LTD", displayName: "Limited Finance" },
+];
+
 const SAP_B1_HANA_PROCESS_RE = /\b(hdbindexserver|hdbnameserver|hdbscriptserver|hdbxsengine|hdbcompileserver|hdbpreprocessor|hdbwebdispatcher|hdbdaemon|hdbrsutil|sapstartsrv|hdb[a-z0-9_-]+)\b/i;
 
 let autoRefreshTimerId = null;
@@ -167,25 +174,33 @@ const state = {
   filesystemBlacklistPatterns: [],
   showBlacklistedFilesystems: false,
   sapB1VmapDirty: false,
+  sapLicenseTypeMapDirty: false,
   sapB1VmapBeforeUnloadWired: false,
   backupAutomationLoaded: false,
 };
 
 function hasSapB1VersionMapUnsavedChanges() {
-  return state.viewMode === "global" && state.globalSubMode === "admin-settings" && state.sapB1VmapDirty;
+  return state.viewMode === "global"
+    && state.globalSubMode === "admin-settings"
+    && (state.sapB1VmapDirty || state.sapLicenseTypeMapDirty);
 }
 
 function markSapB1VersionMapDirty(isDirty) {
   state.sapB1VmapDirty = Boolean(isDirty);
 }
 
+function markSapLicenseTypeMapDirty(isDirty) {
+  state.sapLicenseTypeMapDirty = Boolean(isDirty);
+}
+
 function confirmDiscardSapB1VersionMapChanges() {
   if (!hasSapB1VersionMapUnsavedChanges()) {
     return true;
   }
-  const ok = window.confirm("Ungespeicherte Änderungen in der SAP B1 Version Map verwerfen?");
+  const ok = window.confirm("Ungespeicherte Änderungen in den Admin-Mappings verwerfen?");
   if (ok) {
     markSapB1VersionMapDirty(false);
+    markSapLicenseTypeMapDirty(false);
   }
   return ok;
 }
@@ -3256,6 +3271,25 @@ async function loadSapB1VersionMap() {
   } catch { /* keep built-in map on error */ }
 }
 
+async function loadSapLicenseTypeMap() {
+  try {
+    const resp = await fetch("/api/v1/sap-license-type-map", { credentials: "same-origin" });
+    if (!resp.ok) return;
+    const contentType = String(resp.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.includes("application/json")) return;
+    const data = await resp.json();
+    if (!Array.isArray(data.entries)) return;
+    const normalized = data.entries
+      .filter((entry) => entry && typeof entry === "object")
+      .map((entry) => ({
+        matchText: asText(entry.match_text, "").trim(),
+        displayName: asText(entry.display_name, "").trim(),
+      }))
+      .filter((entry) => entry.matchText);
+    SAP_LICENSE_TYPE_MAP = normalized;
+  } catch { /* keep built-in map on error */ }
+}
+
 function renderSapB1VersionMapAdminSection() {
   const rows = Array.from(SAP_B1_VERSION_MAP.entries()).map(([build, info], idx) => `
     <tr data-idx="${idx}">
@@ -3371,6 +3405,122 @@ function wireSapB1VersionMapAdminSection(container) {
     try {
       await navigator.clipboard.writeText(text);
       const btn = section.querySelector("#sapB1VmapCopyBtn");
+      const orig = btn.textContent;
+      btn.textContent = "✅ Kopiert!";
+      setTimeout(() => { btn.textContent = orig; }, 1500);
+    } catch { /* ignore */ }
+  });
+}
+
+function renderSapLicenseTypeMapAdminSection() {
+  const rows = SAP_LICENSE_TYPE_MAP.map((entry, idx) => `
+    <tr data-idx="${idx}">
+      <td><input class="vmap-input" data-field="match_text" value="${escapeHtml(entry.matchText)}" style="width:180px;font-family:monospace" placeholder="z.B. CRM-LTD"></td>
+      <td><input class="vmap-input" data-field="display_name" value="${escapeHtml(entry.displayName)}" style="width:220px" placeholder="z.B. Limited CRM"></td>
+      <td><button type="button" class="license-map-del-btn" data-idx="${idx}" title="Zeile löschen">🗑</button></td>
+    </tr>`).join("");
+
+  return `
+    <section class="settings-subsection" id="sapLicenseTypeMapAdminSection">
+      <div class="settings-subsection-head">
+        <h5>🪪 SAP Lizenztyp Übersetzungsmatrix</h5>
+        <p class="count compact">Substring-Matching für Lizenztypen aus B01 (mit LTD bzw. PROFESSIONAL) mit Überschreibmöglichkeit der Anzeige</p>
+      </div>
+      <div class="table-wrap" style="margin-bottom:8px;max-height:340px;overflow-y:auto;">
+        <table class="report-subtable sap-vmap-table" id="sapLicenseMapAdminTable">
+          <thead>
+            <tr>
+              <th>Suchmuster (enthalten)</th>
+              <th>Anzeigename in UI</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="sapLicenseMapAdminBody">${rows}</tbody>
+        </table>
+      </div>
+      <div class="alarm-settings-actions">
+        <button type="button" id="sapLicenseMapAddRowBtn" class="btn-secondary">+ Zeile hinzufügen</button>
+        <button type="button" id="sapLicenseMapSaveBtn">💾 Speichern</button>
+        <button type="button" id="sapLicenseMapCopyBtn" class="btn-secondary">📋 Kopieren</button>
+        <span id="sapLicenseMapStatus" class="count compact"></span>
+      </div>
+    </section>`;
+}
+
+function wireSapLicenseTypeMapAdminSection(container) {
+  const section = (container || document).querySelector("#sapLicenseTypeMapAdminSection");
+  if (!section) return;
+  markSapLicenseTypeMapDirty(false);
+
+  function getTableEntries() {
+    return Array.from(section.querySelectorAll("#sapLicenseMapAdminBody tr")).map((tr) => ({
+      match_text: tr.querySelector('[data-field="match_text"]')?.value.trim() || "",
+      display_name: tr.querySelector('[data-field="display_name"]')?.value.trim() || "",
+    })).filter((entry) => entry.match_text);
+  }
+
+  section.querySelector("#sapLicenseMapAddRowBtn")?.addEventListener("click", () => {
+    const tbody = section.querySelector("#sapLicenseMapAdminBody");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input class="vmap-input" data-field="match_text" value="" style="width:180px;font-family:monospace" placeholder="z.B. FINANCE-LTD"></td>
+      <td><input class="vmap-input" data-field="display_name" value="" style="width:220px" placeholder="z.B. Limited Finance"></td>
+      <td><button type="button" class="license-map-del-btn" title="Zeile löschen">🗑</button></td>`;
+    tbody.insertBefore(tr, tbody.firstChild);
+    tr.querySelector("input")?.focus();
+    markSapLicenseTypeMapDirty(true);
+  });
+
+  section.addEventListener("click", (event) => {
+    if (event.target.classList.contains("license-map-del-btn")) {
+      event.target.closest("tr")?.remove();
+      markSapLicenseTypeMapDirty(true);
+    }
+  });
+
+  section.addEventListener("input", (event) => {
+    if (event.target instanceof Element && event.target.classList.contains("vmap-input")) {
+      markSapLicenseTypeMapDirty(true);
+    }
+  });
+
+  section.querySelector("#sapLicenseMapSaveBtn")?.addEventListener("click", async () => {
+    const status = section.querySelector("#sapLicenseMapStatus");
+    const entries = getTableEntries();
+    status.textContent = "Speichern…";
+    try {
+      const resp = await fetch("/api/v1/sap-license-type-map", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entries }),
+      });
+      const contentType = String(resp.headers.get("content-type") || "").toLowerCase();
+      if (!contentType.includes("application/json")) {
+        throw new Error(`Ungültige Server-Antwort (HTTP ${resp.status})`);
+      }
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || resp.statusText);
+
+      SAP_LICENSE_TYPE_MAP = entries.map((entry) => ({
+        matchText: entry.match_text,
+        displayName: entry.display_name,
+      }));
+
+      markSapLicenseTypeMapDirty(false);
+      status.textContent = `✅ ${data.saved} Einträge gespeichert`;
+    } catch (err) {
+      status.textContent = `❌ ${err.message}`;
+    }
+    setTimeout(() => { status.textContent = ""; }, 3000);
+  });
+
+  section.querySelector("#sapLicenseMapCopyBtn")?.addEventListener("click", async () => {
+    const entries = getTableEntries();
+    const text = entries.map((entry) => `${entry.match_text}\t${entry.display_name}`).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      const btn = section.querySelector("#sapLicenseMapCopyBtn");
       const orig = btn.textContent;
       btn.textContent = "✅ Kopiert!";
       setTimeout(() => { btn.textContent = orig; }, 1500);
@@ -3533,6 +3683,7 @@ async function loadGlobalAdminSettingsPanel(force = false) {
     setBackupAutomationStatus(`Fehler: ${error.message}`, true);
   }
   await loadSapB1VersionMap();
+  await loadSapLicenseTypeMap();
   await loadAlarmSettings(force);
   await loadOauthSettings(force);
   await loadWebUsers(force);
@@ -3543,6 +3694,10 @@ async function loadGlobalAdminSettingsPanel(force = false) {
     container.querySelector("#sapB1VersionMapAdminSection")?.remove();
     container.insertAdjacentHTML("beforeend", renderSapB1VersionMapAdminSection());
     wireSapB1VersionMapAdminSection(container);
+
+    container.querySelector("#sapLicenseTypeMapAdminSection")?.remove();
+    container.insertAdjacentHTML("beforeend", renderSapLicenseTypeMapAdminSection());
+    wireSapLicenseTypeMapAdminSection(container);
   }
   if (container && !container.querySelector("#filesystemBlacklistAdminSection")) {
     container.insertAdjacentHTML("beforeend", renderFilesystemBlacklistAdminSection());
@@ -5455,12 +5610,6 @@ function renderSapB1ExtensionsSection(payload) {
 function renderSapLicenseInfoSection(payload) {
   const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : null;
   const rawFocusTypes = Array.isArray(sapLicense?.focus_license_types) ? sapLicense.focus_license_types : [];
-  const licenseTypeMatrix = [
-    { needle: "CRM-LTD", label: "Limited CRM" },
-    { needle: "LOGISTICS-LTD", label: "Logistics CRM" },
-    { needle: "PROFESSIONAL", label: "Professional" },
-    { needle: "FINANCE-LTD", label: "Limited Finance" },
-  ];
 
   const translatedFocusTypes = rawFocusTypes
     .filter((entry) => entry && typeof entry === "object")
@@ -5468,9 +5617,10 @@ function renderSapLicenseInfoSection(payload) {
       const rawType = asText(entry.license_type, "");
       const upperRawType = rawType.toUpperCase();
       let translated = rawType;
-      for (const mapEntry of licenseTypeMatrix) {
-        if (upperRawType.includes(mapEntry.needle)) {
-          translated = mapEntry.label;
+      for (const mapEntry of SAP_LICENSE_TYPE_MAP) {
+        const needle = asText(mapEntry?.matchText, "").toUpperCase();
+        if (needle && upperRawType.includes(needle)) {
+          translated = asText(mapEntry?.displayName, rawType);
           break;
         }
       }
@@ -12297,6 +12447,7 @@ async function init() {
     console.warn("initial loadWebclientVersion failed:", error);
   });
   const sapB1VersionMapPromise = loadSapB1VersionMap();
+  const sapLicenseTypeMapPromise = loadSapLicenseTypeMap();
 
   wireEvents();
   mountAdminSettingsIntoGlobalView();
@@ -12317,11 +12468,17 @@ async function init() {
     return;
   }
   await loadSapB1VersionMap();
+  await loadSapLicenseTypeMap();
   // sapB1VersionMapPromise runs in background — hosts render immediately,
   // SAP badges fill in once the map is ready
   sapB1VersionMapPromise.then(() => {
     if (state.hosts && state.hosts.length > 0) {
       renderHosts(state.hosts);
+    }
+  });
+  sapLicenseTypeMapPromise.then(() => {
+    if (state.currentReport) {
+      renderCurrentReportInView();
     }
   });
   document.getElementById("hostSearchInput").value = state.hostSearchQuery;
