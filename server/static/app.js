@@ -12992,15 +12992,21 @@ async function loadSystemOverview() {
 
     if (statsEl) {
       const scope = activeCountryFilter === "all" ? "Alle Länder" : activeCountryFilter;
-      const withSearch = searchQuery
-        ? (isAddonSortMode
-          ? ` | AddOn-Filter: "${state.systemOverviewSearchQuery}"`
-          : ` | Suche: "${state.systemOverviewSearchQuery}"`)
-        : "";
       const modeLabel = state.systemOverviewSortMode === "addon-customer-os"
-        ? " | Sicht: AddOn > Kunde > OS"
-        : " | Sicht: Land > Kunde";
-      statsEl.textContent = `${displayedHostCount} Systeme (${scope})${withSearch}${modeLabel}`;
+        ? "Sicht: AddOn > Kunde > OS"
+        : "Sicht: Land > Kunde";
+      const chips = [
+        `${displayedHostCount} Systeme`,
+        `Land: ${scope}`,
+        modeLabel,
+      ];
+      if (searchQuery) {
+        const label = isAddonSortMode ? "AddOn-Filter" : "Suche";
+        chips.push(`${label}: ${state.systemOverviewSearchQuery}`);
+      }
+      statsEl.innerHTML = chips
+        .map((chip, idx) => `<span class="system-overview-stat-chip${idx === 0 ? " is-primary" : ""}">${escapeHtml(chip)}</span>`)
+        .join("");
     }
 
     if (!displayedHostCount || !treeHtml) {

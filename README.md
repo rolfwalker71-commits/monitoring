@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.258 (20. Mai 2026)
+
+- **Systemübersicht Toolbar/Infos**: Einzeilige Informationen und Controls wieder als Chips dargestellt (u.a. Statistikzeile, Sortier-/Action-Buttons und Länderfilter).
+
 ### v1.6.257 (20. Mai 2026)
 
 - **Alert Digest Mail**: Host-Detailzeile ergänzt um den Kundennamen (`Kunde: ...`) zusätzlich zur IP.

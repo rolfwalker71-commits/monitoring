@@ -9809,6 +9809,34 @@ body[data-theme="dark"] .backup-row--hana td {
   align-items: center;
 }
 
+#systemOverviewStats {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.system-overview-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid #cfd9e6;
+  background: #f8fbff;
+  color: #1f3b63;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.system-overview-stat-chip.is-primary {
+  border-color: #b9cbe3;
+  background: #eef5ff;
+  color: #17324d;
+  font-weight: 700;
+}
+
 .so-country-filter-list {
   display: inline-flex;
   align-items: center;
@@ -10831,8 +10859,6 @@ body[data-theme="dark"] tbody tr:nth-child(even) td {
 }
 
 /* System overview: plain, no chip/pill framing */
-#systemOverviewView .btn-secondary.btn-secondary-pill-compact,
-#systemOverviewView .so-country-filter-btn,
 #systemOverviewView .system-overview-toggle,
 #systemOverviewView .system-overview-toggle--customer {
   border: none;
@@ -10844,8 +10870,6 @@ body[data-theme="dark"] tbody tr:nth-child(even) td {
   padding: 0 4px;
 }
 
-#systemOverviewView .btn-secondary.btn-secondary-pill-compact:hover:not(:disabled),
-#systemOverviewView .so-country-filter-btn:hover,
 #systemOverviewView .system-overview-toggle:hover:not(:disabled),
 #systemOverviewView .system-overview-toggle--customer:hover:not(:disabled) {
   border: none;
@@ -10853,26 +10877,27 @@ body[data-theme="dark"] tbody tr:nth-child(even) td {
   box-shadow: none;
 }
 
-#systemOverviewView .so-country-filter-btn.active {
-  color: #1e40af;
-  font-weight: 800;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
 #systemOverviewView .system-overview-toggle .system-overview-chevron {
   color: currentColor;
 }
 
-body[data-theme="dark"] #systemOverviewView .btn-secondary.btn-secondary-pill-compact,
-body[data-theme="dark"] #systemOverviewView .so-country-filter-btn,
 body[data-theme="dark"] #systemOverviewView .system-overview-toggle,
 body[data-theme="dark"] #systemOverviewView .system-overview-toggle--customer,
-body[data-theme="dark"] #systemOverviewView .btn-secondary.btn-secondary-pill-compact:hover:not(:disabled),
-body[data-theme="dark"] #systemOverviewView .so-country-filter-btn:hover,
 body[data-theme="dark"] #systemOverviewView .system-overview-toggle:hover:not(:disabled),
 body[data-theme="dark"] #systemOverviewView .system-overview-toggle--customer:hover:not(:disabled) {
   border: none;
   background: transparent;
   box-shadow: none;
+}
+
+body[data-theme="dark"] .system-overview-stat-chip {
+  border-color: #304762;
+  background: #13243a;
+  color: #c8dbf7;
+}
+
+body[data-theme="dark"] .system-overview-stat-chip.is-primary {
+  border-color: #35547a;
+  background: #1a2f47;
+  color: #e2eefc;
 }
