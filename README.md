@@ -554,6 +554,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.250 (20. Mai 2026)
+
+- **Header Session-Badge**: Sichtbaren Session-Countdown im Header entfernt; Session-Refresh- und Timeout-Logik bleiben weiterhin im Hintergrund aktiv.
+
 ### v1.6.249 (19. Mai 2026)
 
 - **Mail-Footer SAP-Logo**: SAP-Logo in allen HTML-Mails (inkl. Testmail-Vorlagen) um ca. 20% verkleinert, damit das Footer-Balancing mit dem ANG-Logo harmonischer wirkt.
