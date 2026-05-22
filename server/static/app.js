@@ -5515,77 +5515,66 @@ function renderSapB1ExtensionsSection(payload) {
     }
   }
 
-  // HANA: Lightweight Extensions
-  const hanaLightweight = Array.isArray(hanaAddons?.lightweight) ? hanaAddons.lightweight : [];
-  const hanaLightweightCount = hanaLightweight.length;
-  let hanaLightweightContent = '<p class="muted">Keine Daten vorhanden.</p>';
-  if (hanaAddons && hanaLightweight.length > 0) {
-    const bodyHtml = hanaLightweight.map((row) => {
-      const pair = normalizeAddonPair(row?.name, row?.version);
-      if (!pair.name) return "";
-      const name = escapeHtml(pair.name);
-      const version = escapeHtml(pair.version || "-");
-      return `<tr><td>${name}</td><td>${version}</td></tr>`;
-    }).filter(Boolean).join("");
-    if (bodyHtml) {
-      hanaLightweightContent = `
-        <div class="table-wrap">
-          <table class="report-subtable sap-addon-subtable">
-            <thead><tr><th>Name</th><th>Version</th></tr></thead>
-            <tbody>${bodyHtml}</tbody>
-          </table>
-        </div>
-      `;
-    } else {
-      hanaLightweightContent = '<p class="muted">Extensions gefunden, aber ohne verwertbare Werte.</p>';
-    }
-  } else if (hanaAddons && hanaAddons.reason) {
-    const reason = asText(hanaAddons.reason, "");
-    const error = asText(hanaAddons.error, "");
-    const reasonText = {
-      "missing_hana_sid": "HANA SID nicht gefunden",
-      "missing_sid_user": "HANA-Benutzer nicht angelegt",
-      "missing_hdbsql": "hdbsql nicht vorhanden",
-      "empty_result": "Keine Extensions gefunden",
-      "success": "Keine Extensions vorhanden"
-    }[reason] || reason;
-    hanaLightweightContent = `<p class="muted">${reasonText}${error ? ": " + escapeHtml(error) : ""}</p>`;
-  }
+  const hanaTenantViews = collectHanaAddonTenantViews(hanaAddons);
+  const hanaAddonCount = hanaTenantViews.reduce((sum, tenantView) => {
+    return sum
+      + (Array.isArray(tenantView?.lightweight) ? tenantView.lightweight.length : 0)
+      + (Array.isArray(tenantView?.legacy) ? tenantView.legacy.length : 0);
+  }, 0);
 
-  // HANA: Legacy AddOns
-  const hanaLegacy = Array.isArray(hanaAddons?.legacy) ? hanaAddons.legacy : [];
-  const hanaLegacyCount = hanaLegacy.length;
-  let hanaLegacyContent = '<p class="muted">Keine Daten vorhanden.</p>';
-  if (hanaAddons && hanaLegacy.length > 0) {
-    const bodyHtml = hanaLegacy.map((row) => {
-      const pair = normalizeAddonPair(row?.name, row?.version);
-      if (!pair.name) return "";
-      const name = escapeHtml(pair.name);
-      const version = escapeHtml(pair.version || "-");
-      return `<tr><td>${name}</td><td>${version}</td></tr>`;
-    }).filter(Boolean).join("");
-    if (bodyHtml) {
-      hanaLegacyContent = `
-        <div class="table-wrap">
-          <table class="report-subtable sap-addon-subtable">
-            <thead><tr><th>Name</th><th>Version</th></tr></thead>
-            <tbody>${bodyHtml}</tbody>
-          </table>
-        </div>
+  const renderHanaRows = (rows) => {
+    return (Array.isArray(rows) ? rows : [])
+      .map((row) => {
+        const pair = normalizeAddonPair(row?.name, row?.version);
+        if (!pair.name) return "";
+        const name = escapeHtml(pair.name);
+        const version = escapeHtml(pair.version || "-");
+        return `<tr><td>${name}</td><td>${version}</td></tr>`;
+      })
+      .filter(Boolean)
+      .join("");
+  };
+
+  const hanaTenantContent = hanaTenantViews
+    .map((tenantView) => {
+      const tenantLabel = tenantView.tenantId ? `Tenant ${tenantView.tenantId}` : "SystemDB";
+      const tenantPortLabel = tenantView.tenantPort ? `Port ${tenantView.tenantPort}` : "Port unbekannt";
+      const tenantHeader = `${tenantLabel} | ${tenantPortLabel}`;
+
+      const lwBody = renderHanaRows(tenantView.lightweight);
+      const lgBody = renderHanaRows(tenantView.legacy);
+      const lwCount = Array.isArray(tenantView.lightweight) ? tenantView.lightweight.length : 0;
+      const lgCount = Array.isArray(tenantView.legacy) ? tenantView.legacy.length : 0;
+
+      const lwContent = lwBody
+        ? `<div class="table-wrap"><table class="report-subtable sap-addon-subtable"><thead><tr><th>Name</th><th>Version</th></tr></thead><tbody>${lwBody}</tbody></table></div>`
+        : '<p class="muted">Keine Lightweight Extensions vorhanden.</p>';
+      const lgContent = lgBody
+        ? `<div class="table-wrap"><table class="report-subtable sap-addon-subtable"><thead><tr><th>Name</th><th>Version</th></tr></thead><tbody>${lgBody}</tbody></table></div>`
+        : '<p class="muted">Keine Legacy AddOns vorhanden.</p>';
+
+      const tenantError = tenantView.error ? `<p class="muted">Fehler: ${escapeHtml(tenantView.error)}</p>` : "";
+      const tenantReason = !tenantView.available && tenantView.reason
+        ? `<p class="muted">Status: ${escapeHtml(tenantView.reason)}</p>`
+        : "";
+
+      return `
+        <details class="sap-b1-raw-details sap-b1-sub-details" open>
+          <summary class="sap-b1-raw-summary">${escapeHtml(tenantHeader)} (${lwCount + lgCount})</summary>
+          <details class="sap-b1-raw-details sap-b1-sub-details" open>
+            <summary class="sap-b1-raw-summary">Lightweight Extensions (HANA) (${lwCount})</summary>
+            ${lwContent}
+          </details>
+          <details class="sap-b1-raw-details sap-b1-sub-details" open>
+            <summary class="sap-b1-raw-summary">Legacy AddOns (HANA) (${lgCount})</summary>
+            ${lgContent}
+          </details>
+          ${tenantReason}
+          ${tenantError}
+        </details>
       `;
-    } else {
-      hanaLegacyContent = '<p class="muted">Legacy AddOns gefunden, aber ohne verwertbare Werte.</p>';
-    }
-  } else if (hanaAddons && hanaAddons.reason) {
-    const reason = asText(hanaAddons.reason, "");
-    const reasonText = {
-      "empty_result": "Keine Legacy AddOns gefunden",
-      "success": "Keine Legacy AddOns vorhanden"
-    }[reason] || "";
-    if (reasonText) {
-      hanaLegacyContent = `<p class="muted">${reasonText}</p>`;
-    }
-  }
+    })
+    .join("");
 
   return `
     ${showSql ? `
@@ -5600,15 +5589,97 @@ function renderSapB1ExtensionsSection(payload) {
     ` : ""}
     ${showHana && hanaAddons ? `
     <details class="sap-b1-raw-details sap-b1-sub-details" open>
-      <summary class="sap-b1-raw-summary">Lightweight Extensions (HANA) (${hanaLightweightCount})</summary>
-      ${hanaLightweightContent}
-    </details>
-    <details class="sap-b1-raw-details sap-b1-sub-details" open>
-      <summary class="sap-b1-raw-summary">Legacy AddOns (HANA) (${hanaLegacyCount})</summary>
-      ${hanaLegacyContent}
+      <summary class="sap-b1-raw-summary">HANA AddOns (${hanaAddonCount})</summary>
+      ${hanaTenantContent || '<p class="muted">Keine HANA AddOn-Daten vorhanden.</p>'}
     </details>
     ` : ''}
   `;
+}
+
+function collectHanaAddonTenantViews(hanaAddons) {
+  if (!hanaAddons || typeof hanaAddons !== "object") {
+    return [];
+  }
+
+  const parsePortFromTarget = (targetValue) => {
+    const target = asText(targetValue, "");
+    const match = target.match(/:(\d{5})$/);
+    return match ? match[1] : "";
+  };
+
+  const tenantRows = Array.isArray(hanaAddons.tenants) ? hanaAddons.tenants : [];
+  if (tenantRows.length > 0) {
+    return tenantRows
+      .filter((tenantRow) => tenantRow && typeof tenantRow === "object")
+      .map((tenantRow) => {
+        const tenantResult = tenantRow.result && typeof tenantRow.result === "object" ? tenantRow.result : tenantRow;
+        const targetValue = asText(tenantResult.target, "");
+        const tenantPortRaw = asText(tenantRow.tenant_port, "").trim();
+        return {
+          tenantId: asText(tenantRow.tenant_id, "").trim(),
+          tenantPort: tenantPortRaw || parsePortFromTarget(targetValue),
+          target: targetValue,
+          lightweight: Array.isArray(tenantResult.lightweight) ? tenantResult.lightweight : [],
+          legacy: Array.isArray(tenantResult.legacy) ? tenantResult.legacy : [],
+          available: tenantResult.available === true,
+          reason: asText(tenantResult.reason, ""),
+          error: asText(tenantResult.error, "")
+        };
+      });
+  }
+
+  return [{
+    tenantId: "",
+    tenantPort: parsePortFromTarget(asText(hanaAddons.target, "")),
+    target: asText(hanaAddons.target, ""),
+    lightweight: Array.isArray(hanaAddons.lightweight) ? hanaAddons.lightweight : [],
+    legacy: Array.isArray(hanaAddons.legacy) ? hanaAddons.legacy : [],
+    available: hanaAddons.available === true,
+    reason: asText(hanaAddons.reason, ""),
+    error: asText(hanaAddons.error, "")
+  }];
+}
+
+function collectHanaDbTenantViews(hanaInfo) {
+  if (!hanaInfo || typeof hanaInfo !== "object") {
+    return [];
+  }
+
+  const parsePortFromTarget = (targetValue) => {
+    const target = asText(targetValue, "");
+    const match = target.match(/:(\d{5})$/);
+    return match ? match[1] : "";
+  };
+
+  const tenantRows = Array.isArray(hanaInfo.tenants) ? hanaInfo.tenants : [];
+  if (tenantRows.length > 0) {
+    return tenantRows
+      .filter((tenantRow) => tenantRow && typeof tenantRow === "object")
+      .map((tenantRow) => {
+        const tenantResult = tenantRow.result && typeof tenantRow.result === "object" ? tenantRow.result : tenantRow;
+        const targetValue = asText(tenantResult.target, "");
+        const tenantPortRaw = asText(tenantRow.tenant_port, "").trim();
+        return {
+          tenantId: asText(tenantRow.tenant_id, "").trim(),
+          tenantPort: tenantPortRaw || parsePortFromTarget(targetValue),
+          target: targetValue,
+          schemas: Array.isArray(tenantResult.schemas) ? tenantResult.schemas : [],
+          available: tenantResult.available === true,
+          reason: asText(tenantResult.reason, ""),
+          error: asText(tenantResult.error, "")
+        };
+      });
+  }
+
+  return [{
+    tenantId: "",
+    tenantPort: parsePortFromTarget(asText(hanaInfo.target, "")),
+    target: asText(hanaInfo.target, ""),
+    schemas: Array.isArray(hanaInfo.schemas) ? hanaInfo.schemas : [],
+    available: hanaInfo.available === true,
+    reason: asText(hanaInfo.reason, ""),
+    error: asText(hanaInfo.error, "")
+  }];
 }
 
 function renderSapLicenseInfoSection(payload) {
@@ -6570,7 +6641,7 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
 
   // ---- HANA DB (schema memory usage) ----
   if (hanaInfo && typeof hanaInfo === "object") {
-    if (hanaInfo.available !== true) {
+    if (hanaInfo.available !== true && !Array.isArray(hanaInfo.tenants)) {
       const reason = asText(hanaInfo.reason, "");
       const error = asText(hanaInfo.error, "");
       const reasonText = {
@@ -6582,25 +6653,38 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
       }[reason] || (reason || "HANA DB-Scan nicht verfügbar");
       parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Datenbanken</h4><p class="muted">${escapeHtml(reasonText)}${error ? `: ${escapeHtml(error)}` : ""}</p></section>`);
     } else {
-      const schemas = (Array.isArray(hanaInfo.schemas) ? hanaInfo.schemas : []).filter((entry) => {
-        const name = asText(entry?.name, "").trim();
-        if (!name) return false;
-        const upperName = name.toUpperCase();
-        if (name.startsWith("_")) return false;
-        if (upperName.startsWith("SAP")) return false;
-        if (upperName === "SLDDATA" || upperName === "SBOCOMMON" || upperName === "LANDSCAPE") return false;
-        const memoryGb = Number(entry?.memory_gb || 0);
-        return Number.isFinite(memoryGb) && memoryGb > 0;
-      });
-      const target = asText(hanaInfo.target, "");
-      if (schemas.length === 0) {
-        parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Datenbanken</h4><p class="muted">Keine Eintraege gefunden (Filter: kein SAP*, kein _*, kein SLDDATA, kein SBOCOMMON, kein LANDSCAPE, Groesse > 0 GB).</p></section>`);
-      } else {
+      const tenantViews = collectHanaDbTenantViews(hanaInfo);
+      const renderFilteredSchemas = (schemas) => {
+        return (Array.isArray(schemas) ? schemas : []).filter((entry) => {
+          const name = asText(entry?.name, "").trim();
+          if (!name) return false;
+          const upperName = name.toUpperCase();
+          if (name.startsWith("_")) return false;
+          if (upperName.startsWith("SAP")) return false;
+          if (upperName === "SLDDATA" || upperName === "SBOCOMMON" || upperName === "LANDSCAPE") return false;
+          const memoryGb = Number(entry?.memory_gb || 0);
+          return Number.isFinite(memoryGb) && memoryGb > 0;
+        });
+      };
+
+      const tenantBlocks = tenantViews.map((tenantView) => {
+        const schemas = renderFilteredSchemas(tenantView.schemas);
+        const tenantLabel = tenantView.tenantId ? `Tenant ${tenantView.tenantId}` : "SystemDB";
+        const tenantMeta = [tenantLabel];
+        if (tenantView.tenantPort) tenantMeta.push(`Port ${tenantView.tenantPort}`);
+        if (tenantView.target) tenantMeta.push(`Target ${tenantView.target}`);
+
+        if (schemas.length === 0) {
+          const tenantStatus = tenantView.error
+            ? ` (${escapeHtml(tenantView.error)})`
+            : (tenantView.reason ? ` (${escapeHtml(tenantView.reason)})` : "");
+          return `<p class="muted">${escapeHtml(tenantMeta.join(" | "))}: Keine Eintraege${tenantStatus}.</p>`;
+        }
+
         const rows = schemas.map((entry) => {
           const name = asText(entry.name, "-");
           const memoryGb = Number(entry.memory_gb || 0);
           const memoryText = Number.isFinite(memoryGb) ? `${memoryGb.toFixed(2)} GB` : "-";
-          // Fett, wenn Name auf _P/_P[Zahl] endet oder PROD enthaelt
           const isProject = /_P(\d+)?$/i.test(name) || /PROD/i.test(name);
           return `
             <tr>
@@ -6609,10 +6693,9 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
             </tr>`;
         }).join("");
 
-        parts.push(`
-          <section class="detail-card">
-            <h4>🔶 SAP HANA Datenbanken</h4>
-            <p class="count compact">Eintraege: ${schemas.length}${target ? ` | Target: ${escapeHtml(target)}` : ""}</p>
+        return `
+          <details class="sap-b1-raw-details sap-b1-sub-details" open>
+            <summary class="sap-b1-raw-summary">${escapeHtml(tenantMeta.join(" | "))} (${schemas.length})</summary>
             <div class="table-wrap">
               <table class="db-table">
                 <thead>
@@ -6624,8 +6707,14 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
                 <tbody>${rows}</tbody>
               </table>
             </div>
-          </section>`);
-      }
+          </details>`;
+      }).join("");
+
+      parts.push(`
+        <section class="detail-card">
+          <h4>🔶 SAP HANA Datenbanken</h4>
+          ${tenantBlocks || '<p class="muted">Keine Eintraege gefunden (Filter: kein SAP*, kein _*, kein SLDDATA, kein SBOCOMMON, kein LANDSCAPE, Groesse > 0 GB).</p>'}
+        </section>`);
     }
   }
 
@@ -12916,10 +13005,13 @@ function collectSystemOverviewHostAddonLabels(host) {
   }
 
   if (showHana && hana) {
-    const lightRows = Array.isArray(hana?.lightweight) ? hana.lightweight : [];
-    lightRows.forEach((row) => pushPair(row?.name, row?.version));
-    const legacyRows = Array.isArray(hana?.legacy) ? hana.legacy : [];
-    legacyRows.forEach((row) => pushPair(row?.name, row?.version));
+    const tenantViews = collectHanaAddonTenantViews(hana);
+    tenantViews.forEach((tenantView) => {
+      const lightRows = Array.isArray(tenantView?.lightweight) ? tenantView.lightweight : [];
+      lightRows.forEach((row) => pushPair(row?.name, row?.version));
+      const legacyRows = Array.isArray(tenantView?.legacy) ? tenantView.legacy : [];
+      legacyRows.forEach((row) => pushPair(row?.name, row?.version));
+    });
   }
 
   return labels.sort((a, b) => {
@@ -13021,28 +13113,44 @@ function renderSystemOverviewAddons(payload, addonFilterQuery = "") {
 
   // HANA AddOns (Linux or unknown OS)
   if (hanaToShow) {
-    const hanaLightRaw = Array.isArray(hanaToShow?.lightweight) ? hanaToShow.lightweight : [];
-    const hanaLegacyRaw = Array.isArray(hanaToShow?.legacy) ? hanaToShow.legacy : [];
-    const hanaLightweight = filterAddonRows(hanaLightRaw, "name", "version");
-    const hanaLegacy = filterAddonRows(hanaLegacyRaw, "name", "version");
-    const hanaLightCount = hanaLightweight.length;
-    const hanaLegacyCount = hanaLegacy.length;
-    const hanaTotalCount = hanaLightCount + hanaLegacyCount;
+    const tenantViews = collectHanaAddonTenantViews(hanaToShow);
+    const hanaTotalCount = tenantViews.reduce((sum, tenantView) => {
+      const lightRows = filterAddonRows(tenantView?.lightweight, "name", "version");
+      const legacyRows = filterAddonRows(tenantView?.legacy, "name", "version");
+      return sum + lightRows.length + legacyRows.length;
+    }, 0);
 
     if (hanaTotalCount > 0) {
-      const columns = [
-        renderAddonColumn("Lightweight", hanaLightweight, "name", "version"),
-        renderAddonColumn("Legacy", hanaLegacy, "name", "version"),
-      ].filter(Boolean).join("");
-      const hanaSummary = `HANA AddOns (${hanaLightCount} LW / ${hanaLegacyCount} Legacy)`;
       const openAttr = state.systemOverviewAddonsExpanded === true ? " open" : "";
+      const tenantSections = tenantViews.map((tenantView) => {
+        const lightRows = filterAddonRows(tenantView?.lightweight, "name", "version");
+        const legacyRows = filterAddonRows(tenantView?.legacy, "name", "version");
+        const tenantCount = lightRows.length + legacyRows.length;
+        if (tenantCount === 0) {
+          return "";
+        }
+
+        const tenantLabel = tenantView.tenantId ? `Tenant ${tenantView.tenantId}` : "SystemDB";
+        const tenantPort = tenantView.tenantPort ? ` | Port ${tenantView.tenantPort}` : "";
+        const tenantSummary = `${tenantLabel}${tenantPort} (${lightRows.length} LW / ${legacyRows.length} Legacy)`;
+        const tenantColumns = [
+          renderAddonColumn("Lightweight", lightRows, "name", "version"),
+          renderAddonColumn("Legacy", legacyRows, "name", "version"),
+        ].filter(Boolean).join("");
+
+        return `
+        <details class="so-addon-details so-addon-tenant-details"${openAttr}>
+          <summary>${escapeHtml(tenantSummary)}</summary>
+          <div class="so-addon-grid">
+            ${tenantColumns}
+          </div>
+        </details>`;
+      }).join("");
 
       result += `
     <details class="so-addon-details"${openAttr}>
-      <summary>${escapeHtml(hanaSummary)}</summary>
-      <div class="so-addon-grid">
-        ${columns}
-      </div>
+      <summary>${escapeHtml(`HANA AddOns (${hanaTotalCount})`)}</summary>
+      ${tenantSections}
     </details>`;
     }
   }
@@ -13246,16 +13354,22 @@ function collectSystemOverviewAddonSearchText(payload) {
   }
 
   if (hana) {
-    const lightweight = Array.isArray(hana.lightweight) ? hana.lightweight : [];
-    lightweight.forEach((row) => {
-      pushValue(row?.name);
-      pushValue(row?.version);
-    });
+    const tenantViews = collectHanaAddonTenantViews(hana);
+    tenantViews.forEach((tenantView) => {
+      pushValue(tenantView?.tenantId);
+      pushValue(tenantView?.tenantPort);
 
-    const legacy = Array.isArray(hana.legacy) ? hana.legacy : [];
-    legacy.forEach((row) => {
-      pushValue(row?.name);
-      pushValue(row?.version);
+      const lightweight = Array.isArray(tenantView?.lightweight) ? tenantView.lightweight : [];
+      lightweight.forEach((row) => {
+        pushValue(row?.name);
+        pushValue(row?.version);
+      });
+
+      const legacy = Array.isArray(tenantView?.legacy) ? tenantView.legacy : [];
+      legacy.forEach((row) => {
+        pushValue(row?.name);
+        pushValue(row?.version);
+      });
     });
   }
 

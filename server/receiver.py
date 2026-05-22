@@ -3551,14 +3551,35 @@ def _extract_database_inventory(payload: dict) -> set[str]:
     hana_schemas = hana_info.get("schemas") if isinstance(hana_info.get("schemas"), list) else []
     for schema_entry in hana_schemas:
         if isinstance(schema_entry, dict):
+            tenant_id = str(schema_entry.get("tenant_id", "")).strip()
+            hana_instance = f"HANA-T{tenant_id}" if tenant_id else "HANA"
             _add_name(
                 schema_entry.get("name")
                 or schema_entry.get("schema")
                 or schema_entry.get("schema_name"),
-                instance_name="HANA",
+                instance_name=hana_instance,
             )
         else:
             _add_name(schema_entry, instance_name="HANA")
+
+    hana_tenants = hana_info.get("tenants") if isinstance(hana_info.get("tenants"), list) else []
+    for tenant_entry in hana_tenants:
+        if not isinstance(tenant_entry, dict):
+            continue
+        tenant_id = str(tenant_entry.get("tenant_id", "")).strip()
+        hana_instance = f"HANA-T{tenant_id}" if tenant_id else "HANA"
+        tenant_result = tenant_entry.get("result") if isinstance(tenant_entry.get("result"), dict) else tenant_entry
+        tenant_schemas = tenant_result.get("schemas") if isinstance(tenant_result.get("schemas"), list) else []
+        for schema_entry in tenant_schemas:
+            if isinstance(schema_entry, dict):
+                _add_name(
+                    schema_entry.get("name")
+                    or schema_entry.get("schema")
+                    or schema_entry.get("schema_name"),
+                    instance_name=hana_instance,
+                )
+            else:
+                _add_name(schema_entry, instance_name=hana_instance)
 
     return inventory
 
@@ -5149,6 +5170,38 @@ def _extract_sap_addon_snapshot(payload: dict) -> dict[str, str]:
             if not addon_name:
                 continue
             snapshot[f"hana_sari::{addon_name}"] = addon_version
+
+        tenant_rows = hana_block.get("tenants")
+        if not isinstance(tenant_rows, list):
+            tenant_rows = []
+        for tenant_row in tenant_rows:
+            if not isinstance(tenant_row, dict):
+                continue
+            tenant_id = _clean_text(tenant_row.get("tenant_id"))
+            tenant_prefix = f"tenant{tenant_id}::" if tenant_id else "tenant::"
+            tenant_result = tenant_row.get("result") if isinstance(tenant_row.get("result"), dict) else tenant_row
+
+            tenant_lw_rows = tenant_result.get("lightweight")
+            if not isinstance(tenant_lw_rows, list):
+                tenant_lw_rows = []
+            for row in tenant_lw_rows:
+                if not isinstance(row, dict):
+                    continue
+                addon_name, addon_version = _normalize_pair(row.get("name"), row.get("version"))
+                if not addon_name:
+                    continue
+                snapshot[f"hana_extensions::{tenant_prefix}{addon_name}"] = addon_version
+
+            tenant_legacy_rows = tenant_result.get("legacy")
+            if not isinstance(tenant_legacy_rows, list):
+                tenant_legacy_rows = []
+            for row in tenant_legacy_rows:
+                if not isinstance(row, dict):
+                    continue
+                addon_name, addon_version = _normalize_pair(row.get("name"), row.get("version"))
+                if not addon_name:
+                    continue
+                snapshot[f"hana_sari::{tenant_prefix}{addon_name}"] = addon_version
 
     return snapshot
 

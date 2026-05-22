@@ -854,6 +854,47 @@ collect_hana_addons_json() {
     return
   fi
 
+  if [[ "${HANA_TENANT_SCAN_MODE:-0}" != "1" ]] && [[ -n "$sid" ]]; then
+    local tenant_targets=()
+    mapfile -t tenant_targets < <(collect_hana_multitenant_targets "$sid")
+    if (( ${#tenant_targets[@]} > 0 )); then
+      local tenants_json=""
+      local tenants_sep=""
+      local any_available=false
+      local target_line=""
+
+      for target_line in "${tenant_targets[@]}"; do
+        local tenant_id="${target_line%%|*}"
+        local tenant_port="${target_line#*|}"
+        local tenant_result=""
+        local tenant_reason="success"
+        local tenant_error=""
+
+        if [[ -z "$tenant_port" ]]; then
+          tenant_reason="missing_tenant_port"
+          tenant_error="Tenant-Port in indexserver.ini nicht gefunden"
+          tenant_result="{\"available\":false,\"lightweight\":[],\"legacy\":[],\"error\":\"$(json_escape "$tenant_error")\",\"reason\":\"$tenant_reason\"}"
+        else
+          tenant_result="$(HANA_TENANT_SCAN_MODE=1 HANA_SID="$sid" HANA_ADDONS_PORT="$tenant_port" collect_hana_addons_json)"
+          if printf '%s' "$tenant_result" | grep -q '"available":true'; then
+            any_available=true
+          fi
+        fi
+
+        tenants_json+="${tenants_sep}{\"tenant_id\":\"$(json_escape "$tenant_id")\",\"tenant_port\":\"$(json_escape "$tenant_port")\",\"result\":${tenant_result}}"
+        tenants_sep=","
+      done
+
+      printf '{"available":%s,"sid":"%s","user":"%s","target_mode":"multitenant","multitenant":true,"tenants":[%s],"lightweight":[],"legacy":[],"error":"","reason":"%s"}' \
+        "$([ "$any_available" = true ] && echo true || echo false)" \
+        "$(json_escape "$sid")" \
+        "$(json_escape "$addons_user")" \
+        "$tenants_json" \
+        "$([ "$any_available" = true ] && echo success || echo partial)"
+      return
+    fi
+  fi
+
   # Try Lightweight query against SLDDATA extensions with deployment join.
   local lightweight_output=""
   local lightweight_error=""
@@ -1029,6 +1070,39 @@ collect_hana_addons_json() {
     "$legacy_entries" \
     "$(json_escape "$error_msg")" \
     "$reason"
+}
+
+collect_hana_multitenant_targets() {
+  # Detect tenant directories and ports from indexserver.ini first line.
+  # Output format per line: TENANT_ID|PORT
+  local sid="${1-}"
+  local config_root=""
+  local tenant_dir=""
+
+  [[ -z "$sid" ]] && return 0
+  config_root="/usr/sap/${sid}/SYS/global/hdb/custom/config"
+  [[ -d "$config_root" ]] || return 0
+
+  while IFS= read -r tenant_dir; do
+    local tenant_name=""
+    local tenant_id=""
+    local ini_path=""
+    local first_line=""
+    local tenant_port=""
+
+    [[ -z "$tenant_dir" ]] && continue
+    tenant_name="$(basename "$tenant_dir")"
+    tenant_id="${tenant_name#DB_}"
+    [[ "$tenant_id" =~ ^[0-9]{3}$ ]] || continue
+
+    ini_path="$tenant_dir/indexserver.ini"
+    if [[ -f "$ini_path" ]]; then
+      first_line="$(head -n 1 "$ini_path" 2>/dev/null || true)"
+      tenant_port="$(printf '%s' "$first_line" | sed -nE 's/.*-port[[:space:]]+([0-9]{5}).*/\1/p')"
+    fi
+
+    printf '%s|%s\n' "$tenant_id" "$tenant_port"
+  done < <(find "$config_root" -mindepth 1 -maxdepth 1 -type d -name 'DB_[0-9][0-9][0-9]' 2>/dev/null | sort)
 }
 
 collect_hana_db_info_json() {
@@ -1257,6 +1331,47 @@ collect_hana_db_info_json() {
       "$(json_escape "$error_msg")" \
       "$reason"
     return
+  fi
+
+  if [[ "${HANA_TENANT_SCAN_MODE:-0}" != "1" ]] && [[ -n "$sid" ]]; then
+    local tenant_targets=()
+    mapfile -t tenant_targets < <(collect_hana_multitenant_targets "$sid")
+    if (( ${#tenant_targets[@]} > 0 )); then
+      local tenants_json=""
+      local tenants_sep=""
+      local any_available=false
+      local target_line=""
+
+      for target_line in "${tenant_targets[@]}"; do
+        local tenant_id="${target_line%%|*}"
+        local tenant_port="${target_line#*|}"
+        local tenant_result=""
+        local tenant_reason="success"
+        local tenant_error=""
+
+        if [[ -z "$tenant_port" ]]; then
+          tenant_reason="missing_tenant_port"
+          tenant_error="Tenant-Port in indexserver.ini nicht gefunden"
+          tenant_result="{\"available\":false,\"schemas\":[],\"error\":\"$(json_escape "$tenant_error")\",\"reason\":\"$tenant_reason\"}"
+        else
+          tenant_result="$(HANA_TENANT_SCAN_MODE=1 HANA_SID="$sid" HANA_ADDONS_PORT="$tenant_port" collect_hana_db_info_json)"
+          if printf '%s' "$tenant_result" | grep -q '"available":true'; then
+            any_available=true
+          fi
+        fi
+
+        tenants_json+="${tenants_sep}{\"tenant_id\":\"$(json_escape "$tenant_id")\",\"tenant_port\":\"$(json_escape "$tenant_port")\",\"result\":${tenant_result}}"
+        tenants_sep=","
+      done
+
+      printf '{"available":%s,"sid":"%s","user":"%s","target_mode":"multitenant","multitenant":true,"tenants":[%s],"schemas":[],"error":"","reason":"%s"}' \
+        "$([ "$any_available" = true ] && echo true || echo false)" \
+        "$(json_escape "$sid")" \
+        "$(json_escape "$db_user")" \
+        "$tenants_json" \
+        "$([ "$any_available" = true ] && echo success || echo partial)"
+      return
+    fi
   fi
 
   if ! su - "$sid_user" -c "command -v hdbsql" >/dev/null 2>&1; then
