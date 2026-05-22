@@ -124,6 +124,16 @@ def parse_positive_int(value: object, default: int = 0, max_value: int = 365) ->
     return min(parsed, max_value)
 
 
+def reports_host_key_sql(alias: str = "") -> str:
+    prefix = f"{alias}." if alias else ""
+    # No implicit hostname merge: missing host_uid gets a unique legacy key per report row.
+    return (
+        f"CASE WHEN COALESCE({prefix}host_uid, '') <> '' "
+        f"THEN {prefix}host_uid "
+        f"ELSE '__legacy_report__:' || CAST({prefix}id AS TEXT) END"
+    )
+
+
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
@@ -1322,9 +1332,10 @@ def _backfill_report_host_uids(conn: sqlite3.Connection, batch_size: int = 1000)
 def _repair_report_host_uids(conn: sqlite3.Connection, batch_size: int = 1000) -> dict:
     _ensure_reports_host_uid_support(conn)
     safe_batch_size = max(100, min(int(batch_size or 1000), 5000))
+    host_key_expr = reports_host_key_sql()
     before_host_cards = int(
         conn.execute(
-            "SELECT COUNT(*) FROM (SELECT 1 FROM reports GROUP BY COALESCE(NULLIF(host_uid, ''), hostname))"
+            f"SELECT COUNT(*) FROM (SELECT 1 FROM reports GROUP BY {host_key_expr})"
         ).fetchone()[0]
         or 0
     )
@@ -1380,7 +1391,7 @@ def _repair_report_host_uids(conn: sqlite3.Connection, batch_size: int = 1000) -
 
     after_host_cards = int(
         conn.execute(
-            "SELECT COUNT(*) FROM (SELECT 1 FROM reports GROUP BY COALESCE(NULLIF(host_uid, ''), hostname))"
+            f"SELECT COUNT(*) FROM (SELECT 1 FROM reports GROUP BY {host_key_expr})"
         ).fetchone()[0]
         or 0
     )
@@ -6351,12 +6362,13 @@ def export_reports_rows(conn: sqlite3.Connection, hostname: str = "", host_uid: 
     host = str(hostname or "").strip()
     host_key = str(host_uid or "").strip()
     limited = max(1, min(int(limit or 500), 2000))
+    host_key_expr = reports_host_key_sql()
     if host_key:
         rows = conn.execute(
-            """
-            SELECT id, hostname, received_at_utc, payload_json, COALESCE(NULLIF(host_uid, ''), hostname)
+            f"""
+            SELECT id, hostname, received_at_utc, payload_json, {host_key_expr}
             FROM reports
-            WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+            WHERE {host_key_expr} = ?
             ORDER BY id DESC
             LIMIT ?
             """,
@@ -6365,7 +6377,7 @@ def export_reports_rows(conn: sqlite3.Connection, hostname: str = "", host_uid: 
     elif host:
         rows = conn.execute(
             """
-            SELECT id, hostname, received_at_utc, payload_json, COALESCE(NULLIF(host_uid, ''), hostname)
+            SELECT id, hostname, received_at_utc, payload_json, COALESCE(host_uid, '')
             FROM reports
             WHERE hostname = ?
             ORDER BY id DESC
@@ -6375,8 +6387,8 @@ def export_reports_rows(conn: sqlite3.Connection, hostname: str = "", host_uid: 
         ).fetchall()
     else:
         rows = conn.execute(
-            """
-            SELECT id, hostname, received_at_utc, payload_json, COALESCE(NULLIF(host_uid, ''), hostname)
+            f"""
+            SELECT id, hostname, received_at_utc, payload_json, {host_key_expr}
             FROM reports
             ORDER BY id DESC
             LIMIT ?
@@ -10837,18 +10849,19 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
+            host_key_expr = reports_host_key_sql()
 
             with sqlite3.connect(DB_PATH) as conn:
                 rows = conn.execute(
-                    """
+                    f"""
                     WITH grouped AS (
                         SELECT
-                            COALESCE(NULLIF(host_uid, ''), hostname) AS host_key,
+                            {host_key_expr} AS host_key,
                             MAX(received_at_utc) AS last_seen_utc,
                             COUNT(*) AS report_count,
                             MAX(id) AS latest_id
                         FROM reports
-                        GROUP BY COALESCE(NULLIF(host_uid, ''), hostname)
+                        GROUP BY {host_key_expr}
                     ),
                     ordered AS (
                         SELECT
@@ -10867,7 +10880,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         o.report_count,
                         COALESCE(r_latest.primary_ip, '') AS latest_primary_ip,
                         COALESCE(r_latest.agent_id, '') AS latest_agent_id,
-                        COALESCE(r_latest.payload_json, '{}') AS latest_payload_json,
+                        COALESCE(r_latest.payload_json, '{{}}') AS latest_payload_json,
                         COALESCE(r_latest.hostname, '') AS latest_hostname,
                         o.total_hosts
                     FROM ordered o
@@ -10880,7 +10893,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 total_hosts = int(rows[0][7] or 0) if rows else 0
                 if not rows and offset > 0:
                     total_hosts = int(conn.execute(
-                        "SELECT COUNT(*) FROM (SELECT 1 FROM reports GROUP BY COALESCE(NULLIF(host_uid, ''), hostname))"
+                        f"SELECT COUNT(*) FROM (SELECT 1 FROM reports GROUP BY {host_key_expr})"
                     ).fetchone()[0] or 0)
 
                 hostnames_for_counts = [str(row[6] or "").strip() for row in rows if str(row[6] or "").strip()]
@@ -11027,12 +11040,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "host_uid or hostname query parameter is required"})
                 return
 
+            host_key_expr = reports_host_key_sql()
+
             where_clause = "hostname = ?"
             where_args: tuple = (hostname,)
             if host_uid:
-                # Prefer direct host_uid index path; include legacy hostname fallback rows.
-                where_clause = "(host_uid = ? OR (COALESCE(host_uid, '') = '' AND hostname = ?))"
-                where_args = (host_uid, host_uid)
+                where_clause = f"({host_key_expr} = ?)"
+                where_args = (host_uid,)
 
             limit = parse_int(query, "limit", default=10, min_value=1, max_value=200)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
@@ -11076,7 +11090,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
                 rows = conn.execute(
                     f"""
-                    SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json, COALESCE(NULLIF(host_uid, ''), hostname)
+                    SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json, {host_key_expr}
                     FROM reports
                     WHERE {where_clause}
                     ORDER BY id DESC

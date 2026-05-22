@@ -584,6 +584,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.312 (22. Mai 2026)
+
+- **Kein automatisches Hostkarten-Merge ueber Hostname mehr**: Alle relevanten Host-Queries verwenden jetzt einen strikten Host-Key ohne Hostname-Fallback. Damit werden Hosts nicht mehr wegen identischem Hostnamen zusammengefuehrt.
+- **Striktes Schluesselverhalten**: Wenn `host_uid` vorhanden ist, wird nur diese UID verwendet. Wenn `host_uid` fehlt, wird ein eindeutiger Legacy-Key pro Report (`__legacy_report__:<id>`) genutzt statt einer impliziten Zusammenfuehrung.
+- **Host-Reports/Export angepasst**: Filterung fuer `host_uid` nutzt denselben strikten Host-Key wie die Hostlisten-Aggregation, damit Auswahl und Detaildaten konsistent bleiben.
+
 ### v1.6.311 (22. Mai 2026)
 
 - **Historische Host-UID-Reparatur eingefuehrt**: Neue serverseitige Batch-Reparatur setzt fuer bestehende Reports die `host_uid` wieder strikt auf den aus Payload/Agent/IP abgeleiteten Wert, statt alte, zusammengefuehrte UID-Zustaende fortzuschreiben.
