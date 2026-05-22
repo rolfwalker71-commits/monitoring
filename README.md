@@ -584,6 +584,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.316 (22. Mai 2026)
+
+- **Host-Bezeichnung jetzt pro Host-Karte (host_uid) moeglich**: Display-Name-Overrides koennen jetzt UID-spezifisch gespeichert werden, statt nur hostname-basiert.
+- **Fix fuer gleichnamige, getrennte Karten**: Wenn mehrere Karten denselben Hostnamen haben (z. B. geklonte Systeme), aendert eine Namensanpassung nicht mehr automatisch alle Karten.
+- **API/UI auf UID-Override erweitert**: `host-settings` unterstuetzt `host_uid` fuer den Display-Namen; Hostliste und Report-Ansicht verwenden UID-Overrides priorisiert vor hostname-Fallback.
+
 ### v1.6.315 (22. Mai 2026)
 
 - **Port/Target-Anzeige aus HANA-Multitenant-UI entfernt**: In Discovery, Tenant-Ueberschriften und Leerstatus-Meldungen werden keine Port- oder Target-Informationen mehr angezeigt.

@@ -235,6 +235,15 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS host_uid_settings (
+                host_uid TEXT PRIMARY KEY,
+                display_name_override TEXT,
+                updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
         existing_host_columns = {
             str(row[1])
             for row in conn.execute("PRAGMA table_info(host_settings)").fetchall()
@@ -9184,7 +9193,16 @@ def summarize_numeric_series(values: list[float]) -> dict | None:
     }
 
 
-def get_display_name_override(conn: sqlite3.Connection, hostname: str) -> str:
+def get_display_name_override(conn: sqlite3.Connection, hostname: str, host_uid: str = "") -> str:
+    safe_host_uid = str(host_uid or "").strip()
+    if safe_host_uid:
+        uid_row = conn.execute(
+            "SELECT display_name_override FROM host_uid_settings WHERE host_uid = ?",
+            (safe_host_uid,),
+        ).fetchone()
+        if uid_row and uid_row[0]:
+            return str(uid_row[0]).strip()
+
     row = conn.execute(
         "SELECT display_name_override FROM host_settings WHERE hostname = ?",
         (hostname,),
@@ -10810,6 +10828,24 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     """
                 ).fetchall()
 
+                host_uid_keys = [str(row[0] or "").strip() for row in rows if str(row[0] or "").strip()]
+                host_uid_display_name_map: dict[str, str] = {}
+                if host_uid_keys:
+                    placeholders = ",".join(["?"] * len(host_uid_keys))
+                    host_uid_rows = conn.execute(
+                        f"""
+                        SELECT host_uid, COALESCE(display_name_override, '')
+                        FROM host_uid_settings
+                        WHERE host_uid IN ({placeholders})
+                        """,
+                        tuple(host_uid_keys),
+                    ).fetchall()
+                    host_uid_display_name_map = {
+                        str(row[0] or "").strip(): str(row[1] or "").strip()
+                        for row in host_uid_rows
+                        if str(row[0] or "").strip()
+                    }
+
             reports = []
             host_settings_by_name = {
                 str(row[0]): {
@@ -10970,6 +11006,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "is_favorite": False,
                     "is_hidden": False,
                 })
+                display_name_override = str(host_uid_display_name_map.get(host_uid_key, "") or "").strip()
+                if not display_name_override:
+                    display_name_override = str(host_settings.get("display_name_override", "") or "").strip()
                 country_code = normalize_country_code(host_settings.get("country_code_override", ""))
                 if not country_code:
                     country_code = extract_country_code_from_payload(latest_payload)
@@ -10982,7 +11021,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "hostname": hostname,
                         "display_name": effective_display_name(
                             latest_payload,
-                            str(host_settings.get("display_name_override", "")),
+                            display_name_override,
                             hostname,
                         ),
                         "last_seen_utc": row[1],
@@ -11102,7 +11141,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 resolved_hostname = ""
                 if rows:
                     resolved_hostname = str(rows[0][3] or "").strip()
-                display_name_override = get_display_name_override(conn, resolved_hostname or hostname)
+                display_name_override = get_display_name_override(conn, resolved_hostname or hostname, host_uid)
 
             reports = []
             for row in rows:
@@ -11141,18 +11180,36 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/host-settings":
             query = parse_qs(parsed.query)
             hostname = query.get("hostname", [""])[0].strip()
-            if not hostname:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
+            host_uid = query.get("host_uid", [""])[0].strip()
+            if not hostname and not host_uid:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname or host_uid query parameter is required"})
                 return
 
             with sqlite3.connect(DB_PATH) as conn:
-                host_settings = get_host_settings(conn, hostname)
+                resolved_hostname = hostname
+                if not resolved_hostname and host_uid:
+                    host_key_expr = reports_host_key_sql()
+                    row = conn.execute(
+                        f"""
+                        SELECT COALESCE(hostname, '')
+                        FROM reports
+                        WHERE {host_key_expr} = ?
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (host_uid,),
+                    ).fetchone()
+                    resolved_hostname = str((row[0] if row else "") or "").strip()
+
+                host_settings = get_host_settings(conn, resolved_hostname)
+                display_name_override = get_display_name_override(conn, resolved_hostname, host_uid)
 
             self._send_json(
                 HTTPStatus.OK,
                 {
-                    "hostname": hostname,
-                    "display_name_override": host_settings["display_name_override"],
+                    "hostname": resolved_hostname or hostname,
+                    "host_uid": host_uid,
+                    "display_name_override": display_name_override,
                     "country_code_override": host_settings["country_code_override"],
                     "is_favorite": host_settings["is_favorite"],
                     "is_hidden": host_settings["is_hidden"],
@@ -13130,6 +13187,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             hostname = str(payload.get("hostname", "")).strip()
+            host_uid = str(payload.get("host_uid", "") or "").strip()
             has_display_name = "display_name_override" in payload
             has_country_code = "country_code_override" in payload
             has_is_favorite = "is_favorite" in payload
@@ -13140,8 +13198,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             has_customer_id = "customer_id" in payload
             has_environment_type = "environment_type" in payload
 
-            if not hostname:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
+            if not hostname and not host_uid:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname or host_uid missing"})
                 return
 
             if not (
@@ -13159,8 +13217,36 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             with sqlite3.connect(DB_PATH) as conn:
-                current = get_host_settings(conn, hostname)
-                display_name_override = current["display_name_override"]
+                resolved_hostname = hostname
+                if not resolved_hostname and host_uid:
+                    host_key_expr = reports_host_key_sql()
+                    row = conn.execute(
+                        f"""
+                        SELECT COALESCE(hostname, '')
+                        FROM reports
+                        WHERE {host_key_expr} = ?
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (host_uid,),
+                    ).fetchone()
+                    resolved_hostname = str((row[0] if row else "") or "").strip()
+
+                if not resolved_hostname and (
+                    has_country_code
+                    or has_is_favorite
+                    or has_is_hidden
+                    or has_customer_alert_emails
+                    or has_customer_alert_mountpoints
+                    or has_customer_alert_min_severity
+                    or has_customer_id
+                    or has_environment_type
+                ):
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname required for non-display host settings"})
+                    return
+
+                current = get_host_settings(conn, resolved_hostname)
+                display_name_override = get_display_name_override(conn, resolved_hostname, host_uid)
                 country_code_override = current["country_code_override"]
                 is_favorite = bool(current["is_favorite"])
                 is_hidden = bool(current["is_hidden"])
@@ -13213,16 +13299,38 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         self._send_json(HTTPStatus.BAD_REQUEST, {"error": "environment_type must be empty, prod or test"})
                         return
 
+                if has_display_name and host_uid:
+                    if display_name_override:
+                        conn.execute(
+                            """
+                            INSERT INTO host_uid_settings (host_uid, display_name_override, updated_at_utc)
+                            VALUES (?, ?, ?)
+                            ON CONFLICT(host_uid) DO UPDATE SET
+                              display_name_override = excluded.display_name_override,
+                              updated_at_utc = excluded.updated_at_utc
+                            """,
+                            (host_uid, display_name_override, utc_now_iso()),
+                        )
+                    else:
+                        conn.execute("DELETE FROM host_uid_settings WHERE host_uid = ?", (host_uid,))
+
+                hostname_display_name_override = current["display_name_override"]
+                if has_display_name and not host_uid:
+                    hostname_display_name_override = display_name_override
+
                 if (
-                    display_name_override
-                    or country_code_override
-                    or is_favorite
-                    or is_hidden
-                    or customer_alert_emails
-                    or customer_alert_mountpoints
-                    or customer_alert_min_severity != "critical"
-                    or customer_id is not None
-                    or environment_type
+                    resolved_hostname
+                    and (
+                        hostname_display_name_override
+                        or country_code_override
+                        or is_favorite
+                        or is_hidden
+                        or customer_alert_emails
+                        or customer_alert_mountpoints
+                        or customer_alert_min_severity != "critical"
+                        or customer_id is not None
+                        or environment_type
+                    )
                 ):
                     conn.execute(
                         """
@@ -13253,8 +13361,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                           updated_at_utc = excluded.updated_at_utc
                         """,
                         (
-                            hostname,
-                            display_name_override,
+                            resolved_hostname,
+                            hostname_display_name_override,
                             country_code_override,
                             1 if is_favorite else 0,
                             1 if is_hidden else 0,
@@ -13266,13 +13374,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             utc_now_iso(),
                         ),
                     )
-                else:
-                    conn.execute("DELETE FROM host_settings WHERE hostname = ?", (hostname,))
+                elif resolved_hostname:
+                    conn.execute("DELETE FROM host_settings WHERE hostname = ?", (resolved_hostname,))
 
                 if is_hidden:
-                    resolve_open_alerts_for_host(conn, hostname, None)
+                    resolve_open_alerts_for_host(conn, resolved_hostname, None)
 
-                stored_host_settings = get_host_settings(conn, hostname)
+                stored_host_settings = get_host_settings(conn, resolved_hostname)
 
                 conn.commit()
 
@@ -13280,7 +13388,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "status": "stored",
-                    "hostname": hostname,
+                    "hostname": resolved_hostname or hostname,
+                    "host_uid": host_uid,
                     "display_name_override": display_name_override,
                     "country_code_override": country_code_override,
                     "is_favorite": is_favorite,

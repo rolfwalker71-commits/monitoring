@@ -8252,7 +8252,7 @@ function updateSelectedHostControls() {
   updateReportJumpHostUidChip(selectedHost);
 }
 
-async function saveHostSettings(hostname, partialSettings) {
+async function saveHostSettings(hostname, partialSettings, hostUid = "") {
   const response = await fetch("/api/v1/host-settings", {
     method: "POST",
     headers: {
@@ -8260,6 +8260,7 @@ async function saveHostSettings(hostname, partialSettings) {
     },
     body: JSON.stringify({
       hostname,
+      host_uid: hostUid,
       ...partialSettings,
     }),
   });
@@ -9589,7 +9590,7 @@ async function editDisplayName() {
   }
 
   const [hostSettingsResp, customersResp] = await Promise.all([
-    fetch(`/api/v1/host-settings?hostname=${encodeURIComponent(state.selectedHost)}`),
+    fetch(`/api/v1/host-settings?hostname=${encodeURIComponent(state.selectedHost)}&host_uid=${encodeURIComponent(state.selectedHostUid || "")}`),
     fetch("/api/v1/customers"),
   ]);
   if (!hostSettingsResp.ok) {
@@ -9645,7 +9646,7 @@ async function editDisplayName() {
     country_code_override: result.countryCode,
     environment_type: result.environmentType,
     customer_id: customerId,
-  });
+  }, state.selectedHostUid || "");
 
   await loadHosts();
   await loadReportsForHost();
