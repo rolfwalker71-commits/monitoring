@@ -5912,6 +5912,34 @@ function wireSapVersionMapCopyButtons(container) {
   }
 }
 
+function wireReportHierarchyToggleButtons(container) {
+  for (const button of (container || document).querySelectorAll("[data-action='report-hierarchy-toggle']")) {
+    button.addEventListener("click", () => {
+      const mode = asText(button.getAttribute("data-toggle-mode"), "").toLowerCase();
+      const targetClass = asText(button.getAttribute("data-target-class"), "").trim();
+      if (!targetClass || (mode !== "expand" && mode !== "collapse")) {
+        return;
+      }
+      const reportCard = button.closest(".report-card");
+      if (!reportCard) {
+        return;
+      }
+      const targetRoot = reportCard.querySelector(`.${targetClass}`);
+      if (!targetRoot) {
+        return;
+      }
+      const detailsNodes = [
+        ...(targetRoot.matches("details") ? [targetRoot] : []),
+        ...targetRoot.querySelectorAll("details"),
+      ];
+      const open = mode === "expand";
+      for (const detailsNode of detailsNodes) {
+        detailsNode.open = open;
+      }
+    });
+  }
+}
+
 function renderSapB1CombinedCard(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const versionBlock = sap && typeof sap.server_components_version === "object" ? sap.server_components_version : null;
@@ -5970,10 +5998,16 @@ function renderSapB1CombinedCard(payload) {
 
   return `
     <section class="detail-card sap-b1-card sap-b1-combined-card">
-      <h4>SAP B1</h4>
+      <div class="report-section-head">
+        <h4>SAP B1</h4>
+        <div class="report-section-head-actions">
+          <button type="button" class="btn-secondary btn-secondary--compact" data-action="report-hierarchy-toggle" data-toggle-mode="expand" data-target-class="report-addons-hierarchy">Alle aufklappen</button>
+          <button type="button" class="btn-secondary btn-secondary--compact" data-action="report-hierarchy-toggle" data-toggle-mode="collapse" data-target-class="report-addons-hierarchy">Alle zuklappen</button>
+        </div>
+      </div>
 
       <div class="sap-b1-scroll-region">
-        <details class="sap-b1-raw-details">
+        <details class="sap-b1-raw-details report-addons-hierarchy">
           <summary class="sap-b1-raw-summary">AddOns</summary>
           ${renderSapB1ExtensionsSection(payload)}
         </details>
@@ -6808,8 +6842,14 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
 
       parts.push(`
         <section class="detail-card sap-hana-databases-card">
-          <h4>🔶 SAP HANA Datenbanken</h4>
-          <div class="sap-hana-databases-scroll">
+          <div class="report-section-head">
+            <h4>🔶 SAP HANA Datenbanken</h4>
+            <div class="report-section-head-actions">
+              <button type="button" class="btn-secondary btn-secondary--compact" data-action="report-hierarchy-toggle" data-toggle-mode="expand" data-target-class="report-hana-db-hierarchy">Alle aufklappen</button>
+              <button type="button" class="btn-secondary btn-secondary--compact" data-action="report-hierarchy-toggle" data-toggle-mode="collapse" data-target-class="report-hana-db-hierarchy">Alle zuklappen</button>
+            </div>
+          </div>
+          <div class="sap-hana-databases-scroll report-hana-db-hierarchy">
             ${discoveryHtml}
             ${tenantBlocks || '<p class="muted">Keine Eintraege gefunden.</p>'}
           </div>
@@ -9589,6 +9629,7 @@ async function loadReportsForHost(options = {}) {
     state.currentReport = reports[0];
     list.innerHTML = renderReportCard(state.currentReport);
     wireSapVersionMapCopyButtons(list);
+    wireReportHierarchyToggleButtons(list);
     updateHeaderStatChips();
     updatePagerButtons();
   } catch (error) {
@@ -9639,6 +9680,7 @@ function renderCurrentReportInView() {
   }
   list.innerHTML = renderReportCard(state.currentReport);
   wireSapVersionMapCopyButtons(list);
+  wireReportHierarchyToggleButtons(list);
 }
 
 async function editDisplayName() {

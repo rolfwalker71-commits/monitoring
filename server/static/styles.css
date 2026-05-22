@@ -6762,6 +6762,26 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   font-size: 13px;
 }
 
+.report-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.report-section-head h4 {
+  margin: 0;
+}
+
+.report-section-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .detail-card-collapsible {
   padding: 0;
   overflow: hidden;
