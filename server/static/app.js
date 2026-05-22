@@ -11435,6 +11435,103 @@ function setHostConfigChangesBackfillStatus(message, isError = false) {
   statusEl.classList.toggle("status-error", Boolean(isError));
 }
 
+function setChangelogRebuildJobStatus(message, isError = false) {
+  const statusEl = document.getElementById("changelogRebuildJobStatus");
+  if (!statusEl) return;
+  statusEl.textContent = String(message || "");
+  statusEl.classList.toggle("status-error", Boolean(isError));
+}
+
+async function loadChangelogRebuildJobsStatus() {
+  const statusEl = document.getElementById("changelogRebuildJobStatus");
+  if (!statusEl) return;
+  try {
+    const response = await fetch("/api/v1/admin/changelog-rebuild/jobs?limit=5", {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json().catch(() => ({}));
+    const jobs = Array.isArray(data.jobs) ? data.jobs : [];
+    if (!jobs.length) {
+      setChangelogRebuildJobStatus("Keine Rebuild-Jobs vorhanden.");
+      return;
+    }
+    const latest = jobs[0] || {};
+    const latestStatus = asText(latest.status, "-").toLowerCase();
+    const latestId = Number(latest.id || 0);
+    const latestDays = Number(latest.days || 0);
+    if (latestStatus === "completed") {
+      const finishedAt = asText(latest.finished_at_utc, "");
+      setChangelogRebuildJobStatus(`Job #${latestId} abgeschlossen (${latestDays} Tag(e)) · ${formatUtcPlus2(finishedAt)}`);
+      return;
+    }
+    if (latestStatus === "failed") {
+      const errorMessage = asText(latest.error_message, "Unbekannter Fehler");
+      setChangelogRebuildJobStatus(`Job #${latestId} fehlgeschlagen: ${errorMessage}`, true);
+      return;
+    }
+    if (latestStatus === "running") {
+      setChangelogRebuildJobStatus(`Job #${latestId} läuft (${latestDays} Tag(e))...`);
+      return;
+    }
+    const scheduledAt = asText(latest.scheduled_for_utc, "");
+    setChangelogRebuildJobStatus(`Job #${latestId} geplant (${latestDays} Tag(e)) · ${formatUtcPlus2(scheduledAt)}`);
+  } catch (error) {
+    setChangelogRebuildJobStatus(`Job-Status Fehler: ${error.message}`, true);
+  }
+}
+
+async function runChangelogRebuildNow(days = 1) {
+  const button = document.getElementById("runChangelogRebuildNowButton");
+  const targetDays = Math.max(1, Math.min(365, Number(days) || 1));
+  const confirmed = window.confirm(
+    `Globales Changelog jetzt neu aufbauen (Stichtag heute, ${targetDays} Tag(e))?\n\nDies überschreibt den bisherigen Changelog-Neuaufbauzustand.`
+  );
+  if (!confirmed) return;
+
+  if (button) button.disabled = true;
+  setChangelogRebuildJobStatus("Rebuild-Job wird gestartet...");
+
+  try {
+    const response = await fetch("/api/v1/admin/changelog-rebuild/schedule", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        days: targetDays,
+        run_now: true,
+        force_rebuild: true,
+      }),
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json().catch(() => ({}));
+
+    const processed = Array.isArray(data.processed_now) ? data.processed_now : [];
+    if (processed.length > 0 && asText(processed[0]?.status, "") === "completed") {
+      const result = processed[0]?.result || {};
+      const cfg = result?.config_result || {};
+      const db = result?.database_result || {};
+      setChangelogRebuildJobStatus(
+        `Rebuild OK: ${Number(cfg.inserted_changes || 0)} Config-Changes + ${Number(db.inserted_events || 0)} DB-Events.`
+      );
+    } else {
+      setChangelogRebuildJobStatus("Rebuild-Job gestartet.");
+    }
+
+    await loadHostConfigChanges();
+    if (state.selectedHost) {
+      await loadConfigChangelogForHost();
+      await loadDatabaseLifecycleForHost();
+    }
+    await loadChangelogRebuildJobsStatus();
+  } catch (error) {
+    setChangelogRebuildJobStatus(`Rebuild Fehler: ${error.message}`, true);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 async function runCombinedBackfill(days = 7) {
   const button = document.getElementById("backfillHostConfigChangesButton");
   const targetDays = Math.max(1, Math.min(30, Number(days) || 7));
@@ -12115,6 +12212,7 @@ function wireEvents() {
       state.globalSubMode = "host-config-changes";
       updateGlobalSubMode();
       await loadHostConfigChanges();
+      await loadChangelogRebuildJobsStatus();
     });
   }
   const refreshHostConfigChangesButton = document.getElementById("refreshHostConfigChangesButton");
@@ -12133,6 +12231,18 @@ function wireEvents() {
         hoursFilterEl.value = "720";
       }
       await runCombinedBackfill(days);
+    });
+  }
+  const runChangelogRebuildNowButton = document.getElementById("runChangelogRebuildNowButton");
+  if (runChangelogRebuildNowButton) {
+    runChangelogRebuildNowButton.addEventListener("click", async () => {
+      await runChangelogRebuildNow(1);
+    });
+  }
+  const refreshChangelogRebuildJobsButton = document.getElementById("refreshChangelogRebuildJobsButton");
+  if (refreshChangelogRebuildJobsButton) {
+    refreshChangelogRebuildJobsButton.addEventListener("click", async () => {
+      await loadChangelogRebuildJobsStatus();
     });
   }
   const hostConfigChangesHoursFilter = document.getElementById("hostConfigChangesHoursFilter");

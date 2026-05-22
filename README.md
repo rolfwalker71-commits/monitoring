@@ -584,6 +584,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.323 (22. Mai 2026)
+
+- **UI-Integration fuer sofortigen Changelog-Rebuild**: In der Changelog-Ansicht gibt es jetzt den Button `♻ Rebuild heute`, der direkt den Rebuild-Job (`days=1`, `run_now=true`, `force_rebuild=true`) startet.
+- **Job-Status in der UI sichtbar**: Neuer `📋 Jobs`-Button und Statuszeile zeigen den letzten Rebuild-Job-Status (geplant/laufend/abgeschlossen/fehlgeschlagen) direkt in der Toolbar.
+- **Bestehender Backfill bleibt erhalten**: Der bisherige `📥 Backfill`-Flow bleibt unveraendert nutzbar fuer inkrementelles Nachfuellen.
+
 ### v1.6.322 (22. Mai 2026)
 
 - **Globales Changelog-Rebuild als Job planbar**: Neue Admin-API `POST /api/v1/admin/changelog-rebuild/schedule` plant einen Bereinigungs-/Rebuild-Job fuer Host-Config- und DB-Lifecycle-Changelog.
