@@ -584,6 +584,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.293 (22. Mai 2026)
+
+- **Host-Identität entkoppelt (host_uid)**: Linux- und Windows-Agent senden jetzt zusätzlich eine stabile `host_uid` (mit Fallback-Strategien), damit Hosts mit identischem Hostname/IP sicher getrennt bleiben.
+- **Server/API erweitert**: Ingestion, Backfill und Host-Listing nutzen `host_uid` mit sauberem Fallback auf `hostname`; `/api/v1/host-reports` und Reports-Export unterstützen nun auch `host_uid`.
+- **UI-Selektion robust gemacht**: Host-Auswahl, Report-Laden, Export und Systemübersicht-Row-Klick arbeiten host_uid-basiert (abwärtskompatibel), wodurch Kollisionen bei gleichnamigen Hosts verhindert werden.
+
 ### v1.6.262 (20. Mai 2026)
 
 - **DB-Maintenance Charts**: Popup-Drilldown für vergrößerte Graphen nun nur noch per Klick auf den jeweiligen Graphen (kein Hover-Trigger mehr).

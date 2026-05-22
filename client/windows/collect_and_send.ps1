@@ -1481,6 +1481,24 @@ $cpuInfoList = @(Get-CimInstance -ClassName Win32_Processor)
 # Agent identity
 $agentId     = if ($cfg.ContainsKey('AGENT_ID')      -and $cfg['AGENT_ID'])      { $cfg['AGENT_ID'] }      else { $hostnameValue }
 $displayName = if ($cfg.ContainsKey('DISPLAY_NAME')  -and $cfg['DISPLAY_NAME'])  { $cfg['DISPLAY_NAME'] }  else { $hostnameValue }
+$hostUidValue = if ($cfg.ContainsKey('HOST_UID') -and $cfg['HOST_UID']) { [string]$cfg['HOST_UID'] } else { '' }
+if (-not $hostUidValue) {
+    $machineGuid = ''
+    try {
+        $machineGuid = [string](Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Cryptography' -Name 'MachineGuid' -ErrorAction Stop).MachineGuid
+    } catch {
+        $machineGuid = ''
+    }
+    $machineGuid = ($machineGuid -replace '\s+', '').Trim()
+
+    if ($machineGuid) {
+        $hostUidValue = "$hostnameValue::mid:$machineGuid"
+    } elseif ($agentId) {
+        $hostUidValue = "$hostnameValue::agent:$agentId"
+    } else {
+        $hostUidValue = $hostnameValue
+    }
+}
 
 if (-not $NoJitter -and $SendJitterMaxSec -gt 0) {
     $jitterIdentity = "$hostnameValue$agentId"
@@ -1663,6 +1681,7 @@ $agentIdEsc      = ConvertTo-JsonString $agentId
 $agentVerEsc     = ConvertTo-JsonString $agentVersion
 $displayNameEsc  = ConvertTo-JsonString $displayName
 $hostnameEsc     = ConvertTo-JsonString $hostnameValue
+$hostUidEsc      = ConvertTo-JsonString $hostUidValue
 $primaryIpEsc    = ConvertTo-JsonString $primaryIp
 $allIpsEsc       = ConvertTo-JsonString $allIps
 $kernelEsc       = ConvertTo-JsonString $kernelVersion
@@ -1700,6 +1719,7 @@ $payload = @"
   "agent_version": "$agentVerEsc",
   "display_name": "$displayNameEsc",
   "hostname": "$hostnameEsc",
+    "host_uid": "$hostUidEsc",
   "primary_ip": "$primaryIpEsc",
   "all_ips": "$allIpsEsc",
   "kernel": "$kernelEsc",

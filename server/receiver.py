@@ -134,11 +134,19 @@ def init_db() -> None:
                 received_at_utc TEXT NOT NULL,
                 agent_id TEXT,
                 hostname TEXT,
+                host_uid TEXT,
                 primary_ip TEXT,
                 payload_json TEXT NOT NULL
             )
             """
         )
+        existing_reports_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(reports)").fetchall()
+        }
+        if "host_uid" not in existing_reports_columns:
+            conn.execute("ALTER TABLE reports ADD COLUMN host_uid TEXT")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_host_uid_id ON reports(host_uid, id)")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS alerts (
@@ -984,6 +992,9 @@ def init_db() -> None:
             "DELETE FROM oauth_pending_states WHERE expires_at_utc <= ?",
             (utc_now_iso(),),
         )
+
+        # Backfill host_uid for historical reports without changing existing hostname data.
+        _backfill_report_host_uids(conn)
         conn.commit()
 
 
@@ -1111,6 +1122,50 @@ def _resolve_std_nic_ipv4(payload: dict, fallback_primary_ip: str = "") -> str:
         return from_primary
 
     return _first_ipv4_from_value(payload.get("all_ips"))
+
+
+def _derive_host_uid(payload: dict, hostname: str, agent_id: str = "", primary_ip: str = "") -> str:
+    safe_hostname = str(hostname or "").strip()
+    safe_agent_id = str(agent_id or "").strip()
+    explicit_uid = str(payload.get("host_uid", "") or "").strip() if isinstance(payload, dict) else ""
+    if explicit_uid:
+        return explicit_uid
+
+    if safe_agent_id:
+        return f"{safe_hostname}::agent:{safe_agent_id}"
+
+    resolved_ip = _resolve_std_nic_ipv4(payload if isinstance(payload, dict) else {}, str(primary_ip or ""))
+    if resolved_ip:
+        return f"{safe_hostname}::ip:{resolved_ip}"
+
+    return safe_hostname
+
+
+def _backfill_report_host_uids(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        """
+        SELECT id, COALESCE(hostname, ''), COALESCE(agent_id, ''), COALESCE(primary_ip, ''), COALESCE(payload_json, '{}')
+        FROM reports
+        WHERE COALESCE(host_uid, '') = ''
+        ORDER BY id ASC
+        """
+    ).fetchall()
+    if not rows:
+        return
+
+    updates: list[tuple[str, int]] = []
+    for row in rows:
+        report_id = int(row[0] or 0)
+        hostname = str(row[1] or "").strip()
+        agent_id = str(row[2] or "").strip()
+        primary_ip = str(row[3] or "").strip()
+        payload = parse_payload_json(str(row[4] or "{}"))
+        host_uid = _derive_host_uid(payload, hostname, agent_id, primary_ip)
+        if host_uid:
+            updates.append((host_uid, report_id))
+
+    if updates:
+        conn.executemany("UPDATE reports SET host_uid = ? WHERE id = ?", updates)
 
 
 def normalize_sap_b1_version_map_entries(entries_raw: object) -> list[dict[str, str]]:
@@ -6063,13 +6118,25 @@ def export_alerts_rows(conn: sqlite3.Connection, *, status: str | None = None, s
     return result
 
 
-def export_reports_rows(conn: sqlite3.Connection, hostname: str = "", limit: int = 500) -> list[dict]:
+def export_reports_rows(conn: sqlite3.Connection, hostname: str = "", host_uid: str = "", limit: int = 500) -> list[dict]:
     host = str(hostname or "").strip()
+    host_key = str(host_uid or "").strip()
     limited = max(1, min(int(limit or 500), 2000))
-    if host:
+    if host_key:
         rows = conn.execute(
             """
-            SELECT id, hostname, received_at_utc, payload_json
+            SELECT id, hostname, received_at_utc, payload_json, COALESCE(NULLIF(host_uid, ''), hostname)
+            FROM reports
+            WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (host_key, limited),
+        ).fetchall()
+    elif host:
+        rows = conn.execute(
+            """
+            SELECT id, hostname, received_at_utc, payload_json, COALESCE(NULLIF(host_uid, ''), hostname)
             FROM reports
             WHERE hostname = ?
             ORDER BY id DESC
@@ -6080,7 +6147,7 @@ def export_reports_rows(conn: sqlite3.Connection, hostname: str = "", limit: int
     else:
         rows = conn.execute(
             """
-            SELECT id, hostname, received_at_utc, payload_json
+            SELECT id, hostname, received_at_utc, payload_json, COALESCE(NULLIF(host_uid, ''), hostname)
             FROM reports
             ORDER BY id DESC
             LIMIT ?
@@ -6095,6 +6162,7 @@ def export_reports_rows(conn: sqlite3.Connection, hostname: str = "", limit: int
                 "hostname": str(row[1] or ""),
                 "received_at_utc": str(row[2] or ""),
                 "payload": parse_payload_json(str(row[3] or "{}")),
+                "host_uid": str(row[4] or ""),
             }
         )
     return data
@@ -10547,54 +10615,46 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             with sqlite3.connect(DB_PATH) as conn:
                 total_hosts = conn.execute(
-                    "SELECT COUNT(DISTINCT hostname) FROM reports"
+                                        "SELECT COUNT(DISTINCT COALESCE(NULLIF(host_uid, ''), hostname)) FROM reports"
                 ).fetchone()[0]
 
                 rows = conn.execute(
                     """
                     SELECT
-                      r.hostname,
-                      MAX(r.received_at_utc) AS last_seen_utc,
-                      COUNT(*) AS report_count,
-                      (
-                        SELECT primary_ip
-                        FROM reports r2
-                        WHERE r2.hostname = r.hostname
-                        ORDER BY r2.id DESC
-                        LIMIT 1
-                      ) AS latest_primary_ip,
-                      (
-                        SELECT agent_id
-                        FROM reports r3
-                        WHERE r3.hostname = r.hostname
-                        ORDER BY r3.id DESC
-                        LIMIT 1
-                                            ) AS latest_agent_id,
-                                            (
-                                                SELECT payload_json
-                                                FROM reports r4
-                                                WHERE r4.hostname = r.hostname
-                                                ORDER BY r4.id DESC
-                                                LIMIT 1
-                                            ) AS latest_payload_json,
+                                            g.host_key,
+                                            g.last_seen_utc,
+                                            g.report_count,
+                                            COALESCE(r_latest.primary_ip, '') AS latest_primary_ip,
+                                            COALESCE(r_latest.agent_id, '') AS latest_agent_id,
+                                            COALESCE(r_latest.payload_json, '{}') AS latest_payload_json,
+                                            COALESCE(r_latest.hostname, '') AS latest_hostname,
                                             (
                                                 SELECT COUNT(*)
                                                 FROM alerts a1
-                                                WHERE a1.hostname = r.hostname AND a1.status = 'open'
-                                                  AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a1.hostname AND m.mountpoint = a1.mountpoint)
+                                                WHERE a1.hostname = r_latest.hostname AND a1.status = 'open'
+                                                    AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a1.hostname AND m.mountpoint = a1.mountpoint)
                                             ) AS open_alert_count,
                                             (
                                                 SELECT COUNT(*)
                                                 FROM alerts a2
-                                                WHERE a2.hostname = r.hostname AND a2.status = 'open' AND a2.severity = 'critical'
-                                                  AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a2.hostname AND m.mountpoint = a2.mountpoint)
+                                                WHERE a2.hostname = r_latest.hostname AND a2.status = 'open' AND a2.severity = 'critical'
+                                                    AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a2.hostname AND m.mountpoint = a2.mountpoint)
                                             ) AS open_critical_alert_count
-                    FROM reports r
-                    GROUP BY r.hostname
-                    ORDER BY last_seen_utc DESC
-                    LIMIT ? OFFSET ?
+                                        FROM (
+                                            SELECT
+                                                COALESCE(NULLIF(host_uid, ''), hostname) AS host_key,
+                                                MAX(received_at_utc) AS last_seen_utc,
+                                                COUNT(*) AS report_count,
+                                                MAX(id) AS latest_id
+                                            FROM reports
+                                            GROUP BY COALESCE(NULLIF(host_uid, ''), hostname)
+                                            ORDER BY last_seen_utc DESC
+                                            LIMIT ? OFFSET ?
+                                        ) g
+                                        JOIN reports r_latest ON r_latest.id = g.latest_id
+                                        ORDER BY g.last_seen_utc DESC
                     """,
-                    (limit, offset),
+                                        (limit, offset),
                 ).fetchall()
 
                 settings_rows = conn.execute(
@@ -10639,7 +10699,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         for field in ("hardware_key", "instno", "system_nr", "customer_no", "customer_name", "expiration")
                     )
                     has_sap_license_info = bool(has_focus_types or has_license_core)
-                hostname = str(row[0])
+                host_uid_key = str(row[0] or "").strip()
+                hostname = str(row[6] or "").strip()
                 host_settings = settings_map.get(hostname, {
                     "display_name_override": "",
                     "country_code_override": "",
@@ -10654,6 +10715,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
                 hosts.append(
                     {
+                        "host_uid": host_uid_key,
                         "hostname": hostname,
                         "display_name": effective_display_name(
                             latest_payload,
@@ -10669,8 +10731,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "delivery_mode": str(latest_payload.get("delivery_mode", "live") or "live"),
                         "is_delayed": bool(latest_payload.get("is_delayed", False)),
                         "queue_depth": payload_int(latest_payload, "queue_depth", 0),
-                        "open_alert_count": int(row[6] or 0),
-                        "open_critical_alert_count": int(row[7] or 0),
+                        "open_alert_count": int(row[7] or 0),
+                        "open_critical_alert_count": int(row[8] or 0),
                         "os": str(latest_payload.get("os", "")),
                         "country_code": country_code,
                         "sap_release": release_info["sap_release"],
@@ -10710,9 +10772,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/host-reports":
             query = parse_qs(parsed.query)
             hostname = query.get("hostname", [""])[0].strip()
-            if not hostname:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
+            host_uid = query.get("host_uid", [""])[0].strip()
+            if not hostname and not host_uid:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "host_uid or hostname query parameter is required"})
                 return
+
+            where_clause = "hostname = ?"
+            where_value = hostname
+            if host_uid:
+                where_clause = "COALESCE(NULLIF(host_uid, ''), hostname) = ?"
+                where_value = host_uid
 
             limit = parse_int(query, "limit", default=10, min_value=1, max_value=200)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
@@ -10733,21 +10802,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             with sqlite3.connect(DB_PATH) as conn:
                 total_reports = conn.execute(
-                    "SELECT COUNT(*) FROM reports WHERE hostname = ?",
-                    (hostname,),
+                    f"SELECT COUNT(*) FROM reports WHERE {where_clause}",
+                    (where_value,),
                 ).fetchone()[0]
 
                 bounds_row = conn.execute(
-                    "SELECT MIN(received_at_utc), MAX(received_at_utc) FROM reports WHERE hostname = ?",
-                    (hostname,),
+                    f"SELECT MIN(received_at_utc), MAX(received_at_utc) FROM reports WHERE {where_clause}",
+                    (where_value,),
                 ).fetchone()
                 oldest_report_at_utc = str((bounds_row[0] if bounds_row else "") or "")
                 newest_report_at_utc = str((bounds_row[1] if bounds_row else "") or "")
 
                 if jump_to_utc_iso and total_reports > 0:
                     jump_offset = conn.execute(
-                        "SELECT COUNT(*) FROM reports WHERE hostname = ? AND received_at_utc > ?",
-                        (hostname, jump_to_utc_iso),
+                        f"SELECT COUNT(*) FROM reports WHERE {where_clause} AND received_at_utc > ?",
+                        (where_value, jump_to_utc_iso),
                     ).fetchone()[0]
                     if jump_offset >= total_reports:
                         offset = max(0, total_reports - 1)
@@ -10755,17 +10824,20 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         offset = max(0, jump_offset)
 
                 rows = conn.execute(
-                    """
-                    SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json
+                    f"""
+                    SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json, COALESCE(NULLIF(host_uid, ''), hostname)
                     FROM reports
-                    WHERE hostname = ?
+                    WHERE {where_clause}
                     ORDER BY id DESC
                     LIMIT ? OFFSET ?
                     """,
-                    (hostname, limit, offset),
+                    (where_value, limit, offset),
                 ).fetchall()
 
-                display_name_override = get_display_name_override(conn, hostname)
+                resolved_hostname = ""
+                if rows:
+                    resolved_hostname = str(rows[0][3] or "").strip()
+                display_name_override = get_display_name_override(conn, resolved_hostname or hostname)
 
             reports = []
             for row in rows:
@@ -10777,9 +10849,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "received_at_utc": row[1],
                         "agent_id": row[2],
                         "hostname": row[3],
+                        "host_uid": row[6],
                         "primary_ip": row[4],
                         "delivery_mode": delivery_mode,
-                        "display_name": effective_display_name(payload, display_name_override, hostname),
+                        "display_name": effective_display_name(payload, display_name_override, str(row[3] or "")),
                         "payload": payload,
                     }
                 )
@@ -10793,7 +10866,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "total_reports": total_reports,
                     "oldest_report_at_utc": oldest_report_at_utc,
                     "newest_report_at_utc": newest_report_at_utc,
-                    "hostname": hostname,
+                    "hostname": str(rows[0][3] if rows else hostname),
+                    "host_uid": host_uid,
                     "reports": reports,
                 },
             )
@@ -11310,12 +11384,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/export/reports.json":
             query = parse_qs(parsed.query)
             hostname = str(query.get("hostname", [""])[0] or "").strip()
+            host_uid = str(query.get("host_uid", [""])[0] or "").strip()
             limit = parse_int(query, "limit", default=500, min_value=1, max_value=2000)
             with sqlite3.connect(DB_PATH) as conn:
-                rows = export_reports_rows(conn, hostname=hostname, limit=limit)
+                rows = export_reports_rows(conn, hostname=hostname, host_uid=host_uid, limit=limit)
             payload = {
                 "count": len(rows),
                 "hostname": hostname,
+                "host_uid": host_uid,
                 "limit": limit,
                 "reports": rows,
             }
@@ -13631,18 +13707,23 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         report_received_at_utc = utc_now_iso()
+        incoming_agent_id = str(payload.get("agent_id", "") or "")
+        incoming_primary_ip = str(payload.get("primary_ip", "") or "")
+        incoming_host_uid = _derive_host_uid(payload, hostname, incoming_agent_id, incoming_primary_ip)
+        payload["host_uid"] = incoming_host_uid
 
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.execute(
                 """
-                INSERT INTO reports (received_at_utc, agent_id, hostname, primary_ip, payload_json)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO reports (received_at_utc, agent_id, hostname, host_uid, primary_ip, payload_json)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     report_received_at_utc,
-                    str(payload.get("agent_id", "")),
+                    incoming_agent_id,
                     hostname,
-                    str(payload.get("primary_ip", "")),
+                    incoming_host_uid,
+                    incoming_primary_ip,
                     json.dumps(payload, separators=(",", ":")),
                 ),
             )

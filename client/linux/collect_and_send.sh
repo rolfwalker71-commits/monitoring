@@ -2748,6 +2748,23 @@ KERNEL="$(uname -r)"
 OS_NAME="$(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-unknown}")"
 AGENT_ID_VALUE="${AGENT_ID:-$HOSTNAME_VALUE}"
 DISPLAY_NAME_VALUE="${DISPLAY_NAME:-$HOSTNAME_VALUE}"
+HOST_UID_VALUE="${HOST_UID:-}"
+if [[ -z "$HOST_UID_VALUE" ]]; then
+  MACHINE_ID_VALUE="$(tr -d '[:space:]' < /etc/machine-id 2>/dev/null || true)"
+  if [[ -z "$MACHINE_ID_VALUE" ]]; then
+    MACHINE_ID_VALUE="$(tr -d '[:space:]' < /var/lib/dbus/machine-id 2>/dev/null || true)"
+  fi
+
+  if [[ -n "$MACHINE_ID_VALUE" ]]; then
+    HOST_UID_VALUE="${HOSTNAME_VALUE}::mid:${MACHINE_ID_VALUE}"
+  elif [[ -n "$AGENT_ID_VALUE" ]]; then
+    HOST_UID_VALUE="${HOSTNAME_VALUE}::agent:${AGENT_ID_VALUE}"
+  elif [[ -n "$PRIMARY_IP" ]]; then
+    HOST_UID_VALUE="${HOSTNAME_VALUE}::ip:${PRIMARY_IP}"
+  else
+    HOST_UID_VALUE="$HOSTNAME_VALUE"
+  fi
+fi
 AGENT_VERSION_VALUE="unknown"
 if [[ -f "$AGENT_VERSION_FILE" ]]; then
   AGENT_VERSION_VALUE="$(head -n 1 "$AGENT_VERSION_FILE" | tr -d '[:space:]')"
@@ -2852,6 +2869,7 @@ PAYLOAD=$(cat <<EOF
   "agent_version": "$(json_escape "$AGENT_VERSION_VALUE")",
   "display_name": "$(json_escape "$DISPLAY_NAME_VALUE")",
   "hostname": "$(json_escape "$HOSTNAME_VALUE")",
+  "host_uid": "$(json_escape "$HOST_UID_VALUE")",
   "primary_ip": "$(json_escape "$PRIMARY_IP")",
   "all_ips": "$(json_escape "$ALL_IPS")",
   "kernel": "$(json_escape "$KERNEL")",

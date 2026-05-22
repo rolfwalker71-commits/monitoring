@@ -103,6 +103,7 @@ const state = {
   hosts: [],
   totalHosts: 0,
   selectedHost: "",
+  selectedHostUid: "",
   selectedDisplayName: "",
   hostSearchQuery: "",
   hostOsFilter: "all",
@@ -184,6 +185,23 @@ const state = {
   // Add a new user type "readOnly" to the state
   userType: "default", // Possible values: "default", "readOnly", "admin"
 };
+
+function resolveHostIdentity(host) {
+  const hostUid = asText(host?.host_uid, "").trim();
+  const hostname = asText(host?.hostname, "").trim();
+  return hostUid || hostname;
+}
+
+function getSelectedHostRecord() {
+  if (!Array.isArray(state.hosts) || state.hosts.length === 0) {
+    return null;
+  }
+  const selectedIdentity = asText(state.selectedHostUid, "").trim() || asText(state.selectedHost, "").trim();
+  if (!selectedIdentity) {
+    return null;
+  }
+  return state.hosts.find((host) => resolveHostIdentity(host) === selectedIdentity) || null;
+}
 
 function hasSapB1VersionMapUnsavedChanges() {
   return state.viewMode === "global"
@@ -7214,9 +7232,9 @@ function updatePagerButtons() {
   hostsPrevButton.disabled = state.hostOffset <= 0;
   hostsNextButton.disabled = state.hostOffset + state.hostLimit >= state.totalHosts;
 
-  reportsPrevButton.disabled = state.reportOffset <= 0 || !state.selectedHost;
+  reportsPrevButton.disabled = state.reportOffset <= 0 || (!state.selectedHost && !state.selectedHostUid);
   reportsNextButton.disabled =
-    !state.selectedHost || state.reportOffset + state.reportLimit >= state.totalReports;
+    (!state.selectedHost && !state.selectedHostUid) || state.reportOffset + state.reportLimit >= state.totalReports;
 
   if (reportsPrevButtonTop) {
     reportsPrevButtonTop.disabled = reportsPrevButton.disabled;
@@ -7496,8 +7514,9 @@ async function loadAlertMutes() {
 
 function renderSingleHostCard(host) {
   const hostname = asText(host.hostname);
+  const hostIdentity = resolveHostIdentity(host);
   const displayName = asText(host.display_name || host.hostname);
-  const selectedClass = hostname === state.selectedHost ? "host-item selected" : "host-item";
+  const selectedClass = hostIdentity === (state.selectedHostUid || state.selectedHost) ? "host-item selected" : "host-item";
   const openAlertCount = Number(host.open_alert_count || 0);
   const hasOpenAlerts = openAlertCount > 0;
   const isFavorite = Boolean(host.is_favorite);
@@ -7595,7 +7614,7 @@ function renderSingleHostCard(host) {
   const versionSideBarHtml = `<div class="${versionSideBarClass}" title="${escapeHtml(versionSideBarTitle)}" aria-hidden="true"></div>`;
   const hasSapLicenseInfo = Boolean(host.has_sap_license_info);
   const sapLicenseBadge = hasSapLicenseInfo
-    ? `<span class="host-license-info-badge" data-host-license-host="${escapeHtml(hostname)}">🪪</span>`
+    ? `<span class="host-license-info-badge" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}">🪪</span>`
     : "";
   const customerTitleLine = customerNameValue
     ? `<div class="host-customer-title-line"><span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span><span class="host-detail-line">🏷️ ${escapeHtml(hostDesignationLabel)}</span></span>${sapLicenseBadge}</div>`
@@ -7648,7 +7667,7 @@ function renderSingleHostCard(host) {
   }
 
   return `
-    <article class="${selectedClass}${envCardClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}">
+    <article class="${selectedClass}${envCardClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostIdentity)}">
       ${statusBarHtml}
       ${versionSideBarHtml}
       ${flagIcon}
@@ -7689,8 +7708,8 @@ function mapSapLicenseFocusTypes(sapLicense) {
     .filter(Boolean);
 }
 
-async function loadHostLicenseInfoForHover(hostname) {
-  const key = asText(hostname, "").trim();
+async function loadHostLicenseInfoForHover(hostname, hostUid = "") {
+  const key = asText(hostUid, "").trim() || asText(hostname, "").trim();
   if (!key) {
     return { hasData: false, message: "Kein Host angegeben." };
   }
@@ -7698,7 +7717,9 @@ async function loadHostLicenseInfoForHover(hostname) {
     return hostLicenseHoverCache.get(key);
   }
 
-  const url = `/api/v1/host-reports?hostname=${encodeURIComponent(key)}&limit=1&offset=0`;
+  const url = asText(hostUid, "").trim()
+    ? `/api/v1/host-reports?host_uid=${encodeURIComponent(asText(hostUid, "").trim())}&limit=1&offset=0`
+    : `/api/v1/host-reports?hostname=${encodeURIComponent(asText(hostname, "").trim())}&limit=1&offset=0`;
   const response = await fetch(url, { credentials: "same-origin" });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
@@ -7849,8 +7870,8 @@ function renderHostLicenseHoverPopupContent(hostname, data) {
   `;
 }
 
-async function showHostLicenseHoverPopup(anchorEl, hostname) {
-  const key = asText(hostname, "").trim();
+async function showHostLicenseHoverPopup(anchorEl, hostname, hostUid = "") {
+  const key = asText(hostUid, "").trim() || asText(hostname, "").trim();
   if (!anchorEl || !key) return;
   const popup = ensureHostLicenseHoverPopup();
   if (hostLicenseHoverHideTimerId !== null) {
@@ -7863,7 +7884,7 @@ async function showHostLicenseHoverPopup(anchorEl, hostname) {
   positionHostLicenseHoverPopup(anchorEl);
 
   try {
-    const data = await loadHostLicenseInfoForHover(key);
+    const data = await loadHostLicenseInfoForHover(hostname, hostUid);
     if (hostLicenseHoverActiveHost !== key || !hostLicenseHoverPopupEl) {
       return;
     }
@@ -7881,9 +7902,10 @@ async function showHostLicenseHoverPopup(anchorEl, hostname) {
 function wireHostLicenseInfoBadges(hostList) {
   for (const badge of (hostList || document).querySelectorAll(".host-license-info-badge")) {
     const hostAttr = asText(badge.getAttribute("data-host-license-host"), "").trim();
+    const uidAttr = asText(badge.getAttribute("data-host-license-uid"), "").trim();
     if (!hostAttr) continue;
     badge.addEventListener("mouseenter", () => {
-      void showHostLicenseHoverPopup(badge, hostAttr);
+      void showHostLicenseHoverPopup(badge, hostAttr, uidAttr);
     });
     badge.addEventListener("mousemove", () => {
       positionHostLicenseHoverPopup(badge);
@@ -7965,10 +7987,8 @@ function updateReportCustomerChip() {
   if (!chipWrap) {
     return;
   }
-  const selectedHost = Array.isArray(state.hosts)
-    ? state.hosts.find((host) => asText(host.hostname) === state.selectedHost)
-    : null;
-  if (!state.selectedHost || !selectedHost) {
+  const selectedHost = getSelectedHostRecord();
+  if ((!state.selectedHost && !state.selectedHostUid) || !selectedHost) {
     chipWrap.innerHTML = "";
     chipWrap.classList.add("hidden");
     return;
@@ -8060,9 +8080,7 @@ function updateHeaderFirstRowControls() {
     return;
   }
 
-  const selectedHost = Array.isArray(state.hosts)
-    ? state.hosts.find((host) => asText(host.hostname) === state.selectedHost)
-    : null;
+  const selectedHost = getSelectedHostRecord();
 
   if (!selectedHost) {
     container.innerHTML = "";
@@ -8082,11 +8100,9 @@ function updateSelectedHostControls() {
     return;
   }
 
-  const selectedHost = Array.isArray(state.hosts)
-    ? state.hosts.find((host) => asText(host.hostname) === state.selectedHost)
-    : null;
+  const selectedHost = getSelectedHostRecord();
 
-  if (!state.selectedHost || !selectedHost) {
+  if ((!state.selectedHost && !state.selectedHostUid) || !selectedHost) {
     controls.innerHTML = "";
     controls.classList.add("hidden");
     updateReportCustomerChip();
@@ -8185,6 +8201,7 @@ function ensureHostContextMenu() {
       await deleteHostCard(hostname);
       if (state.selectedHost === hostname) {
         state.selectedHost = "";
+        state.selectedHostUid = "";
         state.selectedDisplayName = "";
         state.currentReport = null;
         state.reportOffset = 0;
@@ -8929,12 +8946,14 @@ async function exportGlobalAlertsCsv() {
 }
 
 async function exportSelectedHostReportsJson() {
-  if (!state.selectedHost) {
+  if (!state.selectedHost && !state.selectedHostUid) {
     throw new Error("Bitte zuerst einen Host auswählen.");
   }
-  const hostname = encodeURIComponent(state.selectedHost);
+  const hostQuery = state.selectedHostUid
+    ? `host_uid=${encodeURIComponent(state.selectedHostUid)}`
+    : `hostname=${encodeURIComponent(state.selectedHost)}`;
   return triggerFileDownload(
-    `/api/v1/export/reports.json?hostname=${hostname}`,
+    `/api/v1/export/reports.json?${hostQuery}`,
     `monitoring-reports-${new Date().toISOString().replace(/[.:]/g, "-")}.json`,
   );
 }
@@ -8945,12 +8964,14 @@ function wireHostListInteractions() {
   for (const item of hostList.querySelectorAll(".host-item")) {
     item.addEventListener("click", () => {
       const hostname = item.getAttribute("data-host") || "";
-      if (!hostname || hostname === state.selectedHost) {
+      const hostUid = item.getAttribute("data-host-uid") || hostname;
+      if (!hostname || (hostname === state.selectedHost && hostUid === state.selectedHostUid)) {
         return;
       }
 
       const previousScrollTop = hostList.scrollTop;
       state.selectedHost = hostname;
+      state.selectedHostUid = hostUid;
       state.selectedDisplayName = item.querySelector("strong")?.textContent || hostname;
       state.reportOffset = 0;
       renderHosts(state.hosts);
@@ -9130,16 +9151,19 @@ async function loadHosts(options = {}) {
 
     if (orderedHosts.length === 0) {
       state.selectedHost = "";
+      state.selectedHostUid = "";
       state.selectedDisplayName = "";
       state.reportOffset = 0;
       loadAndRenderCustomerNotificationPanel("");
     }
     // No auto-selection: user picks a host explicitly
 
-    const selectedStillVisible = !state.selectedHost || orderedHosts.some((host) => String(host.hostname || "") === state.selectedHost);
+    const selectedIdentity = asText(state.selectedHostUid, "").trim() || asText(state.selectedHost, "").trim();
+    const selectedStillVisible = !selectedIdentity || orderedHosts.some((host) => resolveHostIdentity(host) === selectedIdentity);
     if (!selectedStillVisible && orderedHosts.length > 0) {
       // Previously selected host disappeared (e.g. hidden/deleted) — deselect instead of jumping
       state.selectedHost = "";
+      state.selectedHostUid = "";
       state.selectedDisplayName = "";
       state.reportOffset = 0;
       renderHosts(hosts);
@@ -9148,8 +9172,10 @@ async function loadHosts(options = {}) {
       return;
     }
 
-    const selectedHost = orderedHosts.find((host) => String(host.hostname || "") === state.selectedHost);
+    const selectedHost = orderedHosts.find((host) => resolveHostIdentity(host) === selectedIdentity);
     if (selectedHost) {
+      state.selectedHost = String(selectedHost.hostname || "");
+      state.selectedHostUid = resolveHostIdentity(selectedHost);
       state.selectedDisplayName = String(selectedHost.display_name || selectedHost.hostname || "");
     }
 
@@ -9188,7 +9214,7 @@ async function loadReportsForHost(options = {}) {
   const reportJumpDateInput = document.getElementById("reportJumpDateTimeInput");
   const reportJumpBounds = document.getElementById("reportJumpBounds");
 
-  if (!state.selectedHost) {
+  if (!state.selectedHost && !state.selectedHostUid) {
     state.currentReport = null;
     selectedHostTitle.textContent = "🗂️ Meldungen";
     count.textContent = "";
@@ -9209,7 +9235,7 @@ async function loadReportsForHost(options = {}) {
     return;
   }
 
-  const selectedLabel = state.selectedDisplayName || state.selectedHost;
+  const selectedLabel = state.selectedDisplayName || state.selectedHost || state.selectedHostUid;
   selectedHostTitle.textContent = `🗂️ ${selectedLabel}`;
   list.innerHTML = "<p class=\"muted\">Lade Daten...</p>";
   count.textContent = "";
@@ -9217,8 +9243,11 @@ async function loadReportsForHost(options = {}) {
 
   try {
     const hostNameParam = encodeURIComponent(state.selectedHost);
+    const hostUidParam = encodeURIComponent(state.selectedHostUid || "");
     const jumpParam = jumpToUtc ? `&jump_to_utc=${encodeURIComponent(jumpToUtc)}` : "";
-    const url = `/api/v1/host-reports?hostname=${hostNameParam}&limit=${state.reportLimit}&offset=${state.reportOffset}${jumpParam}`;
+    const url = state.selectedHostUid
+      ? `/api/v1/host-reports?host_uid=${hostUidParam}&limit=${state.reportLimit}&offset=${state.reportOffset}${jumpParam}`
+      : `/api/v1/host-reports?hostname=${hostNameParam}&limit=${state.reportLimit}&offset=${state.reportOffset}${jumpParam}`;
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error("HTTP " + response.status);
@@ -13419,7 +13448,9 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
   if (!host) return "";
 
   const hostnameRaw = String(host.hostname || "-");
+  const hostUidRaw = String(resolveHostIdentity(host) || hostnameRaw);
   const hostname = escapeHtml(hostnameRaw);
+  const hostUid = escapeHtml(hostUidRaw);
   const shortHostname = escapeHtml(formatShortHostname(hostnameRaw));
   const hostTitle = escapeHtml(String(host.display_name || host.hostname || "-").trim() || "-");
   const osEmoji = getOsEmoji(osName);
@@ -13443,7 +13474,7 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
   const licenseTypeSection = renderSystemOverviewLicenseTypes(payload);
 
   const rowClickClass = onRowClick ? "so-row-clickable" : "";
-  const rowClickAttr = onRowClick ? `data-hostname="${hostname}"` : "";
+  const rowClickAttr = onRowClick ? `data-hostname="${hostname}" data-host-uid="${hostUid}"` : "";
 
   return `
     <tr class="${rowClickClass}" ${rowClickAttr}>
@@ -13825,8 +13856,10 @@ async function loadSystemOverview() {
     container.querySelectorAll(".so-row-clickable").forEach((row) => {
       row.addEventListener("click", () => {
         const hostAttr = row.getAttribute("data-hostname");
+        const hostUidAttr = row.getAttribute("data-host-uid") || hostAttr || "";
         if (hostAttr) {
           state.selectedHost = hostAttr;
+          state.selectedHostUid = hostUidAttr;
           state.viewMode = "overview";
           state.overviewSection = "main";
           state.reportSection = "overview";
