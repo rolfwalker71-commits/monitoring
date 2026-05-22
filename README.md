@@ -529,6 +529,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 | 1.4.121 | 13.05.2026 | Fix database lifecycle changelog tracking and backfill for SQL/HANA payloads |
 | 1.4.120 | 12.05.2026 | Fix user settings wiring: Trend Digest metrics + Host Interests now persist via user-preferences endpoint; mail profile save no longer resets digest selections |
 | 1.4.119 | 12.05.2026 | Daily Trend Digest filters blacklisted filesystems (e.g. /hana/shared/.snapshot) |
+| 1.4.124 | 22.05.2026 | Remove SAP logo from header and from all outgoing mail templates |
 | 1.4.123 | 22.05.2026 | Add hourly DB report count and DB size delta header tiles |
 | 1.4.122 | 22.05.2026 | Add header tiles for DB report count and DB size |
 | 1.4.121 | 22.05.2026 | Hide host UID labels in host views and expose system overview license types to all users |

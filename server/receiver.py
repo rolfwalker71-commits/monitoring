@@ -41,7 +41,6 @@ BACKUP_TEMP_DIR = DATA_DIR / "backup_jobs"
 AUTO_BACKUP_DIR = DATA_DIR / "auto_db_backups"
 APP_LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
 ANG_LOGO_PATH = STATIC_DIR / "icons" / "ANG.png"
-SAP_LOGO_PATH = STATIC_DIR / "icons" / "sap.png"
 LINUX_LOGO_PATH = STATIC_DIR / "icons" / "linux.png"
 WINDOWS_LOGO_PATH = STATIC_DIR / "icons" / "windows.png"
 BUILD_VERSION_PATH = BASE_DIR.parent / "BUILD_VERSION"
@@ -7293,7 +7292,6 @@ def branded_info_mail_html(
 ) -> str:
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
-    sap_logo_uri = sap_logo_data_uri()
     build_version = html.escape(read_build_version())
     header_meta = f"Benutzer: {username} | Zeit: {format_mail_datetime()}"
     return (
@@ -7304,7 +7302,7 @@ def branded_info_mail_html(
         f"<h2 style='margin:10px 0 0 0;font-size:22px;color:#17324d;'>{html.escape(title)}</h2>"
         "</div>"
         f"<div style='padding:18px 20px;font-size:14px;line-height:1.5;color:#1f2937;'>{body_html}</div>"
-        f"<div style='padding:0 20px 16px 20px;'>{mail_footer_logos_html(sap_logo_uri, ang_logo_uri)}</div>"
+        f"<div style='padding:0 20px 16px 20px;'>{mail_footer_logos_html(ang_logo_uri)}</div>"
         "</div>"
         "</body></html>"
     )
@@ -7313,7 +7311,6 @@ def branded_info_mail_html(
 def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
-    sap_logo_uri = sap_logo_data_uri()
     build_version = html.escape(read_build_version())
     header_meta = f"Benutzer: {username} | Fenster: letzte {hours}h | Zeit: {format_mail_datetime()}"
     rows_html = "".join(
@@ -7350,7 +7347,7 @@ def trend_digest_html(username: str, warnings: list[dict], hours: int) -> str:
         "</tr></thead>"
         f"<tbody>{rows_html}</tbody>"
         "</table>"
-        f"{mail_footer_logos_html(sap_logo_uri, ang_logo_uri)}"
+        f"{mail_footer_logos_html(ang_logo_uri)}"
         "</div>"
         "</div>"
         "</body></html>"
@@ -7366,7 +7363,6 @@ def trend_digest_subject(warnings: list[dict], local_date: str) -> str:
 def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int, str] | None = None, graph_hours: int = 24) -> str:
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
-    sap_logo_uri = sap_logo_data_uri()
     build_version = html.escape(read_build_version())
     header_meta = f"Benutzer: {username} | Zeit: {format_mail_datetime()}"
     graph_lookup = graph_cids or {}
@@ -7417,7 +7413,7 @@ def alert_digest_html(username: str, alerts: list[dict], *, graph_cids: dict[int
         "</tr></thead>"
         f"<tbody>{rows_html}</tbody>"
         "</table>"
-        f"{mail_footer_logos_html(sap_logo_uri, ang_logo_uri)}"
+        f"{mail_footer_logos_html(ang_logo_uri)}"
         "</div>"
         "</div>"
         "</body></html>"
@@ -7491,7 +7487,6 @@ def alert_instant_mail_html(
     )
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
-    sap_logo_uri = sap_logo_data_uri()
     build_version = html.escape(read_build_version())
     header_meta = f"Benutzer: {username} | Zeit: {format_mail_datetime()}"
     reported_at = format_mail_datetime(reported_at_utc)
@@ -7531,7 +7526,7 @@ def alert_instant_mail_html(
         f"<td style='padding:8px 0;'><span style='display:inline-block;padding:2px 10px;border-radius:999px;background:{sev_bg};color:{sev_text};font-weight:700;font-size:12px;'>{sev_label}</span></td></tr>"
         "</table>"
         f"{graph_block}"
-        f"{mail_footer_logos_html(sap_logo_uri, ang_logo_uri)}"
+        f"{mail_footer_logos_html(ang_logo_uri)}"
         "</div>"
         "</div>"
         "</body></html>"
@@ -7547,7 +7542,6 @@ def inactive_hosts_mail_subject(hosts: list[dict], threshold_hours: int) -> str:
 def inactive_hosts_mail_html(username: str, hosts: list[dict], threshold_hours: int) -> str:
     app_logo_uri = app_logo_data_uri()
     ang_logo_uri = ang_logo_data_uri()
-    sap_logo_uri = sap_logo_data_uri()
     build_version = html.escape(read_build_version())
     header_meta = f"Benutzer: {username} | Schwellwert: {threshold_hours}h | Zeit: {format_mail_datetime()}"
 
@@ -7594,7 +7588,7 @@ def inactive_hosts_mail_html(username: str, hosts: list[dict], threshold_hours: 
         f"<tbody>{rows_html}</tbody>"
         "</table>"
         "<p style='margin:12px 0 0 0;font-size:12px;color:#64748b;'>Hinweis: Ein Host gilt als inaktiv, wenn seit dem Schwellwert keine neue Meldung eingegangen ist.</p>"
-        f"{mail_footer_logos_html(sap_logo_uri, ang_logo_uri)}"
+        f"{mail_footer_logos_html(ang_logo_uri)}"
         "</div>"
         "</div>"
         "</body></html>"
@@ -9625,20 +9619,7 @@ def ang_logo_data_uri() -> str:
         return ""
 
 
-def sap_logo_data_uri() -> str:
-    try:
-        encoded = base64.b64encode(SAP_LOGO_PATH.read_bytes()).decode("ascii")
-        return f"data:image/png;base64,{encoded}"
-    except OSError:
-        return ""
-
-
-def mail_footer_logos_html(sap_logo_uri: str, ang_logo_uri: str) -> str:
-    sap_logo_html = (
-        f"<img src='{sap_logo_uri}' alt='SAP' width='67' style='display:inline-block;max-width:67px;height:auto;'>"
-        if sap_logo_uri
-        else ""
-    )
+def mail_footer_logos_html(ang_logo_uri: str) -> str:
     ang_logo_html = (
         f"<img src='{ang_logo_uri}' alt='ANG' width='110' style='display:inline-block;max-width:110px;height:auto;'>"
         if ang_logo_uri
@@ -9647,7 +9628,6 @@ def mail_footer_logos_html(sap_logo_uri: str, ang_logo_uri: str) -> str:
     return (
         "<table role='presentation' cellpadding='0' cellspacing='0' border='0' style='margin-top:18px;padding-top:14px;border-top:1px solid #e2e8f0;width:100%;border-collapse:collapse;'>"
         "<tr>"
-        f"<td style='text-align:left;vertical-align:middle;'>{sap_logo_html}</td>"
         f"<td style='text-align:right;vertical-align:middle;'>{ang_logo_html}</td>"
         "</tr>"
         "</table>"
