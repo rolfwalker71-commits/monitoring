@@ -584,6 +584,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.310 (22. Mai 2026)
+
+- **Automatische Host-Zusammenfuehrung beim Ingest deaktiviert**: Der serverseitige Legacy-Reconcile-Schritt, der bestehende `host_uid`-Werte historischer Reports umgeschrieben hat, wurde entfernt.
+- **Strikteres Kartenverhalten ueber `host_uid`**: Eingehende Reports behalten jetzt ihre abgeleitete/eingelieferte `host_uid` unveraendert; ein Merging ueber nachtraegliche UID-Umschreibung findet nicht mehr statt.
+
 ### v1.6.309 (22. Mai 2026)
 
 - **Hostlisten-Interaktion auf Event-Delegation umgestellt**: Statt pro Hostkarte bei jedem Render mehrere Listener neu zu binden, nutzt die Sidebar jetzt zentrale delegierte Handler. Das reduziert den Setup-Overhead bei vielen Hosts deutlich und beschleunigt die Reaktion der Seitenliste spuerbar.

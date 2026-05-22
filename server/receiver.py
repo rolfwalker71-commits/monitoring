@@ -13856,14 +13856,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         payload["host_uid"] = incoming_host_uid
 
         with sqlite3.connect(DB_PATH) as conn:
-            _reconcile_legacy_host_uids(
-                conn,
-                payload,
-                hostname,
-                incoming_host_uid,
-                incoming_agent_id,
-                incoming_primary_ip,
-            )
             cursor = conn.execute(
                 """
                 INSERT INTO reports (received_at_utc, agent_id, hostname, host_uid, primary_ip, payload_json)
