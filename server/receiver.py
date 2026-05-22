@@ -1252,7 +1252,37 @@ def _reconcile_legacy_host_uids(
     )
 
 
+def _ensure_reports_host_uid_support(conn: sqlite3.Connection) -> None:
+    existing_reports_columns = {
+        str(row[1])
+        for row in conn.execute("PRAGMA table_info(reports)").fetchall()
+    }
+    if "host_uid" not in existing_reports_columns:
+        conn.execute("ALTER TABLE reports ADD COLUMN host_uid TEXT")
+
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_host_uid_id ON reports(host_uid, id)")
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_reports_host_key_id
+        ON reports(COALESCE(NULLIF(host_uid, ''), hostname), id)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_reports_host_key_received
+        ON reports(COALESCE(NULLIF(host_uid, ''), hostname), received_at_utc)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_reports_host_agent_ip_uid
+        ON reports(hostname, agent_id, primary_ip, host_uid, id)
+        """
+    )
+
+
 def _backfill_report_host_uids(conn: sqlite3.Connection, batch_size: int = 1000) -> None:
+    _ensure_reports_host_uid_support(conn)
     safe_batch_size = max(100, min(int(batch_size or 1000), 5000))
     last_report_id = 0
     while True:
@@ -1287,6 +1317,84 @@ def _backfill_report_host_uids(conn: sqlite3.Connection, batch_size: int = 1000)
         last_report_id = int(rows[-1][0] or last_report_id)
         if len(rows) < safe_batch_size:
             return
+
+
+def _repair_report_host_uids(conn: sqlite3.Connection, batch_size: int = 1000) -> dict:
+    _ensure_reports_host_uid_support(conn)
+    safe_batch_size = max(100, min(int(batch_size or 1000), 5000))
+    before_host_cards = int(
+        conn.execute(
+            "SELECT COUNT(*) FROM (SELECT 1 FROM reports GROUP BY COALESCE(NULLIF(host_uid, ''), hostname))"
+        ).fetchone()[0]
+        or 0
+    )
+
+    scanned_reports = 0
+    updated_reports = 0
+    changed_hostnames: set[str] = set()
+    last_report_id = 0
+
+    while True:
+        rows = conn.execute(
+            """
+            SELECT id,
+                   COALESCE(hostname, ''),
+                   COALESCE(agent_id, ''),
+                   COALESCE(primary_ip, ''),
+                   COALESCE(payload_json, '{}'),
+                   COALESCE(host_uid, '')
+            FROM reports
+            WHERE id > ?
+            ORDER BY id ASC
+            LIMIT ?
+            """,
+            (last_report_id, safe_batch_size),
+        ).fetchall()
+        if not rows:
+            break
+
+        scanned_reports += len(rows)
+        updates: list[tuple[str, int]] = []
+        for row in rows:
+            report_id = int(row[0] or 0)
+            hostname = str(row[1] or "").strip()
+            agent_id = str(row[2] or "").strip()
+            primary_ip = str(row[3] or "").strip()
+            payload = parse_payload_json(str(row[4] or "{}"))
+            current_uid = str(row[5] or "").strip()
+            expected_uid = _derive_host_uid(payload, hostname, agent_id, primary_ip)
+            if not expected_uid:
+                expected_uid = hostname
+            if expected_uid and expected_uid != current_uid:
+                updates.append((expected_uid, report_id))
+                if hostname:
+                    changed_hostnames.add(hostname)
+
+        if updates:
+            conn.executemany("UPDATE reports SET host_uid = ? WHERE id = ?", updates)
+            updated_reports += len(updates)
+
+        last_report_id = int(rows[-1][0] or last_report_id)
+        if len(rows) < safe_batch_size:
+            break
+
+    after_host_cards = int(
+        conn.execute(
+            "SELECT COUNT(*) FROM (SELECT 1 FROM reports GROUP BY COALESCE(NULLIF(host_uid, ''), hostname))"
+        ).fetchone()[0]
+        or 0
+    )
+
+    return {
+        "status": "ok",
+        "scanned_reports": scanned_reports,
+        "updated_reports": updated_reports,
+        "before_host_cards": before_host_cards,
+        "after_host_cards": after_host_cards,
+        "delta_host_cards": after_host_cards - before_host_cards,
+        "changed_hostnames_count": len(changed_hostnames),
+        "changed_hostnames_sample": sorted(changed_hostnames)[:30],
+    }
 
 
 def normalize_sap_b1_version_map_entries(entries_raw: object) -> list[dict[str, str]]:
@@ -13809,6 +13917,31 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "message": "DB Kennzahlen manuell neu berechnet",
                     "triggered": snapshot,
                     **payload,
+                },
+            )
+            return
+
+        if path == "/api/v1/admin/repair-host-uids":
+            if not self._require_admin_session():
+                return
+
+            query = parse_qs(parsed.query)
+            batch_size = parse_int(query, "batch_size", default=1000, min_value=100, max_value=5000)
+
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    result = _repair_report_host_uids(conn, batch_size=batch_size)
+                    conn.commit()
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "message": "Host-UID-Reparatur abgeschlossen",
+                    **result,
                 },
             )
             return

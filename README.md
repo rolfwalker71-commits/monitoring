@@ -584,6 +584,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.311 (22. Mai 2026)
+
+- **Historische Host-UID-Reparatur eingefuehrt**: Neue serverseitige Batch-Reparatur setzt fuer bestehende Reports die `host_uid` wieder strikt auf den aus Payload/Agent/IP abgeleiteten Wert, statt alte, zusammengefuehrte UID-Zustaende fortzuschreiben.
+- **Admin-Endpoint fuer Vollreparatur**: `POST /api/v1/admin/repair-host-uids` fuehrt den globalen Reparaturlauf aus und liefert Vorher/Nachher-Kennzahlen (gescannte Reports, geaenderte Reports, Hostkarten-Differenz, betroffene Hostnamen).
+- **Schema-Absicherung fuer Alt-Datenbanken**: Reparatur/Backfill stellen fehlende `reports.host_uid`-Spalte samt relevanter Indizes automatisch bereit, damit der Fix auch auf aelteren DB-Staenden laeuft.
+
 ### v1.6.310 (22. Mai 2026)
 
 - **Automatische Host-Zusammenfuehrung beim Ingest deaktiviert**: Der serverseitige Legacy-Reconcile-Schritt, der bestehende `host_uid`-Werte historischer Reports umgeschrieben hat, wurde entfernt.
