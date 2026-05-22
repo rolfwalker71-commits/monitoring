@@ -8072,8 +8072,9 @@ function renderReportJumpHostUidChip(host) {
   if (!hostIdentity) {
     return "";
   }
-  const hostIdentityShort = hostIdentity.length > 38 ? `${hostIdentity.slice(0, 35)}...` : hostIdentity;
-  return `<span class="selected-host-meta-chip report-jump-host-id" title="Host-ID (host_uid)">🆔 <span title="${escapeHtml(hostIdentity)}">${escapeHtml(hostIdentityShort)}</span></span>`;
+  const hostLabelRaw = String(host.display_name || host.hostname || hostIdentity || "Host").trim() || "Host";
+  const hostLabelShort = hostLabelRaw.length > 38 ? `${hostLabelRaw.slice(0, 35)}...` : hostLabelRaw;
+  return `<span class="selected-host-meta-chip report-jump-host-id" title="Aktueller Host">🖥️ <span title="${escapeHtml(hostLabelRaw)}">${escapeHtml(hostLabelShort)}</span></span>`;
 }
 
 function updateReportJumpHostUidChip(host) {
@@ -10532,7 +10533,6 @@ function renderInactiveHosts(data) {
           </div>
           <div class="ih-host-details">
             <span class="ih-hostname">${escapeHtml(displayTitle)}${showHostname ? ` <span class="ih-hostname-sub">(${escapeHtml(host.hostname)})</span>` : ""}</span>
-            ${hostUid ? `<div class="ih-hostname-sub" title="${escapeHtml(hostUid)}">ID: ${escapeHtml(hostUidShort)}</div>` : ""}
             <div class="ih-meta-row">
               <span class="ih-meta-item">Letzter Kontakt: <span class="ih-last-seen">${escapeHtml(lastSeenText)}</span></span>
               <span class="ih-meta-item"><span class="ih-hours-badge ${hoursClass}">${host.hours_inactive.toFixed(1)}h inaktiv</span></span>
@@ -13561,11 +13561,11 @@ function collectSystemOverviewTranslatedLicenseTypes(sapLicense) {
       const count = Number.isFinite(countRaw) ? countRaw : 0;
       return {
         rawType,
-        translated,
+        translated: translated || rawType,
         count,
       };
     })
-    .filter((entry) => entry.rawType && entry.translated !== null);
+    .filter((entry) => entry.rawType);
 }
 
 function hasSystemOverviewLicenseInfo(payload) {
@@ -13608,7 +13608,7 @@ function buildSystemOverviewCustomerDataIndicators(hostEntries) {
     }
     if (!hasLicenseTypes) {
       const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : null;
-      if (collectSystemOverviewTranslatedLicenseTypes(sapLicense).length > 0) {
+      if (Array.isArray(sapLicense?.focus_license_types) && sapLicense.focus_license_types.length > 0) {
         hasLicenseTypes = true;
       }
     }
@@ -13686,7 +13686,11 @@ function renderSystemOverviewLicenseTypes(payload) {
   const rowsHtml = translatedFocusTypes
     .map((entry) => {
       const countPadded = String(entry.count).padStart(3, "0");
-      return `<li><span class="so-license-type-count">${escapeHtml(countPadded)}</span><span class="so-license-type-name">${escapeHtml(entry.translated)} <span class="so-license-type-raw">(${escapeHtml(entry.rawType)})</span></span></li>`;
+      const hasTranslatedLabel = entry.translated && entry.translated !== entry.rawType;
+      const labelHtml = hasTranslatedLabel
+        ? `${escapeHtml(entry.translated)} <span class="so-license-type-raw">(${escapeHtml(entry.rawType)})</span>`
+        : `${escapeHtml(entry.rawType)}`;
+      return `<li><span class="so-license-type-count">${escapeHtml(countPadded)}</span><span class="so-license-type-name">${labelHtml}</span></li>`;
     })
     .join("");
 
@@ -13833,7 +13837,6 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
       <td class="so-host-cell">
         <div class="so-host-title">${hostTitle}</div>
         <div class="so-host-short">${shortHostname}</div>
-        <div class="so-host-short" title="${hostUid}">ID: ${hostUidShort}</div>
         ${addOnSection ? `<div class="so-host-addons">${addOnSection}</div>` : ""}
       </td>
       <td>
