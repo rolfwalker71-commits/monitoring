@@ -7564,6 +7564,22 @@ body[data-theme="dark"] .fs-bar-wrap {
 .db-size-cell { white-space: nowrap; text-align: right; }
 .db-bk-cell   { white-space: nowrap; font-size: 11px; }
 
+.hana-db-table {
+  table-layout: fixed;
+}
+
+.hana-db-table .hana-db-col-name {
+  width: 35%;
+}
+
+.hana-db-table .hana-db-col-company {
+  width: 45%;
+}
+
+.hana-db-table .hana-db-col-loc {
+  width: 20%;
+}
+
 body[data-theme="dark"] .db-status-ok   { background: #14532d; color: #86efac; border-color: #166534; }
 body[data-theme="dark"] .db-status-warn { background: #451a03; color: #fcd34d; border-color: #78350f; }
 body[data-theme="dark"] .db-sys-badge   { background: #1e1b4b; color: #a5b4fc; }

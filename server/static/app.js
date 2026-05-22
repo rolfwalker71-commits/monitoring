@@ -5574,8 +5574,7 @@ function renderSapB1ExtensionsSection(payload) {
   const hanaTenantContent = hanaTenantViews
     .map((tenantView) => {
       const tenantLabel = tenantView.tenantId ? `Tenant ${tenantView.tenantId}` : "SystemDB";
-      const tenantPortLabel = tenantView.tenantPort ? `Port ${tenantView.tenantPort}` : "Port unbekannt";
-      const tenantHeader = `${tenantLabel} | ${tenantPortLabel}`;
+      const tenantHeader = tenantLabel;
 
       const lwBody = renderHanaRows(tenantView.lightweight);
       const lgBody = renderHanaRows(tenantView.legacy);
@@ -5732,8 +5731,7 @@ function renderHanaMultitenantDiscoverySummary(discovery) {
     .map((entry) => {
       const tenantId = asText(entry.tenant_id, "").trim();
       if (!tenantId) return "";
-      const tenantPort = asText(entry.tenant_port, "").trim();
-      return tenantPort ? `${tenantId} (Port ${tenantPort})` : `${tenantId} (Port unbekannt)`;
+      return tenantId;
     })
     .filter(Boolean);
 
@@ -6747,8 +6745,6 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
         const databases = renderFilteredDatabases(tenantView.databases);
         const tenantLabel = tenantView.tenantId ? `Tenant ${tenantView.tenantId}` : "SystemDB";
         const tenantMeta = [tenantLabel];
-        if (tenantView.tenantPort) tenantMeta.push(`Port ${tenantView.tenantPort}`);
-        if (tenantView.target) tenantMeta.push(`Target ${tenantView.target}`);
 
         if (databases.length === 0) {
           const tenantStatus = tenantView.error
@@ -6773,7 +6769,12 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
           <details class="sap-b1-raw-details sap-b1-sub-details" open>
             <summary class="sap-b1-raw-summary">${escapeHtml(tenantMeta.join(" | "))} (${databases.length})</summary>
             <div class="table-wrap">
-              <table class="db-table">
+              <table class="db-table hana-db-table">
+                <colgroup>
+                  <col class="hana-db-col-name">
+                  <col class="hana-db-col-company">
+                  <col class="hana-db-col-loc">
+                </colgroup>
                 <thead>
                   <tr>
                     <th>Datenbank</th>

@@ -584,6 +584,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.315 (22. Mai 2026)
+
+- **Port/Target-Anzeige aus HANA-Multitenant-UI entfernt**: In Discovery, Tenant-Ueberschriften und Leerstatus-Meldungen werden keine Port- oder Target-Informationen mehr angezeigt.
+- **Spaltenausrichtung in HANA-Datenbanklisten vereinheitlicht**: Tenant-Tabellen verwenden jetzt feste, konsistente Spaltenbreiten fuer `Datenbank`, `Firma` und `Lokalisierung`, damit alle Tabellen sauber auf denselben Spaltenpositionen stehen.
+
 ### v1.6.314 (22. Mai 2026)
 
 - **Host-UID fuer Linux gegen Klon-Kollisionen gehaertet**: Bei der automatischen Host-UID-Bildung wird jetzt zusaetzlich die MAC der Default-NIC eingebunden (`<hostname>::mid:<machine-id>::mac:<mac>`).
