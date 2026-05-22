@@ -584,6 +584,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.318 (22. Mai 2026)
+
+- **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
+- **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
+
 ### v1.6.317 (22. Mai 2026)
 
 - **Changelog-Feldnamen fuer HANA-Tenants bereinigt**: Das Praefix `tenant` wird in den AddOn-Feldbezeichnungen entfernt.

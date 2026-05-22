@@ -3986,7 +3986,8 @@ def _format_database_lifecycle_name(database_name: object, instance_name: object
         return db_name
     if instance.upper() == "MSSQLSERVER":
         return db_name
-    return f"{instance}::{db_name}"
+    instance_display = re.sub(r"(?i)^HANA-T", "", instance).strip() or instance
+    return f"{instance_display} - {db_name}"
 
 
 def _database_lifecycle_values(action: str, database_display_name: str, instance_name: object = "MSSQLSERVER") -> tuple[str, str, str]:

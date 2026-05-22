@@ -10308,12 +10308,13 @@ async function loadDatabaseLifecycleForHost() {
         const dbName = asText(item.database_name || "-");
         const instanceName = asText(item.instance_name || "MSSQLSERVER");
         const isHana = instanceName.toUpperCase() === "HANA";
+        const instanceDisplay = instanceName.replace(/^HANA-T/i, "").trim() || instanceName;
         const actionLabel = isHana
           ? (item.action === "create" ? "✨ erstellt" : item.action === "delete" ? "🗑️ gelöscht" : "umbenannt")
           : (item.action === "create" ? "✨ Erstellt" : item.action === "delete" ? "🗑️ Gelöscht" : "Umbenannt");
         const dbLabel = isHana
           ? `Schema: ${dbName}`
-          : (instanceName && instanceName.toUpperCase() !== "MSSQLSERVER" ? `${instanceName}::${dbName}` : dbName);
+          : (instanceName && instanceName.toUpperCase() !== "MSSQLSERVER" ? `${instanceDisplay} - ${dbName}` : dbName);
 
         return `
           <tr>
