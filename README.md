@@ -584,6 +584,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.301 (22. Mai 2026)
+
+- **Doppelte Host-Karten automatisch zusammenführen**: Beim Eingang eines Reports mit neuer/echter `host_uid` werden ältere, serverseitig erzeugte Fallback-Keys (z. B. `::agent:` / `::ip:`) für denselben Host gezielt auf die neue `host_uid` nachgezogen.
+- **Host-Karte löschen beschleunigt**: Delete-Pfad optimiert (keine separaten Vorab-Count-Scans pro Tabelle, zusätzliche Reports-Indexierung für Host/Agent/IP/UID), wodurch das Löschen spürbar schneller reagiert.
+
 ### v1.6.300 (22. Mai 2026)
 
 - **Hosts-Liste nach host_uid-Migration beschleunigt**: `/api/v1/hosts` wurde auf effizientere Aggregation umgestellt (Total+Page in einem CTE-Durchlauf), Alert-Zähler werden gesammelt statt als korrelierte Subqueries je Host berechnet, und zusätzliche Indizes für host_key/received_at wurden ergänzt.

@@ -163,6 +163,12 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE INDEX IF NOT EXISTS idx_reports_host_agent_ip_uid
+            ON reports(hostname, agent_id, primary_ip, host_uid, id)
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS alerts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 hostname TEXT NOT NULL,
@@ -1159,6 +1165,61 @@ def _derive_host_uid(payload: dict, hostname: str, agent_id: str = "", primary_i
         return f"{safe_hostname}::ip:{resolved_ip}"
 
     return safe_hostname
+
+
+def _reconcile_legacy_host_uids(
+    conn: sqlite3.Connection,
+    payload: dict,
+    hostname: str,
+    incoming_host_uid: str,
+    agent_id: str = "",
+    primary_ip: str = "",
+) -> None:
+    safe_hostname = str(hostname or "").strip()
+    safe_host_uid = str(incoming_host_uid or "").strip()
+    safe_agent_id = str(agent_id or "").strip()
+    safe_primary_ip = str(primary_ip or "").strip()
+    if not safe_hostname or not safe_host_uid:
+        return
+
+    # Nothing to reconcile when host_uid stays at plain hostname fallback.
+    if safe_host_uid == safe_hostname:
+        return
+
+    candidates: set[str] = set()
+    if safe_agent_id:
+        candidates.add(f"{safe_hostname}::agent:{safe_agent_id}")
+
+    resolved_ip = _resolve_std_nic_ipv4(payload if isinstance(payload, dict) else {}, safe_primary_ip)
+    if resolved_ip:
+        candidates.add(f"{safe_hostname}::ip:{resolved_ip}")
+    if safe_primary_ip and _is_valid_ipv4(safe_primary_ip):
+        candidates.add(f"{safe_hostname}::ip:{safe_primary_ip}")
+
+    candidates.discard(safe_host_uid)
+    if not candidates:
+        return
+
+    placeholders = ",".join(["?"] * len(candidates))
+    where_parts = [
+        "hostname = ?",
+        f"COALESCE(host_uid, '') IN ({placeholders})",
+    ]
+    args: list = [safe_hostname, *sorted(candidates)]
+
+    # Guard against cross-hostname collisions: require a secondary identity axis where possible.
+    if safe_agent_id:
+        where_parts.append("COALESCE(agent_id, '') = ?")
+        args.append(safe_agent_id)
+    elif resolved_ip:
+        where_parts.append("COALESCE(primary_ip, '') = ?")
+        args.append(resolved_ip)
+
+    where_clause = " AND ".join(where_parts)
+    conn.execute(
+        f"UPDATE reports SET host_uid = ? WHERE {where_clause}",
+        (safe_host_uid, *args),
+    )
 
 
 def _backfill_report_host_uids(conn: sqlite3.Connection, batch_size: int = 1000) -> None:
@@ -9644,16 +9705,12 @@ def delete_host_card_data(conn: sqlite3.Connection, hostname: str) -> dict[str, 
     ]
 
     for table_name, where_clause in cleanup_plan:
-        row = conn.execute(
-            f"SELECT COUNT(*) FROM {table_name} WHERE {where_clause}",
-            (hostname,),
-        ).fetchone()
-        count = int(row[0] or 0) if row else 0
         conn.execute(
             f"DELETE FROM {table_name} WHERE {where_clause}",
             (hostname,),
         )
-        deleted[table_name] = count
+        row = conn.execute("SELECT changes()").fetchone()
+        deleted[table_name] = int(row[0] or 0) if row else 0
 
     return deleted
 
@@ -13769,6 +13826,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         payload["host_uid"] = incoming_host_uid
 
         with sqlite3.connect(DB_PATH) as conn:
+            _reconcile_legacy_host_uids(
+                conn,
+                payload,
+                hostname,
+                incoming_host_uid,
+                incoming_agent_id,
+                incoming_primary_ip,
+            )
             cursor = conn.execute(
                 """
                 INSERT INTO reports (received_at_utc, agent_id, hostname, host_uid, primary_ip, payload_json)
