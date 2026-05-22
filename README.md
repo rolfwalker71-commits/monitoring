@@ -584,6 +584,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.295 (22. Mai 2026)
+
+- **Server-Start stabilisiert**: Der `host_uid`-Backfill in der Initialisierung verarbeitet Reports nun in kleinen Batches statt alles auf einmal, wodurch OOM-Kills beim Dienststart auf grossen Datenbanken vermieden werden.
+
 ### v1.6.294 (22. Mai 2026)
 
 - **Host-ID im UI sichtbar**: Beim ausgewählten Host wird die technische Host-ID (`host_uid`) nun als eigener Chip angezeigt, damit Kollisionen/Zuordnungen direkt im Dashboard nachvollziehbar sind.

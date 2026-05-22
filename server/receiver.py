@@ -1141,31 +1141,38 @@ def _derive_host_uid(payload: dict, hostname: str, agent_id: str = "", primary_i
     return safe_hostname
 
 
-def _backfill_report_host_uids(conn: sqlite3.Connection) -> None:
-    rows = conn.execute(
-        """
-        SELECT id, COALESCE(hostname, ''), COALESCE(agent_id, ''), COALESCE(primary_ip, ''), COALESCE(payload_json, '{}')
-        FROM reports
-        WHERE COALESCE(host_uid, '') = ''
-        ORDER BY id ASC
-        """
-    ).fetchall()
-    if not rows:
-        return
+def _backfill_report_host_uids(conn: sqlite3.Connection, batch_size: int = 1000) -> None:
+    safe_batch_size = max(100, min(int(batch_size or 1000), 5000))
+    while True:
+        rows = conn.execute(
+            """
+            SELECT id, COALESCE(hostname, ''), COALESCE(agent_id, ''), COALESCE(primary_ip, ''), COALESCE(payload_json, '{}')
+            FROM reports
+            WHERE COALESCE(host_uid, '') = ''
+            ORDER BY id ASC
+            LIMIT ?
+            """,
+            (safe_batch_size,),
+        ).fetchall()
+        if not rows:
+            return
 
-    updates: list[tuple[str, int]] = []
-    for row in rows:
-        report_id = int(row[0] or 0)
-        hostname = str(row[1] or "").strip()
-        agent_id = str(row[2] or "").strip()
-        primary_ip = str(row[3] or "").strip()
-        payload = parse_payload_json(str(row[4] or "{}"))
-        host_uid = _derive_host_uid(payload, hostname, agent_id, primary_ip)
-        if host_uid:
-            updates.append((host_uid, report_id))
+        updates: list[tuple[str, int]] = []
+        for row in rows:
+            report_id = int(row[0] or 0)
+            hostname = str(row[1] or "").strip()
+            agent_id = str(row[2] or "").strip()
+            primary_ip = str(row[3] or "").strip()
+            payload = parse_payload_json(str(row[4] or "{}"))
+            host_uid = _derive_host_uid(payload, hostname, agent_id, primary_ip)
+            if host_uid:
+                updates.append((host_uid, report_id))
 
-    if updates:
-        conn.executemany("UPDATE reports SET host_uid = ? WHERE id = ?", updates)
+        if updates:
+            conn.executemany("UPDATE reports SET host_uid = ? WHERE id = ?", updates)
+
+        if len(rows) < safe_batch_size:
+            return
 
 
 def normalize_sap_b1_version_map_entries(entries_raw: object) -> list[dict[str, str]]:
