@@ -584,6 +584,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.300 (22. Mai 2026)
+
+- **Hosts-Liste nach host_uid-Migration beschleunigt**: `/api/v1/hosts` wurde auf effizientere Aggregation umgestellt (Total+Page in einem CTE-Durchlauf), Alert-Zähler werden gesammelt statt als korrelierte Subqueries je Host berechnet, und zusätzliche Indizes für host_key/received_at wurden ergänzt.
+
 ### v1.6.299 (22. Mai 2026)
 
 - **Host-Suche/Filter deutlich beschleunigt**: Sidebar-Filter (Suche, OS, Land, Interessen) werden jetzt lokal auf bereits geladene Hosts angewendet statt bei jeder Änderung `/api/v1/hosts` neu zu laden; die Suche nutzt zusätzlich ein kurzes Debounce für flüssigere Reaktion.

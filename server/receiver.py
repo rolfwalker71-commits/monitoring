@@ -157,6 +157,12 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE INDEX IF NOT EXISTS idx_reports_host_key_received
+            ON reports(COALESCE(NULLIF(host_uid, ''), hostname), received_at_utc)
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS alerts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 hostname TEXT NOT NULL,
@@ -10638,48 +10644,73 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
 
             with sqlite3.connect(DB_PATH) as conn:
-                total_hosts = conn.execute(
-                                        "SELECT COUNT(DISTINCT COALESCE(NULLIF(host_uid, ''), hostname)) FROM reports"
-                ).fetchone()[0]
-
                 rows = conn.execute(
                     """
+                    WITH grouped AS (
+                        SELECT
+                            COALESCE(NULLIF(host_uid, ''), hostname) AS host_key,
+                            MAX(received_at_utc) AS last_seen_utc,
+                            COUNT(*) AS report_count,
+                            MAX(id) AS latest_id
+                        FROM reports
+                        GROUP BY COALESCE(NULLIF(host_uid, ''), hostname)
+                    ),
+                    ordered AS (
+                        SELECT
+                            host_key,
+                            last_seen_utc,
+                            report_count,
+                            latest_id,
+                            COUNT(*) OVER() AS total_hosts
+                        FROM grouped
+                        ORDER BY last_seen_utc DESC
+                        LIMIT ? OFFSET ?
+                    )
                     SELECT
-                                            g.host_key,
-                                            g.last_seen_utc,
-                                            g.report_count,
-                                            COALESCE(r_latest.primary_ip, '') AS latest_primary_ip,
-                                            COALESCE(r_latest.agent_id, '') AS latest_agent_id,
-                                            COALESCE(r_latest.payload_json, '{}') AS latest_payload_json,
-                                            COALESCE(r_latest.hostname, '') AS latest_hostname,
-                                            (
-                                                SELECT COUNT(*)
-                                                FROM alerts a1
-                                                WHERE a1.hostname = r_latest.hostname AND a1.status = 'open'
-                                                    AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a1.hostname AND m.mountpoint = a1.mountpoint)
-                                            ) AS open_alert_count,
-                                            (
-                                                SELECT COUNT(*)
-                                                FROM alerts a2
-                                                WHERE a2.hostname = r_latest.hostname AND a2.status = 'open' AND a2.severity = 'critical'
-                                                    AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = a2.hostname AND m.mountpoint = a2.mountpoint)
-                                            ) AS open_critical_alert_count
-                                        FROM (
-                                            SELECT
-                                                COALESCE(NULLIF(host_uid, ''), hostname) AS host_key,
-                                                MAX(received_at_utc) AS last_seen_utc,
-                                                COUNT(*) AS report_count,
-                                                MAX(id) AS latest_id
-                                            FROM reports
-                                            GROUP BY COALESCE(NULLIF(host_uid, ''), hostname)
-                                            ORDER BY last_seen_utc DESC
-                                            LIMIT ? OFFSET ?
-                                        ) g
-                                        JOIN reports r_latest ON r_latest.id = g.latest_id
-                                        ORDER BY g.last_seen_utc DESC
+                        o.host_key,
+                        o.last_seen_utc,
+                        o.report_count,
+                        COALESCE(r_latest.primary_ip, '') AS latest_primary_ip,
+                        COALESCE(r_latest.agent_id, '') AS latest_agent_id,
+                        COALESCE(r_latest.payload_json, '{}') AS latest_payload_json,
+                        COALESCE(r_latest.hostname, '') AS latest_hostname,
+                        o.total_hosts
+                    FROM ordered o
+                    JOIN reports r_latest ON r_latest.id = o.latest_id
+                    ORDER BY o.last_seen_utc DESC
                     """,
-                                        (limit, offset),
+                    (limit, offset),
                 ).fetchall()
+
+                total_hosts = int(rows[0][7] or 0) if rows else 0
+                if not rows and offset > 0:
+                    total_hosts = int(conn.execute(
+                        "SELECT COUNT(*) FROM (SELECT 1 FROM reports GROUP BY COALESCE(NULLIF(host_uid, ''), hostname))"
+                    ).fetchone()[0] or 0)
+
+                hostnames_for_counts = [str(row[6] or "").strip() for row in rows if str(row[6] or "").strip()]
+                open_counts_by_hostname: dict[str, tuple[int, int]] = {}
+                if hostnames_for_counts:
+                    placeholders = ",".join(["?"] * len(hostnames_for_counts))
+                    alert_rows = conn.execute(
+                        f"""
+                        SELECT a.hostname,
+                               COUNT(*) AS open_alert_count,
+                               SUM(CASE WHEN a.severity = 'critical' THEN 1 ELSE 0 END) AS open_critical_alert_count
+                        FROM alerts a
+                        LEFT JOIN muted_alert_rules m
+                          ON m.hostname = a.hostname AND m.mountpoint = a.mountpoint
+                        WHERE a.status = 'open'
+                          AND m.hostname IS NULL
+                          AND a.hostname IN ({placeholders})
+                        GROUP BY a.hostname
+                        """,
+                        tuple(hostnames_for_counts),
+                    ).fetchall()
+                    open_counts_by_hostname = {
+                        str(row[0] or ""): (int(row[1] or 0), int(row[2] or 0))
+                        for row in alert_rows
+                    }
 
                 settings_rows = conn.execute(
                     """
@@ -10755,8 +10786,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "delivery_mode": str(latest_payload.get("delivery_mode", "live") or "live"),
                         "is_delayed": bool(latest_payload.get("is_delayed", False)),
                         "queue_depth": payload_int(latest_payload, "queue_depth", 0),
-                        "open_alert_count": int(row[7] or 0),
-                        "open_critical_alert_count": int(row[8] or 0),
+                        "open_alert_count": int(open_counts_by_hostname.get(hostname, (0, 0))[0]),
+                        "open_critical_alert_count": int(open_counts_by_hostname.get(hostname, (0, 0))[1]),
                         "os": str(latest_payload.get("os", "")),
                         "country_code": country_code,
                         "sap_release": release_info["sap_release"],
