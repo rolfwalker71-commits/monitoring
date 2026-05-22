@@ -584,6 +584,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.309 (22. Mai 2026)
+
+- **Hostlisten-Interaktion auf Event-Delegation umgestellt**: Statt pro Hostkarte bei jedem Render mehrere Listener neu zu binden, nutzt die Sidebar jetzt zentrale delegierte Handler. Das reduziert den Setup-Overhead bei vielen Hosts deutlich und beschleunigt die Reaktion der Seitenliste spuerbar.
+- **Hostlisten-Seitengroesse reduziert**: Standard-Limit fuer `/api/v1/hosts` im Frontend wurde von 500 auf 200 gesetzt, um Initial-Load, JSON-Verarbeitung und DOM-Aufbau zu entlasten.
+
 ### v1.6.308 (22. Mai 2026)
 
 - **Startrendering der Seitenliste entkoppelt**: Beim Dashboard-Refresh wird die Host-/Seitenliste jetzt zuerst geladen und gerendert; die drei schweren Global-Kacheln (Globale Alerts, Kritische Trends, Inaktive Hosts) werden erst danach asynchron nachgezogen.

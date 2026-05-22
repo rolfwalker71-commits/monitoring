@@ -93,7 +93,7 @@ const hostLicenseHoverCache = new Map();
 const SESSION_REFRESH_INTERVAL_SECONDS = 240;
 
 const state = {
-  hostLimit: 500,
+  hostLimit: 200,
   hostOffset: 0,
   reportLimit: 1,
   reportOffset: 0,
@@ -185,6 +185,7 @@ const state = {
   backupAutomationLoaded: false,
   mutedAlertsSignature: "",
   deferredDashboardTasksInFlight: false,
+  hostListDelegatedWired: false,
   // Add a new user type "readOnly" to the state
   userType: "default", // Possible values: "default", "readOnly", "admin"
 };
@@ -9093,55 +9094,43 @@ async function exportSelectedHostReportsJson() {
 
 function wireHostListInteractions() {
   const hostList = document.getElementById("hostList");
-
-  for (const item of hostList.querySelectorAll(".host-item")) {
-    item.addEventListener("click", () => {
-      const hostname = item.getAttribute("data-host") || "";
-      const hostUid = item.getAttribute("data-host-uid") || hostname;
-      if (!hostname || (hostname === state.selectedHost && hostUid === state.selectedHostUid)) {
-        return;
-      }
-
-      const previousScrollTop = hostList.scrollTop;
-      state.selectedHost = hostname;
-      state.selectedHostUid = hostUid;
-      state.selectedDisplayName = item.querySelector("strong")?.textContent || hostname;
-      state.reportOffset = 0;
-      renderHosts(state.hosts);
-      hostList.scrollTop = previousScrollTop;
-      loadReportsForHost();
-      loadAnalysisForHost();
-      loadAlertsForHost();
-      loadDatabaseLifecycleForHost();
-      loadConfigChangelogForHost();
-      loadAndRenderCustomerNotificationPanel(hostname);
-    });
-
-    item.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") {
-        return;
-      }
-      event.preventDefault();
-      item.click();
-    });
-
-    item.addEventListener("contextmenu", (event) => {
-      const hostname = item.getAttribute("data-host") || "";
-      if (!hostname) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      openHostContextMenu(hostname, event.clientX, event.clientY);
-    });
+  if (!hostList || state.hostListDelegatedWired) {
+    return;
   }
 
-  wireHostActionButtons(hostList);
-  wireHostLicenseInfoBadges(hostList);
+  const selectHostFromItem = (item) => {
+    if (!item) {
+      return;
+    }
+    const hostname = item.getAttribute("data-host") || "";
+    const hostUid = item.getAttribute("data-host-uid") || hostname;
+    if (!hostname || (hostname === state.selectedHost && hostUid === state.selectedHostUid)) {
+      return;
+    }
 
-  const hiddenToggle = hostList.querySelector("#hiddenHostsToggleButton");
-  if (hiddenToggle) {
-    hiddenToggle.addEventListener("click", (event) => {
+    const previousScrollTop = hostList.scrollTop;
+    state.selectedHost = hostname;
+    state.selectedHostUid = hostUid;
+    state.selectedDisplayName = item.querySelector("strong")?.textContent || hostname;
+    state.reportOffset = 0;
+    renderHosts(state.hosts);
+    hostList.scrollTop = previousScrollTop;
+    loadReportsForHost();
+    loadAnalysisForHost();
+    loadAlertsForHost();
+    loadDatabaseLifecycleForHost();
+    loadConfigChangelogForHost();
+    loadAndRenderCustomerNotificationPanel(hostname);
+  };
+
+  hostList.addEventListener("click", async (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) {
+      return;
+    }
+
+    const hiddenToggle = target.closest("#hiddenHostsToggleButton");
+    if (hiddenToggle) {
       event.preventDefault();
       event.stopPropagation();
       state.hiddenHostsCollapsed = !state.hiddenHostsCollapsed;
@@ -9151,51 +9140,147 @@ function wireHostListInteractions() {
       }
       hiddenToggle.textContent = hiddenHostsToggleLabel(state.hiddenHostsCollapsed);
       hiddenToggle.setAttribute("aria-expanded", state.hiddenHostsCollapsed ? "false" : "true");
-    });
-  }
+      return;
+    }
 
-  for (const button of hostList.querySelectorAll("[data-action='toggle-muted-list']")) {
-    button.addEventListener("click", (event) => {
+    const toggleMutedButton = target.closest("[data-action='toggle-muted-list']");
+    if (toggleMutedButton) {
       event.preventDefault();
       event.stopPropagation();
-
-      const hostnameEnc = button.getAttribute("data-host-enc") || "";
+      const hostnameEnc = toggleMutedButton.getAttribute("data-host-enc") || "";
       const hostname = decodeURIComponent(hostnameEnc);
       if (!hostname) {
         return;
       }
-
       const currentlyCollapsed = state.hiddenHostMutedAlertsCollapsed[hostname] !== false;
       const nextCollapsed = !currentlyCollapsed;
       state.hiddenHostMutedAlertsCollapsed[hostname] = nextCollapsed;
-
       const body = hostList.querySelector(`[data-muted-body-enc='${hostnameEnc}']`);
       if (body) {
         body.classList.toggle("hidden", nextCollapsed);
       }
-      button.textContent = hiddenHostMutedAlertsToggleLabel(nextCollapsed);
-      button.setAttribute("aria-expanded", nextCollapsed ? "false" : "true");
-    });
-  }
+      toggleMutedButton.textContent = hiddenHostMutedAlertsToggleLabel(nextCollapsed);
+      toggleMutedButton.setAttribute("aria-expanded", nextCollapsed ? "false" : "true");
+      return;
+    }
 
-  for (const button of hostList.querySelectorAll("[data-action='unmute-alert']")) {
-    button.addEventListener("click", async (event) => {
+    const unmuteButton = target.closest("[data-action='unmute-alert']");
+    if (unmuteButton) {
       event.preventDefault();
       event.stopPropagation();
-
-      const hostname = decodeURIComponent(button.getAttribute("data-host-enc") || "");
-      const mountpoint = decodeURIComponent(button.getAttribute("data-mount-enc") || "");
+      const hostname = decodeURIComponent(unmuteButton.getAttribute("data-host-enc") || "");
+      const mountpoint = decodeURIComponent(unmuteButton.getAttribute("data-mount-enc") || "");
       if (!hostname || !mountpoint) {
         return;
       }
-
       try {
         await toggleAlertMute(hostname, mountpoint, true);
       } catch (error) {
         window.alert(`Alert konnte nicht reaktiviert werden: ${error.message}`);
       }
-    });
-  }
+      return;
+    }
+
+    const miniAction = target.closest(".host-mini-action[data-action]");
+    if (miniAction) {
+      event.preventDefault();
+      event.stopPropagation();
+      const hostname = miniAction.getAttribute("data-host") || "";
+      const action = miniAction.getAttribute("data-action") || "";
+      const current = miniAction.getAttribute("data-current") === "1";
+      if (!hostname || !action) {
+        return;
+      }
+      try {
+        if (action === "favorite") {
+          await saveHostSettings(hostname, { is_favorite: !current });
+        } else if (action === "hidden") {
+          await saveHostSettings(hostname, { is_hidden: !current });
+        }
+        await loadHosts();
+        await loadReportsForHost();
+        await loadAnalysisForHost();
+        await loadAlertsForHost();
+      } catch (error) {
+        window.alert(`Host-Einstellung konnte nicht gespeichert werden: ${error.message}`);
+      }
+      return;
+    }
+
+    const hostItem = target.closest(".host-item");
+    if (!hostItem) {
+      return;
+    }
+
+    if (target.closest(".host-mini-action, .host-license-info-badge, [data-action='toggle-muted-list'], [data-action='unmute-alert']")) {
+      return;
+    }
+
+    selectHostFromItem(hostItem);
+  });
+
+  hostList.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    const target = event.target instanceof Element ? event.target : null;
+    const hostItem = target ? target.closest(".host-item") : null;
+    if (!hostItem) {
+      return;
+    }
+    event.preventDefault();
+    selectHostFromItem(hostItem);
+  });
+
+  hostList.addEventListener("contextmenu", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const hostItem = target ? target.closest(".host-item") : null;
+    if (!hostItem) {
+      return;
+    }
+    const hostname = hostItem.getAttribute("data-host") || "";
+    if (!hostname) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    openHostContextMenu(hostname, event.clientX, event.clientY);
+  });
+
+  hostList.addEventListener("mouseover", (event) => {
+    const target = event.target instanceof Element ? event.target.closest(".host-license-info-badge") : null;
+    if (!target) {
+      return;
+    }
+    const hostAttr = asText(target.getAttribute("data-host-license-host"), "").trim();
+    const uidAttr = asText(target.getAttribute("data-host-license-uid"), "").trim();
+    if (!hostAttr) {
+      return;
+    }
+    void showHostLicenseHoverPopup(target, hostAttr, uidAttr);
+  });
+
+  hostList.addEventListener("mousemove", (event) => {
+    const target = event.target instanceof Element ? event.target.closest(".host-license-info-badge") : null;
+    if (!target) {
+      return;
+    }
+    positionHostLicenseHoverPopup(target);
+  });
+
+  hostList.addEventListener("mouseout", (event) => {
+    const fromBadge = event.target instanceof Element ? event.target.closest(".host-license-info-badge") : null;
+    if (!fromBadge) {
+      return;
+    }
+    const related = event.relatedTarget instanceof Element ? event.relatedTarget.closest(".host-license-info-badge") : null;
+    if (related === fromBadge) {
+      return;
+    }
+    scheduleHideHostLicenseHoverPopup();
+  });
+
+  state.hostListDelegatedWired = true;
 }
 
 function renderHosts(hosts) {
