@@ -584,6 +584,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.317 (22. Mai 2026)
+
+- **Changelog-Feldnamen fuer HANA-Tenants bereinigt**: Das Praefix `tenant` wird in den AddOn-Feldbezeichnungen entfernt.
+- **Trennzeichen normalisiert**: Doppelte Doppelpunkte `::` in den HANA-AddOn-Feldnamen werden als einzelner Doppelpunkt `:` dargestellt.
+
 ### v1.6.316 (22. Mai 2026)
 
 - **Host-Bezeichnung jetzt pro Host-Karte (host_uid) moeglich**: Display-Name-Overrides koennen jetzt UID-spezifisch gespeichert werden, statt nur hostname-basiert.

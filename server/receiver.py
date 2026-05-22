@@ -5525,6 +5525,10 @@ def _describe_sap_addon_key(addon_name: str) -> tuple[str, str]:
     elif addon_name.startswith("hana_sari::"):
         plain_name = addon_name.split("::", 1)[1]
         label_source = "HANA Legacy"
+
+    if plain_name:
+        plain_name = re.sub(r"(?i)^tenant", "", plain_name)
+        plain_name = plain_name.replace("::", ":").lstrip(":")
     return label_source, plain_name
 
 
