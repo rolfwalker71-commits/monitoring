@@ -138,6 +138,8 @@ const state = {
   globalOpenAlertsCount: 0,
   criticalTrendsCount: 0,
   inactiveHostsCount: 0,
+  dbReportsTotal: 0,
+  dbTotalFileBytes: null,
   authUser: "",
   authDisplayName: "",
   isAuthenticated: false,
@@ -781,6 +783,7 @@ async function refreshDashboard(options = {}) {
           loadGlobalAlertsOverview({ updateList: shouldRefreshGlobalAlertsList }),
           loadCriticalTrends({ updateList: false }),
           loadInactiveHosts({ updateList: false }),
+          loadHeaderDatabaseKpis(),
         ])
           .then(() => {
             updateSummaryStrip();
@@ -9059,6 +9062,25 @@ async function loadAdminDatabaseStats() {
   return stats;
 }
 
+async function loadHeaderDatabaseKpis() {
+  const response = await fetch("/api/v1/dashboard-db-kpis", {
+    method: "GET",
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  const stats = data && typeof data.stats === "object" ? data.stats : {};
+  const reportsTotal = Number(stats.reports_total || 0);
+  const totalFileBytes = Number(stats.total_file_bytes);
+  state.dbReportsTotal = Number.isFinite(reportsTotal) && reportsTotal >= 0 ? reportsTotal : 0;
+  state.dbTotalFileBytes = Number.isFinite(totalFileBytes) && totalFileBytes >= 0 ? totalFileBytes : null;
+  updateHeaderStatChips();
+  return stats;
+}
+
 async function runAdminDatabaseVacuum() {
   const response = await fetch("/api/v1/admin/database-vacuum", {
     method: "POST",
@@ -11575,6 +11597,10 @@ function updateHeaderStatChips() {
   const alertCount = document.getElementById("headerAlertCount");
   const inactiveChip = document.getElementById("headerInactiveChip");
   const inactiveCount = document.getElementById("headerInactiveCount");
+  const dbReportsChip = document.getElementById("headerDbReportsChip");
+  const dbReportsCount = document.getElementById("headerDbReportsCount");
+  const dbSizeChip = document.getElementById("headerDbSizeChip");
+  const dbSizeValue = document.getElementById("headerDbSizeValue");
   const licenseChip = document.getElementById("headerLicenseChip");
   const licenseHw = document.getElementById("headerLicenseHw");
   const licenseInst = document.getElementById("headerLicenseInst");
@@ -11591,6 +11617,14 @@ function updateHeaderStatChips() {
   if (inactiveChip && inactiveCount) {
     inactiveCount.textContent = String(state.inactiveHostsCount);
     inactiveChip.classList.remove("hidden");
+  }
+  if (dbReportsChip && dbReportsCount) {
+    dbReportsCount.textContent = Number(state.dbReportsTotal || 0).toLocaleString("de-CH");
+    dbReportsChip.classList.remove("hidden");
+  }
+  if (dbSizeChip && dbSizeValue) {
+    dbSizeValue.textContent = state.dbTotalFileBytes === null ? "-" : formatBytes(state.dbTotalFileBytes);
+    dbSizeChip.classList.remove("hidden");
   }
   if (licenseChip) {
     const payload = state.currentReport && typeof state.currentReport.payload === "object" ? state.currentReport.payload : {};

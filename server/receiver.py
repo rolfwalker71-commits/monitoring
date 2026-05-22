@@ -11001,6 +11001,23 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, {"status": "ok", **payload})
             return
 
+        if parsed.path == "/api/v1/dashboard-db-kpis":
+            if not self._require_web_session():
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                stats = collect_database_maintenance_stats(conn)
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "stats": {
+                        "reports_total": int(stats.get("reports_total", 0) or 0),
+                        "total_file_bytes": int(stats.get("total_file_bytes", 0) or 0),
+                    },
+                },
+            )
+            return
+
         if parsed.path == "/api/v1/admin/changelog-rebuild/jobs":
             if not self._require_admin_session():
                 return
