@@ -6820,6 +6820,17 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
 }
 
+.sap-hana-databases-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.sap-hana-databases-scroll {
+  max-height: min(60vh, 720px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 .sap-b1-grid {
   display: grid;
   gap: 10px;

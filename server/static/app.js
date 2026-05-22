@@ -6731,7 +6731,7 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
         "auth_failed": "Authentifizierung fehlgeschlagen",
         "query_failed": "Abfrage fehlgeschlagen"
       }[reason] || (reason || "HANA Datenbank-Scan nicht verfügbar");
-      parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Datenbanken</h4>${discoveryHtml}<p class="muted">${escapeHtml(reasonText)}${error ? `: ${escapeHtml(error)}` : ""}</p></section>`);
+      parts.push(`<section class="detail-card sap-hana-databases-card"><h4>🔶 SAP HANA Datenbanken</h4><div class="sap-hana-databases-scroll">${discoveryHtml}<p class="muted">${escapeHtml(reasonText)}${error ? `: ${escapeHtml(error)}` : ""}</p></div></section>`);
     } else {
       const tenantViews = collectHanaDbTenantViews(hanaInfo);
       const renderFilteredDatabases = (databases) => {
@@ -6789,10 +6789,12 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
       }).join("");
 
       parts.push(`
-        <section class="detail-card">
+        <section class="detail-card sap-hana-databases-card">
           <h4>🔶 SAP HANA Datenbanken</h4>
-          ${discoveryHtml}
-          ${tenantBlocks || '<p class="muted">Keine Eintraege gefunden.</p>'}
+          <div class="sap-hana-databases-scroll">
+            ${discoveryHtml}
+            ${tenantBlocks || '<p class="muted">Keine Eintraege gefunden.</p>'}
+          </div>
         </section>`);
     }
   }
