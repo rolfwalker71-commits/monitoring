@@ -10094,9 +10094,13 @@ async function loadAlertsForHost() {
 
   try {
     const hostNameParam = encodeURIComponent(state.selectedHost);
+    const hostUidParam = encodeURIComponent(state.selectedHostUid || "");
+    const hostQuery = state.selectedHostUid
+      ? `host_uid=${hostUidParam}`
+      : `hostname=${hostNameParam}`;
     const [summaryResp, listResp] = await Promise.all([
-      fetch(`/api/v1/alerts-summary?hostname=${hostNameParam}`),
-      fetch(`/api/v1/alerts?hostname=${hostNameParam}&status=open&limit=50&offset=0`),
+      fetch(`/api/v1/alerts-summary?${hostQuery}`),
+      fetch(`/api/v1/alerts?${hostQuery}&status=open&limit=50&offset=0`),
     ]);
 
     if (!summaryResp.ok) {
@@ -10493,6 +10497,8 @@ function renderInactiveHosts(data) {
 
   const cards = inactive_hosts.map((host) => {
     const displayName = host.display_name || host.hostname;
+    const hostUid = asText(host.host_uid || host.hostname, "").trim();
+    const hostUidShort = hostUid.length > 34 ? `${hostUid.slice(0, 31)}...` : hostUid;
     const customerNameRaw = asText(host.customer_name || "").trim();
     const hasRealCustomerName = customerNameRaw && customerNameRaw !== "-" && customerNameRaw !== "--";
     const displayTitle = hasRealCustomerName ? `${customerNameRaw} · ${displayName}` : displayName;
@@ -10522,6 +10528,7 @@ function renderInactiveHosts(data) {
           </div>
           <div class="ih-host-details">
             <span class="ih-hostname">${escapeHtml(displayTitle)}${showHostname ? ` <span class="ih-hostname-sub">(${escapeHtml(host.hostname)})</span>` : ""}</span>
+            ${hostUid ? `<div class="ih-hostname-sub" title="${escapeHtml(hostUid)}">ID: ${escapeHtml(hostUidShort)}</div>` : ""}
             <div class="ih-meta-row">
               <span class="ih-meta-item">Letzter Kontakt: <span class="ih-last-seen">${escapeHtml(lastSeenText)}</span></span>
               <span class="ih-meta-item"><span class="ih-hours-badge ${hoursClass}">${host.hours_inactive.toFixed(1)}h inaktiv</span></span>
@@ -13697,6 +13704,7 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
   const hostUid = escapeHtml(hostUidRaw);
   const shortHostname = escapeHtml(formatShortHostname(hostnameRaw));
   const hostTitle = escapeHtml(String(host.display_name || host.hostname || "-").trim() || "-");
+  const hostUidShort = escapeHtml(hostUidRaw.length > 32 ? `${hostUidRaw.slice(0, 29)}...` : hostUidRaw);
   const osEmoji = getOsEmoji(osName);
   const osRelease = parseOsRelease(host.payload || {}, osName);
   const osReleaseDisplay = escapeHtml(osRelease || String(osName || "-").trim() || "-");
@@ -13725,6 +13733,7 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
       <td class="so-host-cell">
         <div class="so-host-title">${hostTitle}</div>
         <div class="so-host-short">${shortHostname}</div>
+        <div class="so-host-short" title="${hostUid}">ID: ${hostUidShort}</div>
         ${addOnSection ? `<div class="so-host-addons">${addOnSection}</div>` : ""}
       </td>
       <td>
@@ -13817,7 +13826,7 @@ async function loadSystemOverview() {
       });
     });
 
-    const uniqueHostCount = new Set(filteredHostEntries.map((entry) => String(entry.host?.hostname || ""))).size;
+    const uniqueHostCount = new Set(filteredHostEntries.map((entry) => String(resolveHostIdentity(entry.host) || ""))).size;
     let displayedHostCount = uniqueHostCount;
     let treeHtml = "";
 
@@ -13855,7 +13864,7 @@ async function loadSystemOverview() {
             customerMap.set(customerKey, []);
           }
           customerMap.get(customerKey).push(entry);
-          displayedHostnames.add(String(entry.host?.hostname || ""));
+          displayedHostnames.add(String(resolveHostIdentity(entry.host) || ""));
         });
       });
 

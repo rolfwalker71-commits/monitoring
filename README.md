@@ -584,6 +584,13 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.321 (22. Mai 2026)
+
+- **Systemansicht gegen Host-Merge gehaertet**: `/api/v1/system-overview` aggregiert jetzt ueber den kanonischen Host-Key (`host_uid`/Legacy-Key) statt nur ueber `hostname`, damit gleichnamige Hosts separat erscheinen.
+- **Inaktive Hosts host_uid-spezifisch**: Die Inaktiv-Liste basiert jetzt ebenfalls auf dem kanonischen Host-Key und zeigt zusaetzlich die Host-ID zur eindeutigen Zuordnung.
+- **Backup-/Customer-Overview auf Host-Key umgestellt**: Beide Uebersichten nutzen jetzt die neuesten Reports pro Host-Key; host_uid-spezifische Displaynamen werden bevorzugt.
+- **Alerts im Host-Kontext host_uid-filterbar**: `alerts` und `alerts-summary` akzeptieren jetzt `host_uid`; die UI verwendet bei ausgewaehltem Host bevorzugt diesen Filter statt nur `hostname`.
+
 ### v1.6.320 (22. Mai 2026)
 
 - **Doppelte Karten: Loeschen jetzt host_uid-spezifisch**: Der Kontextmenue-Delete sendet jetzt `host_uid` mit, damit exakt die ausgewaehlte Karte geloescht wird.
