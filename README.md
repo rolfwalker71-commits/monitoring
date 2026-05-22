@@ -584,6 +584,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.294 (22. Mai 2026)
+
+- **Host-ID im UI sichtbar**: Beim ausgewählten Host wird die technische Host-ID (`host_uid`) nun als eigener Chip angezeigt, damit Kollisionen/Zuordnungen direkt im Dashboard nachvollziehbar sind.
+
 ### v1.6.293 (22. Mai 2026)
 
 - **Host-Identität entkoppelt (host_uid)**: Linux- und Windows-Agent senden jetzt zusätzlich eine stabile `host_uid` (mit Fallback-Strategien), damit Hosts mit identischem Hostname/IP sicher getrennt bleiben.

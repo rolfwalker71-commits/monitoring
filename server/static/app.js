@@ -7937,6 +7937,8 @@ function renderHeaderFirstRowControls(host) {
   }
 
   const reportCount = Number(host.report_count || 0).toLocaleString("de-DE");
+  const hostIdentity = resolveHostIdentity(host);
+  const hostIdentityShort = hostIdentity.length > 38 ? `${hostIdentity.slice(0, 35)}...` : hostIdentity;
   const environmentType = asText(host.environment_type, "").trim().toLowerCase();
   const envLabel = environmentType === "prod"
     ? "Prod."
@@ -7950,6 +7952,7 @@ function renderHeaderFirstRowControls(host) {
   return `
     ${renderApiKeyChip(host)}
     ${envChip}
+    <span class="selected-host-meta-chip" title="Host-ID (host_uid)">🆔 <span title="${escapeHtml(hostIdentity)}">${escapeHtml(hostIdentityShort)}</span></span>
     <span class="selected-host-meta-chip" title="Gesendete Meldungen">📦 ${reportCount}</span>
   `;
 }
