@@ -5594,13 +5594,13 @@ function renderSapB1ExtensionsSection(payload) {
         : "";
 
       return `
-        <details class="sap-b1-raw-details sap-b1-sub-details" open>
+        <details class="sap-b1-raw-details sap-b1-sub-details">
           <summary class="sap-b1-raw-summary">${escapeHtml(tenantHeader)} (${lwCount + lgCount})</summary>
-          <details class="sap-b1-raw-details sap-b1-sub-details" open>
+            <details class="sap-b1-raw-details sap-b1-sub-details">
             <summary class="sap-b1-raw-summary">Lightweight Extensions (HANA) (${lwCount})</summary>
             ${lwContent}
           </details>
-          <details class="sap-b1-raw-details sap-b1-sub-details" open>
+            <details class="sap-b1-raw-details sap-b1-sub-details">
             <summary class="sap-b1-raw-summary">Legacy AddOns (HANA) (${lgCount})</summary>
             ${lgContent}
           </details>
@@ -5613,17 +5613,17 @@ function renderSapB1ExtensionsSection(payload) {
 
   return `
     ${showSql ? `
-    <details class="sap-b1-raw-details sap-b1-sub-details" open>
+    <details class="sap-b1-raw-details sap-b1-sub-details">
       <summary class="sap-b1-raw-summary">Lightweight Extensions (SQL) (${extCount})</summary>
       ${extContent}
     </details>
-    <details class="sap-b1-raw-details sap-b1-sub-details" open>
+    <details class="sap-b1-raw-details sap-b1-sub-details">
       <summary class="sap-b1-raw-summary">Legacy AddOns (SQL) (${sariCount})</summary>
       ${sariContent}
     </details>
     ` : ""}
     ${showHana && hanaAddons ? `
-    <details class="sap-b1-raw-details sap-b1-sub-details" open>
+    <details class="sap-b1-raw-details sap-b1-sub-details">
       <summary class="sap-b1-raw-summary">HANA AddOns (${hanaAddonCount})</summary>
       ${hanaTenantContent || '<p class="muted">Keine HANA AddOn-Daten vorhanden.</p>'}
     </details>
@@ -5750,7 +5750,7 @@ function renderHanaMultitenantDiscoverySummary(discovery) {
     : "Erkannte Tenants: keine";
 
   return `
-    <details class="sap-b1-raw-details sap-b1-sub-details" open>
+    <details class="sap-b1-raw-details sap-b1-sub-details">
       <summary class="sap-b1-raw-summary">${title} (${tenantLabels.length})</summary>
       <p class="muted">${escapeHtml(reasonText || "Status unbekannt")}</p>
       <p class="muted">${details}</p>
@@ -5956,44 +5956,46 @@ function renderSapB1CombinedCard(payload) {
     <section class="detail-card sap-b1-card sap-b1-combined-card">
       <h4>SAP B1</h4>
 
-      <details class="sap-b1-raw-details" open>
-        <summary class="sap-b1-raw-summary">AddOns</summary>
-        ${renderSapB1ExtensionsSection(payload)}
-      </details>
-
-      ${isLinux ? `
-      <details class="sap-b1-raw-details">
-        <summary class="sap-b1-raw-summary">SAP Business One Files / Ordner</summary>
-        ${filesContent}
-      </details>
-      ` : ""}
-
-      ${sapB1RawOutputDetails}
-
-      ${isLinux ? `
-      <details class="sap-b1-raw-details">
-        <summary class="sap-b1-raw-summary">HANA Versions-Scan</summary>
-        ${hanaInfoRows}
-        ${hanaRawOutput ? renderTerminalViewer(hanaRawOutput, "Roh-Output") : ""}
-      </details>
-      ` : ""}
-
-        ${isWindows ? `
+      <div class="sap-b1-scroll-region">
         <details class="sap-b1-raw-details">
-          <summary class="sap-b1-raw-summary">Harvest SQL-Benutzer Status</summary>
-          ${renderHarvestStatusSection(payload)}
+          <summary class="sap-b1-raw-summary">AddOns</summary>
+          ${renderSapB1ExtensionsSection(payload)}
+        </details>
+
+        ${isLinux ? `
+        <details class="sap-b1-raw-details">
+          <summary class="sap-b1-raw-summary">SAP Business One Files / Ordner</summary>
+          ${filesContent}
         </details>
         ` : ""}
 
-      ${renderSapLicenseInfoSection(payload)}
+        ${sapB1RawOutputDetails}
 
-      <details class="sap-b1-raw-details">
-        <summary class="sap-b1-raw-summary">
-          SAP B1 Version-Referenztabelle (${SAP_B1_VERSION_MAP.size} Einträge) 📋
-          <button class="sap-vmap-copy-btn" type="button" title="In Zwischenablage kopieren" data-copy="${escapeHtml(copyText)}">📋 Kopieren</button>
-        </summary>
-        ${renderSapVersionMapTerminalTable(sortedEntries, `${SAP_B1_VERSION_MAP.size} Referenzeintraege`)}
-      </details>
+        ${isLinux ? `
+        <details class="sap-b1-raw-details">
+          <summary class="sap-b1-raw-summary">HANA Versions-Scan</summary>
+          ${hanaInfoRows}
+          ${hanaRawOutput ? renderTerminalViewer(hanaRawOutput, "Roh-Output") : ""}
+        </details>
+        ` : ""}
+
+          ${isWindows ? `
+          <details class="sap-b1-raw-details">
+            <summary class="sap-b1-raw-summary">Harvest SQL-Benutzer Status</summary>
+            ${renderHarvestStatusSection(payload)}
+          </details>
+          ` : ""}
+
+        ${renderSapLicenseInfoSection(payload)}
+
+        <details class="sap-b1-raw-details">
+          <summary class="sap-b1-raw-summary">
+            SAP B1 Version-Referenztabelle (${SAP_B1_VERSION_MAP.size} Einträge) 📋
+            <button class="sap-vmap-copy-btn" type="button" title="In Zwischenablage kopieren" data-copy="${escapeHtml(copyText)}">📋 Kopieren</button>
+          </summary>
+          ${renderSapVersionMapTerminalTable(sortedEntries, `${SAP_B1_VERSION_MAP.size} Referenzeintraege`)}
+        </details>
+      </div>
     </section>
   `;
 }
@@ -6766,7 +6768,7 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
         }).join("");
 
         return `
-          <details class="sap-b1-raw-details sap-b1-sub-details" open>
+          <details class="sap-b1-raw-details sap-b1-sub-details">
             <summary class="sap-b1-raw-summary">${escapeHtml(tenantMeta.join(" | "))} (${databases.length})</summary>
             <div class="table-wrap">
               <table class="db-table hana-db-table">
