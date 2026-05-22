@@ -584,6 +584,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.303 (22. Mai 2026)
+
+- **HANA-Multitenant-Erkennung fuer alphanumerische Tenant-IDs korrigiert**: Tenant-Ordner unter `/usr/sap/<SID>/SYS/global/hdb/custom/config` werden jetzt als `DB_XXX` mit beliebigen drei alphanumerischen Zeichen erkannt, statt nur rein numerische Namen wie `DB_123` zu akzeptieren.
+
 ### v1.6.302 (22. Mai 2026)
 
 - **Multitenant-Discovery explizit im Payload**: Linux-Agent sendet nun zusaetzlich `hana_multitenant_discovery` mit erkannten Tenant-IDs/Ports, Tenant-Anzahl, Port-Abdeckung und Discovery-Status (`success`/`partial_missing_port`/`none_found`).

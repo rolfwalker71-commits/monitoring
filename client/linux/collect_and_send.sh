@@ -1093,7 +1093,7 @@ collect_hana_multitenant_targets() {
     [[ -z "$tenant_dir" ]] && continue
     tenant_name="$(basename "$tenant_dir")"
     tenant_id="${tenant_name#DB_}"
-    [[ "$tenant_id" =~ ^[0-9]{3}$ ]] || continue
+    [[ "$tenant_id" =~ ^[A-Za-z0-9]{3}$ ]] || continue
 
     ini_path="$tenant_dir/indexserver.ini"
     if [[ -f "$ini_path" ]]; then
@@ -1102,7 +1102,7 @@ collect_hana_multitenant_targets() {
     fi
 
     printf '%s|%s\n' "$tenant_id" "$tenant_port"
-  done < <(find "$config_root" -mindepth 1 -maxdepth 1 -type d -name 'DB_[0-9][0-9][0-9]' 2>/dev/null | sort)
+  done < <(find "$config_root" -mindepth 1 -maxdepth 1 -type d -name 'DB_???' 2>/dev/null | sort)
 }
 
 collect_hana_multitenant_discovery_json() {
