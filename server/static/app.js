@@ -5682,7 +5682,7 @@ function collectHanaDbTenantViews(hanaInfo) {
           tenantId: asText(tenantRow.tenant_id, "").trim(),
           tenantPort: tenantPortRaw || parsePortFromTarget(targetValue),
           target: targetValue,
-          schemas: Array.isArray(tenantResult.schemas) ? tenantResult.schemas : [],
+          databases: Array.isArray(tenantResult.databases) ? tenantResult.databases : [],
           available: tenantResult.available === true,
           reason: asText(tenantResult.reason, ""),
           error: asText(tenantResult.error, "")
@@ -5694,7 +5694,7 @@ function collectHanaDbTenantViews(hanaInfo) {
     tenantId: "",
     tenantPort: parsePortFromTarget(asText(hanaInfo.target, "")),
     target: asText(hanaInfo.target, ""),
-    schemas: Array.isArray(hanaInfo.schemas) ? hanaInfo.schemas : [],
+    databases: Array.isArray(hanaInfo.databases) ? hanaInfo.databases : [],
     available: hanaInfo.available === true,
     reason: asText(hanaInfo.reason, ""),
     error: asText(hanaInfo.error, "")
@@ -6703,7 +6703,7 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
     }
   }
 
-  // ---- HANA DB (schema memory usage) ----
+  // ---- HANA DB (company databases) ----
   if (hanaInfo && typeof hanaInfo === "object") {
     const discoveryHtml = renderHanaMultitenantDiscoverySummary(hanaDiscovery);
     if (hanaInfo.available !== true && !Array.isArray(hanaInfo.tenants)) {
@@ -6715,58 +6715,53 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
         "missing_hdbsql": "hdbsql nicht gefunden",
         "auth_failed": "Authentifizierung fehlgeschlagen",
         "query_failed": "Abfrage fehlgeschlagen"
-      }[reason] || (reason || "HANA Schema-Scan nicht verfügbar");
-      parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Schemas</h4>${discoveryHtml}<p class="muted">${escapeHtml(reasonText)}${error ? `: ${escapeHtml(error)}` : ""}</p></section>`);
+      }[reason] || (reason || "HANA Datenbank-Scan nicht verfügbar");
+      parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Datenbanken</h4>${discoveryHtml}<p class="muted">${escapeHtml(reasonText)}${error ? `: ${escapeHtml(error)}` : ""}</p></section>`);
     } else {
       const tenantViews = collectHanaDbTenantViews(hanaInfo);
-      const renderFilteredSchemas = (schemas) => {
-        return (Array.isArray(schemas) ? schemas : []).filter((entry) => {
+      const renderFilteredDatabases = (databases) => {
+        return (Array.isArray(databases) ? databases : []).filter((entry) => {
           const name = asText(entry?.name, "").trim();
-          if (!name) return false;
-          const upperName = name.toUpperCase();
-          if (name.startsWith("_")) return false;
-          if (upperName.startsWith("SAP")) return false;
-          if (upperName === "SLDDATA" || upperName === "SBOCOMMON" || upperName === "LANDSCAPE") return false;
-          const memoryGb = Number(entry?.memory_gb || 0);
-          return Number.isFinite(memoryGb) && memoryGb > 0;
+          return !!name;
         });
       };
 
       const tenantBlocks = tenantViews.map((tenantView) => {
-        const schemas = renderFilteredSchemas(tenantView.schemas);
+        const databases = renderFilteredDatabases(tenantView.databases);
         const tenantLabel = tenantView.tenantId ? `Tenant ${tenantView.tenantId}` : "SystemDB";
         const tenantMeta = [tenantLabel];
         if (tenantView.tenantPort) tenantMeta.push(`Port ${tenantView.tenantPort}`);
         if (tenantView.target) tenantMeta.push(`Target ${tenantView.target}`);
 
-        if (schemas.length === 0) {
+        if (databases.length === 0) {
           const tenantStatus = tenantView.error
             ? ` (${escapeHtml(tenantView.error)})`
             : (tenantView.reason ? ` (${escapeHtml(tenantView.reason)})` : "");
           return `<p class="muted">${escapeHtml(tenantMeta.join(" | "))}: Keine Eintraege${tenantStatus}.</p>`;
         }
 
-        const rows = schemas.map((entry) => {
+        const rows = databases.map((entry) => {
           const name = asText(entry.name, "-");
-          const memoryGb = Number(entry.memory_gb || 0);
-          const memoryText = Number.isFinite(memoryGb) ? `${memoryGb.toFixed(2)} GB` : "-";
-          const isProject = /_P(\d+)?$/i.test(name) || /PROD/i.test(name);
+          const companyName = asText(entry.company_name, "-");
+          const localization = asText(entry.localization, "-");
           return `
             <tr>
-              <td${isProject ? ' style="font-weight:bold"' : ''}>${escapeHtml(name)}</td>
-              <td class="db-size-cell"${isProject ? ' style="font-weight:bold"' : ''}>${escapeHtml(memoryText)}</td>
+              <td>${escapeHtml(name)}</td>
+              <td>${escapeHtml(companyName || "-")}</td>
+              <td>${escapeHtml(localization || "-")}</td>
             </tr>`;
         }).join("");
 
         return `
           <details class="sap-b1-raw-details sap-b1-sub-details" open>
-            <summary class="sap-b1-raw-summary">${escapeHtml(tenantMeta.join(" | "))} (${schemas.length})</summary>
+            <summary class="sap-b1-raw-summary">${escapeHtml(tenantMeta.join(" | "))} (${databases.length})</summary>
             <div class="table-wrap">
               <table class="db-table">
                 <thead>
                   <tr>
-                    <th>Schema</th>
-                    <th class="db-size-cell">Groesse</th>
+                    <th>Datenbank</th>
+                    <th>Firma</th>
+                    <th>Lokalisierung</th>
                   </tr>
                 </thead>
                 <tbody>${rows}</tbody>
@@ -6777,9 +6772,9 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
 
       parts.push(`
         <section class="detail-card">
-          <h4>🔶 SAP HANA Schemas</h4>
+          <h4>🔶 SAP HANA Datenbanken</h4>
           ${discoveryHtml}
-          ${tenantBlocks || '<p class="muted">Keine Eintraege gefunden (Filter: kein SAP*, kein _*, kein SLDDATA, kein SBOCOMMON, kein LANDSCAPE, Groesse > 0 GB).</p>'}
+          ${tenantBlocks || '<p class="muted">Keine Eintraege gefunden.</p>'}
         </section>`);
     }
   }

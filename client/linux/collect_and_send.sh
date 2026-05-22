@@ -1402,7 +1402,7 @@ collect_hana_db_info_json() {
         if [[ -z "$tenant_port" ]]; then
           tenant_reason="missing_tenant_port"
           tenant_error="Tenant-Port in indexserver.ini nicht gefunden"
-          tenant_result="{\"available\":false,\"schemas\":[],\"error\":\"$(json_escape "$tenant_error")\",\"reason\":\"$tenant_reason\"}"
+          tenant_result="{\"available\":false,\"databases\":[],\"error\":\"$(json_escape "$tenant_error")\",\"reason\":\"$tenant_reason\"}"
         else
           tenant_result="$(HANA_TENANT_SCAN_MODE=1 HANA_SID="$sid" HANA_ADDONS_PORT="$tenant_port" collect_hana_db_info_json)"
           if printf '%s' "$tenant_result" | grep -q '"available":true'; then
@@ -1414,7 +1414,7 @@ collect_hana_db_info_json() {
         tenants_sep=","
       done
 
-      printf '{"available":%s,"sid":"%s","user":"%s","target_mode":"multitenant","multitenant":true,"tenants":[%s],"schemas":[],"error":"","reason":"%s"}' \
+      printf '{"available":%s,"sid":"%s","user":"%s","target_mode":"multitenant","multitenant":true,"tenants":[%s],"databases":[],"error":"","reason":"%s"}' \
         "$([ "$any_available" = true ] && echo true || echo false)" \
         "$(json_escape "$sid")" \
         "$(json_escape "$db_user")" \
@@ -1427,7 +1427,7 @@ collect_hana_db_info_json() {
   if ! su - "$sid_user" -c "command -v hdbsql" >/dev/null 2>&1; then
     reason="missing_hdbsql"
     error_msg="hdbsql nicht vorhanden"
-    printf '{"available":false,"sid":"%s","user":"%s","target":"%s","target_mode":"n/a","schemas":[],"error":"%s","reason":"%s"}' \
+    printf '{"available":false,"sid":"%s","user":"%s","target":"%s","target_mode":"n/a","databases":[],"error":"%s","reason":"%s"}' \
       "$(json_escape "$sid")" \
       "$(json_escape "$db_user")" \
       "$(json_escape "$hdbsql_target")" \
@@ -1438,7 +1438,7 @@ collect_hana_db_info_json() {
 
   local db_output=""
   local db_error=""
-  db_output="$(run_hdbsql_db_query "SELECT SCHEMA_NAME, ROUND(SUM(MEMORY_SIZE_IN_TOTAL) / 1024 / 1024 / 1024, 2) AS MEMORY_GB FROM M_CS_TABLES WHERE UPPER(SCHEMA_NAME) NOT LIKE 'SAP%' AND UPPER(SCHEMA_NAME) NOT IN ('SLDDATA','SBOCOMMON','LANDSCAPE') AND SCHEMA_NAME NOT LIKE '\\_%' ESCAPE '\\' GROUP BY SCHEMA_NAME HAVING SUM(MEMORY_SIZE_IN_TOTAL) > 0 ORDER BY MEMORY_GB DESC;")"
+  db_output="$(run_hdbsql_db_query 'SELECT "NAME","COMPANYNAME","LOCALIZATION" FROM "SLDDATA"."COMPANYDBS";')"
 
   if detect_hdbsql_db_error_line "$db_output" >/dev/null; then
     db_error="$(detect_hdbsql_db_error_line "$db_output")"
@@ -1449,63 +1449,81 @@ collect_hana_db_info_json() {
     cleaned_output="$(clean_hdbsql_db_output "$db_output")"
 
     local csv_matches=""
-    csv_matches="$(printf '%s\n' "$cleaned_output" | grep -oE '"[^"]*","[^"]*"' || true)"
+    csv_matches="$(printf '%s\n' "$cleaned_output" | grep -oE '"[^"]*","[^"]*","[^"]*"' || true)"
     if [[ -n "$csv_matches" ]]; then
       while IFS= read -r record; do
-        local schema_name=""
-        local memory_gb=""
+        local db_name=""
+        local company_name=""
+        local localization=""
         [[ -z "$record" ]] && continue
-        if [[ "$record" =~ \"([^\"]*)\",\"([^\"]*)\" ]]; then
-          schema_name="${BASH_REMATCH[1]}"
-          memory_gb="${BASH_REMATCH[2]}"
+        if [[ "$record" =~ \"([^\"]*)\",\"([^\"]*)\",\"([^\"]*)\" ]]; then
+          db_name="${BASH_REMATCH[1]}"
+          company_name="${BASH_REMATCH[2]}"
+          localization="${BASH_REMATCH[3]}"
         else
           continue
         fi
 
-        schema_name="$(printf '%s' "$schema_name" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
-        memory_gb="$(printf '%s' "$memory_gb" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+        db_name="$(printf '%s' "$db_name" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+        company_name="$(printf '%s' "$company_name" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+        localization="$(printf '%s' "$localization" | sed -e 's/^[[:space:]]*//; s/[[:space:]]*$//')"
 
-        [[ -z "$schema_name" ]] && continue
-        [[ "${schema_name^^}" == SAP* ]] && continue
-        [[ "${schema_name^^}" == "SLDDATA" ]] && continue
-        [[ "${schema_name^^}" == "SBOCOMMON" ]] && continue
-        [[ "${schema_name^^}" == "LANDSCAPE" ]] && continue
-        [[ "$schema_name" == _* ]] && continue
-        if ! [[ "$memory_gb" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+        [[ -z "$db_name" ]] && continue
+        if [[ "${db_name^^}" == "NAME" ]] && [[ "${company_name^^}" == "COMPANYNAME" ]]; then
           continue
         fi
-        if awk "BEGIN { exit !($memory_gb > 0) }"; then
-          local entry
-          entry="$(printf '{"name":"%s","memory_gb":%s}' "$(json_escape "$schema_name")" "$memory_gb")"
-          schema_entries="${schema_entries:+$schema_entries,}$entry"
-        fi
+
+        local entry
+        entry="$(printf '{\"name\":\"%s\",\"company_name\":\"%s\",\"localization\":\"%s\"}' "$(json_escape "$db_name")" "$(json_escape "$company_name")" "$(json_escape "$localization")")"
+        schema_entries="${schema_entries:+$schema_entries,}$entry"
       done <<< "$csv_matches"
     fi
 
     if [[ -z "$schema_entries" ]]; then
       while IFS= read -r line; do
         local parsed_row=""
-        local schema_name=""
-        local memory_gb=""
-        parsed_row="$(parse_hdbsql_db_row_fallback "$line" || true)"
+        local db_name=""
+        local company_name=""
+        local localization=""
+        parsed_row="$(printf '%s' "$line" | awk '
+          BEGIN { OFS="\t" }
+          /[Rr]ows[[:space:]]+selected|[Oo]verall[[:space:]]+time|[Ss]erver[[:space:]]+time|^[-=]+$|^\*/ { next }
+          {
+            raw=$0
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", raw)
+            if (raw == "") next
+            if (raw ~ /^".*",".*",".*"$/) {
+              sub(/^"/, "", raw)
+              sub(/"$/, "", raw)
+              gsub(/","/, OFS, raw)
+              print raw
+              exit
+            }
+            n=split(raw, parts, "|")
+            if (n >= 3) {
+              for (i = 1; i <= 3; i++) {
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", parts[i])
+                gsub(/^"|"$/, "", parts[i])
+              }
+              print parts[1], parts[2], parts[3]
+              exit
+            }
+          }
+        ' || true)"
         [[ -z "$parsed_row" ]] && continue
-        schema_name="${parsed_row%%$'\t'*}"
-        memory_gb="${parsed_row#*$'\t'}"
+        db_name="${parsed_row%%$'\t'*}"
+        parsed_row="${parsed_row#*$'\t'}"
+        company_name="${parsed_row%%$'\t'*}"
+        localization="${parsed_row#*$'\t'}"
 
-        [[ -z "$schema_name" ]] && continue
-        [[ "${schema_name^^}" == SAP* ]] && continue
-        [[ "${schema_name^^}" == "SLDDATA" ]] && continue
-        [[ "${schema_name^^}" == "SBOCOMMON" ]] && continue
-        [[ "${schema_name^^}" == "LANDSCAPE" ]] && continue
-        [[ "$schema_name" == _* ]] && continue
-        if ! [[ "$memory_gb" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+        [[ -z "$db_name" ]] && continue
+        if [[ "${db_name^^}" == "NAME" ]] && [[ "${company_name^^}" == "COMPANYNAME" ]]; then
           continue
         fi
-        if awk "BEGIN { exit !($memory_gb > 0) }"; then
-          local entry
-          entry="$(printf '{"name":"%s","memory_gb":%s}' "$(json_escape "$schema_name")" "$memory_gb")"
-          schema_entries="${schema_entries:+$schema_entries,}$entry"
-        fi
+
+        local entry
+        entry="$(printf '{\"name\":\"%s\",\"company_name\":\"%s\",\"localization\":\"%s\"}' "$(json_escape "$db_name")" "$(json_escape "$company_name")" "$(json_escape "$localization")")"
+        schema_entries="${schema_entries:+$schema_entries,}$entry"
       done <<< "$cleaned_output"
     fi
 
@@ -1524,7 +1542,7 @@ collect_hana_db_info_json() {
     fi
   fi
 
-  printf '{"available":%s,"sid":"%s","user":"%s","target":"%s","target_mode":"%s","schemas":[%s],"error":"%s","reason":"%s"}' \
+  printf '{"available":%s,"sid":"%s","user":"%s","target":"%s","target_mode":"%s","databases":[%s],"error":"%s","reason":"%s"}' \
     "$([ "$available" = true ] && echo true || echo false)" \
     "$(json_escape "$sid")" \
     "$(json_escape "$db_user")" \

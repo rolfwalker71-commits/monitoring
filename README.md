@@ -584,6 +584,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.304 (22. Mai 2026)
+
+- **HANA-Datenbankabfrage auf COMPANYDBS umgestellt**: Statt Schema-/Memory-Auswertung aus `M_CS_TABLES` wird pro erkanntem Tenant jetzt `SELECT "NAME","COMPANYNAME","LOCALIZATION" FROM "SLDDATA"."COMPANYDBS"` ausgefuehrt.
+- **HANA-UI auf Datenbankliste angepasst**: Die HANA-Kachel zeigt jetzt je Tenant eine Tabelle mit Datenbankname, Firmenname und Lokalisierung statt Schema und Groesse.
+
 ### v1.6.303 (22. Mai 2026)
 
 - **HANA-Multitenant-Erkennung fuer alphanumerische Tenant-IDs korrigiert**: Tenant-Ordner unter `/usr/sap/<SID>/SYS/global/hdb/custom/config` werden jetzt als `DB_XXX` mit beliebigen drei alphanumerischen Zeichen erkannt, statt nur rein numerische Namen wie `DB_123` zu akzeptieren.
