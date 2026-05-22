@@ -584,6 +584,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.302 (22. Mai 2026)
+
+- **Multitenant-Discovery explizit im Payload**: Linux-Agent sendet nun zusaetzlich `hana_multitenant_discovery` mit erkannten Tenant-IDs/Ports, Tenant-Anzahl, Port-Abdeckung und Discovery-Status (`success`/`partial_missing_port`/`none_found`).
+- **Sichtbare Discovery im UI**: In den HANA-Schema-Details wird ein eigener "Multitenant Discovery"-Block angezeigt, damit erkannte Tenants auch dann sichtbar bleiben, wenn eigentliche HANA-Abfragen leer sind oder fehlschlagen.
+
 ### v1.6.301 (22. Mai 2026)
 
 - **Doppelte Host-Karten automatisch zusammenführen**: Beim Eingang eines Reports mit neuer/echter `host_uid` werden ältere, serverseitig erzeugte Fallback-Keys (z. B. `::agent:` / `::ip:`) für denselben Host gezielt auf die neue `host_uid` nachgezogen.

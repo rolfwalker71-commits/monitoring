@@ -5701,6 +5701,48 @@ function collectHanaDbTenantViews(hanaInfo) {
   }];
 }
 
+function renderHanaMultitenantDiscoverySummary(discovery) {
+  if (!discovery || typeof discovery !== "object") {
+    return "";
+  }
+
+  const sid = asText(discovery.sid, "").trim();
+  const reason = asText(discovery.reason, "").trim();
+  const tenants = Array.isArray(discovery.tenants)
+    ? discovery.tenants.filter((entry) => entry && typeof entry === "object")
+    : [];
+  const tenantLabels = tenants
+    .map((entry) => {
+      const tenantId = asText(entry.tenant_id, "").trim();
+      if (!tenantId) return "";
+      const tenantPort = asText(entry.tenant_port, "").trim();
+      return tenantPort ? `${tenantId} (Port ${tenantPort})` : `${tenantId} (Port unbekannt)`;
+    })
+    .filter(Boolean);
+
+  const reasonText = {
+    success: "Tenant-Verzeichnisse inkl. Ports erkannt",
+    partial_missing_port: "Tenant-Verzeichnisse erkannt (teilweise ohne Port)",
+    none_found: "Keine Tenant-Verzeichnisse erkannt",
+    missing_hana_sid: "HANA SID fehlt"
+  }[reason] || reason;
+
+  const title = sid
+    ? `Multitenant Discovery (SID ${escapeHtml(sid)})`
+    : "Multitenant Discovery";
+  const details = tenantLabels.length > 0
+    ? `Erkannte Tenants: ${escapeHtml(tenantLabels.join(", "))}`
+    : "Erkannte Tenants: keine";
+
+  return `
+    <details class="sap-b1-raw-details sap-b1-sub-details" open>
+      <summary class="sap-b1-raw-summary">${title} (${tenantLabels.length})</summary>
+      <p class="muted">${escapeHtml(reasonText || "Status unbekannt")}</p>
+      <p class="muted">${details}</p>
+    </details>
+  `;
+}
+
 function renderSapLicenseInfoSection(payload) {
   const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : null;
   const rawFocusTypes = Array.isArray(sapLicense?.focus_license_types) ? sapLicense.focus_license_types : [];
@@ -6474,6 +6516,9 @@ function renderFilesystemTable(filesystems) {
 function renderDatabasesSection(payload) {
   const sqlInfo = payload.sql_server_info;
   const hanaInfo = payload.hana_db_info; // reserved for future HANA DB user data
+  const hanaDiscovery = payload && typeof payload.hana_multitenant_discovery === "object"
+    ? payload.hana_multitenant_discovery
+    : null;
 
   const sqlReleaseMap = [
     { major: 16, label: "SQL Server 2022" },
@@ -6660,6 +6705,7 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
 
   // ---- HANA DB (schema memory usage) ----
   if (hanaInfo && typeof hanaInfo === "object") {
+    const discoveryHtml = renderHanaMultitenantDiscoverySummary(hanaDiscovery);
     if (hanaInfo.available !== true && !Array.isArray(hanaInfo.tenants)) {
       const reason = asText(hanaInfo.reason, "");
       const error = asText(hanaInfo.error, "");
@@ -6670,7 +6716,7 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
         "auth_failed": "Authentifizierung fehlgeschlagen",
         "query_failed": "Abfrage fehlgeschlagen"
       }[reason] || (reason || "HANA Schema-Scan nicht verfügbar");
-      parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Schemas</h4><p class="muted">${escapeHtml(reasonText)}${error ? `: ${escapeHtml(error)}` : ""}</p></section>`);
+      parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Schemas</h4>${discoveryHtml}<p class="muted">${escapeHtml(reasonText)}${error ? `: ${escapeHtml(error)}` : ""}</p></section>`);
     } else {
       const tenantViews = collectHanaDbTenantViews(hanaInfo);
       const renderFilteredSchemas = (schemas) => {
@@ -6732,6 +6778,7 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
       parts.push(`
         <section class="detail-card">
           <h4>🔶 SAP HANA Schemas</h4>
+          ${discoveryHtml}
           ${tenantBlocks || '<p class="muted">Keine Eintraege gefunden (Filter: kein SAP*, kein _*, kein SLDDATA, kein SBOCOMMON, kein LANDSCAPE, Groesse > 0 GB).</p>'}
         </section>`);
     }

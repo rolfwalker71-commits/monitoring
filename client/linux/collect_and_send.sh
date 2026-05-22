@@ -1105,6 +1105,56 @@ collect_hana_multitenant_targets() {
   done < <(find "$config_root" -mindepth 1 -maxdepth 1 -type d -name 'DB_[0-9][0-9][0-9]' 2>/dev/null | sort)
 }
 
+collect_hana_multitenant_discovery_json() {
+  local sid="${HANA_SID:-}"
+  local config_root=""
+  local targets=()
+  local tenants_json=""
+  local sep=""
+  local line=""
+
+  if [[ -z "$sid" ]]; then
+    printf '{"available":false,"sid":"","config_root":"","tenant_count":0,"with_port_count":0,"tenants":[],"reason":"missing_hana_sid"}'
+    return
+  fi
+
+  config_root="/usr/sap/${sid}/SYS/global/hdb/custom/config"
+  mapfile -t targets < <(collect_hana_multitenant_targets "$sid")
+
+  for line in "${targets[@]}"; do
+    local tenant_id="${line%%|*}"
+    local tenant_port="${line#*|}"
+    local has_port=false
+    if [[ -n "$tenant_port" ]]; then
+      has_port=true
+    fi
+    tenants_json+="${sep}{\"tenant_id\":\"$(json_escape "$tenant_id")\",\"tenant_port\":\"$(json_escape "$tenant_port")\",\"has_port\":$has_port}"
+    sep=","
+  done
+
+  local tenant_count="${#targets[@]}"
+  local with_port_count=0
+  if (( tenant_count > 0 )); then
+    with_port_count="$(printf '%s\n' "${targets[@]}" | awk -F'|' 'NF>=2 && $2 != "" {c++} END {print c+0}')"
+  fi
+
+  local reason="none_found"
+  if (( tenant_count > 0 )) && (( with_port_count == tenant_count )); then
+    reason="success"
+  elif (( tenant_count > 0 )) && (( with_port_count < tenant_count )); then
+    reason="partial_missing_port"
+  fi
+
+  printf '{"available":%s,"sid":"%s","config_root":"%s","tenant_count":%s,"with_port_count":%s,"tenants":[%s],"reason":"%s"}' \
+    "$([ "$tenant_count" -gt 0 ] && echo true || echo false)" \
+    "$(json_escape "$sid")" \
+    "$(json_escape "$config_root")" \
+    "$tenant_count" \
+    "$with_port_count" \
+    "$tenants_json" \
+    "$reason"
+}
+
 collect_hana_db_info_json() {
   # Collects HANA schema memory usage (read-only) via hdbsql.
   # Connection behavior intentionally mirrors collect_hana_addons_json.
@@ -2847,6 +2897,7 @@ SAP_BUSINESS_ONE_JSON="$(collect_sap_business_one_json)"
 HANA_INFO_JSON="$(collect_hana_version_json)"
 HANA_ADDONS_JSON="$(collect_hana_addons_json)"
 HANA_DB_INFO_JSON="$(collect_hana_db_info_json)"
+HANA_MULTITENANT_DISCOVERY_JSON="$(collect_hana_multitenant_discovery_json)"
 DIR_LISTINGS_JSON="$(collect_dir_listings_json)"
 DIR_DEEP_LISTINGS_JSON="$(collect_dir_deep_listings_json)"
 CRON_INFO_JSON="$(collect_cron_json)"
@@ -2928,6 +2979,7 @@ PAYLOAD=$(cat <<EOF
   "hana_info": ${HANA_INFO_JSON},
   "hana_addons": ${HANA_ADDONS_JSON},
   "hana_db_info": ${HANA_DB_INFO_JSON},
+  "hana_multitenant_discovery": ${HANA_MULTITENANT_DISCOVERY_JSON},
   "dir_listings": ${DIR_LISTINGS_JSON},
   "dir_deep_listings": ${DIR_DEEP_LISTINGS_JSON},
   "cron_info": ${CRON_INFO_JSON}
