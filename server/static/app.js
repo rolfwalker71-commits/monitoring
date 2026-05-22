@@ -11569,8 +11569,6 @@ async function runCombinedBackfill(days = 7) {
 function updateHeaderStatChips() {
   const alertChip = document.getElementById("headerAlertChip");
   const alertCount = document.getElementById("headerAlertCount");
-  const trendsChip = document.getElementById("headerTrendsChip");
-  const trendsCount = document.getElementById("headerTrendsCount");
   const inactiveChip = document.getElementById("headerInactiveChip");
   const inactiveCount = document.getElementById("headerInactiveCount");
   const licenseChip = document.getElementById("headerLicenseChip");
@@ -11585,10 +11583,6 @@ function updateHeaderStatChips() {
   if (alertChip && alertCount) {
     alertCount.textContent = String(state.globalOpenAlertsCount);
     alertChip.classList.remove("hidden");
-  }
-  if (trendsChip && trendsCount) {
-    trendsCount.textContent = String(state.criticalTrendsCount);
-    trendsChip.classList.remove("hidden");
   }
   if (inactiveChip && inactiveCount) {
     inactiveCount.textContent = String(state.inactiveHostsCount);
@@ -11874,7 +11868,7 @@ function wireEvents() {
   }
 
   document.addEventListener("click", (event) => {
-    const target = event.target instanceof Element ? event.target.closest("#overviewTabButton, #reportsTabButton, #globalViewButton, #globalAlertsTabButton, #criticalTrendsTabButton, #inactiveHostsTabButton, #backupStatusTabButton, #systemOverviewTabButton, #hostConfigChangesTabButton, #agentSourceStatusTabButton, #globalAdminAlertSubsTabButton, #globalAdminLoginAuditTabButton, #globalAdminSettingsTabButton, #headerAlertChip, #headerTrendsChip, #headerInactiveChip") : null;
+    const target = event.target instanceof Element ? event.target.closest("#overviewTabButton, #reportsTabButton, #globalViewButton, #globalAlertsTabButton, #criticalTrendsTabButton, #inactiveHostsTabButton, #backupStatusTabButton, #systemOverviewTabButton, #hostConfigChangesTabButton, #agentSourceStatusTabButton, #globalAdminAlertSubsTabButton, #globalAdminLoginAuditTabButton, #globalAdminSettingsTabButton, #headerAlertChip, #headerInactiveChip") : null;
     if (!target) {
       return;
     }
@@ -12314,14 +12308,6 @@ function wireEvents() {
     updateViewMode();
     updateGlobalSubMode();
     await loadGlobalAlertsOverview();
-  });
-
-  document.getElementById("headerTrendsChip").addEventListener("click", async () => {
-    state.viewMode = "global";
-    state.globalSubMode = "critical-trends";
-    updateViewMode();
-    updateGlobalSubMode();
-    await loadCriticalTrends();
   });
 
   document.getElementById("headerInactiveChip").addEventListener("click", async () => {

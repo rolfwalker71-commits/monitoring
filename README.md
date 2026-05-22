@@ -537,6 +537,7 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 | 1.4.113 | 12.05.2026 | Fix Windows self_update empty-string config binding for GITHUB_REPO reset |
 | 1.4.112 | 12.05.2026 | Fix Windows self_update parser error and add X_API_KEY fallback in Windows agents |
 | 1.4.111 | 12.05.2026 | Add comprehensive technical documentation for Linux and Windows agents |
+| 1.4.114 | 22.05.2026 | Remove critical trends header chip |
 | 1.4.110 | 12.05.2026 | Add SAP Feature Pack display to host changelog |
 | 1.4.109 | 12.05.2026 | Bump version |
 | 1.4.108 | 12.05.2026 | Bold Feature Pack in SAP Release changelog display |
