@@ -584,6 +584,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.319 (22. Mai 2026)
+
+- **502 nach Login behoben (Regression aus 1.6.316)**: Im API-Pfad `/api/v1/hosts` wurde das Mapping fuer `host_uid`-Displaynamen in bestimmten Faellen verwendet, ohne vorher aufgebaut zu sein.
+- **Runtime-Crash entfernt**: Das `host_uid_display_name_map` wird jetzt im `/api/v1/hosts`-Handler immer initialisiert und mit den vorhandenen `host_uid_settings` geladen.
+
 ### v1.6.318 (22. Mai 2026)
 
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.

@@ -10977,6 +10977,24 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     """
                 ).fetchall()
 
+                host_uid_keys = [str(row[0] or "").strip() for row in rows if str(row[0] or "").strip()]
+                host_uid_display_name_map: dict[str, str] = {}
+                if host_uid_keys:
+                    placeholders = ",".join(["?"] * len(host_uid_keys))
+                    host_uid_rows = conn.execute(
+                        f"""
+                        SELECT host_uid, COALESCE(display_name_override, '')
+                        FROM host_uid_settings
+                        WHERE host_uid IN ({placeholders})
+                        """,
+                        tuple(host_uid_keys),
+                    ).fetchall()
+                    host_uid_display_name_map = {
+                        str(row[0] or "").strip(): str(row[1] or "").strip()
+                        for row in host_uid_rows
+                        if str(row[0] or "").strip()
+                    }
+
             settings_map = {
                 str(row[0]): {
                     "display_name_override": str(row[1] or ""),
