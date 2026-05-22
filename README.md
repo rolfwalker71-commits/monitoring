@@ -584,6 +584,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.296 (22. Mai 2026)
+
+- **Web-Start-Fix bei host_uid-Backfill**: Der Start-Backfill nutzt jetzt ID-basiertes Paging statt wiederholter LIMIT-Abfragen auf denselben offenen Datensätzen. Damit wird ein möglicher Endloslauf beim Start verhindert und der Web-Listener kommt zuverlässig hoch.
+
 ### v1.6.295 (22. Mai 2026)
 
 - **Server-Start stabilisiert**: Der `host_uid`-Backfill in der Initialisierung verarbeitet Reports nun in kleinen Batches statt alles auf einmal, wodurch OOM-Kills beim Dienststart auf grossen Datenbanken vermieden werden.

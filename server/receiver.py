@@ -1143,16 +1143,18 @@ def _derive_host_uid(payload: dict, hostname: str, agent_id: str = "", primary_i
 
 def _backfill_report_host_uids(conn: sqlite3.Connection, batch_size: int = 1000) -> None:
     safe_batch_size = max(100, min(int(batch_size or 1000), 5000))
+    last_report_id = 0
     while True:
         rows = conn.execute(
             """
             SELECT id, COALESCE(hostname, ''), COALESCE(agent_id, ''), COALESCE(primary_ip, ''), COALESCE(payload_json, '{}')
             FROM reports
             WHERE COALESCE(host_uid, '') = ''
+              AND id > ?
             ORDER BY id ASC
             LIMIT ?
             """,
-            (safe_batch_size,),
+            (last_report_id, safe_batch_size),
         ).fetchall()
         if not rows:
             return
@@ -1171,6 +1173,7 @@ def _backfill_report_host_uids(conn: sqlite3.Connection, batch_size: int = 1000)
         if updates:
             conn.executemany("UPDATE reports SET host_uid = ? WHERE id = ?", updates)
 
+        last_report_id = int(rows[-1][0] or last_report_id)
         if len(rows) < safe_batch_size:
             return
 
