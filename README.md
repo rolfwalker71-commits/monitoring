@@ -584,6 +584,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.305 (22. Mai 2026)
+
+- **Tenant-Queries erzwingen jetzt den jeweiligen Tenant-Port**: Bei HANA-Multitenant-Scans fuer AddOns, SARI und COMPANYDBS wird im Tenant-Modus die implizite Default-Verbindung uebersprungen und direkt gegen den erkannten `host:port` des jeweiligen Tenants verbunden. Das verhindert, dass mehrere Tenants irrtuemlich denselben Inhalt aus derselben Default-DB anzeigen.
+
 ### v1.6.304 (22. Mai 2026)
 
 - **HANA-Datenbankabfrage auf COMPANYDBS umgestellt**: Statt Schema-/Memory-Auswertung aus `M_CS_TABLES` wird pro erkanntem Tenant jetzt `SELECT "NAME","COMPANYNAME","LOCALIZATION" FROM "SLDDATA"."COMPANYDBS"` ausgefuehrt.

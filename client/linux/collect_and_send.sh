@@ -648,20 +648,23 @@ collect_hana_addons_json() {
     local alt_output=""
     local probe_hosts_csv=""
     local probe_host_list=""
+    local tenant_scan_mode="${HANA_TENANT_SCAN_MODE:-0}"
 
     sql_escaped="$(printf '%q' "$sql_text")"
 
     # 1) Primary mode (legacy behavior from early stable releases): implicit
     # connection as <sid>adm without explicit -n target.
-    if command -v timeout >/dev/null 2>&1; then
-      implicit_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" $sql_escaped 2>&1" || true)"
-    else
-      implicit_output="$(su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" $sql_escaped 2>&1" || true)"
-    fi
-    if [[ -n "$implicit_output" ]] && ! is_hdbsql_connection_error "$implicit_output"; then
-      last_hdbsql_mode="implicit_primary"
-      printf '%s' "$implicit_output"
-      return
+    if [[ "$tenant_scan_mode" != "1" ]]; then
+      if command -v timeout >/dev/null 2>&1; then
+        implicit_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" $sql_escaped 2>&1" || true)"
+      else
+        implicit_output="$(su - "$sid_user" -c "hdbsql -u \"$addons_user\" -p \"$addons_password\" $sql_escaped 2>&1" || true)"
+      fi
+      if [[ -n "$implicit_output" ]] && ! is_hdbsql_connection_error "$implicit_output"; then
+        last_hdbsql_mode="implicit_primary"
+        printf '%s' "$implicit_output"
+        return
+      fi
     fi
 
     # 2) Fallback mode: explicit configured target (with runtime diagnostics).
@@ -1225,18 +1228,21 @@ collect_hana_db_info_json() {
     local alt_output=""
     local probe_hosts_csv=""
     local probe_host_list=""
+    local tenant_scan_mode="${HANA_TENANT_SCAN_MODE:-0}"
 
     sql_escaped="$(printf '%q' "$sql_text")"
 
-    if command -v timeout >/dev/null 2>&1; then
-      implicit_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -u \"$db_user\" -p \"$db_password\" $sql_escaped 2>&1" || true)"
-    else
-      implicit_output="$(su - "$sid_user" -c "hdbsql -u \"$db_user\" -p \"$db_password\" $sql_escaped 2>&1" || true)"
-    fi
-    if [[ -n "$implicit_output" ]] && ! is_hdbsql_db_connection_error "$implicit_output"; then
-      last_hdbsql_mode="implicit_primary"
-      printf '%s' "$implicit_output"
-      return
+    if [[ "$tenant_scan_mode" != "1" ]]; then
+      if command -v timeout >/dev/null 2>&1; then
+        implicit_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -u \"$db_user\" -p \"$db_password\" $sql_escaped 2>&1" || true)"
+      else
+        implicit_output="$(su - "$sid_user" -c "hdbsql -u \"$db_user\" -p \"$db_password\" $sql_escaped 2>&1" || true)"
+      fi
+      if [[ -n "$implicit_output" ]] && ! is_hdbsql_db_connection_error "$implicit_output"; then
+        last_hdbsql_mode="implicit_primary"
+        printf '%s' "$implicit_output"
+        return
+      fi
     fi
 
     last_hdbsql_mode="explicit_target"
