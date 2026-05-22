@@ -7937,8 +7937,6 @@ function renderHeaderFirstRowControls(host) {
   }
 
   const reportCount = Number(host.report_count || 0).toLocaleString("de-DE");
-  const hostIdentity = resolveHostIdentity(host);
-  const hostIdentityShort = hostIdentity.length > 38 ? `${hostIdentity.slice(0, 35)}...` : hostIdentity;
   const environmentType = asText(host.environment_type, "").trim().toLowerCase();
   const envLabel = environmentType === "prod"
     ? "Prod."
@@ -7952,9 +7950,35 @@ function renderHeaderFirstRowControls(host) {
   return `
     ${renderApiKeyChip(host)}
     ${envChip}
-    <span class="selected-host-meta-chip" title="Host-ID (host_uid)">🆔 <span title="${escapeHtml(hostIdentity)}">${escapeHtml(hostIdentityShort)}</span></span>
     <span class="selected-host-meta-chip" title="Gesendete Meldungen">📦 ${reportCount}</span>
   `;
+}
+
+function renderReportJumpHostUidChip(host) {
+  if (!host) {
+    return "";
+  }
+  const hostIdentity = resolveHostIdentity(host);
+  if (!hostIdentity) {
+    return "";
+  }
+  const hostIdentityShort = hostIdentity.length > 38 ? `${hostIdentity.slice(0, 35)}...` : hostIdentity;
+  return `<span class="selected-host-meta-chip report-jump-host-id" title="Host-ID (host_uid)">🆔 <span title="${escapeHtml(hostIdentity)}">${escapeHtml(hostIdentityShort)}</span></span>`;
+}
+
+function updateReportJumpHostUidChip(host) {
+  const chipWrap = document.getElementById("reportJumpHostUidChip");
+  if (!chipWrap) {
+    return;
+  }
+  const chip = renderReportJumpHostUidChip(host);
+  if (!chip) {
+    chipWrap.innerHTML = "";
+    chipWrap.classList.add("hidden");
+    return;
+  }
+  chipWrap.innerHTML = chip;
+  chipWrap.classList.remove("hidden");
 }
 
 function renderSelectedHostControls(host) {
@@ -8110,6 +8134,7 @@ function updateSelectedHostControls() {
     controls.classList.add("hidden");
     updateReportCustomerChip();
     updateReportHeaderOsLogo(null);
+    updateReportJumpHostUidChip(null);
     return;
   }
 
@@ -8118,6 +8143,7 @@ function updateSelectedHostControls() {
   wireHostActionButtons(controls);
   updateReportCustomerChip();
   updateReportHeaderOsLogo(selectedHost);
+  updateReportJumpHostUidChip(selectedHost);
 }
 
 async function saveHostSettings(hostname, partialSettings) {

@@ -584,6 +584,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.297 (22. Mai 2026)
+
+- **Host-ID Chip neu positioniert**: Der `host_uid`-Chip wurde aus der oberen Host-Metazeile in die Einzelmeldungs-Navigation verschoben und direkt neben `Aktuellste` platziert.
+
 ### v1.6.296 (22. Mai 2026)
 
 - **Web-Start-Fix bei host_uid-Backfill**: Der Start-Backfill nutzt jetzt ID-basiertes Paging statt wiederholter LIMIT-Abfragen auf denselben offenen Datensätzen. Damit wird ein möglicher Endloslauf beim Start verhindert und der Web-Listener kommt zuverlässig hoch.
