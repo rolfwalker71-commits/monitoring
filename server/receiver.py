@@ -11006,13 +11006,38 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             with sqlite3.connect(DB_PATH) as conn:
                 stats = collect_database_maintenance_stats(conn)
+                now_utc = datetime.now(timezone.utc)
+                hour_ago_utc = now_utc - timedelta(hours=1)
+                hour_ago_iso = hour_ago_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+                reports_last_hour_row = conn.execute(
+                    "SELECT COUNT(*) FROM reports WHERE received_at_utc >= ?",
+                    (hour_ago_iso,),
+                ).fetchone()
+                reports_last_hour = int((reports_last_hour_row[0] or 0) if reports_last_hour_row else 0)
+
+                baseline_row = conn.execute(
+                    """
+                    SELECT total_file_bytes
+                    FROM db_maintenance_history
+                    WHERE computed_at_utc <= ?
+                    ORDER BY computed_at_utc DESC
+                    LIMIT 1
+                    """,
+                    (hour_ago_iso,),
+                ).fetchone()
+                total_file_bytes_now = int(stats.get("total_file_bytes", 0) or 0)
+                total_file_bytes_baseline = int((baseline_row[0] or 0) if baseline_row else total_file_bytes_now)
+                delta_total_file_bytes_last_hour = total_file_bytes_now - total_file_bytes_baseline
             self._send_json(
                 HTTPStatus.OK,
                 {
                     "status": "ok",
                     "stats": {
                         "reports_total": int(stats.get("reports_total", 0) or 0),
+                        "reports_last_hour": reports_last_hour,
                         "total_file_bytes": int(stats.get("total_file_bytes", 0) or 0),
+                        "delta_total_file_bytes_last_hour": int(delta_total_file_bytes_last_hour),
                     },
                 },
             )

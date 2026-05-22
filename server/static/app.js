@@ -139,7 +139,9 @@ const state = {
   criticalTrendsCount: 0,
   inactiveHostsCount: 0,
   dbReportsTotal: 0,
+  dbReportsLastHour: 0,
   dbTotalFileBytes: null,
+  dbDeltaLastHourBytes: 0,
   authUser: "",
   authDisplayName: "",
   isAuthenticated: false,
@@ -4061,6 +4063,17 @@ function formatBytes(value) {
   }
   const digits = amount >= 100 ? 0 : amount >= 10 ? 1 : 2;
   return `${amount.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+function formatSignedMegabytesFromBytes(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    return "+0 MB";
+  }
+  const mb = Math.abs(n) / (1024 * 1024);
+  const digits = mb >= 100 ? 0 : 1;
+  const sign = n >= 0 ? "+" : "-";
+  return `${sign}${mb.toFixed(digits)} MB`;
 }
 
 function normalizeMountpointValue(value) {
@@ -9074,9 +9087,13 @@ async function loadHeaderDatabaseKpis() {
   }
   const stats = data && typeof data.stats === "object" ? data.stats : {};
   const reportsTotal = Number(stats.reports_total || 0);
+  const reportsLastHour = Number(stats.reports_last_hour || 0);
   const totalFileBytes = Number(stats.total_file_bytes);
+  const deltaLastHourBytes = Number(stats.delta_total_file_bytes_last_hour || 0);
   state.dbReportsTotal = Number.isFinite(reportsTotal) && reportsTotal >= 0 ? reportsTotal : 0;
+  state.dbReportsLastHour = Number.isFinite(reportsLastHour) && reportsLastHour >= 0 ? reportsLastHour : 0;
   state.dbTotalFileBytes = Number.isFinite(totalFileBytes) && totalFileBytes >= 0 ? totalFileBytes : null;
+  state.dbDeltaLastHourBytes = Number.isFinite(deltaLastHourBytes) ? deltaLastHourBytes : 0;
   updateHeaderStatChips();
   return stats;
 }
@@ -11599,8 +11616,12 @@ function updateHeaderStatChips() {
   const inactiveCount = document.getElementById("headerInactiveCount");
   const dbReportsChip = document.getElementById("headerDbReportsChip");
   const dbReportsCount = document.getElementById("headerDbReportsCount");
+  const dbReportsHourChip = document.getElementById("headerDbReportsHourChip");
+  const dbReportsHourCount = document.getElementById("headerDbReportsHourCount");
   const dbSizeChip = document.getElementById("headerDbSizeChip");
   const dbSizeValue = document.getElementById("headerDbSizeValue");
+  const dbSizeDeltaChip = document.getElementById("headerDbSizeDeltaChip");
+  const dbSizeDeltaValue = document.getElementById("headerDbSizeDeltaValue");
   const licenseChip = document.getElementById("headerLicenseChip");
   const licenseHw = document.getElementById("headerLicenseHw");
   const licenseInst = document.getElementById("headerLicenseInst");
@@ -11622,9 +11643,17 @@ function updateHeaderStatChips() {
     dbReportsCount.textContent = Number(state.dbReportsTotal || 0).toLocaleString("de-CH");
     dbReportsChip.classList.remove("hidden");
   }
+  if (dbReportsHourChip && dbReportsHourCount) {
+    dbReportsHourCount.textContent = Number(state.dbReportsLastHour || 0).toLocaleString("de-CH");
+    dbReportsHourChip.classList.remove("hidden");
+  }
   if (dbSizeChip && dbSizeValue) {
     dbSizeValue.textContent = state.dbTotalFileBytes === null ? "-" : formatBytes(state.dbTotalFileBytes);
     dbSizeChip.classList.remove("hidden");
+  }
+  if (dbSizeDeltaChip && dbSizeDeltaValue) {
+    dbSizeDeltaValue.textContent = formatSignedMegabytesFromBytes(state.dbDeltaLastHourBytes);
+    dbSizeDeltaChip.classList.remove("hidden");
   }
   if (licenseChip) {
     const payload = state.currentReport && typeof state.currentReport.payload === "object" ? state.currentReport.payload : {};

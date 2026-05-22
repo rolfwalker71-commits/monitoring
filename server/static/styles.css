@@ -3946,8 +3946,16 @@ body[data-theme="dark"] .trend-progress-bar {
   border-left-color: #2f9e44;
 }
 
+.header-stat-chip-db-reports-hour {
+  border-left-color: #0f766e;
+}
+
 .header-stat-chip-db-size {
   border-left-color: #7c3aed;
+}
+
+.header-stat-chip-db-size-delta {
+  border-left-color: #be123c;
 }
 
 #headerLicenseChip.header-stat-chip {
@@ -8349,10 +8357,22 @@ body[data-theme="dark"] .header-stat-chip-db-reports {
   border-color: rgba(74, 222, 128, 0.34);
 }
 
+body[data-theme="dark"] .header-stat-chip-db-reports-hour {
+  background: rgba(45, 212, 191, 0.16);
+  color: #99f6e4;
+  border-color: rgba(45, 212, 191, 0.34);
+}
+
 body[data-theme="dark"] .header-stat-chip-db-size {
   background: rgba(167, 139, 250, 0.16);
   color: #c4b5fd;
   border-color: rgba(167, 139, 250, 0.34);
+}
+
+body[data-theme="dark"] .header-stat-chip-db-size-delta {
+  background: rgba(251, 113, 133, 0.16);
+  color: #fecdd3;
+  border-color: rgba(251, 113, 133, 0.34);
 }
 
 body[data-theme="dark"] .btn-secondary {
@@ -11069,7 +11089,9 @@ body[data-theme="dark"] .search-input-compact::placeholder {
 .header-stat-chip-warn,
 .header-stat-chip-inactive,
 .header-stat-chip-db-reports,
+.header-stat-chip-db-reports-hour,
 .header-stat-chip-db-size,
+.header-stat-chip-db-size-delta,
 .header-stat-chip-license {
   border-color: #cfd8e3;
   background: linear-gradient(180deg, #f7f9fb 0%, #eff3f7 100%);
@@ -11106,8 +11128,16 @@ body[data-theme="dark"] .search-input-compact::placeholder {
   border-left-color: #2f9e44;
 }
 
+.header-stat-chip-db-reports-hour {
+  border-left-color: #0f766e;
+}
+
 .header-stat-chip-db-size {
   border-left-color: #7c3aed;
+}
+
+.header-stat-chip-db-size-delta {
+  border-left-color: #be123c;
 }
 
 .header-stat-chip-license {
@@ -11198,7 +11228,9 @@ body[data-theme="dark"] .header-stat-chip-alert,
 body[data-theme="dark"] .header-stat-chip-warn,
 body[data-theme="dark"] .header-stat-chip-inactive,
 body[data-theme="dark"] .header-stat-chip-db-reports,
+body[data-theme="dark"] .header-stat-chip-db-reports-hour,
 body[data-theme="dark"] .header-stat-chip-db-size,
+body[data-theme="dark"] .header-stat-chip-db-size-delta,
 body[data-theme="dark"] .header-stat-chip-license {
   border-color: #355072;
   background: linear-gradient(180deg, #1a2e49 0%, #14263f 100%);
@@ -11221,8 +11253,16 @@ body[data-theme="dark"] .header-stat-chip-db-reports {
   border-left-color: #52c97a;
 }
 
+body[data-theme="dark"] .header-stat-chip-db-reports-hour {
+  border-left-color: #5ad0be;
+}
+
 body[data-theme="dark"] .header-stat-chip-db-size {
   border-left-color: #b69cf9;
+}
+
+body[data-theme="dark"] .header-stat-chip-db-size-delta {
+  border-left-color: #f39ab0;
 }
 
 body[data-theme="dark"] .header-stat-chip-license {
