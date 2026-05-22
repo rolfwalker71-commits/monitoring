@@ -9866,8 +9866,59 @@ def prune_reports_for_host(conn: sqlite3.Connection, hostname: str, keep_count: 
     )
 
 
-def delete_host_card_data(conn: sqlite3.Connection, hostname: str) -> dict[str, int]:
-    deleted: dict[str, int] = {}
+def delete_host_card_data(conn: sqlite3.Connection, hostname: str, host_uid: str = "") -> dict[str, int]:
+    deleted: dict[str, int] = {
+        "muted_alert_rules": 0,
+        "alert_debounce": 0,
+        "alerts": 0,
+        "agent_commands": 0,
+        "host_settings": 0,
+        "host_uid_settings": 0,
+        "reports": 0,
+    }
+
+    normalized_hostname = str(hostname or "").strip()
+    normalized_host_uid = str(host_uid or "").strip()
+
+    if normalized_host_uid:
+        host_key_expr = reports_host_key_sql()
+        touched_hostnames = {
+            str(row[0] or "").strip()
+            for row in conn.execute(
+                f"SELECT DISTINCT COALESCE(hostname, '') FROM reports WHERE {host_key_expr} = ?",
+                (normalized_host_uid,),
+            ).fetchall()
+            if str(row[0] or "").strip()
+        }
+
+        conn.execute(
+            f"DELETE FROM reports WHERE {host_key_expr} = ?",
+            (normalized_host_uid,),
+        )
+        row = conn.execute("SELECT changes()").fetchone()
+        deleted["reports"] = int(row[0] or 0) if row else 0
+
+        conn.execute("DELETE FROM host_uid_settings WHERE host_uid = ?", (normalized_host_uid,))
+        row = conn.execute("SELECT changes()").fetchone()
+        deleted["host_uid_settings"] = int(row[0] or 0) if row else 0
+
+        # Only clear hostname-scoped data when no reports for that hostname remain.
+        for touched_hostname in touched_hostnames:
+            remaining = conn.execute(
+                "SELECT COUNT(*) FROM reports WHERE hostname = ?",
+                (touched_hostname,),
+            ).fetchone()
+            remaining_count = int((remaining[0] if remaining else 0) or 0)
+            if remaining_count > 0:
+                continue
+
+            for table_name in ("muted_alert_rules", "alert_debounce", "alerts", "agent_commands", "host_settings"):
+                conn.execute(f"DELETE FROM {table_name} WHERE hostname = ?", (touched_hostname,))
+                row = conn.execute("SELECT changes()").fetchone()
+                deleted[table_name] += int(row[0] or 0) if row else 0
+
+        return deleted
+
     cleanup_plan = [
         ("muted_alert_rules", "hostname = ?"),
         ("alert_debounce", "hostname = ?"),
@@ -9880,7 +9931,7 @@ def delete_host_card_data(conn: sqlite3.Connection, hostname: str) -> dict[str, 
     for table_name, where_clause in cleanup_plan:
         conn.execute(
             f"DELETE FROM {table_name} WHERE {where_clause}",
-            (hostname,),
+            (normalized_hostname,),
         )
         row = conn.execute("SELECT changes()").fetchone()
         deleted[table_name] = int(row[0] or 0) if row else 0
@@ -13442,19 +13493,36 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             hostname = str(payload.get("hostname", "")).strip()
-            if not hostname:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
+            host_uid = str(payload.get("host_uid", "") or "").strip()
+            if not hostname and not host_uid:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname or host_uid missing"})
                 return
 
             with sqlite3.connect(DB_PATH) as conn:
-                deleted = delete_host_card_data(conn, hostname)
+                resolved_hostname = hostname
+                if not resolved_hostname and host_uid:
+                    host_key_expr = reports_host_key_sql()
+                    row = conn.execute(
+                        f"""
+                        SELECT COALESCE(hostname, '')
+                        FROM reports
+                        WHERE {host_key_expr} = ?
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (host_uid,),
+                    ).fetchone()
+                    resolved_hostname = str((row[0] if row else "") or "").strip()
+
+                deleted = delete_host_card_data(conn, resolved_hostname, host_uid)
                 conn.commit()
 
             self._send_json(
                 HTTPStatus.OK,
                 {
                     "status": "deleted",
-                    "hostname": hostname,
+                    "hostname": resolved_hostname or hostname,
+                    "host_uid": host_uid,
                     "deleted": deleted,
                     "deleted_total": int(sum(deleted.values())),
                 },

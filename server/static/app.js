@@ -8272,13 +8272,16 @@ async function saveHostSettings(hostname, partialSettings, hostUid = "") {
   return response.json();
 }
 
-async function deleteHostCard(hostname) {
+async function deleteHostCard(hostname, hostUid = "") {
   const response = await fetch("/api/v1/host-delete", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ hostname }),
+    body: JSON.stringify({
+      hostname,
+      host_uid: asText(hostUid, "").trim(),
+    }),
   });
 
   const data = await response.json().catch(() => ({}));
@@ -8295,6 +8298,7 @@ function closeHostContextMenu() {
   }
   menu.classList.add("hidden");
   delete menu.dataset.hostname;
+  delete menu.dataset.hostUid;
 }
 
 function ensureHostContextMenu() {
@@ -8321,21 +8325,26 @@ function ensureHostContextMenu() {
     event.preventDefault();
     event.stopPropagation();
     const hostname = String(menu.dataset.hostname || "").trim();
+    const hostUid = String(menu.dataset.hostUid || "").trim();
     closeHostContextMenu();
-    if (!hostname) {
+    if (!hostname && !hostUid) {
       return;
     }
 
+    const hostLabel = hostUid || hostname;
+    const hostLabelShort = hostLabel.length > 54 ? `${hostLabel.slice(0, 51)}...` : hostLabel;
+
     const confirmed = window.confirm(
-      `Karte für ${hostname} wirklich löschen?\n\nDas entfernt Reports, Alerts und Host-Settings dauerhaft.`
+      `Karte für ${hostLabelShort} wirklich löschen?\n\nDas entfernt Reports, Alerts und Host-Settings dauerhaft.`
     );
     if (!confirmed) {
       return;
     }
 
     try {
-      await deleteHostCard(hostname);
-      if (state.selectedHost === hostname) {
+      await deleteHostCard(hostname, hostUid);
+      const selectedIdentity = asText(state.selectedHostUid, "").trim() || asText(state.selectedHost, "").trim();
+      if (selectedIdentity && selectedIdentity === (hostUid || hostname)) {
         state.selectedHost = "";
         state.selectedHostUid = "";
         state.selectedDisplayName = "";
@@ -8364,18 +8373,21 @@ function ensureHostContextMenu() {
   return menu;
 }
 
-function openHostContextMenu(hostname, clientX, clientY) {
+function openHostContextMenu(hostname, hostUid, clientX, clientY) {
   const menu = ensureHostContextMenu();
   const normalizedHost = String(hostname || "").trim();
-  if (!normalizedHost) {
+  const normalizedHostUid = String(hostUid || "").trim();
+  if (!normalizedHost && !normalizedHostUid) {
     return;
   }
+  const labelText = normalizedHostUid || normalizedHost;
 
   const label = menu.querySelector(".host-context-menu-label");
   if (label) {
-    label.textContent = normalizedHost;
+    label.textContent = labelText;
   }
   menu.dataset.hostname = normalizedHost;
+  menu.dataset.hostUid = normalizedHostUid;
   menu.classList.remove("hidden");
 
   const viewportWidth = window.innerWidth;
@@ -9241,12 +9253,13 @@ function wireHostListInteractions() {
       return;
     }
     const hostname = hostItem.getAttribute("data-host") || "";
-    if (!hostname) {
+    const hostUid = hostItem.getAttribute("data-host-uid") || "";
+    if (!hostname && !hostUid) {
       return;
     }
     event.preventDefault();
     event.stopPropagation();
-    openHostContextMenu(hostname, event.clientX, event.clientY);
+    openHostContextMenu(hostname, hostUid, event.clientX, event.clientY);
   });
 
   hostList.addEventListener("mouseover", (event) => {

@@ -584,6 +584,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.320 (22. Mai 2026)
+
+- **Doppelte Karten: Loeschen jetzt host_uid-spezifisch**: Der Kontextmenue-Delete sendet jetzt `host_uid` mit, damit exakt die ausgewaehlte Karte geloescht wird.
+- **Kein Mit-Loeschen gleichnamiger Karten mehr**: Im Backend loescht `/api/v1/host-delete` bei gesetzter `host_uid` nur die zugehoerigen Reports/UID-Settings; hostname-basierte Sammel-Loeschungen erfolgen nur noch, wenn fuer den Hostnamen keine Reports mehr uebrig sind.
+
 ### v1.6.319 (22. Mai 2026)
 
 - **502 nach Login behoben (Regression aus 1.6.316)**: Im API-Pfad `/api/v1/hosts` wurde das Mapping fuer `host_uid`-Displaynamen in bestimmten Faellen verwendet, ohne vorher aufgebaut zu sein.
