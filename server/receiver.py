@@ -1084,16 +1084,17 @@ def web_session_expires_iso() -> str:
 
 
 def format_mail_datetime(value: str | None = None) -> str:
+    target_tz = SCHEDULE_TIMEZONE or datetime.now().astimezone().tzinfo
     if not value:
-        return datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
+        return datetime.now(timezone.utc).astimezone(target_tz).strftime("%d.%m.%Y %H:%M %Z")
     raw = str(value).strip()
     if not raw:
-        return datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
+        return datetime.now(timezone.utc).astimezone(target_tz).strftime("%d.%m.%Y %H:%M %Z")
     try:
         parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
-        return parsed.astimezone().strftime("%d.%m.%Y %H:%M")
+        return parsed.astimezone(target_tz).strftime("%d.%m.%Y %H:%M %Z")
     except ValueError:
         return raw
 
