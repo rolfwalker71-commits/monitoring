@@ -584,6 +584,13 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.322 (22. Mai 2026)
+
+- **Globales Changelog-Rebuild als Job planbar**: Neue Admin-API `POST /api/v1/admin/changelog-rebuild/schedule` plant einen Bereinigungs-/Rebuild-Job fuer Host-Config- und DB-Lifecycle-Changelog.
+- **Stichtag-heute Workflow vorbereitet**: Standard fuer den Rebuild-Job ist `days=1` (heutiger Stichtag); optional kann `run_now=true` fuer sofortige Ausfuehrung gesetzt werden.
+- **Job-Status einsehbar**: Neue Admin-API `GET /api/v1/admin/changelog-rebuild/jobs` liefert geplante/laufende/abgeschlossene Rebuild-Jobs inklusive Ergebnis/Fehler.
+- **Forcierter Neuaufbau moeglich**: Rebuild-Jobs unterstuetzen `force_rebuild`, damit bestehender Rebuild-State den erneuten Neuaufbau nicht blockiert.
+
 ### v1.6.321 (22. Mai 2026)
 
 - **Systemansicht gegen Host-Merge gehaertet**: `/api/v1/system-overview` aggregiert jetzt ueber den kanonischen Host-Key (`host_uid`/Legacy-Key) statt nur ueber `hostname`, damit gleichnamige Hosts separat erscheinen.

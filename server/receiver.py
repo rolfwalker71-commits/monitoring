@@ -412,6 +412,35 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS changelog_rebuild_jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                requested_at_utc TEXT NOT NULL,
+                requested_by TEXT NOT NULL DEFAULT '',
+                scheduled_for_utc TEXT NOT NULL,
+                days INTEGER NOT NULL,
+                force_rebuild INTEGER NOT NULL DEFAULT 1,
+                status TEXT NOT NULL DEFAULT 'pending',
+                started_at_utc TEXT NOT NULL DEFAULT '',
+                finished_at_utc TEXT NOT NULL DEFAULT '',
+                error_message TEXT NOT NULL DEFAULT '',
+                result_json TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_changelog_rebuild_jobs_status_time
+            ON changelog_rebuild_jobs(status, scheduled_for_utc ASC, id ASC)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_changelog_rebuild_jobs_finished
+            ON changelog_rebuild_jobs(finished_at_utc DESC, id DESC)
+            """
+        )
         existing_host_config_snapshot_columns = {
             str(row[1])
             for row in conn.execute("PRAGMA table_info(host_config_snapshot)").fetchall()
@@ -2677,6 +2706,7 @@ def _db_maintenance_scheduler_loop() -> None:
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 _ensure_db_maintenance_snapshot(conn)
+                process_due_changelog_rebuild_jobs(conn, max_jobs=1)
         except Exception as exc:
             print(f"[db-maintenance-scheduler] {exc}")
         threading.Event().wait(60)
@@ -4248,7 +4278,7 @@ def backfill_database_lifecycle(conn: sqlite3.Connection, days: int = 7) -> dict
     }
 
 
-def rebuild_changelog_history(conn: sqlite3.Connection, days: int = 15) -> dict:
+def rebuild_changelog_history(conn: sqlite3.Connection, days: int = 15, force_rebuild: bool = False) -> dict:
     """Reset changelog tables and rebuild them from the last N report days.
 
     This is intended as a one-time startup migration for hosts that need a clean
@@ -4259,7 +4289,7 @@ def rebuild_changelog_history(conn: sqlite3.Connection, days: int = 15) -> dict:
     existing_state = conn.execute(
         "SELECT completed_at_utc, days FROM changelog_rebuild_state WHERE id = 1"
     ).fetchone()
-    if existing_state:
+    if existing_state and not force_rebuild:
         return {
             "status": "skipped",
             "completed_at_utc": str(existing_state[0] or ""),
@@ -4308,6 +4338,224 @@ def rebuild_changelog_history(conn: sqlite3.Connection, days: int = 15) -> dict:
         "config_result": config_result,
         "database_result": db_result,
     }
+
+
+def _normalize_utc_timestamp(value: str, default_to_now: bool = False) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return utc_now_iso() if default_to_now else ""
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return utc_now_iso() if default_to_now else ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def schedule_changelog_rebuild_job(
+    conn: sqlite3.Connection,
+    requested_by: str,
+    *,
+    days: int = 1,
+    scheduled_for_utc: str = "",
+    force_rebuild: bool = True,
+) -> dict:
+    safe_days = max(1, min(int(days or 1), 365))
+    run_at = _normalize_utc_timestamp(scheduled_for_utc, default_to_now=True)
+    requested_at = utc_now_iso()
+    requester = str(requested_by or "").strip() or "webclient"
+    force_int = 1 if force_rebuild else 0
+
+    existing_pending = conn.execute(
+        """
+        SELECT id, requested_at_utc, requested_by, scheduled_for_utc, days, force_rebuild, status,
+               started_at_utc, finished_at_utc, error_message, result_json
+        FROM changelog_rebuild_jobs
+        WHERE status IN ('pending', 'running')
+          AND days = ?
+          AND force_rebuild = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (safe_days, force_int),
+    ).fetchone()
+    if existing_pending:
+        return {
+            "status": "already_scheduled",
+            "job": {
+                "id": int(existing_pending[0] or 0),
+                "requested_at_utc": str(existing_pending[1] or ""),
+                "requested_by": str(existing_pending[2] or ""),
+                "scheduled_for_utc": str(existing_pending[3] or ""),
+                "days": int(existing_pending[4] or 0),
+                "force_rebuild": bool(int(existing_pending[5] or 0)),
+                "status": str(existing_pending[6] or "pending"),
+                "started_at_utc": str(existing_pending[7] or ""),
+                "finished_at_utc": str(existing_pending[8] or ""),
+                "error_message": str(existing_pending[9] or ""),
+                "result": parse_payload_json(str(existing_pending[10] or "{}")),
+            },
+        }
+
+    cursor = conn.execute(
+        """
+        INSERT INTO changelog_rebuild_jobs (
+            requested_at_utc,
+            requested_by,
+            scheduled_for_utc,
+            days,
+            force_rebuild,
+            status,
+            started_at_utc,
+            finished_at_utc,
+            error_message,
+            result_json
+        )
+        VALUES (?, ?, ?, ?, ?, 'pending', '', '', '', '')
+        """,
+        (requested_at, requester, run_at, safe_days, force_int),
+    )
+
+    return {
+        "status": "scheduled",
+        "job": {
+            "id": int(cursor.lastrowid or 0),
+            "requested_at_utc": requested_at,
+            "requested_by": requester,
+            "scheduled_for_utc": run_at,
+            "days": safe_days,
+            "force_rebuild": bool(force_int),
+            "status": "pending",
+            "started_at_utc": "",
+            "finished_at_utc": "",
+            "error_message": "",
+            "result": {},
+        },
+    }
+
+
+def list_changelog_rebuild_jobs(conn: sqlite3.Connection, limit: int = 20) -> list[dict]:
+    safe_limit = max(1, min(int(limit or 20), 200))
+    rows = conn.execute(
+        """
+        SELECT id,
+               requested_at_utc,
+               requested_by,
+               scheduled_for_utc,
+               days,
+               force_rebuild,
+               status,
+               started_at_utc,
+               finished_at_utc,
+               error_message,
+               result_json
+        FROM changelog_rebuild_jobs
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (safe_limit,),
+    ).fetchall()
+    return [
+        {
+            "id": int(row[0] or 0),
+            "requested_at_utc": str(row[1] or ""),
+            "requested_by": str(row[2] or ""),
+            "scheduled_for_utc": str(row[3] or ""),
+            "days": int(row[4] or 0),
+            "force_rebuild": bool(int(row[5] or 0)),
+            "status": str(row[6] or "pending"),
+            "started_at_utc": str(row[7] or ""),
+            "finished_at_utc": str(row[8] or ""),
+            "error_message": str(row[9] or ""),
+            "result": parse_payload_json(str(row[10] or "{}")),
+        }
+        for row in rows
+    ]
+
+
+def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int = 1) -> list[dict]:
+    safe_max = max(1, min(int(max_jobs or 1), 5))
+    now_iso = utc_now_iso()
+    jobs = conn.execute(
+        """
+        SELECT id, days, force_rebuild
+        FROM changelog_rebuild_jobs
+        WHERE status = 'pending'
+          AND scheduled_for_utc <= ?
+        ORDER BY scheduled_for_utc ASC, id ASC
+        LIMIT ?
+        """,
+        (now_iso, safe_max),
+    ).fetchall()
+
+    processed: list[dict] = []
+    for row in jobs:
+        job_id = int(row[0] or 0)
+        window_days = int(row[1] or 1)
+        force_rebuild = bool(int(row[2] or 0))
+        started_at = utc_now_iso()
+
+        conn.execute(
+            """
+            UPDATE changelog_rebuild_jobs
+            SET status = 'running',
+                started_at_utc = ?,
+                finished_at_utc = '',
+                error_message = '',
+                result_json = ''
+            WHERE id = ? AND status = 'pending'
+            """,
+            (started_at, job_id),
+        )
+        if conn.execute("SELECT changes()").fetchone()[0] == 0:
+            continue
+        conn.commit()
+
+        try:
+            result = rebuild_changelog_history(conn, days=window_days, force_rebuild=force_rebuild)
+            finished_at = utc_now_iso()
+            conn.execute(
+                """
+                UPDATE changelog_rebuild_jobs
+                SET status = 'completed',
+                    finished_at_utc = ?,
+                    error_message = '',
+                    result_json = ?
+                WHERE id = ?
+                """,
+                (finished_at, json.dumps(result, separators=(",", ":")), job_id),
+            )
+            conn.commit()
+            processed.append({
+                "id": job_id,
+                "status": "completed",
+                "finished_at_utc": finished_at,
+                "result": result,
+            })
+        except Exception as exc:
+            finished_at = utc_now_iso()
+            conn.execute(
+                """
+                UPDATE changelog_rebuild_jobs
+                SET status = 'failed',
+                    finished_at_utc = ?,
+                    error_message = ?
+                WHERE id = ?
+                """,
+                (finished_at, str(exc), job_id),
+            )
+            conn.commit()
+            processed.append({
+                "id": job_id,
+                "status": "failed",
+                "finished_at_utc": finished_at,
+                "error": str(exc),
+            })
+
+    return processed
 
 
 
@@ -10753,6 +11001,23 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, {"status": "ok", **payload})
             return
 
+        if parsed.path == "/api/v1/admin/changelog-rebuild/jobs":
+            if not self._require_admin_session():
+                return
+            query = parse_qs(parsed.query)
+            limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
+            with sqlite3.connect(DB_PATH) as conn:
+                jobs = list_changelog_rebuild_jobs(conn, limit=limit)
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "count": len(jobs),
+                    "jobs": jobs,
+                },
+            )
+            return
+
         if parsed.path == "/api/v1/admin/backup-automation":
             if not self._require_admin_session():
                 return
@@ -14226,6 +14491,65 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "message": "DB Kennzahlen manuell neu berechnet",
                     "triggered": snapshot,
                     **payload,
+                },
+            )
+            return
+
+        if path == "/api/v1/admin/changelog-rebuild/schedule":
+            if not self._require_admin_session():
+                return
+
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "json object required"})
+                return
+
+            run_now = parse_bool(payload.get("run_now"), False)
+            force_rebuild = parse_bool(payload.get("force_rebuild"), True)
+            try:
+                days = int(payload.get("days", 1) or 1)
+            except (TypeError, ValueError):
+                days = 1
+            days = max(1, min(days, 365))
+            scheduled_for_utc = str(payload.get("scheduled_for_utc", "") or "").strip()
+            if run_now:
+                scheduled_for_utc = utc_now_iso()
+
+            requested_by = self._web_session_username() or "webclient"
+
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    scheduled = schedule_changelog_rebuild_job(
+                        conn,
+                        requested_by,
+                        days=days,
+                        scheduled_for_utc=scheduled_for_utc,
+                        force_rebuild=force_rebuild,
+                    )
+                    immediate_result = []
+                    if run_now:
+                        immediate_result = process_due_changelog_rebuild_jobs(conn, max_jobs=1)
+                    jobs = list_changelog_rebuild_jobs(conn, limit=20)
+                    conn.commit()
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "message": "Changelog-Rebuild-Job geplant",
+                    "scheduled": scheduled,
+                    "processed_now": immediate_result,
+                    "jobs": jobs,
                 },
             )
             return
