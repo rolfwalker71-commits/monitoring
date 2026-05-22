@@ -6650,8 +6650,8 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
         "missing_hdbsql": "hdbsql nicht gefunden",
         "auth_failed": "Authentifizierung fehlgeschlagen",
         "query_failed": "Abfrage fehlgeschlagen"
-      }[reason] || (reason || "HANA DB-Scan nicht verfügbar");
-      parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Datenbanken</h4><p class="muted">${escapeHtml(reasonText)}${error ? `: ${escapeHtml(error)}` : ""}</p></section>`);
+      }[reason] || (reason || "HANA Schema-Scan nicht verfügbar");
+      parts.push(`<section class="detail-card"><h4>🔶 SAP HANA Schemas</h4><p class="muted">${escapeHtml(reasonText)}${error ? `: ${escapeHtml(error)}` : ""}</p></section>`);
     } else {
       const tenantViews = collectHanaDbTenantViews(hanaInfo);
       const renderFilteredSchemas = (schemas) => {
@@ -6712,7 +6712,7 @@ GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];`;
 
       parts.push(`
         <section class="detail-card">
-          <h4>🔶 SAP HANA Datenbanken</h4>
+          <h4>🔶 SAP HANA Schemas</h4>
           ${tenantBlocks || '<p class="muted">Keine Eintraege gefunden (Filter: kein SAP*, kein _*, kein SLDDATA, kein SBOCOMMON, kein LANDSCAPE, Groesse > 0 GB).</p>'}
         </section>`);
     }
