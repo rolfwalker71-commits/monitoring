@@ -85,6 +85,7 @@ let autoRefreshLastRefreshAt = null;
 let autoRefreshCountdownTimerId = null;
 let sessionRefreshTimerId = null;
 let sessionCountdownTimerId = null;
+let hostSearchFilterDebounceTimerId = null;
 let hostLicenseHoverPopupEl = null;
 let hostLicenseHoverHideTimerId = null;
 let hostLicenseHoverActiveHost = "";
@@ -7321,7 +7322,7 @@ function renderHostIconFilters(hosts) {
       state.hostOsFilter = nextFilter;
       state.hostOffset = 0;
       persistHostFilterPreferences();
-      await loadHosts();
+      await applyHostFiltersLocally({ preserveScroll: true });
     });
   });
 
@@ -7335,7 +7336,7 @@ function renderHostIconFilters(hosts) {
       state.hostCountryFilter = nextFilter;
       state.hostOffset = 0;
       persistHostFilterPreferences();
-      await loadHosts();
+      await applyHostFiltersLocally({ preserveScroll: true });
     });
   });
 }
@@ -7415,6 +7416,38 @@ function hasActiveHostFilters() {
     || String(state.hostOsFilter || "all") !== "all"
     || String(state.hostCountryFilter || "all") !== "all"
   );
+}
+
+async function applyHostFiltersLocally(options = {}) {
+  const preserveScroll = Boolean(options && options.preserveScroll);
+  const hostList = document.getElementById("hostList");
+  const previousScrollTop = hostList ? hostList.scrollTop : 0;
+  const hosts = Array.isArray(state.hosts) ? state.hosts : [];
+
+  const { visibleHosts, hiddenHosts } = splitHosts(hosts);
+  const orderedHosts = [...visibleHosts, ...hiddenHosts];
+  state.hostFilterNoMatches = hosts.length > 0 && orderedHosts.length === 0 && hasActiveHostFilters();
+
+  const selectedIdentity = asText(state.selectedHostUid, "").trim() || asText(state.selectedHost, "").trim();
+  const selectedStillVisible = !selectedIdentity || orderedHosts.some((host) => resolveHostIdentity(host) === selectedIdentity);
+  if (!selectedStillVisible) {
+    state.selectedHost = "";
+    state.selectedHostUid = "";
+    state.selectedDisplayName = "";
+    state.reportOffset = 0;
+    loadAndRenderCustomerNotificationPanel("");
+    await loadReportsForHost();
+    await loadAnalysisForHost();
+    await loadAlertsForHost();
+    await loadDatabaseLifecycleForHost();
+    await loadConfigChangelogForHost();
+  }
+
+  renderHosts(hosts);
+  if (preserveScroll && hostList) {
+    hostList.scrollTop = previousScrollTop;
+  }
+  updatePagerButtons();
 }
 
 function hiddenHostsToggleLabel(collapsed) {
@@ -12639,7 +12672,7 @@ function wireEvents() {
       state.hostInterestMode = normalizeHostInterestMode(event.target?.value || "all");
       syncHostInterestModeControls();
       renderHostInterestsEditor();
-      await loadHosts({ preserveScroll: true });
+      await applyHostFiltersLocally({ preserveScroll: true });
     });
   }
   const hostSidebarInterestModeSelect = document.getElementById("hostSidebarInterestModeSelect");
@@ -12653,7 +12686,7 @@ function wireEvents() {
       } catch (error) {
         setHostInterestsStatus(`Modus konnte nicht gespeichert werden: ${error.message}`, true);
       }
-      await loadHosts({ preserveScroll: true });
+      await applyHostFiltersLocally({ preserveScroll: true });
     });
   }
   const hostInterestSearchInput = document.getElementById("hostInterestSearchInput");
@@ -12800,11 +12833,18 @@ function wireEvents() {
     reportsNextButtonTop.addEventListener("click", goToNextReport);
   }
 
-  document.getElementById("hostSearchInput").addEventListener("input", async (event) => {
+  document.getElementById("hostSearchInput").addEventListener("input", (event) => {
     state.hostSearchQuery = event.target.value;
     state.hostOffset = 0;
     persistHostFilterPreferences();
-    await loadHosts();
+
+    if (hostSearchFilterDebounceTimerId !== null) {
+      window.clearTimeout(hostSearchFilterDebounceTimerId);
+    }
+    hostSearchFilterDebounceTimerId = window.setTimeout(() => {
+      hostSearchFilterDebounceTimerId = null;
+      void applyHostFiltersLocally({ preserveScroll: true });
+    }, 120);
   });
 
   document.addEventListener("visibilitychange", () => {

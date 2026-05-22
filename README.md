@@ -584,6 +584,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.299 (22. Mai 2026)
+
+- **Host-Suche/Filter deutlich beschleunigt**: Sidebar-Filter (Suche, OS, Land, Interessen) werden jetzt lokal auf bereits geladene Hosts angewendet statt bei jeder Änderung `/api/v1/hosts` neu zu laden; die Suche nutzt zusätzlich ein kurzes Debounce für flüssigere Reaktion.
+
 ### v1.6.298 (22. Mai 2026)
 
 - **Performance-Optimierung Hosts/Einzelmeldungen**: Zusätzliche DB-Indizes für Reports/Alerts eingeführt und Host-Report-Filter auf index-freundliche `host_uid`-Abfrage umgestellt. Dadurch sind Hostlisten-Aufbau und Kartenwechsel deutlich schneller auf grossen Datenbeständen.
