@@ -584,6 +584,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.314 (22. Mai 2026)
+
+- **Host-UID fuer Linux gegen Klon-Kollisionen gehaertet**: Bei der automatischen Host-UID-Bildung wird jetzt zusaetzlich die MAC der Default-NIC eingebunden (`<hostname>::mid:<machine-id>::mac:<mac>`).
+- **Ursache fuer 4-auf-2-Merge adressiert**: Wenn zwei Hosts denselben Hostnamen und dieselbe (geklonte) `/etc/machine-id` haben, war die bisherige Host-UID identisch. Mit der NIC-MAC im UID-Key bleiben solche Hosts getrennt.
+
 ### v1.6.313 (22. Mai 2026)
 
 - **HANA-Multitenant-Verbindung auf DB-Name-only gehaertet**: Im Tenant-Scan wird fuer AddOn- und COMPANYDBS-Abfragen jetzt ausschliesslich `hdbsql -d <tenant>` verwendet. Der `-n`/Port-Fallback wurde im Tenant-Modus entfernt, damit keine implizite Verbindung auf falsche Targets erfolgt.

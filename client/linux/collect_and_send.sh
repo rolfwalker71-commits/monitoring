@@ -2840,6 +2840,11 @@ flush_queue() {
 
 HOSTNAME_VALUE="$(hostname -f 2>/dev/null || hostname)"
 PRIMARY_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i=="src") {print $(i+1); exit}}')"
+HOST_UID_NIC_NAME="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i=="dev") {print $(i+1); exit}}')"
+HOST_UID_NIC_MAC=""
+if [[ -n "$HOST_UID_NIC_NAME" ]] && [[ -r "/sys/class/net/${HOST_UID_NIC_NAME}/address" ]]; then
+  HOST_UID_NIC_MAC="$(tr '[:upper:]' '[:lower:]' < "/sys/class/net/${HOST_UID_NIC_NAME}/address" 2>/dev/null | tr -d '[:space:]')"
+fi
 ALL_IPS="$(hostname -I 2>/dev/null | xargs || true)"
 TIMESTAMP_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 UPTIME_SECONDS="$(cut -d. -f1 /proc/uptime)"
@@ -2855,7 +2860,11 @@ if [[ -z "$HOST_UID_VALUE" ]]; then
   fi
 
   if [[ -n "$MACHINE_ID_VALUE" ]]; then
-    HOST_UID_VALUE="${HOSTNAME_VALUE}::mid:${MACHINE_ID_VALUE}"
+    if [[ -n "$HOST_UID_NIC_MAC" ]]; then
+      HOST_UID_VALUE="${HOSTNAME_VALUE}::mid:${MACHINE_ID_VALUE}::mac:${HOST_UID_NIC_MAC}"
+    else
+      HOST_UID_VALUE="${HOSTNAME_VALUE}::mid:${MACHINE_ID_VALUE}"
+    fi
   elif [[ -n "$AGENT_ID_VALUE" ]]; then
     HOST_UID_VALUE="${HOSTNAME_VALUE}::agent:${AGENT_ID_VALUE}"
   elif [[ -n "$PRIMARY_IP" ]]; then
