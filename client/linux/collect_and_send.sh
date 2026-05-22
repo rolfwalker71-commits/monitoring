@@ -653,7 +653,7 @@ collect_hana_addons_json() {
 
     sql_escaped="$(printf '%q' "$sql_text")"
 
-    # Tenant mode: prefer DB-name based access (-d) over port routing.
+    # Tenant mode: use DB-name based access (-d) only.
     if [[ "$tenant_scan_mode" == "1" ]]; then
       if [[ -z "$tenant_db_name" ]]; then
         tenant_db_name="$sid"
@@ -665,19 +665,16 @@ collect_hana_addons_json() {
         else
           implicit_output="$(su - "$sid_user" -c "hdbsql -d \"$tenant_db_name\" -u \"$addons_user\" -p \"$addons_password\" $sql_escaped 2>&1" || true)"
         fi
-        if [[ -n "$implicit_output" ]] && ! is_hdbsql_connection_error "$implicit_output"; then
-          last_hdbsql_mode="tenant_db_implicit"
-          printf '%s' "$implicit_output"
-          return
-        fi
-
-        if command -v timeout >/dev/null 2>&1; then
-          explicit_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -n \"$hdbsql_target\" -d \"$tenant_db_name\" -u \"$addons_user\" -p \"$addons_password\" $sql_escaped 2>&1" || true)"
+        if [[ -n "$implicit_output" ]]; then
+          if is_hdbsql_connection_error "$implicit_output"; then
+            last_hdbsql_mode="tenant_db_implicit_failed"
+          else
+            last_hdbsql_mode="tenant_db_implicit"
+          fi
         else
-          explicit_output="$(su - "$sid_user" -c "hdbsql -n \"$hdbsql_target\" -d \"$tenant_db_name\" -u \"$addons_user\" -p \"$addons_password\" $sql_escaped 2>&1" || true)"
+          last_hdbsql_mode="tenant_db_implicit_empty"
         fi
-        last_hdbsql_mode="tenant_db_explicit"
-        printf '%s' "$explicit_output"
+        printf '%s' "$implicit_output"
         return
       fi
     fi
@@ -900,11 +897,7 @@ collect_hana_addons_json() {
         local tenant_id="${target_line%%|*}"
         local tenant_port="${target_line#*|}"
         local tenant_result=""
-        if [[ -n "$tenant_port" ]]; then
-          tenant_result="$(HANA_TENANT_SCAN_MODE=1 HANA_TENANT_DB="$tenant_id" HANA_SID="$sid" HANA_ADDONS_PORT="$tenant_port" collect_hana_addons_json)"
-        else
-          tenant_result="$(HANA_TENANT_SCAN_MODE=1 HANA_TENANT_DB="$tenant_id" HANA_SID="$sid" collect_hana_addons_json)"
-        fi
+        tenant_result="$(HANA_TENANT_SCAN_MODE=1 HANA_TENANT_DB="$tenant_id" HANA_SID="$sid" collect_hana_addons_json)"
         if printf '%s' "$tenant_result" | grep -q '"available":true'; then
           any_available=true
         fi
@@ -1101,8 +1094,8 @@ collect_hana_addons_json() {
 }
 
 collect_hana_multitenant_targets() {
-  # Detect tenant directories and ports from indexserver.ini first line.
-  # Output format per line: TENANT_ID|PORT
+  # Detect tenant directories only.
+  # Output format per line: TENANT_ID|
   local sid="${1-}"
   local config_root=""
   local tenant_dir=""
@@ -1114,22 +1107,13 @@ collect_hana_multitenant_targets() {
   while IFS= read -r tenant_dir; do
     local tenant_name=""
     local tenant_id=""
-    local ini_path=""
-    local first_line=""
-    local tenant_port=""
 
     [[ -z "$tenant_dir" ]] && continue
     tenant_name="$(basename "$tenant_dir")"
     tenant_id="${tenant_name#DB_}"
     [[ "$tenant_id" =~ ^[A-Za-z0-9]{3}$ ]] || continue
 
-    ini_path="$tenant_dir/indexserver.ini"
-    if [[ -f "$ini_path" ]]; then
-      first_line="$(head -n 1 "$ini_path" 2>/dev/null || true)"
-      tenant_port="$(printf '%s' "$first_line" | sed -nE 's/.*-port[[:space:]]+([0-9]{5}).*/\1/p')"
-    fi
-
-    printf '%s|%s\n' "$tenant_id" "$tenant_port"
+    printf '%s|\n' "$tenant_id"
   done < <(find "$config_root" -mindepth 1 -maxdepth 1 -type d -name 'DB_???' 2>/dev/null | sort)
 }
 
@@ -1167,10 +1151,8 @@ collect_hana_multitenant_discovery_json() {
   fi
 
   local reason="none_found"
-  if (( tenant_count > 0 )) && (( with_port_count == tenant_count )); then
+  if (( tenant_count > 0 )); then
     reason="success"
-  elif (( tenant_count > 0 )) && (( with_port_count < tenant_count )); then
-    reason="partial_missing_port"
   fi
 
   printf '{"available":%s,"sid":"%s","config_root":"%s","tenant_count":%s,"with_port_count":%s,"tenants":[%s],"reason":"%s"}' \
@@ -1258,7 +1240,7 @@ collect_hana_db_info_json() {
 
     sql_escaped="$(printf '%q' "$sql_text")"
 
-    # Tenant mode: prefer DB-name based access (-d) over port routing.
+    # Tenant mode: use DB-name based access (-d) only.
     if [[ "$tenant_scan_mode" == "1" ]]; then
       if [[ -z "$tenant_db_name" ]]; then
         tenant_db_name="$sid"
@@ -1270,19 +1252,16 @@ collect_hana_db_info_json() {
         else
           implicit_output="$(su - "$sid_user" -c "hdbsql -d \"$tenant_db_name\" -u \"$db_user\" -p \"$db_password\" $sql_escaped 2>&1" || true)"
         fi
-        if [[ -n "$implicit_output" ]] && ! is_hdbsql_db_connection_error "$implicit_output"; then
-          last_hdbsql_mode="tenant_db_implicit"
-          printf '%s' "$implicit_output"
-          return
-        fi
-
-        if command -v timeout >/dev/null 2>&1; then
-          explicit_output="$(timeout "${query_timeout_sec}s" su - "$sid_user" -c "hdbsql -n \"$hdbsql_target\" -d \"$tenant_db_name\" -u \"$db_user\" -p \"$db_password\" $sql_escaped 2>&1" || true)"
+        if [[ -n "$implicit_output" ]]; then
+          if is_hdbsql_db_connection_error "$implicit_output"; then
+            last_hdbsql_mode="tenant_db_implicit_failed"
+          else
+            last_hdbsql_mode="tenant_db_implicit"
+          fi
         else
-          explicit_output="$(su - "$sid_user" -c "hdbsql -n \"$hdbsql_target\" -d \"$tenant_db_name\" -u \"$db_user\" -p \"$db_password\" $sql_escaped 2>&1" || true)"
+          last_hdbsql_mode="tenant_db_implicit_empty"
         fi
-        last_hdbsql_mode="tenant_db_explicit"
-        printf '%s' "$explicit_output"
+        printf '%s' "$implicit_output"
         return
       fi
     fi
@@ -1457,11 +1436,7 @@ collect_hana_db_info_json() {
         local tenant_id="${target_line%%|*}"
         local tenant_port="${target_line#*|}"
         local tenant_result=""
-        if [[ -n "$tenant_port" ]]; then
-          tenant_result="$(HANA_TENANT_SCAN_MODE=1 HANA_TENANT_DB="$tenant_id" HANA_SID="$sid" HANA_ADDONS_PORT="$tenant_port" collect_hana_db_info_json)"
-        else
-          tenant_result="$(HANA_TENANT_SCAN_MODE=1 HANA_TENANT_DB="$tenant_id" HANA_SID="$sid" collect_hana_db_info_json)"
-        fi
+        tenant_result="$(HANA_TENANT_SCAN_MODE=1 HANA_TENANT_DB="$tenant_id" HANA_SID="$sid" collect_hana_db_info_json)"
         if printf '%s' "$tenant_result" | grep -q '"available":true'; then
           any_available=true
         fi

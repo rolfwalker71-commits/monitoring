@@ -584,6 +584,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.313 (22. Mai 2026)
+
+- **HANA-Multitenant-Verbindung auf DB-Name-only gehaertet**: Im Tenant-Scan wird fuer AddOn- und COMPANYDBS-Abfragen jetzt ausschliesslich `hdbsql -d <tenant>` verwendet. Der `-n`/Port-Fallback wurde im Tenant-Modus entfernt, damit keine implizite Verbindung auf falsche Targets erfolgt.
+- **Tenant-Discovery ohne Port-Abhaengigkeit**: Tenant-Erkennung nutzt nur noch die Verzeichnisse unter `/usr/sap/<SID>/SYS/global/hdb/custom/config/DB_???`; der `indexserver.ini`-`-port` wird nicht mehr ausgewertet.
+- **UI-Discovery-Text angepasst**: Discovery zeigt nun neutral "Tenant-Verzeichnisse erkannt" statt port-basierter Statusmeldungen.
+
 ### v1.6.312 (22. Mai 2026)
 
 - **Kein automatisches Hostkarten-Merge ueber Hostname mehr**: Alle relevanten Host-Queries verwenden jetzt einen strikten Host-Key ohne Hostname-Fallback. Damit werden Hosts nicht mehr wegen identischem Hostnamen zusammengefuehrt.

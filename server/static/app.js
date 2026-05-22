@@ -5738,8 +5738,8 @@ function renderHanaMultitenantDiscoverySummary(discovery) {
     .filter(Boolean);
 
   const reasonText = {
-    success: "Tenant-Verzeichnisse inkl. Ports erkannt",
-    partial_missing_port: "Tenant-Verzeichnisse erkannt (teilweise ohne Port)",
+    success: "Tenant-Verzeichnisse erkannt",
+    partial_missing_port: "Tenant-Verzeichnisse erkannt",
     none_found: "Keine Tenant-Verzeichnisse erkannt",
     missing_hana_sid: "HANA SID fehlt"
   }[reason] || reason;
