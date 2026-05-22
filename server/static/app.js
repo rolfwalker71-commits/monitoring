@@ -184,6 +184,7 @@ const state = {
   sapB1VmapBeforeUnloadWired: false,
   backupAutomationLoaded: false,
   mutedAlertsSignature: "",
+  deferredDashboardTasksInFlight: false,
   // Add a new user type "readOnly" to the state
   userType: "default", // Possible values: "default", "readOnly", "admin"
 };
@@ -759,13 +760,8 @@ async function refreshDashboard(options = {}) {
   autoRefreshInProgress = true;
   try {
     const shouldRefreshGlobalAlertsList = state.viewMode === "global" && state.globalSubMode === "global-alerts";
-    // Load hosts first so the list appears immediately, fire background tasks in parallel
-    const backgroundTasks = Promise.allSettled([
-      loadWebclientVersion(),
-      loadGlobalAlertsOverview({ updateList: shouldRefreshGlobalAlertsList }),
-      loadCriticalTrends({ updateList: false }),
-      loadInactiveHosts({ updateList: false }),
-    ]);
+
+    // Critical path first: render host list quickly and keep startup interactive.
     await loadHosts({ preserveScroll });
     if (state.selectedHost) {
       await Promise.allSettled([
@@ -774,7 +770,29 @@ async function refreshDashboard(options = {}) {
         loadAlertsForHost(),
       ]);
     }
-    await backgroundTasks;
+
+    // Defer heavy global tiles until after host list paint.
+    if (!state.deferredDashboardTasksInFlight) {
+      state.deferredDashboardTasksInFlight = true;
+      window.setTimeout(() => {
+        Promise.allSettled([
+          loadWebclientVersion(),
+          loadGlobalAlertsOverview({ updateList: shouldRefreshGlobalAlertsList }),
+          loadCriticalTrends({ updateList: false }),
+          loadInactiveHosts({ updateList: false }),
+        ])
+          .then(() => {
+            updateSummaryStrip();
+            if (automatic) {
+              updateAutoRefreshStatus(new Date());
+            }
+          })
+          .finally(() => {
+            state.deferredDashboardTasksInFlight = false;
+          });
+      }, 0);
+    }
+
     if (state.viewMode === "settings") {
       try {
         await loadSettingsPanel(true);
@@ -783,9 +801,6 @@ async function refreshDashboard(options = {}) {
       }
     }
     updateSummaryStrip();
-    if (automatic) {
-      updateAutoRefreshStatus(new Date());
-    }
   } finally {
     autoRefreshInProgress = false;
   }

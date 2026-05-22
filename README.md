@@ -584,6 +584,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.308 (22. Mai 2026)
+
+- **Startrendering der Seitenliste entkoppelt**: Beim Dashboard-Refresh wird die Host-/Seitenliste jetzt zuerst geladen und gerendert; die drei schweren Global-Kacheln (Globale Alerts, Kritische Trends, Inaktive Hosts) werden erst danach asynchron nachgezogen.
+- **Weniger Blockierung beim Initialaufbau**: Die bis dato gleichzeitigen Start-Requests fuer die Global-Kacheln blockieren den schnellen Listenaufbau nicht mehr. Dadurch reagiert die Sidebar deutlich frueher und bleibt waehrend des Nachladens bedienbar.
+
 ### v1.6.307 (22. Mai 2026)
 
 - **HANA Tenant-Zugriff auf DB-Name (`-d`) umgestellt**: Fuer AddOn- und Datenbankabfragen nutzt der Agent im Multitenant-Modus jetzt primaer `hdbsql -d <tenant_db>` (optional mit `-n` als Fallback), statt hart vom Tenant-Port abzuhaengen.
