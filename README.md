@@ -584,6 +584,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.307 (22. Mai 2026)
+
+- **HANA Tenant-Zugriff auf DB-Name (`-d`) umgestellt**: Fuer AddOn- und Datenbankabfragen nutzt der Agent im Multitenant-Modus jetzt primaer `hdbsql -d <tenant_db>` (optional mit `-n` als Fallback), statt hart vom Tenant-Port abzuhaengen.
+- **Kein harter Abbruch mehr bei fehlendem Tenant-Port**: Tenants ohne erkannten Port werden weiterhin abgefragt (ueber `-d`), damit Daten nicht mehr komplett ausfallen, wenn `indexserver.ini`-Portinfos fehlen oder ungueltig sind.
+
 ### v1.6.306 (22. Mai 2026)
 
 - **Falsches Zusammenfuehren gleichnamiger Hosts gehaertet**: Die serverseitige `host_uid`-Reconciliation verlangt jetzt strengere Sekundaerachsen (Agent-ID und/oder IP; wenn beide vorhanden sind, muessen beide passen) und bricht bei mehrdeutigen bestehenden `host_uid`-Werten pro Hostname ab. Dadurch werden unterschiedliche Maschinen mit gleichem Hostnamen nicht mehr versehentlich auf eine Karte zusammengezogen.
