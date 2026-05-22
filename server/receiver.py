@@ -147,6 +147,14 @@ def init_db() -> None:
         if "host_uid" not in existing_reports_columns:
             conn.execute("ALTER TABLE reports ADD COLUMN host_uid TEXT")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_host_uid_id ON reports(host_uid, id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_hostname_id ON reports(hostname, id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_received_utc_id ON reports(received_at_utc, id)")
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_reports_host_key_id
+            ON reports(COALESCE(NULLIF(host_uid, ''), hostname), id)
+            """
+        )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS alerts (
@@ -162,6 +170,12 @@ def init_db() -> None:
                 report_id INTEGER,
                 FOREIGN KEY(report_id) REFERENCES reports(id)
             )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_alerts_host_status_severity
+            ON alerts(hostname, status, severity, mountpoint)
             """
         )
         conn.execute(
@@ -10788,10 +10802,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             where_clause = "hostname = ?"
-            where_value = hostname
+            where_args: tuple = (hostname,)
             if host_uid:
-                where_clause = "COALESCE(NULLIF(host_uid, ''), hostname) = ?"
-                where_value = host_uid
+                # Prefer direct host_uid index path; include legacy hostname fallback rows.
+                where_clause = "(host_uid = ? OR (COALESCE(host_uid, '') = '' AND hostname = ?))"
+                where_args = (host_uid, host_uid)
 
             limit = parse_int(query, "limit", default=10, min_value=1, max_value=200)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
@@ -10813,12 +10828,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 total_reports = conn.execute(
                     f"SELECT COUNT(*) FROM reports WHERE {where_clause}",
-                    (where_value,),
+                    where_args,
                 ).fetchone()[0]
 
                 bounds_row = conn.execute(
                     f"SELECT MIN(received_at_utc), MAX(received_at_utc) FROM reports WHERE {where_clause}",
-                    (where_value,),
+                    where_args,
                 ).fetchone()
                 oldest_report_at_utc = str((bounds_row[0] if bounds_row else "") or "")
                 newest_report_at_utc = str((bounds_row[1] if bounds_row else "") or "")
@@ -10826,7 +10841,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 if jump_to_utc_iso and total_reports > 0:
                     jump_offset = conn.execute(
                         f"SELECT COUNT(*) FROM reports WHERE {where_clause} AND received_at_utc > ?",
-                        (where_value, jump_to_utc_iso),
+                        (*where_args, jump_to_utc_iso),
                     ).fetchone()[0]
                     if jump_offset >= total_reports:
                         offset = max(0, total_reports - 1)
@@ -10841,7 +10856,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     ORDER BY id DESC
                     LIMIT ? OFFSET ?
                     """,
-                    (where_value, limit, offset),
+                    (*where_args, limit, offset),
                 ).fetchall()
 
                 resolved_hostname = ""

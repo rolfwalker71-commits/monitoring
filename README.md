@@ -584,6 +584,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.298 (22. Mai 2026)
+
+- **Performance-Optimierung Hosts/Einzelmeldungen**: Zusätzliche DB-Indizes für Reports/Alerts eingeführt und Host-Report-Filter auf index-freundliche `host_uid`-Abfrage umgestellt. Dadurch sind Hostlisten-Aufbau und Kartenwechsel deutlich schneller auf grossen Datenbeständen.
+
 ### v1.6.297 (22. Mai 2026)
 
 - **Host-ID Chip neu positioniert**: Der `host_uid`-Chip wurde aus der oberen Host-Metazeile in die Einzelmeldungs-Navigation verschoben und direkt neben `Aktuellste` platziert.
