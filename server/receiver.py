@@ -1207,13 +1207,43 @@ def _reconcile_legacy_host_uids(
     ]
     args: list = [safe_hostname, *sorted(candidates)]
 
-    # Guard against cross-hostname collisions: require a secondary identity axis where possible.
+    # Guard against false merges: require stable secondary identity axes.
+    # If both agent_id and IP are available, both must match.
+    ip_guard = ""
+    if resolved_ip:
+        ip_guard = resolved_ip
+    elif safe_primary_ip and _is_valid_ipv4(safe_primary_ip):
+        ip_guard = safe_primary_ip
+
     if safe_agent_id:
         where_parts.append("COALESCE(agent_id, '') = ?")
         args.append(safe_agent_id)
-    elif resolved_ip:
+
+    if ip_guard:
         where_parts.append("COALESCE(primary_ip, '') = ?")
-        args.append(resolved_ip)
+        args.append(ip_guard)
+
+    # Reconciliation is unsafe without at least one stable secondary axis.
+    if not safe_agent_id and not ip_guard:
+        return
+
+    # If multiple explicit non-legacy host_uids exist for the same hostname,
+    # skip reconciliation to avoid collapsing distinct machines.
+    ambiguous_values = [safe_host_uid, safe_hostname, *sorted(candidates)]
+    ambiguous_placeholders = ",".join(["?"] * len(ambiguous_values))
+    ambiguity_row = conn.execute(
+        f"""
+        SELECT 1
+        FROM reports
+        WHERE hostname = ?
+          AND COALESCE(host_uid, '') <> ''
+          AND COALESCE(host_uid, '') NOT IN ({ambiguous_placeholders})
+        LIMIT 1
+        """,
+        (safe_hostname, *ambiguous_values),
+    ).fetchone()
+    if ambiguity_row:
+        return
 
     where_clause = " AND ".join(where_parts)
     conn.execute(

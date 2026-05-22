@@ -183,6 +183,7 @@ const state = {
   sapLicenseTypeMapDirty: false,
   sapB1VmapBeforeUnloadWired: false,
   backupAutomationLoaded: false,
+  mutedAlertsSignature: "",
   // Add a new user type "readOnly" to the state
   userType: "default", // Possible values: "default", "readOnly", "admin"
 };
@@ -7580,10 +7581,23 @@ async function loadAlertMutes() {
       grouped[hostname].sort((left, right) => left.mountpoint.localeCompare(right.mountpoint));
     }
 
+    const signature = Object.keys(grouped)
+      .sort((a, b) => a.localeCompare(b))
+      .map((hostname) => {
+        const mountpoints = grouped[hostname].map((item) => String(item.mountpoint || "")).join(",");
+        return `${hostname}:${mountpoints}`;
+      })
+      .join("|");
+    const changed = signature !== state.mutedAlertsSignature;
     state.mutedAlertsByHost = grouped;
+    state.mutedAlertsSignature = signature;
+    return changed;
   } catch (_error) {
     // Keep host list usable even if the mutes endpoint is temporarily unavailable.
+    const changed = state.mutedAlertsSignature !== "" || Object.keys(state.mutedAlertsByHost || {}).length > 0;
     state.mutedAlertsByHost = {};
+    state.mutedAlertsSignature = "";
+    return changed;
   }
 }
 
@@ -9294,7 +9308,10 @@ async function loadHosts(options = {}) {
     if (!state.alertMutesRefreshInFlight) {
       state.alertMutesRefreshInFlight = true;
       loadAlertMutes()
-        .then(() => {
+        .then((changed) => {
+          if (!changed) {
+            return;
+          }
           const currentScrollTop = hostList ? hostList.scrollTop : 0;
           renderHosts(state.hosts || []);
           if (hostList) {

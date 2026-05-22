@@ -584,6 +584,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.6.306 (22. Mai 2026)
+
+- **Falsches Zusammenfuehren gleichnamiger Hosts gehaertet**: Die serverseitige `host_uid`-Reconciliation verlangt jetzt strengere Sekundaerachsen (Agent-ID und/oder IP; wenn beide vorhanden sind, muessen beide passen) und bricht bei mehrdeutigen bestehenden `host_uid`-Werten pro Hostname ab. Dadurch werden unterschiedliche Maschinen mit gleichem Hostnamen nicht mehr versehentlich auf eine Karte zusammengezogen.
+- **Hostlisten-Rendering beschleunigt**: Nachladen von stummgeschalteten Alerts rendert die Hostliste nur noch neu, wenn sich die Mute-Daten tatsaechlich geaendert haben. Das reduziert unnoetige Voll-Renderzyklen deutlich.
+
 ### v1.6.305 (22. Mai 2026)
 
 - **Tenant-Queries erzwingen jetzt den jeweiligen Tenant-Port**: Bei HANA-Multitenant-Scans fuer AddOns, SARI und COMPANYDBS wird im Tenant-Modus die implizite Default-Verbindung uebersprungen und direkt gegen den erkannten `host:port` des jeweiligen Tenants verbunden. Das verhindert, dass mehrere Tenants irrtuemlich denselben Inhalt aus derselben Default-DB anzeigen.
