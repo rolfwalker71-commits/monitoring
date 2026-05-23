@@ -12248,6 +12248,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
                 hostnames = sorted({str(row[1]) for row in rows if row[1]})
                 display_names: dict[str, str] = {}
+                customer_names: dict[str, str] = {}
                 if hostnames:
                     placeholders = ",".join("?" for _ in hostnames)
                     settings_rows = conn.execute(
