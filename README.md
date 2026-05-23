@@ -630,6 +630,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
 
+### v1.6.353 (23. Mai 2026)
+
+- **Inaktive-Hosts Mail-Spam behoben**: Die Inaktiv-Erkennung konsolidiert Hosts jetzt zuerst auf den neuesten Report pro `hostname`.
+- **Deduplizierung stabilisiert**: Historische Mehrfach-Identitaeten (z. B. nach `host_uid`-Migration) loesen dadurch keine wiederholten Inaktiv-Mails im Minutentakt mehr aus.
+- **Erwartetes Verhalten wiederhergestellt**: Pro Inaktiv-Phase wird pro Host nur einmal benachrichtigt, bis ein neuer Report eintrifft.
+
 ### v1.6.352 (23. Mai 2026)
 
 - **Dark-Mode Menuezeilen deutlich lesbarer**: Aufklappbare Zeilen in SAP/HANA-Bereichen (z. B. Tenant-/Discovery-Summaries) nutzen jetzt kontrastreiche Schriftfarben.

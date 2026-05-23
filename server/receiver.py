@@ -4990,8 +4990,22 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
     now_utc = datetime.now(timezone.utc)
 
     rows = _latest_report_rows_by_host_key(conn)
-    inactive_hosts = []
+    # A hostname can have multiple historical host keys (e.g., uid migration).
+    # For inactivity we must evaluate only the newest report per hostname.
+    latest_row_by_hostname: dict[str, tuple] = {}
     for row in rows:
+        hostname = str(row[1] or "").strip()
+        if not hostname:
+            continue
+        last_report_time_utc = str(row[2] or "").strip()
+        if not last_report_time_utc:
+            continue
+        existing = latest_row_by_hostname.get(hostname)
+        if existing is None or last_report_time_utc > str(existing[2] or ""):
+            latest_row_by_hostname[hostname] = row
+
+    inactive_hosts = []
+    for row in latest_row_by_hostname.values():
         host_uid = str(row[0] or "").strip()
         hostname = str(row[1] or "").strip()
         last_report_time_utc = str(row[2] or "").strip()
