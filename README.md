@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.6.292**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.6.292**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.0**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.0**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.0 | 23.05.2026 | UI design refresh toward a graphit SaaS look: stronger card hierarchy for metric panels, more whitespace and numeric typography contrast, stricter host-list metadata alignment, and calmer charts with subdued grids plus soft area gradients |
 | 1.6.292 | 20.05.2026 | Clarify the HANA detail view terminology in the UI: tenant-wise `M_CS_TABLES` results are labeled as Schemas instead of Datenbanken |
 | 1.6.291 | 20.05.2026 | Add HANA multitenant support (DB_XXX discovery via /usr/sap/<SID>/SYS/global/hdb/custom/config): collect tenant-specific AddOns and schema memory by tenant port, extend backend extraction, and render tenant/port grouped HANA data across SAP/AddOn and Datenbank views |
 | 1.6.290 | 20.05.2026 | Add customer-level data indicator emojis in System Overview groups: 🧩 for AddOns, 📄 for Lizenzfile, and 🏷️ for translated Lizenztypen when data exists |

@@ -4824,6 +4824,7 @@ function buildTrendLine(series, width, height, minValue, maxValue, color, margin
 
   return `<line class="chart-trend-line" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" />`;
 }
+let sparklineGradientSequence = 0;
 
 function buildSparklineSvg(series, color, width = 320, height = 82, options = {}) {
   const points = normalizeSeries(series);
@@ -4860,12 +4861,20 @@ function buildSparklineSvg(series, color, width = 320, height = 82, options = {}
   const markers = buildPointMarkers(points, width, height, minValue, maxValue, color, "Wert", margins);
   const usedTrendColor = options.trendColor || color;
   const trendLine = buildTrendLine(points, width, height, minValue, maxValue, usedTrendColor, margins);
+  const gradientId = `sparkline-area-${sparklineGradientSequence++}`;
 
   return `
     <svg class="sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="Trend">
+      <defs>
+        <linearGradient id="${gradientId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${color}" stop-opacity="0.24" />
+          <stop offset="65%" stop-color="${color}" stop-opacity="0.08" />
+          <stop offset="100%" stop-color="${color}" stop-opacity="0.02" />
+        </linearGradient>
+      </defs>
       ${guides}
       ${timeLabels}
-      <polygon class="chart-area" fill="${color}" fill-opacity="0.16" points="${area}" />
+      <polygon class="chart-area" fill="url(#${gradientId})" points="${area}" />
       <polyline fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="${polyline}" />
       ${trendLine}
       ${markers}
@@ -4892,8 +4901,10 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
     .map((item) => {
       const points = normalizeSeries(resourceSeries[item.key]);
       const values = points.map((point) => point.value);
+      const currentValue = values.length > 0 ? values[values.length - 1] : null;
       const minValue = values.length > 0 ? Math.min(...values) : null;
       const maxValue = values.length > 0 ? Math.max(...values) : null;
+      const avgValue = values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
       const isPercent = item.label.includes("%");
       const reg = isPercent ? computeLinearRegression(points) : null;
       const alertLevel = reg ? trendAlertLevel(reg.projected) : null;
@@ -4910,14 +4921,16 @@ function renderResourceCharts(resourceSeries, latestReportTimeUtc) {
             <strong>${item.label}</strong>
             <span>${points.length} Samples</span>
           </header>
+          <p class="mini-chart-main-value">${currentValue === null ? "-" : `${formatNumber(currentValue, 1)}${isPercent ? "%" : ""}`}</p>
           ${buildSparklineSvg(points, item.color, 420, 140, {
             suffix: isPercent ? "%" : "",
             trendColor: usedTrendColor,
             ...(isPercent ? { minValue: 0, maxValue: 100 } : {}),
           })}
-          <footer>
+          <footer class="mini-chart-history">
             <span>Min: ${minValue === null ? "-" : formatNumber(minValue, 2)}</span>
             <span>Max: ${maxValue === null ? "-" : formatNumber(maxValue, 2)}</span>
+            <span>Avg: ${avgValue === null ? "-" : formatNumber(avgValue, 2)}</span>
             ${trendBadge}
           </footer>
         </article>
@@ -7838,7 +7851,10 @@ function renderSingleHostCard(host) {
       ${versionSideBarHtml}
       ${flagIcon}
       ${customerTitleLine}
-      <span class="host-meta-line host-meta-line--primary host-meta-line--with-alert"><span class="host-meta-text">🖥️ ${escapeHtml(shortHostname)} &nbsp;·&nbsp; 🌐 ${escapeHtml(hostCardIp)}</span></span>
+      <span class="host-meta-line host-meta-line--primary host-meta-line--with-alert">
+        <span class="host-meta-kv"><span class="host-meta-k">Host</span><span class="host-meta-v" title="${escapeHtml(shortHostname)}">${escapeHtml(shortHostname)}</span></span>
+        <span class="host-meta-kv host-meta-kv--ip"><span class="host-meta-k">IP</span><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span></span>
+      </span>
       ${mutedAlertsSection}
       ${osIcon}
     </article>
