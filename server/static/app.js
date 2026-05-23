@@ -7803,8 +7803,9 @@ function renderSingleHostCard(host) {
     ? `<span class="host-license-info-badge host-license-info-badge--corner" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}">🪪</span>`
     : "";
   const customerTitleLine = customerNameValue
-    ? `<div class="host-customer-title-line"><span class="host-customer-text-block"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span>${flagIcon}</span><span class="host-detail-line">${escapeHtml(hostDesignationLabel)}</span></span></div>`
+    ? `<div class="host-customer-title-line"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span>${flagIcon}</span></div>`
     : "";
+  const designationBadgeLine = `<span class="host-detail-line">${escapeHtml(hostDesignationLabel)}</span>`;
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
   const hanaRawForDebug = asText(host.hana_release || host.hana_version || "", "").trim();
@@ -7858,7 +7859,8 @@ function renderSingleHostCard(host) {
       ${versionSideBarHtml}
       <div class="host-card-main">
         ${customerTitleLine}
-        <div class="host-tech-stack">
+        ${designationBadgeLine}
+        <div class="host-tech-line">
           <span class="host-tech-row host-tech-row--host"><span class="${statusPulseClass}" aria-hidden="true"></span><span class="host-meta-v" title="${escapeHtml(shortHostname)}">${escapeHtml(shortHostname)}</span>${osIcon}</span>
           <span class="host-tech-row host-tech-row--ip"><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span></span>
         </div>
