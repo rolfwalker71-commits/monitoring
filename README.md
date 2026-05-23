@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.7**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.7**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.8**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.8**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.8 | 23.05.2026 | Host card meta row: remove visible "Host" label, shift hostname left, align hostname/IP vertically, and render IP value in bold for clearer scanning |
 | 1.7.7 | 23.05.2026 | Host card visuals: reduce corner radius for a slightly less rounded, more compact look |
 | 1.7.6 | 23.05.2026 | Host card compactness: remove visible "IP" label while keeping the IP value in the same position to free horizontal space for longer host names |
 | 1.7.5 | 23.05.2026 | SAP license hover popup: swap columns so Lizenztyp is first and Anzahl is second; refine second-column width/gap to keep values close but avoid clipping descriptions |

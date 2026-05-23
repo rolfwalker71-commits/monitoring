@@ -4969,15 +4969,14 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-meta-line--with-alert {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 8px;
 }
 
 .host-meta-kv {
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
-  align-items: baseline;
-  gap: 4px;
+  display: flex;
+  align-items: center;
   min-width: 0;
 }
 
@@ -4997,9 +4996,14 @@ body[data-theme="dark"] .trend-progress-bar {
   font-weight: 600;
 }
 
+.host-meta-kv--host .host-meta-v {
+  font-weight: 700;
+}
+
 .host-meta-kv--ip .host-meta-v {
   font-family: "IBM Plex Mono", monospace;
   font-size: 10.5px;
+  font-weight: 800;
 }
 
 .host-agent-version {
@@ -5234,12 +5238,14 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
   margin-top: 8px;
   display: flex;
   gap: 8px;
+  align-items: center;
   flex-wrap: wrap;
 }
 
 .pager-top {
   margin-top: 2px;
-  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
 }
 
 .report-jump-row {
@@ -5263,6 +5269,7 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
 }
 
 .report-jump-host-id {
+  font-weight: 800;
   height: 22px;
   min-height: 22px;
   line-height: 20px;
@@ -5282,7 +5289,7 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
   font-size: 12px;
   min-height: 22px;
   width: 144px;
-  background: #fff;
+    width: 100%;
   color: var(--text);
 }
 
@@ -7918,9 +7925,8 @@ body[data-theme="dark"] th {
     gap: 4px;
   }
   .host-meta-kv {
-    grid-template-columns: 20px minmax(0, 1fr);
+    width: 100%;
   }
-  .host-meta-k,
   .host-meta-v,
   .host-meta-kv--ip .host-meta-v {
     font-size: 10px;
@@ -8696,12 +8702,12 @@ body[data-theme="dark"] .host-detail-line {
   color: #91a7c1;
 }
 
-body[data-theme="dark"] .host-meta-k {
-  color: #89a1be;
-}
-
 body[data-theme="dark"] .host-meta-v {
   color: #dce8f8;
+}
+
+body[data-theme="dark"] .host-meta-kv--ip .host-meta-v {
+  color: #eef5ff;
 }
 
 body[data-theme="dark"] .host-license-info-badge {
