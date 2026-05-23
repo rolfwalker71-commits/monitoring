@@ -4202,7 +4202,7 @@ body[data-theme="dark"] .trend-progress-bar {
     radial-gradient(circle at 100% 0%, rgba(14, 165, 233, 0.06) 0%, transparent 52%),
     linear-gradient(180deg, #f9fcff 0%, #eef5ff 100%);
   color: var(--text);
-  border-radius: 12px;
+  border-radius: 9px;
   padding: 10px 44px 10px 12px;
   display: flex;
   flex-direction: column;
