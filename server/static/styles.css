@@ -11349,6 +11349,42 @@ body[data-theme="dark"] .system-overview-stat-chip.is-primary {
   color: #e2eefc;
 }
 
+/* Dark-mode readability safety net:
+   ensures text that was hard-coded for light mode remains readable in dark mode. */
+body[data-theme="dark"] :where(
+  .analysis-panel,
+  .alerts-panel,
+  .settings-subsection,
+  .alarm-settings-card,
+  .settings-logic-help-card,
+  .system-overview-customer-block,
+  .ct-host-card,
+  .ih-host-card,
+  .backup-host-card,
+  .host-config-change-group,
+  .hosts-column,
+  .section-head,
+  .overview-sidebar,
+  .overview-content,
+  .table-wrap,
+  .agent-update-admin-status,
+  .db-maintenance-head
+) :where(h1, h2, h3, h4, h5, h6, p, label, legend, small, span, li, td, th, strong, a):not(.stat-chip):not(.selected-host-meta-chip):not(.agent-update-status-badge):not(.agent-source-status-badge):not(.host-alert-chip):not(.so-card-alert-badge):not(.db-status-badge):not(.db-sys-badge):not(.tab-button):not(.header-stat-chip) {
+  color: #d4e6fb;
+}
+
+body[data-theme="dark"] .muted,
+body[data-theme="dark"] .count,
+body[data-theme="dark"] .auto-refresh-last-update,
+body[data-theme="dark"] .auto-refresh-status {
+  color: #9eb7d4;
+}
+
+body[data-theme="dark"] input::placeholder,
+body[data-theme="dark"] textarea::placeholder {
+  color: #8fa8c4;
+}
+
 @media (min-width: 1200px) {
   .panel-actions > .header-stat-chip:first-of-type {
     margin-left: clamp(300px, 22vw, 430px);

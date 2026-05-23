@@ -630,6 +630,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
 
+### v1.6.350 (23. Mai 2026)
+
+- **Dark-Mode Lesbarkeit appweit gehaertet**: Eine globale Fallback-Schicht sorgt dafuer, dass bisher lichtmodus-fixierte dunkle Schrift im Dark-Mode kontrastreich dargestellt wird.
+- **Statusfarben bleiben erhalten**: Semantische Badges (z. B. Alert-/Status-Chips) sind vom Fallback ausgenommen, damit deren Farblogik unveraendert bleibt.
+- **Placeholder und Meta-Texte verbessert**: Platzhalter- und Nebeninformationen wurden im Dark-Mode auf besser lesbare Farbstufen angehoben.
+
 ### v1.6.349 (23. Mai 2026)
 
 - **Dashboard-Header neu ausgerichtet**: Die oberen KPI-Kacheln wurden auf Desktop weiter nach rechts verschoben.
