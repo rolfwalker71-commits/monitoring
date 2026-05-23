@@ -11689,3 +11689,174 @@ body[data-theme="dark"] .global-hostname-sub,
 body[data-theme="dark"] .host-config-change-subline {
   color: #9fb3cc;
 }
+
+/* View-by-view fine tuning: global views, admin sections and deep tables. */
+#globalView .settings-page {
+  display: grid;
+  gap: 12px;
+}
+
+#globalView .settings-page-header,
+#globalView .settings-subsection-head,
+#globalView .analysis-header {
+  margin-bottom: 2px;
+}
+
+#globalView .critical-trends-toolbar,
+#globalView .inactive-hosts-toolbar,
+#globalView .global-alerts-controls,
+#globalView .admin-alert-sub-controls,
+#globalView .backup-status-filters,
+#globalView .alarm-settings-actions {
+  padding: 8px 10px;
+  border: 1px solid var(--ui-border-soft);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--ui-surface-1) 0%, var(--ui-surface-2) 100%);
+  gap: 8px;
+}
+
+#globalView .critical-trends-list,
+#globalView .inactive-hosts-list,
+#globalView .backup-status-list,
+#globalView .system-overview-host-list,
+#globalView .host-config-changes-groups {
+  display: grid;
+  gap: 10px;
+}
+
+#globalView .ct-host-card,
+#globalView .ih-host-card,
+#globalView .backup-host-card,
+#globalView .system-overview-customer-block,
+#globalView .host-config-change-group,
+#globalView .host-config-change-date-group,
+#globalView .admin-login-audit-details,
+#globalView .agent-update-admin-table-wrap,
+#globalView .user-management-table-wrap {
+  border-radius: 12px;
+  border: 1px solid var(--ui-border-soft);
+  background: linear-gradient(180deg, var(--ui-surface-1) 0%, var(--ui-surface-2) 100%);
+  box-shadow: var(--ui-shadow-soft);
+}
+
+#globalView .host-config-change-summary,
+#globalView .host-config-change-date-summary,
+#globalView .admin-login-audit-summary {
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
+#globalView .table-wrap table th,
+#globalView .table-wrap table td,
+#globalView .agent-source-status-table th,
+#globalView .agent-source-status-table td,
+#globalView .admin-alert-subscriptions-table th,
+#globalView .admin-alert-subscriptions-table td,
+#globalView .user-management-table th,
+#globalView .user-management-table td,
+#globalView .agent-update-admin-table th,
+#globalView .agent-update-admin-table td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  line-height: 1.28;
+}
+
+#globalView .table-wrap table th,
+#globalView .agent-source-status-table th,
+#globalView .admin-alert-subscriptions-table th,
+#globalView .user-management-table th,
+#globalView .agent-update-admin-table th {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+#globalView .table-wrap table td,
+#globalView .agent-source-status-table td,
+#globalView .admin-alert-subscriptions-table td,
+#globalView .user-management-table td,
+#globalView .agent-update-admin-table td {
+  font-size: 12px;
+}
+
+#globalView .global-host-cell {
+  gap: 3px;
+}
+
+#globalView .global-host-customer {
+  font-size: 14px;
+}
+
+#globalView .so-card-body {
+  gap: 10px;
+}
+
+#globalView .so-card-section {
+  gap: 5px;
+}
+
+#globalView .so-card-footer {
+  padding-top: 8px;
+}
+
+#globalView .host-config-main-value {
+  font-size: 12px;
+}
+
+#globalView .host-config-change-subline {
+  margin-top: 2px;
+}
+
+body[data-theme="dark"] #globalView .critical-trends-toolbar,
+body[data-theme="dark"] #globalView .inactive-hosts-toolbar,
+body[data-theme="dark"] #globalView .global-alerts-controls,
+body[data-theme="dark"] #globalView .admin-alert-sub-controls,
+body[data-theme="dark"] #globalView .backup-status-filters,
+body[data-theme="dark"] #globalView .alarm-settings-actions,
+body[data-theme="dark"] #globalView .ct-host-card,
+body[data-theme="dark"] #globalView .ih-host-card,
+body[data-theme="dark"] #globalView .backup-host-card,
+body[data-theme="dark"] #globalView .system-overview-customer-block,
+body[data-theme="dark"] #globalView .host-config-change-group,
+body[data-theme="dark"] #globalView .host-config-change-date-group,
+body[data-theme="dark"] #globalView .admin-login-audit-details,
+body[data-theme="dark"] #globalView .agent-update-admin-table-wrap,
+body[data-theme="dark"] #globalView .user-management-table-wrap {
+  border-color: var(--ui-border-soft);
+  background: linear-gradient(180deg, var(--ui-surface-1) 0%, var(--ui-surface-2) 100%);
+}
+
+body[data-theme="dark"] #globalView .table-wrap table th,
+body[data-theme="dark"] #globalView .agent-source-status-table th,
+body[data-theme="dark"] #globalView .admin-alert-subscriptions-table th,
+body[data-theme="dark"] #globalView .user-management-table th,
+body[data-theme="dark"] #globalView .agent-update-admin-table th {
+  color: #b8cee7;
+}
+
+@media (max-width: 900px) {
+  #globalView .critical-trends-toolbar,
+  #globalView .inactive-hosts-toolbar,
+  #globalView .global-alerts-controls,
+  #globalView .admin-alert-sub-controls,
+  #globalView .backup-status-filters,
+  #globalView .alarm-settings-actions {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  #globalView .table-wrap table th,
+  #globalView .table-wrap table td,
+  #globalView .agent-source-status-table th,
+  #globalView .agent-source-status-table td,
+  #globalView .admin-alert-subscriptions-table th,
+  #globalView .admin-alert-subscriptions-table td,
+  #globalView .user-management-table th,
+  #globalView .user-management-table td,
+  #globalView .agent-update-admin-table th,
+  #globalView .agent-update-admin-table td {
+    padding-top: 7px;
+    padding-bottom: 7px;
+    font-size: 11px;
+  }
+}

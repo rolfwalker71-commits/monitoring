@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.2**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.2**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.3**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.3**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.3 | 23.05.2026 | View-by-view polish across Global/Admin sections: harmonized toolbars, dense tables, cards, changelog blocks and system-overview layout details for consistent readability in both Light and Dark mode |
 | 1.7.2 | 23.05.2026 | Extend the new UI language to all menu sections and views (not only overview): unified panel/card surfaces, tabs, sidebars, toolbars, tables, buttons and form controls for both Light and Dark mode |
 | 1.7.1 | 23.05.2026 | Mobile/UI fine-tuning for the new dashboard look: tighter responsive paddings, scaled metric headline values, wrapped chart meta rows, and single-column host metadata alignment on small screens |
 | 1.7.0 | 23.05.2026 | UI design refresh toward a graphit SaaS look: stronger card hierarchy for metric panels, more whitespace and numeric typography contrast, stricter host-list metadata alignment, and calmer charts with subdued grids plus soft area gradients |
