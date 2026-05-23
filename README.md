@@ -630,6 +630,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
 
+### v1.6.346 (23. Mai 2026)
+
+- **Header-Chips umbenannt**: `REPORTS DB` heisst jetzt `REPORTS IN DB` und `REPORTS 1H` heisst jetzt `ANZAHL REPORTS`.
+
 ### v1.6.345 (23. Mai 2026)
 
 - **Hotfix fuer Linux-Agent-Syntaxfehler**: Ein fehlerhaftes `fi` in `collect_and_send.sh` nach dem Update-Quellen-Fallback wurde korrigiert, damit der Agent wieder normal laeuft.
