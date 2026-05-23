@@ -9798,14 +9798,19 @@ def collect_agent_source_status(conn: sqlite3.Connection) -> dict:
 
     settings_rows = conn.execute(
         f"""
-        SELECT hostname, COALESCE(display_name_override, ''), COALESCE(country_code_override, '')
-        FROM host_settings
-        WHERE hostname IN ({placeholders})
+        SELECT h.hostname,
+               COALESCE(h.display_name_override, ''),
+               COALESCE(h.country_code_override, ''),
+               COALESCE(c.customer_name, '')
+         FROM host_settings h
+        LEFT JOIN customers c ON c.id = h.customer_id
+        WHERE h.hostname IN ({placeholders})
         """,
         tuple(known_hosts),
     ).fetchall()
     display_name_override_map = {str(row[0] or ""): str(row[1] or "") for row in settings_rows}
     country_override_map = {str(row[0] or ""): normalize_country_code(str(row[2] or "")) for row in settings_rows}
+    customer_name_map = {str(row[0] or ""): str(row[3] or "").strip() for row in settings_rows}
 
     latest_rows = conn.execute(
         f"""
@@ -9857,6 +9862,7 @@ def collect_agent_source_status(conn: sqlite3.Connection) -> dict:
             {
                 "hostname": hostname,
                 "display_name": display_name,
+                "customer_name": customer_name_map.get(hostname, ""),
                 "country_code": normalize_country_code(country_code),
                 "received_at_utc": received_at_utc,
                 "server_url": server_url,

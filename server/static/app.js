@@ -11485,6 +11485,7 @@ async function loadAgentSourceStatus() {
     rowsEl.innerHTML = items.map((item) => {
       const checks = item && typeof item.checks === "object" ? item.checks : {};
       const host = asText(item.display_name || item.hostname, "-");
+      const customerName = asText(item.customer_name || "", "").trim() || "Ohne Kunde";
       const hostname = asText(item.hostname, "-");
       const showHostname = host !== hostname;
       const statusOk = Boolean(item.is_ok);
@@ -11497,6 +11498,7 @@ async function loadAgentSourceStatus() {
           <td>
             <div class="global-host-cell">
               <span class="global-host-label">${escapeHtml(host)}</span>
+              <span class="global-host-customer">${escapeHtml(customerName)}</span>
               ${showHostname ? `<span class="global-hostname-sub">(${escapeHtml(hostname)})</span>` : ""}
             </div>
           </td>
