@@ -630,6 +630,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
 
+### v1.6.349 (23. Mai 2026)
+
+- **Dashboard-Header neu ausgerichtet**: Die oberen KPI-Kacheln wurden auf Desktop weiter nach rechts verschoben.
+- **Linke Seitenleiste nach oben verdichtet**: Die Host-Seitenleiste nutzt den frei werdenden oberen Bereich jetzt besser aus.
+- **DB-Delta-1h Kachel ausgeblendet**: Die Kachel fuer das DB-Wachstum der letzten Stunde wird nicht mehr angezeigt.
+
 ### v1.6.348 (23. Mai 2026)
 
 - **Emoji vor Kundennamen entfernt**: In Host-Karten und im ausgewählten Host-Chip wird der Kundenname jetzt ohne vorangestelltes Gebäude-Emoji dargestellt.

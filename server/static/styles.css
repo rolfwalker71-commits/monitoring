@@ -11348,3 +11348,18 @@ body[data-theme="dark"] .system-overview-stat-chip.is-primary {
   background: #1a2f47;
   color: #e2eefc;
 }
+
+@media (min-width: 1200px) {
+  .panel-actions > .header-stat-chip:first-of-type {
+    margin-left: clamp(300px, 22vw, 430px);
+  }
+
+  .hosts-column {
+    margin-top: -108px;
+  }
+}
+
+#headerDbSizeDeltaChip,
+.header-stat-chip-db-size-delta {
+  display: none !important;
+}
