@@ -630,6 +630,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
 
+### v1.6.354 (23. Mai 2026)
+
+- **Inaktive Hosts jetzt strikt One-Shot pro Inaktiv-Phase**: Benachrichtigungen (Mail/Telegram) werden nur einmal gesendet, solange ein Host inaktiv bleibt.
+- **Automatischer Reset bei Wiederaktivierung**: Sobald ein Host wieder innerhalb der Inaktiv-Schwelle reportet, werden die Inaktiv-Notification-Marker zurueckgesetzt.
+- **Minutentakt-Spam verhindert**: Die Versandentscheidung haengt nicht mehr an laufenden Zeitstempel-Vergleichen pro Poll, sondern an einem robusten Phase-Status.
+
 ### v1.6.353 (23. Mai 2026)
 
 - **Inaktive-Hosts Mail-Spam behoben**: Die Inaktiv-Erkennung konsolidiert Hosts jetzt zuerst auf den neuesten Report pro `hostname`.

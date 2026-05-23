@@ -8619,6 +8619,31 @@ def maybe_send_inactive_host_notifications(conn: sqlite3.Connection) -> None:
     except (TypeError, ValueError):
         threshold_hours = 3
     threshold_hours = max(1, min(168, threshold_hours))
+    cutoff_iso = utc_hours_ago_iso(threshold_hours)
+
+    # Reset one-shot notification markers once a host is active again.
+    conn.execute(
+        """
+        WITH latest AS (
+            SELECT hostname, MAX(received_at_utc) AS last_report_time_utc
+            FROM reports
+            WHERE COALESCE(hostname, '') <> ''
+            GROUP BY hostname
+        )
+        UPDATE inactive_host_notification_state
+        SET last_mail_notified_report_time_utc = '',
+            last_telegram_notified_report_time_utc = '',
+            updated_at_utc = ?
+        WHERE hostname IN (
+            SELECT hostname FROM latest WHERE last_report_time_utc >= ?
+        )
+          AND (
+            COALESCE(last_mail_notified_report_time_utc, '') <> ''
+            OR COALESCE(last_telegram_notified_report_time_utc, '') <> ''
+          )
+        """,
+        (utc_now_iso(), cutoff_iso),
+    )
 
     inactive_hosts = collect_inactive_hosts(conn, threshold_hours)
     if not inactive_hosts:
@@ -8642,13 +8667,14 @@ def maybe_send_inactive_host_notifications(conn: sqlite3.Connection) -> None:
         if str(row[0] or "")
     }
 
+    # One-shot semantics: send once per inactive phase; reset happens when host is active again.
     due_mail_hosts = [
         item for item in inactive_hosts
-        if state_by_host.get(str(item.get("hostname") or ""), {}).get("mail", "") != str(item.get("last_report_time_utc") or "")
+        if not state_by_host.get(str(item.get("hostname") or ""), {}).get("mail", "")
     ]
     due_telegram_hosts = [
         item for item in inactive_hosts
-        if state_by_host.get(str(item.get("hostname") or ""), {}).get("telegram", "") != str(item.get("last_report_time_utc") or "")
+        if not state_by_host.get(str(item.get("hostname") or ""), {}).get("telegram", "")
     ]
     if not due_mail_hosts and not due_telegram_hosts:
         return
