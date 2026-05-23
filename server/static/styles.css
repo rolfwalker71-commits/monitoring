@@ -11528,3 +11528,164 @@ body[data-theme="dark"] textarea::placeholder {
 .header-stat-chip-db-size-delta {
   display: none !important;
 }
+
+/* Global view harmonization: apply the same card/tabs/forms language across all menu sections. */
+:root {
+  --ui-surface-1: #ffffff;
+  --ui-surface-2: #f6f9fd;
+  --ui-surface-3: #edf3fa;
+  --ui-border-soft: rgba(41, 70, 106, 0.2);
+  --ui-border-strong: rgba(41, 70, 106, 0.3);
+  --ui-shadow-soft: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+body[data-theme="dark"] {
+  --ui-surface-1: #121822;
+  --ui-surface-2: #171f2c;
+  --ui-surface-3: #1e2838;
+  --ui-border-soft: rgba(173, 197, 226, 0.24);
+  --ui-border-strong: rgba(173, 197, 226, 0.38);
+  --ui-shadow-soft: 0 10px 26px rgba(0, 0, 0, 0.38);
+}
+
+.panel,
+.view-tabs-shell,
+.subview-tabs-shell,
+.overview-sidebar,
+.analysis-panel,
+.alerts-panel,
+.settings-subsection,
+.alarm-settings-card,
+.settings-logic-help-card,
+.detail-card,
+.table-wrap,
+.inactive-hosts-toolbar,
+.critical-trends-toolbar,
+.global-alerts-controls,
+.host-config-change-group,
+.db-maintenance-panel,
+.agent-update-admin-status {
+  background: linear-gradient(180deg, var(--ui-surface-1) 0%, var(--ui-surface-2) 100%);
+  border-color: var(--ui-border-soft);
+}
+
+.panel,
+.analysis-panel,
+.alerts-panel,
+.settings-subsection,
+.alarm-settings-card,
+.settings-logic-help-card,
+.detail-card,
+.table-wrap,
+.host-config-change-group,
+.db-maintenance-panel,
+.agent-update-admin-status,
+.overview-sidebar,
+.view-tabs-shell,
+.subview-tabs-shell {
+  box-shadow: var(--ui-shadow-soft);
+}
+
+.analysis-header,
+.settings-subsection-head,
+.host-config-change-summary,
+.host-config-change-date-summary,
+.overview-sidebar-divider {
+  border-color: var(--ui-border-soft);
+}
+
+.tab-button,
+.overview-sidebar-item,
+.btn-secondary,
+.btn-secondary-compact,
+.btn-secondary-pill-compact,
+.view-back-chip,
+.host-group-toggle,
+.icon-filter-chip,
+.system-overview-toggle,
+.so-country-filter-btn {
+  border: 1px solid var(--ui-border-soft);
+  background: linear-gradient(180deg, var(--ui-surface-1) 0%, var(--ui-surface-2) 100%);
+  color: var(--text);
+}
+
+.tab-button:hover:not(.active):not(.alert-active),
+.overview-sidebar-item:hover,
+.btn-secondary:hover:not(:disabled),
+.btn-secondary-compact:hover:not(:disabled),
+.btn-secondary-pill-compact:hover:not(:disabled),
+.view-back-chip:hover:not(:disabled),
+.host-group-toggle:hover,
+.icon-filter-chip:hover,
+.system-overview-toggle:hover:not(:disabled),
+.so-country-filter-btn:hover:not(:disabled) {
+  border-color: var(--ui-border-strong);
+  background: linear-gradient(180deg, var(--ui-surface-2) 0%, var(--ui-surface-3) 100%);
+}
+
+.tab-button.active,
+.overview-sidebar-item.active {
+  border-color: rgba(59, 130, 246, 0.65);
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.1) 100%);
+}
+
+body[data-theme="dark"] .tab-button.active,
+body[data-theme="dark"] .overview-sidebar-item.active {
+  color: #e8f1ff;
+}
+
+.table-wrap {
+  border-radius: 12px;
+}
+
+th {
+  background: var(--ui-surface-3);
+}
+
+tbody tr:nth-child(odd) td {
+  background: #fcfdff;
+}
+
+tbody tr:nth-child(even) td {
+  background: #f7fbff;
+}
+
+body[data-theme="dark"] tbody tr:nth-child(odd) td {
+  background: #162031;
+}
+
+body[data-theme="dark"] tbody tr:nth-child(even) td {
+  background: #131c2c;
+}
+
+.chart-range-control select,
+.global-alerts-controls select,
+.search-input,
+.search-input-compact,
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input[type="email"],
+input[type="time"],
+select,
+textarea {
+  border-color: var(--ui-border-soft);
+  background: linear-gradient(180deg, var(--ui-surface-1) 0%, var(--ui-surface-2) 100%);
+  color: var(--text);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(59, 130, 246, 0.7);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
+}
+
+body[data-theme="dark"] .muted,
+body[data-theme="dark"] .count,
+body[data-theme="dark"] .header-chip-label,
+body[data-theme="dark"] .header-chip-scope,
+body[data-theme="dark"] .global-hostname-sub,
+body[data-theme="dark"] .host-config-change-subline {
+  color: #9fb3cc;
+}
