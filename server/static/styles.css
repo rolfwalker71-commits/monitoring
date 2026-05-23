@@ -4203,7 +4203,7 @@ body[data-theme="dark"] .trend-progress-bar {
     linear-gradient(180deg, #f9fcff 0%, #eef5ff 100%);
   color: var(--text);
   border-radius: 9px;
-  padding: 10px 44px 10px 12px;
+  padding: 10px 18px 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -4589,7 +4589,7 @@ body[data-theme="dark"] .trend-progress-bar {
   display: flex;
   align-items: center;
   gap: 5px;
-  width: 100%;
+  width: auto;
   min-width: 0;
 }
 
@@ -4610,6 +4610,7 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-tech-row--host {
   flex: 1 1 auto;
+  min-width: 0;
 }
 
 .host-tech-row--host .host-meta-v {
@@ -8070,7 +8071,7 @@ body[data-theme="dark"] th {
     flex-wrap: wrap;
   }
   .host-item {
-    padding: 9px 38px 9px 10px;
+    padding: 9px 18px 9px 10px;
     gap: 6px;
   }
   .host-card-main {
