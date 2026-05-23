@@ -90,6 +90,10 @@ TELEGRAM_ACTION_BASE_URL = os.getenv(
     "MONITORING_TELEGRAM_ACTION_BASE_URL",
     os.getenv("MONITORING_PUBLIC_BASE_URL", ""),
 ).strip().rstrip("/")
+CANONICAL_AGENT_BASE_URL = os.getenv(
+    "MONITORING_CANONICAL_AGENT_BASE_URL",
+    "https://infoboard.an-group.work",
+).strip().rstrip("/")
 TELEGRAM_ACTION_SIGNING_SECRET = os.getenv("MONITORING_TELEGRAM_ACTION_SIGNING_SECRET", "").strip()
 TELEGRAM_ACTION_TTL_MINUTES = max(10, min(10080, int(os.getenv("MONITORING_TELEGRAM_ACTION_TTL_MINUTES", "1440") or "1440")))
 try:
@@ -9792,7 +9796,7 @@ def collect_agent_source_status(conn: sqlite3.Connection) -> dict:
         raw_base_url = str(entries_map.get("RAW_BASE_URL", "") or "").strip()
         github_repo = str(entries_map.get("GITHUB_REPO", "") or "").strip()
 
-        expected_update_base = f"{server_url.rstrip('/')}/updates" if server_url else ""
+        expected_update_base = f"{CANONICAL_AGENT_BASE_URL}/updates" if CANONICAL_AGENT_BASE_URL else (f"{server_url.rstrip('/')}/updates" if server_url else "")
 
         server_ok = bool(server_url)
         update_ok = bool(update_base_url) and bool(expected_update_base) and (update_base_url == expected_update_base)
@@ -9819,6 +9823,7 @@ def collect_agent_source_status(conn: sqlite3.Connection) -> dict:
                 "raw_base_url": raw_base_url,
                 "github_repo": github_repo,
                 "expected_update_base_url": expected_update_base,
+                "canonical_update_base_url": expected_update_base,
                 "checks": {
                     "server_url": server_ok,
                     "update_base_url": update_ok,

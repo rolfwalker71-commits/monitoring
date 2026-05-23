@@ -80,6 +80,8 @@ Der Wrapper zieht die aktuellen Windows-Skripte von `/updates`, repariert eine b
 
 Agents prüfen selbständig (alle ~6 Stunden, plus bei jedem Sammellauf wenn die Version veraltet ist) die vom Server bereitgestellten Pakete unter `/updates` und aktualisieren sich automatisch. Die aktuelle Agent-Version steht in `AGENT_VERSION`.
 
+Wichtig für die Domain-Migration: Self-Update und Repair schreiben vorhandene Hosts aktiv auf die neue Canonical-URL `https://infoboard.an-group.work` um. Die alte URL bleibt nur als Übergang erreichbar, bis alle Hosts umgestellt sind.
+
 ### Payload-Sicherung vor Versand
 
 Vor jedem `POST /api/v1/agent-report` speichert der Agent den ausgehenden JSON-Payload lokal als Snapshot.
@@ -627,6 +629,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
+
+### v1.6.339 (23. Mai 2026)
+
+- **Agent-Quelle auf neue Canonical-URL umgestellt**: Die Soll-URL in der UI und die Backend-Bewertung fuer `agent.conf` vergleichen jetzt gegen `https://infoboard.an-group.work`; die Tabelle zeigt den Migrationszielwert explizit an.
 
 ### v1.6.338 (23. Mai 2026)
 

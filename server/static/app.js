@@ -11471,7 +11471,10 @@ async function loadAgentSourceStatus() {
     const okCount = Number(data.ok || 0);
     const pendingCount = Number(data.pending || Math.max(0, total - okCount));
     if (summaryEl) {
-      summaryEl.textContent = `${okCount}/${total} umgestellt, ${pendingCount} offen`;
+      const targetBaseUrl = asText(items[0]?.canonical_update_base_url || items[0]?.expected_update_base_url, "");
+      summaryEl.textContent = targetBaseUrl
+        ? `${okCount}/${total} umgestellt, ${pendingCount} offen · Ziel: ${targetBaseUrl}`
+        : `${okCount}/${total} umgestellt, ${pendingCount} offen`;
     }
 
     if (!items.length) {
