@@ -630,6 +630,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
 
+### v1.6.352 (23. Mai 2026)
+
+- **Dark-Mode Menuezeilen deutlich lesbarer**: Aufklappbare Zeilen in SAP/HANA-Bereichen (z. B. Tenant-/Discovery-Summaries) nutzen jetzt kontrastreiche Schriftfarben.
+- **Chevron/Marker ebenfalls angepasst**: Pfeilindikatoren in diesen Menuezeilen wurden auf besser sichtbare Dark-Mode-Farben umgestellt.
+- **Ueber alle Menuepunkte konsistent**: Die Anpassung greift fuer die gemeinsamen Summary-Komponenten in den betroffenen Ansichten.
+
 ### v1.6.351 (23. Mai 2026)
 
 - **Dark-Mode Header-Titel wieder sichtbar**: Der App-Titel `System Infoboard` hat im Dark-Mode jetzt eine explizit kontrastreiche Farbe.

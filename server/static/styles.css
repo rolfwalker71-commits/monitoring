@@ -8117,6 +8117,27 @@ body[data-theme="dark"] .sap-b1-item {
   background: linear-gradient(180deg, #152035 0%, #0b1628 100%);
 }
 
+body[data-theme="dark"] .sap-hana-databases-discovery {
+  border-color: #2d4a6e;
+  background: linear-gradient(180deg, #12213a 0%, #0f1c31 100%);
+}
+
+body[data-theme="dark"] .sap-hana-databases-discovery > summary {
+  color: #d4e6fb;
+}
+
+body[data-theme="dark"] .sap-hana-databases-discovery > summary::before {
+  color: #9eb7d4;
+}
+
+body[data-theme="dark"] .sap-b1-raw-summary {
+  color: #d4e6fb;
+}
+
+body[data-theme="dark"] .sap-b1-raw-summary::before {
+  color: #9eb7d4;
+}
+
 body[data-theme="dark"] .sap-b1-item header {
   color: #bfdbfe;
 }
