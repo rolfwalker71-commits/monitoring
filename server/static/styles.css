@@ -4539,10 +4539,10 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-os-icon--inline {
   position: static;
-  width: 14px;
-  height: 14px;
-  opacity: 0.5;
-  filter: grayscale(1) saturate(0) contrast(1.05);
+  width: 15px;
+  height: 15px;
+  opacity: 0.92;
+  filter: none;
   flex: 0 0 auto;
 }
 
@@ -8888,8 +8888,8 @@ body[data-theme="dark"] .host-tech-row--ip .host-meta-v {
 }
 
 body[data-theme="dark"] .host-os-icon--inline {
-  opacity: 0.56;
-  filter: grayscale(1) saturate(0) brightness(1.22);
+  opacity: 0.94;
+  filter: none;
 }
 
 body[data-theme="dark"] .host-meta-v {
