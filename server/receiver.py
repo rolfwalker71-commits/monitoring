@@ -10083,15 +10083,22 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
     environment_type = str(row[8] or "").strip().lower()
     if environment_type not in {"", "prod", "test"}:
         environment_type = ""
+
+    def _safe_int(value: object, default: int | None = 0) -> int | None:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
     return {
         "display_name_override": str(row[0] or "").strip(),
         "country_code_override": normalize_country_code(row[1]),
-        "is_favorite": bool(int(row[2] or 0)),
-        "is_hidden": bool(int(row[3] or 0)),
+        "is_favorite": bool(_safe_int(row[2], 0) or 0),
+        "is_hidden": bool(_safe_int(row[3], 0) or 0),
         "customer_alert_emails": str(row[4] or "").strip(),
         "customer_alert_mountpoints": str(row[5] or "").strip(),
         "customer_alert_min_severity": customer_alert_min_severity,
-        "customer_id": int(row[7]) if row[7] is not None else None,
+        "customer_id": _safe_int(row[7], None),
         "environment_type": environment_type,
         "customer_name": str(row[9] or "").strip(),
         "customer_maringo_project_number": str(row[10] or "").strip(),
