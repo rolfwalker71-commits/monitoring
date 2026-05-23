@@ -7800,10 +7800,10 @@ function renderSingleHostCard(host) {
   const versionSideBarHtml = `<div class="${versionSideBarClass}" title="${escapeHtml(versionSideBarTitle)}" aria-hidden="true"></div>`;
   const hasSapLicenseInfo = Boolean(host.has_sap_license_info);
   const sapLicenseBadge = hasSapLicenseInfo
-    ? `<span class="host-license-info-badge" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}">🪪</span>`
+    ? `<span class="host-license-info-badge host-license-info-badge--corner" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}">🪪</span>`
     : "";
   const customerTitleLine = customerNameValue
-    ? `<div class="host-customer-title-line"><span class="host-customer-text-block"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span>${flagIcon}</span><span class="host-detail-line">${escapeHtml(hostDesignationLabel)}</span></span>${sapLicenseBadge}</div>`
+    ? `<div class="host-customer-title-line"><span class="host-customer-text-block"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span>${flagIcon}</span><span class="host-detail-line">${escapeHtml(hostDesignationLabel)}</span></span></div>`
     : "";
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
@@ -7859,10 +7859,11 @@ function renderSingleHostCard(host) {
       <div class="host-card-main">
         ${customerTitleLine}
         <div class="host-tech-stack">
-          <span class="host-tech-row host-tech-row--host"><span class="${statusPulseClass}" aria-hidden="true"></span>${osIcon}<span class="host-meta-v" title="${escapeHtml(shortHostname)}">${escapeHtml(shortHostname)}</span></span>
+          <span class="host-tech-row host-tech-row--host"><span class="${statusPulseClass}" aria-hidden="true"></span><span class="host-meta-v" title="${escapeHtml(shortHostname)}">${escapeHtml(shortHostname)}</span>${osIcon}</span>
           <span class="host-tech-row host-tech-row--ip"><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span></span>
         </div>
       </div>
+      ${sapLicenseBadge}
       ${mutedAlertsSection}
     </article>
   `;
