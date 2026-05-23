@@ -630,6 +630,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
 
+### v1.6.344 (23. Mai 2026)
+
+- **Zusatz-Selbstheilung in `collect_and_send`**: Linux- und Windows-Agenten probieren beim Nachladen von `self_update` jetzt mehrere Update-Quellen (neu + alt + Config), damit ein globales `update-now` auch Hosts mit veralteter lokaler `self_update` ohne manuelles Eingreifen wieder auf den aktuellen Stand bringt.
+
 ### v1.6.343 (23. Mai 2026)
 
 - **Self-Update hat jetzt einen Notfall-Fallback auf die Alt-Domain**: Falls `infoboard.an-group.work` auf einem Host noch nicht erreichbar ist, pruefen Linux- und Windows-`self_update` zusaetzlich `https://monitoring.rolfwalker.ch/updates`, damit der Versions-Lookup nicht abbricht.

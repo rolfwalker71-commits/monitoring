@@ -2258,13 +2258,32 @@ maybe_priority_self_update() {
 
 run_self_update_now() {
   local updater_path="${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh"
+  local canonical_update_base_url="https://infoboard.an-group.work/updates"
+  local legacy_update_base_url="https://monitoring.rolfwalker.ch/updates"
   local update_base_url="${UPDATE_BASE_URL:-}"
+  local update_base_candidates=()
   local tmp_updater=""
+  local candidate=""
   local curl_args=(--silent --show-error --fail --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC" --max-time "$CURL_MAX_TIME_SEC")
+
+  add_update_candidate() {
+    local value="${1:-}"
+    value="${value%/}"
+    [[ -z "$value" ]] && return
+    local existing
+    for existing in "${update_base_candidates[@]:-}"; do
+      [[ "$existing" == "$value" ]] && return
+    done
+    update_base_candidates+=("$value")
+  }
 
   if [[ "$TLS_INSECURE" == "1" ]]; then
     curl_args+=(--insecure)
   fi
+
+  add_update_candidate "$canonical_update_base_url"
+  add_update_candidate "$legacy_update_base_url"
+  add_update_candidate "$update_base_url"
 
   if [[ -z "$update_base_url" && -n "${SERVER_URL:-}" ]]; then
     update_base_url="${SERVER_URL%/}/updates"
@@ -2272,17 +2291,24 @@ run_self_update_now() {
   if [[ -z "$update_base_url" && -n "${RAW_BASE_URL:-}" ]]; then
     update_base_url="$RAW_BASE_URL"
   fi
+  add_update_candidate "$update_base_url"
+  if [[ -n "${SERVER_URL:-}" ]]; then
+    add_update_candidate "${SERVER_URL%/}/updates"
+  fi
+  add_update_candidate "${RAW_BASE_URL:-}"
 
-  if [[ -n "$update_base_url" ]]; then
-    tmp_updater="$(mktemp)"
-    if curl "${curl_args[@]}" "$update_base_url/client/linux/self_update.sh" -o "$tmp_updater" 2>/dev/null; then
-      chmod 0755 "$tmp_updater"
-      if CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$AGENT_VERSION_FILE" "$tmp_updater" >> "$UPDATE_LOG_FILE" 2>&1; then
-        rm -f "$tmp_updater"
-        return 0
+  if [[ "${#update_base_candidates[@]}" -gt 0 ]]; then
+    for candidate in "${update_base_candidates[@]}"; do
+      tmp_updater="$(mktemp)"
+      if curl "${curl_args[@]}" "$candidate/client/linux/self_update.sh" -o "$tmp_updater" 2>/dev/null; then
+        chmod 0755 "$tmp_updater"
+        if CONFIG_FILE="$CONFIG_FILE" AGENT_VERSION_FILE="$AGENT_VERSION_FILE" "$tmp_updater" >> "$UPDATE_LOG_FILE" 2>&1; then
+          rm -f "$tmp_updater"
+          return 0
+        fi
       fi
+      [[ -n "$tmp_updater" ]] && rm -f "$tmp_updater"
     fi
-    [[ -n "$tmp_updater" ]] && rm -f "$tmp_updater"
   fi
 
   if [[ -x "$updater_path" ]]; then

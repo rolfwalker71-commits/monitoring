@@ -937,19 +937,23 @@ function Invoke-AgentSelfUpdate {
 
     $tmpScript = $null
     try {
-        $updateBase = ''
-        if ($cfg.ContainsKey('UPDATE_BASE_URL') -and $cfg['UPDATE_BASE_URL']) {
-            $updateBase = $cfg['UPDATE_BASE_URL']
-        } elseif ($cfg.ContainsKey('SERVER_URL') -and $cfg['SERVER_URL']) {
-            $updateBase = ($cfg['SERVER_URL'].TrimEnd('/')) + '/updates'
-        } elseif ($cfg.ContainsKey('RAW_BASE_URL') -and $cfg['RAW_BASE_URL']) {
-            $updateBase = $cfg['RAW_BASE_URL']
-        }
-
-        if ($updateBase) {
+        $updateBases = Get-UpdateBaseCandidates
+        if ($updateBases.Count -gt 0) {
             $tmpScript = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + '.ps1')
-            $wc = New-Object System.Net.WebClient
-            $wc.DownloadFile(($updateBase.TrimEnd('/')) + '/client/windows/self_update.ps1', $tmpScript)
+            $downloaded = $false
+            foreach ($updateBase in $updateBases) {
+                try {
+                    $wc = New-Object System.Net.WebClient
+                    $wc.DownloadFile(($updateBase.TrimEnd('/')) + '/client/windows/self_update.ps1', $tmpScript)
+                    $downloaded = $true
+                    break
+                } catch {
+                    continue
+                }
+            }
+            if (-not $downloaded) {
+                throw 'could not download remote self_update.ps1 from any update source candidate'
+            }
             & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $tmpScript *>> $UpdateLogFile
             if ($LASTEXITCODE -eq 0) {
                 return (New-UpdateResult -Ok $true -Message 'update command executed (remote updater)')
@@ -976,15 +980,40 @@ function Invoke-AgentSelfUpdate {
     return (New-UpdateResult -Ok $false -Message 'no self-update source available (local script missing and no update base configured)')
 }
 
-function Get-UpdateBaseUrl {
+function Get-UpdateBaseCandidates {
+    $candidates = New-Object System.Collections.Generic.List[string]
+
+    function Add-UniqueCandidate {
+        param([string]$Value)
+        if (-not $Value) { return }
+        $normalized = $Value.Trim().TrimEnd('/')
+        if (-not $normalized) { return }
+        foreach ($existing in $candidates) {
+            if ($existing -ieq $normalized) { return }
+        }
+        $candidates.Add($normalized) | Out-Null
+    }
+
+    Add-UniqueCandidate 'https://infoboard.an-group.work/updates'
+    Add-UniqueCandidate 'https://monitoring.rolfwalker.ch/updates'
+
     if ($cfg.ContainsKey('UPDATE_BASE_URL') -and $cfg['UPDATE_BASE_URL']) {
-        return $cfg['UPDATE_BASE_URL'].TrimEnd('/')
+        Add-UniqueCandidate $cfg['UPDATE_BASE_URL']
     }
     if ($cfg.ContainsKey('SERVER_URL') -and $cfg['SERVER_URL']) {
-        return (($cfg['SERVER_URL']).TrimEnd('/') + '/updates')
+        Add-UniqueCandidate (($cfg['SERVER_URL']).TrimEnd('/') + '/updates')
     }
     if ($cfg.ContainsKey('RAW_BASE_URL') -and $cfg['RAW_BASE_URL']) {
-        return $cfg['RAW_BASE_URL'].TrimEnd('/')
+        Add-UniqueCandidate $cfg['RAW_BASE_URL']
+    }
+
+    return $candidates
+}
+
+function Get-UpdateBaseUrl {
+    $candidates = Get-UpdateBaseCandidates
+    if ($candidates.Count -gt 0) {
+        return $candidates[0]
     }
     return ''
 }
@@ -1155,25 +1184,29 @@ function Ensure-OptionalSapScanScript {
         return
     }
 
-    $updateBase = ''
-    if ($cfg.ContainsKey('UPDATE_BASE_URL') -and $cfg['UPDATE_BASE_URL']) {
-        $updateBase = $cfg['UPDATE_BASE_URL']
-    } elseif ($cfg.ContainsKey('SERVER_URL') -and $cfg['SERVER_URL']) {
-        $updateBase = ($cfg['SERVER_URL'].TrimEnd('/')) + '/updates'
-    } elseif ($cfg.ContainsKey('RAW_BASE_URL') -and $cfg['RAW_BASE_URL']) {
-        $updateBase = $cfg['RAW_BASE_URL']
-    }
-
-    if (-not $updateBase) {
+    $updateBases = Get-UpdateBaseCandidates
+    if ($updateBases.Count -eq 0) {
         return
     }
 
     $tmpScript = $null
     try {
         $tmpScript = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + '.ps1')
-        $uri = ($updateBase.TrimEnd('/')) + '/client/windows/collect_and_scan_sap_tables.ps1'
-        $wc = New-Object System.Net.WebClient
-        $wc.DownloadFile($uri, $tmpScript)
+        $downloaded = $false
+        foreach ($updateBase in $updateBases) {
+            try {
+                $uri = ($updateBase.TrimEnd('/')) + '/client/windows/collect_and_scan_sap_tables.ps1'
+                $wc = New-Object System.Net.WebClient
+                $wc.DownloadFile($uri, $tmpScript)
+                $downloaded = $true
+                break
+            } catch {
+                continue
+            }
+        }
+        if (-not $downloaded) {
+            return
+        }
 
         # Basic guard against HTML/proxy responses.
         $text = [System.IO.File]::ReadAllText($tmpScript, [System.Text.Encoding]::UTF8)
