@@ -7783,7 +7783,7 @@ function renderSingleHostCard(host) {
     ? `<span class="host-license-info-badge" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}">🪪</span>`
     : "";
   const customerTitleLine = customerNameValue
-    ? `<div class="host-customer-title-line"><span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">🏢 ${escapeHtml(customerChipLabel)}</span><span class="host-detail-line">🏷️ ${escapeHtml(hostDesignationLabel)}</span></span>${sapLicenseBadge}</div>`
+    ? `<div class="host-customer-title-line"><span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span><span class="host-detail-line">🏷️ ${escapeHtml(hostDesignationLabel)}</span></span>${sapLicenseBadge}</div>`
     : "";
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
@@ -8173,7 +8173,7 @@ function renderSelectedHostCustomerChip(host) {
   if (!customerName) {
     return "";
   }
-  return `<span class="selected-host-meta-chip" title="Kunde${customerProject ? ` · Maringo ${escapeHtml(customerProject)}` : ""}">🏢 ${escapeHtml(customerName)}${customerProject ? ` · ${escapeHtml(customerProject)}` : ""}</span>`;
+  return `<span class="selected-host-meta-chip" title="Kunde${customerProject ? ` · Maringo ${escapeHtml(customerProject)}` : ""}">${escapeHtml(customerName)}${customerProject ? ` · ${escapeHtml(customerProject)}` : ""}</span>`;
 }
 
 function updateReportCustomerChip() {
