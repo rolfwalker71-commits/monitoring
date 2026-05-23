@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.5**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.5**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.6**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.6**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.6 | 23.05.2026 | Host card compactness: remove visible "IP" label while keeping the IP value in the same position to free horizontal space for longer host names |
 | 1.7.5 | 23.05.2026 | SAP license hover popup: swap columns so Lizenztyp is first and Anzahl is second; refine second-column width/gap to keep values close but avoid clipping descriptions |
 | 1.7.4 | 23.05.2026 | Final premium UI micro-polish per module: refined spacing rhythm, row density, heading cadence and compact chip/table typography in Global/Admin/System views for both Light and Dark mode |
 | 1.7.3 | 23.05.2026 | View-by-view polish across Global/Admin sections: harmonized toolbars, dense tables, cards, changelog blocks and system-overview layout details for consistent readability in both Light and Dark mode |

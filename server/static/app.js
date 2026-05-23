@@ -7853,7 +7853,7 @@ function renderSingleHostCard(host) {
       ${customerTitleLine}
       <span class="host-meta-line host-meta-line--primary host-meta-line--with-alert">
         <span class="host-meta-kv"><span class="host-meta-k">Host</span><span class="host-meta-v" title="${escapeHtml(shortHostname)}">${escapeHtml(shortHostname)}</span></span>
-        <span class="host-meta-kv host-meta-kv--ip"><span class="host-meta-k">IP</span><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span></span>
+        <span class="host-meta-kv host-meta-kv--ip"><span class="host-meta-k" aria-hidden="true"></span><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span></span>
       </span>
       ${mutedAlertsSection}
       ${osIcon}
