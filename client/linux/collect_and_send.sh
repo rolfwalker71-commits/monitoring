@@ -2308,7 +2308,7 @@ run_self_update_now() {
         fi
       fi
       [[ -n "$tmp_updater" ]] && rm -f "$tmp_updater"
-    fi
+    done
   fi
 
   if [[ -x "$updater_path" ]]; then
