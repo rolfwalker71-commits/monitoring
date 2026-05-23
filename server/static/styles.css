@@ -4428,9 +4428,9 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-license-hover-types-head {
   margin: 0 0 3px;
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 52px;
   align-items: baseline;
-  gap: 8px;
+  gap: 10px;
 }
 
 .host-license-hover-type-count-label,
@@ -4443,26 +4443,28 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .host-license-hover-type-count-label {
-  min-width: 40px;
+  min-width: 52px;
+  text-align: right;
   font-family: "IBM Plex Mono", monospace;
 }
 
 .host-license-hover-type-row {
   margin: 2px 0;
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 52px;
   align-items: baseline;
-  gap: 8px;
+  gap: 10px;
   color: #28486a;
   font-size: 12px;
 }
 
 .host-license-hover-type-count {
-  min-width: 40px;
+  min-width: 52px;
   font-size: 12px;
   font-family: "IBM Plex Mono", monospace;
   color: #7c2d12;
   font-weight: 700;
+  text-align: right;
 }
 
 .host-license-hover-type-name-wrap {
