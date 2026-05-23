@@ -7712,7 +7712,7 @@ function renderSingleHostCard(host) {
   const osLabel = osIconInfo.osLabel;
   const osIcon = `<img src="icons/${iconName}" class="host-os-icon host-os-icon--inline" alt="${osLabel}" title="${escapeHtml(asText(host.os))}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${iconName}';}">`;
   const flagIcon = countryCode
-    ? `<img src="icons/${countryCode}.png" class="host-flag-icon host-flag-icon--inline" alt="${countryCode}" title="Land: ${countryCode}" onerror="if(!this.dataset.fallback1){this.dataset.fallback1='1';this.src='/icons/${countryCode}.png';return;}if(!this.dataset.fallback2){this.dataset.fallback2='1';this.src='/icons/${countryCodeLower}.png';return;}if(!this.dataset.fallback3){this.dataset.fallback3='1';this.src='/icons/${countryCodeLower}.svg';return;}this.style.display='none'">`
+    ? `<img src="icons/${countryCode}.png" class="host-flag-icon host-flag-icon--corner" alt="${countryCode}" title="Land: ${countryCode}" onerror="if(!this.dataset.fallback1){this.dataset.fallback1='1';this.src='/icons/${countryCode}.png';return;}if(!this.dataset.fallback2){this.dataset.fallback2='1';this.src='/icons/${countryCodeLower}.png';return;}if(!this.dataset.fallback3){this.dataset.fallback3='1';this.src='/icons/${countryCodeLower}.svg';return;}this.style.display='none'">`
     : "";
   const mutedAlerts = Array.isArray(state.mutedAlertsByHost[hostname]) ? state.mutedAlertsByHost[hostname] : [];
   const hasMutedAlerts = mutedAlerts.length > 0;
@@ -7788,10 +7788,10 @@ function renderSingleHostCard(host) {
   const versionSideBarHtml = `<div class="${versionSideBarClass}" title="${escapeHtml(versionSideBarTitle)}" aria-hidden="true"></div>`;
   const hasSapLicenseInfo = Boolean(host.has_sap_license_info);
   const sapLicenseBadge = hasSapLicenseInfo
-    ? `<span class="host-license-info-badge host-license-info-badge--corner" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}">🪪</span>`
+    ? `<span class="host-license-info-badge host-license-info-badge--inline" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}">🪪</span>`
     : "";
   const customerTitleLine = customerNameValue
-    ? `<div class="host-customer-title-line"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span>${flagIcon}</span></div>`
+    ? `<div class="host-customer-title-line"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span>${sapLicenseBadge}</span></div>`
     : "";
   const designationBadgeLine = `<span class="host-detail-line">${escapeHtml(hostDesignationLabel)}</span>`;
 
@@ -7852,7 +7852,7 @@ function renderSingleHostCard(host) {
           <span class="host-tech-row host-tech-row--ip"><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span>${osIcon}</span>
         </div>
       </div>
-      ${sapLicenseBadge}
+      ${flagIcon}
       ${mutedAlertsSection}
     </article>
   `;

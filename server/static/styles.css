@@ -4369,6 +4369,11 @@ body[data-theme="dark"] .trend-progress-bar {
   z-index: 2;
 }
 
+.host-license-info-badge--inline {
+  position: static;
+  font-size: 13px;
+}
+
 .host-license-hover-popup {
   position: fixed;
   z-index: 1300;
@@ -4554,6 +4559,15 @@ body[data-theme="dark"] .trend-progress-bar {
   width: 20px;
   height: 20px;
   flex: 0 0 auto;
+}
+
+.host-flag-icon--corner {
+  position: absolute;
+  top: 10px;
+  right: 18px;
+  width: 20px;
+  height: 20px;
+  z-index: 2;
 }
 
 .host-card-main {
@@ -8857,6 +8871,10 @@ body[data-theme="dark"] .host-detail-line {
 }
 
 body[data-theme="dark"] .host-flag-icon--inline {
+  opacity: 0.96;
+}
+
+body[data-theme="dark"] .host-flag-icon--corner {
   opacity: 0.96;
 }
 
