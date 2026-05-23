@@ -628,6 +628,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
 
+### v1.6.335 (23. Mai 2026)
+
+- **Root Cause fuer Alerts-502 mit `host_uid` behoben**: SQL-Alias-Aufbau in `reports_host_key_sql()` gehaertet. Aufrufe mit Alias wie `r.` erzeugen jetzt gueltige SQL-Ausdruecke statt `r..host_uid`.
+
 ### v1.6.334 (23. Mai 2026)
 
 - **Host-Settings fuer Alerts robuster gemacht**: Migrierte SQLite-Daten mit leeren oder kaputten `customer_id`-Werten brechen das Alerts-Rendering nicht mehr ab.

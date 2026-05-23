@@ -124,7 +124,10 @@ def parse_positive_int(value: object, default: int = 0, max_value: int = 365) ->
 
 
 def reports_host_key_sql(alias: str = "") -> str:
-    prefix = f"{alias}." if alias else ""
+    alias_text = str(alias or "").strip()
+    if alias_text.endswith("."):
+        alias_text = alias_text[:-1]
+    prefix = f"{alias_text}." if alias_text else ""
     # No implicit hostname merge: missing host_uid gets a unique legacy key per report row.
     return (
         f"CASE WHEN COALESCE({prefix}host_uid, '') <> '' "
