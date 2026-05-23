@@ -7754,18 +7754,6 @@ function renderSingleHostCard(host) {
       : "",
   ].filter(Boolean).join("");
   const lastReportInfo = formatHostLastReportAge(host.last_report_utc || host.last_seen_utc);
-  const statusBarClass = lastReportInfo.statusClass === "host-last-report-dot--critical"
-    ? "host-status-bar host-status-bar--report-critical"
-    : lastReportInfo.statusClass === "host-last-report-dot--warning"
-      ? "host-status-bar host-status-bar--report-warning"
-      : lastReportInfo.statusClass === "host-last-report-dot--ok"
-        ? "host-status-bar host-status-bar--report-ok"
-        : "host-status-bar host-status-bar--report-unknown";
-  const statusBarLogicText = "Logik: gruen < 20 Min, orange 20-49 Min, rot ab 50 Min, grau wenn unbekannt.";
-  const statusBarTitle = lastReportInfo.label.startsWith("Report vor")
-    ? `Letzter ${lastReportInfo.label} | ${statusBarLogicText}`
-    : `${lastReportInfo.title} | ${statusBarLogicText}`;
-  const statusBarHtml = `<div class="${statusBarClass}" title="${escapeHtml(statusBarTitle)}" aria-hidden="true"></div>`;
   const statusPulseClass = lastReportInfo.statusClass === "host-last-report-dot--critical"
     ? "host-status-pulse host-status-pulse--critical"
     : lastReportInfo.statusClass === "host-last-report-dot--warning"
@@ -7855,14 +7843,13 @@ function renderSingleHostCard(host) {
 
   return `
     <article class="${selectedClass}${envCardClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostIdentity)}">
-      ${statusBarHtml}
       ${versionSideBarHtml}
       <div class="host-card-main">
         ${customerTitleLine}
         ${designationBadgeLine}
         <div class="host-tech-line">
-          <span class="host-tech-row host-tech-row--host"><span class="${statusPulseClass}" aria-hidden="true"></span><span class="host-meta-v" title="${escapeHtml(shortHostname)}">${escapeHtml(shortHostname)}</span>${osIcon}</span>
-          <span class="host-tech-row host-tech-row--ip"><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span></span>
+          <span class="host-tech-row host-tech-row--host"><span class="${statusPulseClass}" aria-hidden="true"></span><span class="host-meta-v" title="${escapeHtml(shortHostname)}">${escapeHtml(shortHostname)}</span></span>
+          <span class="host-tech-row host-tech-row--ip"><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span>${osIcon}</span>
         </div>
       </div>
       ${sapLicenseBadge}

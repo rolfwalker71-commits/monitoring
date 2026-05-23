@@ -4366,7 +4366,7 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-license-info-badge--corner {
   position: absolute;
   top: 9px;
-  right: 34px;
+  right: 22px;
   width: 18px;
   height: 18px;
   border-radius: 999px;
@@ -4616,6 +4616,10 @@ body[data-theme="dark"] .trend-progress-bar {
   font-weight: 600;
   color: #7188a3;
   flex: 0 0 auto;
+}
+
+.host-tech-row--ip {
+  justify-content: flex-end;
 }
 
 .host-status-pulse {
