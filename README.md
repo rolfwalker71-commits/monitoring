@@ -630,6 +630,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
 
+### v1.6.347 (23. Mai 2026)
+
+- **Kundenname auf Host-Karte vergroessert**: Die Schrift fuer den Kundennamen wurde von 17px auf 18px erhoeht.
+
 ### v1.6.346 (23. Mai 2026)
 
 - **Header-Chips umbenannt**: `REPORTS DB` heisst jetzt `REPORTS IN DB` und `REPORTS 1H` heisst jetzt `ANZAHL REPORTS`.
