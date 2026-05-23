@@ -628,6 +628,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
 
+### v1.6.336 (23. Mai 2026)
+
+- **Test-Mail fuer Host-Abo nutzt jetzt den konfigurierten Absender**: Der Host-Alert-Abo-Testpfad uebergibt `email_sender` nun ebenfalls, damit nicht vereinzelt die O365-Standardadresse verwendet wird.
+
 ### v1.6.335 (23. Mai 2026)
 
 - **Root Cause fuer Alerts-502 mit `host_uid` behoben**: SQL-Alias-Aufbau in `reports_host_key_sql()` gehaertet. Aufrufe mit Alias wie `r.` erzeugen jetzt gueltige SQL-Ausdruecke statt `r..host_uid`.

@@ -13173,6 +13173,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         subject,
                         body,
                         content_type="HTML",
+                        sender_address=str(user_settings.get("email_sender", "") or "").strip(),
                     )
                     status = HTTPStatus.OK if mail_ok else HTTPStatus.BAD_REQUEST
                     self._send_json(status, {"status": "sent" if mail_ok else "failed", "channel": "mail", "details": mail_details})
