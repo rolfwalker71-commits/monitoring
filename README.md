@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.11**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.11**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.12**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.12**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.12 | 23.05.2026 | Host card typography/contrast polish: keep customer title dominant while softening technical host/IP text contrast, reducing technical font weight, and toning down inline OS icon emphasis |
 | 1.7.11 | 23.05.2026 | Host card layout refresh: identity/tech grid split, designation rendered as rounded badge, inline country flag integration, and technical column with status pulse + monochrome OS icon |
 | 1.7.10 | 23.05.2026 | Host card customer name typography: reduce size by 1px and increase weight to the strongest available bold style |
 | 1.7.9 | 23.05.2026 | Host card note line: remove designation emoji, shift text left, and increase note-line font size by 1px |

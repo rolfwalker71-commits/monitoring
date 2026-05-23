@@ -4354,9 +4354,9 @@ body[data-theme="dark"] .trend-progress-bar {
   border-radius: 999px;
   border: 1px solid #c5d6ea;
   background: linear-gradient(180deg, #eef4fb 0%, #e2ebf6 100%);
-  color: #4a6788;
+  color: #5a7593;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.01em;
   white-space: nowrap;
   overflow: hidden;
@@ -4515,6 +4515,8 @@ body[data-theme="dark"] .trend-progress-bar {
   display: block;
   font-size: 17px;
   font-weight: 900;
+  letter-spacing: 0.01em;
+  line-height: 1.08;
   color: #0f3f5f;
   word-break: break-word;
 }
@@ -4537,7 +4539,7 @@ body[data-theme="dark"] .trend-progress-bar {
   position: static;
   width: 14px;
   height: 14px;
-  opacity: 0.58;
+  opacity: 0.5;
   filter: grayscale(1) saturate(0) contrast(1.05);
   flex: 0 0 auto;
 }
@@ -4587,18 +4589,19 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-tech-row .host-meta-v {
   font-family: "IBM Plex Mono", monospace;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .host-tech-row--host .host-meta-v {
-  color: #294764;
+  color: #4f6782;
 }
 
 .host-tech-row--ip .host-meta-v {
-  font-size: 11px;
-  font-weight: 700;
-  color: #5c738f;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #7188a3;
 }
 
 .host-status-pulse {
@@ -8837,13 +8840,13 @@ body[data-theme="dark"] .host-value-chip--customer-title {
 }
 
 body[data-theme="dark"] .host-customer-line {
-  color: #edf5ff;
+  color: #f4f8ff;
 }
 
 body[data-theme="dark"] .host-detail-line {
   border-color: rgba(123, 159, 199, 0.45);
   background: linear-gradient(180deg, rgba(46, 73, 104, 0.48) 0%, rgba(33, 57, 84, 0.52) 100%);
-  color: #b8cae0;
+  color: #afc4db;
 }
 
 body[data-theme="dark"] .host-flag-icon--inline {
@@ -8853,15 +8856,15 @@ body[data-theme="dark"] .host-flag-icon--inline {
 }
 
 body[data-theme="dark"] .host-tech-row--host .host-meta-v {
-  color: #e2eeff;
+  color: #cfdeef;
 }
 
 body[data-theme="dark"] .host-tech-row--ip .host-meta-v {
-  color: #b9cce3;
+  color: #9fb4cb;
 }
 
 body[data-theme="dark"] .host-os-icon--inline {
-  opacity: 0.64;
+  opacity: 0.56;
   filter: grayscale(1) saturate(0) brightness(1.22);
 }
 
