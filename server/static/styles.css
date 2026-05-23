@@ -10810,6 +10810,98 @@ body[data-theme="dark"] .so-status-offline {
   }
 }
 
+/* Final premium micro-polish per module (global/admin sections). */
+#globalView .settings-page-header h3 {
+  letter-spacing: 0.01em;
+}
+
+#globalView .count.compact,
+#globalView .count {
+  line-height: 1.35;
+}
+
+#globalView .ct-host-header,
+#globalView .backup-host-card summary,
+#globalView .admin-login-audit-summary,
+#globalView .host-config-change-summary,
+#globalView .host-config-change-date-summary {
+  min-height: 38px;
+}
+
+#globalView .ct-hostname,
+#globalView .ih-hostname,
+#globalView .backup-host-title,
+#globalView .so-card-hostname,
+#globalView .global-host-customer,
+#globalView .admin-sub-country-title {
+  letter-spacing: 0.01em;
+}
+
+#globalView .ct-row,
+#globalView .ih-meta-row,
+#globalView .so-card-line,
+#globalView .admin-sub-row-actions,
+#globalView .admin-sub-user-stack {
+  gap: 8px 12px;
+}
+
+#globalView .ct-row,
+#globalView .admin-alert-subscriptions-table td,
+#globalView .user-management-table td,
+#globalView .agent-source-status-table td,
+#globalView .agent-update-admin-table td {
+  line-height: 1.32;
+}
+
+#globalView .agent-source-mono,
+#globalView .host-config-changes-wrap table td:nth-child(3),
+#globalView .host-config-changes-wrap table td:nth-child(4) {
+  font-size: 11px;
+}
+
+#globalView .system-overview-toggle,
+#globalView .so-country-filter-btn,
+#globalView .admin-sub-user-chip,
+#globalView .agent-source-status-badge,
+#globalView .user-flag-pill,
+#globalView .oauth-state-pill {
+  min-height: 26px;
+}
+
+#globalView .table-wrap {
+  scrollbar-gutter: stable;
+}
+
+body[data-theme="dark"] #globalView .ct-hostname,
+body[data-theme="dark"] #globalView .ih-hostname,
+body[data-theme="dark"] #globalView .backup-host-title,
+body[data-theme="dark"] #globalView .so-card-hostname,
+body[data-theme="dark"] #globalView .global-host-customer {
+  color: #edf5ff;
+}
+
+body[data-theme="dark"] #globalView .admin-sub-country-title {
+  color: #cfe0f6;
+}
+
+@media (max-width: 760px) {
+  #globalView .ct-row,
+  #globalView .ih-meta-row,
+  #globalView .so-card-line,
+  #globalView .admin-sub-row-actions,
+  #globalView .admin-sub-user-stack {
+    gap: 6px 8px;
+  }
+
+  #globalView .ct-host-header,
+  #globalView .backup-host-card summary,
+  #globalView .admin-login-audit-summary,
+  #globalView .host-config-change-summary,
+  #globalView .host-config-change-date-summary {
+    min-height: 34px;
+  }
+}
+
 @media (max-width: 600px) {
   .so-card-grid {
     grid-template-columns: 1fr;
