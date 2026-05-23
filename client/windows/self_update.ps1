@@ -34,10 +34,41 @@ foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
 
 $InstallDir = if ($cfg.ContainsKey('INSTALL_DIR'))   { $cfg['INSTALL_DIR'] }   else { 'C:\ProgramData\monitoring-agent' }
 $CanonicalServerUrl = 'https://infoboard.an-group.work'
-$ServerUrl = $CanonicalServerUrl
+$OriginalServerUrl = if ($cfg.ContainsKey('SERVER_URL')) { $cfg['SERVER_URL'] } else { '' }
 $ConfiguredUpdateBaseUrl = if ($cfg.ContainsKey('UPDATE_BASE_URL')) { $cfg['UPDATE_BASE_URL'] } else { '' }
 $LegacyRawBaseUrl = if ($cfg.ContainsKey('RAW_BASE_URL')) { $cfg['RAW_BASE_URL'] } else { '' }
-$PrimaryUpdateBaseUrl = ($CanonicalServerUrl.TrimEnd('/')) + '/updates'
+$CanonicalUpdateBaseUrl = ($CanonicalServerUrl.TrimEnd('/')) + '/updates'
+
+$UpdateBaseCandidates = New-Object System.Collections.Generic.List[string]
+function Add-UpdateBaseCandidate {
+    param([string]$Value)
+
+    if (-not $Value) {
+        return
+    }
+
+    $normalized = $Value.Trim().TrimEnd('/')
+    if (-not $normalized) {
+        return
+    }
+
+    foreach ($existing in $UpdateBaseCandidates) {
+        if ($existing -ieq $normalized) {
+            return
+        }
+    }
+
+    $UpdateBaseCandidates.Add($normalized) | Out-Null
+}
+
+Add-UpdateBaseCandidate -Value $CanonicalUpdateBaseUrl
+if ($OriginalServerUrl) {
+    Add-UpdateBaseCandidate -Value (($OriginalServerUrl.TrimEnd('/')) + '/updates')
+}
+Add-UpdateBaseCandidate -Value $ConfiguredUpdateBaseUrl
+Add-UpdateBaseCandidate -Value $LegacyRawBaseUrl
+
+$PrimaryUpdateBaseUrl = if ($UpdateBaseCandidates.Count -gt 0) { $UpdateBaseCandidates[0] } else { '' }
 
 if (-not $PrimaryUpdateBaseUrl) {
     Write-Error "No update source configured. Set SERVER_URL or UPDATE_BASE_URL in agent.conf."
@@ -66,14 +97,33 @@ function Get-RepoUrlCandidates {
     $cacheBust = [System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 
     $urls = @()
-    if ($PrimaryUpdateBaseUrl) {
+    foreach ($base in $UpdateBaseCandidates) {
+        if (-not $base) {
+            continue
+        }
         $urls += @(
-            ("{0}/{1}?cb={2}" -f $PrimaryUpdateBaseUrl, $path, $cacheBust),
-            ("{0}/{1}" -f $PrimaryUpdateBaseUrl, $path)
+            ("{0}/{1}?cb={2}" -f $base, $path, $cacheBust),
+            ("{0}/{1}" -f $base, $path)
         )
     }
 
     return @($urls | Select-Object -Unique)
+}
+
+function Get-UpdateBaseFromUrl {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Url,
+        [Parameter(Mandatory = $true)]
+        [string]$RelativePath
+    )
+
+    $cleanUrl = ($Url -split '\?')[0]
+    $suffix = '/' + (($RelativePath -replace '\\', '/').TrimStart('/'))
+    if ($cleanUrl.EndsWith($suffix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $cleanUrl.Substring(0, $cleanUrl.Length - $suffix.Length).TrimEnd('/')
+    }
+    return ''
 }
 
 function Get-RepoZipUrlCandidates {
@@ -134,6 +184,7 @@ function Test-DownloadedFileContent {
     )
 
     $global:LastContentValidationHint = ''
+    $global:LastSuccessfulUpdateBaseUrl = ''
 
     if (-not (Test-Path $Path)) {
         $global:LastContentValidationHint = 'downloaded file missing'
@@ -248,7 +299,11 @@ function Download-RepoText {
     foreach ($url in (Get-RepoUrlCandidates -RelativePath $RelativePath)) {
         try {
             $txt = $wc.DownloadString($url)
-            if ($txt) { return [string]$txt }
+            if ($txt) {
+                $base = Get-UpdateBaseFromUrl -Url $url -RelativePath $RelativePath
+                if ($base) { $global:LastSuccessfulUpdateBaseUrl = $base }
+                return [string]$txt
+            }
         } catch {
             $attemptErrors.Add("webclient: $url => $($_.Exception.Message)")
         }
@@ -256,7 +311,11 @@ function Download-RepoText {
         try {
             $resp = Invoke-WebRequest -Uri $url -UseBasicParsing -Headers @{ 'User-Agent' = 'monitoring-agent-self-update'; 'Accept' = '*/*' } -ErrorAction Stop
             $txt = [string]$resp.Content
-            if ($txt) { return $txt }
+            if ($txt) {
+                $base = Get-UpdateBaseFromUrl -Url $url -RelativePath $RelativePath
+                if ($base) { $global:LastSuccessfulUpdateBaseUrl = $base }
+                return $txt
+            }
         } catch {
             $attemptErrors.Add("iwr: $url => $($_.Exception.Message)")
         }
@@ -266,7 +325,11 @@ function Download-RepoText {
                 $result = & $curl.Source '--silent' '--show-error' '--fail' '--location' $url 2>&1
                 if ($LASTEXITCODE -eq 0) {
                     $txt = ($result | Out-String)
-                    if ($txt) { return [string]$txt }
+                    if ($txt) {
+                        $base = Get-UpdateBaseFromUrl -Url $url -RelativePath $RelativePath
+                        if ($base) { $global:LastSuccessfulUpdateBaseUrl = $base }
+                        return [string]$txt
+                    }
                 }
                 $attemptErrors.Add("curl($LASTEXITCODE): $url => $($result | Out-String)")
             } catch {
@@ -294,6 +357,8 @@ function Download-RepoFile {
         try {
             $wc.DownloadFile($url, $DestinationPath)
             if (Test-DownloadedFileContent -RelativePath $RelativePath -Path $DestinationPath) {
+                $base = Get-UpdateBaseFromUrl -Url $url -RelativePath $RelativePath
+                if ($base) { $global:LastSuccessfulUpdateBaseUrl = $base }
                 return $true
             }
             $attemptErrors.Add("webclient-invalid-content: $url => $($global:LastContentValidationHint)")
@@ -304,6 +369,8 @@ function Download-RepoFile {
         try {
             Invoke-WebRequest -Uri $url -UseBasicParsing -Headers @{ 'User-Agent' = 'monitoring-agent-self-update'; 'Accept' = '*/*' } -OutFile $DestinationPath -ErrorAction Stop | Out-Null
             if (Test-DownloadedFileContent -RelativePath $RelativePath -Path $DestinationPath) {
+                $base = Get-UpdateBaseFromUrl -Url $url -RelativePath $RelativePath
+                if ($base) { $global:LastSuccessfulUpdateBaseUrl = $base }
                 return $true
             }
             $attemptErrors.Add("iwr-invalid-content: $url => $($global:LastContentValidationHint)")
@@ -316,6 +383,8 @@ function Download-RepoFile {
                 $result = & $curl.Source '--silent' '--show-error' '--fail' '--location' '--output' $DestinationPath $url 2>&1
                 if ($LASTEXITCODE -eq 0) {
                     if (Test-DownloadedFileContent -RelativePath $RelativePath -Path $DestinationPath) {
+                            $base = Get-UpdateBaseFromUrl -Url $url -RelativePath $RelativePath
+                            if ($base) { $global:LastSuccessfulUpdateBaseUrl = $base }
                         return $true
                     }
                     $attemptErrors.Add("curl-invalid-content: $url => $($global:LastContentValidationHint)")
@@ -477,12 +546,20 @@ try {
     Copy-Item "$tmpDir\setup_harvest_sql_user.ps1" "$InstallDir\setup_harvest_sql_user.ps1" -Force
     Copy-Item "$tmpDir\AGENT_VERSION"        $VersionFile                       -Force
 
-    $normalizedServerUrl = $CanonicalServerUrl
+    $effectiveUpdateBaseUrl = if ($global:LastSuccessfulUpdateBaseUrl) { $global:LastSuccessfulUpdateBaseUrl } else { $PrimaryUpdateBaseUrl }
+    $normalizedServerUrl = $OriginalServerUrl
+    if ($effectiveUpdateBaseUrl -ieq $CanonicalUpdateBaseUrl) {
+        $normalizedServerUrl = $CanonicalServerUrl
+    } elseif (-not $normalizedServerUrl -and $effectiveUpdateBaseUrl -match '/updates$') {
+        $normalizedServerUrl = $effectiveUpdateBaseUrl.Substring(0, $effectiveUpdateBaseUrl.Length - '/updates'.Length)
+    }
     if ($normalizedServerUrl) {
         Set-ConfigValue -Path $ConfigFile -Key 'SERVER_URL' -Value $normalizedServerUrl
     }
-    Set-ConfigValue -Path $ConfigFile -Key 'UPDATE_BASE_URL' -Value $PrimaryUpdateBaseUrl
-    Set-ConfigValue -Path $ConfigFile -Key 'RAW_BASE_URL' -Value $PrimaryUpdateBaseUrl
+    if ($effectiveUpdateBaseUrl) {
+        Set-ConfigValue -Path $ConfigFile -Key 'UPDATE_BASE_URL' -Value $effectiveUpdateBaseUrl
+        Set-ConfigValue -Path $ConfigFile -Key 'RAW_BASE_URL' -Value $effectiveUpdateBaseUrl
+    }
     Set-ConfigValue -Path $ConfigFile -Key 'GITHUB_REPO' -Value ''
 } finally {
     Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue

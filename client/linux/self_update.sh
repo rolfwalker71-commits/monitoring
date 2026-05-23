@@ -12,21 +12,42 @@ fi
 source "$CONFIG_FILE"
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/monitoring-agent}"
+CONFIG_SERVER_URL="${SERVER_URL:-}"
+CONFIG_UPDATE_BASE_URL="${UPDATE_BASE_URL:-}"
+CONFIG_RAW_BASE_URL="${RAW_BASE_URL:-}"
 CANONICAL_SERVER_URL="https://infoboard.an-group.work"
-SERVER_URL="$CANONICAL_SERVER_URL"
-UPDATE_BASE_URL="${CANONICAL_SERVER_URL%/}/updates"
-RAW_BASE_URL="$UPDATE_BASE_URL"
+CANONICAL_UPDATE_BASE_URL="${CANONICAL_SERVER_URL%/}/updates"
 AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-$INSTALL_DIR/AGENT_VERSION}"
 TLS_INSECURE="${TLS_INSECURE:-0}"
 CURL_CONNECT_TIMEOUT_SEC="${CURL_CONNECT_TIMEOUT_SEC:-10}"
 CURL_MAX_TIME_SEC="${CURL_MAX_TIME_SEC:-45}"
+
+UPDATE_BASE_CANDIDATES=()
+
+add_update_base_candidate() {
+  local candidate="${1:-}"
+  candidate="${candidate%/}"
+  [[ -z "$candidate" ]] && return
+  local existing
+  for existing in "${UPDATE_BASE_CANDIDATES[@]:-}"; do
+    [[ "$existing" == "$candidate" ]] && return
+  done
+  UPDATE_BASE_CANDIDATES+=("$candidate")
+}
+
+add_update_base_candidate "$CANONICAL_UPDATE_BASE_URL"
+if [[ -n "$CONFIG_SERVER_URL" ]]; then
+  add_update_base_candidate "${CONFIG_SERVER_URL%/}/updates"
+fi
+add_update_base_candidate "$CONFIG_UPDATE_BASE_URL"
+add_update_base_candidate "$CONFIG_RAW_BASE_URL"
 
 CURL_BASE_ARGS=(--fail --silent --show-error --location --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC" --max-time "$CURL_MAX_TIME_SEC")
 if [[ "$TLS_INSECURE" == "1" ]]; then
   CURL_BASE_ARGS+=(--insecure)
 fi
 
-if [[ -z "$UPDATE_BASE_URL" ]]; then
+if [[ "${#UPDATE_BASE_CANDIDATES[@]}" -eq 0 ]]; then
   echo "No update source configured. Set SERVER_URL or UPDATE_BASE_URL in $CONFIG_FILE." >&2
   exit 1
 fi
@@ -57,14 +78,15 @@ version_is_newer() {
 fetch_remote_version_file() {
   local rel="$1"
   local candidate=""
+  local base=""
 
-  if [[ -n "$UPDATE_BASE_URL" ]]; then
-    candidate="$(curl "${CURL_BASE_ARGS[@]}" "$UPDATE_BASE_URL/$rel" 2>/dev/null | tr -d '[:space:]' || true)"
+  for base in "${UPDATE_BASE_CANDIDATES[@]}"; do
+    candidate="$(curl "${CURL_BASE_ARGS[@]}" "$base/$rel" 2>/dev/null | tr -d '[:space:]' || true)"
     if version_is_valid "$candidate"; then
-      printf '%s|%s\n' "$candidate" "$UPDATE_BASE_URL/$rel"
+      printf '%s|%s|%s\n' "$candidate" "$base/$rel" "$base"
       return 0
     fi
-  fi
+  done
 
   return 1
 }
@@ -76,30 +98,37 @@ fi
 
 agent_version=""
 agent_source=""
+agent_base=""
 agent_pair=""
 if agent_pair="$(fetch_remote_version_file "AGENT_VERSION" 2>/dev/null)"; then
-  agent_version="${agent_pair%%|*}"
-  agent_source="${agent_pair#*|}"
+  agent_version="$(printf '%s' "$agent_pair" | cut -d'|' -f1)"
+  agent_source="$(printf '%s' "$agent_pair" | cut -d'|' -f2)"
+  agent_base="$(printf '%s' "$agent_pair" | cut -d'|' -f3)"
 fi
 
 build_version=""
 build_source=""
+build_base=""
 build_pair=""
 if build_pair="$(fetch_remote_version_file "BUILD_VERSION" 2>/dev/null)"; then
-  build_version="${build_pair%%|*}"
-  build_source="${build_pair#*|}"
+  build_version="$(printf '%s' "$build_pair" | cut -d'|' -f1)"
+  build_source="$(printf '%s' "$build_pair" | cut -d'|' -f2)"
+  build_base="$(printf '%s' "$build_pair" | cut -d'|' -f3)"
 fi
 
 remote_version=""
 remote_version_source=""
+selected_update_base=""
 if version_is_valid "$agent_version"; then
   remote_version="$agent_version"
   remote_version_source="$agent_source"
+  selected_update_base="$agent_base"
 fi
 if version_is_valid "$build_version"; then
   if [[ -z "$remote_version" ]] || version_is_newer "$build_version" "$remote_version"; then
     remote_version="$build_version"
     remote_version_source="$build_source"
+    selected_update_base="$build_base"
   fi
 fi
 
@@ -111,9 +140,17 @@ fi
 download_update_file() {
   local rel="$1"
   local out="$2"
-  if [[ -n "$UPDATE_BASE_URL" ]] && curl "${CURL_BASE_ARGS[@]}" "$UPDATE_BASE_URL/$rel" -o "$out" 2>/dev/null; then
+  local base=""
+  if [[ -n "$selected_update_base" ]] && curl "${CURL_BASE_ARGS[@]}" "$selected_update_base/$rel" -o "$out" 2>/dev/null; then
     return 0
   fi
+  for base in "${UPDATE_BASE_CANDIDATES[@]}"; do
+    [[ "$base" == "$selected_update_base" ]] && continue
+    if curl "${CURL_BASE_ARGS[@]}" "$base/$rel" -o "$out" 2>/dev/null; then
+      selected_update_base="$base"
+      return 0
+    fi
+  done
   return 1
 }
 
@@ -166,14 +203,21 @@ ensure_config_value "HANA_ADDONS_PASSWORD" "0djKUt&xbLK0AYr"
 ensure_config_value "HANA_ADDONS_QUERY_TIMEOUT_SEC" "15"
 ensure_config_value "HANA_ADDONS_HOST" "127.0.0.1"
 ensure_config_value "HANA_ADDONS_PORT" "30015"
-if [[ -n "$UPDATE_BASE_URL" ]]; then
-  ensure_config_value "UPDATE_BASE_URL" "$UPDATE_BASE_URL"
+target_server_url="$CONFIG_SERVER_URL"
+target_update_base_url="$selected_update_base"
+if [[ -n "$selected_update_base" && "$selected_update_base" == "$CANONICAL_UPDATE_BASE_URL" ]]; then
+  target_server_url="$CANONICAL_SERVER_URL"
+  target_update_base_url="$CANONICAL_UPDATE_BASE_URL"
+elif [[ -z "$target_server_url" && "$selected_update_base" =~ /updates$ ]]; then
+  target_server_url="${selected_update_base%/updates}"
 fi
-if [[ -n "$SERVER_URL" ]]; then
-  ensure_config_value "SERVER_URL" "$SERVER_URL"
+
+if [[ -n "$target_update_base_url" ]]; then
+  ensure_config_value "UPDATE_BASE_URL" "$target_update_base_url"
+  ensure_config_value "RAW_BASE_URL" "$target_update_base_url"
 fi
-if [[ -n "$UPDATE_BASE_URL" ]]; then
-  ensure_config_value "RAW_BASE_URL" "$UPDATE_BASE_URL"
+if [[ -n "$target_server_url" ]]; then
+  ensure_config_value "SERVER_URL" "$target_server_url"
 fi
 ensure_config_value "GITHUB_REPO" ""
 # Migration: remove old static DIR_SCAN_DEEP_PATHS that was auto-written by a
