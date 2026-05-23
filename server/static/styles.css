@@ -6222,9 +6222,21 @@ body[data-theme="dark"] .brand-session-badge {
   margin: 0;
   font-size: 14px;
 }
+  .analysis-panel {
+    padding: 10px;
+  }
 
 .delta-up {
   color: #c2410c;
+  .mini-chart-card {
+    padding: 12px;
+  }
+  .mini-chart-main-value {
+    font-size: 24px;
+  }
+  .mini-chart-history {
+    gap: 8px;
+  }
   font-weight: 600;
 }
 
@@ -7877,6 +7889,39 @@ body[data-theme="dark"] th {
 
   .alarm-settings-grid-span2 {
     grid-column: span 1;
+  }
+  .analysis-panel {
+    padding: 8px;
+  }
+  .resource-chart-layout {
+    gap: 8px;
+  }
+  .mini-chart-card {
+    padding: 10px;
+    border-radius: 9px;
+  }
+  .mini-chart-main-value {
+    font-size: 22px;
+  }
+  .mini-chart-card header,
+  .mini-chart-history {
+    flex-wrap: wrap;
+  }
+  .host-item {
+    padding: 9px 38px 9px 10px;
+    gap: 6px;
+  }
+  .host-meta-line--with-alert {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .host-meta-kv {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+  .host-meta-k,
+  .host-meta-v,
+  .host-meta-kv--ip .host-meta-v {
+    font-size: 10px;
   }
 }
 
