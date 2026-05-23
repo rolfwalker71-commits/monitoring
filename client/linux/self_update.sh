@@ -12,19 +12,10 @@ fi
 source "$CONFIG_FILE"
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/monitoring-agent}"
-SERVER_URL="${SERVER_URL:-}"
-RAW_BASE_URL="${RAW_BASE_URL:-}"
-UPDATE_BASE_URL="${UPDATE_BASE_URL:-}"
-# Enforce server-only update source: always derive from SERVER_URL when present.
-if [[ -n "$SERVER_URL" ]]; then
-  UPDATE_BASE_URL="${SERVER_URL%/}/updates"
-fi
-if [[ -z "$UPDATE_BASE_URL" && -n "$RAW_BASE_URL" ]]; then
-  UPDATE_BASE_URL="$RAW_BASE_URL"
-fi
-if [[ -z "$RAW_BASE_URL" ]]; then
-  RAW_BASE_URL="$UPDATE_BASE_URL"
-fi
+CANONICAL_SERVER_URL="https://infoboard.an-group.work"
+SERVER_URL="$CANONICAL_SERVER_URL"
+UPDATE_BASE_URL="${CANONICAL_SERVER_URL%/}/updates"
+RAW_BASE_URL="$UPDATE_BASE_URL"
 AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-$INSTALL_DIR/AGENT_VERSION}"
 TLS_INSECURE="${TLS_INSECURE:-0}"
 CURL_CONNECT_TIMEOUT_SEC="${CURL_CONNECT_TIMEOUT_SEC:-10}"
@@ -180,8 +171,6 @@ if [[ -n "$UPDATE_BASE_URL" ]]; then
 fi
 if [[ -n "$SERVER_URL" ]]; then
   ensure_config_value "SERVER_URL" "$SERVER_URL"
-elif [[ "$UPDATE_BASE_URL" =~ /updates$ ]]; then
-  ensure_config_value "SERVER_URL" "${UPDATE_BASE_URL%/updates}"
 fi
 if [[ -n "$UPDATE_BASE_URL" ]]; then
   ensure_config_value "RAW_BASE_URL" "$UPDATE_BASE_URL"

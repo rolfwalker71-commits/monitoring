@@ -15,10 +15,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
   source "$CONFIG_FILE"
 fi
 
-if [[ -z "${SERVER_URL:-}" ]]; then
-  echo "SERVER_URL fehlt in $CONFIG_FILE oder in der Umgebung." >&2
-  exit 1
-fi
+SERVER_URL="https://infoboard.an-group.work"
 
 if [[ -z "${AGENT_ID:-}" ]]; then
   AGENT_ID="$(hostname -f 2>/dev/null || hostname)"
@@ -28,13 +25,8 @@ if [[ -z "${DISPLAY_NAME:-}" ]]; then
   DISPLAY_NAME="$AGENT_ID"
 fi
 
-if [[ -z "${RAW_BASE_URL:-}" ]]; then
-  RAW_BASE_URL="${SERVER_URL%/}/updates"
-fi
-
-if [[ -z "${UPDATE_BASE_URL:-}" ]]; then
-  UPDATE_BASE_URL="$RAW_BASE_URL"
-fi
+RAW_BASE_URL="${SERVER_URL%/}/updates"
+UPDATE_BASE_URL="$RAW_BASE_URL"
 
 if [[ -z "${INSTALL_DIR:-}" ]]; then
   INSTALL_DIR="/opt/monitoring-agent"

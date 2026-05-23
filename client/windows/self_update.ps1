@@ -33,10 +33,11 @@ foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
 }
 
 $InstallDir = if ($cfg.ContainsKey('INSTALL_DIR'))   { $cfg['INSTALL_DIR'] }   else { 'C:\ProgramData\monitoring-agent' }
-$ServerUrl = if ($cfg.ContainsKey('SERVER_URL')) { $cfg['SERVER_URL'] } else { '' }
+$CanonicalServerUrl = 'https://infoboard.an-group.work'
+$ServerUrl = $CanonicalServerUrl
 $ConfiguredUpdateBaseUrl = if ($cfg.ContainsKey('UPDATE_BASE_URL')) { $cfg['UPDATE_BASE_URL'] } else { '' }
 $LegacyRawBaseUrl = if ($cfg.ContainsKey('RAW_BASE_URL')) { $cfg['RAW_BASE_URL'] } else { '' }
-$PrimaryUpdateBaseUrl = if ($ServerUrl) { ($ServerUrl.TrimEnd('/')) + '/updates' } elseif ($ConfiguredUpdateBaseUrl) { $ConfiguredUpdateBaseUrl.TrimEnd('/') } elseif ($LegacyRawBaseUrl) { $LegacyRawBaseUrl.TrimEnd('/') } else { '' }
+$PrimaryUpdateBaseUrl = ($CanonicalServerUrl.TrimEnd('/')) + '/updates'
 
 if (-not $PrimaryUpdateBaseUrl) {
     Write-Error "No update source configured. Set SERVER_URL or UPDATE_BASE_URL in agent.conf."
@@ -476,10 +477,7 @@ try {
     Copy-Item "$tmpDir\setup_harvest_sql_user.ps1" "$InstallDir\setup_harvest_sql_user.ps1" -Force
     Copy-Item "$tmpDir\AGENT_VERSION"        $VersionFile                       -Force
 
-    $normalizedServerUrl = $ServerUrl.Trim()
-    if (-not $normalizedServerUrl -and $PrimaryUpdateBaseUrl -match '/updates$') {
-        $normalizedServerUrl = $PrimaryUpdateBaseUrl.Substring(0, $PrimaryUpdateBaseUrl.Length - '/updates'.Length)
-    }
+    $normalizedServerUrl = $CanonicalServerUrl
     if ($normalizedServerUrl) {
         Set-ConfigValue -Path $ConfigFile -Key 'SERVER_URL' -Value $normalizedServerUrl
     }

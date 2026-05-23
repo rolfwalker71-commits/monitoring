@@ -2,7 +2,7 @@
 
 Zentrales Monitoring-System für Linux- und Windows-Hosts, betrieben als selbst-gehosteter Web-Service auf einer Synology NAS.
 
-**Produktiv:** `https://monitoring.rolfwalker.ch`
+**Produktiv:** `https://infoboard.an-group.work`
 
 ---
 
@@ -59,19 +59,19 @@ receiver.py  ← ThreadingHTTPServer auf Port 8080
 **Linux (per curl):**
 
 ```bash
-curl -sSL https://monitoring.rolfwalker.ch/updates/client/linux/install_agent.sh | bash
+curl -sSL https://infoboard.an-group.work/updates/client/linux/install_agent.sh | bash
 ```
 
 **Windows (PowerShell als Admin):**
 
 ```powershell
-irm https://monitoring.rolfwalker.ch/updates/client/windows/install_agent.ps1 | iex
+irm https://infoboard.an-group.work/updates/client/windows/install_agent.ps1 | iex
 ```
 
 **Windows repair/bootstrap für bestehende Hosts:**
 
 ```powershell
-& .\bootstrap_agent.ps1 -ServerUrl https://monitoring.rolfwalker.ch -DisableJitter
+& .\bootstrap_agent.ps1 -ServerUrl https://infoboard.an-group.work -DisableJitter
 ```
 
 Der Wrapper zieht die aktuellen Windows-Skripte von `/updates`, repariert eine bestehende Installation in place und schaltet Jitter nur für diesen Lauf aus.
@@ -627,6 +627,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
+
+### v1.6.338 (23. Mai 2026)
+
+- **Canonical-URL fuer die Agenten-Migration umgestellt**: Bootstrapping, Self-Update und Repair schreiben Hosts jetzt aktiv auf `https://infoboard.an-group.work` um, damit die alte Domain nur noch uebergangsweise gebraucht wird.
 
 ### v1.6.337 (23. Mai 2026)
 
