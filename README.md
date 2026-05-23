@@ -630,6 +630,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
 
+### v1.6.343 (23. Mai 2026)
+
+- **Self-Update hat jetzt einen Notfall-Fallback auf die Alt-Domain**: Falls `infoboard.an-group.work` auf einem Host noch nicht erreichbar ist, pruefen Linux- und Windows-`self_update` zusaetzlich `https://monitoring.rolfwalker.ch/updates`, damit der Versions-Lookup nicht abbricht.
+
 ### v1.6.342 (23. Mai 2026)
 
 - **Self-Update Domain-Migration gehaertet**: Linux- und Windows-`self_update` versuchen jetzt zuerst die neue Canonical-URL und fallen bei Bedarf auf vorhandene Host-Quellen zurueck. Dadurch tritt der Fehler "Remote version lookup failed (AGENT_VERSION/BUILD_VERSION empty or invalid)" auf bestehenden Hosts nicht mehr auf.

@@ -16,7 +16,9 @@ CONFIG_SERVER_URL="${SERVER_URL:-}"
 CONFIG_UPDATE_BASE_URL="${UPDATE_BASE_URL:-}"
 CONFIG_RAW_BASE_URL="${RAW_BASE_URL:-}"
 CANONICAL_SERVER_URL="https://infoboard.an-group.work"
+LEGACY_SERVER_URL="https://monitoring.rolfwalker.ch"
 CANONICAL_UPDATE_BASE_URL="${CANONICAL_SERVER_URL%/}/updates"
+LEGACY_UPDATE_BASE_URL="${LEGACY_SERVER_URL%/}/updates"
 AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-$INSTALL_DIR/AGENT_VERSION}"
 TLS_INSECURE="${TLS_INSECURE:-0}"
 CURL_CONNECT_TIMEOUT_SEC="${CURL_CONNECT_TIMEOUT_SEC:-10}"
@@ -36,6 +38,7 @@ add_update_base_candidate() {
 }
 
 add_update_base_candidate "$CANONICAL_UPDATE_BASE_URL"
+add_update_base_candidate "$LEGACY_UPDATE_BASE_URL"
 if [[ -n "$CONFIG_SERVER_URL" ]]; then
   add_update_base_candidate "${CONFIG_SERVER_URL%/}/updates"
 fi

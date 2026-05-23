@@ -34,10 +34,12 @@ foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
 
 $InstallDir = if ($cfg.ContainsKey('INSTALL_DIR'))   { $cfg['INSTALL_DIR'] }   else { 'C:\ProgramData\monitoring-agent' }
 $CanonicalServerUrl = 'https://infoboard.an-group.work'
+$LegacyServerUrl = 'https://monitoring.rolfwalker.ch'
 $OriginalServerUrl = if ($cfg.ContainsKey('SERVER_URL')) { $cfg['SERVER_URL'] } else { '' }
 $ConfiguredUpdateBaseUrl = if ($cfg.ContainsKey('UPDATE_BASE_URL')) { $cfg['UPDATE_BASE_URL'] } else { '' }
 $LegacyRawBaseUrl = if ($cfg.ContainsKey('RAW_BASE_URL')) { $cfg['RAW_BASE_URL'] } else { '' }
 $CanonicalUpdateBaseUrl = ($CanonicalServerUrl.TrimEnd('/')) + '/updates'
+$LegacyUpdateBaseUrl = ($LegacyServerUrl.TrimEnd('/')) + '/updates'
 
 $UpdateBaseCandidates = New-Object System.Collections.Generic.List[string]
 function Add-UpdateBaseCandidate {
@@ -62,6 +64,7 @@ function Add-UpdateBaseCandidate {
 }
 
 Add-UpdateBaseCandidate -Value $CanonicalUpdateBaseUrl
+Add-UpdateBaseCandidate -Value $LegacyUpdateBaseUrl
 if ($OriginalServerUrl) {
     Add-UpdateBaseCandidate -Value (($OriginalServerUrl.TrimEnd('/')) + '/updates')
 }
