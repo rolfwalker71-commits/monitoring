@@ -630,6 +630,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
 
+### v1.6.351 (23. Mai 2026)
+
+- **Dark-Mode Header-Titel wieder sichtbar**: Der App-Titel `System Infoboard` hat im Dark-Mode jetzt eine explizit kontrastreiche Farbe.
+- **Agent-Quelle URLs wieder lesbar**: URL-Zellen im Tab `Agent Quelle` erhalten im Dark-Mode eine kontraststarke Text-/Hintergrundkombination statt blassem Gruen-auf-Hell.
+- **Fallback-Ausnahmen erweitert**: Die globale Dark-Mode-Text-Fallback-Regel schliesst Agent-Quelle-Zellen jetzt gezielt aus, damit deren eigene Kontrastfarben greifen.
+
 ### v1.6.350 (23. Mai 2026)
 
 - **Dark-Mode Lesbarkeit appweit gehaertet**: Eine globale Fallback-Schicht sorgt dafuer, dass bisher lichtmodus-fixierte dunkle Schrift im Dark-Mode kontrastreich dargestellt wird.

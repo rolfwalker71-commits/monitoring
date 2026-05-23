@@ -11369,8 +11369,25 @@ body[data-theme="dark"] :where(
   .table-wrap,
   .agent-update-admin-status,
   .db-maintenance-head
-) :where(h1, h2, h3, h4, h5, h6, p, label, legend, small, span, li, td, th, strong, a):not(.stat-chip):not(.selected-host-meta-chip):not(.agent-update-status-badge):not(.agent-source-status-badge):not(.host-alert-chip):not(.so-card-alert-badge):not(.db-status-badge):not(.db-sys-badge):not(.tab-button):not(.header-stat-chip) {
+) :where(h1, h2, h3, h4, h5, h6, p, label, legend, small, span, li, td, th, strong, a):not(.stat-chip):not(.selected-host-meta-chip):not(.agent-update-status-badge):not(.agent-source-status-badge):not(.agent-source-cell-ok):not(.agent-source-cell-bad):not(.host-alert-chip):not(.so-card-alert-badge):not(.db-status-badge):not(.db-sys-badge):not(.tab-button):not(.header-stat-chip) {
   color: #d4e6fb;
+}
+
+body[data-theme="dark"] .brand-text h1 {
+  color: #dbeafe;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+body[data-theme="dark"] .agent-source-cell-ok {
+  color: #14532d;
+  background: #bbf7d0;
+  border-color: #4ade80;
+}
+
+body[data-theme="dark"] .agent-source-cell-bad {
+  color: #7f1d1d;
+  background: #fecaca;
+  border-color: #f87171;
 }
 
 body[data-theme="dark"] .muted,
