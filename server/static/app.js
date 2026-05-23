@@ -11473,7 +11473,7 @@ async function loadAgentSourceStatus() {
     if (summaryEl) {
       const targetBaseUrl = asText(items[0]?.canonical_update_base_url || items[0]?.expected_update_base_url, "");
       summaryEl.textContent = targetBaseUrl
-        ? `${okCount}/${total} umgestellt, ${pendingCount} offen · Ziel: ${targetBaseUrl}`
+        ? `${okCount}/${total} umgestellt, ${pendingCount} offen · Grün = ${targetBaseUrl}`
         : `${okCount}/${total} umgestellt, ${pendingCount} offen`;
     }
 

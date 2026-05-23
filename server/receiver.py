@@ -9801,7 +9801,7 @@ def collect_agent_source_status(conn: sqlite3.Connection) -> dict:
 
         server_ok = bool(server_url) and bool(expected_server_url) and (server_url == expected_server_url)
         update_ok = bool(update_base_url) and bool(expected_update_base) and (update_base_url == expected_update_base)
-        raw_ok = (not raw_base_url) or (bool(update_base_url) and raw_base_url == update_base_url and update_base_url == expected_update_base)
+        raw_ok = bool(raw_base_url) and bool(expected_update_base) and (raw_base_url == expected_update_base)
         github_ok = not github_repo
 
         is_ok = bool(server_ok and update_ok and raw_ok and github_ok)

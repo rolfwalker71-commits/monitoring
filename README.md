@@ -630,6 +630,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
 
+### v1.6.341 (23. Mai 2026)
+
+- **Agent-Quelle bewertet jetzt strikt auf die neue Ziel-URL**: Gruen wird nur noch dann angezeigt, wenn `SERVER_URL`, `UPDATE_BASE_URL` und `RAW_BASE_URL` auf `https://infoboard.an-group.work` bzw. `/updates` zeigen.
+
 ### v1.6.340 (23. Mai 2026)
 
 - **Agent-Quelle zeigt jetzt wirklich die neue Ziel-URL an**: `SERVER_URL` wird in der Status-Tabelle gegen `https://infoboard.an-group.work` bewertet, und die Spaltenbreiten verhindern das Ueberlappen des Soll-Werts mit dem letzten Header.
