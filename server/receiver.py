@@ -7720,6 +7720,7 @@ def send_instant_alert_mails_to_users(
                 body,
                 content_type="HTML",
                 attachments=graph_attachments,
+                sender_address=str(user_settings.get("email_sender", "") or "").strip(),
             )
         except Exception:
             pass

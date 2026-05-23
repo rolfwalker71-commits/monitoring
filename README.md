@@ -628,6 +628,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
 
+### v1.6.337 (23. Mai 2026)
+
+- **Resolved- und Instant-Alert-Mails verwenden jetzt den konfigurierten Absender**: Auch die Sofort-Alarm-Mails aus dem Alert-Event-Pfad uebergeben nun `email_sender`.
+
 ### v1.6.336 (23. Mai 2026)
 
 - **Test-Mail fuer Host-Abo nutzt jetzt den konfigurierten Absender**: Der Host-Alert-Abo-Testpfad uebergibt `email_sender` nun ebenfalls, damit nicht vereinzelt die O365-Standardadresse verwendet wird.
