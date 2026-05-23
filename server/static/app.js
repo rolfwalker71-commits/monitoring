@@ -7710,9 +7710,9 @@ function renderSingleHostCard(host) {
   const countryCodeLower = countryCode.toLowerCase();
   const iconName = osIconInfo.iconName;
   const osLabel = osIconInfo.osLabel;
-  const osIcon = `<img src="icons/${iconName}" class="host-os-icon" alt="${osLabel}" title="${escapeHtml(asText(host.os))}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${iconName}';}">`;
+  const osIcon = `<img src="icons/${iconName}" class="host-os-icon host-os-icon--inline" alt="${osLabel}" title="${escapeHtml(asText(host.os))}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${iconName}';}">`;
   const flagIcon = countryCode
-    ? `<img src="icons/${countryCode}.png" class="host-flag-icon" alt="${countryCode}" title="Land: ${countryCode}" onerror="if(!this.dataset.fallback1){this.dataset.fallback1='1';this.src='/icons/${countryCode}.png';return;}if(!this.dataset.fallback2){this.dataset.fallback2='1';this.src='/icons/${countryCodeLower}.png';return;}if(!this.dataset.fallback3){this.dataset.fallback3='1';this.src='/icons/${countryCodeLower}.svg';return;}this.style.display='none'">`
+    ? `<img src="icons/${countryCode}.png" class="host-flag-icon host-flag-icon--inline" alt="${countryCode}" title="Land: ${countryCode}" onerror="if(!this.dataset.fallback1){this.dataset.fallback1='1';this.src='/icons/${countryCode}.png';return;}if(!this.dataset.fallback2){this.dataset.fallback2='1';this.src='/icons/${countryCodeLower}.png';return;}if(!this.dataset.fallback3){this.dataset.fallback3='1';this.src='/icons/${countryCodeLower}.svg';return;}this.style.display='none'">`
     : "";
   const mutedAlerts = Array.isArray(state.mutedAlertsByHost[hostname]) ? state.mutedAlertsByHost[hostname] : [];
   const hasMutedAlerts = mutedAlerts.length > 0;
@@ -7766,6 +7766,13 @@ function renderSingleHostCard(host) {
     ? `Letzter ${lastReportInfo.label} | ${statusBarLogicText}`
     : `${lastReportInfo.title} | ${statusBarLogicText}`;
   const statusBarHtml = `<div class="${statusBarClass}" title="${escapeHtml(statusBarTitle)}" aria-hidden="true"></div>`;
+  const statusPulseClass = lastReportInfo.statusClass === "host-last-report-dot--critical"
+    ? "host-status-pulse host-status-pulse--critical"
+    : lastReportInfo.statusClass === "host-last-report-dot--warning"
+      ? "host-status-pulse host-status-pulse--warning"
+      : lastReportInfo.statusClass === "host-last-report-dot--ok"
+        ? "host-status-pulse host-status-pulse--ok"
+        : "host-status-pulse host-status-pulse--unknown";
 
   const latestAgentVersion = asText(state.latestAgentRelease || "", "").trim();
   const hostAgentVersion = asText(host.agent_version || "", "").trim();
@@ -7796,7 +7803,7 @@ function renderSingleHostCard(host) {
     ? `<span class="host-license-info-badge" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}">🪪</span>`
     : "";
   const customerTitleLine = customerNameValue
-    ? `<div class="host-customer-title-line"><span class="host-customer-text-block"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span><span class="host-detail-line">${escapeHtml(hostDesignationLabel)}</span></span>${sapLicenseBadge}</div>`
+    ? `<div class="host-customer-title-line"><span class="host-customer-text-block"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span>${flagIcon}</span><span class="host-detail-line">${escapeHtml(hostDesignationLabel)}</span></span>${sapLicenseBadge}</div>`
     : "";
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
@@ -7849,14 +7856,14 @@ function renderSingleHostCard(host) {
     <article class="${selectedClass}${envCardClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostIdentity)}">
       ${statusBarHtml}
       ${versionSideBarHtml}
-      ${flagIcon}
-      ${customerTitleLine}
-      <span class="host-meta-line host-meta-line--primary host-meta-line--with-alert">
-        <span class="host-meta-kv host-meta-kv--host"><span class="host-meta-v" title="${escapeHtml(shortHostname)}">${escapeHtml(shortHostname)}</span></span>
-        <span class="host-meta-kv host-meta-kv--ip"><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span></span>
-      </span>
+      <div class="host-card-main">
+        ${customerTitleLine}
+        <div class="host-tech-stack">
+          <span class="host-tech-row host-tech-row--host"><span class="${statusPulseClass}" aria-hidden="true"></span>${osIcon}<span class="host-meta-v" title="${escapeHtml(shortHostname)}">${escapeHtml(shortHostname)}</span></span>
+          <span class="host-tech-row host-tech-row--ip"><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span></span>
+        </div>
+      </div>
       ${mutedAlertsSection}
-      ${osIcon}
     </article>
   `;
 }
