@@ -2258,7 +2258,8 @@ maybe_priority_self_update() {
 
 run_self_update_now() {
   local updater_path="${INSTALL_DIR:-/opt/monitoring-agent}/self_update.sh"
-  local canonical_update_base_url="https://infoboard.an-group.work/updates"
+  local canonical_update_base_url="https://infoboard.ang-schweiz.ch/updates"
+  local secondary_update_base_url="https://infoboard.an-group.work/updates"
   local legacy_update_base_url="https://monitoring.rolfwalker.ch/updates"
   local update_base_url="${UPDATE_BASE_URL:-}"
   local update_base_candidates=()
@@ -2282,6 +2283,7 @@ run_self_update_now() {
   fi
 
   add_update_candidate "$canonical_update_base_url"
+  add_update_candidate "$secondary_update_base_url"
   add_update_candidate "$legacy_update_base_url"
   add_update_candidate "$update_base_url"
 

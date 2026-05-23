@@ -15,7 +15,30 @@ if [[ -f "$CONFIG_FILE" ]]; then
   source "$CONFIG_FILE"
 fi
 
-SERVER_URL="https://infoboard.an-group.work"
+CANONICAL_SERVER_URL="https://infoboard.ang-schweiz.ch"
+SECONDARY_SERVER_URL="https://infoboard.an-group.work"
+LEGACY_SERVER_URL="https://monitoring.rolfwalker.ch"
+
+server_url_reachable() {
+  local candidate="${1:-}"
+  [[ -z "$candidate" ]] && return 1
+  local probe_args=(--silent --show-error --location --connect-timeout 10 --max-time 45 --output /dev/null)
+  if [[ "${TLS_INSECURE:-0}" == "1" ]]; then
+    probe_args+=(--insecure)
+  fi
+  curl "${probe_args[@]}" "${candidate%/}/api/v1/agent-commands" >/dev/null 2>&1
+}
+
+SERVER_URL="${SERVER_URL:-}"
+if server_url_reachable "$CANONICAL_SERVER_URL"; then
+  SERVER_URL="$CANONICAL_SERVER_URL"
+elif server_url_reachable "$SECONDARY_SERVER_URL"; then
+  SERVER_URL="$SECONDARY_SERVER_URL"
+elif server_url_reachable "$LEGACY_SERVER_URL"; then
+  SERVER_URL="$LEGACY_SERVER_URL"
+elif [[ -z "$SERVER_URL" ]]; then
+  SERVER_URL="$LEGACY_SERVER_URL"
+fi
 
 if [[ -z "${AGENT_ID:-}" ]]; then
   AGENT_ID="$(hostname -f 2>/dev/null || hostname)"

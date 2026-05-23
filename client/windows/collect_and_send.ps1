@@ -994,6 +994,7 @@ function Get-UpdateBaseCandidates {
         $candidates.Add($normalized) | Out-Null
     }
 
+    Add-UniqueCandidate 'https://infoboard.ang-schweiz.ch/updates'
     Add-UniqueCandidate 'https://infoboard.an-group.work/updates'
     Add-UniqueCandidate 'https://monitoring.rolfwalker.ch/updates'
 

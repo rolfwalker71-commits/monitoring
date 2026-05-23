@@ -15,9 +15,11 @@ INSTALL_DIR="${INSTALL_DIR:-/opt/monitoring-agent}"
 CONFIG_SERVER_URL="${SERVER_URL:-}"
 CONFIG_UPDATE_BASE_URL="${UPDATE_BASE_URL:-}"
 CONFIG_RAW_BASE_URL="${RAW_BASE_URL:-}"
-CANONICAL_SERVER_URL="https://infoboard.an-group.work"
+CANONICAL_SERVER_URL="https://infoboard.ang-schweiz.ch"
+SECONDARY_SERVER_URL="https://infoboard.an-group.work"
 LEGACY_SERVER_URL="https://monitoring.rolfwalker.ch"
 CANONICAL_UPDATE_BASE_URL="${CANONICAL_SERVER_URL%/}/updates"
+SECONDARY_UPDATE_BASE_URL="${SECONDARY_SERVER_URL%/}/updates"
 LEGACY_UPDATE_BASE_URL="${LEGACY_SERVER_URL%/}/updates"
 AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-$INSTALL_DIR/AGENT_VERSION}"
 TLS_INSECURE="${TLS_INSECURE:-0}"
@@ -38,6 +40,7 @@ add_update_base_candidate() {
 }
 
 add_update_base_candidate "$CANONICAL_UPDATE_BASE_URL"
+add_update_base_candidate "$SECONDARY_UPDATE_BASE_URL"
 add_update_base_candidate "$LEGACY_UPDATE_BASE_URL"
 if [[ -n "$CONFIG_SERVER_URL" ]]; then
   add_update_base_candidate "${CONFIG_SERVER_URL%/}/updates"
@@ -206,12 +209,28 @@ ensure_config_value "HANA_ADDONS_PASSWORD" "0djKUt&xbLK0AYr"
 ensure_config_value "HANA_ADDONS_QUERY_TIMEOUT_SEC" "15"
 ensure_config_value "HANA_ADDONS_HOST" "127.0.0.1"
 ensure_config_value "HANA_ADDONS_PORT" "30015"
+
+server_url_reachable() {
+  local server_url="${1:-}"
+  [[ -z "$server_url" ]] && return 1
+  local probe_url="${server_url%/}/api/v1/agent-commands"
+  local probe_args=(--silent --show-error --location --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC" --max-time "$CURL_MAX_TIME_SEC" --output /dev/null)
+  if [[ "$TLS_INSECURE" == "1" ]]; then
+    probe_args+=(--insecure)
+  fi
+  curl "${probe_args[@]}" "$probe_url" >/dev/null 2>&1
+}
+
 target_server_url="$CONFIG_SERVER_URL"
 target_update_base_url="$selected_update_base"
 if [[ -n "$selected_update_base" && "$selected_update_base" == "$CANONICAL_UPDATE_BASE_URL" ]]; then
-  target_server_url="$CANONICAL_SERVER_URL"
-  target_update_base_url="$CANONICAL_UPDATE_BASE_URL"
-elif [[ -z "$target_server_url" && "$selected_update_base" =~ /updates$ ]]; then
+  if server_url_reachable "$CANONICAL_SERVER_URL"; then
+    target_server_url="$CANONICAL_SERVER_URL"
+    target_update_base_url="$CANONICAL_UPDATE_BASE_URL"
+  else
+    echo "Canonical server unreachable from host, keeping current SERVER_URL: $CANONICAL_SERVER_URL" >&2
+  fi
+elif [[ "$selected_update_base" =~ /updates$ ]]; then
   target_server_url="${selected_update_base%/updates}"
 fi
 

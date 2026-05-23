@@ -27,7 +27,7 @@ param(
     [pscredential]$Credential,
 
     [Parameter(Mandatory = $false)]
-    [string]$UpdateBaseUrl = 'https://infoboard.an-group.work/updates',
+    [string]$UpdateBaseUrl = 'https://infoboard.ang-schweiz.ch/updates',
 
     [Parameter(Mandatory = $false)]
     [switch]$SkipCollectRun,

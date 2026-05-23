@@ -2,7 +2,7 @@
 
 Zentrales Monitoring-System für Linux- und Windows-Hosts, betrieben als selbst-gehosteter Web-Service auf einer Synology NAS.
 
-**Produktiv:** `https://infoboard.an-group.work`
+**Produktiv:** `https://infoboard.ang-schweiz.ch`
 
 ---
 
@@ -59,19 +59,19 @@ receiver.py  ← ThreadingHTTPServer auf Port 8080
 **Linux (per curl):**
 
 ```bash
-curl -sSL https://infoboard.an-group.work/updates/client/linux/install_agent.sh | bash
+curl -sSL https://infoboard.ang-schweiz.ch/updates/client/linux/install_agent.sh | bash
 ```
 
 **Windows (PowerShell als Admin):**
 
 ```powershell
-irm https://infoboard.an-group.work/updates/client/windows/install_agent.ps1 | iex
+irm https://infoboard.ang-schweiz.ch/updates/client/windows/install_agent.ps1 | iex
 ```
 
 **Windows repair/bootstrap für bestehende Hosts:**
 
 ```powershell
-& .\bootstrap_agent.ps1 -ServerUrl https://infoboard.an-group.work -DisableJitter
+& .\bootstrap_agent.ps1 -ServerUrl https://infoboard.ang-schweiz.ch -DisableJitter
 ```
 
 Der Wrapper zieht die aktuellen Windows-Skripte von `/updates`, repariert eine bestehende Installation in place und schaltet Jitter nur für diesen Lauf aus.
@@ -80,7 +80,7 @@ Der Wrapper zieht die aktuellen Windows-Skripte von `/updates`, repariert eine b
 
 Agents prüfen selbständig (alle ~6 Stunden, plus bei jedem Sammellauf wenn die Version veraltet ist) die vom Server bereitgestellten Pakete unter `/updates` und aktualisieren sich automatisch. Die aktuelle Agent-Version steht in `AGENT_VERSION`.
 
-Wichtig für die Domain-Migration: Self-Update und Repair schreiben vorhandene Hosts aktiv auf die neue Canonical-URL `https://infoboard.an-group.work` um. Die alte URL bleibt nur als Übergang erreichbar, bis alle Hosts umgestellt sind.
+Wichtig für die Domain-Migration: Self-Update und Repair schreiben vorhandene Hosts aktiv auf die neue Canonical-URL `https://infoboard.ang-schweiz.ch` um, aber nur wenn die URL vom Host aus erreichbar ist. Als sichere Fallback-Quellen bleiben `https://infoboard.an-group.work/updates` und `https://monitoring.rolfwalker.ch/updates` aktiv.
 
 ### Payload-Sicherung vor Versand
 
@@ -629,6 +629,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
+
+### v1.6.355 (23. Mai 2026)
+
+- **Canonical-URL auf `infoboard.ang-schweiz.ch` umgestellt**: Linux-/Windows-Agenten, Bootstrap und Agent-Quelle-Sollwert zeigen jetzt auf die neue Ziel-Domain.
+- **Sicheres Rewrite im Self-Update**: `SERVER_URL` wird nur dann auf die neue Canonical-URL geschrieben, wenn ein Reachability-Probe vom Host erfolgreich ist.
+- **Fallback ohne Host-Verlust gehaertet**: Update-Quellen priorisieren jetzt `infoboard.ang-schweiz.ch`, behalten aber `infoboard.an-group.work` und `monitoring.rolfwalker.ch` als automatische Fallback-Stufen.
 
 ### v1.6.354 (23. Mai 2026)
 

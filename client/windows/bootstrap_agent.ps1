@@ -10,12 +10,12 @@
     - Optional -DisableJitter suppresses send jitter only for this one run.
 
 .EXAMPLE
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\bootstrap_agent.ps1 -ServerUrl https://infoboard.an-group.work -DisableJitter
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\bootstrap_agent.ps1 -ServerUrl https://infoboard.ang-schweiz.ch -DisableJitter
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
-    [string]$ServerUrl = 'https://infoboard.an-group.work',
+    [string]$ServerUrl = 'https://infoboard.ang-schweiz.ch',
 
     [Parameter(Mandatory = $false)]
     [switch]$DisableJitter,

@@ -92,7 +92,7 @@ TELEGRAM_ACTION_BASE_URL = os.getenv(
 ).strip().rstrip("/")
 CANONICAL_AGENT_BASE_URL = os.getenv(
     "MONITORING_CANONICAL_AGENT_BASE_URL",
-    "https://infoboard.an-group.work",
+    "https://infoboard.ang-schweiz.ch",
 ).strip().rstrip("/")
 TELEGRAM_ACTION_SIGNING_SECRET = os.getenv("MONITORING_TELEGRAM_ACTION_SIGNING_SECRET", "").strip()
 TELEGRAM_ACTION_TTL_MINUTES = max(10, min(10080, int(os.getenv("MONITORING_TELEGRAM_ACTION_TTL_MINUTES", "1440") or "1440")))

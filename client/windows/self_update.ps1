@@ -33,12 +33,14 @@ foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8) {
 }
 
 $InstallDir = if ($cfg.ContainsKey('INSTALL_DIR'))   { $cfg['INSTALL_DIR'] }   else { 'C:\ProgramData\monitoring-agent' }
-$CanonicalServerUrl = 'https://infoboard.an-group.work'
+$CanonicalServerUrl = 'https://infoboard.ang-schweiz.ch'
+$SecondaryServerUrl = 'https://infoboard.an-group.work'
 $LegacyServerUrl = 'https://monitoring.rolfwalker.ch'
 $OriginalServerUrl = if ($cfg.ContainsKey('SERVER_URL')) { $cfg['SERVER_URL'] } else { '' }
 $ConfiguredUpdateBaseUrl = if ($cfg.ContainsKey('UPDATE_BASE_URL')) { $cfg['UPDATE_BASE_URL'] } else { '' }
 $LegacyRawBaseUrl = if ($cfg.ContainsKey('RAW_BASE_URL')) { $cfg['RAW_BASE_URL'] } else { '' }
 $CanonicalUpdateBaseUrl = ($CanonicalServerUrl.TrimEnd('/')) + '/updates'
+$SecondaryUpdateBaseUrl = ($SecondaryServerUrl.TrimEnd('/')) + '/updates'
 $LegacyUpdateBaseUrl = ($LegacyServerUrl.TrimEnd('/')) + '/updates'
 
 $UpdateBaseCandidates = New-Object System.Collections.Generic.List[string]
@@ -64,6 +66,7 @@ function Add-UpdateBaseCandidate {
 }
 
 Add-UpdateBaseCandidate -Value $CanonicalUpdateBaseUrl
+Add-UpdateBaseCandidate -Value $SecondaryUpdateBaseUrl
 Add-UpdateBaseCandidate -Value $LegacyUpdateBaseUrl
 if ($OriginalServerUrl) {
     Add-UpdateBaseCandidate -Value (($OriginalServerUrl.TrimEnd('/')) + '/updates')
@@ -438,6 +441,41 @@ function Set-ConfigValue {
     [System.IO.File]::WriteAllLines($Path, $newContent, [System.Text.Encoding]::UTF8)
 }
 
+function Test-ServerUrlReachable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ServerUrl
+    )
+
+    if (-not $ServerUrl) {
+        return $false
+    }
+
+    $probeUrl = ($ServerUrl.TrimEnd('/')) + '/api/v1/agent-commands'
+    try {
+        Invoke-WebRequest -Uri $probeUrl -UseBasicParsing -Method Get -TimeoutSec 12 -Headers @{ 'User-Agent' = 'monitoring-agent-self-update'; 'Accept' = '*/*' } -ErrorAction Stop | Out-Null
+        return $true
+    } catch {
+        if ($_.Exception -and $_.Exception.Response) {
+            return $true
+        }
+    }
+
+    $curl = Get-Command 'curl.exe' -ErrorAction SilentlyContinue
+    if ($curl) {
+        try {
+            $null = & $curl.Source '--silent' '--show-error' '--location' '--connect-timeout' '10' '--max-time' '20' '--output' 'NUL' $probeUrl 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                return $true
+            }
+        } catch {
+            return $false
+        }
+    }
+
+    return $false
+}
+
 function Use-LocalScriptFallback {
     param(
         [Parameter(Mandatory = $true)]
@@ -552,8 +590,12 @@ try {
     $effectiveUpdateBaseUrl = if ($global:LastSuccessfulUpdateBaseUrl) { $global:LastSuccessfulUpdateBaseUrl } else { $PrimaryUpdateBaseUrl }
     $normalizedServerUrl = $OriginalServerUrl
     if ($effectiveUpdateBaseUrl -ieq $CanonicalUpdateBaseUrl) {
-        $normalizedServerUrl = $CanonicalServerUrl
-    } elseif (-not $normalizedServerUrl -and $effectiveUpdateBaseUrl -match '/updates$') {
+        if (Test-ServerUrlReachable -ServerUrl $CanonicalServerUrl) {
+            $normalizedServerUrl = $CanonicalServerUrl
+        } else {
+            Write-Warning "Canonical server unreachable from host, keeping current SERVER_URL: $CanonicalServerUrl"
+        }
+    } elseif ($effectiveUpdateBaseUrl -match '/updates$') {
         $normalizedServerUrl = $effectiveUpdateBaseUrl.Substring(0, $effectiveUpdateBaseUrl.Length - '/updates'.Length)
     }
     if ($normalizedServerUrl) {
