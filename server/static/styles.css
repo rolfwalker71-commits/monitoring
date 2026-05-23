@@ -1975,7 +1975,7 @@ td.center {
 .agent-source-status-table {
   table-layout: auto;
   width: 100%;
-  min-width: 1220px;
+  min-width: 1440px;
   margin-top: 4px;
 }
 
@@ -2016,20 +2016,20 @@ td.center {
 .agent-source-status-table td:nth-child(5),
 .agent-source-status-table th:nth-child(7),
 .agent-source-status-table td:nth-child(7) {
-  width: 14%;
-  min-width: 150px;
+  width: 15%;
+  min-width: 180px;
 }
 
 .agent-source-status-table th:nth-child(6),
 .agent-source-status-table td:nth-child(6) {
-  width: 10%;
-  min-width: 120px;
+  width: 8%;
+  min-width: 110px;
 }
 
 .agent-source-status-table th:nth-child(8),
 .agent-source-status-table td:nth-child(8) {
-  width: 10%;
-  min-width: 130px;
+  width: 12%;
+  min-width: 150px;
 }
 
 .agent-source-status-badge {

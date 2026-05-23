@@ -9796,11 +9796,12 @@ def collect_agent_source_status(conn: sqlite3.Connection) -> dict:
         raw_base_url = str(entries_map.get("RAW_BASE_URL", "") or "").strip()
         github_repo = str(entries_map.get("GITHUB_REPO", "") or "").strip()
 
-        expected_update_base = f"{CANONICAL_AGENT_BASE_URL}/updates" if CANONICAL_AGENT_BASE_URL else (f"{server_url.rstrip('/')}/updates" if server_url else "")
+        expected_server_url = CANONICAL_AGENT_BASE_URL
+        expected_update_base = f"{CANONICAL_AGENT_BASE_URL}/updates" if CANONICAL_AGENT_BASE_URL else ""
 
-        server_ok = bool(server_url)
+        server_ok = bool(server_url) and bool(expected_server_url) and (server_url == expected_server_url)
         update_ok = bool(update_base_url) and bool(expected_update_base) and (update_base_url == expected_update_base)
-        raw_ok = (not raw_base_url) or (bool(update_base_url) and raw_base_url == update_base_url)
+        raw_ok = (not raw_base_url) or (bool(update_base_url) and raw_base_url == update_base_url and update_base_url == expected_update_base)
         github_ok = not github_repo
 
         is_ok = bool(server_ok and update_ok and raw_ok and github_ok)
@@ -9822,6 +9823,7 @@ def collect_agent_source_status(conn: sqlite3.Connection) -> dict:
                 "update_base_url": update_base_url,
                 "raw_base_url": raw_base_url,
                 "github_repo": github_repo,
+                "expected_server_url": expected_server_url,
                 "expected_update_base_url": expected_update_base,
                 "canonical_update_base_url": expected_update_base,
                 "checks": {

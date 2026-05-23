@@ -630,6 +630,10 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 - **Lifecycle-Anzeige fuer Datenbank/HANA-Schema vereinheitlicht**: Instanz-/Schema-Namen verwenden jetzt ` - ` als Trenner statt `::`.
 - **HANA-T-Praefix in Anzeige entfernt**: In der Lifecycle-Darstellung wird ein fuehrendes `HANA-T` aus dem Instanzteil ausgeblendet (z. B. `NDB - CRS_PRODUKTIV`).
 
+### v1.6.340 (23. Mai 2026)
+
+- **Agent-Quelle zeigt jetzt wirklich die neue Ziel-URL an**: `SERVER_URL` wird in der Status-Tabelle gegen `https://infoboard.an-group.work` bewertet, und die Spaltenbreiten verhindern das Ueberlappen des Soll-Werts mit dem letzten Header.
+
 ### v1.6.339 (23. Mai 2026)
 
 - **Agent-Quelle auf neue Canonical-URL umgestellt**: Die Soll-URL in der UI und die Backend-Bewertung fuer `agent.conf` vergleichen jetzt gegen `https://infoboard.an-group.work`; die Tabelle zeigt den Migrationszielwert explizit an.
