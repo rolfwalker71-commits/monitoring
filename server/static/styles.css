@@ -11647,6 +11647,33 @@ body[data-theme="dark"] #globalView .admin-sub-country-title {
   }
 }
 
+/* KPI card final pass: distinct cards with equal width and visible spacing. */
+.panel-header .header-kpi-strip {
+  display: grid !important;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 10px !important;
+  align-items: stretch;
+  overflow: hidden;
+  padding: 2px;
+}
+
+.panel-header .header-kpi-strip > .header-stat-chip {
+  min-width: 0 !important;
+  width: 100%;
+  border: 1px solid #c9d8ea !important;
+  border-left-width: 4px !important;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f2f7fd 100%) !important;
+  box-shadow: 0 3px 10px rgba(20, 45, 77, 0.08);
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip {
+  border-color: #334b6b !important;
+  background: linear-gradient(180deg, #1b2f4c 0%, #162840 100%) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
 @media (max-width: 600px) {
   .so-card-grid {
     grid-template-columns: 1fr;
