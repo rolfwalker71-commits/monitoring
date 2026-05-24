@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.27**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.27**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.28**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.28**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.28 | 24.05.2026 | Changelog identity and baseline fix: changelog entries are now host_uid-aware (duplicate hostnames are separated correctly), and initial baseline entries are generated as Neu-only values (old='-') for host config and AddOns; backfill button now includes this baseline initialization too |
 | 1.7.27 | 24.05.2026 | Server startup hotfix: fixed indentation crash in `/api/v1/alert-mute` handler and repaired DB init migration order so legacy databases add `alerts.host_uid` before creating host_uid index (prevents `sqlite3.OperationalError: no such column: host_uid`) |
 | 1.7.26 | 24.05.2026 | Added global-alert diagnostics panel (hostname, host_uid, latest report IP, open-alert counts) and expanded changelog rebuild to also write initial system-parameter baseline entries (OS/kernel/CPU/RAM/SAP/HANA/SQL) so rebuilds no longer miss those values when no prior delta exists |
 | 1.7.25 | 24.05.2026 | Duplicate-hostname alert/mail fix: alert lifecycle now keys by host_uid (fallback-safe) instead of hostname-only, including debounce/rebuild context and alert actions via alert_id/host_uid so equal hostnames on different IPs no longer auto-resolve each other or trigger misleading open/resolved mail pairs |

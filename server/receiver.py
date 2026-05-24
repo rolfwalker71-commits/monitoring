@@ -526,6 +526,7 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS host_config_changes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 detected_at_utc TEXT NOT NULL,
+                host_uid TEXT NOT NULL DEFAULT '',
                 hostname TEXT NOT NULL,
                 field_key TEXT NOT NULL,
                 old_value TEXT NOT NULL,
@@ -545,6 +546,29 @@ def init_db() -> None:
             """
             CREATE INDEX IF NOT EXISTS idx_host_config_changes_host_time
             ON host_config_changes(hostname, detected_at_utc DESC)
+            """
+        )
+        existing_host_config_changes_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(host_config_changes)").fetchall()
+        }
+        if "host_uid" not in existing_host_config_changes_columns:
+            conn.execute("ALTER TABLE host_config_changes ADD COLUMN host_uid TEXT NOT NULL DEFAULT ''")
+            conn.execute(
+                """
+                UPDATE host_config_changes
+                SET host_uid = COALESCE((
+                    SELECT COALESCE(NULLIF(r.host_uid, ''), r.hostname)
+                    FROM reports r
+                    WHERE r.id = host_config_changes.report_id
+                ), hostname)
+                WHERE COALESCE(host_uid, '') = ''
+                """
+            )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_host_config_changes_uid_time
+            ON host_config_changes(host_uid, detected_at_utc DESC)
             """
         )
         conn.execute(
@@ -4156,6 +4180,7 @@ def _collect_database_lifecycle_change_items(conn: sqlite3.Connection, hours: in
         """
         SELECT dl.id,
                dl.triggered_at_utc,
+         COALESCE(NULLIF(r.host_uid, ''), dl.hostname) AS host_uid_value,
                dl.hostname,
                dl.database_name,
                dl.action,
@@ -4164,6 +4189,7 @@ def _collect_database_lifecycle_change_items(conn: sqlite3.Connection, hours: in
                COALESCE(h.country_code_override, ''),
                COALESCE(cust.customer_name, '')
         FROM database_lifecycle dl
+     LEFT JOIN reports r ON r.id = dl.report_id
         LEFT JOIN host_settings h ON h.hostname = dl.hostname
         LEFT JOIN customers cust ON cust.id = h.customer_id
         WHERE dl.triggered_at_utc >= ?
@@ -4175,20 +4201,22 @@ def _collect_database_lifecycle_change_items(conn: sqlite3.Connection, hours: in
 
     items: list[dict] = []
     for row in rows:
-        hostname = str(row[2] or "")
-        display_override = str(row[6] or "").strip()
-        country_code = normalize_country_code(str(row[7] or ""))
-        customer_name = str(row[8] or "").strip()
-        database_display_name = _format_database_lifecycle_name(row[3], row[5])
-        action_label, old_value, new_value = _database_lifecycle_values(str(row[4] or ""), database_display_name, row[5])
+        host_uid = str(row[2] or "").strip()
+        hostname = str(row[3] or "")
+        display_override = str(row[7] or "").strip()
+        country_code = normalize_country_code(str(row[8] or ""))
+        customer_name = str(row[9] or "").strip()
+        database_display_name = _format_database_lifecycle_name(row[4], row[6])
+        action_label, old_value, new_value = _database_lifecycle_values(str(row[5] or ""), database_display_name, row[6])
         items.append(
             {
                 "id": int(row[0] or 0),
                 "detected_at_utc": str(row[1] or ""),
+                "host_uid": host_uid or hostname,
                 "hostname": hostname,
                 "display_name": display_override or hostname,
                 "customer_name": customer_name,
-                "field_key": f"db_lifecycle::{str(row[4] or '').strip().lower()}::{database_display_name}",
+                "field_key": f"db_lifecycle::{str(row[5] or '').strip().lower()}::{database_display_name}",
                 "field_label": action_label,
                 "old_value": old_value,
                 "new_value": new_value,
@@ -5740,6 +5768,7 @@ def _extract_host_config_snapshot(payload: dict) -> dict[str, str]:
 def _track_host_config_changes(
     conn: sqlite3.Connection,
     hostname: str,
+    host_uid: str,
     payload: dict,
     report_id: int,
     detected_at_utc: str,
@@ -5748,6 +5777,7 @@ def _track_host_config_changes(
 
     if not hostname:
         return
+    host_key = alert_host_key(hostname, host_uid)
 
     new_snapshot_raw = _extract_host_config_snapshot(payload)
     new_snapshot = {
@@ -5761,7 +5791,7 @@ def _track_host_config_changes(
         FROM host_config_snapshot
         WHERE hostname = ?
         """,
-        (hostname,),
+        (host_key,),
     ).fetchone()
 
     if existing_row:
@@ -5788,7 +5818,7 @@ def _track_host_config_changes(
                 """
                 SELECT 1
                 FROM host_config_changes
-                WHERE hostname = ?
+                WHERE host_uid = ?
                   AND field_key = ?
                   AND old_value = ?
                   AND new_value = ?
@@ -5796,7 +5826,7 @@ def _track_host_config_changes(
                 ORDER BY id DESC
                 LIMIT 1
                 """,
-                (hostname, field_key, old_value, new_value, dedupe_cutoff),
+                (host_key, field_key, old_value, new_value, dedupe_cutoff),
             ).fetchone()
             if duplicate:
                 continue
@@ -5805,6 +5835,7 @@ def _track_host_config_changes(
                 """
                 INSERT INTO host_config_changes (
                     detected_at_utc,
+                    host_uid,
                     hostname,
                     field_key,
                     old_value,
@@ -5812,9 +5843,9 @@ def _track_host_config_changes(
                     report_id,
                     source
                 )
-                VALUES (?, ?, ?, ?, ?, ?, 'agent-report')
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'agent-report')
                 """,
-                (detected_at_utc, hostname, field_key, old_value, new_value, report_id),
+                (detected_at_utc, host_key, hostname, field_key, old_value, new_value, report_id),
             )
 
     conn.execute(
@@ -5846,7 +5877,7 @@ def _track_host_config_changes(
             updated_at_utc = excluded.updated_at_utc
         """,
         (
-            hostname,
+            host_key,
             new_snapshot["os_release"],
             new_snapshot["kernel_release"],
             new_snapshot["cpu_cores"],
@@ -6086,10 +6117,12 @@ def _collect_sap_addon_change_items_for_host(conn: sqlite3.Connection, hostname:
 
 def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit: int) -> list[dict]:
     cutoff_iso = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    host_key_expr = reports_host_key_sql("r")
     rows = conn.execute(
-        """
+        f"""
         SELECT r.id,
                r.received_at_utc,
+               {host_key_expr} AS host_uid_value,
                r.hostname,
                r.payload_json,
                COALESCE(h.display_name_override, ''),
@@ -6099,10 +6132,28 @@ def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit:
         LEFT JOIN host_settings h ON h.hostname = r.hostname
         LEFT JOIN customers cust ON cust.id = h.customer_id
         WHERE r.received_at_utc >= ?
-        ORDER BY r.hostname COLLATE NOCASE ASC, r.id ASC
+        ORDER BY {host_key_expr} COLLATE NOCASE ASC, r.id ASC
         """,
         (cutoff_iso,),
     ).fetchall()
+
+    host_uids = sorted({str(row[2] or "").strip() for row in rows if str(row[2] or "").strip()})
+    host_uid_display_name_map: dict[str, str] = {}
+    if host_uids:
+        placeholders = ",".join(["?"] * len(host_uids))
+        host_uid_rows = conn.execute(
+            f"""
+            SELECT host_uid, COALESCE(display_name_override, '')
+            FROM host_uid_settings
+            WHERE host_uid IN ({placeholders})
+            """,
+            tuple(host_uids),
+        ).fetchall()
+        host_uid_display_name_map = {
+            str(row[0] or "").strip(): str(row[1] or "").strip()
+            for row in host_uid_rows
+            if str(row[0] or "").strip()
+        }
 
     previous_by_host: dict[str, dict[str, str]] = {}
     changes: list[dict] = []
@@ -6110,13 +6161,21 @@ def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit:
     for row in rows:
         report_id = int(row[0] or 0)
         detected_at_utc = str(row[1] or "")
-        hostname = str(row[2] or "").strip()
+        host_uid = str(row[2] or "").strip()
+        hostname = str(row[3] or "").strip()
         if not hostname:
             continue
+        host_key = host_uid or hostname
 
-        payload = parse_payload_json(str(row[3] or "{}"))
+        payload = parse_payload_json(str(row[4] or "{}"))
         current_snapshot = _extract_sap_addon_snapshot(payload)
-        previous_snapshot = previous_by_host.get(hostname)
+        previous_snapshot = previous_by_host.get(host_key)
+
+        display_override = str(host_uid_display_name_map.get(host_key, "") or "").strip()
+        if not display_override:
+            display_override = str(row[5] or "").strip()
+        country_code = normalize_country_code(str(row[6] or ""))
+        customer_name = str(row[7] or "").strip()
 
         if previous_snapshot is not None:
             addon_names = sorted(set(previous_snapshot.keys()) | set(current_snapshot.keys()), key=lambda x: x.lower())
@@ -6127,14 +6186,11 @@ def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit:
                     continue
 
                 label_source, plain_name = _describe_sap_addon_key(addon_name)
-
-                display_override = str(row[4] or "").strip()
-                country_code = normalize_country_code(str(row[5] or ""))
-                customer_name = str(row[6] or "").strip()
                 changes.append(
                     {
                         "id": report_id,
                         "detected_at_utc": detected_at_utc,
+                        "host_uid": host_key,
                         "hostname": hostname,
                         "display_name": display_override or hostname,
                         "customer_name": customer_name,
@@ -6146,9 +6202,31 @@ def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit:
                         "country_code": country_code,
                     }
                 )
-        # No synthetic "init" entries: changelog should only show real deltas.
+        else:
+            # First snapshot for this host identity: emit baseline as Neu-only entries.
+            for addon_name in sorted(current_snapshot.keys(), key=lambda x: x.lower()):
+                new_version = str(current_snapshot.get(addon_name, "-") or "-")
+                if new_version == "-":
+                    continue
+                label_source, plain_name = _describe_sap_addon_key(addon_name)
+                changes.append(
+                    {
+                        "id": report_id,
+                        "detected_at_utc": detected_at_utc,
+                        "host_uid": host_key,
+                        "hostname": hostname,
+                        "display_name": display_override or hostname,
+                        "customer_name": customer_name,
+                        "field_key": f"sap_addon::{addon_name}",
+                        "field_label": f"{label_source}: {plain_name}",
+                        "old_value": "-",
+                        "new_value": new_version,
+                        "source": "agent-report:addon-init",
+                        "country_code": country_code,
+                    }
+                )
 
-        previous_by_host[hostname] = current_snapshot
+        previous_by_host[host_key] = current_snapshot
 
     changes.sort(key=lambda item: (str(item.get("detected_at_utc") or ""), int(item.get("id") or 0)), reverse=True)
     return changes[:limit]
@@ -6163,8 +6241,8 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
         """
         SELECT chg.id,
                chg.detected_at_utc,
+               COALESCE(NULLIF(chg.host_uid, ''), COALESCE(NULLIF(r.host_uid, ''), chg.hostname)) AS host_uid_value,
                chg.hostname,
-               COALESCE(h.display_name_override, ''),
                chg.field_key,
                chg.old_value,
                chg.new_value,
@@ -6172,6 +6250,7 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
                COALESCE(h.country_code_override, ''),
                COALESCE(cust.customer_name, '')
         FROM host_config_changes chg
+        LEFT JOIN reports r ON r.id = chg.report_id
         LEFT JOIN host_settings h ON h.hostname = chg.hostname
         LEFT JOIN customers cust ON cust.id = h.customer_id
         WHERE chg.detected_at_utc >= ?
@@ -6181,16 +6260,39 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
         (cutoff_iso, row_limit),
     ).fetchall()
 
+    host_uids = sorted({str(row[2] or "").strip() for row in rows if str(row[2] or "").strip()})
+    host_uid_display_name_map: dict[str, str] = {}
+    if host_uids:
+        placeholders = ",".join(["?"] * len(host_uids))
+        host_uid_rows = conn.execute(
+            f"""
+            SELECT host_uid, COALESCE(display_name_override, '')
+            FROM host_uid_settings
+            WHERE host_uid IN ({placeholders})
+            """,
+            tuple(host_uids),
+        ).fetchall()
+        host_uid_display_name_map = {
+            str(row[0] or "").strip(): str(row[1] or "").strip()
+            for row in host_uid_rows
+            if str(row[0] or "").strip()
+        }
+
     items = []
     for row in rows:
-        hostname = str(row[2] or "")
-        display_override = str(row[3] or "").strip()
+        host_uid = str(row[2] or "").strip()
+        hostname = str(row[3] or "")
+        display_override = str(host_uid_display_name_map.get(host_uid, "") or "").strip()
+        if not display_override:
+            host_settings = get_host_settings(conn, hostname)
+            display_override = str(host_settings.get("display_name_override", "") or "").strip()
         country_code = normalize_country_code(str(row[8] or ""))
         customer_name = str(row[9] or "").strip()
         items.append(
             {
                 "id": int(row[0] or 0),
                 "detected_at_utc": str(row[1] or ""),
+                "host_uid": host_uid or hostname,
                 "hostname": hostname,
                 "display_name": display_override or hostname,
                 "customer_name": customer_name,
@@ -6236,21 +6338,21 @@ def backfill_host_config_changes(
 
     row_iter = conn.execute(
         """
-        SELECT id, received_at_utc, hostname, payload_json
+        SELECT id, received_at_utc, hostname, COALESCE(host_uid, ''), payload_json
         FROM reports
         WHERE received_at_utc >= ?
-        ORDER BY hostname COLLATE NOCASE ASC, id ASC
+        ORDER BY COALESCE(NULLIF(host_uid, ''), hostname) COLLATE NOCASE ASC, id ASC
         """,
         (cutoff_iso,),
     )
 
-    last_snapshot_by_host: dict[str, dict[str, str]] = {}
-    last_seen_at_by_host: dict[str, str] = {}
+    last_snapshot_by_host_key: dict[str, dict[str, str]] = {}
+    last_seen_at_by_host_key: dict[str, str] = {}
     report_count = 0
     inserted_changes = 0
     hosts_total_row = conn.execute(
         """
-        SELECT COUNT(DISTINCT hostname)
+        SELECT COUNT(DISTINCT COALESCE(NULLIF(host_uid, ''), hostname))
         FROM reports
         WHERE received_at_utc >= ?
           AND hostname IS NOT NULL
@@ -6260,7 +6362,7 @@ def backfill_host_config_changes(
     ).fetchone()
     hosts_total = int((hosts_total_row[0] or 0) if hosts_total_row else 0)
     hosts_processed = 0
-    last_progress_hostname = ""
+    last_progress_host_key = ""
 
     if callable(progress_callback):
         try:
@@ -6277,11 +6379,13 @@ def backfill_host_config_changes(
         report_id = int(row[0] or 0)
         detected_at_utc = str(row[1] or "").strip()
         hostname = str(row[2] or "").strip()
+        host_uid = str(row[3] or "").strip()
         if not hostname:
             continue
-        if hostname != last_progress_hostname:
+        host_key = alert_host_key(hostname, host_uid)
+        if host_key != last_progress_host_key:
             hosts_processed += 1
-            last_progress_hostname = hostname
+            last_progress_host_key = host_key
             if callable(progress_callback):
                 try:
                     progress_callback({
@@ -6293,14 +6397,14 @@ def backfill_host_config_changes(
                     })
                 except Exception:
                     pass
-        payload = parse_payload_json(str(row[3] or "{}"))
+                payload = parse_payload_json(str(row[4] or "{}"))
         report_count += 1
 
         current_snapshot = {
             key: _normalize_config_value(key, value)
             for key, value in _extract_host_config_snapshot(payload).items()
         }
-        previous_snapshot = last_snapshot_by_host.get(hostname)
+        previous_snapshot = last_snapshot_by_host_key.get(host_key)
 
         if previous_snapshot is not None:
             for field_key in HOST_CONFIG_TRACKED_FIELDS:
@@ -6313,14 +6417,14 @@ def backfill_host_config_changes(
                     """
                     SELECT 1
                     FROM host_config_changes
-                    WHERE hostname = ?
+                                        WHERE host_uid = ?
                       AND field_key = ?
                       AND report_id = ?
                       AND old_value = ?
                       AND new_value = ?
                     LIMIT 1
                     """,
-                    (hostname, field_key, report_id, old_value, new_value),
+                                        (host_key, field_key, report_id, old_value, new_value),
                 ).fetchone()
                 if existing:
                     continue
@@ -6329,6 +6433,7 @@ def backfill_host_config_changes(
                     """
                     INSERT INTO host_config_changes (
                         detected_at_utc,
+                        host_uid,
                         hostname,
                         field_key,
                         old_value,
@@ -6336,9 +6441,9 @@ def backfill_host_config_changes(
                         report_id,
                         source
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, 'backfill')
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'backfill')
                     """,
-                    (detected_at_utc or utc_now_iso(), hostname, field_key, old_value, new_value, report_id),
+                    (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
                 )
                 inserted_changes += 1
         elif include_initial_snapshot_events:
@@ -6352,14 +6457,14 @@ def backfill_host_config_changes(
                     """
                     SELECT 1
                     FROM host_config_changes
-                    WHERE hostname = ?
+                                        WHERE host_uid = ?
                       AND field_key = ?
                       AND report_id = ?
                       AND old_value = ?
                       AND new_value = ?
                     LIMIT 1
                     """,
-                    (hostname, field_key, report_id, old_value, new_value),
+                                        (host_key, field_key, report_id, old_value, new_value),
                 ).fetchone()
                 if existing:
                     continue
@@ -6368,6 +6473,7 @@ def backfill_host_config_changes(
                     """
                     INSERT INTO host_config_changes (
                         detected_at_utc,
+                        host_uid,
                         hostname,
                         field_key,
                         old_value,
@@ -6375,20 +6481,20 @@ def backfill_host_config_changes(
                         report_id,
                         source
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, 'backfill-init')
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'backfill-init')
                     """,
-                    (detected_at_utc or utc_now_iso(), hostname, field_key, old_value, new_value, report_id),
+                    (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
                 )
                 inserted_changes += 1
 
-        last_snapshot_by_host[hostname] = current_snapshot
-        last_seen_at_by_host[hostname] = detected_at_utc or utc_now_iso()
+        last_snapshot_by_host_key[host_key] = current_snapshot
+        last_seen_at_by_host_key[host_key] = detected_at_utc or utc_now_iso()
 
         if report_count % 1000 == 0:
             conn.commit()
 
-    for hostname, snapshot in last_snapshot_by_host.items():
-        updated_at_utc = last_seen_at_by_host.get(hostname, utc_now_iso())
+    for host_key, snapshot in last_snapshot_by_host_key.items():
+        updated_at_utc = last_seen_at_by_host_key.get(host_key, utc_now_iso())
         conn.execute(
             """
             INSERT INTO host_config_snapshot (
@@ -6418,7 +6524,7 @@ def backfill_host_config_changes(
                 updated_at_utc = excluded.updated_at_utc
             """,
             (
-                hostname,
+                host_key,
                 snapshot["os_release"],
                 snapshot["kernel_release"],
                 snapshot["cpu_cores"],
@@ -6435,7 +6541,7 @@ def backfill_host_config_changes(
     return {
         "days": window_days,
         "reports_scanned": report_count,
-        "hosts_touched": len(last_snapshot_by_host),
+        "hosts_touched": len(last_snapshot_by_host_key),
         "hosts_processed": hosts_processed,
         "hosts_total": hosts_total,
         "inserted_changes": inserted_changes,
@@ -13915,7 +14021,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             try:
                 with sqlite3.connect(DB_PATH) as conn:
-                    config_result = backfill_host_config_changes(conn, days=days)
+                    config_result = backfill_host_config_changes(
+                        conn,
+                        days=days,
+                        include_initial_snapshot_events=True,
+                    )
                     db_result = backfill_database_lifecycle(conn, days=days)
                     conn.commit()
 
@@ -15233,7 +15343,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 ),
             )
             report_id = int(cursor.lastrowid)
-            _track_host_config_changes(conn, hostname, payload, report_id, report_received_at_utc)
+            _track_host_config_changes(conn, hostname, incoming_host_uid, payload, report_id, report_received_at_utc)
             _track_database_lifecycle(conn, hostname, payload, report_id, report_received_at_utc)
             prune_reports_for_host(conn, hostname, MAX_REPORTS_PER_HOST)
             alarm_settings = get_alarm_settings(conn)

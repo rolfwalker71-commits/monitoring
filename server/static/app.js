@@ -11326,11 +11326,12 @@ async function loadHostConfigChanges() {
       const q = String(state.hostConfigChangesSearchQuery).toLowerCase();
       filteredItems = filteredItems.filter((item) => {
         const hostMatch = String(item.hostname || "").toLowerCase().includes(q);
+        const hostUidMatch = String(item.host_uid || "").toLowerCase().includes(q);
         const displayMatch = String(item.display_name || "").toLowerCase().includes(q);
         const fieldMatch = String(item.field_label || item.field_key || "").toLowerCase().includes(q);
         const oldMatch = String(item.old_value || "").toLowerCase().includes(q);
         const newMatch = String(item.new_value || "").toLowerCase().includes(q);
-        return hostMatch || displayMatch || fieldMatch || oldMatch || newMatch;
+        return hostMatch || hostUidMatch || displayMatch || fieldMatch || oldMatch || newMatch;
       });
     }
 
@@ -11378,13 +11379,15 @@ async function loadHostConfigChanges() {
       .map((customerGroup) => {
         const itemsByHost = new Map();
         customerGroup.items.forEach((item) => {
+          const hostUid = asText(item.host_uid, "") || asText(item.hostname, "");
           const hostname = asText(item.hostname, "");
           const displayName = asText(item.display_name, "") || hostname;
           const countryCode = asText(item.country_code, "");
-          if (!itemsByHost.has(hostname)) {
-            itemsByHost.set(hostname, { hostname, displayName, items: [], country_code: countryCode });
+          const hostKey = `${hostUid}::${hostname}`;
+          if (!itemsByHost.has(hostKey)) {
+            itemsByHost.set(hostKey, { hostUid, hostname, displayName, items: [], country_code: countryCode });
           }
-          itemsByHost.get(hostname).items.push(item);
+          itemsByHost.get(hostKey).items.push(item);
         });
 
         const hostGroups = Array.from(itemsByHost.values()).sort((a, b) => {
@@ -11432,10 +11435,11 @@ async function loadHostConfigChanges() {
             }).join("");
 
             const showHostSub = hostGroup.displayName !== hostGroup.hostname;
+            const showHostUid = hostGroup.hostUid && hostGroup.hostUid !== hostGroup.hostname;
             return `
               <details class="host-config-change-group" ${autoExpandGroups ? "open" : ""}>
                 <summary class="host-config-change-summary">
-                  <span class="global-host-label">${escapeHtml(hostGroup.displayName)}${showHostSub ? ` <span class="global-hostname-sub">(${escapeHtml(hostGroup.hostname)})</span>` : ""}</span>
+                  <span class="global-host-label">${escapeHtml(hostGroup.displayName)}${showHostSub ? ` <span class="global-hostname-sub">(${escapeHtml(hostGroup.hostname)})</span>` : ""}${showHostUid ? ` <span class="global-hostname-sub" title="Host UID">[${escapeHtml(hostGroup.hostUid)}]</span>` : ""}</span>
                   ${hostGroup.country_code && getCountryFlagIconPath(hostGroup.country_code)
                     ? `<span class="host-config-country-badge" title="Land: ${escapeHtml(hostGroup.country_code)}"><img src="${getCountryFlagIconPath(hostGroup.country_code)}" class="host-config-country-flag" alt="${escapeHtml(hostGroup.country_code)}" /></span>`
                     : ""}
