@@ -118,6 +118,9 @@ _backup_jobs_lock = threading.Lock()
 _backup_jobs: dict[str, dict[str, str]] = {}
 _auto_backup_lock = threading.Lock()
 _agent_ingest_queue_wakeup = threading.Event()
+_local_cpu_sample_lock = threading.Lock()
+_local_cpu_prev_total: int | None = None
+_local_cpu_prev_idle: int | None = None
 
 AGENT_INGEST_RETRY_MAX_BACKOFF_SECONDS = max(
     10,
@@ -2585,6 +2588,74 @@ def collect_database_maintenance_stats(conn: sqlite3.Connection) -> dict[str, ob
         "freelist_count": freelist_count,
         "used_pages": used_pages,
         "free_ratio": free_ratio,
+    }
+
+
+def _read_proc_cpu_totals() -> tuple[int, int] | None:
+    try:
+        with open("/proc/stat", "r", encoding="utf-8") as handle:
+            first_line = handle.readline().strip()
+    except OSError:
+        return None
+    if not first_line.startswith("cpu "):
+        return None
+    parts = first_line.split()
+    if len(parts) < 5:
+        return None
+    try:
+        values = [int(part) for part in parts[1:]]
+    except ValueError:
+        return None
+    total = sum(values)
+    idle = values[3] + (values[4] if len(values) > 4 else 0)
+    return total, idle
+
+
+def collect_local_server_resource_usage() -> dict[str, float]:
+    global _local_cpu_prev_total, _local_cpu_prev_idle
+
+    cpu_percent = 0.0
+    sample = _read_proc_cpu_totals()
+    with _local_cpu_sample_lock:
+        if sample is not None:
+            total, idle = sample
+            if _local_cpu_prev_total is not None and _local_cpu_prev_idle is not None and total > _local_cpu_prev_total:
+                delta_total = total - _local_cpu_prev_total
+                delta_idle = max(0, idle - _local_cpu_prev_idle)
+                busy = max(0, delta_total - delta_idle)
+                if delta_total > 0:
+                    cpu_percent = (busy / float(delta_total)) * 100.0
+            else:
+                try:
+                    cpu_count = max(1, int(os.cpu_count() or 1))
+                    load_1m = os.getloadavg()[0]
+                    cpu_percent = (float(load_1m) / float(cpu_count)) * 100.0
+                except (OSError, ValueError):
+                    cpu_percent = 0.0
+            _local_cpu_prev_total = total
+            _local_cpu_prev_idle = idle
+
+    mem_total_kb = 0
+    mem_available_kb = 0
+    try:
+        with open("/proc/meminfo", "r", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("MemTotal:"):
+                    mem_total_kb = int(line.split()[1])
+                elif line.startswith("MemAvailable:"):
+                    mem_available_kb = int(line.split()[1])
+    except (OSError, ValueError, IndexError):
+        mem_total_kb = 0
+        mem_available_kb = 0
+
+    memory_percent = 0.0
+    if mem_total_kb > 0:
+        used_kb = max(0, mem_total_kb - max(0, mem_available_kb))
+        memory_percent = (used_kb / float(mem_total_kb)) * 100.0
+
+    return {
+        "cpu_percent": max(0.0, min(100.0, float(cpu_percent))),
+        "memory_percent": max(0.0, min(100.0, float(memory_percent))),
     }
 
 
@@ -12463,38 +12534,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             with sqlite3.connect(DB_PATH) as conn:
                 stats = collect_database_maintenance_stats(conn)
-                now_utc = datetime.now(timezone.utc)
-                hour_ago_utc = now_utc - timedelta(hours=1)
-                hour_ago_iso = hour_ago_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-                reports_last_hour_row = conn.execute(
-                    "SELECT COUNT(*) FROM reports WHERE received_at_utc >= ?",
-                    (hour_ago_iso,),
-                ).fetchone()
-                reports_last_hour = int((reports_last_hour_row[0] or 0) if reports_last_hour_row else 0)
-
-                baseline_row = conn.execute(
-                    """
-                    SELECT total_file_bytes
-                    FROM db_maintenance_history
-                    WHERE computed_at_utc <= ?
-                    ORDER BY computed_at_utc DESC
-                    LIMIT 1
-                    """,
-                    (hour_ago_iso,),
-                ).fetchone()
-                total_file_bytes_now = int(stats.get("total_file_bytes", 0) or 0)
-                total_file_bytes_baseline = int((baseline_row[0] or 0) if baseline_row else total_file_bytes_now)
-                delta_total_file_bytes_last_hour = total_file_bytes_now - total_file_bytes_baseline
+            usage = collect_local_server_resource_usage()
             self._send_json(
                 HTTPStatus.OK,
                 {
                     "status": "ok",
                     "stats": {
                         "reports_total": int(stats.get("reports_total", 0) or 0),
-                        "reports_last_hour": reports_last_hour,
                         "total_file_bytes": int(stats.get("total_file_bytes", 0) or 0),
-                        "delta_total_file_bytes_last_hour": int(delta_total_file_bytes_last_hour),
+                        "cpu_percent": round(float(usage.get("cpu_percent", 0.0) or 0.0), 1),
+                        "memory_percent": round(float(usage.get("memory_percent", 0.0) or 0.0), 1),
                     },
                 },
             )

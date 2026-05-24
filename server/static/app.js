@@ -142,9 +142,9 @@ const state = {
   criticalTrendsCount: 0,
   inactiveHostsCount: 0,
   dbReportsTotal: 0,
-  dbReportsLastHour: 0,
+  serverCpuPercent: null,
   dbTotalFileBytes: null,
-  dbDeltaLastHourBytes: 0,
+  serverMemoryPercent: null,
   authUser: "",
   authDisplayName: "",
   isAuthenticated: false,
@@ -9547,13 +9547,13 @@ async function loadHeaderDatabaseKpis() {
   }
   const stats = data && typeof data.stats === "object" ? data.stats : {};
   const reportsTotal = Number(stats.reports_total || 0);
-  const reportsLastHour = Number(stats.reports_last_hour || 0);
   const totalFileBytes = Number(stats.total_file_bytes);
-  const deltaLastHourBytes = Number(stats.delta_total_file_bytes_last_hour || 0);
+  const cpuPercent = Number(stats.cpu_percent);
+  const memoryPercent = Number(stats.memory_percent);
   state.dbReportsTotal = Number.isFinite(reportsTotal) && reportsTotal >= 0 ? reportsTotal : 0;
-  state.dbReportsLastHour = Number.isFinite(reportsLastHour) && reportsLastHour >= 0 ? reportsLastHour : 0;
   state.dbTotalFileBytes = Number.isFinite(totalFileBytes) && totalFileBytes >= 0 ? totalFileBytes : null;
-  state.dbDeltaLastHourBytes = Number.isFinite(deltaLastHourBytes) ? deltaLastHourBytes : 0;
+  state.serverCpuPercent = Number.isFinite(cpuPercent) ? cpuPercent : null;
+  state.serverMemoryPercent = Number.isFinite(memoryPercent) ? memoryPercent : null;
   updateHeaderStatChips();
   return stats;
 }
@@ -12297,7 +12297,9 @@ function updateHeaderStatChips() {
     dbReportsChip.classList.remove("hidden");
   }
   if (dbReportsHourChip && dbReportsHourCount) {
-    dbReportsHourCount.textContent = Number(state.dbReportsLastHour || 0).toLocaleString("de-CH");
+    dbReportsHourCount.textContent = state.serverCpuPercent === null
+      ? "-"
+      : `${Number(state.serverCpuPercent).toFixed(1)}%`;
     dbReportsHourChip.classList.remove("hidden");
   }
   if (dbSizeChip && dbSizeValue) {
@@ -12305,7 +12307,9 @@ function updateHeaderStatChips() {
     dbSizeChip.classList.remove("hidden");
   }
   if (dbSizeDeltaChip && dbSizeDeltaValue) {
-    dbSizeDeltaValue.textContent = formatSignedMegabytesFromBytes(state.dbDeltaLastHourBytes);
+    dbSizeDeltaValue.textContent = state.serverMemoryPercent === null
+      ? "-"
+      : `${Number(state.serverMemoryPercent).toFixed(1)}%`;
     dbSizeDeltaChip.classList.remove("hidden");
   }
   if (licenseChip) {

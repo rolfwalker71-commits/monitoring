@@ -646,6 +646,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.64 (24. Mai 2026)
+
+- **Header-KPIs umgestellt auf lokale Serverauslastung**: Statt `Anzahl Reports (letzte 1h)` und `DB Delta 1h` zeigt die Leiste jetzt `Server CPU` und `Server Memory` in Prozent.
+- **CPU/Memory direkt vom lokalen Server-Host**: Die Werte werden auf dem Monitoring-Server selbst erhoben (`/proc/stat`, `/proc/meminfo`) und als kompakte Prozentwerte ausgeliefert.
+
 ### v1.7.63 (24. Mai 2026)
 
 - **Kunde im Ingest-Lieferlog ergänzt**: Die Admin-Tabelle zeigt jetzt pro Queue-Eintrag zusätzlich den zugeordneten Kunden.
