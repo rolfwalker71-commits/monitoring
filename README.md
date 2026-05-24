@@ -646,6 +646,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.58 (24. Mai 2026)
+
+- **SAP Services/Ports im Changelog lesbar gemacht**: Die Felder werden jetzt pro Service als einzelne Eintraege dargestellt statt als lange Semikolon-Zeile.
+- **Gilt fuer beide Changelog-Ansichten**: Sowohl im Host-Detail-Changelog als auch im globalen Host-Config-Changelog ist die Darstellung jetzt identisch strukturiert.
+- **Port-Hervorhebung fuer neue Werte**: In der Spalte `Neu` sind die Portangaben je Service visuell staerker markiert, damit Aenderungen schneller auffallen.
+
 ### v1.7.57 (24. Mai 2026)
 
 - **Deployment-Freischaltung fuer Windows Probe-Script**: `pull-server-only.sh` und `pull-server.sh` laden jetzt auch `client/windows/probe_sap_services.ps1` herunter.

@@ -5611,6 +5611,32 @@ function renderSapB1InstalledServicesSection(payload) {
   `;
 }
 
+function renderSapServicesChangelogValue(rawValue, isNew = false) {
+  const text = asText(rawValue, "").trim();
+  if (!text || text === "-") {
+    return '<div class="sap-services-changelog-empty">-</div>';
+  }
+
+  const entries = text.split(";").map((part) => asText(part, "").trim()).filter(Boolean);
+  if (entries.length === 0) {
+    return '<div class="sap-services-changelog-empty">-</div>';
+  }
+
+  const rows = entries.map((entry) => {
+    const idx = entry.indexOf(":");
+    const name = idx >= 0 ? asText(entry.slice(0, idx), "").trim() : entry;
+    const ports = idx >= 0 ? asText(entry.slice(idx + 1), "").trim() : "-";
+    return `
+      <div class="sap-services-changelog-item">
+        <span class="sap-services-changelog-name">${escapeHtml(name || "-")}</span>
+        <span class="sap-services-changelog-ports">${renderSapB1ServicePorts(ports || "-")}</span>
+      </div>
+    `;
+  }).join("");
+
+  return `<div class="sap-services-changelog-list${isNew ? " is-new" : ""}">${rows}</div>`;
+}
+
 function renderSapB1ExtensionsSection(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const ext = sap && typeof sap.extensions === "object" ? sap.extensions : null;
@@ -10443,6 +10469,8 @@ async function loadConfigChangelogForHost() {
         const fieldKey = String(item.field_key || "");
         let oldFpInfo = "";
         let newFpInfo = "";
+        let oldValueHtml = `<code>${escapeHtml(oldValue)}</code>`;
+        let newValueHtml = `<code>${escapeHtml(newValue)}</code>`;
         if (fieldKey === "sap_release") {
           const oldFp = resolveSapReleaseDisplay(oldValue, SAP_B1_VERSION_MAP);
           if (oldFp && oldFp !== "-" && oldFp !== oldValue) {
@@ -10453,12 +10481,16 @@ async function loadConfigChangelogForHost() {
             newFpInfo = ` <strong>(${escapeHtml(newFp)})</strong>`;
           }
         }
+        if (fieldKey === "sap_services_ports") {
+          oldValueHtml = renderSapServicesChangelogValue(oldValue, false);
+          newValueHtml = renderSapServicesChangelogValue(newValue, true);
+        }
 
         return `
           <tr>
             <td><strong>${escapeHtml(fieldLabel)}</strong></td>
-            <td><code>${escapeHtml(oldValue)}</code>${oldFpInfo}</td>
-            <td><code>${escapeHtml(newValue)}</code>${newFpInfo}</td>
+            <td>${oldValueHtml}${oldFpInfo}</td>
+            <td>${newValueHtml}${newFpInfo}</td>
             
             <td>${escapeHtml(formatUtcPlus2(item.detected_at_utc))}</td>
           </tr>
@@ -11491,6 +11523,8 @@ async function loadHostConfigChanges() {
 
               let oldFpInfo = "";
               let newFpInfo = "";
+              let oldValueHtml = `<div class="host-config-main-value">${escapeHtml(oldValue)}</div>`;
+              let newValueHtml = `<div class="host-config-main-value"><strong>${escapeHtml(newValue)}</strong></div>`;
               if (fieldKey === "sap_release") {
                 const oldFp = resolveSapReleaseDisplay(oldValue, SAP_B1_VERSION_MAP);
                 if (oldFp && oldFp !== "-") {
@@ -11501,17 +11535,21 @@ async function loadHostConfigChanges() {
                   newFpInfo = `<div class="host-config-change-subline"><strong>(${escapeHtml(newFp)})</strong></div>`;
                 }
               }
+              if (fieldKey === "sap_services_ports") {
+                oldValueHtml = renderSapServicesChangelogValue(oldValue, false);
+                newValueHtml = renderSapServicesChangelogValue(newValue, true);
+              }
 
               return `
                 <tr>
                   <td>${escapeHtml(formatUtcPlus2(item.detected_at_utc))}</td>
                   <td>${escapeHtml(asText(item.field_label || item.field_key, "-"))}</td>
                   <td>
-                    <div class="host-config-main-value">${escapeHtml(oldValue)}</div>
+                    ${oldValueHtml}
                     ${oldFpInfo}
                   </td>
                   <td>
-                    <div class="host-config-main-value"><strong>${escapeHtml(newValue)}</strong></div>
+                    ${newValueHtml}
                     ${newFpInfo}
                   </td>
                 </tr>

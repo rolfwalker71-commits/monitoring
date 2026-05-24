@@ -6291,6 +6291,49 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
   line-height: 1.15;
 }
 
+.sap-services-changelog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.sap-services-changelog-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px dotted #c9d7ea;
+  padding-bottom: 1px;
+}
+
+.sap-services-changelog-item:last-child {
+  border-bottom: 0;
+}
+
+.sap-services-changelog-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sap-services-changelog-ports {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: #0f172a;
+}
+
+.sap-services-changelog-list.is-new .sap-services-changelog-ports {
+  font-weight: 700;
+}
+
+.sap-services-changelog-empty {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
 .host-config-changes-groups {
   display: grid;
   gap: 10px;
