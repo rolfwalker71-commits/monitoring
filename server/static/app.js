@@ -145,6 +145,7 @@ const state = {
   serverCpuPercent: null,
   dbTotalFileBytes: null,
   serverMemoryPercent: null,
+  serverMemoryTotalBytes: null,
   authUser: "",
   authDisplayName: "",
   isAuthenticated: false,
@@ -4100,6 +4101,15 @@ function formatMegabytesFromBytes(value) {
   const mb = n / (1024 * 1024);
   const digits = mb >= 100 ? 0 : 1;
   return mb.toFixed(digits);
+}
+
+function formatGigabytesFromBytes(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) {
+    return "-";
+  }
+  const gb = n / (1024 * 1024 * 1024);
+  return `${gb.toFixed(1)} GB`;
 }
 
 function formatSignedMegabytesFromBytes(value) {
@@ -9550,10 +9560,12 @@ async function loadHeaderDatabaseKpis() {
   const totalFileBytes = Number(stats.total_file_bytes);
   const cpuPercent = Number(stats.cpu_percent);
   const memoryPercent = Number(stats.memory_percent);
+  const memoryTotalBytes = Number(stats.memory_total_bytes);
   state.dbReportsTotal = Number.isFinite(reportsTotal) && reportsTotal >= 0 ? reportsTotal : 0;
   state.dbTotalFileBytes = Number.isFinite(totalFileBytes) && totalFileBytes >= 0 ? totalFileBytes : null;
   state.serverCpuPercent = Number.isFinite(cpuPercent) ? cpuPercent : null;
   state.serverMemoryPercent = Number.isFinite(memoryPercent) ? memoryPercent : null;
+  state.serverMemoryTotalBytes = Number.isFinite(memoryTotalBytes) && memoryTotalBytes > 0 ? memoryTotalBytes : null;
   updateHeaderStatChips();
   return stats;
 }
@@ -12241,6 +12253,7 @@ function updateHeaderStatChips() {
   const dbSizeValue = document.getElementById("headerDbSizeValue");
   const dbSizeDeltaChip = document.getElementById("headerDbSizeDeltaChip");
   const dbSizeDeltaValue = document.getElementById("headerDbSizeDeltaValue");
+  const dbMemoryScope = document.getElementById("headerDbMemoryScope");
   const licenseChip = document.getElementById("headerLicenseChip");
   const licenseHw = document.getElementById("headerLicenseHw");
   const licenseInst = document.getElementById("headerLicenseInst");
@@ -12310,6 +12323,11 @@ function updateHeaderStatChips() {
     dbSizeDeltaValue.textContent = state.serverMemoryPercent === null
       ? "-"
       : `${Number(state.serverMemoryPercent).toFixed(1)}%`;
+    if (dbMemoryScope) {
+      dbMemoryScope.textContent = state.serverMemoryTotalBytes === null
+        ? "Gesamt -"
+        : `Gesamt ${formatGigabytesFromBytes(state.serverMemoryTotalBytes)}`;
+    }
     dbSizeDeltaChip.classList.remove("hidden");
   }
   if (licenseChip) {

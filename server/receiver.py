@@ -2611,7 +2611,7 @@ def _read_proc_cpu_totals() -> tuple[int, int] | None:
     return total, idle
 
 
-def collect_local_server_resource_usage() -> dict[str, float]:
+def collect_local_server_resource_usage() -> dict[str, float | int]:
     global _local_cpu_prev_total, _local_cpu_prev_idle
 
     cpu_percent = 0.0
@@ -2656,6 +2656,7 @@ def collect_local_server_resource_usage() -> dict[str, float]:
     return {
         "cpu_percent": max(0.0, min(100.0, float(cpu_percent))),
         "memory_percent": max(0.0, min(100.0, float(memory_percent))),
+        "memory_total_bytes": max(0, int(mem_total_kb) * 1024),
     }
 
 
@@ -12544,6 +12545,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "total_file_bytes": int(stats.get("total_file_bytes", 0) or 0),
                         "cpu_percent": round(float(usage.get("cpu_percent", 0.0) or 0.0), 1),
                         "memory_percent": round(float(usage.get("memory_percent", 0.0) or 0.0), 1),
+                        "memory_total_bytes": int(usage.get("memory_total_bytes", 0) or 0),
                     },
                 },
             )

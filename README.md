@@ -646,6 +646,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.66 (24. Mai 2026)
+
+- **Server-Memory Unterzeile ergänzt**: Der `Server Memory` KPI zeigt jetzt in der Unterzeile die gesamte verfügbare RAM-Menge des Server-Hosts.
+- **Anzeige auf feste GB-Darstellung umgestellt**: Die Unterzeile wird einheitlich als `Gesamt X.X GB` ausgegeben.
+
 ### v1.7.65 (24. Mai 2026)
 
 - **KPI-Reihenfolge im Header angepasst**: `Server CPU` steht jetzt an der zweitletzten Position, direkt vor `Server Memory`.
