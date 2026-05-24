@@ -11341,19 +11341,15 @@ body[data-theme="dark"] .so-status-offline {
 
 
 .header-host-tools {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  top: calc(100% + 6px);
-  margin-top: 0;
+  position: relative;
+  margin-top: 10px;
   padding: 10px 12px;
   border: 1px solid #d4dfed;
   border-radius: 12px;
   background: rgba(248, 252, 255, 0.98);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  box-shadow: 0 12px 26px rgba(20, 45, 77, 0.18);
-  z-index: 36;
+  box-shadow: 0 8px 18px rgba(20, 45, 77, 0.12);
 }
 
 .header-host-tools .host-filters-inline {
@@ -11568,11 +11564,7 @@ body[data-theme="dark"] .header-stat-chip {
     min-height: 50px;
   }
 
-  .header-host-tools {
-    left: 6px;
-    right: 6px;
-    padding: 9px;
-  }
+  .header-host-tools { padding: 9px; }
 
   .header-host-tools .host-filters-inline {
     gap: 8px;
