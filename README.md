@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.34**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.34**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.35**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.35**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.35 | 24.05.2026 | Header variant-3 refinement: KPI strip now stays single-line (horizontal scroll instead of wrapping), partner ANG logo remains plain (no card treatment), and desktop layout hacks that shifted header/sidebar alignment were neutralized so the hosts sidebar no longer needs extra vertical compensation |
 | 1.7.34 | 24.05.2026 | Header UX refresh: top status bar is now sticky while scrolling; panel header split into KPI strip + action toolbar; top-right user controls (Dark/User/Logout) redesigned from chip-heavy look to a cleaner segmented control style |
 | 1.7.33 | 24.05.2026 | Receiver crash hotfix: guard `collect_host_mail_context` against missing latest report rows (including hostname fallback lookup) so `/api/v1/agent-report` no longer fails with `TypeError: 'NoneType' object is not subscriptable` during alert reminder processing |
 | 1.7.32 | 24.05.2026 | Alert reminder spam fix for acknowledged/muted alerts: reminder cadence now anchors to `ack_at_utc` (next heads-up only after configured hours from acknowledgement) and muted alert pairs are skipped in reminder dispatch for both Mail and Telegram |
