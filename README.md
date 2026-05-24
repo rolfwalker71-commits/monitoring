@@ -646,6 +646,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.67 (24. Mai 2026)
+
+- **Lizenzindikator auf Hostkarte wiederhergestellt**: Hosts mit gültigen SAP-Lizenzinfos zeigen den Indikator wieder als Corner-Badge auf der Karte.
+- **Popup per Klick geöffnet**: Ein Klick auf den Badge öffnet bzw. schließt die SAP-Lizenzinfo-Ansicht direkt auf der Hostkarte.
+- **Info-Emoji statt Ausweis-Emoji**: Der Badge und die Popup-Überschrift verwenden jetzt ein Informationssymbol (`ℹ️`).
+
 ### v1.7.66 (24. Mai 2026)
 
 - **Server-Memory Unterzeile ergänzt**: Der `Server Memory` KPI zeigt jetzt in der Unterzeile die gesamte verfügbare RAM-Menge des Server-Hosts.

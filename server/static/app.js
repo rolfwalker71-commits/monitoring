@@ -8045,10 +8045,10 @@ function renderSingleHostCard(host) {
   const versionSideBarHtml = `<div class="${versionSideBarClass}" title="${escapeHtml(versionSideBarTitle)}" aria-hidden="true"></div>`;
   const hasSapLicenseInfo = Boolean(host.has_sap_license_info);
   const sapLicenseBadge = hasSapLicenseInfo
-    ? `<span class="host-license-info-badge host-license-info-badge--inline" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}">🪪</span>`
+    ? `<button type="button" class="host-license-info-badge host-license-info-badge--corner" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}" title="SAP Lizenzinfos anzeigen" aria-label="SAP Lizenzinfos anzeigen">ℹ️</button>`
     : "";
   const customerTitleLine = customerNameValue
-    ? `<div class="host-customer-title-line"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span>${sapLicenseBadge}</span></div>`
+    ? `<div class="host-customer-title-line"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span></span></div>`
     : "";
   const designationBadgeLine = `<span class="host-detail-line">${escapeHtml(hostDesignationLabel)}</span>`;
 
@@ -8101,6 +8101,7 @@ function renderSingleHostCard(host) {
   return `
     <article class="${selectedClass}${envCardClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostIdentity)}">
       ${versionSideBarHtml}
+      ${sapLicenseBadge}
       <div class="host-card-main">
         ${customerTitleLine}
         ${designationBadgeLine}
@@ -8276,7 +8277,7 @@ function scheduleHideHostLicenseHoverPopup() {
 
 function renderHostLicenseHoverPopupContent(hostname, data) {
   if (!data?.hasData) {
-    return `<div class="host-license-hover-head"><strong>🪪 SAP Lizenzinfos</strong><span>${escapeHtml(hostname)}</span></div><p class="muted">${escapeHtml(data?.message || "Keine SAP Lizenzinfos verfügbar.")}</p>`;
+    return `<div class="host-license-hover-head"><strong>ℹ️ SAP Lizenzinfos</strong><span>${escapeHtml(hostname)}</span></div><p class="muted">${escapeHtml(data?.message || "Keine SAP Lizenzinfos verfügbar.")}</p>`;
   }
   const f = data.fields || {};
   const rows = [
@@ -8297,7 +8298,7 @@ function renderHostLicenseHoverPopupContent(hostname, data) {
 
   return `
     <div class="host-license-hover-head">
-      <strong>🪪 SAP Lizenzinfos</strong>
+      <strong>ℹ️ SAP Lizenzinfos</strong>
       <span>${escapeHtml(hostname)}</span>
       <button type="button" class="header-license-copy-btn" data-host-license-copy="${escapeHtml(data.copyText || "")}">📋 Kopieren</button>
     </div>
@@ -8315,7 +8316,7 @@ async function showHostLicenseHoverPopup(anchorEl, hostname, hostUid = "") {
     hostLicenseHoverHideTimerId = null;
   }
   hostLicenseHoverActiveHost = key;
-  popup.innerHTML = `<div class="host-license-hover-head"><strong>🪪 SAP Lizenzinfos</strong><span>${escapeHtml(key)}</span></div><p class="muted">Lade Lizenzinfos…</p>`;
+  popup.innerHTML = `<div class="host-license-hover-head"><strong>ℹ️ SAP Lizenzinfos</strong><span>${escapeHtml(key)}</span></div><p class="muted">Lade Lizenzinfos…</p>`;
   popup.classList.remove("hidden");
   positionHostLicenseHoverPopup(anchorEl);
 
@@ -8330,7 +8331,7 @@ async function showHostLicenseHoverPopup(anchorEl, hostname, hostUid = "") {
     if (hostLicenseHoverActiveHost !== key || !hostLicenseHoverPopupEl) {
       return;
     }
-    hostLicenseHoverPopupEl.innerHTML = `<div class="host-license-hover-head"><strong>🪪 SAP Lizenzinfos</strong><span>${escapeHtml(key)}</span></div><p class="muted">Fehler beim Laden: ${escapeHtml(error.message || "Unbekannt")}</p>`;
+    hostLicenseHoverPopupEl.innerHTML = `<div class="host-license-hover-head"><strong>ℹ️ SAP Lizenzinfos</strong><span>${escapeHtml(key)}</span></div><p class="muted">Fehler beim Laden: ${escapeHtml(error.message || "Unbekannt")}</p>`;
     positionHostLicenseHoverPopup(anchorEl);
   }
 }
@@ -9659,6 +9660,25 @@ function wireHostListInteractions() {
       return;
     }
 
+    const licenseBadge = target.closest(".host-license-info-badge");
+    if (licenseBadge) {
+      event.preventDefault();
+      event.stopPropagation();
+      const hostAttr = asText(licenseBadge.getAttribute("data-host-license-host"), "").trim();
+      const uidAttr = asText(licenseBadge.getAttribute("data-host-license-uid"), "").trim();
+      const activeKey = uidAttr || hostAttr;
+      if (!hostAttr || !activeKey) {
+        return;
+      }
+      if (hostLicenseHoverPopupEl && !hostLicenseHoverPopupEl.classList.contains("hidden") && hostLicenseHoverActiveHost === activeKey) {
+        hostLicenseHoverPopupEl.classList.add("hidden");
+        hostLicenseHoverActiveHost = "";
+        return;
+      }
+      void showHostLicenseHoverPopup(licenseBadge, hostAttr, uidAttr);
+      return;
+    }
+
     const hiddenToggle = target.closest("#hiddenHostsToggleButton");
     if (hiddenToggle) {
       event.preventDefault();
@@ -9754,6 +9774,23 @@ function wireHostListInteractions() {
       return;
     }
     const target = event.target instanceof Element ? event.target : null;
+    const licenseBadge = target ? target.closest(".host-license-info-badge") : null;
+    if (licenseBadge) {
+      event.preventDefault();
+      const hostAttr = asText(licenseBadge.getAttribute("data-host-license-host"), "").trim();
+      const uidAttr = asText(licenseBadge.getAttribute("data-host-license-uid"), "").trim();
+      const activeKey = uidAttr || hostAttr;
+      if (!hostAttr || !activeKey) {
+        return;
+      }
+      if (hostLicenseHoverPopupEl && !hostLicenseHoverPopupEl.classList.contains("hidden") && hostLicenseHoverActiveHost === activeKey) {
+        hostLicenseHoverPopupEl.classList.add("hidden");
+        hostLicenseHoverActiveHost = "";
+      } else {
+        void showHostLicenseHoverPopup(licenseBadge, hostAttr, uidAttr);
+      }
+      return;
+    }
     const hostItem = target ? target.closest(".host-item") : null;
     if (!hostItem) {
       return;
