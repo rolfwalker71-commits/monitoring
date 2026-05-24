@@ -4072,7 +4072,7 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .header-stat-chip-db-reports-hour {
-  border-left-color: #0f766e;
+  border-left-color: #2563eb;
 }
 
 .header-stat-chip-db-size {
@@ -4080,7 +4080,7 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .header-stat-chip-db-size-delta {
-  border-left-color: #be123c;
+  border-left-color: #b45309;
 }
 
 #headerLicenseChip.header-stat-chip {
@@ -8992,9 +8992,9 @@ body[data-theme="dark"] .header-stat-chip-db-reports {
 }
 
 body[data-theme="dark"] .header-stat-chip-db-reports-hour {
-  background: rgba(45, 212, 191, 0.16);
-  color: #99f6e4;
-  border-color: rgba(45, 212, 191, 0.34);
+  background: rgba(96, 165, 250, 0.16);
+  color: #bfdbfe;
+  border-color: rgba(96, 165, 250, 0.34);
 }
 
 body[data-theme="dark"] .header-stat-chip-db-size {
@@ -9004,9 +9004,9 @@ body[data-theme="dark"] .header-stat-chip-db-size {
 }
 
 body[data-theme="dark"] .header-stat-chip-db-size-delta {
-  background: rgba(251, 113, 133, 0.16);
-  color: #fecdd3;
-  border-color: rgba(251, 113, 133, 0.34);
+  background: rgba(251, 191, 36, 0.16);
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.34);
 }
 
 body[data-theme="dark"] .btn-secondary {
@@ -12384,7 +12384,7 @@ body[data-theme="dark"] .search-input-compact::placeholder {
 }
 
 .header-stat-chip-db-reports-hour {
-  border-left-color: #0f766e;
+  border-left-color: #2563eb;
 }
 
 .header-stat-chip-db-size {
@@ -12392,7 +12392,7 @@ body[data-theme="dark"] .search-input-compact::placeholder {
 }
 
 .header-stat-chip-db-size-delta {
-  border-left-color: #be123c;
+  border-left-color: #b45309;
 }
 
 .header-stat-chip-license {
@@ -12524,7 +12524,7 @@ body[data-theme="dark"] .header-stat-chip-db-reports {
 }
 
 body[data-theme="dark"] .header-stat-chip-db-reports-hour {
-  border-left-color: #5ad0be;
+  border-left-color: #60a5fa;
 }
 
 body[data-theme="dark"] .header-stat-chip-db-size {
@@ -12532,7 +12532,7 @@ body[data-theme="dark"] .header-stat-chip-db-size {
 }
 
 body[data-theme="dark"] .header-stat-chip-db-size-delta {
-  border-left-color: #f39ab0;
+  border-left-color: #fbbf24;
 }
 
 body[data-theme="dark"] .header-stat-chip-license {

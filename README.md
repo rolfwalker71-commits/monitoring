@@ -646,6 +646,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.65 (24. Mai 2026)
+
+- **KPI-Reihenfolge im Header angepasst**: `Server CPU` steht jetzt an der zweitletzten Position, direkt vor `Server Memory`.
+- **Unterzeile `%` bei CPU/Memory entfernt**: Die beiden Server-Auslastungs-Chips zeigen den Prozentwert jetzt ohne separate Prozent-Unterzeile.
+- **Farben fuer die letzten zwei KPIs aktualisiert**: `Server CPU` und `Server Memory` verwenden nun eine neue, nicht-pinke Farbpalette.
+
 ### v1.7.64 (24. Mai 2026)
 
 - **Header-KPIs umgestellt auf lokale Serverauslastung**: Statt `Anzahl Reports (letzte 1h)` und `DB Delta 1h` zeigt die Leiste jetzt `Server CPU` und `Server Memory` in Prozent.
