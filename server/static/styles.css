@@ -148,11 +148,11 @@ body[data-theme="dark"] {
   width: 100%;
   border: 1px solid #c9d8ec;
   border-radius: 18px;
-  padding: 16px 18px 14px;
+  padding: 14px 18px 10px;
   background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
   box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25);
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .login-card h2,
@@ -185,18 +185,27 @@ body[data-theme="dark"] {
   text-align: center;
 }
 
-  .login-ang-logo {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 8px;
-  }
+.login-ang-logo {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1px;
+}
 
-  .login-ang-logo img {
-    height: 78px;
-    width: auto;
-    display: block;
-    opacity: 0.82;
-  }
+.login-ang-logo img {
+  height: 102px;
+  width: auto;
+  display: block;
+  opacity: 0.84;
+}
+
+.login-card #loginStatus {
+  margin: 0;
+  line-height: 1.2;
+}
+
+.login-card #loginStatus:empty {
+  display: none;
+}
 
 .login-card label {
   display: grid;
@@ -226,7 +235,7 @@ body[data-theme="dark"] {
 
   .login-card {
     border-radius: 16px;
-    padding: 14px 14px 12px;
+    padding: 12px 14px 9px;
   }
 
   .login-product-title {
@@ -234,7 +243,7 @@ body[data-theme="dark"] {
   }
 
   .login-ang-logo img {
-    height: 66px;
+    height: 86px;
   }
 }
 
