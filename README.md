@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.19**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.19**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.20**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.20**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.20 | 24.05.2026 | DB maintenance cards now wrap in multiple rows (3/2/1 responsive columns) instead of stretching in one long row, and each card shows the current value centered at the top in bold (CPU/RAM-style) |
 | 1.7.19 | 23.05.2026 | Host card OS icon emphasis increased significantly (higher opacity, slightly larger size, and full color rendering without desaturation) |
 | 1.7.18 | 23.05.2026 | Host row alignment fix: move IP+OS block to the right edge aligned with corner flag and restore hostname visibility next to the status dot |
 | 1.7.17 | 23.05.2026 | Host card icon position swap: country flag moved to corner position and license emoji moved into the top row next to customer name |

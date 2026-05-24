@@ -915,19 +915,19 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 .db-maintenance-charts {
   margin-top: 10px;
   display: grid;
-  grid-template-columns: repeat(6, minmax(170px, 1fr));
+  grid-template-columns: repeat(3, minmax(280px, 1fr));
   gap: 8px;
 }
 
 @media (max-width: 1800px) {
   .db-maintenance-charts {
-    grid-template-columns: repeat(3, minmax(220px, 1fr));
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
   }
 }
 
 @media (max-width: 1100px) {
   .db-maintenance-charts {
-    grid-template-columns: repeat(2, minmax(220px, 1fr));
+    grid-template-columns: 1fr;
   }
 }
 
@@ -942,6 +942,17 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   border-radius: 8px;
   background: #ffffff;
   padding: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.db-chart-current-value {
+  margin: 0 0 4px;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #1e3a8a;
 }
 
 .db-maintenance-chart-head {
@@ -965,6 +976,10 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 .db-chart-main-value {
   margin: 0 0 4px;
   font-weight: 700;
+}
+
+.db-chart-delta-line {
+  text-align: center;
 }
 
 .db-trend-chip {
@@ -1304,6 +1319,10 @@ body[data-theme="dark"] .db-maintenance-chart-card {
 
 body[data-theme="dark"] .db-maintenance-chart-head strong {
   color: #dbeafe;
+}
+
+body[data-theme="dark"] .db-chart-current-value {
+  color: #bfdbfe;
 }
 
 body[data-theme="dark"] .db-maintenance-chart-head span {

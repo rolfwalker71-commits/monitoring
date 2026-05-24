@@ -8857,11 +8857,12 @@ function renderDbMaintenanceCharts(history, forecasts, intervalHours = 2) {
     }).join("");
 
     return `<div class="db-maintenance-chart-card" data-db-chart-index="${index}">
+      <p class="db-chart-current-value">${escapeHtml(def.formatter(latest || 0))}</p>
       <div class="db-maintenance-chart-head">
         <strong>${escapeHtml(def.title)}</strong>
         <span class="db-trend-chip ${trend.cls}" title="Trendindikator">${trend.arrow} ${escapeHtml(trend.label)}</span>
       </div>
-      <p class="count compact db-chart-main-value">${escapeHtml(def.formatter(latest || 0))} · Δ${escapeHtml(String(intervalHours))}h ${escapeHtml(def.deltaFormatter ? def.deltaFormatter(deltaWindow) : formatSignedInteger(deltaWindow))}</p>
+      <p class="count compact db-chart-main-value db-chart-delta-line">Δ${escapeHtml(String(intervalHours))}h ${escapeHtml(def.deltaFormatter ? def.deltaFormatter(deltaWindow) : formatSignedInteger(deltaWindow))}</p>
       <svg viewBox="0 0 ${line.width} ${line.height}" class="db-maintenance-chart-svg" role="img" aria-label="${escapeHtml(def.title)} Verlauf">
         ${gridMarkup}
         <line x1="${line.padLeft}" y1="${line.height - line.padBottom}" x2="${line.width - line.padRight}" y2="${line.height - line.padBottom}" class="db-maintenance-chart-axis"></line>
