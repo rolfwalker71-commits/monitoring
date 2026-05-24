@@ -7496,6 +7496,52 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   margin-top: 2px;
 }
 
+.sap-b1-services-table td,
+.sap-b1-services-table th {
+  vertical-align: top;
+}
+
+.sap-b1-services-table th:nth-child(1),
+.sap-b1-services-table td:nth-child(1) {
+  width: 28%;
+}
+
+.sap-b1-services-table th:nth-child(2),
+.sap-b1-services-table td:nth-child(2) {
+  width: 34%;
+  word-break: break-all;
+}
+
+.sap-b1-services-table th:nth-child(3),
+.sap-b1-services-table td:nth-child(3) {
+  width: 14%;
+}
+
+.sap-b1-services-table th:nth-child(4),
+.sap-b1-services-table td:nth-child(4),
+.sap-b1-services-table th:nth-child(5),
+.sap-b1-services-table td:nth-child(5) {
+  width: 12%;
+}
+
+.sap-b1-service-status-active {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.sap-b1-service-status-inactive {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+body[data-theme="dark"] .sap-b1-service-status-active {
+  color: #86efac;
+}
+
+body[data-theme="dark"] .sap-b1-service-status-inactive {
+  color: #fca5a5;
+}
+
 .sap-vmap-terminal-section {
   padding-top: 6px;
 }

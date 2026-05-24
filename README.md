@@ -646,6 +646,13 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.52 (24. Mai 2026)
+
+- **Linux-Agent sammelt installierte SAP Services robust**: Neue Erkennung fuer Dienste mit Prefix `sapb1servertools`; Collector liefert pro Service `name`, `status`, `prot`, `live`, `ports`, `description` und bleibt fehlertolerant ohne Script-Abbruch.
+- **Klare Fallback-Antwort ohne Dienste**: Wenn keine passenden Dienste gefunden werden, wird im Payload unter `sap_business_one.installed_services` konsistent `reason: "Keine SAPServices gefunden"` geliefert.
+- **SAP B1 UI um Services-Tabelle erweitert**: Neue Sektion `Installierte Services` mit Spalten `Beschreibung`, `Dienstname`, `Port(s)`, `Status`, `Live`.
+- **Status-/Port-Hervorhebung in der UI**: `active`-Status wird gruen, inaktive Stati rot dargestellt; Ports beginnend mit `4` werden visuell fett hervorgehoben.
+
 ### v1.7.51 (24. Mai 2026)
 
 - **sFTP Upload-Timeout fuer grosse Backups gehaertet**: Der Backup-Upload verwendet nicht mehr ein fixes 30s-Timeout, sondern ein dateigroessenbasiertes Timeout mit sinnvollen Min/Max-Grenzen.

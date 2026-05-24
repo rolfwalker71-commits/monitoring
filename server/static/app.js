@@ -5534,6 +5534,81 @@ function renderHarvestStatusSection(payload) {
   `;
 }
 
+function renderSapB1ServicePorts(portsRaw) {
+  const parts = asText(portsRaw, "").split(",").map((part) => asText(part, "").trim()).filter(Boolean);
+  if (parts.length === 0) {
+    return "-";
+  }
+  return parts.map((part) => {
+    const safe = escapeHtml(part);
+    if (/^4\d{3,}$/.test(part)) {
+      return `<strong>${safe}</strong>`;
+    }
+    return safe;
+  }).join(", ");
+}
+
+function renderSapB1InstalledServicesSection(payload) {
+  const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
+  const installed = sap && typeof sap.installed_services === "object" ? sap.installed_services : null;
+  const services = Array.isArray(installed?.services) ? installed.services : [];
+  const reason = asText(installed?.reason, "").trim();
+
+  let contentHtml = '<p class="muted">Keine SAPServices gefunden</p>';
+  if (services.length > 0) {
+    const sorted = [...services].sort((a, b) => {
+      const ad = asText(a?.description, "").toLowerCase();
+      const bd = asText(b?.description, "").toLowerCase();
+      return ad.localeCompare(bd);
+    });
+
+    const rowsHtml = sorted.map((service) => {
+      const description = asText(service?.description, "-");
+      const name = asText(service?.name, "-");
+      const ports = asText(service?.ports, "-");
+      const status = asText(service?.status, "-");
+      const live = asText(service?.live, "-");
+      const isActive = status.toLowerCase().startsWith("active");
+      const statusClass = isActive ? "sap-b1-service-status-active" : "sap-b1-service-status-inactive";
+      return `
+        <tr>
+          <td>${escapeHtml(description)}</td>
+          <td>${escapeHtml(name)}</td>
+          <td>${renderSapB1ServicePorts(ports)}</td>
+          <td><span class="${statusClass}">${escapeHtml(status)}</span></td>
+          <td>${escapeHtml(live)}</td>
+        </tr>
+      `;
+    }).join("");
+
+    contentHtml = `
+      <div class="table-wrap">
+        <table class="report-subtable sap-b1-services-table">
+          <thead>
+            <tr>
+              <th>Beschreibung</th>
+              <th>Dienstname</th>
+              <th>Port(s)</th>
+              <th>Status</th>
+              <th>Live</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    `;
+  } else if (reason) {
+    contentHtml = `<p class="muted">${escapeHtml(reason)}</p>`;
+  }
+
+  return `
+    <details class="sap-b1-raw-details">
+      <summary class="sap-b1-raw-summary">Installierte Services</summary>
+      ${contentHtml}
+    </details>
+  `;
+}
+
 function renderSapB1ExtensionsSection(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const ext = sap && typeof sap.extensions === "object" ? sap.extensions : null;
@@ -6056,6 +6131,8 @@ function renderSapB1CombinedCard(payload) {
           ${filesContent}
         </details>
         ` : ""}
+
+        ${isLinux ? renderSapB1InstalledServicesSection(payload) : ""}
 
         ${sapB1RawOutputDetails}
 

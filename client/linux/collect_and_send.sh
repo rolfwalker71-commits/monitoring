@@ -292,6 +292,8 @@ EOF
 }
 
 collect_sap_business_one_json() {
+  local sap_services_json
+  sap_services_json="$(collect_sap_b1_installed_services_json)"
   local catalina_path="$SAP_B1_CATALINA_OUT_PATH"
   local businessone_dir="$SAP_B1_BUSINESSONE_LOG_DIR"
   local setup_path="$SAP_B1_SETUP_PATH"
@@ -355,7 +357,7 @@ collect_sap_business_one_json() {
     version_error="setup not found or not executable"
   fi
 
-  printf '{"catalina_out":{"path":"%s","exists":%s,"size_bytes":%s,"error":"%s"},"businessone_log_dir":{"path":"%s","exists":%s,"size_bytes":%s,"error":"%s"},"server_components_version":{"command":"%s --version","setup_path":"%s","available":%s,"raw_output":"%s","version":"%s","error":"%s"}}' \
+  printf '{"catalina_out":{"path":"%s","exists":%s,"size_bytes":%s,"error":"%s"},"businessone_log_dir":{"path":"%s","exists":%s,"size_bytes":%s,"error":"%s"},"server_components_version":{"command":"%s --version","setup_path":"%s","available":%s,"raw_output":"%s","version":"%s","error":"%s"},"installed_services":%s}' \
     "$(json_escape "$catalina_path")" \
     "$catalina_exists" \
     "$(json_number_or_null "$catalina_size")" \
@@ -369,7 +371,138 @@ collect_sap_business_one_json() {
     "$setup_exists" \
     "$(json_escape "$version_raw")" \
     "$(json_escape "$version_text")" \
-    "$(json_escape "$version_error")"
+    "$(json_escape "$version_error")" \
+    "$sap_services_json"
+}
+
+collect_sap_b1_installed_services_json() {
+  local timeout_sec="${SAP_B1_SERVICES_TIMEOUT_SEC:-6}"
+  local unit_names=""
+  local service_entries=""
+
+  if ! [[ "$timeout_sec" =~ ^[0-9]+$ ]] || [[ "$timeout_sec" -lt 1 ]]; then
+    timeout_sec=6
+  fi
+
+  _sapb1_safe_timeout() {
+    if command -v timeout >/dev/null 2>&1; then
+      timeout "${timeout_sec}s" "$@" 2>/dev/null || true
+    else
+      "$@" 2>/dev/null || true
+    fi
+  }
+
+  _sapb1_guess_ports_from_execstart() {
+    local exec_start_raw="${1-}"
+    local service_name_raw="${2-}"
+    local guessed_ports=""
+
+    guessed_ports="$(printf '%s\n' "$exec_start_raw" \
+      | grep -Eo '(^|[[:space:]])(--server\.port=|--port=|-Dserver\.port=|-Dhttp\.port=|-Dhttps\.port=|port=)[0-9]{2,5}' \
+      | grep -Eo '[0-9]{2,5}' \
+      | awk '$1>=1024 && $1<=65535' \
+      | sort -n -u \
+      | paste -sd, - || true)"
+
+    if [[ -z "$guessed_ports" ]]; then
+      case "$service_name_raw" in
+        *analytics*) guessed_ports="40003" ;;
+        *authentication*) guessed_ports="8443" ;;
+        *jobservice*) guessed_ports="40004" ;;
+        *license*) guessed_ports="40002" ;;
+        *servicelayercontroller*) guessed_ports="40005" ;;
+        *ms365integration*) guessed_ports="40006" ;;
+        *sapb1servertools.service) guessed_ports="40000" ;;
+      esac
+    fi
+
+    printf '%s' "$guessed_ports"
+  }
+
+  unit_names="$(_sapb1_safe_timeout systemctl list-unit-files --type=service "sapb1servertools*" --no-legend \
+    | awk '{print $1}' \
+    | grep -E '^sapb1servertools.*\.service$' \
+    | sort -u || true)"
+
+  if [[ -z "$unit_names" ]]; then
+    printf '{"available":false,"reason":"Keine SAPServices gefunden","services":[]}'
+    return 0
+  fi
+
+  while IFS= read -r service_name; do
+    [[ -n "$service_name" ]] || continue
+
+    local description active_state sub_state main_pid exec_start
+    local status_field live_field ports_field prot_field ss_rows
+
+    description="$(_sapb1_safe_timeout systemctl show -p Description --value "$service_name" | head -n1 || true)"
+    active_state="$(_sapb1_safe_timeout systemctl show -p ActiveState --value "$service_name" | head -n1 || true)"
+    sub_state="$(_sapb1_safe_timeout systemctl show -p SubState --value "$service_name" | head -n1 || true)"
+    main_pid="$(_sapb1_safe_timeout systemctl show -p MainPID --value "$service_name" | head -n1 || true)"
+    exec_start="$(_sapb1_safe_timeout systemctl show -p ExecStart --value "$service_name" | head -n1 || true)"
+
+    [[ -n "$description" ]] || description="-"
+    [[ -n "$active_state" ]] || active_state="unknown"
+    [[ -n "$sub_state" ]] || sub_state="unknown"
+    [[ "$main_pid" =~ ^[0-9]+$ ]] || main_pid=0
+
+    status_field="${active_state}/${sub_state}"
+    ports_field=""
+    prot_field=""
+    ss_rows=""
+
+    if [[ "$main_pid" -gt 0 ]]; then
+      ss_rows="$(_sapb1_safe_timeout ss -H -ltnup | grep -E "pid=${main_pid}[,)]" || true)"
+    fi
+
+    if [[ -n "$ss_rows" ]]; then
+      ports_field="$(printf '%s\n' "$ss_rows" \
+        | awk '{print $5}' \
+        | awk -F':' '{print $NF}' \
+        | sed 's/[^0-9]//g' \
+        | awk '$1>=1 && $1<=65535' \
+        | sort -n -u \
+        | paste -sd, - || true)"
+
+      prot_field="$(printf '%s\n' "$ss_rows" \
+        | awk '{print $1}' \
+        | awk 'NF' \
+        | sort -u \
+        | paste -sd, - || true)"
+    fi
+
+    if [[ -z "$ports_field" ]]; then
+      ports_field="$(_sapb1_guess_ports_from_execstart "$exec_start" "$service_name")"
+      if [[ -n "$ports_field" ]] && [[ -z "$prot_field" ]]; then
+        prot_field="tcp"
+      fi
+    fi
+
+    if [[ "$active_state" == "active" ]] && [[ "$sub_state" == "running" ]]; then
+      live_field="Live"
+    elif [[ "$active_state" == "active" ]]; then
+      live_field="ActiveNotRunning"
+    else
+      live_field="NotLive"
+    fi
+
+    [[ -n "$ports_field" ]] || ports_field="-"
+    [[ -n "$prot_field" ]] || prot_field="-"
+
+    local entry_json
+    entry_json="$(printf '{"name":"%s","status":"%s","prot":"%s","live":"%s","ports":"%s","description":"%s"}' \
+      "$(json_escape "$service_name")" \
+      "$(json_escape "$status_field")" \
+      "$(json_escape "$prot_field")" \
+      "$(json_escape "$live_field")" \
+      "$(json_escape "$ports_field")" \
+      "$(json_escape "$description")")"
+
+    service_entries="$(append_json_entry "$service_entries" "$entry_json")"
+  done <<< "$unit_names"
+
+  printf '{"available":true,"reason":"ok","services":[%s]}' "$service_entries"
+  return 0
 }
 
 collect_hana_version_json() {
