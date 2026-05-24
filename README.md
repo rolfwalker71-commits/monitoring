@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.44**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.44**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.45**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.45**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.45 | 24.05.2026 | Header layout fix: enforced vertical panel-header stacking (`flex-direction: column`) so the full host search/filter card renders as a separate block below the KPI row (instead of appearing in the same horizontal row due legacy flex rules) |
 | 1.7.44 | 24.05.2026 | Login card compactness pass: increased ANG logo size by ~30% in the login mask, reduced vertical spacing between submit button/status and ANG logo, and tightened card paddings/gaps (including mobile sizing) so the overall login card height is more compact |
 | 1.7.43 | 24.05.2026 | Header filter card finalization: removed the expand/collapse mechanism and related toolbar icon entirely; host search/filter card now stays fixed and always visible as a standalone block directly below the KPI strip (only hidden when not authenticated) |
 | 1.7.42 | 24.05.2026 | Login logo positioning refinement: moved the floating app logo significantly further upward so it is clearly outside the login card with explicit visual spacing above the card top edge (desktop + mobile) |

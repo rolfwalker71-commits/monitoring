@@ -11269,6 +11269,9 @@ body[data-theme="dark"] .so-status-offline {
 }
 
 .panel-header {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   position: sticky;
   top: 10px;
   z-index: 30;
