@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.38**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.38**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.39**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.39**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.39 | 24.05.2026 | Login UI refresh: moved the app logo out of the login card into a floating top position with halo glow, reduced card footprint/spacing for a more compact form layout, and tuned mobile/dark-mode rendering for the new login composition |
 | 1.7.38 | 24.05.2026 | Header usability polish: fixed Active Hosts KPI count by adding backend `online` state to `/api/v1/hosts` (with frontend fallback via `last_seen_utc`), switched KPI semantic accent from top-strip to left border with wider tile spacing, moved Host search + interest + OS/country filters into the top header bar, removed the duplicate sidebar filter block, and simplified DB Delta KPI value display to numeric-only (unit remains in subtitle) |
 | 1.7.37 | 24.05.2026 | Header KPI parity update: added missing KPI tiles (kritische Alerts, quittierte offene Alerts, aktive Hosts), re-enabled DB Delta tile, and removed the unwanted left accent/border so KPI cards now keep only the top semantic accent in line with the mockup intent |
 | 1.7.36 | 24.05.2026 | Header KPI strip layout refinement: removed horizontal scroll and switched to a dynamic one-row equal-width KPI layout (`grid-auto-columns: minmax(0,1fr)`) so all KPIs stay visible without wrapping/scrolling; responsive KPI typography adjusted accordingly |

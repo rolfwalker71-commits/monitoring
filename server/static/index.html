@@ -11,28 +11,30 @@
   </head>
   <body>
     <div id="loginOverlay" class="login-overlay hidden">
-      <div class="login-card">
-        <div class="login-brand">
-          <div class="login-logo" aria-hidden="true">
-            <img src="icons/logo.png" alt="Monitoring" />
-          </div>
-          <p class="login-product-title">System Infoboard</p>
-          <h2>Webclient Anmeldung</h2>
-          <p class="muted">Monitoring Zugang mit Session-Schutz</p>
+      <div class="login-shell">
+        <div class="login-logo-floating" aria-hidden="true">
+          <img src="icons/logo.png" alt="Monitoring" />
         </div>
-        <label>
-          Benutzername
-          <input id="loginUsernameInput" type="text" autocomplete="username" />
-        </label>
-        <label>
-          Passwort
-          <input id="loginPasswordInput" type="password" autocomplete="current-password" />
-        </label>
-        <button id="loginSubmitButton" type="button">Anmelden</button>
-        <p id="loginStatus" class="count compact"></p>
+        <div class="login-card">
+          <div class="login-brand">
+            <p class="login-product-title">System Infoboard</p>
+            <h2>Webclient Anmeldung</h2>
+            <p class="muted">Monitoring Zugang mit Session-Schutz</p>
+          </div>
+          <label>
+            Benutzername
+            <input id="loginUsernameInput" type="text" autocomplete="username" />
+          </label>
+          <label>
+            Passwort
+            <input id="loginPasswordInput" type="password" autocomplete="current-password" />
+          </label>
+          <button id="loginSubmitButton" type="button">Anmelden</button>
+          <p id="loginStatus" class="count compact"></p>
           <div class="login-ang-logo" aria-hidden="true">
             <img src="icons/ANG.png" alt="ANG" />
           </div>
+        </div>
       </div>
     </div>
 
