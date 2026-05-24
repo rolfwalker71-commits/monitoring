@@ -12011,9 +12011,25 @@ body[data-theme="dark"] .host-config-change-subline {
   min-width: 0;
 }
 
+#settingsView .settings-page {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
 #globalView .settings-page-header,
 #globalView .subview-tabs-shell,
 #globalView > .settings-page > [role="tabpanel"] {
+  width: 100%;
+  max-width: 1240px;
+  margin-left: auto;
+  margin-right: auto;
+  min-width: 0;
+}
+
+#settingsView .settings-page-header,
+#settingsView .subview-tabs-shell,
+#settingsView > .settings-page > .settings-subsection {
   width: 100%;
   max-width: 1240px;
   margin-left: auto;
@@ -12026,7 +12042,17 @@ body[data-theme="dark"] .host-config-change-subline {
   overflow-y: hidden;
 }
 
+#settingsView .subview-tabs-shell {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 #globalView .subview-tabs {
+  width: max-content;
+  min-width: 100%;
+}
+
+#settingsView .subview-tabs {
   width: max-content;
   min-width: 100%;
 }
