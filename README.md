@@ -646,6 +646,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.55 (24. Mai 2026)
+
+- **SAP Service-Subinfo visuell verfeinert**: Der Dienstname in der zweiten Zeile unter `Beschreibung` ist nun dezent grau und kursiv dargestellt.
+- **Kleines Subinfo-Icon ergaenzt**: Vor dem Dienstnamen wird ein kompaktes Icon-Badge angezeigt, damit die zweite Zeile schneller als Zusatzinformation erkannt wird.
+
 ### v1.7.54 (24. Mai 2026)
 
 - **SAP Services Tabelle kompakter gemacht**: Der `Dienstname` steht nun als zweite, kleinere Zeile direkt unter `Beschreibung`.

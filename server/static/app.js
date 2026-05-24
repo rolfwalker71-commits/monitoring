@@ -5574,7 +5574,7 @@ function renderSapB1InstalledServicesSection(payload) {
         <tr>
           <td>
             <div>${escapeHtml(description)}</div>
-            <div class="sap-b1-service-subname">${escapeHtml(name)}</div>
+            <div class="sap-b1-service-subname"><span class="sap-b1-service-subname-icon" aria-hidden="true">i</span><span class="sap-b1-service-subname-text">${escapeHtml(name)}</span></div>
           </td>
           <td>${renderSapB1ServicePorts(ports)}</td>
           <td><span class="${statusClass}">${escapeHtml(status)}</span></td>

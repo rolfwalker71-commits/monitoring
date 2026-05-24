@@ -7523,14 +7523,43 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
 }
 
 .sap-b1-service-subname {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-top: 2px;
   font-size: 0.84em;
+  font-style: italic;
   color: #5b6b80;
   word-break: break-all;
 }
 
+.sap-b1-service-subname-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid #a7b9cf;
+  color: #51627a;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.sap-b1-service-subname-text {
+  min-width: 0;
+}
+
 body[data-theme="dark"] .sap-b1-service-subname {
   color: #9fb0c9;
+}
+
+body[data-theme="dark"] .sap-b1-service-subname-icon {
+  border-color: #52667f;
+  color: #bdd0e8;
 }
 
 .sap-b1-service-status-active {
