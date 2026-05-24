@@ -112,12 +112,12 @@ body[data-theme="dark"] {
 .login-shell {
   position: relative;
   width: min(430px, 100%);
-  padding-top: 58px;
+  padding-top: 0;
 }
 
 .login-logo-floating {
   position: absolute;
-  top: 0;
+  top: -126px;
   left: 50%;
   transform: translateX(-50%);
   width: 112px;
@@ -215,10 +215,11 @@ body[data-theme="dark"] {
 @media (max-width: 560px) {
   .login-shell {
     width: min(396px, 100%);
-    padding-top: 52px;
+    padding-top: 0;
   }
 
   .login-logo-floating {
+    top: -108px;
     width: 98px;
     height: 98px;
   }
