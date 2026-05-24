@@ -456,6 +456,41 @@
 
               <div class="db-maintenance-panel">
                 <div class="db-maintenance-head">
+                  <h6>Agent Ingest Queue</h6>
+                  <div class="db-maintenance-actions">
+                    <button id="refreshAgentIngestQueueButton" class="btn-secondary" type="button" title="Queue Kennzahlen aktualisieren">↻ Aktualisieren</button>
+                  </div>
+                </div>
+                <p id="agentIngestQueueStatus" class="count compact">Lade Queue-Status...</p>
+                <div class="agent-ingest-queue-stats">
+                  <div class="agent-ingest-queue-stat-card"><span>Queue Tiefe</span><strong id="agentIngestQueueDepth">-</strong></div>
+                  <div class="agent-ingest-queue-stat-card"><span>Sofort faellig</span><strong id="agentIngestQueueReady">-</strong></div>
+                  <div class="agent-ingest-queue-stat-card"><span>Retry</span><strong id="agentIngestQueueRetry">-</strong></div>
+                  <div class="agent-ingest-queue-stat-card"><span>In Flight</span><strong id="agentIngestQueueInFlight">-</strong></div>
+                  <div class="agent-ingest-queue-stat-card"><span>Verzoegert</span><strong id="agentIngestQueueDelayed">-</strong></div>
+                  <div class="agent-ingest-queue-stat-card"><span>Aeltestes Item</span><strong id="agentIngestQueueOldestAge">-</strong></div>
+                </div>
+                <div class="agent-update-admin-table-wrap db-maintenance-history-wrap">
+                  <table class="agent-update-admin-table db-maintenance-history-table">
+                    <thead>
+                      <tr>
+                        <th>Queue ID</th>
+                        <th>Host</th>
+                        <th>Versuche</th>
+                        <th>Letzter Fehler</th>
+                        <th>Nächster Retry</th>
+                        <th>Fehlermeldung</th>
+                      </tr>
+                    </thead>
+                    <tbody id="agentIngestQueueErrorRows">
+                      <tr><td colspan="6" class="muted">Lade Queue-Fehler...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="db-maintenance-panel">
+                <div class="db-maintenance-head">
                   <h6>Backup Automation (lokal + sFTP vorbereitet)</h6>
                   <div class="db-maintenance-actions">
                     <button id="triggerAutoBackupNowButton" class="btn-secondary" type="button" title="Lokales Backup sofort ausführen">💾 Jetzt sichern</button>

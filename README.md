@@ -646,6 +646,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.61 (24. Mai 2026)
+
+- **Admin-API fuer Ingest-Queue Uebersicht**: Neuer Endpoint `/api/v1/admin/agent-ingest-queue` liefert Queue-Tiefe, Ready/Retry/In-Flight/Delayed, Alterswerte und letzte Fehler als kompakte Betriebskennzahlen.
+- **Neue Admin-Panelansicht fuer Queue-Betrieb**: In den globalen Admin-Operations zeigt die UI jetzt Queue-Kennzahlen als Karten inkl. Statuszeile und Refresh-Button.
+- **Queue-Fehler direkt sichtbar**: Eine Tabelle listet die letzten Queue-Fehler mit Queue-ID, Host, Versuchszahl, Zeitstempeln und Fehlermeldung fuer schnelle Ursachenanalyse.
+
 ### v1.7.60 (24. Mai 2026)
 
 - **Agent-Report Ingest auf Queue umgestellt**: `/api/v1/agent-report` speichert eingehende Reports jetzt zuerst durable in `agent_ingest_queue` und antwortet sofort mit `queued`.

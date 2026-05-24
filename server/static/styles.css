@@ -1181,6 +1181,38 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   color: #dc2626;
 }
 
+#agentIngestQueueStatus.error {
+  color: #dc2626;
+}
+
+.agent-ingest-queue-stats {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.agent-ingest-queue-stat-card {
+  border: 1px solid #d8e2f0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agent-ingest-queue-stat-card > span {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.agent-ingest-queue-stat-card > strong {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 13px;
+  color: #0f172a;
+}
+
 .backup-automation-grid {
   margin-top: 8px;
   display: grid;
@@ -1366,6 +1398,19 @@ body[data-theme="dark"] .db-maintenance-stat > span {
 }
 
 body[data-theme="dark"] .db-maintenance-stat > strong {
+  color: #dbeafe;
+}
+
+body[data-theme="dark"] .agent-ingest-queue-stat-card {
+  background: #15243c;
+  border-color: #2b3b56;
+}
+
+body[data-theme="dark"] .agent-ingest-queue-stat-card > span {
+  color: #93a9c4;
+}
+
+body[data-theme="dark"] .agent-ingest-queue-stat-card > strong {
   color: #dbeafe;
 }
 

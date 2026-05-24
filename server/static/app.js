@@ -3732,6 +3732,7 @@ async function loadGlobalAdminSettingsPanel(force = false) {
   }
   setDbMaintenanceStatus("Lade DB Kennzahlen-Verlauf...");
   setBackupAutomationStatus("Lade Backup-Automation...");
+  setAgentIngestQueueStatus("Lade Queue-Status...");
   try {
     await loadAdminDatabaseStats();
   } catch (error) {
@@ -3741,6 +3742,11 @@ async function loadGlobalAdminSettingsPanel(force = false) {
     await loadAdminBackupAutomation();
   } catch (error) {
     setBackupAutomationStatus(`Fehler: ${error.message}`, true);
+  }
+  try {
+    await loadAdminAgentIngestQueue();
+  } catch (error) {
+    setAgentIngestQueueStatus(`Fehler: ${error.message}`, true);
   }
   await loadSapB1VersionMap();
   await loadSapLicenseTypeMap();
@@ -8925,6 +8931,93 @@ function setBackupAutomationStatus(message, isError = false) {
   el.classList.toggle("error", !!isError);
 }
 
+function setAgentIngestQueueStatus(message, isError = false) {
+  const el = document.getElementById("agentIngestQueueStatus");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle("error", !!isError);
+}
+
+function formatDurationCompact(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds || 0)));
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${secs}s`;
+  return `${secs}s`;
+}
+
+function renderAgentIngestQueueOverview(data) {
+  const depthEl = document.getElementById("agentIngestQueueDepth");
+  const readyEl = document.getElementById("agentIngestQueueReady");
+  const retryEl = document.getElementById("agentIngestQueueRetry");
+  const inFlightEl = document.getElementById("agentIngestQueueInFlight");
+  const delayedEl = document.getElementById("agentIngestQueueDelayed");
+  const oldestAgeEl = document.getElementById("agentIngestQueueOldestAge");
+  const bodyEl = document.getElementById("agentIngestQueueErrorRows");
+
+  if (depthEl) depthEl.textContent = formatInteger(data?.queue_depth || 0);
+  if (readyEl) readyEl.textContent = formatInteger(data?.ready_count || 0);
+  if (retryEl) retryEl.textContent = formatInteger(data?.retry_count || 0);
+  if (inFlightEl) inFlightEl.textContent = formatInteger(data?.in_flight_count || 0);
+  if (delayedEl) delayedEl.textContent = formatInteger(data?.delayed_count || 0);
+  if (oldestAgeEl) {
+    const ageSeconds = Number(data?.oldest_age_seconds || 0);
+    oldestAgeEl.textContent = ageSeconds > 0 ? formatDurationCompact(ageSeconds) : "-";
+  }
+
+  if (!bodyEl) return;
+  const recentErrors = Array.isArray(data?.recent_errors) ? data.recent_errors : [];
+  if (recentErrors.length === 0) {
+    bodyEl.innerHTML = '<tr><td colspan="6" class="muted">Keine Queue-Fehler vorhanden.</td></tr>';
+    return;
+  }
+
+  bodyEl.innerHTML = recentErrors.map((item) => {
+    const queueId = Number(item?.id || 0);
+    const host = asText(item?.hostname || item?.host_uid, "-");
+    const attempts = Number(item?.attempt_count || 0);
+    const updatedAt = formatUtcPlus2(asText(item?.updated_at_utc, ""));
+    const retryAt = formatUtcPlus2(asText(item?.next_attempt_at_utc, ""));
+    const errorMsg = asText(item?.last_error, "-");
+    return `
+      <tr>
+        <td>${escapeHtml(String(queueId || "-"))}</td>
+        <td>${escapeHtml(host)}</td>
+        <td>${escapeHtml(String(attempts))}</td>
+        <td>${escapeHtml(updatedAt)}</td>
+        <td>${escapeHtml(retryAt)}</td>
+        <td class="agent-update-admin-message">${escapeHtml(errorMsg)}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function loadAdminAgentIngestQueue() {
+  const response = await fetch("/api/v1/admin/agent-ingest-queue?recent_limit=20", {
+    method: "GET",
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  renderAgentIngestQueueOverview(data);
+
+  const oldestAge = Number(data?.oldest_age_seconds || 0);
+  const nextAttemptSeconds = Number(data?.next_attempt_in_seconds || 0);
+  const oldestText = oldestAge > 0 ? formatDurationCompact(oldestAge) : "-";
+  const nextText = nextAttemptSeconds > 0 ? `in ${formatDurationCompact(nextAttemptSeconds)}` : "sofort";
+  setAgentIngestQueueStatus(
+    `Queue: ${formatInteger(data?.queue_depth || 0)} · Ready: ${formatInteger(data?.ready_count || 0)} · Aeltestes: ${oldestText} · Naechster Retry: ${nextText}`
+  );
+  return data;
+}
+
 function renderDbMaintenanceStats(stats) {
   const el = document.getElementById("dbMaintenanceStats");
   if (!el) return;
@@ -13233,6 +13326,7 @@ function wireEvents() {
   const triggerAutoBackupNowButton = document.getElementById("triggerAutoBackupNowButton");
   const testBackupAutomationSftpButton = document.getElementById("testBackupAutomationSftpButton");
   const backupAutomationSftpAuthMode = document.getElementById("backupAutomationSftpAuthMode");
+  const refreshAgentIngestQueueButton = document.getElementById("refreshAgentIngestQueueButton");
 
   if (triggerDatabaseStatsButton) {
     triggerDatabaseStatsButton.addEventListener("click", async () => {
@@ -13355,12 +13449,29 @@ function wireEvents() {
     });
   }
 
+  if (refreshAgentIngestQueueButton) {
+    refreshAgentIngestQueueButton.addEventListener("click", async () => {
+      refreshAgentIngestQueueButton.disabled = true;
+      setAgentIngestQueueStatus("Queue-Status wird aktualisiert...");
+      try {
+        await loadAdminAgentIngestQueue();
+      } catch (error) {
+        setAgentIngestQueueStatus(`Fehler: ${error.message}`, true);
+      } finally {
+        refreshAgentIngestQueueButton.disabled = false;
+      }
+    });
+  }
+
   if (state.isAdmin) {
     void loadAdminDatabaseStats().catch((error) => {
       setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
     });
     void loadAdminBackupAutomation().catch((error) => {
       setBackupAutomationStatus(`Fehler: ${error.message}`, true);
+    });
+    void loadAdminAgentIngestQueue().catch((error) => {
+      setAgentIngestQueueStatus(`Fehler: ${error.message}`, true);
     });
   }
 

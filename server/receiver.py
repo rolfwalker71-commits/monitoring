@@ -2523,6 +2523,130 @@ def collect_database_maintenance_stats(conn: sqlite3.Connection) -> dict[str, ob
     }
 
 
+def collect_agent_ingest_queue_overview(conn: sqlite3.Connection, recent_errors_limit: int = 20) -> dict[str, object]:
+    now_iso = utc_now_iso()
+    now_dt = datetime.now(timezone.utc)
+
+    totals_row = conn.execute(
+        """
+        SELECT
+            COUNT(*) AS queue_depth,
+            SUM(CASE WHEN next_attempt_at_utc <= ? THEN 1 ELSE 0 END) AS ready_count,
+            SUM(CASE WHEN attempt_count > 0 THEN 1 ELSE 0 END) AS retry_count,
+            SUM(CASE WHEN COALESCE(processing_started_at_utc, '') <> '' THEN 1 ELSE 0 END) AS in_flight_count,
+            SUM(CASE WHEN next_attempt_at_utc > ? THEN 1 ELSE 0 END) AS delayed_count
+        FROM agent_ingest_queue
+        """,
+        (now_iso, now_iso),
+    ).fetchone()
+
+    oldest_row = conn.execute(
+        """
+        SELECT enqueued_at_utc
+        FROM agent_ingest_queue
+        ORDER BY enqueued_at_utc ASC, id ASC
+        LIMIT 1
+        """
+    ).fetchone()
+
+    newest_row = conn.execute(
+        """
+        SELECT enqueued_at_utc
+        FROM agent_ingest_queue
+        ORDER BY enqueued_at_utc DESC, id DESC
+        LIMIT 1
+        """
+    ).fetchone()
+
+    next_ready_row = conn.execute(
+        """
+        SELECT next_attempt_at_utc
+        FROM agent_ingest_queue
+        ORDER BY next_attempt_at_utc ASC, id ASC
+        LIMIT 1
+        """
+    ).fetchone()
+
+    recent_errors_rows = conn.execute(
+        """
+        SELECT id, hostname, host_uid, attempt_count, updated_at_utc, next_attempt_at_utc, last_error
+        FROM agent_ingest_queue
+        WHERE COALESCE(last_error, '') <> ''
+        ORDER BY updated_at_utc DESC, id DESC
+        LIMIT ?
+        """,
+        (max(1, int(recent_errors_limit)),),
+    ).fetchall()
+
+    def _parse_iso(value: object) -> datetime | None:
+        raw = str(value or "").strip()
+        if not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    oldest_enqueued_at_utc = str((oldest_row[0] if oldest_row else "") or "")
+    newest_enqueued_at_utc = str((newest_row[0] if newest_row else "") or "")
+    next_attempt_at_utc = str((next_ready_row[0] if next_ready_row else "") or "")
+
+    oldest_age_seconds = 0
+    oldest_dt = _parse_iso(oldest_enqueued_at_utc)
+    if oldest_dt is not None:
+        oldest_age_seconds = max(0, int((now_dt - oldest_dt).total_seconds()))
+
+    next_attempt_in_seconds = 0
+    next_attempt_dt = _parse_iso(next_attempt_at_utc)
+    if next_attempt_dt is not None:
+        next_attempt_in_seconds = int((next_attempt_dt - now_dt).total_seconds())
+
+    recent_errors: list[dict[str, object]] = []
+    for row in recent_errors_rows:
+        updated_at = str(row[4] or "")
+        next_attempt = str(row[5] or "")
+        updated_dt = _parse_iso(updated_at)
+        next_attempt_dt_row = _parse_iso(next_attempt)
+        age_seconds = max(0, int((now_dt - updated_dt).total_seconds())) if updated_dt is not None else 0
+        retry_in_seconds = int((next_attempt_dt_row - now_dt).total_seconds()) if next_attempt_dt_row is not None else 0
+        recent_errors.append(
+            {
+                "id": int(row[0] or 0),
+                "hostname": str(row[1] or ""),
+                "host_uid": str(row[2] or ""),
+                "attempt_count": int(row[3] or 0),
+                "updated_at_utc": updated_at,
+                "next_attempt_at_utc": next_attempt,
+                "error_age_seconds": age_seconds,
+                "retry_in_seconds": retry_in_seconds,
+                "last_error": str(row[6] or ""),
+            }
+        )
+
+    queue_depth = int((totals_row[0] or 0) if totals_row else 0)
+    ready_count = int((totals_row[1] or 0) if totals_row else 0)
+    retry_count = int((totals_row[2] or 0) if totals_row else 0)
+    in_flight_count = int((totals_row[3] or 0) if totals_row else 0)
+    delayed_count = int((totals_row[4] or 0) if totals_row else 0)
+
+    return {
+        "queue_depth": queue_depth,
+        "ready_count": ready_count,
+        "retry_count": retry_count,
+        "in_flight_count": in_flight_count,
+        "delayed_count": delayed_count,
+        "oldest_enqueued_at_utc": oldest_enqueued_at_utc,
+        "newest_enqueued_at_utc": newest_enqueued_at_utc,
+        "oldest_age_seconds": oldest_age_seconds,
+        "next_attempt_at_utc": next_attempt_at_utc,
+        "next_attempt_in_seconds": next_attempt_in_seconds,
+        "recent_errors": recent_errors,
+    }
+
+
 def run_database_vacuum() -> dict[str, object]:
     started_at = datetime.now(timezone.utc)
     with sqlite3.connect(DB_PATH) as conn_before:
@@ -11892,6 +12016,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 _ensure_db_maintenance_snapshot(conn, force_if_empty=True)
                 payload = build_db_maintenance_dashboard(conn)
+            self._send_json(HTTPStatus.OK, {"status": "ok", **payload})
+            return
+
+        if parsed.path == "/api/v1/admin/agent-ingest-queue":
+            if not self._require_admin_session():
+                return
+            query = parse_qs(parsed.query)
+            recent_limit = parse_int(query, "recent_limit", default=20, min_value=5, max_value=100)
+            with sqlite3.connect(DB_PATH) as conn:
+                payload = collect_agent_ingest_queue_overview(conn, recent_errors_limit=recent_limit)
             self._send_json(HTTPStatus.OK, {"status": "ok", **payload})
             return
 
