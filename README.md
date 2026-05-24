@@ -646,6 +646,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.51 (24. Mai 2026)
+
+- **sFTP Upload-Timeout fuer grosse Backups gehaertet**: Der Backup-Upload verwendet nicht mehr ein fixes 30s-Timeout, sondern ein dateigroessenbasiertes Timeout mit sinnvollen Min/Max-Grenzen.
+- **sFTP Test bleibt kurz und schnell**: Fuer den Test-Button bleibt ein separates, kurzes Timeout aktiv, damit Verbindungsprobleme weiterhin sofort sichtbar sind.
+- **Timeouts per Env konfigurierbar**: Neue Parameter fuer Test-Timeout, Upload-Min/Max-Timeout und angenommene Upload-Rate erlauben Tuning pro Standort.
+
 ### v1.6.323 (22. Mai 2026)
 
 - **UI-Integration fuer sofortigen Changelog-Rebuild**: In der Changelog-Ansicht gibt es jetzt den Button `♻ Rebuild heute`, der direkt den Rebuild-Job (`days=1`, `run_now=true`, `force_rebuild=true`) startet.

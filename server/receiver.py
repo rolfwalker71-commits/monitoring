@@ -87,6 +87,16 @@ DEFAULT_SAP_LICENSE_TYPE_MAP_ENTRIES = [
 ]
 AUTO_BACKUP_DEFAULT_INTERVAL_HOURS = max(1, min(168, int(os.getenv("MONITORING_AUTO_BACKUP_INTERVAL_HOURS", "12") or "12")))
 AUTO_BACKUP_DEFAULT_RETENTION_DAYS = max(1, min(365, int(os.getenv("MONITORING_AUTO_BACKUP_RETENTION_DAYS", "7") or "7")))
+SFTP_TEST_TIMEOUT_SECONDS = max(10, min(300, int(os.getenv("MONITORING_SFTP_TEST_TIMEOUT_SECONDS", "45") or "45")))
+SFTP_UPLOAD_TIMEOUT_MIN_SECONDS = max(30, min(3600, int(os.getenv("MONITORING_SFTP_UPLOAD_TIMEOUT_MIN_SECONDS", "300") or "300")))
+SFTP_UPLOAD_TIMEOUT_MAX_SECONDS = max(
+    SFTP_UPLOAD_TIMEOUT_MIN_SECONDS,
+    min(86400, int(os.getenv("MONITORING_SFTP_UPLOAD_TIMEOUT_MAX_SECONDS", "7200") or "7200")),
+)
+SFTP_UPLOAD_ASSUMED_BYTES_PER_SECOND = max(
+    64 * 1024,
+    int(os.getenv("MONITORING_SFTP_UPLOAD_ASSUMED_BYTES_PER_SECOND", str(2 * 1024 * 1024)) or str(2 * 1024 * 1024)),
+)
 TELEGRAM_ACTION_BASE_URL = os.getenv(
     "MONITORING_TELEGRAM_ACTION_BASE_URL",
     os.getenv("MONITORING_PUBLIC_BASE_URL", ""),
@@ -2105,6 +2115,18 @@ def _run_sftp_batch(sftp_cfg: dict[str, object], batch_lines: list[str], *, time
         raise RuntimeError(f"{error_prefix}: {details or 'unbekannter Fehler'}")
 
 
+def _calculate_sftp_upload_timeout_seconds(local_file_path: Path) -> int:
+    try:
+        file_size_bytes = int(local_file_path.stat().st_size)
+    except OSError:
+        return SFTP_UPLOAD_TIMEOUT_MIN_SECONDS
+
+    # Add fixed handshake margin plus transfer time estimate for slower links.
+    estimated_transfer_seconds = int(file_size_bytes / SFTP_UPLOAD_ASSUMED_BYTES_PER_SECOND)
+    timeout_seconds = 120 + estimated_transfer_seconds
+    return max(SFTP_UPLOAD_TIMEOUT_MIN_SECONDS, min(SFTP_UPLOAD_TIMEOUT_MAX_SECONDS, timeout_seconds))
+
+
 def upload_backup_file_to_sftp(payload: dict[str, object], local_file_path: Path, remote_filename: str | None = None) -> dict[str, object]:
     sftp_cfg = _resolve_sftp_config(payload)
 
@@ -2113,13 +2135,19 @@ def upload_backup_file_to_sftp(payload: dict[str, object], local_file_path: Path
         raise ValueError("Lokale Backup-Datei nicht gefunden")
 
     remote_name = str(remote_filename or local_path.name).strip() or local_path.name
+    timeout_seconds = _calculate_sftp_upload_timeout_seconds(local_path)
     batch_lines = [
         f"cd {_sftp_batch_quote(str(sftp_cfg['remote_path']))}",
         f"put {_sftp_batch_quote(str(local_path))} {_sftp_batch_quote(remote_name)}",
         f"ls {_sftp_batch_quote(remote_name)}",
         "bye",
     ]
-    _run_sftp_batch(sftp_cfg, batch_lines, error_prefix="sFTP Upload fehlgeschlagen")
+    _run_sftp_batch(
+        sftp_cfg,
+        batch_lines,
+        timeout_seconds=timeout_seconds,
+        error_prefix="sFTP Upload fehlgeschlagen",
+    )
 
     return {
         "host": str(sftp_cfg.get("host") or ""),
@@ -2150,7 +2178,12 @@ def run_sftp_upload_test(payload: dict[str, object]) -> dict[str, object]:
             f"rm {_sftp_batch_quote(remote_name)}",
             "bye",
         ]
-        _run_sftp_batch(sftp_cfg, batch_lines, error_prefix="sFTP Test fehlgeschlagen")
+        _run_sftp_batch(
+            sftp_cfg,
+            batch_lines,
+            timeout_seconds=SFTP_TEST_TIMEOUT_SECONDS,
+            error_prefix="sFTP Test fehlgeschlagen",
+        )
 
         return {
             "status": "ok",
