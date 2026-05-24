@@ -12826,3 +12826,40 @@ body[data-theme="dark"] #globalView .agent-update-admin-table th {
     font-size: 11px;
   }
 }
+
+/* Final KPI accent enforcement: keep semantic color bars despite late neutral chip resets. */
+.panel-header .header-kpi-strip > .header-stat-chip-alert,
+.panel-header .header-kpi-strip > .header-stat-chip-critical,
+.panel-header .header-kpi-strip > .header-stat-chip-acknowledged {
+  border-left-color: #d97706 !important;
+}
+
+.panel-header .header-kpi-strip > .header-stat-chip-active-hosts,
+.panel-header .header-kpi-strip > .header-stat-chip-inactive {
+  border-left-color: #2563eb !important;
+}
+
+.panel-header .header-kpi-strip > .header-stat-chip-db-reports,
+.panel-header .header-kpi-strip > .header-stat-chip-db-reports-hour,
+.panel-header .header-kpi-strip > .header-stat-chip-db-size,
+.panel-header .header-kpi-strip > .header-stat-chip-db-size-delta {
+  border-left-color: #0f766e !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-alert,
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-critical,
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-acknowledged {
+  border-left-color: #f59e0b !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-active-hosts,
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-inactive {
+  border-left-color: #60a5fa !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-reports,
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-reports-hour,
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-size,
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-size-delta {
+  border-left-color: #2dd4bf !important;
+}

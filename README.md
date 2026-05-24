@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.48**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.48**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.49**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.49**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.49 | 24.05.2026 | KPI color restore hotfix: added a final high-priority CSS override at stylesheet end so semantic KPI left accent bars (Alerts/Host status/DB metrics) can no longer be neutralized by later global chip harmonization rules |
 | 1.7.48 | 24.05.2026 | KPI accent color harmonization: removed pink from KPI bars and introduced semantic color grouping with shared accents per category (Alerts = orange family, Host status = blue family, DB/Report metrics = teal/green family), including dark-mode tuned counterparts |
 | 1.7.47 | 24.05.2026 | KPI card visual separation pass: enforced distinct single-card rendering for each KPI (small explicit gaps, full card borders/backgrounds) with equal-width distribution in the strip, preventing the previous “cards running into each other” appearance |
 | 1.7.46 | 24.05.2026 | Sidebar cleanup: removed redundant host summary line under the Hosts title and removed the separate “Aktive Hosts (…)” section header in the host list; compacted the hosts sidebar header spacing/border to better align with KPI-driven status presentation |
