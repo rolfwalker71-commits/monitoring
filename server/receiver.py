@@ -4285,13 +4285,29 @@ def backfill_database_lifecycle(conn: sqlite3.Connection, days: int = 7) -> dict
     }
 
 
-def rebuild_changelog_history(conn: sqlite3.Connection, days: int = 15, force_rebuild: bool = False) -> dict:
+def rebuild_changelog_history(
+    conn: sqlite3.Connection,
+    days: int = 15,
+    force_rebuild: bool = False,
+    progress_callback=None,
+) -> dict:
     """Reset changelog tables and rebuild them from the last N report days.
 
     This is intended as a one-time startup migration for hosts that need a clean
     greenfield rebuild of the changelog state.
     """
     window_days = max(1, min(int(days or 15), 365))
+
+    if callable(progress_callback):
+        try:
+            progress_callback({
+                "phase": "reset",
+                "hosts_processed": 0,
+                "hosts_total": 0,
+                "message": "Setze Changelog-Tabellen zurück...",
+            })
+        except Exception:
+            pass
 
     existing_state = conn.execute(
         "SELECT completed_at_utc, days FROM changelog_rebuild_state WHERE id = 1"
@@ -4307,7 +4323,30 @@ def rebuild_changelog_history(conn: sqlite3.Connection, days: int = 15, force_re
     conn.execute("DELETE FROM database_lifecycle")
     conn.execute("DELETE FROM host_config_snapshot")
 
-    config_result = backfill_host_config_changes(conn, days=window_days)
+    if callable(progress_callback):
+        try:
+            progress_callback({
+                "phase": "config_backfill",
+                "hosts_processed": 0,
+                "hosts_total": 0,
+                "message": "Baue Host-Config-Changelog neu auf...",
+            })
+        except Exception:
+            pass
+
+    config_result = backfill_host_config_changes(conn, days=window_days, progress_callback=progress_callback)
+
+    if callable(progress_callback):
+        try:
+            progress_callback({
+                "phase": "database_backfill",
+                "hosts_processed": int(config_result.get("hosts_processed", 0) or 0),
+                "hosts_total": int(config_result.get("hosts_total", 0) or 0),
+                "message": "Baue DB-Lifecycle-Changelog neu auf...",
+            })
+        except Exception:
+            pass
+
     db_result = backfill_database_lifecycle(conn, days=window_days)
 
     completed_at_utc = utc_now_iso()
@@ -4338,13 +4377,26 @@ def rebuild_changelog_history(conn: sqlite3.Connection, days: int = 15, force_re
         ),
     )
 
-    return {
+    result = {
         "status": "rebuilt",
         "completed_at_utc": completed_at_utc,
         "days": window_days,
         "config_result": config_result,
         "database_result": db_result,
     }
+
+    if callable(progress_callback):
+        try:
+            progress_callback({
+                "phase": "completed",
+                "hosts_processed": int(config_result.get("hosts_processed", 0) or 0),
+                "hosts_total": int(config_result.get("hosts_total", 0) or 0),
+                "message": "Changelog-Rebuild abgeschlossen.",
+            })
+        except Exception:
+            pass
+
+    return result
 
 
 def _normalize_utc_timestamp(value: str, default_to_now: bool = False) -> str:
@@ -4522,7 +4574,47 @@ def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int =
         conn.commit()
 
         try:
-            result = rebuild_changelog_history(conn, days=window_days, force_rebuild=force_rebuild)
+            last_progress_phase = ""
+            last_progress_hosts = -1
+
+            def progress_reporter(progress: dict) -> None:
+                nonlocal last_progress_phase, last_progress_hosts
+                phase = str(progress.get("phase") or "")
+                hosts_processed = int(progress.get("hosts_processed", 0) or 0)
+                hosts_total = int(progress.get("hosts_total", 0) or 0)
+                should_flush = phase != last_progress_phase or hosts_processed != last_progress_hosts
+                if phase == "config_backfill" and hosts_total > 0:
+                    should_flush = should_flush and (hosts_processed in {0, hosts_total} or hosts_processed % 5 == 0)
+                if not should_flush:
+                    return
+
+                payload = {
+                    "progress": {
+                        "phase": phase,
+                        "hosts_processed": hosts_processed,
+                        "hosts_total": hosts_total,
+                        "message": str(progress.get("message") or ""),
+                        "updated_at_utc": utc_now_iso(),
+                    }
+                }
+                conn.execute(
+                    """
+                    UPDATE changelog_rebuild_jobs
+                    SET result_json = ?
+                    WHERE id = ? AND status = 'running'
+                    """,
+                    (json.dumps(payload, separators=(",", ":")), job_id),
+                )
+                conn.commit()
+                last_progress_phase = phase
+                last_progress_hosts = hosts_processed
+
+            result = rebuild_changelog_history(
+                conn,
+                days=window_days,
+                force_rebuild=force_rebuild,
+                progress_callback=progress_reporter,
+            )
             finished_at = utc_now_iso()
             conn.execute(
                 """
@@ -5995,7 +6087,7 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
     }
 
 
-def backfill_host_config_changes(conn: sqlite3.Connection, days: int = 7) -> dict:
+def backfill_host_config_changes(conn: sqlite3.Connection, days: int = 7, progress_callback=None) -> dict:
     _ensure_host_config_snapshot_schema(conn)
 
     window_days = max(1, int(days or 7))
@@ -6015,6 +6107,30 @@ def backfill_host_config_changes(conn: sqlite3.Connection, days: int = 7) -> dic
     last_seen_at_by_host: dict[str, str] = {}
     report_count = 0
     inserted_changes = 0
+    hosts_total_row = conn.execute(
+        """
+        SELECT COUNT(DISTINCT hostname)
+        FROM reports
+        WHERE received_at_utc >= ?
+          AND hostname IS NOT NULL
+          AND TRIM(hostname) <> ''
+        """,
+        (cutoff_iso,),
+    ).fetchone()
+    hosts_total = int((hosts_total_row[0] or 0) if hosts_total_row else 0)
+    hosts_processed = 0
+    last_progress_hostname = ""
+
+    if callable(progress_callback):
+        try:
+            progress_callback({
+                "phase": "config_backfill",
+                "hosts_processed": 0,
+                "hosts_total": hosts_total,
+                "message": "Baue Host-Config-Changelog neu auf...",
+            })
+        except Exception:
+            pass
 
     for row in row_iter:
         report_id = int(row[0] or 0)
@@ -6022,6 +6138,20 @@ def backfill_host_config_changes(conn: sqlite3.Connection, days: int = 7) -> dic
         hostname = str(row[2] or "").strip()
         if not hostname:
             continue
+        if hostname != last_progress_hostname:
+            hosts_processed += 1
+            last_progress_hostname = hostname
+            if callable(progress_callback):
+                try:
+                    progress_callback({
+                        "phase": "config_backfill",
+                        "hosts_processed": hosts_processed,
+                        "hosts_total": hosts_total,
+                        "reports_scanned": report_count,
+                        "message": "Baue Host-Config-Changelog neu auf...",
+                    })
+                except Exception:
+                    pass
         payload = parse_payload_json(str(row[3] or "{}"))
         report_count += 1
 
@@ -6126,6 +6256,8 @@ def backfill_host_config_changes(conn: sqlite3.Connection, days: int = 7) -> dic
         "days": window_days,
         "reports_scanned": report_count,
         "hosts_touched": len(last_snapshot_by_host),
+        "hosts_processed": hosts_processed,
+        "hosts_total": hosts_total,
         "inserted_changes": inserted_changes,
     }
 

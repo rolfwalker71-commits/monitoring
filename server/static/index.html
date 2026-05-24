@@ -277,6 +277,13 @@
                 <button id="refreshHostConfigChangesButton" type="button" class="btn-secondary-compact">↻</button>
                 <p id="hostConfigChangesBackfillStatus" class="count compact"></p>
                 <p id="changelogRebuildJobStatus" class="count compact"></p>
+                <div id="changelogRebuildProgress" class="db-ops-progress hidden">
+                  <div class="db-ops-progress-bar-wrap">
+                    <div id="changelogRebuildProgressBar" class="db-ops-progress-bar"></div>
+                  </div>
+                  <span id="changelogRebuildProgressLabel" class="db-ops-progress-label"></span>
+                </div>
+                <p id="changelogRebuildWarningHint" class="count compact changelog-rebuild-warning hidden">⚠ Rebuild heute löscht und baut alle Changelog-Daten komplett neu auf (Host-Config + DB-Lifecycle).</p>
               </div>
               <div id="hostConfigChangesGroups" class="host-config-changes-groups">
                 <p class="muted">Lade Daten…</p>

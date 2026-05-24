@@ -89,6 +89,7 @@ let hostSearchFilterDebounceTimerId = null;
 let hostLicenseHoverPopupEl = null;
 let hostLicenseHoverHideTimerId = null;
 let hostLicenseHoverActiveHost = "";
+let changelogRebuildPollTimerId = null;
 const hostLicenseHoverCache = new Map();
 const SESSION_REFRESH_INTERVAL_SECONDS = 240;
 
@@ -1649,6 +1650,8 @@ function updateAdminSettingsVisibility() {
   const globalAdminOpsSection = document.getElementById("globalAdminOpsSection");
   const hostConfigChangesBackfillButton = document.getElementById("backfillHostConfigChangesButton");
   const hostConfigChangesBackfillStatus = document.getElementById("hostConfigChangesBackfillStatus");
+  const changelogRebuildWarningHint = document.getElementById("changelogRebuildWarningHint");
+  const changelogRebuildProgress = document.getElementById("changelogRebuildProgress");
   if (adminOauthSection) {
     adminOauthSection.classList.toggle("hidden", !state.isAdmin);
   }
@@ -1681,6 +1684,12 @@ function updateAdminSettingsVisibility() {
   }
   if (hostConfigChangesBackfillStatus) {
     hostConfigChangesBackfillStatus.classList.toggle("hidden", !state.isAdmin);
+  }
+  if (changelogRebuildWarningHint) {
+    changelogRebuildWarningHint.classList.toggle("hidden", !state.isAdmin);
+  }
+  if (changelogRebuildProgress && !state.isAdmin) {
+    changelogRebuildProgress.classList.add("hidden");
   }
   const overviewNotificationTab = document.getElementById("overviewNotificationTabButton");
   if (overviewNotificationTab) {
@@ -11546,9 +11555,66 @@ function setChangelogRebuildJobStatus(message, isError = false) {
   statusEl.classList.toggle("status-error", Boolean(isError));
 }
 
+function clearChangelogRebuildPollTimer() {
+  if (changelogRebuildPollTimerId !== null) {
+    window.clearTimeout(changelogRebuildPollTimerId);
+    changelogRebuildPollTimerId = null;
+  }
+}
+
+function scheduleChangelogRebuildPoll(delayMs = 2000) {
+  clearChangelogRebuildPollTimer();
+  changelogRebuildPollTimerId = window.setTimeout(() => {
+    if (state.viewMode !== "global" || state.globalSubMode !== "host-config-changes") {
+      return;
+    }
+    void loadChangelogRebuildJobsStatus();
+  }, Math.max(800, Number(delayMs) || 2000));
+}
+
+function setChangelogRebuildProgress({
+  visible = false,
+  processed = 0,
+  total = 0,
+  label = "",
+  indeterminate = false,
+  isError = false,
+} = {}) {
+  const wrapEl = document.getElementById("changelogRebuildProgress");
+  const barEl = document.getElementById("changelogRebuildProgressBar");
+  const labelEl = document.getElementById("changelogRebuildProgressLabel");
+  if (!wrapEl || !barEl || !labelEl) {
+    return;
+  }
+
+  wrapEl.classList.toggle("hidden", !visible);
+  if (!visible) {
+    barEl.classList.remove("db-ops-progress-bar--indeterminate");
+    barEl.style.width = "0%";
+    labelEl.textContent = "";
+    labelEl.className = "db-ops-progress-label";
+    return;
+  }
+
+  if (indeterminate) {
+    barEl.classList.add("db-ops-progress-bar--indeterminate");
+    barEl.style.width = "40%";
+  } else {
+    const safeTotal = Math.max(0, Number(total) || 0);
+    const safeProcessed = Math.max(0, Number(processed) || 0);
+    const pct = safeTotal > 0 ? Math.max(0, Math.min(100, Math.round((safeProcessed / safeTotal) * 100))) : 0;
+    barEl.classList.remove("db-ops-progress-bar--indeterminate");
+    barEl.style.width = `${pct}%`;
+  }
+
+  labelEl.textContent = String(label || "");
+  labelEl.className = `db-ops-progress-label${isError ? " error" : ""}`;
+}
+
 async function loadChangelogRebuildJobsStatus() {
   const statusEl = document.getElementById("changelogRebuildJobStatus");
   if (!statusEl) return;
+  clearChangelogRebuildPollTimer();
   try {
     const response = await fetch("/api/v1/admin/changelog-rebuild/jobs?limit=5", {
       credentials: "same-origin",
@@ -11559,30 +11625,85 @@ async function loadChangelogRebuildJobsStatus() {
     const jobs = Array.isArray(data.jobs) ? data.jobs : [];
     if (!jobs.length) {
       setChangelogRebuildJobStatus("Keine Rebuild-Jobs vorhanden.");
+      setChangelogRebuildProgress({ visible: false });
       return;
     }
     const latest = jobs[0] || {};
     const latestStatus = asText(latest.status, "-").toLowerCase();
     const latestId = Number(latest.id || 0);
     const latestDays = Number(latest.days || 0);
+    const latestResult = latest && typeof latest.result === "object" ? latest.result : {};
+    const latestProgress = latestResult && typeof latestResult.progress === "object" ? latestResult.progress : {};
     if (latestStatus === "completed") {
       const finishedAt = asText(latest.finished_at_utc, "");
+      const configResult = latestResult && typeof latestResult.config_result === "object" ? latestResult.config_result : {};
+      const hostsTotal = Number(configResult.hosts_total || configResult.hosts_touched || 0);
+      const hostsProcessed = Number(configResult.hosts_processed || configResult.hosts_touched || 0);
       setChangelogRebuildJobStatus(`Job #${latestId} abgeschlossen (${latestDays} Tag(e)) · ${formatUtcPlus2(finishedAt)}`);
+      setChangelogRebuildProgress({
+        visible: hostsTotal > 0,
+        processed: hostsProcessed,
+        total: hostsTotal,
+        label: hostsTotal > 0 ? `Rebuild abgeschlossen: Hosts ${hostsProcessed}/${hostsTotal}` : "",
+        indeterminate: false,
+      });
       return;
     }
     if (latestStatus === "failed") {
       const errorMessage = asText(latest.error_message, "Unbekannter Fehler");
       setChangelogRebuildJobStatus(`Job #${latestId} fehlgeschlagen: ${errorMessage}`, true);
+      setChangelogRebuildProgress({
+        visible: true,
+        label: "Rebuild fehlgeschlagen.",
+        indeterminate: false,
+        isError: true,
+      });
       return;
     }
     if (latestStatus === "running") {
+      const phase = asText(latestProgress.phase, "running");
+      const phaseLabel = phase === "config_backfill"
+        ? "Host-Config Rebuild"
+        : phase === "database_backfill"
+          ? "DB-Lifecycle Rebuild"
+          : "Rebuild läuft";
+      const hostsTotal = Number(latestProgress.hosts_total || 0);
+      const hostsProcessed = Number(latestProgress.hosts_processed || 0);
+      if (hostsTotal > 0) {
+        setChangelogRebuildProgress({
+          visible: true,
+          processed: hostsProcessed,
+          total: hostsTotal,
+          label: `${phaseLabel}: Hosts ${hostsProcessed}/${hostsTotal}`,
+          indeterminate: false,
+        });
+      } else {
+        setChangelogRebuildProgress({
+          visible: true,
+          label: `${phaseLabel}...`,
+          indeterminate: true,
+        });
+      }
       setChangelogRebuildJobStatus(`Job #${latestId} läuft (${latestDays} Tag(e))...`);
+      scheduleChangelogRebuildPoll(1800);
       return;
     }
     const scheduledAt = asText(latest.scheduled_for_utc, "");
     setChangelogRebuildJobStatus(`Job #${latestId} geplant (${latestDays} Tag(e)) · ${formatUtcPlus2(scheduledAt)}`);
+    setChangelogRebuildProgress({
+      visible: true,
+      label: "Rebuild-Job geplant...",
+      indeterminate: true,
+    });
+    scheduleChangelogRebuildPoll(1800);
   } catch (error) {
     setChangelogRebuildJobStatus(`Job-Status Fehler: ${error.message}`, true);
+    setChangelogRebuildProgress({
+      visible: true,
+      label: `Job-Status Fehler: ${error.message}`,
+      indeterminate: false,
+      isError: true,
+    });
   }
 }
 
@@ -11590,12 +11711,23 @@ async function runChangelogRebuildNow(days = 1) {
   const button = document.getElementById("runChangelogRebuildNowButton");
   const targetDays = Math.max(1, Math.min(365, Number(days) || 1));
   const confirmed = window.confirm(
-    `Globales Changelog jetzt neu aufbauen (Stichtag heute, ${targetDays} Tag(e))?\n\nDies überschreibt den bisherigen Changelog-Neuaufbauzustand.`
+    `WARNUNG: Das globale Changelog wird komplett neu aufgebaut (Stichtag heute, ${targetDays} Tag(e)).\n\nDabei werden alle vorhandenen Changelog-Daten gelöscht und aus Reports neu erzeugt (Host-Config + DB-Lifecycle).\n\nFortfahren?`
   );
   if (!confirmed) return;
 
+  const safetyToken = window.prompt("Sicherheitsabfrage: Bitte REBUILD eingeben, um den vollständigen Changelog-Neuaufbau zu starten.", "");
+  if (safetyToken !== "REBUILD") {
+    setChangelogRebuildJobStatus("Abgebrochen: Sicherheitsbestätigung nicht erfüllt.", true);
+    return;
+  }
+
   if (button) button.disabled = true;
   setChangelogRebuildJobStatus("Rebuild-Job wird gestartet...");
+  setChangelogRebuildProgress({
+    visible: true,
+    label: "Rebuild wird gestartet...",
+    indeterminate: true,
+  });
 
   try {
     const response = await fetch("/api/v1/admin/changelog-rebuild/schedule", {
@@ -11631,6 +11763,12 @@ async function runChangelogRebuildNow(days = 1) {
     await loadChangelogRebuildJobsStatus();
   } catch (error) {
     setChangelogRebuildJobStatus(`Rebuild Fehler: ${error.message}`, true);
+    setChangelogRebuildProgress({
+      visible: true,
+      label: `Rebuild Fehler: ${error.message}`,
+      indeterminate: false,
+      isError: true,
+    });
   } finally {
     if (button) button.disabled = false;
   }

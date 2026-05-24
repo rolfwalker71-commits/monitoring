@@ -1991,6 +1991,25 @@ td.center {
   color: #b91c1c;
 }
 
+.changelog-rebuild-warning {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid #fdba74;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+body[data-theme="dark"] .changelog-rebuild-warning {
+  border-color: #9a3412;
+  background: #3d1f16;
+  color: #fdba74;
+}
+
 .agent-source-status-table {
   table-layout: auto;
   width: 100%;

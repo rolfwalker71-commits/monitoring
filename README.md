@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.23**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.23**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.24**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.24**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.24 | 24.05.2026 | Changelog-Rebuild safety and progress UX: added explicit destructive warning + confirmation gate in UI, and live progress bar during running rebuild jobs (hosts processed / total hosts) |
 | 1.7.23 | 24.05.2026 | User settings width harmonized: header, tab menu and settings sections now use the same centered max content width, and the settings tab strip now scrolls instead of widening the layout |
 | 1.7.22 | 24.05.2026 | Global view width harmonized: header, tab menu and tab panels now share one consistent max content width, and the tab strip now scrolls safely instead of pushing the layout wider |
 | 1.7.21 | 24.05.2026 | Event alert mails now include the Alert-ID from the Infoboard (visible in subject and HTML body) so each mail can be uniquely mapped to one alert event |
