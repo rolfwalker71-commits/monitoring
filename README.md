@@ -646,6 +646,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.63 (24. Mai 2026)
+
+- **Kunde im Ingest-Lieferlog ergänzt**: Die Admin-Tabelle zeigt jetzt pro Queue-Eintrag zusätzlich den zugeordneten Kunden.
+- **Host-UID wird bei Kundenzuordnung priorisiert**: Die Auflösung erfolgt zuerst über die letzte bekannte Host-UID-Zuordnung und fällt nur bei Bedarf auf Hostname zurück.
+
 ### v1.7.62 (24. Mai 2026)
 
 - **Ingest-Lieferlog fuer Admin eingebaut**: Neue Uebersicht zeigt pro Eintrag Host, Empfangszeit, Payload-Groesse und finalen DB-Schreibzeitpunkt inkl. Ende-zu-Ende-Latenz.

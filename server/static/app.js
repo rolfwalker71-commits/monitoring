@@ -9043,13 +9043,14 @@ function renderAgentIngestAuditLog(data) {
 
   const entries = Array.isArray(data?.entries) ? data.entries : [];
   if (entries.length === 0) {
-    bodyEl.innerHTML = '<tr><td colspan="8" class="muted">Noch keine Ingest-Lieferdaten vorhanden.</td></tr>';
+    bodyEl.innerHTML = '<tr><td colspan="9" class="muted">Noch keine Ingest-Lieferdaten vorhanden.</td></tr>';
     return;
   }
 
   bodyEl.innerHTML = entries.map((item) => {
     const queueId = Number(item?.queue_id || 0);
     const host = asText(item?.hostname || item?.host_uid, "-");
+    const customerName = asText(item?.customer_name, "").trim() || "-";
     const receivedAt = formatUtcPlus2(asText(item?.report_received_at_utc, ""));
     const writtenAt = formatUtcPlus2(asText(item?.db_written_at_utc, ""));
     const payloadBytes = Number(item?.payload_bytes || 0);
@@ -9064,6 +9065,7 @@ function renderAgentIngestAuditLog(data) {
       <tr>
         <td>${escapeHtml(String(queueId || "-"))}</td>
         <td>${escapeHtml(host)}</td>
+        <td>${escapeHtml(customerName)}</td>
         <td>${escapeHtml(receivedAt)}</td>
         <td>${escapeHtml(formatBytes(payloadBytes))}</td>
         <td>${escapeHtml(writtenAt)}</td>

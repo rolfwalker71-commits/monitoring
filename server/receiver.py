@@ -2857,24 +2857,44 @@ def collect_agent_ingest_audit_log(
     rows = conn.execute(
         """
         SELECT
-            id,
-            queue_id,
-            hostname,
-            host_uid,
-            report_received_at_utc,
-            enqueued_at_utc,
-            db_written_at_utc,
-            payload_bytes,
-            payload_stored,
-            payload_file_path,
-            attempt_count,
-            queue_wait_ms,
-            processing_ms,
-            end_to_end_ms,
-            status,
-            error_message,
-            updated_at_utc
-        FROM agent_ingest_audit_log
+            a.id,
+            a.queue_id,
+            a.hostname,
+            a.host_uid,
+            a.report_received_at_utc,
+            a.enqueued_at_utc,
+            a.db_written_at_utc,
+            a.payload_bytes,
+            a.payload_stored,
+            a.payload_file_path,
+            a.attempt_count,
+            a.queue_wait_ms,
+            a.processing_ms,
+            a.end_to_end_ms,
+            a.status,
+            a.error_message,
+            a.updated_at_utc,
+            COALESCE(
+                (
+                    SELECT c_uid.customer_name
+                    FROM reports r_uid
+                    JOIN host_settings hs_uid ON hs_uid.hostname = r_uid.hostname
+                    LEFT JOIN customers c_uid ON c_uid.id = hs_uid.customer_id
+                    WHERE COALESCE(a.host_uid, '') <> ''
+                      AND COALESCE(r_uid.host_uid, '') = a.host_uid
+                    ORDER BY r_uid.id DESC
+                    LIMIT 1
+                ),
+                (
+                    SELECT c_host.customer_name
+                    FROM host_settings hs_host
+                    LEFT JOIN customers c_host ON c_host.id = hs_host.customer_id
+                    WHERE hs_host.hostname = a.hostname
+                    LIMIT 1
+                ),
+                ''
+            ) AS customer_name
+        FROM agent_ingest_audit_log a
         ORDER BY id DESC
         LIMIT ?
         """,
@@ -2908,6 +2928,7 @@ def collect_agent_ingest_audit_log(
                 "status": str(row[14] or "queued"),
                 "error_message": str(row[15] or ""),
                 "updated_at_utc": str(row[16] or ""),
+                "customer_name": str(row[17] or ""),
             }
         )
 
