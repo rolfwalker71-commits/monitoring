@@ -646,6 +646,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.60 (24. Mai 2026)
+
+- **Agent-Report Ingest auf Queue umgestellt**: `/api/v1/agent-report` speichert eingehende Reports jetzt zuerst durable in `agent_ingest_queue` und antwortet sofort mit `queued`.
+- **Serielle Worker-Verarbeitung fuer Lastspitzen**: Ein dedizierter Background-Worker verarbeitet Queue-Eintraege nacheinander und schreibt erst dann in `reports`, Alerts und Changelog.
+- **Retry-Backoff bei Verarbeitungsfehlern**: Fehlgeschlagene Queue-Eintraege bleiben erhalten und werden mit exponentiellem Backoff erneut versucht, statt im Burst verloren zu gehen.
+
 ### v1.7.59 (24. Mai 2026)
 
 - **SAP Services/Ports jetzt als echte Diff-Ansicht**: Pro Service wird im Changelog markiert, ob der Eintrag neu (`+`), entfernt (`-`) oder geaendert (`~`) ist.

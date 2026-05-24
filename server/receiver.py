@@ -117,6 +117,16 @@ except ZoneInfoNotFoundError:
 _backup_jobs_lock = threading.Lock()
 _backup_jobs: dict[str, dict[str, str]] = {}
 _auto_backup_lock = threading.Lock()
+_agent_ingest_queue_wakeup = threading.Event()
+
+AGENT_INGEST_RETRY_MAX_BACKOFF_SECONDS = max(
+    10,
+    min(3600, int(os.getenv("MONITORING_AGENT_INGEST_RETRY_MAX_BACKOFF_SECONDS", "300") or "300")),
+)
+AGENT_INGEST_WORKER_IDLE_SECONDS = max(
+    0.1,
+    min(10.0, float(os.getenv("MONITORING_AGENT_INGEST_WORKER_IDLE_SECONDS", "0.5") or "0.5")),
+)
 
 
 def parse_int(query: dict, key: str, default: int, min_value: int, max_value: int) -> int:
@@ -200,6 +210,46 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_reports_host_agent_ip_uid
             ON reports(hostname, agent_id, primary_ip, host_uid, id)
             """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS agent_ingest_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                enqueued_at_utc TEXT NOT NULL,
+                report_received_at_utc TEXT NOT NULL,
+                hostname TEXT NOT NULL,
+                host_uid TEXT NOT NULL DEFAULT '',
+                payload_json TEXT NOT NULL,
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                next_attempt_at_utc TEXT NOT NULL,
+                processing_started_at_utc TEXT NOT NULL DEFAULT '',
+                last_error TEXT NOT NULL DEFAULT '',
+                updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_agent_ingest_queue_next_attempt
+            ON agent_ingest_queue(next_attempt_at_utc, id)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_agent_ingest_queue_host
+            ON agent_ingest_queue(hostname, id)
+            """
+        )
+        # Safety reset on startup in case the process ended while an item was marked in-flight.
+        conn.execute(
+            """
+            UPDATE agent_ingest_queue
+            SET processing_started_at_utc = '',
+                next_attempt_at_utc = CASE WHEN next_attempt_at_utc < ? THEN ? ELSE next_attempt_at_utc END,
+                updated_at_utc = ?
+            WHERE COALESCE(processing_started_at_utc, '') <> ''
+            """,
+            (utc_now_iso(), utc_now_iso(), utc_now_iso()),
         )
         conn.execute(
             """
@@ -10874,6 +10924,169 @@ def prune_reports_for_host(conn: sqlite3.Connection, hostname: str, keep_count: 
     )
 
 
+def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, report_received_at_utc: str) -> int:
+    hostname = str(payload.get("hostname", "")).strip()
+    if not hostname:
+        raise ValueError("hostname missing")
+
+    filesystems = payload.get("filesystems", [])
+    if not isinstance(filesystems, list):
+        raise ValueError("filesystems must be an array")
+
+    incoming_agent_id = str(payload.get("agent_id", "") or "")
+    incoming_primary_ip = str(payload.get("primary_ip", "") or "")
+    incoming_host_uid = str(payload.get("host_uid", "") or "").strip()
+    if not incoming_host_uid:
+        incoming_host_uid = _derive_host_uid(payload, hostname, incoming_agent_id, incoming_primary_ip)
+        payload["host_uid"] = incoming_host_uid
+
+    cursor = conn.execute(
+        """
+        INSERT INTO reports (received_at_utc, agent_id, hostname, host_uid, primary_ip, payload_json)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            report_received_at_utc,
+            incoming_agent_id,
+            hostname,
+            incoming_host_uid,
+            incoming_primary_ip,
+            json.dumps(payload, separators=(",", ":")),
+        ),
+    )
+    report_id = int(cursor.lastrowid)
+    _track_host_config_changes(conn, hostname, incoming_host_uid, payload, report_id, report_received_at_utc)
+    _track_database_lifecycle(conn, hostname, payload, report_id, report_received_at_utc)
+    prune_reports_for_host(conn, hostname, MAX_REPORTS_PER_HOST)
+    alarm_settings = get_alarm_settings(conn)
+    host_settings = get_host_settings(conn, hostname)
+    if bool(host_settings.get("is_hidden", False)):
+        resolve_open_alerts_for_host(conn, hostname, incoming_host_uid, report_id)
+    else:
+        update_alerts_for_report(conn, hostname, incoming_host_uid, report_id, filesystems, alarm_settings)
+    maybe_send_alert_reminders(conn)
+    maybe_send_inactive_host_notifications(conn)
+    maybe_send_scheduled_user_mails(conn)
+
+    # Keep behavior identical to direct-ingest: non-blocking best effort.
+    auto_sync_discovered_license_types(payload)
+    return report_id
+
+
+def enqueue_agent_report(payload: dict, report_received_at_utc: str) -> int:
+    hostname = str(payload.get("hostname", "")).strip()
+    host_uid = str(payload.get("host_uid", "") or "").strip()
+    now_utc = utc_now_iso()
+    with sqlite3.connect(DB_PATH, timeout=30) as conn:
+        conn.execute("PRAGMA busy_timeout = 5000")
+        cursor = conn.execute(
+            """
+            INSERT INTO agent_ingest_queue (
+                enqueued_at_utc,
+                report_received_at_utc,
+                hostname,
+                host_uid,
+                payload_json,
+                attempt_count,
+                next_attempt_at_utc,
+                processing_started_at_utc,
+                last_error,
+                updated_at_utc
+            ) VALUES (?, ?, ?, ?, ?, 0, ?, '', '', ?)
+            """,
+            (
+                now_utc,
+                report_received_at_utc,
+                hostname,
+                host_uid,
+                json.dumps(payload, separators=(",", ":")),
+                now_utc,
+                now_utc,
+            ),
+        )
+        queue_id = int(cursor.lastrowid)
+        conn.commit()
+    _agent_ingest_queue_wakeup.set()
+    return queue_id
+
+
+def _agent_ingest_retry_backoff_seconds(attempt_count: int) -> int:
+    safe_attempt = max(1, int(attempt_count))
+    return min(AGENT_INGEST_RETRY_MAX_BACKOFF_SECONDS, 2 ** min(safe_attempt, 10))
+
+
+def _agent_ingest_worker_loop() -> None:
+    while True:
+        had_work = False
+        try:
+            with sqlite3.connect(DB_PATH, timeout=30) as conn:
+                conn.execute("PRAGMA busy_timeout = 5000")
+                now_utc = utc_now_iso()
+                row = conn.execute(
+                    """
+                    SELECT id, payload_json, report_received_at_utc, attempt_count
+                    FROM agent_ingest_queue
+                    WHERE next_attempt_at_utc <= ?
+                    ORDER BY id ASC
+                    LIMIT 1
+                    """,
+                    (now_utc,),
+                ).fetchone()
+
+                if row is None:
+                    conn.commit()
+                else:
+                    had_work = True
+                    queue_id = int(row[0] or 0)
+                    payload_json = str(row[1] or "{}")
+                    report_received_at_utc = str(row[2] or "") or now_utc
+                    attempt_count = int(row[3] or 0) + 1
+                    conn.execute(
+                        """
+                        UPDATE agent_ingest_queue
+                        SET attempt_count = ?,
+                            processing_started_at_utc = ?,
+                            updated_at_utc = ?
+                        WHERE id = ?
+                        """,
+                        (attempt_count, now_utc, now_utc, queue_id),
+                    )
+                    conn.commit()
+
+                    try:
+                        payload = json.loads(payload_json)
+                        if not isinstance(payload, dict):
+                            raise ValueError("queued payload must be a JSON object")
+
+                        _process_agent_report_payload(conn, payload, report_received_at_utc)
+                        conn.execute("DELETE FROM agent_ingest_queue WHERE id = ?", (queue_id,))
+                        conn.commit()
+                    except Exception as exc:
+                        backoff = _agent_ingest_retry_backoff_seconds(attempt_count)
+                        retry_at = (datetime.now(timezone.utc) + timedelta(seconds=backoff)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                        conn.execute(
+                            """
+                            UPDATE agent_ingest_queue
+                            SET next_attempt_at_utc = ?,
+                                processing_started_at_utc = '',
+                                last_error = ?,
+                                updated_at_utc = ?
+                            WHERE id = ?
+                            """,
+                            (retry_at, str(exc), utc_now_iso(), queue_id),
+                        )
+                        conn.commit()
+                        print(f"[agent-ingest-worker] queue_id={queue_id} failed (attempt={attempt_count}): {exc}")
+        except Exception as exc:
+            print(f"[agent-ingest-worker] loop failure: {exc}")
+
+        if had_work:
+            continue
+
+        _agent_ingest_queue_wakeup.wait(AGENT_INGEST_WORKER_IDLE_SECONDS)
+        _agent_ingest_queue_wakeup.clear()
+
+
 def delete_host_card_data(conn: sqlite3.Connection, hostname: str, host_uid: str = "") -> dict[str, int]:
     deleted: dict[str, int] = {
         "muted_alert_rules": 0,
@@ -15517,40 +15730,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         incoming_host_uid = _derive_host_uid(payload, hostname, incoming_agent_id, incoming_primary_ip)
         payload["host_uid"] = incoming_host_uid
 
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO reports (received_at_utc, agent_id, hostname, host_uid, primary_ip, payload_json)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    report_received_at_utc,
-                    incoming_agent_id,
-                    hostname,
-                    incoming_host_uid,
-                    incoming_primary_ip,
-                    json.dumps(payload, separators=(",", ":")),
-                ),
-            )
-            report_id = int(cursor.lastrowid)
-            _track_host_config_changes(conn, hostname, incoming_host_uid, payload, report_id, report_received_at_utc)
-            _track_database_lifecycle(conn, hostname, payload, report_id, report_received_at_utc)
-            prune_reports_for_host(conn, hostname, MAX_REPORTS_PER_HOST)
-            alarm_settings = get_alarm_settings(conn)
-            host_settings = get_host_settings(conn, hostname)
-            if bool(host_settings.get("is_hidden", False)):
-                resolve_open_alerts_for_host(conn, hostname, incoming_host_uid, report_id)
-            else:
-                update_alerts_for_report(conn, hostname, incoming_host_uid, report_id, filesystems, alarm_settings)
-            maybe_send_alert_reminders(conn)
-            maybe_send_inactive_host_notifications(conn)
-            maybe_send_scheduled_user_mails(conn)
-            conn.commit()
+        queue_id = enqueue_agent_report(payload, report_received_at_utc)
 
-        # Auto-discover new license types from agent report
-        auto_sync_discovered_license_types(payload)
-
-        self._send_json(HTTPStatus.CREATED, {"status": "stored"})
+        self._send_json(
+            HTTPStatus.ACCEPTED,
+            {
+                "status": "queued",
+                "queue_id": queue_id,
+                "received_at_utc": report_received_at_utc,
+            },
+        )
 
 
     def do_PATCH(self) -> None:
@@ -15637,6 +15826,13 @@ def main() -> None:
         daemon=True,
     )
     backup_scheduler_thread.start()
+
+    agent_ingest_worker_thread = threading.Thread(
+        target=_agent_ingest_worker_loop,
+        name="agent-ingest-worker",
+        daemon=True,
+    )
+    agent_ingest_worker_thread.start()
 
     server = ThreadingHTTPServer((args.host, args.port), MonitoringHandler)
     print(f"Monitoring receiver running on http://{args.host}:{args.port}")
