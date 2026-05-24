@@ -646,6 +646,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.69 (24. Mai 2026)
+
+- **Header-KPIs zurückgestellt**: `Server CPU` und `Server Memory` wurden wieder durch die früheren Karten `Reports letzte 1h` und `DB Delta 1h` ersetzt.
+- **KPI-Datenpfad rückgebaut**: `/api/v1/dashboard-db-kpis` liefert wieder stündliche Report-Anzahl sowie DB-Größenänderung gegenüber vor 1 Stunde.
+
 ### v1.7.68 (24. Mai 2026)
 
 - **Hostkarten-Icons horizontal ausgerichtet**: Lizenz-Info und Länder-Icon werden jetzt in einer gemeinsamen Corner-Zeile gerendert und sind sauber auf einer Linie.

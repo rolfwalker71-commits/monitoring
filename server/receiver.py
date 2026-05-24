@@ -12535,17 +12535,40 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             with sqlite3.connect(DB_PATH) as conn:
                 stats = collect_database_maintenance_stats(conn)
-            usage = collect_local_server_resource_usage()
+                reports_last_hour_row = conn.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM reports
+                    WHERE received_at_utc >= ?
+                    """,
+                    (utc_hours_ago_iso(1),),
+                ).fetchone()
+                reports_last_hour = int((reports_last_hour_row[0] or 0) if reports_last_hour_row else 0)
+
+                delta_1h_row = conn.execute(
+                    """
+                    SELECT total_file_bytes
+                    FROM db_maintenance_history
+                    WHERE computed_at_utc <= ?
+                    ORDER BY computed_at_utc DESC
+                    LIMIT 1
+                    """,
+                    (utc_hours_ago_iso(1),),
+                ).fetchone()
+
+            total_file_bytes = int(stats.get("total_file_bytes", 0) or 0)
+            db_size_delta_1h_bytes = None
+            if delta_1h_row and delta_1h_row[0] is not None:
+                db_size_delta_1h_bytes = total_file_bytes - int(delta_1h_row[0] or 0)
             self._send_json(
                 HTTPStatus.OK,
                 {
                     "status": "ok",
                     "stats": {
                         "reports_total": int(stats.get("reports_total", 0) or 0),
-                        "total_file_bytes": int(stats.get("total_file_bytes", 0) or 0),
-                        "cpu_percent": round(float(usage.get("cpu_percent", 0.0) or 0.0), 1),
-                        "memory_percent": round(float(usage.get("memory_percent", 0.0) or 0.0), 1),
-                        "memory_total_bytes": int(usage.get("memory_total_bytes", 0) or 0),
+                        "reports_last_hour": reports_last_hour,
+                        "total_file_bytes": total_file_bytes,
+                        "db_size_delta_1h_bytes": db_size_delta_1h_bytes,
                     },
                 },
             )
