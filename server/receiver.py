@@ -4141,20 +4141,38 @@ def _database_lifecycle_values(action: str, database_display_name: str, instance
     return f"DB {normalized or 'event'}", "-", database_display_name
 
 
-def _collect_database_lifecycle_change_items_for_host(conn: sqlite3.Connection, hostname: str) -> list[dict]:
-    rows = conn.execute(
-        """
-        SELECT id,
-               triggered_at_utc,
-               database_name,
-               action,
-               COALESCE(instance_name, 'MSSQLSERVER')
-        FROM database_lifecycle
-        WHERE hostname = ?
-        ORDER BY triggered_at_utc DESC, id DESC
-        """,
-        (hostname,),
-    ).fetchall()
+def _collect_database_lifecycle_change_items_for_host(conn: sqlite3.Connection, hostname: str, host_uid: str = "") -> list[dict]:
+    host_uid_value = str(host_uid or "").strip()
+    if host_uid_value:
+        host_key_expr = reports_host_key_sql("r")
+        rows = conn.execute(
+            f"""
+            SELECT dl.id,
+                   dl.triggered_at_utc,
+                   dl.database_name,
+                   dl.action,
+                   COALESCE(dl.instance_name, 'MSSQLSERVER')
+            FROM database_lifecycle dl
+            LEFT JOIN reports r ON r.id = dl.report_id
+            WHERE COALESCE({host_key_expr}, dl.hostname) = ?
+            ORDER BY dl.triggered_at_utc DESC, dl.id DESC
+            """,
+            (host_uid_value,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT id,
+                   triggered_at_utc,
+                   database_name,
+                   action,
+                   COALESCE(instance_name, 'MSSQLSERVER')
+            FROM database_lifecycle
+            WHERE hostname = ?
+            ORDER BY triggered_at_utc DESC, id DESC
+            """,
+            (hostname,),
+        ).fetchall()
 
     items: list[dict] = []
     for row in rows:
@@ -4232,6 +4250,7 @@ def _collect_database_lifecycle_change_items(conn: sqlite3.Connection, hours: in
 def get_host_config_changes_for_host(
     conn: sqlite3.Connection,
     hostname: str,
+    host_uid: str = "",
     limit: int = 100,
     offset: int = 0,
 ) -> dict:
@@ -4239,20 +4258,37 @@ def get_host_config_changes_for_host(
     safe_limit = max(1, min(int(limit or 100), 1000))
     safe_offset = max(0, int(offset or 0))
 
-    rows = conn.execute(
-        """
-        SELECT c.id,
-               c.detected_at_utc,
-               c.field_key,
-               c.old_value,
-               c.new_value,
-               COALESCE(c.source, 'agent-report')
-        FROM host_config_changes c
-        WHERE c.hostname = ?
-        ORDER BY c.detected_at_utc DESC
-        """,
-        (hostname,),
-    ).fetchall()
+    host_uid_value = str(host_uid or "").strip()
+    if host_uid_value:
+        rows = conn.execute(
+            """
+            SELECT c.id,
+                   c.detected_at_utc,
+                   c.field_key,
+                   c.old_value,
+                   c.new_value,
+                   COALESCE(c.source, 'agent-report')
+            FROM host_config_changes c
+            WHERE c.host_uid = ?
+            ORDER BY c.detected_at_utc DESC
+            """,
+            (host_uid_value,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT c.id,
+                   c.detected_at_utc,
+                   c.field_key,
+                   c.old_value,
+                   c.new_value,
+                   COALESCE(c.source, 'agent-report')
+            FROM host_config_changes c
+            WHERE c.hostname = ?
+            ORDER BY c.detected_at_utc DESC
+            """,
+            (hostname,),
+        ).fetchall()
 
     items = [
         {
@@ -4267,9 +4303,13 @@ def get_host_config_changes_for_host(
         for row in rows
     ]
 
-    addon_items = _collect_sap_addon_change_items_for_host(conn, hostname)
+    addon_items = _collect_sap_addon_change_items_for_host(conn, hostname, host_uid=host_uid_value)
     if addon_items:
         items.extend(addon_items)
+
+    db_items = _collect_database_lifecycle_change_items_for_host(conn, hostname, host_uid=host_uid_value)
+    if db_items:
+        items.extend(db_items)
 
     items.sort(key=lambda item: (str(item.get("detected_at_utc") or ""), int(item.get("id") or 0)), reverse=True)
 
@@ -6069,16 +6109,29 @@ def _describe_sap_addon_key(addon_name: str) -> tuple[str, str]:
     return label_source, plain_name
 
 
-def _collect_sap_addon_change_items_for_host(conn: sqlite3.Connection, hostname: str) -> list[dict]:
-    rows = conn.execute(
-        """
-        SELECT id, received_at_utc, payload_json
-        FROM reports
-        WHERE hostname = ?
-        ORDER BY id ASC
-        """,
-        (hostname,),
-    ).fetchall()
+def _collect_sap_addon_change_items_for_host(conn: sqlite3.Connection, hostname: str, host_uid: str = "") -> list[dict]:
+    host_uid_value = str(host_uid or "").strip()
+    if host_uid_value:
+        host_key_expr = reports_host_key_sql()
+        rows = conn.execute(
+            f"""
+            SELECT id, received_at_utc, payload_json
+            FROM reports
+            WHERE {host_key_expr} = ?
+            ORDER BY id ASC
+            """,
+            (host_uid_value,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT id, received_at_utc, payload_json
+            FROM reports
+            WHERE hostname = ?
+            ORDER BY id ASC
+            """,
+            (hostname,),
+        ).fetchall()
 
     previous_snapshot: dict[str, str] | None = None
     changes: list[dict] = []
@@ -12206,6 +12259,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/host-changelog":
             query = parse_qs(parsed.query)
             hostname = query.get("hostname", [""])[0].strip()
+            host_uid = query.get("host_uid", [""])[0].strip()
             if not hostname:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
                 return
@@ -12214,7 +12268,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
 
             with sqlite3.connect(DB_PATH) as conn:
-                data = get_host_config_changes_for_host(conn, hostname, limit=limit, offset=offset)
+                data = get_host_config_changes_for_host(conn, hostname, host_uid=host_uid, limit=limit, offset=offset)
 
             self._send_json(HTTPStatus.OK, data)
             return

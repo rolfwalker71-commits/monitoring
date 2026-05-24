@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.30**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.30**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.31**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.31**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.31 | 24.05.2026 | Host-detail changelog identity fix: `/api/v1/host-changelog` and frontend host detail requests now pass and honor `host_uid` (with hostname fallback), so hosts with duplicate hostnames no longer show mixed changelog entries; also includes host-scoped DB lifecycle/addon item filtering by `host_uid` |
 | 1.7.30 | 24.05.2026 | System overview status fix: online/offline determination now uses a configurable threshold (`MONITORING_SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES`, default 60) instead of a hard 20-minute cutoff, reducing false Offline states in host cards |
 | 1.7.29 | 24.05.2026 | UI permissions hardening: both host-config changelog action buttons (`Backfill` and `Rebuild heute`) are now admin-only (button visibility) |
 | 1.7.28 | 24.05.2026 | Changelog identity and baseline fix: changelog entries are now host_uid-aware (duplicate hostnames are separated correctly), and initial baseline entries are generated as Neu-only values (old='-') for host config and AddOns; backfill button now includes this baseline initialization too |

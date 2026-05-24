@@ -10335,7 +10335,8 @@ async function loadConfigChangelogForHost() {
 
   try {
     const hostNameParam = encodeURIComponent(state.selectedHost);
-    const resp = await fetch(`/api/v1/host-changelog?hostname=${hostNameParam}&limit=100&offset=0`);
+    const hostUidParam = state.selectedHostUid ? `&host_uid=${encodeURIComponent(state.selectedHostUid)}` : "";
+    const resp = await fetch(`/api/v1/host-changelog?hostname=${hostNameParam}${hostUidParam}&limit=100&offset=0`);
 
     if (!resp.ok) {
       throw new Error("HTTP " + resp.status);
