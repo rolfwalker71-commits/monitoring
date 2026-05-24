@@ -8883,13 +8883,11 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
         return
 
     now_utc_dt = datetime.now(timezone.utc)
-    cutoff_mail_iso = (now_utc_dt - timedelta(hours=mail_interval_hours)).strftime("%Y-%m-%dT%H:%M:%SZ") if mail_interval_hours > 0 else ""
-    cutoff_telegram_iso = (now_utc_dt - timedelta(hours=telegram_interval_hours)).strftime("%Y-%m-%dT%H:%M:%SZ") if telegram_interval_hours > 0 else ""
 
     open_alerts = conn.execute(
         """
         SELECT id, hostname, COALESCE(host_uid, ''), mountpoint, severity, used_percent,
-               created_at_utc, last_reminder_sent_utc, last_telegram_reminder_sent_utc
+             created_at_utc, last_reminder_sent_utc, last_telegram_reminder_sent_utc, COALESCE(ack_at_utc, '')
         FROM alerts
         WHERE status = 'open'
         ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, used_percent DESC
@@ -8902,6 +8900,24 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
     now_utc_iso = now_utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     host_context_cache: dict[str, dict] = {}
     blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
+    muted_pairs = {
+        (str(row[0] or ""), str(row[1] or ""))
+        for row in conn.execute("SELECT hostname, mountpoint FROM muted_alert_rules").fetchall()
+    }
+
+    def _channel_due(interval_hours: int, created_at_utc: str, last_sent_utc: str, ack_at_utc: str) -> bool:
+        if interval_hours <= 0:
+            return False
+
+        last_sent_dt = parse_utc_iso(last_sent_utc)
+        if last_sent_dt is not None:
+            return now_utc_dt >= (last_sent_dt + timedelta(hours=interval_hours))
+
+        anchor_dt = parse_utc_iso(ack_at_utc) or parse_utc_iso(created_at_utc)
+        if anchor_dt is None:
+            return False
+
+        return now_utc_dt >= (anchor_dt + timedelta(hours=interval_hours))
 
     try:
         mail_user_rows = conn.execute(
@@ -8951,16 +8967,22 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
         created_at_utc = str(alert_row[6] or "")
         last_mail_reminder_sent_utc = str(alert_row[7] or "")
         last_telegram_reminder_sent_utc = str(alert_row[8] or "")
+        ack_at_utc = str(alert_row[9] or "")
 
-        due_mail = (
-            mail_interval_hours > 0
-            and created_at_utc <= cutoff_mail_iso
-            and (not last_mail_reminder_sent_utc or last_mail_reminder_sent_utc <= cutoff_mail_iso)
+        if (hostname, mountpoint) in muted_pairs:
+            continue
+
+        due_mail = bool(mail_user_rows) and _channel_due(
+            mail_interval_hours,
+            created_at_utc,
+            last_mail_reminder_sent_utc,
+            ack_at_utc,
         )
-        due_telegram = (
-            telegram_channel_available
-            and created_at_utc <= cutoff_telegram_iso
-            and (not last_telegram_reminder_sent_utc or last_telegram_reminder_sent_utc <= cutoff_telegram_iso)
+        due_telegram = telegram_channel_available and _channel_due(
+            telegram_interval_hours,
+            created_at_utc,
+            last_telegram_reminder_sent_utc,
+            ack_at_utc,
         )
 
         if not due_mail and not due_telegram:
