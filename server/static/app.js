@@ -4080,6 +4080,16 @@ function formatBytes(value) {
   return `${amount.toFixed(digits)} ${units[unitIndex]}`;
 }
 
+function formatMegabytesFromBytes(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) {
+    return "-";
+  }
+  const mb = n / (1024 * 1024);
+  const digits = mb >= 100 ? 0 : 1;
+  return mb.toFixed(digits);
+}
+
 function formatSignedMegabytesFromBytes(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) {
@@ -11896,7 +11906,7 @@ function updateHeaderStatChips() {
     dbReportsHourChip.classList.remove("hidden");
   }
   if (dbSizeChip && dbSizeValue) {
-    dbSizeValue.textContent = state.dbTotalFileBytes === null ? "-" : formatBytes(state.dbTotalFileBytes);
+    dbSizeValue.textContent = state.dbTotalFileBytes === null ? "-" : formatMegabytesFromBytes(state.dbTotalFileBytes);
     dbSizeChip.classList.remove("hidden");
   }
   if (dbSizeDeltaChip && dbSizeDeltaValue) {
