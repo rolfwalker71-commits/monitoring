@@ -646,6 +646,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.68 (24. Mai 2026)
+
+- **Hostkarten-Icons horizontal ausgerichtet**: Lizenz-Info und Länder-Icon werden jetzt in einer gemeinsamen Corner-Zeile gerendert und sind sauber auf einer Linie.
+- **Kundentext nicht mehr unten abgeschnitten**: Zeilenhöhen und vertikale Innenabstände für Kundenname und Untertitel wurden angepasst, damit Buchstaben-Unterlängen sichtbar bleiben.
+
 ### v1.7.67 (24. Mai 2026)
 
 - **Lizenzindikator auf Hostkarte wiederhergestellt**: Hosts mit gültigen SAP-Lizenzinfos zeigen den Indikator wieder als Corner-Badge auf der Karte.

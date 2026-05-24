@@ -7969,7 +7969,7 @@ function renderSingleHostCard(host) {
   const osLabel = osIconInfo.osLabel;
   const osIcon = `<img src="icons/${iconName}" class="host-os-icon host-os-icon--inline" alt="${osLabel}" title="${escapeHtml(asText(host.os))}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${iconName}';}">`;
   const flagIcon = countryCode
-    ? `<img src="icons/${countryCode}.png" class="host-flag-icon host-flag-icon--corner" alt="${countryCode}" title="Land: ${countryCode}" onerror="if(!this.dataset.fallback1){this.dataset.fallback1='1';this.src='/icons/${countryCode}.png';return;}if(!this.dataset.fallback2){this.dataset.fallback2='1';this.src='/icons/${countryCodeLower}.png';return;}if(!this.dataset.fallback3){this.dataset.fallback3='1';this.src='/icons/${countryCodeLower}.svg';return;}this.style.display='none'">`
+    ? `<img src="icons/${countryCode}.png" class="host-flag-icon host-flag-icon--inline" alt="${countryCode}" title="Land: ${countryCode}" onerror="if(!this.dataset.fallback1){this.dataset.fallback1='1';this.src='/icons/${countryCode}.png';return;}if(!this.dataset.fallback2){this.dataset.fallback2='1';this.src='/icons/${countryCodeLower}.png';return;}if(!this.dataset.fallback3){this.dataset.fallback3='1';this.src='/icons/${countryCodeLower}.svg';return;}this.style.display='none'">`
     : "";
   const mutedAlerts = Array.isArray(state.mutedAlertsByHost[hostname]) ? state.mutedAlertsByHost[hostname] : [];
   const hasMutedAlerts = mutedAlerts.length > 0;
@@ -8045,7 +8045,10 @@ function renderSingleHostCard(host) {
   const versionSideBarHtml = `<div class="${versionSideBarClass}" title="${escapeHtml(versionSideBarTitle)}" aria-hidden="true"></div>`;
   const hasSapLicenseInfo = Boolean(host.has_sap_license_info);
   const sapLicenseBadge = hasSapLicenseInfo
-    ? `<button type="button" class="host-license-info-badge host-license-info-badge--corner" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}" title="SAP Lizenzinfos anzeigen" aria-label="SAP Lizenzinfos anzeigen">ℹ️</button>`
+    ? `<button type="button" class="host-license-info-badge host-license-info-badge--card" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}" title="SAP Lizenzinfos anzeigen" aria-label="SAP Lizenzinfos anzeigen">ℹ️</button>`
+    : "";
+  const cornerIcons = (sapLicenseBadge || flagIcon)
+    ? `<div class="host-corner-icons">${sapLicenseBadge}${flagIcon}</div>`
     : "";
   const customerTitleLine = customerNameValue
     ? `<div class="host-customer-title-line"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span></span></div>`
@@ -8101,7 +8104,7 @@ function renderSingleHostCard(host) {
   return `
     <article class="${selectedClass}${envCardClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostIdentity)}">
       ${versionSideBarHtml}
-      ${sapLicenseBadge}
+      ${cornerIcons}
       <div class="host-card-main">
         ${customerTitleLine}
         ${designationBadgeLine}
@@ -8110,7 +8113,6 @@ function renderSingleHostCard(host) {
           <span class="host-tech-row host-tech-row--ip"><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span>${osIcon}</span>
         </div>
       </div>
-      ${flagIcon}
       ${mutedAlertsSection}
     </article>
   `;
