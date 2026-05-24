@@ -163,7 +163,6 @@ const state = {
   oauthSettingsLoaded: false,
   userManagementLoaded: false,
   hostFilterNoMatches: false,
-  headerHostToolsExpanded: true,
   hostInterestMode: "all",
   hostInterestHosts: new Set(),
   hostInterestsLoadedFor: "",
@@ -1592,30 +1591,18 @@ function setPasswordChangeStatus(message, isError = false) {
   statusEl.classList.toggle("status-error", isError);
 }
 
-function syncHeaderHostToolsVisibility() {
-  const hostToolsHeader = document.getElementById("hostToolsHeader");
-  const toggleHostToolsButton = document.getElementById("toggleHostToolsButton");
-  const authenticated = state.isAuthenticated === true;
-  const expanded = authenticated && state.headerHostToolsExpanded === true;
-
-  if (hostToolsHeader) {
-    hostToolsHeader.classList.toggle("hidden", !expanded);
-  }
-  if (toggleHostToolsButton) {
-    toggleHostToolsButton.classList.toggle("hidden", !authenticated);
-    toggleHostToolsButton.classList.toggle("active", expanded);
-    toggleHostToolsButton.setAttribute("aria-expanded", expanded ? "true" : "false");
-  }
-}
-
 function setAuthUiState(authenticated) {
   const loginOverlay = document.getElementById("loginOverlay");
   const appPanel = document.getElementById("appPanel");
+  const hostToolsHeader = document.getElementById("hostToolsHeader");
   const brandUserBadge = document.getElementById("brandUserBadge");
   const brandSessionBadge = document.getElementById("brandSessionBadge");
   const logoutButton = document.getElementById("logoutButton");
   loginOverlay.classList.toggle("hidden", authenticated);
   appPanel.classList.toggle("hidden", !authenticated);
+  if (hostToolsHeader) {
+    hostToolsHeader.classList.toggle("hidden", !authenticated);
+  }
   if (brandUserBadge) {
     brandUserBadge.classList.toggle("hidden", !authenticated);
     if (authenticated && state.authUser) {
@@ -1629,7 +1616,6 @@ function setAuthUiState(authenticated) {
     brandSessionBadge.classList.toggle("hidden", !authenticated);
   }
   state.isAuthenticated = authenticated;
-  syncHeaderHostToolsVisibility();
   if (authenticated) {
     startSessionRefreshTimer();
     startSessionCountdownTimer();
@@ -13419,13 +13405,6 @@ function wireEvents() {
         setHostInterestsStatus(`Modus konnte nicht gespeichert werden: ${error.message}`, true);
       }
       await applyHostFiltersLocally({ preserveScroll: true });
-    });
-  }
-  const toggleHostToolsButton = document.getElementById("toggleHostToolsButton");
-  if (toggleHostToolsButton) {
-    toggleHostToolsButton.addEventListener("click", () => {
-      state.headerHostToolsExpanded = !state.headerHostToolsExpanded;
-      syncHeaderHostToolsVisibility();
     });
   }
   const hostInterestSearchInput = document.getElementById("hostInterestSearchInput");

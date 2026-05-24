@@ -300,13 +300,6 @@ body[data-theme="dark"] {
   box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
 }
 
-.btn-emoji-pill.active {
-  background: linear-gradient(180deg, #e6f0ff 0%, #d8e8ff 100%);
-  border-color: #78a3d4;
-  color: #214c7a;
-  box-shadow: 0 6px 14px rgba(52, 109, 171, 0.2);
-}
-
 body[data-theme="dark"] .btn-emoji-pill {
   background: linear-gradient(180deg, #1b2b45 0%, #14233a 100%);
   border-color: #2a3c59;
@@ -11519,12 +11512,6 @@ body[data-theme="dark"] .header-host-tools .icon-filter-chip:hover {
 body[data-theme="dark"] .header-host-tools .icon-filter-chip.active {
   background: #2b4d78;
   border-color: #7098c8;
-}
-
-body[data-theme="dark"] .btn-emoji-pill.active {
-  background: linear-gradient(180deg, #27466e 0%, #1d3757 100%);
-  border-color: #5b85b6;
-  color: #e6f0ff;
 }
 
 body[data-theme="dark"] .header-stat-chip {

@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.42**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.42**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.43**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.43**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.43 | 24.05.2026 | Header filter card finalization: removed the expand/collapse mechanism and related toolbar icon entirely; host search/filter card now stays fixed and always visible as a standalone block directly below the KPI strip (only hidden when not authenticated) |
 | 1.7.42 | 24.05.2026 | Login logo positioning refinement: moved the floating app logo significantly further upward so it is clearly outside the login card with explicit visual spacing above the card top edge (desktop + mobile) |
 | 1.7.41 | 24.05.2026 | Header filter placement adjustment: converted the host filter/search area from an overlapping overlay into a standalone in-flow block directly below the KPI strip, so expanding the block now pushes the content below downward and preserves the same one-row control layout |
 | 1.7.40 | 24.05.2026 | Header filter UX correction: moved host filters/search into a dedicated collapsible overlay box directly below the KPI strip (instead of sharing the KPI row), added toolbar toggle button with active state, and enforced one-line presentation for the filter controls with horizontal scrolling fallback to prevent KPI compression and wrapping |
