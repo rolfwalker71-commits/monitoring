@@ -132,6 +132,7 @@
                   <button id="exportGlobalAlertsButton" type="button" class="btn-secondary" title="Alerts als CSV exportieren">Export CSV</button>
                   <button id="toggleGlobalAlertsPanelButton" type="button" class="host-group-toggle">▾</button>
                 </div>
+                <div id="globalAlertsIdentityPanel" class="global-alert-identity-panel hidden"></div>
                 <div id="globalAlertsPanelBody">
                   <div class="table-wrap">
                     <table>
@@ -283,7 +284,7 @@
                   </div>
                   <span id="changelogRebuildProgressLabel" class="db-ops-progress-label"></span>
                 </div>
-                <p id="changelogRebuildWarningHint" class="count compact changelog-rebuild-warning hidden">⚠ Rebuild heute löscht und baut alle Changelog-Daten komplett neu auf (Host-Config + DB-Lifecycle).</p>
+                <p id="changelogRebuildWarningHint" class="count compact changelog-rebuild-warning hidden">⚠ Rebuild heute löscht und baut alle Changelog-Daten komplett neu auf (Host-Config inkl. OS/CPU/RAM + DB-Lifecycle).</p>
               </div>
               <div id="hostConfigChangesGroups" class="host-config-changes-groups">
                 <p class="muted">Lade Daten…</p>

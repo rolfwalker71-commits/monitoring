@@ -4399,7 +4399,12 @@ def rebuild_changelog_history(
         except Exception:
             pass
 
-    config_result = backfill_host_config_changes(conn, days=window_days, progress_callback=progress_callback)
+    config_result = backfill_host_config_changes(
+        conn,
+        days=window_days,
+        progress_callback=progress_callback,
+        include_initial_snapshot_events=True,
+    )
 
     if callable(progress_callback):
         try:
@@ -5297,6 +5302,66 @@ def _collect_latest_report_usage_by_host(conn: sqlite3.Connection, hostnames: li
     return usage_by_host
 
 
+def _collect_latest_report_details_by_host_keys(conn: sqlite3.Connection, host_keys: list[str]) -> dict[str, dict]:
+    normalized_keys = [str(item or "").strip() for item in (host_keys or []) if str(item or "").strip()]
+    if not normalized_keys:
+        return {}
+
+    unique_keys = sorted(set(normalized_keys))
+    placeholders = ",".join("?" for _ in unique_keys)
+    host_key_expr = reports_host_key_sql()
+    latest_rows = conn.execute(
+        f"""
+        SELECT latest.host_key,
+               COALESCE(r.hostname, ''),
+               COALESCE(r.primary_ip, ''),
+               COALESCE(r.payload_json, '{{}}')
+        FROM (
+            SELECT {host_key_expr} AS host_key,
+                   MAX(id) AS latest_id
+            FROM reports
+            WHERE {host_key_expr} IN ({placeholders})
+            GROUP BY {host_key_expr}
+        ) latest
+        JOIN reports r ON r.id = latest.latest_id
+        """,
+        tuple(unique_keys),
+    ).fetchall()
+
+    details_by_host_key: dict[str, dict] = {}
+    for row in latest_rows:
+        host_key = str(row[0] or "").strip()
+        if not host_key:
+            continue
+        hostname = str(row[1] or "").strip()
+        primary_ip = str(row[2] or "").strip()
+        payload = parse_payload_json(str(row[3] or "{}"))
+        latest_report_ip = _resolve_std_nic_ipv4(payload, primary_ip)
+
+        usage_by_mountpoint: dict[str, float] = {}
+        filesystems = payload.get("filesystems", []) if isinstance(payload, dict) else []
+        if isinstance(filesystems, list):
+            for fs in filesystems:
+                if not isinstance(fs, dict):
+                    continue
+                mountpoint = str(fs.get("mountpoint", "") or "").strip()
+                if not mountpoint:
+                    continue
+                try:
+                    used_percent = float(fs.get("used_percent"))
+                except (TypeError, ValueError):
+                    continue
+                usage_by_mountpoint[normalize_mountpoint_key(mountpoint)] = used_percent
+
+        details_by_host_key[host_key] = {
+            "hostname": hostname,
+            "latest_report_ip": latest_report_ip,
+            "usage_by_mountpoint": usage_by_mountpoint,
+        }
+
+    return details_by_host_key
+
+
 def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | None = None) -> list[dict]:
     rows = conn.execute(
         """
@@ -6154,7 +6219,12 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
     }
 
 
-def backfill_host_config_changes(conn: sqlite3.Connection, days: int = 7, progress_callback=None) -> dict:
+def backfill_host_config_changes(
+    conn: sqlite3.Connection,
+    days: int = 7,
+    progress_callback=None,
+    include_initial_snapshot_events: bool = False,
+) -> dict:
     _ensure_host_config_snapshot_schema(conn)
 
     window_days = max(1, int(days or 7))
@@ -6263,6 +6333,45 @@ def backfill_host_config_changes(conn: sqlite3.Connection, days: int = 7, progre
                         source
                     )
                     VALUES (?, ?, ?, ?, ?, ?, 'backfill')
+                    """,
+                    (detected_at_utc or utc_now_iso(), hostname, field_key, old_value, new_value, report_id),
+                )
+                inserted_changes += 1
+        elif include_initial_snapshot_events:
+            for field_key in HOST_CONFIG_TRACKED_FIELDS:
+                old_value = "-"
+                new_value = current_snapshot.get(field_key, "-")
+                if not _is_significant_config_change(field_key, old_value, new_value):
+                    continue
+
+                existing = conn.execute(
+                    """
+                    SELECT 1
+                    FROM host_config_changes
+                    WHERE hostname = ?
+                      AND field_key = ?
+                      AND report_id = ?
+                      AND old_value = ?
+                      AND new_value = ?
+                    LIMIT 1
+                    """,
+                    (hostname, field_key, report_id, old_value, new_value),
+                ).fetchone()
+                if existing:
+                    continue
+
+                conn.execute(
+                    """
+                    INSERT INTO host_config_changes (
+                        detected_at_utc,
+                        hostname,
+                        field_key,
+                        old_value,
+                        new_value,
+                        report_id,
+                        source
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, 'backfill-init')
                     """,
                     (detected_at_utc or utc_now_iso(), hostname, field_key, old_value, new_value, report_id),
                 )
@@ -12592,7 +12701,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             host_settings = get_host_settings(conn, hostname)
                             customer_names[hostname] = str(host_settings.get("customer_name", "") or "").strip()
 
-                latest_usage_by_host = _collect_latest_report_usage_by_host(conn, hostnames)
+                host_keys = sorted(
+                    {
+                        alert_host_key(str(row[1] or ""), str(row[6] or ""))
+                        for row in rows
+                    }
+                )
+                latest_details_by_host_key = _collect_latest_report_details_by_host_keys(conn, host_keys)
 
             alerts = []
             with sqlite3.connect(DB_PATH) as conn_mute:
@@ -12604,12 +12719,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 hostname = str(row[1] or "")
                 host_uid_value = alert_host_key(hostname, str(row[6] or ""))
                 mountpoint = str(row[2] or "")
+                host_details = latest_details_by_host_key.get(host_uid_value, {})
+                host_usage = host_details.get("usage_by_mountpoint", {}) if isinstance(host_details, dict) else {}
                 current_used_percent = None
                 if mountpoint:
-                    current_used_percent = latest_usage_by_host.get(hostname, {}).get(normalize_mountpoint_key(mountpoint))
+                    current_used_percent = host_usage.get(normalize_mountpoint_key(mountpoint))
                 delta_used_percent = None
                 if current_used_percent is not None:
                     delta_used_percent = abs(float(current_used_percent) - float(row[4] or 0.0))
+                latest_report_ip = ""
+                if isinstance(host_details, dict):
+                    latest_report_ip = str(host_details.get("latest_report_ip") or "").strip()
                 alerts.append(
                     {
                         "id": row[0],
@@ -12623,6 +12743,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "current_used_percent": current_used_percent,
                         "delta_used_percent": delta_used_percent,
                         "status": row[5],
+                        "latest_report_ip": latest_report_ip,
                         "created_at_utc": row[7],
                         "last_seen_at_utc": row[8],
                         "resolved_at_utc": row[9],

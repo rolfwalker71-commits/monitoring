@@ -6121,6 +6121,33 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
   background: #fff;
 }
 
+.global-alert-identity-panel {
+  margin-top: 10px;
+  border: 1px dashed #b5c7de;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+}
+
+.global-alert-identity-head {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 6px;
+}
+
+.global-alert-identity-table th,
+.global-alert-identity-table td {
+  font-size: 11px;
+}
+
+.global-alert-identity-hostuid {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .alerts-panel-actions {
   display: inline-flex;
   align-items: center;
@@ -9169,6 +9196,15 @@ body[data-theme="dark"] .global-alerts-panel {
 
 body[data-theme="dark"] .global-alerts-controls {
   color: #9fb3cc;
+}
+
+body[data-theme="dark"] .global-alert-identity-panel {
+  border-color: #385375;
+  background: linear-gradient(180deg, #162338 0%, #132033 100%);
+}
+
+body[data-theme="dark"] .global-alert-identity-head {
+  color: #c9dbf5;
 }
 
 body[data-theme="dark"] .mini-chart-card {
