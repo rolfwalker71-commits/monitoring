@@ -3733,6 +3733,7 @@ async function loadGlobalAdminSettingsPanel(force = false) {
   setDbMaintenanceStatus("Lade DB Kennzahlen-Verlauf...");
   setBackupAutomationStatus("Lade Backup-Automation...");
   setAgentIngestQueueStatus("Lade Queue-Status...");
+  setAgentIngestAuditStatus("Lade Ingest-Lieferlog...");
   try {
     await loadAdminDatabaseStats();
   } catch (error) {
@@ -3747,6 +3748,11 @@ async function loadGlobalAdminSettingsPanel(force = false) {
     await loadAdminAgentIngestQueue();
   } catch (error) {
     setAgentIngestQueueStatus(`Fehler: ${error.message}`, true);
+  }
+  try {
+    await loadAdminAgentIngestAuditLog();
+  } catch (error) {
+    setAgentIngestAuditStatus(`Fehler: ${error.message}`, true);
   }
   await loadSapB1VersionMap();
   await loadSapLicenseTypeMap();
@@ -8938,6 +8944,13 @@ function setAgentIngestQueueStatus(message, isError = false) {
   el.classList.toggle("error", !!isError);
 }
 
+function setAgentIngestAuditStatus(message, isError = false) {
+  const el = document.getElementById("agentIngestAuditStatus");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle("error", !!isError);
+}
+
 function formatDurationCompact(seconds) {
   const total = Math.max(0, Math.floor(Number(seconds || 0)));
   const days = Math.floor(total / 86400);
@@ -9013,8 +9026,71 @@ async function loadAdminAgentIngestQueue() {
   const oldestText = oldestAge > 0 ? formatDurationCompact(oldestAge) : "-";
   const nextText = nextAttemptSeconds > 0 ? `in ${formatDurationCompact(nextAttemptSeconds)}` : "sofort";
   setAgentIngestQueueStatus(
-    `Queue: ${formatInteger(data?.queue_depth || 0)} · Ready: ${formatInteger(data?.ready_count || 0)} · Aeltestes: ${oldestText} · Naechster Retry: ${nextText}`
+    `Queue: ${formatInteger(data?.queue_depth || 0)} · Ready: ${formatInteger(data?.ready_count || 0)} · Ältestes: ${oldestText} · Nächster Retry: ${nextText}`
   );
+  return data;
+}
+
+function formatLatencyMs(valueMs) {
+  const ms = Math.max(0, Math.floor(Number(valueMs || 0)));
+  if (ms < 1000) return `${ms} ms`;
+  return formatDurationCompact(ms / 1000);
+}
+
+function renderAgentIngestAuditLog(data) {
+  const bodyEl = document.getElementById("agentIngestAuditRows");
+  if (!bodyEl) return;
+
+  const entries = Array.isArray(data?.entries) ? data.entries : [];
+  if (entries.length === 0) {
+    bodyEl.innerHTML = '<tr><td colspan="8" class="muted">Noch keine Ingest-Lieferdaten vorhanden.</td></tr>';
+    return;
+  }
+
+  bodyEl.innerHTML = entries.map((item) => {
+    const queueId = Number(item?.queue_id || 0);
+    const host = asText(item?.hostname || item?.host_uid, "-");
+    const receivedAt = formatUtcPlus2(asText(item?.report_received_at_utc, ""));
+    const writtenAt = formatUtcPlus2(asText(item?.db_written_at_utc, ""));
+    const payloadBytes = Number(item?.payload_bytes || 0);
+    const latencyText = formatLatencyMs(item?.end_to_end_ms || 0);
+    const status = asText(item?.status, "-");
+    const payloadStored = !!item?.payload_stored;
+    const payloadPath = asText(item?.payload_download_path, "");
+    const payloadLinkHtml = payloadStored && payloadPath
+      ? `<a class="backup-run-link" href="${escapeHtml(payloadPath)}" target="_blank" rel="noopener noreferrer">anzeigen</a>`
+      : "-";
+    return `
+      <tr>
+        <td>${escapeHtml(String(queueId || "-"))}</td>
+        <td>${escapeHtml(host)}</td>
+        <td>${escapeHtml(receivedAt)}</td>
+        <td>${escapeHtml(formatBytes(payloadBytes))}</td>
+        <td>${escapeHtml(writtenAt)}</td>
+        <td>${escapeHtml(latencyText)}</td>
+        <td>${payloadLinkHtml}</td>
+        <td>${escapeHtml(status)}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function loadAdminAgentIngestAuditLog() {
+  const response = await fetch("/api/v1/admin/agent-ingest-log?limit=250", {
+    method: "GET",
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+
+  renderAgentIngestAuditLog(data);
+  const count = Array.isArray(data?.entries) ? data.entries.length : 0;
+  const mode = asText(data?.payload_capture_mode, "off");
+  const payloadMode = mode === "disk" ? "Payload auf Disk" : "Payload aus";
+  setAgentIngestAuditStatus(`Einträge: ${formatInteger(count)} · Limit: ${formatInteger(data?.retention_limit || 250)} · ${payloadMode}`);
   return data;
 }
 
@@ -13453,10 +13529,13 @@ function wireEvents() {
     refreshAgentIngestQueueButton.addEventListener("click", async () => {
       refreshAgentIngestQueueButton.disabled = true;
       setAgentIngestQueueStatus("Queue-Status wird aktualisiert...");
+      setAgentIngestAuditStatus("Ingest-Lieferlog wird aktualisiert...");
       try {
         await loadAdminAgentIngestQueue();
+        await loadAdminAgentIngestAuditLog();
       } catch (error) {
         setAgentIngestQueueStatus(`Fehler: ${error.message}`, true);
+        setAgentIngestAuditStatus(`Fehler: ${error.message}`, true);
       } finally {
         refreshAgentIngestQueueButton.disabled = false;
       }
@@ -13472,6 +13551,9 @@ function wireEvents() {
     });
     void loadAdminAgentIngestQueue().catch((error) => {
       setAgentIngestQueueStatus(`Fehler: ${error.message}`, true);
+    });
+    void loadAdminAgentIngestAuditLog().catch((error) => {
+      setAgentIngestAuditStatus(`Fehler: ${error.message}`, true);
     });
   }
 

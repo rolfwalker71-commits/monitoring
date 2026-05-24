@@ -127,6 +127,16 @@ AGENT_INGEST_WORKER_IDLE_SECONDS = max(
     0.1,
     min(10.0, float(os.getenv("MONITORING_AGENT_INGEST_WORKER_IDLE_SECONDS", "0.5") or "0.5")),
 )
+AGENT_INGEST_AUDIT_MAX_ROWS = max(
+    50,
+    min(2000, int(os.getenv("MONITORING_AGENT_INGEST_AUDIT_MAX_ROWS", "250") or "250")),
+)
+AGENT_INGEST_AUDIT_STORE_PAYLOAD = os.getenv("MONITORING_AGENT_INGEST_AUDIT_STORE_PAYLOAD", "0").strip().lower() in {"1", "true", "yes", "on"}
+AGENT_INGEST_AUDIT_PAYLOAD_DIR = DATA_DIR / "agent_ingest_payload_audit"
+AGENT_INGEST_AUDIT_PAYLOAD_MAX_BYTES = max(
+    4096,
+    min(2 * 1024 * 1024, int(os.getenv("MONITORING_AGENT_INGEST_AUDIT_PAYLOAD_MAX_BYTES", "65536") or "65536")),
+)
 
 
 def parse_int(query: dict, key: str, default: int, min_value: int, max_value: int) -> int:
@@ -240,6 +250,61 @@ def init_db() -> None:
             ON agent_ingest_queue(hostname, id)
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS agent_ingest_audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                queue_id INTEGER NOT NULL,
+                hostname TEXT NOT NULL,
+                host_uid TEXT NOT NULL DEFAULT '',
+                report_received_at_utc TEXT NOT NULL,
+                enqueued_at_utc TEXT NOT NULL,
+                db_written_at_utc TEXT NOT NULL DEFAULT '',
+                payload_bytes INTEGER NOT NULL DEFAULT 0,
+                payload_stored INTEGER NOT NULL DEFAULT 0,
+                payload_file_path TEXT NOT NULL DEFAULT '',
+                payload_snapshot_json TEXT NOT NULL DEFAULT '',
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                queue_wait_ms INTEGER NOT NULL DEFAULT 0,
+                processing_ms INTEGER NOT NULL DEFAULT 0,
+                end_to_end_ms INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'queued',
+                error_message TEXT NOT NULL DEFAULT '',
+                updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_ingest_audit_queue_id
+            ON agent_ingest_audit_log(queue_id)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_agent_ingest_audit_updated
+            ON agent_ingest_audit_log(updated_at_utc DESC, id DESC)
+            """
+        )
+        existing_ingest_audit_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(agent_ingest_audit_log)").fetchall()
+        }
+        if "payload_file_path" not in existing_ingest_audit_columns:
+            conn.execute("ALTER TABLE agent_ingest_audit_log ADD COLUMN payload_file_path TEXT NOT NULL DEFAULT ''")
+        conn.execute(
+            """
+            DELETE FROM agent_ingest_audit_log
+            WHERE id IN (
+                SELECT id
+                FROM agent_ingest_audit_log
+                ORDER BY id DESC
+                LIMIT -1 OFFSET ?
+            )
+            """,
+            (AGENT_INGEST_AUDIT_MAX_ROWS,),
+        )
+        AGENT_INGEST_AUDIT_PAYLOAD_DIR.mkdir(parents=True, exist_ok=True)
         # Safety reset on startup in case the process ended while an item was marked in-flight.
         conn.execute(
             """
@@ -2645,6 +2710,252 @@ def collect_agent_ingest_queue_overview(conn: sqlite3.Connection, recent_errors_
         "next_attempt_in_seconds": next_attempt_in_seconds,
         "recent_errors": recent_errors,
     }
+
+
+def _agent_ingest_duration_ms(start_iso: object, end_iso: object) -> int:
+    start_dt = parse_utc_iso(start_iso)
+    end_dt = parse_utc_iso(end_iso)
+    if start_dt is None or end_dt is None:
+        return 0
+    return max(0, int((end_dt - start_dt).total_seconds() * 1000))
+
+
+def _prune_agent_ingest_audit_log(conn: sqlite3.Connection) -> None:
+    rows_to_delete = conn.execute(
+        """
+        SELECT id, payload_file_path
+        FROM agent_ingest_audit_log
+        ORDER BY id DESC
+        LIMIT -1 OFFSET ?
+        """,
+        (AGENT_INGEST_AUDIT_MAX_ROWS,),
+    ).fetchall()
+    if not rows_to_delete:
+        return
+
+    for row in rows_to_delete:
+        file_name = str((row[1] if len(row) > 1 else "") or "").strip()
+        if not file_name:
+            continue
+        file_path = AGENT_INGEST_AUDIT_PAYLOAD_DIR / file_name
+        try:
+            if file_path.is_file():
+                file_path.unlink()
+        except OSError:
+            pass
+
+    conn.execute(
+        """
+        DELETE FROM agent_ingest_audit_log
+        WHERE id IN (
+            SELECT id
+            FROM agent_ingest_audit_log
+            ORDER BY id DESC
+            LIMIT -1 OFFSET ?
+        )
+        """,
+        (AGENT_INGEST_AUDIT_MAX_ROWS,),
+    )
+
+
+def _insert_agent_ingest_audit_log_row(
+    conn: sqlite3.Connection,
+    *,
+    queue_id: int,
+    hostname: str,
+    host_uid: str,
+    report_received_at_utc: str,
+    enqueued_at_utc: str,
+    payload_bytes: int,
+    payload_file_path: str,
+) -> None:
+    safe_file_name = str(payload_file_path or "").strip()
+    payload_stored = 1 if safe_file_name else 0
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO agent_ingest_audit_log (
+            queue_id,
+            hostname,
+            host_uid,
+            report_received_at_utc,
+            enqueued_at_utc,
+            db_written_at_utc,
+            payload_bytes,
+            payload_stored,
+            payload_file_path,
+            payload_snapshot_json,
+            attempt_count,
+            queue_wait_ms,
+            processing_ms,
+            end_to_end_ms,
+            status,
+            error_message,
+            updated_at_utc
+        ) VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, '', 0, 0, 0, 0, 'queued', '', ?)
+        """,
+        (
+            int(queue_id),
+            str(hostname or ""),
+            str(host_uid or ""),
+            str(report_received_at_utc or ""),
+            str(enqueued_at_utc or ""),
+            max(0, int(payload_bytes or 0)),
+            payload_stored,
+            safe_file_name,
+            str(enqueued_at_utc or ""),
+        ),
+    )
+    _prune_agent_ingest_audit_log(conn)
+
+
+def _update_agent_ingest_audit_log_row(
+    conn: sqlite3.Connection,
+    *,
+    queue_id: int,
+    status: str,
+    updated_at_utc: str,
+    attempt_count: int,
+    db_written_at_utc: str = "",
+    queue_wait_ms: int = 0,
+    processing_ms: int = 0,
+    end_to_end_ms: int = 0,
+    error_message: str = "",
+) -> None:
+    conn.execute(
+        """
+        UPDATE agent_ingest_audit_log
+        SET status = ?,
+            updated_at_utc = ?,
+            attempt_count = ?,
+            db_written_at_utc = ?,
+            queue_wait_ms = ?,
+            processing_ms = ?,
+            end_to_end_ms = ?,
+            error_message = ?
+        WHERE queue_id = ?
+        """,
+        (
+            str(status or "queued"),
+            str(updated_at_utc or ""),
+            max(0, int(attempt_count or 0)),
+            str(db_written_at_utc or ""),
+            max(0, int(queue_wait_ms or 0)),
+            max(0, int(processing_ms or 0)),
+            max(0, int(end_to_end_ms or 0)),
+            str(error_message or ""),
+            int(queue_id),
+        ),
+    )
+
+
+def collect_agent_ingest_audit_log(
+    conn: sqlite3.Connection,
+    *,
+    limit: int = AGENT_INGEST_AUDIT_MAX_ROWS,
+) -> dict[str, object]:
+    safe_limit = max(10, min(2000, int(limit or AGENT_INGEST_AUDIT_MAX_ROWS)))
+    rows = conn.execute(
+        """
+        SELECT
+            id,
+            queue_id,
+            hostname,
+            host_uid,
+            report_received_at_utc,
+            enqueued_at_utc,
+            db_written_at_utc,
+            payload_bytes,
+            payload_stored,
+            payload_file_path,
+            attempt_count,
+            queue_wait_ms,
+            processing_ms,
+            end_to_end_ms,
+            status,
+            error_message,
+            updated_at_utc
+        FROM agent_ingest_audit_log
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (safe_limit,),
+    ).fetchall()
+
+    entries: list[dict[str, object]] = []
+    for row in rows:
+        payload_stored = int(row[8] or 0) == 1
+        payload_file_name = str(row[9] or "").strip()
+        payload_download_path = ""
+        if payload_stored and payload_file_name:
+            payload_download_path = f"/api/v1/admin/agent-ingest-log/payload?audit_id={int(row[0] or 0)}"
+        entries.append(
+            {
+                "id": int(row[0] or 0),
+                "queue_id": int(row[1] or 0),
+                "hostname": str(row[2] or ""),
+                "host_uid": str(row[3] or ""),
+                "report_received_at_utc": str(row[4] or ""),
+                "enqueued_at_utc": str(row[5] or ""),
+                "db_written_at_utc": str(row[6] or ""),
+                "payload_bytes": int(row[7] or 0),
+                "payload_stored": payload_stored,
+                "payload_file_name": payload_file_name,
+                "payload_download_path": payload_download_path,
+                "attempt_count": int(row[10] or 0),
+                "queue_wait_ms": int(row[11] or 0),
+                "processing_ms": int(row[12] or 0),
+                "end_to_end_ms": int(row[13] or 0),
+                "status": str(row[14] or "queued"),
+                "error_message": str(row[15] or ""),
+                "updated_at_utc": str(row[16] or ""),
+            }
+        )
+
+    return {
+        "limit": safe_limit,
+        "retention_limit": AGENT_INGEST_AUDIT_MAX_ROWS,
+        "payload_capture_enabled": AGENT_INGEST_AUDIT_STORE_PAYLOAD,
+        "payload_capture_max_bytes": AGENT_INGEST_AUDIT_PAYLOAD_MAX_BYTES,
+        "payload_capture_mode": "disk" if AGENT_INGEST_AUDIT_STORE_PAYLOAD else "off",
+        "entries": entries,
+    }
+
+
+def _write_agent_ingest_audit_payload_file(
+    *,
+    queue_id: int,
+    hostname: str,
+    report_received_at_utc: str,
+    payload_json: str,
+) -> str:
+    if not AGENT_INGEST_AUDIT_STORE_PAYLOAD:
+        return ""
+    payload_text = str(payload_json or "")
+    payload_bytes = len(payload_text.encode("utf-8"))
+    if payload_bytes > AGENT_INGEST_AUDIT_PAYLOAD_MAX_BYTES:
+        return ""
+
+    AGENT_INGEST_AUDIT_PAYLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    host_slug = re.sub(r"[^a-zA-Z0-9._-]+", "-", str(hostname or "").strip()).strip("-._") or "host"
+    ts = re.sub(r"[^0-9]", "", str(report_received_at_utc or ""))[:14]
+    if not ts:
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    file_name = f"ingest_{ts}_q{int(queue_id)}_{host_slug}.json"
+    file_path = AGENT_INGEST_AUDIT_PAYLOAD_DIR / file_name
+    tmp_path = AGENT_INGEST_AUDIT_PAYLOAD_DIR / f"{file_name}.tmp"
+
+    try:
+        tmp_path.write_text(payload_text, encoding="utf-8")
+        tmp_path.replace(file_path)
+        return file_name
+    except OSError as exc:
+        print(f"[agent-ingest-audit] payload snapshot write failed for queue_id={queue_id}: {exc}")
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except OSError:
+            pass
+        return ""
 
 
 def run_database_vacuum() -> dict[str, object]:
@@ -11100,6 +11411,8 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
 def enqueue_agent_report(payload: dict, report_received_at_utc: str) -> int:
     hostname = str(payload.get("hostname", "")).strip()
     host_uid = str(payload.get("host_uid", "") or "").strip()
+    payload_json = json.dumps(payload, separators=(",", ":"))
+    payload_bytes = len(payload_json.encode("utf-8"))
     now_utc = utc_now_iso()
     with sqlite3.connect(DB_PATH, timeout=30) as conn:
         conn.execute("PRAGMA busy_timeout = 5000")
@@ -11123,12 +11436,28 @@ def enqueue_agent_report(payload: dict, report_received_at_utc: str) -> int:
                 report_received_at_utc,
                 hostname,
                 host_uid,
-                json.dumps(payload, separators=(",", ":")),
+                payload_json,
                 now_utc,
                 now_utc,
             ),
         )
         queue_id = int(cursor.lastrowid)
+        payload_file_path = _write_agent_ingest_audit_payload_file(
+            queue_id=queue_id,
+            hostname=hostname,
+            report_received_at_utc=report_received_at_utc,
+            payload_json=payload_json,
+        )
+        _insert_agent_ingest_audit_log_row(
+            conn,
+            queue_id=queue_id,
+            hostname=hostname,
+            host_uid=host_uid,
+            report_received_at_utc=report_received_at_utc,
+            enqueued_at_utc=now_utc,
+            payload_bytes=payload_bytes,
+            payload_file_path=payload_file_path,
+        )
         conn.commit()
     _agent_ingest_queue_wakeup.set()
     return queue_id
@@ -11148,7 +11477,7 @@ def _agent_ingest_worker_loop() -> None:
                 now_utc = utc_now_iso()
                 row = conn.execute(
                     """
-                    SELECT id, payload_json, report_received_at_utc, attempt_count
+                    SELECT id, payload_json, report_received_at_utc, enqueued_at_utc, attempt_count
                     FROM agent_ingest_queue
                     WHERE next_attempt_at_utc <= ?
                     ORDER BY id ASC
@@ -11164,7 +11493,8 @@ def _agent_ingest_worker_loop() -> None:
                     queue_id = int(row[0] or 0)
                     payload_json = str(row[1] or "{}")
                     report_received_at_utc = str(row[2] or "") or now_utc
-                    attempt_count = int(row[3] or 0) + 1
+                    enqueued_at_utc = str(row[3] or "") or report_received_at_utc
+                    attempt_count = int(row[4] or 0) + 1
                     conn.execute(
                         """
                         UPDATE agent_ingest_queue
@@ -11175,6 +11505,13 @@ def _agent_ingest_worker_loop() -> None:
                         """,
                         (attempt_count, now_utc, now_utc, queue_id),
                     )
+                    _update_agent_ingest_audit_log_row(
+                        conn,
+                        queue_id=queue_id,
+                        status="processing",
+                        updated_at_utc=now_utc,
+                        attempt_count=attempt_count,
+                    )
                     conn.commit()
 
                     try:
@@ -11183,11 +11520,28 @@ def _agent_ingest_worker_loop() -> None:
                             raise ValueError("queued payload must be a JSON object")
 
                         _process_agent_report_payload(conn, payload, report_received_at_utc)
+                        written_at_utc = utc_now_iso()
+                        queue_wait_ms = _agent_ingest_duration_ms(enqueued_at_utc, now_utc)
+                        processing_ms = _agent_ingest_duration_ms(now_utc, written_at_utc)
+                        end_to_end_ms = _agent_ingest_duration_ms(report_received_at_utc, written_at_utc)
+                        _update_agent_ingest_audit_log_row(
+                            conn,
+                            queue_id=queue_id,
+                            status="written",
+                            updated_at_utc=written_at_utc,
+                            attempt_count=attempt_count,
+                            db_written_at_utc=written_at_utc,
+                            queue_wait_ms=queue_wait_ms,
+                            processing_ms=processing_ms,
+                            end_to_end_ms=end_to_end_ms,
+                            error_message="",
+                        )
                         conn.execute("DELETE FROM agent_ingest_queue WHERE id = ?", (queue_id,))
                         conn.commit()
                     except Exception as exc:
                         backoff = _agent_ingest_retry_backoff_seconds(attempt_count)
                         retry_at = (datetime.now(timezone.utc) + timedelta(seconds=backoff)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                        failure_at_utc = utc_now_iso()
                         conn.execute(
                             """
                             UPDATE agent_ingest_queue
@@ -11197,7 +11551,15 @@ def _agent_ingest_worker_loop() -> None:
                                 updated_at_utc = ?
                             WHERE id = ?
                             """,
-                            (retry_at, str(exc), utc_now_iso(), queue_id),
+                            (retry_at, str(exc), failure_at_utc, queue_id),
+                        )
+                        _update_agent_ingest_audit_log_row(
+                            conn,
+                            queue_id=queue_id,
+                            status="retrying",
+                            updated_at_utc=failure_at_utc,
+                            attempt_count=attempt_count,
+                            error_message=str(exc),
                         )
                         conn.commit()
                         print(f"[agent-ingest-worker] queue_id={queue_id} failed (attempt={attempt_count}): {exc}")
@@ -12027,6 +12389,52 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 payload = collect_agent_ingest_queue_overview(conn, recent_errors_limit=recent_limit)
             self._send_json(HTTPStatus.OK, {"status": "ok", **payload})
+            return
+
+        if parsed.path == "/api/v1/admin/agent-ingest-log":
+            if not self._require_admin_session():
+                return
+            query = parse_qs(parsed.query)
+            limit = parse_int(query, "limit", default=AGENT_INGEST_AUDIT_MAX_ROWS, min_value=10, max_value=2000)
+            with sqlite3.connect(DB_PATH) as conn:
+                payload = collect_agent_ingest_audit_log(conn, limit=limit)
+            self._send_json(HTTPStatus.OK, {"status": "ok", **payload})
+            return
+
+        if parsed.path == "/api/v1/admin/agent-ingest-log/payload":
+            if not self._require_admin_session():
+                return
+            query = parse_qs(parsed.query)
+            if "audit_id" not in query:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "audit_id missing"})
+                return
+            audit_id = parse_int(query, "audit_id", default=0, min_value=1, max_value=2_000_000_000)
+            with sqlite3.connect(DB_PATH) as conn:
+                row = conn.execute(
+                    "SELECT payload_file_path FROM agent_ingest_audit_log WHERE id = ?",
+                    (audit_id,),
+                ).fetchone()
+
+            if not row:
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "audit entry not found"})
+                return
+
+            file_name = str(row[0] or "").strip()
+            if not file_name:
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "payload snapshot not available"})
+                return
+
+            safe_name = Path(file_name).name
+            if safe_name != file_name:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid payload reference"})
+                return
+
+            payload_file = AGENT_INGEST_AUDIT_PAYLOAD_DIR / safe_name
+            self._send_file(
+                payload_file,
+                "application/json; charset=utf-8",
+                extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+            )
             return
 
         if parsed.path == "/api/v1/dashboard-db-kpis":

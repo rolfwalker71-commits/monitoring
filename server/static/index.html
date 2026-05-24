@@ -464,11 +464,11 @@
                 <p id="agentIngestQueueStatus" class="count compact">Lade Queue-Status...</p>
                 <div class="agent-ingest-queue-stats">
                   <div class="agent-ingest-queue-stat-card"><span>Queue Tiefe</span><strong id="agentIngestQueueDepth">-</strong></div>
-                  <div class="agent-ingest-queue-stat-card"><span>Sofort faellig</span><strong id="agentIngestQueueReady">-</strong></div>
+                  <div class="agent-ingest-queue-stat-card"><span>Sofort fällig</span><strong id="agentIngestQueueReady">-</strong></div>
                   <div class="agent-ingest-queue-stat-card"><span>Retry</span><strong id="agentIngestQueueRetry">-</strong></div>
                   <div class="agent-ingest-queue-stat-card"><span>In Flight</span><strong id="agentIngestQueueInFlight">-</strong></div>
-                  <div class="agent-ingest-queue-stat-card"><span>Verzoegert</span><strong id="agentIngestQueueDelayed">-</strong></div>
-                  <div class="agent-ingest-queue-stat-card"><span>Aeltestes Item</span><strong id="agentIngestQueueOldestAge">-</strong></div>
+                  <div class="agent-ingest-queue-stat-card"><span>Verzögert</span><strong id="agentIngestQueueDelayed">-</strong></div>
+                  <div class="agent-ingest-queue-stat-card"><span>Ältestes Item</span><strong id="agentIngestQueueOldestAge">-</strong></div>
                 </div>
                 <div class="agent-update-admin-table-wrap db-maintenance-history-wrap">
                   <table class="agent-update-admin-table db-maintenance-history-table">
@@ -487,6 +487,29 @@
                     </tbody>
                   </table>
                 </div>
+                <p id="agentIngestAuditStatus" class="count compact">Lade Ingest-Lieferlog...</p>
+                <details id="agentIngestAuditDetails" class="admin-login-audit-details agent-ingest-audit-details">
+                  <summary class="admin-login-audit-summary">Ingest-Lieferlog anzeigen (letzte 250 Einträge)</summary>
+                  <div class="agent-update-admin-table-wrap db-maintenance-history-wrap">
+                    <table class="agent-update-admin-table db-maintenance-history-table">
+                      <thead>
+                        <tr>
+                          <th>Queue ID</th>
+                          <th>Host</th>
+                          <th>Empfangen</th>
+                          <th>Payload</th>
+                          <th>In DB geschrieben</th>
+                          <th>Ende-zu-Ende</th>
+                          <th>Payload Datei</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody id="agentIngestAuditRows">
+                        <tr><td colspan="8" class="muted">Lade Ingest-Lieferlog...</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
               </div>
 
               <div class="db-maintenance-panel">

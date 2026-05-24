@@ -1185,6 +1185,14 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   color: #dc2626;
 }
 
+#agentIngestAuditStatus.error {
+  color: #dc2626;
+}
+
+.agent-ingest-audit-details {
+  margin-top: 8px;
+}
+
 .agent-ingest-queue-stats {
   margin-top: 8px;
   display: grid;

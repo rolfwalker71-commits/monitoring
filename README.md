@@ -646,6 +646,13 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.62 (24. Mai 2026)
+
+- **Ingest-Lieferlog fuer Admin eingebaut**: Neue Uebersicht zeigt pro Eintrag Host, Empfangszeit, Payload-Groesse und finalen DB-Schreibzeitpunkt inkl. Ende-zu-Ende-Latenz.
+- **Rollierend auf die letzten 250 Eintraege begrenzt**: Das Audit-Log bleibt kompakt und ueberschreibt alte Eintraege automatisch.
+- **Payload-Referenz auf Disk statt in DB**: Optional werden Original-Payloads als JSON-Dateien unter `server/data/agent_ingest_payload_audit/` abgelegt und in der Ansicht per "anzeigen" verlinkt.
+- **Ansicht standardmaessig eingeklappt**: Das Ingest-Lieferlog startet zugeklappt und kann bei Bedarf geoeffnet werden.
+
 ### v1.7.61 (24. Mai 2026)
 
 - **Admin-API fuer Ingest-Queue Uebersicht**: Neuer Endpoint `/api/v1/admin/agent-ingest-queue` liefert Queue-Tiefe, Ready/Retry/In-Flight/Delayed, Alterswerte und letzte Fehler als kompakte Betriebskennzahlen.
