@@ -646,6 +646,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.53 (24. Mai 2026)
+
+- **SAP Service-/Port-Aenderungen jetzt im Host-Changelog**: Das Host-Config-Tracking schreibt nun ein zusaetzliches Feld `SAP Services/Ports`, damit Servicebezeichnungen inkl. Portbelegung als Change mit Alt/Neu-Wert sichtbar sind.
+- **Port-Change-Pruefung normalisiert**: Ports werden robust geparst (numerisch, dedupliziert, sortiert), damit echte Port-Aenderungen sauber erkannt werden und Reihenfolge-/Format-Rauschen keine falschen Changes erzeugt.
+- **Schema-Migration automatisch**: Bestehende Installationen erweitern `host_config_snapshot` automatisch um das neue Tracking-Feld.
+
 ### v1.7.52 (24. Mai 2026)
 
 - **Linux-Agent sammelt installierte SAP Services robust**: Neue Erkennung fuer Dienste mit Prefix `sapb1servertools`; Collector liefert pro Service `name`, `status`, `prot`, `live`, `ports`, `description` und bleibt fehlertolerant ohne Script-Abbruch.
