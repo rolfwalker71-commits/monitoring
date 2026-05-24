@@ -77,7 +77,7 @@
               <span id="headerDbReportsChip" class="header-stat-chip header-stat-chip-db-reports" title="Reports in der Datenbank"><span class="header-chip-label">REPORTS IN DB</span><span id="headerDbReportsCount" class="header-chip-count">0</span><span class="header-chip-scope">Gesamt</span></span>
               <span id="headerDbReportsHourChip" class="header-stat-chip header-stat-chip-db-reports-hour" title="Neu eingegangene Reports in der letzten Stunde"><span class="header-chip-label">ANZAHL REPORTS</span><span id="headerDbReportsHourCount" class="header-chip-count">0</span><span class="header-chip-scope">Letzte 1h</span></span>
               <span id="headerDbSizeChip" class="header-stat-chip header-stat-chip-db-size" title="Groesse der Datenbankdateien (SQLite + WAL + SHM)"><span class="header-chip-label">DB GROESSE</span><span id="headerDbSizeValue" class="header-chip-count">-</span><span class="header-chip-scope">SQLite+WAL+SHM</span></span>
-              <span id="headerDbSizeDeltaChip" class="header-stat-chip header-stat-chip-db-size-delta" title="Datenbankgroessen-Veraenderung in der letzten Stunde"><span class="header-chip-label">DB DELTA 1H</span><span id="headerDbSizeDeltaValue" class="header-chip-count">+0 MB</span><span class="header-chip-scope">+/- MB</span></span>
+              <span id="headerDbSizeDeltaChip" class="header-stat-chip header-stat-chip-db-size-delta" title="Datenbankgroessen-Veraenderung in der letzten Stunde"><span class="header-chip-label">DB DELTA 1H</span><span id="headerDbSizeDeltaValue" class="header-chip-count">+0</span><span class="header-chip-scope">+/- MB</span></span>
             </div>
             <div class="header-toolbar" aria-label="Schnellaktionen">
               <button id="openUserSettingsButton" class="btn-emoji-pill" type="button" title="Benutzereinstellungen">👤</button>
@@ -86,6 +86,29 @@
               <button id="refreshButton" class="btn-emoji-pill" title="Neu laden">↻</button>
             </div>
           </div>
+          <section id="hostToolsHeader" class="header-host-tools hidden" aria-label="Host-Schnellfilter">
+            <div class="host-filters host-filters-header host-filters-inline">
+              <div class="host-search-box">
+                <input id="hostSearchInput" type="text" placeholder="Hosts suchen..." class="search-input" />
+              </div>
+              <label class="host-filter-control" for="hostSidebarInterestModeSelect">
+                <span>Interessen</span>
+                <select id="hostSidebarInterestModeSelect">
+                  <option value="all">Alle Hosts</option>
+                  <option value="interested_first">Interessante zuerst</option>
+                  <option value="interested_only">Nur interessante</option>
+                </select>
+              </label>
+              <div class="host-filter-control host-filter-control-icons">
+                <span>OS</span>
+                <div id="hostOsFilterChips" class="icon-filter-chips"></div>
+              </div>
+              <div class="host-filter-control host-filter-control-icons">
+                <span>Land</span>
+                <div id="hostCountryFilterChips" class="icon-filter-chips"></div>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div id="globalView" class="view-section hidden settings-view">
@@ -1050,29 +1073,6 @@
                 <h3>🖥️ Hosts</h3>
                 <p id="hostCount" class="count"></p>
               </div>
-              <section id="hostToolsHeader" class="sidebar-tools hidden">
-                <div class="host-filters host-filters-header">
-                  <div class="host-search-box">
-                    <input id="hostSearchInput" type="text" placeholder="Suchen..." class="search-input" />
-                  </div>
-                  <label class="host-filter-control" for="hostSidebarInterestModeSelect">
-                    <span>Interessen</span>
-                    <select id="hostSidebarInterestModeSelect">
-                      <option value="all">Alle Hosts</option>
-                      <option value="interested_first">Interessante zuerst</option>
-                      <option value="interested_only">Nur interessante</option>
-                    </select>
-                  </label>
-                  <div class="host-filter-control host-filter-control-icons">
-                    <span>OS</span>
-                    <div id="hostOsFilterChips" class="icon-filter-chips"></div>
-                  </div>
-                  <div class="host-filter-control host-filter-control-icons">
-                    <span>Land</span>
-                    <div id="hostCountryFilterChips" class="icon-filter-chips"></div>
-                  </div>
-                </div>
-              </section>
               <div class="host-list-shell">
                 <div id="hostListHeader" class="host-list-header"></div>
                 <div id="hostList" class="host-list"></div>

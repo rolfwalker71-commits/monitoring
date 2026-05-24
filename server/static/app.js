@@ -4083,12 +4083,12 @@ function formatBytes(value) {
 function formatSignedMegabytesFromBytes(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) {
-    return "+0 MB";
+    return "+0";
   }
   const mb = Math.abs(n) / (1024 * 1024);
   const digits = mb >= 100 ? 0 : 1;
   const sign = n >= 0 ? "+" : "-";
-  return `${sign}${mb.toFixed(digits)} MB`;
+  return `${sign}${mb.toFixed(digits)}`;
 }
 
 function normalizeMountpointValue(value) {
@@ -11886,9 +11886,17 @@ function updateHeaderStatChips() {
     acknowledgedChip.classList.remove("hidden");
   }
   if (activeHostsChip && activeHostsCount) {
-    const activeHosts = (Array.isArray(state.hosts) ? state.hosts : []).reduce((sum, host) => (
-      host?.online === true ? sum + 1 : sum
-    ), 0);
+    const nowMs = Date.now();
+    const activeHosts = (Array.isArray(state.hosts) ? state.hosts : []).reduce((sum, host) => {
+      if (host?.online === true) {
+        return sum + 1;
+      }
+      const parsedLastSeen = parseUtcIso(host?.last_seen_utc || "");
+      if (!parsedLastSeen) {
+        return sum;
+      }
+      return (nowMs - parsedLastSeen.getTime()) <= (60 * 60 * 1000) ? sum + 1 : sum;
+    }, 0);
     activeHostsCount.textContent = String(activeHosts);
     activeHostsChip.classList.remove("hidden");
   }

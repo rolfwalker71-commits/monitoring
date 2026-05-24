@@ -12030,6 +12030,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 for row in settings_rows
             }
             hosts = []
+            now_utc = datetime.now(timezone.utc)
             for row in rows:
                 latest_payload = parse_payload_json(row[5] or "{}")
                 sap_license = latest_payload.get("sap_license") if isinstance(latest_payload, dict) else None
@@ -12044,6 +12045,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     has_sap_license_info = bool(has_focus_types or has_license_core)
                 host_uid_key = str(row[0] or "").strip()
                 hostname = str(row[6] or "").strip()
+                last_seen_utc = str(row[1] or "")
+                online = False
+                if last_seen_utc:
+                    parsed_last_seen = parse_utc_iso(last_seen_utc)
+                    if parsed_last_seen is not None:
+                        online = (now_utc - parsed_last_seen) <= timedelta(minutes=SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES)
                 host_settings = settings_map.get(hostname, {
                     "display_name_override": "",
                     "country_code_override": "",
@@ -12068,7 +12075,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             display_name_override,
                             hostname,
                         ),
-                        "last_seen_utc": row[1],
+                        "last_seen_utc": last_seen_utc,
+                        "online": online,
                         "report_count": row[2],
                         "primary_ip": row[3] or "",
                         "std_nic_ip": _resolve_std_nic_ipv4(latest_payload, str(row[3] or "")),
