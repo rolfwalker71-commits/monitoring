@@ -646,6 +646,14 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.56 (24. Mai 2026)
+
+- **Windows: SAP Services jetzt im Payload integriert**: Der Windows-Agent liefert unter `sap_business_one.installed_services` jetzt installierte SAP-B1-Dienste mit `name`, `status`, `prot`, `live`, `ports`, `description`.
+- **Windows: robuste Port-Ermittlung mit Fallback-Hints**: Ports werden primaer pro Prozess aus Listening-Sockets gelesen; fuer Service-Layer/Authentication greifen zusaetzlich Muster-Hints (z. B. `b1s50001` -> `50001`, Auth -> `40020`).
+- **Windows: Nicht-SAP-Noise wird gefiltert**: Bekannte Fremddienste (z. B. `PPSOne_*`, `PrintWorkflow*`, `AppXSvc`) werden konsequent ausgeschlossen.
+- **UI: Installierte Services auch auf Windows sichtbar**: Die Services-Sektion wird nicht mehr nur fuer Linux gerendert; Status `running` wird wie `active` gruen markiert.
+- **Support-Tool aktualisiert**: `client/windows/probe_sap_services.ps1` bleibt als Diagnose-/Testskript im Repo fuer Host-seitige Validierungen.
+
 ### v1.7.55 (24. Mai 2026)
 
 - **SAP Service-Subinfo visuell verfeinert**: Der Dienstname in der zweiten Zeile unter `Beschreibung` ist nun dezent grau und kursiv dargestellt.

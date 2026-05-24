@@ -637,9 +637,234 @@ function Get-HarvestHealthStatus {
     return $status
 }
 
+function Get-SapB1InstalledServicesBlock {
+    function Sort-InstalledServicePorts {
+        param([string[]]$Ports)
+
+        $nums = @()
+        foreach ($p in @($Ports)) {
+            if ([string]$p -match '^\d+$') {
+                $n = [int]$p
+                if ($n -ge 1 -and $n -le 65535) {
+                    $nums += $n
+                }
+            }
+        }
+
+        return @($nums | Sort-Object -Unique | ForEach-Object { [string]$_ })
+    }
+
+    function Test-SapB1CandidateService {
+        param(
+            [string]$Name,
+            [string]$DisplayName,
+            [string]$PathName
+        )
+
+        $n = [string]$Name
+        $d = [string]$DisplayName
+        $p = [string]$PathName
+
+        if ($n -match '^(?i)(AppXSvc|COMSysApp|PPSOne_|PrintWorkflow(UserSvc)?_)') { return $false }
+        if ($d -match '^(?i)(AppX Deployment Service|COM\+ System Application|PPSOne_|PrintWorkflow(UserSvc)?_)') { return $false }
+
+        if ($n -match '^(?i)b1s\d+$') { return $true }
+        if ($n -match '^(?i)(B1ServerTools|B1Workflow|SAPB1|SBODI_|SBOMail|SBOWF|SBOClient)') { return $true }
+
+        if ($d -match '(?i)SAP\s+Business\s+One') { return $true }
+        if ($d -match '(?i)(Service\s*Layer|Server\s*Tools|Workflow|DI\s*Proxy|DI\s*Server|Integration\s*Service|RSP\s*Agent)') { return $true }
+
+        if ($p -match '(?i)\\SAP\\') { return $true }
+        if ($p -match '(?i)(ServiceLayer|ServerTools|DIProxy|IntegrationServer|Remote support platform for SAP Business One)') { return $true }
+
+        return $false
+    }
+
+    function Get-SapB1PortHints {
+        param(
+            [string]$Name,
+            [string]$DisplayName
+        )
+
+        $hints = @()
+        $n = [string]$Name
+        $d = [string]$DisplayName
+
+        if ($n -match '^(?i)b1s(\d{4,5})$') {
+            $hints += [string]$Matches[1]
+        }
+
+        if ($d -match '\((\d{4,5})\)') {
+            $hints += [string]$Matches[1]
+        }
+
+        if ($n -match '^(?i)B1ServerToolsAuthentication$') {
+            $hints += '40020'
+        }
+
+        return Sort-InstalledServicePorts -Ports @($hints)
+    }
+
+    function Get-PortsForProcess {
+        param(
+            [hashtable]$PortsByPid,
+            [int]$ProcessId
+        )
+
+        if ($ProcessId -le 0 -or -not $PortsByPid.ContainsKey($ProcessId)) {
+            return @()
+        }
+
+        $raw = $PortsByPid[$ProcessId]
+        if ($null -eq $raw) {
+            return @()
+        }
+
+        if ($raw -is [string]) {
+            return @([string]$raw)
+        }
+
+        if ($raw -is [System.Collections.IEnumerable]) {
+            $result = @()
+            foreach ($entry in $raw) {
+                if ($null -eq $entry) { continue }
+                $result += [string]$entry
+            }
+            return $result
+        }
+
+        return @([string]$raw)
+    }
+
+    $portsByPid = @{}
+    try {
+        $netTcpCmd = Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue
+        if ($null -ne $netTcpCmd) {
+            $tcpRows = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue)
+            foreach ($row in $tcpRows) {
+                $procId = [int]$row.OwningProcess
+                if ($procId -le 0) { continue }
+                if (-not $portsByPid.ContainsKey($procId)) {
+                    $portsByPid[$procId] = New-Object 'System.Collections.Generic.HashSet[string]'
+                }
+                [void]$portsByPid[$procId].Add([string]$row.LocalPort)
+            }
+        } else {
+            $lines = @(netstat -ano -p tcp 2>$null)
+            foreach ($line in $lines) {
+                if ($line -notmatch '^\s*TCP\s+' -or $line -notmatch '\s+LISTENING\s+') { continue }
+                $parts = ($line -replace '^\s+', '') -split '\s+'
+                if (@($parts).Count -lt 5) { continue }
+
+                $localAddress = [string]$parts[1]
+                $pidRaw = [string]$parts[4]
+                if ($pidRaw -notmatch '^\d+$') { continue }
+
+                if ($localAddress -notmatch ':([0-9]+)$') { continue }
+                $port = [string]$Matches[1]
+                $procId = [int]$pidRaw
+                if ($procId -le 0) { continue }
+
+                if (-not $portsByPid.ContainsKey($procId)) {
+                    $portsByPid[$procId] = New-Object 'System.Collections.Generic.HashSet[string]'
+                }
+                [void]$portsByPid[$procId].Add($port)
+            }
+        }
+    } catch {
+        $portsByPid = @{}
+    }
+
+    $services = @()
+    try {
+        $allServices = @(Get-CimInstance Win32_Service -ErrorAction Stop)
+        foreach ($svc in $allServices) {
+            if (Test-SapB1CandidateService -Name ([string]$svc.Name) -DisplayName ([string]$svc.DisplayName) -PathName ([string]$svc.PathName)) {
+                $services += $svc
+            }
+        }
+    } catch {
+        $services = @()
+        try {
+            $allServices = @(Get-Service -ErrorAction SilentlyContinue)
+            foreach ($svc in $allServices) {
+                if (-not (Test-SapB1CandidateService -Name ([string]$svc.Name) -DisplayName ([string]$svc.DisplayName) -PathName '')) {
+                    continue
+                }
+                $services += [PSCustomObject]@{
+                    Name = [string]$svc.Name
+                    DisplayName = [string]$svc.DisplayName
+                    State = [string]$svc.Status
+                    Status = [string]$svc.Status
+                    StartMode = ''
+                    ProcessId = 0
+                }
+            }
+        } catch {
+            $services = @()
+        }
+    }
+
+    $serviceJsonRows = @()
+    foreach ($svc in $services) {
+        $name = [string]$svc.Name
+        $description = [string]$svc.DisplayName
+        if (-not $description) { $description = $name }
+
+        if ($name -match '^(?i)(PPSOne_|PrintWorkflow(UserSvc)?_)') { continue }
+        if ($description -match '^(?i)(PPSOne_|PrintWorkflow(UserSvc)?_)') { continue }
+
+        $status = [string]$svc.State
+        if (-not $status) { $status = [string]$svc.Status }
+        if (-not $status) { $status = '-' }
+
+        $procId = 0
+        try { $procId = [int]$svc.ProcessId } catch { $procId = 0 }
+
+        $ports = @()
+        if ($procId -gt 0 -and $portsByPid.ContainsKey($procId)) {
+            $ports = Sort-InstalledServicePorts -Ports (Get-PortsForProcess -PortsByPid $portsByPid -ProcessId $procId)
+        }
+
+        $protocol = '-'
+        $portsCsv = '-'
+        if (@($ports).Count -gt 0) {
+            $portsCsv = ($ports -join ',')
+            $protocol = 'tcp'
+        } else {
+            $hintPorts = Get-SapB1PortHints -Name $name -DisplayName $description
+            if (@($hintPorts).Count -gt 0) {
+                $portsCsv = ($hintPorts -join ',')
+                $protocol = 'tcp-hint'
+            }
+        }
+
+        $isLive = ($status -match '^(?i)(Running|active)')
+        $live = if ($isLive) { 'Live' } else { 'Nicht Live' }
+
+        $serviceJsonRows += (
+            '{' +
+            '"name":"' + (ConvertTo-JsonString $name) + '",' +
+            '"status":"' + (ConvertTo-JsonString $status) + '",' +
+            '"prot":"' + (ConvertTo-JsonString $protocol) + '",' +
+            '"live":"' + (ConvertTo-JsonString $live) + '",' +
+            '"ports":"' + (ConvertTo-JsonString $portsCsv) + '",' +
+            '"description":"' + (ConvertTo-JsonString $description) + '"' +
+            '}'
+        )
+    }
+
+    if (@($serviceJsonRows).Count -le 0) {
+        return '{"available":false,"reason":"Keine SAPServices gefunden","services":[]}'
+    }
+
+    return '{"available":true,"reason":"","services":[' + ($serviceJsonRows -join ',') + ']}'
+}
+
 function Get-SapB1PayloadBlock {
     $b1Block = Get-SapB1InfoBlock
     $harvestStatus = Get-HarvestHealthStatus
+    $installedServicesJson = Get-SapB1InstalledServicesBlock
 
     $dbItems = @($harvestStatus.databases_accessible | ForEach-Object { '"' + (ConvertTo-JsonString $_) + '"' })
     $harvDbsJson = ($dbItems -join ',')
@@ -670,7 +895,7 @@ function Get-SapB1PayloadBlock {
     $sariAddonsJson = "{`"available`":$(if($harvestStatus.sari_addons_available){'true'}else{'false'}),`"source_db`":`"$sariSourceDbEsc`",`"rows`":[${sariRowsJson}],`"error`":`"$sariErrorEsc`"}"
 
     if ($b1Block.EndsWith('}')) {
-        return $b1Block.Substring(0, $b1Block.Length - 1) + ",`"harvest_status`":$harvJson,`"extensions`":$extensionsJson,`"sari_addons`":$sariAddonsJson}"
+        return $b1Block.Substring(0, $b1Block.Length - 1) + ",`"harvest_status`":$harvJson,`"extensions`":$extensionsJson,`"sari_addons`":$sariAddonsJson,`"installed_services`":$installedServicesJson}"
     }
     return $b1Block
 }

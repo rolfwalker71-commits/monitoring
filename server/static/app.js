@@ -5568,7 +5568,8 @@ function renderSapB1InstalledServicesSection(payload) {
       const ports = asText(service?.ports, "-");
       const status = asText(service?.status, "-");
       const live = asText(service?.live, "-");
-      const isActive = status.toLowerCase().startsWith("active");
+      const statusLower = status.toLowerCase();
+      const isActive = statusLower.startsWith("active") || statusLower.startsWith("running");
       const statusClass = isActive ? "sap-b1-service-status-active" : "sap-b1-service-status-inactive";
       return `
         <tr>
@@ -6133,7 +6134,7 @@ function renderSapB1CombinedCard(payload) {
         </details>
         ` : ""}
 
-        ${isLinux ? renderSapB1InstalledServicesSection(payload) : ""}
+        ${renderSapB1InstalledServicesSection(payload)}
 
         ${sapB1RawOutputDetails}
 
