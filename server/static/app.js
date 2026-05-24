@@ -1649,6 +1649,7 @@ function updateAdminSettingsVisibility() {
   const adminOnlyTabsLegend = document.getElementById("adminOnlyTabsLegend");
   const globalAdminOpsSection = document.getElementById("globalAdminOpsSection");
   const hostConfigChangesBackfillButton = document.getElementById("backfillHostConfigChangesButton");
+  const runChangelogRebuildNowButton = document.getElementById("runChangelogRebuildNowButton");
   const hostConfigChangesBackfillStatus = document.getElementById("hostConfigChangesBackfillStatus");
   const changelogRebuildWarningHint = document.getElementById("changelogRebuildWarningHint");
   const changelogRebuildProgress = document.getElementById("changelogRebuildProgress");
@@ -1681,6 +1682,9 @@ function updateAdminSettingsVisibility() {
   }
   if (hostConfigChangesBackfillButton) {
     hostConfigChangesBackfillButton.classList.toggle("hidden", !state.isAdmin);
+  }
+  if (runChangelogRebuildNowButton) {
+    runChangelogRebuildNowButton.classList.toggle("hidden", !state.isAdmin);
   }
   if (hostConfigChangesBackfillStatus) {
     hostConfigChangesBackfillStatus.classList.toggle("hidden", !state.isAdmin);

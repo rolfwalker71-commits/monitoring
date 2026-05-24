@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.28**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.28**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.29**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.29**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.29 | 24.05.2026 | UI permissions hardening: both host-config changelog action buttons (`Backfill` and `Rebuild heute`) are now admin-only (button visibility) |
 | 1.7.28 | 24.05.2026 | Changelog identity and baseline fix: changelog entries are now host_uid-aware (duplicate hostnames are separated correctly), and initial baseline entries are generated as Neu-only values (old='-') for host config and AddOns; backfill button now includes this baseline initialization too |
 | 1.7.27 | 24.05.2026 | Server startup hotfix: fixed indentation crash in `/api/v1/alert-mute` handler and repaired DB init migration order so legacy databases add `alerts.host_uid` before creating host_uid index (prevents `sqlite3.OperationalError: no such column: host_uid`) |
 | 1.7.26 | 24.05.2026 | Added global-alert diagnostics panel (hostname, host_uid, latest report IP, open-alert counts) and expanded changelog rebuild to also write initial system-parameter baseline entries (OS/kernel/CPU/RAM/SAP/HANA/SQL) so rebuilds no longer miss those values when no prior delta exists |
