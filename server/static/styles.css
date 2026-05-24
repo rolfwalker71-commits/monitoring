@@ -11139,6 +11139,43 @@ body[data-theme="dark"] .so-status-offline {
   }
 }
 
+/* KPI semantic accent colors (no pink): grouped by meaning. */
+.panel-header .header-kpi-strip > .header-stat-chip-alert,
+.panel-header .header-kpi-strip > .header-stat-chip-critical,
+.panel-header .header-kpi-strip > .header-stat-chip-acknowledged {
+  border-left-color: #c2410c !important;
+}
+
+.panel-header .header-kpi-strip > .header-stat-chip-active-hosts,
+.panel-header .header-kpi-strip > .header-stat-chip-inactive {
+  border-left-color: #2563eb !important;
+}
+
+.panel-header .header-kpi-strip > .header-stat-chip-db-reports,
+.panel-header .header-kpi-strip > .header-stat-chip-db-reports-hour,
+.panel-header .header-kpi-strip > .header-stat-chip-db-size,
+.panel-header .header-kpi-strip > .header-stat-chip-db-size-delta {
+  border-left-color: #0f766e !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-alert,
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-critical,
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-acknowledged {
+  border-left-color: #f97316 !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-active-hosts,
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-inactive {
+  border-left-color: #60a5fa !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-reports,
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-reports-hour,
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-size,
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-size-delta {
+  border-left-color: #34d399 !important;
+}
+
 /* Variant 3 refinements: one-line KPI strip, plain ANG logo, no sidebar push hacks. */
 .brand-partner-logo,
 .brand-partner-logo img {
