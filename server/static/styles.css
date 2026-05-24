@@ -3955,6 +3955,18 @@ body[data-theme="dark"] .trend-progress-bar {
   border-left-color: #cf2f2f;
 }
 
+.header-stat-chip-critical {
+  border-left-color: #a01515;
+}
+
+.header-stat-chip-acknowledged {
+  border-left-color: #8b5cf6;
+}
+
+.header-stat-chip-active-hosts {
+  border-left-color: #15803d;
+}
+
 .header-stat-chip-warn {
   border-left-color: #c2790f;
 }
@@ -11241,7 +11253,8 @@ body[data-theme="dark"] .so-status-offline {
 
 .header-stat-chip {
   position: relative;
-  border-left-width: 1px;
+  border-left-width: 0;
+  border-left-color: transparent;
   min-width: 0;
   min-height: 52px;
   border-radius: 10px;
@@ -11275,6 +11288,9 @@ body[data-theme="dark"] .so-status-offline {
 }
 
 .header-stat-chip-alert::before { background: #cf2f2f; }
+.header-stat-chip-critical::before { background: #a01515; }
+.header-stat-chip-acknowledged::before { background: #8b5cf6; }
+.header-stat-chip-active-hosts::before { background: #15803d; }
 .header-stat-chip-inactive::before { background: #2a74b5; }
 .header-stat-chip-db-reports::before { background: #2f9e44; }
 .header-stat-chip-db-reports-hour::before { background: #0f766e; }
@@ -11814,6 +11830,9 @@ body[data-theme="dark"] .search-input-compact::placeholder {
 
 .header-stat-chip-alert,
 .header-stat-chip-warn,
+.header-stat-chip-critical,
+.header-stat-chip-acknowledged,
+.header-stat-chip-active-hosts,
 .header-stat-chip-inactive,
 .header-stat-chip-db-reports,
 .header-stat-chip-db-reports-hour,
@@ -11953,6 +11972,9 @@ body[data-theme="dark"] .so-card-alert-badge-critical {
 
 body[data-theme="dark"] .header-stat-chip-alert,
 body[data-theme="dark"] .header-stat-chip-warn,
+body[data-theme="dark"] .header-stat-chip-critical,
+body[data-theme="dark"] .header-stat-chip-acknowledged,
+body[data-theme="dark"] .header-stat-chip-active-hosts,
 body[data-theme="dark"] .header-stat-chip-inactive,
 body[data-theme="dark"] .header-stat-chip-db-reports,
 body[data-theme="dark"] .header-stat-chip-db-reports-hour,
@@ -11966,6 +11988,18 @@ body[data-theme="dark"] .header-stat-chip-license {
 
 body[data-theme="dark"] .header-stat-chip-alert {
   border-left-color: #d66767;
+}
+
+body[data-theme="dark"] .header-stat-chip-critical {
+  border-left-color: #ef6a6a;
+}
+
+body[data-theme="dark"] .header-stat-chip-acknowledged {
+  border-left-color: #b69cf9;
+}
+
+body[data-theme="dark"] .header-stat-chip-active-hosts {
+  border-left-color: #52c97a;
 }
 
 body[data-theme="dark"] .header-stat-chip-warn {
@@ -12138,17 +12172,17 @@ body[data-theme="dark"] textarea::placeholder {
 
 @media (min-width: 1200px) {
   .panel-actions > .header-stat-chip:first-of-type {
-    margin-left: clamp(300px, 22vw, 430px);
+    margin-left: 0 !important;
   }
 
   .hosts-column {
-    margin-top: -108px;
+    margin-top: 0 !important;
   }
 }
 
 #headerDbSizeDeltaChip,
 .header-stat-chip-db-size-delta {
-  display: none !important;
+  display: inline-flex !important;
 }
 
 /* Global view harmonization: apply the same card/tabs/forms language across all menu sections. */

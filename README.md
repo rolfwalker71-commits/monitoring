@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.36**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.36**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.37**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.37**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.37 | 24.05.2026 | Header KPI parity update: added missing KPI tiles (kritische Alerts, quittierte offene Alerts, aktive Hosts), re-enabled DB Delta tile, and removed the unwanted left accent/border so KPI cards now keep only the top semantic accent in line with the mockup intent |
 | 1.7.36 | 24.05.2026 | Header KPI strip layout refinement: removed horizontal scroll and switched to a dynamic one-row equal-width KPI layout (`grid-auto-columns: minmax(0,1fr)`) so all KPIs stay visible without wrapping/scrolling; responsive KPI typography adjusted accordingly |
 | 1.7.35 | 24.05.2026 | Header variant-3 refinement: KPI strip now stays single-line (horizontal scroll instead of wrapping), partner ANG logo remains plain (no card treatment), and desktop layout hacks that shifted header/sidebar alignment were neutralized so the hosts sidebar no longer needs extra vertical compensation |
 | 1.7.34 | 24.05.2026 | Header UX refresh: top status bar is now sticky while scrolling; panel header split into KPI strip + action toolbar; top-right user controls (Dark/User/Logout) redesigned from chip-heavy look to a cleaner segmented control style |

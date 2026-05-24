@@ -137,6 +137,8 @@ const state = {
   hostAlertsCollapsed: false,
   globalSeverityFilter: "all",
   globalOpenAlertsCount: 0,
+  globalCriticalOpenAlertsCount: 0,
+  globalAcknowledgedOpenAlertsCount: 0,
   criticalTrendsCount: 0,
   inactiveHostsCount: 0,
   dbReportsTotal: 0,
@@ -9486,6 +9488,7 @@ async function loadHosts(options = {}) {
     state.totalHosts = Number(data.total_hosts || 0);
     const hosts = data.hosts || [];
     state.hosts = hosts;
+    updateHeaderStatChips();
     renderHostInterestsEditor();
     const { visibleHosts, hiddenHosts } = splitHosts(hosts);
     state.visibleHosts = Number(data.visible_hosts || visibleHosts.length || 0);
@@ -11832,6 +11835,12 @@ function updateHeaderStatChips() {
   const alertCount = document.getElementById("headerAlertCount");
   const inactiveChip = document.getElementById("headerInactiveChip");
   const inactiveCount = document.getElementById("headerInactiveCount");
+  const criticalChip = document.getElementById("headerCriticalChip");
+  const criticalCount = document.getElementById("headerCriticalCount");
+  const acknowledgedChip = document.getElementById("headerAcknowledgedChip");
+  const acknowledgedCount = document.getElementById("headerAcknowledgedCount");
+  const activeHostsChip = document.getElementById("headerActiveHostsChip");
+  const activeHostsCount = document.getElementById("headerActiveHostsCount");
   const dbReportsChip = document.getElementById("headerDbReportsChip");
   const dbReportsCount = document.getElementById("headerDbReportsCount");
   const dbReportsHourChip = document.getElementById("headerDbReportsHourChip");
@@ -11856,6 +11865,32 @@ function updateHeaderStatChips() {
   if (inactiveChip && inactiveCount) {
     inactiveCount.textContent = String(state.inactiveHostsCount);
     inactiveChip.classList.remove("hidden");
+  }
+  if (criticalChip && criticalCount) {
+    const fallbackCritical = (Array.isArray(state.hosts) ? state.hosts : []).reduce((sum, host) => {
+      const direct = Number(host?.open_critical_alert_count);
+      if (Number.isFinite(direct) && direct >= 0) {
+        return sum + direct;
+      }
+      const payloadAlerts = Array.isArray(host?.payload?.alerts)
+        ? host.payload.alerts.filter((item) => item?.severity === "critical" && item?.status !== "resolved" && item?.status !== "closed").length
+        : 0;
+      return sum + payloadAlerts;
+    }, 0);
+    const criticalOpen = Math.max(0, Number(state.globalCriticalOpenAlertsCount || 0) || fallbackCritical);
+    criticalCount.textContent = String(criticalOpen);
+    criticalChip.classList.remove("hidden");
+  }
+  if (acknowledgedChip && acknowledgedCount) {
+    acknowledgedCount.textContent = String(Math.max(0, Number(state.globalAcknowledgedOpenAlertsCount || 0)));
+    acknowledgedChip.classList.remove("hidden");
+  }
+  if (activeHostsChip && activeHostsCount) {
+    const activeHosts = (Array.isArray(state.hosts) ? state.hosts : []).reduce((sum, host) => (
+      host?.online === true ? sum + 1 : sum
+    ), 0);
+    activeHostsCount.textContent = String(activeHosts);
+    activeHostsChip.classList.remove("hidden");
   }
   if (dbReportsChip && dbReportsCount) {
     dbReportsCount.textContent = Number(state.dbReportsTotal || 0).toLocaleString("de-CH");
@@ -12087,6 +12122,20 @@ async function loadGlobalAlertsOverview(options = {}) {
 
     // Header and tab counters are always based on ALL open alerts.
     state.globalOpenAlertsCount = Number(summaryData?.open?.total || 0);
+    state.globalCriticalOpenAlertsCount = Number(summaryData?.open?.critical || 0);
+
+    try {
+      const acknowledgedResp = await fetch("/api/v1/alerts?status=open&acknowledged=yes&limit=1&offset=0", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (acknowledgedResp.ok) {
+        const acknowledgedData = await acknowledgedResp.json();
+        state.globalAcknowledgedOpenAlertsCount = Number(acknowledgedData?.total || 0);
+      }
+    } catch (_) {
+      // Keep previous value when the lightweight acknowledged summary probe fails.
+    }
 
     globalAlertsTabButton.textContent = state.globalOpenAlertsCount > 0
       ? `Globale Alerts (${state.globalOpenAlertsCount})`
