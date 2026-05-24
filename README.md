@@ -646,6 +646,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.57 (24. Mai 2026)
+
+- **Deployment-Freischaltung fuer Windows Probe-Script**: `pull-server-only.sh` und `pull-server.sh` laden jetzt auch `client/windows/probe_sap_services.ps1` herunter.
+- **Updates-Mirror erweitert**: Das Probe-Script wird zusaetzlich nach `updates/client/windows/` gespiegelt, damit es serverseitig direkt verfuegbar bleibt.
+
 ### v1.7.56 (24. Mai 2026)
 
 - **Windows: SAP Services jetzt im Payload integriert**: Der Windows-Agent liefert unter `sap_business_one.installed_services` jetzt installierte SAP-B1-Dienste mit `name`, `status`, `prot`, `live`, `ports`, `description`.

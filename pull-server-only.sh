@@ -232,6 +232,7 @@ client/windows/bootstrap_agent.ps1
 client/windows/install_agent.ps1
 client/windows/self_update.ps1
 client/windows/setup_harvest_sql_user.ps1
+client/windows/probe_sap_services.ps1
 client/linux/collect_and_send.sh
 client/linux/install_agent.sh
 client/linux/self_update.sh
@@ -274,6 +275,7 @@ cp -f "$TARGET_DIR/client/windows/bootstrap_agent.ps1" "$TARGET_DIR/updates/clie
 cp -f "$TARGET_DIR/client/windows/install_agent.ps1" "$TARGET_DIR/updates/client/windows/install_agent.ps1"
 cp -f "$TARGET_DIR/client/windows/self_update.ps1" "$TARGET_DIR/updates/client/windows/self_update.ps1"
 cp -f "$TARGET_DIR/client/windows/setup_harvest_sql_user.ps1" "$TARGET_DIR/updates/client/windows/setup_harvest_sql_user.ps1"
+cp -f "$TARGET_DIR/client/windows/probe_sap_services.ps1" "$TARGET_DIR/updates/client/windows/probe_sap_services.ps1"
 cp -f "$TARGET_DIR/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/collect_and_send.sh"
 cp -f "$TARGET_DIR/client/linux/install_agent.sh" "$TARGET_DIR/updates/client/linux/install_agent.sh"
 cp -f "$TARGET_DIR/client/linux/self_update.sh" "$TARGET_DIR/updates/client/linux/self_update.sh"
