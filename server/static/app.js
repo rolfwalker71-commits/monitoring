@@ -10058,12 +10058,12 @@ async function loadAnalysisForHost() {
   }
 }
 
-async function toggleAlertMute(hostname, mountpoint, currentlyMuted) {
+async function toggleAlertMute(hostname, hostUid, mountpoint, alertId, currentlyMuted) {
   const endpoint = currentlyMuted ? "/api/v1/alert-unmute" : "/api/v1/alert-mute";
   await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ hostname, mountpoint }),
+    body: JSON.stringify({ hostname, host_uid: hostUid, mountpoint, alert_id: alertId }),
   });
   await loadAlertsForHost();
   await loadGlobalAlertsOverview();
@@ -10122,7 +10122,7 @@ function closeAckModal(result) {
   }
 }
 
-async function acknowledgeAlert(hostname, mountpoint, currentNote = "", isAcknowledged = false) {
+async function acknowledgeAlert(hostname, hostUid, mountpoint, alertId, currentNote = "", isAcknowledged = false) {
   const result = await openAckModal(hostname, mountpoint, currentNote, isAcknowledged);
   if (!result) return;
 
@@ -10134,7 +10134,7 @@ async function acknowledgeAlert(hostname, mountpoint, currentNote = "", isAcknow
       const response = await fetch("/api/v1/alert-unack", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hostname, mountpoint }),
+        body: JSON.stringify({ hostname, host_uid: hostUid, mountpoint, alert_id: alertId }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || ("HTTP " + response.status));
@@ -10144,7 +10144,9 @@ async function acknowledgeAlert(hostname, mountpoint, currentNote = "", isAcknow
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           hostname,
+          host_uid: hostUid,
           mountpoint,
+          alert_id: alertId,
           ack_note: String(result.note || "").trim(),
         }),
       });
@@ -10162,13 +10164,13 @@ async function acknowledgeAlert(hostname, mountpoint, currentNote = "", isAcknow
   await loadHosts();
 }
 
-async function closeAlert(hostname, mountpoint, isClosed) {
+async function closeAlert(hostname, hostUid, mountpoint, alertId, isClosed) {
   try {
     const url = isClosed ? "/api/v1/alert-unclose" : "/api/v1/alert-close";
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ hostname, mountpoint }),
+      body: JSON.stringify({ hostname, host_uid: hostUid, mountpoint, alert_id: alertId }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || ("HTTP " + response.status));
@@ -10244,9 +10246,11 @@ async function loadAlertsForHost() {
         const closeTitle = isClosed
           ? `Abgeschlossen von ${asText(item.closed_by, "-")} am ${formatUtcPlus2(item.closed_at_utc)} – klicken zum Wiederöffnen`
           : "Alert abschliessen (stoppt Heads-Up)";
-        const muteBtn = `<button class="alert-mute-btn${isMuted ? " muted" : ""}" type="button" data-action="toggle-mute" data-hostname="${escapeHtml(asText(item.hostname))}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-muted="${isMuted ? "1" : "0"}" title="${isMuted ? "Stummschaltung aufheben" : "Alert stummschalten"}">${isMuted ? "🔇" : "🔔"}</button>`;
-        const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-acknowledged="${isAcknowledged ? "1" : "0"}" data-hostname="${escapeHtml(asText(item.hostname))}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
-        const closeBtn = `<button class="alert-close-btn${isClosed ? " closed" : ""}" type="button" data-action="close" data-hostname="${escapeHtml(asText(item.hostname))}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-closed="${isClosed ? "1" : "0"}" title="${escapeHtml(closeTitle)}">${isClosed ? "🔓" : "🔒"}</button>`;
+        const hostUid = asText(item.host_uid || item.hostname);
+        const alertId = Number(item.id || 0);
+        const muteBtn = `<button class="alert-mute-btn${isMuted ? " muted" : ""}" type="button" data-action="toggle-mute" data-alert-id="${alertId}" data-hostname="${escapeHtml(asText(item.hostname))}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-muted="${isMuted ? "1" : "0"}" title="${isMuted ? "Stummschaltung aufheben" : "Alert stummschalten"}">${isMuted ? "🔇" : "🔔"}</button>`;
+        const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-alert-id="${alertId}" data-acknowledged="${isAcknowledged ? "1" : "0"}" data-hostname="${escapeHtml(asText(item.hostname))}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
+        const closeBtn = `<button class="alert-close-btn${isClosed ? " closed" : ""}" type="button" data-action="close" data-alert-id="${alertId}" data-hostname="${escapeHtml(asText(item.hostname))}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-closed="${isClosed ? "1" : "0"}" title="${escapeHtml(closeTitle)}">${isClosed ? "🔓" : "🔒"}</button>`;
         const ackMeta = isAcknowledged
           ? `<div class="count compact">✅ ${escapeHtml(asText(item.ack_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.ack_at_utc))}</div>`
           : "";
@@ -10270,28 +10274,34 @@ async function loadAlertsForHost() {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
         const hostname = btn.getAttribute("data-hostname");
+        const hostUid = btn.getAttribute("data-host-uid");
         const mountpoint = btn.getAttribute("data-mountpoint");
+        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
         const isMuted = btn.getAttribute("data-muted") === "1";
-        await toggleAlertMute(hostname, mountpoint, isMuted);
+        await toggleAlertMute(hostname, hostUid, mountpoint, alertId, isMuted);
       });
     });
     alertsRows.querySelectorAll("[data-action='ack']").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
         const hostname = btn.getAttribute("data-hostname");
+        const hostUid = btn.getAttribute("data-host-uid");
         const mountpoint = btn.getAttribute("data-mountpoint");
+        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
         const currentNote = decodeURIComponent(btn.getAttribute("data-ack-note") || "");
         const isAlreadyAcknowledged = btn.getAttribute("data-acknowledged") === "1";
-        await acknowledgeAlert(hostname, mountpoint, currentNote, isAlreadyAcknowledged);
+        await acknowledgeAlert(hostname, hostUid, mountpoint, alertId, currentNote, isAlreadyAcknowledged);
       });
     });
     alertsRows.querySelectorAll("[data-action='close']").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
         const hostname = btn.getAttribute("data-hostname");
+        const hostUid = btn.getAttribute("data-host-uid");
         const mountpoint = btn.getAttribute("data-mountpoint");
+        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
         const isClosed = btn.getAttribute("data-closed") === "1";
-        await closeAlert(hostname, mountpoint, isClosed);
+        await closeAlert(hostname, hostUid, mountpoint, alertId, isClosed);
       });
     });
   } catch (error) {
@@ -12033,9 +12043,11 @@ async function loadGlobalAlertsOverview(options = {}) {
         const closeTitle = isClosed
           ? `Abgeschlossen von ${asText(item.closed_by, "-")} am ${formatUtcPlus2(item.closed_at_utc)} – klicken zum Wiederöffnen`
           : "Alert abschliessen (stoppt Heads-Up)";
-        const muteBtn = `<button class="alert-mute-btn${isMuted ? " muted" : ""}" type="button" data-action="toggle-mute" data-hostname="${escapeHtml(hostName)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-muted="${isMuted ? "1" : "0"}" title="${isMuted ? "Stummschaltung aufheben" : "Alert stummschalten"}">${isMuted ? "🔇" : "🔔"}</button>`;
-        const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-acknowledged="${isAcknowledged ? "1" : "0"}" data-hostname="${escapeHtml(hostName)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
-        const closeBtn = `<button class="alert-close-btn${isClosed ? " closed" : ""}" type="button" data-action="close" data-hostname="${escapeHtml(hostName)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-closed="${isClosed ? "1" : "0"}" title="${escapeHtml(closeTitle)}">${isClosed ? "🔓" : "🔒"}</button>`;
+        const hostUid = asText(item.host_uid || hostName);
+        const alertId = Number(item.id || 0);
+        const muteBtn = `<button class="alert-mute-btn${isMuted ? " muted" : ""}" type="button" data-action="toggle-mute" data-alert-id="${alertId}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-muted="${isMuted ? "1" : "0"}" title="${isMuted ? "Stummschaltung aufheben" : "Alert stummschalten"}">${isMuted ? "🔇" : "🔔"}</button>`;
+        const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-alert-id="${alertId}" data-acknowledged="${isAcknowledged ? "1" : "0"}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
+        const closeBtn = `<button class="alert-close-btn${isClosed ? " closed" : ""}" type="button" data-action="close" data-alert-id="${alertId}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-closed="${isClosed ? "1" : "0"}" title="${escapeHtml(closeTitle)}">${isClosed ? "🔓" : "🔒"}</button>`;
         const ackMeta = isAcknowledged
           ? `<div class="count compact">✅ ${escapeHtml(asText(item.ack_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.ack_at_utc))}</div>`
           : "";
@@ -12085,28 +12097,34 @@ async function loadGlobalAlertsOverview(options = {}) {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
         const hostname = btn.getAttribute("data-hostname");
+        const hostUid = btn.getAttribute("data-host-uid");
         const mountpoint = btn.getAttribute("data-mountpoint");
+        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
         const isMuted = btn.getAttribute("data-muted") === "1";
-        await toggleAlertMute(hostname, mountpoint, isMuted);
+        await toggleAlertMute(hostname, hostUid, mountpoint, alertId, isMuted);
       });
     });
     rowsEl.querySelectorAll("[data-action='ack']").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
         const hostname = btn.getAttribute("data-hostname");
+        const hostUid = btn.getAttribute("data-host-uid");
         const mountpoint = btn.getAttribute("data-mountpoint");
+        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
         const currentNote = decodeURIComponent(btn.getAttribute("data-ack-note") || "");
         const isAlreadyAcknowledged = btn.getAttribute("data-acknowledged") === "1";
-        await acknowledgeAlert(hostname, mountpoint, currentNote, isAlreadyAcknowledged);
+        await acknowledgeAlert(hostname, hostUid, mountpoint, alertId, currentNote, isAlreadyAcknowledged);
       });
     });
     rowsEl.querySelectorAll("[data-action='close']").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
         const hostname = btn.getAttribute("data-hostname");
+        const hostUid = btn.getAttribute("data-host-uid");
         const mountpoint = btn.getAttribute("data-mountpoint");
+        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
         const isClosed = btn.getAttribute("data-closed") === "1";
-        await closeAlert(hostname, mountpoint, isClosed);
+        await closeAlert(hostname, hostUid, mountpoint, alertId, isClosed);
       });
     });
   } catch (error) {

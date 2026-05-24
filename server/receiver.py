@@ -140,6 +140,13 @@ def reports_host_key_sql(alias: str = "") -> str:
     )
 
 
+def alert_host_key(hostname: object, host_uid: object = "") -> str:
+    host_uid_value = str(host_uid or "").strip()
+    if host_uid_value:
+        return host_uid_value
+    return str(hostname or "").strip()
+
+
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
@@ -188,6 +195,7 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS alerts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 hostname TEXT NOT NULL,
+                host_uid TEXT NOT NULL DEFAULT '',
                 mountpoint TEXT NOT NULL,
                 severity TEXT NOT NULL,
                 used_percent REAL NOT NULL,
@@ -204,6 +212,12 @@ def init_db() -> None:
             """
             CREATE INDEX IF NOT EXISTS idx_alerts_host_status_severity
             ON alerts(hostname, status, severity, mountpoint)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_alerts_host_uid_status
+            ON alerts(host_uid, status, mountpoint)
             """
         )
         conn.execute(
@@ -349,6 +363,9 @@ def init_db() -> None:
             str(row[1])
             for row in conn.execute("PRAGMA table_info(alerts)").fetchall()
         }
+        if "host_uid" not in existing_alert_columns:
+            conn.execute("ALTER TABLE alerts ADD COLUMN host_uid TEXT NOT NULL DEFAULT ''")
+            conn.execute("UPDATE alerts SET host_uid = hostname WHERE COALESCE(host_uid, '') = ''")
         if "ack_note" not in existing_alert_columns:
             conn.execute("ALTER TABLE alerts ADD COLUMN ack_note TEXT")
         if "ack_by" not in existing_alert_columns:
@@ -367,6 +384,7 @@ def init_db() -> None:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS alert_debounce (
+                host_uid TEXT NOT NULL,
                 hostname TEXT NOT NULL,
                 mountpoint TEXT NOT NULL,
                 first_seen_at_utc TEXT NOT NULL,
@@ -374,10 +392,56 @@ def init_db() -> None:
                 hit_count INTEGER NOT NULL,
                 last_used_percent REAL NOT NULL,
                 last_severity TEXT NOT NULL,
-                PRIMARY KEY(hostname, mountpoint)
+                PRIMARY KEY(host_uid, mountpoint)
             )
             """
         )
+        existing_alert_debounce_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(alert_debounce)").fetchall()
+        }
+        if "host_uid" not in existing_alert_debounce_columns:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS alert_debounce_new (
+                    host_uid TEXT NOT NULL,
+                    hostname TEXT NOT NULL,
+                    mountpoint TEXT NOT NULL,
+                    first_seen_at_utc TEXT NOT NULL,
+                    last_seen_at_utc TEXT NOT NULL,
+                    hit_count INTEGER NOT NULL,
+                    last_used_percent REAL NOT NULL,
+                    last_severity TEXT NOT NULL,
+                    PRIMARY KEY(host_uid, mountpoint)
+                )
+                """
+            )
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO alert_debounce_new (
+                    host_uid,
+                    hostname,
+                    mountpoint,
+                    first_seen_at_utc,
+                    last_seen_at_utc,
+                    hit_count,
+                    last_used_percent,
+                    last_severity
+                )
+                SELECT
+                    COALESCE(NULLIF(hostname, ''), ''),
+                    hostname,
+                    mountpoint,
+                    first_seen_at_utc,
+                    last_seen_at_utc,
+                    hit_count,
+                    last_used_percent,
+                    last_severity
+                FROM alert_debounce
+                """
+            )
+            conn.execute("DROP TABLE alert_debounce")
+            conn.execute("ALTER TABLE alert_debounce_new RENAME TO alert_debounce")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS inactive_host_notification_state (
@@ -3775,7 +3839,7 @@ def resolve_open_blacklisted_alerts(conn: sqlite3.Connection, patterns: list[str
     now_utc = utc_now_iso()
     open_rows = conn.execute(
         """
-        SELECT id, hostname, mountpoint
+        SELECT id, hostname, COALESCE(host_uid, ''), mountpoint
         FROM alerts
         WHERE status = 'open'
         """
@@ -3784,7 +3848,8 @@ def resolve_open_blacklisted_alerts(conn: sqlite3.Connection, patterns: list[str
     for row in open_rows:
         alert_id = int(row[0] or 0)
         hostname = str(row[1] or "").strip()
-        mountpoint = str(row[2] or "").strip()
+        host_uid = alert_host_key(hostname, str(row[2] or ""))
+        mountpoint = str(row[3] or "").strip()
         if alert_id <= 0 or not hostname or not mountpoint:
             continue
         if not is_filesystem_blacklisted_by_patterns(mountpoint, patterns):
@@ -3793,7 +3858,7 @@ def resolve_open_blacklisted_alerts(conn: sqlite3.Connection, patterns: list[str
             "UPDATE alerts SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ? WHERE id = ?",
             (now_utc, now_utc, alert_id),
         )
-        conn.execute("DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?", (hostname, mountpoint))
+        conn.execute("DELETE FROM alert_debounce WHERE host_uid = ? AND mountpoint = ?", (host_uid, mountpoint))
         resolved_count += 1
     return resolved_count
 
@@ -5235,7 +5300,7 @@ def _collect_latest_report_usage_by_host(conn: sqlite3.Connection, hostnames: li
 def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | None = None) -> list[dict]:
     rows = conn.execute(
         """
-        SELECT id, hostname, mountpoint, severity, used_percent, created_at_utc, last_seen_at_utc
+        SELECT id, hostname, COALESCE(host_uid, ''), mountpoint, severity, used_percent, created_at_utc, last_seen_at_utc
         FROM alerts
         WHERE status = 'open'
           AND COALESCE((SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0
@@ -5248,7 +5313,7 @@ def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | 
     ).fetchall()
     blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
     if blacklist_patterns:
-        rows = [row for row in rows if not is_filesystem_blacklisted_by_patterns(str(row[2] or ""), blacklist_patterns)]
+        rows = [row for row in rows if not is_filesystem_blacklisted_by_patterns(str(row[3] or ""), blacklist_patterns)]
     if allowed_hostnames is not None:
         rows = [row for row in rows if str(row[1] or "") in allowed_hostnames]
 
@@ -5302,29 +5367,31 @@ def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | 
     result = []
     for row in rows:
         hostname = str(row[1] or "")
-        mountpoint = str(row[2] or "")
+        host_uid = alert_host_key(hostname, str(row[2] or ""))
+        mountpoint = str(row[3] or "")
         current_used_percent = None
         host_usage = latest_usage_by_host.get(hostname, {})
         if mountpoint:
             current_used_percent = host_usage.get(normalize_mountpoint_key(mountpoint))
         delta_used_percent = None
         if current_used_percent is not None:
-            delta_used_percent = float(current_used_percent) - float(row[4] or 0)
+            delta_used_percent = float(current_used_percent) - float(row[5] or 0)
 
         result.append(
             {
                 "id": int(row[0] or 0),
                 "hostname": hostname,
+                "host_uid": host_uid,
                 "display_name": display_names.get(hostname, hostname),
                 "customer_name": customer_names.get(hostname, ""),
                 "primary_ip": primary_ip_by_hostname.get(hostname, ""),
                 "mountpoint": mountpoint,
-                "severity": str(row[3] or "warning"),
-                "used_percent": float(row[4] or 0),
+                "severity": str(row[4] or "warning"),
+                "used_percent": float(row[5] or 0),
                 "current_used_percent": current_used_percent,
                 "delta_used_percent": delta_used_percent,
-                "created_at_utc": str(row[5] or ""),
-                "last_seen_at_utc": str(row[6] or ""),
+                "created_at_utc": str(row[6] or ""),
+                "last_seen_at_utc": str(row[7] or ""),
                 "country_code": country_codes.get(hostname, ""),
                 "os_family": os_families.get(hostname, "linux"),
             }
@@ -7161,24 +7228,27 @@ def collect_filesystem_usage_series(
     conn: sqlite3.Connection,
     hostname: str,
     mountpoint: str,
+    host_uid: str = "",
     *,
     hours: int = 24,
     max_points: int = 72,
 ) -> list[float]:
     host = str(hostname or "").strip()
     mount = str(mountpoint or "").strip()
-    if not host or not mount:
+    host_key = alert_host_key(host, host_uid)
+    if not host_key or not mount:
         return []
 
     cutoff_iso = utc_hours_ago_iso(hours)
+    host_key_expr = reports_host_key_sql()
     rows = conn.execute(
-        """
+        f"""
         SELECT payload_json
         FROM reports
-        WHERE hostname = ? AND received_at_utc >= ?
+        WHERE {host_key_expr} = ? AND received_at_utc >= ?
         ORDER BY id ASC
         """,
-        (host, cutoff_iso),
+        (host_key, cutoff_iso),
     ).fetchall()
 
     values: list[float] = []
@@ -7300,11 +7370,12 @@ def build_alert_usage_graph_attachment(
     conn: sqlite3.Connection,
     hostname: str,
     mountpoint: str,
+    host_uid: str = "",
     *,
     severity: str,
     hours: int = 24,
 ) -> tuple[str | None, dict | None]:
-    series = collect_filesystem_usage_series(conn, hostname, mountpoint, hours=hours)
+    series = collect_filesystem_usage_series(conn, hostname, mountpoint, host_uid=host_uid, hours=hours)
     if len(series) < 3:
         return None, None
 
@@ -7340,6 +7411,7 @@ def build_alert_digest_graph_bundle(
     for item in alerts[:max_graphs]:
         alert_id = int(item.get("id") or 0)
         hostname = str(item.get("hostname") or "").strip()
+        host_uid = str(item.get("host_uid") or "").strip()
         mountpoint = str(item.get("mountpoint") or "").strip()
         severity = str(item.get("severity") or "warning").strip().lower()
         if alert_id <= 0 or not hostname or not mountpoint or severity not in {"critical", "warning"}:
@@ -7349,6 +7421,7 @@ def build_alert_digest_graph_bundle(
             conn,
             hostname,
             mountpoint,
+            host_uid=host_uid,
             severity=severity,
             hours=hours,
         )
@@ -7795,16 +7868,18 @@ def send_instant_alert_mails_to_users(
     conn: sqlite3.Connection,
     event_type: str,
     hostname: str,
+    host_uid: str,
     mountpoint: str,
     severity: str,
     used_percent: float,
 ) -> None:
     if event_type not in {"opened", "escalated", "resolved"}:
         return
-    host_context = collect_host_mail_context(conn, hostname)
+    host_context = collect_host_mail_context(conn, hostname, host_uid)
+    host_key = alert_host_key(hostname, host_uid)
     reported_row = conn.execute(
-        "SELECT id, created_at_utc FROM alerts WHERE hostname = ? AND mountpoint = ? ORDER BY id DESC LIMIT 1",
-        (hostname, mountpoint),
+        "SELECT id, created_at_utc FROM alerts WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ? AND mountpoint = ? ORDER BY id DESC LIMIT 1",
+        (host_key, mountpoint),
     ).fetchone()
     alert_id = int(reported_row[0] or 0) if reported_row else 0
     reported_at_utc = str(reported_row[1] or "") if reported_row else utc_now_iso()
@@ -7850,6 +7925,7 @@ def send_instant_alert_mails_to_users(
                 conn,
                 hostname,
                 mountpoint,
+                host_uid=host_uid,
                 severity=severity,
                 hours=24,
             )
@@ -7894,6 +7970,7 @@ def send_instant_alert_telegram_to_users(
     conn: sqlite3.Connection,
     event_type: str,
     hostname: str,
+    host_uid: str,
     mountpoint: str,
     severity: str,
     used_percent: float,
@@ -7932,7 +8009,7 @@ def send_instant_alert_telegram_to_users(
         "escalated": "⬆️ ALERT ESCALATED",
         "resolved": "✅ ALERT RESOLVED",
     }.get(event_type, "⚠️ ALERT")
-    host_ctx = collect_host_mail_context(conn, hostname)
+    host_ctx = collect_host_mail_context(conn, hostname, host_uid)
     title = display_name.strip() if display_name.strip() else str(host_ctx.get("display_name") or hostname)
     customer_label = str(host_ctx.get("customer_name") or "").strip() or "Ohne Kunde"
     now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
@@ -8538,7 +8615,7 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
 
     open_alerts = conn.execute(
         """
-        SELECT id, hostname, mountpoint, severity, used_percent,
+        SELECT id, hostname, COALESCE(host_uid, ''), mountpoint, severity, used_percent,
                created_at_utc, last_reminder_sent_utc, last_telegram_reminder_sent_utc
         FROM alerts
         WHERE status = 'open'
@@ -8594,12 +8671,13 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
     for alert_row in open_alerts:
         alert_id = int(alert_row[0])
         hostname = str(alert_row[1] or "")
-        mountpoint = str(alert_row[2] or "")
-        severity = str(alert_row[3] or "warning")
-        used_percent = float(alert_row[4] or 0)
-        created_at_utc = str(alert_row[5] or "")
-        last_mail_reminder_sent_utc = str(alert_row[6] or "")
-        last_telegram_reminder_sent_utc = str(alert_row[7] or "")
+        host_uid = alert_host_key(hostname, str(alert_row[2] or ""))
+        mountpoint = str(alert_row[3] or "")
+        severity = str(alert_row[4] or "warning")
+        used_percent = float(alert_row[5] or 0)
+        created_at_utc = str(alert_row[6] or "")
+        last_mail_reminder_sent_utc = str(alert_row[7] or "")
+        last_telegram_reminder_sent_utc = str(alert_row[8] or "")
 
         due_mail = (
             mail_interval_hours > 0
@@ -8620,12 +8698,13 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                 "UPDATE alerts SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ? WHERE id = ?",
                 (now_utc_iso, now_utc_iso, alert_id),
             )
-            conn.execute("DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?", (hostname, mountpoint))
+            conn.execute("DELETE FROM alert_debounce WHERE host_uid = ? AND mountpoint = ?", (host_uid, mountpoint))
             continue
 
-        if hostname not in host_context_cache:
-            host_context_cache[hostname] = collect_host_mail_context(conn, hostname)
-        host_ctx = host_context_cache[hostname]
+        cache_key = host_uid or hostname
+        if cache_key not in host_context_cache:
+            host_context_cache[cache_key] = collect_host_mail_context(conn, hostname, host_uid)
+        host_ctx = host_context_cache[cache_key]
 
         reported_row = conn.execute(
             "SELECT created_at_utc FROM alerts WHERE id = ?",
@@ -8665,7 +8744,7 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                     if not ok_token:
                         continue
                     graph_cid, graph_attachment = build_alert_usage_graph_attachment(
-                        conn, hostname, mountpoint, severity=severity, hours=24
+                        conn, hostname, mountpoint, host_uid=host_uid, severity=severity, hours=24
                     )
                     graph_attachments = [graph_attachment] if graph_attachment else []
                     subject = (
@@ -9643,6 +9722,7 @@ def maybe_send_alert_message(
     settings: dict,
     event_type: str,
     hostname: str,
+    host_uid: str,
     mountpoint: str,
     severity: str,
     used_percent: float,
@@ -9656,7 +9736,7 @@ def maybe_send_alert_message(
             "resolved": "✅ ALERT RESOLVED",
         }.get(event_type, "⚠️ ALERT")
         sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
-        host_ctx = collect_host_mail_context(conn, hostname) if conn is not None else {}
+        host_ctx = collect_host_mail_context(conn, hostname, host_uid) if conn is not None else {}
         title = display_name.strip() if display_name.strip() else str(host_ctx.get("display_name") or hostname)
         customer_label = str(host_ctx.get("customer_name") or "").strip() or "Ohne Kunde"
         now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
@@ -9678,12 +9758,13 @@ def maybe_send_alert_message(
             conn,
             event_type,
             hostname,
+            host_uid,
             mountpoint,
             severity,
             used_percent,
             display_name=display_name,
         )
-        send_instant_alert_mails_to_users(conn, event_type, hostname, mountpoint, severity, used_percent)
+        send_instant_alert_mails_to_users(conn, event_type, hostname, host_uid, mountpoint, severity, used_percent)
 
 
 def get_nested_number(payload: dict, section: str, key: str) -> float | None:
@@ -9833,7 +9914,7 @@ def mail_footer_logos_html(ang_logo_uri: str) -> str:
     )
 
 
-def collect_host_mail_context(conn: sqlite3.Connection, hostname: str) -> dict:
+def collect_host_mail_context(conn: sqlite3.Connection, hostname: str, host_uid: str = "") -> dict:
     settings_row = conn.execute(
         """
         SELECT COALESCE(h.display_name_override, ''),
@@ -9849,9 +9930,11 @@ def collect_host_mail_context(conn: sqlite3.Connection, hostname: str) -> dict:
     country_code_override = normalize_country_code(settings_row[1] if settings_row else "")
     customer_name = str(settings_row[2] or "").strip() if settings_row else ""
 
+    host_key = alert_host_key(hostname, host_uid)
+    host_key_expr = reports_host_key_sql()
     latest_payload_row = conn.execute(
-        "SELECT payload_json FROM reports WHERE hostname = ? ORDER BY id DESC LIMIT 1",
-        (hostname,),
+        f"SELECT payload_json, COALESCE(primary_ip, '') FROM reports WHERE {host_key_expr} = ? ORDER BY id DESC LIMIT 1",
+        (host_key,),
     ).fetchone()
     latest_payload = parse_payload_json(str(latest_payload_row[0] or "{}")) if latest_payload_row else {}
 
@@ -9859,7 +9942,7 @@ def collect_host_mail_context(conn: sqlite3.Connection, hostname: str) -> dict:
     country_code = country_code_override or extract_country_code_from_payload(latest_payload)
     os_name = str(latest_payload.get("os", "") or "")
     os_family = normalize_os_family(os_name)
-    primary_ip = str(latest_payload.get("primary_ip", "") or "").strip()
+    primary_ip = str(latest_payload.get("primary_ip", "") or "").strip() or str(latest_payload_row[1] or "").strip()
     return {
         "display_name": display_name,
         "customer_name": customer_name,
@@ -10320,17 +10403,18 @@ def is_alert_muted(conn: sqlite3.Connection, hostname: str, mountpoint: str) -> 
     return row is not None
 
 
-def resolve_open_alerts_for_host(conn: sqlite3.Connection, hostname: str, report_id: int | None) -> None:
+def resolve_open_alerts_for_host(conn: sqlite3.Connection, hostname: str, host_uid: str, report_id: int | None) -> None:
     now_utc = utc_now_iso()
+    host_key = alert_host_key(hostname, host_uid)
     conn.execute(
         """
         UPDATE alerts
         SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
-        WHERE hostname = ? AND status = 'open'
+        WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ? AND status = 'open'
         """,
-        (now_utc, now_utc, report_id, hostname),
+        (now_utc, now_utc, report_id, host_key),
     )
-    conn.execute("DELETE FROM alert_debounce WHERE hostname = ?", (hostname,))
+    conn.execute("DELETE FROM alert_debounce WHERE host_uid = ?", (host_key,))
 
 
 def prune_reports_for_host(conn: sqlite3.Connection, hostname: str, keep_count: int) -> None:
@@ -10481,8 +10565,9 @@ def evaluate_severity(used_percent: float) -> str:
     return "ok"
 
 
-def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id: int, filesystems: list, alarm_settings: dict) -> None:
+def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: str, report_id: int, filesystems: list, alarm_settings: dict) -> None:
     now_utc = utc_now_iso()
+    alert_key = alert_host_key(hostname, host_uid)
     mountpoints_seen = set()
     blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
     hidden_mountpoint_keys = {
@@ -10501,7 +10586,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
     warning_hits_required = max(1, int(alarm_settings.get("warning_consecutive_hits", 2)))
     warning_window_minutes = max(1, int(alarm_settings.get("warning_window_minutes", 15)))
     critical_trigger_immediate = bool(alarm_settings.get("critical_trigger_immediate", True))
-    display_name = get_display_name_override(conn, hostname) or hostname
+    display_name = get_display_name_override(conn, hostname, host_uid) or hostname
 
     for fs in filesystems:
         if not isinstance(fs, dict):
@@ -10514,42 +10599,42 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
         mountpoint_key = normalize_mountpoint_key(mountpoint)
         if mountpoint_key in hidden_mountpoint_keys:
             suppressed_open = conn.execute(
-                "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open'",
-                (hostname, mountpoint),
+                "SELECT id FROM alerts WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ? AND mountpoint = ? AND status = 'open'",
+                (alert_key, mountpoint),
             ).fetchone()
             if suppressed_open:
                 conn.execute(
                     "UPDATE alerts SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ? WHERE id = ?",
                     (now_utc, now_utc, suppressed_open[0]),
                 )
-            conn.execute("DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?", (hostname, mountpoint))
+            conn.execute("DELETE FROM alert_debounce WHERE host_uid = ? AND mountpoint = ?", (alert_key, mountpoint))
             continue
 
         if is_filesystem_blacklisted_by_patterns(mountpoint, blacklist_patterns):
             blacklisted_open = conn.execute(
-                "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open'",
-                (hostname, mountpoint),
+                "SELECT id FROM alerts WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ? AND mountpoint = ? AND status = 'open'",
+                (alert_key, mountpoint),
             ).fetchone()
             if blacklisted_open:
                 conn.execute(
                     "UPDATE alerts SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ? WHERE id = ?",
                     (now_utc, now_utc, blacklisted_open[0]),
                 )
-            conn.execute("DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?", (hostname, mountpoint))
+            conn.execute("DELETE FROM alert_debounce WHERE host_uid = ? AND mountpoint = ?", (alert_key, mountpoint))
             continue
 
         mountpoints_seen.add(mountpoint)
         if is_alert_muted(conn, hostname, mountpoint):
             muted_open = conn.execute(
-                "SELECT id FROM alerts WHERE hostname = ? AND mountpoint = ? AND status = 'open'",
-                (hostname, mountpoint),
+                "SELECT id FROM alerts WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ? AND mountpoint = ? AND status = 'open'",
+                (alert_key, mountpoint),
             ).fetchone()
             if muted_open:
                 conn.execute(
                     "UPDATE alerts SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ? WHERE id = ?",
                     (now_utc, now_utc, muted_open[0]),
                 )
-            conn.execute("DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?", (hostname, mountpoint))
+            conn.execute("DELETE FROM alert_debounce WHERE host_uid = ? AND mountpoint = ?", (alert_key, mountpoint))
             continue
         try:
             used_percent = float(fs.get("used_percent"))
@@ -10568,9 +10653,9 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
                 """
                 SELECT first_seen_at_utc, last_seen_at_utc, hit_count
                 FROM alert_debounce
-                WHERE hostname = ? AND mountpoint = ?
+                WHERE host_uid = ? AND mountpoint = ?
                 """,
-                (hostname, mountpoint),
+                (alert_key, mountpoint),
             ).fetchone()
 
             if debounce_row:
@@ -10590,18 +10675,19 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
             conn.execute(
                 """
                 INSERT INTO alert_debounce (
-                    hostname, mountpoint, first_seen_at_utc, last_seen_at_utc,
+                    host_uid, hostname, mountpoint, first_seen_at_utc, last_seen_at_utc,
                     hit_count, last_used_percent, last_severity
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(hostname, mountpoint) DO UPDATE SET
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(host_uid, mountpoint) DO UPDATE SET
+                    hostname = excluded.hostname,
                     first_seen_at_utc = excluded.first_seen_at_utc,
                     last_seen_at_utc = excluded.last_seen_at_utc,
                     hit_count = excluded.hit_count,
                     last_used_percent = excluded.last_used_percent,
                     last_severity = excluded.last_severity
                 """,
-                (hostname, mountpoint, first_seen, now_utc, next_hit_count, used_percent, severity),
+                (alert_key, hostname, mountpoint, first_seen, now_utc, next_hit_count, used_percent, severity),
             )
 
             alert_started = next_hit_count >= warning_hits_required
@@ -10610,17 +10696,17 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
             """
             SELECT id, severity
             FROM alerts
-            WHERE hostname = ? AND mountpoint = ? AND status = 'open'
+            WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ? AND mountpoint = ? AND status = 'open'
             ORDER BY id DESC
             LIMIT 1
             """,
-            (hostname, mountpoint),
+            (alert_key, mountpoint),
         ).fetchone()
 
         if severity == "ok":
             conn.execute(
-                "DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?",
-                (hostname, mountpoint),
+                "DELETE FROM alert_debounce WHERE host_uid = ? AND mountpoint = ?",
+                (alert_key, mountpoint),
             )
             if open_alert:
                 conn.execute(
@@ -10631,29 +10717,29 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
                     """,
                     (now_utc, now_utc, report_id, open_alert[0]),
                 )
-                maybe_send_alert_message(alarm_settings, "resolved", hostname, mountpoint, "ok", used_percent, conn=conn, display_name=display_name)
+                maybe_send_alert_message(alarm_settings, "resolved", hostname, alert_key, mountpoint, "ok", used_percent, conn=conn, display_name=display_name)
             continue
 
         if not open_alert and not alert_started:
             continue
 
         conn.execute(
-            "DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint = ?",
-            (hostname, mountpoint),
+            "DELETE FROM alert_debounce WHERE host_uid = ? AND mountpoint = ?",
+            (alert_key, mountpoint),
         )
 
         if not open_alert:
             conn.execute(
                 """
                 INSERT INTO alerts (
-                    hostname, mountpoint, severity, used_percent, status,
+                    hostname, host_uid, mountpoint, severity, used_percent, status,
                     created_at_utc, last_seen_at_utc, resolved_at_utc, report_id
                 )
-                VALUES (?, ?, ?, ?, 'open', ?, ?, NULL, ?)
+                VALUES (?, ?, ?, ?, ?, 'open', ?, ?, NULL, ?)
                 """,
-                (hostname, mountpoint, severity, used_percent, now_utc, now_utc, report_id),
+                (hostname, alert_key, mountpoint, severity, used_percent, now_utc, now_utc, report_id),
             )
-            maybe_send_alert_message(alarm_settings, "opened", hostname, mountpoint, severity, used_percent, conn=conn, display_name=display_name)
+            maybe_send_alert_message(alarm_settings, "opened", hostname, alert_key, mountpoint, severity, used_percent, conn=conn, display_name=display_name)
             continue
 
         previous_severity = str(open_alert[1] or "warning")
@@ -10668,26 +10754,26 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, report_id:
         )
 
         if previous_severity != "critical" and severity == "critical":
-            maybe_send_alert_message(alarm_settings, "escalated", hostname, mountpoint, severity, used_percent, conn=conn, display_name=display_name)
+            maybe_send_alert_message(alarm_settings, "escalated", hostname, alert_key, mountpoint, severity, used_percent, conn=conn, display_name=display_name)
 
     if mountpoints_seen:
         placeholders = ",".join("?" for _ in mountpoints_seen)
         conn.execute(
-            f"DELETE FROM alert_debounce WHERE hostname = ? AND mountpoint NOT IN ({placeholders})",
-            (hostname, *sorted(mountpoints_seen)),
+            f"DELETE FROM alert_debounce WHERE host_uid = ? AND mountpoint NOT IN ({placeholders})",
+            (alert_key, *sorted(mountpoints_seen)),
         )
         conn.execute(
             f"""
             UPDATE alerts
             SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
-            WHERE hostname = ?
+            WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
               AND status = 'open'
               AND mountpoint NOT IN ({placeholders})
             """,
-            (now_utc, now_utc, report_id, hostname, *sorted(mountpoints_seen)),
+            (now_utc, now_utc, report_id, alert_key, *sorted(mountpoints_seen)),
         )
     else:
-        conn.execute("DELETE FROM alert_debounce WHERE hostname = ?", (hostname,))
+        conn.execute("DELETE FROM alert_debounce WHERE host_uid = ?", (alert_key,))
 
 
 class MonitoringHandler(BaseHTTPRequestHandler):
@@ -12428,10 +12514,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 where_parts.append("hostname = ?")
                 args.append(hostname_filter)
             if host_uid_filter:
-                host_key_expr = reports_host_key_sql("r.")
-                where_parts.append(
-                    f"EXISTS (SELECT 1 FROM reports r WHERE r.id = alerts.report_id AND {host_key_expr} = ?)"
-                )
+                where_parts.append("COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname) = ?")
                 args.append(host_uid_filter)
 
             where_clause = ""
@@ -12442,6 +12525,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 all_rows = conn.execute(
                     f"""
                     SELECT id, hostname, mountpoint, severity, used_percent, status,
+                          COALESCE(host_uid, ''),
                           created_at_utc, last_seen_at_utc, resolved_at_utc, report_id,
                           COALESCE(ack_note, ''), COALESCE(ack_by, ''), COALESCE(ack_at_utc, ''),
                           COALESCE(closed_at_utc, ''), COALESCE(closed_by, '')
@@ -12518,6 +12602,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 }
             for row in rows:
                 hostname = str(row[1] or "")
+                host_uid_value = alert_host_key(hostname, str(row[6] or ""))
                 mountpoint = str(row[2] or "")
                 current_used_percent = None
                 if mountpoint:
@@ -12529,6 +12614,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     {
                         "id": row[0],
                         "hostname": hostname,
+                        "host_uid": host_uid_value,
                         "display_name": display_names.get(hostname, hostname),
                         "customer_name": customer_names.get(hostname, "") or "Ohne Kunde",
                         "mountpoint": mountpoint,
@@ -12537,17 +12623,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "current_used_percent": current_used_percent,
                         "delta_used_percent": delta_used_percent,
                         "status": row[5],
-                        "created_at_utc": row[6],
-                        "last_seen_at_utc": row[7],
-                        "resolved_at_utc": row[8],
-                        "report_id": row[9],
-                        "ack_note": str(row[10] or ""),
-                        "ack_by": str(row[11] or ""),
-                        "ack_at_utc": str(row[12] or ""),
-                        "is_acknowledged": bool(str(row[12] or "").strip()),
-                        "closed_at_utc": str(row[13] or ""),
-                        "closed_by": str(row[14] or ""),
-                        "is_closed": bool(str(row[13] or "").strip()),
+                        "created_at_utc": row[7],
+                        "last_seen_at_utc": row[8],
+                        "resolved_at_utc": row[9],
+                        "report_id": row[10],
+                        "ack_note": str(row[11] or ""),
+                        "ack_by": str(row[12] or ""),
+                        "ack_at_utc": str(row[13] or ""),
+                        "is_acknowledged": bool(str(row[13] or "").strip()),
+                        "closed_at_utc": str(row[14] or ""),
+                        "closed_by": str(row[15] or ""),
+                        "is_closed": bool(str(row[14] or "").strip()),
                         "is_muted": (hostname, mountpoint) in muted_pairs,
                     }
                 )
@@ -12581,8 +12667,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 where_clause += " AND hostname = ?"
                 args.append(hostname_filter)
             if host_uid_filter:
-                host_key_expr = reports_host_key_sql("r.")
-                where_clause += f" AND EXISTS (SELECT 1 FROM reports r WHERE r.id = alerts.report_id AND {host_key_expr} = ?)"
+                where_clause += " AND COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname) = ?"
                 args.append(host_uid_filter)
 
             with sqlite3.connect(DB_PATH) as conn:
@@ -14051,7 +14136,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     conn.execute("DELETE FROM host_settings WHERE hostname = ?", (resolved_hostname,))
 
                 if is_hidden:
-                    resolve_open_alerts_for_host(conn, resolved_hostname, None)
+                    resolve_open_alerts_for_host(conn, resolved_hostname, host_uid, None)
 
                 stored_host_settings = get_host_settings(conn, resolved_hostname)
 
@@ -14136,13 +14221,38 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             except json.JSONDecodeError:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
                 return
+            alert_id = parse_positive_int(payload.get("alert_id"), default=0, max_value=2_000_000_000)
             hostname = str(payload.get("hostname", "")).strip()
+            host_uid = str(payload.get("host_uid", "")).strip()
             mountpoint = str(payload.get("mountpoint", "")).strip()
-            if not hostname or not mountpoint:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
-                return
-            muted_by = self._web_session_username() or "webclient"
             with sqlite3.connect(DB_PATH) as conn:
+                if alert_id > 0:
+                    row = conn.execute(
+                        "SELECT hostname, mountpoint FROM alerts WHERE id = ?",
+                        (alert_id,),
+                    ).fetchone()
+                    if not row:
+                        self._send_json(HTTPStatus.NOT_FOUND, {"error": "alert not found"})
+                        return
+                    hostname = str(row[0] or "").strip()
+                    mountpoint = str(row[1] or "").strip()
+                if (not hostname or not mountpoint) and host_uid and mountpoint:
+                    row = conn.execute(
+                        """
+                        SELECT hostname
+                        FROM alerts
+                        WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+                          AND mountpoint = ?
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (host_uid, mountpoint),
+                    ).fetchone()
+                    hostname = str((row[0] if row else "") or "").strip()
+                if not hostname or not mountpoint:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "alert_id or (hostname+mountpoint) required"})
+                    return
+            muted_by = self._web_session_username() or "webclient"
                 conn.execute(
                     "INSERT OR REPLACE INTO muted_alert_rules (hostname, mountpoint, muted_by, muted_at_utc) VALUES (?, ?, ?, ?)",
                     (hostname, mountpoint, muted_by, utc_now_iso()),
@@ -14159,12 +14269,37 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             except json.JSONDecodeError:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
                 return
+            alert_id = parse_positive_int(payload.get("alert_id"), default=0, max_value=2_000_000_000)
             hostname = str(payload.get("hostname", "")).strip()
+            host_uid = str(payload.get("host_uid", "")).strip()
             mountpoint = str(payload.get("mountpoint", "")).strip()
-            if not hostname or not mountpoint:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
-                return
             with sqlite3.connect(DB_PATH) as conn:
+                if alert_id > 0:
+                    row = conn.execute(
+                        "SELECT hostname, mountpoint FROM alerts WHERE id = ?",
+                        (alert_id,),
+                    ).fetchone()
+                    if not row:
+                        self._send_json(HTTPStatus.NOT_FOUND, {"error": "alert not found"})
+                        return
+                    hostname = str(row[0] or "").strip()
+                    mountpoint = str(row[1] or "").strip()
+                if (not hostname or not mountpoint) and host_uid and mountpoint:
+                    row = conn.execute(
+                        """
+                        SELECT hostname
+                        FROM alerts
+                        WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+                          AND mountpoint = ?
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (host_uid, mountpoint),
+                    ).fetchone()
+                    hostname = str((row[0] if row else "") or "").strip()
+                if not hostname or not mountpoint:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "alert_id or (hostname+mountpoint) required"})
+                    return
                 conn.execute(
                     "DELETE FROM muted_alert_rules WHERE hostname = ? AND mountpoint = ?",
                     (hostname, mountpoint),
@@ -14182,12 +14317,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
                 return
 
+            alert_id = parse_positive_int(payload.get("alert_id"), default=0, max_value=2_000_000_000)
             hostname = str(payload.get("hostname", "")).strip()
+            host_uid = str(payload.get("host_uid", "")).strip()
             mountpoint = str(payload.get("mountpoint", "")).strip()
             note = str(payload.get("ack_note", "") or "").strip()
-            if not hostname or not mountpoint:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
-                return
             if len(note) > 500:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "ack_note too long (max 500)"})
                 return
@@ -14196,19 +14330,41 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             ack_at_utc = utc_now_iso()
 
             with sqlite3.connect(DB_PATH) as conn:
-                target = conn.execute(
-                    """
-                    SELECT id
-                    FROM alerts
-                    WHERE hostname = ? AND mountpoint = ? AND status = 'open'
-                    ORDER BY id DESC
-                    LIMIT 1
-                    """,
-                    (hostname, mountpoint),
-                ).fetchone()
+                target = None
+                if alert_id > 0:
+                    target = conn.execute(
+                        "SELECT id, hostname, mountpoint FROM alerts WHERE id = ? AND status = 'open'",
+                        (alert_id,),
+                    ).fetchone()
+                elif host_uid and mountpoint:
+                    target = conn.execute(
+                        """
+                        SELECT id, hostname, mountpoint
+                        FROM alerts
+                        WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+                          AND mountpoint = ?
+                          AND status = 'open'
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (host_uid, mountpoint),
+                    ).fetchone()
+                elif hostname and mountpoint:
+                    target = conn.execute(
+                        """
+                        SELECT id, hostname, mountpoint
+                        FROM alerts
+                        WHERE hostname = ? AND mountpoint = ? AND status = 'open'
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (hostname, mountpoint),
+                    ).fetchone()
                 if not target:
                     self._send_json(HTTPStatus.NOT_FOUND, {"error": "open alert not found"})
                     return
+                hostname = str(target[1] or "").strip()
+                mountpoint = str(target[2] or "").strip()
 
                 conn.execute(
                     """
@@ -14242,20 +14398,54 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
                 return
 
+            alert_id = parse_positive_int(payload.get("alert_id"), default=0, max_value=2_000_000_000)
             hostname = str(payload.get("hostname", "")).strip()
+            host_uid = str(payload.get("host_uid", "")).strip()
             mountpoint = str(payload.get("mountpoint", "")).strip()
-            if not hostname or not mountpoint:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
-                return
 
             with sqlite3.connect(DB_PATH) as conn:
+                target = None
+                if alert_id > 0:
+                    target = conn.execute(
+                        "SELECT id, hostname, mountpoint FROM alerts WHERE id = ? AND status = 'open'",
+                        (alert_id,),
+                    ).fetchone()
+                elif host_uid and mountpoint:
+                    target = conn.execute(
+                        """
+                        SELECT id, hostname, mountpoint
+                        FROM alerts
+                        WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+                          AND mountpoint = ?
+                          AND status = 'open'
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (host_uid, mountpoint),
+                    ).fetchone()
+                elif hostname and mountpoint:
+                    target = conn.execute(
+                        """
+                        SELECT id, hostname, mountpoint
+                        FROM alerts
+                        WHERE hostname = ? AND mountpoint = ? AND status = 'open'
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (hostname, mountpoint),
+                    ).fetchone()
+                if not target:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "open alert not found"})
+                    return
+                hostname = str(target[1] or "").strip()
+                mountpoint = str(target[2] or "").strip()
                 conn.execute(
                     """
                     UPDATE alerts
                     SET ack_note = NULL, ack_by = NULL, ack_at_utc = NULL
-                    WHERE hostname = ? AND mountpoint = ? AND status = 'open'
+                    WHERE id = ?
                     """,
-                    (hostname, mountpoint),
+                    (int(target[0]),),
                 )
                 conn.commit()
 
@@ -14271,29 +14461,50 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
                 return
 
+            alert_id = parse_positive_int(payload.get("alert_id"), default=0, max_value=2_000_000_000)
             hostname = str(payload.get("hostname", "")).strip()
+            host_uid = str(payload.get("host_uid", "")).strip()
             mountpoint = str(payload.get("mountpoint", "")).strip()
-            if not hostname or not mountpoint:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
-                return
 
             closed_by = self._web_session_username() or "webclient"
             closed_at_utc = utc_now_iso()
 
             with sqlite3.connect(DB_PATH) as conn:
-                target = conn.execute(
-                    """
-                    SELECT id
-                    FROM alerts
-                    WHERE hostname = ? AND mountpoint = ? AND status = 'open'
-                    ORDER BY id DESC
-                    LIMIT 1
-                    """,
-                    (hostname, mountpoint),
-                ).fetchone()
+                target = None
+                if alert_id > 0:
+                    target = conn.execute(
+                        "SELECT id, hostname, mountpoint FROM alerts WHERE id = ? AND status = 'open'",
+                        (alert_id,),
+                    ).fetchone()
+                elif host_uid and mountpoint:
+                    target = conn.execute(
+                        """
+                        SELECT id, hostname, mountpoint
+                        FROM alerts
+                        WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+                          AND mountpoint = ?
+                          AND status = 'open'
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (host_uid, mountpoint),
+                    ).fetchone()
+                elif hostname and mountpoint:
+                    target = conn.execute(
+                        """
+                        SELECT id, hostname, mountpoint
+                        FROM alerts
+                        WHERE hostname = ? AND mountpoint = ? AND status = 'open'
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (hostname, mountpoint),
+                    ).fetchone()
                 if not target:
                     self._send_json(HTTPStatus.NOT_FOUND, {"error": "open alert not found"})
                     return
+                hostname = str(target[1] or "").strip()
+                mountpoint = str(target[2] or "").strip()
 
                 conn.execute(
                     "UPDATE alerts SET status = 'resolved', closed_at_utc = ?, closed_by = ? WHERE id = ?",
@@ -14322,26 +14533,47 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
                 return
 
+            alert_id = parse_positive_int(payload.get("alert_id"), default=0, max_value=2_000_000_000)
             hostname = str(payload.get("hostname", "")).strip()
+            host_uid = str(payload.get("host_uid", "")).strip()
             mountpoint = str(payload.get("mountpoint", "")).strip()
-            if not hostname or not mountpoint:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname and mountpoint required"})
-                return
 
             with sqlite3.connect(DB_PATH) as conn:
-                target = conn.execute(
-                    """
-                    SELECT id
-                    FROM alerts
-                    WHERE hostname = ? AND mountpoint = ? AND status = 'open'
-                    ORDER BY id DESC
-                    LIMIT 1
-                    """,
-                    (hostname, mountpoint),
-                ).fetchone()
+                target = None
+                if alert_id > 0:
+                    target = conn.execute(
+                        "SELECT id, hostname, mountpoint FROM alerts WHERE id = ? AND status = 'open'",
+                        (alert_id,),
+                    ).fetchone()
+                elif host_uid and mountpoint:
+                    target = conn.execute(
+                        """
+                        SELECT id, hostname, mountpoint
+                        FROM alerts
+                        WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+                          AND mountpoint = ?
+                          AND status = 'open'
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (host_uid, mountpoint),
+                    ).fetchone()
+                elif hostname and mountpoint:
+                    target = conn.execute(
+                        """
+                        SELECT id, hostname, mountpoint
+                        FROM alerts
+                        WHERE hostname = ? AND mountpoint = ? AND status = 'open'
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (hostname, mountpoint),
+                    ).fetchone()
                 if not target:
                     self._send_json(HTTPStatus.NOT_FOUND, {"error": "open alert not found"})
                     return
+                hostname = str(target[1] or "").strip()
+                mountpoint = str(target[2] or "").strip()
 
                 conn.execute(
                     "UPDATE alerts SET status = 'open', closed_at_utc = NULL, closed_by = NULL WHERE id = ?",
@@ -14882,9 +15114,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             alarm_settings = get_alarm_settings(conn)
             host_settings = get_host_settings(conn, hostname)
             if bool(host_settings.get("is_hidden", False)):
-                resolve_open_alerts_for_host(conn, hostname, report_id)
+                resolve_open_alerts_for_host(conn, hostname, incoming_host_uid, report_id)
             else:
-                update_alerts_for_report(conn, hostname, report_id, filesystems, alarm_settings)
+                update_alerts_for_report(conn, hostname, incoming_host_uid, report_id, filesystems, alarm_settings)
             maybe_send_alert_reminders(conn)
             maybe_send_inactive_host_notifications(conn)
             maybe_send_scheduled_user_mails(conn)
