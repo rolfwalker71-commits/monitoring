@@ -7448,7 +7448,13 @@ def alert_digest_subject(alerts: list[dict], local_date: str) -> str:
     return f"[Monitoring] Alert Digest {local_date} (C:{critical_count} W:{warning_count})"
 
 
-def alert_instant_mail_subject(event_type: str, hostname: str, severity: str, display_name: str = "") -> str:
+def alert_instant_mail_subject(
+    event_type: str,
+    hostname: str,
+    severity: str,
+    display_name: str = "",
+    alert_id: int = 0,
+) -> str:
     sev_label = "KRITISCH" if severity == "critical" else "WARNUNG"
     event_label = {
         "opened": "Alarm ausgelöst",
@@ -7457,7 +7463,8 @@ def alert_instant_mail_subject(event_type: str, hostname: str, severity: str, di
         "reminder": "Heads-Up: Alert noch offen",
     }.get(event_type, "Alarm")
     title_target = display_name.strip() or hostname
-    return f"[Monitoring] [{sev_label}] {event_label}: {title_target}"
+    alert_id_suffix = f" | Alert-ID {alert_id}" if int(alert_id or 0) > 0 else ""
+    return f"[Monitoring] [{sev_label}] {event_label}: {title_target}{alert_id_suffix}"
 
 
 def alert_instant_mail_html(
@@ -7474,6 +7481,7 @@ def alert_instant_mail_html(
     os_family: str = "linux",
     reported_at_utc: str = "",
     graph_cid: str = "",
+    alert_id: int = 0,
 ) -> str:
     normalized_severity = str(severity or "").strip().lower()
     if normalized_severity == "critical":
@@ -7489,6 +7497,7 @@ def alert_instant_mail_html(
         "reminder": "Heads-Up: Alert noch offen",
     }.get(event_type, "Alarm")
     used_str = f"{used_percent:.1f}"
+    normalized_alert_id = int(alert_id or 0)
     host_title = display_name.strip() or hostname
     customer_title = str(customer_name or "").strip() or host_title
     normalized_country_code = normalize_country_code(country_code)
@@ -7538,6 +7547,8 @@ def alert_instant_mail_html(
         "<div style='padding:20px;'>"
         f"<h2 style='margin:0 0 14px 0;font-size:20px;color:#0f172a;'>{html.escape(event_label)}</h2>"
         "<table style='width:100%;border-collapse:collapse;font-size:14px;'>"
+        "<tr><td style='padding:8px 0;color:#64748b;'>Alert-ID</td>"
+        f"<td style='padding:8px 0;font-weight:700;font-family:Consolas,Menlo,monospace;'>#{normalized_alert_id if normalized_alert_id > 0 else '-'}</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Mountpoint</td>"
         f"<td style='padding:8px 0;font-weight:600;'>{html.escape(mountpoint)}</td></tr>"
         "<tr><td style='padding:8px 0;color:#64748b;'>Gemeldet am</td>"
@@ -7660,10 +7671,11 @@ def send_instant_alert_mails_to_users(
         return
     host_context = collect_host_mail_context(conn, hostname)
     reported_row = conn.execute(
-        "SELECT created_at_utc FROM alerts WHERE hostname = ? AND mountpoint = ? ORDER BY id DESC LIMIT 1",
+        "SELECT id, created_at_utc FROM alerts WHERE hostname = ? AND mountpoint = ? ORDER BY id DESC LIMIT 1",
         (hostname, mountpoint),
     ).fetchone()
-    reported_at_utc = str(reported_row[0] or "") if reported_row else utc_now_iso()
+    alert_id = int(reported_row[0] or 0) if reported_row else 0
+    reported_at_utc = str(reported_row[1] or "") if reported_row else utc_now_iso()
     try:
         rows = conn.execute(
             """
@@ -7715,6 +7727,7 @@ def send_instant_alert_mails_to_users(
                 hostname,
                 severity,
                 str(host_context.get("display_name", "") or ""),
+                alert_id=alert_id,
             )
             body = alert_instant_mail_html(
                 username,
@@ -7730,6 +7743,7 @@ def send_instant_alert_mails_to_users(
                 os_family=str(host_context.get("os_family", "linux") or "linux"),
                 reported_at_utc=reported_at_utc,
                 graph_cid=graph_cid or "",
+                alert_id=alert_id,
             )
             send_microsoft_mail_multi(
                 access_token,
@@ -8522,7 +8536,10 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                         conn, hostname, mountpoint, severity=severity, hours=24
                     )
                     graph_attachments = [graph_attachment] if graph_attachment else []
-                    subject = f"[Monitoring] [HEADS-UP] Offener Alert: {html.escape(str(host_ctx.get('display_name', hostname)))}"
+                    subject = (
+                        f"[Monitoring] [HEADS-UP] Offener Alert: {html.escape(str(host_ctx.get('display_name', hostname)))}"
+                        f" | Alert-ID {alert_id}"
+                    )
                     body = alert_instant_mail_html(
                         username,
                         "reminder",
@@ -8537,6 +8554,7 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                         os_family=str(host_ctx.get("os_family", "linux") or "linux"),
                         reported_at_utc=reported_at_utc,
                         graph_cid=graph_cid or "",
+                        alert_id=alert_id,
                     )
                     send_microsoft_mail_multi(
                         access_token,
