@@ -5572,8 +5572,10 @@ function renderSapB1InstalledServicesSection(payload) {
       const statusClass = isActive ? "sap-b1-service-status-active" : "sap-b1-service-status-inactive";
       return `
         <tr>
-          <td>${escapeHtml(description)}</td>
-          <td>${escapeHtml(name)}</td>
+          <td>
+            <div>${escapeHtml(description)}</div>
+            <div class="sap-b1-service-subname">${escapeHtml(name)}</div>
+          </td>
           <td>${renderSapB1ServicePorts(ports)}</td>
           <td><span class="${statusClass}">${escapeHtml(status)}</span></td>
           <td>${escapeHtml(live)}</td>
@@ -5587,7 +5589,6 @@ function renderSapB1InstalledServicesSection(payload) {
           <thead>
             <tr>
               <th>Beschreibung</th>
-              <th>Dienstname</th>
               <th>Port(s)</th>
               <th>Status</th>
               <th>Live</th>

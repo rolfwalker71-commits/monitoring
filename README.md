@@ -646,6 +646,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.54 (24. Mai 2026)
+
+- **SAP Services Tabelle kompakter gemacht**: Der `Dienstname` steht nun als zweite, kleinere Zeile direkt unter `Beschreibung`.
+- **Eigene Dienstname-Spalte entfernt**: Die separate Spalte `Dienstname` wurde entfernt, damit `Port(s)`, `Status` und `Live` mehr horizontalen Platz erhalten.
+- **Lesbarkeit optimiert**: Subzeile fuer den Dienstnamen ist visuell zurueckgenommen, aber weiterhin vollstaendig sichtbar.
+
 ### v1.7.53 (24. Mai 2026)
 
 - **SAP Service-/Port-Aenderungen jetzt im Host-Changelog**: Das Host-Config-Tracking schreibt nun ein zusaetzliches Feld `SAP Services/Ports`, damit Servicebezeichnungen inkl. Portbelegung als Change mit Alt/Neu-Wert sichtbar sind.
