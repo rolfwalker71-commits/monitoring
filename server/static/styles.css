@@ -6302,6 +6302,7 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
 
 .sap-services-changelog-item {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
   border-bottom: 1px dotted #c9d7ea;
@@ -6320,10 +6321,50 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
   text-overflow: ellipsis;
 }
 
+.sap-services-changelog-marker {
+  flex: 0 0 auto;
+  width: 10px;
+  color: #64748b;
+  font-weight: 700;
+}
+
 .sap-services-changelog-ports {
   flex: 0 0 auto;
   white-space: nowrap;
   color: #0f172a;
+  text-align: right;
+}
+
+.sap-services-changelog-delta {
+  display: block;
+  margin-top: 1px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.sap-services-changelog-item-added {
+  background: #ecfdf5;
+}
+
+.sap-services-changelog-item-removed {
+  background: #fef2f2;
+}
+
+.sap-services-changelog-item-changed {
+  background: #eff6ff;
+}
+
+.sap-services-changelog-item-added .sap-services-changelog-marker {
+  color: #15803d;
+}
+
+.sap-services-changelog-item-removed .sap-services-changelog-marker {
+  color: #b91c1c;
+}
+
+.sap-services-changelog-item-changed .sap-services-changelog-marker {
+  color: #1d4ed8;
 }
 
 .sap-services-changelog-list.is-new .sap-services-changelog-ports {
@@ -6332,6 +6373,31 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
 
 .sap-services-changelog-empty {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+body[data-theme="dark"] .sap-services-changelog-item {
+  border-bottom-color: #294062;
+}
+
+body[data-theme="dark"] .sap-services-changelog-marker,
+body[data-theme="dark"] .sap-services-changelog-ports {
+  color: #cfe0ff;
+}
+
+body[data-theme="dark"] .sap-services-changelog-delta {
+  color: #97abc8;
+}
+
+body[data-theme="dark"] .sap-services-changelog-item-added {
+  background: rgba(16, 185, 129, 0.14);
+}
+
+body[data-theme="dark"] .sap-services-changelog-item-removed {
+  background: rgba(239, 68, 68, 0.14);
+}
+
+body[data-theme="dark"] .sap-services-changelog-item-changed {
+  background: rgba(59, 130, 246, 0.14);
 }
 
 .host-config-changes-groups {

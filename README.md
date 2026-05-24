@@ -646,6 +646,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.59 (24. Mai 2026)
+
+- **SAP Services/Ports jetzt als echte Diff-Ansicht**: Pro Service wird im Changelog markiert, ob der Eintrag neu (`+`), entfernt (`-`) oder geaendert (`~`) ist.
+- **Port-Aenderungen direkt sichtbar**: Bei geaenderten Services wird in Alt/Neu jeweils der Gegenwert eingeblendet (`vorher`/`neu`), damit Port-Swaps sofort lesbar sind.
+- **Host + Global vereinheitlicht**: Die Diff-Darstellung gilt identisch im Host-Detail-Changelog und im globalen Host-Config-Changelog, fuer Windows und Linux.
+
 ### v1.7.58 (24. Mai 2026)
 
 - **SAP Services/Ports im Changelog lesbar gemacht**: Die Felder werden jetzt pro Service als einzelne Eintraege dargestellt statt als lange Semikolon-Zeile.
