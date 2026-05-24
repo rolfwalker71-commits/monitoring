@@ -208,6 +208,13 @@ def init_db() -> None:
             )
             """
         )
+        existing_alert_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(alerts)").fetchall()
+        }
+        if "host_uid" not in existing_alert_columns:
+            conn.execute("ALTER TABLE alerts ADD COLUMN host_uid TEXT NOT NULL DEFAULT ''")
+            conn.execute("UPDATE alerts SET host_uid = hostname WHERE COALESCE(host_uid, '') = ''")
         conn.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_alerts_host_status_severity
@@ -363,9 +370,6 @@ def init_db() -> None:
             str(row[1])
             for row in conn.execute("PRAGMA table_info(alerts)").fetchall()
         }
-        if "host_uid" not in existing_alert_columns:
-            conn.execute("ALTER TABLE alerts ADD COLUMN host_uid TEXT NOT NULL DEFAULT ''")
-            conn.execute("UPDATE alerts SET host_uid = hostname WHERE COALESCE(host_uid, '') = ''")
         if "ack_note" not in existing_alert_columns:
             conn.execute("ALTER TABLE alerts ADD COLUMN ack_note TEXT")
         if "ack_by" not in existing_alert_columns:
@@ -14373,7 +14377,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 if not hostname or not mountpoint:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "alert_id or (hostname+mountpoint) required"})
                     return
-            muted_by = self._web_session_username() or "webclient"
+                muted_by = self._web_session_username() or "webclient"
                 conn.execute(
                     "INSERT OR REPLACE INTO muted_alert_rules (hostname, mountpoint, muted_by, muted_at_utc) VALUES (?, ?, ?, ?)",
                     (hostname, mountpoint, muted_by, utc_now_iso()),
