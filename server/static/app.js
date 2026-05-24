@@ -9413,8 +9413,6 @@ function wireHostListInteractions() {
 
 function renderHosts(hosts) {
   const hostList = document.getElementById("hostList");
-  const hostListHeader = document.getElementById("hostListHeader");
-  const hostCount = document.getElementById("hostCount");
   const triggerAllButton = document.getElementById("triggerAllAgentsUpdateButton");
 
   if (triggerAllButton) {
@@ -9425,18 +9423,14 @@ function renderHosts(hosts) {
   }
 
   if (!Array.isArray(hosts) || hosts.length === 0) {
-    hostCount.textContent = "0 Hosts gesamt";
-    hostListHeader.innerHTML = "";
     hostList.innerHTML = "<p class=\"muted\">Keine Hosts vorhanden.</p>";
     renderHostIconFilters([]);
     return;
   }
 
   const { visibleHosts, hiddenHosts } = splitHosts(hosts);
-  hostCount.textContent = `${state.totalHosts} Hosts gesamt | aktiv ${visibleHosts.length} | ausgeblendet ${hiddenHosts.length}`;
 
   if (visibleHosts.length === 0 && hiddenHosts.length === 0) {
-    hostListHeader.innerHTML = "";
     hostList.innerHTML = "<p class=\"muted\">Keine Hosts passen zum Suchfilter.</p>";
     renderHostIconFilters(hosts);
     return;
@@ -9445,8 +9439,6 @@ function renderHosts(hosts) {
   const visibleHtml = visibleHosts.map(renderSingleHostCard).join("");
   const hiddenHtml = hiddenHosts.map(renderSingleHostCard).join("");
   const hiddenCollapsedClass = state.hiddenHostsCollapsed ? "hidden" : "";
-
-  hostListHeader.innerHTML = `<h4 class="host-group-title">Aktive Hosts (${visibleHosts.length})</h4>`;
 
   hostList.innerHTML = `
     <section class="host-group">
@@ -9470,12 +9462,7 @@ function renderHosts(hosts) {
 async function loadHosts(options = {}) {
   const preserveScroll = Boolean(options && options.preserveScroll);
   const hostList = document.getElementById("hostList");
-  const hostListHeader = document.getElementById("hostListHeader");
   const previousScrollTop = hostList ? hostList.scrollTop : 0;
-
-  if (!preserveScroll) {
-    hostListHeader.innerHTML = "<h4 class=\"host-group-title\">Aktive Hosts</h4>";
-  }
 
   try {
     const url = `/api/v1/hosts?limit=${state.hostLimit}&offset=${state.hostOffset}`;
