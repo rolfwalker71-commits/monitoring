@@ -10231,13 +10231,19 @@ def collect_host_mail_context(conn: sqlite3.Connection, hostname: str, host_uid:
         f"SELECT payload_json, COALESCE(primary_ip, '') FROM reports WHERE {host_key_expr} = ? ORDER BY id DESC LIMIT 1",
         (host_key,),
     ).fetchone()
+    if not latest_payload_row and hostname:
+        latest_payload_row = conn.execute(
+            "SELECT payload_json, COALESCE(primary_ip, '') FROM reports WHERE hostname = ? ORDER BY id DESC LIMIT 1",
+            (hostname,),
+        ).fetchone()
     latest_payload = parse_payload_json(str(latest_payload_row[0] or "{}")) if latest_payload_row else {}
 
     display_name = effective_display_name(latest_payload, display_name_override, hostname)
     country_code = country_code_override or extract_country_code_from_payload(latest_payload)
     os_name = str(latest_payload.get("os", "") or "")
     os_family = normalize_os_family(os_name)
-    primary_ip = str(latest_payload.get("primary_ip", "") or "").strip() or str(latest_payload_row[1] or "").strip()
+    primary_ip_from_row = str(latest_payload_row[1] or "").strip() if latest_payload_row else ""
+    primary_ip = str(latest_payload.get("primary_ip", "") or "").strip() or primary_ip_from_row
     return {
         "display_name": display_name,
         "customer_name": customer_name,
