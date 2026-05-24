@@ -77,6 +77,7 @@ DEFAULT_TREND_DIGEST_TIME = "08:00"
 DEFAULT_ALERT_DIGEST_TIME = "08:05"
 SCHEDULE_TIMEZONE_NAME = os.getenv("MONITORING_SCHEDULE_TIMEZONE", "Europe/Zurich").strip() or "Europe/Zurich"
 DB_MAINTENANCE_INTERVAL_HOURS = max(1, min(24, int(os.getenv("MONITORING_DB_MAINT_INTERVAL_HOURS", "2") or "2")))
+SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES = max(5, min(720, int(os.getenv("MONITORING_SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES", "60") or "60")))
 AUTO_BACKUP_DEFAULT_ENABLED = os.getenv("MONITORING_AUTO_BACKUP_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
 DEFAULT_SAP_LICENSE_TYPE_MAP_ENTRIES = [
     {"match_text": "CRM-LTD", "display_name": "Limited CRM"},
@@ -6620,8 +6621,8 @@ def collect_system_overview(conn: sqlite3.Connection) -> dict:
         if received_at_utc:
             try:
                 last_dt = datetime.fromisoformat(received_at_utc.replace("Z", "+00:00"))
-                online = (now_utc - last_dt) <= timedelta(minutes=20)
-            except ValueError:
+                online = (now_utc - last_dt) <= timedelta(minutes=SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES)
+            except (ValueError, TypeError):
                 online = False
 
         country_bucket = by_country.setdefault(country, {})
