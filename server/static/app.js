@@ -7897,6 +7897,34 @@ function formatHostLastReportAge(reportUtcValue) {
   };
 }
 
+function formatHostLastReportClock(reportUtcValue) {
+  const raw = asText(reportUtcValue, "").trim();
+  if (!raw || raw === "-") {
+    return {
+      label: "--:--",
+      title: "Noch kein Report empfangen",
+    };
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return {
+      label: "--:--",
+      title: `Ungültiger Zeitstempel: ${raw}`,
+    };
+  }
+
+  const timeLabel = parsed.toLocaleTimeString("de-CH", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return {
+    label: timeLabel,
+    title: `Letzter Report: ${formatUtcPlus2(raw)}`,
+  };
+}
+
 async function loadAlertMutes() {
   try {
     const response = await fetch("/api/v1/alert-mutes");
@@ -8010,6 +8038,7 @@ function renderSingleHostCard(host) {
       : "",
   ].filter(Boolean).join("");
   const lastReportInfo = formatHostLastReportAge(host.last_report_utc || host.last_seen_utc);
+  const lastReportClock = formatHostLastReportClock(host.last_report_utc || host.last_seen_utc);
   const statusPulseClass = lastReportInfo.statusClass === "host-last-report-dot--critical"
     ? "host-status-pulse host-status-pulse--critical"
     : lastReportInfo.statusClass === "host-last-report-dot--warning"
@@ -8109,6 +8138,7 @@ function renderSingleHostCard(host) {
         ${designationBadgeLine}
         <div class="host-tech-line">
           <span class="host-tech-row host-tech-row--host"><span class="${statusPulseClass}" aria-hidden="true"></span><span class="host-meta-v" title="${escapeHtml(shortHostname)}">${escapeHtml(shortHostname)}</span></span>
+          <span class="host-tech-row host-tech-row--report-clock" title="${escapeHtml(lastReportClock.title)}"><span class="host-meta-v">${escapeHtml(lastReportClock.label)}</span></span>
           <span class="host-tech-row host-tech-row--ip"><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span>${osIcon}</span>
         </div>
       </div>

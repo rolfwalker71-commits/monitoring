@@ -4784,6 +4784,18 @@ body[data-theme="dark"] .trend-progress-bar {
   color: #4f6782;
 }
 
+.host-tech-row--report-clock {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.host-tech-row--report-clock .host-meta-v {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #8aa0b8;
+}
+
 .host-tech-row--ip .host-meta-v {
   font-size: 10.5px;
   font-weight: 600;
@@ -4794,7 +4806,6 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-tech-row--ip {
   justify-content: flex-end;
   flex: 0 0 auto;
-  margin-left: auto;
 }
 
 .host-status-pulse {

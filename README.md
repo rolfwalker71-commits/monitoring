@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.71**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.71**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.72**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.72**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.72 | 25.05.2026 | Host card usability refinement: added a compact last-report time (HH:MM) in the technical metadata row between hostname and IP, with tooltip showing the full timestamp |
 | 1.7.71 | 25.05.2026 | Queue flush hardening on Linux and Windows agents: malformed/empty queue payload files and permanent 4xx rejects are quarantined instead of blocking backlog replay; transient transport failures still pause the flush to preserve unsent queue files |
 | 1.7.70 | 25.05.2026 | Hotfix receiver hang under load: fixed SQLite file-descriptor leak by ensuring context-managed DB connections are closed on block exit, preventing exhaustion of open files and resulting local timeouts on port 8080 |
 | 1.7.50 | 24.05.2026 | DB-size KPI presentation refinement: removed the `MiB` unit from the main value line and moved the unit to the subtitle as `MB`, so the KPI value row now shows only the numeric size |
@@ -648,6 +649,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.72 (25. Mai 2026)
+
+- **Letzte Report-Uhrzeit auf Hostkarte ergänzt**: In der kompakten Technikzeile der Hostkarte wird jetzt eine kleine Uhrzeit (`HH:MM`) der letzten Report-Anlieferung angezeigt.
+- **Saubere Positionierung zwischen Host und IP**: Die neue Zeit ist dezent gestylt und vertikal ausgerichtet zwischen Hostnamen-Bereich und IP/OS-Bereich platziert.
+- **Fallback + Tooltip**: Bei fehlendem/ungueltigem Zeitstempel wird `--:--` angezeigt; der Tooltip zeigt weiterhin den vollständigen Zeitstempel.
+
 ### v1.7.71 (25. Mai 2026)
 
 - **Queue-Flush robuster gemacht (Linux/Windows)**: Einzelne fehlerhafte oder leere Queue-Dateien blockieren den Backlog nicht mehr, sondern werden in ein Quarantäne-Verzeichnis verschoben.
