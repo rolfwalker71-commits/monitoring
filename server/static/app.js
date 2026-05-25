@@ -1604,8 +1604,9 @@ function renderMobilePushButton() {
   button.classList.toggle("hidden", !state.isAuthenticated);
   if (!state.isAuthenticated) {
     button.disabled = true;
-    button.textContent = "🔔 Push";
+    button.textContent = "🔕";
     button.title = "Mobile Push";
+    button.setAttribute("aria-label", "Mobile Push (inaktiv)");
     return;
   }
 
@@ -1616,28 +1617,32 @@ function renderMobilePushButton() {
 
   if (loading) {
     button.disabled = true;
-    button.textContent = "⏳ Push ...";
+    button.textContent = "⏳";
     button.title = "Push wird aktualisiert";
+    button.setAttribute("aria-label", "Mobile Push wird aktualisiert");
     return;
   }
   if (!supported) {
     button.disabled = true;
-    button.textContent = "🔕 Push n/v";
+    button.textContent = "🔕";
     button.title = "Browser unterstützt Web Push nicht";
+    button.setAttribute("aria-label", "Mobile Push nicht verfügbar");
     return;
   }
   if (!configured) {
     button.disabled = true;
-    button.textContent = "🔕 Push aus";
+    button.textContent = "🔕";
     button.title = "Serverseitig nicht konfiguriert";
+    button.setAttribute("aria-label", "Mobile Push serverseitig nicht konfiguriert");
     return;
   }
 
   button.disabled = false;
-  button.textContent = enabled ? "🔔 Push an" : "🔔 Push aus";
+  button.textContent = enabled ? "🔔" : "🔕";
   button.title = enabled
     ? "Push für dieses Gerät deaktivieren"
     : "Push für dieses Gerät aktivieren";
+  button.setAttribute("aria-label", enabled ? "Mobile Push aktiv" : "Mobile Push inaktiv");
 }
 
 function base64UrlToUint8Array(base64Url) {

@@ -11507,6 +11507,10 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
   flex: 0 0 auto;
 }
 
+#mobilePushToggleButton {
+  font-size: 14px;
+}
+
 @media (max-width: 1100px) {
   .panel-actions {
     flex-wrap: nowrap !important;
