@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.72**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.72**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.73**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.73**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.73 | 25.05.2026 | Host card micro-layout adjustment: moved the compact last-report clock from the bottom technical row to the second line, right-aligned and vertically centered |
 | 1.7.72 | 25.05.2026 | Host card usability refinement: added a compact last-report time (HH:MM) in the technical metadata row between hostname and IP, with tooltip showing the full timestamp |
 | 1.7.71 | 25.05.2026 | Queue flush hardening on Linux and Windows agents: malformed/empty queue payload files and permanent 4xx rejects are quarantined instead of blocking backlog replay; transient transport failures still pause the flush to preserve unsent queue files |
 | 1.7.70 | 25.05.2026 | Hotfix receiver hang under load: fixed SQLite file-descriptor leak by ensuring context-managed DB connections are closed on block exit, preventing exhaustion of open files and resulting local timeouts on port 8080 |
@@ -649,10 +650,16 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.73 (25. Mai 2026)
+
+- **Uhrzeit in zweite Zeile verschoben**: Die kompakte letzte Report-Uhrzeit ist von der unteren Technikzeile in die zweite Zeile der Hostkarte gewandert.
+- **Rechtsbuendig + vertikal zentriert**: Die Uhrzeit wird nun am rechten Rand der zweiten Zeile sauber ausgerichtet und vertikal zentriert angezeigt.
+- **Untere Zeile wieder aufgeraeumt**: Die letzte Technikzeile zeigt wieder nur Host/IP/OS-Informationen ohne zusaetzliche Uhrzeit.
+
 ### v1.7.72 (25. Mai 2026)
 
-- **Letzte Report-Uhrzeit auf Hostkarte ergänzt**: In der kompakten Technikzeile der Hostkarte wird jetzt eine kleine Uhrzeit (`HH:MM`) der letzten Report-Anlieferung angezeigt.
-- **Saubere Positionierung zwischen Host und IP**: Die neue Zeit ist dezent gestylt und vertikal ausgerichtet zwischen Hostnamen-Bereich und IP/OS-Bereich platziert.
+- **Letzte Report-Uhrzeit auf Hostkarte ergänzt**: Auf der Hostkarte wird eine kleine Uhrzeit (`HH:MM`) der letzten Report-Anlieferung angezeigt.
+- **Dezente kompakte Darstellung**: Die Zeit ist als kleine, unaufdringliche Zusatzinformation mit Tooltip auf den Vollzeitstempel integriert.
 - **Fallback + Tooltip**: Bei fehlendem/ungueltigem Zeitstempel wird `--:--` angezeigt; der Tooltip zeigt weiterhin den vollständigen Zeitstempel.
 
 ### v1.7.71 (25. Mai 2026)

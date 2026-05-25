@@ -8081,7 +8081,7 @@ function renderSingleHostCard(host) {
   const customerTitleLine = customerNameValue
     ? `<div class="host-customer-title-line"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span></span></div>`
     : "";
-  const designationBadgeLine = `<span class="host-detail-line">${escapeHtml(hostDesignationLabel)}</span>`;
+  const designationBadgeLine = `<div class="host-designation-row"><span class="host-detail-line">${escapeHtml(hostDesignationLabel)}</span><span class="host-detail-clock" title="${escapeHtml(lastReportClock.title)}">${escapeHtml(lastReportClock.label)}</span></div>`;
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
   const hanaRawForDebug = asText(host.hana_release || host.hana_version || "", "").trim();
@@ -8138,7 +8138,6 @@ function renderSingleHostCard(host) {
         ${designationBadgeLine}
         <div class="host-tech-line">
           <span class="host-tech-row host-tech-row--host"><span class="${statusPulseClass}" aria-hidden="true"></span><span class="host-meta-v" title="${escapeHtml(shortHostname)}">${escapeHtml(shortHostname)}</span></span>
-          <span class="host-tech-row host-tech-row--report-clock" title="${escapeHtml(lastReportClock.title)}"><span class="host-meta-v">${escapeHtml(lastReportClock.label)}</span></span>
           <span class="host-tech-row host-tech-row--ip"><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span>${osIcon}</span>
         </div>
       </div>

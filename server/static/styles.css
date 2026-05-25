@@ -4477,6 +4477,8 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-detail-line {
   display: block;
+  flex: 1 1 auto;
+  min-width: 0;
   max-width: 100%;
   color: #6a819d;
   font-size: 12px;
@@ -4487,6 +4489,24 @@ body[data-theme="dark"] .trend-progress-bar {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.host-designation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.host-detail-clock {
+  flex: 0 0 auto;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #8aa0b8;
+  white-space: nowrap;
 }
 
 .host-corner-icons {
@@ -4782,18 +4802,6 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-tech-row--host .host-meta-v {
   color: #4f6782;
-}
-
-.host-tech-row--report-clock {
-  flex: 0 0 auto;
-  margin-left: auto;
-}
-
-.host-tech-row--report-clock .host-meta-v {
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: #8aa0b8;
 }
 
 .host-tech-row--ip .host-meta-v {
