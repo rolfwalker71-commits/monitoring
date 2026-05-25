@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Monitoring Receiver API
-  version: 1.6.45
+  version: 1.7.82
   description: |-
     OpenAPI spec for the Monitoring server endpoints in receiver.py.
     Most /api/v1 endpoints require an authenticated web session cookie.
@@ -1162,6 +1162,90 @@ paths:
         '400':
           $ref: '#/components/responses/ErrorBadRequest'
 
+  /api/v1/push-subscriptions:
+    get:
+      tags: [Notifications]
+      summary: Get web push capability and current user subscriptions
+      operationId: getPushSubscriptions
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Push capability and subscription list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  supported: { type: boolean }
+                  configured: { type: boolean }
+                  vapid_public_key: { type: string }
+                  subscriptions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PushSubscriptionStored'
+    post:
+      tags: [Notifications]
+      summary: Subscribe or unsubscribe current device for web push
+      operationId: postPushSubscriptions
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [subscribe, unsubscribe]
+                  default: subscribe
+                endpoint: { type: string }
+                subscription:
+                  $ref: '#/components/schemas/PushSubscriptionInput'
+      responses:
+        '200':
+          description: Subscription updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: stored }
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+
+  /api/v1/push-test:
+    post:
+      tags: [Notifications]
+      summary: Send test push notification to current user's active devices
+      operationId: postPushTest
+      security:
+        - CookieAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                body: { type: string }
+      responses:
+        '200':
+          description: Test push send result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: sent }
+                  success: { type: integer, example: 1 }
+                  failed: { type: integer, example: 0 }
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+
   /api/v1/admin/user-alert-subscriptions:
     get:
       tags: [Admin]
@@ -2013,3 +2097,24 @@ components:
       properties:
         hostname: { type: string, example: support01 }
         display_name: { type: string, example: ANG AT Supportserver }
+    PushSubscriptionInput:
+      type: object
+      required: [endpoint, keys]
+      properties:
+        endpoint: { type: string }
+        keys:
+          type: object
+          required: [p256dh, auth]
+          properties:
+            p256dh: { type: string }
+            auth: { type: string }
+    PushSubscriptionStored:
+      type: object
+      properties:
+        id: { type: integer, example: 12 }
+        endpoint: { type: string }
+        is_active: { type: boolean, example: true }
+        created_at_utc: { type: string, format: date-time }
+        updated_at_utc: { type: string, format: date-time }
+        last_success_at_utc: { type: string, format: date-time }
+        last_error: { type: string }

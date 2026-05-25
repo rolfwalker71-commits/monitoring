@@ -172,6 +172,11 @@ const state = {
   adminAlertSubscriptionsUsers: [],
   adminAlertAvailableHosts: [],
   adminAlertTelegramAvailable: false,
+  pushSupported: false,
+  pushConfigured: false,
+  pushEnabled: false,
+  pushLoading: false,
+  pushVapidPublicKey: "",
   fsVisibilityEditable: false,
   fsFocusHiddenMountpoints: [],
   largeFilesHiddenMountpoints: [],
@@ -1591,6 +1596,183 @@ function setPasswordChangeStatus(message, isError = false) {
   statusEl.classList.toggle("status-error", isError);
 }
 
+function renderMobilePushButton() {
+  const button = document.getElementById("mobilePushToggleButton");
+  if (!button) {
+    return;
+  }
+  button.classList.toggle("hidden", !state.isAuthenticated);
+  if (!state.isAuthenticated) {
+    button.disabled = true;
+    button.textContent = "🔔 Push";
+    button.title = "Mobile Push";
+    return;
+  }
+
+  const supported = state.pushSupported === true;
+  const configured = state.pushConfigured === true;
+  const enabled = state.pushEnabled === true;
+  const loading = state.pushLoading === true;
+
+  if (loading) {
+    button.disabled = true;
+    button.textContent = "⏳ Push ...";
+    button.title = "Push wird aktualisiert";
+    return;
+  }
+  if (!supported) {
+    button.disabled = true;
+    button.textContent = "🔕 Push n/v";
+    button.title = "Browser unterstützt Web Push nicht";
+    return;
+  }
+  if (!configured) {
+    button.disabled = true;
+    button.textContent = "🔕 Push aus";
+    button.title = "Serverseitig nicht konfiguriert";
+    return;
+  }
+
+  button.disabled = false;
+  button.textContent = enabled ? "🔔 Push an" : "🔔 Push aus";
+  button.title = enabled
+    ? "Push für dieses Gerät deaktivieren"
+    : "Push für dieses Gerät aktivieren";
+}
+
+function base64UrlToUint8Array(base64Url) {
+  const input = String(base64Url || "").trim();
+  if (!input) {
+    return new Uint8Array();
+  }
+  const padding = "=".repeat((4 - (input.length % 4)) % 4);
+  const normalized = (input + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = window.atob(normalized);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) {
+    output[i] = raw.charCodeAt(i);
+  }
+  return output;
+}
+
+async function refreshMobilePushState() {
+  if (!state.isAuthenticated) {
+    state.pushSupported = false;
+    state.pushConfigured = false;
+    state.pushEnabled = false;
+    state.pushVapidPublicKey = "";
+    state.pushLoading = false;
+    renderMobilePushButton();
+    return;
+  }
+
+  state.pushLoading = true;
+  renderMobilePushButton();
+  try {
+    const response = await fetch("/api/v1/push-subscriptions", { credentials: "same-origin" });
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+    const payload = await response.json();
+    state.pushSupported = payload.supported === true && "serviceWorker" in navigator && "PushManager" in window;
+    state.pushConfigured = payload.configured === true;
+    state.pushVapidPublicKey = String(payload.vapid_public_key || "");
+
+    let localEndpoint = "";
+    if (state.pushSupported) {
+      const registration = await navigator.serviceWorker.ready;
+      const existing = await registration.pushManager.getSubscription();
+      localEndpoint = String(existing?.endpoint || "");
+    }
+
+    const serverSubscriptions = Array.isArray(payload.subscriptions) ? payload.subscriptions : [];
+    state.pushEnabled = Boolean(
+      localEndpoint
+      && serverSubscriptions.some((item) => (
+        item
+        && item.is_active === true
+        && String(item.endpoint || "") === localEndpoint
+      ))
+    );
+  } catch (error) {
+    state.pushSupported = false;
+    state.pushConfigured = false;
+    state.pushEnabled = false;
+    state.pushVapidPublicKey = "";
+    console.warn("refreshMobilePushState failed:", error);
+  } finally {
+    state.pushLoading = false;
+    renderMobilePushButton();
+  }
+}
+
+async function toggleMobilePush() {
+  if (state.pushLoading) {
+    return;
+  }
+  if (!state.pushSupported) {
+    window.alert("Push wird in diesem Browser nicht unterstützt.");
+    return;
+  }
+  if (!state.pushConfigured) {
+    window.alert("Push ist serverseitig noch nicht konfiguriert.");
+    return;
+  }
+
+  state.pushLoading = true;
+  renderMobilePushButton();
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const existing = await registration.pushManager.getSubscription();
+
+    if (existing && state.pushEnabled) {
+      await fetch("/api/v1/push-subscriptions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ action: "unsubscribe", endpoint: existing.endpoint }),
+      });
+      await existing.unsubscribe();
+      state.pushEnabled = false;
+      window.alert("Push für dieses Gerät deaktiviert.");
+      return;
+    }
+
+    let subscription = existing;
+    if (!subscription) {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        throw new Error("Benachrichtigungsberechtigung wurde nicht erteilt");
+      }
+      const vapidKey = base64UrlToUint8Array(state.pushVapidPublicKey);
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidKey,
+      });
+    }
+
+    const saveResponse = await fetch("/api/v1/push-subscriptions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ action: "subscribe", subscription: subscription.toJSON() }),
+    });
+    if (!saveResponse.ok) {
+      const errPayload = await saveResponse.json().catch(() => ({}));
+      throw new Error(String(errPayload.error || ("HTTP " + saveResponse.status)));
+    }
+
+    state.pushEnabled = true;
+    window.alert("Push für dieses Gerät aktiviert.");
+  } catch (error) {
+    window.alert("Push konnte nicht umgestellt werden: " + (error?.message || String(error)));
+  } finally {
+    state.pushLoading = false;
+    renderMobilePushButton();
+    void refreshMobilePushState();
+  }
+}
+
 function setAuthUiState(authenticated) {
   const loginOverlay = document.getElementById("loginOverlay");
   const appPanel = document.getElementById("appPanel");
@@ -1634,10 +1816,18 @@ function setAuthUiState(authenticated) {
     state.adminAlertSubscriptionsUsers = [];
     state.adminAlertAvailableHosts = [];
     state.adminAlertTelegramAvailable = false;
+    state.pushSupported = false;
+    state.pushConfigured = false;
+    state.pushEnabled = false;
+    state.pushVapidPublicKey = "";
   }
   renderSessionStatus();
   updateFilesystemVisibilityButtons();
   updateAdminSettingsVisibility();
+  renderMobilePushButton();
+  if (authenticated) {
+    void refreshMobilePushState();
+  }
 }
 
 function updateAdminSettingsVisibility() {
@@ -13829,6 +14019,13 @@ function wireEvents() {
     updateAutoRefreshStatus(new Date());
     if (autoRefreshCurrentIntervalSec > 0) startAutoRefreshTimer();
   });
+
+  const mobilePushToggleButton = document.getElementById("mobilePushToggleButton");
+  if (mobilePushToggleButton) {
+    mobilePushToggleButton.addEventListener("click", async () => {
+      await toggleMobilePush();
+    });
+  }
 
   document.getElementById("openAlarmSettingsButton").addEventListener("click", async () => {
     if (state.isAdmin) {

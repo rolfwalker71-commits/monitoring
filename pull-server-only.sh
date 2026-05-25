@@ -222,6 +222,11 @@ server/receiver.py
 server/static/index.html
 server/static/app.js
 server/static/styles.css
+server/static/sw.js
+server/static/manifest.json
+server/static/mobile-alerts.html
+server/static/mobile-alerts.css
+server/static/mobile-alerts.js
 server/static/icons/sap.png
 BUILD_VERSION
 AGENT_VERSION
@@ -368,6 +373,7 @@ if command -v apt-get >/dev/null 2>&1; then
 fi
 echo "Installiere/aktualisiere Python-Abhaengigkeiten ..."
 "$TARGET_DIR/.venv/bin/pip" install --quiet --upgrade cairosvg
+"$TARGET_DIR/.venv/bin/pip" install --quiet --upgrade pywebpush
 
 # --- EnvironmentFile anlegen (nur wenn noch nicht vorhanden) ---
 ENV_FILE="$TARGET_DIR/monitoring.env"
@@ -378,6 +384,9 @@ if [ ! -f "$ENV_FILE" ]; then
 MONITORING_API_KEY=HIER_API_KEY_EINTRAGEN
 MONITORING_API_KEY_GRACE_ALLOW_KNOWN_HOSTS=0
 MONITORING_GITHUB_TOKEN=HIER_GITHUB_TOKEN_EINTRAGEN
+# MONITORING_WEB_PUSH_VAPID_PUBLIC_KEY=HIER_PUBLIC_KEY
+# MONITORING_WEB_PUSH_VAPID_PRIVATE_KEY=HIER_PRIVATE_KEY
+# MONITORING_WEB_PUSH_VAPID_SUBJECT=mailto:it@example.com
 # MONITORING_SCHEDULE_TIMEZONE=Europe/Zurich
 EOF
     chmod 600 "$ENV_FILE"

@@ -31,6 +31,14 @@ except Exception:
     _cairosvg = None  # type: ignore
     _CAIROSVG_AVAILABLE = False
 
+try:
+    from pywebpush import WebPushException, webpush
+    _WEB_PUSH_AVAILABLE = True
+except Exception:
+    WebPushException = Exception  # type: ignore[assignment]
+    webpush = None  # type: ignore[assignment]
+    _WEB_PUSH_AVAILABLE = False
+
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
@@ -107,6 +115,9 @@ CANONICAL_AGENT_BASE_URL = os.getenv(
 ).strip().rstrip("/")
 TELEGRAM_ACTION_SIGNING_SECRET = os.getenv("MONITORING_TELEGRAM_ACTION_SIGNING_SECRET", "").strip()
 TELEGRAM_ACTION_TTL_MINUTES = max(10, min(10080, int(os.getenv("MONITORING_TELEGRAM_ACTION_TTL_MINUTES", "1440") or "1440")))
+WEB_PUSH_VAPID_PUBLIC_KEY = os.getenv("MONITORING_WEB_PUSH_VAPID_PUBLIC_KEY", "").strip()
+WEB_PUSH_VAPID_PRIVATE_KEY = os.getenv("MONITORING_WEB_PUSH_VAPID_PRIVATE_KEY", "").strip()
+WEB_PUSH_VAPID_SUBJECT = os.getenv("MONITORING_WEB_PUSH_VAPID_SUBJECT", "mailto:monitoring@example.com").strip() or "mailto:monitoring@example.com"
 try:
     SCHEDULE_TIMEZONE = ZoneInfo(SCHEDULE_TIMEZONE_NAME)
 except ZoneInfoNotFoundError:
@@ -920,6 +931,37 @@ def init_db() -> None:
             """
             CREATE INDEX IF NOT EXISTS idx_web_user_alert_subscriptions_host
             ON web_user_alert_subscriptions(hostname)
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS web_push_subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                endpoint TEXT NOT NULL,
+                p256dh TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                user_agent TEXT NOT NULL DEFAULT '',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                last_success_at_utc TEXT NOT NULL DEFAULT '',
+                last_error TEXT NOT NULL DEFAULT '',
+                created_at_utc TEXT NOT NULL,
+                updated_at_utc TEXT NOT NULL,
+                UNIQUE(username, endpoint),
+                FOREIGN KEY(username) REFERENCES web_users(username)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_web_push_subscriptions_user_active
+            ON web_push_subscriptions(username, is_active)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_web_push_subscriptions_endpoint
+            ON web_push_subscriptions(endpoint)
             """
         )
         conn.execute(
@@ -10752,6 +10794,16 @@ def maybe_send_alert_message(
         reply_markup = build_telegram_alert_reply_markup(bot_token, hostname, mountpoint, event_type)
         telegram_send_to_chat(bot_token, chat_id, text, reply_markup=reply_markup)
     if conn is not None:
+        send_instant_alert_web_push_to_users(
+            conn,
+            event_type,
+            hostname,
+            host_uid,
+            mountpoint,
+            severity,
+            used_percent,
+            display_name=display_name,
+        )
         send_instant_alert_telegram_to_users(
             conn,
             event_type,
@@ -10763,6 +10815,248 @@ def maybe_send_alert_message(
             display_name=display_name,
         )
         send_instant_alert_mails_to_users(conn, event_type, hostname, host_uid, mountpoint, severity, used_percent)
+
+
+def web_push_is_configured() -> bool:
+    return bool(_WEB_PUSH_AVAILABLE and WEB_PUSH_VAPID_PUBLIC_KEY and WEB_PUSH_VAPID_PRIVATE_KEY)
+
+
+def parse_web_push_subscription_payload(payload: object) -> dict:
+    if not isinstance(payload, dict):
+        raise ValueError("invalid payload")
+    subscription = payload.get("subscription")
+    if not isinstance(subscription, dict):
+        raise ValueError("subscription object missing")
+
+    endpoint = str(subscription.get("endpoint", "") or "").strip()
+    keys = subscription.get("keys")
+    if not endpoint:
+        raise ValueError("subscription.endpoint missing")
+    if not isinstance(keys, dict):
+        raise ValueError("subscription.keys missing")
+
+    p256dh = str(keys.get("p256dh", "") or "").strip()
+    auth = str(keys.get("auth", "") or "").strip()
+    if not p256dh or not auth:
+        raise ValueError("subscription.keys.p256dh/auth missing")
+
+    return {
+        "endpoint": endpoint,
+        "p256dh": p256dh,
+        "auth": auth,
+    }
+
+
+def upsert_web_push_subscription(conn: sqlite3.Connection, username: str, subscription: dict, user_agent: str = "") -> dict:
+    endpoint = str(subscription.get("endpoint", "") or "").strip()
+    p256dh = str(subscription.get("p256dh", "") or "").strip()
+    auth = str(subscription.get("auth", "") or "").strip()
+    if not endpoint or not p256dh or not auth:
+        raise ValueError("invalid push subscription")
+
+    now_utc = utc_now_iso()
+    conn.execute(
+        """
+        INSERT INTO web_push_subscriptions (
+            username,
+            endpoint,
+            p256dh,
+            auth,
+            user_agent,
+            is_active,
+            last_success_at_utc,
+            last_error,
+            created_at_utc,
+            updated_at_utc
+        )
+        VALUES (?, ?, ?, ?, ?, 1, '', '', ?, ?)
+        ON CONFLICT(username, endpoint) DO UPDATE SET
+            p256dh = excluded.p256dh,
+            auth = excluded.auth,
+            user_agent = excluded.user_agent,
+            is_active = 1,
+            updated_at_utc = excluded.updated_at_utc
+        """,
+        (username, endpoint, p256dh, auth, user_agent, now_utc, now_utc),
+    )
+    row = conn.execute(
+        """
+        SELECT id, endpoint, is_active, created_at_utc, updated_at_utc
+        FROM web_push_subscriptions
+        WHERE username = ? AND endpoint = ?
+        """,
+        (username, endpoint),
+    ).fetchone()
+    return {
+        "id": int(row[0] or 0) if row else 0,
+        "endpoint": endpoint,
+        "is_active": bool(int((row[2] if row else 0) or 0)),
+        "created_at_utc": str((row[3] if row else "") or ""),
+        "updated_at_utc": str((row[4] if row else "") or ""),
+    }
+
+
+def list_web_push_subscriptions(conn: sqlite3.Connection, username: str) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT id, endpoint, is_active, created_at_utc, updated_at_utc, last_success_at_utc, last_error
+        FROM web_push_subscriptions
+        WHERE username = ?
+        ORDER BY updated_at_utc DESC, id DESC
+        """,
+        (username,),
+    ).fetchall()
+    return [
+        {
+            "id": int(row[0] or 0),
+            "endpoint": str(row[1] or ""),
+            "is_active": bool(int(row[2] or 0)),
+            "created_at_utc": str(row[3] or ""),
+            "updated_at_utc": str(row[4] or ""),
+            "last_success_at_utc": str(row[5] or ""),
+            "last_error": str(row[6] or ""),
+        }
+        for row in rows
+    ]
+
+
+def remove_web_push_subscription(conn: sqlite3.Connection, username: str, endpoint: str) -> int:
+    safe_endpoint = str(endpoint or "").strip()
+    if not safe_endpoint:
+        return 0
+    cursor = conn.execute(
+        "DELETE FROM web_push_subscriptions WHERE username = ? AND endpoint = ?",
+        (username, safe_endpoint),
+    )
+    return int(cursor.rowcount or 0)
+
+
+def _push_tag_for_alert(host_uid: str, hostname: str, mountpoint: str) -> str:
+    host_key = alert_host_key(hostname, host_uid)
+    mount_key = normalize_mountpoint_key(mountpoint) or "fs"
+    return f"alert:{host_key}:{mount_key}"
+
+
+def _send_web_push_to_subscription(endpoint: str, p256dh: str, auth: str, payload: dict) -> tuple[bool, str, bool]:
+    if not web_push_is_configured():
+        return False, "web push not configured", False
+    if webpush is None:
+        return False, "pywebpush not available", False
+
+    try:
+        webpush(
+            subscription_info={
+                "endpoint": endpoint,
+                "keys": {
+                    "p256dh": p256dh,
+                    "auth": auth,
+                },
+            },
+            data=json.dumps(payload, separators=(",", ":")),
+            vapid_private_key=WEB_PUSH_VAPID_PRIVATE_KEY,
+            vapid_claims={"sub": WEB_PUSH_VAPID_SUBJECT},
+            ttl=120,
+        )
+        return True, "ok", False
+    except WebPushException as exc:
+        response = getattr(exc, "response", None)
+        status_code = int(getattr(response, "status_code", 0) or 0)
+        details = str(exc)
+        return False, details, status_code in {404, 410}
+    except Exception as exc:
+        return False, str(exc), False
+
+
+def send_instant_alert_web_push_to_users(
+    conn: sqlite3.Connection,
+    event_type: str,
+    hostname: str,
+    host_uid: str,
+    mountpoint: str,
+    severity: str,
+    used_percent: float,
+    display_name: str = "",
+) -> None:
+    if not web_push_is_configured():
+        return
+    if event_type not in {"opened", "escalated", "resolved"}:
+        return
+
+    host_ctx = collect_host_mail_context(conn, hostname, host_uid)
+    host_title = display_name.strip() if display_name.strip() else str(host_ctx.get("display_name") or hostname)
+    sev_label = "KRITISCH" if severity == "critical" else ("WARNUNG" if severity == "warning" else "OK")
+    event_label = {
+        "opened": "Neuer Alert",
+        "escalated": "Alert eskaliert",
+        "resolved": "Alert behoben",
+    }.get(event_type, "Alert")
+
+    title = f"{event_label}: {host_title}"
+    body = f"{mountpoint} · {sev_label} · {used_percent:.1f}%"
+    payload = {
+        "title": title,
+        "body": body,
+        "tag": _push_tag_for_alert(host_uid, hostname, mountpoint),
+        "renotify": event_type in {"opened", "escalated"},
+        "data": {
+            "url": "/",
+            "hostname": hostname,
+            "host_uid": alert_host_key(hostname, host_uid),
+            "mountpoint": mountpoint,
+            "severity": severity,
+            "event_type": event_type,
+        },
+    }
+
+    target_rows = conn.execute(
+        """
+        SELECT DISTINCT s.id, s.endpoint, s.p256dh, s.auth
+        FROM web_user_alert_subscriptions a
+        JOIN web_push_subscriptions s
+          ON s.username = a.username
+        WHERE a.hostname = ?
+          AND s.is_active = 1
+        """,
+        (hostname,),
+    ).fetchall()
+
+    if not target_rows:
+        return
+
+    now_utc = utc_now_iso()
+    for row in target_rows:
+        sub_id = int(row[0] or 0)
+        endpoint = str(row[1] or "")
+        p256dh = str(row[2] or "")
+        auth = str(row[3] or "")
+        ok, details, deactivate = _send_web_push_to_subscription(endpoint, p256dh, auth, payload)
+        if ok:
+            conn.execute(
+                """
+                UPDATE web_push_subscriptions
+                SET last_success_at_utc = ?, last_error = '', updated_at_utc = ?
+                WHERE id = ?
+                """,
+                (now_utc, now_utc, sub_id),
+            )
+        elif deactivate:
+            conn.execute(
+                """
+                UPDATE web_push_subscriptions
+                SET is_active = 0, last_error = ?, updated_at_utc = ?
+                WHERE id = ?
+                """,
+                (details[:500], now_utc, sub_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE web_push_subscriptions
+                SET last_error = ?, updated_at_utc = ?
+                WHERE id = ?
+                """,
+                (details[:500], now_utc, sub_id),
+            )
 
 
 def get_nested_number(payload: dict, section: str, key: str) -> float | None:
@@ -12460,6 +12754,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "alert_instant_telegram_enabled": bool(user_settings.get("alert_instant_telegram_enabled", False)),
                     },
                 )
+            return
+
+        if parsed.path == "/api/v1/push-subscriptions":
+            username = self._web_session_username()
+            with sqlite3.connect(DB_PATH) as conn:
+                subscriptions = list_web_push_subscriptions(conn, username)
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "supported": bool(_WEB_PUSH_AVAILABLE),
+                    "configured": web_push_is_configured(),
+                    "vapid_public_key": WEB_PUSH_VAPID_PUBLIC_KEY,
+                    "subscriptions": subscriptions,
+                },
+            )
             return
 
         if parsed.path == "/api/v1/web-users":
@@ -14162,6 +14471,34 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_index_with_asset_version()
             return
 
+        if parsed.path == "/mobile/alerts":
+            self._send_html_with_asset_version(STATIC_DIR / "mobile-alerts.html")
+            return
+
+        if parsed.path == "/mobile-alerts.js":
+            self._send_file(
+                STATIC_DIR / "mobile-alerts.js",
+                "application/javascript; charset=utf-8",
+                extra_headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
+            return
+
+        if parsed.path == "/mobile-alerts.css":
+            self._send_file(
+                STATIC_DIR / "mobile-alerts.css",
+                "text/css; charset=utf-8",
+                extra_headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
+            return
+
         if parsed.path == "/app.js":
             self._send_file(
                 STATIC_DIR / "app.js",
@@ -14797,6 +15134,140 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 status = HTTPStatus.OK if telegram_ok else HTTPStatus.BAD_REQUEST
                 self._send_json(status, {"status": "sent" if telegram_ok else "failed", "channel": "telegram", "details": telegram_details})
                 return
+
+        if path == "/api/v1/push-subscriptions":
+            username = self._web_session_username()
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid payload"})
+                return
+
+            action = str(payload.get("action", "subscribe") or "subscribe").strip().lower()
+            user_agent = str(self.headers.get("User-Agent", "") or "")[:512]
+
+            with sqlite3.connect(DB_PATH) as conn:
+                if action == "unsubscribe":
+                    endpoint = str(payload.get("endpoint", "") or "").strip()
+                    removed = remove_web_push_subscription(conn, username, endpoint)
+                    conn.commit()
+                    self._send_json(HTTPStatus.OK, {"status": "removed", "removed": removed})
+                    return
+
+                try:
+                    subscription = parse_web_push_subscription_payload(payload)
+                    saved = upsert_web_push_subscription(conn, username, subscription, user_agent=user_agent)
+                    conn.commit()
+                except ValueError as exc:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                    return
+
+            self._send_json(HTTPStatus.OK, {"status": "stored", "subscription": saved})
+            return
+
+        if path == "/api/v1/push-test":
+            username = self._web_session_username()
+            if not web_push_is_configured():
+                self._send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "error": "web push not configured",
+                        "supported": bool(_WEB_PUSH_AVAILABLE),
+                        "configured": web_push_is_configured(),
+                    },
+                )
+                return
+
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+
+            custom_title = ""
+            custom_body = ""
+            if isinstance(payload, dict):
+                custom_title = str(payload.get("title", "") or "").strip()
+                custom_body = str(payload.get("body", "") or "").strip()
+
+            title = custom_title or "Monitoring Push Test"
+            body = custom_body or f"Testnachricht für {username} um {datetime.now().astimezone().strftime('%d.%m.%Y %H:%M')}"
+            push_payload = {
+                "title": title,
+                "body": body,
+                "tag": f"push-test:{username}",
+                "data": {"url": "/"},
+            }
+
+            with sqlite3.connect(DB_PATH) as conn:
+                rows = conn.execute(
+                    """
+                    SELECT id, endpoint, p256dh, auth
+                    FROM web_push_subscriptions
+                    WHERE username = ? AND is_active = 1
+                    ORDER BY updated_at_utc DESC
+                    """,
+                    (username,),
+                ).fetchall()
+                if not rows:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "no active push subscriptions"})
+                    return
+
+                now_utc = utc_now_iso()
+                success = 0
+                failed = 0
+                for row in rows:
+                    sub_id = int(row[0] or 0)
+                    ok, details, deactivate = _send_web_push_to_subscription(
+                        str(row[1] or ""),
+                        str(row[2] or ""),
+                        str(row[3] or ""),
+                        push_payload,
+                    )
+                    if ok:
+                        success += 1
+                        conn.execute(
+                            """
+                            UPDATE web_push_subscriptions
+                            SET last_success_at_utc = ?, last_error = '', updated_at_utc = ?
+                            WHERE id = ?
+                            """,
+                            (now_utc, now_utc, sub_id),
+                        )
+                    else:
+                        failed += 1
+                        if deactivate:
+                            conn.execute(
+                                """
+                                UPDATE web_push_subscriptions
+                                SET is_active = 0, last_error = ?, updated_at_utc = ?
+                                WHERE id = ?
+                                """,
+                                (details[:500], now_utc, sub_id),
+                            )
+                        else:
+                            conn.execute(
+                                """
+                                UPDATE web_push_subscriptions
+                                SET last_error = ?, updated_at_utc = ?
+                                WHERE id = ?
+                                """,
+                                (details[:500], now_utc, sub_id),
+                            )
+                conn.commit()
+
+            self._send_json(HTTPStatus.OK, {"status": "sent", "success": success, "failed": failed})
+            return
 
         if path == "/api/v1/oauth-settings":
             if not self._require_admin_session():

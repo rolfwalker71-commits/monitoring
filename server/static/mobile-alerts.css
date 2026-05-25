@@ -1,0 +1,182 @@
+:root {
+  --bg: #e9eef2;
+  --panel: #ffffff;
+  --ink: #143047;
+  --muted: #4f6271;
+  --accent: #0f6ea8;
+  --danger: #b42318;
+  --ok: #157347;
+  --warn: #9a6700;
+  --border: #cfdae3;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  background: radial-gradient(circle at 15% -20%, #f7fbff 0%, var(--bg) 45%, #d9e3ea 100%);
+  color: var(--ink);
+}
+
+.mobile-shell {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0.85rem;
+}
+
+.mobile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+h1 {
+  margin: 0.1rem 0 0;
+  font-size: 1.6rem;
+}
+
+.toolbar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+  margin-bottom: 0.65rem;
+}
+
+.toolbar label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.checkline {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.45rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.55rem;
+}
+
+button,
+select {
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--ink);
+  padding: 0.55rem 0.65rem;
+  font-size: 0.92rem;
+}
+
+button {
+  font-weight: 600;
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+.ghost {
+  background: transparent;
+}
+
+.status {
+  margin: 0.35rem 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.alert-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left-width: 6px;
+  border-radius: 12px;
+  padding: 0.65rem;
+}
+
+.alert-card.critical {
+  border-left-color: var(--danger);
+}
+
+.alert-card.warning {
+  border-left-color: var(--warn);
+}
+
+.alert-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  align-items: baseline;
+}
+
+.alert-host {
+  font-weight: 700;
+}
+
+.alert-meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-top: 0.25rem;
+}
+
+.alert-usage {
+  margin-top: 0.35rem;
+  font-weight: 700;
+}
+
+.alert-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.45rem;
+  margin-top: 0.6rem;
+}
+
+.btn-ok {
+  border-color: #b8e3ca;
+  color: var(--ok);
+}
+
+.btn-danger {
+  border-color: #f2b9b6;
+  color: var(--danger);
+}
+
+.empty {
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  text-align: center;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+@media (max-width: 520px) {
+  .toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .alert-actions {
+    grid-template-columns: 1fr;
+  }
+}
