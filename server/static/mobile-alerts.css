@@ -35,6 +35,12 @@ body {
   margin-bottom: 0.75rem;
 }
 
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .eyebrow {
   margin: 0;
   font-size: 0.75rem;
@@ -93,6 +99,10 @@ button:active {
 
 .ghost {
   background: transparent;
+}
+
+.ghost:disabled {
+  opacity: 0.65;
 }
 
 .status {
@@ -172,6 +182,11 @@ button:active {
 }
 
 @media (max-width: 520px) {
+  .header-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .toolbar {
     grid-template-columns: 1fr;
   }

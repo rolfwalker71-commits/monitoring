@@ -171,6 +171,42 @@ async function togglePush() {
   }
 }
 
+async function sendTestPush() {
+  const button = document.getElementById("testPushButton");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Sende...";
+  }
+  try {
+    const resp = await fetch("/api/v1/push-test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        title: "Monitoring Test Push",
+        body: "Diese Nachricht wurde über den Test-Button ausgelöst.",
+      }),
+    });
+    const payload = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      throw new Error(String(payload.error || ("HTTP " + resp.status)));
+    }
+    const success = Number(payload.success || 0);
+    const failed = Number(payload.failed || 0);
+    setStatus("Test Push gesendet (ok: " + success + ", failed: " + failed + ").");
+    alert("Test Push wurde ausgelöst.");
+  } catch (error) {
+    const details = error?.message || String(error);
+    setStatus("Test Push fehlgeschlagen: " + details, true);
+    alert("Test Push fehlgeschlagen: " + details);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Test Push";
+    }
+  }
+}
+
 async function callAlertAction(url, payload, okMessage) {
   const resp = await fetch(url, {
     method: "POST",
@@ -277,6 +313,7 @@ function wire() {
   const showAckToggle = document.getElementById("showAckToggle");
   const showClosedToggle = document.getElementById("showClosedToggle");
   const pushToggleButton = document.getElementById("pushToggleButton");
+  const testPushButton = document.getElementById("testPushButton");
 
   if (refreshBtn) {
     refreshBtn.addEventListener("click", () => {
@@ -304,6 +341,11 @@ function wire() {
   if (pushToggleButton) {
     pushToggleButton.addEventListener("click", () => {
       void togglePush();
+    });
+  }
+  if (testPushButton) {
+    testPushButton.addEventListener("click", () => {
+      void sendTestPush();
     });
   }
 }
