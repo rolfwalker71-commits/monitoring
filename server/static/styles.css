@@ -5676,17 +5676,18 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
   max-width: 150px;
   white-space: normal !important;
   text-align: right;
-  line-height: 1.2;
-  font-size: 9px !important;
+  line-height: 1.08;
+  font-size: 8px !important;
 }
 
 #reportJumpBounds .report-jump-label,
 #reportJumpBounds .report-jump-value {
   display: block;
+  font-size: 8px !important;
 }
 
 #reportJumpBounds .report-jump-label {
-  font-size: 10px;
+  font-weight: 600;
 }
 
 @media (max-width: 980px) {
@@ -7113,8 +7114,9 @@ body[data-theme="dark"] .report-license-meta {
 }
 
 .report-time {
-  color: var(--muted);
+  color: #4a6786;
   font-size: 11px;
+  font-weight: 800;
   line-height: 1.18;
   text-align: right;
   display: inline-flex;
@@ -7130,6 +7132,10 @@ body[data-theme="dark"] .report-license-meta {
 
 .report-time-clock {
   font-size: 10px;
+}
+
+body[data-theme="dark"] .report-time {
+  color: #b7cce3;
 }
 
 .meta-grid {

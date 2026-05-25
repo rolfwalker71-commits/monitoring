@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.73**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.73**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.74**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.74**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.74 | 25.05.2026 | Report header typography tuning: made the top "Erste Nachricht" info block significantly smaller across all lines and emphasized current report date/time info in bold |
 | 1.7.73 | 25.05.2026 | Host card micro-layout adjustment: moved the compact last-report clock from the bottom technical row to the second line, right-aligned and vertically centered |
 | 1.7.72 | 25.05.2026 | Host card usability refinement: added a compact last-report time (HH:MM) in the technical metadata row between hostname and IP, with tooltip showing the full timestamp |
 | 1.7.71 | 25.05.2026 | Queue flush hardening on Linux and Windows agents: malformed/empty queue payload files and permanent 4xx rejects are quarantined instead of blocking backlog replay; transient transport failures still pause the flush to preserve unsent queue files |
@@ -650,6 +651,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.74 (25. Mai 2026)
+
+- **Obere Infozeilen stark verkleinert**: Der Bereich `Erste Nachricht` ist in allen Zeilen deutlich kleiner gesetzt (kompaktere Label- und Werteanzeige).
+- **Aktuelle Report-Infos fett hervorgehoben**: Datum/Uhrzeit des aktuell angezeigten Reports im Header wurden typografisch deutlicher (fett) gestaltet.
+- **Kontrast im Header verbessert**: Die hervorgehobene Zeitinfo wurde farblich so angepasst, dass sie in Hell- und Dunkelmodus klar lesbar bleibt.
+
 ### v1.7.73 (25. Mai 2026)
 
 - **Uhrzeit in zweite Zeile verschoben**: Die kompakte letzte Report-Uhrzeit ist von der unteren Technikzeile in die zweite Zeile der Hostkarte gewandert.
