@@ -1,0 +1,192 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="1420" viewBox="0 0 2200 1420" role="img" aria-labelledby="title desc">
+  <title id="title">Flat Design Infografik - Monitoring App Prozesse</title>
+  <desc id="desc">Detaillierte Flat-Design-Prozessgrafik ueber Agent Collection, API Ingest, Queue, Datenbank, Alerts, Benachrichtigung, Remote Commands, Backup und UI.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f4f8fe"/>
+      <stop offset="100%" stop-color="#ebf2fd"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2b66c2"/>
+      <stop offset="100%" stop-color="#4f89df"/>
+    </linearGradient>
+    <style>
+      .h1 { font: 800 50px 'Segoe UI', Arial, sans-serif; fill: #ffffff; }
+      .h2 { font: 600 24px 'Segoe UI', Arial, sans-serif; fill: #dceaff; }
+      .lane { font: 800 28px 'Segoe UI', Arial, sans-serif; fill: #1b3558; }
+      .t1 { font: 800 21px 'Segoe UI', Arial, sans-serif; fill: #162d4c; }
+      .t2 { font: 600 16px 'Segoe UI', Arial, sans-serif; fill: #466283; }
+      .leg { font: 700 15px 'Segoe UI', Arial, sans-serif; fill: #2b4568; }
+      .foot { font: 600 13px 'Segoe UI', Arial, sans-serif; fill: #5f7da1; }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L12,6 L0,12 z" fill="#3a73be"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="2200" height="1420" fill="url(#bg)"/>
+
+  <rect x="34" y="28" width="2132" height="150" rx="22" fill="url(#top)"/>
+  <text x="74" y="94" class="h1">Monitoring Platform - Flat Design Process Infographic</text>
+  <text x="74" y="137" class="h2">Structured process map from endpoint telemetry to persistence, alerting, operations and governance</text>
+
+  <rect x="34" y="196" width="2132" height="86" rx="14" fill="#ffffff" stroke="#ccdbee"/>
+  <rect x="66" y="227" width="28" height="18" rx="4" fill="#dceafe" stroke="#8caee0"/>
+  <text x="106" y="241" class="leg">Core process step</text>
+  <rect x="302" y="227" width="28" height="18" rx="4" fill="#ffe9cf" stroke="#dfab67"/>
+  <text x="342" y="241" class="leg">Fallback/exception path</text>
+  <rect x="634" y="227" width="28" height="18" rx="4" fill="#dff6eb" stroke="#74b996"/>
+  <text x="674" y="241" class="leg">Persistence/completion</text>
+  <line x1="950" y1="236" x2="1020" y2="236" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="1040" y="241" class="leg">Data flow</text>
+  <text x="1180" y="241" class="leg">Domains: Agent, API, Queue, DB, Alerts, Mail, Remote Commands, Backup, UI</text>
+
+  <rect x="34" y="300" width="2132" height="1088" rx="20" fill="#ffffff" stroke="#ccdbee"/>
+
+  <!-- Row 1 -->
+  <text x="62" y="348" class="lane">1) Endpoint and Agent Runtime</text>
+  <rect x="62" y="362" width="2074" height="172" rx="14" fill="#f7fbff" stroke="#d8e6f7"/>
+
+  <rect x="94" y="398" width="316" height="102" rx="12" fill="#dceafe" stroke="#8caee0"/>
+  <text x="116" y="432" class="t1">Metric Collection</text>
+  <text x="116" y="456" class="t2">Collect CPU, memory, filesystems,</text>
+  <text x="116" y="478" class="t2">network and app-specific telemetry</text>
+
+  <rect x="446" y="398" width="318" height="102" rx="12" fill="#dceafe" stroke="#8caee0"/>
+  <text x="468" y="432" class="t1">Payload Build</text>
+  <text x="468" y="456" class="t2">Attach host_uid, timestamps,</text>
+  <text x="468" y="478" class="t2">delivery_mode and queue metadata</text>
+
+  <rect x="800" y="398" width="286" height="102" rx="12" fill="#dceafe" stroke="#8caee0"/>
+  <text x="822" y="432" class="t1">Live Send</text>
+  <text x="822" y="456" class="t2">POST /api/v1/agent-report</text>
+  <text x="822" y="478" class="t2">with API key header</text>
+
+  <rect x="1122" y="398" width="330" height="102" rx="12" fill="#ffe9cf" stroke="#dfab67"/>
+  <text x="1144" y="432" class="t1">Queue Fallback</text>
+  <text x="1144" y="456" class="t2">On failures: persist delayed payload</text>
+  <text x="1144" y="478" class="t2">for replay in later cycles</text>
+
+  <rect x="1488" y="398" width="616" height="102" rx="12" fill="#dceafe" stroke="#8caee0"/>
+  <text x="1510" y="432" class="t1">Queue Flush Discipline</text>
+  <text x="1510" y="456" class="t2">Replay old payloads before new send; quarantine malformed/4xx queue files to avoid blocking the backlog.</text>
+
+  <line x1="410" y1="448" x2="446" y2="448" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="764" y1="448" x2="800" y2="448" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1086" y1="448" x2="1122" y2="448" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1452" y1="448" x2="1488" y2="448" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <!-- Row 2 -->
+  <text x="62" y="568" class="lane">2) API Ingest and Queue Admission</text>
+  <rect x="62" y="582" width="2074" height="186" rx="14" fill="#f8fbff" stroke="#d8e6f7"/>
+
+  <rect x="94" y="620" width="296" height="112" rx="12" fill="#dceafe" stroke="#8caee0"/>
+  <text x="116" y="654" class="t1">Input Validation</text>
+  <text x="116" y="678" class="t2">Validate payload structure and</text>
+  <text x="116" y="700" class="t2">required host/report fields</text>
+
+  <rect x="426" y="620" width="332" height="112" rx="12" fill="#dceafe" stroke="#8caee0"/>
+  <text x="448" y="654" class="t1">Auth and Identity</text>
+  <text x="448" y="678" class="t2">API key checks, grace mode,</text>
+  <text x="448" y="700" class="t2">host_uid derive/reconcile</text>
+
+  <rect x="794" y="620" width="286" height="112" rx="12" fill="#dceafe" stroke="#8caee0"/>
+  <text x="816" y="654" class="t1">Queue Insert</text>
+  <text x="816" y="678" class="t2">Enqueue for async worker,</text>
+  <text x="816" y="700" class="t2">capture receive and queue times</text>
+
+  <rect x="1116" y="620" width="286" height="112" rx="12" fill="#dff6eb" stroke="#74b996"/>
+  <text x="1138" y="654" class="t1">Fast Agent ACK</text>
+  <text x="1138" y="678" class="t2">HTTP 202 with queue_id</text>
+  <text x="1138" y="700" class="t2">for robust sender behavior</text>
+
+  <rect x="1438" y="620" width="666" height="112" rx="12" fill="#dceafe" stroke="#8caee0"/>
+  <text x="1460" y="654" class="t1">Background Worker Scheduler</text>
+  <text x="1460" y="678" class="t2">FIFO with retries/backoff, attempt counters, ingest audit snapshots and performance timing.</text>
+
+  <line x1="390" y1="668" x2="426" y2="668" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="758" y1="668" x2="794" y2="668" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1080" y1="668" x2="1116" y2="668" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1402" y1="668" x2="1438" y2="668" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <!-- Row 3 -->
+  <text x="62" y="802" class="lane">3) Persistence, Alert State and Retention</text>
+  <rect x="62" y="816" width="2074" height="204" rx="14" fill="#f6fcfa" stroke="#d2ebe0"/>
+
+  <rect x="94" y="856" width="322" height="124" rx="12" fill="#dff6eb" stroke="#74b996"/>
+  <text x="116" y="890" class="t1">Transactional Report Write</text>
+  <text x="116" y="914" class="t2">Insert report payload and identity</text>
+  <text x="116" y="936" class="t2">as atomic DB transaction</text>
+
+  <rect x="452" y="856" width="334" height="124" rx="12" fill="#dff6eb" stroke="#74b996"/>
+  <text x="474" y="890" class="t1">Derived Change Tracking</text>
+  <text x="474" y="914" class="t2">host_config_changes, snapshots,</text>
+  <text x="474" y="936" class="t2">database lifecycle events</text>
+
+  <rect x="822" y="856" width="328" height="124" rx="12" fill="#dff6eb" stroke="#74b996"/>
+  <text x="844" y="890" class="t1">Alert Evaluation</text>
+  <text x="844" y="914" class="t2">open/ack/resolved lifecycle with</text>
+  <text x="844" y="936" class="t2">debounce and host visibility rules</text>
+
+  <rect x="1186" y="856" width="354" height="124" rx="12" fill="#dff6eb" stroke="#74b996"/>
+  <text x="1208" y="890" class="t1">Retention + Count Pruning</text>
+  <text x="1208" y="914" class="t2">Retention days + keep_count cap,</text>
+  <text x="1208" y="936" class="t2">scoped by host_uid with fallback</text>
+
+  <rect x="1576" y="856" width="528" height="124" rx="12" fill="#ffe9cf" stroke="#dfab67"/>
+  <text x="1598" y="890" class="t1">Failure Safety and Recovery</text>
+  <text x="1598" y="914" class="t2">On processing exceptions: rollback transaction and keep queue work item for retry to avoid partial writes.</text>
+
+  <line x1="416" y1="906" x2="452" y2="906" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="786" y1="906" x2="822" y2="906" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1150" y1="906" x2="1186" y2="906" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1540" y1="906" x2="1576" y2="906" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <!-- Row 4 -->
+  <text x="62" y="1054" class="lane">4) Business Features and Operator Control</text>
+  <rect x="62" y="1068" width="2074" height="208" rx="14" fill="#f9fbff" stroke="#d8e6f7"/>
+
+  <rect x="94" y="1110" width="312" height="126" rx="12" fill="#dceafe" stroke="#8caee0"/>
+  <text x="116" y="1144" class="t1">Notification Engine</text>
+  <text x="116" y="1168" class="t2">Instant alert mail, reminder cycle,</text>
+  <text x="116" y="1190" class="t2">daily/weekly digests</text>
+
+  <rect x="442" y="1110" width="320" height="126" rx="12" fill="#dceafe" stroke="#8caee0"/>
+  <text x="464" y="1144" class="t1">OAuth/Token Lifecycle</text>
+  <text x="464" y="1168" class="t2">Connect, callback, refresh,</text>
+  <text x="464" y="1190" class="t2">disconnect and fallback states</text>
+
+  <rect x="798" y="1110" width="342" height="126" rx="12" fill="#dceafe" stroke="#8caee0"/>
+  <text x="820" y="1144" class="t1">Remote Command Lifecycle</text>
+  <text x="820" y="1168" class="t2">Queue command, agent poll, execute,</text>
+  <text x="820" y="1190" class="t2">post status/result</text>
+
+  <rect x="1176" y="1110" width="292" height="126" rx="12" fill="#dff6eb" stroke="#74b996"/>
+  <text x="1198" y="1144" class="t1">Backup and Restore</text>
+  <text x="1198" y="1168" class="t2">Scheduled and manual backups,</text>
+  <text x="1198" y="1190" class="t2">guarded restore workflow</text>
+
+  <rect x="1504" y="1110" width="600" height="126" rx="12" fill="#dceafe" stroke="#8caee0"/>
+  <text x="1526" y="1144" class="t1">User Experience and Reporting</text>
+  <text x="1526" y="1168" class="t2">Host cards, single report pages, trend analytics, exports, filters, alert management and admin settings.</text>
+
+  <line x1="406" y1="1160" x2="442" y2="1160" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="762" y1="1160" x2="798" y2="1160" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1140" y1="1160" x2="1176" y2="1160" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1468" y1="1160" x2="1504" y2="1160" stroke="#3a73be" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <!-- Bottom summary -->
+  <text x="62" y="1310" class="lane">5) Governance Summary</text>
+  <rect x="62" y="1320" width="2074" height="88" rx="14" fill="#f4f8ff" stroke="#cdddf1"/>
+  <text x="88" y="1354" class="t2">Reliable by design: asynchronous queue-based ingest, transactional persistence, identity-scoped retention, observable alert lifecycle, and operational control loops.</text>
+  <text x="88" y="1382" class="t2">Communication-ready flat visual style supports business and technical stakeholders with one shared process map.</text>
+
+  <!-- Vertical process arrows -->
+  <line x1="2088" y1="500" x2="2088" y2="620" stroke="#3a73be" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="2088" y1="732" x2="2088" y2="856" stroke="#3a73be" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="2088" y1="980" x2="2088" y2="1110" stroke="#3a73be" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="2088" y1="1236" x2="2088" y2="1320" stroke="#3a73be" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <text x="38" y="1414" class="foot">Asset: docs/processes/business-illustration-flat-design.svg | Style: Flat Design infographic elements | Date: 2026-05-25</text>
+</svg>
