@@ -1,0 +1,210 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1280" viewBox="0 0 1920 1280" role="img" aria-labelledby="title desc" shape-rendering="crispEdges">
+  <title id="title">Pixel Art Prozessgrafik - Monitoring App</title>
+  <desc id="desc">Pixel-Art Infografik ueber Agent, API, Queue, Datenbank, Alerts, Mail, Commands, Backup und UI Prozesse.</desc>
+
+  <defs>
+    <style>
+      .h1 { font: 800 42px 'Courier New', monospace; fill: #f7fbff; }
+      .h2 { font: 700 18px 'Courier New', monospace; fill: #d7eaff; }
+      .lane { font: 800 20px 'Courier New', monospace; fill: #14324f; }
+      .t1 { font: 800 16px 'Courier New', monospace; fill: #102b47; }
+      .t2 { font: 700 12px 'Courier New', monospace; fill: #3f5d7d; }
+      .f { font: 700 12px 'Courier New', monospace; fill: #4f7092; }
+    </style>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2f6ab6"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1920" height="1280" fill="#eef5ff"/>
+
+  <!-- Pixel background blocks -->
+  <rect x="40" y="40" width="20" height="20" fill="#d3e7ff"/>
+  <rect x="60" y="40" width="20" height="20" fill="#d3e7ff"/>
+  <rect x="80" y="40" width="20" height="20" fill="#d3e7ff"/>
+  <rect x="1840" y="80" width="20" height="20" fill="#ffd9b4"/>
+  <rect x="1860" y="80" width="20" height="20" fill="#ffd9b4"/>
+  <rect x="1840" y="100" width="20" height="20" fill="#ffd9b4"/>
+  <rect x="180" y="1180" width="20" height="20" fill="#dff3e8"/>
+  <rect x="200" y="1180" width="20" height="20" fill="#dff3e8"/>
+  <rect x="220" y="1180" width="20" height="20" fill="#dff3e8"/>
+
+  <!-- Header -->
+  <rect x="24" y="24" width="1872" height="120" fill="#2f6ab6"/>
+  <rect x="24" y="24" width="1872" height="8" fill="#1f4f8b"/>
+  <text x="56" y="78" class="h1">MONITORING APP - PIXEL ART PROCESS MAP</text>
+  <text x="56" y="112" class="h2">Agent collection -> API ingest -> queue worker -> DB/alerts -> business operations</text>
+
+  <!-- Legend -->
+  <rect x="24" y="164" width="1872" height="64" fill="#ffffff" stroke="#c9d9ee"/>
+  <rect x="48" y="186" width="18" height="18" fill="#dcebff" stroke="#8baedf"/>
+  <text x="76" y="200" class="t2">core step</text>
+  <rect x="220" y="186" width="18" height="18" fill="#ffe9cf" stroke="#deaa67"/>
+  <text x="248" y="200" class="t2">fallback</text>
+  <rect x="360" y="186" width="18" height="18" fill="#dff6eb" stroke="#6fb493"/>
+  <text x="388" y="200" class="t2">persisted</text>
+  <line x1="520" y1="195" x2="590" y2="195" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <text x="606" y="200" class="t2">data flow</text>
+
+  <!-- Main board -->
+  <rect x="24" y="248" width="1872" height="1006" fill="#ffffff" stroke="#c9d9ee"/>
+
+  <!-- Lane blocks -->
+  <rect x="40" y="268" width="1840" height="170" fill="#f6fbff" stroke="#d7e7f8"/>
+  <text x="56" y="300" class="lane">1) ENDPOINT AGENT LAYER</text>
+
+  <rect x="40" y="452" width="1840" height="180" fill="#f8fbff" stroke="#d7e7f8"/>
+  <text x="56" y="484" class="lane">2) SERVER API + ADMISSION QUEUE</text>
+
+  <rect x="40" y="646" width="1840" height="186" fill="#f6fcfa" stroke="#d0e9de"/>
+  <text x="56" y="678" class="lane">3) WORKER, DATABASE, ALERT STATE</text>
+
+  <rect x="40" y="846" width="1840" height="188" fill="#f9fbff" stroke="#d7e7f8"/>
+  <text x="56" y="878" class="lane">4) BUSINESS PROCESS SERVICES</text>
+
+  <rect x="40" y="1048" width="1840" height="188" fill="#fbfdff" stroke="#d7e7f8"/>
+  <text x="56" y="1080" class="lane">5) GOVERNANCE OUTCOME</text>
+
+  <!-- Lane 1 cards -->
+  <rect x="64" y="316" width="280" height="102" fill="#dcebff" stroke="#8baedf"/>
+  <text x="78" y="342" class="t1">Metric Collect</text>
+  <text x="78" y="364" class="t2">CPU RAM FS NET</text>
+  <text x="78" y="382" class="t2">SAP HANA status</text>
+
+  <rect x="366" y="316" width="290" height="102" fill="#dcebff" stroke="#8baedf"/>
+  <text x="380" y="342" class="t1">Payload Build</text>
+  <text x="380" y="364" class="t2">host_uid + time</text>
+  <text x="380" y="382" class="t2">delivery metadata</text>
+
+  <rect x="678" y="316" width="250" height="102" fill="#dcebff" stroke="#8baedf"/>
+  <text x="692" y="342" class="t1">POST report</text>
+  <text x="692" y="364" class="t2">api/v1/agent-report</text>
+  <text x="692" y="382" class="t2">live send path</text>
+
+  <rect x="950" y="316" width="300" height="102" fill="#ffe9cf" stroke="#deaa67"/>
+  <text x="964" y="342" class="t1">Queue fallback</text>
+  <text x="964" y="364" class="t2">store delayed payload</text>
+  <text x="964" y="382" class="t2">retry in next cycle</text>
+
+  <rect x="1272" y="316" width="590" height="102" fill="#dcebff" stroke="#8baedf"/>
+  <text x="1286" y="342" class="t1">Queue replay first</text>
+  <text x="1286" y="364" class="t2">Flush old queue files before creating new report.</text>
+  <text x="1286" y="382" class="t2">Quarantine bad queue files to avoid backlog stalls.</text>
+
+  <!-- Lane 2 cards -->
+  <rect x="64" y="504" width="270" height="108" fill="#dcebff" stroke="#8baedf"/>
+  <text x="78" y="530" class="t1">Validate Input</text>
+  <text x="78" y="552" class="t2">json, hostname,</text>
+  <text x="78" y="570" class="t2">filesystems list</text>
+
+  <rect x="356" y="504" width="300" height="108" fill="#dcebff" stroke="#8baedf"/>
+  <text x="370" y="530" class="t1">Auth + Identity</text>
+  <text x="370" y="552" class="t2">api key + grace</text>
+  <text x="370" y="570" class="t2">host_uid reconcile</text>
+
+  <rect x="678" y="504" width="280" height="108" fill="#dcebff" stroke="#8baedf"/>
+  <text x="692" y="530" class="t1">Enqueue report</text>
+  <text x="692" y="552" class="t2">agent_ingest_queue</text>
+  <text x="692" y="570" class="t2">timestamps stored</text>
+
+  <rect x="980" y="504" width="260" height="108" fill="#dff6eb" stroke="#6fb493"/>
+  <text x="994" y="530" class="t1">ACK 202</text>
+  <text x="994" y="552" class="t2">queue_id return</text>
+  <text x="994" y="570" class="t2">fast sender response</text>
+
+  <rect x="1262" y="504" width="600" height="108" fill="#dcebff" stroke="#8baedf"/>
+  <text x="1276" y="530" class="t1">Worker schedule</text>
+  <text x="1276" y="552" class="t2">FIFO + retry backoff + attempt counters + ingest audit timing</text>
+  <text x="1276" y="570" class="t2">queue_wait_ms and end_to_end_ms observable</text>
+
+  <!-- Lane 3 cards -->
+  <rect x="64" y="700" width="300" height="112" fill="#dff6eb" stroke="#6fb493"/>
+  <text x="78" y="726" class="t1">Insert reports row</text>
+  <text x="78" y="748" class="t2">payload_json, uid, host,</text>
+  <text x="78" y="766" class="t2">received_at_utc</text>
+
+  <rect x="386" y="700" width="320" height="112" fill="#dff6eb" stroke="#6fb493"/>
+  <text x="400" y="726" class="t1">Track side effects</text>
+  <text x="400" y="748" class="t2">host_config_changes</text>
+  <text x="400" y="766" class="t2">database_lifecycle</text>
+
+  <rect x="728" y="700" width="300" height="112" fill="#dff6eb" stroke="#6fb493"/>
+  <text x="742" y="726" class="t1">Alert lifecycle</text>
+  <text x="742" y="748" class="t2">open ack resolved</text>
+  <text x="742" y="766" class="t2">debounce + visibility</text>
+
+  <rect x="1050" y="700" width="340" height="112" fill="#dff6eb" stroke="#6fb493"/>
+  <text x="1064" y="726" class="t1">Retention and pruning</text>
+  <text x="1064" y="748" class="t2">days + keep_count cap</text>
+  <text x="1064" y="766" class="t2">host_uid scoped fallback host</text>
+
+  <rect x="1412" y="700" width="450" height="112" fill="#ffe9cf" stroke="#deaa67"/>
+  <text x="1426" y="726" class="t1">Safe failure behavior</text>
+  <text x="1426" y="748" class="t2">rollback transaction on error</text>
+  <text x="1426" y="766" class="t2">queue item retained for retry</text>
+
+  <!-- Lane 4 cards -->
+  <rect x="64" y="902" width="280" height="112" fill="#dcebff" stroke="#8baedf"/>
+  <text x="78" y="928" class="t1">Mail pipeline</text>
+  <text x="78" y="950" class="t2">instant reminders</text>
+  <text x="78" y="968" class="t2">digest scheduling</text>
+
+  <rect x="366" y="902" width="290" height="112" fill="#dcebff" stroke="#8baedf"/>
+  <text x="380" y="928" class="t1">OAuth lifecycle</text>
+  <text x="380" y="950" class="t2">connect callback</text>
+  <text x="380" y="968" class="t2">refresh disconnect</text>
+
+  <rect x="678" y="902" width="320" height="112" fill="#dcebff" stroke="#8baedf"/>
+  <text x="692" y="928" class="t1">Remote commands</text>
+  <text x="692" y="950" class="t2">queue poll execute</text>
+  <text x="692" y="968" class="t2">result feedback</text>
+
+  <rect x="1020" y="902" width="280" height="112" fill="#dff6eb" stroke="#6fb493"/>
+  <text x="1034" y="928" class="t1">Backup restore</text>
+  <text x="1034" y="950" class="t2">scheduled + manual</text>
+  <text x="1034" y="968" class="t2">guarded restore</text>
+
+  <rect x="1322" y="902" width="540" height="112" fill="#dcebff" stroke="#8baedf"/>
+  <text x="1336" y="928" class="t1">UI analytics and control</text>
+  <text x="1336" y="950" class="t2">host cards, single reports, trend views, alert table, exports, admin settings</text>
+
+  <!-- Lane 5 cards -->
+  <rect x="64" y="1102" width="880" height="112" fill="#f1f7ff" stroke="#cddcf0"/>
+  <text x="78" y="1128" class="t1">Reliability outcome</text>
+  <text x="78" y="1150" class="t2">Asynchronous ingest and durable queues reduce data loss risk.</text>
+  <text x="78" y="1168" class="t2">Transactional write path preserves consistency between reports and alerts.</text>
+
+  <rect x="966" y="1102" width="896" height="112" fill="#f1f7ff" stroke="#cddcf0"/>
+  <text x="980" y="1128" class="t1">Business outcome</text>
+  <text x="980" y="1150" class="t2">Unified visibility and operational control from endpoint telemetry to notifications and remediation.</text>
+  <text x="980" y="1168" class="t2">Auditability via queue ids, command results and changelog/lifecycle tracking.</text>
+
+  <!-- Horizontal flow arrows -->
+  <line x1="344" y1="366" x2="366" y2="366" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="656" y1="366" x2="678" y2="366" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="928" y1="366" x2="950" y2="366" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="1250" y1="366" x2="1272" y2="366" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+
+  <line x1="334" y1="558" x2="356" y2="558" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="656" y1="558" x2="678" y2="558" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="958" y1="558" x2="980" y2="558" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="1240" y1="558" x2="1262" y2="558" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+
+  <line x1="364" y1="754" x2="386" y2="754" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="706" y1="754" x2="728" y2="754" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="1028" y1="754" x2="1050" y2="754" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="1390" y1="754" x2="1412" y2="754" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+
+  <line x1="344" y1="956" x2="366" y2="956" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="656" y1="956" x2="678" y2="956" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="998" y1="956" x2="1020" y2="956" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="1300" y1="956" x2="1322" y2="956" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+
+  <!-- Vertical arrows between lanes -->
+  <line x1="1840" y1="418" x2="1840" y2="504" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="1840" y1="612" x2="1840" y2="700" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="1840" y1="812" x2="1840" y2="902" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+  <line x1="1840" y1="1014" x2="1840" y2="1102" stroke="#2f6ab6" stroke-width="3" marker-end="url(#arr)"/>
+
+  <text x="30" y="1268" class="f">Asset: docs/processes/business-illustration-pixel-art.svg | Style: Pixel Art | Date: 2026-05-25</text>
+</svg>

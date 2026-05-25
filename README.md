@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.77**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.77**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.78**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.78**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.78 | 25.05.2026 | Process-visual documentation completed with a detailed Pixel Art SVG variant and quick-access link in the process docs index |
 | 1.7.77 | 25.05.2026 | Process-visual documentation expansion: added a second detailed app-process infographic in Flat Design style (SVG) and linked it in the process docs quick-access section |
 | 1.7.76 | 25.05.2026 | Documentation visuals expanded: added a detailed Corporate Memphis business illustration plus technical process flow SVGs for end-to-end app process communication, and linked them from the process docs index |
 | 1.7.75 | 25.05.2026 | Report pruning scope fix: retention/count pruning now follows host identity (`host_uid`) when present, with hostname fallback for legacy payloads without host_uid, preventing cross-identity truncation on split hosts |
@@ -654,6 +655,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.78 (25. Mai 2026)
+
+- **Pixel-Art Prozess-Infografik hinzugefuegt**: Eine weitere detaillierte SVG-Variante im Stil `Pixel Art` wurde erstellt.
+- **Prozess-Index erweitert**: Die neue Pixel-Art Grafik ist als eigener Schnellzugriff in der Prozess-Startseite verlinkt.
+- **Stilportfolio komplettiert**: Technische, Corporate-Memphis, Flat-Design und Pixel-Art Varianten stehen jetzt parallel zur Verfuegung.
+
 ### v1.7.77 (25. Mai 2026)
 
 - **Neue Flat-Design Prozess-Infografik**: Eine zweite detaillierte SVG-Visualisierung der App-Prozesse wurde im Stil `Infografik-Elemente / Flat Design` erstellt.
