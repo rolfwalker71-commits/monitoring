@@ -8347,42 +8347,22 @@ function formatSapLicenseExpiry(value) {
 
 function mapSapLicenseFocusTypes(sapLicense) {
   const rawEntries = Array.isArray(sapLicense?.focus_license_types) ? sapLicense.focus_license_types : [];
-  const aggregated = new Map();
-
-  for (const entry of rawEntries) {
-    const rawType = asText(entry?.license_type, "").trim();
-    if (!rawType) continue;
-
-    const parsedCount = Number.parseInt(
-      String(entry?.count ?? entry?.license_count ?? entry?.quantity ?? 0),
-      10,
-    );
-    const count = Number.isFinite(parsedCount) && parsedCount >= 0 ? parsedCount : 0;
-    const normalizedRaw = rawType.toUpperCase();
-
-    const mapped = SAP_LICENSE_TYPE_MAP.find(
-      (mapEntry) => normalizedRaw === asText(mapEntry?.matchText, "").toUpperCase(),
-    );
-    const translated = asText(mapped?.displayName, "").trim();
-    const displayType = translated || rawType;
-    const hasTranslation = Boolean(translated);
-
-    const existing = aggregated.get(normalizedRaw);
-    if (existing) {
-      existing.count += count;
-      continue;
-    }
-
-    aggregated.set(normalizedRaw, {
-      rawType,
-      displayType,
-      hasTranslation,
-      count,
-    });
-  }
-
-  return Array.from(aggregated.values())
-    .sort((a, b) => String(a.displayType).localeCompare(String(b.displayType), "de"));
+  return rawEntries
+    .map((entry) => {
+      const rawType = asText(entry?.license_type, "").trim();
+      const count = Number.parseInt(String(entry?.count ?? 0), 10);
+      if (!rawType) return null;
+      const normalizedRaw = rawType.toUpperCase();
+      const mapped = SAP_LICENSE_TYPE_MAP.find((mapEntry) => normalizedRaw === asText(mapEntry?.matchText, "").toUpperCase());
+      const displayType = asText(mapped?.displayName, "").trim();
+      if (!displayType) return null;
+      return {
+        rawType,
+        displayType,
+        count: Number.isFinite(count) && count >= 0 ? count : 0,
+      };
+    })
+    .filter(Boolean);
 }
 
 async function loadHostLicenseInfoForHover(hostname, hostUid = "") {
@@ -8435,10 +8415,7 @@ async function loadHostLicenseInfoForHover(hostname, hostUid = "") {
     copyLines.push("");
     copyLines.push("Lizenztypen:");
     for (const item of types) {
-      const typeLabel = item.hasTranslation
-        ? `${item.displayType} (${item.rawType})`
-        : item.displayType;
-      copyLines.push(`${String(item.count).padStart(3, "0")}  ${typeLabel}`);
+      copyLines.push(`${String(item.count).padStart(3, "0")}  ${item.displayType} (${item.rawType})`);
     }
   }
 
@@ -8536,7 +8513,7 @@ function renderHostLicenseHoverPopupContent(hostname, data) {
   const typesHtml = types.length === 0
     ? ""
     : `<div class="host-license-hover-types"><div class="host-license-hover-types-head"><span class="host-license-hover-type-name-label">Lizenztyp</span><span class="host-license-hover-type-count-label">Anzahl</span></div>${types
-      .map((item) => `<div class="host-license-hover-type-row"><span class="host-license-hover-type-name-wrap"><span class="host-license-hover-type-name">${escapeHtml(item.displayType)}</span>${item.hasTranslation ? `<span class=\"host-license-hover-type-raw\">(${escapeHtml(item.rawType)})</span>` : ""}</span><span class=\"host-license-hover-type-count\">${String(item.count).padStart(3, "0")}</span></div>`)
+      .map((item) => `<div class="host-license-hover-type-row"><span class="host-license-hover-type-name-wrap"><span class="host-license-hover-type-name">${escapeHtml(item.displayType)}</span><span class=\"host-license-hover-type-raw\">(${escapeHtml(item.rawType)})</span></span><span class=\"host-license-hover-type-count\">${String(item.count).padStart(3, "0")}</span></div>`)
       .join("")}</div>`;
 
   return `

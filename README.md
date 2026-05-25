@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.87**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.87**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.88**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.88**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.88 | 25.05.2026 | Reverted SAP license hover popup to translated-only behavior: ungemappte Roh-Lizenztypen werden wieder ausgeblendet, so wie zuvor vorgesehen |
 | 1.7.87 | 25.05.2026 | SAP license hover popup now falls back to raw license types when no translation is configured, so Lizenztyp and Anzahl remain visible (with robust count parsing/aggregation) |
 | 1.7.86 | 25.05.2026 | Web-push alert payload now mirrors Telegram-style details (customer, host, mountpoint, severity, usage, timestamp) with explicit logo icon/badge and click target to `/mobile/alerts` |
 | 1.7.85 | 25.05.2026 | Added a dedicated "Test Push" button on `/mobile/alerts` to trigger `/api/v1/push-test` directly from the app and show immediate send feedback |
