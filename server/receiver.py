@@ -11421,10 +11421,18 @@ def resolve_open_alerts_for_host(conn: sqlite3.Connection, hostname: str, host_u
     conn.execute("DELETE FROM alert_debounce WHERE host_uid = ?", (host_key,))
 
 
-def prune_reports_for_host(conn: sqlite3.Connection, hostname: str, keep_count: int) -> None:
+def prune_reports_for_host(conn: sqlite3.Connection, hostname: str, host_uid: str, keep_count: int) -> None:
     keep_count = max(0, int(keep_count))
     retention_days = max(1, int(REPORT_RETENTION_DAYS))
     cutoff_iso = (datetime.now(timezone.utc) - timedelta(days=retention_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    host_uid_value = str(host_uid or "").strip()
+    prune_where_clause = "hostname = ?"
+    prune_where_args: tuple[object, ...] = (hostname,)
+    if host_uid_value:
+        # Keep retention/count pruning aligned with host identity where host_uid is available.
+        prune_where_clause = "COALESCE(NULLIF(host_uid, ''), hostname) = ?"
+        prune_where_args = (host_uid_value,)
 
     conn.execute(
         """
@@ -11433,17 +11441,17 @@ def prune_reports_for_host(conn: sqlite3.Connection, hostname: str, keep_count: 
         WHERE report_id IN (
             SELECT id
             FROM reports
-            WHERE hostname = ? AND received_at_utc < ?
+            WHERE {prune_where_clause} AND received_at_utc < ?
         )
-        """,
-        (hostname, cutoff_iso),
+        """.format(prune_where_clause=prune_where_clause),
+        (*prune_where_args, cutoff_iso),
     )
     conn.execute(
         """
         DELETE FROM reports
-        WHERE hostname = ? AND received_at_utc < ?
-        """,
-        (hostname, cutoff_iso),
+        WHERE {prune_where_clause} AND received_at_utc < ?
+        """.format(prune_where_clause=prune_where_clause),
+        (*prune_where_args, cutoff_iso),
     )
 
     if keep_count <= 0:
@@ -11456,12 +11464,12 @@ def prune_reports_for_host(conn: sqlite3.Connection, hostname: str, keep_count: 
         WHERE report_id IN (
             SELECT id
             FROM reports
-            WHERE hostname = ?
+            WHERE {prune_where_clause}
             ORDER BY id DESC
             LIMIT -1 OFFSET ?
         )
-        """,
-        (hostname, keep_count),
+        """.format(prune_where_clause=prune_where_clause),
+        (*prune_where_args, keep_count),
     )
     conn.execute(
         """
@@ -11469,12 +11477,12 @@ def prune_reports_for_host(conn: sqlite3.Connection, hostname: str, keep_count: 
         WHERE id IN (
             SELECT id
             FROM reports
-            WHERE hostname = ?
+            WHERE {prune_where_clause}
             ORDER BY id DESC
             LIMIT -1 OFFSET ?
         )
-        """,
-        (hostname, keep_count),
+        """.format(prune_where_clause=prune_where_clause),
+        (*prune_where_args, keep_count),
     )
 
 
@@ -11511,7 +11519,7 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
     report_id = int(cursor.lastrowid)
     _track_host_config_changes(conn, hostname, incoming_host_uid, payload, report_id, report_received_at_utc)
     _track_database_lifecycle(conn, hostname, payload, report_id, report_received_at_utc)
-    prune_reports_for_host(conn, hostname, MAX_REPORTS_PER_HOST)
+    prune_reports_for_host(conn, hostname, incoming_host_uid, MAX_REPORTS_PER_HOST)
     alarm_settings = get_alarm_settings(conn)
     host_settings = get_host_settings(conn, hostname)
     if bool(host_settings.get("is_hidden", False)):

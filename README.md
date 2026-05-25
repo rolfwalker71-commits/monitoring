@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.74**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.74**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.75**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.75**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.75 | 25.05.2026 | Report pruning scope fix: retention/count pruning now follows host identity (`host_uid`) when present, with hostname fallback for legacy payloads without host_uid, preventing cross-identity truncation on split hosts |
 | 1.7.74 | 25.05.2026 | Report header typography tuning: made the top "Erste Nachricht" info block significantly smaller across all lines and emphasized current report date/time info in bold |
 | 1.7.73 | 25.05.2026 | Host card micro-layout adjustment: moved the compact last-report clock from the bottom technical row to the second line, right-aligned and vertically centered |
 | 1.7.72 | 25.05.2026 | Host card usability refinement: added a compact last-report time (HH:MM) in the technical metadata row between hostname and IP, with tooltip showing the full timestamp |
@@ -651,6 +652,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.75 (25. Mai 2026)
+
+- **Pruning auf Host-Identitaet umgestellt**: Retention- und Count-Pruning laufen jetzt `host_uid`-basiert, sobald eine UID vorhanden ist.
+- **Legacy-Fallback bleibt erhalten**: Wenn keine `host_uid` vorliegt, greift weiterhin der Hostname-basierte Fallback.
+- **Split-Host Risiko reduziert**: Bei mehreren Identitaeten unter gleichem Hostname werden Reports nicht mehr uebergreifend gekuerzt.
+
 ### v1.7.74 (25. Mai 2026)
 
 - **Obere Infozeilen stark verkleinert**: Der Bereich `Erste Nachricht` ist in allen Zeilen deutlich kleiner gesetzt (kompaktere Label- und Werteanzeige).
