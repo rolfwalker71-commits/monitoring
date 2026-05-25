@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.85**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.85**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.86**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.86**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.86 | 25.05.2026 | Web-push alert payload now mirrors Telegram-style details (customer, host, mountpoint, severity, usage, timestamp) with explicit logo icon/badge and click target to `/mobile/alerts` |
 | 1.7.85 | 25.05.2026 | Added a dedicated "Test Push" button on `/mobile/alerts` to trigger `/api/v1/push-test` directly from the app and show immediate send feedback |
 | 1.7.84 | 25.05.2026 | Updated app icon references to the official logo (`/icons/logo.png`) for PWA manifest, Apple touch icon, mobile alerts page, and push notification icon/badge |
 | 1.7.83 | 25.05.2026 | Mobile alerts push fix: service worker is now explicitly registered on /mobile/alerts so tapping the push button reliably triggers subscribe/unsubscribe instead of silently waiting on an unregistered worker |

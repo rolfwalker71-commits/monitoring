@@ -10984,22 +10984,38 @@ def send_instant_alert_web_push_to_users(
 
     host_ctx = collect_host_mail_context(conn, hostname, host_uid)
     host_title = display_name.strip() if display_name.strip() else str(host_ctx.get("display_name") or hostname)
+    customer_label = str(host_ctx.get("customer_name") or "").strip() or "Ohne Kunde"
     sev_label = "KRITISCH" if severity == "critical" else ("WARNUNG" if severity == "warning" else "OK")
+    sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
+    event_icon = {
+        "opened": "🚨",
+        "escalated": "⬆️",
+        "resolved": "✅",
+    }.get(event_type, "⚠️")
     event_label = {
-        "opened": "Neuer Alert",
-        "escalated": "Alert eskaliert",
-        "resolved": "Alert behoben",
-    }.get(event_type, "Alert")
+        "opened": "ALERT OPEN",
+        "escalated": "ALERT ESCALATED",
+        "resolved": "ALERT RESOLVED",
+    }.get(event_type, "ALERT")
+    now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
 
-    title = f"{event_label}: {host_title}"
-    body = f"{mountpoint} · {sev_label} · {used_percent:.1f}%"
+    title = f"{event_icon} {event_label}"
+    body = (
+        f"👥 {customer_label}\n"
+        f"🖥️ {host_title} ({hostname})\n"
+        f"📂 {mountpoint}\n"
+        f"{sev_icon} {sev_label} · {used_percent:.1f}%\n"
+        f"🕐 {now_local}"
+    )
     payload = {
         "title": title,
         "body": body,
+        "icon": "/icons/logo.png",
+        "badge": "/icons/logo.png",
         "tag": _push_tag_for_alert(host_uid, hostname, mountpoint),
         "renotify": event_type in {"opened", "escalated"},
         "data": {
-            "url": "/",
+            "url": "/mobile/alerts",
             "hostname": hostname,
             "host_uid": alert_host_key(hostname, host_uid),
             "mountpoint": mountpoint,
