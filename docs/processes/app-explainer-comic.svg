@@ -1,0 +1,177 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1280" viewBox="0 0 1920 1280" role="img" aria-labelledby="title desc">
+  <title id="title">Monitoring App im Comic Stil erklaert</title>
+  <desc id="desc">Comic-Story mit Panels: Agent sammelt Daten, Server validiert und queued, Worker schreibt in DB, Alerts und Mails werden ausgeliefert, Dashboard zeigt alles an.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #fff8e8; }
+      .title { font: 900 52px 'Trebuchet MS', 'Verdana', sans-serif; fill: #1f2a44; }
+      .subtitle { font: 700 20px 'Trebuchet MS', 'Verdana', sans-serif; fill: #3c4f73; }
+      .panel { fill: #ffffff; stroke: #1f2a44; stroke-width: 4; }
+      .panel-title { font: 800 24px 'Trebuchet MS', 'Verdana', sans-serif; fill: #1f2a44; }
+      .panel-text { font: 700 16px 'Trebuchet MS', 'Verdana', sans-serif; fill: #324666; }
+      .chip { fill: #e7f0ff; stroke: #8aa9d9; stroke-width: 2; }
+      .chip-text { font: 700 13px 'Trebuchet MS', 'Verdana', sans-serif; fill: #38557d; }
+      .speech { fill: #fffef8; stroke: #1f2a44; stroke-width: 3; }
+      .speech-text { font: 700 14px 'Trebuchet MS', 'Verdana', sans-serif; fill: #213451; }
+      .arrow { stroke: #ef6a5b; stroke-width: 5; fill: none; marker-end: url(#arrowHead); }
+      .burst { fill: #ffd166; stroke: #d88b00; stroke-width: 3; }
+      .burst-text { font: 900 18px 'Trebuchet MS', 'Verdana', sans-serif; fill: #7a4d00; }
+      .footer { font: 700 13px 'Trebuchet MS', 'Verdana', sans-serif; fill: #4a5e80; }
+    </style>
+
+    <marker id="arrowHead" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#ef6a5b"/>
+    </marker>
+  </defs>
+
+  <rect width="1920" height="1280" class="bg"/>
+
+  <!-- Header -->
+  <rect x="28" y="24" width="1864" height="136" rx="16" ry="16" fill="#ffecc8" stroke="#1f2a44" stroke-width="4"/>
+  <text x="58" y="88" class="title">MONITORING APP ALS COMIC STORY</text>
+  <text x="58" y="126" class="subtitle">Von Endpoint-Daten bis Alert, Mail und Dashboard in 6 Szenen</text>
+
+  <!-- Panel 1 -->
+  <rect x="40" y="186" width="590" height="320" rx="18" ry="18" class="panel"/>
+  <text x="62" y="224" class="panel-title">Szene 1: Agent auf dem Server</text>
+  <rect x="66" y="244" width="210" height="34" rx="10" ry="10" class="chip"/>
+  <text x="80" y="267" class="chip-text">collect_and_send.*</text>
+  <rect x="82" y="296" width="150" height="120" rx="10" ry="10" fill="#d8e9ff" stroke="#1f2a44" stroke-width="3"/>
+  <rect x="108" y="324" width="95" height="64" fill="#ffffff" stroke="#1f2a44" stroke-width="2"/>
+  <circle cx="178" cy="360" r="10" fill="#6fcf97" stroke="#1f2a44" stroke-width="2"/>
+  <path d="M260 296 h140 v24 h-140 z" fill="#ffe7cf" stroke="#1f2a44" stroke-width="2"/>
+  <path d="M260 332 h200 v24 h-200 z" fill="#ffe7cf" stroke="#1f2a44" stroke-width="2"/>
+  <path d="M260 368 h170 v24 h-170 z" fill="#ffe7cf" stroke="#1f2a44" stroke-width="2"/>
+  <text x="66" y="452" class="panel-text">Der Agent liest CPU, RAM, Disk, Netzwerk und SAP/HANA Status.</text>
+  <path d="M420 250 q90 -40 156 18 q-10 36 -58 48 q-86 24 -142 -20 z" class="speech"/>
+  <text x="440" y="272" class="speech-text">"Ich sammle alles,</text>
+  <text x="440" y="290" class="speech-text">was fuer Betrieb</text>
+  <text x="440" y="308" class="speech-text">relevant ist!"</text>
+
+  <!-- Panel 2 -->
+  <rect x="664" y="186" width="590" height="320" rx="18" ry="18" class="panel"/>
+  <text x="686" y="224" class="panel-title">Szene 2: API nimmt Daten an</text>
+  <rect x="690" y="244" width="250" height="34" rx="10" ry="10" class="chip"/>
+  <text x="704" y="267" class="chip-text">POST /api/v1/agent-report</text>
+  <rect x="700" y="296" width="220" height="120" rx="10" ry="10" fill="#e8f7ff" stroke="#1f2a44" stroke-width="3"/>
+  <text x="718" y="332" class="panel-text">Validierung</text>
+  <text x="718" y="356" class="panel-text">API-Key Check</text>
+  <text x="718" y="380" class="panel-text">host_uid Mapping</text>
+  <rect x="942" y="296" width="280" height="120" rx="10" ry="10" fill="#fff0db" stroke="#1f2a44" stroke-width="3"/>
+  <text x="960" y="332" class="panel-text">Queue Admission</text>
+  <text x="960" y="356" class="panel-text">Sofort 202 ACK</text>
+  <text x="960" y="380" class="panel-text">queue_id zurueck</text>
+  <path d="M1028 248 q78 -52 184 -10 q8 36 -46 60 q-84 34 -172 -8 z" class="speech"/>
+  <text x="1048" y="272" class="speech-text">"Danke! Ich antworte</text>
+  <text x="1048" y="290" class="speech-text">schnell und arbeite</text>
+  <text x="1048" y="308" class="speech-text">asynchron weiter."</text>
+  <text x="686" y="452" class="panel-text">So bleibt der Agent schnell, auch wenn die Verarbeitung laenger dauert.</text>
+
+  <!-- Panel 3 -->
+  <rect x="1288" y="186" width="590" height="320" rx="18" ry="18" class="panel"/>
+  <text x="1310" y="224" class="panel-title">Szene 3: Queue Worker macht den Rest</text>
+  <rect x="1314" y="244" width="234" height="34" rx="10" ry="10" class="chip"/>
+  <text x="1328" y="267" class="chip-text">agent_ingest_queue Worker</text>
+  <rect x="1326" y="296" width="248" height="120" rx="10" ry="10" fill="#e5f9f1" stroke="#1f2a44" stroke-width="3"/>
+  <text x="1344" y="332" class="panel-text">DB Insert Report</text>
+  <text x="1344" y="356" class="panel-text">Pruning (host_uid)</text>
+  <text x="1344" y="380" class="panel-text">Transaction Commit</text>
+  <rect x="1592" y="296" width="258" height="120" rx="10" ry="10" fill="#ffe9e5" stroke="#1f2a44" stroke-width="3"/>
+  <text x="1610" y="332" class="panel-text">Bei Fehler:</text>
+  <text x="1610" y="356" class="panel-text">Rollback + Retry</text>
+  <text x="1610" y="380" class="panel-text">Queue bleibt erhalten</text>
+  <path d="M1460 248 q90 -42 196 8 q0 36 -60 54 q-88 28 -180 -16 z" class="speech"/>
+  <text x="1482" y="272" class="speech-text">"Ich sichere, dass Daten</text>
+  <text x="1482" y="290" class="speech-text">konsistent in DB und</text>
+  <text x="1482" y="308" class="speech-text">Alert-State landen."</text>
+  <text x="1310" y="452" class="panel-text">Robust gegen Lastspitzen durch Queue, Retry und Quarantaene-Faelle.</text>
+
+  <!-- Panel 4 -->
+  <rect x="40" y="538" width="590" height="320" rx="18" ry="18" class="panel"/>
+  <text x="62" y="576" class="panel-title">Szene 4: Alerts und Mail</text>
+  <rect x="66" y="596" width="198" height="34" rx="10" ry="10" class="chip"/>
+  <text x="80" y="619" class="chip-text">open -> ack -> resolved</text>
+  <rect x="82" y="648" width="220" height="120" rx="10" ry="10" fill="#fff4d8" stroke="#1f2a44" stroke-width="3"/>
+  <text x="100" y="684" class="panel-text">Alert Lifecycle</text>
+  <text x="100" y="708" class="panel-text">Debounce + Routing</text>
+  <text x="100" y="732" class="panel-text">Visibility Regeln</text>
+  <rect x="324" y="648" width="274" height="120" rx="10" ry="10" fill="#eaf2ff" stroke="#1f2a44" stroke-width="3"/>
+  <text x="342" y="684" class="panel-text">Mail Pipeline</text>
+  <text x="342" y="708" class="panel-text">Instant + Reminder</text>
+  <text x="342" y="732" class="panel-text">Digest (OAuth)</text>
+  <path d="M344 602 q74 -40 174 -8 q8 34 -38 56 q-78 32 -164 -8 z" class="speech"/>
+  <text x="364" y="626" class="speech-text">"Nur relevante Signale,</text>
+  <text x="364" y="644" class="speech-text">kein Alarm-Spam."</text>
+  <text x="62" y="804" class="panel-text">Das Team erhaelt die richtigen Infos zur richtigen Zeit.</text>
+
+  <!-- Panel 5 -->
+  <rect x="664" y="538" width="590" height="320" rx="18" ry="18" class="panel"/>
+  <text x="686" y="576" class="panel-title">Szene 5: Remote Commands und Backup</text>
+  <rect x="690" y="596" width="242" height="34" rx="10" ry="10" class="chip"/>
+  <text x="704" y="619" class="chip-text">Fernaktion + Betriebsschutz</text>
+  <rect x="700" y="648" width="258" height="120" rx="10" ry="10" fill="#e6f6ff" stroke="#1f2a44" stroke-width="3"/>
+  <text x="718" y="684" class="panel-text">Command Queue</text>
+  <text x="718" y="708" class="panel-text">Agent pollt und fuehrt aus</text>
+  <text x="718" y="732" class="panel-text">Resultat zurueck an Server</text>
+  <rect x="980" y="648" width="252" height="120" rx="10" ry="10" fill="#ecffef" stroke="#1f2a44" stroke-width="3"/>
+  <text x="998" y="684" class="panel-text">Backup/Restore</text>
+  <text x="998" y="708" class="panel-text">Automatisch + manuell</text>
+  <text x="998" y="732" class="panel-text">Safety Guardrails</text>
+  <path d="M986 602 q72 -38 186 -8 q10 34 -46 56 q-84 34 -176 -8 z" class="speech"/>
+  <text x="1008" y="626" class="speech-text">"Steuern, beheben und</text>
+  <text x="1008" y="644" class="speech-text">abgesichert wiederherstellen."</text>
+  <text x="686" y="804" class="panel-text">Operations werden schneller, aber bleiben kontrolliert und nachvollziehbar.</text>
+
+  <!-- Panel 6 -->
+  <rect x="1288" y="538" width="590" height="320" rx="18" ry="18" class="panel"/>
+  <text x="1310" y="576" class="panel-title">Szene 6: Dashboard macht es sichtbar</text>
+  <rect x="1314" y="596" width="202" height="34" rx="10" ry="10" class="chip"/>
+  <text x="1328" y="619" class="chip-text">server/static UI</text>
+  <rect x="1326" y="648" width="530" height="120" rx="10" ry="10" fill="#f2f7ff" stroke="#1f2a44" stroke-width="3"/>
+  <text x="1344" y="684" class="panel-text">Hostcards, Einzelreports, Trends, Alert-Tabelle, KPI-Strip</text>
+  <text x="1344" y="708" class="panel-text">Filter, Exporte, Admin-Settings und Zeitverlaeufe</text>
+  <text x="1344" y="732" class="panel-text">Alles auf einer operativen Arbeitsflaeche</text>
+  <path d="M1508 602 q84 -44 204 -8 q8 34 -54 56 q-94 34 -192 -8 z" class="speech"/>
+  <text x="1530" y="626" class="speech-text">"Aus Daten wird</text>
+  <text x="1530" y="644" class="speech-text">schnell eine</text>
+  <text x="1530" y="662" class="speech-text">Entscheidung."</text>
+  <text x="1310" y="804" class="panel-text">Transparenz fuer Technik, Betrieb und Management in einem Bild.</text>
+
+  <!-- Story flow arrows -->
+  <path d="M630 346 H664" class="arrow"/>
+  <path d="M1254 346 H1288" class="arrow"/>
+  <path d="M1584 506 V538" class="arrow"/>
+  <path d="M1288 698 H1254" class="arrow"/>
+  <path d="M664 698 H630" class="arrow"/>
+
+  <!-- Bottom takeaway strip -->
+  <rect x="40" y="892" width="1838" height="328" rx="18" ry="18" fill="#fff3d5" stroke="#1f2a44" stroke-width="4"/>
+  <text x="62" y="934" class="panel-title">Was die App am Ende liefert</text>
+
+  <polygon points="96,970 126,988 114,1022 78,1022 66,988" class="burst"/>
+  <text x="136" y="995" class="burst-text">1</text>
+  <text x="164" y="996" class="panel-text">Stabile Datenerfassung, auch bei Netzwerkproblemen (Queue + Replay).</text>
+
+  <polygon points="96,1036 126,1054 114,1088 78,1088 66,1054" class="burst"/>
+  <text x="136" y="1061" class="burst-text">2</text>
+  <text x="164" y="1062" class="panel-text">Konsistente Speicherung durch transaktionale Worker-Verarbeitung.</text>
+
+  <polygon points="96,1102 126,1120 114,1154 78,1154 66,1120" class="burst"/>
+  <text x="136" y="1127" class="burst-text">3</text>
+  <text x="164" y="1128" class="panel-text">Gezielte Alerts und Mail-Logik statt reiner Rohdatenflut.</text>
+
+  <polygon points="960,970 990,988 978,1022 942,1022 930,988" class="burst"/>
+  <text x="1000" y="995" class="burst-text">4</text>
+  <text x="1028" y="996" class="panel-text">Remote Commands + Backups machen Betrieb handlungsfaehig.</text>
+
+  <polygon points="960,1036 990,1054 978,1088 942,1088 930,1054" class="burst"/>
+  <text x="1000" y="1061" class="burst-text">5</text>
+  <text x="1028" y="1062" class="panel-text">Dashboard schafft gemeinsame Sicht fuer Ops, Admin und Leitung.</text>
+
+  <polygon points="960,1102 990,1120 978,1154 942,1154 930,1120" class="burst"/>
+  <text x="1000" y="1127" class="burst-text">6</text>
+  <text x="1028" y="1128" class="panel-text">Schneller reagieren, weniger Ausfallzeit, bessere Nachvollziehbarkeit.</text>
+
+  <text x="46" y="1260" class="footer">Asset: docs/processes/app-explainer-comic.svg | Style: Comic Storyboard | Date: 2026-05-25</text>
+</svg>

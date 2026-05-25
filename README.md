@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.79**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.79**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.80**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.80**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.80 | 25.05.2026 | Added a comic-style app explainer SVG with six story scenes and linked it in the process docs quick-access section |
 | 1.7.79 | 25.05.2026 | Added a blueprint-style technical process drawing with explanatory callouts and linked it in the process docs quick-access section |
 | 1.7.78 | 25.05.2026 | Process-visual documentation completed with a detailed Pixel Art SVG variant and quick-access link in the process docs index |
 | 1.7.77 | 25.05.2026 | Process-visual documentation expansion: added a second detailed app-process infographic in Flat Design style (SVG) and linked it in the process docs quick-access section |
@@ -656,6 +657,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.80 (25. Mai 2026)
+
+- **Comic-Erklaergrafik erstellt**: Neue SVG im Comic-Stil erklaert die App als sechsteilige Story von Agent-Erfassung bis Dashboard.
+- **Narrative Prozessdarstellung ergaenzt**: Sprechblasen, Szenen und Zusammenfassungsbereich machen den Ablauf fuer nicht-technische Zielgruppen greifbarer.
+- **Doku-Einstieg erweitert**: Die Comic-Variante ist als eigener Schnellzugriff in der Prozess-Startseite verlinkt.
+
 ### v1.7.79 (25. Mai 2026)
 
 - **Blueprint-Variante erstellt**: Neue technische Prozesszeichnung im Blueprint-Stil als SVG hinzugefuegt.
