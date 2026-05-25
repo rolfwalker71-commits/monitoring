@@ -77,8 +77,8 @@ self.addEventListener("push", (event) => {
     tag: String(payload.tag || "monitoring-alert"),
     renotify: Boolean(payload.renotify),
     data: payload.data && typeof payload.data === "object" ? payload.data : { url: "/" },
-    icon: "/icons/pwa-icon-192.png",
-    badge: "/icons/pwa-icon-192.png",
+    icon: "/icons/logo.png",
+    badge: "/icons/logo.png",
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
