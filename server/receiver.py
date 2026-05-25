@@ -13348,7 +13348,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     has_focus_types = isinstance(focus_types, list) and len(focus_types) > 0
                     has_license_core = any(
                         str(sap_license.get(field, "") or "").strip()
-                        for field in ("hardware_key", "instno", "system_nr", "customer_no", "customer_name", "expiration")
+                        for field in ("hardware_key", "instno", "system_nr", "system_type", "customer_no", "customer_name", "expiration")
                     )
                     has_sap_license_info = bool(has_focus_types or has_license_core)
                 host_uid_key = str(row[0] or "").strip()

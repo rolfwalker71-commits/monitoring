@@ -180,6 +180,7 @@ collect_sap_license_json() {
   local instno=""
   local expiration=""
   local system_nr=""
+  local system_type=""
   local customer_name=""
   local customer_no=""
   local file_mtime_utc=""
@@ -199,7 +200,7 @@ collect_sap_license_json() {
   done
   
   if [[ -z "$license_path" ]]; then
-    printf '{"available":false,"hardware_key":"","instno":"","expiration":"","system_nr":"","customer_name":"","customer_no":"","file_mtime_utc":"","focus_license_types":[]}'
+    printf '{"available":false,"hardware_key":"","instno":"","expiration":"","system_nr":"","system_type":"","customer_name":"","customer_no":"","file_mtime_utc":"","focus_license_types":[]}'
     return
   fi
   
@@ -214,7 +215,7 @@ collect_sap_license_json() {
   fi
   
   if [[ -z "$content" ]]; then
-    printf '{"available":false,"hardware_key":"","instno":"","expiration":"","system_nr":"","customer_name":"","customer_no":"","file_mtime_utc":"%s","focus_license_types":[]}' "$(json_escape "$file_mtime_utc")"
+    printf '{"available":false,"hardware_key":"","instno":"","expiration":"","system_nr":"","system_type":"","customer_name":"","customer_no":"","file_mtime_utc":"%s","focus_license_types":[]}' "$(json_escape "$file_mtime_utc")"
     return
   fi
   
@@ -229,6 +230,7 @@ collect_sap_license_json() {
   [[ "$block_content" =~ INSTNO[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && instno="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
   [[ "$block_content" =~ EXPIRATION[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && expiration="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
   [[ "$block_content" =~ SYSTEM-NR[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && system_nr="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  [[ "$block_content" =~ SYSTEM-TYPE[[:space:]]*=[[:space:]]*([^;$'\n'$'\r']+) ]] && system_type="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
   [[ "$block_content" =~ CUSTOMER-NAME[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && customer_name="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
   [[ "$block_content" =~ CUSTOMER-NO[[:space:]]*=[[:space:]]*([^$'\n'$'\r']+) ]] && customer_no="$(printf '%s' "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
 
@@ -281,12 +283,13 @@ EOF
     available="true"
   fi
   
-  printf '{"available":%s,"hardware_key":"%s","instno":"%s","expiration":"%s","system_nr":"%s","customer_name":"%s","customer_no":"%s","file_mtime_utc":"%s","focus_license_types":[%s]}' \
+  printf '{"available":%s,"hardware_key":"%s","instno":"%s","expiration":"%s","system_nr":"%s","system_type":"%s","customer_name":"%s","customer_no":"%s","file_mtime_utc":"%s","focus_license_types":[%s]}' \
     "$available" \
     "$(json_escape "$hardware_key")" \
     "$(json_escape "$instno")" \
     "$(json_escape "$expiration")" \
     "$(json_escape "$system_nr")" \
+    "$(json_escape "$system_type")" \
     "$(json_escape "$customer_name")" \
     "$(json_escape "$customer_no")" \
     "$(json_escape "$file_mtime_utc")" \

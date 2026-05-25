@@ -6238,6 +6238,7 @@ function renderHanaMultitenantDiscoverySummary(discovery) {
 
 function renderSapLicenseInfoSection(payload) {
   const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : null;
+  const systemType = asText(sapLicense?.system_type, "").trim();
   const rawFocusTypes = Array.isArray(sapLicense?.focus_license_types) ? sapLicense.focus_license_types : [];
 
   const translatedFocusTypes = rawFocusTypes
@@ -6290,6 +6291,7 @@ function renderSapLicenseInfoSection(payload) {
     <details class="sap-b1-raw-details">
       <summary class="sap-b1-raw-summary">Lizenzinfos</summary>
       <div class="sap-license-list-wrap">
+        ${systemType ? `<p class="muted"><strong>Systemtyp:</strong> ${escapeHtml(systemType)}</p>` : ""}
         <p class="sap-license-list-meta">
           <span>SAP B1 Lizenztypen (übersetzt)</span>
           ${focusTypeRows ? `<button class="sap-vmap-copy-btn" type="button" title="In Zwischenablage kopieren" data-copy="${escapeHtml(copyText)}">📋 Kopieren</button>` : ""}
@@ -8400,6 +8402,7 @@ async function loadHostLicenseInfoForHover(hostname, hostUid = "") {
     hw: asText(sapLicense.hardware_key, "").trim(),
     inst: asText(sapLicense.instno, "").trim(),
     system: asText(sapLicense.system_nr, "").trim(),
+    systemType: asText(sapLicense.system_type, "").trim(),
     customerNo: asText(sapLicense.customer_no, "").trim(),
     holder: asText(sapLicense.customer_name, "").trim(),
     expiry: formatSapLicenseExpiry(sapLicense.expiration),
@@ -8412,6 +8415,7 @@ async function loadHostLicenseInfoForHover(hostname, hostUid = "") {
     `HW-Key: ${fields.hw || "-"}`,
     `Installationsnummer: ${fields.inst || "-"}`,
     `Systemnummer: ${fields.system || "-"}`,
+    `Systemtyp: ${fields.systemType || "-"}`,
     `Kundennummer: ${fields.customerNo || "-"}`,
     `Lizenznehmer: ${fields.holder || "-"}`,
     `Gültig bis: ${fields.expiry || "-"}`,
@@ -8509,6 +8513,7 @@ function renderHostLicenseHoverPopupContent(hostname, data) {
     ["HW-Key", f.hw || "-", ""],
     ["Instno", f.inst || "-", ""],
     ["System", f.system || "-", ""],
+    ["Systemtyp", f.systemType || "-", ""],
     ["Kundnr", f.customerNo || "-", ""],
     ["Inhaber", f.holder || "-", "host-license-hover-item--holder"],
     ["Gültig bis", f.expiry || "-", ""],
@@ -12590,13 +12595,14 @@ function updateHeaderStatChips() {
     const hw = asText(sapLicense.hardware_key, "").trim();
     const inst = asText(sapLicense.instno, "").trim();
     const system = asText(sapLicense.system_nr, "").trim();
+    const systemType = asText(sapLicense.system_type, "").trim();
     const customerNo = asText(sapLicense.customer_no, "").trim();
     const holder = asText(sapLicense.customer_name, "").trim();
     const expiryRaw = asText(sapLicense.expiration, "").trim();
     const expiry = /^\d{8}$/.test(expiryRaw)
       ? `${expiryRaw.substring(6, 8)}.${expiryRaw.substring(4, 6)}.${expiryRaw.substring(0, 4)}`
       : expiryRaw;
-    const hasData = [hw, inst, system, customerNo, holder, expiry].some((entry) => Boolean(entry));
+    const hasData = [hw, inst, system, systemType, customerNo, holder, expiry].some((entry) => Boolean(entry));
     const hasSelectedHost = Boolean(selectedHost);
     const hostMatchesSelection = Boolean(hasSelectedHost && reportHost && reportHost === selectedHost);
     const showLicenseChip = Boolean(hasData && hasSelectedHost && hostMatchesSelection);
@@ -12627,6 +12633,7 @@ function updateHeaderStatChips() {
         `HW-Key: ${hw || "-"}`,
         `Installationsnummer: ${inst || "-"}`,
         `Systemnummer: ${system || "-"}`,
+        `Systemtyp: ${systemType || "-"}`,
         `Kundennummer: ${customerNo || "-"}`,
         `Lizenznehmer: ${holder || "-"}`,
       ];
@@ -14716,6 +14723,7 @@ function hasSystemOverviewLicenseInfo(payload) {
     asText(sapLicense.hardware_key, "").trim(),
     asText(sapLicense.instno, "").trim(),
     asText(sapLicense.system_nr, "").trim(),
+    asText(sapLicense.system_type, "").trim(),
     asText(sapLicense.customer_no, "").trim(),
     asText(sapLicense.customer_name, "").trim(),
     formattedExpiration,
@@ -14783,6 +14791,7 @@ function renderSystemOverviewLicenseInfos(payload) {
     { label: "HW-Key", value: asText(sapLicense.hardware_key, "").trim() },
     { label: "Installationsnummer", value: asText(sapLicense.instno, "").trim() },
     { label: "Systemnummer", value: asText(sapLicense.system_nr, "").trim() },
+    { label: "Systemtyp", value: asText(sapLicense.system_type, "").trim() },
     { label: "Kundennummer", value: asText(sapLicense.customer_no, "").trim() },
     { label: "Lizenznehmer", value: asText(sapLicense.customer_name, "").trim() },
     { label: "Gültig bis", value: formattedExpiration }

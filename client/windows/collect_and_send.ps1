@@ -1647,6 +1647,7 @@ function Get-SapLicenseInfo {
         instno = ""
         expiration = ""
         system_nr = ""
+        system_type = ""
         customer_name = ""
         customer_no = ""
         file_mtime_utc = ""
@@ -1703,6 +1704,9 @@ function Get-SapLicenseInfo {
         }
         if ($blockContent -match 'SYSTEM-NR\s*=\s*([^\r\n]+)') {
             $licenseInfo.system_nr = $Matches[1].Trim()
+        }
+        if ($blockContent -match 'SYSTEM-TYPE\s*=\s*([^;\r\n]+)') {
+            $licenseInfo.system_type = $Matches[1].Trim()
         }
         if ($blockContent -match 'CUSTOMER-NAME\s*=\s*([^\r\n]+)') {
             $licenseInfo.customer_name = $Matches[1].Trim()
@@ -2016,6 +2020,7 @@ $hardwareKeyEsc = ConvertTo-JsonString $licenseInfo.hardware_key
 $instnoEsc = ConvertTo-JsonString $licenseInfo.instno
 $expirationEsc = ConvertTo-JsonString $licenseInfo.expiration
 $systemNrEsc = ConvertTo-JsonString $licenseInfo.system_nr
+$systemTypeEsc = ConvertTo-JsonString $licenseInfo.system_type
 $customerNameEsc = ConvertTo-JsonString $licenseInfo.customer_name
 $customerNoEsc = ConvertTo-JsonString $licenseInfo.customer_no
 $licenseFileMtimeUtcEsc = ConvertTo-JsonString $licenseInfo.file_mtime_utc
@@ -2106,6 +2111,7 @@ $payload = @"
         "instno": "$instnoEsc",
         "expiration": "$expirationEsc",
         "system_nr": "$systemNrEsc",
+        "system_type": "$systemTypeEsc",
         "customer_name": "$customerNameEsc",
         "customer_no": "$customerNoEsc",
         "file_mtime_utc": "$licenseFileMtimeUtcEsc",
