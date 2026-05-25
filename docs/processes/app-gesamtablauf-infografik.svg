@@ -1,0 +1,230 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1280" viewBox="0 0 1800 1280" role="img" aria-labelledby="title desc">
+  <title id="title">Monitoring App Gesamtablauf Infografik</title>
+  <desc id="desc">Technische Uebersicht ueber Agent Datensammlung, API Ingest, Queue Verarbeitung, Datenbank Schreiben, Alerting, Mailversand, UI und Betriebsprozesse.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f7fbff"/>
+      <stop offset="100%" stop-color="#eef5ff"/>
+    </linearGradient>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1f5fbf"/>
+      <stop offset="100%" stop-color="#3278dd"/>
+    </linearGradient>
+    <style>
+      .title { font: 700 44px 'Segoe UI', Arial, sans-serif; fill: #ffffff; }
+      .subtitle { font: 500 21px 'Segoe UI', Arial, sans-serif; fill: #d9e8ff; }
+      .lane-title { font: 700 24px 'Segoe UI', Arial, sans-serif; fill: #1f2a3a; }
+      .box-title { font: 700 18px 'Segoe UI', Arial, sans-serif; fill: #142033; }
+      .box-text { font: 500 15px 'Segoe UI', Arial, sans-serif; fill: #415670; }
+      .small { font: 600 13px 'Segoe UI', Arial, sans-serif; fill: #4d627c; }
+      .legend { font: 600 15px 'Segoe UI', Arial, sans-serif; fill: #2b405b; }
+      .foot { font: 600 13px 'Segoe UI', Arial, sans-serif; fill: #59708f; }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L12,6 L0,12 z" fill="#356db9"/>
+    </marker>
+    <marker id="arrowMuted" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L12,6 L0,12 z" fill="#6f88a7"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1800" height="1280" fill="url(#bg)"/>
+
+  <rect x="40" y="28" width="1720" height="122" rx="22" fill="url(#header)"/>
+  <text x="80" y="84" class="title">Monitoring Plattform - Technische Infografik</text>
+  <text x="80" y="121" class="subtitle">Einfacher, genauer Gesamtablauf: Agent -> API -> Queue -> DB -> Alerts -> Benachrichtigungen -> UI/Ops</text>
+
+  <rect x="40" y="172" width="1720" height="100" rx="16" fill="#ffffff" stroke="#cddcee"/>
+  <text x="70" y="210" class="legend">Legende:</text>
+  <rect x="180" y="188" width="28" height="20" rx="4" fill="#dcecff" stroke="#7ea7df"/>
+  <text x="220" y="203" class="legend">Regulaerer Lauf</text>
+  <rect x="420" y="188" width="28" height="20" rx="4" fill="#ffe9cf" stroke="#e3a65d"/>
+  <text x="460" y="203" class="legend">Fehler / Fallback / Queue</text>
+  <rect x="700" y="188" width="28" height="20" rx="4" fill="#dcf7ec" stroke="#5fb38c"/>
+  <text x="740" y="203" class="legend">Persistenz / Abschluss</text>
+  <line x1="990" y1="198" x2="1055" y2="198" stroke="#356db9" stroke-width="3.5" marker-end="url(#arrow)"/>
+  <text x="1070" y="203" class="legend">Datenfluss</text>
+  <line x1="1220" y1="198" x2="1285" y2="198" stroke="#6f88a7" stroke-width="3" stroke-dasharray="7 6" marker-end="url(#arrowMuted)"/>
+  <text x="1300" y="203" class="legend">Steuerung / Polling</text>
+  <text x="70" y="242" class="small">Wichtige APIs: /api/v1/agent-report, /api/v1/agent-commands, /api/v1/agent-command-result, /api/v1/hosts, /api/v1/host-reports</text>
+
+  <!-- Lanes -->
+  <rect x="40" y="292" width="1720" height="930" rx="20" fill="#ffffff" stroke="#cddcee"/>
+
+  <rect x="60" y="318" width="1680" height="126" rx="14" fill="#f5f9ff" stroke="#d6e4f5"/>
+  <text x="84" y="352" class="lane-title">1) Agent auf Host (Linux/Windows)</text>
+
+  <rect x="60" y="456" width="1680" height="140" rx="14" fill="#f8fbff" stroke="#d6e4f5"/>
+  <text x="84" y="490" class="lane-title">2) API Ingest + Auth + Queue auf Server</text>
+
+  <rect x="60" y="608" width="1680" height="150" rx="14" fill="#f5faff" stroke="#d6e4f5"/>
+  <text x="84" y="642" class="lane-title">3) Worker + Datenbank Schreibpipeline</text>
+
+  <rect x="60" y="770" width="1680" height="150" rx="14" fill="#f7fcfa" stroke="#cce8db"/>
+  <text x="84" y="804" class="lane-title">4) Alerting + Mail/OAuth + Command Lifecycle</text>
+
+  <rect x="60" y="932" width="1680" height="268" rx="14" fill="#f9fbff" stroke="#d6e4f5"/>
+  <text x="84" y="966" class="lane-title">5) UI, Betrieb und Wartung</text>
+
+  <!-- Lane 1 boxes -->
+  <rect x="90" y="364" width="270" height="62" rx="10" fill="#dcecff" stroke="#7ea7df"/>
+  <text x="108" y="389" class="box-title">Metriken sammeln</text>
+  <text x="108" y="411" class="box-text">CPU, RAM, FS, Netz, SAP/HANA</text>
+
+  <rect x="410" y="364" width="275" height="62" rx="10" fill="#dcecff" stroke="#7ea7df"/>
+  <text x="428" y="389" class="box-title">Payload bauen</text>
+  <text x="428" y="411" class="box-text">timestamp_utc, host_uid, delivery_mode</text>
+
+  <rect x="740" y="364" width="255" height="62" rx="10" fill="#dcecff" stroke="#7ea7df"/>
+  <text x="758" y="389" class="box-title">POST agent-report</text>
+  <text x="758" y="411" class="box-text">live payload senden</text>
+
+  <rect x="1045" y="364" width="300" height="62" rx="10" fill="#ffe9cf" stroke="#e3a65d"/>
+  <text x="1063" y="389" class="box-title">Bei Fehler: lokal queue</text>
+  <text x="1063" y="411" class="box-text">delayed markieren, Datei speichern</text>
+
+  <rect x="1385" y="364" width="325" height="62" rx="10" fill="#dcecff" stroke="#7ea7df"/>
+  <text x="1403" y="389" class="box-title">Vor jedem Lauf: Queue flush</text>
+  <text x="1403" y="411" class="box-text">alte Payloads zuerst nachliefern</text>
+
+  <!-- Lane 2 boxes -->
+  <rect x="90" y="508" width="245" height="72" rx="10" fill="#dcecff" stroke="#7ea7df"/>
+  <text x="108" y="533" class="box-title">Request annehmen</text>
+  <text x="108" y="555" class="box-text">JSON validieren</text>
+  <text x="108" y="573" class="box-text">hostname/filesystems pruefen</text>
+
+  <rect x="380" y="508" width="270" height="72" rx="10" fill="#dcecff" stroke="#7ea7df"/>
+  <text x="398" y="533" class="box-title">Agent Auth</text>
+  <text x="398" y="555" class="box-text">API Key + Grace Mode</text>
+  <text x="398" y="573" class="box-text">bekannte Hosts optional toleriert</text>
+
+  <rect x="700" y="508" width="250" height="72" rx="10" fill="#dcecff" stroke="#7ea7df"/>
+  <text x="718" y="533" class="box-title">Queue Insert</text>
+  <text x="718" y="555" class="box-text">agent_ingest_queue</text>
+  <text x="718" y="573" class="box-text">status queued</text>
+
+  <rect x="995" y="508" width="300" height="72" rx="10" fill="#dcf7ec" stroke="#5fb38c"/>
+  <text x="1013" y="533" class="box-title">Sofortantwort an Agent</text>
+  <text x="1013" y="555" class="box-text">HTTP 202 accepted</text>
+  <text x="1013" y="573" class="box-text">queue_id + received_at_utc</text>
+
+  <rect x="1345" y="508" width="365" height="72" rx="10" fill="#dcecff" stroke="#7ea7df"/>
+  <text x="1363" y="533" class="box-title">Background Worker pollt Queue</text>
+  <text x="1363" y="555" class="box-text">FIFO, retry/attempt_count, audit log</text>
+  <text x="1363" y="573" class="box-text">Messwerte: queue_wait, end_to_end</text>
+
+  <!-- Lane 3 boxes -->
+  <rect x="90" y="660" width="290" height="80" rx="10" fill="#dcf7ec" stroke="#5fb38c"/>
+  <text x="108" y="685" class="box-title">INSERT reports</text>
+  <text x="108" y="707" class="box-text">received_at_utc + payload_json</text>
+  <text x="108" y="725" class="box-text">Host Identitaet stabilisiert</text>
+
+  <rect x="425" y="660" width="320" height="80" rx="10" fill="#dcf7ec" stroke="#5fb38c"/>
+  <text x="443" y="685" class="box-title">Nebenpipelinen</text>
+  <text x="443" y="707" class="box-text">host_config_changes, database_lifecycle</text>
+  <text x="443" y="725" class="box-text">Retention/Pruning je Host</text>
+
+  <rect x="790" y="660" width="315" height="80" rx="10" fill="#dcf7ec" stroke="#5fb38c"/>
+  <text x="808" y="685" class="box-title">Alert Bewertung</text>
+  <text x="808" y="707" class="box-text">update_alerts_for_report</text>
+  <text x="808" y="725" class="box-text">oder resolve bei hidden Hosts</text>
+
+  <rect x="1145" y="660" width="250" height="80" rx="10" fill="#dcf7ec" stroke="#5fb38c"/>
+  <text x="1163" y="685" class="box-title">Commit</text>
+  <text x="1163" y="707" class="box-text">Transaktion abgeschlossen</text>
+  <text x="1163" y="725" class="box-text">Daten sofort sichtbar</text>
+
+  <rect x="1430" y="660" width="280" height="80" rx="10" fill="#ffe9cf" stroke="#e3a65d"/>
+  <text x="1448" y="685" class="box-title">Fehlerpfad</text>
+  <text x="1448" y="707" class="box-text">Retry, Fehlerzaehler, Queue bleibt</text>
+  <text x="1448" y="725" class="box-text">kein Datenverlust im Agent Queue Pfad</text>
+
+  <!-- Lane 4 boxes -->
+  <rect x="90" y="822" width="310" height="80" rx="10" fill="#dcf7ec" stroke="#5fb38c"/>
+  <text x="108" y="847" class="box-title">Alert Lifecycle</text>
+  <text x="108" y="869" class="box-text">open, acknowledged, resolved</text>
+  <text x="108" y="887" class="box-text">Debounce + Escalation Regeln</text>
+
+  <rect x="445" y="822" width="345" height="80" rx="10" fill="#dcf7ec" stroke="#5fb38c"/>
+  <text x="463" y="847" class="box-title">Benachrichtigung</text>
+  <text x="463" y="869" class="box-text">Instant Mail, Reminder, Digest</text>
+  <text x="463" y="887" class="box-text">via OAuth/Graph Token Lifecycle</text>
+
+  <rect x="835" y="822" width="335" height="80" rx="10" fill="#dcecff" stroke="#7ea7df"/>
+  <text x="853" y="847" class="box-title">Remote Command Queue</text>
+  <text x="853" y="869" class="box-text">set-api-key, update-now, bulk dispatch</text>
+  <text x="853" y="887" class="box-text">pending -> completed/failed/expired</text>
+
+  <rect x="1210" y="822" width="500" height="80" rx="10" fill="#dcecff" stroke="#7ea7df"/>
+  <text x="1228" y="847" class="box-title">Agent Polling</text>
+  <text x="1228" y="869" class="box-text">GET agent-commands -> lokal ausfuehren -> POST agent-command-result</text>
+  <text x="1228" y="887" class="box-text">Resultat inkl. status + message wird auditierbar gespeichert</text>
+
+  <!-- Lane 5 boxes -->
+  <rect x="90" y="986" width="300" height="88" rx="10" fill="#dcecff" stroke="#7ea7df"/>
+  <text x="108" y="1013" class="box-title">Web UI</text>
+  <text x="108" y="1035" class="box-text">Hosts, Einzelmeldungen, Trends</text>
+  <text x="108" y="1053" class="box-text">KPI, Filter, Drilldown</text>
+
+  <rect x="430" y="986" width="325" height="88" rx="10" fill="#dcecff" stroke="#7ea7df"/>
+  <text x="448" y="1013" class="box-title">Zeitachsenverhalten</text>
+  <text x="448" y="1035" class="box-text">UI zeigt primaer received_at_utc</text>
+  <text x="448" y="1053" class="box-text">delayed Daten koennen spaeter erscheinen</text>
+
+  <rect x="795" y="986" width="335" height="88" rx="10" fill="#ffe9cf" stroke="#e3a65d"/>
+  <text x="813" y="1013" class="box-title">Queue Robustheit Agent</text>
+  <text x="813" y="1035" class="box-text">defekte/4xx Payloads -> Quarantaene</text>
+  <text x="813" y="1053" class="box-text">Backlog bleibt entsperrt</text>
+
+  <rect x="1170" y="986" width="275" height="88" rx="10" fill="#dcf7ec" stroke="#5fb38c"/>
+  <text x="1188" y="1013" class="box-title">Backup Jobs</text>
+  <text x="1188" y="1035" class="box-text">automatisch + manuell</text>
+  <text x="1188" y="1053" class="box-text">Download/Retention</text>
+
+  <rect x="1475" y="986" width="235" height="88" rx="10" fill="#ffe9cf" stroke="#e3a65d"/>
+  <text x="1493" y="1013" class="box-title">Restore</text>
+  <text x="1493" y="1035" class="box-text">DB Ueberschreiben</text>
+  <text x="1493" y="1053" class="box-text">mit Safety-Hinweis</text>
+
+  <rect x="90" y="1090" width="1620" height="94" rx="12" fill="#f3f8ff" stroke="#c9daef"/>
+  <text x="110" y="1122" class="box-title">Kurz zusammengefasst</text>
+  <text x="110" y="1148" class="box-text">1) Agent sammelt und sendet regelmaessig. 2) Server nimmt schnell an (202) und verarbeitet asynchron. 3) DB, Alerts und Mails folgen transaktional. 4) Queue/Fallback sichert Daten bei Stoerungen. 5) UI und Betriebsfunktionen bauen auf derselben Datenbasis auf.</text>
+
+  <!-- Flow arrows lane 1 -->
+  <line x1="360" y1="395" x2="410" y2="395" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="685" y1="395" x2="740" y2="395" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="995" y1="395" x2="1045" y2="395" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="1345" y1="395" x2="1385" y2="395" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- Lane connectors -->
+  <line x1="1570" y1="426" x2="1570" y2="508" stroke="#6f88a7" stroke-width="3" stroke-dasharray="7 6" marker-end="url(#arrowMuted)"/>
+  <line x1="1530" y1="580" x2="1530" y2="660" stroke="#6f88a7" stroke-width="3" stroke-dasharray="7 6" marker-end="url(#arrowMuted)"/>
+  <line x1="1260" y1="740" x2="1260" y2="822" stroke="#6f88a7" stroke-width="3" stroke-dasharray="7 6" marker-end="url(#arrowMuted)"/>
+  <line x1="600" y1="902" x2="600" y2="986" stroke="#6f88a7" stroke-width="3" stroke-dasharray="7 6" marker-end="url(#arrowMuted)"/>
+
+  <!-- Flow arrows lane 2 -->
+  <line x1="335" y1="544" x2="380" y2="544" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="650" y1="544" x2="700" y2="544" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="950" y1="544" x2="995" y2="544" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="1295" y1="544" x2="1345" y2="544" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- Flow arrows lane 3 -->
+  <line x1="380" y1="700" x2="425" y2="700" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="745" y1="700" x2="790" y2="700" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="1105" y1="700" x2="1145" y2="700" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="1395" y1="700" x2="1430" y2="700" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- Flow arrows lane 4 -->
+  <line x1="400" y1="862" x2="445" y2="862" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="790" y1="862" x2="835" y2="862" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="1170" y1="862" x2="1210" y2="862" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <!-- Flow arrows lane 5 -->
+  <line x1="390" y1="1028" x2="430" y2="1028" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="755" y1="1028" x2="795" y2="1028" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="1130" y1="1028" x2="1170" y2="1028" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="1445" y1="1028" x2="1475" y2="1028" stroke="#356db9" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <text x="52" y="1258" class="foot">Stand: 25.05.2026 | Quelle: Monitoring Agent + Receiver + Web UI Prozesse | Datei: docs/processes/app-gesamtablauf-infografik.svg</text>
+</svg>

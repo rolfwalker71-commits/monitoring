@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.75**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.75**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.76**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.76**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.76 | 25.05.2026 | Documentation visuals expanded: added a detailed Corporate Memphis business illustration plus technical process flow SVGs for end-to-end app process communication, and linked them from the process docs index |
 | 1.7.75 | 25.05.2026 | Report pruning scope fix: retention/count pruning now follows host identity (`host_uid`) when present, with hostname fallback for legacy payloads without host_uid, preventing cross-identity truncation on split hosts |
 | 1.7.74 | 25.05.2026 | Report header typography tuning: made the top "Erste Nachricht" info block significantly smaller across all lines and emphasized current report date/time info in bold |
 | 1.7.73 | 25.05.2026 | Host card micro-layout adjustment: moved the compact last-report clock from the bottom technical row to the second line, right-aligned and vertically centered |
@@ -652,6 +653,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.76 (25. Mai 2026)
+
+- **Neue Corporate-Memphis Business-Illustration**: Detaillierte SVG-Grafik fuer die App-Prozesse von Agent-Erfassung bis Betrieb erstellt.
+- **Prozess-Grafiken in Doku indexiert**: Die neuen SVGs wurden im Prozess-Index als schnelle Einstiegsdokumente verlinkt.
+- **Visuelle Prozesskommunikation ausgebaut**: Neben textuellen Ablaufdokus steht nun eine grafische Gesamtuebersicht fuer fachliche und technische Abstimmung bereit.
+
 ### v1.7.75 (25. Mai 2026)
 
 - **Pruning auf Host-Identitaet umgestellt**: Retention- und Count-Pruning laufen jetzt `host_uid`-basiert, sobald eine UID vorhanden ist.

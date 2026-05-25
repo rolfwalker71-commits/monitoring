@@ -1,0 +1,253 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1500" viewBox="0 0 2400 1500" role="img" aria-labelledby="title desc">
+  <title id="title">Business Illustration Corporate Memphis - Monitoring App Prozesse</title>
+  <desc id="desc">Detaillierte Corporate-Memphis-Infografik zu Agent-Erfassung, API-Ingest, Queue, Datenbank, Alerting, Mail, Remote-Commands, Backup und Self-Update.</desc>
+
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f4f8ff"/>
+      <stop offset="100%" stop-color="#edf7ff"/>
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#1f5fbf"/>
+      <stop offset="100%" stop-color="#3d84e8"/>
+    </linearGradient>
+    <style>
+      .h1 { font: 800 56px 'Segoe UI', Arial, sans-serif; fill: #ffffff; }
+      .h2 { font: 600 26px 'Segoe UI', Arial, sans-serif; fill: #dbeaff; }
+      .laneTitle { font: 800 30px 'Segoe UI', Arial, sans-serif; fill: #17304f; }
+      .cardTitle { font: 800 22px 'Segoe UI', Arial, sans-serif; fill: #122741; }
+      .cardText { font: 600 17px 'Segoe UI', Arial, sans-serif; fill: #3f5774; }
+      .badge { font: 800 14px 'Segoe UI', Arial, sans-serif; fill: #26486f; }
+      .note { font: 600 15px 'Segoe UI', Arial, sans-serif; fill: #4c6586; }
+      .label { font: 700 16px 'Segoe UI', Arial, sans-serif; fill: #22456d; }
+      .foot { font: 600 14px 'Segoe UI', Arial, sans-serif; fill: #587596; }
+    </style>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto" markerUnits="strokeWidth">
+      <path d="M0 0 L14 7 L0 14 z" fill="#2e6db9"/>
+    </marker>
+    <marker id="arrowSoft" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto" markerUnits="strokeWidth">
+      <path d="M0 0 L14 7 L0 14 z" fill="#6b88ab"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="2400" height="1500" fill="url(#bgGrad)"/>
+
+  <!-- Memphis background shapes -->
+  <circle cx="220" cy="220" r="120" fill="#ffe2a7" opacity="0.45"/>
+  <rect x="2080" y="130" width="180" height="180" rx="32" fill="#d6e8ff" opacity="0.8"/>
+  <polygon points="2050,380 2200,320 2280,460 2120,520" fill="#ffd4d4" opacity="0.7"/>
+  <circle cx="2200" cy="1170" r="140" fill="#cceee2" opacity="0.6"/>
+  <rect x="90" y="1240" width="210" height="150" rx="30" fill="#ecd8ff" opacity="0.65"/>
+  <path d="M1840 1120 C1960 980, 2140 980, 2260 1120" fill="none" stroke="#f0b65d" stroke-width="16" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- Header -->
+  <rect x="44" y="36" width="2312" height="160" rx="34" fill="url(#headerGrad)"/>
+  <text x="94" y="112" class="h1">Monitoring Platform Process Landscape</text>
+  <text x="94" y="157" class="h2">Corporate Memphis Illustration - detailed end-to-end process map from agent to business operations</text>
+
+  <!-- Legend -->
+  <rect x="44" y="216" width="2312" height="90" rx="20" fill="#ffffff" stroke="#d1e0f2"/>
+  <rect x="80" y="247" width="32" height="22" rx="6" fill="#dbeaff" stroke="#81a9de"/>
+  <text x="126" y="264" class="badge">Core Flow</text>
+  <rect x="320" y="247" width="32" height="22" rx="6" fill="#ffe6c7" stroke="#e3a460"/>
+  <text x="366" y="264" class="badge">Fallback / Queue</text>
+  <rect x="610" y="247" width="32" height="22" rx="6" fill="#daf3e7" stroke="#63b58f"/>
+  <text x="656" y="264" class="badge">Persistence / Done</text>
+  <line x1="920" y1="258" x2="1000" y2="258" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="1016" y="264" class="badge">Data Movement</text>
+  <line x1="1240" y1="258" x2="1320" y2="258" stroke="#6b88ab" stroke-width="4" stroke-dasharray="8 7" marker-end="url(#arrowSoft)"/>
+  <text x="1338" y="264" class="badge">Polling / Control</text>
+  <text x="1580" y="264" class="badge">Scale: multi-host, async ingest, transactional write, alert lifecycle, ops controls</text>
+
+  <!-- Main board -->
+  <rect x="44" y="324" width="2312" height="1132" rx="28" fill="#ffffff" stroke="#d1e0f2"/>
+
+  <!-- Lanes -->
+  <rect x="72" y="356" width="2256" height="188" rx="18" fill="#f6faff" stroke="#d7e6f8"/>
+  <text x="100" y="398" class="laneTitle">1) Endpoint Layer - Agents on Customer Hosts</text>
+
+  <rect x="72" y="556" width="2256" height="200" rx="18" fill="#f8fbff" stroke="#d7e6f8"/>
+  <text x="100" y="598" class="laneTitle">2) Server API Layer - Validation, Auth, Queue Admission</text>
+
+  <rect x="72" y="768" width="2256" height="210" rx="18" fill="#f6fcfa" stroke="#cfe9de"/>
+  <text x="100" y="810" class="laneTitle">3) Worker + Persistence Layer - reports, alerts, lifecycle, retention</text>
+
+  <rect x="72" y="990" width="2256" height="210" rx="18" fill="#f9fbff" stroke="#d7e6f8"/>
+  <text x="100" y="1032" class="laneTitle">4) Business Services - Notification, Remote Control, Backup, UI Analytics</text>
+
+  <rect x="72" y="1212" width="2256" height="214" rx="18" fill="#fbfdff" stroke="#d7e6f8"/>
+  <text x="100" y="1254" class="laneTitle">5) Governance + Reliability Outcomes</text>
+
+  <!-- People illustrations (Corporate Memphis style) -->
+  <g transform="translate(1950,392)">
+    <circle cx="70" cy="42" r="26" fill="#102e5f"/>
+    <rect x="34" y="72" width="72" height="92" rx="18" fill="#ff7e73"/>
+    <rect x="10" y="98" width="32" height="14" rx="7" fill="#ff7e73" transform="rotate(-18 10 98)"/>
+    <rect x="98" y="98" width="32" height="14" rx="7" fill="#ff7e73" transform="rotate(18 98 98)"/>
+    <rect x="48" y="158" width="18" height="56" rx="9" fill="#102e5f"/>
+    <rect x="76" y="158" width="18" height="56" rx="9" fill="#102e5f"/>
+    <circle cx="56" cy="42" r="4" fill="#fce7d2"/>
+    <circle cx="84" cy="42" r="4" fill="#fce7d2"/>
+  </g>
+
+  <g transform="translate(2080,1118)">
+    <circle cx="58" cy="36" r="24" fill="#1b3b70"/>
+    <rect x="28" y="64" width="62" height="84" rx="16" fill="#52c796"/>
+    <rect x="12" y="88" width="26" height="12" rx="6" fill="#52c796" transform="rotate(-20 12 88)"/>
+    <rect x="82" y="88" width="26" height="12" rx="6" fill="#52c796" transform="rotate(18 82 88)"/>
+    <rect x="40" y="140" width="14" height="44" rx="7" fill="#1b3b70"/>
+    <rect x="64" y="140" width="14" height="44" rx="7" fill="#1b3b70"/>
+  </g>
+
+  <!-- Lane 1 cards -->
+  <rect x="110" y="422" width="300" height="98" rx="14" fill="#dbeaff" stroke="#81a9de"/>
+  <text x="132" y="456" class="cardTitle">Metric Collection</text>
+  <text x="132" y="480" class="cardText">CPU, RAM, FS, network, services,</text>
+  <text x="132" y="502" class="cardText">SAP/HANA, update state, config hints</text>
+
+  <rect x="450" y="422" width="310" height="98" rx="14" fill="#dbeaff" stroke="#81a9de"/>
+  <text x="472" y="456" class="cardTitle">Payload Assembly</text>
+  <text x="472" y="480" class="cardText">hostname, host_uid, timestamp_utc,</text>
+  <text x="472" y="502" class="cardText">delivery_mode, queue_depth metadata</text>
+
+  <rect x="800" y="422" width="270" height="98" rx="14" fill="#dbeaff" stroke="#81a9de"/>
+  <text x="822" y="456" class="cardTitle">Live Send</text>
+  <text x="822" y="480" class="cardText">POST /api/v1/agent-report</text>
+  <text x="822" y="502" class="cardText">with API key header</text>
+
+  <rect x="1110" y="422" width="328" height="98" rx="14" fill="#ffe6c7" stroke="#e3a460"/>
+  <text x="1132" y="456" class="cardTitle">Fallback Queue (Agent)</text>
+  <text x="1132" y="480" class="cardText">On send failure: store delayed payload,</text>
+  <text x="1132" y="502" class="cardText">mark queued_at_utc, retry next run</text>
+
+  <rect x="1478" y="422" width="430" height="98" rx="14" fill="#dbeaff" stroke="#81a9de"/>
+  <text x="1500" y="456" class="cardTitle">Queue Flush Discipline</text>
+  <text x="1500" y="480" class="cardText">Before creating new report: replay old files first.</text>
+  <text x="1500" y="502" class="cardText">Bad/4xx payloads isolated in quarantine, backlog continues.</text>
+
+  <!-- Lane 2 cards -->
+  <rect x="110" y="624" width="280" height="108" rx="14" fill="#dbeaff" stroke="#81a9de"/>
+  <text x="132" y="658" class="cardTitle">Input Validation</text>
+  <text x="132" y="682" class="cardText">JSON parse, required hostname,</text>
+  <text x="132" y="704" class="cardText">filesystems must be list</text>
+
+  <rect x="430" y="624" width="310" height="108" rx="14" fill="#dbeaff" stroke="#81a9de"/>
+  <text x="452" y="658" class="cardTitle">Identity + Authorization</text>
+  <text x="452" y="682" class="cardText">host_uid derive/reconcile,</text>
+  <text x="452" y="704" class="cardText">API key + known-host grace checks</text>
+
+  <rect x="780" y="624" width="300" height="108" rx="14" fill="#dbeaff" stroke="#81a9de"/>
+  <text x="802" y="658" class="cardTitle">Admission Queue</text>
+  <text x="802" y="682" class="cardText">insert into agent_ingest_queue,</text>
+  <text x="802" y="704" class="cardText">record enqueued and received time</text>
+
+  <rect x="1120" y="624" width="292" height="108" rx="14" fill="#daf3e7" stroke="#63b58f"/>
+  <text x="1142" y="658" class="cardTitle">Fast ACK</text>
+  <text x="1142" y="682" class="cardText">Return HTTP 202 to agents,</text>
+  <text x="1142" y="704" class="cardText">queue_id for traceability</text>
+
+  <rect x="1452" y="624" width="410" height="108" rx="14" fill="#dbeaff" stroke="#81a9de"/>
+  <text x="1474" y="658" class="cardTitle">Background Worker Scheduling</text>
+  <text x="1474" y="682" class="cardText">FIFO processing, retry backoff, attempts,</text>
+  <text x="1474" y="704" class="cardText">ingest audit with queue_wait and end_to_end latency</text>
+
+  <!-- Lane 3 cards -->
+  <rect x="110" y="838" width="330" height="114" rx="14" fill="#daf3e7" stroke="#63b58f"/>
+  <text x="132" y="872" class="cardTitle">Transactional Write</text>
+  <text x="132" y="896" class="cardText">INSERT reports(received_at_utc, payload_json,</text>
+  <text x="132" y="918" class="cardText">host_uid, hostname, primary_ip)</text>
+
+  <rect x="480" y="838" width="350" height="114" rx="14" fill="#daf3e7" stroke="#63b58f"/>
+  <text x="502" y="872" class="cardTitle">Derived Tracking</text>
+  <text x="502" y="896" class="cardText">host_config_changes + snapshots,</text>
+  <text x="502" y="918" class="cardText">database_lifecycle events</text>
+
+  <rect x="870" y="838" width="320" height="114" rx="14" fill="#daf3e7" stroke="#63b58f"/>
+  <text x="892" y="872" class="cardTitle">Alert Engine</text>
+  <text x="892" y="896" class="cardText">open/ack/resolved transitions,</text>
+  <text x="892" y="918" class="cardText">debounce and hidden-host resolve logic</text>
+
+  <rect x="1230" y="838" width="332" height="114" rx="14" fill="#daf3e7" stroke="#63b58f"/>
+  <text x="1252" y="872" class="cardTitle">Retention + Pruning</text>
+  <text x="1252" y="896" class="cardText">time retention and optional keep_count,</text>
+  <text x="1252" y="918" class="cardText">scoped by host identity (host_uid)</text>
+
+  <rect x="1602" y="838" width="380" height="114" rx="14" fill="#ffe6c7" stroke="#e3a460"/>
+  <text x="1624" y="872" class="cardTitle">Failure Safety</text>
+  <text x="1624" y="896" class="cardText">Rollback on exceptions, queue item kept for retry,</text>
+  <text x="1624" y="918" class="cardText">no partial writes after failed transaction</text>
+
+  <!-- Lane 4 cards -->
+  <rect x="110" y="1060" width="305" height="114" rx="14" fill="#dbeaff" stroke="#81a9de"/>
+  <text x="132" y="1094" class="cardTitle">Notification Services</text>
+  <text x="132" y="1118" class="cardText">instant alert mail, reminders, digests</text>
+  <text x="132" y="1140" class="cardText">based on routing matrix + subscriptions</text>
+
+  <rect x="455" y="1060" width="322" height="114" rx="14" fill="#dbeaff" stroke="#81a9de"/>
+  <text x="477" y="1094" class="cardTitle">OAuth and Token Flow</text>
+  <text x="477" y="1118" class="cardText">connect callback, token refresh,</text>
+  <text x="477" y="1140" class="cardText">disconnect and fallback behavior</text>
+
+  <rect x="817" y="1060" width="352" height="114" rx="14" fill="#dbeaff" stroke="#81a9de"/>
+  <text x="839" y="1094" class="cardTitle">Remote Command Lifecycle</text>
+  <text x="839" y="1118" class="cardText">queue command -> poll by agent -> execute -></text>
+  <text x="839" y="1140" class="cardText">command result posted and audited</text>
+
+  <rect x="1209" y="1060" width="292" height="114" rx="14" fill="#daf3e7" stroke="#63b58f"/>
+  <text x="1231" y="1094" class="cardTitle">Backup + Restore</text>
+  <text x="1231" y="1118" class="cardText">scheduled backups, on-demand exports,</text>
+  <text x="1231" y="1140" class="cardText">guarded restore workflow</text>
+
+  <rect x="1541" y="1060" width="441" height="114" rx="14" fill="#dbeaff" stroke="#81a9de"/>
+  <text x="1563" y="1094" class="cardTitle">UI and Analytics Surfaces</text>
+  <text x="1563" y="1118" class="cardText">host cards, single reports, trends, inactive host view,</text>
+  <text x="1563" y="1140" class="cardText">filters, exports, command triggers, admin control plane</text>
+
+  <!-- Lane 5 summary -->
+  <rect x="110" y="1282" width="720" height="118" rx="14" fill="#f2f7ff" stroke="#cadcf2"/>
+  <text x="132" y="1316" class="cardTitle">Reliability Outcomes</text>
+  <text x="132" y="1340" class="cardText">Asynchronous ingest avoids agent blocking.</text>
+  <text x="132" y="1362" class="cardText">Queue + retry + quarantine protect data continuity.</text>
+  <text x="132" y="1384" class="cardText">Transactional writes keep alerts and reports consistent.</text>
+
+  <rect x="870" y="1282" width="700" height="118" rx="14" fill="#f2f7ff" stroke="#cadcf2"/>
+  <text x="892" y="1316" class="cardTitle">Operational Outcomes</text>
+  <text x="892" y="1340" class="cardText">Unified observability from endpoint metrics to business alerts.</text>
+  <text x="892" y="1362" class="cardText">Traceability via queue id, audit logs, and command result history.</text>
+  <text x="892" y="1384" class="cardText">Admin can react fast with remote commands and targeted filters.</text>
+
+  <rect x="1610" y="1282" width="372" height="118" rx="14" fill="#ffe6c7" stroke="#e3a460"/>
+  <text x="1632" y="1316" class="cardTitle">Design Notes</text>
+  <text x="1632" y="1340" class="cardText">Corporate Memphis style:</text>
+  <text x="1632" y="1362" class="cardText">flat shapes, playful humans,</text>
+  <text x="1632" y="1384" class="cardText">clear enterprise process semantics.</text>
+
+  <!-- Connectors -->
+  <line x1="410" y1="471" x2="450" y2="471" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="760" y1="471" x2="800" y2="471" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1070" y1="471" x2="1110" y2="471" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1438" y1="471" x2="1478" y2="471" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <line x1="390" y1="678" x2="430" y2="678" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="740" y1="678" x2="780" y2="678" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1080" y1="678" x2="1120" y2="678" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1412" y1="678" x2="1452" y2="678" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <line x1="440" y1="894" x2="480" y2="894" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="830" y1="894" x2="870" y2="894" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1190" y1="894" x2="1230" y2="894" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1562" y1="894" x2="1602" y2="894" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <line x1="415" y1="1114" x2="455" y2="1114" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="777" y1="1114" x2="817" y2="1114" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1169" y1="1114" x2="1209" y2="1114" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1501" y1="1114" x2="1541" y2="1114" stroke="#2e6db9" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <!-- Vertical lane flow hints -->
+  <line x1="2020" y1="520" x2="2020" y2="624" stroke="#6b88ab" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#arrowSoft)"/>
+  <line x1="2020" y1="732" x2="2020" y2="838" stroke="#6b88ab" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#arrowSoft)"/>
+  <line x1="2020" y1="952" x2="2020" y2="1060" stroke="#6b88ab" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#arrowSoft)"/>
+  <line x1="2020" y1="1174" x2="2020" y2="1282" stroke="#6b88ab" stroke-width="4" stroke-dasharray="10 8" marker-end="url(#arrowSoft)"/>
+
+  <text x="56" y="1478" class="foot">Created for: Monitoring app process communication | Asset: docs/processes/business-illustration-corporate-memphis.svg | Date: 2026-05-25</text>
+</svg>
