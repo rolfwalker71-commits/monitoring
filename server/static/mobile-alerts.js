@@ -18,6 +18,8 @@ const state = {
   loadingPush: false,
 };
 
+let serviceWorkerRegistrationPromise = null;
+
 function setStatus(text, isError = false) {
   const line = document.getElementById("statusLine");
   if (!line) return;
@@ -34,6 +36,20 @@ function base64UrlToUint8Array(base64Url) {
   const output = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i);
   return output;
+}
+
+async function getServiceWorkerRegistration() {
+  if (!("serviceWorker" in navigator)) {
+    throw new Error("Service Worker wird auf diesem Browser nicht unterstützt");
+  }
+  if (!serviceWorkerRegistrationPromise) {
+    serviceWorkerRegistrationPromise = navigator.serviceWorker.register("/sw.js");
+  }
+  const registration = await serviceWorkerRegistrationPromise;
+  if (!registration) {
+    throw new Error("Service Worker konnte nicht registriert werden");
+  }
+  return registration;
 }
 
 function renderPushButton() {
@@ -74,7 +90,7 @@ async function refreshPushState() {
 
     let localEndpoint = "";
     if (state.pushSupported) {
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await getServiceWorkerRegistration();
       const localSub = await registration.pushManager.getSubscription();
       localEndpoint = String(localSub?.endpoint || "");
     }
@@ -108,7 +124,7 @@ async function togglePush() {
   state.loadingPush = true;
   renderPushButton();
   try {
-    const registration = await navigator.serviceWorker.ready;
+    const registration = await getServiceWorkerRegistration();
     const existing = await registration.pushManager.getSubscription();
 
     if (existing && state.pushEnabled) {
