@@ -122,6 +122,32 @@ _local_cpu_sample_lock = threading.Lock()
 _local_cpu_prev_total: int | None = None
 _local_cpu_prev_idle: int | None = None
 
+
+_SQLITE_CONNECT_ORIGINAL = sqlite3.connect
+
+
+class _AutoClosingSQLiteConnection(sqlite3.Connection):
+    """Ensure `with sqlite3.connect(...)` also closes the file descriptor."""
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            return super().__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            try:
+                self.close()
+            except sqlite3.Error:
+                pass
+
+
+def _sqlite_connect_autoclose(*args, **kwargs):
+    kwargs.setdefault("factory", _AutoClosingSQLiteConnection)
+    return _SQLITE_CONNECT_ORIGINAL(*args, **kwargs)
+
+
+# Global hotfix: every sqlite3.connect call in this process gets an auto-closing
+# context manager to avoid descriptor leaks under high request volume.
+sqlite3.connect = _sqlite_connect_autoclose  # type: ignore[assignment]
+
 AGENT_INGEST_RETRY_MAX_BACKOFF_SECONDS = max(
     10,
     min(3600, int(os.getenv("MONITORING_AGENT_INGEST_RETRY_MAX_BACKOFF_SECONDS", "300") or "300")),

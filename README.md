@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.50**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.50**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.70**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.70**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.70 | 25.05.2026 | Hotfix receiver hang under load: fixed SQLite file-descriptor leak by ensuring context-managed DB connections are closed on block exit, preventing exhaustion of open files and resulting local timeouts on port 8080 |
 | 1.7.50 | 24.05.2026 | DB-size KPI presentation refinement: removed the `MiB` unit from the main value line and moved the unit to the subtitle as `MB`, so the KPI value row now shows only the numeric size |
 | 1.7.49 | 24.05.2026 | KPI color restore hotfix: added a final high-priority CSS override at stylesheet end so semantic KPI left accent bars (Alerts/Host status/DB metrics) can no longer be neutralized by later global chip harmonization rules |
 | 1.7.48 | 24.05.2026 | KPI accent color harmonization: removed pink from KPI bars and introduced semantic color grouping with shared accents per category (Alerts = orange family, Host status = blue family, DB/Report metrics = teal/green family), including dark-mode tuned counterparts |
