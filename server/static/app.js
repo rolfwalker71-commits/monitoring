@@ -6265,14 +6265,14 @@ function renderSapLicenseInfoSection(payload) {
     .filter((entry) => entry.rawType && entry.translated !== null);
 
   const copyText = translatedFocusTypes
-    .map((entry) => `${String(entry.count).padStart(3, "0")}  ${entry.translated} (${entry.rawType})`)
+    .map((entry) => `${String(entry.count)}  ${entry.translated} (${entry.rawType})`)
     .join("\n");
 
   const focusTypeRows = translatedFocusTypes
     .map((entry) => {
-      const countPadded = String(entry.count).padStart(3, "0");
+      const countDisplay = String(entry.count);
       const label = `${escapeHtml(entry.translated)} <span class="sap-license-raw-type">(${escapeHtml(entry.rawType)})</span>`;
-      return `<p class="sap-license-list-item"><span class="sap-license-count">${countPadded}</span><strong>${label}</strong></p>`;
+      return `<p class="sap-license-list-item"><span class="sap-license-count">${countDisplay}</span><strong>${label}</strong></p>`;
     })
     .join("");
 
@@ -8424,7 +8424,7 @@ async function loadHostLicenseInfoForHover(hostname, hostUid = "") {
     copyLines.push("");
     copyLines.push("Lizenztypen:");
     for (const item of types) {
-      copyLines.push(`${String(item.count).padStart(3, "0")}  ${item.displayType} (${item.rawType})`);
+      copyLines.push(`${String(item.count)}  ${item.displayType} (${item.rawType})`);
     }
   }
 
@@ -8523,7 +8523,7 @@ function renderHostLicenseHoverPopupContent(hostname, data) {
   const typesHtml = types.length === 0
     ? ""
     : `<div class="host-license-hover-types"><div class="host-license-hover-types-head"><span class="host-license-hover-type-name-label">Lizenztyp</span><span class="host-license-hover-type-count-label">Anzahl</span></div>${types
-      .map((item) => `<div class="host-license-hover-type-row"><span class="host-license-hover-type-name-wrap"><span class="host-license-hover-type-name">${escapeHtml(item.displayType)}</span><span class=\"host-license-hover-type-raw\">(${escapeHtml(item.rawType)})</span></span><span class=\"host-license-hover-type-count\">${String(item.count).padStart(3, "0")}</span></div>`)
+      .map((item) => `<div class="host-license-hover-type-row"><span class="host-license-hover-type-name-wrap"><span class="host-license-hover-type-name">${escapeHtml(item.displayType)}</span><span class=\"host-license-hover-type-raw\">(${escapeHtml(item.rawType)})</span></span><span class=\"host-license-hover-type-count\">${String(item.count)}</span></div>`)
       .join("")}</div>`;
 
   return `
@@ -14827,12 +14827,12 @@ function renderSystemOverviewLicenseTypes(payload) {
   const openAttr = state.systemOverviewAddonsExpanded === true ? " open" : "";
   const rowsHtml = translatedFocusTypes
     .map((entry) => {
-      const countPadded = String(entry.count).padStart(3, "0");
+      const countDisplay = String(entry.count);
       const hasTranslatedLabel = entry.translated && entry.translated !== entry.rawType;
       const labelHtml = hasTranslatedLabel
         ? `${escapeHtml(entry.translated)} <span class="so-license-type-raw">(${escapeHtml(entry.rawType)})</span>`
         : `${escapeHtml(entry.rawType)}`;
-      return `<li><span class="so-license-type-count">${escapeHtml(countPadded)}</span><span class="so-license-type-name">${labelHtml}</span></li>`;
+      return `<li><span class="so-license-type-count">${escapeHtml(countDisplay)}</span><span class="so-license-type-name">${labelHtml}</span></li>`;
     })
     .join("");
 
