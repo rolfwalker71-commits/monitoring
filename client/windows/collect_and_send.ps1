@@ -44,6 +44,7 @@ $IC          = [System.Globalization.CultureInfo]::InvariantCulture
 $ConfigFile  = if ($env:CONFIG_FILE)        { $env:CONFIG_FILE }        else { 'C:\ProgramData\monitoring-agent\agent.conf' }
 $VersionFile = if ($env:AGENT_VERSION_FILE) { $env:AGENT_VERSION_FILE } else { 'C:\ProgramData\monitoring-agent\AGENT_VERSION' }
 $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { 'C:\ProgramData\monitoring-agent\queue' }
+$QueueQuarantineDir = if ($env:AGENT_QUEUE_QUARANTINE_DIR) { $env:AGENT_QUEUE_QUARANTINE_DIR } else { 'C:\ProgramData\monitoring-agent\queue-quarantine' }
 $PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
 $PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
 $EmbeddedAgentVersion = '1.4.87'
@@ -172,6 +173,9 @@ if (-not $ServerUrl) {
 
 if (-not (Test-Path $QueueDir)) {
     New-Item -ItemType Directory -Path $QueueDir -Force | Out-Null
+}
+if (-not (Test-Path $QueueQuarantineDir)) {
+    New-Item -ItemType Directory -Path $QueueQuarantineDir -Force | Out-Null
 }
 
 function ConvertTo-JsonString([string]$s) {
@@ -1045,14 +1049,70 @@ function Get-HttpExceptionSummary($exception) {
     return ($parts -join ' | ')
 }
 
+function Get-HttpStatusCodeFromException($exception) {
+    if ($null -eq $exception) {
+        return 0
+    }
+
+    try {
+        $response = $exception.Response
+        if ($response -and $response.StatusCode) {
+            return [int]$response.StatusCode
+        }
+    } catch { }
+
+    $message = ''
+    try { $message = [string]$exception.Message } catch { }
+    if (-not $message) {
+        return 0
+    }
+
+    if ($message -match 'HTTP\s+(\d{3})') {
+        return [int]$Matches[1]
+    }
+    if ($message -match 'returned\s+error:\s*(\d{3})') {
+        return [int]$Matches[1]
+    }
+
+    return 0
+}
+
+function Move-QueueFileToQuarantine {
+    param(
+        [string]$FilePath,
+        [string]$Reason
+    )
+
+    try {
+        [System.IO.Directory]::CreateDirectory($QueueQuarantineDir) | Out-Null
+        $baseName = [System.IO.Path]::GetFileNameWithoutExtension($FilePath)
+        $stamp = [System.DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ', $IC)
+        $target = Join-Path $QueueQuarantineDir ("{0}-{1}-{2}.bad.json" -f $baseName, $stamp, (Get-Random -Maximum 10000))
+        Move-Item -Path $FilePath -Destination $target -Force
+        Write-Warning ("Quarantined queue payload: {0} -> {1} (reason: {2})" -f $FilePath, $target, $Reason)
+    } catch {
+        Write-Warning ("Failed to quarantine queue payload, deleting file to unblock queue: {0} (reason: {1})" -f $FilePath, $Reason)
+        Remove-Item -Path $FilePath -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-FlushQueue {
     $files = @(Get-ChildItem -Path $QueueDir -Filter '*.json' -ErrorAction SilentlyContinue | Sort-Object Name)
     foreach ($f in $files) {
         try {
             $data = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
+            if ([string]::IsNullOrWhiteSpace($data)) {
+                Move-QueueFileToQuarantine -FilePath $f.FullName -Reason 'empty_payload'
+                continue
+            }
             Send-Payload $data
             Remove-Item $f.FullName -Force
         } catch {
+            $statusCode = Get-HttpStatusCodeFromException $_.Exception
+            if ($statusCode -ge 400 -and $statusCode -lt 500) {
+                Move-QueueFileToQuarantine -FilePath $f.FullName -Reason ("server_http_{0}" -f $statusCode)
+                continue
+            }
             return $false
         }
     }

@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.70**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.70**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.71**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.71**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.71 | 25.05.2026 | Queue flush hardening on Linux and Windows agents: malformed/empty queue payload files and permanent 4xx rejects are quarantined instead of blocking backlog replay; transient transport failures still pause the flush to preserve unsent queue files |
 | 1.7.70 | 25.05.2026 | Hotfix receiver hang under load: fixed SQLite file-descriptor leak by ensuring context-managed DB connections are closed on block exit, preventing exhaustion of open files and resulting local timeouts on port 8080 |
 | 1.7.50 | 24.05.2026 | DB-size KPI presentation refinement: removed the `MiB` unit from the main value line and moved the unit to the subtitle as `MB`, so the KPI value row now shows only the numeric size |
 | 1.7.49 | 24.05.2026 | KPI color restore hotfix: added a final high-priority CSS override at stylesheet end so semantic KPI left accent bars (Alerts/Host status/DB metrics) can no longer be neutralized by later global chip harmonization rules |
@@ -647,6 +648,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.71 (25. Mai 2026)
+
+- **Queue-Flush robuster gemacht (Linux/Windows)**: Einzelne fehlerhafte oder leere Queue-Dateien blockieren den Backlog nicht mehr, sondern werden in ein Quarantäne-Verzeichnis verschoben.
+- **4xx-Dauerfehler isoliert statt Stau**: Wenn der Server ein Queue-Payload dauerhaft mit 4xx ablehnt, wird nur diese Datei quarantänisiert und der Rest der Queue weiter abgearbeitet.
+- **Transportfehler-Verhalten beibehalten**: Bei Netzwerk-/Timeout-Problemen stoppt der Flush weiterhin, damit nicht gesendete Queue-Dateien im regulären Queue-Verzeichnis für den nächsten Lauf erhalten bleiben.
+
 ### v1.7.69 (24. Mai 2026)
 
 - **Header-KPIs zurückgestellt**: `Server CPU` und `Server Memory` wurden wieder durch die früheren Karten `Reports letzte 1h` und `DB Delta 1h` ersetzt.

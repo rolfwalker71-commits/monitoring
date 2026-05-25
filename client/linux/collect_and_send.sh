@@ -4,6 +4,7 @@ set -euo pipefail
 CONFIG_FILE="${CONFIG_FILE:-/etc/monitoring-agent/agent.conf}"
 AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-/opt/monitoring-agent/AGENT_VERSION}"
 AGENT_QUEUE_DIR="${AGENT_QUEUE_DIR:-/var/lib/monitoring-agent/queue}"
+AGENT_QUEUE_QUARANTINE_DIR="${AGENT_QUEUE_QUARANTINE_DIR:-/var/lib/monitoring-agent/queue-quarantine}"
 PAYLOAD_ARCHIVE_DIR="${PAYLOAD_ARCHIVE_DIR:-/var/lib/monitoring-agent/payload-history}"
 PAYLOAD_ARCHIVE_KEEP="${PAYLOAD_ARCHIVE_KEEP:-4}"
 COLLECT_LOCK_FILE="${COLLECT_LOCK_FILE:-/var/lib/monitoring-agent/collect.lock}"
@@ -103,6 +104,7 @@ fi
 TLS_INSECURE="${TLS_INSECURE:-0}"
 
 mkdir -p "$AGENT_QUEUE_DIR"
+mkdir -p "$AGENT_QUEUE_QUARANTINE_DIR"
 mkdir -p "$PAYLOAD_ARCHIVE_DIR" 2>/dev/null || true
 
 if command -v flock >/dev/null 2>&1; then
@@ -2877,10 +2879,41 @@ post_payload() {
     time_connect="${rest#*|}"
   fi
 
+
+  POST_LAST_HTTP_CODE="$http_code"
+  POST_LAST_CURL_EXIT="$curl_exit"
   echo "Payload delivery metrics: http_code=$http_code total_sec=$time_total connect_sec=$time_connect curl_exit=$curl_exit" >&2
   return "$curl_exit"
 }
 
+
+queue_file_is_client_error() {
+  local curl_exit="$1"
+  local http_code="$2"
+  if [[ "$curl_exit" == "22" ]] && [[ "$http_code" =~ ^4[0-9][0-9]$ ]]; then
+    return 0
+  fi
+  return 1
+}
+
+quarantine_queue_file() {
+  local file="$1"
+  local reason="$2"
+  local stamp target base_name
+
+  base_name="$(basename "$file")"
+  stamp="$(date -u +"%Y%m%dT%H%M%SZ")"
+  target="$AGENT_QUEUE_QUARANTINE_DIR/${base_name%.json}-${stamp}-${RANDOM}.bad.json"
+
+  if mv -f -- "$file" "$target" 2>/dev/null; then
+    echo "Quarantined queue payload: file=$file target=$target reason=$reason" >&2
+    return 0
+  fi
+
+  echo "Failed to quarantine queue payload, deleting to unblock queue: file=$file reason=$reason" >&2
+  rm -f -- "$file"
+  return 0
+}
 post_command_result() {
   local command_id="$1"
   local status="$2"
@@ -2987,9 +3020,15 @@ flush_queue() {
   shopt -u nullglob
 
   for file in "${queued_files[@]}"; do
-    payload_data="$(cat "$file")"
+    if ! payload_data="$(cat "$file" 2>/dev/null)"; then
+      quarantine_queue_file "$file" "read_error"
+      continue
+    fi
+
     if post_payload "$payload_data" >/dev/null; then
       rm -f "$file"
+    elif queue_file_is_client_error "${POST_LAST_CURL_EXIT:-1}" "${POST_LAST_HTTP_CODE:-000}"; then
+      quarantine_queue_file "$file" "server_http_${POST_LAST_HTTP_CODE}"
     else
       # Keep remaining queue files for the next run when connectivity recovers.
       return 1
