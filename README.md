@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.82**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.82**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.83**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.83**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.83 | 25.05.2026 | Mobile alerts push fix: service worker is now explicitly registered on /mobile/alerts so tapping the push button reliably triggers subscribe/unsubscribe instead of silently waiting on an unregistered worker |
 | 1.7.82 | 25.05.2026 | Added dedicated mobile alerts-only page at /mobile/alerts (compact alert handling + optional push toggle) and updated pull-server-only deploy sync to include sw.js/manifest/mobile assets plus pywebpush installation |
 | 1.7.81 | 25.05.2026 | Added additive PWA web-push support (server-side push subscription endpoints, service-worker push handling, optional UI toggle) without replacing existing alert/dashboard workflows |
 | 1.7.80 | 25.05.2026 | Added a comic-style app explainer SVG with six story scenes and linked it in the process docs quick-access section |
