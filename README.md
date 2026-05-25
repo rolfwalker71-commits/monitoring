@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.78**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.78**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.79**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.79**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.79 | 25.05.2026 | Added a blueprint-style technical process drawing with explanatory callouts and linked it in the process docs quick-access section |
 | 1.7.78 | 25.05.2026 | Process-visual documentation completed with a detailed Pixel Art SVG variant and quick-access link in the process docs index |
 | 1.7.77 | 25.05.2026 | Process-visual documentation expansion: added a second detailed app-process infographic in Flat Design style (SVG) and linked it in the process docs quick-access section |
 | 1.7.76 | 25.05.2026 | Documentation visuals expanded: added a detailed Corporate Memphis business illustration plus technical process flow SVGs for end-to-end app process communication, and linked them from the process docs index |
@@ -655,6 +656,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.79 (25. Mai 2026)
+
+- **Blueprint-Variante erstellt**: Neue technische Prozesszeichnung im Blueprint-Stil als SVG hinzugefuegt.
+- **Mit Erklaer-Callouts erweitert**: Die Grafik enthaelt technische Erklaerboxen zu 202-Admission, Queue-Telemetrie, host_uid-Pruning und Mail/OAuth-Verhalten.
+- **Doku-Schnellzugriff aktualisiert**: Die Blueprint-Grafik ist auf der Prozess-Startseite als eigener Einstiegslink verankert.
+
 ### v1.7.78 (25. Mai 2026)
 
 - **Pixel-Art Prozess-Infografik hinzugefuegt**: Eine weitere detaillierte SVG-Variante im Stil `Pixel Art` wurde erstellt.
