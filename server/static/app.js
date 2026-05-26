@@ -8655,12 +8655,13 @@ function renderSelectedHostControls(host) {
   }
 
   const hostname = asText(host.hostname);
+  const hostUid = asText(host.host_uid || hostname);
   const isFavorite = Boolean(host.is_favorite);
   const isHidden = Boolean(host.is_hidden);
 
   return `
-    <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👀" : "🫣"}</button>
-    <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
+    <button class="host-mini-action visibility${isHidden ? " active" : ""}" type="button" data-action="hidden" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostUid)}" data-current="${isHidden ? "1" : "0"}" title="${isHidden ? "Einblenden" : "Ausblenden"}">${isHidden ? "👀" : "🫣"}</button>
+    <button class="host-mini-action favorite${isFavorite ? " active" : ""}" type="button" data-action="favorite" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostUid)}" data-current="${isFavorite ? "1" : "0"}" title="Favorit umschalten">★</button>
   `;
 }
 
@@ -8745,6 +8746,7 @@ function wireHostActionButtons(root) {
       event.stopPropagation();
 
       const hostname = button.getAttribute("data-host") || "";
+      const hostUid = button.getAttribute("data-host-uid") || "";
       const action = button.getAttribute("data-action") || "";
       const current = button.getAttribute("data-current") === "1";
       if (!hostname || !action) {
@@ -8753,9 +8755,9 @@ function wireHostActionButtons(root) {
 
       try {
         if (action === "favorite") {
-          await saveHostSettings(hostname, { is_favorite: !current });
+          await saveHostSettings(hostname, { is_favorite: !current }, hostUid);
         } else if (action === "hidden") {
-          await saveHostSettings(hostname, { is_hidden: !current });
+          await saveHostSettings(hostname, { is_hidden: !current }, hostUid);
         }
 
         await loadHosts();
@@ -9964,6 +9966,7 @@ function wireHostListInteractions() {
       event.preventDefault();
       event.stopPropagation();
       const hostname = miniAction.getAttribute("data-host") || "";
+      const hostUid = miniAction.getAttribute("data-host-uid") || "";
       const action = miniAction.getAttribute("data-action") || "";
       const current = miniAction.getAttribute("data-current") === "1";
       if (!hostname || !action) {
@@ -9971,9 +9974,9 @@ function wireHostListInteractions() {
       }
       try {
         if (action === "favorite") {
-          await saveHostSettings(hostname, { is_favorite: !current });
+          await saveHostSettings(hostname, { is_favorite: !current }, hostUid);
         } else if (action === "hidden") {
-          await saveHostSettings(hostname, { is_hidden: !current });
+          await saveHostSettings(hostname, { is_hidden: !current }, hostUid);
         }
         await loadHosts();
         await loadReportsForHost();

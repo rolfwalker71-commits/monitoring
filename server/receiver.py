@@ -433,10 +433,38 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS host_uid_settings (
                 host_uid TEXT PRIMARY KEY,
                 display_name_override TEXT,
+                country_code_override TEXT NOT NULL DEFAULT '',
+                is_favorite INTEGER NOT NULL DEFAULT 0,
+                is_hidden INTEGER NOT NULL DEFAULT 0,
+                customer_alert_emails TEXT NOT NULL DEFAULT '',
+                customer_alert_mountpoints TEXT NOT NULL DEFAULT '',
+                customer_alert_min_severity TEXT NOT NULL DEFAULT 'critical',
+                customer_id INTEGER,
+                environment_type TEXT NOT NULL DEFAULT '',
                 updated_at_utc TEXT NOT NULL
             )
             """
         )
+        existing_host_uid_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(host_uid_settings)").fetchall()
+        }
+        if "country_code_override" not in existing_host_uid_columns:
+            conn.execute("ALTER TABLE host_uid_settings ADD COLUMN country_code_override TEXT NOT NULL DEFAULT ''")
+        if "is_favorite" not in existing_host_uid_columns:
+            conn.execute("ALTER TABLE host_uid_settings ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
+        if "is_hidden" not in existing_host_uid_columns:
+            conn.execute("ALTER TABLE host_uid_settings ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0")
+        if "customer_alert_emails" not in existing_host_uid_columns:
+            conn.execute("ALTER TABLE host_uid_settings ADD COLUMN customer_alert_emails TEXT NOT NULL DEFAULT ''")
+        if "customer_alert_mountpoints" not in existing_host_uid_columns:
+            conn.execute("ALTER TABLE host_uid_settings ADD COLUMN customer_alert_mountpoints TEXT NOT NULL DEFAULT ''")
+        if "customer_alert_min_severity" not in existing_host_uid_columns:
+            conn.execute("ALTER TABLE host_uid_settings ADD COLUMN customer_alert_min_severity TEXT NOT NULL DEFAULT 'critical'")
+        if "customer_id" not in existing_host_uid_columns:
+            conn.execute("ALTER TABLE host_uid_settings ADD COLUMN customer_id INTEGER")
+        if "environment_type" not in existing_host_uid_columns:
+            conn.execute("ALTER TABLE host_uid_settings ADD COLUMN environment_type TEXT NOT NULL DEFAULT ''")
         existing_host_columns = {
             str(row[1])
             for row in conn.execute("PRAGMA table_info(host_settings)").fetchall()
@@ -11223,20 +11251,10 @@ def mail_footer_logos_html(ang_logo_uri: str) -> str:
 
 
 def collect_host_mail_context(conn: sqlite3.Connection, hostname: str, host_uid: str = "") -> dict:
-    settings_row = conn.execute(
-        """
-        SELECT COALESCE(h.display_name_override, ''),
-               COALESCE(h.country_code_override, ''),
-               COALESCE(c.customer_name, '')
-        FROM host_settings h
-        LEFT JOIN customers c ON c.id = h.customer_id
-        WHERE h.hostname = ?
-        """,
-        (hostname,),
-    ).fetchone()
-    display_name_override = str(settings_row[0] or "").strip() if settings_row else ""
-    country_code_override = normalize_country_code(settings_row[1] if settings_row else "")
-    customer_name = str(settings_row[2] or "").strip() if settings_row else ""
+    host_settings = get_host_settings(conn, hostname, host_uid)
+    display_name_override = str(host_settings.get("display_name_override", "") or "").strip()
+    country_code_override = normalize_country_code(host_settings.get("country_code_override", ""))
+    customer_name = str(host_settings.get("customer_name", "") or "").strip()
 
     host_key = alert_host_key(hostname, host_uid)
     host_key_expr = reports_host_key_sql()
@@ -11646,7 +11664,7 @@ def get_latest_report_rows_by_hostname(conn: sqlite3.Connection) -> dict[str, di
     return result
 
 
-def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
+def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "") -> dict:
     row = conn.execute(
         """
         SELECT
@@ -11668,7 +11686,7 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
         (hostname,),
     ).fetchone()
     if not row:
-        return {
+        result = {
             "display_name_override": "",
             "country_code_override": "",
             "is_favorite": False,
@@ -11681,32 +11699,95 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str) -> dict:
             "customer_name": "",
             "customer_maringo_project_number": "",
         }
-    customer_alert_min_severity = str(row[6] or "critical").strip().lower()
-    if customer_alert_min_severity not in {"warning", "critical"}:
-        customer_alert_min_severity = "critical"
-    environment_type = str(row[8] or "").strip().lower()
-    if environment_type not in {"", "prod", "test"}:
-        environment_type = ""
+    else:
+        customer_alert_min_severity = str(row[6] or "critical").strip().lower()
+        if customer_alert_min_severity not in {"warning", "critical"}:
+            customer_alert_min_severity = "critical"
+        environment_type = str(row[8] or "").strip().lower()
+        if environment_type not in {"", "prod", "test"}:
+            environment_type = ""
 
-    def _safe_int(value: object, default: int | None = 0) -> int | None:
+        def _safe_int(value: object, default: int | None = 0) -> int | None:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return default
+
+        result = {
+            "display_name_override": str(row[0] or "").strip(),
+            "country_code_override": normalize_country_code(row[1]),
+            "is_favorite": bool(_safe_int(row[2], 0) or 0),
+            "is_hidden": bool(_safe_int(row[3], 0) or 0),
+            "customer_alert_emails": str(row[4] or "").strip(),
+            "customer_alert_mountpoints": str(row[5] or "").strip(),
+            "customer_alert_min_severity": customer_alert_min_severity,
+            "customer_id": _safe_int(row[7], None),
+            "environment_type": environment_type,
+            "customer_name": str(row[9] or "").strip(),
+            "customer_maringo_project_number": str(row[10] or "").strip(),
+        }
+
+    safe_host_uid = str(host_uid or "").strip()
+    if not safe_host_uid:
+        return result
+
+    uid_row = conn.execute(
+        """
+        SELECT
+            COALESCE(display_name_override, ''),
+            COALESCE(country_code_override, ''),
+            COALESCE(is_favorite, 0),
+            COALESCE(is_hidden, 0),
+            COALESCE(customer_alert_emails, ''),
+            COALESCE(customer_alert_mountpoints, ''),
+            COALESCE(customer_alert_min_severity, 'critical'),
+            customer_id,
+            COALESCE(environment_type, ''),
+            updated_at_utc
+        FROM host_uid_settings
+        WHERE host_uid = ?
+        """,
+        (safe_host_uid,),
+    ).fetchone()
+    if not uid_row:
+        return result
+
+    result["display_name_override"] = str(uid_row[0] or "").strip()
+    result["country_code_override"] = normalize_country_code(uid_row[1])
+    result["is_favorite"] = bool(int(uid_row[2] or 0))
+    result["is_hidden"] = bool(int(uid_row[3] or 0))
+    result["customer_alert_emails"] = str(uid_row[4] or "").strip()
+    result["customer_alert_mountpoints"] = str(uid_row[5] or "").strip()
+    uid_min_severity = str(uid_row[6] or "critical").strip().lower()
+    result["customer_alert_min_severity"] = uid_min_severity if uid_min_severity in {"warning", "critical"} else "critical"
+    uid_environment_type = str(uid_row[8] or "").strip().lower()
+    result["environment_type"] = uid_environment_type if uid_environment_type in {"", "prod", "test"} else ""
+
+    uid_customer_id = uid_row[7]
+    if uid_customer_id is None:
+        result["customer_id"] = None
+        result["customer_name"] = ""
+        result["customer_maringo_project_number"] = ""
+    else:
         try:
-            return int(value)
+            result["customer_id"] = int(uid_customer_id)
         except (TypeError, ValueError):
-            return default
+            result["customer_id"] = None
+            result["customer_name"] = ""
+            result["customer_maringo_project_number"] = ""
+        if result["customer_id"] is not None:
+            customer_row = conn.execute(
+                "SELECT COALESCE(customer_name, ''), COALESCE(maringo_project_number, '') FROM customers WHERE id = ?",
+                (result["customer_id"],),
+            ).fetchone()
+            if customer_row:
+                result["customer_name"] = str(customer_row[0] or "").strip()
+                result["customer_maringo_project_number"] = str(customer_row[1] or "").strip()
+            else:
+                result["customer_name"] = ""
+                result["customer_maringo_project_number"] = ""
 
-    return {
-        "display_name_override": str(row[0] or "").strip(),
-        "country_code_override": normalize_country_code(row[1]),
-        "is_favorite": bool(_safe_int(row[2], 0) or 0),
-        "is_hidden": bool(_safe_int(row[3], 0) or 0),
-        "customer_alert_emails": str(row[4] or "").strip(),
-        "customer_alert_mountpoints": str(row[5] or "").strip(),
-        "customer_alert_min_severity": customer_alert_min_severity,
-        "customer_id": _safe_int(row[7], None),
-        "environment_type": environment_type,
-        "customer_name": str(row[9] or "").strip(),
-        "customer_maringo_project_number": str(row[10] or "").strip(),
-    }
+    return result
 
 
 def is_alert_muted(conn: sqlite3.Connection, hostname: str, mountpoint: str) -> bool:
@@ -13164,20 +13245,43 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
                 host_uid_keys = [str(row[0] or "").strip() for row in rows if str(row[0] or "").strip()]
                 host_uid_display_name_map: dict[str, str] = {}
+                host_uid_settings_map: dict[str, dict] = {}
                 if host_uid_keys:
                     placeholders = ",".join(["?"] * len(host_uid_keys))
                     host_uid_rows = conn.execute(
                         f"""
-                        SELECT host_uid, COALESCE(display_name_override, '')
-                        FROM host_uid_settings
+                        SELECT hus.host_uid,
+                               COALESCE(hus.display_name_override, ''),
+                               COALESCE(hus.country_code_override, ''),
+                               COALESCE(hus.is_favorite, 0),
+                               COALESCE(hus.is_hidden, 0),
+                               hus.customer_id,
+                               COALESCE(hus.environment_type, ''),
+                               COALESCE(c.customer_name, ''),
+                               COALESCE(c.maringo_project_number, '')
+                        FROM host_uid_settings hus
+                        LEFT JOIN customers c ON c.id = hus.customer_id
                         WHERE host_uid IN ({placeholders})
                         """,
                         tuple(host_uid_keys),
                     ).fetchall()
                     host_uid_display_name_map = {
-                        str(row[0] or "").strip(): str(row[1] or "").strip()
-                        for row in host_uid_rows
-                        if str(row[0] or "").strip()
+                        str(uid_row[0] or "").strip(): str(uid_row[1] or "").strip()
+                        for uid_row in host_uid_rows
+                        if str(uid_row[0] or "").strip()
+                    }
+                    host_uid_settings_map = {
+                        str(uid_row[0] or "").strip(): {
+                            "country_code_override": normalize_country_code(uid_row[2]),
+                            "is_favorite": bool(int(uid_row[3] or 0)),
+                            "is_hidden": bool(int(uid_row[4] or 0)),
+                            "customer_id": int(uid_row[5]) if uid_row[5] is not None else None,
+                            "environment_type": str(uid_row[6] or "").strip().lower(),
+                            "customer_name": str(uid_row[7] or ""),
+                            "customer_maringo_project_number": str(uid_row[8] or ""),
+                        }
+                        for uid_row in host_uid_rows
+                        if str(uid_row[0] or "").strip()
                     }
 
             reports = []
@@ -13364,13 +13468,33 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "country_code_override": "",
                     "is_favorite": False,
                     "is_hidden": False,
+                    "customer_id": None,
+                    "environment_type": "",
+                    "customer_name": "",
+                    "customer_maringo_project_number": "",
                 })
+                host_uid_settings = host_uid_settings_map.get(host_uid_key, {}) if host_uid_key else {}
                 display_name_override = str(host_uid_display_name_map.get(host_uid_key, "") or "").strip()
                 if not display_name_override:
                     display_name_override = str(host_settings.get("display_name_override", "") or "").strip()
-                country_code = normalize_country_code(host_settings.get("country_code_override", ""))
+                country_code = normalize_country_code(host_uid_settings.get("country_code_override", ""))
+                if not country_code:
+                    country_code = normalize_country_code(host_settings.get("country_code_override", ""))
                 if not country_code:
                     country_code = extract_country_code_from_payload(latest_payload)
+
+                is_favorite = bool(host_uid_settings.get("is_favorite", host_settings.get("is_favorite", False)))
+                is_hidden = bool(host_uid_settings.get("is_hidden", host_settings.get("is_hidden", False)))
+                customer_id = host_uid_settings.get("customer_id", host_settings.get("customer_id"))
+                environment_type = str(host_uid_settings.get("environment_type", host_settings.get("environment_type", "")) or "")
+                customer_name = str(host_uid_settings.get("customer_name", host_settings.get("customer_name", "")) or "")
+                customer_maringo_project_number = str(
+                    host_uid_settings.get(
+                        "customer_maringo_project_number",
+                        host_settings.get("customer_maringo_project_number", ""),
+                    )
+                    or ""
+                )
 
                 release_info = _extract_sap_hana_ram(latest_payload)
 
@@ -13403,12 +13527,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "hana_version": release_info["hana_version"],
                         "hana_sid": release_info["hana_sid"],
                         "ram_gb": release_info["ram_gb"],
-                        "is_favorite": bool(host_settings.get("is_favorite", False)),
-                        "is_hidden": bool(host_settings.get("is_hidden", False)),
-                        "customer_id": host_settings.get("customer_id"),
-                        "customer_name": str(host_settings.get("customer_name", "") or ""),
-                        "customer_maringo_project_number": str(host_settings.get("customer_maringo_project_number", "") or ""),
-                        "environment_type": str(host_settings.get("environment_type", "") or ""),
+                        "is_favorite": is_favorite,
+                        "is_hidden": is_hidden,
+                        "customer_id": customer_id,
+                        "customer_name": customer_name,
+                        "customer_maringo_project_number": customer_maringo_project_number,
+                        "environment_type": environment_type,
                         "agent_api_key_status": str((latest_payload.get("agent_api_key") or {}).get("status", "off")),
                         "has_sap_license_info": has_sap_license_info,
                     }
@@ -13561,7 +13685,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     ).fetchone()
                     resolved_hostname = str((row[0] if row else "") or "").strip()
 
-                host_settings = get_host_settings(conn, resolved_hostname)
+                host_settings = get_host_settings(conn, resolved_hostname, host_uid)
                 display_name_override = get_display_name_override(conn, resolved_hostname, host_uid)
 
             self._send_json(
@@ -15799,7 +15923,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname required for non-display host settings"})
                     return
 
-                current = get_host_settings(conn, resolved_hostname)
+                current = get_host_settings(conn, resolved_hostname, host_uid)
                 display_name_override = get_display_name_override(conn, resolved_hostname, host_uid)
                 country_code_override = current["country_code_override"]
                 is_favorite = bool(current["is_favorite"])
@@ -15853,29 +15977,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         self._send_json(HTTPStatus.BAD_REQUEST, {"error": "environment_type must be empty, prod or test"})
                         return
 
-                if has_display_name and host_uid:
-                    if display_name_override:
-                        conn.execute(
-                            """
-                            INSERT INTO host_uid_settings (host_uid, display_name_override, updated_at_utc)
-                            VALUES (?, ?, ?)
-                            ON CONFLICT(host_uid) DO UPDATE SET
-                              display_name_override = excluded.display_name_override,
-                              updated_at_utc = excluded.updated_at_utc
-                            """,
-                            (host_uid, display_name_override, utc_now_iso()),
-                        )
-                    else:
-                        conn.execute("DELETE FROM host_uid_settings WHERE host_uid = ?", (host_uid,))
-
-                hostname_display_name_override = current["display_name_override"]
-                if has_display_name and not host_uid:
-                    hostname_display_name_override = display_name_override
-
-                if (
-                    resolved_hostname
-                    and (
-                        hostname_display_name_override
+                if host_uid:
+                    should_store_uid_settings = bool(
+                        display_name_override
                         or country_code_override
                         or is_favorite
                         or is_hidden
@@ -15885,56 +15989,119 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         or customer_id is not None
                         or environment_type
                     )
-                ):
-                    conn.execute(
-                        """
-                        INSERT INTO host_settings (
-                          hostname,
-                          display_name_override,
-                          country_code_override,
-                          is_favorite,
-                          is_hidden,
-                          customer_alert_emails,
-                          customer_alert_mountpoints,
-                          customer_alert_min_severity,
-                                                    customer_id,
-                                                    environment_type,
-                          updated_at_utc
+                    if should_store_uid_settings:
+                        conn.execute(
+                            """
+                            INSERT INTO host_uid_settings (
+                              host_uid,
+                              display_name_override,
+                              country_code_override,
+                              is_favorite,
+                              is_hidden,
+                              customer_alert_emails,
+                              customer_alert_mountpoints,
+                              customer_alert_min_severity,
+                              customer_id,
+                              environment_type,
+                              updated_at_utc
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT(host_uid) DO UPDATE SET
+                              display_name_override = excluded.display_name_override,
+                              country_code_override = excluded.country_code_override,
+                              is_favorite = excluded.is_favorite,
+                              is_hidden = excluded.is_hidden,
+                              customer_alert_emails = excluded.customer_alert_emails,
+                              customer_alert_mountpoints = excluded.customer_alert_mountpoints,
+                              customer_alert_min_severity = excluded.customer_alert_min_severity,
+                              customer_id = excluded.customer_id,
+                              environment_type = excluded.environment_type,
+                              updated_at_utc = excluded.updated_at_utc
+                            """,
+                            (
+                                host_uid,
+                                display_name_override,
+                                country_code_override,
+                                1 if is_favorite else 0,
+                                1 if is_hidden else 0,
+                                customer_alert_emails,
+                                customer_alert_mountpoints,
+                                customer_alert_min_severity,
+                                customer_id,
+                                environment_type,
+                                utc_now_iso(),
+                            ),
                         )
-                                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(hostname) DO UPDATE SET
-                          display_name_override = excluded.display_name_override,
-                          country_code_override = excluded.country_code_override,
-                          is_favorite = excluded.is_favorite,
-                          is_hidden = excluded.is_hidden,
-                          customer_alert_emails = excluded.customer_alert_emails,
-                          customer_alert_mountpoints = excluded.customer_alert_mountpoints,
-                          customer_alert_min_severity = excluded.customer_alert_min_severity,
-                                                    customer_id = excluded.customer_id,
-                                                    environment_type = excluded.environment_type,
-                          updated_at_utc = excluded.updated_at_utc
-                        """,
-                        (
-                            resolved_hostname,
-                            hostname_display_name_override,
-                            country_code_override,
-                            1 if is_favorite else 0,
-                            1 if is_hidden else 0,
-                            customer_alert_emails,
-                            customer_alert_mountpoints,
-                            customer_alert_min_severity,
-                            customer_id,
-                            environment_type,
-                            utc_now_iso(),
-                        ),
-                    )
-                elif resolved_hostname:
-                    conn.execute("DELETE FROM host_settings WHERE hostname = ?", (resolved_hostname,))
+                    else:
+                        conn.execute("DELETE FROM host_uid_settings WHERE host_uid = ?", (host_uid,))
+                else:
+                    hostname_display_name_override = current["display_name_override"]
+                    if has_display_name:
+                        hostname_display_name_override = display_name_override
+
+                    if (
+                        resolved_hostname
+                        and (
+                            hostname_display_name_override
+                            or country_code_override
+                            or is_favorite
+                            or is_hidden
+                            or customer_alert_emails
+                            or customer_alert_mountpoints
+                            or customer_alert_min_severity != "critical"
+                            or customer_id is not None
+                            or environment_type
+                        )
+                    ):
+                        conn.execute(
+                            """
+                            INSERT INTO host_settings (
+                              hostname,
+                              display_name_override,
+                              country_code_override,
+                              is_favorite,
+                              is_hidden,
+                              customer_alert_emails,
+                              customer_alert_mountpoints,
+                              customer_alert_min_severity,
+                              customer_id,
+                              environment_type,
+                              updated_at_utc
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT(hostname) DO UPDATE SET
+                              display_name_override = excluded.display_name_override,
+                              country_code_override = excluded.country_code_override,
+                              is_favorite = excluded.is_favorite,
+                              is_hidden = excluded.is_hidden,
+                              customer_alert_emails = excluded.customer_alert_emails,
+                              customer_alert_mountpoints = excluded.customer_alert_mountpoints,
+                              customer_alert_min_severity = excluded.customer_alert_min_severity,
+                              customer_id = excluded.customer_id,
+                              environment_type = excluded.environment_type,
+                              updated_at_utc = excluded.updated_at_utc
+                            """,
+                            (
+                                resolved_hostname,
+                                hostname_display_name_override,
+                                country_code_override,
+                                1 if is_favorite else 0,
+                                1 if is_hidden else 0,
+                                customer_alert_emails,
+                                customer_alert_mountpoints,
+                                customer_alert_min_severity,
+                                customer_id,
+                                environment_type,
+                                utc_now_iso(),
+                            ),
+                        )
+                    elif resolved_hostname:
+                        conn.execute("DELETE FROM host_settings WHERE hostname = ?", (resolved_hostname,))
 
                 if is_hidden:
                     resolve_open_alerts_for_host(conn, resolved_hostname, host_uid, None)
 
-                stored_host_settings = get_host_settings(conn, resolved_hostname)
+                stored_host_settings = get_host_settings(conn, resolved_hostname, host_uid)
 
                 conn.commit()
 
