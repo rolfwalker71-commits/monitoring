@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.94**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.94**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.95**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.95**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.95 | 26.05.2026 | Breiter Host-Identity-Hardening-Release: `muted_alert_rules` und `filesystem_visibility` auf `host_uid` migriert (inkl. DB-Migration), Alert-/Summary-/Open-Alert-Filter auf host_uid-basierte Mute+Hidden-Logik umgestellt, Host-Update-Log host_uid-fähig gemacht, Filesystem-Visibility speichert host_uid aus der UI und Hostkarten-/Alert-Zähler bleiben bei gleichen Hostnamen sauber getrennt |
 | 1.7.94 | 26.05.2026 | Host-Isolation erweitert: Analyse (`/api/v1/analysis`) und DB-Lifecycle (`/api/v1/database-lifecycle`) unterstützen jetzt `host_uid`-Filter, UI sendet `host_uid` in beiden Calls, und Hostkarten-Alertzähler werden host-key-basiert ermittelt; damit keine CPU/RAM/Mountpoint-Vermischung mehr bei gleichen Hostnamen |
 | 1.7.93 | 26.05.2026 | Hotfix fuer Hosts-Seitenleiste: `/api/v1/hosts` lieferte 502 wegen fehlend initialisierter `host_uid_settings_map`; Map-Aufbau fuer `host_uid`-Settings wiederhergestellt und Hostliste rendert stabil |
 | 1.7.92 | 26.05.2026 | Host-Settings vollständig `host_uid`-spezifisch gemacht (Backend-Lesen/Schreiben + Hostliste-Merge + UI-Mini-Aktionen mit `host_uid`), damit Hosts mit gleichem Hostnamen keine gemeinsamen Favorit/Hidden/Land/Kunden/Typ-Metadaten mehr überschreiben |

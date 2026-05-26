@@ -1008,6 +1008,7 @@ function renderAgentUpdateStatusTableRows(hosts) {
       const status = asText(host.command_status || "idle").toLowerCase();
       const displayName = asText(host.display_name || host.hostname);
       const hostname = asText(host.hostname || "-");
+      const hostUid = asText(host.host_uid || "", "").trim();
       const agentVersion = asText(host.agent_version || "-");
       const customerName = asText(host.customer_name || "-") || "-";
       const lastReport = host.last_report_utc ? formatUtcPlus2(host.last_report_utc) : "-";
@@ -1021,7 +1022,7 @@ function renderAgentUpdateStatusTableRows(hosts) {
       const recurringHint = asText(host.recurring_update_hint || "");
       const commandMessage = asText(host.command_result_message || "Kein Rückkanal-Ergebnis.");
       const showLogBtn = (status === "failed" || status === "completed")
-        ? ` <button class="chip-btn" onclick="showHostUpdateLog(${escapeHtml(JSON.stringify(hostname))})" title="Update-Log anzeigen">Log</button>`
+        ? ` <button class="chip-btn" onclick="showHostUpdateLog(${escapeHtml(JSON.stringify(hostname))}, ${escapeHtml(JSON.stringify(hostUid))})" title="Update-Log anzeigen">Log</button>`
         : "";
 
       if (currentVersionGroup !== agentVersion) {
@@ -1220,7 +1221,7 @@ async function loadAgentUpdateStatus() {
   }
 }
 
-async function showHostUpdateLog(hostname) {
+async function showHostUpdateLog(hostname, hostUid = "") {
   let modal = document.getElementById("hostUpdateLogModal");
   if (!modal) {
     modal = document.createElement("div");
@@ -1244,7 +1245,10 @@ async function showHostUpdateLog(hostname) {
   if (bodyEl) bodyEl.textContent = "Lade...";
 
   try {
-    const res = await fetch(`/api/v1/host-update-log?hostname=${encodeURIComponent(hostname)}`);
+    const query = hostUid
+      ? `host_uid=${encodeURIComponent(hostUid)}`
+      : `hostname=${encodeURIComponent(hostname)}`;
+    const res = await fetch(`/api/v1/host-update-log?${query}`);
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
     if (!bodyEl) return;
@@ -4518,6 +4522,7 @@ async function saveFilesystemVisibilityFromModal() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         hostname: state.selectedHost,
+        host_uid: state.selectedHostUid || "",
         section,
         hidden_mountpoints: hiddenMountpoints,
       }),

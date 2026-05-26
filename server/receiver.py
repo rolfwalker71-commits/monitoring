@@ -872,12 +872,49 @@ def init_db() -> None:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS muted_alert_rules (
+                host_uid TEXT NOT NULL DEFAULT '',
                 hostname TEXT NOT NULL,
                 mountpoint TEXT NOT NULL,
                 muted_by TEXT NOT NULL DEFAULT '',
                 muted_at_utc TEXT NOT NULL,
-                PRIMARY KEY(hostname, mountpoint)
+                PRIMARY KEY(host_uid, mountpoint)
             )
+            """
+        )
+        existing_muted_alert_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(muted_alert_rules)").fetchall()
+        }
+        if "host_uid" not in existing_muted_alert_columns:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS muted_alert_rules_v2 (
+                    host_uid TEXT NOT NULL,
+                    hostname TEXT NOT NULL,
+                    mountpoint TEXT NOT NULL,
+                    muted_by TEXT NOT NULL DEFAULT '',
+                    muted_at_utc TEXT NOT NULL,
+                    PRIMARY KEY(host_uid, mountpoint)
+                )
+                """
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO muted_alert_rules_v2 (host_uid, hostname, mountpoint, muted_by, muted_at_utc)
+                SELECT COALESCE(NULLIF(hostname, ''), ''),
+                       COALESCE(hostname, ''),
+                       COALESCE(mountpoint, ''),
+                       COALESCE(muted_by, ''),
+                       COALESCE(muted_at_utc, '')
+                FROM muted_alert_rules
+                """
+            )
+            conn.execute("DROP TABLE muted_alert_rules")
+            conn.execute("ALTER TABLE muted_alert_rules_v2 RENAME TO muted_alert_rules")
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_muted_alert_rules_host_uid_mount
+            ON muted_alert_rules(host_uid, mountpoint)
             """
         )
         conn.execute(
@@ -1008,13 +1045,53 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS filesystem_visibility (
                 username TEXT NOT NULL,
+                host_uid TEXT NOT NULL DEFAULT '',
                 hostname TEXT NOT NULL,
                 section TEXT NOT NULL,
                 mountpoint TEXT NOT NULL,
                 updated_at_utc TEXT NOT NULL,
-                PRIMARY KEY(username, hostname, section, mountpoint),
+                PRIMARY KEY(username, host_uid, section, mountpoint),
                 FOREIGN KEY(username) REFERENCES web_users(username)
             )
+            """
+        )
+        existing_visibility_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(filesystem_visibility)").fetchall()
+        }
+        if "host_uid" not in existing_visibility_columns:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS filesystem_visibility_v2 (
+                    username TEXT NOT NULL,
+                    host_uid TEXT NOT NULL,
+                    hostname TEXT NOT NULL,
+                    section TEXT NOT NULL,
+                    mountpoint TEXT NOT NULL,
+                    updated_at_utc TEXT NOT NULL,
+                    PRIMARY KEY(username, host_uid, section, mountpoint),
+                    FOREIGN KEY(username) REFERENCES web_users(username)
+                )
+                """
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO filesystem_visibility_v2 (username, host_uid, hostname, section, mountpoint, updated_at_utc)
+                SELECT COALESCE(username, ''),
+                       COALESCE(NULLIF(hostname, ''), ''),
+                       COALESCE(hostname, ''),
+                       COALESCE(section, ''),
+                       COALESCE(mountpoint, ''),
+                       COALESCE(updated_at_utc, '')
+                FROM filesystem_visibility
+                """
+            )
+            conn.execute("DROP TABLE filesystem_visibility")
+            conn.execute("ALTER TABLE filesystem_visibility_v2 RENAME TO filesystem_visibility")
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_filesystem_visibility_user_host_uid_section
+            ON filesystem_visibility(username, host_uid, section)
             """
         )
         conn.execute(
@@ -4434,16 +4511,18 @@ def get_filesystem_visibility_hidden(
     conn: sqlite3.Connection,
     username: str,
     hostname: str,
+    host_uid: str,
     section: str,
 ) -> list[str]:
+    host_key = alert_host_key(hostname, host_uid)
     rows = conn.execute(
         """
         SELECT mountpoint
         FROM filesystem_visibility
-        WHERE username = ? AND hostname = ? AND section = ?
+        WHERE username = ? AND host_uid = ? AND section = ?
         ORDER BY mountpoint COLLATE NOCASE ASC
         """,
-        (username, hostname, section),
+        (username, host_key, section),
     ).fetchall()
     return [str(row[0] or "") for row in rows if str(row[0] or "").strip()]
 
@@ -4459,9 +4538,11 @@ def save_filesystem_visibility_hidden(
     conn: sqlite3.Connection,
     username: str,
     hostname: str,
+    host_uid: str,
     section: str,
     hidden_mountpoints: list[str],
 ) -> list[str]:
+    host_key = alert_host_key(hostname, host_uid)
     normalized = sorted(
         {
             str(item or "").strip()
@@ -4471,17 +4552,17 @@ def save_filesystem_visibility_hidden(
         key=lambda item: item.lower(),
     )
     conn.execute(
-        "DELETE FROM filesystem_visibility WHERE username = ? AND hostname = ? AND section = ?",
-        (username, hostname, section),
+        "DELETE FROM filesystem_visibility WHERE username = ? AND host_uid = ? AND section = ?",
+        (username, host_key, section),
     )
     now_utc = utc_now_iso()
     for mountpoint in normalized:
         conn.execute(
             """
-            INSERT INTO filesystem_visibility (username, hostname, section, mountpoint, updated_at_utc)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO filesystem_visibility (username, host_uid, hostname, section, mountpoint, updated_at_utc)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (username, hostname, section, mountpoint, now_utc),
+            (username, host_key, hostname, section, mountpoint, now_utc),
         )
     return normalized
 
@@ -5830,6 +5911,14 @@ def collect_critical_trends(
             continue
 
         last_payload = parse_payload_json(rows[-1][0])
+        host_primary_ip = str(last_payload.get("primary_ip", "") or "").strip()
+        host_uid_value = _derive_host_uid(
+            last_payload,
+            hostname,
+            str(last_payload.get("agent_id", "") or ""),
+            host_primary_ip,
+        )
+        host_key_value = alert_host_key(hostname, host_uid_value)
         host_settings = conn.execute(
             """
             SELECT COALESCE(h.display_name_override, ''),
@@ -5844,8 +5933,8 @@ def collect_critical_trends(
         muted_mountpoints = {
             str(item[0] or "").strip()
             for item in conn.execute(
-                "SELECT mountpoint FROM muted_alert_rules WHERE hostname = ?",
-                (hostname,),
+                "SELECT mountpoint FROM muted_alert_rules WHERE host_uid = ?",
+                (host_key_value,),
             ).fetchall()
         }
         display_name_override = str(host_settings[0] or "").strip() if host_settings else ""
@@ -6021,8 +6110,8 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
             customer_name = ""
 
         open_alerts = conn.execute(
-            "SELECT COUNT(*) FROM alerts WHERE hostname = ? AND status = 'open'",
-            (hostname,),
+            "SELECT COUNT(*) FROM alerts WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ? AND status = 'open'",
+            (host_uid or hostname,),
         ).fetchone()
         open_alert_count = int(open_alerts[0] or 0) if open_alerts else 0
 
@@ -6182,10 +6271,16 @@ def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | 
         SELECT id, hostname, COALESCE(host_uid, ''), mountpoint, severity, used_percent, created_at_utc, last_seen_at_utc
         FROM alerts
         WHERE status = 'open'
-          AND COALESCE((SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0
+                    AND COALESCE(
+                            (SELECT is_hidden FROM host_uid_settings hus
+                             WHERE hus.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)),
+                            (SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname),
+                            0
+                    ) = 0
           AND NOT EXISTS (
               SELECT 1 FROM muted_alert_rules m
-              WHERE m.hostname = alerts.hostname AND m.mountpoint = alerts.mountpoint
+                            WHERE m.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)
+                                AND m.mountpoint = alerts.mountpoint
           )
         ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, used_percent DESC, id DESC
         """
@@ -7817,15 +7912,16 @@ def collect_customer_overview(conn: sqlite3.Connection) -> dict:
 
     alert_counts_rows = conn.execute(
         """
-        SELECT a.hostname,
+                SELECT COALESCE(NULLIF(a.host_uid, ''), a.hostname) AS host_key,
                SUM(CASE WHEN a.status = 'open' THEN 1 ELSE 0 END) AS open_count,
                SUM(CASE WHEN a.status = 'open' AND a.severity = 'critical' THEN 1 ELSE 0 END) AS critical_count
         FROM alerts a
         WHERE NOT EXISTS (
           SELECT 1 FROM muted_alert_rules m
-          WHERE m.hostname = a.hostname AND m.mountpoint = a.mountpoint
+                    WHERE m.host_uid = COALESCE(NULLIF(a.host_uid, ''), a.hostname)
+                        AND m.mountpoint = a.mountpoint
         )
-        GROUP BY a.hostname
+                GROUP BY COALESCE(NULLIF(a.host_uid, ''), a.hostname)
         """
     ).fetchall()
     alert_counts_by_host = {
@@ -7884,7 +7980,7 @@ def collect_customer_overview(conn: sqlite3.Connection) -> dict:
         elif grouped[customer_key].get("customer_id") is None and host_settings.get("customer_id") is not None:
             grouped[customer_key]["customer_id"] = host_settings.get("customer_id")
 
-        alert_counts = alert_counts_by_host.get(hostname, {"open": 0, "critical": 0})
+        alert_counts = alert_counts_by_host.get(host_uid or hostname, {"open": 0, "critical": 0})
         has_missing_backup = bool(backup_missing_by_host.get(host_uid or hostname, False))
 
         grouped[customer_key]["hosts"].append(
@@ -9706,7 +9802,7 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
     blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
     muted_pairs = {
         (str(row[0] or ""), str(row[1] or ""))
-        for row in conn.execute("SELECT hostname, mountpoint FROM muted_alert_rules").fetchall()
+        for row in conn.execute("SELECT host_uid, mountpoint FROM muted_alert_rules").fetchall()
     }
 
     def _channel_due(interval_hours: int, created_at_utc: str, last_sent_utc: str, ack_at_utc: str) -> bool:
@@ -9773,7 +9869,8 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
         last_telegram_reminder_sent_utc = str(alert_row[8] or "")
         ack_at_utc = str(alert_row[9] or "")
 
-        if (hostname, mountpoint) in muted_pairs:
+        host_key = alert_host_key(hostname, host_uid)
+        if (host_key, mountpoint) in muted_pairs:
             continue
 
         due_mail = bool(mail_user_rows) and _channel_due(
@@ -10238,8 +10335,8 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
             relevant_hostnames = trend_allowed_hosts if trend_allowed_hosts is not None else all_hostnames
             hidden_mountpoints_by_host = {}
             for hostname in relevant_hostnames:
-                hidden_critical = get_filesystem_visibility_hidden(conn, username, hostname, "critical-trends")
-                hidden_fs_focus = get_filesystem_visibility_hidden(conn, username, hostname, "fs-focus")
+                hidden_critical = get_filesystem_visibility_hidden(conn, username, hostname, hostname, "critical-trends")
+                hidden_fs_focus = get_filesystem_visibility_hidden(conn, username, hostname, hostname, "fs-focus")
                 hidden = sorted({*(hidden_critical or []), *(hidden_fs_focus or [])}, key=lambda item: str(item).lower())
                 if hidden:
                     hidden_mountpoints_by_host[hostname] = hidden
@@ -11821,10 +11918,10 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
     return result
 
 
-def is_alert_muted(conn: sqlite3.Connection, hostname: str, mountpoint: str) -> bool:
+def is_alert_muted(conn: sqlite3.Connection, host_key: str, mountpoint: str) -> bool:
     row = conn.execute(
-        "SELECT 1 FROM muted_alert_rules WHERE hostname = ? AND mountpoint = ?",
-        (hostname, mountpoint),
+        "SELECT 1 FROM muted_alert_rules WHERE host_uid = ? AND mountpoint = ?",
+        (host_key, mountpoint),
     ).fetchone()
     return row is not None
 
@@ -12158,6 +12255,21 @@ def delete_host_card_data(conn: sqlite3.Connection, hostname: str, host_uid: str
         row = conn.execute("SELECT changes()").fetchone()
         deleted["host_uid_settings"] = int(row[0] or 0) if row else 0
 
+        conn.execute("DELETE FROM muted_alert_rules WHERE host_uid = ?", (normalized_host_uid,))
+        row = conn.execute("SELECT changes()").fetchone()
+        deleted["muted_alert_rules"] += int(row[0] or 0) if row else 0
+
+        conn.execute("DELETE FROM alert_debounce WHERE host_uid = ?", (normalized_host_uid,))
+        row = conn.execute("SELECT changes()").fetchone()
+        deleted["alert_debounce"] += int(row[0] or 0) if row else 0
+
+        conn.execute(
+            "DELETE FROM alerts WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?",
+            (normalized_host_uid,),
+        )
+        row = conn.execute("SELECT changes()").fetchone()
+        deleted["alerts"] += int(row[0] or 0) if row else 0
+
         # Only clear hostname-scoped data when no reports for that hostname remain.
         for touched_hostname in touched_hostnames:
             remaining = conn.execute(
@@ -12224,10 +12336,10 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: 
             """
             SELECT DISTINCT mountpoint
             FROM filesystem_visibility
-            WHERE hostname = ?
+                        WHERE host_uid = ?
               AND section IN ('analysis', 'fs-focus', 'critical-trends')
             """,
-            (hostname,),
+                        (alert_key,),
         ).fetchall()
         if str(row[0] or "").strip()
     }
@@ -12272,7 +12384,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: 
             continue
 
         mountpoints_seen.add(mountpoint)
-        if is_alert_muted(conn, hostname, mountpoint):
+        if is_alert_muted(conn, alert_key, mountpoint):
             muted_open = conn.execute(
                 "SELECT id FROM alerts WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ? AND mountpoint = ? AND status = 'open'",
                 (alert_key, mountpoint),
@@ -13412,9 +13524,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                                SUM(CASE WHEN a.severity = 'critical' THEN 1 ELSE 0 END) AS open_critical_alert_count
                         FROM alerts a
                         LEFT JOIN muted_alert_rules m
-                          ON m.hostname = a.hostname AND m.mountpoint = a.mountpoint
+                                                    ON m.host_uid = COALESCE(NULLIF(a.host_uid, ''), a.hostname)
+                                                 AND m.mountpoint = a.mountpoint
                         WHERE a.status = 'open'
-                          AND m.hostname IS NULL
+                                                    AND m.host_uid IS NULL
                           AND COALESCE(NULLIF(a.host_uid, ''), a.hostname) IN ({placeholders})
                         GROUP BY COALESCE(NULLIF(a.host_uid, ''), a.hostname)
                         """,
@@ -13837,6 +13950,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
                 hosts.append(
                     {
+                        "host_uid": _derive_host_uid(
+                            payload,
+                            hostname,
+                            str(payload.get("agent_id", "") or ""),
+                            str(payload.get("primary_ip", "") or ""),
+                        ),
                         "hostname": hostname,
                         "display_name": effective_display_name(payload, overrides.get(hostname, ""), hostname),
                         "customer_name": customer_names.get(hostname, ""),
@@ -13890,8 +14009,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 }
                 hidden_mountpoints_by_host = {}
                 for hostname in all_hostnames:
-                    hidden_critical = get_filesystem_visibility_hidden(conn, username, hostname, "critical-trends")
-                    hidden_fs_focus = get_filesystem_visibility_hidden(conn, username, hostname, "fs-focus")
+                    hidden_critical = get_filesystem_visibility_hidden(conn, username, hostname, hostname, "critical-trends")
+                    hidden_fs_focus = get_filesystem_visibility_hidden(conn, username, hostname, hostname, "fs-focus")
                     hidden = sorted({*(hidden_critical or []), *(hidden_fs_focus or [])}, key=lambda item: str(item).lower())
                     if hidden:
                         hidden_mountpoints_by_host[hostname] = hidden
@@ -13914,18 +14033,27 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/host-update-log":
             query = parse_qs(parsed.query)
             hostname_param = (query.get("hostname") or [""])[0].strip()
-            if not hostname_param:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname parameter required"})
+            host_uid_param = (query.get("host_uid") or [""])[0].strip()
+            if not hostname_param and not host_uid_param:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname or host_uid parameter required"})
                 return
             try:
                 with sqlite3.connect(DB_PATH) as conn:
+                    host_key_expr = reports_host_key_sql()
+                    where_clause = "hostname = ?"
+                    where_args: tuple = (hostname_param,)
+                    if host_uid_param:
+                        where_clause = f"({host_key_expr} = ?)"
+                        where_args = (host_uid_param,)
+
                     row = conn.execute(
-                        "SELECT payload_json FROM reports WHERE hostname = ? ORDER BY id DESC LIMIT 1",
-                        (hostname_param,),
+                        f"SELECT payload_json, COALESCE(hostname, '') FROM reports WHERE {where_clause} ORDER BY id DESC LIMIT 1",
+                        where_args,
                     ).fetchone()
                 if not row:
-                    self._send_json(HTTPStatus.OK, {"hostname": hostname_param, "lines": [], "crash_info": "", "available": False})
+                    self._send_json(HTTPStatus.OK, {"hostname": hostname_param, "host_uid": host_uid_param, "lines": [], "crash_info": "", "available": False})
                     return
+                resolved_hostname = str(row[1] or "").strip() or hostname_param
                 payload = {}
                 if row[0]:
                     try:
@@ -13936,7 +14064,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 lines = agent_update.get("lines", []) if isinstance(agent_update.get("lines"), list) else []
                 crash_info = str(agent_update.get("last_crash", "") or "")
                 self._send_json(HTTPStatus.OK, {
-                    "hostname": hostname_param,
+                    "hostname": resolved_hostname,
+                    "host_uid": host_uid_param,
                     "available": bool(lines or crash_info),
                     "lines": [str(l) for l in lines],
                     "crash_info": crash_info,
@@ -13992,17 +14121,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     resolved_hostname = str(rows[-1][3] or "").strip()
 
                 hidden_mountpoints = (
-                    get_filesystem_visibility_hidden(conn, username, resolved_hostname, "analysis")
+                    get_filesystem_visibility_hidden(conn, username, resolved_hostname, host_uid, "analysis")
                     if resolved_hostname
                     else []
                 )
                 fs_focus_hidden = (
-                    get_filesystem_visibility_hidden(conn, username, resolved_hostname, "fs-focus")
+                    get_filesystem_visibility_hidden(conn, username, resolved_hostname, host_uid, "fs-focus")
                     if resolved_hostname
                     else []
                 )
                 large_files_hidden = (
-                    get_filesystem_visibility_hidden(conn, username, resolved_hostname, "large-files")
+                    get_filesystem_visibility_hidden(conn, username, resolved_hostname, host_uid, "large-files")
                     if resolved_hostname
                     else []
                 )
@@ -14316,7 +14445,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             where_parts = []
             args = []
-            where_parts.append("COALESCE((SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0")
+            where_parts.append(
+                """
+                COALESCE(
+                  (SELECT is_hidden FROM host_uid_settings hus
+                   WHERE hus.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)),
+                  (SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname),
+                  0
+                ) = 0
+                """
+            )
             if status_filter != "all":
                 where_parts.append("status = ?")
                 args.append(status_filter)
@@ -14425,11 +14563,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn_mute:
                 muted_pairs = {
                     (str(r[0]), str(r[1]))
-                    for r in conn_mute.execute("SELECT hostname, mountpoint FROM muted_alert_rules").fetchall()
+                    for r in conn_mute.execute("SELECT host_uid, mountpoint FROM muted_alert_rules").fetchall()
                 }
             for row in rows:
                 hostname = str(row[1] or "")
                 host_uid_value = alert_host_key(hostname, str(row[6] or ""))
+                host_settings = get_host_settings(conn_mute, hostname, host_uid_value)
+                display_name_value = get_display_name_override(conn_mute, hostname, host_uid_value) or hostname
+                customer_name_value = str(host_settings.get("customer_name", "") or "").strip() or "Ohne Kunde"
                 mountpoint = str(row[2] or "")
                 host_details = latest_details_by_host_key.get(host_uid_value, {})
                 host_usage = host_details.get("usage_by_mountpoint", {}) if isinstance(host_details, dict) else {}
@@ -14447,8 +14588,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "id": row[0],
                         "hostname": hostname,
                         "host_uid": host_uid_value,
-                        "display_name": display_names.get(hostname, hostname),
-                        "customer_name": customer_names.get(hostname, "") or "Ohne Kunde",
+                        "display_name": display_name_value,
+                        "customer_name": customer_name_value,
                         "mountpoint": mountpoint,
                         "severity": row[3],
                         "used_percent": row[4],
@@ -14467,7 +14608,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "closed_at_utc": str(row[14] or ""),
                         "closed_by": str(row[15] or ""),
                         "is_closed": bool(str(row[14] or "").strip()),
-                        "is_muted": (hostname, mountpoint) in muted_pairs,
+                        "is_muted": (host_uid_value, mountpoint) in muted_pairs,
                     }
                 )
 
@@ -14494,8 +14635,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             where_clause = "WHERE status = 'open' AND (ack_by IS NULL OR ack_by = '')"
             args = []
-            where_clause += " AND COALESCE((SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0"
-            where_clause += " AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m WHERE m.hostname = alerts.hostname AND m.mountpoint = alerts.mountpoint)"
+            where_clause += (
+                " AND COALESCE((SELECT is_hidden FROM host_uid_settings hus "
+                "WHERE hus.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)), "
+                "(SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0"
+            )
+            where_clause += (
+                " AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m "
+                "WHERE m.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname) "
+                "AND m.mountpoint = alerts.mountpoint)"
+            )
             if hostname_filter:
                 where_clause += " AND hostname = ?"
                 args.append(hostname_filter)
@@ -14678,11 +14827,22 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/alert-mutes":
             with sqlite3.connect(DB_PATH) as conn:
                 rows = conn.execute(
-                    "SELECT hostname, mountpoint, muted_by, muted_at_utc FROM muted_alert_rules ORDER BY hostname, mountpoint"
+                    "SELECT host_uid, hostname, mountpoint, muted_by, muted_at_utc FROM muted_alert_rules ORDER BY hostname, mountpoint"
                 ).fetchall()
             self._send_json(
                 HTTPStatus.OK,
-                {"mutes": [{"hostname": r[0], "mountpoint": r[1], "muted_by": r[2], "muted_at_utc": r[3]} for r in rows]},
+                {
+                    "mutes": [
+                        {
+                            "host_uid": r[0],
+                            "hostname": r[1],
+                            "mountpoint": r[2],
+                            "muted_by": r[3],
+                            "muted_at_utc": r[4],
+                        }
+                        for r in rows
+                    ]
+                },
             )
             return
 
@@ -15146,10 +15306,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             hostname = str(payload.get("hostname", "") or "").strip()
+            host_uid = str(payload.get("host_uid", "") or "").strip()
             section = str(payload.get("section", "analysis") or "analysis").strip().lower()
             hidden_mountpoints_raw = payload.get("hidden_mountpoints", [])
-            if not hostname:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname missing"})
+            if not hostname and not host_uid:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname or host_uid missing"})
                 return
             if section not in {"analysis", "critical-trends", "large-files", "fs-focus"}:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid section"})
@@ -15159,10 +15320,26 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             with sqlite3.connect(DB_PATH) as conn:
+                resolved_hostname = hostname
+                if not resolved_hostname and host_uid:
+                    host_key_expr = reports_host_key_sql()
+                    row = conn.execute(
+                        f"""
+                        SELECT COALESCE(hostname, '')
+                        FROM reports
+                        WHERE {host_key_expr} = ?
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (host_uid,),
+                    ).fetchone()
+                    resolved_hostname = str((row[0] if row else "") or "").strip()
+
                 saved_hidden = save_filesystem_visibility_hidden(
                     conn,
                     username,
-                    hostname,
+                    resolved_hostname,
+                    host_uid,
                     section,
                     [str(item or "") for item in hidden_mountpoints_raw],
                 )
@@ -15173,7 +15350,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 {
                     "status": "stored",
                     "username": username,
-                    "hostname": hostname,
+                    "hostname": resolved_hostname or hostname,
+                    "host_uid": host_uid,
                     "section": section,
                     "hidden_mountpoints": saved_hidden,
                 },
@@ -15553,8 +15731,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         all_hostnames = {hostname for hostname in all_hostnames if hostname in trend_allowed_hosts}
                     hidden_mountpoints_by_host = {}
                     for hostname in all_hostnames:
-                        hidden_critical = get_filesystem_visibility_hidden(conn, username, hostname, "critical-trends")
-                        hidden_fs_focus = get_filesystem_visibility_hidden(conn, username, hostname, "fs-focus")
+                        hidden_critical = get_filesystem_visibility_hidden(conn, username, hostname, hostname, "critical-trends")
+                        hidden_fs_focus = get_filesystem_visibility_hidden(conn, username, hostname, hostname, "fs-focus")
                         hidden = sorted({*(hidden_critical or []), *(hidden_fs_focus or [])}, key=lambda item: str(item).lower())
                         if hidden:
                             hidden_mountpoints_by_host[hostname] = hidden
@@ -16270,14 +16448,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 if alert_id > 0:
                     row = conn.execute(
-                        "SELECT hostname, mountpoint FROM alerts WHERE id = ?",
+                        "SELECT hostname, COALESCE(NULLIF(host_uid, ''), hostname), mountpoint FROM alerts WHERE id = ?",
                         (alert_id,),
                     ).fetchone()
                     if not row:
                         self._send_json(HTTPStatus.NOT_FOUND, {"error": "alert not found"})
                         return
                     hostname = str(row[0] or "").strip()
-                    mountpoint = str(row[1] or "").strip()
+                    host_uid = str(row[1] or "").strip()
+                    mountpoint = str(row[2] or "").strip()
                 if (not hostname or not mountpoint) and host_uid and mountpoint:
                     row = conn.execute(
                         """
@@ -16294,13 +16473,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 if not hostname or not mountpoint:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "alert_id or (hostname+mountpoint) required"})
                     return
+                host_key = alert_host_key(hostname, host_uid)
                 muted_by = self._web_session_username() or "webclient"
                 conn.execute(
-                    "INSERT OR REPLACE INTO muted_alert_rules (hostname, mountpoint, muted_by, muted_at_utc) VALUES (?, ?, ?, ?)",
-                    (hostname, mountpoint, muted_by, utc_now_iso()),
+                    "INSERT OR REPLACE INTO muted_alert_rules (host_uid, hostname, mountpoint, muted_by, muted_at_utc) VALUES (?, ?, ?, ?, ?)",
+                    (host_key, hostname, mountpoint, muted_by, utc_now_iso()),
                 )
                 conn.commit()
-            self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "mountpoint": mountpoint})
+            self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "host_uid": host_key, "mountpoint": mountpoint})
             return
 
         if path == "/api/v1/alert-unmute":
@@ -16318,14 +16498,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 if alert_id > 0:
                     row = conn.execute(
-                        "SELECT hostname, mountpoint FROM alerts WHERE id = ?",
+                        "SELECT hostname, COALESCE(NULLIF(host_uid, ''), hostname), mountpoint FROM alerts WHERE id = ?",
                         (alert_id,),
                     ).fetchone()
                     if not row:
                         self._send_json(HTTPStatus.NOT_FOUND, {"error": "alert not found"})
                         return
                     hostname = str(row[0] or "").strip()
-                    mountpoint = str(row[1] or "").strip()
+                    host_uid = str(row[1] or "").strip()
+                    mountpoint = str(row[2] or "").strip()
                 if (not hostname or not mountpoint) and host_uid and mountpoint:
                     row = conn.execute(
                         """
@@ -16342,12 +16523,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 if not hostname or not mountpoint:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "alert_id or (hostname+mountpoint) required"})
                     return
+                host_key = alert_host_key(hostname, host_uid)
                 conn.execute(
-                    "DELETE FROM muted_alert_rules WHERE hostname = ? AND mountpoint = ?",
-                    (hostname, mountpoint),
+                    "DELETE FROM muted_alert_rules WHERE host_uid = ? AND mountpoint = ?",
+                    (host_key, mountpoint),
                 )
                 conn.commit()
-            self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "mountpoint": mountpoint})
+            self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "host_uid": host_key, "mountpoint": mountpoint})
             return
 
         if path == "/api/v1/alert-ack":
