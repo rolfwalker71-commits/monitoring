@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.95**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.95**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.96**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.96**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.96 | 26.05.2026 | Backup-Job Stabilisierung: DB-Backup-Worker nutzt inkrementelles `sqlite backup` mit Busy-Timeout, fängt jetzt alle Exceptions ab (setzt Status sauber auf `error` statt endlos `running`), Status-Endpoint hat Running-Watchdog (15 Minuten), und UI wartet bis 10 Minuten mit klarerer Fortschritts-/Timeout-Meldung |
 | 1.7.95 | 26.05.2026 | Breiter Host-Identity-Hardening-Release: `muted_alert_rules` und `filesystem_visibility` auf `host_uid` migriert (inkl. DB-Migration), Alert-/Summary-/Open-Alert-Filter auf host_uid-basierte Mute+Hidden-Logik umgestellt, Host-Update-Log host_uid-fähig gemacht, Filesystem-Visibility speichert host_uid aus der UI und Hostkarten-/Alert-Zähler bleiben bei gleichen Hostnamen sauber getrennt |
 | 1.7.94 | 26.05.2026 | Host-Isolation erweitert: Analyse (`/api/v1/analysis`) und DB-Lifecycle (`/api/v1/database-lifecycle`) unterstützen jetzt `host_uid`-Filter, UI sendet `host_uid` in beiden Calls, und Hostkarten-Alertzähler werden host-key-basiert ermittelt; damit keine CPU/RAM/Mountpoint-Vermischung mehr bei gleichen Hostnamen |
 | 1.7.93 | 26.05.2026 | Hotfix fuer Hosts-Seitenleiste: `/api/v1/hosts` lieferte 502 wegen fehlend initialisierter `host_uid_settings_map`; Map-Aufbau fuer `host_uid`-Settings wiederhergestellt und Hostliste rendert stabil |

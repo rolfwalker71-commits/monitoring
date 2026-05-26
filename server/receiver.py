@@ -2035,22 +2035,28 @@ def _create_database_backup_job() -> dict:
             "status": "running",
             "created_at_utc": created_at,
             "updated_at_utc": created_at,
+            "started_at_utc": created_at,
             "file_path": str(backup_path),
             "filename": backup_filename,
+            "error": "",
         }
 
     def _run_job() -> None:
         try:
             # Use SQLite's online backup API - WAL-aware and consistent under concurrent writes.
             with sqlite3.connect(DB_PATH) as src_conn:
+                src_conn.execute("PRAGMA busy_timeout = 10000")
                 with sqlite3.connect(backup_path) as dst_conn:
-                    src_conn.backup(dst_conn)
+                    dst_conn.execute("PRAGMA busy_timeout = 10000")
+                    # Incremental copy yields between chunks while source DB is active.
+                    src_conn.backup(dst_conn, pages=2048, sleep=0.05)
             with _backup_jobs_lock:
                 job = _backup_jobs.get(job_id)
                 if job is not None:
                     job["status"] = "ready"
+                    job["error"] = ""
                     job["updated_at_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        except (OSError, sqlite3.Error) as exc:
+        except Exception as exc:
             with _backup_jobs_lock:
                 job = _backup_jobs.get(job_id)
                 if job is not None:
@@ -14720,6 +14726,20 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             _cleanup_backup_jobs()
             with _backup_jobs_lock:
                 job = _backup_jobs.get(job_id)
+                if job and str(job.get("status") or "") == "running":
+                    started_raw = str(job.get("started_at_utc") or job.get("created_at_utc") or "").strip()
+                    started_at = None
+                    if started_raw:
+                        try:
+                            started_at = datetime.fromisoformat(started_raw.replace("Z", "+00:00"))
+                        except ValueError:
+                            started_at = None
+                    if started_at is not None:
+                        runtime_seconds = (datetime.now(timezone.utc) - started_at).total_seconds()
+                        if runtime_seconds > 900:
+                            job["status"] = "error"
+                            job["error"] = "backup job timeout after 15 minutes"
+                            job["updated_at_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             if not job:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup job not found"})
                 return

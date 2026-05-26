@@ -9100,7 +9100,7 @@ async function downloadDatabaseBackup(onProgress) {
   }
 
   const startTs = Date.now();
-  const timeoutMs = 180000;
+  const timeoutMs = 600000;
   onProgress?.({ pct: null, label: "Datenbank wird gesichert..." });
   while (Date.now() - startTs < timeoutMs) {
     await waitMs(1200);
@@ -9113,6 +9113,9 @@ async function downloadDatabaseBackup(onProgress) {
       throw new Error(statusData.error || ("HTTP " + statusResponse.status));
     }
     const status = String(statusData.status || "");
+    if (status === "running") {
+      onProgress?.({ pct: null, label: "Datenbank wird gesichert (läuft)..." });
+    }
     if (status === "ready") {
       onProgress?.({ pct: null, label: "Download wird gestartet..." });
       return triggerFileDownload(
@@ -9125,7 +9128,7 @@ async function downloadDatabaseBackup(onProgress) {
     }
   }
 
-  throw new Error("backup timeout");
+  throw new Error("backup timeout nach 10 Minuten");
 }
 
 async function restoreDatabaseFromFile(file, onProgress) {
