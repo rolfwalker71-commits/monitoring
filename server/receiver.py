@@ -4784,24 +4784,55 @@ def _track_database_lifecycle(
 def get_database_lifecycle_for_host(
     conn: sqlite3.Connection,
     hostname: str,
+    host_uid: str = "",
     limit: int = 100,
     offset: int = 0,
 ) -> dict:
     """Get database lifecycle events for a host."""
-    rows = conn.execute(
-        """
-        SELECT id, database_name, action, triggered_by, triggered_at_utc, reason, COALESCE(instance_name, 'MSSQLSERVER')
-        FROM database_lifecycle
-        WHERE hostname = ?
-        ORDER BY triggered_at_utc DESC
-        LIMIT ? OFFSET ?
-        """,
-        (hostname, limit, offset),
-    ).fetchall()
-    total = conn.execute(
-        "SELECT COUNT(*) FROM database_lifecycle WHERE hostname = ?",
-        (hostname,),
-    ).fetchone()[0]
+    safe_host_uid = str(host_uid or "").strip()
+    if safe_host_uid:
+        host_key_expr = reports_host_key_sql("r")
+        rows = conn.execute(
+            f"""
+            SELECT dl.id,
+                   dl.database_name,
+                   dl.action,
+                   dl.triggered_by,
+                   dl.triggered_at_utc,
+                   dl.reason,
+                   COALESCE(dl.instance_name, 'MSSQLSERVER')
+            FROM database_lifecycle dl
+            JOIN reports r ON r.id = dl.report_id
+            WHERE {host_key_expr} = ?
+            ORDER BY dl.triggered_at_utc DESC
+            LIMIT ? OFFSET ?
+            """,
+            (safe_host_uid, limit, offset),
+        ).fetchall()
+        total = conn.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM database_lifecycle dl
+            JOIN reports r ON r.id = dl.report_id
+            WHERE {host_key_expr} = ?
+            """,
+            (safe_host_uid,),
+        ).fetchone()[0]
+    else:
+        rows = conn.execute(
+            """
+            SELECT id, database_name, action, triggered_by, triggered_at_utc, reason, COALESCE(instance_name, 'MSSQLSERVER')
+            FROM database_lifecycle
+            WHERE hostname = ?
+            ORDER BY triggered_at_utc DESC
+            LIMIT ? OFFSET ?
+            """,
+            (hostname, limit, offset),
+        ).fetchall()
+        total = conn.execute(
+            "SELECT COUNT(*) FROM database_lifecycle WHERE hostname = ?",
+            (hostname,),
+        ).fetchone()[0]
     return {
         "events": [
             {
@@ -13370,13 +13401,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         f"SELECT COUNT(*) FROM (SELECT 1 FROM reports GROUP BY {host_key_expr})"
                     ).fetchone()[0] or 0)
 
-                hostnames_for_counts = [str(row[6] or "").strip() for row in rows if str(row[6] or "").strip()]
-                open_counts_by_hostname: dict[str, tuple[int, int]] = {}
-                if hostnames_for_counts:
-                    placeholders = ",".join(["?"] * len(hostnames_for_counts))
+                host_keys_for_counts = [str(row[0] or "").strip() for row in rows if str(row[0] or "").strip()]
+                open_counts_by_host_key: dict[str, tuple[int, int]] = {}
+                if host_keys_for_counts:
+                    placeholders = ",".join(["?"] * len(host_keys_for_counts))
                     alert_rows = conn.execute(
                         f"""
-                        SELECT a.hostname,
+                        SELECT COALESCE(NULLIF(a.host_uid, ''), a.hostname) AS host_key,
                                COUNT(*) AS open_alert_count,
                                SUM(CASE WHEN a.severity = 'critical' THEN 1 ELSE 0 END) AS open_critical_alert_count
                         FROM alerts a
@@ -13384,12 +13415,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                           ON m.hostname = a.hostname AND m.mountpoint = a.mountpoint
                         WHERE a.status = 'open'
                           AND m.hostname IS NULL
-                          AND a.hostname IN ({placeholders})
-                        GROUP BY a.hostname
+                          AND COALESCE(NULLIF(a.host_uid, ''), a.hostname) IN ({placeholders})
+                        GROUP BY COALESCE(NULLIF(a.host_uid, ''), a.hostname)
                         """,
-                        tuple(hostnames_for_counts),
+                        tuple(host_keys_for_counts),
                     ).fetchall()
-                    open_counts_by_hostname = {
+                    open_counts_by_host_key = {
                         str(row[0] or ""): (int(row[1] or 0), int(row[2] or 0))
                         for row in alert_rows
                     }
@@ -13540,8 +13571,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "delivery_mode": str(latest_payload.get("delivery_mode", "live") or "live"),
                         "is_delayed": bool(latest_payload.get("is_delayed", False)),
                         "queue_depth": payload_int(latest_payload, "queue_depth", 0),
-                        "open_alert_count": int(open_counts_by_hostname.get(hostname, (0, 0))[0]),
-                        "open_critical_alert_count": int(open_counts_by_hostname.get(hostname, (0, 0))[1]),
+                        "open_alert_count": int(open_counts_by_host_key.get(host_uid_key or hostname, (0, 0))[0]),
+                        "open_critical_alert_count": int(open_counts_by_host_key.get(host_uid_key or hostname, (0, 0))[1]),
                         "os": str(latest_payload.get("os", "")),
                         "country_code": country_code,
                         "sap_release": release_info["sap_release"],
@@ -13734,15 +13765,16 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/database-lifecycle":
             query = parse_qs(parsed.query)
             hostname = query.get("hostname", [""])[0].strip()
-            if not hostname:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
+            host_uid = query.get("host_uid", [""])[0].strip()
+            if not hostname and not host_uid:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname or host_uid query parameter is required"})
                 return
 
             limit = parse_int(query, "limit", default=100, min_value=1, max_value=1000)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
 
             with sqlite3.connect(DB_PATH) as conn:
-                data = get_database_lifecycle_for_host(conn, hostname, limit=limit, offset=offset)
+                data = get_database_lifecycle_for_host(conn, hostname, host_uid=host_uid, limit=limit, offset=offset)
 
             self._send_json(HTTPStatus.OK, data)
             return
@@ -13930,27 +13962,50 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/analysis":
             query = parse_qs(parsed.query)
             hostname = query.get("hostname", [""])[0].strip()
-            if not hostname:
-                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname query parameter is required"})
+            host_uid = query.get("host_uid", [""])[0].strip()
+            if not hostname and not host_uid:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname or host_uid query parameter is required"})
                 return
 
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
             cutoff_iso = utc_hours_ago_iso(hours)
             username = self._web_session_username()
+            host_key_expr = reports_host_key_sql()
+            where_clause = "hostname = ?"
+            where_args: tuple = (hostname,)
+            if host_uid:
+                where_clause = f"{host_key_expr} = ?"
+                where_args = (host_uid,)
 
             with sqlite3.connect(DB_PATH) as conn:
                 rows = conn.execute(
-                    """
-                    SELECT id, received_at_utc, payload_json
+                    f"""
+                    SELECT id, received_at_utc, payload_json, COALESCE(hostname, '')
                     FROM reports
-                    WHERE hostname = ? AND received_at_utc >= ?
+                    WHERE {where_clause} AND received_at_utc >= ?
                     ORDER BY id ASC
                     """,
-                    (hostname, cutoff_iso),
+                    (*where_args, cutoff_iso),
                 ).fetchall()
-                hidden_mountpoints = get_filesystem_visibility_hidden(conn, username, hostname, "analysis")
-                fs_focus_hidden = get_filesystem_visibility_hidden(conn, username, hostname, "fs-focus")
-                large_files_hidden = get_filesystem_visibility_hidden(conn, username, hostname, "large-files")
+                resolved_hostname = hostname
+                if not resolved_hostname and rows:
+                    resolved_hostname = str(rows[-1][3] or "").strip()
+
+                hidden_mountpoints = (
+                    get_filesystem_visibility_hidden(conn, username, resolved_hostname, "analysis")
+                    if resolved_hostname
+                    else []
+                )
+                fs_focus_hidden = (
+                    get_filesystem_visibility_hidden(conn, username, resolved_hostname, "fs-focus")
+                    if resolved_hostname
+                    else []
+                )
+                large_files_hidden = (
+                    get_filesystem_visibility_hidden(conn, username, resolved_hostname, "large-files")
+                    if resolved_hostname
+                    else []
+                )
                 blacklist_patterns = [row[0] for row in conn.execute("SELECT pattern FROM filesystem_blacklist_patterns").fetchall()]
 
             fs_by_mountpoint = {}
@@ -14107,6 +14162,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "hostname": hostname,
+                    "host_uid": host_uid,
                     "window_hours": hours,
                     "cutoff_utc": cutoff_iso,
                     "report_count": report_count,

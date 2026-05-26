@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.93**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.93**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.94**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.94**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.94 | 26.05.2026 | Host-Isolation erweitert: Analyse (`/api/v1/analysis`) und DB-Lifecycle (`/api/v1/database-lifecycle`) unterstützen jetzt `host_uid`-Filter, UI sendet `host_uid` in beiden Calls, und Hostkarten-Alertzähler werden host-key-basiert ermittelt; damit keine CPU/RAM/Mountpoint-Vermischung mehr bei gleichen Hostnamen |
 | 1.7.93 | 26.05.2026 | Hotfix fuer Hosts-Seitenleiste: `/api/v1/hosts` lieferte 502 wegen fehlend initialisierter `host_uid_settings_map`; Map-Aufbau fuer `host_uid`-Settings wiederhergestellt und Hostliste rendert stabil |
 | 1.7.92 | 26.05.2026 | Host-Settings vollständig `host_uid`-spezifisch gemacht (Backend-Lesen/Schreiben + Hostliste-Merge + UI-Mini-Aktionen mit `host_uid`), damit Hosts mit gleichem Hostnamen keine gemeinsamen Favorit/Hidden/Land/Kunden/Typ-Metadaten mehr überschreiben |
 | 1.7.91 | 25.05.2026 | SAP Lizenz-Anzahlen in der UI jetzt ohne führende Nullen (z. B. 1 statt 001) in Lizenzinfos, Hover-Popup und Systemübersicht |

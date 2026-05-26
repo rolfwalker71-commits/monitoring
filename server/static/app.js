@@ -10637,7 +10637,11 @@ async function loadAnalysisForHost() {
 
   try {
     const hostNameParam = encodeURIComponent(state.selectedHost);
-    const url = `/api/v1/analysis?hostname=${hostNameParam}&hours=${state.analysisHours}`;
+    const hostUidParam = encodeURIComponent(state.selectedHostUid || "");
+    const hostQuery = state.selectedHostUid
+      ? `host_uid=${hostUidParam}`
+      : `hostname=${hostNameParam}`;
+    const url = `/api/v1/analysis?${hostQuery}&hours=${state.analysisHours}`;
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error("HTTP " + response.status);
@@ -11089,7 +11093,11 @@ async function loadDatabaseLifecycleForHost() {
 
   try {
     const hostNameParam = encodeURIComponent(state.selectedHost);
-    const resp = await fetch(`/api/v1/database-lifecycle?hostname=${hostNameParam}&limit=100&offset=0`);
+    const hostUidParam = encodeURIComponent(state.selectedHostUid || "");
+    const hostQuery = state.selectedHostUid
+      ? `host_uid=${hostUidParam}`
+      : `hostname=${hostNameParam}`;
+    const resp = await fetch(`/api/v1/database-lifecycle?${hostQuery}&limit=100&offset=0`);
 
     if (!resp.ok) {
       throw new Error("HTTP " + resp.status);
