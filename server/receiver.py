@@ -14571,52 +14571,52 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     (str(r[0]), str(r[1]))
                     for r in conn_mute.execute("SELECT host_uid, mountpoint FROM muted_alert_rules").fetchall()
                 }
-            for row in rows:
-                hostname = str(row[1] or "")
-                host_uid_value = alert_host_key(hostname, str(row[6] or ""))
-                host_settings = get_host_settings(conn_mute, hostname, host_uid_value)
-                display_name_value = get_display_name_override(conn_mute, hostname, host_uid_value) or hostname
-                customer_name_value = str(host_settings.get("customer_name", "") or "").strip() or "Ohne Kunde"
-                mountpoint = str(row[2] or "")
-                host_details = latest_details_by_host_key.get(host_uid_value, {})
-                host_usage = host_details.get("usage_by_mountpoint", {}) if isinstance(host_details, dict) else {}
-                current_used_percent = None
-                if mountpoint:
-                    current_used_percent = host_usage.get(normalize_mountpoint_key(mountpoint))
-                delta_used_percent = None
-                if current_used_percent is not None:
-                    delta_used_percent = abs(float(current_used_percent) - float(row[4] or 0.0))
-                latest_report_ip = ""
-                if isinstance(host_details, dict):
-                    latest_report_ip = str(host_details.get("latest_report_ip") or "").strip()
-                alerts.append(
-                    {
-                        "id": row[0],
-                        "hostname": hostname,
-                        "host_uid": host_uid_value,
-                        "display_name": display_name_value,
-                        "customer_name": customer_name_value,
-                        "mountpoint": mountpoint,
-                        "severity": row[3],
-                        "used_percent": row[4],
-                        "current_used_percent": current_used_percent,
-                        "delta_used_percent": delta_used_percent,
-                        "status": row[5],
-                        "latest_report_ip": latest_report_ip,
-                        "created_at_utc": row[7],
-                        "last_seen_at_utc": row[8],
-                        "resolved_at_utc": row[9],
-                        "report_id": row[10],
-                        "ack_note": str(row[11] or ""),
-                        "ack_by": str(row[12] or ""),
-                        "ack_at_utc": str(row[13] or ""),
-                        "is_acknowledged": bool(str(row[13] or "").strip()),
-                        "closed_at_utc": str(row[14] or ""),
-                        "closed_by": str(row[15] or ""),
-                        "is_closed": bool(str(row[14] or "").strip()),
-                        "is_muted": (host_uid_value, mountpoint) in muted_pairs,
-                    }
-                )
+                for row in rows:
+                    hostname = str(row[1] or "")
+                    host_uid_value = alert_host_key(hostname, str(row[6] or ""))
+                    host_settings = get_host_settings(conn_mute, hostname, host_uid_value)
+                    display_name_value = get_display_name_override(conn_mute, hostname, host_uid_value) or hostname
+                    customer_name_value = str(host_settings.get("customer_name", "") or "").strip() or "Ohne Kunde"
+                    mountpoint = str(row[2] or "")
+                    host_details = latest_details_by_host_key.get(host_uid_value, {})
+                    host_usage = host_details.get("usage_by_mountpoint", {}) if isinstance(host_details, dict) else {}
+                    current_used_percent = None
+                    if mountpoint:
+                        current_used_percent = host_usage.get(normalize_mountpoint_key(mountpoint))
+                    delta_used_percent = None
+                    if current_used_percent is not None:
+                        delta_used_percent = abs(float(current_used_percent) - float(row[4] or 0.0))
+                    latest_report_ip = ""
+                    if isinstance(host_details, dict):
+                        latest_report_ip = str(host_details.get("latest_report_ip") or "").strip()
+                    alerts.append(
+                        {
+                            "id": row[0],
+                            "hostname": hostname,
+                            "host_uid": host_uid_value,
+                            "display_name": display_name_value,
+                            "customer_name": customer_name_value,
+                            "mountpoint": mountpoint,
+                            "severity": row[3],
+                            "used_percent": row[4],
+                            "current_used_percent": current_used_percent,
+                            "delta_used_percent": delta_used_percent,
+                            "status": row[5],
+                            "latest_report_ip": latest_report_ip,
+                            "created_at_utc": row[7],
+                            "last_seen_at_utc": row[8],
+                            "resolved_at_utc": row[9],
+                            "report_id": row[10],
+                            "ack_note": str(row[11] or ""),
+                            "ack_by": str(row[12] or ""),
+                            "ack_at_utc": str(row[13] or ""),
+                            "is_acknowledged": bool(str(row[13] or "").strip()),
+                            "closed_at_utc": str(row[14] or ""),
+                            "closed_by": str(row[15] or ""),
+                            "is_closed": bool(str(row[14] or "").strip()),
+                            "is_muted": (host_uid_value, mountpoint) in muted_pairs,
+                        }
+                    )
 
             self._send_json(
                 HTTPStatus.OK,
