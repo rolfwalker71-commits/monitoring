@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.92**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.92**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.93**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.93**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.93 | 26.05.2026 | Hotfix fuer Hosts-Seitenleiste: `/api/v1/hosts` lieferte 502 wegen fehlend initialisierter `host_uid_settings_map`; Map-Aufbau fuer `host_uid`-Settings wiederhergestellt und Hostliste rendert stabil |
 | 1.7.92 | 26.05.2026 | Host-Settings vollständig `host_uid`-spezifisch gemacht (Backend-Lesen/Schreiben + Hostliste-Merge + UI-Mini-Aktionen mit `host_uid`), damit Hosts mit gleichem Hostnamen keine gemeinsamen Favorit/Hidden/Land/Kunden/Typ-Metadaten mehr überschreiben |
 | 1.7.91 | 25.05.2026 | SAP Lizenz-Anzahlen in der UI jetzt ohne führende Nullen (z. B. 1 statt 001) in Lizenzinfos, Hover-Popup und Systemübersicht |
 | 1.7.90 | 25.05.2026 | SAP Lizenzinfos erweitert: Linux- und Windows-Agent lesen `SYSTEM-TYPE` aus B01.txt (z. B. aus `PARAMS=SYSTEM-TYPE=Prod;...`) und UI zeigt den Wert als `Systemtyp` in den Lizenzinfos an |

@@ -13412,20 +13412,43 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
                 host_uid_keys = [str(row[0] or "").strip() for row in rows if str(row[0] or "").strip()]
                 host_uid_display_name_map: dict[str, str] = {}
+                host_uid_settings_map: dict[str, dict] = {}
                 if host_uid_keys:
                     placeholders = ",".join(["?"] * len(host_uid_keys))
                     host_uid_rows = conn.execute(
                         f"""
-                        SELECT host_uid, COALESCE(display_name_override, '')
-                        FROM host_uid_settings
+                        SELECT hus.host_uid,
+                               COALESCE(hus.display_name_override, ''),
+                               COALESCE(hus.country_code_override, ''),
+                               COALESCE(hus.is_favorite, 0),
+                               COALESCE(hus.is_hidden, 0),
+                               hus.customer_id,
+                               COALESCE(hus.environment_type, ''),
+                               COALESCE(c.customer_name, ''),
+                               COALESCE(c.maringo_project_number, '')
+                        FROM host_uid_settings hus
+                        LEFT JOIN customers c ON c.id = hus.customer_id
                         WHERE host_uid IN ({placeholders})
                         """,
                         tuple(host_uid_keys),
                     ).fetchall()
                     host_uid_display_name_map = {
-                        str(row[0] or "").strip(): str(row[1] or "").strip()
-                        for row in host_uid_rows
-                        if str(row[0] or "").strip()
+                        str(uid_row[0] or "").strip(): str(uid_row[1] or "").strip()
+                        for uid_row in host_uid_rows
+                        if str(uid_row[0] or "").strip()
+                    }
+                    host_uid_settings_map = {
+                        str(uid_row[0] or "").strip(): {
+                            "country_code_override": normalize_country_code(uid_row[2]),
+                            "is_favorite": bool(int(uid_row[3] or 0)),
+                            "is_hidden": bool(int(uid_row[4] or 0)),
+                            "customer_id": int(uid_row[5]) if uid_row[5] is not None else None,
+                            "environment_type": str(uid_row[6] or "").strip().lower(),
+                            "customer_name": str(uid_row[7] or ""),
+                            "customer_maringo_project_number": str(uid_row[8] or ""),
+                        }
+                        for uid_row in host_uid_rows
+                        if str(uid_row[0] or "").strip()
                     }
 
             settings_map = {
