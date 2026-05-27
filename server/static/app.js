@@ -12819,89 +12819,11 @@ function wireHeaderLicenseCopyButton() {
   });
 }
 
-function renderGlobalAlertsIdentityPanel(alerts) {
-  const panelEl = document.getElementById("globalAlertsIdentityPanel");
-  if (!panelEl) return;
-
-  const alertItems = Array.isArray(alerts) ? alerts : [];
-  if (!alertItems.length) {
-    panelEl.classList.add("hidden");
-    panelEl.innerHTML = "";
-    return;
-  }
-
-  const grouped = new Map();
-  alertItems.forEach((item) => {
-    const hostname = asText(item?.hostname, "").trim() || "-";
-    const hostUid = asText(item?.host_uid, "").trim() || hostname;
-    const latestReportIp = asText(item?.latest_report_ip, "").trim() || "-";
-    const key = `${hostname}::${hostUid}`;
-
-    if (!grouped.has(key)) {
-      grouped.set(key, {
-        hostname,
-        hostUid,
-        latestReportIp,
-        openAlerts: 0,
-        criticalAlerts: 0,
-      });
-    }
-
-    const entry = grouped.get(key);
-    entry.openAlerts += 1;
-    if (asText(item?.severity, "").toLowerCase() === "critical") {
-      entry.criticalAlerts += 1;
-    }
-    if (entry.latestReportIp === "-" && latestReportIp !== "-") {
-      entry.latestReportIp = latestReportIp;
-    }
-  });
-
-  const rows = Array.from(grouped.values()).sort((left, right) => {
-    const byHostname = String(left.hostname || "").localeCompare(String(right.hostname || ""), "de", { sensitivity: "base" });
-    if (byHostname !== 0) return byHostname;
-    return String(left.hostUid || "").localeCompare(String(right.hostUid || ""), "de", { sensitivity: "base" });
-  });
-
-  const rowsHtml = rows.map((row) => {
-    const alertCountText = row.criticalAlerts > 0
-      ? `${row.openAlerts} (kritisch ${row.criticalAlerts})`
-      : `${row.openAlerts}`;
-    return `
-      <tr>
-        <td>${escapeHtml(row.hostname)}</td>
-        <td class="global-alert-identity-hostuid" title="${escapeHtml(row.hostUid)}">${escapeHtml(row.hostUid)}</td>
-        <td>${escapeHtml(row.latestReportIp)}</td>
-        <td>${escapeHtml(alertCountText)}</td>
-      </tr>
-    `;
-  }).join("");
-
-  panelEl.innerHTML = `
-    <div class="global-alert-identity-head">🔎 Host-Identität (offene Alerts): ${rows.length} Host(s)</div>
-    <div class="table-wrap">
-      <table class="global-alert-identity-table">
-        <thead>
-          <tr>
-            <th>Hostname</th>
-            <th>Host UID</th>
-            <th>Letzte Report-IP</th>
-            <th>Offene Alerts</th>
-          </tr>
-        </thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    </div>
-  `;
-  panelEl.classList.remove("hidden");
-}
-
 async function loadGlobalAlertsOverview(options = {}) {
   const updateList = options.updateList !== false;
   const append = options.append === true;
   const summaryEl = document.getElementById("globalAlertsSummary");
   const rowsEl = document.getElementById("globalAlertsRows");
-  const identityPanel = document.getElementById("globalAlertsIdentityPanel");
   const globalAlertsTabButton = document.getElementById("globalAlertsTabButton");
   const toggleButton = document.getElementById("toggleGlobalAlertsPanelButton");
   const panelBody = document.getElementById("globalAlertsPanelBody");
@@ -12921,9 +12843,6 @@ async function loadGlobalAlertsOverview(options = {}) {
   }
   if (updateList && summaryEl && !append) {
     summaryEl.textContent = "";
-  }
-  if (identityPanel && !append) {
-    identityPanel.classList.add("hidden");
   }
   if (!append) {
     state.globalAlertsOffset = 0;
@@ -12988,11 +12907,8 @@ async function loadGlobalAlertsOverview(options = {}) {
 
     const headsUpScope = state.globalHeadsUpSuppressedOnly ? " · Heads-Up: nur unterdrückt" : "";
     summaryEl.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}${headsUpScope}`;
-    renderGlobalAlertsIdentityPanel(accumulatedAlerts);
-
     if (!append && alerts.length === 0) {
       rowsEl.innerHTML = "<tr><td colspan=\"8\" class=\"muted\">Keine offenen Alerts für den gesetzten Filter.</td></tr>";
-      renderGlobalAlertsIdentityPanel([]);
       if (loadMoreButton) loadMoreButton.classList.add("hidden");
       if (pagingStatus) pagingStatus.textContent = "0 / 0";
       return;
@@ -13116,7 +13032,6 @@ async function loadGlobalAlertsOverview(options = {}) {
     });
   } catch (error) {
     rowsEl.innerHTML = `<tr><td colspan="8" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
-    renderGlobalAlertsIdentityPanel([]);
     state.globalAlertsLoadedItems = [];
     globalAlertsTabButton.textContent = "Globale Alerts";
     globalAlertsTabButton.classList.remove("alert-active");
