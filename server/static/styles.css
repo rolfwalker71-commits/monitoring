@@ -5059,6 +5059,30 @@ body[data-theme="dark"] .trend-progress-bar {
   white-space: nowrap;
 }
 
+/* Keep the 4 action icons inside the right table cell in Global Alerts. */
+#globalAlertsPanelBody table th:last-child,
+#globalAlertsPanelBody table td:last-child {
+  min-width: 118px;
+  width: 118px;
+  white-space: nowrap;
+  text-align: right;
+  padding-right: 8px;
+}
+
+#globalAlertsPanelBody .alert-action-buttons {
+  display: inline-flex;
+  justify-content: flex-end;
+  min-width: 108px;
+  gap: 1px;
+}
+
+#globalAlertsPanelBody .alert-mute-btn,
+#globalAlertsPanelBody .alert-headsup-btn,
+#globalAlertsPanelBody .alert-ack-btn,
+#globalAlertsPanelBody .alert-close-btn {
+  padding: 1px 2px;
+}
+
 .alert-ack-btn {
   background: none;
   border: none;
