@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.97**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.97**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.98**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.98**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.98 | 27.05.2026 | Linux-Mountpoint-Defaults gehärtet: Für Linux-Hosts bleiben initial nur `/`, `/hana`, `/hana/log`, `/hana/shared`, `/hana/shared/backup_service`, `/usr/sap` aktiv. Alle anderen Mountpoints werden pro Benutzer/Sektion automatisch ausgeblendet; Neu-Hosts erhalten diese Defaults beim Ingest, und eine einmalige Migration setzt bestehende Linux-Hosts auf denselben Startzustand. |
 | 1.7.97 | 26.05.2026 | Fix für Alert-Listen-502: In `/api/v1/alerts` wurde beim Rendern von Alert-Zeilen eine bereits geschlossene SQLite-Connection verwendet; die Zeilenverarbeitung läuft jetzt innerhalb der aktiven Connection, damit Hosts mit offenen Alerts wieder stabil geladen werden. |
 | 1.7.96 | 26.05.2026 | Backup-Job Stabilisierung: DB-Backup-Worker nutzt inkrementelles `sqlite backup` mit Busy-Timeout, fängt jetzt alle Exceptions ab (setzt Status sauber auf `error` statt endlos `running`), Status-Endpoint hat Running-Watchdog (15 Minuten), und UI wartet bis 10 Minuten mit klarerer Fortschritts-/Timeout-Meldung |
 | 1.7.95 | 26.05.2026 | Breiter Host-Identity-Hardening-Release: `muted_alert_rules` und `filesystem_visibility` auf `host_uid` migriert (inkl. DB-Migration), Alert-/Summary-/Open-Alert-Filter auf host_uid-basierte Mute+Hidden-Logik umgestellt, Host-Update-Log host_uid-fähig gemacht, Filesystem-Visibility speichert host_uid aus der UI und Hostkarten-/Alert-Zähler bleiben bei gleichen Hostnamen sauber getrennt |

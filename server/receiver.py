@@ -177,6 +177,16 @@ AGENT_INGEST_AUDIT_PAYLOAD_MAX_BYTES = max(
     4096,
     min(2 * 1024 * 1024, int(os.getenv("MONITORING_AGENT_INGEST_AUDIT_PAYLOAD_MAX_BYTES", "65536") or "65536")),
 )
+LINUX_DEFAULT_MONITORED_MOUNTPOINTS = (
+    "/",
+    "/hana",
+    "/hana/log",
+    "/hana/shared",
+    "/hana/shared/backup_service",
+    "/usr/sap",
+)
+LINUX_FILESYSTEM_VISIBILITY_SECTIONS = ("analysis", "critical-trends", "large-files", "fs-focus")
+LINUX_MOUNTPOINT_DEFAULTS_MIGRATION_KEY = "linux_mountpoint_defaults_v1"
 
 
 def parse_int(query: dict, key: str, default: int, min_value: int, max_value: int) -> int:
@@ -1199,6 +1209,14 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS app_migrations (
+                migration_key TEXT PRIMARY KEY,
+                applied_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS oauth_connections (
                 username TEXT NOT NULL,
                 provider TEXT NOT NULL,
@@ -1472,6 +1490,16 @@ def init_db() -> None:
 
         # Backfill host_uid for historical reports without changing existing hostname data.
         _backfill_report_host_uids(conn)
+        migration_done = conn.execute(
+            "SELECT 1 FROM app_migrations WHERE migration_key = ?",
+            (LINUX_MOUNTPOINT_DEFAULTS_MIGRATION_KEY,),
+        ).fetchone()
+        if not migration_done:
+            enforce_linux_mountpoint_defaults_for_existing_hosts(conn)
+            conn.execute(
+                "INSERT INTO app_migrations (migration_key, applied_at_utc) VALUES (?, ?)",
+                (LINUX_MOUNTPOINT_DEFAULTS_MIGRATION_KEY, utc_now_iso()),
+            )
         conn.commit()
 
 
@@ -4538,6 +4566,147 @@ def normalize_mountpoint_key(value: object) -> str:
     if mountpoint != "/":
         mountpoint = mountpoint.rstrip("/")
     return mountpoint.lower()
+
+
+def _active_web_usernames(conn: sqlite3.Connection) -> list[str]:
+    rows = conn.execute(
+        """
+        SELECT username
+        FROM web_users
+        WHERE COALESCE(is_disabled, 0) = 0
+        ORDER BY LOWER(username)
+        """
+    ).fetchall()
+    return [str(row[0] or "").strip() for row in rows if str(row[0] or "").strip()]
+
+
+def _linux_mountpoint_whitelist_keys() -> set[str]:
+    return {
+        normalize_mountpoint_key(item)
+        for item in LINUX_DEFAULT_MONITORED_MOUNTPOINTS
+        if str(item or "").strip()
+    }
+
+
+def _collect_linux_hidden_mountpoints_from_payload(payload: dict) -> list[str]:
+    if not isinstance(payload, dict):
+        return []
+    if normalize_os_family(payload.get("os", "")) != "linux":
+        return []
+
+    filesystems = payload.get("filesystems", [])
+    if not isinstance(filesystems, list):
+        return []
+
+    whitelist_keys = _linux_mountpoint_whitelist_keys()
+    hidden_by_key: dict[str, str] = {}
+
+    for item in filesystems:
+        if not isinstance(item, dict):
+            continue
+        mountpoint_raw = str(item.get("mountpoint", "") or "").strip()
+        if not mountpoint_raw:
+            continue
+        mountpoint_key = normalize_mountpoint_key(mountpoint_raw)
+        if not mountpoint_key:
+            continue
+        if mountpoint_key in whitelist_keys:
+            continue
+        normalized_mountpoint = "/" if mountpoint_raw == "/" else mountpoint_raw.rstrip("/")
+        hidden_by_key[mountpoint_key] = normalized_mountpoint
+
+    return sorted(hidden_by_key.values(), key=lambda item: item.lower())
+
+
+def ensure_linux_mountpoint_defaults_for_host(
+    conn: sqlite3.Connection,
+    hostname: str,
+    host_uid: str,
+    payload: dict,
+    *,
+    force: bool,
+) -> int:
+    if normalize_os_family((payload or {}).get("os", "")) != "linux":
+        return 0
+
+    hidden_mountpoints = _collect_linux_hidden_mountpoints_from_payload(payload)
+    resolved_hostname = str(hostname or "").strip()
+    if not resolved_hostname:
+        return 0
+
+    usernames = _active_web_usernames(conn)
+    if not usernames:
+        return 0
+
+    host_key = alert_host_key(resolved_hostname, host_uid)
+    updated_sections = 0
+
+    for username in usernames:
+        for section in LINUX_FILESYSTEM_VISIBILITY_SECTIONS:
+            if not force:
+                existing_row = conn.execute(
+                    """
+                    SELECT 1
+                    FROM filesystem_visibility
+                    WHERE username = ? AND host_uid = ? AND section = ?
+                    LIMIT 1
+                    """,
+                    (username, host_key, section),
+                ).fetchone()
+                if existing_row is not None:
+                    continue
+                if not hidden_mountpoints:
+                    continue
+
+            save_filesystem_visibility_hidden(
+                conn,
+                username,
+                resolved_hostname,
+                host_key,
+                section,
+                hidden_mountpoints,
+            )
+            updated_sections += 1
+
+    return updated_sections
+
+
+def enforce_linux_mountpoint_defaults_for_existing_hosts(conn: sqlite3.Connection) -> dict:
+    latest_rows = _latest_report_rows_by_host_key(conn)
+    processed_host_keys: set[str] = set()
+    hosts_scanned = 0
+    linux_hosts = 0
+    updated_sections = 0
+
+    for row in latest_rows:
+        hosts_scanned += 1
+        hostname = str(row[1] or "").strip()
+        payload = parse_payload_json(str(row[3] or "{}"))
+        if normalize_os_family(payload.get("os", "")) != "linux":
+            continue
+
+        agent_id = str(payload.get("agent_id", "") or "")
+        primary_ip = str(row[4] or "").strip() or str(payload.get("primary_ip", "") or "").strip()
+        derived_host_uid = _derive_host_uid(payload, hostname, agent_id, primary_ip)
+        host_key = alert_host_key(hostname, derived_host_uid)
+        if not host_key or host_key in processed_host_keys:
+            continue
+        processed_host_keys.add(host_key)
+
+        linux_hosts += 1
+        updated_sections += ensure_linux_mountpoint_defaults_for_host(
+            conn,
+            hostname,
+            host_key,
+            payload,
+            force=True,
+        )
+
+    return {
+        "hosts_scanned": hosts_scanned,
+        "linux_hosts": linux_hosts,
+        "updated_sections": updated_sections,
+    }
 
 
 def save_filesystem_visibility_hidden(
@@ -12042,6 +12211,13 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
         ),
     )
     report_id = int(cursor.lastrowid)
+    ensure_linux_mountpoint_defaults_for_host(
+        conn,
+        hostname,
+        incoming_host_uid,
+        payload,
+        force=False,
+    )
     _track_host_config_changes(conn, hostname, incoming_host_uid, payload, report_id, report_received_at_utc)
     _track_database_lifecycle(conn, hostname, payload, report_id, report_received_at_utc)
     prune_reports_for_host(conn, hostname, incoming_host_uid, MAX_REPORTS_PER_HOST)
