@@ -7072,12 +7072,18 @@ def _track_host_license_type_changes(
         if not has_existing_snapshot or match_text_upper not in old_counts:
             old_value = "-"
             new_value = str(new_count)
+            # Skip init entries where nothing was ever licensed
+            if new_count == 0:
+                continue
             should_insert = True
             source_value = "agent-report:license-init"
         else:
             old_count = int(old_counts.get(match_text_upper, 0) or 0)
             old_value = str(old_count)
             new_value = str(new_count)
+            # Skip if both are 0 (no meaningful change)
+            if old_count == 0 and new_count == 0:
+                continue
             should_insert = old_count != new_count
             source_value = "agent-report:license"
 
@@ -7848,6 +7854,9 @@ def backfill_host_config_changes(
                     new_count = int(current_license_counts.get(match_text_upper, 0) or 0)
                     if old_count == new_count:
                         continue
+                    # Skip 0→0 noise
+                    if old_count == 0 and new_count == 0:
+                        continue
 
                     field_key = f"{SAP_LICENSE_TYPE_FIELD_PREFIX}{match_text_upper}"
                     old_value = str(old_count)
@@ -7930,7 +7939,11 @@ def backfill_host_config_changes(
             for match_text_upper in sorted(current_license_counts.keys()):
                 field_key = f"{SAP_LICENSE_TYPE_FIELD_PREFIX}{match_text_upper}"
                 old_value = "-"
-                new_value = str(int(current_license_counts.get(match_text_upper, 0) or 0))
+                init_count = int(current_license_counts.get(match_text_upper, 0) or 0)
+                # Skip init entries where nothing was ever licensed
+                if init_count == 0:
+                    continue
+                new_value = str(init_count)
 
                 existing = conn.execute(
                     """
