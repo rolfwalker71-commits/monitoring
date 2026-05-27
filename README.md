@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.118**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.118**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.119**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.119**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.119 | 27.05.2026 | Endgueltiger UI-Fix Global Alerts: Tabelle fuer Alerts auf `table-layout:auto` umgestellt und Aktionsspalte als feste Pixelbreite (170px) definiert. Dadurch werden alle 4 Aktionsicons stabil vollständig gerendert (kein Abschneiden am rechten Rand). |
 | 1.7.118 | 27.05.2026 | UI-Fix Global Alerts: Aktionsspalte im Tabellenlayout real verbreitert (`colgroup` + feste Button-Breite), damit das 4. Alert-Icon nicht mehr rechts abgeschnitten wird. |
 | 1.7.117 | 27.05.2026 | UI-Fix Global Alerts: Schliessen-Button auf robustes Symbol umgestellt, damit in der Aktionsspalte wieder alle 4 Alert-Icons sichtbar sind. |
 | 1.7.116 | 27.05.2026 | Backfill/Rebuild-Konkurrenz abgesichert: zentrale Maintenance-Sperre eingefuehrt, damit keine parallelen DB-Heavy-Operationen laufen. Bei Lock-Konflikten liefert Backfill jetzt kontrolliert `409` mit klarer Fehlermeldung statt `500 OperationalError: database is locked`. |
