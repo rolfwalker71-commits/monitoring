@@ -12114,11 +12114,12 @@ async function loadHostConfigChanges() {
       filteredItems = filteredItems.filter((item) => {
         const hostMatch = String(item.hostname || "").toLowerCase().includes(q);
         const hostUidMatch = String(item.host_uid || "").toLowerCase().includes(q);
+        const customerMatch = String(item.customer_name || "").toLowerCase().includes(q);
         const displayMatch = String(item.display_name || "").toLowerCase().includes(q);
         const fieldMatch = String(item.field_label || item.field_key || "").toLowerCase().includes(q);
         const oldMatch = String(item.old_value || "").toLowerCase().includes(q);
         const newMatch = String(item.new_value || "").toLowerCase().includes(q);
-        return hostMatch || hostUidMatch || displayMatch || fieldMatch || oldMatch || newMatch;
+        return hostMatch || hostUidMatch || customerMatch || displayMatch || fieldMatch || oldMatch || newMatch;
       });
     }
 
