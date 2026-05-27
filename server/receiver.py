@@ -14693,6 +14693,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if closed_filter not in {"all", "yes", "no"}:
                 closed_filter = "all"
 
+            heads_up_suppressed_filter = query.get("heads_up_suppressed", ["all"])[0].strip().lower()
+            if heads_up_suppressed_filter not in {"all", "yes", "no"}:
+                heads_up_suppressed_filter = "all"
+
             hostname_filter = query.get("hostname", [""])[0].strip()
             host_uid_filter = query.get("host_uid", [""])[0].strip()
             limit = parse_int(query, "limit", default=50, min_value=1, max_value=500)
@@ -14724,6 +14728,28 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 where_parts.append("(closed_at_utc IS NULL OR closed_at_utc = '')")
             elif closed_filter == "yes":
                 where_parts.append("(closed_at_utc IS NOT NULL AND closed_at_utc != '')")
+            if heads_up_suppressed_filter == "yes":
+                where_parts.append(
+                    """
+                    EXISTS (
+                      SELECT 1
+                      FROM heads_up_suppression_rules hs
+                      WHERE hs.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)
+                        AND hs.mountpoint = alerts.mountpoint
+                    )
+                    """
+                )
+            elif heads_up_suppressed_filter == "no":
+                where_parts.append(
+                    """
+                    NOT EXISTS (
+                      SELECT 1
+                      FROM heads_up_suppression_rules hs
+                      WHERE hs.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)
+                        AND hs.mountpoint = alerts.mountpoint
+                    )
+                    """
+                )
             if hostname_filter:
                 where_parts.append("hostname = ?")
                 args.append(hostname_filter)
@@ -14881,6 +14907,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "offset": offset,
                     "status": status_filter,
                     "severity": severity_filter,
+                    "heads_up_suppressed": heads_up_suppressed_filter,
                     "hostname": hostname_filter,
                     "host_uid": host_uid_filter,
                     "alerts": alerts,

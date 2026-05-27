@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.101**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.101**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.102**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.102**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.102 | 27.05.2026 | Globale Alert-Ansicht um Filter `Nur Heads-Up unterdrückt` erweitert. Der Filter ist als zusätzliche Checkbox im UI verfügbar und wird serverseitig über `heads_up_suppressed=yes/no` in `/api/v1/alerts` ausgewertet, damit Paging/Total-Zähler konsistent bleiben. |
 | 1.7.101 | 27.05.2026 | Alerts-Aktionsleiste um 4. Icon erweitert: pro Host+Mountpoint kann Heads-Up nun separat unterdrückt/reaktiviert werden (ohne Alert zu schließen). Neue persistente Regel-Tabelle (`heads_up_suppression_rules`) inkl. API-Endpoints und UI-Button; unterdrückte Heads-Ups stoppen sowohl Instant-Alerts (Mail/Telegram/Web-Push) als auch Reminder, während der Alert in der Liste sichtbar bleibt. |
 | 1.7.100 | 27.05.2026 | Header-KPI Feinschliff: Label der Mute-Kachel auf `Gemuted` geändert, Mute-Kachel farblich an die Alert-Familie angeglichen, und KPI-Strip auf feste Toolbar-Reservierung + kompaktere Kartenmaße umgestellt, damit keine Kachel mehr unter die rechten 5 Icons läuft. |
 | 1.7.99 | 27.05.2026 | Kopf-KPIs kompakter gemacht: Alerts-Kacheln heißen jetzt nur noch Offen/Kritisch/Quittiert, eine neue Kachel für gemutete Alerts wurde ergänzt, Reports-1h zeigt jetzt als Hauptwert die Anzahl Reports mit der Unterzeile 1h, und die Kacheln wurden in der Breite so gestrafft, dass die zusätzliche Karte Platz findet. |

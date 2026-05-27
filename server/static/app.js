@@ -134,6 +134,7 @@ const state = {
   globalAlertsPageSize: 100,
   globalShowAcknowledged: true,
   globalShowClosed: false,
+  globalHeadsUpSuppressedOnly: false,
   hostAlertsCollapsed: false,
   globalSeverityFilter: "all",
   globalOpenAlertsCount: 0,
@@ -12827,6 +12828,7 @@ async function loadGlobalAlertsOverview(options = {}) {
     : "";
   const acknowledgedQuery = state.globalShowAcknowledged ? "" : "&acknowledged=no";
   const closedQuery = state.globalShowClosed ? "" : "&closed=no";
+  const headsUpSuppressedQuery = state.globalHeadsUpSuppressedOnly ? "&heads_up_suppressed=yes" : "";
 
   if (updateList && rowsEl && !append) {
     rowsEl.innerHTML = "<tr><td colspan=\"8\" class=\"muted\">Lade globale Alerts...</td></tr>";
@@ -12883,7 +12885,7 @@ async function loadGlobalAlertsOverview(options = {}) {
       return;
     }
 
-    const listResp = await fetch(`/api/v1/alerts?status=open&limit=${requestLimit}&offset=${requestOffset}${severityQuery}${acknowledgedQuery}${closedQuery}`, {
+    const listResp = await fetch(`/api/v1/alerts?status=open&limit=${requestLimit}&offset=${requestOffset}${severityQuery}${acknowledgedQuery}${closedQuery}${headsUpSuppressedQuery}`, {
       credentials: "same-origin",
       cache: "no-store",
     });
@@ -12898,7 +12900,8 @@ async function loadGlobalAlertsOverview(options = {}) {
     const totalForFilter = Number(listData.total || 0);
     state.globalAlertsTotal = totalForFilter;
 
-    summaryEl.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}`;
+    const headsUpScope = state.globalHeadsUpSuppressedOnly ? " · Heads-Up: nur unterdrückt" : "";
+    summaryEl.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}${headsUpScope}`;
     renderGlobalAlertsIdentityPanel(accumulatedAlerts);
 
     if (!append && alerts.length === 0) {
@@ -13999,6 +14002,16 @@ function wireEvents() {
     });
   }
 
+  const globalShowHeadsUpSuppressedOnlyCheckbox = document.getElementById("globalShowHeadsUpSuppressedOnlyCheckbox");
+  if (globalShowHeadsUpSuppressedOnlyCheckbox) {
+    globalShowHeadsUpSuppressedOnlyCheckbox.checked = state.globalHeadsUpSuppressedOnly;
+    globalShowHeadsUpSuppressedOnlyCheckbox.addEventListener("change", async (event) => {
+      state.globalHeadsUpSuppressedOnly = event.target.checked;
+      state.globalAlertsOffset = 0;
+      await loadGlobalAlertsOverview({ append: false });
+    });
+  }
+
   // Ack modal wiring
   const ackModalCloseBtn = document.getElementById("ackModalCloseBtn");
   const ackModalCancelBtn = document.getElementById("ackModalCancelBtn");
@@ -14400,6 +14413,10 @@ async function init() {
   document.getElementById("criticalTrendsProjectSelect").value = String(state.criticalTrendsProjectHours);
   document.getElementById("inactiveHostsRangeSelect").value = String(state.inactiveHostsHours);
   document.getElementById("globalSeverityFilter").value = state.globalSeverityFilter;
+  const globalShowHeadsUpSuppressedOnlyCheckbox = document.getElementById("globalShowHeadsUpSuppressedOnlyCheckbox");
+  if (globalShowHeadsUpSuppressedOnlyCheckbox) {
+    globalShowHeadsUpSuppressedOnlyCheckbox.checked = state.globalHeadsUpSuppressedOnly;
+  }
   document.getElementById("hostSearchInput").value = state.hostSearchQuery;
   document.getElementById("loginUsernameInput").value = "";
   document.getElementById("loginPasswordInput").value = "";
