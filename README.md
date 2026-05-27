@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.107**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.107**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.108**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.108**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.108 | 27.05.2026 | Rebuild-Stabilitaet verbessert: SQLite-Busy-Timeout erhoeht (gegen `database is locked`) und hängende Rebuild-Jobs im Status `running` werden nach Inaktivitaets-Timeout automatisch auf `failed` gesetzt, damit neue Rebuilds wieder startbar sind. |
 | 1.7.107 | 27.05.2026 | Rebuild-Fehleranzeige verbessert: Bei HTTP-Fehlern zeigt die UI jetzt zusätzlich die Backend-Fehlermeldung (`error`/`message`) statt nur den Statuscode (z. B. `HTTP 500: no such table ...`). |
 | 1.7.106 | 27.05.2026 | SAP-Lizenztypen-Changelog: korrekte Schnittmenge – nur Typen werden gespeichert, die SOWOHL im Payload (focus_license_types) vorhanden als AUCH in der Lizenztypen-Übersetzungstabelle eingetragen sind. Nicht-übersetzte Typen aus B01.txt werden ignoriert, auch wenn sie Werte > 0 haben. |
 | 1.7.105 | 27.05.2026 | Changelog-Filterung für SAP-Lizenztypen: nur Einträge mit mind. einem Wert > 0 werden gespeichert (kein `- → 0`-Rauschen mehr). Gilt für Live-Tracking, Backfill und Rebuild. |

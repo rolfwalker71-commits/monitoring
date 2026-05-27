@@ -85,6 +85,8 @@ DEFAULT_TREND_DIGEST_TIME = "08:00"
 DEFAULT_ALERT_DIGEST_TIME = "08:05"
 SCHEDULE_TIMEZONE_NAME = os.getenv("MONITORING_SCHEDULE_TIMEZONE", "Europe/Zurich").strip() or "Europe/Zurich"
 DB_MAINTENANCE_INTERVAL_HOURS = max(1, min(24, int(os.getenv("MONITORING_DB_MAINT_INTERVAL_HOURS", "2") or "2")))
+SQLITE_BUSY_TIMEOUT_SECONDS = max(1.0, min(120.0, float(os.getenv("MONITORING_SQLITE_BUSY_TIMEOUT_SECONDS", "30") or "30")))
+CHANGELOG_REBUILD_STALE_MINUTES = max(10, min(1440, int(os.getenv("MONITORING_CHANGELOG_REBUILD_STALE_MINUTES", "120") or "120")))
 SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES = max(5, min(720, int(os.getenv("MONITORING_SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES", "60") or "60")))
 AUTO_BACKUP_DEFAULT_ENABLED = os.getenv("MONITORING_AUTO_BACKUP_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
 DEFAULT_SAP_LICENSE_TYPE_MAP_ENTRIES = [
@@ -152,6 +154,7 @@ class _AutoClosingSQLiteConnection(sqlite3.Connection):
 
 def _sqlite_connect_autoclose(*args, **kwargs):
     kwargs.setdefault("factory", _AutoClosingSQLiteConnection)
+    kwargs.setdefault("timeout", SQLITE_BUSY_TIMEOUT_SECONDS)
     return _SQLITE_CONNECT_ORIGINAL(*args, **kwargs)
 
 
@@ -5622,6 +5625,64 @@ def _normalize_utc_timestamp(value: str, default_to_now: bool = False) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _mark_stale_running_changelog_rebuild_jobs_failed(
+    conn: sqlite3.Connection,
+    *,
+    stale_after_minutes: int = CHANGELOG_REBUILD_STALE_MINUTES,
+) -> int:
+    stale_minutes = max(10, min(int(stale_after_minutes or CHANGELOG_REBUILD_STALE_MINUTES), 1440))
+    cutoff_dt = datetime.now(timezone.utc) - timedelta(minutes=stale_minutes)
+    updated = 0
+
+    running_rows = conn.execute(
+        """
+        SELECT id, started_at_utc, result_json
+        FROM changelog_rebuild_jobs
+        WHERE status = 'running'
+        """
+    ).fetchall()
+
+    for row in running_rows:
+        job_id = int(row[0] or 0)
+        started_at_utc = _normalize_utc_timestamp(str(row[1] or ""))
+        payload = parse_payload_json(str(row[2] or "{}"))
+        progress = payload.get("progress") if isinstance(payload, dict) else None
+        updated_at_utc = ""
+        if isinstance(progress, dict):
+            updated_at_utc = _normalize_utc_timestamp(str(progress.get("updated_at_utc") or ""))
+
+        reference_utc = updated_at_utc or started_at_utc
+        if not reference_utc:
+            continue
+        try:
+            reference_dt = datetime.fromisoformat(reference_utc.replace("Z", "+00:00")).astimezone(timezone.utc)
+        except ValueError:
+            continue
+        if reference_dt >= cutoff_dt:
+            continue
+
+        conn.execute(
+            """
+            UPDATE changelog_rebuild_jobs
+            SET status = 'failed',
+                finished_at_utc = ?,
+                error_message = ?
+            WHERE id = ? AND status = 'running'
+            """,
+            (
+                utc_now_iso(),
+                f"Automatisch als fehlgeschlagen markiert (keine Aktivitaet seit > {stale_minutes} Minuten).",
+                job_id,
+            ),
+        )
+        if conn.execute("SELECT changes()").fetchone()[0] > 0:
+            updated += 1
+
+    if updated > 0:
+        conn.commit()
+    return updated
+
+
 def schedule_changelog_rebuild_job(
     conn: sqlite3.Connection,
     requested_by: str,
@@ -5630,6 +5691,8 @@ def schedule_changelog_rebuild_job(
     scheduled_for_utc: str = "",
     force_rebuild: bool = True,
 ) -> dict:
+    _mark_stale_running_changelog_rebuild_jobs_failed(conn)
+
     safe_days = max(1, min(int(days or 1), 365))
     run_at = _normalize_utc_timestamp(scheduled_for_utc, default_to_now=True)
     requested_at = utc_now_iso()
@@ -5705,6 +5768,8 @@ def schedule_changelog_rebuild_job(
 
 
 def list_changelog_rebuild_jobs(conn: sqlite3.Connection, limit: int = 20) -> list[dict]:
+    _mark_stale_running_changelog_rebuild_jobs_failed(conn)
+
     safe_limit = max(1, min(int(limit or 20), 200))
     rows = conn.execute(
         """
@@ -5744,6 +5809,8 @@ def list_changelog_rebuild_jobs(conn: sqlite3.Connection, limit: int = 20) -> li
 
 
 def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int = 1) -> list[dict]:
+    _mark_stale_running_changelog_rebuild_jobs_failed(conn)
+
     safe_max = max(1, min(int(max_jobs or 1), 5))
     now_iso = utc_now_iso()
     jobs = conn.execute(
