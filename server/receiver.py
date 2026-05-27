@@ -14822,7 +14822,18 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "WHERE hus.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)), "
                 "(SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0"
             )
-            where_clause += (
+            muted_where_clause = "WHERE status = 'open'"
+            muted_where_clause += (
+                " AND COALESCE((SELECT is_hidden FROM host_uid_settings hus "
+                "WHERE hus.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)), "
+                "(SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0"
+            )
+            muted_where_clause += (
+                " AND EXISTS (SELECT 1 FROM muted_alert_rules m "
+                "WHERE m.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname) "
+                "AND m.mountpoint = alerts.mountpoint)"
+            )
+            visible_where_clause = where_clause + (
                 " AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m "
                 "WHERE m.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname) "
                 "AND m.mountpoint = alerts.mountpoint)"
@@ -14830,14 +14841,22 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if hostname_filter:
                 where_clause += " AND hostname = ?"
                 args.append(hostname_filter)
+                muted_where_clause += " AND hostname = ?"
+                visible_where_clause += " AND hostname = ?"
             if host_uid_filter:
                 where_clause += " AND COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname) = ?"
                 args.append(host_uid_filter)
+                muted_where_clause += " AND COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname) = ?"
+                visible_where_clause += " AND COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname) = ?"
 
             with sqlite3.connect(DB_PATH) as conn:
                 alarm_settings = get_alarm_settings(conn)
                 rows = conn.execute(
-                    f"SELECT severity, mountpoint FROM alerts {where_clause}",
+                    f"SELECT severity, mountpoint FROM alerts {visible_where_clause}",
+                    tuple(args),
+                ).fetchall()
+                muted_rows = conn.execute(
+                    f"SELECT 1 FROM alerts {muted_where_clause}",
                     tuple(args),
                 ).fetchall()
                 blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
@@ -14846,6 +14865,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     for row in rows
                     if not is_filesystem_blacklisted_by_patterns(str(row[1] or ""), blacklist_patterns)
                 ]
+                muted_open = len(muted_rows)
                 total_open = len(visible_rows)
                 warning_open = sum(1 for row in visible_rows if str(row[0] or "").strip().lower() == "warning")
                 critical_open = sum(1 for row in visible_rows if str(row[0] or "").strip().lower() == "critical")
@@ -14863,6 +14883,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "total": total_open,
                         "warning": warning_open,
                         "critical": critical_open,
+                    },
+                    "muted": {
+                        "total": muted_open,
                     },
                 },
             )

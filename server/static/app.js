@@ -139,6 +139,7 @@ const state = {
   globalOpenAlertsCount: 0,
   globalCriticalOpenAlertsCount: 0,
   globalAcknowledgedOpenAlertsCount: 0,
+  globalMutedOpenAlertsCount: 0,
   criticalTrendsCount: 0,
   inactiveHostsCount: 0,
   dbReportsTotal: 0,
@@ -12527,6 +12528,8 @@ function updateHeaderStatChips() {
   const criticalCount = document.getElementById("headerCriticalCount");
   const acknowledgedChip = document.getElementById("headerAcknowledgedChip");
   const acknowledgedCount = document.getElementById("headerAcknowledgedCount");
+  const mutedChip = document.getElementById("headerMutedChip");
+  const mutedCount = document.getElementById("headerMutedCount");
   const activeHostsChip = document.getElementById("headerActiveHostsChip");
   const activeHostsCount = document.getElementById("headerActiveHostsCount");
   const dbReportsChip = document.getElementById("headerDbReportsChip");
@@ -12572,6 +12575,10 @@ function updateHeaderStatChips() {
   if (acknowledgedChip && acknowledgedCount) {
     acknowledgedCount.textContent = String(Math.max(0, Number(state.globalAcknowledgedOpenAlertsCount || 0)));
     acknowledgedChip.classList.remove("hidden");
+  }
+  if (mutedChip && mutedCount) {
+    mutedCount.textContent = String(Math.max(0, Number(state.globalMutedOpenAlertsCount || 0)));
+    mutedChip.classList.remove("hidden");
   }
   if (activeHostsChip && activeHostsCount) {
     const nowMs = Date.now();
@@ -12823,6 +12830,7 @@ async function loadGlobalAlertsOverview(options = {}) {
     // Header and tab counters are always based on ALL open alerts.
     state.globalOpenAlertsCount = Number(summaryData?.open?.total || 0);
     state.globalCriticalOpenAlertsCount = Number(summaryData?.open?.critical || 0);
+    state.globalMutedOpenAlertsCount = Number(summaryData?.muted?.total || 0);
 
     try {
       const acknowledgedResp = await fetch("/api/v1/alerts?status=open&acknowledged=yes&limit=1&offset=0", {
@@ -13000,7 +13008,7 @@ function wireEvents() {
   }
 
   document.addEventListener("click", (event) => {
-    const target = event.target instanceof Element ? event.target.closest("#overviewTabButton, #reportsTabButton, #globalViewButton, #globalAlertsTabButton, #criticalTrendsTabButton, #inactiveHostsTabButton, #backupStatusTabButton, #systemOverviewTabButton, #hostConfigChangesTabButton, #agentSourceStatusTabButton, #globalAdminAlertSubsTabButton, #globalAdminLoginAuditTabButton, #globalAdminSettingsTabButton, #headerAlertChip, #headerInactiveChip") : null;
+    const target = event.target instanceof Element ? event.target.closest("#overviewTabButton, #reportsTabButton, #globalViewButton, #globalAlertsTabButton, #criticalTrendsTabButton, #inactiveHostsTabButton, #backupStatusTabButton, #systemOverviewTabButton, #hostConfigChangesTabButton, #agentSourceStatusTabButton, #globalAdminAlertSubsTabButton, #globalAdminLoginAuditTabButton, #globalAdminSettingsTabButton, #headerAlertChip, #headerMutedChip, #headerInactiveChip") : null;
     if (!target) {
       return;
     }
@@ -13441,6 +13449,17 @@ function wireEvents() {
     updateGlobalSubMode();
     await loadGlobalAlertsOverview();
   });
+
+  const headerMutedChip = document.getElementById("headerMutedChip");
+  if (headerMutedChip) {
+    headerMutedChip.addEventListener("click", async () => {
+      state.viewMode = "global";
+      state.globalSubMode = "global-alerts";
+      updateViewMode();
+      updateGlobalSubMode();
+      await loadGlobalAlertsOverview();
+    });
+  }
 
   document.getElementById("headerInactiveChip").addEventListener("click", async () => {
     state.viewMode = "global";

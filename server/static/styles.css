@@ -3993,9 +3993,9 @@ body[data-theme="dark"] .trend-progress-bar {
   flex-direction: column;
   gap: 2px;
   border-radius: 12px;
-  padding: 6px 8px;
-  min-height: 56px;
-  min-width: 150px;
+  padding: 5px 7px;
+  min-height: 52px;
+  min-width: 132px;
   font-size: 0.9rem;
   font-weight: 800;
   cursor: pointer;
@@ -4019,23 +4019,23 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .header-chip-label {
-  font-size: 9px;
+  font-size: 8px;
   line-height: 1.1;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   font-weight: 800;
   color: #4a6687;
 }
 
 .header-chip-count {
   font-family: var(--kv-value-family);
-  font-size: 1.8rem;
+  font-size: 1.6rem;
   font-weight: 800;
   line-height: 1;
   letter-spacing: 0;
 }
 
 .header-chip-scope {
-  font-size: 10px;
+  font-size: 9px;
   line-height: 1;
   opacity: 1;
   font-weight: 600;
@@ -4053,6 +4053,10 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .header-stat-chip-acknowledged {
   border-left-color: #8b5cf6;
+}
+
+.header-stat-chip-muted {
+  border-left-color: #0f766e;
 }
 
 .header-stat-chip-active-hosts {
@@ -11988,8 +11992,8 @@ body[data-theme="dark"] #globalView .admin-sub-country-title {
 .panel-header .header-kpi-strip {
   display: grid !important;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: 10px !important;
+  grid-auto-columns: minmax(132px, 1fr);
+  gap: 8px !important;
   align-items: stretch;
   overflow: hidden;
   padding: 2px;
