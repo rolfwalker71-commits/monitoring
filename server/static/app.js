@@ -11084,6 +11084,7 @@ async function loadConfigChangelogForHost() {
         const oldValue = asText(item.old_value || "-");
         const newValue = asText(item.new_value || "-");
         const fieldKey = String(item.field_key || "");
+        const licenseDeltaHtml = renderLicenseTypeCountDelta(fieldKey, oldValue, newValue);
         let oldFpInfo = "";
         let newFpInfo = "";
         let oldValueHtml = `<code>${escapeHtml(oldValue)}</code>`;
@@ -11102,6 +11103,9 @@ async function loadConfigChangelogForHost() {
           const servicesDiff = buildSapServicesChangelogDiff(oldValue, newValue);
           oldValueHtml = renderSapServicesChangelogValue(oldValue, { isNew: false, diff: servicesDiff });
           newValueHtml = renderSapServicesChangelogValue(newValue, { isNew: true, diff: servicesDiff });
+        }
+        if (licenseDeltaHtml) {
+          newValueHtml = `<code>${escapeHtml(newValue)}</code> ${licenseDeltaHtml}`;
         }
 
         return `
@@ -11943,6 +11947,40 @@ function groupByDateAndHost(items) {
   return sortedDateGroups;
 }
 
+function parseChangelogCount(value) {
+  const text = String(value ?? "").trim();
+  if (!text || text === "-") {
+    return null;
+  }
+  if (!/^-?\d+$/.test(text)) {
+    return null;
+  }
+  const parsed = Number.parseInt(text, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function renderLicenseTypeCountDelta(fieldKey, oldValue, newValue) {
+  const key = String(fieldKey || "");
+  if (!key.startsWith("sap_license_type::")) {
+    return "";
+  }
+
+  const oldCount = parseChangelogCount(oldValue);
+  const newCount = parseChangelogCount(newValue);
+  if (oldCount === null || newCount === null) {
+    return "";
+  }
+
+  const delta = newCount - oldCount;
+  if (delta === 0) {
+    return "";
+  }
+
+  const signText = delta > 0 ? `+${delta}` : String(delta);
+  const cssClass = delta > 0 ? "host-config-license-delta-up" : "host-config-license-delta-down";
+  return `<span class="host-config-license-delta ${cssClass}">(${escapeHtml(signText)})</span>`;
+}
+
 function renderCountryFlagFilter(filterEl, countryCodes, selectedCountryCode, onSelect) {
   if (!filterEl) return;
   const normalized = Array.from(new Set((Array.isArray(countryCodes) ? countryCodes : [])
@@ -12142,6 +12180,7 @@ async function loadHostConfigChanges() {
               const fieldKey = String(item.field_key || "");
               const oldValue = asText(item.old_value, "-");
               const newValue = asText(item.new_value, "-");
+              const licenseDeltaHtml = renderLicenseTypeCountDelta(fieldKey, oldValue, newValue);
 
               let oldFpInfo = "";
               let newFpInfo = "";
@@ -12161,6 +12200,9 @@ async function loadHostConfigChanges() {
                 const servicesDiff = buildSapServicesChangelogDiff(oldValue, newValue);
                 oldValueHtml = renderSapServicesChangelogValue(oldValue, { isNew: false, diff: servicesDiff });
                 newValueHtml = renderSapServicesChangelogValue(newValue, { isNew: true, diff: servicesDiff });
+              }
+              if (licenseDeltaHtml) {
+                newValueHtml = `<div class="host-config-main-value"><strong>${escapeHtml(newValue)}</strong> ${licenseDeltaHtml}</div>`;
               }
 
               return `

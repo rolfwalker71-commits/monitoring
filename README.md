@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.103**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.103**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.104**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.104**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.104 | 27.05.2026 | Changelog um SAP-Lizenztypen-Anzahlen erweitert: pro Host und übersetztem Lizenztyp wird jetzt ein eigener Changelog-Feldkey (`sap_license_type::<TYPE>`) mit Vorher/Neu erfasst. Initialeinträge pro Typ (`- -> Anzahl`) werden gesetzt und Folgeberichte tracken Änderungen kontinuierlich; in UI (Host-Changelog + Global-Changelog) wird beim neuen Wert zusätzlich das Delta in Klammern angezeigt (z. B. `(+2)` oder `(-1)`). |
 | 1.7.103 | 27.05.2026 | SAP-Lizenz Hover-Karte erweitert: zeigt jetzt zusätzlich in kleiner Schrift den Zeitstempel `B01.txt Stand` (aus `sap_license.file_mtime_utc`, Linux+Windows), damit sofort sichtbar ist, von wann die gelesenen Lizenzdaten stammen. |
 | 1.7.102 | 27.05.2026 | Globale Alert-Ansicht um Filter `Nur Heads-Up unterdrückt` erweitert. Der Filter ist als zusätzliche Checkbox im UI verfügbar und wird serverseitig über `heads_up_suppressed=yes/no` in `/api/v1/alerts` ausgewertet, damit Paging/Total-Zähler konsistent bleiben. |
 | 1.7.101 | 27.05.2026 | Alerts-Aktionsleiste um 4. Icon erweitert: pro Host+Mountpoint kann Heads-Up nun separat unterdrückt/reaktiviert werden (ohne Alert zu schließen). Neue persistente Regel-Tabelle (`heads_up_suppression_rules`) inkl. API-Endpoints und UI-Button; unterdrückte Heads-Ups stoppen sowohl Instant-Alerts (Mail/Telegram/Web-Push) als auch Reminder, während der Alert in der Liste sichtbar bleibt. |

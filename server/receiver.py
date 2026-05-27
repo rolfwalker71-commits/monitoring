@@ -681,6 +681,24 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS host_license_type_snapshot (
+                host_uid TEXT NOT NULL,
+                hostname TEXT NOT NULL,
+                license_type_match_text TEXT NOT NULL,
+                count_value INTEGER NOT NULL DEFAULT 0,
+                updated_at_utc TEXT NOT NULL,
+                PRIMARY KEY(host_uid, license_type_match_text)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_host_license_type_snapshot_host
+            ON host_license_type_snapshot(host_uid, updated_at_utc DESC)
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS changelog_rebuild_state (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 completed_at_utc TEXT NOT NULL,
@@ -5335,12 +5353,13 @@ def get_host_config_changes_for_host(
             (hostname,),
         ).fetchall()
 
+    license_label_map = _build_sap_license_type_label_map()
     items = [
         {
             "id": row[0],
             "detected_at_utc": row[1],
             "field_key": row[2],
-            "field_label": HOST_CONFIG_FIELD_LABELS.get(row[2], row[2]),
+            "field_label": _host_config_field_label(str(row[2] or ""), license_label_map=license_label_map),
             "old_value": row[3] or "-",
             "new_value": row[4] or "-",
             "source": row[5],
@@ -5505,6 +5524,7 @@ def rebuild_changelog_history(
     conn.execute("DELETE FROM host_config_changes")
     conn.execute("DELETE FROM database_lifecycle")
     conn.execute("DELETE FROM host_config_snapshot")
+    conn.execute("DELETE FROM host_license_type_snapshot")
 
     if callable(progress_callback):
         try:
@@ -6773,6 +6793,79 @@ HOST_CONFIG_FIELD_LABELS = {
     "sap_services_ports": "SAP Services/Ports",
 }
 
+SAP_LICENSE_TYPE_FIELD_PREFIX = "sap_license_type::"
+
+
+def _build_sap_license_type_label_map() -> dict[str, tuple[str, str]]:
+    label_map: dict[str, tuple[str, str]] = {}
+    for entry in load_sap_license_type_map_entries():
+        if not isinstance(entry, dict):
+            continue
+        raw_match_text = str(entry.get("match_text", "") or "").strip()
+        display_name = str(entry.get("display_name", "") or "").strip()
+        if not raw_match_text or not display_name:
+            continue
+        normalized_key = raw_match_text.upper()
+        if normalized_key in label_map:
+            continue
+        label_map[normalized_key] = (raw_match_text, display_name)
+    return label_map
+
+
+def _extract_translated_sap_license_type_counts(
+    payload: dict,
+    *,
+    license_label_map: dict[str, tuple[str, str]] | None = None,
+) -> dict[str, int]:
+    label_map = license_label_map or _build_sap_license_type_label_map()
+    if not label_map:
+        return {}
+
+    sap_license = payload.get("sap_license") if isinstance(payload, dict) else None
+    focus_license_types = sap_license.get("focus_license_types") if isinstance(sap_license, dict) else []
+
+    raw_counts: dict[str, int] = {}
+    if isinstance(focus_license_types, list):
+        for item in focus_license_types:
+            if not isinstance(item, dict):
+                continue
+            raw_type = str(item.get("license_type", "") or "").strip().upper()
+            if not raw_type:
+                continue
+            count_raw = item.get("count", 0)
+            try:
+                count_value = int(float(str(count_raw).strip()))
+            except (TypeError, ValueError):
+                count_value = 0
+            raw_counts[raw_type] = raw_counts.get(raw_type, 0) + max(0, count_value)
+
+    translated_counts: dict[str, int] = {}
+    for normalized_match_text in sorted(label_map.keys()):
+        translated_counts[normalized_match_text] = int(raw_counts.get(normalized_match_text, 0) or 0)
+    return translated_counts
+
+
+def _host_config_field_label(field_key: str, *, license_label_map: dict[str, tuple[str, str]] | None = None) -> str:
+    field_key_text = str(field_key or "").strip()
+    if not field_key_text:
+        return "-"
+
+    static_label = HOST_CONFIG_FIELD_LABELS.get(field_key_text)
+    if static_label:
+        return static_label
+
+    if field_key_text.startswith(SAP_LICENSE_TYPE_FIELD_PREFIX):
+        match_text = field_key_text[len(SAP_LICENSE_TYPE_FIELD_PREFIX):].strip()
+        normalized_match_text = match_text.upper()
+        label_map = license_label_map or _build_sap_license_type_label_map()
+        mapped = label_map.get(normalized_match_text)
+        if mapped:
+            raw_match_text, display_name = mapped
+            return f"SAP Lizenztyp: {display_name} ({raw_match_text})"
+        return f"SAP Lizenztyp: {match_text or '-'}"
+
+    return field_key_text
+
 
 def _ensure_host_config_snapshot_schema(conn: sqlite3.Connection) -> None:
     columns = {
@@ -6783,6 +6876,24 @@ def _ensure_host_config_snapshot_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE host_config_snapshot ADD COLUMN kernel_release TEXT NOT NULL DEFAULT '-'")
     if "sap_services_ports" not in columns:
         conn.execute("ALTER TABLE host_config_snapshot ADD COLUMN sap_services_ports TEXT NOT NULL DEFAULT '-'")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS host_license_type_snapshot (
+            host_uid TEXT NOT NULL,
+            hostname TEXT NOT NULL,
+            license_type_match_text TEXT NOT NULL,
+            count_value INTEGER NOT NULL DEFAULT 0,
+            updated_at_utc TEXT NOT NULL,
+            PRIMARY KEY(host_uid, license_type_match_text)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_host_license_type_snapshot_host
+        ON host_license_type_snapshot(host_uid, updated_at_utc DESC)
+        """
+    )
 
 
 def _extract_sap_services_ports_snapshot(payload: dict) -> str:
@@ -6921,6 +7032,109 @@ def _extract_host_config_snapshot(payload: dict) -> dict[str, str]:
     }
 
 
+def _track_host_license_type_changes(
+    conn: sqlite3.Connection,
+    hostname: str,
+    host_uid: str,
+    payload: dict,
+    report_id: int,
+    detected_at_utc: str,
+) -> None:
+    if not hostname:
+        return
+
+    host_key = alert_host_key(hostname, host_uid)
+    license_label_map = _build_sap_license_type_label_map()
+    new_counts = _extract_translated_sap_license_type_counts(payload, license_label_map=license_label_map)
+    if not new_counts:
+        return
+
+    existing_rows = conn.execute(
+        """
+        SELECT license_type_match_text, count_value
+        FROM host_license_type_snapshot
+        WHERE host_uid = ?
+        """,
+        (host_key,),
+    ).fetchall()
+    old_counts = {
+        str(row[0] or "").strip().upper(): max(0, int(row[1] or 0))
+        for row in existing_rows
+        if str(row[0] or "").strip()
+    }
+    has_existing_snapshot = bool(existing_rows)
+
+    dedupe_cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for match_text_upper in sorted(new_counts.keys()):
+        field_key = f"{SAP_LICENSE_TYPE_FIELD_PREFIX}{match_text_upper}"
+        new_count = int(new_counts.get(match_text_upper, 0) or 0)
+
+        if not has_existing_snapshot or match_text_upper not in old_counts:
+            old_value = "-"
+            new_value = str(new_count)
+            should_insert = True
+            source_value = "agent-report:license-init"
+        else:
+            old_count = int(old_counts.get(match_text_upper, 0) or 0)
+            old_value = str(old_count)
+            new_value = str(new_count)
+            should_insert = old_count != new_count
+            source_value = "agent-report:license"
+
+        if not should_insert:
+            continue
+
+        duplicate = conn.execute(
+            """
+            SELECT 1
+            FROM host_config_changes
+            WHERE host_uid = ?
+              AND field_key = ?
+              AND old_value = ?
+              AND new_value = ?
+              AND detected_at_utc >= ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (host_key, field_key, old_value, new_value, dedupe_cutoff),
+        ).fetchone()
+        if duplicate:
+            continue
+
+        conn.execute(
+            """
+            INSERT INTO host_config_changes (
+                detected_at_utc,
+                host_uid,
+                hostname,
+                field_key,
+                old_value,
+                new_value,
+                report_id,
+                source
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (detected_at_utc, host_key, hostname, field_key, old_value, new_value, report_id, source_value),
+        )
+
+    conn.execute("DELETE FROM host_license_type_snapshot WHERE host_uid = ?", (host_key,))
+    for match_text_upper in sorted(new_counts.keys()):
+        conn.execute(
+            """
+            INSERT INTO host_license_type_snapshot (
+                host_uid,
+                hostname,
+                license_type_match_text,
+                count_value,
+                updated_at_utc
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (host_key, hostname, match_text_upper, int(new_counts.get(match_text_upper, 0) or 0), detected_at_utc),
+        )
+
+
 def _track_host_config_changes(
     conn: sqlite3.Connection,
     hostname: str,
@@ -7050,6 +7264,8 @@ def _track_host_config_changes(
             detected_at_utc,
         ),
     )
+
+    _track_host_license_type_changes(conn, hostname, host_key, payload, report_id, detected_at_utc)
 
 
 def _extract_sap_addon_snapshot(payload: dict) -> dict[str, str]:
@@ -7451,6 +7667,7 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
             if str(row[0] or "").strip()
         }
 
+    license_label_map = _build_sap_license_type_label_map()
     items = []
     for row in rows:
         host_uid = str(row[2] or "").strip()
@@ -7470,7 +7687,7 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
                 "display_name": display_override or hostname,
                 "customer_name": customer_name,
                 "field_key": str(row[4] or ""),
-                "field_label": HOST_CONFIG_FIELD_LABELS.get(str(row[4] or ""), str(row[4] or "")),
+                "field_label": _host_config_field_label(str(row[4] or ""), license_label_map=license_label_map),
                 "old_value": str(row[5] or "-"),
                 "new_value": str(row[6] or "-"),
                 "source": str(row[7] or "agent-report"),
@@ -7520,7 +7737,10 @@ def backfill_host_config_changes(
     )
 
     last_snapshot_by_host_key: dict[str, dict[str, str]] = {}
+    last_license_counts_by_host_key: dict[str, dict[str, int]] = {}
+    last_hostname_by_host_key: dict[str, str] = {}
     last_seen_at_by_host_key: dict[str, str] = {}
+    license_label_map = _build_sap_license_type_label_map()
     report_count = 0
     inserted_changes = 0
     hosts_total_row = conn.execute(
@@ -7577,7 +7797,9 @@ def backfill_host_config_changes(
             key: _normalize_config_value(key, value)
             for key, value in _extract_host_config_snapshot(payload).items()
         }
+        current_license_counts = _extract_translated_sap_license_type_counts(payload, license_label_map=license_label_map)
         previous_snapshot = last_snapshot_by_host_key.get(host_key)
+        previous_license_counts = last_license_counts_by_host_key.get(host_key)
 
         if previous_snapshot is not None:
             for field_key in HOST_CONFIG_TRACKED_FIELDS:
@@ -7619,6 +7841,51 @@ def backfill_host_config_changes(
                     (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
                 )
                 inserted_changes += 1
+
+            if previous_license_counts is not None:
+                for match_text_upper in sorted(current_license_counts.keys()):
+                    old_count = int(previous_license_counts.get(match_text_upper, 0) or 0)
+                    new_count = int(current_license_counts.get(match_text_upper, 0) or 0)
+                    if old_count == new_count:
+                        continue
+
+                    field_key = f"{SAP_LICENSE_TYPE_FIELD_PREFIX}{match_text_upper}"
+                    old_value = str(old_count)
+                    new_value = str(new_count)
+
+                    existing = conn.execute(
+                        """
+                        SELECT 1
+                        FROM host_config_changes
+                        WHERE host_uid = ?
+                          AND field_key = ?
+                          AND report_id = ?
+                          AND old_value = ?
+                          AND new_value = ?
+                        LIMIT 1
+                        """,
+                        (host_key, field_key, report_id, old_value, new_value),
+                    ).fetchone()
+                    if existing:
+                        continue
+
+                    conn.execute(
+                        """
+                        INSERT INTO host_config_changes (
+                            detected_at_utc,
+                            host_uid,
+                            hostname,
+                            field_key,
+                            old_value,
+                            new_value,
+                            report_id,
+                            source
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'backfill-license')
+                        """,
+                        (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
+                    )
+                    inserted_changes += 1
         elif include_initial_snapshot_events:
             for field_key in HOST_CONFIG_TRACKED_FIELDS:
                 old_value = "-"
@@ -7660,7 +7927,48 @@ def backfill_host_config_changes(
                 )
                 inserted_changes += 1
 
+            for match_text_upper in sorted(current_license_counts.keys()):
+                field_key = f"{SAP_LICENSE_TYPE_FIELD_PREFIX}{match_text_upper}"
+                old_value = "-"
+                new_value = str(int(current_license_counts.get(match_text_upper, 0) or 0))
+
+                existing = conn.execute(
+                    """
+                    SELECT 1
+                    FROM host_config_changes
+                    WHERE host_uid = ?
+                      AND field_key = ?
+                      AND report_id = ?
+                      AND old_value = ?
+                      AND new_value = ?
+                    LIMIT 1
+                    """,
+                    (host_key, field_key, report_id, old_value, new_value),
+                ).fetchone()
+                if existing:
+                    continue
+
+                conn.execute(
+                    """
+                    INSERT INTO host_config_changes (
+                        detected_at_utc,
+                        host_uid,
+                        hostname,
+                        field_key,
+                        old_value,
+                        new_value,
+                        report_id,
+                        source
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 'backfill-init-license')
+                    """,
+                    (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
+                )
+                inserted_changes += 1
+
         last_snapshot_by_host_key[host_key] = current_snapshot
+        last_license_counts_by_host_key[host_key] = current_license_counts
+        last_hostname_by_host_key[host_key] = hostname
         last_seen_at_by_host_key[host_key] = detected_at_utc or utc_now_iso()
 
         if report_count % 1000 == 0:
@@ -7713,6 +8021,33 @@ def backfill_host_config_changes(
                 updated_at_utc,
             ),
         )
+
+    for host_key, license_counts in last_license_counts_by_host_key.items():
+        if not license_counts:
+            continue
+        updated_at_utc = last_seen_at_by_host_key.get(host_key, utc_now_iso())
+        hostname_value = str(last_hostname_by_host_key.get(host_key, host_key) or host_key)
+        conn.execute("DELETE FROM host_license_type_snapshot WHERE host_uid = ?", (host_key,))
+        for match_text_upper in sorted(license_counts.keys()):
+            conn.execute(
+                """
+                INSERT INTO host_license_type_snapshot (
+                    host_uid,
+                    hostname,
+                    license_type_match_text,
+                    count_value,
+                    updated_at_utc
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    host_key,
+                    hostname_value,
+                    match_text_upper,
+                    int(license_counts.get(match_text_upper, 0) or 0),
+                    updated_at_utc,
+                ),
+            )
 
     return {
         "days": window_days,
@@ -12474,6 +12809,7 @@ def delete_host_card_data(conn: sqlite3.Connection, hostname: str, host_uid: str
         "heads_up_suppression_rules": 0,
         "alert_debounce": 0,
         "alerts": 0,
+        "host_license_type_snapshot": 0,
         "agent_commands": 0,
         "host_settings": 0,
         "host_uid_settings": 0,
@@ -12505,6 +12841,10 @@ def delete_host_card_data(conn: sqlite3.Connection, hostname: str, host_uid: str
         row = conn.execute("SELECT changes()").fetchone()
         deleted["host_uid_settings"] = int(row[0] or 0) if row else 0
 
+        conn.execute("DELETE FROM host_license_type_snapshot WHERE host_uid = ?", (normalized_host_uid,))
+        row = conn.execute("SELECT changes()").fetchone()
+        deleted["host_license_type_snapshot"] = int(row[0] or 0) if row else 0
+
         conn.execute("DELETE FROM muted_alert_rules WHERE host_uid = ?", (normalized_host_uid,))
         row = conn.execute("SELECT changes()").fetchone()
         deleted["muted_alert_rules"] += int(row[0] or 0) if row else 0
@@ -12534,7 +12874,7 @@ def delete_host_card_data(conn: sqlite3.Connection, hostname: str, host_uid: str
             if remaining_count > 0:
                 continue
 
-            for table_name in ("muted_alert_rules", "heads_up_suppression_rules", "alert_debounce", "alerts", "agent_commands", "host_settings"):
+            for table_name in ("muted_alert_rules", "heads_up_suppression_rules", "alert_debounce", "alerts", "host_license_type_snapshot", "agent_commands", "host_settings"):
                 conn.execute(f"DELETE FROM {table_name} WHERE hostname = ?", (touched_hostname,))
                 row = conn.execute("SELECT changes()").fetchone()
                 deleted[table_name] += int(row[0] or 0) if row else 0
@@ -12546,6 +12886,7 @@ def delete_host_card_data(conn: sqlite3.Connection, hostname: str, host_uid: str
         ("heads_up_suppression_rules", "hostname = ?"),
         ("alert_debounce", "hostname = ?"),
         ("alerts", "hostname = ?"),
+        ("host_license_type_snapshot", "hostname = ?"),
         ("agent_commands", "hostname = ?"),
         ("host_settings", "hostname = ?"),
         ("reports", "hostname = ?"),
