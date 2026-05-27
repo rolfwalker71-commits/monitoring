@@ -8413,9 +8413,20 @@ async function loadHostLicenseInfoForHover(hostname, hostUid = "") {
     customerNo: asText(sapLicense.customer_no, "").trim(),
     holder: asText(sapLicense.customer_name, "").trim(),
     expiry: formatSapLicenseExpiry(sapLicense.expiration),
+    b01FileMtimeRaw: asText(sapLicense.file_mtime_utc, "").trim(),
   };
+  const b01FileMtimeFormatted = fields.b01FileMtimeRaw ? formatUtcPlus2(fields.b01FileMtimeRaw) : "";
   const types = mapSapLicenseFocusTypes(sapLicense);
-  const hasCore = Object.values(fields).some((value) => Boolean(value));
+  const hasCore = [
+    fields.hw,
+    fields.inst,
+    fields.system,
+    fields.systemType,
+    fields.customerNo,
+    fields.holder,
+    fields.expiry,
+    b01FileMtimeFormatted,
+  ].some((value) => Boolean(value));
   const hasData = hasCore || types.length > 0;
 
   const copyLines = [
@@ -8426,6 +8437,7 @@ async function loadHostLicenseInfoForHover(hostname, hostUid = "") {
     `Kundennummer: ${fields.customerNo || "-"}`,
     `Lizenznehmer: ${fields.holder || "-"}`,
     `Gültig bis: ${fields.expiry || "-"}`,
+    `B01.txt Stand: ${b01FileMtimeFormatted || "-"}`,
   ];
   if (types.length > 0) {
     copyLines.push("");
@@ -8532,6 +8544,12 @@ function renderHostLicenseHoverPopupContent(hostname, data) {
     : `<div class="host-license-hover-types"><div class="host-license-hover-types-head"><span class="host-license-hover-type-name-label">Lizenztyp</span><span class="host-license-hover-type-count-label">Anzahl</span></div>${types
       .map((item) => `<div class="host-license-hover-type-row"><span class="host-license-hover-type-name-wrap"><span class="host-license-hover-type-name">${escapeHtml(item.displayType)}</span><span class=\"host-license-hover-type-raw\">(${escapeHtml(item.rawType)})</span></span><span class=\"host-license-hover-type-count\">${String(item.count)}</span></div>`)
       .join("")}</div>`;
+  const b01FileMtimeText = asText(f.b01FileMtimeRaw, "").trim()
+    ? formatUtcPlus2(asText(f.b01FileMtimeRaw, "").trim())
+    : "";
+  const b01FileMetaHtml = b01FileMtimeText
+    ? `<p class="host-license-hover-filemeta">B01.txt Stand: <strong>${escapeHtml(b01FileMtimeText)}</strong></p>`
+    : "";
 
   return `
     <div class="host-license-hover-head">
@@ -8540,6 +8558,7 @@ function renderHostLicenseHoverPopupContent(hostname, data) {
       <button type="button" class="header-license-copy-btn" data-host-license-copy="${escapeHtml(data.copyText || "")}">📋 Kopieren</button>
     </div>
     <div class="host-license-hover-grid">${rows}</div>
+    ${b01FileMetaHtml}
     ${typesHtml}
   `;
 }
