@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.106**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.106**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.107**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.107**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.107 | 27.05.2026 | Rebuild-Fehleranzeige verbessert: Bei HTTP-Fehlern zeigt die UI jetzt zusätzlich die Backend-Fehlermeldung (`error`/`message`) statt nur den Statuscode (z. B. `HTTP 500: no such table ...`). |
 | 1.7.106 | 27.05.2026 | SAP-Lizenztypen-Changelog: korrekte Schnittmenge – nur Typen werden gespeichert, die SOWOHL im Payload (focus_license_types) vorhanden als AUCH in der Lizenztypen-Übersetzungstabelle eingetragen sind. Nicht-übersetzte Typen aus B01.txt werden ignoriert, auch wenn sie Werte > 0 haben. |
 | 1.7.105 | 27.05.2026 | Changelog-Filterung für SAP-Lizenztypen: nur Einträge mit mind. einem Wert > 0 werden gespeichert (kein `- → 0`-Rauschen mehr). Gilt für Live-Tracking, Backfill und Rebuild. |
 | 1.7.104 | 27.05.2026 | Changelog um SAP-Lizenztypen-Anzahlen erweitert: pro Host und übersetztem Lizenztyp wird jetzt ein eigener Changelog-Feldkey (`sap_license_type::<TYPE>`) mit Vorher/Neu erfasst. Initialeinträge pro Typ (`- -> Anzahl`) werden gesetzt und Folgeberichte tracken Änderungen kontinuierlich; in UI (Host-Changelog + Global-Changelog) wird beim neuen Wert zusätzlich das Delta in Klammern angezeigt (z. B. `(+2)` oder `(-1)`). |

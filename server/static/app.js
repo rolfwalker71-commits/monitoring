@@ -12356,6 +12356,31 @@ function setChangelogRebuildJobStatus(message, isError = false) {
   statusEl.classList.toggle("status-error", Boolean(isError));
 }
 
+async function buildHttpErrorFromResponse(response) {
+  const statusText = Number(response?.status || 0) > 0 ? `HTTP ${response.status}` : "HTTP Fehler";
+  let backendMessage = "";
+  try {
+    const payload = await response.clone().json();
+    if (payload && typeof payload === "object") {
+      const rawError = String(payload.error || payload.message || "").trim();
+      if (rawError) {
+        backendMessage = rawError;
+      }
+    }
+  } catch (_jsonError) {
+    try {
+      const text = String(await response.clone().text() || "").trim();
+      if (text) {
+        backendMessage = text.slice(0, 240);
+      }
+    } catch (_textError) {
+      backendMessage = "";
+    }
+  }
+
+  return new Error(backendMessage ? `${statusText}: ${backendMessage}` : statusText);
+}
+
 function clearChangelogRebuildPollTimer() {
   if (changelogRebuildPollTimerId !== null) {
     window.clearTimeout(changelogRebuildPollTimerId);
@@ -12421,7 +12446,7 @@ async function loadChangelogRebuildJobsStatus() {
       credentials: "same-origin",
       cache: "no-store",
     });
-    if (!response.ok) throw new Error("HTTP " + response.status);
+    if (!response.ok) throw await buildHttpErrorFromResponse(response);
     const data = await response.json().catch(() => ({}));
     const jobs = Array.isArray(data.jobs) ? data.jobs : [];
     if (!jobs.length) {
@@ -12541,7 +12566,7 @@ async function runChangelogRebuildNow(days = 1) {
         force_rebuild: true,
       }),
     });
-    if (!response.ok) throw new Error("HTTP " + response.status);
+    if (!response.ok) throw await buildHttpErrorFromResponse(response);
     const data = await response.json().catch(() => ({}));
 
     const processed = Array.isArray(data.processed_now) ? data.processed_now : [];
