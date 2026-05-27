@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.115**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.115**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.116**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.116**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.116 | 27.05.2026 | Backfill/Rebuild-Konkurrenz abgesichert: zentrale Maintenance-Sperre eingefuehrt, damit keine parallelen DB-Heavy-Operationen laufen. Bei Lock-Konflikten liefert Backfill jetzt kontrolliert `409` mit klarer Fehlermeldung statt `500 OperationalError: database is locked`. |
 | 1.7.115 | 27.05.2026 | UI-Fix Global Alerts: rechte Aktionsspalte stabilisiert (feste Mindestbreite, kompaktere Button-Paddings, rechtsbuendige Action-Gruppe), damit die 4 Alert-Icons nicht mehr ueber den Rahmen hinausragen. |
 | 1.7.114 | 27.05.2026 | Hotfix Global Alerts: JavaScript-Fehler `currentReportStandHtml is not defined` behoben. Die `Aktuell`-Spalte mit `Stand:`-Unterzeile rendert wieder stabil. |
 | 1.7.113 | 27.05.2026 | Alerts korrigiert: `Used` bleibt jetzt der urspruengliche Ausloesewert (wird bei offenen Alerts nicht mehr mit jedem Report ueberschrieben). `Aktuell` zeigt weiterhin den letzten gemeldeten Wert und darunter den Zeitstempel des Reports (`Stand: ...`). `Delta` berechnet sich damit wieder gegen den initialen Ausloesewert. Zusätzlich zeigt Backfill-Fehler in der UI den Backend-Fehlertext statt nur HTTP-Status. |

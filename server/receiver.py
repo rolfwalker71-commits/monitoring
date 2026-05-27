@@ -130,6 +130,7 @@ except ZoneInfoNotFoundError:
 _backup_jobs_lock = threading.Lock()
 _backup_jobs: dict[str, dict[str, str]] = {}
 _auto_backup_lock = threading.Lock()
+_db_maintenance_lock = threading.Lock()
 _agent_ingest_queue_wakeup = threading.Event()
 _local_cpu_sample_lock = threading.Lock()
 _local_cpu_prev_total: int | None = None
@@ -5838,127 +5839,133 @@ def list_changelog_rebuild_jobs(conn: sqlite3.Connection, limit: int = 20) -> li
 
 
 def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int = 1) -> list[dict]:
-    _mark_stale_running_changelog_rebuild_jobs_failed(conn)
+    if not _db_maintenance_lock.acquire(blocking=False):
+        return []
 
-    safe_max = max(1, min(int(max_jobs or 1), 5))
-    now_iso = utc_now_iso()
-    jobs = conn.execute(
-        """
-        SELECT id, days, force_rebuild
-        FROM changelog_rebuild_jobs
-        WHERE status = 'pending'
-          AND scheduled_for_utc <= ?
-        ORDER BY scheduled_for_utc ASC, id ASC
-        LIMIT ?
-        """,
-        (now_iso, safe_max),
-    ).fetchall()
+    try:
+        _mark_stale_running_changelog_rebuild_jobs_failed(conn)
 
-    processed: list[dict] = []
-    for row in jobs:
-        job_id = int(row[0] or 0)
-        window_days = int(row[1] or 1)
-        force_rebuild = bool(int(row[2] or 0))
-        started_at = utc_now_iso()
-
-        conn.execute(
+        safe_max = max(1, min(int(max_jobs or 1), 5))
+        now_iso = utc_now_iso()
+        jobs = conn.execute(
             """
-            UPDATE changelog_rebuild_jobs
-            SET status = 'running',
-                started_at_utc = ?,
-                finished_at_utc = '',
-                error_message = '',
-                result_json = ''
-            WHERE id = ? AND status = 'pending'
+            SELECT id, days, force_rebuild
+            FROM changelog_rebuild_jobs
+            WHERE status = 'pending'
+              AND scheduled_for_utc <= ?
+            ORDER BY scheduled_for_utc ASC, id ASC
+            LIMIT ?
             """,
-            (started_at, job_id),
-        )
-        if conn.execute("SELECT changes()").fetchone()[0] == 0:
-            continue
-        conn.commit()
+            (now_iso, safe_max),
+        ).fetchall()
 
-        try:
-            last_progress_phase = ""
-            last_progress_hosts = -1
+        processed: list[dict] = []
+        for row in jobs:
+            job_id = int(row[0] or 0)
+            window_days = int(row[1] or 1)
+            force_rebuild = bool(int(row[2] or 0))
+            started_at = utc_now_iso()
 
-            def progress_reporter(progress: dict) -> None:
-                nonlocal last_progress_phase, last_progress_hosts
-                phase = str(progress.get("phase") or "")
-                hosts_processed = int(progress.get("hosts_processed", 0) or 0)
-                hosts_total = int(progress.get("hosts_total", 0) or 0)
-                should_flush = phase != last_progress_phase or hosts_processed != last_progress_hosts
-                if phase == "config_backfill" and hosts_total > 0:
-                    should_flush = should_flush and (hosts_processed in {0, hosts_total} or hosts_processed % 5 == 0)
-                if not should_flush:
-                    return
+            conn.execute(
+                """
+                UPDATE changelog_rebuild_jobs
+                SET status = 'running',
+                    started_at_utc = ?,
+                    finished_at_utc = '',
+                    error_message = '',
+                    result_json = ''
+                WHERE id = ? AND status = 'pending'
+                """,
+                (started_at, job_id),
+            )
+            if conn.execute("SELECT changes()").fetchone()[0] == 0:
+                continue
+            conn.commit()
 
-                payload = {
-                    "progress": {
-                        "phase": phase,
-                        "hosts_processed": hosts_processed,
-                        "hosts_total": hosts_total,
-                        "message": str(progress.get("message") or ""),
-                        "updated_at_utc": utc_now_iso(),
+            try:
+                last_progress_phase = ""
+                last_progress_hosts = -1
+
+                def progress_reporter(progress: dict) -> None:
+                    nonlocal last_progress_phase, last_progress_hosts
+                    phase = str(progress.get("phase") or "")
+                    hosts_processed = int(progress.get("hosts_processed", 0) or 0)
+                    hosts_total = int(progress.get("hosts_total", 0) or 0)
+                    should_flush = phase != last_progress_phase or hosts_processed != last_progress_hosts
+                    if phase == "config_backfill" and hosts_total > 0:
+                        should_flush = should_flush and (hosts_processed in {0, hosts_total} or hosts_processed % 5 == 0)
+                    if not should_flush:
+                        return
+
+                    payload = {
+                        "progress": {
+                            "phase": phase,
+                            "hosts_processed": hosts_processed,
+                            "hosts_total": hosts_total,
+                            "message": str(progress.get("message") or ""),
+                            "updated_at_utc": utc_now_iso(),
+                        }
                     }
-                }
+                    conn.execute(
+                        """
+                        UPDATE changelog_rebuild_jobs
+                        SET result_json = ?
+                        WHERE id = ? AND status = 'running'
+                        """,
+                        (json.dumps(payload, separators=(",", ":")), job_id),
+                    )
+                    conn.commit()
+                    last_progress_phase = phase
+                    last_progress_hosts = hosts_processed
+
+                result = rebuild_changelog_history(
+                    conn,
+                    days=window_days,
+                    force_rebuild=force_rebuild,
+                    progress_callback=progress_reporter,
+                )
+                finished_at = utc_now_iso()
                 conn.execute(
                     """
                     UPDATE changelog_rebuild_jobs
-                    SET result_json = ?
-                    WHERE id = ? AND status = 'running'
+                    SET status = 'completed',
+                        finished_at_utc = ?,
+                        error_message = '',
+                        result_json = ?
+                    WHERE id = ?
                     """,
-                    (json.dumps(payload, separators=(",", ":")), job_id),
+                    (finished_at, json.dumps(result, separators=(",", ":")), job_id),
                 )
                 conn.commit()
-                last_progress_phase = phase
-                last_progress_hosts = hosts_processed
+                processed.append({
+                    "id": job_id,
+                    "status": "completed",
+                    "finished_at_utc": finished_at,
+                    "result": result,
+                })
+            except Exception as exc:
+                finished_at = utc_now_iso()
+                conn.execute(
+                    """
+                    UPDATE changelog_rebuild_jobs
+                    SET status = 'failed',
+                        finished_at_utc = ?,
+                        error_message = ?
+                    WHERE id = ?
+                    """,
+                    (finished_at, str(exc), job_id),
+                )
+                conn.commit()
+                processed.append({
+                    "id": job_id,
+                    "status": "failed",
+                    "finished_at_utc": finished_at,
+                    "error": str(exc),
+                })
 
-            result = rebuild_changelog_history(
-                conn,
-                days=window_days,
-                force_rebuild=force_rebuild,
-                progress_callback=progress_reporter,
-            )
-            finished_at = utc_now_iso()
-            conn.execute(
-                """
-                UPDATE changelog_rebuild_jobs
-                SET status = 'completed',
-                    finished_at_utc = ?,
-                    error_message = '',
-                    result_json = ?
-                WHERE id = ?
-                """,
-                (finished_at, json.dumps(result, separators=(",", ":")), job_id),
-            )
-            conn.commit()
-            processed.append({
-                "id": job_id,
-                "status": "completed",
-                "finished_at_utc": finished_at,
-                "result": result,
-            })
-        except Exception as exc:
-            finished_at = utc_now_iso()
-            conn.execute(
-                """
-                UPDATE changelog_rebuild_jobs
-                SET status = 'failed',
-                    finished_at_utc = ?,
-                    error_message = ?
-                WHERE id = ?
-                """,
-                (finished_at, str(exc), job_id),
-            )
-            conn.commit()
-            processed.append({
-                "id": job_id,
-                "status": "failed",
-                "finished_at_utc": finished_at,
-                "error": str(exc),
-            })
-
-    return processed
+        return processed
+    finally:
+        _db_maintenance_lock.release()
 
 
 
@@ -16750,8 +16757,19 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "days must be an integer between 1 and 30"})
                     return
 
+            if not _db_maintenance_lock.acquire(blocking=False):
+                self._send_json(
+                    HTTPStatus.CONFLICT,
+                    {
+                        "error": "Wartungsoperation bereits aktiv (Rebuild/Backfill). Bitte nach Abschluss erneut versuchen.",
+                        "code": "maintenance_busy",
+                    },
+                )
+                return
+
             try:
                 with sqlite3.connect(DB_PATH) as conn:
+                    conn.execute("PRAGMA busy_timeout = 120000")
                     config_result = backfill_host_config_changes(
                         conn,
                         days=days,
@@ -16773,11 +16791,26 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         },
                     },
                 )
+            except sqlite3.OperationalError as e:
+                error_text = str(e)
+                if "locked" in error_text.lower() or "busy" in error_text.lower():
+                    self._send_json(
+                        HTTPStatus.CONFLICT,
+                        {
+                            "error": "Datenbank ist aktuell gesperrt (parallel laufende Schreiboperation). Bitte in 1-2 Minuten erneut versuchen.",
+                            "details": error_text,
+                            "code": "database_locked",
+                        },
+                    )
+                else:
+                    self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"OperationalError: {error_text}"})
             except Exception as e:
                 import traceback
                 error_msg = f"{type(e).__name__}: {str(e)}"
                 traceback.print_exc()
                 self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": error_msg})
+            finally:
+                _db_maintenance_lock.release()
             return
 
 
