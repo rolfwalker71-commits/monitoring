@@ -10748,6 +10748,18 @@ async function toggleAlertMute(hostname, hostUid, mountpoint, alertId, currently
   await loadHosts();
 }
 
+async function toggleAlertHeadsUpSuppression(hostname, hostUid, mountpoint, alertId, currentlySuppressed) {
+  const endpoint = currentlySuppressed ? "/api/v1/alert-headsup-unsuppress" : "/api/v1/alert-headsup-suppress";
+  await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ hostname, host_uid: hostUid, mountpoint, alert_id: alertId }),
+  });
+  await loadAlertsForHost();
+  await loadGlobalAlertsOverview();
+  await loadHosts();
+}
+
 let _ackModalResolve = null;
 
 function openAckModal(hostname, mountpoint, currentNote, isAcknowledged) {
@@ -10921,12 +10933,17 @@ async function loadAlertsForHost() {
         const ackTitle = isAcknowledged
           ? `Quittiert von ${asText(item.ack_by, "-")} am ${formatUtcPlus2(item.ack_at_utc)}${ackNote ? ` | Notiz: ${ackNote}` : ""}`
           : "Alert quittieren";
+        const isHeadsUpSuppressed = Boolean(item.is_heads_up_suppressed);
+        const headsUpTitle = isHeadsUpSuppressed
+          ? "Heads-Up wieder aktivieren"
+          : "Heads-Up für diesen Alert unterdrücken";
         const closeTitle = isClosed
           ? `Abgeschlossen von ${asText(item.closed_by, "-")} am ${formatUtcPlus2(item.closed_at_utc)} – klicken zum Wiederöffnen`
-          : "Alert abschliessen (stoppt Heads-Up)";
+          : "Alert abschliessen";
         const hostUid = asText(item.host_uid || item.hostname);
         const alertId = Number(item.id || 0);
         const muteBtn = `<button class="alert-mute-btn${isMuted ? " muted" : ""}" type="button" data-action="toggle-mute" data-alert-id="${alertId}" data-hostname="${escapeHtml(asText(item.hostname))}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-muted="${isMuted ? "1" : "0"}" title="${isMuted ? "Stummschaltung aufheben" : "Alert stummschalten"}">${isMuted ? "🔇" : "🔔"}</button>`;
+        const headsUpBtn = `<button class="alert-headsup-btn${isHeadsUpSuppressed ? " suppressed" : ""}" type="button" data-action="toggle-headsup" data-alert-id="${alertId}" data-hostname="${escapeHtml(asText(item.hostname))}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-headsup-suppressed="${isHeadsUpSuppressed ? "1" : "0"}" title="${escapeHtml(headsUpTitle)}">${isHeadsUpSuppressed ? "⏸️" : "📣"}</button>`;
         const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-alert-id="${alertId}" data-acknowledged="${isAcknowledged ? "1" : "0"}" data-hostname="${escapeHtml(asText(item.hostname))}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
         const closeBtn = `<button class="alert-close-btn${isClosed ? " closed" : ""}" type="button" data-action="close" data-alert-id="${alertId}" data-hostname="${escapeHtml(asText(item.hostname))}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-closed="${isClosed ? "1" : "0"}" title="${escapeHtml(closeTitle)}">${isClosed ? "🔓" : "🔒"}</button>`;
         const ackMeta = isAcknowledged
@@ -10942,7 +10959,7 @@ async function loadAlertsForHost() {
             <td>${renderAlertMountpointLabel(item.mountpoint, 60)}</td>
             <td>${formatPercent(item.used_percent)}</td>
             <td title="Zuletzt gesehen: ${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}">${escapeHtml(formatUtcPlus2(item.created_at_utc))}${ackMeta}${closeMeta}</td>
-            <td><div class="alert-action-buttons">${muteBtn}${ackBtn}${closeBtn}</div></td>
+            <td><div class="alert-action-buttons">${muteBtn}${headsUpBtn}${ackBtn}${closeBtn}</div></td>
           </tr>
         `;
       })
@@ -10957,6 +10974,17 @@ async function loadAlertsForHost() {
         const alertId = Number(btn.getAttribute("data-alert-id") || 0);
         const isMuted = btn.getAttribute("data-muted") === "1";
         await toggleAlertMute(hostname, hostUid, mountpoint, alertId, isMuted);
+      });
+    });
+    alertsRows.querySelectorAll("[data-action='toggle-headsup']").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const hostname = btn.getAttribute("data-hostname");
+        const hostUid = btn.getAttribute("data-host-uid");
+        const mountpoint = btn.getAttribute("data-mountpoint");
+        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
+        const isSuppressed = btn.getAttribute("data-headsup-suppressed") === "1";
+        await toggleAlertHeadsUpSuppression(hostname, hostUid, mountpoint, alertId, isSuppressed);
       });
     });
     alertsRows.querySelectorAll("[data-action='ack']").forEach((btn) => {
@@ -12894,12 +12922,17 @@ async function loadGlobalAlertsOverview(options = {}) {
         const ackTitle = isAcknowledged
           ? `Quittiert von ${asText(item.ack_by, "-")} am ${formatUtcPlus2(item.ack_at_utc)}${ackNote ? ` | Notiz: ${ackNote}` : ""}`
           : "Alert quittieren";
+        const isHeadsUpSuppressed = Boolean(item.is_heads_up_suppressed);
+        const headsUpTitle = isHeadsUpSuppressed
+          ? "Heads-Up wieder aktivieren"
+          : "Heads-Up für diesen Alert unterdrücken";
         const closeTitle = isClosed
           ? `Abgeschlossen von ${asText(item.closed_by, "-")} am ${formatUtcPlus2(item.closed_at_utc)} – klicken zum Wiederöffnen`
-          : "Alert abschliessen (stoppt Heads-Up)";
+          : "Alert abschliessen";
         const hostUid = asText(item.host_uid || hostName);
         const alertId = Number(item.id || 0);
         const muteBtn = `<button class="alert-mute-btn${isMuted ? " muted" : ""}" type="button" data-action="toggle-mute" data-alert-id="${alertId}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-muted="${isMuted ? "1" : "0"}" title="${isMuted ? "Stummschaltung aufheben" : "Alert stummschalten"}">${isMuted ? "🔇" : "🔔"}</button>`;
+        const headsUpBtn = `<button class="alert-headsup-btn${isHeadsUpSuppressed ? " suppressed" : ""}" type="button" data-action="toggle-headsup" data-alert-id="${alertId}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-headsup-suppressed="${isHeadsUpSuppressed ? "1" : "0"}" title="${escapeHtml(headsUpTitle)}">${isHeadsUpSuppressed ? "⏸️" : "📣"}</button>`;
         const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-alert-id="${alertId}" data-acknowledged="${isAcknowledged ? "1" : "0"}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
         const closeBtn = `<button class="alert-close-btn${isClosed ? " closed" : ""}" type="button" data-action="close" data-alert-id="${alertId}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-closed="${isClosed ? "1" : "0"}" title="${escapeHtml(closeTitle)}">${isClosed ? "🔓" : "🔒"}</button>`;
         const ackMeta = isAcknowledged
@@ -12924,7 +12957,7 @@ async function loadGlobalAlertsOverview(options = {}) {
             <td>${formatPercent(item.current_used_percent)}</td>
             <td>${formatPercent(item.delta_used_percent)}</td>
             <td title="Zuletzt gesehen: ${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}">${escapeHtml(formatUtcPlus2(item.created_at_utc))}${ackMeta}${closeMeta}</td>
-            <td><div class="alert-action-buttons">${muteBtn}${ackBtn}${closeBtn}</div></td>
+            <td><div class="alert-action-buttons">${muteBtn}${headsUpBtn}${ackBtn}${closeBtn}</div></td>
           </tr>
         `;
       })
@@ -12956,6 +12989,17 @@ async function loadGlobalAlertsOverview(options = {}) {
         const alertId = Number(btn.getAttribute("data-alert-id") || 0);
         const isMuted = btn.getAttribute("data-muted") === "1";
         await toggleAlertMute(hostname, hostUid, mountpoint, alertId, isMuted);
+      });
+    });
+    rowsEl.querySelectorAll("[data-action='toggle-headsup']").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const hostname = btn.getAttribute("data-hostname");
+        const hostUid = btn.getAttribute("data-host-uid");
+        const mountpoint = btn.getAttribute("data-mountpoint");
+        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
+        const isSuppressed = btn.getAttribute("data-headsup-suppressed") === "1";
+        await toggleAlertHeadsUpSuppression(hostname, hostUid, mountpoint, alertId, isSuppressed);
       });
     });
     rowsEl.querySelectorAll("[data-action='ack']").forEach((btn) => {

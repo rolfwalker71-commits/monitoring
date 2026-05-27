@@ -891,6 +891,18 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS heads_up_suppression_rules (
+                host_uid TEXT NOT NULL DEFAULT '',
+                hostname TEXT NOT NULL,
+                mountpoint TEXT NOT NULL,
+                suppressed_by TEXT NOT NULL DEFAULT '',
+                suppressed_at_utc TEXT NOT NULL,
+                PRIMARY KEY(host_uid, mountpoint)
+            )
+            """
+        )
         existing_muted_alert_columns = {
             str(row[1])
             for row in conn.execute("PRAGMA table_info(muted_alert_rules)").fetchall()
@@ -925,6 +937,42 @@ def init_db() -> None:
             """
             CREATE INDEX IF NOT EXISTS idx_muted_alert_rules_host_uid_mount
             ON muted_alert_rules(host_uid, mountpoint)
+            """
+        )
+        existing_heads_up_suppression_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(heads_up_suppression_rules)").fetchall()
+        }
+        if "host_uid" not in existing_heads_up_suppression_columns:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS heads_up_suppression_rules_v2 (
+                    host_uid TEXT NOT NULL,
+                    hostname TEXT NOT NULL,
+                    mountpoint TEXT NOT NULL,
+                    suppressed_by TEXT NOT NULL DEFAULT '',
+                    suppressed_at_utc TEXT NOT NULL,
+                    PRIMARY KEY(host_uid, mountpoint)
+                )
+                """
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO heads_up_suppression_rules_v2 (host_uid, hostname, mountpoint, suppressed_by, suppressed_at_utc)
+                SELECT COALESCE(NULLIF(hostname, ''), ''),
+                       COALESCE(hostname, ''),
+                       COALESCE(mountpoint, ''),
+                       COALESCE(suppressed_by, ''),
+                       COALESCE(suppressed_at_utc, '')
+                FROM heads_up_suppression_rules
+                """
+            )
+            conn.execute("DROP TABLE heads_up_suppression_rules")
+            conn.execute("ALTER TABLE heads_up_suppression_rules_v2 RENAME TO heads_up_suppression_rules")
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_heads_up_suppression_rules_host_uid_mount
+            ON heads_up_suppression_rules(host_uid, mountpoint)
             """
         )
         conn.execute(
@@ -9979,6 +10027,10 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
         (str(row[0] or ""), str(row[1] or ""))
         for row in conn.execute("SELECT host_uid, mountpoint FROM muted_alert_rules").fetchall()
     }
+    heads_up_suppressed_pairs = {
+        (str(row[0] or ""), str(row[1] or ""))
+        for row in conn.execute("SELECT host_uid, mountpoint FROM heads_up_suppression_rules").fetchall()
+    }
 
     def _channel_due(interval_hours: int, created_at_utc: str, last_sent_utc: str, ack_at_utc: str) -> bool:
         if interval_hours <= 0:
@@ -10046,6 +10098,8 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
 
         host_key = alert_host_key(hostname, host_uid)
         if (host_key, mountpoint) in muted_pairs:
+            continue
+        if (host_key, mountpoint) in heads_up_suppressed_pairs:
             continue
 
         due_mail = bool(mail_user_rows) and _channel_due(
@@ -11100,6 +11154,11 @@ def maybe_send_alert_message(
     conn: sqlite3.Connection | None = None,
     display_name: str = "",
 ) -> None:
+    if conn is not None:
+        host_key = alert_host_key(hostname, host_uid)
+        if is_alert_heads_up_suppressed(conn, host_key, mountpoint):
+            return
+
     if settings.get("telegram_enabled"):
         icon = {
             "opened": "🚨 ALERT OPEN",
@@ -12101,6 +12160,14 @@ def is_alert_muted(conn: sqlite3.Connection, host_key: str, mountpoint: str) -> 
     return row is not None
 
 
+def is_alert_heads_up_suppressed(conn: sqlite3.Connection, host_key: str, mountpoint: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM heads_up_suppression_rules WHERE host_uid = ? AND mountpoint = ?",
+        (host_key, mountpoint),
+    ).fetchone()
+    return row is not None
+
+
 def resolve_open_alerts_for_host(conn: sqlite3.Connection, hostname: str, host_uid: str, report_id: int | None) -> None:
     now_utc = utc_now_iso()
     host_key = alert_host_key(hostname, host_uid)
@@ -12404,6 +12471,7 @@ def _agent_ingest_worker_loop() -> None:
 def delete_host_card_data(conn: sqlite3.Connection, hostname: str, host_uid: str = "") -> dict[str, int]:
     deleted: dict[str, int] = {
         "muted_alert_rules": 0,
+        "heads_up_suppression_rules": 0,
         "alert_debounce": 0,
         "alerts": 0,
         "agent_commands": 0,
@@ -12441,6 +12509,10 @@ def delete_host_card_data(conn: sqlite3.Connection, hostname: str, host_uid: str
         row = conn.execute("SELECT changes()").fetchone()
         deleted["muted_alert_rules"] += int(row[0] or 0) if row else 0
 
+        conn.execute("DELETE FROM heads_up_suppression_rules WHERE host_uid = ?", (normalized_host_uid,))
+        row = conn.execute("SELECT changes()").fetchone()
+        deleted["heads_up_suppression_rules"] += int(row[0] or 0) if row else 0
+
         conn.execute("DELETE FROM alert_debounce WHERE host_uid = ?", (normalized_host_uid,))
         row = conn.execute("SELECT changes()").fetchone()
         deleted["alert_debounce"] += int(row[0] or 0) if row else 0
@@ -12462,7 +12534,7 @@ def delete_host_card_data(conn: sqlite3.Connection, hostname: str, host_uid: str
             if remaining_count > 0:
                 continue
 
-            for table_name in ("muted_alert_rules", "alert_debounce", "alerts", "agent_commands", "host_settings"):
+            for table_name in ("muted_alert_rules", "heads_up_suppression_rules", "alert_debounce", "alerts", "agent_commands", "host_settings"):
                 conn.execute(f"DELETE FROM {table_name} WHERE hostname = ?", (touched_hostname,))
                 row = conn.execute("SELECT changes()").fetchone()
                 deleted[table_name] += int(row[0] or 0) if row else 0
@@ -12471,6 +12543,7 @@ def delete_host_card_data(conn: sqlite3.Connection, hostname: str, host_uid: str
 
     cleanup_plan = [
         ("muted_alert_rules", "hostname = ?"),
+        ("heads_up_suppression_rules", "hostname = ?"),
         ("alert_debounce", "hostname = ?"),
         ("alerts", "hostname = ?"),
         ("agent_commands", "hostname = ?"),
@@ -14747,6 +14820,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     (str(r[0]), str(r[1]))
                     for r in conn_mute.execute("SELECT host_uid, mountpoint FROM muted_alert_rules").fetchall()
                 }
+                heads_up_suppressed_pairs = {
+                    (str(r[0]), str(r[1]))
+                    for r in conn_mute.execute("SELECT host_uid, mountpoint FROM heads_up_suppression_rules").fetchall()
+                }
                 for row in rows:
                     hostname = str(row[1] or "")
                     host_uid_value = alert_host_key(hostname, str(row[6] or ""))
@@ -14791,6 +14868,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             "closed_by": str(row[15] or ""),
                             "is_closed": bool(str(row[14] or "").strip()),
                             "is_muted": (host_uid_value, mountpoint) in muted_pairs,
+                            "is_heads_up_suppressed": (host_uid_value, mountpoint) in heads_up_suppressed_pairs,
                         }
                     )
 
@@ -16745,6 +16823,105 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 host_key = alert_host_key(hostname, host_uid)
                 conn.execute(
                     "DELETE FROM muted_alert_rules WHERE host_uid = ? AND mountpoint = ?",
+                    (host_key, mountpoint),
+                )
+                conn.commit()
+            self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "host_uid": host_key, "mountpoint": mountpoint})
+            return
+
+        if path == "/api/v1/alert-headsup-suppress":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            alert_id = parse_positive_int(payload.get("alert_id"), default=0, max_value=2_000_000_000)
+            hostname = str(payload.get("hostname", "")).strip()
+            host_uid = str(payload.get("host_uid", "")).strip()
+            mountpoint = str(payload.get("mountpoint", "")).strip()
+            with sqlite3.connect(DB_PATH) as conn:
+                if alert_id > 0:
+                    row = conn.execute(
+                        "SELECT hostname, COALESCE(NULLIF(host_uid, ''), hostname), mountpoint FROM alerts WHERE id = ?",
+                        (alert_id,),
+                    ).fetchone()
+                    if not row:
+                        self._send_json(HTTPStatus.NOT_FOUND, {"error": "alert not found"})
+                        return
+                    hostname = str(row[0] or "").strip()
+                    host_uid = str(row[1] or "").strip()
+                    mountpoint = str(row[2] or "").strip()
+                if (not hostname or not mountpoint) and host_uid and mountpoint:
+                    row = conn.execute(
+                        """
+                        SELECT hostname
+                        FROM alerts
+                        WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+                          AND mountpoint = ?
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (host_uid, mountpoint),
+                    ).fetchone()
+                    hostname = str((row[0] if row else "") or "").strip()
+                if not hostname or not mountpoint:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "alert_id or (hostname+mountpoint) required"})
+                    return
+                host_key = alert_host_key(hostname, host_uid)
+                suppressed_by = self._web_session_username() or "webclient"
+                conn.execute(
+                    "INSERT OR REPLACE INTO heads_up_suppression_rules (host_uid, hostname, mountpoint, suppressed_by, suppressed_at_utc) VALUES (?, ?, ?, ?, ?)",
+                    (host_key, hostname, mountpoint, suppressed_by, utc_now_iso()),
+                )
+                conn.commit()
+            self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "host_uid": host_key, "mountpoint": mountpoint})
+            return
+
+        if path == "/api/v1/alert-headsup-unsuppress":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            alert_id = parse_positive_int(payload.get("alert_id"), default=0, max_value=2_000_000_000)
+            hostname = str(payload.get("hostname", "")).strip()
+            host_uid = str(payload.get("host_uid", "")).strip()
+            mountpoint = str(payload.get("mountpoint", "")).strip()
+            with sqlite3.connect(DB_PATH) as conn:
+                if alert_id > 0:
+                    row = conn.execute(
+                        "SELECT hostname, COALESCE(NULLIF(host_uid, ''), hostname), mountpoint FROM alerts WHERE id = ?",
+                        (alert_id,),
+                    ).fetchone()
+                    if not row:
+                        self._send_json(HTTPStatus.NOT_FOUND, {"error": "alert not found"})
+                        return
+                    hostname = str(row[0] or "").strip()
+                    host_uid = str(row[1] or "").strip()
+                    mountpoint = str(row[2] or "").strip()
+                if (not hostname or not mountpoint) and host_uid and mountpoint:
+                    row = conn.execute(
+                        """
+                        SELECT hostname
+                        FROM alerts
+                        WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+                          AND mountpoint = ?
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (host_uid, mountpoint),
+                    ).fetchone()
+                    hostname = str((row[0] if row else "") or "").strip()
+                if not hostname or not mountpoint:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "alert_id or (hostname+mountpoint) required"})
+                    return
+                host_key = alert_host_key(hostname, host_uid)
+                conn.execute(
+                    "DELETE FROM heads_up_suppression_rules WHERE host_uid = ? AND mountpoint = ?",
                     (host_key, mountpoint),
                 )
                 conn.commit()
