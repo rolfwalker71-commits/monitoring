@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.110**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.110**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.111**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.111**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.111 | 27.05.2026 | Changelog-UX/Backfill-Fix: Host-Config-Changelog laedt nicht mehr automatisch beim Tabwechsel oder Filteraenderungen, sondern erst per `Suchen`/`Refresh` (Enter in Suche ebenfalls moeglich). Zusätzlich Einrueckungsfehler im Host-Config-Backfill behoben, damit pro Report immer der korrekte Payload verarbeitet wird. |
 | 1.7.110 | 27.05.2026 | Rebuild-Job-Selbstheilung erweitert: ein alter `running`-Job wird automatisch auf `failed` gesetzt, wenn bereits ein neuerer terminaler Job (`completed`/`failed`) existiert. Verhindert Zombie-Status wie „Job #5 läuft“, obwohl ein späterer Job schon fertig ist. |
 | 1.7.109 | 27.05.2026 | Global Alerts UI aufgeraeumt: Block "Host-Identitaet (offene Alerts)" vollstaendig entfernt (HTML, Rendering und Styles), damit die eigentliche Alert-Tabelle ohne zusaetzlichen Zwischenblock angezeigt wird. |
 | 1.7.108 | 27.05.2026 | Rebuild-Stabilitaet verbessert: SQLite-Busy-Timeout erhoeht (gegen `database is locked`) und hängende Rebuild-Jobs im Status `running` werden nach Inaktivitaets-Timeout automatisch auf `failed` gesetzt, damit neue Rebuilds wieder startbar sind. |

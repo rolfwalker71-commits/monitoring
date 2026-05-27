@@ -7880,6 +7880,7 @@ def backfill_host_config_changes(
         detected_at_utc = str(row[1] or "").strip()
         hostname = str(row[2] or "").strip()
         host_uid = str(row[3] or "").strip()
+        payload = parse_payload_json(str(row[4] or "{}"))
         if not hostname:
             continue
         host_key = alert_host_key(hostname, host_uid)
@@ -7897,7 +7898,6 @@ def backfill_host_config_changes(
                     })
                 except Exception:
                     pass
-                payload = parse_payload_json(str(row[4] or "{}"))
         report_count += 1
 
         current_snapshot = {

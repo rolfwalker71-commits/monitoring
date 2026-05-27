@@ -12018,6 +12018,17 @@ function renderCountryFlagFilter(filterEl, countryCodes, selectedCountryCode, on
   });
 }
 
+function showHostConfigChangesIdleState(message = "Filter gesetzt. Bitte auf Suchen oder Refresh klicken.") {
+  const groupsEl = document.getElementById("hostConfigChangesGroups");
+  const summaryEl = document.getElementById("hostConfigChangesSummary");
+  if (groupsEl) {
+    groupsEl.innerHTML = `<p class="muted">${escapeHtml(message)}</p>`;
+  }
+  if (summaryEl) {
+    summaryEl.textContent = "";
+  }
+}
+
 async function loadHostConfigChanges() {
   const groupsEl = document.getElementById("hostConfigChangesGroups");
   const summaryEl = document.getElementById("hostConfigChangesSummary");
@@ -12057,7 +12068,7 @@ async function loadHostConfigChanges() {
         state.hostConfigChangesCountryFilter = selected;
         renderCountryFlagFilter(countryFilterEl, cachedCountries, selected, (nextFilter) => {
           state.hostConfigChangesCountryFilter = nextFilter;
-          loadHostConfigChanges();
+          showHostConfigChangesIdleState();
         });
       }
       return;
@@ -12083,7 +12094,7 @@ async function loadHostConfigChanges() {
       state.hostConfigChangesCountryFilter = selected;
       renderCountryFlagFilter(countryFilterEl, countriesForFilter, selected, (nextFilter) => {
         state.hostConfigChangesCountryFilter = nextFilter;
-        loadHostConfigChanges();
+        showHostConfigChangesIdleState();
       });
     }
 
@@ -13393,8 +13404,14 @@ function wireEvents() {
     hostConfigChangesTabButton.addEventListener("click", async () => {
       state.globalSubMode = "host-config-changes";
       updateGlobalSubMode();
-      await loadHostConfigChanges();
+      showHostConfigChangesIdleState("Bitte Filter setzen und dann Suchen/Refresh klicken.");
       await loadChangelogRebuildJobsStatus();
+    });
+  }
+  const applyHostConfigChangesFiltersButton = document.getElementById("applyHostConfigChangesFiltersButton");
+  if (applyHostConfigChangesFiltersButton) {
+    applyHostConfigChangesFiltersButton.addEventListener("click", async () => {
+      await loadHostConfigChanges();
     });
   }
   const refreshHostConfigChangesButton = document.getElementById("refreshHostConfigChangesButton");
@@ -13429,14 +13446,22 @@ function wireEvents() {
   }
   const hostConfigChangesHoursFilter = document.getElementById("hostConfigChangesHoursFilter");
   if (hostConfigChangesHoursFilter) {
-    hostConfigChangesHoursFilter.addEventListener("change", async () => {
+    hostConfigChangesHoursFilter.addEventListener("change", () => {
       state.hostConfigChangesHours = Number(hostConfigChangesHoursFilter.value);
-      await loadHostConfigChanges();
+      showHostConfigChangesIdleState();
     });
   }
   const hostConfigChangesSearchInput = document.getElementById("hostConfigChangesSearchInput");
   if (hostConfigChangesSearchInput) {
-    hostConfigChangesSearchInput.addEventListener("input", async () => {
+    hostConfigChangesSearchInput.addEventListener("input", () => {
+      state.hostConfigChangesSearchQuery = hostConfigChangesSearchInput.value.trim();
+      showHostConfigChangesIdleState();
+    });
+    hostConfigChangesSearchInput.addEventListener("keydown", async (event) => {
+      if (event.key !== "Enter") {
+        return;
+      }
+      event.preventDefault();
       state.hostConfigChangesSearchQuery = hostConfigChangesSearchInput.value.trim();
       await loadHostConfigChanges();
     });
@@ -13483,7 +13508,10 @@ function wireEvents() {
     else if (state.globalSubMode === "inactive-hosts") await loadInactiveHosts();
     else if (state.globalSubMode === "system-overview") await loadSystemOverview();
     else if (state.globalSubMode === "backup-status") await loadBackupStatus();
-    else if (state.globalSubMode === "host-config-changes") await loadHostConfigChanges();
+    else if (state.globalSubMode === "host-config-changes") {
+      showHostConfigChangesIdleState("Bitte Filter setzen und dann Suchen/Refresh klicken.");
+      await loadChangelogRebuildJobsStatus();
+    }
     else if (state.globalSubMode === "agent-source-status") await loadAgentSourceStatus();
     else if (state.globalSubMode === "admin-alert-subs") await loadAdminAlertSubscriptions();
     else if (state.globalSubMode === "admin-login-audit") await loadAdminLoginAudit();
