@@ -6839,9 +6839,14 @@ def _extract_translated_sap_license_type_counts(
                 count_value = 0
             raw_counts[raw_type] = raw_counts.get(raw_type, 0) + max(0, count_value)
 
+    # Only include types that are BOTH in the payload (raw_counts) AND have a translation (label_map).
+    # Types present in the payload but not translated are excluded.
+    # Types present in label_map but absent from the payload are excluded entirely.
     translated_counts: dict[str, int] = {}
-    for normalized_match_text in sorted(label_map.keys()):
-        translated_counts[normalized_match_text] = int(raw_counts.get(normalized_match_text, 0) or 0)
+    for raw_type_upper in sorted(raw_counts.keys()):
+        if raw_type_upper not in label_map:
+            continue
+        translated_counts[raw_type_upper] = int(raw_counts[raw_type_upper] or 0)
     return translated_counts
 
 
