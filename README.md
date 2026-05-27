@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.112**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.112**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.113**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.113**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.113 | 27.05.2026 | Alerts korrigiert: `Used` bleibt jetzt der urspruengliche Ausloesewert (wird bei offenen Alerts nicht mehr mit jedem Report ueberschrieben). `Aktuell` zeigt weiterhin den letzten gemeldeten Wert und darunter den Zeitstempel des Reports (`Stand: ...`). `Delta` berechnet sich damit wieder gegen den initialen Ausloesewert. Zusätzlich zeigt Backfill-Fehler in der UI den Backend-Fehlertext statt nur HTTP-Status. |
 | 1.7.112 | 27.05.2026 | Host-Config-Changelog-Suche erweitert: Suchbegriffe matchen jetzt auch `customer_name`, damit Eintraege wie "Netto" gefunden werden, auch wenn Hostname/UID nicht den Begriff enthalten. |
 | 1.7.111 | 27.05.2026 | Changelog-UX/Backfill-Fix: Host-Config-Changelog laedt nicht mehr automatisch beim Tabwechsel oder Filteraenderungen, sondern erst per `Suchen`/`Refresh` (Enter in Suche ebenfalls moeglich). Zusätzlich Einrueckungsfehler im Host-Config-Backfill behoben, damit pro Report immer der korrekte Payload verarbeitet wird. |
 | 1.7.110 | 27.05.2026 | Rebuild-Job-Selbstheilung erweitert: ein alter `running`-Job wird automatisch auf `failed` gesetzt, wenn bereits ein neuerer terminaler Job (`completed`/`failed`) existiert. Verhindert Zombie-Status wie „Job #5 läuft“, obwohl ein späterer Job schon fertig ist. |

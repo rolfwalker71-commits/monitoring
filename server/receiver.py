@@ -6500,14 +6500,14 @@ def _latest_report_rows_by_host_key(conn: sqlite3.Connection) -> list[tuple]:
         """
     ).fetchall()
 
-def _collect_latest_report_usage_by_host(conn: sqlite3.Connection, hostnames: list[str]) -> dict[str, dict[str, float]]:
+def _collect_latest_report_usage_by_host(conn: sqlite3.Connection, hostnames: list[str]) -> dict[str, dict[str, object]]:
     if not hostnames:
         return {}
 
     placeholders = ",".join("?" for _ in hostnames)
     latest_rows = conn.execute(
         f"""
-        SELECT hostname, payload_json
+        SELECT hostname, received_at_utc, payload_json
         FROM reports
         WHERE id IN (
             SELECT MAX(id)
@@ -6519,12 +6519,13 @@ def _collect_latest_report_usage_by_host(conn: sqlite3.Connection, hostnames: li
         tuple(hostnames),
     ).fetchall()
 
-    usage_by_host: dict[str, dict[str, float]] = {}
+    usage_by_host: dict[str, dict[str, object]] = {}
     for row in latest_rows:
         hostname = str(row[0] or "").strip()
         if not hostname:
             continue
-        payload = parse_payload_json(str(row[1] or "{}"))
+        received_at_utc = str(row[1] or "").strip()
+        payload = parse_payload_json(str(row[2] or "{}"))
         filesystems = payload.get("filesystems", [])
         if not isinstance(filesystems, list):
             continue
@@ -6540,7 +6541,10 @@ def _collect_latest_report_usage_by_host(conn: sqlite3.Connection, hostnames: li
             except (TypeError, ValueError):
                 continue
             usage_by_mountpoint[normalize_mountpoint_key(mountpoint)] = used_percent
-        usage_by_host[hostname] = usage_by_mountpoint
+        usage_by_host[hostname] = {
+            "received_at_utc": received_at_utc,
+            "usage_by_mountpoint": usage_by_mountpoint,
+        }
     return usage_by_host
 
 
@@ -6683,7 +6687,9 @@ def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | 
         host_uid = alert_host_key(hostname, str(row[2] or ""))
         mountpoint = str(row[3] or "")
         current_used_percent = None
-        host_usage = latest_usage_by_host.get(hostname, {})
+        host_snapshot = latest_usage_by_host.get(hostname, {})
+        host_usage = host_snapshot.get("usage_by_mountpoint", {}) if isinstance(host_snapshot, dict) else {}
+        current_report_at_utc = str(host_snapshot.get("received_at_utc", "") or "") if isinstance(host_snapshot, dict) else ""
         if mountpoint:
             current_used_percent = host_usage.get(normalize_mountpoint_key(mountpoint))
         delta_used_percent = None
@@ -6702,6 +6708,7 @@ def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | 
                 "severity": str(row[4] or "warning"),
                 "used_percent": float(row[5] or 0),
                 "current_used_percent": current_used_percent,
+                "current_report_at_utc": current_report_at_utc,
                 "delta_used_percent": delta_used_percent,
                 "created_at_utc": str(row[6] or ""),
                 "last_seen_at_utc": str(row[7] or ""),
@@ -8743,7 +8750,9 @@ def export_alerts_rows(conn: sqlite3.Connection, *, status: str | None = None, s
         if is_filesystem_blacklisted_by_patterns(mountpoint, blacklist_patterns):
             continue
         current_used_percent = None
-        host_usage = latest_usage_by_host.get(hostname, {})
+        host_snapshot = latest_usage_by_host.get(hostname, {})
+        host_usage = host_snapshot.get("usage_by_mountpoint", {}) if isinstance(host_snapshot, dict) else {}
+        current_report_at_utc = str(host_snapshot.get("received_at_utc", "") or "") if isinstance(host_snapshot, dict) else ""
         if mountpoint:
             current_used_percent = host_usage.get(normalize_mountpoint_key(mountpoint))
         delta_used_percent = None
@@ -8757,6 +8766,7 @@ def export_alerts_rows(conn: sqlite3.Connection, *, status: str | None = None, s
                 "severity": str(row[3] or "warning"),
                 "used_percent": float(row[4] or 0.0),
                 "current_used_percent": current_used_percent,
+                "current_report_at_utc": current_report_at_utc,
                 "delta_used_percent": delta_used_percent,
                 "created_at_utc": str(row[5] or ""),
                 "last_seen_at_utc": str(row[6] or ""),
@@ -13217,10 +13227,10 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: 
         conn.execute(
             """
             UPDATE alerts
-            SET severity = ?, used_percent = ?, last_seen_at_utc = ?, report_id = ?
+            SET severity = ?, last_seen_at_utc = ?, report_id = ?
             WHERE id = ?
             """,
-            (severity, used_percent, now_utc, report_id, open_alert[0]),
+            (severity, now_utc, report_id, open_alert[0]),
         )
 
         if previous_severity != "critical" and severity == "critical":

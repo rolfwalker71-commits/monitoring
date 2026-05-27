@@ -10972,6 +10972,10 @@ async function loadAlertsForHost() {
         const closeMeta = isClosed
           ? `<div class="count compact alert-closed-meta">🔒 ${escapeHtml(asText(item.closed_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.closed_at_utc))}</div>`
           : "";
+        const currentReportStand = asText(item.current_report_at_utc, "").trim();
+        const currentReportStandHtml = currentReportStand
+          ? `<div class="count compact">Stand: ${escapeHtml(formatUtcPlus2(currentReportStand))}</div>`
+          : "";
         return `
           <tr class="${isMuted ? "alert-row-muted" : ""}${isClosed ? " alert-row-closed" : ""}">
             <td><span class="badge ${statusClass}">${escapeHtml(asText(item.status))}</span></td>
@@ -12629,7 +12633,7 @@ async function runCombinedBackfill(days = 7) {
       body: JSON.stringify({ days: targetDays }),
     });
 
-    if (!response.ok) throw new Error("HTTP " + response.status);
+    if (!response.ok) throw await buildHttpErrorFromResponse(response);
     const data = await response.json();
     const result = data?.result || {};
 
@@ -12971,7 +12975,7 @@ async function loadGlobalAlertsOverview(options = {}) {
             <td><span class="badge ${severityClass}">${escapeHtml(asText(item.severity))}</span></td>
             <td>${renderAlertMountpointLabel(item.mountpoint, 56)}</td>
             <td>${formatPercent(item.used_percent)}</td>
-            <td>${formatPercent(item.current_used_percent)}</td>
+            <td>${formatPercent(item.current_used_percent)}${currentReportStandHtml}</td>
             <td>${formatPercent(item.delta_used_percent)}</td>
             <td title="Zuletzt gesehen: ${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}">${escapeHtml(formatUtcPlus2(item.created_at_utc))}${ackMeta}${closeMeta}</td>
             <td><div class="alert-action-buttons">${muteBtn}${headsUpBtn}${ackBtn}${closeBtn}</div></td>
