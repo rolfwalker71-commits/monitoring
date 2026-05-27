@@ -5634,6 +5634,15 @@ def _mark_stale_running_changelog_rebuild_jobs_failed(
     cutoff_dt = datetime.now(timezone.utc) - timedelta(minutes=stale_minutes)
     updated = 0
 
+    latest_terminal_job_row = conn.execute(
+        """
+        SELECT MAX(id)
+        FROM changelog_rebuild_jobs
+        WHERE status IN ('completed', 'failed')
+        """
+    ).fetchone()
+    latest_terminal_job_id = int(latest_terminal_job_row[0] or 0) if latest_terminal_job_row else 0
+
     running_rows = conn.execute(
         """
         SELECT id, started_at_utc, result_json
@@ -5650,6 +5659,26 @@ def _mark_stale_running_changelog_rebuild_jobs_failed(
         updated_at_utc = ""
         if isinstance(progress, dict):
             updated_at_utc = _normalize_utc_timestamp(str(progress.get("updated_at_utc") or ""))
+
+        # If a newer terminal job exists, this running job is stale/superseded.
+        if latest_terminal_job_id > 0 and job_id < latest_terminal_job_id:
+            conn.execute(
+                """
+                UPDATE changelog_rebuild_jobs
+                SET status = 'failed',
+                    finished_at_utc = ?,
+                    error_message = ?
+                WHERE id = ? AND status = 'running'
+                """,
+                (
+                    utc_now_iso(),
+                    f"Automatisch als fehlgeschlagen markiert (durch neueren Job #{latest_terminal_job_id} ueberholt).",
+                    job_id,
+                ),
+            )
+            if conn.execute("SELECT changes()").fetchone()[0] > 0:
+                updated += 1
+            continue
 
         reference_utc = updated_at_utc or started_at_utc
         if not reference_utc:
