@@ -12962,6 +12962,10 @@ async function loadGlobalAlertsOverview(options = {}) {
         const closeMeta = isClosed
           ? `<div class="count compact alert-closed-meta">🔒 ${escapeHtml(asText(item.closed_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.closed_at_utc))}</div>`
           : "";
+        const currentReportStand = asText(item.current_report_at_utc, "").trim();
+        const currentReportStandHtml = currentReportStand
+          ? `<div class="count compact">Stand: ${escapeHtml(formatUtcPlus2(currentReportStand))}</div>`
+          : "";
         return `
           <tr class="${isMuted ? "alert-row-muted" : ""}${isClosed ? " alert-row-closed" : ""}">
             <td>
