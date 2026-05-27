@@ -13167,3 +13167,56 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
 body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-size-delta {
   border-left-color: #2dd4bf !important;
 }
+
+/* Header KPI fit fix: reserve explicit toolbar space so cards never run underneath icon buttons. */
+.panel-header .panel-actions {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  column-gap: 8px;
+}
+
+.panel-header .panel-actions .header-kpi-strip {
+  min-width: 0;
+  width: 100%;
+  display: grid !important;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(108px, 1fr);
+  gap: 6px !important;
+  overflow: hidden;
+}
+
+.panel-header .panel-actions .header-toolbar {
+  min-width: max-content;
+  width: auto !important;
+  margin-left: 0;
+  justify-content: flex-end;
+}
+
+.panel-header .header-kpi-strip > .header-stat-chip {
+  min-width: 0 !important;
+  min-height: 48px;
+  padding: 5px 6px;
+}
+
+.panel-header .header-kpi-strip .header-chip-label {
+  font-size: 8px;
+  letter-spacing: 0.05em;
+}
+
+.panel-header .header-kpi-strip .header-chip-count {
+  font-size: 1.5rem;
+}
+
+.panel-header .header-kpi-strip .header-chip-scope {
+  font-size: 9px;
+}
+
+/* Muted belongs to the alert family coloring. */
+.panel-header .header-kpi-strip > .header-stat-chip-muted {
+  border-left-color: #d97706 !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-muted {
+  border-left-color: #f59e0b !important;
+}
