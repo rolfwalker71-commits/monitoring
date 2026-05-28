@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Monitoring Receiver API
-  version: 1.7.86
+  version: 1.7.120
   description: |-
     OpenAPI spec for the Monitoring server endpoints in receiver.py.
     Most /api/v1 endpoints require an authenticated web session cookie.

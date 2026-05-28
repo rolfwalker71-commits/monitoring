@@ -5067,9 +5067,9 @@ body[data-theme="dark"] .trend-progress-bar {
 
 #globalAlertsPanelBody table th:last-child,
 #globalAlertsPanelBody table td:last-child {
-  min-width: 170px;
-  width: 170px;
-  max-width: 170px;
+  min-width: 192px;
+  width: 192px;
+  max-width: 192px;
   white-space: nowrap;
   text-align: right;
   padding-left: 4px;
@@ -5077,23 +5077,28 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 #globalAlertsPanelBody .alert-action-buttons {
-  display: inline-flex;
+  display: flex;
   justify-content: flex-end;
-  min-width: 132px;
-  gap: 3px;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+  white-space: nowrap;
 }
 
 #globalAlertsPanelBody .alert-mute-btn,
 #globalAlertsPanelBody .alert-headsup-btn,
 #globalAlertsPanelBody .alert-ack-btn,
 #globalAlertsPanelBody .alert-close-btn {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  flex: 0 0 24px;
+  flex: 0 0 26px;
+  line-height: 1;
+  overflow: visible;
 }
 
 .alert-ack-btn {
