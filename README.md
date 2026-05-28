@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.120**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.120**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.121**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.121**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.121 | 28.05.2026 | Performance-Fix fuer globale Listen: Global Alerts laden Requests jetzt parallel statt sequenziell, und Host-Config-Changelog vermeidet N+1-Lookups durch gebatchte Host-Metadaten. Dadurch erscheinen beide Bereiche deutlich schneller. |
 | 1.7.120 | 28.05.2026 | UI-Fix Global Alerts: Aktionsspalte und 4 Icon-Buttons weiter verbreitert, damit die rechte Leiste nicht mehr am Rand abgeschnitten wird. |
 | 1.7.119 | 27.05.2026 | Endgueltiger UI-Fix Global Alerts: Tabelle fuer Alerts auf `table-layout:auto` umgestellt und Aktionsspalte als feste Pixelbreite (170px) definiert. Dadurch werden alle 4 Aktionsicons stabil vollständig gerendert (kein Abschneiden am rechten Rand). |
 | 1.7.118 | 27.05.2026 | UI-Fix Global Alerts: Aktionsspalte im Tabellenlayout real verbreitert (`colgroup` + feste Button-Breite), damit das 4. Alert-Icon nicht mehr rechts abgeschnitten wird. |

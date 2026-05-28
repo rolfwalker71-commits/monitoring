@@ -12167,118 +12167,124 @@ async function loadHostConfigChanges() {
     // Auto-expand for active search and for 24h quick-review refresh workflow.
     const autoExpandGroups = !!state.hostConfigChangesSearchQuery || Number(hours) <= 24;
 
-    groupsEl.innerHTML = customerGroups
-      .map((customerGroup) => {
-        const itemsByHost = new Map();
-        customerGroup.items.forEach((item) => {
-          const hostUid = asText(item.host_uid, "") || asText(item.hostname, "");
-          const hostname = asText(item.hostname, "");
-          const displayName = asText(item.display_name, "") || hostname;
-          const countryCode = asText(item.country_code, "");
-          const hostKey = `${hostUid}::${hostname}`;
-          if (!itemsByHost.has(hostKey)) {
-            itemsByHost.set(hostKey, { hostUid, hostname, displayName, items: [], country_code: countryCode });
-          }
-          itemsByHost.get(hostKey).items.push(item);
-        });
+    const renderCustomerGroupHtml = (customerGroup) => {
+      const itemsByHost = new Map();
+      customerGroup.items.forEach((item) => {
+        const hostUid = asText(item.host_uid, "") || asText(item.hostname, "");
+        const hostname = asText(item.hostname, "");
+        const displayName = asText(item.display_name, "") || hostname;
+        const countryCode = asText(item.country_code, "");
+        const hostKey = `${hostUid}::${hostname}`;
+        if (!itemsByHost.has(hostKey)) {
+          itemsByHost.set(hostKey, { hostUid, hostname, displayName, items: [], country_code: countryCode });
+        }
+        itemsByHost.get(hostKey).items.push(item);
+      });
 
-        const hostGroups = Array.from(itemsByHost.values()).sort((a, b) => {
-          return String(a.displayName || "").toLowerCase().localeCompare(String(b.displayName || "").toLowerCase(), "de", { sensitivity: "base", numeric: true });
-        });
+      const hostGroups = Array.from(itemsByHost.values()).sort((a, b) => {
+        return String(a.displayName || "").toLowerCase().localeCompare(String(b.displayName || "").toLowerCase(), "de", { sensitivity: "base", numeric: true });
+      });
 
-        const hostRowsHtml = hostGroups
-          .map((hostGroup) => {
-            const sortedItems = [...hostGroup.items].sort((left, right) => {
-              return String(right.detected_at_utc || "").localeCompare(String(left.detected_at_utc || ""));
-            });
+      const hostRowsHtml = hostGroups
+        .map((hostGroup) => {
+          const sortedItems = [...hostGroup.items].sort((left, right) => {
+            return String(right.detected_at_utc || "").localeCompare(String(left.detected_at_utc || ""));
+          });
 
-            const rows = sortedItems.map((item) => {
-              const fieldKey = String(item.field_key || "");
-              const oldValue = asText(item.old_value, "-");
-              const newValue = asText(item.new_value, "-");
-              const licenseDeltaHtml = renderLicenseTypeCountDelta(fieldKey, oldValue, newValue);
+          const rows = sortedItems.map((item) => {
+            const fieldKey = String(item.field_key || "");
+            const oldValue = asText(item.old_value, "-");
+            const newValue = asText(item.new_value, "-");
+            const licenseDeltaHtml = renderLicenseTypeCountDelta(fieldKey, oldValue, newValue);
 
-              let oldFpInfo = "";
-              let newFpInfo = "";
-              let oldValueHtml = `<div class="host-config-main-value">${escapeHtml(oldValue)}</div>`;
-              let newValueHtml = `<div class="host-config-main-value"><strong>${escapeHtml(newValue)}</strong></div>`;
-              if (fieldKey === "sap_release") {
-                const oldFp = resolveSapReleaseDisplay(oldValue, SAP_B1_VERSION_MAP);
-                if (oldFp && oldFp !== "-") {
-                  oldFpInfo = `<div class="host-config-change-subline"><strong>(${escapeHtml(oldFp)})</strong></div>`;
-                }
-                const newFp = resolveSapReleaseDisplay(newValue, SAP_B1_VERSION_MAP);
-                if (newFp && newFp !== "-") {
-                  newFpInfo = `<div class="host-config-change-subline"><strong>(${escapeHtml(newFp)})</strong></div>`;
-                }
+            let oldFpInfo = "";
+            let newFpInfo = "";
+            let oldValueHtml = `<div class="host-config-main-value">${escapeHtml(oldValue)}</div>`;
+            let newValueHtml = `<div class="host-config-main-value"><strong>${escapeHtml(newValue)}</strong></div>`;
+            if (fieldKey === "sap_release") {
+              const oldFp = resolveSapReleaseDisplay(oldValue, SAP_B1_VERSION_MAP);
+              if (oldFp && oldFp !== "-") {
+                oldFpInfo = `<div class="host-config-change-subline"><strong>(${escapeHtml(oldFp)})</strong></div>`;
               }
-              if (fieldKey === "sap_services_ports") {
-                const servicesDiff = buildSapServicesChangelogDiff(oldValue, newValue);
-                oldValueHtml = renderSapServicesChangelogValue(oldValue, { isNew: false, diff: servicesDiff });
-                newValueHtml = renderSapServicesChangelogValue(newValue, { isNew: true, diff: servicesDiff });
+              const newFp = resolveSapReleaseDisplay(newValue, SAP_B1_VERSION_MAP);
+              if (newFp && newFp !== "-") {
+                newFpInfo = `<div class="host-config-change-subline"><strong>(${escapeHtml(newFp)})</strong></div>`;
               }
-              if (licenseDeltaHtml) {
-                newValueHtml = `<div class="host-config-main-value"><strong>${escapeHtml(newValue)}</strong> ${licenseDeltaHtml}</div>`;
-              }
+            }
+            if (fieldKey === "sap_services_ports") {
+              const servicesDiff = buildSapServicesChangelogDiff(oldValue, newValue);
+              oldValueHtml = renderSapServicesChangelogValue(oldValue, { isNew: false, diff: servicesDiff });
+              newValueHtml = renderSapServicesChangelogValue(newValue, { isNew: true, diff: servicesDiff });
+            }
+            if (licenseDeltaHtml) {
+              newValueHtml = `<div class="host-config-main-value"><strong>${escapeHtml(newValue)}</strong> ${licenseDeltaHtml}</div>`;
+            }
 
-              return `
-                <tr>
-                  <td>${escapeHtml(formatUtcPlus2(item.detected_at_utc))}</td>
-                  <td>${escapeHtml(asText(item.field_label || item.field_key, "-"))}</td>
-                  <td>
-                    ${oldValueHtml}
-                    ${oldFpInfo}
-                  </td>
-                  <td>
-                    ${newValueHtml}
-                    ${newFpInfo}
-                  </td>
-                </tr>
-              `;
-            }).join("");
-
-            const showHostSub = hostGroup.displayName !== hostGroup.hostname;
-            const showHostUid = hostGroup.hostUid && hostGroup.hostUid !== hostGroup.hostname;
             return `
-              <details class="host-config-change-group" ${autoExpandGroups ? "open" : ""}>
-                <summary class="host-config-change-summary">
-                  <span class="global-host-label">${escapeHtml(hostGroup.displayName)}${showHostSub ? ` <span class="global-hostname-sub">(${escapeHtml(hostGroup.hostname)})</span>` : ""}${showHostUid ? ` <span class="global-hostname-sub" title="Host UID">[${escapeHtml(hostGroup.hostUid)}]</span>` : ""}</span>
-                  ${hostGroup.country_code && getCountryFlagIconPath(hostGroup.country_code)
-                    ? `<span class="host-config-country-badge" title="Land: ${escapeHtml(hostGroup.country_code)}"><img src="${getCountryFlagIconPath(hostGroup.country_code)}" class="host-config-country-flag" alt="${escapeHtml(hostGroup.country_code)}" /></span>`
-                    : ""}
-                  <span class="host-config-change-count">${sortedItems.length} Changelog-Eintrag/Einträge</span>
-                </summary>
-                <div class="table-wrap host-config-changes-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Zeit</th>
-                        <th>Feld</th>
-                        <th>Vorher</th>
-                        <th>Neu</th>
-                      </tr>
-                    </thead>
-                    <tbody>${rows}</tbody>
-                  </table>
-                </div>
-              </details>
+              <tr>
+                <td>${escapeHtml(formatUtcPlus2(item.detected_at_utc))}</td>
+                <td>${escapeHtml(asText(item.field_label || item.field_key, "-"))}</td>
+                <td>
+                  ${oldValueHtml}
+                  ${oldFpInfo}
+                </td>
+                <td>
+                  ${newValueHtml}
+                  ${newFpInfo}
+                </td>
+              </tr>
             `;
-          })
-          .join("");
+          }).join("");
 
-        return `
-          <details class="host-config-change-date-group" ${autoExpandGroups ? "open" : ""}>
-            <summary class="host-config-change-date-summary">
-              <span class="host-config-date-label">${escapeHtml(customerGroup.customerName)}</span>
-              <span class="host-config-date-count">${customerGroup.items.length} Changelog-Eintrag/Einträge</span>
-            </summary>
-            <div class="host-config-date-group-content">
-              ${hostRowsHtml}
-            </div>
-          </details>
-        `;
-      })
-      .join("");
+          const showHostSub = hostGroup.displayName !== hostGroup.hostname;
+          const showHostUid = hostGroup.hostUid && hostGroup.hostUid !== hostGroup.hostname;
+          return `
+            <details class="host-config-change-group" ${autoExpandGroups ? "open" : ""}>
+              <summary class="host-config-change-summary">
+                <span class="global-host-label">${escapeHtml(hostGroup.displayName)}${showHostSub ? ` <span class="global-hostname-sub">(${escapeHtml(hostGroup.hostname)})</span>` : ""}${showHostUid ? ` <span class="global-hostname-sub" title="Host UID">[${escapeHtml(hostGroup.hostUid)}]</span>` : ""}</span>
+                ${hostGroup.country_code && getCountryFlagIconPath(hostGroup.country_code)
+                  ? `<span class="host-config-country-badge" title="Land: ${escapeHtml(hostGroup.country_code)}"><img src="${getCountryFlagIconPath(hostGroup.country_code)}" class="host-config-country-flag" alt="${escapeHtml(hostGroup.country_code)}" /></span>`
+                  : ""}
+                <span class="host-config-change-count">${sortedItems.length} Changelog-Eintrag/Einträge</span>
+              </summary>
+              <div class="table-wrap host-config-changes-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Zeit</th>
+                      <th>Feld</th>
+                      <th>Vorher</th>
+                      <th>Neu</th>
+                    </tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+            </details>
+          `;
+        })
+        .join("");
+
+      return `
+        <details class="host-config-change-date-group" ${autoExpandGroups ? "open" : ""}>
+          <summary class="host-config-change-date-summary">
+            <span class="host-config-date-label">${escapeHtml(customerGroup.customerName)}</span>
+            <span class="host-config-date-count">${customerGroup.items.length} Changelog-Eintrag/Einträge</span>
+          </summary>
+          <div class="host-config-date-group-content">
+            ${hostRowsHtml}
+          </div>
+        </details>
+      `;
+    };
+
+    groupsEl.innerHTML = "";
+    for (let index = 0; index < customerGroups.length; index += 1) {
+      groupsEl.insertAdjacentHTML("beforeend", renderCustomerGroupHtml(customerGroups[index]));
+      if (index === 0 || (index + 1) % 4 === 0) {
+        await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+      }
+    }
   } catch (error) {
     groupsEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
   }
@@ -12871,45 +12877,43 @@ async function loadGlobalAlertsOverview(options = {}) {
   }
 
   try {
-    const summaryResp = await fetch("/api/v1/alerts-summary", {
+    const summaryPromise = fetch("/api/v1/alerts-summary", {
       credentials: "same-origin",
       cache: "no-store",
     });
-    if (!summaryResp.ok) throw new Error("Summary HTTP " + summaryResp.status);
-    const summaryData = await summaryResp.json();
-
-    // Header and tab counters are always based on ALL open alerts.
-    state.globalOpenAlertsCount = Number(summaryData?.open?.total || 0);
-    state.globalCriticalOpenAlertsCount = Number(summaryData?.open?.critical || 0);
-    state.globalMutedOpenAlertsCount = Number(summaryData?.muted?.total || 0);
-
-    try {
-      const acknowledgedResp = await fetch("/api/v1/alerts?status=open&acknowledged=yes&limit=1&offset=0", {
+    const acknowledgedPromise = fetch("/api/v1/alerts?status=open&acknowledged=yes&limit=1&offset=0", {
+      credentials: "same-origin",
+      cache: "no-store",
+    }).catch(() => null);
+    const listPromise = updateList && rowsEl
+      ? fetch(`/api/v1/alerts?status=open&limit=${requestLimit}&offset=${requestOffset}${severityQuery}${acknowledgedQuery}${closedQuery}${headsUpSuppressedQuery}`, {
         credentials: "same-origin",
         cache: "no-store",
-      });
-      if (acknowledgedResp.ok) {
+      })
+      : null;
+
+    if (!updateList || !rowsEl || !summaryEl) {
+      const summaryResp = await summaryPromise;
+      if (!summaryResp.ok) throw new Error("Summary HTTP " + summaryResp.status);
+      const summaryData = await summaryResp.json();
+      state.globalOpenAlertsCount = Number(summaryData?.open?.total || 0);
+      state.globalCriticalOpenAlertsCount = Number(summaryData?.open?.critical || 0);
+      state.globalMutedOpenAlertsCount = Number(summaryData?.muted?.total || 0);
+      const acknowledgedResp = await acknowledgedPromise;
+      if (acknowledgedResp && acknowledgedResp.ok) {
         const acknowledgedData = await acknowledgedResp.json();
         state.globalAcknowledgedOpenAlertsCount = Number(acknowledgedData?.total || 0);
       }
-    } catch (_) {
-      // Keep previous value when the lightweight acknowledged summary probe fails.
-    }
-
-    globalAlertsTabButton.textContent = state.globalOpenAlertsCount > 0
-      ? `Globale Alerts (${state.globalOpenAlertsCount})`
-      : "Globale Alerts";
-    globalAlertsTabButton.classList.toggle("alert-active", state.globalOpenAlertsCount > 0);
-    updateHeaderStatChips();
-
-    if (!updateList || !rowsEl || !summaryEl) {
+      globalAlertsTabButton.textContent = state.globalOpenAlertsCount > 0
+        ? `Globale Alerts (${state.globalOpenAlertsCount})`
+        : "Globale Alerts";
+      globalAlertsTabButton.classList.toggle("alert-active", state.globalOpenAlertsCount > 0);
+      updateHeaderStatChips();
       return;
     }
 
-    const listResp = await fetch(`/api/v1/alerts?status=open&limit=${requestLimit}&offset=${requestOffset}${severityQuery}${acknowledgedQuery}${closedQuery}${headsUpSuppressedQuery}`, {
-      credentials: "same-origin",
-      cache: "no-store",
-    });
+    const listResp = listPromise ? await listPromise : null;
+    if (!listResp) return;
     if (!listResp.ok) throw new Error("List HTTP " + listResp.status);
 
     const listData = await listResp.json();
@@ -12921,16 +12925,12 @@ async function loadGlobalAlertsOverview(options = {}) {
     const totalForFilter = Number(listData.total || 0);
     state.globalAlertsTotal = totalForFilter;
 
-    const headsUpScope = state.globalHeadsUpSuppressedOnly ? " · Heads-Up: nur unterdrückt" : "";
-    summaryEl.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}${headsUpScope}`;
     if (!append && alerts.length === 0) {
       rowsEl.innerHTML = "<tr><td colspan=\"8\" class=\"muted\">Keine offenen Alerts für den gesetzten Filter.</td></tr>";
       if (loadMoreButton) loadMoreButton.classList.add("hidden");
       if (pagingStatus) pagingStatus.textContent = "0 / 0";
-      return;
-    }
-
-    const rowsHtml = alerts
+    } else {
+      const rowsHtml = alerts
       .map((item) => {
         const severityClass = item.severity === "critical" ? "severity-critical" : "severity-warning";
         const hostDisplayName = asText(item.display_name || item.hostname);
@@ -12988,10 +12988,11 @@ async function loadGlobalAlertsOverview(options = {}) {
       })
       .join("");
 
-    if (append && requestOffset > 0) {
-      rowsEl.insertAdjacentHTML("beforeend", rowsHtml);
-    } else {
-      rowsEl.innerHTML = rowsHtml;
+      if (append && requestOffset > 0) {
+        rowsEl.insertAdjacentHTML("beforeend", rowsHtml);
+      } else {
+        rowsEl.innerHTML = rowsHtml;
+      }
     }
 
     state.globalAlertsOffset = requestOffset + alerts.length;
@@ -13004,6 +13005,27 @@ async function loadGlobalAlertsOverview(options = {}) {
     if (pagingStatus) {
       pagingStatus.textContent = `${Math.min(shownCount, totalForFilter)} / ${totalForFilter}`;
     }
+
+    const summaryResp = await summaryPromise;
+    if (!summaryResp.ok) throw new Error("Summary HTTP " + summaryResp.status);
+    const summaryData = await summaryResp.json();
+    state.globalOpenAlertsCount = Number(summaryData?.open?.total || 0);
+    state.globalCriticalOpenAlertsCount = Number(summaryData?.open?.critical || 0);
+    state.globalMutedOpenAlertsCount = Number(summaryData?.muted?.total || 0);
+
+    const acknowledgedResp = await acknowledgedPromise;
+    if (acknowledgedResp && acknowledgedResp.ok) {
+      const acknowledgedData = await acknowledgedResp.json();
+      state.globalAcknowledgedOpenAlertsCount = Number(acknowledgedData?.total || 0);
+    }
+
+    globalAlertsTabButton.textContent = state.globalOpenAlertsCount > 0
+      ? `Globale Alerts (${state.globalOpenAlertsCount})`
+      : "Globale Alerts";
+    globalAlertsTabButton.classList.toggle("alert-active", state.globalOpenAlertsCount > 0);
+    updateHeaderStatChips();
+    const headsUpScope = state.globalHeadsUpSuppressedOnly ? " · Heads-Up: nur unterdrückt" : "";
+    summaryEl.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}${headsUpScope}`;
 
     rowsEl.querySelectorAll("[data-action='toggle-mute']").forEach((btn) => {
       btn.addEventListener("click", async (e) => {

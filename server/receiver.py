@@ -7648,22 +7648,8 @@ def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit:
     ).fetchall()
 
     host_uids = sorted({str(row[2] or "").strip() for row in rows if str(row[2] or "").strip()})
-    host_uid_display_name_map: dict[str, str] = {}
-    if host_uids:
-        placeholders = ",".join(["?"] * len(host_uids))
-        host_uid_rows = conn.execute(
-            f"""
-            SELECT host_uid, COALESCE(display_name_override, '')
-            FROM host_uid_settings
-            WHERE host_uid IN ({placeholders})
-            """,
-            tuple(host_uids),
-        ).fetchall()
-        host_uid_display_name_map = {
-            str(row[0] or "").strip(): str(row[1] or "").strip()
-            for row in host_uid_rows
-            if str(row[0] or "").strip()
-        }
+    hostnames = sorted({str(row[3] or "").strip() for row in rows if str(row[3] or "").strip()})
+    host_settings_by_hostname, host_uid_display_name_map = _load_host_metadata_maps(conn, hostnames, host_uids)
 
     previous_by_host: dict[str, dict[str, str]] = {}
     changes: list[dict] = []
@@ -7795,8 +7781,7 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
         hostname = str(row[3] or "")
         display_override = str(host_uid_display_name_map.get(host_uid, "") or "").strip()
         if not display_override:
-            host_settings = get_host_settings(conn, hostname)
-            display_override = str(host_settings.get("display_name_override", "") or "").strip()
+            display_override = str(host_settings_by_hostname.get(hostname, {}).get("display_name_override", "") or "").strip()
         country_code = normalize_country_code(str(row[8] or ""))
         customer_name = str(row[9] or "").strip()
         items.append(
@@ -12618,6 +12603,59 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
     return result
 
 
+def _load_host_metadata_maps(
+    conn: sqlite3.Connection,
+    hostnames: list[str] | None = None,
+    host_uids: list[str] | None = None,
+) -> tuple[dict[str, dict], dict[str, str]]:
+    host_settings_by_hostname: dict[str, dict] = {}
+    display_name_by_host_uid: dict[str, str] = {}
+
+    normalized_hostnames = sorted({str(item or "").strip() for item in (hostnames or []) if str(item or "").strip()})
+    if normalized_hostnames:
+        placeholders = ",".join("?" for _ in normalized_hostnames)
+        settings_rows = conn.execute(
+            f"""
+            SELECT h.hostname,
+                   COALESCE(h.display_name_override, ''),
+                   COALESCE(h.country_code_override, ''),
+                   COALESCE(c.customer_name, '')
+            FROM host_settings h
+            LEFT JOIN customers c ON c.id = h.customer_id
+            WHERE h.hostname IN ({placeholders})
+            """,
+            tuple(normalized_hostnames),
+        ).fetchall()
+        for row in settings_rows:
+            hostname = str(row[0] or "").strip()
+            if not hostname:
+                continue
+            host_settings_by_hostname[hostname] = {
+                "display_name_override": str(row[1] or "").strip(),
+                "country_code_override": normalize_country_code(row[2]),
+                "customer_name": str(row[3] or "").strip(),
+            }
+
+    normalized_host_uids = sorted({str(item or "").strip() for item in (host_uids or []) if str(item or "").strip()})
+    if normalized_host_uids:
+        placeholders = ",".join("?" for _ in normalized_host_uids)
+        uid_rows = conn.execute(
+            f"""
+            SELECT host_uid, COALESCE(display_name_override, '')
+            FROM host_uid_settings
+            WHERE host_uid IN ({placeholders})
+            """,
+            tuple(normalized_host_uids),
+        ).fetchall()
+        for row in uid_rows:
+            host_uid = str(row[0] or "").strip()
+            if not host_uid:
+                continue
+            display_name_by_host_uid[host_uid] = str(row[1] or "").strip()
+
+    return host_settings_by_hostname, display_name_by_host_uid
+
+
 def is_alert_muted(conn: sqlite3.Connection, host_key: str, mountpoint: str) -> bool:
     row = conn.execute(
         "SELECT 1 FROM muted_alert_rules WHERE host_uid = ? AND mountpoint = ?",
@@ -15257,52 +15295,40 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 rows = filtered_rows[offset : offset + limit]
 
                 hostnames = sorted({str(row[1]) for row in rows if row[1]})
+                host_uids = sorted({alert_host_key(str(row[1] or ""), str(row[6] or "")) for row in rows})
+                host_settings_by_hostname, host_uid_display_name_map = _load_host_metadata_maps(conn, hostnames, host_uids)
                 display_names: dict[str, str] = {}
-                customer_names: dict[str, str] = {}
-                if hostnames:
-                    placeholders = ",".join("?" for _ in hostnames)
-                    settings_rows = conn.execute(
-                        f"""
-                        SELECT h.hostname,
-                               h.display_name_override,
-                               COALESCE(c.customer_name, '')
-                        FROM host_settings h
-                        LEFT JOIN customers c ON c.id = h.customer_id
-                        WHERE h.hostname IN ({placeholders})
-                        """,
-                        tuple(hostnames),
-                    ).fetchall()
-                    overrides = {str(item[0]): str(item[1] or "") for item in settings_rows}
-                    customer_names = {str(item[0]): str(item[2] or "").strip() for item in settings_rows}
+                customer_names: dict[str, str] = {
+                    hostname: str(host_settings_by_hostname.get(hostname, {}).get("customer_name", "") or "").strip()
+                    for hostname in hostnames
+                }
 
-                    latest_payload_rows = conn.execute(
-                        f"""
-                        SELECT hostname, payload_json
+                latest_payload_rows = conn.execute(
+                    f"""
+                    SELECT hostname, payload_json
+                    FROM reports
+                    WHERE id IN (
+                        SELECT MAX(id)
                         FROM reports
-                        WHERE id IN (
-                            SELECT MAX(id)
-                            FROM reports
-                            WHERE hostname IN ({placeholders})
-                            GROUP BY hostname
-                        )
-                        """,
-                        tuple(hostnames),
-                    ).fetchall()
-                    payload_by_hostname = {
-                        str(item[0]): parse_payload_json(str(item[1] or "{}"))
-                        for item in latest_payload_rows
-                    }
+                        WHERE hostname IN ({','.join('?' for _ in hostnames)})
+                        GROUP BY hostname
+                    )
+                    """,
+                    tuple(hostnames),
+                ).fetchall() if hostnames else []
+                payload_by_hostname = {
+                    str(item[0]): parse_payload_json(str(item[1] or "{}"))
+                    for item in latest_payload_rows
+                }
 
-                    for hostname in hostnames:
-                        payload = payload_by_hostname.get(hostname, {})
-                        display_names[hostname] = effective_display_name(
-                            payload,
-                            overrides.get(hostname, ""),
-                            hostname,
-                        )
-                        if not customer_names.get(hostname):
-                            host_settings = get_host_settings(conn, hostname)
-                            customer_names[hostname] = str(host_settings.get("customer_name", "") or "").strip()
+                for hostname in hostnames:
+                    payload = payload_by_hostname.get(hostname, {})
+                    host_settings = host_settings_by_hostname.get(hostname, {})
+                    display_names[hostname] = effective_display_name(
+                        payload,
+                        str(host_settings.get("display_name_override", "") or ""),
+                        hostname,
+                    )
 
                 host_keys = sorted(
                     {
@@ -15325,8 +15351,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 for row in rows:
                     hostname = str(row[1] or "")
                     host_uid_value = alert_host_key(hostname, str(row[6] or ""))
-                    host_settings = get_host_settings(conn_mute, hostname, host_uid_value)
-                    display_name_value = get_display_name_override(conn_mute, hostname, host_uid_value) or hostname
+                    host_settings = host_settings_by_hostname.get(hostname, {})
+                    display_name_value = (
+                        host_uid_display_name_map.get(host_uid_value)
+                        or str(host_settings.get("display_name_override", "") or "")
+                        or hostname
+                    )
                     customer_name_value = str(host_settings.get("customer_name", "") or "").strip() or "Ohne Kunde"
                     mountpoint = str(row[2] or "")
                     host_details = latest_details_by_host_key.get(host_uid_value, {})
