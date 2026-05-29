@@ -13791,13 +13791,19 @@ body[data-theme="dark"] .fs-bar-wrap {
 #globalView .global-admin-nav-buttons {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
+  gap: 9px;
+}
+
+#globalView .global-admin-nav-divider {
+  height: 1px;
+  margin: 4px 2px 2px;
+  background: linear-gradient(90deg, rgba(104, 130, 165, 0.15) 0%, rgba(104, 130, 165, 0.46) 50%, rgba(104, 130, 165, 0.15) 100%);
 }
 
 #globalView .global-admin-nav-buttons .tab-button {
   width: 100%;
   justify-content: flex-start;
-  min-height: 50px;
+  min-height: 54px;
   padding: 0 14px;
   gap: 10px;
   display: inline-flex;
@@ -13829,6 +13835,10 @@ body[data-theme="dark"] .fs-bar-wrap {
 #adminNavSettingsButton::before {
   font-size: 17px;
   line-height: 1;
+}
+
+#adminNavSettingsButton {
+  margin-top: 2px;
 }
 
 #adminNavAgentSourceButton::before { content: "🧾"; }
@@ -13876,6 +13886,10 @@ body[data-theme="dark"] #globalView .global-admin-nav-buttons .tab-button.active
   background: linear-gradient(180deg, #2b446a 0%, #243a5b 100%);
   color: #eef5ff;
   box-shadow: inset 3px 0 0 #79a6ef, inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 3px 10px rgba(0, 0, 0, 0.28);
+}
+
+body[data-theme="dark"] #globalView .global-admin-nav-divider {
+  background: linear-gradient(90deg, rgba(147, 174, 210, 0.08) 0%, rgba(147, 174, 210, 0.4) 50%, rgba(147, 174, 210, 0.08) 100%);
 }
 
 @media (max-width: 900px) {
