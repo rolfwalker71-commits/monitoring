@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.130**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.130**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.131**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.131**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.131 | 29.05.2026 | Visuelle Angleichung der linken Admin-Menüleiste an das Referenzmuster: neutrales Sidebar-Panel (grau/blau statt orange), größere Titeltypografie, klare vertikale Menü-Buttons mit Icon-Präfixen sowie stärkerer Active-State mit linker Akzentkante. |
 | 1.7.130 | 29.05.2026 | Admin-Workspace Breitenfix: zweispaltiges Admin-Layout hart auf Seitenbreite begrenzt (Sidebar + Content), Min-Width/Max-Width für Admin-Content korrigiert und Chart-Grid in Admin-Einstellungen responsiv angepasst, sodass keine Bereiche mehr nach rechts aufreißen oder aus dem Viewport laufen. |
 | 1.7.129 | 29.05.2026 | Admin-Bereich optisch auf vertikale linke Menüleiste umgestellt (statt Kachel-Umbruch): die Haupt-Admin-Navigation rendert jetzt als echte Sidebar-Liste mit voller Breite pro Menüpunkt, analog zur gewünschten Navigationslogik aus Einzelmeldungen. |
 | 1.7.128 | 29.05.2026 | Admin Einstellungen aufgeteilt: innerhalb des Admin-Tabs wurde eine thematische Unter-Navigation eingeführt (`Betrieb`, `Sicherheit`, `Alerting`, `SAP Mappings`, `Datenhygiene`), sodass jeweils nur eine Funktionsgruppe sichtbar ist und der zuvor überladene Gesamtblock deutlich besser navigierbar wird. |
