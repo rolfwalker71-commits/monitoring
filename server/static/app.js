@@ -118,6 +118,7 @@ const state = {
   userSettingsSubMode: "password",
   overviewSection: "main",
   globalSubMode: "global-alerts",
+  adminSubMode: "agent-source-status",
   criticalTrendsHours: 24,
   criticalTrendsProjectHours: 72,
   criticalTrendsMetrics: ["filesystem"],
@@ -253,6 +254,38 @@ function normalizeHostInterestMode(value) {
     return mode;
   }
   return "all";
+}
+
+const ADMIN_SUBMODE_TO_GLOBAL_MAP = {
+  "agent-source-status": "agent-source-status",
+  "admin-alert-subs": "admin-alert-subs",
+  "admin-login-audit": "admin-login-audit",
+  "admin-settings": "admin-settings",
+};
+
+const GLOBAL_TO_ADMIN_SUBMODE_MAP = Object.fromEntries(
+  Object.entries(ADMIN_SUBMODE_TO_GLOBAL_MAP).map(([adminSubMode, globalSubMode]) => [globalSubMode, adminSubMode])
+);
+
+function normalizeAdminSubMode(value) {
+  const mode = String(value || "").trim();
+  if (Object.prototype.hasOwnProperty.call(ADMIN_SUBMODE_TO_GLOBAL_MAP, mode)) {
+    return mode;
+  }
+  return "agent-source-status";
+}
+
+function syncAdminSubModeFromGlobal() {
+  const mapped = GLOBAL_TO_ADMIN_SUBMODE_MAP[state.globalSubMode];
+  if (mapped) {
+    state.adminSubMode = mapped;
+  }
+}
+
+function setAdminSubMode(mode) {
+  const normalized = normalizeAdminSubMode(mode);
+  state.adminSubMode = normalized;
+  state.globalSubMode = ADMIN_SUBMODE_TO_GLOBAL_MAP[normalized];
 }
 
 const ANALYSIS_RANGE_OPTIONS = new Map([
@@ -1312,6 +1345,8 @@ function updateViewMode() {
 }
 
 function updateGlobalSubMode() {
+  syncAdminSubModeFromGlobal();
+
   const globalAlertsView = document.getElementById("globalAlertsView");
   const criticalTrendsView = document.getElementById("criticalTrendsView");
   const inactiveHostsView = document.getElementById("inactiveHostsView");
@@ -1332,6 +1367,11 @@ function updateGlobalSubMode() {
   const globalAdminAlertSubsTabButton = document.getElementById("globalAdminAlertSubsTabButton");
   const globalAdminLoginAuditTabButton = document.getElementById("globalAdminLoginAuditTabButton");
   const globalAdminSettingsTabButton = document.getElementById("globalAdminSettingsTabButton");
+  const globalAdminNavShell = document.getElementById("globalAdminNavShell");
+  const adminNavAgentSourceButton = document.getElementById("adminNavAgentSourceButton");
+  const adminNavAlertSubsButton = document.getElementById("adminNavAlertSubsButton");
+  const adminNavLoginAuditButton = document.getElementById("adminNavLoginAuditButton");
+  const adminNavSettingsButton = document.getElementById("adminNavSettingsButton");
 
   const alertsActive = state.globalSubMode === "global-alerts";
   const trendsActive = state.globalSubMode === "critical-trends";
@@ -1343,6 +1383,8 @@ function updateGlobalSubMode() {
   const adminAlertSubsActive = state.globalSubMode === "admin-alert-subs";
   const adminLoginAuditActive = state.globalSubMode === "admin-login-audit";
   const adminSettingsActive = state.globalSubMode === "admin-settings";
+  const adminSourceActive = state.globalSubMode === "agent-source-status";
+  const anyAdminSectionActive = adminSourceActive || adminAlertSubsActive || adminLoginAuditActive || adminSettingsActive;
 
   if (globalAlertsView) globalAlertsView.classList.toggle("hidden", !alertsActive);
   if (criticalTrendsView) criticalTrendsView.classList.toggle("hidden", !trendsActive);
@@ -1364,6 +1406,26 @@ function updateGlobalSubMode() {
   if (globalAdminAlertSubsTabButton) { globalAdminAlertSubsTabButton.classList.toggle("active", adminAlertSubsActive); globalAdminAlertSubsTabButton.setAttribute("aria-selected", adminAlertSubsActive ? "true" : "false"); }
   if (globalAdminLoginAuditTabButton) { globalAdminLoginAuditTabButton.classList.toggle("active", adminLoginAuditActive); globalAdminLoginAuditTabButton.setAttribute("aria-selected", adminLoginAuditActive ? "true" : "false"); }
   if (globalAdminSettingsTabButton) { globalAdminSettingsTabButton.classList.toggle("active", adminSettingsActive); globalAdminSettingsTabButton.setAttribute("aria-selected", adminSettingsActive ? "true" : "false"); }
+  if (globalAdminNavShell) {
+    globalAdminNavShell.classList.toggle("hidden", !state.isAdmin);
+    globalAdminNavShell.classList.toggle("global-admin-nav-shell-active", anyAdminSectionActive);
+  }
+  if (adminNavAgentSourceButton) {
+    adminNavAgentSourceButton.classList.toggle("active", state.adminSubMode === "agent-source-status");
+    adminNavAgentSourceButton.setAttribute("aria-selected", state.adminSubMode === "agent-source-status" ? "true" : "false");
+  }
+  if (adminNavAlertSubsButton) {
+    adminNavAlertSubsButton.classList.toggle("active", state.adminSubMode === "admin-alert-subs");
+    adminNavAlertSubsButton.setAttribute("aria-selected", state.adminSubMode === "admin-alert-subs" ? "true" : "false");
+  }
+  if (adminNavLoginAuditButton) {
+    adminNavLoginAuditButton.classList.toggle("active", state.adminSubMode === "admin-login-audit");
+    adminNavLoginAuditButton.setAttribute("aria-selected", state.adminSubMode === "admin-login-audit" ? "true" : "false");
+  }
+  if (adminNavSettingsButton) {
+    adminNavSettingsButton.classList.toggle("active", state.adminSubMode === "admin-settings");
+    adminNavSettingsButton.setAttribute("aria-selected", state.adminSubMode === "admin-settings" ? "true" : "false");
+  }
 }
 
 function updateUserSettingsSubMode() {
@@ -1850,6 +1912,7 @@ function updateAdminSettingsVisibility() {
   const globalAdminLoginAuditTab = document.getElementById("globalAdminLoginAuditTabButton");
   const globalAdminSettingsTab = document.getElementById("globalAdminSettingsTabButton");
   const adminOnlyTabsLegend = document.getElementById("adminOnlyTabsLegend");
+  const globalAdminNavShell = document.getElementById("globalAdminNavShell");
   const globalAdminOpsSection = document.getElementById("globalAdminOpsSection");
   const hostConfigChangesBackfillButton = document.getElementById("backfillHostConfigChangesButton");
   const runChangelogRebuildNowButton = document.getElementById("runChangelogRebuildNowButton");
@@ -1879,6 +1942,9 @@ function updateAdminSettingsVisibility() {
   }
   if (adminOnlyTabsLegend) {
     adminOnlyTabsLegend.classList.toggle("hidden", !state.isAdmin);
+  }
+  if (globalAdminNavShell) {
+    globalAdminNavShell.classList.toggle("hidden", !state.isAdmin);
   }
   if (globalAdminOpsSection) {
     globalAdminOpsSection.classList.toggle("hidden", !state.isAdmin);
@@ -1917,6 +1983,9 @@ function updateAdminSettingsVisibility() {
   if (!state.isAdmin && state.globalSubMode === "admin-login-audit") {
     state.globalSubMode = "global-alerts";
     updateGlobalSubMode();
+  }
+  if (!state.isAdmin) {
+    state.adminSubMode = "agent-source-status";
   }
   if (state.userSettingsSubMode !== "password" && state.userSettingsSubMode !== "channels" && state.userSettingsSubMode !== "digests" && state.userSettingsSubMode !== "hosts") {
     state.userSettingsSubMode = "password";
@@ -13103,7 +13172,7 @@ function wireEvents() {
   }
 
   document.addEventListener("click", (event) => {
-    const target = event.target instanceof Element ? event.target.closest("#overviewTabButton, #reportsTabButton, #globalViewButton, #globalAlertsTabButton, #criticalTrendsTabButton, #inactiveHostsTabButton, #backupStatusTabButton, #systemOverviewTabButton, #hostConfigChangesTabButton, #agentSourceStatusTabButton, #globalAdminAlertSubsTabButton, #globalAdminLoginAuditTabButton, #globalAdminSettingsTabButton, #headerAlertChip, #headerMutedChip, #headerInactiveChip") : null;
+    const target = event.target instanceof Element ? event.target.closest("#overviewTabButton, #reportsTabButton, #globalViewButton, #globalAlertsTabButton, #criticalTrendsTabButton, #inactiveHostsTabButton, #backupStatusTabButton, #systemOverviewTabButton, #hostConfigChangesTabButton, #agentSourceStatusTabButton, #globalAdminAlertSubsTabButton, #globalAdminLoginAuditTabButton, #globalAdminSettingsTabButton, #adminNavAgentSourceButton, #adminNavAlertSubsButton, #adminNavLoginAuditButton, #adminNavSettingsButton, #headerAlertChip, #headerMutedChip, #headerInactiveChip") : null;
     if (!target) {
       return;
     }
@@ -13362,7 +13431,7 @@ function wireEvents() {
   const globalAdminAlertSubsTabButton = document.getElementById("globalAdminAlertSubsTabButton");
   if (globalAdminAlertSubsTabButton) {
     globalAdminAlertSubsTabButton.addEventListener("click", async () => {
-      state.globalSubMode = "admin-alert-subs";
+      setAdminSubMode("admin-alert-subs");
       updateGlobalSubMode();
       await loadAdminAlertSubscriptions();
     });
@@ -13373,7 +13442,7 @@ function wireEvents() {
       if (!state.isAdmin) {
         return;
       }
-      state.globalSubMode = "admin-login-audit";
+      setAdminSubMode("admin-login-audit");
       updateGlobalSubMode();
       await loadAdminLoginAudit();
     });
@@ -13384,7 +13453,51 @@ function wireEvents() {
       if (!state.isAdmin) {
         return;
       }
-      state.globalSubMode = "admin-settings";
+      setAdminSubMode("admin-settings");
+      updateGlobalSubMode();
+      await loadGlobalAdminSettingsPanel();
+    });
+  }
+  const adminNavAgentSourceButton = document.getElementById("adminNavAgentSourceButton");
+  if (adminNavAgentSourceButton) {
+    adminNavAgentSourceButton.addEventListener("click", async () => {
+      if (!state.isAdmin) {
+        return;
+      }
+      setAdminSubMode("agent-source-status");
+      updateGlobalSubMode();
+      await loadAgentSourceStatus();
+    });
+  }
+  const adminNavAlertSubsButton = document.getElementById("adminNavAlertSubsButton");
+  if (adminNavAlertSubsButton) {
+    adminNavAlertSubsButton.addEventListener("click", async () => {
+      if (!state.isAdmin) {
+        return;
+      }
+      setAdminSubMode("admin-alert-subs");
+      updateGlobalSubMode();
+      await loadAdminAlertSubscriptions();
+    });
+  }
+  const adminNavLoginAuditButton = document.getElementById("adminNavLoginAuditButton");
+  if (adminNavLoginAuditButton) {
+    adminNavLoginAuditButton.addEventListener("click", async () => {
+      if (!state.isAdmin) {
+        return;
+      }
+      setAdminSubMode("admin-login-audit");
+      updateGlobalSubMode();
+      await loadAdminLoginAudit();
+    });
+  }
+  const adminNavSettingsButton = document.getElementById("adminNavSettingsButton");
+  if (adminNavSettingsButton) {
+    adminNavSettingsButton.addEventListener("click", async () => {
+      if (!state.isAdmin) {
+        return;
+      }
+      setAdminSubMode("admin-settings");
       updateGlobalSubMode();
       await loadGlobalAdminSettingsPanel();
     });

@@ -13677,3 +13677,99 @@ body[data-theme="dark"] .trend-progress-bar,
 body[data-theme="dark"] .fs-bar-wrap {
   background: linear-gradient(180deg, #2a3f5a 0%, #24374f 100%);
 }
+
+#globalView .global-admin-nav-shell {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 10px 12px;
+  border: 1px solid #d8c2a5;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fff8ef 0%, #fff2df 100%);
+  box-shadow: 0 6px 14px rgba(67, 42, 14, 0.08);
+}
+
+#globalView .global-admin-nav-shell.global-admin-nav-shell-active {
+  border-color: #d8aa70;
+  box-shadow: 0 10px 20px rgba(67, 42, 14, 0.14);
+}
+
+#globalView .global-admin-nav-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+#globalView .global-admin-nav-head h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #7a3b00;
+}
+
+#globalView .global-admin-nav-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#globalView .global-admin-nav-buttons .tab-button {
+  border-color: #d6b088;
+  background: linear-gradient(180deg, #fffdf9 0%, #fff6ea 100%);
+  color: #7a3b00;
+}
+
+#globalView .global-admin-nav-buttons .tab-button:hover:not(.active) {
+  border-color: #be8a58;
+  background: #fff1e1;
+}
+
+#globalView .global-admin-nav-buttons .tab-button.active {
+  border-color: #a35e1e;
+  background: linear-gradient(180deg, #ffedd5 0%, #ffe1bf 100%);
+  color: #5f2e00;
+}
+
+body[data-theme="dark"] #globalView .global-admin-nav-shell {
+  border-color: #6f4f2d;
+  background: linear-gradient(180deg, #2f2419 0%, #281f16 100%);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+body[data-theme="dark"] #globalView .global-admin-nav-shell.global-admin-nav-shell-active {
+  border-color: #9a6a39;
+}
+
+body[data-theme="dark"] #globalView .global-admin-nav-head h4 {
+  color: #ffcc94;
+}
+
+body[data-theme="dark"] #globalView .global-admin-nav-buttons .tab-button {
+  border-color: #7d5c37;
+  background: linear-gradient(180deg, #3a2d1f 0%, #34281d 100%);
+  color: #ffd9b0;
+}
+
+body[data-theme="dark"] #globalView .global-admin-nav-buttons .tab-button:hover:not(.active) {
+  border-color: #a87b4a;
+  background: #3f3122;
+}
+
+body[data-theme="dark"] #globalView .global-admin-nav-buttons .tab-button.active {
+  border-color: #d39653;
+  background: linear-gradient(180deg, #594024 0%, #4f391f 100%);
+  color: #ffe8cf;
+}
+
+@media (max-width: 900px) {
+  #globalView .global-admin-nav-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  #globalView .global-admin-nav-buttons .tab-button {
+    flex: 1 1 220px;
+  }
+}

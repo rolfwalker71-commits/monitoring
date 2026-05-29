@@ -140,6 +140,19 @@
               <p id="adminOnlyTabsLegend" class="admin-tab-legend hidden"><span class="admin-tab-legend-swatch" aria-hidden="true"></span> Orange markierte Register sind nur für Admins sichtbar.</p>
             </div>
 
+            <section id="globalAdminNavShell" class="global-admin-nav-shell hidden" aria-label="Admin Navigation">
+              <div class="global-admin-nav-head">
+                <h4>Admin Bereiche</h4>
+                <p class="count compact">Neue Navigation mit Bridge zu den bestehenden Registern.</p>
+              </div>
+              <div class="global-admin-nav-buttons" role="tablist" aria-label="Admin Unterbereiche">
+                <button id="adminNavAgentSourceButton" type="button" class="tab-button" role="tab" aria-selected="false">Agent Quelle</button>
+                <button id="adminNavAlertSubsButton" type="button" class="tab-button" role="tab" aria-selected="false">Alert Abos</button>
+                <button id="adminNavLoginAuditButton" type="button" class="tab-button" role="tab" aria-selected="false">Anmeldungen</button>
+                <button id="adminNavSettingsButton" type="button" class="tab-button" role="tab" aria-selected="false">Admin Einstellungen</button>
+              </div>
+            </section>
+
             <div id="globalAlertsView" role="tabpanel" aria-labelledby="globalAlertsTabButton">
               <section class="alerts-panel global-alerts-panel">
                 <div class="analysis-header">
