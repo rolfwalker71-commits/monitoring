@@ -3803,19 +3803,24 @@ function renderCustomerNotificationPanel(hostname, settings) {
   </details>`;
 }
 
-async function loadAndRenderCustomerNotificationPanel(hostname) {
+async function loadAndRenderCustomerNotificationPanel(hostname, hostUid = "") {
   const container = document.getElementById("customerNotificationPanel");
   if (!container) return;
-  if (!hostname) {
+  const normalizedHostname = asText(hostname, "").trim();
+  const normalizedHostUid = asText(hostUid, "").trim();
+  if (!normalizedHostname && !normalizedHostUid) {
     container.classList.remove("hidden");
     container.innerHTML = '<p class="muted">Wähle einen Host, um die Kundeninfos zu sehen.</p>';
     return;
   }
   try {
-    const resp = await fetch(`/api/v1/host-settings?hostname=${encodeURIComponent(hostname)}`);
+    const params = new URLSearchParams();
+    if (normalizedHostname) params.set("hostname", normalizedHostname);
+    if (normalizedHostUid) params.set("host_uid", normalizedHostUid);
+    const resp = await fetch(`/api/v1/host-settings?${params.toString()}`);
     if (!resp.ok) throw new Error("HTTP " + resp.status);
     const data = await resp.json();
-    container.innerHTML = renderCustomerNotificationPanel(hostname, data);
+    container.innerHTML = renderCustomerNotificationPanel(normalizedHostname, data);
     container.classList.remove("hidden");
 
     const saveButton = container.querySelector("#saveCustomerNameBtn");
@@ -3854,7 +3859,7 @@ async function loadAndRenderCustomerNotificationPanel(hostname) {
           throw new Error(d.error || "HTTP " + r.status);
         }
         if (status) { status.textContent = "✅ Gespeichert"; setTimeout(() => { status.textContent = ""; }, 2500); }
-        state.selectedDisplayName = state.selectedDisplayName || hostname;
+        state.selectedDisplayName = state.selectedDisplayName || normalizedHostname;
         await loadHosts({ preserveScroll: true });
       } catch (err) {
         if (status) { status.textContent = `❌ ${err.message}`; setTimeout(() => { status.textContent = ""; }, 3000); }
@@ -9910,7 +9915,7 @@ function wireHostListInteractions() {
     loadAlertsForHost();
     loadDatabaseLifecycleForHost();
     loadConfigChangelogForHost();
-    loadAndRenderCustomerNotificationPanel(hostname);
+    loadAndRenderCustomerNotificationPanel(hostname, hostUid);
   };
 
   hostList.addEventListener("click", async (event) => {
@@ -10218,7 +10223,7 @@ async function loadHosts(options = {}) {
       hostList.scrollTop = previousScrollTop;
     }
     updatePagerButtons();
-    loadAndRenderCustomerNotificationPanel(state.selectedHost || "");
+    loadAndRenderCustomerNotificationPanel(state.selectedHost || "", state.selectedHostUid || "");
 
     // Refresh muted-alert metadata in the background so host cards appear fast.
     if (!state.alertMutesRefreshInFlight) {
@@ -14141,7 +14146,7 @@ function wireEvents() {
     updateOverviewSection();
     // Reload panel for current host when switching to this tab
     if (state.selectedHost) {
-      loadAndRenderCustomerNotificationPanel(state.selectedHost);
+      loadAndRenderCustomerNotificationPanel(state.selectedHost, state.selectedHostUid || "");
     }
   });
 

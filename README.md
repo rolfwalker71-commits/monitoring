@@ -698,6 +698,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.122 (29. Mai 2026)
+
+- **Kundeninfos fuer Duplicate-Hostnamen korrigiert**: Der Kundeninfos-Block laedt Host-Einstellungen jetzt mit host_uid und nicht nur ueber hostname.
+- **Falsches Mapping bei 4 betroffenen Karten behoben**: Hosts mit gleichem Namen greifen wieder auf den richtigen host_uid-Datensatz zu.
+- **Kundenname wieder sichtbar/speicherbar**: Zugeordnete Kunden werden in Kundeninfos wieder korrekt angezeigt und koennen wie erwartet bearbeitet werden.
+
 ### v1.7.80 (25. Mai 2026)
 
 - **Comic-Erklaergrafik erstellt**: Neue SVG im Comic-Stil erklaert die App als sechsteilige Story von Agent-Erfassung bis Dashboard.
