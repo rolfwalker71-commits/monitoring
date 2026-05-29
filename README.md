@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.128**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.128**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.129**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.129**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.129 | 29.05.2026 | Admin-Bereich optisch auf vertikale linke Menüleiste umgestellt (statt Kachel-Umbruch): die Haupt-Admin-Navigation rendert jetzt als echte Sidebar-Liste mit voller Breite pro Menüpunkt, analog zur gewünschten Navigationslogik aus Einzelmeldungen. |
 | 1.7.128 | 29.05.2026 | Admin Einstellungen aufgeteilt: innerhalb des Admin-Tabs wurde eine thematische Unter-Navigation eingeführt (`Betrieb`, `Sicherheit`, `Alerting`, `SAP Mappings`, `Datenhygiene`), sodass jeweils nur eine Funktionsgruppe sichtbar ist und der zuvor überladene Gesamtblock deutlich besser navigierbar wird. |
 | 1.7.127 | 29.05.2026 | Admin-Reorganisation Phase 2: Global-Admin-Navigation in einen Workspace-Modus überführt (Sidebar-ähnliches Layout bei aktiven Admin-Unterbereichen), Legacy-Global-Tabs in diesem Modus visuell gedimmt und das Nachladen des aktiven Global-Submodes über eine zentrale Loader-Funktion vereinheitlicht. |
 | 1.7.126 | 29.05.2026 | Admin-Reorganisation gestartet (safe scaffold): neue Admin-Navigation im Global-Bereich eingefuehrt, inklusive nicht-destruktiver Bridge auf bestehende Admin-Subtabs (`Agent Quelle`, `Alert Abos`, `Anmeldungen`, `Admin Einstellungen`) und separatem `adminSubMode`-State fuer schrittweise Migration ohne Funktionsverlust. |

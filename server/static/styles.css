@@ -13740,10 +13740,8 @@ body[data-theme="dark"] .fs-bar-wrap {
 }
 
 #globalView .global-admin-nav-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  display: grid;
+  gap: 4px;
   margin-bottom: 8px;
 }
 
@@ -13754,12 +13752,16 @@ body[data-theme="dark"] .fs-bar-wrap {
 }
 
 #globalView .global-admin-nav-buttons {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
 #globalView .global-admin-nav-buttons .tab-button {
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 42px;
+  padding: 0 14px;
   border-color: #d6b088;
   background: linear-gradient(180deg, #fffdf9 0%, #fff6ea 100%);
   color: #7a3b00;
@@ -13832,13 +13834,11 @@ body[data-theme="dark"] #globalView .global-admin-nav-buttons .tab-button.active
   }
 
   #globalView .global-admin-nav-head {
-    flex-direction: column;
-    align-items: flex-start;
     gap: 4px;
   }
 
   #globalView .global-admin-nav-buttons .tab-button {
-    flex: 1 1 220px;
+    width: 100%;
   }
 }
 
