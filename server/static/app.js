@@ -120,6 +120,7 @@ const state = {
   globalSubMode: "global-alerts",
   adminSubMode: "agent-source-status",
   adminSettingsSubMode: "operations",
+  adminOperationsSubMode: "quick",
   criticalTrendsHours: 24,
   criticalTrendsProjectHours: 72,
   criticalTrendsMetrics: ["filesystem"],
@@ -276,6 +277,14 @@ const ADMIN_SETTINGS_GROUP_TO_SECTION_IDS = {
   data: ["filesystemBlacklistAdminSection"],
 };
 
+const ADMIN_OPERATIONS_GROUP_TO_SECTION_IDS = {
+  quick: ["adminOpsQuickGroup"],
+  database: ["adminOpsDbMaintenanceCard"],
+  ingest: ["adminOpsIngestCard"],
+  backup: ["adminOpsBackupCard"],
+  agents: ["adminOpsAgentUpdateCard"],
+};
+
 function normalizeAdminSubMode(value) {
   const mode = String(value || "").trim();
   if (Object.prototype.hasOwnProperty.call(ADMIN_SUBMODE_TO_GLOBAL_MAP, mode)) {
@@ -303,6 +312,62 @@ function normalizeAdminSettingsSubMode(value) {
     return mode;
   }
   return "operations";
+}
+
+function normalizeAdminOperationsSubMode(value) {
+  const mode = String(value || "").trim();
+  if (Object.prototype.hasOwnProperty.call(ADMIN_OPERATIONS_GROUP_TO_SECTION_IDS, mode)) {
+    return mode;
+  }
+  return "quick";
+}
+
+function applyAdminOperationsSubMode(section) {
+  if (!section) {
+    return;
+  }
+  const activeMode = normalizeAdminOperationsSubMode(state.adminOperationsSubMode);
+  state.adminOperationsSubMode = activeMode;
+
+  const allManagedIds = Object.values(ADMIN_OPERATIONS_GROUP_TO_SECTION_IDS).flat();
+  const visibleIds = new Set(ADMIN_OPERATIONS_GROUP_TO_SECTION_IDS[activeMode] || []);
+
+  allManagedIds.forEach((sectionId) => {
+    const card = document.getElementById(sectionId);
+    if (!card) {
+      return;
+    }
+    card.classList.toggle("hidden", !visibleIds.has(sectionId));
+  });
+
+  section.querySelectorAll(".admin-ops-nav-button").forEach((button) => {
+    const buttonMode = String(button.getAttribute("data-admin-ops-mode") || "");
+    const active = buttonMode === activeMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+}
+
+function ensureAdminOperationsSplitLayout(section) {
+  if (!section) {
+    return;
+  }
+  const shell = section.querySelector("#adminOpsSplitShell");
+  if (!shell) {
+    return;
+  }
+
+  if (shell.getAttribute("data-wired") !== "1") {
+    shell.querySelectorAll(".admin-ops-nav-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.adminOperationsSubMode = normalizeAdminOperationsSubMode(button.getAttribute("data-admin-ops-mode"));
+        applyAdminOperationsSubMode(section);
+      });
+    });
+    shell.setAttribute("data-wired", "1");
+  }
+
+  applyAdminOperationsSubMode(section);
 }
 
 function applyAdminSettingsSubMode(container) {
@@ -333,6 +398,10 @@ function applyAdminSettingsSubMode(container) {
     button.classList.toggle("active", active);
     button.setAttribute("aria-selected", active ? "true" : "false");
   });
+
+  if (activeMode === "operations") {
+    ensureAdminOperationsSplitLayout(document.getElementById("globalAdminOpsSection"));
+  }
 }
 
 function ensureAdminSettingsSplitLayout(container) {
@@ -2122,6 +2191,7 @@ function updateAdminSettingsVisibility() {
   if (!state.isAdmin) {
     state.adminSubMode = "agent-source-status";
     state.adminSettingsSubMode = "operations";
+    state.adminOperationsSubMode = "quick";
   }
   if (state.userSettingsSubMode !== "password" && state.userSettingsSubMode !== "channels" && state.userSettingsSubMode !== "digests" && state.userSettingsSubMode !== "hosts") {
     state.userSettingsSubMode = "password";

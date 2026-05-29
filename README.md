@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.132**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.132**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.133**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.133**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.133 | 29.05.2026 | Admin Einstellungen > Betrieb auf Unterbereiche aufgeteilt (Aktionen, DB Wartung, Ingest, Backup, Agent Status), sodass nur noch eine Karten-Gruppe gleichzeitig sichtbar ist; zusätzlich Seitenleisten-Typografie (Titel, Untertitel, Menütext/Icons) auf kompakteres Referenzniveau reduziert. |
 | 1.7.132 | 29.05.2026 | Sidebar-Feinschliff gemäß Referenzrhythmik: einheitliche Menü-Kartenhöhe in der linken Admin-Navigation, zusätzliche Trennlinie sowie sichtbarer Gruppenabstand vor dem letzten Menüpunkt für klarere vertikale Struktur. |
 | 1.7.131 | 29.05.2026 | Visuelle Angleichung der linken Admin-Menüleiste an das Referenzmuster: neutrales Sidebar-Panel (grau/blau statt orange), größere Titeltypografie, klare vertikale Menü-Buttons mit Icon-Präfixen sowie stärkerer Active-State mit linker Akzentkante. |
 | 1.7.130 | 29.05.2026 | Admin-Workspace Breitenfix: zweispaltiges Admin-Layout hart auf Seitenbreite begrenzt (Sidebar + Content), Min-Width/Max-Width für Admin-Content korrigiert und Chart-Grid in Admin-Einstellungen responsiv angepasst, sodass keine Bereiche mehr nach rechts aufreißen oder aus dem Viewport laufen. |

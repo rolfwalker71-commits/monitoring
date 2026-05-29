@@ -428,22 +428,34 @@
                 <h5>Admin Aktionen</h5>
                 <p class="count compact">Systemweite Agent-Aktionen</p>
               </div>
-              <div class="global-admin-ops-actions">
-                <button id="triggerAllAgentsUpdateButton" class="global-update-chip global-update-chip-inline" type="button" title="Update für alle Hosts">⟳ Update für alle Hosts</button>
-                <button id="rolloutApiKeyButton" class="btn-secondary" type="button" title="Neuen API-Key auf alle Agenten ausrollen">🔐 API-Key verteilen</button>
-                <button id="downloadDatabaseBackupButton" class="btn-secondary" type="button" title="SQLite Datenbank lokal sichern">💾 DB sichern</button>
-                <button id="restoreDatabaseButton" class="btn-secondary btn-danger-outline" type="button" title="Datenbank aus Backup-Datei wiederherstellen">&#x267B;&#xFE0F; DB wiederherstellen</button>
-                <button id="fixAlertStatusButton" class="btn-secondary" type="button" title="Korrigiere alte quittierte und geschlossene Alerts">🔧 Alert-Status korrigieren</button>
-                <input id="restoreDatabaseFileInput" type="file" accept=".db,application/x-sqlite3,application/octet-stream" style="display:none" />
-              </div>
-              <div id="dbOpsProgress" class="db-ops-progress hidden">
-                <div class="db-ops-progress-bar-wrap">
-                  <div id="dbOpsProgressBar" class="db-ops-progress-bar"></div>
+              <div id="adminOpsSplitShell" class="admin-ops-split-shell">
+                <div class="admin-ops-nav-buttons" role="tablist" aria-label="Betrieb Unterbereiche">
+                  <button type="button" class="tab-button admin-ops-nav-button" data-admin-ops-mode="quick" role="tab" aria-selected="false">Aktionen</button>
+                  <button type="button" class="tab-button admin-ops-nav-button" data-admin-ops-mode="database" role="tab" aria-selected="false">DB Wartung</button>
+                  <button type="button" class="tab-button admin-ops-nav-button" data-admin-ops-mode="ingest" role="tab" aria-selected="false">Ingest</button>
+                  <button type="button" class="tab-button admin-ops-nav-button" data-admin-ops-mode="backup" role="tab" aria-selected="false">Backup</button>
+                  <button type="button" class="tab-button admin-ops-nav-button" data-admin-ops-mode="agents" role="tab" aria-selected="false">Agent Status</button>
                 </div>
-                <span id="dbOpsProgressLabel" class="db-ops-progress-label"></span>
               </div>
 
-              <div class="db-maintenance-panel">
+              <div id="adminOpsQuickGroup" class="admin-ops-card">
+                <div class="global-admin-ops-actions">
+                  <button id="triggerAllAgentsUpdateButton" class="global-update-chip global-update-chip-inline" type="button" title="Update für alle Hosts">⟳ Update für alle Hosts</button>
+                  <button id="rolloutApiKeyButton" class="btn-secondary" type="button" title="Neuen API-Key auf alle Agenten ausrollen">🔐 API-Key verteilen</button>
+                  <button id="downloadDatabaseBackupButton" class="btn-secondary" type="button" title="SQLite Datenbank lokal sichern">💾 DB sichern</button>
+                  <button id="restoreDatabaseButton" class="btn-secondary btn-danger-outline" type="button" title="Datenbank aus Backup-Datei wiederherstellen">&#x267B;&#xFE0F; DB wiederherstellen</button>
+                  <button id="fixAlertStatusButton" class="btn-secondary" type="button" title="Korrigiere alte quittierte und geschlossene Alerts">🔧 Alert-Status korrigieren</button>
+                  <input id="restoreDatabaseFileInput" type="file" accept=".db,application/x-sqlite3,application/octet-stream" style="display:none" />
+                </div>
+                <div id="dbOpsProgress" class="db-ops-progress hidden">
+                  <div class="db-ops-progress-bar-wrap">
+                    <div id="dbOpsProgressBar" class="db-ops-progress-bar"></div>
+                  </div>
+                  <span id="dbOpsProgressLabel" class="db-ops-progress-label"></span>
+                </div>
+              </div>
+
+              <div id="adminOpsDbMaintenanceCard" class="db-maintenance-panel admin-ops-card">
                 <div class="db-maintenance-head">
                   <h6>DB Wartung (SQLite)</h6>
                   <div class="db-maintenance-actions">
@@ -474,7 +486,7 @@
                 <p id="dbMaintenanceEffect" class="count compact"></p>
               </div>
 
-              <div class="db-maintenance-panel">
+              <div id="adminOpsIngestCard" class="db-maintenance-panel admin-ops-card">
                 <div class="db-maintenance-head">
                   <h6>Agent Ingest Queue</h6>
                   <div class="db-maintenance-actions">
@@ -533,7 +545,7 @@
                 </details>
               </div>
 
-              <div class="db-maintenance-panel">
+              <div id="adminOpsBackupCard" class="db-maintenance-panel admin-ops-card">
                 <div class="db-maintenance-head">
                   <h6>Backup Automation (lokal + sFTP vorbereitet)</h6>
                   <div class="db-maintenance-actions">
@@ -628,7 +640,7 @@
                 </div>
               </div>
 
-              <div class="agent-update-admin-status">
+              <div id="adminOpsAgentUpdateCard" class="agent-update-admin-status admin-ops-card">
                 <div class="agent-update-admin-status-head">
                   <h6>Agent Update Status (Alle Hosts)</h6>
                   <button id="refreshAgentUpdateStatusButton" type="button" class="btn-secondary-compact">↻</button>

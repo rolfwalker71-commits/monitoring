@@ -13777,15 +13777,16 @@ body[data-theme="dark"] .fs-bar-wrap {
 
 #globalView .global-admin-nav-head h4 {
   margin: 0;
-  font-size: 34px;
-  line-height: 1;
+  font-size: 23px;
+  line-height: 1.08;
   color: #173b74;
 }
 
 #globalView .global-admin-nav-head p {
   margin: 0;
+  font-size: 12px;
   color: #637a99;
-  line-height: 1.25;
+  line-height: 1.35;
 }
 
 #globalView .global-admin-nav-buttons {
@@ -13812,8 +13813,8 @@ body[data-theme="dark"] .fs-bar-wrap {
   border-radius: 14px;
   background: linear-gradient(180deg, #f1f4f8 0%, #e8edf4 100%);
   color: #102f57;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 650;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), 0 2px 8px rgba(20, 34, 54, 0.09);
 }
 
@@ -13833,7 +13834,7 @@ body[data-theme="dark"] .fs-bar-wrap {
 #adminNavAlertSubsButton::before,
 #adminNavLoginAuditButton::before,
 #adminNavSettingsButton::before {
-  font-size: 17px;
+  font-size: 15px;
   line-height: 1;
 }
 
@@ -13965,6 +13966,45 @@ body[data-theme="dark"] #globalView .global-admin-nav-divider {
   border-color: #2b61d1;
   color: #173b74;
   background: linear-gradient(180deg, #eaf3ff 0%, #deecff 100%);
+}
+
+#globalView #globalAdminOpsSection .admin-ops-split-shell {
+  margin: 4px 0 12px;
+}
+
+#globalView #globalAdminOpsSection .admin-ops-nav-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#globalView #globalAdminOpsSection .admin-ops-nav-button {
+  border-color: #bdd0e8;
+  background: linear-gradient(180deg, #ffffff 0%, #f2f7ff 100%);
+  color: #1d4a79;
+  font-size: 13px;
+}
+
+#globalView #globalAdminOpsSection .admin-ops-nav-button:hover:not(.active) {
+  border-color: #86a8ce;
+}
+
+#globalView #globalAdminOpsSection .admin-ops-nav-button.active {
+  border-color: #2d67da;
+  background: linear-gradient(180deg, #eaf3ff 0%, #dfeeff 100%);
+  color: #163f74;
+}
+
+body[data-theme="dark"] #globalView #globalAdminOpsSection .admin-ops-nav-button {
+  border-color: #4a678d;
+  background: linear-gradient(180deg, #233652 0%, #1e2f46 100%);
+  color: #dbe9ff;
+}
+
+body[data-theme="dark"] #globalView #globalAdminOpsSection .admin-ops-nav-button.active {
+  border-color: #79abff;
+  background: linear-gradient(180deg, #2c4771 0%, #264064 100%);
+  color: #eff5ff;
 }
 
 body[data-theme="dark"] #globalView .admin-settings-split-shell {
