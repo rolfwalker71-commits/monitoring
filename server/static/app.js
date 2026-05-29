@@ -119,6 +119,7 @@ const state = {
   overviewSection: "main",
   globalSubMode: "global-alerts",
   adminSubMode: "agent-source-status",
+  adminSettingsSubMode: "operations",
   criticalTrendsHours: 24,
   criticalTrendsProjectHours: 72,
   criticalTrendsMetrics: ["filesystem"],
@@ -267,6 +268,14 @@ const GLOBAL_TO_ADMIN_SUBMODE_MAP = Object.fromEntries(
   Object.entries(ADMIN_SUBMODE_TO_GLOBAL_MAP).map(([adminSubMode, globalSubMode]) => [globalSubMode, adminSubMode])
 );
 
+const ADMIN_SETTINGS_GROUP_TO_SECTION_IDS = {
+  operations: ["globalAdminOpsSection"],
+  security: ["adminUserManagementSection", "adminOauthSettingsSection"],
+  alerting: ["globalAlarmSettingsSection", "customerAlertTestSection"],
+  sap: ["sapB1VersionMapAdminSection", "sapLicenseTypeMapAdminSection"],
+  data: ["filesystemBlacklistAdminSection"],
+};
+
 function normalizeAdminSubMode(value) {
   const mode = String(value || "").trim();
   if (Object.prototype.hasOwnProperty.call(ADMIN_SUBMODE_TO_GLOBAL_MAP, mode)) {
@@ -286,6 +295,81 @@ function setAdminSubMode(mode) {
   const normalized = normalizeAdminSubMode(mode);
   state.adminSubMode = normalized;
   state.globalSubMode = ADMIN_SUBMODE_TO_GLOBAL_MAP[normalized];
+}
+
+function normalizeAdminSettingsSubMode(value) {
+  const mode = String(value || "").trim();
+  if (Object.prototype.hasOwnProperty.call(ADMIN_SETTINGS_GROUP_TO_SECTION_IDS, mode)) {
+    return mode;
+  }
+  return "operations";
+}
+
+function applyAdminSettingsSubMode(container) {
+  if (!container) {
+    return;
+  }
+  const activeMode = normalizeAdminSettingsSubMode(state.adminSettingsSubMode);
+  state.adminSettingsSubMode = activeMode;
+
+  const allManagedIds = Object.values(ADMIN_SETTINGS_GROUP_TO_SECTION_IDS).flat();
+  const visibleIds = new Set(ADMIN_SETTINGS_GROUP_TO_SECTION_IDS[activeMode] || []);
+
+  allManagedIds.forEach((sectionId) => {
+    const section = document.getElementById(sectionId);
+    if (!section) {
+      return;
+    }
+    if (!state.isAdmin) {
+      section.classList.add("hidden");
+      return;
+    }
+    section.classList.toggle("hidden", !visibleIds.has(sectionId));
+  });
+
+  container.querySelectorAll(".admin-settings-nav-button").forEach((button) => {
+    const buttonMode = String(button.getAttribute("data-admin-settings-mode") || "");
+    const active = buttonMode === activeMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+}
+
+function ensureAdminSettingsSplitLayout(container) {
+  if (!container) {
+    return;
+  }
+  let shell = container.querySelector("#adminSettingsSplitShell");
+  if (!shell) {
+    container.insertAdjacentHTML("afterbegin", `
+      <section id="adminSettingsSplitShell" class="admin-settings-split-shell">
+        <div class="admin-settings-split-head">
+          <h5>Admin Einstellungen</h5>
+          <p class="count compact">Funktionsgruppen statt ein langer Gesamtblock.</p>
+        </div>
+        <div class="admin-settings-nav-buttons" role="tablist" aria-label="Admin Einstellungsgruppen">
+          <button type="button" class="tab-button admin-settings-nav-button" data-admin-settings-mode="operations" role="tab" aria-selected="false">Betrieb</button>
+          <button type="button" class="tab-button admin-settings-nav-button" data-admin-settings-mode="security" role="tab" aria-selected="false">Sicherheit</button>
+          <button type="button" class="tab-button admin-settings-nav-button" data-admin-settings-mode="alerting" role="tab" aria-selected="false">Alerting</button>
+          <button type="button" class="tab-button admin-settings-nav-button" data-admin-settings-mode="sap" role="tab" aria-selected="false">SAP Mappings</button>
+          <button type="button" class="tab-button admin-settings-nav-button" data-admin-settings-mode="data" role="tab" aria-selected="false">Datenhygiene</button>
+        </div>
+      </section>
+    `);
+    shell = container.querySelector("#adminSettingsSplitShell");
+  }
+
+  if (shell && shell.getAttribute("data-wired") !== "1") {
+    shell.querySelectorAll(".admin-settings-nav-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.adminSettingsSubMode = normalizeAdminSettingsSubMode(button.getAttribute("data-admin-settings-mode"));
+        applyAdminSettingsSubMode(container);
+      });
+    });
+    shell.setAttribute("data-wired", "1");
+  }
+
+  applyAdminSettingsSubMode(container);
 }
 
 const ANALYSIS_RANGE_OPTIONS = new Map([
@@ -2037,6 +2121,7 @@ function updateAdminSettingsVisibility() {
   }
   if (!state.isAdmin) {
     state.adminSubMode = "agent-source-status";
+    state.adminSettingsSubMode = "operations";
   }
   if (state.userSettingsSubMode !== "password" && state.userSettingsSubMode !== "channels" && state.userSettingsSubMode !== "digests" && state.userSettingsSubMode !== "hosts") {
     state.userSettingsSubMode = "password";
@@ -4105,6 +4190,7 @@ async function loadGlobalAdminSettingsPanel(force = false) {
     container.insertAdjacentHTML("beforeend", renderCustomerAlertTestSection());
     await wireCustomerAlertTestSection(container);
   }
+  ensureAdminSettingsSplitLayout(container);
 }
 
 async function loadSettingsPanel(force = false) {

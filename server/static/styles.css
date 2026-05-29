@@ -13841,3 +13841,79 @@ body[data-theme="dark"] #globalView .global-admin-nav-buttons .tab-button.active
     flex: 1 1 220px;
   }
 }
+
+#globalAdminSettingsContainer {
+  display: grid;
+  gap: 10px;
+}
+
+#globalView .admin-settings-split-shell {
+  border: 1px solid #d3deec;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, #f7fbff 0%, #eef5ff 100%);
+  box-shadow: 0 5px 14px rgba(30, 58, 95, 0.08);
+}
+
+#globalView .admin-settings-split-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+#globalView .admin-settings-split-head h5 {
+  margin: 0;
+}
+
+#globalView .admin-settings-nav-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#globalView .admin-settings-nav-buttons .admin-settings-nav-button {
+  border-color: #b8cde7;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f7ff 100%);
+  color: #1e4b7a;
+}
+
+#globalView .admin-settings-nav-buttons .admin-settings-nav-button:hover:not(.active) {
+  border-color: #7fa7d1;
+}
+
+#globalView .admin-settings-nav-buttons .admin-settings-nav-button.active {
+  border-color: #2b61d1;
+  color: #173b74;
+  background: linear-gradient(180deg, #eaf3ff 0%, #deecff 100%);
+}
+
+body[data-theme="dark"] #globalView .admin-settings-split-shell {
+  border-color: #304864;
+  background: linear-gradient(180deg, #1a283c 0%, #162335 100%);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-nav-button {
+  border-color: #456389;
+  background: linear-gradient(180deg, #22354f 0%, #1c2d45 100%);
+  color: #d7e7ff;
+}
+
+body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-nav-button.active {
+  border-color: #74a7ff;
+  color: #edf4ff;
+  background: linear-gradient(180deg, #2a4470 0%, #243c63 100%);
+}
+
+@media (max-width: 900px) {
+  #globalView .admin-settings-split-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  #globalView .admin-settings-nav-buttons .admin-settings-nav-button {
+    flex: 1 1 180px;
+  }
+}
