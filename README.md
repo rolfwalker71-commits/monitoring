@@ -698,6 +698,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.123 (29. Mai 2026)
+
+- **Phase 1 UI Clean-Up umgesetzt (risikoarm)**: Rein visuelle Optimierungen in styles.css fuer mehr Whitespace, klarere Hierarchie und ruhigere Kartenoptik umgesetzt.
+- **KPI- und Tab-Darstellung verfeinert**: Alarm-bezogene Kennzahlen deutlicher priorisiert und Underline-Tab-Styling konsistent harmonisiert.
+- **Sidebar- und Filesystem-Karten beruhigt**: Hostkarten und Chartkarten mit konsistenteren Abstaenden, Radien, Schatten und besseren Kontrasten in Light/Dark angepasst.
+
 ### v1.7.122 (29. Mai 2026)
 
 - **Kundeninfos fuer Duplicate-Hostnamen korrigiert**: Der Kundeninfos-Block laedt Host-Einstellungen jetzt mit host_uid und nicht nur ueber hostname.
