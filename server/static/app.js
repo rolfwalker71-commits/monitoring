@@ -1372,6 +1372,8 @@ function updateGlobalSubMode() {
   const adminNavAlertSubsButton = document.getElementById("adminNavAlertSubsButton");
   const adminNavLoginAuditButton = document.getElementById("adminNavLoginAuditButton");
   const adminNavSettingsButton = document.getElementById("adminNavSettingsButton");
+  const globalSettingsPage = document.querySelector("#globalView .settings-page");
+  const globalSubviewTabsShell = document.querySelector("#globalView .subview-tabs-shell");
 
   const alertsActive = state.globalSubMode === "global-alerts";
   const trendsActive = state.globalSubMode === "critical-trends";
@@ -1410,6 +1412,12 @@ function updateGlobalSubMode() {
     globalAdminNavShell.classList.toggle("hidden", !state.isAdmin);
     globalAdminNavShell.classList.toggle("global-admin-nav-shell-active", anyAdminSectionActive);
   }
+  if (globalSettingsPage) {
+    globalSettingsPage.classList.toggle("admin-workspace-mode", state.isAdmin && anyAdminSectionActive);
+  }
+  if (globalSubviewTabsShell) {
+    globalSubviewTabsShell.classList.toggle("admin-tabs-muted", state.isAdmin && anyAdminSectionActive);
+  }
   if (adminNavAgentSourceButton) {
     adminNavAgentSourceButton.classList.toggle("active", state.adminSubMode === "agent-source-status");
     adminNavAgentSourceButton.setAttribute("aria-selected", state.adminSubMode === "agent-source-status" ? "true" : "false");
@@ -1425,6 +1433,49 @@ function updateGlobalSubMode() {
   if (adminNavSettingsButton) {
     adminNavSettingsButton.classList.toggle("active", state.adminSubMode === "admin-settings");
     adminNavSettingsButton.setAttribute("aria-selected", state.adminSubMode === "admin-settings" ? "true" : "false");
+  }
+}
+
+async function loadActiveGlobalSubMode() {
+  if (state.globalSubMode === "global-alerts") {
+    await loadGlobalAlertsOverview();
+    return;
+  }
+  if (state.globalSubMode === "critical-trends") {
+    await loadCriticalTrends();
+    return;
+  }
+  if (state.globalSubMode === "inactive-hosts") {
+    await loadInactiveHosts();
+    return;
+  }
+  if (state.globalSubMode === "system-overview") {
+    await loadSystemOverview();
+    return;
+  }
+  if (state.globalSubMode === "backup-status") {
+    await loadBackupStatus();
+    return;
+  }
+  if (state.globalSubMode === "host-config-changes") {
+    showHostConfigChangesIdleState("Bitte Filter setzen und dann Suchen/Refresh klicken.");
+    await loadChangelogRebuildJobsStatus();
+    return;
+  }
+  if (state.globalSubMode === "agent-source-status") {
+    await loadAgentSourceStatus();
+    return;
+  }
+  if (state.globalSubMode === "admin-alert-subs") {
+    await loadAdminAlertSubscriptions();
+    return;
+  }
+  if (state.globalSubMode === "admin-login-audit") {
+    await loadAdminLoginAudit();
+    return;
+  }
+  if (state.globalSubMode === "admin-settings") {
+    await loadGlobalAdminSettingsPanel();
   }
 }
 
@@ -13618,7 +13669,7 @@ function wireEvents() {
   const agentSourceStatusTabButton = document.getElementById("agentSourceStatusTabButton");
   if (agentSourceStatusTabButton) {
     agentSourceStatusTabButton.addEventListener("click", async () => {
-      state.globalSubMode = "agent-source-status";
+      setAdminSubMode("agent-source-status");
       updateGlobalSubMode();
       await loadAgentSourceStatus();
     });
@@ -13652,19 +13703,7 @@ function wireEvents() {
     }
     updateViewMode();
     updateGlobalSubMode();
-    if (state.globalSubMode === "global-alerts") await loadGlobalAlertsOverview();
-    else if (state.globalSubMode === "critical-trends") await loadCriticalTrends();
-    else if (state.globalSubMode === "inactive-hosts") await loadInactiveHosts();
-    else if (state.globalSubMode === "system-overview") await loadSystemOverview();
-    else if (state.globalSubMode === "backup-status") await loadBackupStatus();
-    else if (state.globalSubMode === "host-config-changes") {
-      showHostConfigChangesIdleState("Bitte Filter setzen und dann Suchen/Refresh klicken.");
-      await loadChangelogRebuildJobsStatus();
-    }
-    else if (state.globalSubMode === "agent-source-status") await loadAgentSourceStatus();
-    else if (state.globalSubMode === "admin-alert-subs") await loadAdminAlertSubscriptions();
-    else if (state.globalSubMode === "admin-login-audit") await loadAdminLoginAudit();
-    else if (state.globalSubMode === "admin-settings") await loadGlobalAdminSettingsPanel();
+    await loadActiveGlobalSubMode();
   });
 
   document.getElementById("headerAlertChip").addEventListener("click", async () => {

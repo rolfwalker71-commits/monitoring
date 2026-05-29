@@ -13689,6 +13689,51 @@ body[data-theme="dark"] .fs-bar-wrap {
   box-shadow: 0 6px 14px rgba(67, 42, 14, 0.08);
 }
 
+#globalView .settings-page.admin-workspace-mode {
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  align-items: start;
+  column-gap: 12px;
+}
+
+#globalView .settings-page.admin-workspace-mode .settings-page-header {
+  grid-column: 1 / -1;
+  max-width: 1240px;
+}
+
+#globalView .settings-page.admin-workspace-mode .subview-tabs-shell {
+  grid-column: 1 / -1;
+  max-width: 1240px;
+}
+
+#globalView .settings-page.admin-workspace-mode .global-admin-nav-shell {
+  grid-column: 1;
+  grid-row: 3;
+  max-width: none;
+  margin: 0;
+  position: sticky;
+  top: 8px;
+}
+
+#globalView .settings-page.admin-workspace-mode #agentSourceStatusView,
+#globalView .settings-page.admin-workspace-mode #globalAdminAlertSubsView,
+#globalView .settings-page.admin-workspace-mode #globalAdminLoginAuditView,
+#globalView .settings-page.admin-workspace-mode #globalAdminSettingsView {
+  grid-column: 2;
+  grid-row: 3;
+  max-width: none;
+  margin: 0;
+}
+
+#globalView .subview-tabs-shell.admin-tabs-muted {
+  border-style: dashed;
+  border-color: #d8c2a5;
+  background: linear-gradient(180deg, #fefaf4 0%, #fdf4e9 100%);
+}
+
+#globalView .subview-tabs-shell.admin-tabs-muted .subview-tabs {
+  opacity: 0.68;
+}
+
 #globalView .global-admin-nav-shell.global-admin-nav-shell-active {
   border-color: #d8aa70;
   box-shadow: 0 10px 20px rgba(67, 42, 14, 0.14);
@@ -13737,6 +13782,11 @@ body[data-theme="dark"] #globalView .global-admin-nav-shell {
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
 }
 
+body[data-theme="dark"] #globalView .subview-tabs-shell.admin-tabs-muted {
+  border-color: #6f4f2d;
+  background: linear-gradient(180deg, #2b2218 0%, #241c13 100%);
+}
+
 body[data-theme="dark"] #globalView .global-admin-nav-shell.global-admin-nav-shell-active {
   border-color: #9a6a39;
 }
@@ -13763,6 +13813,24 @@ body[data-theme="dark"] #globalView .global-admin-nav-buttons .tab-button.active
 }
 
 @media (max-width: 900px) {
+  #globalView .settings-page.admin-workspace-mode {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #globalView .settings-page.admin-workspace-mode .global-admin-nav-shell {
+    grid-column: 1;
+    grid-row: auto;
+    position: static;
+  }
+
+  #globalView .settings-page.admin-workspace-mode #agentSourceStatusView,
+  #globalView .settings-page.admin-workspace-mode #globalAdminAlertSubsView,
+  #globalView .settings-page.admin-workspace-mode #globalAdminLoginAuditView,
+  #globalView .settings-page.admin-workspace-mode #globalAdminSettingsView {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
   #globalView .global-admin-nav-head {
     flex-direction: column;
     align-items: flex-start;
