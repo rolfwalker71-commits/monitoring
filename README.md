@@ -698,6 +698,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.125 (29. Mai 2026)
+
+- **UI-Abnahme dokumentiert**: Neue Prozessdoku `ui-regression-checklist` (HTML + MD) mit 10-Punkte-Quick-Check fuer visuelle Releases ergaenzt und im Prozessindex verlinkt.
+- **Session-Refresh 404 behoben**: Backend unterstuetzt jetzt auch `POST /api/v1/session/refresh` (wie vom Frontend verwendet), dadurch entfaellt der bisherige 404-Warnpfad.
+- **Fix verifiziert**: Endpoint liefert nach Login einen gueltigen 200-Refresh-Response statt 404.
+
 ### v1.7.124 (29. Mai 2026)
 
 - **Weitere Design-Punkte umgesetzt (ohne Funktionsaenderung)**: Zusaeztliche visuelle Verfeinerungen fuer Filterbar, Icon-Konsistenz und semantische Status-Hervorhebung vorgenommen.

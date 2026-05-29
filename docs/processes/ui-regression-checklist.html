@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UI Regression Checklist</title>
+  <style>
+    :root {
+      --bg: #f5f8fc;
+      --card: #ffffff;
+      --text: #1f2a3a;
+      --muted: #5a6c84;
+      --line: #d7e2ef;
+      --accent: #1f5fbf;
+    }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top right, #eaf2ff, transparent 38%), var(--bg);
+    }
+    main {
+      width: min(980px, calc(100% - 28px));
+      margin: 22px auto 40px;
+      display: grid;
+      gap: 14px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(31, 42, 58, 0.08);
+      padding: 18px;
+    }
+    h1, h2 { margin: 0; line-height: 1.15; }
+    h1 { font-size: 30px; }
+    h2 { font-size: 19px; margin-top: 8px; }
+    p { margin: 0; color: var(--muted); }
+    ol {
+      margin: 10px 0 0 18px;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+      line-height: 1.5;
+    }
+    li strong { color: #183f7a; }
+    ul {
+      margin: 8px 0 0 18px;
+      padding: 0;
+      line-height: 1.5;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    a.back {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    a.back:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <h1>UI Regression Checklist</h1>
+      <p>Schneller Abnahme-Check nach visuellen Dashboard-Aenderungen ohne Funktionsaenderung.</p>
+      <div class="row">
+        <span class="chip">10 Punkte</span>
+        <span class="chip">Light + Dark</span>
+        <span class="chip">UI + Verhalten</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Preconditions</h2>
+      <ul>
+        <li>Webclient laeuft und Login ist aktiv.</li>
+        <li>Mindestens ein Host mit Daten ist sichtbar.</li>
+        <li>Nach Deployment Browser einmal neu laden.</li>
+      </ul>
+
+      <h2>10-Point Quick Check</h2>
+      <ol>
+        <li><strong>Version sichtbar</strong>: Header zeigt die erwartete Version.</li>
+        <li><strong>Header/KPI</strong>: Alarm-KPIs klar priorisiert, keine Ueberlappungen.</li>
+        <li><strong>Schnellaktionen</strong>: Buttons reagieren ohne Layoutspruenge.</li>
+        <li><strong>Hostsuche</strong>: Filtern und Ruecksetzen funktioniert.</li>
+        <li><strong>OS/Land Filter</strong>: Zustand sichtbar und korrekt ruecksetzbar.</li>
+        <li><strong>Haupttabs</strong>: Uebersicht/Einzelmeldungen wechseln stabil.</li>
+        <li><strong>Uebersicht-Subtabs</strong>: Alarme, Filesysteme, Kundeninfos schalten korrekt.</li>
+        <li><strong>Kundeninfos</strong>: Kundenname und Kunde-ID werden korrekt angezeigt.</li>
+        <li><strong>Filesysteme/Charts</strong>: Karten, Tabellen und Balken sind lesbar und stabil.</li>
+        <li><strong>Theme Toggle</strong>: Light/Dark ohne Kontrast- oder Spacing-Brueche.</li>
+      </ol>
+
+      <h2>Pass/Fail</h2>
+      <ul>
+        <li><strong>PASS</strong>: Keine Funktionsaenderung, nur visuelle Verbesserung.</li>
+        <li><strong>FAIL</strong>: Tab-/Filter-/Host-/Kundeninfos-Verhalten weicht ab oder Rendering bricht.</li>
+      </ul>
+
+      <p><a class="back" href="index.html">Zurueck zur Prozessuebersicht</a></p>
+    </section>
+  </main>
+</body>
+</html>

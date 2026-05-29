@@ -15924,6 +15924,38 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/v1/session/refresh":
+            username = self._web_session_username()
+            if not username:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "Not authenticated"})
+                return
+            session_token = self.headers.get("Authorization", "").replace("Bearer ", "").strip()
+            if not session_token:
+                session_token = self._cookie_value(WEB_SESSION_COOKIE)
+            if not session_token:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "No session token"})
+                return
+            now_iso = utc_now_iso()
+            expires_iso = web_session_expires_iso()
+            with sqlite3.connect(DB_PATH) as conn:
+                result = conn.execute(
+                    "UPDATE web_sessions SET last_activity_at_utc = ?, expires_at_utc = ? WHERE session_token = ?",
+                    (now_iso, expires_iso, session_token),
+                )
+                conn.commit()
+            if result.rowcount <= 0:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "Session not found"})
+                return
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "username": username,
+                    "expires_at_utc": expires_iso,
+                    "inactivity_timeout_minutes": WEB_SESSION_INACTIVITY_MINUTES,
+                },
+            )
+            return
+
         if path.startswith("/api/v1/") and path not in {"/api/v1/agent-report", "/api/v1/agent-command-result"}:
             if not self._require_web_session():
                 return
