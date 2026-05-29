@@ -698,6 +698,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.124 (29. Mai 2026)
+
+- **Weitere Design-Punkte umgesetzt (ohne Funktionsaenderung)**: Zusaeztliche visuelle Verfeinerungen fuer Filterbar, Icon-Konsistenz und semantische Status-Hervorhebung vorgenommen.
+- **Icon- und Filter-Politur**: Bestehende OS/Flag/Emoji-Elemente harmonisiert (Groesse, Radius, Kontur), ohne das zugrundeliegende Icon- oder Rendering-System zu ersetzen.
+- **Chart-Erfassbarkeit verbessert**: Filesystem- und Trendkarten inkl. Progress-Bars fuer schnellere Erkennbarkeit visuell gestaerkt (Groesse, Kontrast, Lesefluss).
+
 ### v1.7.123 (29. Mai 2026)
 
 - **Phase 1 UI Clean-Up umgesetzt (risikoarm)**: Rein visuelle Optimierungen in styles.css fuer mehr Whitespace, klarere Hierarchie und ruhigere Kartenoptik umgesetzt.
