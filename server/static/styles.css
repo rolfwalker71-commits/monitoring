@@ -13690,9 +13690,17 @@ body[data-theme="dark"] .fs-bar-wrap {
 }
 
 #globalView .settings-page.admin-workspace-mode {
-  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  grid-template-columns: 254px minmax(0, 1fr);
   align-items: start;
   column-gap: 12px;
+  width: 100%;
+  max-width: 1240px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#globalView .settings-page.admin-workspace-mode > * {
+  min-width: 0;
 }
 
 #globalView .settings-page.admin-workspace-mode .settings-page-header {
@@ -13722,6 +13730,28 @@ body[data-theme="dark"] .fs-bar-wrap {
   grid-row: 3;
   max-width: none;
   margin: 0;
+  min-width: 0;
+  width: 100%;
+}
+
+#globalView .settings-page.admin-workspace-mode #globalAdminSettingsView,
+#globalView .settings-page.admin-workspace-mode #globalAdminSettingsContainer,
+#globalView .settings-page.admin-workspace-mode #globalAdminSettingsContainer .settings-subsection,
+#globalView .settings-page.admin-workspace-mode #globalAdminSettingsContainer .db-maintenance-panel,
+#globalView .settings-page.admin-workspace-mode #globalAdminSettingsContainer .agent-update-admin-table-wrap,
+#globalView .settings-page.admin-workspace-mode #globalAdminSettingsContainer .table-wrap {
+  max-width: 100%;
+  min-width: 0;
+}
+
+#globalView .settings-page.admin-workspace-mode #globalAdminSettingsContainer .db-maintenance-charts {
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+}
+
+@media (max-width: 1320px) {
+  #globalView .settings-page.admin-workspace-mode #globalAdminSettingsContainer .db-maintenance-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 #globalView .subview-tabs-shell.admin-tabs-muted {
