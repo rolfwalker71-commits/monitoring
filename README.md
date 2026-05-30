@@ -706,6 +706,12 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.134 (30. Mai 2026)
+
+- **Host-Changelog Layout repariert**: Die Tabelle im Bereich Uebersicht -> Changelog wurde wieder auf stabile Spaltenbreiten und lesbare Typografie gestellt, damit Feldnamen nicht mehr buchstabenweise umbrechen.
+- **Delta fuer RAM und CPU Cores erweitert**: Bei den Feldkeys `ram_gb` und `cpu_cores` zeigt der neue Wert jetzt zusaetzlich die Aenderung im Format `(+/-xx)` an.
+- **Lizenz-Delta verifiziert**: Die bestehende Delta-Anzeige fuer SAP-Lizenztypen (`sap_license_type::...`) bleibt aktiv und unveraendert bestehen.
+
 ### v1.7.125 (29. Mai 2026)
 
 - **UI-Abnahme dokumentiert**: Neue Prozessdoku `ui-regression-checklist` (HTML + MD) mit 10-Punkte-Quick-Check fuer visuelle Releases ergaenzt und im Prozessindex verlinkt.

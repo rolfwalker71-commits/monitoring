@@ -11370,6 +11370,8 @@ async function loadConfigChangelogForHost() {
         const newValue = asText(item.new_value || "-");
         const fieldKey = String(item.field_key || "");
         const licenseDeltaHtml = renderLicenseTypeCountDelta(fieldKey, oldValue, newValue);
+        const numericDeltaHtml = renderHostConfigNumericDelta(fieldKey, oldValue, newValue);
+        const deltaHtml = licenseDeltaHtml || numericDeltaHtml;
         let oldFpInfo = "";
         let newFpInfo = "";
         let oldValueHtml = `<code>${escapeHtml(oldValue)}</code>`;
@@ -11389,8 +11391,8 @@ async function loadConfigChangelogForHost() {
           oldValueHtml = renderSapServicesChangelogValue(oldValue, { isNew: false, diff: servicesDiff });
           newValueHtml = renderSapServicesChangelogValue(newValue, { isNew: true, diff: servicesDiff });
         }
-        if (licenseDeltaHtml) {
-          newValueHtml = `<code>${escapeHtml(newValue)}</code> ${licenseDeltaHtml}`;
+        if (deltaHtml) {
+          newValueHtml = `<code>${escapeHtml(newValue)}</code> ${deltaHtml}`;
         }
 
         return `
@@ -12247,6 +12249,28 @@ function parseChangelogCount(value) {
 function renderLicenseTypeCountDelta(fieldKey, oldValue, newValue) {
   const key = String(fieldKey || "");
   if (!key.startsWith("sap_license_type::")) {
+    return "";
+  }
+
+  const oldCount = parseChangelogCount(oldValue);
+  const newCount = parseChangelogCount(newValue);
+  if (oldCount === null || newCount === null) {
+    return "";
+  }
+
+  const delta = newCount - oldCount;
+  if (delta === 0) {
+    return "";
+  }
+
+  const signText = delta > 0 ? `+${delta}` : String(delta);
+  const cssClass = delta > 0 ? "host-config-license-delta-up" : "host-config-license-delta-down";
+  return `<span class="host-config-license-delta ${cssClass}">(${escapeHtml(signText)})</span>`;
+}
+
+function renderHostConfigNumericDelta(fieldKey, oldValue, newValue) {
+  const key = String(fieldKey || "").trim();
+  if (key !== "ram_gb" && key !== "cpu_cores") {
     return "";
   }
 

@@ -2738,27 +2738,41 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 }
 
 #overviewConfigChangelogSection table {
-  table-layout: auto;
+  table-layout: fixed;
   width: 100%;
-  font-size: 10px;
+  min-width: 900px;
+  font-size: 12px;
 }
 
 #overviewConfigChangelogSection td,
 #overviewConfigChangelogSection th {
-  padding: 3px 4px;
-  font-size: 10px;
-  word-break: break-word;
+  padding: 5px 6px;
+  font-size: 12px;
+  word-break: normal;
+  overflow-wrap: anywhere;
   white-space: normal;
+  line-height: 1.35;
 }
 
 #overviewConfigChangelogSection th {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 #overviewConfigChangelogSection code {
-  font-size: 10px;
-  word-break: break-all;
+  font-size: 11px;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+#overviewConfigChangelogSection td:nth-child(1),
+#overviewConfigChangelogSection th:nth-child(1) {
+  min-width: 220px;
+}
+
+#overviewConfigChangelogSection td:nth-child(4),
+#overviewConfigChangelogSection th:nth-child(4) {
+  white-space: nowrap;
 }
 
 #overviewDatabaseChangelogSection {
@@ -2796,10 +2810,10 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 #overviewDatabaseChangelogSection th:nth-child(4) { width: 20%; }
 #overviewDatabaseChangelogSection th:nth-child(5) { width: 18%; }
 
-#overviewConfigChangelogSection th:nth-child(1) { width: 36%; }
+#overviewConfigChangelogSection th:nth-child(1) { width: 34%; }
 #overviewConfigChangelogSection th:nth-child(2) { width: 24%; }
 #overviewConfigChangelogSection th:nth-child(3) { width: 24%; }
-#overviewConfigChangelogSection th:nth-child(4) { width: 16%; }
+#overviewConfigChangelogSection th:nth-child(4) { width: 18%; }
 
 .report-subtable {
   table-layout: auto;
