@@ -706,6 +706,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.136 (30. Mai 2026)
+
+- **Changelog Label bereinigt**: Der Praefix `SAP Lizenztyp:` wurde in der Feldspalte entfernt.
+- **Anzeige vereinfacht**: Bei Lizenztypen steht jetzt nur noch der eigentliche Name inkl. Rohcode in Klammern (z. B. `Professional License (PROFESSIONAL_HDB)`).
+
 ### v1.7.135 (30. Mai 2026)
 
 - **Linke Sidebar verschlankt**: Host-Kartenleiste ist nun etwas schmaler, damit der Inhaltsbereich rechts mehr nutzbare Breite erhaelt.

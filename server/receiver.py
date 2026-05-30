@@ -6976,8 +6976,8 @@ def _host_config_field_label(field_key: str, *, license_label_map: dict[str, tup
         mapped = label_map.get(normalized_match_text)
         if mapped:
             raw_match_text, display_name = mapped
-            return f"SAP Lizenztyp: {display_name} ({raw_match_text})"
-        return f"SAP Lizenztyp: {match_text or '-'}"
+            return f"{display_name} ({raw_match_text})"
+        return match_text or "-"
 
     return field_key_text
 
