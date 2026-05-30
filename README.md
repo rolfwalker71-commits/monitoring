@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.143**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.143**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.144**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.144**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.144 | 30.05.2026 | Meldungsbereich typografisch verdichtet: Schriftgrössen in Header, Tabs, Sidebar, Untermenüs und Tabellen reduziert; Menüpunkte deutlich fetter gesetzt und Untermenü-/Control-Stile vereinheitlicht, damit die gesamte Übersicht ruhiger und besser lesbar wirkt. |
 | 1.7.143 | 30.05.2026 | KPI-Werte im Header deutlich verkleinert (kompaktere Zahlentypografie und angepasste Zeilenhoehe), damit insbesondere Metriken mit Einheit wie `MB` weniger dominant wirken und sauberer in die Kacheln passen. |
 | 1.7.142 | 30.05.2026 | KPI-Header visuell in Themenblöcke gruppiert (Alarme, Infrastruktur, Datenbank/Metriken) via zusätzliche Block-Abstände; Zahlformat bei DB-Werten vereinheitlicht (`de-CH`, z. B. `1'223`), Einheiten (`MB`) in den Hauptwert verschoben und Unterlabels auf Kontextbegriffe umgestellt (z. B. `Datenvolumen`, `Letzte Stunde`). |
 | 1.7.141 | 30.05.2026 | KPI-Icons im Header auf einen einheitlichen, monochromen Symbolstil umgestellt (keine gemischten farbigen/transparenten Emoji-Glyphen mehr) und pro KPI semantisch passend vereinheitlicht (z. B. Warnung, Kritisch, Quittiert, Stumm, Aktiv/Inaktiv, Berichte, DB-Groesse, Delta). |
