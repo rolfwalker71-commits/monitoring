@@ -15549,7 +15549,12 @@ async function loadSystemOverview() {
   if (filterEl) filterEl.innerHTML = "";
 
   try {
-    const response = await fetch("/api/v1/system-overview", { credentials: "same-origin" });
+    const overviewParams = new URLSearchParams();
+    if (searchQuery) {
+      overviewParams.set("q", searchQuery);
+    }
+    const overviewUrl = `/api/v1/system-overview${overviewParams.toString() ? `?${overviewParams.toString()}` : ""}`;
+    const response = await fetch(overviewUrl, { credentials: "same-origin" });
     if (!response.ok) throw new Error("HTTP " + response.status);
     const data = await response.json();
     const byCountry = data && typeof data === "object" ? (data.by_country || {}) : {};

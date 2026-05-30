@@ -8158,7 +8158,7 @@ def backfill_host_config_changes(
     }
 
 
-def collect_system_overview(conn: sqlite3.Connection) -> dict:
+def collect_system_overview(conn: sqlite3.Connection, search_query: str = "") -> dict:
     latest_rows = _latest_report_rows_by_host_key(conn)
     if not latest_rows:
         return {"by_country": {}, "total": 0}
@@ -8215,6 +8215,7 @@ def collect_system_overview(conn: sqlite3.Connection) -> dict:
         }
 
     now_utc = datetime.now(timezone.utc)
+    normalized_search = str(search_query or "").strip().lower()
     by_country: dict[str, dict[str, dict[str, list[dict]]]] = {}
 
     for row in latest_rows:
@@ -8223,14 +8224,32 @@ def collect_system_overview(conn: sqlite3.Connection) -> dict:
         if not hostname:
             continue
         received_at_utc = str(row[2] or "").strip()
-        payload = parse_payload_json(str(row[3] or "{}"))
+        payload_json_raw = str(row[3] or "{}")
 
         display_name_override = str(host_uid_display_name_map.get(host_uid, "") or "").strip()
         if not display_name_override:
             display_name_override = str(override_names.get(hostname, "") or "").strip()
+        host_uid_settings = host_uid_settings_map.get(host_uid, {}) if host_uid else {}
+        customer = (
+            str(host_uid_settings.get("customer_name", "") or "").strip()
+            or customer_names.get(hostname, "")
+            or "Ohne Kunde"
+        )
+
+        if normalized_search:
+            searchable_meta = " ".join([
+                host_uid,
+                hostname,
+                display_name_override,
+                customer,
+            ]).lower()
+            payload_text_lc = payload_json_raw.lower()
+            if normalized_search not in searchable_meta and normalized_search not in payload_text_lc:
+                continue
+
+        payload = parse_payload_json(payload_json_raw)
         display_name = effective_display_name(payload, display_name_override, hostname)
 
-        host_uid_settings = host_uid_settings_map.get(host_uid, {}) if host_uid else {}
         country = (
             normalize_country_code(str(host_uid_settings.get("country_code_override", "") or ""))
             or override_countries.get(hostname, "")
@@ -8238,11 +8257,6 @@ def collect_system_overview(conn: sqlite3.Connection) -> dict:
             or "XX"
         )
         os_family = normalize_os_family(payload.get("os", ""))
-        customer = (
-            str(host_uid_settings.get("customer_name", "") or "").strip()
-            or customer_names.get(hostname, "")
-            or "Ohne Kunde"
-        )
 
         release_info = _extract_sap_hana_ram(payload)
         cpu_info = _extract_cpu_overview(payload)
@@ -15508,8 +15522,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/system-overview":
+            query = parse_qs(parsed.query)
+            search_query = str(query.get("q", [""])[0] or "").strip()
+            if len(search_query) > 200:
+                search_query = search_query[:200]
             with sqlite3.connect(DB_PATH) as conn:
-                data = collect_system_overview(conn)
+                data = collect_system_overview(conn, search_query=search_query)
             self._send_json(HTTPStatus.OK, data)
             return
 

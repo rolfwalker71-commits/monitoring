@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.149**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.149**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.150**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.150**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.150 | 30.05.2026 | Performance-Fix Systemübersicht: Suchbegriff wird jetzt als Query-Parameter (`q`) an `/api/v1/system-overview` übergeben und serverseitig vorgefiltert. Dadurch werden bei kundenspezifischer Suche deutlich weniger Hosts/Payloads geparst und übertragen, was den initialen Aufruf spürbar beschleunigt. |
 | 1.7.149 | 30.05.2026 | Systemübersicht-Lizenztypen gefiltert: es werden jetzt nur noch Lizenztypen angezeigt, die in der SAP-Lizenzzuweisungs-Map übersetzt sind (wie in den übrigen Bereichen). Nicht-gemappte Roh-Lizenztypen werden in der Systemübersicht nicht mehr gelistet. |
 | 1.7.148 | 30.05.2026 | Systemübersicht-Korrektur bei doppelten Hostnamen: Kunde/Land werden jetzt priorisiert aus `host_uid_settings` (host_uid-basiert) statt primär hostname-basiert aus `host_settings` gelesen. Dadurch landen Hosts mit korrekter UID-Zuordnung nicht mehr fälschlich unter `XX` / `Ohne Kunde`. |
 | 1.7.147 | 30.05.2026 | Admin-Navigation bereinigt: in der oberen horizontalen Global-Registerleiste bleibt nur noch der Einstieg `Admin`; die Unterpunkte `Agent Quelle`, `Alert Abos`, `Anmeldungen` laufen ausschließlich über die linke Admin-Sidebar. Zusätzlich wird die Admin-Sidebar nur noch angezeigt, wenn tatsächlich ein Admin-Unterbereich aktiv ist (nicht mehr bei normalen Global-Menüpunkten). |
