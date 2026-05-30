@@ -13728,8 +13728,8 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
 }
 
 .panel-header .header-kpi-strip .header-chip-count {
-  font-size: 1.58rem;
-  line-height: 0.94;
+  font-size: 1.22rem;
+  line-height: 1.02;
 }
 
 .panel-header .header-kpi-strip .header-chip-scope {
