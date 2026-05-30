@@ -706,6 +706,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.137 (30. Mai 2026)
+
+- **Globales Changelog stabilisiert**: Der Collector laedt jetzt wieder die Host-Metadaten korrekt, damit die globale Changelog-Suche nicht mehr mit HTTP 502 abbricht.
+- **Rebuild-Status entstoert**: Abgeschlossene Rebuild-Jobs werden nach einer Frist nicht mehr als aktive Statusmeldung angezeigt.
+
 ### v1.7.136 (30. Mai 2026)
 
 - **Changelog Label bereinigt**: Der Praefix `SAP Lizenztyp:` wurde in der Feldspalte entfernt.

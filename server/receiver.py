@@ -7757,22 +7757,8 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
     ).fetchall()
 
     host_uids = sorted({str(row[2] or "").strip() for row in rows if str(row[2] or "").strip()})
-    host_uid_display_name_map: dict[str, str] = {}
-    if host_uids:
-        placeholders = ",".join(["?"] * len(host_uids))
-        host_uid_rows = conn.execute(
-            f"""
-            SELECT host_uid, COALESCE(display_name_override, '')
-            FROM host_uid_settings
-            WHERE host_uid IN ({placeholders})
-            """,
-            tuple(host_uids),
-        ).fetchall()
-        host_uid_display_name_map = {
-            str(row[0] or "").strip(): str(row[1] or "").strip()
-            for row in host_uid_rows
-            if str(row[0] or "").strip()
-        }
+    hostnames = sorted({str(row[3] or "").strip() for row in rows if str(row[3] or "").strip()})
+    host_settings_by_hostname, host_uid_display_name_map = _load_host_metadata_maps(conn, hostnames, host_uids)
 
     license_label_map = _build_sap_license_type_label_map()
     items = []

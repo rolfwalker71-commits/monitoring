@@ -12789,6 +12789,13 @@ async function loadChangelogRebuildJobsStatus() {
     const latestProgress = latestResult && typeof latestResult.progress === "object" ? latestResult.progress : {};
     if (latestStatus === "completed") {
       const finishedAt = asText(latest.finished_at_utc, "");
+      const finishedAtMs = Date.parse(finishedAt);
+      const completedTooOld = Number.isFinite(finishedAtMs) && (Date.now() - finishedAtMs) > 24 * 60 * 60 * 1000;
+      if (completedTooOld) {
+        setChangelogRebuildJobStatus("Kein laufender Rebuild-Job.");
+        setChangelogRebuildProgress({ visible: false });
+        return;
+      }
       const configResult = latestResult && typeof latestResult.config_result === "object" ? latestResult.config_result : {};
       const hostsTotal = Number(configResult.hosts_total || configResult.hosts_touched || 0);
       const hostsProcessed = Number(configResult.hosts_processed || configResult.hosts_touched || 0);
