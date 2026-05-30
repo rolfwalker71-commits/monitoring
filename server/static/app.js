@@ -4581,7 +4581,10 @@ function formatMegabytesFromBytes(value) {
   }
   const mb = n / (1024 * 1024);
   const digits = mb >= 100 ? 0 : 1;
-  return mb.toFixed(digits);
+  return Number(mb.toFixed(digits)).toLocaleString("de-CH", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
 }
 
 function formatGigabytesFromBytes(value) {
@@ -4601,7 +4604,11 @@ function formatSignedMegabytesFromBytes(value) {
   const mb = Math.abs(n) / (1024 * 1024);
   const digits = mb >= 100 ? 0 : 1;
   const sign = n >= 0 ? "+" : "-";
-  return `${sign}${mb.toFixed(digits)}`;
+  const formatted = Number(mb.toFixed(digits)).toLocaleString("de-CH", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+  return `${sign}${formatted}`;
 }
 
 function normalizeMountpointValue(value) {
@@ -13053,13 +13060,15 @@ function updateHeaderStatChips() {
     dbReportsHourChip.classList.remove("hidden");
   }
   if (dbSizeChip && dbSizeValue) {
-    dbSizeValue.textContent = state.dbTotalFileBytes === null ? "-" : formatMegabytesFromBytes(state.dbTotalFileBytes);
+    dbSizeValue.textContent = state.dbTotalFileBytes === null
+      ? "-"
+      : `${formatMegabytesFromBytes(state.dbTotalFileBytes)} MB`;
     dbSizeChip.classList.remove("hidden");
   }
   if (dbSizeDeltaChip && dbSizeDeltaValue) {
     dbSizeDeltaValue.textContent = state.dbSizeDelta1hBytes === null
       ? "-"
-      : formatSignedMegabytesFromBytes(state.dbSizeDelta1hBytes);
+      : `${formatSignedMegabytesFromBytes(state.dbSizeDelta1hBytes)} MB`;
     dbSizeDeltaChip.classList.remove("hidden");
   }
   if (licenseChip) {

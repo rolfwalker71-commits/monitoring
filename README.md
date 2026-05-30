@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.141**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.141**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.142**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.142**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.142 | 30.05.2026 | KPI-Header visuell in Themenblöcke gruppiert (Alarme, Infrastruktur, Datenbank/Metriken) via zusätzliche Block-Abstände; Zahlformat bei DB-Werten vereinheitlicht (`de-CH`, z. B. `1'223`), Einheiten (`MB`) in den Hauptwert verschoben und Unterlabels auf Kontextbegriffe umgestellt (z. B. `Datenvolumen`, `Letzte Stunde`). |
 | 1.7.141 | 30.05.2026 | KPI-Icons im Header auf einen einheitlichen, monochromen Symbolstil umgestellt (keine gemischten farbigen/transparenten Emoji-Glyphen mehr) und pro KPI semantisch passend vereinheitlicht (z. B. Warnung, Kritisch, Quittiert, Stumm, Aktiv/Inaktiv, Berichte, DB-Groesse, Delta). |
 | 1.7.140 | 30.05.2026 | KPI-Header weiter verdichtet: Kacheln, Zahlen und Label im oberen Info-Strip nochmals verkleinert fuer eine kompaktere Darstellung; zudem KPI-Begriffe sprachlich vereinheitlicht (Deutsch, z. B. `STUMM`, `BERICHTE`, `DB DIFFERENZ 1H`). |
 | 1.7.133 | 29.05.2026 | Admin Einstellungen > Betrieb auf Unterbereiche aufgeteilt (Aktionen, DB Wartung, Ingest, Backup, Agent Status), sodass nur noch eine Karten-Gruppe gleichzeitig sichtbar ist; zusätzlich Seitenleisten-Typografie (Titel, Untertitel, Menütext/Icons) auf kompakteres Referenzniveau reduziert. |

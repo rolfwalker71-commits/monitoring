@@ -13692,6 +13692,10 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
   gap: 6px;
 }
 
+.panel-header .header-kpi-strip > .header-stat-chip.kpi-group-start {
+  margin-left: 7px;
+}
+
 .panel-header .header-kpi-strip > .header-stat-chip:not(.header-stat-chip-license) {
   min-width: 80px;
   min-height: 48px;
