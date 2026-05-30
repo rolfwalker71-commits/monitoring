@@ -706,6 +706,13 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.139 (30. Mai 2026)
+
+- **Header-KPI kompakter**: Kartenhoehe/-breite und Typografie der Infobar wurden wieder deutlich reduziert.
+- **Hintergruende je KPI wieder sichtbar**: Die Farbtoenungen pro KPI-Gruppe sind klarer ausgepraegt und naeher am referenzierten Screenshot.
+- **Reports-Label korrigiert**: `Reports in DB` zeigt jetzt `REPORTS` mit Unterzeile `Anzahl`; `Anz. Reports` zeigt `REPORTS` mit Unterzeile `1h`.
+- **KPI-Icons ergaenzt**: In allen KPI-Labels wurden passende Symbol-/Outline-Icons vorangestellt.
+
 ### v1.7.138 (30. Mai 2026)
 
 - **Header-Infobar visuell angepasst**: KPI-Chips im Header wurden farblich und typografisch auf das neue Kartenbild abgestimmt (kompaktere Karten, weichere Verlaeufe, klarere Farbfamilien pro Kennzahlgruppe).
