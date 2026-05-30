@@ -1562,7 +1562,7 @@ function updateGlobalSubMode() {
   if (globalAdminLoginAuditTabButton) { globalAdminLoginAuditTabButton.classList.toggle("active", adminLoginAuditActive); globalAdminLoginAuditTabButton.setAttribute("aria-selected", adminLoginAuditActive ? "true" : "false"); }
   if (globalAdminSettingsTabButton) { globalAdminSettingsTabButton.classList.toggle("active", adminSettingsActive); globalAdminSettingsTabButton.setAttribute("aria-selected", adminSettingsActive ? "true" : "false"); }
   if (globalAdminNavShell) {
-    globalAdminNavShell.classList.toggle("hidden", !state.isAdmin);
+    globalAdminNavShell.classList.toggle("hidden", !state.isAdmin || !anyAdminSectionActive);
     globalAdminNavShell.classList.toggle("global-admin-nav-shell-active", anyAdminSectionActive);
   }
   if (globalSettingsPage) {
@@ -2123,6 +2123,12 @@ function updateAdminSettingsVisibility() {
   const hostConfigChangesBackfillStatus = document.getElementById("hostConfigChangesBackfillStatus");
   const changelogRebuildWarningHint = document.getElementById("changelogRebuildWarningHint");
   const changelogRebuildProgress = document.getElementById("changelogRebuildProgress");
+  const anyAdminSectionActive = [
+    "agent-source-status",
+    "admin-alert-subs",
+    "admin-login-audit",
+    "admin-settings",
+  ].includes(String(state.globalSubMode || ""));
   if (adminOauthSection) {
     adminOauthSection.classList.toggle("hidden", !state.isAdmin);
   }
@@ -2145,10 +2151,10 @@ function updateAdminSettingsVisibility() {
     globalAdminSettingsTab.classList.toggle("hidden", !state.isAdmin);
   }
   if (adminOnlyTabsLegend) {
-    adminOnlyTabsLegend.classList.toggle("hidden", !state.isAdmin);
+    adminOnlyTabsLegend.classList.toggle("hidden", true);
   }
   if (globalAdminNavShell) {
-    globalAdminNavShell.classList.toggle("hidden", !state.isAdmin);
+    globalAdminNavShell.classList.toggle("hidden", !state.isAdmin || !anyAdminSectionActive);
   }
   if (globalAdminOpsSection) {
     globalAdminOpsSection.classList.toggle("hidden", !state.isAdmin);

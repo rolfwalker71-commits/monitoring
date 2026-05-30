@@ -132,12 +132,8 @@
                 <button id="backupStatusTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="backupStatusView">Backup Stati</button>
                 <button id="systemOverviewTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="systemOverviewView">Systemübersicht</button>
                 <button id="hostConfigChangesTabButton" type="button" class="tab-button" role="tab" aria-selected="false" aria-controls="hostConfigChangesView">Changelog</button>
-                <button id="agentSourceStatusTabButton" type="button" class="tab-button admin-only-tab hidden" role="tab" aria-selected="false" aria-controls="agentSourceStatusView">Agent Quelle</button>
-                <button id="globalAdminAlertSubsTabButton" type="button" class="tab-button admin-only-tab hidden" role="tab" aria-selected="false" aria-controls="globalAdminAlertSubsView">Alert Abos</button>
-                <button id="globalAdminLoginAuditTabButton" type="button" class="tab-button admin-only-tab hidden" role="tab" aria-selected="false" aria-controls="globalAdminLoginAuditView">Anmeldungen</button>
                 <button id="globalAdminSettingsTabButton" type="button" class="tab-button admin-only-tab hidden" role="tab" aria-selected="false" aria-controls="globalAdminSettingsView">Admin</button>
               </div>
-              <p id="adminOnlyTabsLegend" class="admin-tab-legend hidden"><span class="admin-tab-legend-swatch" aria-hidden="true"></span> Orange markierte Register sind nur für Admins sichtbar.</p>
             </div>
 
             <section id="globalAdminNavShell" class="global-admin-nav-shell hidden" aria-label="Admin Navigation">
@@ -343,7 +339,7 @@
               </div>
             </div>
 
-            <div id="agentSourceStatusView" class="hidden" role="tabpanel" aria-labelledby="agentSourceStatusTabButton">
+            <div id="agentSourceStatusView" class="hidden" role="tabpanel" aria-labelledby="adminNavAgentSourceButton">
               <div class="inactive-hosts-toolbar">
                 <span id="agentSourceStatusSummary" class="count compact"></span>
                 <button id="refreshAgentSourceStatusButton" type="button" class="btn-secondary-compact">↻</button>
@@ -369,7 +365,7 @@
               </div>
             </div>
 
-            <div id="globalAdminAlertSubsView" class="hidden" role="tabpanel" aria-labelledby="globalAdminAlertSubsTabButton">
+            <div id="globalAdminAlertSubsView" class="hidden" role="tabpanel" aria-labelledby="adminNavAlertSubsButton">
               <section class="settings-subsection">
                 <div class="settings-subsection-head">
                   <h5>Alert Abos (Admin)</h5>
@@ -386,7 +382,7 @@
               </section>
             </div>
 
-            <div id="globalAdminLoginAuditView" class="hidden" role="tabpanel" aria-labelledby="globalAdminLoginAuditTabButton">
+            <div id="globalAdminLoginAuditView" class="hidden" role="tabpanel" aria-labelledby="adminNavLoginAuditButton">
               <section class="settings-subsection">
                 <div class="settings-subsection-head">
                   <h5>Anmeldungen (Admin)</h5>
