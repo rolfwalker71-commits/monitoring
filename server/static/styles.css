@@ -3388,77 +3388,77 @@ body[data-theme="dark"] .trend-progress-bar {
 
 /* Meldungsbereich: kompaktere Typografie + stärkere Menü-Hierarchie */
 .reports-column .section-head {
-  padding: 10px 14px 8px;
+  padding: 9px 12px 7px;
 }
 
 .reports-column .title-row h3 {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .reports-column .auto-refresh-interval-select,
 .reports-column #exportHostReportsButton.btn-secondary--compact {
-  font-size: 10px;
-  height: 22px;
-  min-height: 22px;
-  line-height: 20px;
+  font-size: 9px;
+  height: 20px;
+  min-height: 20px;
+  line-height: 18px;
 }
 
 .reports-column .btn-icon--compact {
-  width: 22px;
-  min-width: 22px;
-  height: 22px;
-  min-height: 22px;
-  font-size: 12px;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  font-size: 11px;
 }
 
 .reports-column .view-tabs .tab-button {
-  font-size: 12px;
-  min-height: 34px;
-  padding: 7px 14px 6px;
+  font-size: 11px;
+  min-height: 32px;
+  padding: 6px 12px 5px;
   font-weight: 800;
 }
 
 .reports-column .subview-tabs .tab-button {
-  font-size: 11px;
-  padding: 6px 12px 5px;
+  font-size: 10px;
+  padding: 5px 10px 4px;
   font-weight: 700;
 }
 
 .reports-column .overview-sidebar-item {
-  min-height: 32px;
-  padding: 6px 9px;
-  font-size: 12px;
+  min-height: 30px;
+  padding: 5px 8px;
+  font-size: 11px;
   font-weight: 800;
 }
 
 .reports-column .overview-sidebar-range {
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .reports-column .overview-sidebar-range select {
-  font-size: 10px;
-  padding: 3px 6px;
+  font-size: 9px;
+  padding: 2px 5px;
 }
 
 .reports-column .analysis-header h4 {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .reports-column .count,
 .reports-column .report-count-inline {
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .reports-column .table-wrap table th {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  padding: 6px 7px;
+  padding: 5px 6px;
 }
 
 .reports-column .table-wrap table td {
-  font-size: 10px;
-  padding: 5px 7px;
+  font-size: 9px;
+  padding: 4px 6px;
 }
 
 .admin-tab-legend {
