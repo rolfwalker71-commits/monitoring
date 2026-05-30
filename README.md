@@ -706,6 +706,11 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.138 (30. Mai 2026)
+
+- **Header-Infobar visuell angepasst**: KPI-Chips im Header wurden farblich und typografisch auf das neue Kartenbild abgestimmt (kompaktere Karten, weichere Verlaeufe, klarere Farbfamilien pro Kennzahlgruppe).
+- **KPI-Lesbarkeit verbessert**: Label/Count/Scope in den Chips sind jetzt klarer ausbalanciert und entsprechen dem angefragten Screenshot-Stil.
+
 ### v1.7.137 (30. Mai 2026)
 
 - **Globales Changelog stabilisiert**: Der Collector laedt jetzt wieder die Host-Metadaten korrekt, damit die globale Changelog-Suche nicht mehr mit HTTP 502 abbricht.
