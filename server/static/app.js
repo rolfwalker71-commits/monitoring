@@ -15215,15 +15215,18 @@ function collectSystemOverviewTranslatedLicenseTypes(sapLicense) {
           break;
         }
       }
+      if (!rawType || translated === null) {
+        return null;
+      }
       const countRaw = Number(entry.count);
       const count = Number.isFinite(countRaw) ? countRaw : 0;
       return {
         rawType,
-        translated: translated || rawType,
+        translated,
         count,
       };
     })
-    .filter((entry) => entry.rawType);
+    .filter((entry) => entry !== null);
 }
 
 function hasSystemOverviewLicenseInfo(payload) {
@@ -15267,7 +15270,7 @@ function buildSystemOverviewCustomerDataIndicators(hostEntries) {
     }
     if (!hasLicenseTypes) {
       const sapLicense = payload && typeof payload.sap_license === "object" ? payload.sap_license : null;
-      if (Array.isArray(sapLicense?.focus_license_types) && sapLicense.focus_license_types.length > 0) {
+      if (collectSystemOverviewTranslatedLicenseTypes(sapLicense).length > 0) {
         hasLicenseTypes = true;
       }
     }
