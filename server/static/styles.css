@@ -13689,13 +13689,13 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
 
 /* Header KPI infobar tuning (light mode) */
 .panel-header .header-kpi-strip {
-  gap: 7px;
+  gap: 6px;
 }
 
 .panel-header .header-kpi-strip > .header-stat-chip:not(.header-stat-chip-license) {
-  min-width: 84px;
-  min-height: 52px;
-  padding: 5px 8px;
+  min-width: 80px;
+  min-height: 48px;
+  padding: 4px 7px;
   border-radius: 12px;
   border: 1px solid #bfd0e5;
   border-left-width: 4px;
@@ -13711,24 +13711,24 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 8px;
+  font-size: 7px;
   letter-spacing: 0.015em;
   font-weight: 800;
 }
 
 .panel-header .header-kpi-strip .header-chip-icon {
-  font-size: 10px;
+  font-size: 9px;
   line-height: 1;
   opacity: 0.88;
 }
 
 .panel-header .header-kpi-strip .header-chip-count {
-  font-size: 1.72rem;
+  font-size: 1.58rem;
   line-height: 0.94;
 }
 
 .panel-header .header-kpi-strip .header-chip-scope {
-  font-size: 9px;
+  font-size: 8px;
   letter-spacing: 0;
   font-weight: 600;
   opacity: 0.95;
