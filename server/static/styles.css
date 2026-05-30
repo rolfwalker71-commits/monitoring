@@ -2249,7 +2249,7 @@ button:disabled {
 
 .layout {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 298px minmax(0, 1fr);
   gap: 16px;
   margin-top: 8px;
 }
@@ -2264,7 +2264,7 @@ button:disabled {
   background: linear-gradient(180deg, #ffffff 0%, #f4f9ff 100%);
   border: 1px solid #cbdcf0;
   border-radius: 14px;
-  padding: 12px 10px 12px;
+  padding: 10px 8px 10px;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.6),
     0 8px 20px rgba(30, 58, 95, 0.1);
@@ -2741,13 +2741,13 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
   table-layout: fixed;
   width: 100%;
   min-width: 900px;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 #overviewConfigChangelogSection td,
 #overviewConfigChangelogSection th {
   padding: 5px 6px;
-  font-size: 12px;
+  font-size: 11px;
   word-break: normal;
   overflow-wrap: anywhere;
   white-space: normal;
@@ -2755,12 +2755,12 @@ body[data-theme="dark"] .btn-danger-outline:hover:not(:disabled) {
 }
 
 #overviewConfigChangelogSection th {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
 #overviewConfigChangelogSection code {
-  font-size: 11px;
+  font-size: 10px;
   word-break: normal;
   overflow-wrap: anywhere;
 }
@@ -4363,7 +4363,7 @@ body[data-theme="dark"] .trend-progress-bar {
     linear-gradient(180deg, #f9fcff 0%, #eef5ff 100%);
   color: var(--text);
   border-radius: 9px;
-  padding: 10px 18px 10px 12px;
+  padding: 9px 16px 9px 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -4499,7 +4499,7 @@ body[data-theme="dark"] .trend-progress-bar {
   min-width: 0;
   max-width: 100%;
   color: #6a819d;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   line-height: 1.24;
   padding-bottom: 1px;
@@ -4520,7 +4520,7 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-detail-clock {
   flex: 0 0 auto;
   font-family: "IBM Plex Mono", monospace;
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: #8aa0b8;
@@ -4905,7 +4905,7 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-item strong,
 .host-item .host-title-line,
 .host-item .host-title-line span {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   line-height: 1.1;
   color: #4d617a;
@@ -5389,11 +5389,11 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-item .host-meta-line span:not(.host-value-chip):not(.host-agent-mini-dot):not(.host-meta-k):not(.host-meta-v) {
   color: #6f829a;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .host-item .host-meta-line {
-  font-size: 10px;
+  font-size: 9.5px;
   line-height: 1.25;
   color: #6d829d;
 }

@@ -7554,10 +7554,10 @@ def _describe_sap_addon_key(addon_name: str) -> tuple[str, str]:
         label_source = "Legacy"
     elif addon_name.startswith("hana_extensions::"):
         plain_name = addon_name.split("::", 1)[1]
-        label_source = "HANA LW"
+        label_source = "LW"
     elif addon_name.startswith("hana_sari::"):
         plain_name = addon_name.split("::", 1)[1]
-        label_source = "HANA Legacy"
+        label_source = "Legacy"
 
     if plain_name:
         plain_name = re.sub(r"(?i)^tenant", "", plain_name)

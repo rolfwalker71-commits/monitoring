@@ -706,6 +706,13 @@ BUILD_VERSION              # Aktuelle Server/App-Versionsnummer
 ---
 
 ## Changelog (Agent)
+### v1.7.135 (30. Mai 2026)
+
+- **Linke Sidebar verschlankt**: Host-Kartenleiste ist nun etwas schmaler, damit der Inhaltsbereich rechts mehr nutzbare Breite erhaelt.
+- **Host-Karten Typografie reduziert (Kunde ausgenommen)**: Schriftgroessen und Innenabstaende in den Host-Karten wurden leicht verkleinert; die Kundenzeile bleibt unveraendert prominent.
+- **Changelog lesbarer in der Breite**: Die Schriftgroesse im Host-Changelog (Uebersicht) wurde minimal reduziert, damit mehr Inhalt nebeneinander sichtbar bleibt.
+- **AddOn-Label vereinfacht**: Bei AddOn-Eintraegen steht jetzt nur noch `LW` bzw. `Legacy` (ohne `HANA`/`SQL` Prefix).
+
 ### v1.7.134 (30. Mai 2026)
 
 - **Host-Changelog Layout repariert**: Die Tabelle im Bereich Uebersicht -> Changelog wurde wieder auf stabile Spaltenbreiten und lesbare Typografie gestellt, damit Feldnamen nicht mehr buchstabenweise umbrechen.
