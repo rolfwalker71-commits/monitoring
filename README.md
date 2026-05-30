@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.145**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.145**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.146**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.146**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.146 | 30.05.2026 | Admin-Bereiche-Menü deutlich kompakter gestaltet: kleinere Headline/Unterzeile, reduzierte Kartenhöhen und Paddings, kleinere Icons, engere Abstände und schmalere Sidebar-Spalte im Admin-Workspace-Modus. Ergebnis: wesentlich geringerer Platzbedarf bei weiterhin klarer Lesbarkeit. |
 | 1.7.145 | 30.05.2026 | Meldungsbereich nochmals verdichtet: alle Texte inkl. Menüoptionen/Untermenüs, Tabellen und Header-Controls eine weitere Stufe verkleinert; Menüpunkte bleiben bewusst fett für klare Orientierung. |
 | 1.7.144 | 30.05.2026 | Meldungsbereich typografisch verdichtet: Schriftgrössen in Header, Tabs, Sidebar, Untermenüs und Tabellen reduziert; Menüpunkte deutlich fetter gesetzt und Untermenü-/Control-Stile vereinheitlicht, damit die gesamte Übersicht ruhiger und besser lesbar wirkt. |
 | 1.7.143 | 30.05.2026 | KPI-Werte im Header deutlich verkleinert (kompaktere Zahlentypografie und angepasste Zeilenhoehe), damit insbesondere Metriken mit Einheit wie `MB` weniger dominant wirken und sauberer in die Kacheln passen. |
