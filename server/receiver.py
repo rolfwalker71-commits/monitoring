@@ -102,6 +102,8 @@ ENDPOINT_TIMING_FILE_LOG_MAX_BYTES = max(
     min(256 * 1024 * 1024, int(os.getenv("MONITORING_ENDPOINT_TIMING_FILE_LOG_MAX_BYTES", str(10 * 1024 * 1024)) or str(10 * 1024 * 1024))),
 )
 ENDPOINT_TIMING_FILE_LOG_BACKUPS = max(1, min(20, int(os.getenv("MONITORING_ENDPOINT_TIMING_FILE_LOG_BACKUPS", "5") or "5")))
+HOSTS_ENDPOINT_CACHE_TTL_SECONDS = max(0.0, min(600.0, float(os.getenv("MONITORING_HOSTS_CACHE_TTL_SECONDS", "45") or "45")))
+CRITICAL_TRENDS_ENDPOINT_CACHE_TTL_SECONDS = max(0.0, min(900.0, float(os.getenv("MONITORING_CRITICAL_TRENDS_CACHE_TTL_SECONDS", "180") or "180")))
 CHANGELOG_REBUILD_STALE_MINUTES = max(10, min(1440, int(os.getenv("MONITORING_CHANGELOG_REBUILD_STALE_MINUTES", "120") or "120")))
 SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES = max(5, min(720, int(os.getenv("MONITORING_SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES", "60") or "60")))
 AUTO_BACKUP_DEFAULT_ENABLED = os.getenv("MONITORING_AUTO_BACKUP_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
@@ -14669,7 +14671,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "hidden_hosts": hidden_hosts,
                 "hosts": hosts,
             }
-            _read_cache_set(cache_key, response_data, ttl_seconds=min(5.0, READ_ENDPOINT_CACHE_TTL_SECONDS))
+            _read_cache_set(cache_key, response_data, ttl_seconds=HOSTS_ENDPOINT_CACHE_TTL_SECONDS)
             self._send_json(HTTPStatus.OK, response_data)
             _mark_endpoint_timer(endpoint_timer, "send")
             _finish_endpoint_timer(
@@ -14972,21 +14974,25 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 preferences = get_user_preferences(conn, username)
                 selected_metrics = parse_critical_trends_metrics(preferences.get("critical_trends_metrics", "filesystem"))
-                # Get all hosts and their hidden filesystems for this user
-                all_hostnames = {
-                    row[0]
-                    for row in conn.execute(
-                        "SELECT DISTINCT hostname FROM reports WHERE received_at_utc >= ? ORDER BY hostname ASC",
-                        (utc_hours_ago_iso(hours),),
-                    ).fetchall()
-                }
-                hidden_mountpoints_by_host = {}
-                for hostname in all_hostnames:
-                    hidden_critical = get_filesystem_visibility_hidden(conn, username, hostname, hostname, "critical-trends")
-                    hidden_fs_focus = get_filesystem_visibility_hidden(conn, username, hostname, hostname, "fs-focus")
-                    hidden = sorted({*(hidden_critical or []), *(hidden_fs_focus or [])}, key=lambda item: str(item).lower())
-                    if hidden:
-                        hidden_mountpoints_by_host[hostname] = hidden
+                hidden_mountpoints_by_host: dict[str, list[str]] = {}
+                visibility_rows = conn.execute(
+                    """
+                    SELECT COALESCE(host_uid, ''), COALESCE(mountpoint, '')
+                    FROM filesystem_visibility
+                    WHERE username = ?
+                      AND section IN ('critical-trends', 'fs-focus')
+                    """,
+                    (username,),
+                ).fetchall()
+                visibility_map: dict[str, set[str]] = {}
+                for raw_host_key, raw_mountpoint in visibility_rows:
+                    host_key = str(raw_host_key or "").strip()
+                    mountpoint = str(raw_mountpoint or "").strip()
+                    if not host_key or not mountpoint:
+                        continue
+                    visibility_map.setdefault(host_key, set()).add(mountpoint)
+                for host_key, mountpoints in visibility_map.items():
+                    hidden_mountpoints_by_host[host_key] = sorted(mountpoints, key=lambda item: str(item).lower())
                 
                 warnings = collect_critical_trends(
                     conn,
@@ -15002,7 +15008,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "warnings": warnings,
                 "total": len(warnings),
             }
-            _read_cache_set(cache_key, response_data, ttl_seconds=min(20.0, READ_ENDPOINT_CACHE_TTL_SECONDS))
+            _read_cache_set(cache_key, response_data, ttl_seconds=CRITICAL_TRENDS_ENDPOINT_CACHE_TTL_SECONDS)
             self._send_json(HTTPStatus.OK, response_data)
             _mark_endpoint_timer(endpoint_timer, "send")
             _finish_endpoint_timer(
