@@ -14407,6 +14407,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
+            cache_key = f"hosts:{limit}:{offset}"
+            cached_data = _read_cache_get(cache_key)
+            if isinstance(cached_data, dict):
+                self._send_json(HTTPStatus.OK, cached_data)
+                _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
+                _finish_endpoint_timer(endpoint_timer, meta=f"limit={limit} offset={offset} cache=hit")
+                return
             host_key_expr = reports_host_key_sql()
 
             with sqlite3.connect(DB_PATH) as conn:
@@ -14662,11 +14669,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "hidden_hosts": hidden_hosts,
                 "hosts": hosts,
             }
+            _read_cache_set(cache_key, response_data, ttl_seconds=min(5.0, READ_ENDPOINT_CACHE_TTL_SECONDS))
             self._send_json(HTTPStatus.OK, response_data)
             _mark_endpoint_timer(endpoint_timer, "send")
             _finish_endpoint_timer(
                 endpoint_timer,
-                meta=f"limit={limit} offset={offset} returned={len(hosts)} total={total_hosts}",
+                meta=f"limit={limit} offset={offset} returned={len(hosts)} total={total_hosts} cache=miss",
             )
             return
 
@@ -14953,6 +14961,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=72, min_value=1, max_value=24 * 30)
             project_hours = parse_int(query, "project_hours", default=72, min_value=1, max_value=24 * 7)
+            cache_key = f"critical-trends:{username}:{hours}:{project_hours}"
+            cached_data = _read_cache_get(cache_key)
+            if isinstance(cached_data, dict):
+                self._send_json(HTTPStatus.OK, cached_data)
+                _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
+                _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} project_hours={project_hours} cache=hit")
+                return
             
             with sqlite3.connect(DB_PATH) as conn:
                 preferences = get_user_preferences(conn, username)
@@ -14987,11 +15002,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "warnings": warnings,
                 "total": len(warnings),
             }
+            _read_cache_set(cache_key, response_data, ttl_seconds=min(20.0, READ_ENDPOINT_CACHE_TTL_SECONDS))
             self._send_json(HTTPStatus.OK, response_data)
             _mark_endpoint_timer(endpoint_timer, "send")
             _finish_endpoint_timer(
                 endpoint_timer,
-                meta=f"hours={hours} project_hours={project_hours} warnings={len(warnings)}",
+                meta=f"hours={hours} project_hours={project_hours} warnings={len(warnings)} cache=miss",
             )
             return
 

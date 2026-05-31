@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.155**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.155**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.156**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.156**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.156 | 31.05.2026 | Zusätzlicher Performance-Hotfix nach Live-Messung: Kurzzeit-Servercache für `/api/v1/hosts` (5s) und `/api/v1/critical-trends` (bis 20s, begrenzt durch globale Cache-TTL) eingeführt. Ergebnis: wiederholte Aufrufe/Tab-Wechsel laden diese schweren Ansichten deutlich schneller; Perf-Logs markieren jetzt explizit `cache=hit`/`cache=miss` für beide Endpoints. |
 | 1.7.155 | 31.05.2026 | Endpoint-Performance-Logs jetzt zusätzlich als Datei mit Rotation: neue ENV-Optionen `MONITORING_ENDPOINT_TIMING_FILE_LOG_ENABLED`, `MONITORING_ENDPOINT_TIMING_FILE_LOG_PATH` (Default `server/data/endpoint_perf.log`), `MONITORING_ENDPOINT_TIMING_FILE_LOG_MAX_BYTES` und `MONITORING_ENDPOINT_TIMING_FILE_LOG_BACKUPS`. Damit können Perf-Logs dauerhaft gesammelt und extern analysiert werden, ohne unkontrolliertes Logwachstum. |
 | 1.7.154 | 31.05.2026 | Performance-Diagnostik erweitert: zentrale Endpoint-Timing-Logs mit Phasen-Breakdown (`db`, `compute/build`, `send`) für die Hauptansichten (`/api/v1/hosts`, `/api/v1/host-reports`, `/api/v1/analysis`, `/api/v1/alerts`, `/api/v1/critical-trends`, `/api/v1/inactive-hosts`, `/api/v1/backup-status-overview`, `/api/v1/alerts-summary`, `/api/v1/system-overview`). Steuerbar über neue ENV-Variablen `MONITORING_ENDPOINT_TIMING_LOG_ENABLED` und `MONITORING_ENDPOINT_TIMING_LOG_MIN_MS`. |
 | 1.7.153 | 31.05.2026 | Performance-Breitband-Optimierung: SQLite-Verbindungen erhalten jetzt globale PRAGMA-Tunings (WAL, `synchronous=NORMAL`, `temp_store=MEMORY`, Cache- und MMAP-Größen via ENV). Zusätzlich wurden mehrere teure Read-Endpunkte (`system-overview`, `inactive-hosts`, `backup-status-overview`, `alerts-summary`) mit kurzem TTL-Servercache versehen. Im Frontend wurden zentrale serielle Ladepfade auf paralleles Laden umgestellt (Host-Panels/Report-Navigation/Admin-Settings), wodurch Ansichten insgesamt schneller sichtbar werden. |
