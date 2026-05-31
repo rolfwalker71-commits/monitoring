@@ -7862,7 +7862,30 @@ def _collect_sap_addon_change_items(conn: sqlite3.Connection, hours: int, limit:
     hostnames = sorted({str(row[3] or "").strip() for row in rows if str(row[3] or "").strip()})
     host_settings_by_hostname, host_uid_display_name_map = _load_host_metadata_maps(conn, hostnames, host_uids)
 
+    # Pre-seed previous snapshots from the last report BEFORE the time window so that
+    # the first report inside the window is diffed against a real baseline.  Without
+    # this, every first-in-window report looks like a brand-new host and generates
+    # spurious "old_value = '-'" entries that cycle as the window advances.
     previous_by_host: dict[str, dict[str, str]] = {}
+    pre_rows = conn.execute(
+        f"""
+        SELECT r.payload_json,
+               {host_key_expr} AS host_uid_value
+        FROM reports r
+        INNER JOIN (
+            SELECT COALESCE(NULLIF(host_uid, ''), hostname) AS hkey, MAX(id) AS max_id
+            FROM reports
+            WHERE received_at_utc < ?
+            GROUP BY hkey
+        ) pre ON pre.max_id = r.id
+        """,
+        (cutoff_iso,),
+    ).fetchall()
+    for pre_row in pre_rows:
+        host_key = str(pre_row[1] or "").strip()
+        if host_key:
+            payload = parse_payload_json(str(pre_row[0] or "{}"))
+            previous_by_host[host_key] = _extract_sap_addon_snapshot(payload)
     changes: list[dict] = []
 
     for row in rows:

@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.160**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.160**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.161**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.161**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.161 | 31.05.2026 | Changelog-Phantom-Einträge behoben: `_collect_sap_addon_change_items` seeded jetzt den Vergleichs-Snapshot aus dem letzten Report **vor** dem Zeitfenster. Vorher wurde der erste Report im Fenster immer als neuer Host behandelt, was rollierend Fake-Einträge mit `VORHER=-` erzeugte (alle 30 Minuten neu, nie aus dem Fenster fallend). Nur wirklich neue Hosts ohne jegliche Vorgeschichte erhalten weiterhin Baseline-Einträge. |
 | 1.7.160 | 31.05.2026 | Neues Skalierungskonzept fuer Alert-Abos dokumentiert (`docs/processes/alert-abo-skalierungskonzept.md/.html`): Scope-Vererbung (`global -> country -> team -> service -> host_group -> host`), Empfaenger-Gruppen, Tri-State-Regeln (`inherit/force_on/force_off`), Simulations-API und stufenweise Migration vom aktuellen Host-User-Matrixmodell. Prozess-Index wurde um den neuen Eintrag erweitert. |
 | 1.7.159 | 31.05.2026 | SAP-Lizenztyp-Matrix auf Sichtbar-Flag umgestellt: pro Zeile gibt es jetzt eine Checkbox `Sichtbar`. Die Auswertungen (inkl. Lizenztyp+Anzahl) verifizieren nun strikt gegen dieses Flag statt gegen reine Übersetzungslogik. Initiale Migration setzt `Sichtbar=Ja` nur für tatsächlich übersetzte Einträge; nicht übersetzte Auto-Discover-Einträge starten leer (`display_name=''`) und unsichtbar. |
 | 1.7.158 | 31.05.2026 | Critical-Trends massiv umgebaut für First-Request-Performance: statt N+1-Host-Queries werden Reports, Host-Metadaten und Mute-Regeln jetzt gebatcht geladen und pro Host in-memory verarbeitet. Zusätzlich wurde die Hidden-Mountpoint-Zuordnung robust für `hostname` und `host_uid` vereinheitlicht. Cache-TTLs für schwere Endpoints bleiben separat konfigurierbar (`MONITORING_HOSTS_CACHE_TTL_SECONDS`, `MONITORING_CRITICAL_TRENDS_CACHE_TTL_SECONDS`). |
