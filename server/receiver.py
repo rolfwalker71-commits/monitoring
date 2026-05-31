@@ -6384,33 +6384,64 @@ def collect_critical_trends(
         return None
 
     warnings: list[dict] = []
-    hostnames = [
-        row[0]
-        for row in conn.execute(
-            "SELECT DISTINCT hostname FROM reports WHERE received_at_utc >= ? ORDER BY hostname ASC",
-            (cutoff_iso,),
-        ).fetchall()
-    ]
+    query = "SELECT COALESCE(hostname, ''), COALESCE(payload_json, '{}') FROM reports WHERE received_at_utc >= ?"
+    args: list[object] = [cutoff_iso]
+    normalized_allowed_hostnames: set[str] | None = None
     if allowed_hostnames is not None:
-        hostnames = [hostname for hostname in hostnames if hostname in allowed_hostnames]
+        normalized_allowed_hostnames = {
+            str(item or "").strip()
+            for item in allowed_hostnames
+            if str(item or "").strip()
+        }
+        if not normalized_allowed_hostnames:
+            return []
+        placeholders = ",".join("?" for _ in normalized_allowed_hostnames)
+        query += f" AND hostname IN ({placeholders})"
+        args.extend(sorted(normalized_allowed_hostnames))
+    query += " ORDER BY hostname ASC, id ASC"
+    rows = conn.execute(query, tuple(args)).fetchall()
 
-    prioritized = prioritized_hostnames or set()
-
-    for hostname in hostnames:
-        rows = conn.execute(
-            """
-            SELECT payload_json
-            FROM reports
-            WHERE hostname = ? AND received_at_utc >= ?
-            ORDER BY id ASC
-            """,
-            (hostname, cutoff_iso),
-        ).fetchall()
-
-        if not rows:
+    payload_rows_by_hostname: dict[str, list[dict]] = {}
+    for raw_hostname, raw_payload_json in rows:
+        hostname = str(raw_hostname or "").strip()
+        if not hostname:
             continue
+        payload = parse_payload_json(str(raw_payload_json or "{}"))
+        payload_rows_by_hostname.setdefault(hostname, []).append(payload)
 
-        last_payload = parse_payload_json(rows[-1][0])
+    if not payload_rows_by_hostname:
+        return []
+
+    hostnames = sorted(payload_rows_by_hostname.keys())
+    placeholders = ",".join("?" for _ in hostnames)
+    host_settings_rows = conn.execute(
+        f"""
+        SELECT h.hostname,
+               COALESCE(h.display_name_override, ''),
+               COALESCE(h.country_code_override, ''),
+               COALESCE(c.customer_name, '')
+        FROM host_settings h
+        LEFT JOIN customers c ON c.id = h.customer_id
+        WHERE h.hostname IN ({placeholders})
+        """,
+        tuple(hostnames),
+    ).fetchall()
+    host_settings_map = {
+        str(row[0] or "").strip(): (
+            str(row[1] or "").strip(),
+            normalize_country_code(row[2]),
+            str(row[3] or "").strip(),
+        )
+        for row in host_settings_rows
+        if str(row[0] or "").strip()
+    }
+
+    host_key_by_hostname: dict[str, str] = {}
+    for hostname in hostnames:
+        payloads = payload_rows_by_hostname.get(hostname, [])
+        if not payloads:
+            continue
+        last_payload = payloads[-1]
         host_primary_ip = str(last_payload.get("primary_ip", "") or "").strip()
         host_uid_value = _derive_host_uid(
             last_payload,
@@ -6418,32 +6449,46 @@ def collect_critical_trends(
             str(last_payload.get("agent_id", "") or ""),
             host_primary_ip,
         )
-        host_key_value = alert_host_key(hostname, host_uid_value)
-        host_settings = conn.execute(
-            """
-            SELECT COALESCE(h.display_name_override, ''),
-                   COALESCE(h.country_code_override, ''),
-                   COALESCE(c.customer_name, '')
-            FROM host_settings h
-            LEFT JOIN customers c ON c.id = h.customer_id
-            WHERE h.hostname = ?
+        host_key_by_hostname[hostname] = alert_host_key(hostname, host_uid_value)
+
+    muted_mountpoints_by_host_key: dict[str, set[str]] = {}
+    if host_key_by_hostname:
+        unique_host_keys = sorted({value for value in host_key_by_hostname.values() if value})
+        placeholders = ",".join("?" for _ in unique_host_keys)
+        muted_rows = conn.execute(
+            f"""
+            SELECT COALESCE(host_uid, ''), COALESCE(mountpoint, '')
+            FROM muted_alert_rules
+            WHERE host_uid IN ({placeholders})
             """,
-            (hostname,),
-        ).fetchone()
-        muted_mountpoints = {
-            str(item[0] or "").strip()
-            for item in conn.execute(
-                "SELECT mountpoint FROM muted_alert_rules WHERE host_uid = ?",
-                (host_key_value,),
-            ).fetchall()
-        }
-        display_name_override = str(host_settings[0] or "").strip() if host_settings else ""
-        country_code_override = normalize_country_code(host_settings[1] if host_settings else "")
-        host_customer_name = str(host_settings[2] or "").strip() if host_settings else ""
+            tuple(unique_host_keys),
+        ).fetchall()
+        for raw_host_key, raw_mountpoint in muted_rows:
+            host_key = str(raw_host_key or "").strip()
+            mountpoint = str(raw_mountpoint or "").strip()
+            if not host_key or not mountpoint:
+                continue
+            muted_mountpoints_by_host_key.setdefault(host_key, set()).add(mountpoint)
+
+    prioritized = prioritized_hostnames or set()
+
+    for hostname in hostnames:
+        payloads = payload_rows_by_hostname.get(hostname, [])
+        if not payloads:
+            continue
+
+        last_payload = payloads[-1]
+        host_primary_ip = str(last_payload.get("primary_ip", "") or "").strip()
+        host_key_value = host_key_by_hostname.get(hostname, hostname)
+        muted_mountpoints = muted_mountpoints_by_host_key.get(host_key_value, set())
+
+        settings = host_settings_map.get(hostname, ("", "", ""))
+        display_name_override = settings[0]
+        country_code_override = settings[1]
+        host_customer_name = settings[2]
         host_display_name = effective_display_name(last_payload, display_name_override, hostname)
         host_country_code = country_code_override or extract_country_code_from_payload(last_payload)
         host_os_family = normalize_os_family(last_payload.get("os", ""))
-        host_primary_ip = str(last_payload.get("primary_ip", "") or "").strip()
 
         resource_series: dict[str, list[float]] = {
             "cpu_usage_percent": [],
@@ -6452,9 +6497,7 @@ def collect_critical_trends(
         }
         fs_series: dict[str, list[float]] = {}
 
-        for row in rows:
-            payload = parse_payload_json(row[0])
-
+        for payload in payloads:
             cpu = get_nested_number(payload, "cpu", "usage_percent")
             if cpu is not None:
                 resource_series["cpu_usage_percent"].append(cpu)
@@ -6467,7 +6510,10 @@ def collect_critical_trends(
             if swap is not None:
                 resource_series["swap_used_percent"].append(swap)
 
-            for fs in payload.get("filesystems", []):
+            filesystems = payload.get("filesystems", [])
+            if not isinstance(filesystems, list):
+                continue
+            for fs in filesystems:
                 if not isinstance(fs, dict):
                     continue
                 mountpoint = str(fs.get("mountpoint", "")).strip()
@@ -6477,9 +6523,7 @@ def collect_critical_trends(
                     used_percent = float(fs["used_percent"])
                 except (KeyError, TypeError, ValueError):
                     continue
-                if mountpoint not in fs_series:
-                    fs_series[mountpoint] = []
-                fs_series[mountpoint].append(used_percent)
+                fs_series.setdefault(mountpoint, []).append(used_percent)
 
         for metric_group, key, label in resource_metrics:
             if metric_group not in selected:
@@ -6508,16 +6552,17 @@ def collect_critical_trends(
             )
 
         if "filesystem" in selected:
+            hidden_keys = set()
+            if hidden_normalized_by_host:
+                hidden_keys |= hidden_normalized_by_host.get(hostname, set())
+                hidden_keys |= hidden_normalized_by_host.get(host_key_value, set())
+
             for mountpoint, values in fs_series.items():
                 if mountpoint in muted_mountpoints:
                     continue
-                if blacklist_patterns and is_filesystem_blacklisted_by_patterns(mountpoint, blacklist_patterns):
-                    continue
                 mountpoint_key = normalize_mountpoint_key(mountpoint)
-                # Skip filesystem if it's hidden in user's visibility settings
-                if hidden_normalized_by_host and hostname in hidden_normalized_by_host:
-                    if mountpoint_key in hidden_normalized_by_host[hostname]:
-                        continue
+                if hidden_keys and mountpoint_key in hidden_keys:
+                    continue
                 projected = linear_regression_projected(values)
                 level = trend_level(projected)
                 if not level:

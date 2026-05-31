@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.157**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.157**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.158**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.158**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.158 | 31.05.2026 | Critical-Trends massiv umgebaut für First-Request-Performance: statt N+1-Host-Queries werden Reports, Host-Metadaten und Mute-Regeln jetzt gebatcht geladen und pro Host in-memory verarbeitet. Zusätzlich wurde die Hidden-Mountpoint-Zuordnung robust für `hostname` und `host_uid` vereinheitlicht. Cache-TTLs für schwere Endpoints bleiben separat konfigurierbar (`MONITORING_HOSTS_CACHE_TTL_SECONDS`, `MONITORING_CRITICAL_TRENDS_CACHE_TTL_SECONDS`). |
 | 1.7.157 | 31.05.2026 | Performance-Nachschärfung nach Live-Logs: Endpoint-spezifische Cache-TTLs für `/api/v1/hosts` und `/api/v1/critical-trends` erhöht (separat via ENV konfigurierbar), sodass bei normalen Tab-Wechseln tatsächlich `cache=hit` eintritt. Zusätzlich in `/api/v1/critical-trends` N+1-Queries auf `filesystem_visibility` durch eine gebatchte Einzelabfrage ersetzt. |
 | 1.7.156 | 31.05.2026 | Zusätzlicher Performance-Hotfix nach Live-Messung: Kurzzeit-Servercache für `/api/v1/hosts` (5s) und `/api/v1/critical-trends` (bis 20s, begrenzt durch globale Cache-TTL) eingeführt. Ergebnis: wiederholte Aufrufe/Tab-Wechsel laden diese schweren Ansichten deutlich schneller; Perf-Logs markieren jetzt explizit `cache=hit`/`cache=miss` für beide Endpoints. |
 | 1.7.155 | 31.05.2026 | Endpoint-Performance-Logs jetzt zusätzlich als Datei mit Rotation: neue ENV-Optionen `MONITORING_ENDPOINT_TIMING_FILE_LOG_ENABLED`, `MONITORING_ENDPOINT_TIMING_FILE_LOG_PATH` (Default `server/data/endpoint_perf.log`), `MONITORING_ENDPOINT_TIMING_FILE_LOG_MAX_BYTES` und `MONITORING_ENDPOINT_TIMING_FILE_LOG_BACKUPS`. Damit können Perf-Logs dauerhaft gesammelt und extern analysiert werden, ohne unkontrolliertes Logwachstum. |
