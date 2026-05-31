@@ -13307,7 +13307,7 @@ async function loadGlobalAlertsOverview(options = {}) {
             <td>${renderAlertMountpointLabel(item.mountpoint, 56)}</td>
             <td>${formatPercent(item.used_percent)}</td>
             <td>${formatPercent(item.current_used_percent)}${currentReportStandHtml}</td>
-            <td>${formatPercent(item.delta_used_percent)}</td>
+            <td><span class="${deltaSignClass(item.delta_used_percent)}">${formatSignedPercent(item.delta_used_percent)}</span></td>
             <td title="Zuletzt gesehen: ${escapeHtml(formatUtcPlus2(item.last_seen_at_utc))}">${escapeHtml(formatUtcPlus2(item.created_at_utc))}${ackMeta}${closeMeta}</td>
             <td><div class="alert-action-buttons">${muteBtn}${headsUpBtn}${ackBtn}${closeBtn}</div></td>
           </tr>

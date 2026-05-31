@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.151**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.151**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.152**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.152**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.152 | 31.05.2026 | Globale Alerts-Ansicht verfeinert: Spaltenkopf `Used` auf `Initial` umgestellt und Delta-Werte jetzt mit Vorzeichen (`+/-`) sowie semantischer Farbcodierung dargestellt (`+` grün, `-` rot). |
 | 1.7.151 | 31.05.2026 | Hotfix Systemübersicht: JavaScript-Initialisierungsfehler `Cannot access 'searchQuery' before initialization` behoben (Variable wird vor URL-Param-Aufbau initialisiert). Aufruf der Systemübersicht funktioniert damit wieder stabil. |
 | 1.7.150 | 30.05.2026 | Performance-Fix Systemübersicht: Suchbegriff wird jetzt als Query-Parameter (`q`) an `/api/v1/system-overview` übergeben und serverseitig vorgefiltert. Dadurch werden bei kundenspezifischer Suche deutlich weniger Hosts/Payloads geparst und übertragen, was den initialen Aufruf spürbar beschleunigt. |
 | 1.7.149 | 30.05.2026 | Systemübersicht-Lizenztypen gefiltert: es werden jetzt nur noch Lizenztypen angezeigt, die in der SAP-Lizenzzuweisungs-Map übersetzt sind (wie in den übrigen Bereichen). Nicht-gemappte Roh-Lizenztypen werden in der Systemübersicht nicht mehr gelistet. |
