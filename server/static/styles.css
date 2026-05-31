@@ -11756,13 +11756,18 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
 .header-kpi-strip {
   display: grid !important;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-columns: minmax(132px, 1fr);
   flex-wrap: nowrap !important;
-  overflow: hidden !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  padding-right: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: #9bb4d3 transparent;
 }
 
 .header-kpi-strip .header-stat-chip {
   min-width: 0;
+  scroll-snap-align: start;
 }
 
 .header-toolbar {
@@ -11884,13 +11889,30 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
 .header-kpi-strip {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-columns: minmax(132px, 1fr);
   align-items: stretch;
   gap: 12px;
   flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
-  padding-bottom: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  padding: 0 10px 4px 0;
+  scrollbar-width: thin;
+  scrollbar-color: #9bb4d3 transparent;
+}
+
+.header-kpi-strip::-webkit-scrollbar {
+  height: 7px;
+}
+
+.header-kpi-strip::-webkit-scrollbar-thumb {
+  background: #9bb4d3;
+  border-radius: 999px;
+}
+
+.header-kpi-strip::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .header-toolbar {
@@ -12182,6 +12204,14 @@ body[data-theme="dark"] .header-host-tools .icon-filter-chip:hover {
 body[data-theme="dark"] .header-host-tools .icon-filter-chip.active {
   background: #2b4d78;
   border-color: #7098c8;
+}
+
+body[data-theme="dark"] .header-kpi-strip {
+  scrollbar-color: #4b6e97 transparent;
+}
+
+body[data-theme="dark"] .header-kpi-strip::-webkit-scrollbar-thumb {
+  background: #4b6e97;
 }
 
 body[data-theme="dark"] .header-stat-chip {
