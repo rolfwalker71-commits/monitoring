@@ -93,6 +93,15 @@ READ_ENDPOINT_CACHE_TTL_SECONDS = max(0.0, min(60.0, float(os.getenv("MONITORING
 READ_ENDPOINT_CACHE_MAX_ENTRIES = max(32, min(4096, int(os.getenv("MONITORING_READ_ENDPOINT_CACHE_MAX_ENTRIES", "512") or "512")))
 ENDPOINT_TIMING_LOG_ENABLED = os.getenv("MONITORING_ENDPOINT_TIMING_LOG_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
 ENDPOINT_TIMING_LOG_MIN_MS = max(1.0, min(60000.0, float(os.getenv("MONITORING_ENDPOINT_TIMING_LOG_MIN_MS", "250") or "250")))
+ENDPOINT_TIMING_FILE_LOG_ENABLED = os.getenv("MONITORING_ENDPOINT_TIMING_FILE_LOG_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
+ENDPOINT_TIMING_FILE_LOG_PATH = Path(
+    os.getenv("MONITORING_ENDPOINT_TIMING_FILE_LOG_PATH", str(DATA_DIR / "endpoint_perf.log"))
+).expanduser()
+ENDPOINT_TIMING_FILE_LOG_MAX_BYTES = max(
+    256 * 1024,
+    min(256 * 1024 * 1024, int(os.getenv("MONITORING_ENDPOINT_TIMING_FILE_LOG_MAX_BYTES", str(10 * 1024 * 1024)) or str(10 * 1024 * 1024))),
+)
+ENDPOINT_TIMING_FILE_LOG_BACKUPS = max(1, min(20, int(os.getenv("MONITORING_ENDPOINT_TIMING_FILE_LOG_BACKUPS", "5") or "5")))
 CHANGELOG_REBUILD_STALE_MINUTES = max(10, min(1440, int(os.getenv("MONITORING_CHANGELOG_REBUILD_STALE_MINUTES", "120") or "120")))
 SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES = max(5, min(720, int(os.getenv("MONITORING_SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES", "60") or "60")))
 AUTO_BACKUP_DEFAULT_ENABLED = os.getenv("MONITORING_AUTO_BACKUP_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
@@ -140,6 +149,7 @@ _auto_backup_lock = threading.Lock()
 _db_maintenance_lock = threading.Lock()
 _read_endpoint_cache_lock = threading.Lock()
 _read_endpoint_cache: dict[str, tuple[float, object]] = {}
+_endpoint_timing_file_log_lock = threading.Lock()
 _agent_ingest_queue_wakeup = threading.Event()
 _local_cpu_sample_lock = threading.Lock()
 _local_cpu_prev_total: int | None = None
@@ -243,7 +253,62 @@ def _finish_endpoint_timer(timer: dict[str, object], meta: str = "") -> None:
     if isinstance(steps, list) and steps:
         step_text = " | " + " | ".join(f"{name}:{duration:.1f}ms" for name, duration in steps)
     meta_text = f" | {meta}" if str(meta or "").strip() else ""
-    print(f"[perf] {endpoint} total={total_ms:.1f}ms{step_text}{meta_text}")
+    line = f"[perf] {endpoint} total={total_ms:.1f}ms{step_text}{meta_text}"
+    print(line)
+    _append_endpoint_timing_file_log(line)
+
+
+def _append_endpoint_timing_file_log(line: str) -> None:
+    if not ENDPOINT_TIMING_FILE_LOG_ENABLED:
+        return
+    path = ENDPOINT_TIMING_FILE_LOG_PATH
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    payload_line = f"{timestamp} {str(line or '').strip()}\n"
+
+    with _endpoint_timing_file_log_lock:
+        try:
+            if path.exists() and path.stat().st_size >= ENDPOINT_TIMING_FILE_LOG_MAX_BYTES:
+                _rotate_endpoint_timing_file_logs(path)
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(payload_line)
+        except OSError:
+            return
+
+
+def _rotate_endpoint_timing_file_logs(path: Path) -> None:
+    backup_count = int(ENDPOINT_TIMING_FILE_LOG_BACKUPS or 0)
+    if backup_count <= 0:
+        try:
+            if path.exists():
+                path.unlink()
+        except OSError:
+            pass
+        return
+
+    for idx in range(backup_count - 1, 0, -1):
+        src = Path(f"{path}.{idx}")
+        dst = Path(f"{path}.{idx + 1}")
+        try:
+            if src.exists():
+                if dst.exists():
+                    dst.unlink()
+                src.replace(dst)
+        except OSError:
+            pass
+
+    first_backup = Path(f"{path}.1")
+    try:
+        if path.exists():
+            if first_backup.exists():
+                first_backup.unlink()
+            path.replace(first_backup)
+    except OSError:
+        pass
 
 
 # Global hotfix: every sqlite3.connect call in this process gets an auto-closing
