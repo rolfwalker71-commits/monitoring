@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.163**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.163**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.164**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.164**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.164 | 31.05.2026 | Header-Redesign im Hauptlayout: rechter Bereich als kompakte Account-Zone neu gefasst, Theme-Toggle entrahmt, User/Logout in eine gemeinsame Glass-Card gelegt, Titeltypografie beruhigt und Versions-/Plattform-Metadaten visuell zurückgenommen. Ziel: weniger Pill-Unruhe, klarere Hierarchie und modernerer Kopfbereich ohne kompletten Layoutbruch. |
 | 1.7.163 | 31.05.2026 | Changelog-Backfill-Pre-Seeding auch für `backfill_host_config_changes` nachgezogen: Erster Report pro Host im Rebuild-Fenster erhielt fälschlicherweise `VORHER=-`-Einträge für alle Hardware-/HANA-Felder (`backfill-init`). Fix: Snapshot des letzten Reports **vor** dem Fenster wird vorab geladen, damit `include_initial_snapshot_events=True` nur für wirklich neue Hosts (ohne jegliche Vorgeschichte) greift. **„Rebuild heute"** auf **„Rebuild 30d"** umgestellt (30 statt 1 Tag), damit alle gängigen Zeitfenster (24h–30d) nach einem Rebuild vollständig befüllt sind. Nach dem Deploy: einmalig **„Rebuild 30d"** ausführen. |
 | 1.7.162 | 31.05.2026 | Changelog-DB-Lifecycle-Backfill-Bug behoben: `backfill_database_lifecycle` seeded jetzt `prev_dbs_by_host` aus dem letzten Report **vor** dem Backfill-Fenster. Vorher wurde für den ersten Report jedes Hosts im Fenster jede vorhandene Datenbank fälschlicherweise als „neu erstellt" eingetragen (persistente Fake-`create`-Events in `database_lifecycle`). Nach dem Deploy: einmalig Changelog-Rebuild im Admin-UI triggern, um bestehende Fake-Einträge zu bereinigen. |
 | 1.7.161 | 31.05.2026 | Changelog-Phantom-Einträge behoben: `_collect_sap_addon_change_items` seeded jetzt den Vergleichs-Snapshot aus dem letzten Report **vor** dem Zeitfenster. Vorher wurde der erste Report im Fenster immer als neuer Host behandelt, was rollierend Fake-Einträge mit `VORHER=-` erzeugte (alle 30 Minuten neu, nie aus dem Fenster fallend). Nur wirklich neue Hosts ohne jegliche Vorgeschichte erhalten weiterhin Baseline-Einträge. |

@@ -58,8 +58,13 @@
             <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
             <span class="theme-toggle-label">Dark</span>
           </button>
-          <span id="brandUserBadge" class="brand-user-badge hidden"></span>
-          <button id="logoutButton" class="brand-user-badge brand-logout-btn hidden" type="button" title="Abmelden">&#x1F6AA; Abmelden</button>
+          <div id="brandAccountShell" class="brand-account-shell hidden">
+            <span id="brandUserBadge" class="brand-user-badge hidden"></span>
+            <button id="logoutButton" class="brand-logout-btn hidden" type="button" title="Abmelden">
+              <span class="brand-logout-icon" aria-hidden="true">&#x1F6AA;</span>
+              <span class="brand-logout-label">Abmelden</span>
+            </button>
+          </div>
         </div>
         <div class="brand-partner-logo" aria-hidden="true">
           <img src="icons/ANG.png" alt="ANG" />

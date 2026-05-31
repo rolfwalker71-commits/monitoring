@@ -2054,6 +2054,7 @@ function setAuthUiState(authenticated) {
   const loginOverlay = document.getElementById("loginOverlay");
   const appPanel = document.getElementById("appPanel");
   const hostToolsHeader = document.getElementById("hostToolsHeader");
+  const brandAccountShell = document.getElementById("brandAccountShell");
   const brandUserBadge = document.getElementById("brandUserBadge");
   const brandSessionBadge = document.getElementById("brandSessionBadge");
   const logoutButton = document.getElementById("logoutButton");
@@ -2061,6 +2062,9 @@ function setAuthUiState(authenticated) {
   appPanel.classList.toggle("hidden", !authenticated);
   if (hostToolsHeader) {
     hostToolsHeader.classList.toggle("hidden", !authenticated);
+  }
+  if (brandAccountShell) {
+    brandAccountShell.classList.toggle("hidden", !authenticated);
   }
   if (brandUserBadge) {
     brandUserBadge.classList.toggle("hidden", !authenticated);
