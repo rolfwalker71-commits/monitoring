@@ -86,6 +86,10 @@ DEFAULT_ALERT_DIGEST_TIME = "08:05"
 SCHEDULE_TIMEZONE_NAME = os.getenv("MONITORING_SCHEDULE_TIMEZONE", "Europe/Zurich").strip() or "Europe/Zurich"
 DB_MAINTENANCE_INTERVAL_HOURS = max(1, min(24, int(os.getenv("MONITORING_DB_MAINT_INTERVAL_HOURS", "2") or "2")))
 SQLITE_BUSY_TIMEOUT_SECONDS = max(1.0, min(120.0, float(os.getenv("MONITORING_SQLITE_BUSY_TIMEOUT_SECONDS", "30") or "30")))
+SQLITE_CACHE_SIZE_MIB = max(8, min(512, int(os.getenv("MONITORING_SQLITE_CACHE_SIZE_MIB", "64") or "64")))
+SQLITE_MMAP_SIZE_MIB = max(0, min(2048, int(os.getenv("MONITORING_SQLITE_MMAP_SIZE_MIB", "256") or "256")))
+READ_ENDPOINT_CACHE_TTL_SECONDS = max(0.0, min(60.0, float(os.getenv("MONITORING_READ_ENDPOINT_CACHE_TTL_SECONDS", "8") or "8")))
+READ_ENDPOINT_CACHE_MAX_ENTRIES = max(32, min(4096, int(os.getenv("MONITORING_READ_ENDPOINT_CACHE_MAX_ENTRIES", "512") or "512")))
 CHANGELOG_REBUILD_STALE_MINUTES = max(10, min(1440, int(os.getenv("MONITORING_CHANGELOG_REBUILD_STALE_MINUTES", "120") or "120")))
 SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES = max(5, min(720, int(os.getenv("MONITORING_SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES", "60") or "60")))
 AUTO_BACKUP_DEFAULT_ENABLED = os.getenv("MONITORING_AUTO_BACKUP_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
@@ -131,6 +135,8 @@ _backup_jobs_lock = threading.Lock()
 _backup_jobs: dict[str, dict[str, str]] = {}
 _auto_backup_lock = threading.Lock()
 _db_maintenance_lock = threading.Lock()
+_read_endpoint_cache_lock = threading.Lock()
+_read_endpoint_cache: dict[str, tuple[float, object]] = {}
 _agent_ingest_queue_wakeup = threading.Event()
 _local_cpu_sample_lock = threading.Lock()
 _local_cpu_prev_total: int | None = None
@@ -156,7 +162,49 @@ class _AutoClosingSQLiteConnection(sqlite3.Connection):
 def _sqlite_connect_autoclose(*args, **kwargs):
     kwargs.setdefault("factory", _AutoClosingSQLiteConnection)
     kwargs.setdefault("timeout", SQLITE_BUSY_TIMEOUT_SECONDS)
-    return _SQLITE_CONNECT_ORIGINAL(*args, **kwargs)
+    conn = _SQLITE_CONNECT_ORIGINAL(*args, **kwargs)
+    try:
+        # Per-connection settings that improve throughput for mixed read-heavy workloads.
+        conn.execute(f"PRAGMA busy_timeout = {int(SQLITE_BUSY_TIMEOUT_SECONDS * 1000)}")
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA temp_store=MEMORY")
+        conn.execute(f"PRAGMA cache_size = -{int(SQLITE_CACHE_SIZE_MIB * 1024)}")
+        conn.execute(f"PRAGMA mmap_size = {int(SQLITE_MMAP_SIZE_MIB * 1024 * 1024)}")
+    except sqlite3.Error:
+        # Keep runtime compatibility on environments with limited PRAGMA support.
+        pass
+    return conn
+
+
+def _read_cache_get(cache_key: str) -> object | None:
+    if READ_ENDPOINT_CACHE_TTL_SECONDS <= 0:
+        return None
+    now_ts = datetime.now(timezone.utc).timestamp()
+    with _read_endpoint_cache_lock:
+        cached = _read_endpoint_cache.get(cache_key)
+        if not cached:
+            return None
+        expires_at_ts, value = cached
+        if expires_at_ts <= now_ts:
+            _read_endpoint_cache.pop(cache_key, None)
+            return None
+        return value
+
+
+def _read_cache_set(cache_key: str, value: object, ttl_seconds: float | None = None) -> None:
+    ttl = READ_ENDPOINT_CACHE_TTL_SECONDS if ttl_seconds is None else max(0.0, float(ttl_seconds))
+    if ttl <= 0:
+        return
+    now_ts = datetime.now(timezone.utc).timestamp()
+    expires_at_ts = now_ts + ttl
+    with _read_endpoint_cache_lock:
+        _read_endpoint_cache[cache_key] = (expires_at_ts, value)
+        if len(_read_endpoint_cache) <= READ_ENDPOINT_CACHE_MAX_ENTRIES:
+            return
+        # Trim oldest-expiring entries first to keep cache bounded.
+        for key, _ in sorted(_read_endpoint_cache.items(), key=lambda item: item[1][0])[: max(1, len(_read_endpoint_cache) // 8)]:
+            _read_endpoint_cache.pop(key, None)
 
 
 # Global hotfix: every sqlite3.connect call in this process gets an auto-closing
@@ -14866,14 +14914,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/inactive-hosts":
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=3, min_value=1, max_value=24 * 30)
+            cache_key = f"inactive-hosts:{hours}"
+            cached_data = _read_cache_get(cache_key)
+            if isinstance(cached_data, dict):
+                self._send_json(HTTPStatus.OK, cached_data)
+                return
             with sqlite3.connect(DB_PATH) as conn:
                 inactive = collect_inactive_hosts(conn, hours)
 
-            self._send_json(HTTPStatus.OK, {
+            response_data = {
                 "hours": hours,
                 "inactive_hosts": inactive,
                 "total": len(inactive),
-            })
+            }
+            _read_cache_set(cache_key, response_data)
+            self._send_json(HTTPStatus.OK, response_data)
             return
 
         if parsed.path == "/api/v1/analysis":
@@ -15121,8 +15176,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/backup-status-overview":
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
+            cache_key = f"backup-status-overview:{hours}"
+            cached_data = _read_cache_get(cache_key)
+            if isinstance(cached_data, dict):
+                self._send_json(HTTPStatus.OK, cached_data)
+                return
             with sqlite3.connect(DB_PATH) as conn:
                 data = collect_backup_status_overview(conn, hours)
+            _read_cache_set(cache_key, data)
             self._send_json(HTTPStatus.OK, data)
             return
 
@@ -15444,6 +15505,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             hostname_filter = query.get("hostname", [""])[0].strip()
             host_uid_filter = query.get("host_uid", [""])[0].strip()
+            cache_key = f"alerts-summary:{hostname_filter}:{host_uid_filter}"
+            cached_data = _read_cache_get(cache_key)
+            if isinstance(cached_data, dict):
+                self._send_json(HTTPStatus.OK, cached_data)
+                return
 
             where_clause = "WHERE status = 'open' AND (ack_by IS NULL OR ack_by = '')"
             args = []
@@ -15500,25 +15566,24 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 warning_open = sum(1 for row in visible_rows if str(row[0] or "").strip().lower() == "warning")
                 critical_open = sum(1 for row in visible_rows if str(row[0] or "").strip().lower() == "critical")
 
-            self._send_json(
-                HTTPStatus.OK,
-                {
-                    "hostname": hostname_filter,
-                    "host_uid": host_uid_filter,
-                    "thresholds": {
-                        "warning_percent": alarm_settings["warning_threshold_percent"],
-                        "critical_percent": alarm_settings["critical_threshold_percent"],
-                    },
-                    "open": {
-                        "total": total_open,
-                        "warning": warning_open,
-                        "critical": critical_open,
-                    },
-                    "muted": {
-                        "total": muted_open,
-                    },
+            response_data = {
+                "hostname": hostname_filter,
+                "host_uid": host_uid_filter,
+                "thresholds": {
+                    "warning_percent": alarm_settings["warning_threshold_percent"],
+                    "critical_percent": alarm_settings["critical_threshold_percent"],
                 },
-            )
+                "open": {
+                    "total": total_open,
+                    "warning": warning_open,
+                    "critical": critical_open,
+                },
+                "muted": {
+                    "total": muted_open,
+                },
+            }
+            _read_cache_set(cache_key, response_data)
+            self._send_json(HTTPStatus.OK, response_data)
             return
 
         if parsed.path == "/api/v1/system-overview":
@@ -15526,8 +15591,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             search_query = str(query.get("q", [""])[0] or "").strip()
             if len(search_query) > 200:
                 search_query = search_query[:200]
+            cache_key = f"system-overview:{search_query.lower()}"
+            cached_data = _read_cache_get(cache_key)
+            if isinstance(cached_data, dict):
+                self._send_json(HTTPStatus.OK, cached_data)
+                return
             with sqlite3.connect(DB_PATH) as conn:
                 data = collect_system_overview(conn, search_query=search_query)
+            _read_cache_set(cache_key, data)
             self._send_json(HTTPStatus.OK, data)
             return
 

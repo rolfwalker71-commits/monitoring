@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.152**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.152**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.153**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.153**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.153 | 31.05.2026 | Performance-Breitband-Optimierung: SQLite-Verbindungen erhalten jetzt globale PRAGMA-Tunings (WAL, `synchronous=NORMAL`, `temp_store=MEMORY`, Cache- und MMAP-Größen via ENV). Zusätzlich wurden mehrere teure Read-Endpunkte (`system-overview`, `inactive-hosts`, `backup-status-overview`, `alerts-summary`) mit kurzem TTL-Servercache versehen. Im Frontend wurden zentrale serielle Ladepfade auf paralleles Laden umgestellt (Host-Panels/Report-Navigation/Admin-Settings), wodurch Ansichten insgesamt schneller sichtbar werden. |
 | 1.7.152 | 31.05.2026 | Globale Alerts-Ansicht verfeinert: Spaltenkopf `Used` auf `Initial` umgestellt und Delta-Werte jetzt mit Vorzeichen (`+/-`) sowie semantischer Farbcodierung dargestellt (`+` grün, `-` rot). |
 | 1.7.151 | 31.05.2026 | Hotfix Systemübersicht: JavaScript-Initialisierungsfehler `Cannot access 'searchQuery' before initialization` behoben (Variable wird vor URL-Param-Aufbau initialisiert). Aufruf der Systemübersicht funktioniert damit wieder stabil. |
 | 1.7.150 | 30.05.2026 | Performance-Fix Systemübersicht: Suchbegriff wird jetzt als Query-Parameter (`q`) an `/api/v1/system-overview` übergeben und serverseitig vorgefiltert. Dadurch werden bei kundenspezifischer Suche deutlich weniger Hosts/Payloads geparst und übertragen, was den initialen Aufruf spürbar beschleunigt. |

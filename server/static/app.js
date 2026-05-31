@@ -4221,32 +4221,33 @@ async function loadGlobalAdminSettingsPanel(force = false) {
   setBackupAutomationStatus("Lade Backup-Automation...");
   setAgentIngestQueueStatus("Lade Queue-Status...");
   setAgentIngestAuditStatus("Lade Ingest-Lieferlog...");
-  try {
-    await loadAdminDatabaseStats();
-  } catch (error) {
-    setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
+  const opsResults = await Promise.allSettled([
+    loadAdminDatabaseStats(),
+    loadAdminBackupAutomation(),
+    loadAdminAgentIngestQueue(),
+    loadAdminAgentIngestAuditLog(),
+  ]);
+  if (opsResults[0]?.status === "rejected") {
+    setDbMaintenanceStatus(`Fehler: ${opsResults[0].reason?.message || opsResults[0].reason}`, true);
   }
-  try {
-    await loadAdminBackupAutomation();
-  } catch (error) {
-    setBackupAutomationStatus(`Fehler: ${error.message}`, true);
+  if (opsResults[1]?.status === "rejected") {
+    setBackupAutomationStatus(`Fehler: ${opsResults[1].reason?.message || opsResults[1].reason}`, true);
   }
-  try {
-    await loadAdminAgentIngestQueue();
-  } catch (error) {
-    setAgentIngestQueueStatus(`Fehler: ${error.message}`, true);
+  if (opsResults[2]?.status === "rejected") {
+    setAgentIngestQueueStatus(`Fehler: ${opsResults[2].reason?.message || opsResults[2].reason}`, true);
   }
-  try {
-    await loadAdminAgentIngestAuditLog();
-  } catch (error) {
-    setAgentIngestAuditStatus(`Fehler: ${error.message}`, true);
+  if (opsResults[3]?.status === "rejected") {
+    setAgentIngestAuditStatus(`Fehler: ${opsResults[3].reason?.message || opsResults[3].reason}`, true);
   }
-  await loadSapB1VersionMap();
-  await loadSapLicenseTypeMap();
-  await loadAlarmSettings(force);
-  await loadOauthSettings(force);
-  await loadWebUsers(force);
-  await loadFilesystemBlacklist(force);
+
+  await Promise.allSettled([
+    loadSapB1VersionMap(),
+    loadSapLicenseTypeMap(),
+    loadAlarmSettings(force),
+    loadOauthSettings(force),
+    loadWebUsers(force),
+    loadFilesystemBlacklist(force),
+  ]);
   // Render SAP B1 version map editor (idempotent — skip if already rendered)
   const container = document.getElementById("globalAdminSettingsContainer");
   if (container) {
@@ -8132,14 +8133,34 @@ function updatePagerButtons() {
   }
 }
 
+async function refreshSelectedHostPanels(options = {}) {
+  const reportOptions = options && typeof options.reportOptions === "object" ? options.reportOptions : undefined;
+  const includeDatabaseLifecycle = Boolean(options && options.includeDatabaseLifecycle);
+  const includeConfigChangelog = Boolean(options && options.includeConfigChangelog);
+  const tasks = [
+    loadReportsForHost(reportOptions || {}),
+    loadAnalysisForHost(),
+    loadAlertsForHost(),
+  ];
+  if (includeDatabaseLifecycle) {
+    tasks.push(loadDatabaseLifecycleForHost());
+  }
+  if (includeConfigChangelog) {
+    tasks.push(loadConfigChangelogForHost());
+  }
+  const results = await Promise.allSettled(tasks);
+  const firstRejected = results.find((result) => result.status === "rejected");
+  if (firstRejected && firstRejected.status === "rejected") {
+    throw firstRejected.reason;
+  }
+}
+
 async function goToPreviousReport() {
   if (state.reportOffset <= 0) {
     return;
   }
   state.reportOffset = Math.max(0, state.reportOffset - state.reportLimit);
-  await loadReportsForHost();
-  await loadAnalysisForHost();
-  await loadAlertsForHost();
+  await refreshSelectedHostPanels();
 }
 
 async function goToNextReport() {
@@ -8147,9 +8168,7 @@ async function goToNextReport() {
     return;
   }
   state.reportOffset += state.reportLimit;
-  await loadReportsForHost();
-  await loadAnalysisForHost();
-  await loadAlertsForHost();
+  await refreshSelectedHostPanels();
 }
 
 function normalizeHostOsFamily(host) {
@@ -8323,11 +8342,7 @@ async function applyHostFiltersLocally(options = {}) {
     state.selectedDisplayName = "";
     state.reportOffset = 0;
     loadAndRenderCustomerNotificationPanel("");
-    await loadReportsForHost();
-    await loadAnalysisForHost();
-    await loadAlertsForHost();
-    await loadDatabaseLifecycleForHost();
-    await loadConfigChangelogForHost();
+    await refreshSelectedHostPanels({ includeDatabaseLifecycle: true, includeConfigChangelog: true });
   }
 
   renderHosts(hosts);
@@ -9081,9 +9096,7 @@ function wireHostActionButtons(root) {
         }
 
         await loadHosts();
-        await loadReportsForHost();
-        await loadAnalysisForHost();
-        await loadAlertsForHost();
+        await refreshSelectedHostPanels();
       } catch (error) {
         window.alert(`Host-Einstellung konnte nicht gespeichert werden: ${error.message}`);
       }
@@ -9237,9 +9250,7 @@ function ensureHostContextMenu() {
       }
 
       await loadHosts();
-      await loadReportsForHost();
-      await loadAnalysisForHost();
-      await loadAlertsForHost();
+      await refreshSelectedHostPanels();
     } catch (error) {
       window.alert(`Host-Karte konnte nicht gelöscht werden: ${error.message}`);
     }
@@ -10302,9 +10313,7 @@ function wireHostListInteractions() {
           await saveHostSettings(hostname, { is_hidden: !current }, hostUid);
         }
         await loadHosts();
-        await loadReportsForHost();
-        await loadAnalysisForHost();
-        await loadAlertsForHost();
+        await refreshSelectedHostPanels();
       } catch (error) {
         window.alert(`Host-Einstellung konnte nicht gespeichert werden: ${error.message}`);
       }
@@ -10669,9 +10678,7 @@ async function jumpToReportDateTime() {
     return;
   }
 
-  await loadReportsForHost({ jumpToUtc: parsed.toISOString() });
-  await loadAnalysisForHost();
-  await loadAlertsForHost();
+  await refreshSelectedHostPanels({ reportOptions: { jumpToUtc: parsed.toISOString() } });
 }
 
 async function jumpToLatestReport() {
@@ -10679,9 +10686,7 @@ async function jumpToLatestReport() {
     return;
   }
   state.reportOffset = 0;
-  await loadReportsForHost();
-  await loadAnalysisForHost();
-  await loadAlertsForHost();
+  await refreshSelectedHostPanels();
 }
 
 function renderCurrentReportInView() {
