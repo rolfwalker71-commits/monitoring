@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alert-Abo Skalierungskonzept</title>
+    <script src="vendor/marked.min.js"></script>
+    <script src="vendor/mermaid.min.js"></script>
+    <link rel="stylesheet" href="process-docs.css">
+</head>
+<body>
+    <div id="content"></div>
+    <script id="markdown-content" type="text/markdown"># Alert-Abo Skalierungskonzept
+
+Kurzbeschreibung: Skalierbares Regelmodell fuer Alert-Abos bei wachsender Host- und User-Anzahl mit Vererbung, Gruppen und Ausnahmen.
+
+## Zielbild
+
+- Weg von Einzel-Checkboxen pro Host x User.
+- Hin zu Regeln mit klaren Scopes und Prioritaeten.
+- Einzelhost-Abos bleiben als Ausnahmefall moeglich.
+
+## Probleme im Ist-Zustand
+
+- Matrix wird bei vielen Hosts und Usern schwer wartbar.
+- Sehr viele Klicks fuer wiederkehrende Muster.
+- Teamwechsel und neue Hosts erzeugen hohen Nachpflege-Aufwand.
+- Es ist schwer zu erklaeren, warum User X fuer Host Y benachrichtigt wird.
+
+## Designprinzipien
+
+- Default ueber Vererbung, manuelle Pflege nur fuer Ausnahmen.
+- Gruppen statt Einzelpersonen als primaeres Zielobjekt.
+- Deterministische Prioritaet: jeder Alert hat genau eine nachvollziehbare Aufloesung je Kanal.
+- Simulation vor Speichern: "Wer bekommt was und warum?"
+
+## Scope- und Prioritaetsmodell
+
+```mermaid
+flowchart TD
+    A[Global Default] --&gt; B[Country Scope]
+    B --&gt; C[Team Scope]
+    C --&gt; D[Service Scope]
+    D --&gt; E[Host Group Scope]
+    E --&gt; F[Host Override]
+```
+
+Aufloesungsreihenfolge (niedrig nach hoch):
+
+1. `global`
+2. `country`
+3. `team`
+4. `service`
+5. `host_group`
+6. `host`
+
+Bei gleicher Ebene gilt: juengere Regel (`updated_at_utc`) gewinnt.
+
+## Vorschlag Datenmodell
+
+### 1) Host-Tags
+
+Tabelle: `host_alert_tags`
+
+- `hostname` TEXT PRIMARY KEY
+- `country_code` TEXT NOT NULL DEFAULT ''
+- `team` TEXT NOT NULL DEFAULT ''
+- `service` TEXT NOT NULL DEFAULT ''
+- `criticality` TEXT NOT NULL DEFAULT ''
+- `host_group` TEXT NOT NULL DEFAULT ''
+- `updated_at_utc` TEXT NOT NULL
+
+Zweck: Scope-Zuordnung fuer Regeln.
+
+### 2) Empfaenger-Gruppen
+
+Tabelle: `alert_recipient_groups`
+
+- `group_name` TEXT PRIMARY KEY
+- `display_name` TEXT NOT NULL
+- `description` TEXT NOT NULL DEFAULT ''
+- `is_active` INTEGER NOT NULL DEFAULT 1
+- `updated_at_utc` TEXT NOT NULL
+
+Tabelle: `alert_recipient_group_members`
+
+- `group_name` TEXT NOT NULL
+- `username` TEXT NOT NULL
+- `updated_at_utc` TEXT NOT NULL
+- PRIMARY KEY (`group_name`, `username`)
+
+Zweck: Wartung ueber Teams statt pro User.
+
+### 3) Regelwerk
+
+Tabelle: `alert_subscription_rules`
+
+- `rule_id` INTEGER PRIMARY KEY AUTOINCREMENT
+- `scope_type` TEXT NOT NULL
+- `scope_key` TEXT NOT NULL DEFAULT ''
+- `target_type` TEXT NOT NULL
+- `target_key` TEXT NOT NULL
+- `mail_mode` INTEGER NOT NULL DEFAULT -1
+- `telegram_mode` INTEGER NOT NULL DEFAULT -1
+- `min_severity` TEXT NOT NULL DEFAULT 'warning'
+- `is_enabled` INTEGER NOT NULL DEFAULT 1
+- `comment` TEXT NOT NULL DEFAULT ''
+- `updated_by` TEXT NOT NULL DEFAULT ''
+- `updated_at_utc` TEXT NOT NULL
+
+Mode-Bedeutung:
+
+- `-1` = inherit
+- `0` = force_off
+- `1` = force_on
+
+`target_type`:
+
+- `user`
+- `group`
+
+`scope_type`:
+
+- `global`
+- `country`
+- `team`
+- `service`
+- `host_group`
+- `host`
+
+## Entscheidungslogik (pro Alert, pro User, pro Kanal)
+
+```mermaid
+flowchart TD
+    A[Alert fuer Host H, Severity S] --&gt; B[Host Tags fuer H laden]
+    B --&gt; C[Kandidatenregeln nach Scope sammeln]
+    C --&gt; D[Regeln auf User/Group mappen]
+    D --&gt; E[Nach Scope-Prioritaet und updated_at sortieren]
+    E --&gt; F[Tri-State auf Kanal aufloesen]
+    F --&gt; G{effective kanal enabled?}
+    G --&gt;|Nein| H[skip]
+    G --&gt;|Ja| I{S &gt;= min_severity?}
+    I --&gt;|Nein| H
+    I --&gt;|Ja| J[Nachricht versenden]
+```
+
+Wichtig: Die API liefert neben `effective=true/false` auch den `reason` (Rule-ID + Scope + Target), damit Entscheidungen sichtbar und auditierbar sind.
+
+## API-Skizze (Admin)
+
+- `GET /api/v1/admin/alert-subscription-model`
+- `POST /api/v1/admin/alert-subscription-model/tags`
+- `POST /api/v1/admin/alert-subscription-model/groups`
+- `POST /api/v1/admin/alert-subscription-model/rules`
+- `POST /api/v1/admin/alert-subscription-model/simulate`
+
+`simulate` Request:
+
+- `hostname`
+- `severity`
+- optional `channel`
+
+`simulate` Response:
+
+- `results[]` mit `username`, `mail_effective`, `telegram_effective`, `reason_mail`, `reason_telegram`
+
+## UI-Flow (2 Screens)
+
+### Screen A: Regel-Designer
+
+Linke Seite:
+
+- Scope-Baum (`global &gt; country &gt; team &gt; service &gt; host_group &gt; host`)
+- Suchfeld fuer Host, Team, Service
+
+Rechte Seite:
+
+- Regel-Liste fuer ausgewaehlten Scope
+- Aktionen: Regel anlegen, duplizieren, deaktivieren
+- Bulk: Kanal an/aus fuer selektierte Gruppe
+
+Footer:
+
+- Vorschau "Betroffene Hosts" und "Betroffene User"
+
+### Screen B: Simulation und Ausnahmen
+
+Oben:
+
+- Eingabe `Host`, `Severity`, optional `Channel`
+- Button `Simulation starten`
+
+Mitte:
+
+- Tabelle aller User mit effective Ergebnis je Kanal
+- Spalte `Warum?` zeigt gewinnende Regel
+
+Unten:
+
+- Button `Host-Override erstellen` (nur fuer Sonderfaelle)
+- Hinweis, dass Override hoechste Prioritaet hat
+
+## Migrationsstrategie vom Ist-Modell
+
+Ist-Basis: `web_user_alert_subscriptions(username, hostname, notify_mail, notify_telegram)`
+
+### Phase 1: Grundlagen
+
+- Host-Tags initial aus bestehender Host-Metadatenquelle fuellen (`country_code` bereits vorhanden).
+- Gruppen anlegen (`oncall_sap`, `infra_primary`, `management`), User zuordnen.
+
+### Phase 2: Regel-Basis erzeugen
+
+- Globale Baseline-Regel auf `mail=on`, `telegram=on` (oder bestehender Standard).
+- Falls gewuenscht zusaetzlich Country-Defaults pro Land.
+
+### Phase 3: Bestehende Einzelabos uebernehmen
+
+- Aus bisherigen Abos nur Abweichungen von Baseline als `host`-Override schreiben.
+- Ergebnis: deutlich kleinere Datenmenge als volle Matrix.
+
+### Phase 4: Shadow-Mode
+
+- Alte und neue Aufloesung parallel rechnen.
+- Bei Abweichungen Log-Eintrag mit Diff und Rule-Reason erzeugen.
+
+### Phase 5: Umschalten
+
+- Versandpfad auf neues Regelmodell.
+- Alte Matrix nur read-only anzeigen.
+- Nach Stabilisierung alte Schreibpfade entfernen.
+
+## Kurzfristige Quick Wins (ohne grosses Redesign)
+
+- Country-Collapse standardmaessig zugeklappt laden.
+- Presets: "Mail an fuer alle Hosts in Land X" und "Telegram aus fuer Team Y".
+- Delta-Ansicht als Standard: nur geaenderte Zellen zeigen.
+- Suche um Tags erweitern: Land, Team, Service, Kritikalitaet.
+
+## Akzeptanzkriterien
+
+- Neue Hosts benoetigen keine manuelle Vollmatrix-Pflege.
+- Teamwechsel eines Users ist in &lt; 1 Minute umgesetzt.
+- Fuer jeden Versandfall ist die gewinnende Regel sichtbar.
+- Anzahl manueller Overrides bleibt unter 10% der Hosts.</script>
+    <script src="process-doc-renderer.js"></script>
+</body>
+</html>
