@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.158**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.158**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.159**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.159**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.159 | 31.05.2026 | SAP-Lizenztyp-Matrix auf Sichtbar-Flag umgestellt: pro Zeile gibt es jetzt eine Checkbox `Sichtbar`. Die Auswertungen (inkl. Lizenztyp+Anzahl) verifizieren nun strikt gegen dieses Flag statt gegen reine Übersetzungslogik. Initiale Migration setzt `Sichtbar=Ja` nur für tatsächlich übersetzte Einträge; nicht übersetzte Auto-Discover-Einträge starten leer (`display_name=''`) und unsichtbar. |
 | 1.7.158 | 31.05.2026 | Critical-Trends massiv umgebaut für First-Request-Performance: statt N+1-Host-Queries werden Reports, Host-Metadaten und Mute-Regeln jetzt gebatcht geladen und pro Host in-memory verarbeitet. Zusätzlich wurde die Hidden-Mountpoint-Zuordnung robust für `hostname` und `host_uid` vereinheitlicht. Cache-TTLs für schwere Endpoints bleiben separat konfigurierbar (`MONITORING_HOSTS_CACHE_TTL_SECONDS`, `MONITORING_CRITICAL_TRENDS_CACHE_TTL_SECONDS`). |
 | 1.7.157 | 31.05.2026 | Performance-Nachschärfung nach Live-Logs: Endpoint-spezifische Cache-TTLs für `/api/v1/hosts` und `/api/v1/critical-trends` erhöht (separat via ENV konfigurierbar), sodass bei normalen Tab-Wechseln tatsächlich `cache=hit` eintritt. Zusätzlich in `/api/v1/critical-trends` N+1-Queries auf `filesystem_visibility` durch eine gebatchte Einzelabfrage ersetzt. |
 | 1.7.156 | 31.05.2026 | Zusätzlicher Performance-Hotfix nach Live-Messung: Kurzzeit-Servercache für `/api/v1/hosts` (5s) und `/api/v1/critical-trends` (bis 20s, begrenzt durch globale Cache-TTL) eingeführt. Ergebnis: wiederholte Aufrufe/Tab-Wechsel laden diese schweren Ansichten deutlich schneller; Perf-Logs markieren jetzt explizit `cache=hit`/`cache=miss` für beide Endpoints. |

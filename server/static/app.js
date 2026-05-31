@@ -70,10 +70,10 @@ let SAP_B1_VERSION_MAP = new Map([
 ]);
 
 let SAP_LICENSE_TYPE_MAP = [
-  { matchText: "CRM-LTD", displayName: "Limited CRM" },
-  { matchText: "LOGISTICS-LTD", displayName: "Logistics CRM" },
-  { matchText: "PROFESSIONAL", displayName: "Professional" },
-  { matchText: "FINANCE-LTD", displayName: "Limited Finance" },
+  { matchText: "CRM-LTD", displayName: "Limited CRM", visible: true },
+  { matchText: "LOGISTICS-LTD", displayName: "Logistics CRM", visible: true },
+  { matchText: "PROFESSIONAL", displayName: "Professional", visible: true },
+  { matchText: "FINANCE-LTD", displayName: "Limited Finance", visible: true },
 ];
 
 const SAP_B1_HANA_PROCESS_RE = /\b(hdbindexserver|hdbnameserver|hdbscriptserver|hdbxsengine|hdbcompileserver|hdbpreprocessor|hdbwebdispatcher|hdbdaemon|hdbrsutil|sapstartsrv|hdb[a-z0-9_-]+)\b/i;
@@ -3820,6 +3820,7 @@ async function loadSapLicenseTypeMap() {
       .map((entry) => ({
         matchText: asText(entry.match_text, "").trim(),
         displayName: asText(entry.display_name, "").trim(),
+        visible: Boolean(entry.visible),
       }))
       .filter((entry) => entry.matchText);
     SAP_LICENSE_TYPE_MAP = normalized;
@@ -3953,6 +3954,7 @@ function renderSapLicenseTypeMapAdminSection() {
     <tr data-idx="${idx}">
       <td><input class="vmap-input" data-field="match_text" value="${escapeHtml(entry.matchText)}" style="width:180px;font-family:monospace" placeholder="z.B. CRM-LTD"></td>
       <td><input class="vmap-input" data-field="display_name" value="${escapeHtml(entry.displayName)}" style="width:220px" placeholder="z.B. Limited CRM"></td>
+      <td><label class="checkbox-label compact"><input type="checkbox" data-field="visible" ${entry.visible ? "checked" : ""}> Sichtbar</label></td>
       <td><button type="button" class="license-map-del-btn" data-idx="${idx}" title="Zeile löschen">🗑</button></td>
     </tr>`).join("");
 
@@ -3960,7 +3962,7 @@ function renderSapLicenseTypeMapAdminSection() {
     <section class="settings-subsection" id="sapLicenseTypeMapAdminSection">
       <div class="settings-subsection-head">
         <h5>🪪 SAP Lizenztyp Übersetzungsmatrix</h5>
-        <p class="count compact">Exaktes Matching der Lizenztypen aus B01 auf Anzeigename — nur übersetzte Typen erscheinen in der UI</p>
+        <p class="count compact">Exaktes Matching der Lizenztypen aus B01 auf Anzeigename — Sichtbarkeit wird je Zeile über Checkbox gesteuert</p>
       </div>
       <div class="table-wrap" style="margin-bottom:8px;max-height:340px;overflow-y:auto;">
         <table class="report-subtable sap-vmap-table" id="sapLicenseMapAdminTable">
@@ -3968,6 +3970,7 @@ function renderSapLicenseTypeMapAdminSection() {
             <tr>
               <th>Lizenztyp (exakt)</th>
               <th>Anzeigename in UI</th>
+              <th>Sichtbar</th>
               <th></th>
             </tr>
           </thead>
@@ -3992,6 +3995,7 @@ function wireSapLicenseTypeMapAdminSection(container) {
     return Array.from(section.querySelectorAll("#sapLicenseMapAdminBody tr")).map((tr) => ({
       match_text: tr.querySelector('[data-field="match_text"]')?.value.trim() || "",
       display_name: tr.querySelector('[data-field="display_name"]')?.value.trim() || "",
+      visible: tr.querySelector('[data-field="visible"]')?.checked === true,
     })).filter((entry) => entry.match_text);
   }
 
@@ -4001,6 +4005,7 @@ function wireSapLicenseTypeMapAdminSection(container) {
     tr.innerHTML = `
       <td><input class="vmap-input" data-field="match_text" value="" style="width:180px;font-family:monospace" placeholder="z.B. FINANCE-LTD"></td>
       <td><input class="vmap-input" data-field="display_name" value="" style="width:220px" placeholder="z.B. Limited Finance"></td>
+      <td><label class="checkbox-label compact"><input type="checkbox" data-field="visible"> Sichtbar</label></td>
       <td><button type="button" class="license-map-del-btn" title="Zeile löschen">🗑</button></td>`;
     tbody.insertBefore(tr, tbody.firstChild);
     tr.querySelector("input")?.focus();
@@ -4016,6 +4021,13 @@ function wireSapLicenseTypeMapAdminSection(container) {
 
   section.addEventListener("input", (event) => {
     if (event.target instanceof Element && event.target.classList.contains("vmap-input")) {
+      markSapLicenseTypeMapDirty(true);
+    }
+  });
+
+  section.addEventListener("change", (event) => {
+    if (!(event.target instanceof Element)) return;
+    if (event.target.getAttribute("data-field") === "visible") {
       markSapLicenseTypeMapDirty(true);
     }
   });
@@ -4041,6 +4053,7 @@ function wireSapLicenseTypeMapAdminSection(container) {
       SAP_LICENSE_TYPE_MAP = entries.map((entry) => ({
         matchText: entry.match_text,
         displayName: entry.display_name,
+        visible: Boolean(entry.visible),
       }));
 
       markSapLicenseTypeMapDirty(false);
@@ -4053,7 +4066,7 @@ function wireSapLicenseTypeMapAdminSection(container) {
 
   section.querySelector("#sapLicenseMapCopyBtn")?.addEventListener("click", async () => {
     const entries = getTableEntries();
-    const text = entries.map((entry) => `${entry.match_text}\t${entry.display_name}`).join("\n");
+    const text = entries.map((entry) => `${entry.match_text}\t${entry.display_name}\t${entry.visible ? "ja" : "nein"}`).join("\n");
     try {
       await navigator.clipboard.writeText(text);
       const btn = section.querySelector("#sapLicenseMapCopyBtn");
@@ -6550,8 +6563,9 @@ function renderSapLicenseInfoSection(payload) {
       const upperRawType = rawType.toUpperCase();
       let translated = null;
       for (const mapEntry of SAP_LICENSE_TYPE_MAP) {
+        const isVisible = Boolean(mapEntry?.visible);
         const matchText = asText(mapEntry?.matchText, "").toUpperCase();
-        if (matchText && matchText === upperRawType) {
+        if (matchText && matchText === upperRawType && isVisible) {
           translated = asText(mapEntry?.displayName, null);
           break;
         }
@@ -8676,7 +8690,10 @@ function mapSapLicenseFocusTypes(sapLicense) {
       const count = Number.parseInt(String(entry?.count ?? 0), 10);
       if (!rawType) return null;
       const normalizedRaw = rawType.toUpperCase();
-      const mapped = SAP_LICENSE_TYPE_MAP.find((mapEntry) => normalizedRaw === asText(mapEntry?.matchText, "").toUpperCase());
+      const mapped = SAP_LICENSE_TYPE_MAP.find((mapEntry) => {
+        if (!Boolean(mapEntry?.visible)) return false;
+        return normalizedRaw === asText(mapEntry?.matchText, "").toUpperCase();
+      });
       const displayType = asText(mapped?.displayName, "").trim();
       if (!displayType) return null;
       return {
@@ -15214,8 +15231,9 @@ function collectSystemOverviewTranslatedLicenseTypes(sapLicense) {
       const upperRawType = rawType.toUpperCase();
       let translated = null;
       for (const mapEntry of SAP_LICENSE_TYPE_MAP) {
+        const isVisible = Boolean(mapEntry?.visible);
         const matchText = asText(mapEntry?.matchText, "").toUpperCase();
-        if (matchText && matchText === upperRawType) {
+        if (matchText && matchText === upperRawType && isVisible) {
           translated = asText(mapEntry?.displayName, null);
           break;
         }

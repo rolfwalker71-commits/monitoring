@@ -108,10 +108,10 @@ CHANGELOG_REBUILD_STALE_MINUTES = max(10, min(1440, int(os.getenv("MONITORING_CH
 SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES = max(5, min(720, int(os.getenv("MONITORING_SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES", "60") or "60")))
 AUTO_BACKUP_DEFAULT_ENABLED = os.getenv("MONITORING_AUTO_BACKUP_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
 DEFAULT_SAP_LICENSE_TYPE_MAP_ENTRIES = [
-    {"match_text": "CRM-LTD", "display_name": "Limited CRM"},
-    {"match_text": "LOGISTICS-LTD", "display_name": "Logistics CRM"},
-    {"match_text": "PROFESSIONAL", "display_name": "Professional"},
-    {"match_text": "FINANCE-LTD", "display_name": "Limited Finance"},
+    {"match_text": "CRM-LTD", "display_name": "Limited CRM", "visible": True},
+    {"match_text": "LOGISTICS-LTD", "display_name": "Logistics CRM", "visible": True},
+    {"match_text": "PROFESSIONAL", "display_name": "Professional", "visible": True},
+    {"match_text": "FINANCE-LTD", "display_name": "Limited Finance", "visible": True},
 ]
 AUTO_BACKUP_DEFAULT_INTERVAL_HOURS = max(1, min(168, int(os.getenv("MONITORING_AUTO_BACKUP_INTERVAL_HOURS", "12") or "12")))
 AUTO_BACKUP_DEFAULT_RETENTION_DAYS = max(1, min(365, int(os.getenv("MONITORING_AUTO_BACKUP_RETENTION_DAYS", "7") or "7")))
@@ -2147,10 +2147,10 @@ def save_sap_b1_version_map_entries(entries_raw: object) -> list[dict[str, str]]
     return normalized
 
 
-def normalize_sap_license_type_map_entries(entries_raw: object) -> list[dict[str, str]]:
+def normalize_sap_license_type_map_entries(entries_raw: object) -> list[dict[str, object]]:
     if not isinstance(entries_raw, list):
         return []
-    normalized: list[dict[str, str]] = []
+    normalized: list[dict[str, object]] = []
     seen_patterns: set[str] = set()
     for item in entries_raw:
         if not isinstance(item, dict):
@@ -2159,6 +2159,15 @@ def normalize_sap_license_type_map_entries(entries_raw: object) -> list[dict[str
         display_name = str(item.get("display_name", "") or "").strip()
         if not match_text:
             continue
+        raw_visible = item.get("visible", None)
+        if raw_visible is None:
+            # Migration default: only genuinely translated rows are visible.
+            visible = bool(display_name) and display_name.strip().casefold() != match_text.casefold()
+        else:
+            visible = bool(raw_visible)
+        if not visible and display_name.strip().casefold() == match_text.casefold():
+            # Keep non-translated rows visually empty in the editor/UI.
+            display_name = ""
         dedupe_key = match_text.upper()
         if dedupe_key in seen_patterns:
             continue
@@ -2167,12 +2176,13 @@ def normalize_sap_license_type_map_entries(entries_raw: object) -> list[dict[str
             {
                 "match_text": match_text,
                 "display_name": display_name,
+                "visible": visible,
             }
         )
     return normalized
 
 
-def load_sap_license_type_map_entries() -> list[dict[str, str]]:
+def load_sap_license_type_map_entries() -> list[dict[str, object]]:
     try:
         raw = SAP_LICENSE_TYPE_MAP_PATH.read_text(encoding="utf-8")
     except OSError:
@@ -2187,7 +2197,7 @@ def load_sap_license_type_map_entries() -> list[dict[str, str]]:
     return normalize_sap_license_type_map_entries(DEFAULT_SAP_LICENSE_TYPE_MAP_ENTRIES)
 
 
-def save_sap_license_type_map_entries(entries_raw: object) -> list[dict[str, str]]:
+def save_sap_license_type_map_entries(entries_raw: object) -> list[dict[str, object]]:
     normalized = normalize_sap_license_type_map_entries(entries_raw)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     SAP_LICENSE_TYPE_MAP_PATH.write_text(
@@ -2231,7 +2241,8 @@ def auto_sync_discovered_license_types(payload: object) -> None:
         if discovered_type.upper() not in existing_match_texts:
             new_entries.append({
                 "match_text": discovered_type,
-                "display_name": discovered_type,  # Default: use license type as display name
+                "display_name": "",
+                "visible": False,
             })
     
     if not new_entries:
@@ -7112,7 +7123,8 @@ def _build_sap_license_type_label_map() -> dict[str, tuple[str, str]]:
             continue
         raw_match_text = str(entry.get("match_text", "") or "").strip()
         display_name = str(entry.get("display_name", "") or "").strip()
-        if not raw_match_text or not display_name:
+        is_visible = bool(entry.get("visible", False))
+        if not raw_match_text or not display_name or not is_visible:
             continue
         normalized_key = raw_match_text.upper()
         if normalized_key in label_map:
