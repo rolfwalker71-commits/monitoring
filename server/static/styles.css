@@ -323,16 +323,38 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .app-logo {
-  width: 64px;
-  height: 64px;
-  flex: 0 0 64px;
+  position: relative;
+  width: 68px;
+  height: 68px;
+  flex: 0 0 68px;
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(232, 242, 255, 0.95) 100%),
+    linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border: 1px solid rgba(150, 179, 214, 0.55);
+  box-shadow: 0 14px 28px rgba(35, 68, 109, 0.16);
+  overflow: hidden;
 }
 
-.app-logo img {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: contain;
+.app-logo::before {
+  content: "";
+  position: absolute;
+  inset: 13px 12px 18px 12px;
+  border-radius: 14px;
+  background:
+    linear-gradient(90deg, transparent 0 8%, rgba(77, 120, 171, 0.12) 8% 10%, transparent 10% 24%, rgba(77, 120, 171, 0.12) 24% 26%, transparent 26% 40%, rgba(77, 120, 171, 0.12) 40% 42%, transparent 42% 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(238, 246, 255, 0.92) 100%);
+}
+
+.app-logo::after {
+  content: "";
+  position: absolute;
+  left: 17px;
+  right: 16px;
+  bottom: 17px;
+  height: 18px;
+  background: linear-gradient(135deg, transparent 0 8%, #4fa4f4 8% 13%, transparent 13% 18%, #4fa4f4 18% 24%, transparent 24% 33%, #0ea5a4 33% 39%, transparent 39% 49%, #0ea5a4 49% 56%, transparent 56% 100%);
+  clip-path: polygon(0 72%, 14% 72%, 25% 46%, 41% 46%, 52% 18%, 66% 18%, 78% 58%, 100% 58%, 100% 100%, 0 100%);
 }
 
 .brand-text {
@@ -383,18 +405,28 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   opacity: 0.72;
 }
 
-.brand-platform-icon {
-  width: 18px;
-  height: 18px;
-  display: block;
-  object-fit: contain;
-  filter: saturate(0.88);
+.brand-platform-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(117, 142, 173, 0.28);
+  background: rgba(255, 255, 255, 0.62);
+  color: #506985;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.brand-platform-separator {
-  color: currentColor;
-  font-weight: 700;
-  line-height: 1;
+.brand-platform-pill-linux {
+  color: #155e75;
+}
+
+.brand-platform-pill-windows {
+  color: #1d4ed8;
 }
 
 .brand-version {
@@ -414,28 +446,64 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 .brand-account-shell {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  min-height: 40px;
-  padding: 4px 6px;
-  border-radius: 16px;
+  gap: 4px;
+  min-height: 48px;
+  padding: 5px 7px 5px 5px;
+  border-radius: 18px;
   border: 1px solid rgba(116, 145, 178, 0.26);
-  background: rgba(255, 255, 255, 0.64);
+  background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 10px 24px rgba(32, 64, 104, 0.1);
+  box-shadow: 0 14px 30px rgba(32, 64, 104, 0.12);
+}
+
+.brand-profile-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 8px 0 4px;
+}
+
+.brand-profile-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #4c7fd8 0%, #2754a3 100%);
+  color: #eff6ff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.brand-profile-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.brand-profile-label {
+  color: #71849a;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .brand-user-badge {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  justify-content: flex-start;
   background: transparent;
-  color: #27486d;
+  color: #1f3653;
   border-radius: 12px;
-  height: 30px;
-  padding: 0 10px;
-  font-size: 13px;
+  min-height: 18px;
+  padding: 0;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -443,24 +511,33 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .brand-user-badge::before {
-  content: "👤";
+  content: none;
+}
+
+.brand-session-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 16px;
+  margin-top: 3px;
+  color: #61778f;
   font-size: 11px;
-  opacity: 0.72;
+  font-weight: 600;
 }
 
 .brand-logout-btn {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  height: 30px;
-  padding: 0 10px 0 12px;
+  height: 36px;
+  padding: 0 12px 0 14px;
   border: 0;
   border-left: 1px solid rgba(116, 145, 178, 0.22);
-  border-radius: 0 12px 12px 0;
+  border-radius: 0 14px 14px 0;
   background: transparent;
   color: #9b3a32;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
+  letter-spacing: 0.02em;
   cursor: pointer;
 }
 
@@ -11732,8 +11809,10 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
   padding: 16px 18px;
   border-radius: 24px;
   border: 1px solid rgba(191, 210, 233, 0.58);
-  background: linear-gradient(135deg, rgba(246, 250, 255, 0.9) 0%, rgba(232, 241, 255, 0.88) 100%);
-  box-shadow: 0 18px 44px rgba(20, 45, 77, 0.12);
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0) 28%),
+    linear-gradient(135deg, rgba(246, 250, 255, 0.94) 0%, rgba(232, 241, 255, 0.9) 100%);
+  box-shadow: 0 20px 48px rgba(20, 45, 77, 0.12);
 }
 
 .brand-user {
@@ -11981,7 +12060,9 @@ body[data-theme="dark"] .brand-user {
 
 body[data-theme="dark"] .brand-header {
   border-color: rgba(70, 102, 145, 0.62);
-  background: linear-gradient(135deg, rgba(20, 34, 56, 0.94) 0%, rgba(14, 25, 43, 0.96) 100%);
+  background:
+    radial-gradient(circle at top left, rgba(80, 123, 183, 0.14) 0%, rgba(80, 123, 183, 0) 26%),
+    linear-gradient(135deg, rgba(20, 34, 56, 0.94) 0%, rgba(14, 25, 43, 0.96) 100%);
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.34);
 }
 
@@ -11991,13 +12072,44 @@ body[data-theme="dark"] .brand-account-shell {
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
 }
 
+body[data-theme="dark"] .app-logo {
+  border-color: rgba(91, 126, 170, 0.42);
+  background:
+    linear-gradient(180deg, rgba(24, 43, 70, 0.95) 0%, rgba(17, 31, 50, 0.95) 100%),
+    linear-gradient(135deg, rgba(32, 56, 89, 0.96) 0%, rgba(18, 31, 50, 0.96) 100%);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.28);
+}
+
+body[data-theme="dark"] .app-logo::before {
+  background:
+    linear-gradient(90deg, transparent 0 8%, rgba(140, 174, 214, 0.12) 8% 10%, transparent 10% 24%, rgba(140, 174, 214, 0.12) 24% 26%, transparent 26% 40%, rgba(140, 174, 214, 0.12) 40% 42%, transparent 42% 100%),
+    linear-gradient(180deg, rgba(28, 50, 80, 0.95) 0%, rgba(21, 38, 61, 0.92) 100%);
+}
+
 body[data-theme="dark"] .brand-user-badge {
   color: #c5dcf7;
 }
 
-body[data-theme="dark"] .brand-user-badge::before,
-body[data-theme="dark"] .brand-logout-icon,
+body[data-theme="dark"] .brand-profile-label,
+body[data-theme="dark"] .brand-session-badge {
+  color: #8ea8c6;
+}
+
 body[data-theme="dark"] .brand-platforms {
+  opacity: 1;
+}
+
+body[data-theme="dark"] .brand-platform-pill {
+  border-color: rgba(91, 126, 170, 0.34);
+  background: rgba(20, 38, 63, 0.72);
+  color: #a8c4e7;
+}
+
+body[data-theme="dark"] .brand-profile-avatar {
+  background: linear-gradient(135deg, #5f8fe3 0%, #2d5ab3 100%);
+}
+
+body[data-theme="dark"] .brand-logout-icon {
   opacity: 0.68;
 }
 
@@ -12117,6 +12229,14 @@ body[data-theme="dark"] .header-stat-chip {
 
   .brand-account-shell {
     margin-left: auto;
+  }
+
+  .brand-profile-label {
+    font-size: 9px;
+  }
+
+  .brand-session-badge {
+    font-size: 10px;
   }
 }
 

@@ -40,16 +40,14 @@
 
     <main class="container">
       <div class="brand-header">
-        <div class="app-logo" aria-hidden="true">
-          <img src="icons/logo.png" alt="Monitoring" />
-        </div>
+        <div class="app-logo" aria-hidden="true"></div>
         <div class="brand-text">
           <h1>System Infoboard</h1>
           <p class="subtitle-meta">
             <span class="brand-version">v<span id="webclientVersion">-</span></span>
             <span class="brand-platforms" aria-label="Linux und Windows">
-              <img class="brand-platform-icon" src="icons/linux.png" alt="Linux" />
-              <img class="brand-platform-icon" src="icons/windows.png" alt="Windows" />
+              <span class="brand-platform-pill brand-platform-pill-linux">Linux</span>
+              <span class="brand-platform-pill brand-platform-pill-windows">Windows</span>
             </span>
           </p>
         </div>
@@ -59,7 +57,14 @@
             <span class="theme-toggle-label">Dark</span>
           </button>
           <div id="brandAccountShell" class="brand-account-shell hidden">
-            <span id="brandUserBadge" class="brand-user-badge hidden"></span>
+            <div class="brand-profile-card">
+              <span id="brandProfileAvatar" class="brand-profile-avatar" aria-hidden="true">--</span>
+              <span class="brand-profile-copy">
+                <span class="brand-profile-label">angemeldet als</span>
+                <span id="brandUserBadge" class="brand-user-badge hidden"></span>
+                <span id="brandSessionBadge" class="brand-session-badge hidden"></span>
+              </span>
+            </div>
             <button id="logoutButton" class="brand-logout-btn hidden" type="button" title="Abmelden">
               <span class="brand-logout-icon" aria-hidden="true">&#x1F6AA;</span>
               <span class="brand-logout-label">Abmelden</span>

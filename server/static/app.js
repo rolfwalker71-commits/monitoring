@@ -922,6 +922,30 @@ function renderSessionStatus() {
   badge.textContent = `Session ${formatSessionRemaining(secondsLeft)} (${timeoutMinutes}m)`;
 }
 
+function getBrandProfileInitials(value) {
+  const parts = asText(value, "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+  if (parts.length === 0) {
+    return "--";
+  }
+  return parts.map((part) => part.slice(0, 1).toUpperCase()).join("");
+}
+
+function syncBrandProfileIdentity() {
+  const badge = document.getElementById("brandUserBadge");
+  const avatar = document.getElementById("brandProfileAvatar");
+  const displayName = state.authDisplayName || state.authUser || "";
+  if (badge) {
+    badge.textContent = displayName;
+  }
+  if (avatar) {
+    avatar.textContent = getBrandProfileInitials(displayName);
+  }
+}
+
 function stopSessionCountdownTimer() {
   if (sessionCountdownTimerId !== null) {
     window.clearInterval(sessionCountdownTimerId);
@@ -2069,7 +2093,7 @@ function setAuthUiState(authenticated) {
   if (brandUserBadge) {
     brandUserBadge.classList.toggle("hidden", !authenticated);
     if (authenticated && state.authUser) {
-      brandUserBadge.textContent = state.authDisplayName || state.authUser;
+      syncBrandProfileIdentity();
     }
   }
   if (logoutButton) {
@@ -2079,6 +2103,7 @@ function setAuthUiState(authenticated) {
     brandSessionBadge.classList.toggle("hidden", !authenticated);
   }
   state.isAuthenticated = authenticated;
+  syncBrandProfileIdentity();
   if (authenticated) {
     startSessionRefreshTimer();
     startSessionCountdownTimer();
@@ -2411,6 +2436,10 @@ async function logoutWebClient() {
   const brandUserBadge = document.getElementById("brandUserBadge");
   if (brandUserBadge) {
     brandUserBadge.textContent = "";
+  }
+  const brandProfileAvatar = document.getElementById("brandProfileAvatar");
+  if (brandProfileAvatar) {
+    brandProfileAvatar.textContent = "--";
   }
   state.authDisplayName = "";
   state.sessionExpiresAtUtc = "";
@@ -2894,8 +2923,7 @@ function wireUserManagementActions() {
           try {
             const session = await fetchSessionState();
             state.authDisplayName = asText(session.display_name, "");
-            const badge = document.getElementById("brandUserBadge");
-            if (badge) badge.textContent = state.authDisplayName || state.authUser;
+            syncBrandProfileIdentity();
           } catch { /* non-critical */ }
         }
       } catch (error) {
