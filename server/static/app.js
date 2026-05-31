@@ -15549,6 +15549,7 @@ async function loadSystemOverview() {
   if (filterEl) filterEl.innerHTML = "";
 
   try {
+    const searchQuery = String(state.systemOverviewSearchQuery || "").trim().toLowerCase();
     const overviewParams = new URLSearchParams();
     if (searchQuery) {
       overviewParams.set("q", searchQuery);
@@ -15562,7 +15563,6 @@ async function loadSystemOverview() {
     renderSystemOverviewCountryFilter(allCountries);
 
     const activeCountryFilter = String(state.systemOverviewCountryFilter || "all");
-    const searchQuery = String(state.systemOverviewSearchQuery || "").trim().toLowerCase();
     const filteredEntries = Object.entries(byCountry)
       .filter(([country]) => activeCountryFilter === "all" || String(country).toUpperCase() === activeCountryFilter)
       .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
