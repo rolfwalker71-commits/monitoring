@@ -13859,7 +13859,7 @@ function wireEvents() {
   const runChangelogRebuildNowButton = document.getElementById("runChangelogRebuildNowButton");
   if (runChangelogRebuildNowButton) {
     runChangelogRebuildNowButton.addEventListener("click", async () => {
-      await runChangelogRebuildNow(1);
+      await runChangelogRebuildNow(30);
     });
   }
   const refreshChangelogRebuildJobsButton = document.getElementById("refreshChangelogRebuildJobsButton");

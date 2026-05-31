@@ -8088,6 +8088,40 @@ def backfill_host_config_changes(
     last_hostname_by_host_key: dict[str, str] = {}
     last_seen_at_by_host_key: dict[str, str] = {}
     license_label_map = _build_sap_license_type_label_map()
+
+    # Pre-seed snapshots from the last report BEFORE the time window so that
+    # the first report inside the window is diffed against a real baseline.
+    # Without this, every existing host's first in-window report would hit the
+    # `elif include_initial_snapshot_events` branch and generate fake VORHER=-
+    # entries for all hardware/HANA fields.
+    pre_rows = conn.execute(
+        """
+        SELECT r.hostname, COALESCE(r.host_uid, ''), r.payload_json
+        FROM reports r
+        INNER JOIN (
+            SELECT COALESCE(NULLIF(host_uid, ''), hostname) AS hkey, MAX(id) AS max_id
+            FROM reports
+            WHERE received_at_utc < ?
+            GROUP BY hkey
+        ) pre ON pre.max_id = r.id
+        """,
+        (cutoff_iso,),
+    ).fetchall()
+    for pre_row in pre_rows:
+        pre_hostname = str(pre_row[0] or "").strip()
+        pre_host_uid = str(pre_row[1] or "").strip()
+        if not pre_hostname:
+            continue
+        pre_host_key = alert_host_key(pre_hostname, pre_host_uid)
+        pre_payload = parse_payload_json(str(pre_row[2] or "{}"))
+        last_snapshot_by_host_key[pre_host_key] = {
+            key: _normalize_config_value(key, value)
+            for key, value in _extract_host_config_snapshot(pre_payload).items()
+        }
+        last_license_counts_by_host_key[pre_host_key] = _extract_translated_sap_license_type_counts(
+            pre_payload, license_label_map=license_label_map
+        )
+
     report_count = 0
     inserted_changes = 0
     hosts_total_row = conn.execute(
