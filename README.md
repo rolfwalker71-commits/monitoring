@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.170**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.170**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.171**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.171**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.171 | 31.05.2026 | KPI-Layout ohne Scrollbar: KPI-Karten wurden kompakter gemacht (kleinere Paddings, reduzierte Typografie, geringere Mindesthöhe/-breite, engeres Gap), und der Strip wurde wieder auf nicht-scrollendes Grid (`overflow: hidden`) umgestellt, sodass alle Karten in einer Zeile ohne sichtbaren Scrollbalken dargestellt werden. |
 | 1.7.170 | 31.05.2026 | KPI-Header-Strip korrigiert: letzte Karte wird nicht mehr abgeschnitten. Der Strip ist jetzt horizontal scrollbar (inkl. dezenter Light/Dark-Scrollbar), mit verbessertem rechtem Innenabstand und Snap-Verhalten für sauberes horizontales Navigieren bei vielen KPI-Karten. |
 | 1.7.169 | 31.05.2026 | Theme-Toggle auf Icon-only-Variante umgestellt: Textlabel `Dark/Light` entfernt, Switch als kompakte reine Icon-Schaltfläche ausgeführt und Accessibility über `aria-label`/`title` beibehalten. Sonne/Mond-Zustand bleibt direkt am Thumb sichtbar. |
 | 1.7.168 | 31.05.2026 | Theme-Toggle visuell verbessert: Switch zeigt jetzt ein Sonne/Mond-Symbol direkt am Thumb (Sonne im Light-Mode, Mond im Dark-Mode) mit leicht vergrößertem Track für bessere Lesbarkeit und klarere Zustandsrückmeldung. |
