@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.167**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.167**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.168**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.168**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.168 | 31.05.2026 | Theme-Toggle visuell verbessert: Switch zeigt jetzt ein Sonne/Mond-Symbol direkt am Thumb (Sonne im Light-Mode, Mond im Dark-Mode) mit leicht vergrößertem Track für bessere Lesbarkeit und klarere Zustandsrückmeldung. |
 | 1.7.167 | 31.05.2026 | Header-Iteration nach UX-Feedback: im Hauptheader wieder auf das vertraute Bildlogo umgestellt (statt erfundenem CSS-Signet), Session-Zähler in der Profil-Card entfernt und die Header-Höhe insgesamt reduziert (kompaktere Abstände, kleineres Logo/Avatar/Controls). Login-Maske wurde auf denselben Logo-Stil angepasst, damit Branding zwischen Login und Hauptansicht konsistent bleibt. |
 | 1.7.166 | 31.05.2026 | Premium-Header-Variante: Brand-Bereich typografisch aufgewertet (neuer Kicker, stärkere Titelpräsenz, atmosphärischerer Header-Background) und das linke CSS-Brand-Mark komplett überarbeitet, damit es auf hellem Hintergrund klar lesbar bleibt. Das Signet ist jetzt ein kontraststarkes Monitor-/Dashboard-Symbol statt einer zu subtilen Form. |
 | 1.7.165 | 31.05.2026 | Header-Feinschliff: Bild-Icons im linken Brand-Bereich und bei den Plattformen durch eine konsistentere, CSS-basierte Formsprache ersetzt (Brand-Mark links, Linux/Windows als ruhige Plattform-Pills). Die rechte Seite wurde zu einer markanteren Profil-Card mit Avatar, Name und Session-Status ausgebaut. Ziel: weniger Stilbruch, klarere Account-Hierarchie und ein bewussterer Premium-Look. |

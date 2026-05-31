@@ -573,8 +573,8 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .theme-toggle-track {
   position: relative;
-  width: 28px;
-  height: 16px;
+  width: 32px;
+  height: 18px;
   border-radius: 999px;
   background: #c8d5e6;
   flex-shrink: 0;
@@ -585,12 +585,22 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: #ffffff;
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-  transition: transform 200ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 200ms ease, background 200ms ease, color 200ms ease;
+  color: #ca8a04;
+}
+
+.theme-toggle-thumb::before {
+  content: "☀";
+  font-size: 9px;
+  line-height: 1;
 }
 
 /* active = dark mode on */
@@ -599,7 +609,14 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .theme-toggle[aria-pressed="true"] .theme-toggle-thumb {
-  transform: translateX(12px);
+  transform: translateX(14px);
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.theme-toggle[aria-pressed="true"] .theme-toggle-thumb::before {
+  content: "☾";
+  font-size: 10px;
 }
 
 .panel {
