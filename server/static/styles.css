@@ -117,14 +117,19 @@ body[data-theme="dark"] {
 
 .login-logo-floating {
   position: absolute;
-  top: -126px;
+  top: -112px;
   left: 50%;
   transform: translateX(-50%);
-  width: 112px;
-  height: 112px;
+  width: 96px;
+  height: 96px;
   display: grid;
   place-items: center;
   z-index: 2;
+  border-radius: 24px;
+  border: 1px solid rgba(164, 188, 218, 0.66);
+  background: linear-gradient(180deg, #f8fbff 0%, #e6effa 100%);
+  box-shadow: 0 14px 30px rgba(16, 38, 66, 0.22);
+  padding: 10px;
 }
 
 .login-logo-floating::before {
@@ -324,77 +329,25 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .app-logo {
   position: relative;
-  width: 76px;
-  height: 76px;
-  flex: 0 0 76px;
-  border-radius: 24px;
-  background: linear-gradient(145deg, #1c4273 0%, #0f2a4c 58%, #091a31 100%);
-  border: 1px solid rgba(61, 101, 150, 0.58);
-  box-shadow: 0 18px 34px rgba(10, 28, 53, 0.28);
-  overflow: hidden;
+  width: 62px;
+  height: 62px;
+  flex: 0 0 62px;
+  border-radius: 18px;
+  border: 1px solid rgba(162, 187, 218, 0.7);
+  background: linear-gradient(180deg, #f8fbff 0%, #e6effa 100%);
+  box-shadow: 0 10px 22px rgba(17, 40, 70, 0.16);
+  padding: 7px;
 }
 
 .app-logo::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 22% 18%, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 32%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 38%);
-  pointer-events: none;
+  display: none;
 }
 
-.app-logo-screen {
-  position: absolute;
-  inset: 12px 11px 20px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #f8fbff 0%, #deebfb 100%);
-  border: 1px solid rgba(195, 215, 241, 0.95);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.96),
-    0 8px 18px rgba(7, 20, 39, 0.22);
-}
-
-.app-logo-screen::before {
-  content: "";
-  position: absolute;
-  inset: 10px 11px 14px 11px;
-  border-radius: 10px;
-  background:
-    linear-gradient(180deg, rgba(36, 77, 128, 0.16) 0 100%),
-    linear-gradient(90deg, #7cc4ff 0 18%, transparent 18% 30%, #3ea2ff 30% 48%, transparent 48% 60%, #f5c24b 60% 76%, transparent 76% 86%, #22c55e 86% 100%);
-  -webkit-mask:
-    linear-gradient(#000 0 0) top/100% 38%,
-    linear-gradient(#000 0 0) left 10px bottom/12px 58%,
-    linear-gradient(#000 0 0) center bottom/12px 74%,
-    linear-gradient(#000 0 0) right 10px bottom/12px 48%;
-  -webkit-mask-repeat: no-repeat;
-          mask:
-    linear-gradient(#000 0 0) top/100% 38%,
-    linear-gradient(#000 0 0) left 10px bottom/12px 58%,
-    linear-gradient(#000 0 0) center bottom/12px 74%,
-    linear-gradient(#000 0 0) right 10px bottom/12px 48%;
-          mask-repeat: no-repeat;
-}
-
-.app-logo-screen::after {
-  content: "";
-  position: absolute;
-  inset: 12px 10px 12px 10px;
-  background: linear-gradient(135deg, transparent 0 8%, #0891b2 8% 14%, transparent 14% 26%, #0891b2 26% 32%, transparent 32% 50%, #0ea5a4 50% 57%, transparent 57% 73%, #2563eb 73% 80%, transparent 80% 100%);
-  clip-path: polygon(0 76%, 16% 76%, 27% 56%, 42% 56%, 56% 30%, 68% 30%, 82% 62%, 100% 62%, 100% 72%, 82% 72%, 69% 42%, 57% 42%, 43% 68%, 25% 68%, 15% 86%, 0 86%);
-  opacity: 0.95;
-}
-
-.app-logo-stand {
-  position: absolute;
-  left: 27px;
-  right: 27px;
-  bottom: 12px;
-  height: 5px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(193, 215, 242, 0.18) 0%, rgba(239, 248, 255, 0.92) 48%, rgba(193, 215, 242, 0.18) 100%);
-  box-shadow: 0 -9px 0 -3px rgba(216, 232, 249, 0.82);
+.app-logo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
 }
 
 .brand-text {
@@ -403,11 +356,11 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .brand-kicker {
-  margin: 0 0 8px;
+  margin: 0 0 5px;
   color: #36587e;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
 }
 
@@ -430,23 +383,23 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .brand-text h1 {
   margin: 0;
-  font-size: 33px;
-  line-height: 0.94;
+  font-size: 30px;
+  line-height: 0.96;
   letter-spacing: -0.045em;
-  font-weight: 820;
+  font-weight: 800;
   white-space: nowrap;
   color: #102844;
   text-wrap: balance;
 }
 
 .subtitle-meta {
-  margin: 8px 0 0;
+  margin: 5px 0 0;
   color: rgba(60, 82, 112, 0.76);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .brand-platforms {
@@ -460,13 +413,13 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 20px;
-  padding: 0 8px;
+  min-height: 18px;
+  padding: 0 7px;
   border-radius: 999px;
   border: 1px solid rgba(117, 142, 173, 0.28);
   background: rgba(255, 255, 255, 0.74);
   color: #48627d;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -499,34 +452,34 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-height: 48px;
-  padding: 5px 7px 5px 5px;
-  border-radius: 18px;
+  min-height: 40px;
+  padding: 3px 6px 3px 4px;
+  border-radius: 14px;
   border: 1px solid rgba(116, 145, 178, 0.26);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(242, 247, 255, 0.8) 100%);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 18px 34px rgba(32, 64, 104, 0.14);
+  box-shadow: 0 12px 24px rgba(32, 64, 104, 0.12);
 }
 
 .brand-profile-card {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  padding: 0 8px 0 4px;
+  padding: 0 7px 0 3px;
 }
 
 .brand-profile-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
   background: linear-gradient(135deg, #5b8ef2 0%, #264f9f 100%);
   color: #eff6ff;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
@@ -540,7 +493,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .brand-profile-label {
   color: #647a92;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -553,9 +506,9 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   background: transparent;
   color: #1f3653;
   border-radius: 12px;
-  min-height: 18px;
+  min-height: 17px;
   padding: 0;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -566,28 +519,18 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   content: none;
 }
 
-.brand-session-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 16px;
-  margin-top: 3px;
-  color: #556d87;
-  font-size: 11px;
-  font-weight: 600;
-}
-
 .brand-logout-btn {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  height: 36px;
-  padding: 0 12px 0 14px;
+  height: 32px;
+  padding: 0 10px 0 12px;
   border: 0;
   border-left: 1px solid rgba(116, 145, 178, 0.22);
-  border-radius: 0 14px 14px 0;
+  border-radius: 0 12px 12px 0;
   background: transparent;
   color: #9b3a32;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
   cursor: pointer;
@@ -617,7 +560,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   color: #37526f;
   font-size: 12px;
   font-weight: 700;
-  height: 36px;
+  height: 32px;
   white-space: nowrap;
   box-shadow: none;
   transition: color 140ms ease, background 140ms ease;
@@ -6836,25 +6779,10 @@ body[data-theme="dark"] .sap-services-changelog-item-changed {
   content: "▶";
   display: inline-block;
   width: 16px;
-.brand-session-badge {
-  background: #e0f2fe;
-  color: #0c4a6e;
-  border: 1px solid #bae6fd;
-  min-width: 150px;
-  justify-content: center;
-}
-.brand-session-badge::before {
-  content: "⏳";
-}
   font-size: 10px;
   text-align: center;
   transition: transform 0.2s ease;
   flex-shrink: 0;
-body[data-theme="dark"] .brand-session-badge {
-  background: #0f2f44;
-  color: #cbe9ff;
-  border-color: #1d4f6c;
-}
 }
 
 .host-config-change-group[open] > .host-config-change-summary::before {
@@ -11858,14 +11786,14 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
 
 /* Header refresh: sticky status bar + cleaner control language (v1.7.34). */
 .brand-header {
-  padding: 16px 18px;
-  border-radius: 24px;
+  padding: 10px 14px;
+  border-radius: 18px;
   border: 1px solid rgba(191, 210, 233, 0.58);
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0) 24%),
     radial-gradient(circle at 72% 10%, rgba(96, 165, 250, 0.16) 0%, rgba(96, 165, 250, 0) 22%),
     linear-gradient(135deg, rgba(245, 249, 255, 0.96) 0%, rgba(229, 239, 255, 0.94) 52%, rgba(238, 247, 255, 0.96) 100%);
-  box-shadow: 0 24px 56px rgba(20, 45, 77, 0.14);
+  box-shadow: 0 14px 30px rgba(20, 45, 77, 0.12);
 }
 
 .brand-user {
@@ -12128,12 +12056,8 @@ body[data-theme="dark"] .brand-account-shell {
 
 body[data-theme="dark"] .app-logo {
   border-color: rgba(91, 126, 170, 0.42);
-  background: linear-gradient(145deg, #1b3c68 0%, #102846 56%, #09172b 100%);
-  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.28);
-}
-
-body[data-theme="dark"] .app-logo-screen {
-  background: linear-gradient(180deg, #f7fbff 0%, #dce8f8 100%);
+  background: linear-gradient(180deg, #1f3a60 0%, #132742 100%);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.26);
 }
 
 body[data-theme="dark"] .brand-kicker {
@@ -12153,7 +12077,7 @@ body[data-theme="dark"] .brand-user-badge {
 }
 
 body[data-theme="dark"] .brand-profile-label,
-body[data-theme="dark"] .brand-session-badge {
+body[data-theme="dark"] .brand-profile-label {
   color: #8ea8c6;
 }
 
@@ -12294,11 +12218,7 @@ body[data-theme="dark"] .header-stat-chip {
   }
 
   .brand-profile-label {
-    font-size: 9px;
-  }
-
-  .brand-session-badge {
-    font-size: 10px;
+    font-size: 8.5px;
   }
 }
 

@@ -2080,7 +2080,6 @@ function setAuthUiState(authenticated) {
   const hostToolsHeader = document.getElementById("hostToolsHeader");
   const brandAccountShell = document.getElementById("brandAccountShell");
   const brandUserBadge = document.getElementById("brandUserBadge");
-  const brandSessionBadge = document.getElementById("brandSessionBadge");
   const logoutButton = document.getElementById("logoutButton");
   loginOverlay.classList.toggle("hidden", authenticated);
   appPanel.classList.toggle("hidden", !authenticated);
@@ -2098,9 +2097,6 @@ function setAuthUiState(authenticated) {
   }
   if (logoutButton) {
     logoutButton.classList.toggle("hidden", !authenticated);
-  }
-  if (brandSessionBadge) {
-    brandSessionBadge.classList.toggle("hidden", !authenticated);
   }
   state.isAuthenticated = authenticated;
   syncBrandProfileIdentity();
