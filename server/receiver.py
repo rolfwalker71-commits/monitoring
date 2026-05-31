@@ -5572,8 +5572,29 @@ def backfill_database_lifecycle(conn: sqlite3.Connection, days: int = 7) -> dict
         (cutoff_iso,),
     )
 
-    # Track databases per host over time
+    # Pre-seed prev_dbs_by_host from the last report BEFORE the time window so that
+    # the first report inside the window is diffed against a real baseline.  Without
+    # this, the first report per host would make all its databases look "newly created",
+    # writing spurious create-events into database_lifecycle.
     prev_dbs_by_host: dict[str, set[str]] = {}
+    pre_rows = conn.execute(
+        """
+        SELECT r.hostname, r.payload_json
+        FROM reports r
+        INNER JOIN (
+            SELECT hostname, MAX(id) AS max_id
+            FROM reports
+            WHERE received_at_utc < ?
+            GROUP BY hostname
+        ) pre ON pre.max_id = r.id
+        """,
+        (cutoff_iso,),
+    ).fetchall()
+    for pre_row in pre_rows:
+        pre_hostname = str(pre_row[0] or "").strip()
+        if pre_hostname:
+            pre_payload = parse_payload_json(str(pre_row[1] or "{}"))
+            prev_dbs_by_host[pre_hostname] = _extract_database_inventory(pre_payload)
     report_count = 0
     inserted_events = 0
 
