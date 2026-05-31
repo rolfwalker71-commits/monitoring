@@ -551,11 +551,13 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   visibility: visible;
   opacity: 1;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 0;
   background: transparent;
   border: 0;
   border-radius: 999px;
-  padding: 0 4px;
+  width: 42px;
+  padding: 0;
   cursor: pointer;
   color: #37526f;
   font-size: 12px;
@@ -11845,7 +11847,10 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
 
 .theme-toggle {
   height: 38px;
-  padding: 0 6px;
+  width: 44px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
   box-shadow: none;
 }
 

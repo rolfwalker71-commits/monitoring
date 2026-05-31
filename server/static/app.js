@@ -651,9 +651,8 @@ function updateThemeToggleUi(theme) {
     return;
   }
   const isDark = normalizeTheme(theme) === "dark";
-  const label = button.querySelector(".theme-toggle-label");
-  if (label) label.textContent = isDark ? "Light" : "Dark";
   button.setAttribute("aria-pressed", isDark ? "true" : "false");
+  button.setAttribute("aria-label", isDark ? "Zum Lightmode wechseln" : "Zum Darkmode wechseln");
   button.title = isDark ? "Zum Lightmode wechseln" : "Zum Darkmode wechseln";
 }
 
