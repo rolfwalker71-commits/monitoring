@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 import threading
 import socket
+import time
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -90,6 +91,8 @@ SQLITE_CACHE_SIZE_MIB = max(8, min(512, int(os.getenv("MONITORING_SQLITE_CACHE_S
 SQLITE_MMAP_SIZE_MIB = max(0, min(2048, int(os.getenv("MONITORING_SQLITE_MMAP_SIZE_MIB", "256") or "256")))
 READ_ENDPOINT_CACHE_TTL_SECONDS = max(0.0, min(60.0, float(os.getenv("MONITORING_READ_ENDPOINT_CACHE_TTL_SECONDS", "8") or "8")))
 READ_ENDPOINT_CACHE_MAX_ENTRIES = max(32, min(4096, int(os.getenv("MONITORING_READ_ENDPOINT_CACHE_MAX_ENTRIES", "512") or "512")))
+ENDPOINT_TIMING_LOG_ENABLED = os.getenv("MONITORING_ENDPOINT_TIMING_LOG_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
+ENDPOINT_TIMING_LOG_MIN_MS = max(1.0, min(60000.0, float(os.getenv("MONITORING_ENDPOINT_TIMING_LOG_MIN_MS", "250") or "250")))
 CHANGELOG_REBUILD_STALE_MINUTES = max(10, min(1440, int(os.getenv("MONITORING_CHANGELOG_REBUILD_STALE_MINUTES", "120") or "120")))
 SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES = max(5, min(720, int(os.getenv("MONITORING_SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES", "60") or "60")))
 AUTO_BACKUP_DEFAULT_ENABLED = os.getenv("MONITORING_AUTO_BACKUP_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
@@ -205,6 +208,42 @@ def _read_cache_set(cache_key: str, value: object, ttl_seconds: float | None = N
         # Trim oldest-expiring entries first to keep cache bounded.
         for key, _ in sorted(_read_endpoint_cache.items(), key=lambda item: item[1][0])[: max(1, len(_read_endpoint_cache) // 8)]:
             _read_endpoint_cache.pop(key, None)
+
+
+def _new_endpoint_timer(endpoint: str) -> dict[str, object]:
+    now = time.perf_counter()
+    return {
+        "endpoint": str(endpoint or ""),
+        "start": now,
+        "last": now,
+        "steps": [],
+    }
+
+
+def _mark_endpoint_timer(timer: dict[str, object], step_name: str) -> None:
+    now = time.perf_counter()
+    last = float(timer.get("last") or now)
+    timer["last"] = now
+    steps = timer.get("steps")
+    if not isinstance(steps, list):
+        return
+    steps.append((str(step_name or "step"), max(0.0, (now - last) * 1000.0)))
+
+
+def _finish_endpoint_timer(timer: dict[str, object], meta: str = "") -> None:
+    if not ENDPOINT_TIMING_LOG_ENABLED:
+        return
+    endpoint = str(timer.get("endpoint") or "")
+    start = float(timer.get("start") or time.perf_counter())
+    total_ms = max(0.0, (time.perf_counter() - start) * 1000.0)
+    if total_ms < ENDPOINT_TIMING_LOG_MIN_MS:
+        return
+    steps = timer.get("steps")
+    step_text = ""
+    if isinstance(steps, list) and steps:
+        step_text = " | " + " | ".join(f"{name}:{duration:.1f}ms" for name, duration in steps)
+    meta_text = f" | {meta}" if str(meta or "").strip() else ""
+    print(f"[perf] {endpoint} total={total_ms:.1f}ms{step_text}{meta_text}")
 
 
 # Global hotfix: every sqlite3.connect call in this process gets an auto-closing
@@ -14299,6 +14338,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/hosts":
+            endpoint_timer = _new_endpoint_timer("/api/v1/hosts")
             query = parse_qs(parsed.query)
             limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
@@ -14417,6 +14457,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         for uid_row in host_uid_rows
                         if str(uid_row[0] or "").strip()
                     }
+
                     host_uid_settings_map = {
                         str(uid_row[0] or "").strip(): {
                             "country_code_override": normalize_country_code(uid_row[2]),
@@ -14430,6 +14471,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         for uid_row in host_uid_rows
                         if str(uid_row[0] or "").strip()
                     }
+
+            _mark_endpoint_timer(endpoint_timer, "db")
 
             settings_map = {
                 str(row[0]): {
@@ -14498,7 +14541,6 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     )
                     or ""
                 )
-
                 release_info = _extract_sap_hana_ram(latest_payload)
 
                 hosts.append(
@@ -14541,20 +14583,25 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     }
                 )
 
+            _mark_endpoint_timer(endpoint_timer, "build")
+
             hidden_hosts = sum(1 for host in hosts if bool(host.get("is_hidden", False)))
             visible_hosts = len(hosts) - hidden_hosts
 
-            self._send_json(
-                HTTPStatus.OK,
-                {
-                    "count": len(hosts),
-                    "limit": limit,
-                    "offset": offset,
-                    "total_hosts": total_hosts,
-                    "visible_hosts": visible_hosts,
-                    "hidden_hosts": hidden_hosts,
-                    "hosts": hosts,
-                },
+            response_data = {
+                "count": len(hosts),
+                "limit": limit,
+                "offset": offset,
+                "total_hosts": total_hosts,
+                "visible_hosts": visible_hosts,
+                "hidden_hosts": hidden_hosts,
+                "hosts": hosts,
+            }
+            self._send_json(HTTPStatus.OK, response_data)
+            _mark_endpoint_timer(endpoint_timer, "send")
+            _finish_endpoint_timer(
+                endpoint_timer,
+                meta=f"limit={limit} offset={offset} returned={len(hosts)} total={total_hosts}",
             )
             return
 
@@ -14590,6 +14637,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 except ValueError:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "jump_to_utc must be a valid ISO datetime"})
                     return
+
+            endpoint_timer = _new_endpoint_timer("/api/v1/host-reports")
 
             with sqlite3.connect(DB_PATH) as conn:
                 total_reports = conn.execute(
@@ -14630,6 +14679,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     resolved_hostname = str(rows[0][3] or "").strip()
                 display_name_override = get_display_name_override(conn, resolved_hostname or hostname, host_uid)
 
+            _mark_endpoint_timer(endpoint_timer, "db")
+
             reports = []
             for row in rows:
                 payload = json.loads(row[5])
@@ -14648,19 +14699,24 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     }
                 )
 
-            self._send_json(
-                HTTPStatus.OK,
-                {
-                    "count": len(reports),
-                    "limit": limit,
-                    "offset": offset,
-                    "total_reports": total_reports,
-                    "oldest_report_at_utc": oldest_report_at_utc,
-                    "newest_report_at_utc": newest_report_at_utc,
-                    "hostname": str(rows[0][3] if rows else hostname),
-                    "host_uid": host_uid,
-                    "reports": reports,
-                },
+            _mark_endpoint_timer(endpoint_timer, "build")
+
+            response_data = {
+                "count": len(reports),
+                "limit": limit,
+                "offset": offset,
+                "total_reports": total_reports,
+                "oldest_report_at_utc": oldest_report_at_utc,
+                "newest_report_at_utc": newest_report_at_utc,
+                "hostname": str(rows[0][3] if rows else hostname),
+                "host_uid": host_uid,
+                "reports": reports,
+            }
+            self._send_json(HTTPStatus.OK, response_data)
+            _mark_endpoint_timer(endpoint_timer, "send")
+            _finish_endpoint_timer(
+                endpoint_timer,
+                meta=f"limit={limit} offset={offset} count={len(reports)} total={int(total_reports or 0)}",
             )
             return
 
@@ -14827,6 +14883,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not username:
                 self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "authentication required"})
                 return
+            endpoint_timer = _new_endpoint_timer("/api/v1/critical-trends")
             
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=72, min_value=1, max_value=24 * 30)
@@ -14857,13 +14914,20 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     hidden_mountpoints_by_host,
                     selected_metrics=selected_metrics,
                 )
+            _mark_endpoint_timer(endpoint_timer, "db+compute")
 
-            self._send_json(HTTPStatus.OK, {
+            response_data = {
                 "hours": hours,
                 "project_hours": project_hours,
                 "warnings": warnings,
                 "total": len(warnings),
-            })
+            }
+            self._send_json(HTTPStatus.OK, response_data)
+            _mark_endpoint_timer(endpoint_timer, "send")
+            _finish_endpoint_timer(
+                endpoint_timer,
+                meta=f"hours={hours} project_hours={project_hours} warnings={len(warnings)}",
+            )
             return
 
         if parsed.path == "/api/v1/host-update-log":
@@ -14912,15 +14976,19 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/inactive-hosts":
+            endpoint_timer = _new_endpoint_timer("/api/v1/inactive-hosts")
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=3, min_value=1, max_value=24 * 30)
             cache_key = f"inactive-hosts:{hours}"
             cached_data = _read_cache_get(cache_key)
             if isinstance(cached_data, dict):
                 self._send_json(HTTPStatus.OK, cached_data)
+                _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
+                _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} cache=hit")
                 return
             with sqlite3.connect(DB_PATH) as conn:
                 inactive = collect_inactive_hosts(conn, hours)
+            _mark_endpoint_timer(endpoint_timer, "db+compute")
 
             response_data = {
                 "hours": hours,
@@ -14929,6 +14997,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             }
             _read_cache_set(cache_key, response_data)
             self._send_json(HTTPStatus.OK, response_data)
+            _mark_endpoint_timer(endpoint_timer, "send")
+            _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} cache=miss total={len(inactive)}")
             return
 
         if parsed.path == "/api/v1/analysis":
@@ -14938,6 +15008,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not hostname and not host_uid:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "hostname or host_uid query parameter is required"})
                 return
+            endpoint_timer = _new_endpoint_timer("/api/v1/analysis")
 
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
             cutoff_iso = utc_hours_ago_iso(hours)
@@ -14979,6 +15050,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     else []
                 )
                 blacklist_patterns = [row[0] for row in conn.execute("SELECT pattern FROM filesystem_blacklist_patterns").fetchall()]
+
+            _mark_endpoint_timer(endpoint_timer, "db")
 
             fs_by_mountpoint = {}
             fs_total_kb_by_mountpoint = {}
@@ -15130,61 +15203,72 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             trends.sort(key=lambda item: item["current_used_percent"], reverse=True)
 
-            self._send_json(
-                HTTPStatus.OK,
-                {
-                    "hostname": hostname,
-                    "host_uid": host_uid,
-                    "window_hours": hours,
-                    "cutoff_utc": cutoff_iso,
-                    "report_count": report_count,
-                    "latest_report_time_utc": latest_report_time,
-                    "latest_max_used_percent": latest_max_used_percent,
-                    "latest_hotspots": latest_hotspots,
-                    "resource_trends": {
-                        "cpu_usage_percent": summarize_numeric_series(cpu_usage_values),
-                        "load_avg_1": summarize_numeric_series(load_avg_1_values),
-                        "memory_used_percent": summarize_numeric_series(memory_used_values),
-                        "swap_used_percent": summarize_numeric_series(swap_used_values),
-                    },
-                    "resource_series": {
-                        "cpu_usage_percent": cpu_usage_series,
-                        "load_avg_1": load_avg_1_series,
-                        "memory_used_percent": memory_used_series,
-                        "swap_used_percent": swap_used_series,
-                    },
-                    "latest_memory_total_kb": latest_memory_total_kb,
-                    "delivery": {
-                        "latest_mode": latest_delivery_mode,
-                        "latest_is_delayed": latest_is_delayed,
-                        "latest_queue_depth": latest_queue_depth,
-                        "delayed_report_count": delayed_report_count,
-                        "live_report_count": live_report_count,
-                    },
-                    "filesystem_visibility": {
-                        "section": "analysis",
-                        "hidden_mountpoints": hidden_mountpoints,
-                        "fs_focus_hidden": fs_focus_hidden,
-                        "large_files_hidden": large_files_hidden,
-                    },
-                    "large_files": latest_large_files,
-                    "filesystem_trends": trends,
+            _mark_endpoint_timer(endpoint_timer, "compute")
+
+            response_data = {
+                "hostname": hostname,
+                "host_uid": host_uid,
+                "window_hours": hours,
+                "cutoff_utc": cutoff_iso,
+                "report_count": report_count,
+                "latest_report_time_utc": latest_report_time,
+                "latest_max_used_percent": latest_max_used_percent,
+                "latest_hotspots": latest_hotspots,
+                "resource_trends": {
+                    "cpu_usage_percent": summarize_numeric_series(cpu_usage_values),
+                    "load_avg_1": summarize_numeric_series(load_avg_1_values),
+                    "memory_used_percent": summarize_numeric_series(memory_used_values),
+                    "swap_used_percent": summarize_numeric_series(swap_used_values),
                 },
+                "resource_series": {
+                    "cpu_usage_percent": cpu_usage_series,
+                    "load_avg_1": load_avg_1_series,
+                    "memory_used_percent": memory_used_series,
+                    "swap_used_percent": swap_used_series,
+                },
+                "latest_memory_total_kb": latest_memory_total_kb,
+                "delivery": {
+                    "latest_mode": latest_delivery_mode,
+                    "latest_is_delayed": latest_is_delayed,
+                    "latest_queue_depth": latest_queue_depth,
+                    "delayed_report_count": delayed_report_count,
+                    "live_report_count": live_report_count,
+                },
+                "filesystem_visibility": {
+                    "section": "analysis",
+                    "hidden_mountpoints": hidden_mountpoints,
+                    "fs_focus_hidden": fs_focus_hidden,
+                    "large_files_hidden": large_files_hidden,
+                },
+                "large_files": latest_large_files,
+                "filesystem_trends": trends,
+            }
+            self._send_json(HTTPStatus.OK, response_data)
+            _mark_endpoint_timer(endpoint_timer, "send")
+            _finish_endpoint_timer(
+                endpoint_timer,
+                meta=f"hours={hours} reports={report_count} fs_trends={len(trends)}",
             )
             return
 
         if parsed.path == "/api/v1/backup-status-overview":
+            endpoint_timer = _new_endpoint_timer("/api/v1/backup-status-overview")
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
             cache_key = f"backup-status-overview:{hours}"
             cached_data = _read_cache_get(cache_key)
             if isinstance(cached_data, dict):
                 self._send_json(HTTPStatus.OK, cached_data)
+                _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
+                _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} cache=hit")
                 return
             with sqlite3.connect(DB_PATH) as conn:
                 data = collect_backup_status_overview(conn, hours)
+            _mark_endpoint_timer(endpoint_timer, "db+compute")
             _read_cache_set(cache_key, data)
             self._send_json(HTTPStatus.OK, data)
+            _mark_endpoint_timer(endpoint_timer, "send")
+            _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} cache=miss total={int(data.get('total', 0) or 0)}")
             return
 
         if parsed.path == "/api/v1/customer-overview":
@@ -15270,6 +15354,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/alerts":
+            endpoint_timer = _new_endpoint_timer("/api/v1/alerts")
             query = parse_qs(parsed.query)
             status_filter = query.get("status", ["all"])[0].strip().lower()
             if status_filter not in {"all", "open", "resolved"}:
@@ -15422,6 +15507,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 )
                 latest_details_by_host_key = _collect_latest_report_details_by_host_keys(conn, host_keys)
 
+            _mark_endpoint_timer(endpoint_timer, "db")
+
             alerts = []
             with sqlite3.connect(DB_PATH) as conn_mute:
                 muted_pairs = {
@@ -15484,24 +15571,33 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         }
                     )
 
-            self._send_json(
-                HTTPStatus.OK,
-                {
-                    "count": len(alerts),
-                    "total": total,
-                    "limit": limit,
-                    "offset": offset,
-                    "status": status_filter,
-                    "severity": severity_filter,
-                    "heads_up_suppressed": heads_up_suppressed_filter,
-                    "hostname": hostname_filter,
-                    "host_uid": host_uid_filter,
-                    "alerts": alerts,
-                },
+            _mark_endpoint_timer(endpoint_timer, "build")
+
+            response_data = {
+                "count": len(alerts),
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "status": status_filter,
+                "severity": severity_filter,
+                "heads_up_suppressed": heads_up_suppressed_filter,
+                "hostname": hostname_filter,
+                "host_uid": host_uid_filter,
+                "alerts": alerts,
+            }
+            self._send_json(HTTPStatus.OK, response_data)
+            _mark_endpoint_timer(endpoint_timer, "send")
+            _finish_endpoint_timer(
+                endpoint_timer,
+                meta=(
+                    f"status={status_filter} severity={severity_filter} "
+                    f"offset={offset} limit={limit} count={len(alerts)} total={total}"
+                ),
             )
             return
 
         if parsed.path == "/api/v1/alerts-summary":
+            endpoint_timer = _new_endpoint_timer("/api/v1/alerts-summary")
             query = parse_qs(parsed.query)
             hostname_filter = query.get("hostname", [""])[0].strip()
             host_uid_filter = query.get("host_uid", [""])[0].strip()
@@ -15509,6 +15605,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             cached_data = _read_cache_get(cache_key)
             if isinstance(cached_data, dict):
                 self._send_json(HTTPStatus.OK, cached_data)
+                _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
+                _finish_endpoint_timer(endpoint_timer, meta="cache=hit")
                 return
 
             where_clause = "WHERE status = 'open' AND (ack_by IS NULL OR ack_by = '')"
@@ -15565,6 +15663,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 total_open = len(visible_rows)
                 warning_open = sum(1 for row in visible_rows if str(row[0] or "").strip().lower() == "warning")
                 critical_open = sum(1 for row in visible_rows if str(row[0] or "").strip().lower() == "critical")
+            _mark_endpoint_timer(endpoint_timer, "db+compute")
 
             response_data = {
                 "hostname": hostname_filter,
@@ -15584,9 +15683,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             }
             _read_cache_set(cache_key, response_data)
             self._send_json(HTTPStatus.OK, response_data)
+            _mark_endpoint_timer(endpoint_timer, "send")
+            _finish_endpoint_timer(
+                endpoint_timer,
+                meta=f"cache=miss host={hostname_filter or '-'} uid={host_uid_filter or '-'} open={total_open}",
+            )
             return
 
         if parsed.path == "/api/v1/system-overview":
+            endpoint_timer = _new_endpoint_timer("/api/v1/system-overview")
             query = parse_qs(parsed.query)
             search_query = str(query.get("q", [""])[0] or "").strip()
             if len(search_query) > 200:
@@ -15595,11 +15700,19 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             cached_data = _read_cache_get(cache_key)
             if isinstance(cached_data, dict):
                 self._send_json(HTTPStatus.OK, cached_data)
+                _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
+                _finish_endpoint_timer(endpoint_timer, meta=f"cache=hit qlen={len(search_query)}")
                 return
             with sqlite3.connect(DB_PATH) as conn:
                 data = collect_system_overview(conn, search_query=search_query)
+            _mark_endpoint_timer(endpoint_timer, "db+compute")
             _read_cache_set(cache_key, data)
             self._send_json(HTTPStatus.OK, data)
+            _mark_endpoint_timer(endpoint_timer, "send")
+            _finish_endpoint_timer(
+                endpoint_timer,
+                meta=f"cache=miss qlen={len(search_query)} total={int(data.get('total', 0) or 0)}",
+            )
             return
 
         if parsed.path == "/api/v1/backup/database/start":
