@@ -324,42 +324,91 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .app-logo {
   position: relative;
-  width: 68px;
-  height: 68px;
-  flex: 0 0 68px;
-  border-radius: 22px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(232, 242, 255, 0.95) 100%),
-    linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  border: 1px solid rgba(150, 179, 214, 0.55);
-  box-shadow: 0 14px 28px rgba(35, 68, 109, 0.16);
+  width: 76px;
+  height: 76px;
+  flex: 0 0 76px;
+  border-radius: 24px;
+  background: linear-gradient(145deg, #1c4273 0%, #0f2a4c 58%, #091a31 100%);
+  border: 1px solid rgba(61, 101, 150, 0.58);
+  box-shadow: 0 18px 34px rgba(10, 28, 53, 0.28);
   overflow: hidden;
 }
 
 .app-logo::before {
   content: "";
   position: absolute;
-  inset: 13px 12px 18px 12px;
-  border-radius: 14px;
+  inset: 0;
   background:
-    linear-gradient(90deg, transparent 0 8%, rgba(77, 120, 171, 0.12) 8% 10%, transparent 10% 24%, rgba(77, 120, 171, 0.12) 24% 26%, transparent 26% 40%, rgba(77, 120, 171, 0.12) 40% 42%, transparent 42% 100%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(238, 246, 255, 0.92) 100%);
+    radial-gradient(circle at 22% 18%, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 38%);
+  pointer-events: none;
 }
 
-.app-logo::after {
+.app-logo-screen {
+  position: absolute;
+  inset: 12px 11px 20px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fbff 0%, #deebfb 100%);
+  border: 1px solid rgba(195, 215, 241, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    0 8px 18px rgba(7, 20, 39, 0.22);
+}
+
+.app-logo-screen::before {
   content: "";
   position: absolute;
-  left: 17px;
-  right: 16px;
-  bottom: 17px;
-  height: 18px;
-  background: linear-gradient(135deg, transparent 0 8%, #4fa4f4 8% 13%, transparent 13% 18%, #4fa4f4 18% 24%, transparent 24% 33%, #0ea5a4 33% 39%, transparent 39% 49%, #0ea5a4 49% 56%, transparent 56% 100%);
-  clip-path: polygon(0 72%, 14% 72%, 25% 46%, 41% 46%, 52% 18%, 66% 18%, 78% 58%, 100% 58%, 100% 100%, 0 100%);
+  inset: 10px 11px 14px 11px;
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(36, 77, 128, 0.16) 0 100%),
+    linear-gradient(90deg, #7cc4ff 0 18%, transparent 18% 30%, #3ea2ff 30% 48%, transparent 48% 60%, #f5c24b 60% 76%, transparent 76% 86%, #22c55e 86% 100%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) top/100% 38%,
+    linear-gradient(#000 0 0) left 10px bottom/12px 58%,
+    linear-gradient(#000 0 0) center bottom/12px 74%,
+    linear-gradient(#000 0 0) right 10px bottom/12px 48%;
+  -webkit-mask-repeat: no-repeat;
+          mask:
+    linear-gradient(#000 0 0) top/100% 38%,
+    linear-gradient(#000 0 0) left 10px bottom/12px 58%,
+    linear-gradient(#000 0 0) center bottom/12px 74%,
+    linear-gradient(#000 0 0) right 10px bottom/12px 48%;
+          mask-repeat: no-repeat;
+}
+
+.app-logo-screen::after {
+  content: "";
+  position: absolute;
+  inset: 12px 10px 12px 10px;
+  background: linear-gradient(135deg, transparent 0 8%, #0891b2 8% 14%, transparent 14% 26%, #0891b2 26% 32%, transparent 32% 50%, #0ea5a4 50% 57%, transparent 57% 73%, #2563eb 73% 80%, transparent 80% 100%);
+  clip-path: polygon(0 76%, 16% 76%, 27% 56%, 42% 56%, 56% 30%, 68% 30%, 82% 62%, 100% 62%, 100% 72%, 82% 72%, 69% 42%, 57% 42%, 43% 68%, 25% 68%, 15% 86%, 0 86%);
+  opacity: 0.95;
+}
+
+.app-logo-stand {
+  position: absolute;
+  left: 27px;
+  right: 27px;
+  bottom: 12px;
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(193, 215, 242, 0.18) 0%, rgba(239, 248, 255, 0.92) 48%, rgba(193, 215, 242, 0.18) 100%);
+  box-shadow: 0 -9px 0 -3px rgba(216, 232, 249, 0.82);
 }
 
 .brand-text {
   min-width: 0;
   flex: 1;
+}
+
+.brand-kicker {
+  margin: 0 0 8px;
+  color: #36587e;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
 .brand-partner-logo {
@@ -381,21 +430,23 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .brand-text h1 {
   margin: 0;
-  font-size: 29px;
-  line-height: 0.98;
-  letter-spacing: -0.03em;
-  font-weight: 780;
+  font-size: 33px;
+  line-height: 0.94;
+  letter-spacing: -0.045em;
+  font-weight: 820;
   white-space: nowrap;
+  color: #102844;
+  text-wrap: balance;
 }
 
 .subtitle-meta {
   margin: 8px 0 0;
-  color: rgba(84, 104, 132, 0.78);
+  color: rgba(60, 82, 112, 0.76);
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .brand-platforms {
@@ -413,12 +464,13 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   padding: 0 8px;
   border-radius: 999px;
   border: 1px solid rgba(117, 142, 173, 0.28);
-  background: rgba(255, 255, 255, 0.62);
-  color: #506985;
+  background: rgba(255, 255, 255, 0.74);
+  color: #48627d;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
 .brand-platform-pill-linux {
@@ -451,10 +503,10 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   padding: 5px 7px 5px 5px;
   border-radius: 18px;
   border: 1px solid rgba(116, 145, 178, 0.26);
-  background: rgba(255, 255, 255, 0.72);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(242, 247, 255, 0.8) 100%);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 14px 30px rgba(32, 64, 104, 0.12);
+  box-shadow: 0 18px 34px rgba(32, 64, 104, 0.14);
 }
 
 .brand-profile-card {
@@ -472,7 +524,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   width: 34px;
   height: 34px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #4c7fd8 0%, #2754a3 100%);
+  background: linear-gradient(135deg, #5b8ef2 0%, #264f9f 100%);
   color: #eff6ff;
   font-size: 11px;
   font-weight: 800;
@@ -487,7 +539,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .brand-profile-label {
-  color: #71849a;
+  color: #647a92;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -519,7 +571,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   align-items: center;
   min-height: 16px;
   margin-top: 3px;
-  color: #61778f;
+  color: #556d87;
   font-size: 11px;
   font-weight: 600;
 }
@@ -11810,9 +11862,10 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
   border-radius: 24px;
   border: 1px solid rgba(191, 210, 233, 0.58);
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0) 28%),
-    linear-gradient(135deg, rgba(246, 250, 255, 0.94) 0%, rgba(232, 241, 255, 0.9) 100%);
-  box-shadow: 0 20px 48px rgba(20, 45, 77, 0.12);
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0) 24%),
+    radial-gradient(circle at 72% 10%, rgba(96, 165, 250, 0.16) 0%, rgba(96, 165, 250, 0) 22%),
+    linear-gradient(135deg, rgba(245, 249, 255, 0.96) 0%, rgba(229, 239, 255, 0.94) 52%, rgba(238, 247, 255, 0.96) 100%);
+  box-shadow: 0 24px 56px rgba(20, 45, 77, 0.14);
 }
 
 .brand-user {
@@ -12061,29 +12114,38 @@ body[data-theme="dark"] .brand-user {
 body[data-theme="dark"] .brand-header {
   border-color: rgba(70, 102, 145, 0.62);
   background:
-    radial-gradient(circle at top left, rgba(80, 123, 183, 0.14) 0%, rgba(80, 123, 183, 0) 26%),
-    linear-gradient(135deg, rgba(20, 34, 56, 0.94) 0%, rgba(14, 25, 43, 0.96) 100%);
+    radial-gradient(circle at top left, rgba(80, 123, 183, 0.16) 0%, rgba(80, 123, 183, 0) 24%),
+    radial-gradient(circle at 72% 10%, rgba(34, 197, 94, 0.1) 0%, rgba(34, 197, 94, 0) 18%),
+    linear-gradient(135deg, rgba(20, 34, 56, 0.95) 0%, rgba(14, 25, 43, 0.97) 100%);
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.34);
 }
 
 body[data-theme="dark"] .brand-account-shell {
   border-color: rgba(91, 126, 170, 0.4);
-  background: rgba(20, 38, 63, 0.78);
+  background: linear-gradient(180deg, rgba(20, 38, 63, 0.86) 0%, rgba(15, 31, 52, 0.84) 100%);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
 }
 
 body[data-theme="dark"] .app-logo {
   border-color: rgba(91, 126, 170, 0.42);
-  background:
-    linear-gradient(180deg, rgba(24, 43, 70, 0.95) 0%, rgba(17, 31, 50, 0.95) 100%),
-    linear-gradient(135deg, rgba(32, 56, 89, 0.96) 0%, rgba(18, 31, 50, 0.96) 100%);
+  background: linear-gradient(145deg, #1b3c68 0%, #102846 56%, #09172b 100%);
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.28);
 }
 
-body[data-theme="dark"] .app-logo::before {
-  background:
-    linear-gradient(90deg, transparent 0 8%, rgba(140, 174, 214, 0.12) 8% 10%, transparent 10% 24%, rgba(140, 174, 214, 0.12) 24% 26%, transparent 26% 40%, rgba(140, 174, 214, 0.12) 40% 42%, transparent 42% 100%),
-    linear-gradient(180deg, rgba(28, 50, 80, 0.95) 0%, rgba(21, 38, 61, 0.92) 100%);
+body[data-theme="dark"] .app-logo-screen {
+  background: linear-gradient(180deg, #f7fbff 0%, #dce8f8 100%);
+}
+
+body[data-theme="dark"] .brand-kicker {
+  color: #8fb2da;
+}
+
+body[data-theme="dark"] .brand-text h1 {
+  color: #e5f0ff;
+}
+
+body[data-theme="dark"] .subtitle-meta {
+  color: rgba(173, 196, 224, 0.76);
 }
 
 body[data-theme="dark"] .brand-user-badge {

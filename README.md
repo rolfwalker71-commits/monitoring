@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.165**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.165**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.166**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.166**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.166 | 31.05.2026 | Premium-Header-Variante: Brand-Bereich typografisch aufgewertet (neuer Kicker, stärkere Titelpräsenz, atmosphärischerer Header-Background) und das linke CSS-Brand-Mark komplett überarbeitet, damit es auf hellem Hintergrund klar lesbar bleibt. Das Signet ist jetzt ein kontraststarkes Monitor-/Dashboard-Symbol statt einer zu subtilen Form. |
 | 1.7.165 | 31.05.2026 | Header-Feinschliff: Bild-Icons im linken Brand-Bereich und bei den Plattformen durch eine konsistentere, CSS-basierte Formsprache ersetzt (Brand-Mark links, Linux/Windows als ruhige Plattform-Pills). Die rechte Seite wurde zu einer markanteren Profil-Card mit Avatar, Name und Session-Status ausgebaut. Ziel: weniger Stilbruch, klarere Account-Hierarchie und ein bewussterer Premium-Look. |
 | 1.7.164 | 31.05.2026 | Header-Redesign im Hauptlayout: rechter Bereich als kompakte Account-Zone neu gefasst, Theme-Toggle entrahmt, User/Logout in eine gemeinsame Glass-Card gelegt, Titeltypografie beruhigt und Versions-/Plattform-Metadaten visuell zurückgenommen. Ziel: weniger Pill-Unruhe, klarere Hierarchie und modernerer Kopfbereich ohne kompletten Layoutbruch. |
 | 1.7.163 | 31.05.2026 | Changelog-Backfill-Pre-Seeding auch für `backfill_host_config_changes` nachgezogen: Erster Report pro Host im Rebuild-Fenster erhielt fälschlicherweise `VORHER=-`-Einträge für alle Hardware-/HANA-Felder (`backfill-init`). Fix: Snapshot des letzten Reports **vor** dem Fenster wird vorab geladen, damit `include_initial_snapshot_events=True` nur für wirklich neue Hosts (ohne jegliche Vorgeschichte) greift. **„Rebuild heute"** auf **„Rebuild 30d"** umgestellt (30 statt 1 Tag), damit alle gängigen Zeitfenster (24h–30d) nach einem Rebuild vollständig befüllt sind. Nach dem Deploy: einmalig **„Rebuild 30d"** ausführen. |
