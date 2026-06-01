@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.178**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.178**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.179**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.179**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.179 | 01.06.2026 | SAP-Lizenzinfo-Liste besser lesbar gemacht: Zeilen unter „Lizenztyp / Anzahl“ jetzt im Zebra-Muster (abwechselnd hell und hellgrau) mit leichtem Innenabstand/Radius; Dark-Mode-Variante analog in zwei abgestuften dunklen Hintergründen umgesetzt. |
 | 1.7.178 | 01.06.2026 | Login-Layout angepasst: schwebendes App-Logo so positioniert, dass es etwa zu einem Drittel in die Hauptkarte hineinragt, inkl. stärkerem Rahmen-/Ring-Look. Gleichzeitig den oberen Karten-Inhalt nach unten verschoben (mehr Top-Padding), damit sich Logo und Überschrift nicht überlappen (Desktop + Mobile, Light + Dark). |
 | 1.7.177 | 01.06.2026 | Header-Branding angepasst: Zeile „ANG Monitoring Suite“ im Hauptheader entfernt und der Titel „System Infoboard“ sichtbar grösser sowie kräftiger gesetzt (höhere Schriftgrösse und Font-Weight), damit die Hauptüberschrift klarer dominiert. |
 | 1.7.176 | 01.06.2026 | KPI-Breitenkorrektur nach Oversize-Feedback: Start-/Fallback-Breite reduziert und die Breiten-Synchronisierung auf verfügbare Strip-Breite begrenzt (`fit-to-row`), sodass die KPI-Karten wieder vollständig in eine Zeile passen. Persistierte Altwerte werden dabei automatisch auf die neue Maximalbreite eingegrenzt. |
