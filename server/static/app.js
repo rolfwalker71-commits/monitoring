@@ -7894,7 +7894,7 @@ function renderTopProcessesTable(topProcesses) {
   return `
     <p class="count compact">Top Prozesse nach CPU-Auslastung</p>
     <div class="table-wrap">
-      <table class="report-subtable">
+      <table class="report-subtable top-processes-table">
         <thead>
           <tr>
             <th>PID</th>

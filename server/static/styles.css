@@ -14963,3 +14963,35 @@ body[data-theme="dark"] .reports-column #overviewFilesystemSection .fs-chart-car
   text-overflow: clip;
   word-break: break-all;
 }
+
+/* Top Prozesse: narrow columns, compact command with hover full value via title */
+.reports-column #reportsView .top-processes-table {
+  table-layout: fixed;
+}
+
+.reports-column #reportsView .top-processes-table th:nth-child(1),
+.reports-column #reportsView .top-processes-table td:nth-child(1) { width: 78px; }
+
+.reports-column #reportsView .top-processes-table th:nth-child(2),
+.reports-column #reportsView .top-processes-table td:nth-child(2) { width: 92px; }
+
+.reports-column #reportsView .top-processes-table th:nth-child(3),
+.reports-column #reportsView .top-processes-table td:nth-child(3),
+.reports-column #reportsView .top-processes-table th:nth-child(4),
+.reports-column #reportsView .top-processes-table td:nth-child(4) { width: 88px; }
+
+.reports-column #reportsView .top-processes-table th:nth-child(5),
+.reports-column #reportsView .top-processes-table td:nth-child(5) { width: 96px; }
+
+.reports-column #reportsView .top-processes-table th:nth-child(6),
+.reports-column #reportsView .top-processes-table td:nth-child(6) {
+  width: auto;
+}
+
+.reports-column #reportsView .top-processes-table td:nth-child(6) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+  overflow-wrap: normal;
+}
