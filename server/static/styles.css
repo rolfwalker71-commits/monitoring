@@ -14522,7 +14522,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 
 /* Operations Focus mockup: reports area hierarchy and grouping */
 .reports-column .section-head {
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-radius: 16px;
 }
 
@@ -14543,24 +14543,22 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .reports-column .section-head .report-meta-row {
-  margin-top: 2px;
+  margin-top: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(300px, 27vw, 400px);
   gap: 8px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .reports-column .section-head .report-customer-main-card,
 .reports-column .section-head .report-controls-card {
-  display: grid;
-  align-content: start;
-  gap: 6px;
-  padding: 5px 10px;
+  gap: 4px;
+  padding: 4px 9px;
   border: 1px solid #c7d7eb;
   border-radius: 12px;
   background: linear-gradient(180deg, #f8fbff 0%, #eef4fc 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
-  min-height: 82px;
+  min-height: 72px;
 }
 
 .reports-column .section-head .report-customer-main-card {
@@ -14573,10 +14571,41 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   max-width: 400px;
   min-width: 0;
   justify-self: end;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 4px;
+}
+
+.reports-column .section-head .report-controls-card .report-controls-row {
+  width: 100%;
+}
+
+.reports-column .section-head .report-controls-card .report-controls-row--chips {
   display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 6px 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.reports-column .section-head .report-controls-card .report-controls-row--actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.reports-column .section-head .report-controls-card .report-controls-actions-left,
+.reports-column .section-head .report-controls-card .report-controls-actions-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.reports-column .section-head .report-controls-card .report-controls-actions-right {
+  justify-content: flex-end;
+  margin-left: auto;
 }
 
 .reports-column .section-head .report-controls-card .header-first-row-controls,
@@ -14591,35 +14620,10 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   box-shadow: none;
 }
 
-.reports-column .section-head .report-controls-card .header-first-row-controls {
-  order: 1;
-  flex: 1 1 100%;
-}
-
-.reports-column .section-head .report-controls-card .auto-refresh-interval-label {
-  order: 2;
-}
-
-.reports-column .section-head .report-controls-card #exportHostReportsButton {
-  order: 3;
-}
-
-.reports-column .section-head .report-controls-card #editDisplayNameButton {
-  order: 4;
-  margin-left: auto;
-}
-
-.reports-column .section-head .report-controls-card .selected-host-controls {
-  order: 5;
-  flex: 0 0 auto;
-  justify-content: flex-end;
-  margin-left: 0;
-}
-
 .reports-column .section-head .report-customer-main-card .report-count-inline {
   display: block;
   justify-self: end;
-  margin-top: auto;
+  margin-top: 2px;
   text-align: right;
   margin-right: 0;
   margin-bottom: 0;
@@ -14645,7 +14649,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   display: grid;
   gap: 1px;
   width: 100%;
-  padding: 3px 2px 0;
+  padding: 1px 2px 0;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -14872,22 +14876,15 @@ body[data-theme="dark"] .reports-column #overviewFilesystemSection .fs-chart-car
   .reports-column .section-head .report-controls-card {
     width: 100%;
     max-width: 100%;
-    justify-content: flex-start;
     justify-self: auto;
     min-height: 0;
   }
 
   .reports-column .section-head .report-controls-card .header-first-row-controls,
-  .reports-column .section-head .report-controls-card .selected-host-controls {
+  .reports-column .section-head .report-controls-card .selected-host-controls,
+  .reports-column .section-head .report-controls-card .report-controls-actions-left,
+  .reports-column .section-head .report-controls-card .report-controls-actions-right {
     flex-wrap: wrap;
-  }
-
-  .reports-column .section-head .report-controls-card .header-first-row-controls {
-    flex-basis: auto;
-  }
-
-  .reports-column .section-head .report-controls-card .selected-host-controls {
-    margin-left: 0;
   }
 
   .reports-column .section-head .report-customer-main-card .report-count-inline {
