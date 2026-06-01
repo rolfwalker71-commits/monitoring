@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.185**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.185**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.186**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.186**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.186 | 01.06.2026 | Reports-Header Feintuning: rechte Controls-Karte verschlankt und gegen Überlauf über den Container-Rand abgesichert, linke Kundenkarte per Grid-Stretch auf gleiche Höhe gebracht, und Symbol-Aktionen innerhalb der rechten Karte konsequent nach rechts ausgerichtet. |
 | 1.7.185 | 01.06.2026 | Reports-Header weiter verdichtet: Kartenhöhe links/rechts reduziert, rechte Controls-Karte für 2-zeilige Darstellung optimiert (mehr Platz für die linke Kundenkarte), und der separate Titel „Meldungen“ entfernt. Zusätzlich wird bei fehlender Host-Selektion in der linken Karte prominent „Host auswählen ...“ angezeigt. |
 | 1.7.184 | 01.06.2026 | Reports-Header nach UI-Feedback neu aufgeteilt: Kundeninfo jetzt klar links in einer breiten eigenen Karte, Controls/Chips in eine separate Karte ausgelagert (gleiche visuelle Kartensprache), statt in die Kundenkarte eingebettet. Zusätzlich steht „Meldung X von Y“ jetzt in der Kundenkarte in der letzten Zeile rechtsbündig. |
 | 1.7.183 | 01.06.2026 | Reports-Header weiter entschlackt: redundanten Hostnamen oben entfernt (Titel bleibt generisch), sodass der Host nur noch sekundär im Kundenblock erscheint. Header-Elemente strukturell in weniger Gesamtkarten zusammengeführt (Top-Controls zusammen in einer Gruppe, Meta-Aktionen + Meldungszähler in einer gemeinsamen Karte) und Grid-Layout dafür bereinigt. Ergebnis: deutlich weniger Einzelkarten und ruhigeres Gesamtbild. |

@@ -14545,9 +14545,9 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 .reports-column .section-head .report-meta-row {
   margin-top: 2px;
   display: grid;
-  grid-template-columns: minmax(520px, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) clamp(320px, 30vw, 440px);
   gap: 8px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .reports-column .section-head .report-customer-main-card,
@@ -14563,12 +14563,16 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .reports-column .section-head .report-customer-main-card {
-  min-height: 92px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .reports-column .section-head .report-controls-card {
-  width: clamp(360px, 34vw, 520px);
-  max-width: 100%;
+  width: 100%;
+  max-width: 440px;
+  min-width: 0;
+  justify-self: end;
   display: flex;
   align-items: flex-start;
   flex-wrap: wrap;
@@ -14588,14 +14592,34 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .reports-column .section-head .report-controls-card .header-first-row-controls {
+  order: 1;
   flex: 1 1 100%;
+}
+
+.reports-column .section-head .report-controls-card .auto-refresh-interval-label {
+  order: 2;
+}
+
+.reports-column .section-head .report-controls-card #exportHostReportsButton {
+  order: 3;
+}
+
+.reports-column .section-head .report-controls-card #editDisplayNameButton {
+  order: 4;
+}
+
+.reports-column .section-head .report-controls-card .selected-host-controls {
+  order: 5;
+  margin-left: auto;
 }
 
 .reports-column .section-head .report-customer-main-card .report-count-inline {
   display: block;
   justify-self: end;
+  margin-top: auto;
   text-align: right;
-  margin: 0;
+  margin-right: 0;
+  margin-bottom: 0;
   padding: 0;
   border: 0;
   background: transparent;
@@ -14843,7 +14867,9 @@ body[data-theme="dark"] .reports-column #overviewFilesystemSection .fs-chart-car
 
   .reports-column .section-head .report-controls-card {
     width: 100%;
+    max-width: 100%;
     justify-content: flex-start;
+    justify-self: auto;
   }
 
   .reports-column .section-head .report-controls-card .header-first-row-controls,
@@ -14853,6 +14879,10 @@ body[data-theme="dark"] .reports-column #overviewFilesystemSection .fs-chart-car
 
   .reports-column .section-head .report-controls-card .header-first-row-controls {
     flex-basis: auto;
+  }
+
+  .reports-column .section-head .report-controls-card .selected-host-controls {
+    margin-left: 0;
   }
 
   .reports-column .section-head .report-customer-main-card .report-count-inline {
