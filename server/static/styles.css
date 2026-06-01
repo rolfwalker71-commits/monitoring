@@ -14901,7 +14901,7 @@ body[data-theme="dark"] .reports-column #overviewFilesystemSection .fs-chart-car
   }
 }
 
-/* Final UI sizing pass: menus +2px, Einzelmeldungen details -1px */
+/* Final UI sizing pass: menus +2px, Einzelmeldungen details +2px */
 .reports-column .view-tabs .tab-button {
   font-size: 12px;
 }
@@ -14914,18 +14914,47 @@ body[data-theme="dark"] .reports-column #overviewFilesystemSection .fs-chart-car
 .reports-column #reportsView .report-card h4,
 .reports-column #reportsView .detail-card-collapsible > summary,
 .reports-column #reportsView .report-section-head h4 {
-  font-size: 12px;
+  font-size: 15px;
 }
 
 .reports-column #reportsView .table-wrap table th {
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .reports-column #reportsView .table-wrap table td {
-  font-size: 8px;
+  font-size: 11px;
 }
 
 .reports-column #reportsView .count,
 .reports-column #reportsView .count.compact {
-  font-size: 8px;
+  font-size: 11px;
+}
+
+/* Prevent horizontal scrolling in Einzelmeldungen detail tables after typography increase */
+.reports-column #reportsView .table-wrap {
+  overflow-x: hidden;
+}
+
+.reports-column #reportsView .report-subtable {
+  width: 100%;
+  table-layout: auto;
+}
+
+.reports-column #reportsView .report-subtable th,
+.reports-column #reportsView .report-subtable td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.reports-column #reportsView .report-subtable td:last-child,
+.reports-column #reportsView .report-subtable th:last-child {
+  width: auto;
+}
+
+.reports-column #reportsView .dir-listing-table td.dir-item-name {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-all;
 }
