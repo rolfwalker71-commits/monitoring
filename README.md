@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.183**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.183**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.184**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.184**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.184 | 01.06.2026 | Reports-Header nach UI-Feedback neu aufgeteilt: Kundeninfo jetzt klar links in einer breiten eigenen Karte, Controls/Chips in eine separate Karte ausgelagert (gleiche visuelle Kartensprache), statt in die Kundenkarte eingebettet. Zusätzlich steht „Meldung X von Y“ jetzt in der Kundenkarte in der letzten Zeile rechtsbündig. |
 | 1.7.183 | 01.06.2026 | Reports-Header weiter entschlackt: redundanten Hostnamen oben entfernt (Titel bleibt generisch), sodass der Host nur noch sekundär im Kundenblock erscheint. Header-Elemente strukturell in weniger Gesamtkarten zusammengeführt (Top-Controls zusammen in einer Gruppe, Meta-Aktionen + Meldungszähler in einer gemeinsamen Karte) und Grid-Layout dafür bereinigt. Ergebnis: deutlich weniger Einzelkarten und ruhigeres Gesamtbild. |
 | 1.7.182 | 01.06.2026 | Operations-Focus Mockup im Meldungsbereich umgesetzt: Header neu in Gruppen-/Gesamtkarten strukturiert, Kunde als primäre Information (inkl. Host als sekundäre Zeile) hervorgehoben, großes zentriertes OS-Logo entfernt und als kompakter OS-Chip in die Meta-Leiste verlegt. Zusätzlich vier UX-Anpassungen realisiert: stärkere aktive Host-Hervorhebung bei ruhigeren passiven Host-Cards, klarere Sidebar-Tab-Hierarchie, sowie besser lesbare Filesystem-Chart-Karten mit stärkerer Titel/Meta/Footline-Struktur. |
 | 1.7.181 | 01.06.2026 | KPI-Trendpfeile visuell nachgeschärft: Pfeil wird jetzt direkt im Werte-Span neben der Zahl gerendert (keine zweite Zeile mehr) und mit höherem Schriftgewicht/Grösse dargestellt, damit der Trend sofort erkennbar ist. |
