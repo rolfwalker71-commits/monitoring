@@ -11816,6 +11816,17 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
   box-shadow: 0 14px 30px rgba(20, 45, 77, 0.12);
 }
 
+.brand-kicker {
+  display: none;
+}
+
+.brand-text h1 {
+  font-size: 34px;
+  line-height: 0.94;
+  font-weight: 900;
+  letter-spacing: -0.042em;
+}
+
 .brand-user {
   gap: 8px;
   padding: 0;

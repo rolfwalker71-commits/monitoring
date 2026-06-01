@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.176**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.176**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.177**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.177**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.177 | 01.06.2026 | Header-Branding angepasst: Zeile „ANG Monitoring Suite“ im Hauptheader entfernt und der Titel „System Infoboard“ sichtbar grösser sowie kräftiger gesetzt (höhere Schriftgrösse und Font-Weight), damit die Hauptüberschrift klarer dominiert. |
 | 1.7.176 | 01.06.2026 | KPI-Breitenkorrektur nach Oversize-Feedback: Start-/Fallback-Breite reduziert und die Breiten-Synchronisierung auf verfügbare Strip-Breite begrenzt (`fit-to-row`), sodass die KPI-Karten wieder vollständig in eine Zeile passen. Persistierte Altwerte werden dabei automatisch auf die neue Maximalbreite eingegrenzt. |
 | 1.7.175 | 01.06.2026 | KPI-Startup beruhigt: Karten erscheinen jetzt direkt in stabiler Zielgrösse statt im Ladeverlauf mehrfach sichtbar zu wachsen. Umgesetzt durch festen Initial-Fallback (`--kpi-uniform-card-width`) plus monotone Breiten-Synchronisierung ohne vorheriges Zurücksetzen auf Auto, inklusive Persistenz der zuletzt ermittelten Breite und Re-Sync nach Font-Ready. |
 | 1.7.174 | 01.06.2026 | Header-Feinschliff nach UI-Feedback: KPI-Kartenabstände im finalen Header-Override vereinheitlicht (Sonderabstand bei Gruppenstart entfernt), sodass die Karten durchgehend gleichmässig getrennt sind. Zusätzlich wurde die obere Icon-Leiste als gemeinsame Gesamtkarte gestaltet (ein Container mit integrierten Icon-Buttons in Light/Dark), statt wie einzelne isolierte Pills zu wirken. |
