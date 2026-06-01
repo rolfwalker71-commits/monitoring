@@ -10793,8 +10793,7 @@ async function loadReportsForHost(options = {}) {
     return;
   }
 
-  const selectedLabel = state.selectedDisplayName || state.selectedHost || state.selectedHostUid;
-  selectedHostTitle.textContent = `🗂️ ${selectedLabel}`;
+  selectedHostTitle.textContent = "🗂️ Meldungen";
   list.innerHTML = "<p class=\"muted\">Lade Daten...</p>";
   count.textContent = "";
   updateSelectedHostControls();
@@ -10863,7 +10862,7 @@ async function loadReportsForHost(options = {}) {
     const shownIndex = state.reportOffset + 1;
     count.textContent = `Meldung ${shownIndex} von ${state.totalReports}`;
     state.selectedDisplayName = String(reports[0].display_name || reports[0].hostname || state.selectedHost);
-    selectedHostTitle.textContent = `🗂️ ${state.selectedDisplayName}`;
+    selectedHostTitle.textContent = "🗂️ Meldungen";
     state.currentReport = reports[0];
     list.innerHTML = renderReportCard(state.currentReport);
     wireSapVersionMapCopyButtons(list);

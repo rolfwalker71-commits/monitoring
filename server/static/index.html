@@ -1183,8 +1183,8 @@
             <div class="section-head">
               <div class="title-row">
                 <h3 id="selectedHostTitle">Meldungen</h3>
-                <div id="headerFirstRowControls" class="header-first-row-controls hidden"></div>
                 <div class="title-row-tools">
+                  <div id="headerFirstRowControls" class="header-first-row-controls hidden"></div>
                   <label class="auto-refresh-interval-label" for="autoRefreshIntervalSelect" title="Auto-Refresh Intervall">
                     <select id="autoRefreshIntervalSelect" class="auto-refresh-interval-select">
                       <option value="30">⟳ 30s</option>
@@ -1202,9 +1202,11 @@
                 <img id="reportHeaderOsLogo" class="report-header-os-logo" alt="">
               </div>
               <div class="report-meta-row">
-                <div id="selectedHostControls" class="selected-host-controls hidden"></div>
                 <div id="reportCustomerChip" class="report-customer-chip-wrap hidden"></div>
-                <p id="reportCount" class="count report-count-inline"></p>
+                <div class="report-meta-actions-card">
+                  <div id="selectedHostControls" class="selected-host-controls hidden"></div>
+                  <p id="reportCount" class="count report-count-inline"></p>
+                </div>
               </div>
             </div>
 
