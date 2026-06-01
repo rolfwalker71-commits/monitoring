@@ -5899,20 +5899,6 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
   justify-self: start;
 }
 
-#reportJumpHostUidChip {
-  display: inline-flex;
-  align-items: center;
-}
-
-.report-jump-host-id {
-  font-weight: 800;
-  height: 22px;
-  min-height: 22px;
-  line-height: 20px;
-  font-size: 11px;
-  max-width: 320px;
-}
-
 .report-jump-control {
   display: inline-block;
   flex: 0 0 auto;

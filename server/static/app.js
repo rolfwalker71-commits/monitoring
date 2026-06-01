@@ -9157,16 +9157,7 @@ function renderHeaderFirstRowControls(host) {
 }
 
 function renderReportJumpHostUidChip(host) {
-  if (!host) {
-    return "";
-  }
-  const hostIdentity = resolveHostIdentity(host);
-  if (!hostIdentity) {
-    return "";
-  }
-  const hostLabelRaw = String(host.display_name || host.hostname || hostIdentity || "Host").trim() || "Host";
-  const hostLabelShort = hostLabelRaw.length > 38 ? `${hostLabelRaw.slice(0, 35)}...` : hostLabelRaw;
-  return `<span class="selected-host-meta-chip report-jump-host-id" title="Aktueller Host">🖥️ <span title="${escapeHtml(hostLabelRaw)}">${escapeHtml(hostLabelShort)}</span></span>`;
+  return "";
 }
 
 function updateReportJumpHostUidChip(host) {

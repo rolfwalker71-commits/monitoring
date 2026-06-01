@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monitoring Font Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Manrope:wght@500;600;700;800&family=Source+Sans+3:wght@500;600;700;800&family=Red+Hat+Text:wght@500;600;700;800&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #eef2f7;
+      --card: #d3d9e2;
+      --line: #a6bad6;
+      --ink: #163d71;
+      --muted: #4e6a8d;
+      --chip: #eef3fb;
+      --chip-line: #9eb8dc;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 14% 0%, #f4f7fc 0%, var(--bg) 45%, #e4eaf4 100%);
+      color: #223651;
+      font-family: "Plus Jakarta Sans", sans-serif;
+      padding: 20px;
+    }
+
+    .wrap {
+      max-width: 1500px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+
+    .head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .head h1 {
+      margin: 0;
+      font-size: 24px;
+      color: #1f3f6c;
+      letter-spacing: -0.01em;
+    }
+
+    .head p {
+      margin: 0;
+      font-size: 14px;
+      color: #536f95;
+      font-weight: 600;
+    }
+
+    .font-grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+    }
+
+    .sample {
+      border: 1px solid #bfd0e7;
+      border-radius: 16px;
+      background: linear-gradient(180deg, #edf3fb 0%, #e6edf7 100%);
+      box-shadow: 0 10px 24px rgba(41, 73, 112, 0.08);
+      overflow: hidden;
+    }
+
+    .sample-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #c4d4e9;
+      background: #f4f8fe;
+    }
+
+    .sample-head strong {
+      font-size: 15px;
+      color: #1f3f6c;
+    }
+
+    .sample-head span {
+      font-size: 12px;
+      color: #5a759a;
+      font-weight: 700;
+    }
+
+    .ui {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: minmax(0, 1fr) 380px;
+    }
+
+    .left,
+    .right {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--card);
+      min-height: 96px;
+      padding: 10px 14px;
+    }
+
+    .label {
+      font-size: 29px;
+      font-weight: 800;
+      color: var(--ink);
+      letter-spacing: -0.02em;
+      line-height: 1;
+      margin: 0;
+    }
+
+    .sub {
+      margin: 4px 0 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--muted);
+      line-height: 1.05;
+    }
+
+    .kunde {
+      margin: 0 0 4px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 800;
+      color: #58739a;
+    }
+
+    .count {
+      margin: 12px 0 0;
+      text-align: right;
+      font-size: 14px;
+      font-weight: 800;
+      color: #3f6291;
+    }
+
+    .chip-row,
+    .action-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .action-row {
+      justify-content: space-between;
+      margin-top: 10px;
+    }
+
+    .actions-right {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+
+    .chip,
+    .btn,
+    .icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 30px;
+      border-radius: 999px;
+      border: 1px solid var(--chip-line);
+      background: var(--chip);
+      color: #274a77;
+      padding: 0 14px;
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .icon {
+      min-width: 34px;
+      width: 34px;
+      padding: 0;
+      font-size: 16px;
+    }
+
+    .sample-jakarta { font-family: "Plus Jakarta Sans", sans-serif; }
+    .sample-manrope { font-family: "Manrope", sans-serif; }
+    .sample-source { font-family: "Source Sans 3", sans-serif; }
+    .sample-redhat { font-family: "Red Hat Text", sans-serif; }
+    .sample-sora { font-family: "Sora", sans-serif; }
+
+    @media (max-width: 980px) {
+      .font-grid { grid-template-columns: 1fr; }
+      .ui { grid-template-columns: 1fr; }
+      .right { min-height: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <h1>Font-Vergleich: Monitoring Header Mockup</h1>
+      <p>Layoutpart: Kundenkarte links + zweizeilige Controls-Karte rechts</p>
+    </div>
+
+    <section class="font-grid">
+      <article class="sample sample-jakarta">
+        <div class="sample-head"><strong>Plus Jakarta Sans</strong><span>modern, technisch, klar</span></div>
+        <div class="ui">
+          <div class="left">
+            <p class="kunde">Kunde</p>
+            <p class="label">Rinco Ultrasonics</p>
+            <p class="sub">Host: SAP Test</p>
+            <p class="count">Meldung 1 von 937</p>
+          </div>
+          <div class="right">
+            <div class="chip-row">
+              <span class="chip">API</span><span class="chip">Linux</span><span class="chip">Test</span><span class="chip">📦 937</span>
+            </div>
+            <div class="action-row">
+              <div><span class="btn">⟳ 5 Min.</span> <span class="btn">Export JSON</span></div>
+              <div class="actions-right"><span class="icon">✏️</span><span class="icon">🫣</span><span class="icon">★</span></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="sample sample-manrope">
+        <div class="sample-head"><strong>Manrope</strong><span>freundlich, sehr gut lesbar</span></div>
+        <div class="ui">
+          <div class="left"><p class="kunde">Kunde</p><p class="label">Rinco Ultrasonics</p><p class="sub">Host: SAP Test</p><p class="count">Meldung 1 von 937</p></div>
+          <div class="right"><div class="chip-row"><span class="chip">API</span><span class="chip">Linux</span><span class="chip">Test</span><span class="chip">📦 937</span></div><div class="action-row"><div><span class="btn">⟳ 5 Min.</span> <span class="btn">Export JSON</span></div><div class="actions-right"><span class="icon">✏️</span><span class="icon">🫣</span><span class="icon">★</span></div></div></div>
+        </div>
+      </article>
+
+      <article class="sample sample-source">
+        <div class="sample-head"><strong>Source Sans 3</strong><span>neutral, enterprise, ruhig</span></div>
+        <div class="ui">
+          <div class="left"><p class="kunde">Kunde</p><p class="label">Rinco Ultrasonics</p><p class="sub">Host: SAP Test</p><p class="count">Meldung 1 von 937</p></div>
+          <div class="right"><div class="chip-row"><span class="chip">API</span><span class="chip">Linux</span><span class="chip">Test</span><span class="chip">📦 937</span></div><div class="action-row"><div><span class="btn">⟳ 5 Min.</span> <span class="btn">Export JSON</span></div><div class="actions-right"><span class="icon">✏️</span><span class="icon">🫣</span><span class="icon">★</span></div></div></div>
+        </div>
+      </article>
+
+      <article class="sample sample-redhat">
+        <div class="sample-head"><strong>Red Hat Text</strong><span>kompakt, seriös, stark für UI</span></div>
+        <div class="ui">
+          <div class="left"><p class="kunde">Kunde</p><p class="label">Rinco Ultrasonics</p><p class="sub">Host: SAP Test</p><p class="count">Meldung 1 von 937</p></div>
+          <div class="right"><div class="chip-row"><span class="chip">API</span><span class="chip">Linux</span><span class="chip">Test</span><span class="chip">📦 937</span></div><div class="action-row"><div><span class="btn">⟳ 5 Min.</span> <span class="btn">Export JSON</span></div><div class="actions-right"><span class="icon">✏️</span><span class="icon">🫣</span><span class="icon">★</span></div></div></div>
+        </div>
+      </article>
+
+      <article class="sample sample-sora">
+        <div class="sample-head"><strong>Sora</strong><span>prägnant, modern, markanter Look</span></div>
+        <div class="ui">
+          <div class="left"><p class="kunde">Kunde</p><p class="label">Rinco Ultrasonics</p><p class="sub">Host: SAP Test</p><p class="count">Meldung 1 von 937</p></div>
+          <div class="right"><div class="chip-row"><span class="chip">API</span><span class="chip">Linux</span><span class="chip">Test</span><span class="chip">📦 937</span></div><div class="action-row"><div><span class="btn">⟳ 5 Min.</span> <span class="btn">Export JSON</span></div><div class="actions-right"><span class="icon">✏️</span><span class="icon">🫣</span><span class="icon">★</span></div></div></div>
+        </div>
+      </article>
+    </section>
+  </div>
+</body>
+</html>
