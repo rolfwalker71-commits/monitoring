@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.220**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.220**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.221**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.221**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.221 | 01.06.2026 | Nach Login/Logout wird die Oberfläche wieder explizit auf die normale Übersicht zurückgesetzt, damit die App nicht in einer Full-Panel-Ansicht hängenbleibt und nur der Header sichtbar ist. |
 | 1.7.220 | 01.06.2026 | Admin-User-Fokus markiert den gewählten Benutzer jetzt direkt im Options-Rendering, damit die Auswahl beim Re-Render nicht mehr visuell auf **„Alle Benutzer“** zurückspringt. |
 | 1.7.219 | 01.06.2026 | Admin-User-Fokus behält die ausgewählte Benutzerzeile jetzt stabil über Re-Renders und Reloads hinweg; die Auswahl springt nicht mehr auf **„Alle Benutzer“** zurück. |
 | 1.7.218 | 01.06.2026 | Admin-User-Fokus lädt beim Benutzerwechsel jetzt den frischen Abo-Stand vom Server neu und bietet einen Button **„Alle Hosts anzeigen“** für die globale Hostliste unabhängig vom Land. |

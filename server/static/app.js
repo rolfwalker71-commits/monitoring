@@ -2877,6 +2877,8 @@ async function loginWebClient() {
   }
 
   state.authUser = asText(data.username, username);
+  state.viewMode = "overview";
+  state.overviewSection = "main";
   updateSessionExpiry(
     asText(data.expires_at_utc, ""),
     Number.parseInt(String(data.inactivity_timeout_minutes || ""), 10)
@@ -2913,6 +2915,8 @@ async function logoutWebClient() {
   updateAutoRefreshStatus(null);
   state.authUser = "";
   state.isAdmin = false;
+  state.viewMode = "overview";
+  state.overviewSection = "main";
   resetUserScopedPreferences();
   setAuthUiState(false);
   const brandUserBadge = document.getElementById("brandUserBadge");
