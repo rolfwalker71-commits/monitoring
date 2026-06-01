@@ -91,29 +91,89 @@ let hostLicenseHoverHideTimerId = null;
 let hostLicenseHoverActiveHost = "";
 let changelogRebuildPollTimerId = null;
 let headerKpiWidthSyncFrameId = null;
+const HEADER_KPI_WIDTH_STORAGE_KEY = "monitoring.headerKpiUniformWidth";
+const HEADER_KPI_DEFAULT_WIDTH_PX = 158;
+const HEADER_KPI_MIN_WIDTH_PX = 120;
+const HEADER_KPI_MAX_WIDTH_PX = 280;
 const hostLicenseHoverCache = new Map();
 const SESSION_REFRESH_INTERVAL_SECONDS = 240;
 
+function clampHeaderKpiWidth(widthValue) {
+  const numeric = Number(widthValue || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return 0;
+  }
+  return Math.max(HEADER_KPI_MIN_WIDTH_PX, Math.min(HEADER_KPI_MAX_WIDTH_PX, Math.round(numeric)));
+}
+
+function readStoredHeaderKpiWidth() {
+  try {
+    return clampHeaderKpiWidth(window.localStorage.getItem(HEADER_KPI_WIDTH_STORAGE_KEY));
+  } catch {
+    return 0;
+  }
+}
+
+function persistHeaderKpiWidth(widthValue) {
+  const clamped = clampHeaderKpiWidth(widthValue);
+  if (!clamped) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(HEADER_KPI_WIDTH_STORAGE_KEY, String(clamped));
+  } catch {
+    // Storage might be unavailable in hardened browser contexts.
+  }
+}
+
+function applyInitialHeaderKpiWidth() {
+  const strips = Array.from(document.querySelectorAll(".panel-header .panel-actions .header-kpi-strip"));
+  if (strips.length === 0) {
+    return;
+  }
+  const storedWidth = readStoredHeaderKpiWidth();
+  const initialWidth = clampHeaderKpiWidth(storedWidth || HEADER_KPI_DEFAULT_WIDTH_PX);
+  for (const strip of strips) {
+    if (!strip.style.getPropertyValue("--kpi-uniform-card-width")) {
+      strip.style.setProperty("--kpi-uniform-card-width", `${initialWidth}px`);
+    }
+  }
+}
+
 function syncHeaderKpiUniformCardWidth() {
   const strips = Array.from(document.querySelectorAll(".panel-header .panel-actions .header-kpi-strip"));
+  const storedWidth = readStoredHeaderKpiWidth();
+  let widthToPersist = 0;
   for (const strip of strips) {
-    strip.style.removeProperty("--kpi-uniform-card-width");
+    const cssCurrent = parseFloat(strip.style.getPropertyValue("--kpi-uniform-card-width") || "0");
+    const currentWidth = clampHeaderKpiWidth(cssCurrent || storedWidth || HEADER_KPI_DEFAULT_WIDTH_PX);
     const cards = Array.from(
       strip.querySelectorAll(":scope > .header-stat-chip:not(.header-stat-chip-license):not(.hidden)")
     );
+    let nextWidth = currentWidth;
     if (cards.length === 0) {
+      strip.style.setProperty("--kpi-uniform-card-width", `${nextWidth}px`);
+      widthToPersist = Math.max(widthToPersist, nextWidth);
       continue;
     }
-    let maxWidth = 0;
+    let maxMeasuredWidth = 0;
     for (const card of cards) {
-      const width = Math.ceil(card.getBoundingClientRect().width || 0);
-      if (width > maxWidth) {
-        maxWidth = width;
+      const renderedWidth = Math.ceil(card.getBoundingClientRect().width || 0);
+      const naturalContentWidth = Math.ceil(card.scrollWidth || 0) + 2;
+      const width = Math.max(renderedWidth, naturalContentWidth);
+      if (width > maxMeasuredWidth) {
+        maxMeasuredWidth = width;
       }
     }
-    if (maxWidth > 0) {
-      strip.style.setProperty("--kpi-uniform-card-width", `${maxWidth}px`);
+    if (maxMeasuredWidth > 0) {
+      // Keep width monotonic during load to avoid visible multi-step shrinking/growing.
+      nextWidth = clampHeaderKpiWidth(Math.max(currentWidth, maxMeasuredWidth));
     }
+    strip.style.setProperty("--kpi-uniform-card-width", `${nextWidth}px`);
+    widthToPersist = Math.max(widthToPersist, nextWidth);
+  }
+  if (widthToPersist > 0) {
+    persistHeaderKpiWidth(widthToPersist);
   }
 }
 
@@ -14908,7 +14968,15 @@ async function init() {
   const sapLicenseTypeMapPromise = loadSapLicenseTypeMap();
 
   wireEvents();
+  applyInitialHeaderKpiWidth();
   window.addEventListener("resize", scheduleHeaderKpiUniformCardWidthSync);
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => {
+      scheduleHeaderKpiUniformCardWidthSync();
+    }).catch(() => {
+      // Ignore font readiness failures; regular sync paths still run.
+    });
+  }
   mountAdminSettingsIntoGlobalView();
   updateViewMode();
   updateOverviewSection();

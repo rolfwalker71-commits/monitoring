@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.174**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.174**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.175**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.175**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.175 | 01.06.2026 | KPI-Startup beruhigt: Karten erscheinen jetzt direkt in stabiler Zielgrösse statt im Ladeverlauf mehrfach sichtbar zu wachsen. Umgesetzt durch festen Initial-Fallback (`--kpi-uniform-card-width`) plus monotone Breiten-Synchronisierung ohne vorheriges Zurücksetzen auf Auto, inklusive Persistenz der zuletzt ermittelten Breite und Re-Sync nach Font-Ready. |
 | 1.7.174 | 01.06.2026 | Header-Feinschliff nach UI-Feedback: KPI-Kartenabstände im finalen Header-Override vereinheitlicht (Sonderabstand bei Gruppenstart entfernt), sodass die Karten durchgehend gleichmässig getrennt sind. Zusätzlich wurde die obere Icon-Leiste als gemeinsame Gesamtkarte gestaltet (ein Container mit integrierten Icon-Buttons in Light/Dark), statt wie einzelne isolierte Pills zu wirken. |
 | 1.7.173 | 01.06.2026 | KPI-Karten auf Wunsch gleichbreit umgesetzt: alle sichtbaren KPI-Chips erhalten jetzt dynamisch die Breite der jeweils breitesten Karte im Strip. Implementiert über JS-Messung + CSS-Variable (`--kpi-uniform-card-width`) inkl. Re-Sync bei KPI-Updates und Window-Resize. Ergebnis: optisch einheitliche Kartenbreiten ohne willkürlichen Stretch-Mix. |
 | 1.7.172 | 01.06.2026 | KPI-Strip final kompakt gestellt: im finalen Header-Override von gleichbreiten Karten (`1fr`) auf inhaltsbreite Karten (`max-content`) umgestellt und Typografie/Padding weiter reduziert. Ergebnis: deutlich schmalere KPI-Karten, kein überbreiter Stretch-Effekt und kein sichtbarer Scrollbalken im oberen KPI-Bereich. |
