@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.210**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.210**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.211**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.211**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.211 | 01.06.2026 | Host-Interessen-Selector auf eindeutige Hostnamen konsolidiert (Dedup pro Hostname), damit Summary-Zähler (X von Y) und Filter **„Nur nicht markierte Hosts zeigen“** konsistent auf derselben Hostbasis arbeiten. |
 | 1.7.210 | 01.06.2026 | Host-Interessen-Panel optisch/funktional verfeinert: obere Länderchips horizontal sauber ausgerichtet (Flagge/Label/Anzahl), Kundenzeile ohne alten gelben Chip-Look, Typografie angepasst (Kundenname größer, Hostname kleiner) und neuer Filter **„Nur nicht markierte Hosts zeigen“** ergänzt, um fehlende Hosts sofort sichtbar zu machen. |
 | 1.7.209 | 01.06.2026 | Host-Interessen UI nachgeschärft: vertikale Zentrierung, sauberer Abstand zwischen Flagge und Anzahl, untere Ländergruppen ohne redundante Länderkürzel (nur Flagge + Anzahl). Zusätzlich Länderklick schaltet alle Hosts des Landes aktiv (inkl. Aufhebung bestehender Ausnahmen für dieses Land). Neue Hosts gelten im Mailpfad standardmäßig als aktiv (opt-out per expliziter Abwahl), und die UI zeigt klar „X von Y Hosts im Mailversand“. |
 | 1.7.208 | 01.06.2026 | Alter Einzelhost-Flow in den Host-Interessen entfernt: aktive Logik nutzt nur noch Länder-Vorselektion plus manuelle Host-Ergänzungen/Ausnahmen. `host_interest_hosts` ist im Laufzeitpfad deaktiviert (nur noch einmalige Migration alter Daten in `host_interest_host_additions`). |

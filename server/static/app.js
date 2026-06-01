@@ -751,9 +751,41 @@ function getHostInterestManualExclusions() {
 }
 
 function getHostInterestSelectorHosts() {
-  return Array.isArray(state.hostInterestTargetHosts) && state.hostInterestTargetHosts.length > 0
+  const rawHosts = Array.isArray(state.hostInterestTargetHosts) && state.hostInterestTargetHosts.length > 0
     ? state.hostInterestTargetHosts
     : (state.hosts || []);
+  const byHostname = new Map();
+
+  for (const host of rawHosts) {
+    const hostname = String(host?.hostname || "").trim();
+    if (!hostname) continue;
+
+    const existing = byHostname.get(hostname);
+    if (!existing) {
+      byHostname.set(hostname, {
+        ...host,
+        hostname,
+        display_name: String(host?.display_name || "").trim() || hostname,
+        customer_name: String(host?.customer_name || "").trim(),
+        country_code: getHostInterestCountryCode(host),
+      });
+      continue;
+    }
+
+    const nextDisplayName = String(existing.display_name || "").trim() || String(host?.display_name || "").trim() || hostname;
+    const nextCustomerName = String(existing.customer_name || "").trim() || String(host?.customer_name || "").trim();
+    const nextCountryCode = String(existing.country_code || "").trim() || getHostInterestCountryCode(host);
+    byHostname.set(hostname, {
+      ...existing,
+      ...host,
+      hostname,
+      display_name: nextDisplayName,
+      customer_name: nextCustomerName,
+      country_code: nextCountryCode,
+    });
+  }
+
+  return Array.from(byHostname.values());
 }
 
 function getEffectiveHostInterestHosts() {
