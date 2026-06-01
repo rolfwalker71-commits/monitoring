@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.195**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.195**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.196**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.196**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.196 | 01.06.2026 | Globaler Font erneut auf **Plus Jakarta Sans** umgestellt. Die zuvor gesetzte verkleinerte Basisgröße (ca. 2px kleiner) wurde **beibehalten**; es wurden nur Schriftfamilie/Import geändert, keine zusätzlichen Größen- oder Gewichtsanpassungen. |
 | 1.7.195 | 01.06.2026 | Nächster Font-Kandidat global aktiviert: **Red Hat Text** (Import + Sans-Familien in der UI-CSS). Zusätzlich globale Basis um ca. **2px kleiner** gestellt über zentrale Defaults (`body` Font-Size sowie `--btn-height`/`--chip-height`). Größen/Gewichte einzelner Komponenten ansonsten unverändert. |
 | 1.7.194 | 01.06.2026 | Globale Schrift von Manrope auf **Source Sans 3** umgestellt (Google-Font-Import im Haupt-HTML + Sans-Familien in der UI-CSS). Schriftgrößen und Schriftgewichte unverändert belassen. |
 | 1.7.193 | 01.06.2026 | Globale Schrift von Plus Jakarta Sans auf **Manrope** umgestellt (inkl. Google-Font-Import im Haupt-HTML und Sans-Familien in der UI-CSS). Schriftgrößen und Schriftgewichte unverändert belassen, wie gewünscht. |
