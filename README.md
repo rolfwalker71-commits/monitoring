@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.203**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.203**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.204**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.204**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.204 | 01.06.2026 | Header-Kundenkarte nachgeschärft: zusätzlicher vertikaler Abstand unter dem Kundennamen (Bottom-Spacer), damit die Hostbezeichnung zuverlässig darunter bleibt und nicht mehr überdeckt wird. |
 | 1.7.203 | 01.06.2026 | Header-Kundenkarte überarbeitet: Label **„Kunde“** entfernt. Zusätzlich Überlappung/Abschneiden von Kundenname und Hostzeile behoben, indem die Texte mehrzeilig umbrechen dürfen (kein erzwungenes Ellipsis mehr) und in der Karte zusätzlicher unterer Platz für den rechts unten positionierten Meldungszähler reserviert wird. |
 | 1.7.202 | 01.06.2026 | `Top Prozesse`-Tabelle nach UI-Feedback komprimiert: Spaltenbreiten deutlich verschlankt (PID/User/CPU/RAM/RSS), damit mehr Platz für den Inhalt entsteht. `Command` wird nun in der Zelle gekürzt (Ellipsis), der vollständige Wert bleibt per Hover sichtbar (über vorhandenes `title`). |
 | 1.7.201 | 01.06.2026 | Regression-Fix nach Detail-Layout-Anpassung: Tabellen in `Einzelmeldungen` brachen Zelleninhalte zeichenweise vertikal um (u. a. bei Top Prozesse). Korrigiert durch stabiles Tabellenlayout (`table-layout: fixed`), `nowrap` für normale Spalten und gezielten Umbruch nur in der letzten, langen Textspalte. Horizontales Verhalten der Wrap-Container wieder auf `auto` gesetzt. |

@@ -14662,8 +14662,10 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .report-customer-chip-wrap .selected-host-meta-card-main {
+  display: block;
   font-size: 34px;
   line-height: 1.02;
+  margin-bottom: 8px;
   color: #163b6b;
   font-weight: 900;
   letter-spacing: -0.02em;
