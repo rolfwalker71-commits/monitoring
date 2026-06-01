@@ -698,7 +698,7 @@ async function loadUserPreferences() {
         .filter((item) => /^[A-Z]{2}$/.test(item))
     );
     const parsedHostAdditions = new Set(
-      String(prefs.host_interest_host_additions || prefs.host_interest_hosts || "")
+      String(prefs.host_interest_host_additions || "")
         .split(",")
         .map((item) => String(item || "").trim())
         .filter((item) => item.length > 0)
@@ -712,14 +712,6 @@ async function loadUserPreferences() {
     state.hostInterestCountryCodes = parsedCountryCodes;
     state.hostInterestHostAdditions = parsedHostAdditions;
     state.hostInterestHostExclusions = parsedHostExclusions;
-    if (state.hostInterestCountryCodes.size === 0 && state.hostInterestHostAdditions.size === 0 && state.hostInterestHostExclusions.size === 0) {
-      state.hostInterestHostAdditions = new Set(
-        String(prefs.host_interest_hosts || "")
-          .split(",")
-          .map((item) => item.trim())
-          .filter((item) => item.length > 0)
-      );
-    }
     state.hostInterestHosts = getEffectiveHostInterestHosts();
     state.hostInterestsLoadedFor = String(state.authDisplayName || state.authUser || "").trim();
     updateCriticalTrendsMetricsCheckboxes();
@@ -2633,7 +2625,6 @@ async function saveHostInterestsPreferences() {
     host_interest_country_codes: Array.from(getHostInterestSelectedCountries()).sort().join(","),
     host_interest_host_additions: Array.from(getHostInterestManualAdditions()).sort().join(","),
     host_interest_host_exclusions: Array.from(getHostInterestManualExclusions()).sort().join(","),
-    host_interest_hosts: [...state.hostInterestHosts].sort().join(","),
   };
   const prefsResponse = await fetch("/api/v1/user-preferences", {
     method: "POST",
@@ -3029,12 +3020,25 @@ async function loadUserProfile(force = false) {
         const metrics = metricsStr.split(",").map((m) => m.trim()).filter((m) => m.length > 0);
         state.criticalTrendsMetrics = metrics.length > 0 ? metrics : ["filesystem"];
         state.hostInterestMode = normalizeHostInterestMode(prefs.host_interest_mode || "all");
-        state.hostInterestHosts = new Set(
-          String(prefs.host_interest_hosts || "")
+        state.hostInterestCountryCodes = new Set(
+          String(prefs.host_interest_country_codes || "")
             .split(",")
-            .map((item) => item.trim())
+            .map((item) => String(item || "").trim().toUpperCase())
+            .filter((item) => /^[A-Z]{2}$/.test(item))
+        );
+        state.hostInterestHostAdditions = new Set(
+          String(prefs.host_interest_host_additions || "")
+            .split(",")
+            .map((item) => String(item || "").trim())
             .filter((item) => item.length > 0)
         );
+        state.hostInterestHostExclusions = new Set(
+          String(prefs.host_interest_host_exclusions || "")
+            .split(",")
+            .map((item) => String(item || "").trim())
+            .filter((item) => item.length > 0)
+        );
+        syncEffectiveHostInterestSelection();
       }
     } catch (_error) {
       // Keep existing in-memory preferences if loading fails.

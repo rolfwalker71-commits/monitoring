@@ -1276,7 +1276,6 @@ def init_db() -> None:
                 username TEXT PRIMARY KEY,
                 critical_trends_metrics TEXT NOT NULL DEFAULT 'filesystem',
                 host_interest_mode TEXT NOT NULL DEFAULT 'all',
-                host_interest_hosts TEXT NOT NULL DEFAULT '',
                 host_interest_country_codes TEXT NOT NULL DEFAULT '',
                 host_interest_host_additions TEXT NOT NULL DEFAULT '',
                 host_interest_host_exclusions TEXT NOT NULL DEFAULT '',
@@ -1295,6 +1294,17 @@ def init_db() -> None:
             conn.execute("ALTER TABLE user_preferences ADD COLUMN host_interest_host_additions TEXT NOT NULL DEFAULT ''")
         if "host_interest_host_exclusions" not in existing_user_preferences_columns:
             conn.execute("ALTER TABLE user_preferences ADD COLUMN host_interest_host_exclusions TEXT NOT NULL DEFAULT ''")
+        if "host_interest_hosts" in existing_user_preferences_columns:
+            conn.execute(
+                """
+                UPDATE user_preferences
+                SET host_interest_host_additions = host_interest_hosts
+                WHERE COALESCE(host_interest_hosts, '') != ''
+                  AND COALESCE(host_interest_country_codes, '') = ''
+                  AND COALESCE(host_interest_host_additions, '') = ''
+                  AND COALESCE(host_interest_host_exclusions, '') = ''
+                """
+            )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS filesystem_visibility (
@@ -4748,7 +4758,6 @@ def get_user_preferences(conn: sqlite3.Connection, username: str) -> dict:
         """
         SELECT COALESCE(critical_trends_metrics, 'filesystem'),
                COALESCE(host_interest_mode, 'all'),
-               COALESCE(host_interest_hosts, ''),
                COALESCE(host_interest_country_codes, ''),
                COALESCE(host_interest_host_additions, ''),
                COALESCE(host_interest_host_exclusions, ''),
@@ -4762,7 +4771,6 @@ def get_user_preferences(conn: sqlite3.Connection, username: str) -> dict:
         return {
             "critical_trends_metrics": "filesystem",
             "host_interest_mode": "all",
-            "host_interest_hosts": "",
             "host_interest_country_codes": "",
             "host_interest_host_additions": "",
             "host_interest_host_exclusions": "",
@@ -4786,11 +4794,10 @@ def get_user_preferences(conn: sqlite3.Connection, username: str) -> dict:
     return {
         "critical_trends_metrics": str(row[0] or "filesystem").strip() or "filesystem",
         "host_interest_mode": mode,
-        "host_interest_hosts": str(row[2] or ""),
-        "host_interest_country_codes": _normalize_csv(row[3]),
-        "host_interest_host_additions": str(row[4] or ""),
-        "host_interest_host_exclusions": str(row[5] or ""),
-        "updated_at_utc": str(row[6] or ""),
+        "host_interest_country_codes": _normalize_csv(row[2]),
+        "host_interest_host_additions": str(row[3] or ""),
+        "host_interest_host_exclusions": str(row[4] or ""),
+        "updated_at_utc": str(row[5] or ""),
     }
 
 
@@ -4798,7 +4805,6 @@ def save_user_preferences(conn: sqlite3.Connection, username: str, payload: dict
     existing = get_user_preferences(conn, username)
     metrics = str(payload.get("critical_trends_metrics", existing.get("critical_trends_metrics", "filesystem")) or "filesystem").strip()
     mode = str(payload.get("host_interest_mode", existing.get("host_interest_mode", "all")) or "all").strip().lower()
-    hosts = str(payload.get("host_interest_hosts", existing.get("host_interest_hosts", "")) or "").strip()
     country_codes = str(payload.get("host_interest_country_codes", existing.get("host_interest_country_codes", "")) or "").strip()
     host_additions = str(payload.get("host_interest_host_additions", existing.get("host_interest_host_additions", "")) or "").strip()
     host_exclusions = str(payload.get("host_interest_host_exclusions", existing.get("host_interest_host_exclusions", "")) or "").strip()
@@ -4811,23 +4817,21 @@ def save_user_preferences(conn: sqlite3.Connection, username: str, payload: dict
             username,
             critical_trends_metrics,
             host_interest_mode,
-            host_interest_hosts,
             host_interest_country_codes,
             host_interest_host_additions,
             host_interest_host_exclusions,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             critical_trends_metrics = excluded.critical_trends_metrics,
             host_interest_mode = excluded.host_interest_mode,
-            host_interest_hosts = excluded.host_interest_hosts,
             host_interest_country_codes = excluded.host_interest_country_codes,
             host_interest_host_additions = excluded.host_interest_host_additions,
             host_interest_host_exclusions = excluded.host_interest_host_exclusions,
             updated_at_utc = excluded.updated_at_utc
         """,
-        (username, metrics or "filesystem", mode, hosts, country_codes, host_additions, host_exclusions, now_utc),
+        (username, metrics or "filesystem", mode, country_codes, host_additions, host_exclusions, now_utc),
     )
     return get_user_preferences(conn, username)
 
@@ -6509,7 +6513,24 @@ def parse_critical_trends_metrics(value: object) -> set[str]:
 
 def get_user_trend_host_scope(conn: sqlite3.Connection, username: str) -> tuple[set[str] | None, set[str]]:
     preferences = get_user_preferences(conn, username)
-    interested_hosts = parse_host_csv(preferences.get("host_interest_hosts", ""))
+    selected_country_codes = {
+        str(item or "").strip().upper()
+        for item in str(preferences.get("host_interest_country_codes", "") or "").split(",")
+        if str(item or "").strip() and re.fullmatch(r"[A-Z]{2}", str(item or "").strip().upper())
+    }
+    host_additions = parse_host_csv(preferences.get("host_interest_host_additions", ""))
+    host_exclusions = parse_host_csv(preferences.get("host_interest_host_exclusions", ""))
+    interested_hosts = {
+        hostname
+        for hostname in host_additions
+        if hostname and hostname not in host_exclusions
+    }
+    if selected_country_codes:
+        for host_item in get_host_interest_targets(conn):
+            hostname = str(host_item.get("hostname", "") or "").strip()
+            country_code = str(host_item.get("country_code", "") or "").strip().upper()
+            if hostname and country_code in selected_country_codes and hostname not in host_exclusions:
+                interested_hosts.add(hostname)
     mode = str(preferences.get("host_interest_mode", "all") or "all").strip().lower()
     if mode == "interested_only" and interested_hosts:
         return interested_hosts, interested_hosts
