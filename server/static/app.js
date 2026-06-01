@@ -9209,7 +9209,6 @@ function renderSelectedHostCustomerChip(host) {
     ? `Kunde · Maringo ${customerProject}`
     : "Kunde";
   return `<span class="selected-host-meta-card" title="${escapeHtml(customerTitle)}">
-    <span class="selected-host-meta-card-label">Kunde</span>
     <strong class="selected-host-meta-card-main">${escapeHtml(customerLabel)}</strong>
     <span class="selected-host-meta-card-sub">Host: ${escapeHtml(hostLabelRaw)}</span>
   </span>`;

@@ -14551,7 +14551,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   position: relative;
   display: flex;
   flex-direction: column;
-  padding-bottom: 6px;
+  padding-bottom: 28px;
 }
 
 .reports-column .section-head .report-controls-card {
@@ -14663,23 +14663,27 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 
 .report-customer-chip-wrap .selected-host-meta-card-main {
   font-size: 34px;
-  line-height: 1.0;
+  line-height: 1.02;
   color: #163b6b;
   font-weight: 900;
   letter-spacing: -0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .report-customer-chip-wrap .selected-host-meta-card-sub {
   font-size: 18px;
   color: #5a7392;
   font-weight: 700;
-  line-height: 1.0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.05;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .report-customer-chip-wrap .selected-host-meta-card--placeholder {
