@@ -91,12 +91,53 @@ let hostLicenseHoverHideTimerId = null;
 let hostLicenseHoverActiveHost = "";
 let changelogRebuildPollTimerId = null;
 let headerKpiWidthSyncFrameId = null;
+let headerKpiTrendPreviousValues = null;
 const HEADER_KPI_WIDTH_STORAGE_KEY = "monitoring.headerKpiUniformWidth";
 const HEADER_KPI_DEFAULT_WIDTH_PX = 142;
 const HEADER_KPI_MIN_WIDTH_PX = 104;
 const HEADER_KPI_MAX_WIDTH_PX = 190;
 const hostLicenseHoverCache = new Map();
 const SESSION_REFRESH_INTERVAL_SECONDS = 240;
+
+function resolveHeaderKpiTrendDirection(previousValue, currentValue) {
+  if (!Number.isFinite(previousValue) || !Number.isFinite(currentValue)) {
+    return "flat";
+  }
+  if (currentValue > previousValue) {
+    return "up";
+  }
+  if (currentValue < previousValue) {
+    return "down";
+  }
+  return "flat";
+}
+
+function ensureHeaderKpiTrendArrow(countElement) {
+  if (!countElement) {
+    return null;
+  }
+  const next = countElement.nextElementSibling;
+  if (next && next.classList.contains("header-chip-trend")) {
+    return next;
+  }
+  const trendEl = document.createElement("span");
+  trendEl.className = "header-chip-trend header-chip-trend-flat";
+  trendEl.setAttribute("aria-hidden", "true");
+  countElement.insertAdjacentElement("afterend", trendEl);
+  return trendEl;
+}
+
+function setHeaderKpiTrendArrow(chipElement, countElement, direction) {
+  const trendEl = ensureHeaderKpiTrendArrow(countElement);
+  if (!chipElement || !trendEl) {
+    return;
+  }
+  const safeDirection = direction === "up" || direction === "down" ? direction : "flat";
+  trendEl.classList.remove("header-chip-trend-up", "header-chip-trend-down", "header-chip-trend-flat");
+  trendEl.classList.add(`header-chip-trend-${safeDirection}`);
+  trendEl.textContent = safeDirection === "up" ? "↑" : safeDirection === "down" ? "↓" : "→";
+  chipElement.setAttribute("data-kpi-trend", safeDirection);
+}
 
 function clampHeaderKpiWidth(widthValue) {
   const numeric = Number(widthValue || 0);
@@ -13163,12 +13204,17 @@ function updateHeaderStatChips() {
   const licenseExpiry = document.getElementById("headerLicenseExpiry");
   const licenseExpiryItem = document.getElementById("headerLicenseExpiryItem");
   const licenseCopyTechButton = document.getElementById("headerLicenseCopyTechButton");
+  const currentTrendValues = {};
   if (alertChip && alertCount) {
-    alertCount.textContent = String(state.globalOpenAlertsCount);
+    const alertValue = Math.max(0, Number(state.globalOpenAlertsCount || 0));
+    alertCount.textContent = String(alertValue);
+    currentTrendValues.alert = alertValue;
     alertChip.classList.remove("hidden");
   }
   if (inactiveChip && inactiveCount) {
-    inactiveCount.textContent = String(state.inactiveHostsCount);
+    const inactiveValue = Math.max(0, Number(state.inactiveHostsCount || 0));
+    inactiveCount.textContent = String(inactiveValue);
+    currentTrendValues.inactive = inactiveValue;
     inactiveChip.classList.remove("hidden");
   }
   if (criticalChip && criticalCount) {
@@ -13184,14 +13230,19 @@ function updateHeaderStatChips() {
     }, 0);
     const criticalOpen = Math.max(0, Number(state.globalCriticalOpenAlertsCount || 0) || fallbackCritical);
     criticalCount.textContent = String(criticalOpen);
+    currentTrendValues.critical = criticalOpen;
     criticalChip.classList.remove("hidden");
   }
   if (acknowledgedChip && acknowledgedCount) {
-    acknowledgedCount.textContent = String(Math.max(0, Number(state.globalAcknowledgedOpenAlertsCount || 0)));
+    const acknowledgedValue = Math.max(0, Number(state.globalAcknowledgedOpenAlertsCount || 0));
+    acknowledgedCount.textContent = String(acknowledgedValue);
+    currentTrendValues.acknowledged = acknowledgedValue;
     acknowledgedChip.classList.remove("hidden");
   }
   if (mutedChip && mutedCount) {
-    mutedCount.textContent = String(Math.max(0, Number(state.globalMutedOpenAlertsCount || 0)));
+    const mutedValue = Math.max(0, Number(state.globalMutedOpenAlertsCount || 0));
+    mutedCount.textContent = String(mutedValue);
+    currentTrendValues.muted = mutedValue;
     mutedChip.classList.remove("hidden");
   }
   if (activeHostsChip && activeHostsCount) {
@@ -13207,26 +13258,35 @@ function updateHeaderStatChips() {
       return (nowMs - parsedLastSeen.getTime()) <= (60 * 60 * 1000) ? sum + 1 : sum;
     }, 0);
     activeHostsCount.textContent = String(activeHosts);
+    currentTrendValues.activeHosts = activeHosts;
     activeHostsChip.classList.remove("hidden");
   }
   if (dbReportsChip && dbReportsCount) {
-    dbReportsCount.textContent = Number(state.dbReportsTotal || 0).toLocaleString("de-CH");
+    const dbReportsValue = Number(state.dbReportsTotal || 0);
+    dbReportsCount.textContent = dbReportsValue.toLocaleString("de-CH");
+    currentTrendValues.dbReports = dbReportsValue;
     dbReportsChip.classList.remove("hidden");
   }
   if (dbReportsHourChip && dbReportsHourCount) {
-    dbReportsHourCount.textContent = Number(state.dbReportsLastHour || 0).toLocaleString("de-CH");
+    const dbReportsHourValue = Number(state.dbReportsLastHour || 0);
+    dbReportsHourCount.textContent = dbReportsHourValue.toLocaleString("de-CH");
+    currentTrendValues.dbReportsHour = dbReportsHourValue;
     dbReportsHourChip.classList.remove("hidden");
   }
   if (dbSizeChip && dbSizeValue) {
+    const dbSizeBytes = Number(state.dbTotalFileBytes);
     dbSizeValue.textContent = state.dbTotalFileBytes === null
       ? "-"
       : `${formatMegabytesFromBytes(state.dbTotalFileBytes)} MB`;
+    currentTrendValues.dbSize = Number.isFinite(dbSizeBytes) ? dbSizeBytes : Number.NaN;
     dbSizeChip.classList.remove("hidden");
   }
   if (dbSizeDeltaChip && dbSizeDeltaValue) {
+    const dbSizeDeltaBytes = Number(state.dbSizeDelta1hBytes);
     dbSizeDeltaValue.textContent = state.dbSizeDelta1hBytes === null
       ? "-"
       : `${formatSignedMegabytesFromBytes(state.dbSizeDelta1hBytes)} MB`;
+    currentTrendValues.dbSizeDelta = Number.isFinite(dbSizeDeltaBytes) ? dbSizeDeltaBytes : Number.NaN;
     dbSizeDeltaChip.classList.remove("hidden");
   }
   if (licenseChip) {
@@ -13288,6 +13348,30 @@ function updateHeaderStatChips() {
       if (licenseExpiryItem) licenseExpiryItem.classList.add("hidden");
     }
   }
+
+  const previousTrendValues = headerKpiTrendPreviousValues || {};
+  const trendBindings = [
+    ["alert", alertChip, alertCount],
+    ["critical", criticalChip, criticalCount],
+    ["acknowledged", acknowledgedChip, acknowledgedCount],
+    ["muted", mutedChip, mutedCount],
+    ["activeHosts", activeHostsChip, activeHostsCount],
+    ["inactive", inactiveChip, inactiveCount],
+    ["dbReports", dbReportsChip, dbReportsCount],
+    ["dbSize", dbSizeChip, dbSizeValue],
+    ["dbReportsHour", dbReportsHourChip, dbReportsHourCount],
+    ["dbSizeDelta", dbSizeDeltaChip, dbSizeDeltaValue],
+  ];
+  for (const [key, chipEl, countEl] of trendBindings) {
+    if (!chipEl || !countEl) {
+      continue;
+    }
+    const previousValue = Number(previousTrendValues[key]);
+    const currentValue = Number(currentTrendValues[key]);
+    const direction = resolveHeaderKpiTrendDirection(previousValue, currentValue);
+    setHeaderKpiTrendArrow(chipEl, countEl, direction);
+  }
+  headerKpiTrendPreviousValues = { ...currentTrendValues };
 
   scheduleHeaderKpiUniformCardWidthSync();
 }

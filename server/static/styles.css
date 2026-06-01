@@ -14080,6 +14080,23 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
   line-height: 1.02;
 }
 
+.panel-header .header-kpi-strip .header-chip-trend {
+  display: inline-flex;
+  align-items: baseline;
+  margin-left: 4px;
+  font-size: 0.9rem;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: 0;
+  opacity: 0.98;
+}
+
+.panel-header .header-kpi-strip .header-chip-trend-up,
+.panel-header .header-kpi-strip .header-chip-trend-down,
+.panel-header .header-kpi-strip .header-chip-trend-flat {
+  color: currentColor;
+}
+
 .panel-header .header-kpi-strip .header-chip-scope {
   font-size: 7px;
   letter-spacing: 0;
