@@ -2167,6 +2167,12 @@ body[data-theme="dark"] .agent-update-admin-group-row td {
   gap: 10px;
 }
 
+.admin-user-focus-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin: 10px 0 2px;
+}
+
 .admin-user-focus-country-group {
   margin-top: 0;
 }

@@ -326,6 +326,7 @@ const state = {
   hostInterestShowUnselectedOnly: false,
   adminAlertSubscriptionsLoaded: false,
   adminAlertSubscriptionsViewMode: "user-focus",
+  adminAlertSubscriptionsSelectedUser: "",
   adminAlertSubscriptionsUsers: [],
   adminAlertAvailableHosts: [],
   adminAlertTelegramAvailable: false,
@@ -3878,7 +3879,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
       }
 
       const userFilterSelect = document.getElementById("adminAlertSubsUserFilterSelect");
-      let selectedUser = String(userFilterSelect?.value || "").trim();
+      let selectedUser = String(state.adminAlertSubscriptionsSelectedUser || userFilterSelect?.value || "").trim();
       if (!selectedUser) {
         selectedUser = String(usersSorted[0]?.username || "").trim();
         if (userFilterSelect && selectedUser) {
@@ -3917,6 +3918,10 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
         </button>`;
       }).join("")}</div>`;
 
+      const controls = `<div class="admin-user-focus-actions">
+        <button type="button" class="btn-secondary" id="adminUserFocusAllHostsButton">Alle Hosts anzeigen</button>
+      </div>`;
+
       const list = countryCodes.map((countryCode) => {
         const hostsInCountry = groupedByCountry.get(countryCode) || [];
         const countryLabel = countryCode === "__NONE__" ? "Ohne Land" : countryCode;
@@ -3953,7 +3958,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
         </details>`;
       }).join("");
 
-      return { chips, list, selectedUser };
+      return { chips: `${chips}${controls}`, list, selectedUser };
     };
 
     let rows = "";
@@ -3974,6 +3979,14 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
 
     if (viewMode === "user-focus") {
       tableWrap.innerHTML = `${chips}<div class="admin-user-focus-list">${userFocusList}</div>`;
+      const allHostsButton = document.getElementById("adminUserFocusAllHostsButton");
+      if (allHostsButton) {
+        allHostsButton.addEventListener("click", () => {
+          userFocusCountryFilter = "ALL";
+          renderTable();
+          markUnsavedStatus();
+        });
+      }
     } else {
       tableWrap.innerHTML = `${chips}<div class="table-wrap user-management-table-wrap">
         <table class="user-management-table admin-alert-subscriptions-table">
@@ -4135,20 +4148,21 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     userFilterSelect.addEventListener("change", () => {
       const selectedUser = String(userFilterSelect.value || "").trim();
       const viewModeSelect = document.getElementById("adminAlertSubsViewModeSelect");
+      state.adminAlertSubscriptionsSelectedUser = selectedUser;
       if (selectedUser && normalizeAdminAlertViewMode() !== "user-focus") {
         captureCurrentFromDom();
         state.adminAlertSubscriptionsViewMode = "user-focus";
         if (viewModeSelect) {
           viewModeSelect.value = "user-focus";
         }
-        renderTable();
-        markUnsavedStatus();
+        state.adminAlertSubscriptionsLoaded = false;
+        void loadAdminAlertSubscriptions(true);
         return;
       }
       if (normalizeAdminAlertViewMode() === "user-focus") {
         captureCurrentFromDom();
-        renderTable();
-        markUnsavedStatus();
+        state.adminAlertSubscriptionsLoaded = false;
+        void loadAdminAlertSubscriptions(true);
         return;
       }
       applyFilters();
@@ -4169,6 +4183,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
       }
       if (state.adminAlertSubscriptionsViewMode !== "user-focus") {
         userFocusCountryFilter = "ALL";
+        state.adminAlertSubscriptionsSelectedUser = "";
       }
       renderTable();
       markUnsavedStatus();
