@@ -4850,6 +4850,7 @@ def get_host_interest_targets(conn: sqlite3.Connection) -> list[dict]:
         )
         SELECT
             g.host_key,
+            COALESCE(r_latest.host_uid, '') AS host_uid,
             COALESCE(r_latest.hostname, '') AS hostname,
             COALESCE(r_latest.payload_json, '{{}}') AS latest_payload_json,
             COALESCE(r_latest.display_name, '') AS latest_display_name,
@@ -4866,18 +4867,20 @@ def get_host_interest_targets(conn: sqlite3.Connection) -> list[dict]:
 
     items: list[dict] = []
     for row in rows:
-        payload = parse_payload_json(str(row[2] or "{}"))
-        hostname = str(row[1] or "").strip() or str(row[0] or "").strip()
-        display_name = str(row[4] or "").strip() or str(row[3] or "").strip() or hostname
+        payload = parse_payload_json(str(row[3] or "{}"))
+        host_uid = str(row[1] or "").strip()
+        hostname = str(row[2] or "").strip() or str(row[0] or "").strip()
+        display_name = str(row[5] or "").strip() or str(row[4] or "").strip() or hostname
         if not hostname:
             continue
-        country_code = normalize_country_code(str(row[5] or "")) or extract_country_code_from_payload(payload)
+        country_code = normalize_country_code(str(row[6] or "")) or extract_country_code_from_payload(payload)
         items.append(
             {
+                "host_uid": host_uid,
                 "hostname": hostname,
                 "display_name": display_name,
                 "country_code": country_code,
-                "customer_name": str(row[6] or "").strip(),
+                "customer_name": str(row[7] or "").strip(),
             }
         )
     return items
@@ -6520,16 +6523,39 @@ def get_user_trend_host_scope(conn: sqlite3.Connection, username: str) -> tuple[
     }
     host_additions = parse_host_csv(preferences.get("host_interest_host_additions", ""))
     host_exclusions = parse_host_csv(preferences.get("host_interest_host_exclusions", ""))
-    interested_hosts = {
-        hostname
-        for hostname in host_additions
-        if hostname and hostname not in host_exclusions
-    }
+    target_hosts = get_host_interest_targets(conn)
+    token_to_hostname: dict[str, str] = {}
+    for host_item in target_hosts:
+        hostname = str(host_item.get("hostname", "") or "").strip()
+        host_uid = str(host_item.get("host_uid", "") or "").strip()
+        if not hostname:
+            continue
+        token_to_hostname[hostname] = hostname
+        if host_uid:
+            token_to_hostname[host_uid] = hostname
+
+    resolved_exclusions: set[str] = set()
+    for token in host_exclusions:
+        hostname = token_to_hostname.get(token)
+        if hostname:
+            resolved_exclusions.add(hostname)
+        elif token:
+            resolved_exclusions.add(token)
+
+    interested_hosts: set[str] = set()
+    for token in host_additions:
+        hostname = token_to_hostname.get(token)
+        if hostname and hostname not in resolved_exclusions:
+            interested_hosts.add(hostname)
+        elif token and token not in resolved_exclusions and token not in token_to_hostname:
+            # Keep backward compatibility for legacy hostname-only entries not present in current target snapshot.
+            interested_hosts.add(token)
+
     if selected_country_codes:
-        for host_item in get_host_interest_targets(conn):
+        for host_item in target_hosts:
             hostname = str(host_item.get("hostname", "") or "").strip()
             country_code = str(host_item.get("country_code", "") or "").strip().upper()
-            if hostname and country_code in selected_country_codes and hostname not in host_exclusions:
+            if hostname and country_code in selected_country_codes and hostname not in resolved_exclusions:
                 interested_hosts.add(hostname)
     mode = str(preferences.get("host_interest_mode", "all") or "all").strip().lower()
     if mode == "interested_only" and interested_hosts:

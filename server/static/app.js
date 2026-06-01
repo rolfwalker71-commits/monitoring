@@ -738,6 +738,28 @@ function getHostInterestCountryCode(host) {
   return asText(host?.country_code || "", "").trim().toUpperCase();
 }
 
+function getHostInterestIdentity(host) {
+  return resolveHostIdentity(host);
+}
+
+function hostInterestTokensForHost(host) {
+  const tokens = new Set();
+  const identity = getHostInterestIdentity(host);
+  const hostname = asText(host?.hostname, "").trim();
+  if (identity) tokens.add(identity);
+  if (hostname) tokens.add(hostname);
+  return tokens;
+}
+
+function hostInterestSetHasHost(setRef, host) {
+  for (const token of hostInterestTokensForHost(host)) {
+    if (setRef.has(token)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function getHostInterestSelectedCountries() {
   return new Set(Array.from(state.hostInterestCountryCodes || []).filter((code) => /^[A-Z]{2}$/.test(String(code || ""))));
 }
@@ -754,16 +776,18 @@ function getHostInterestSelectorHosts() {
   const rawHosts = Array.isArray(state.hostInterestTargetHosts) && state.hostInterestTargetHosts.length > 0
     ? state.hostInterestTargetHosts
     : (state.hosts || []);
-  const byHostname = new Map();
+  const byIdentity = new Map();
 
   for (const host of rawHosts) {
+    const identity = getHostInterestIdentity(host);
     const hostname = String(host?.hostname || "").trim();
-    if (!hostname) continue;
+    if (!identity || !hostname) continue;
 
-    const existing = byHostname.get(hostname);
+    const existing = byIdentity.get(identity);
     if (!existing) {
-      byHostname.set(hostname, {
+      byIdentity.set(identity, {
         ...host,
+        host_uid: asText(host?.host_uid, "").trim(),
         hostname,
         display_name: String(host?.display_name || "").trim() || hostname,
         customer_name: String(host?.customer_name || "").trim(),
@@ -775,9 +799,10 @@ function getHostInterestSelectorHosts() {
     const nextDisplayName = String(existing.display_name || "").trim() || String(host?.display_name || "").trim() || hostname;
     const nextCustomerName = String(existing.customer_name || "").trim() || String(host?.customer_name || "").trim();
     const nextCountryCode = String(existing.country_code || "").trim() || getHostInterestCountryCode(host);
-    byHostname.set(hostname, {
+    byIdentity.set(identity, {
       ...existing,
       ...host,
+      host_uid: asText(existing.host_uid || host?.host_uid, "").trim(),
       hostname,
       display_name: nextDisplayName,
       customer_name: nextCustomerName,
@@ -785,7 +810,7 @@ function getHostInterestSelectorHosts() {
     });
   }
 
-  return Array.from(byHostname.values());
+  return Array.from(byIdentity.values());
 }
 
 function getEffectiveHostInterestHosts() {
@@ -797,19 +822,28 @@ function getEffectiveHostInterestHosts() {
   const hasExplicitBaseSelection = selectedCountries.size > 0 || additions.size > 0;
 
   for (const host of selectorHosts) {
+    const identity = getHostInterestIdentity(host);
     const hostname = String(host.hostname || "").trim();
-    if (!hostname) continue;
+    if (!identity || !hostname) continue;
     const countryCode = getHostInterestCountryCode(host);
     const enabledByDefault = !hasExplicitBaseSelection;
     const enabledByCountry = selectedCountries.has(countryCode);
-    if ((enabledByDefault || enabledByCountry) && !exclusions.has(hostname)) {
-      effective.add(hostname);
+    if ((enabledByDefault || enabledByCountry) && !hostInterestSetHasHost(exclusions, host)) {
+      effective.add(identity);
     }
   }
 
-  for (const hostname of additions) {
-    if (!exclusions.has(hostname)) {
-      effective.add(hostname);
+  for (const host of selectorHosts) {
+    const identity = getHostInterestIdentity(host);
+    if (!identity) continue;
+    if (hostInterestSetHasHost(additions, host) && !hostInterestSetHasHost(exclusions, host)) {
+      effective.add(identity);
+    }
+  }
+
+  for (const token of additions) {
+    if (!exclusions.has(token)) {
+      effective.add(token);
     }
   }
 
@@ -2024,7 +2058,7 @@ function renderHostInterestsEditor() {
   const totalHosts = allHosts.length;
   const showUnselectedOnly = state.hostInterestShowUnselectedOnly === true;
   const filteredHosts = showUnselectedOnly
-    ? visibleHosts.filter((host) => !effectiveHosts.has(String(host.hostname || "").trim()))
+    ? visibleHosts.filter((host) => !hostInterestSetHasHost(effectiveHosts, host))
     : visibleHosts;
   const countryGroups = new Map();
   for (const host of filteredHosts) {
@@ -2104,6 +2138,10 @@ function renderHostInterestsEditor() {
             if (!hostname) continue;
             const hostCountryCode = getHostInterestCountryCode(host) || "__NONE__";
             if (hostCountryCode === countryCode) {
+              const hostIdentity = getHostInterestIdentity(host);
+              if (hostIdentity) {
+                manualExclusions.delete(hostIdentity);
+              }
               manualExclusions.delete(hostname);
             }
           }
@@ -2124,20 +2162,21 @@ function renderHostInterestsEditor() {
   }
 
   const renderHostRow = (host) => {
+    const identity = getHostInterestIdentity(host);
     const hostname = String(host.hostname || "").trim();
     const displayName = String(host.display_name || hostname || "").trim();
     const customerName = String(host.customer_name || "").trim() || "Ohne Kunde";
     const countryCode = getHostInterestCountryCode(host);
     const selectedByCountry = selectedCountries.has(countryCode);
-    const manualAdded = manualAdditions.has(hostname);
-    const excluded = manualExclusions.has(hostname);
-    const effective = effectiveHosts.has(hostname);
+    const manualAdded = hostInterestSetHasHost(manualAdditions, host);
+    const excluded = hostInterestSetHasHost(manualExclusions, host);
+    const effective = hostInterestSetHasHost(effectiveHosts, host);
     const hostLabel = displayName || hostname || "Host";
     const badges = [];
     if (selectedByCountry && !excluded) badges.push(`<span class="host-interest-source-pill country">Land</span>`);
     if (manualAdded) badges.push(`<span class="host-interest-source-pill manual">Manuell</span>`);
     if (excluded) badges.push(`<span class="host-interest-source-pill excluded">Ausnahme</span>`);
-    return `<label class="host-interest-item${effective ? " is-active" : ""}" data-host-interest-host="${escapeHtml(hostname)}" data-host-country-code="${escapeHtml(countryCode)}">
+    return `<label class="host-interest-item${effective ? " is-active" : ""}" data-host-interest-key="${escapeHtml(identity || hostname)}" data-host-interest-hostname="${escapeHtml(hostname)}" data-host-country-code="${escapeHtml(countryCode)}">
       <input class="host-interest-toggle" type="checkbox" ${effective ? "checked" : ""} />
       <span class="host-interest-meta">
         <span class="host-interest-customer">${escapeHtml(customerName)}</span>
@@ -2163,25 +2202,28 @@ function renderHostInterestsEditor() {
 
   listEl.innerHTML = groupedSections || '<p class="muted">Keine Treffer für die Suche.</p>';
 
-  listEl.querySelectorAll("[data-host-interest-host]").forEach((row) => {
+  listEl.querySelectorAll("[data-host-interest-key]").forEach((row) => {
     const checkbox = row.querySelector(".host-interest-toggle");
     if (!checkbox) return;
     checkbox.addEventListener("change", () => {
-      const hostname = String(row.getAttribute("data-host-interest-host") || "").trim();
+      const hostKey = String(row.getAttribute("data-host-interest-key") || "").trim();
+      const hostname = String(row.getAttribute("data-host-interest-hostname") || "").trim();
       const countryCode = String(row.getAttribute("data-host-country-code") || "").trim().toUpperCase();
-      if (!hostname) {
+      if (!hostKey) {
         return;
       }
       const countrySelected = selectedCountries.has(countryCode);
       if (checkbox.checked) {
+        manualExclusions.delete(hostKey);
         manualExclusions.delete(hostname);
         if (!countrySelected) {
-          manualAdditions.add(hostname);
+          manualAdditions.add(hostKey);
         }
       } else {
         if (countrySelected) {
-          manualExclusions.add(hostname);
+          manualExclusions.add(hostKey);
         } else {
+          manualAdditions.delete(hostKey);
           manualAdditions.delete(hostname);
         }
       }
@@ -2706,7 +2748,16 @@ async function saveHostInterestsPreferences() {
       headers: { "Content-Type": "application/json" },
     });
     const currentSubs = subsResponse.ok ? await subsResponse.json() : [];
-    const selectedHosts = new Set(state.hostInterestHosts);
+    const selectedHostKeys = new Set(state.hostInterestHosts);
+    const selectedHostnames = new Set();
+    for (const host of getHostInterestSelectorHosts()) {
+      const hostname = asText(host?.hostname, "").trim();
+      if (!hostname) continue;
+      if (hostInterestSetHasHost(selectedHostKeys, host)) {
+        selectedHostnames.add(hostname);
+      }
+    }
+    const initiallySelectedHostnames = new Set(selectedHostnames);
     
     // Build new subscriptions: sync selected hosts with notify_mail=true
     const newSubs = [];
@@ -2716,14 +2767,14 @@ async function saveHostInterestsPreferences() {
       const hostname = String(sub.hostname || "").trim();
       if (!hostname) continue;
       
-      if (selectedHosts.has(hostname)) {
+      if (selectedHostnames.has(hostname)) {
         // Keep subscription and ensure notify_mail is true
         newSubs.push({
           hostname: hostname,
           notify_mail: true,
           notify_telegram: Boolean(sub.notify_telegram || false),
         });
-        selectedHosts.delete(hostname); // Mark as processed
+        selectedHostnames.delete(hostname); // Mark as processed
       } else {
         // Host was deselected: disable notify_mail
         newSubs.push({
@@ -2735,7 +2786,7 @@ async function saveHostInterestsPreferences() {
     }
     
     // Add new subscriptions for any newly selected hosts
-    for (const hostname of selectedHosts) {
+    for (const hostname of selectedHostnames) {
       newSubs.push({
         hostname: hostname,
         notify_mail: true,
@@ -2753,7 +2804,7 @@ async function saveHostInterestsPreferences() {
       
       if (updateResponse.ok) {
         // Show notification about auto-activated mail subscriptions
-        const activatedHosts = Array.from(state.hostInterestHosts).sort();
+        const activatedHosts = Array.from(initiallySelectedHostnames).sort();
         if (activatedHosts.length > 0) {
           const message = activatedHosts.length === 1
             ? `Mail-Abo automatisch aktiviert für: ${activatedHosts[0]}`
@@ -8777,13 +8828,13 @@ function filterAndSortHosts(hosts) {
   const interestMode = normalizeHostInterestMode(state.hostInterestMode);
   const interestSet = state.hostInterestHosts;
   if (interestMode === "interested_only" && interestSet.size > 0) {
-    filtered = filtered.filter((host) => interestSet.has(String(host.hostname || "")));
+    filtered = filtered.filter((host) => hostInterestSetHasHost(interestSet, host));
   }
 
   filtered.sort((a, b) => {
     if (interestMode === "interested_first" && interestSet.size > 0) {
-      const interestedA = interestSet.has(String(a.hostname || "")) ? 1 : 0;
-      const interestedB = interestSet.has(String(b.hostname || "")) ? 1 : 0;
+      const interestedA = hostInterestSetHasHost(interestSet, a) ? 1 : 0;
+      const interestedB = hostInterestSetHasHost(interestSet, b) ? 1 : 0;
       if (interestedA !== interestedB) {
         return interestedB - interestedA;
       }
