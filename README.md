@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.200**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.200**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.201**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.201**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.201 | 01.06.2026 | Regression-Fix nach Detail-Layout-Anpassung: Tabellen in `Einzelmeldungen` brachen Zelleninhalte zeichenweise vertikal um (u. a. bei Top Prozesse). Korrigiert durch stabiles Tabellenlayout (`table-layout: fixed`), `nowrap` für normale Spalten und gezielten Umbruch nur in der letzten, langen Textspalte. Horizontales Verhalten der Wrap-Container wieder auf `auto` gesetzt. |
 | 1.7.200 | 01.06.2026 | Alle zuletzt angefragten Detail-Tasks umgesetzt: **Einzelmeldungen-Detailschrift +2px** (Überschriften, Tabellenköpfe/-zellen, Count-Labels) sowie **Spalten-/Wrap-Anpassungen** in den Detailtabellen, damit in den gezeigten Bereichen kein horizontaler Scroll nötig ist. Zusätzlich für Export-/Dateinamenzellen Umbruchregeln ergänzt. |
 | 1.7.199 | 01.06.2026 | Globaler Font von Sora zurück auf **Manrope** umgestellt (Import + Sans-Familien). Bestehende Größenanpassungen (u. a. kleinere Basis und Menüpunktgröße +2px) unverändert beibehalten. |
 | 1.7.198 | 01.06.2026 | Schriftwechsel auf **Sora** umgesetzt (globaler Import + Sans-Familien in UI-CSS). Zusätzlich die Menüpunkt-Typografie im Meldungsbereich wie gewünscht um **+2px** angehoben (Top-Tabs und Sidebar-Menüpunkte), während die zuvor reduzierten Detailgrößen in den Einzelmeldungen unverändert blieben. |

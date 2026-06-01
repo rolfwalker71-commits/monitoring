@@ -14932,24 +14932,29 @@ body[data-theme="dark"] .reports-column #overviewFilesystemSection .fs-chart-car
 
 /* Prevent horizontal scrolling in Einzelmeldungen detail tables after typography increase */
 .reports-column #reportsView .table-wrap {
-  overflow-x: hidden;
+  overflow-x: auto;
 }
 
 .reports-column #reportsView .report-subtable {
   width: 100%;
-  table-layout: auto;
+  table-layout: fixed;
 }
 
 .reports-column #reportsView .report-subtable th,
 .reports-column #reportsView .report-subtable td {
-  white-space: normal;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .reports-column #reportsView .report-subtable td:last-child,
 .reports-column #reportsView .report-subtable th:last-child {
   width: auto;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .reports-column #reportsView .dir-listing-table td.dir-item-name {
