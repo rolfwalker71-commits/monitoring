@@ -325,7 +325,7 @@ const state = {
   hostInterestSearchQuery: "",
   hostInterestShowUnselectedOnly: false,
   adminAlertSubscriptionsLoaded: false,
-  adminAlertSubscriptionsViewMode: "host",
+  adminAlertSubscriptionsViewMode: "user-focus",
   adminAlertSubscriptionsUsers: [],
   adminAlertAvailableHosts: [],
   adminAlertTelegramAvailable: false,
@@ -2742,49 +2742,50 @@ async function saveHostInterestsPreferences() {
       headers: { "Content-Type": "application/json" },
     });
     const currentSubs = subsResponse.ok ? await subsResponse.json() : [];
+    const currentSubsByHost = new Map(
+      (Array.isArray(currentSubs) ? currentSubs : []).map((sub) => [
+        String(sub?.hostname || "").trim(),
+        {
+          notify_mail: Boolean(sub?.notify_mail),
+          notify_telegram: Boolean(sub?.notify_telegram),
+        },
+      ]).filter(([hostname]) => hostname.length > 0)
+    );
+
+    const selectorHosts = getHostInterestSelectorHosts();
     const selectedHostKeys = new Set(state.hostInterestHosts);
     const selectedHostnames = new Set();
-    for (const host of getHostInterestSelectorHosts()) {
+    const allSelectorHostnames = new Set();
+
+    for (const host of selectorHosts) {
       const hostname = asText(host?.hostname, "").trim();
       if (!hostname) continue;
+      allSelectorHostnames.add(hostname);
       if (hostInterestSetHasHost(selectedHostKeys, host)) {
         selectedHostnames.add(hostname);
       }
     }
+
     const initiallySelectedHostnames = new Set(selectedHostnames);
-    
-    // Build new subscriptions: sync selected hosts with notify_mail=true
     const newSubs = [];
-    
-    // For each currently subscribed host, preserve other settings
-    for (const sub of currentSubs) {
-      const hostname = String(sub.hostname || "").trim();
-      if (!hostname) continue;
-      
-      if (selectedHostnames.has(hostname)) {
-        // Keep subscription and ensure notify_mail is true
-        newSubs.push({
-          hostname: hostname,
-          notify_mail: true,
-          notify_telegram: Boolean(sub.notify_telegram || false),
-        });
-        selectedHostnames.delete(hostname); // Mark as processed
-      } else {
-        // Host was deselected: disable notify_mail
-        newSubs.push({
-          hostname: hostname,
-          notify_mail: false,
-          notify_telegram: Boolean(sub.notify_telegram || false),
-        });
-      }
-    }
-    
-    // Add new subscriptions for any newly selected hosts
-    for (const hostname of selectedHostnames) {
+
+    // Persist explicit notify_mail values for every known selector host.
+    for (const hostname of allSelectorHostnames) {
+      const existing = currentSubsByHost.get(hostname);
       newSubs.push({
-        hostname: hostname,
-        notify_mail: true,
-        notify_telegram: false,
+        hostname,
+        notify_mail: selectedHostnames.has(hostname),
+        notify_telegram: Boolean(existing?.notify_telegram || false),
+      });
+    }
+
+    // Preserve subscriptions for hosts that are currently not in selector scope.
+    for (const [hostname, existing] of currentSubsByHost.entries()) {
+      if (allSelectorHostnames.has(hostname)) continue;
+      newSubs.push({
+        hostname,
+        notify_mail: Boolean(existing.notify_mail),
+        notify_telegram: Boolean(existing.notify_telegram),
       });
     }
     
@@ -3608,7 +3609,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
   const normalizeAdminAlertViewMode = () => {
     if (state.adminAlertSubscriptionsViewMode === "user") return "user";
     if (state.adminAlertSubscriptionsViewMode === "user-focus") return "user-focus";
-    return "host";
+    return "user-focus";
   };
 
   const originalSubscriptions = new Map();
@@ -3737,6 +3738,22 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     if (!tableWrap) return;
     const viewMode = normalizeAdminAlertViewMode();
 
+    const renderAdminHostLabel = (host) => {
+      const hostnameRaw = String(host.hostname || "").trim();
+      const displayNameRaw = String(host.display_name || hostnameRaw || "").trim();
+      const customerNameRaw = String(host.customer_name || "").trim();
+      const hostname = escapeHtml(hostnameRaw);
+      const displayName = escapeHtml(displayNameRaw || hostnameRaw);
+      const customerName = escapeHtml(customerNameRaw);
+      const title = displayNameRaw && hostnameRaw && displayNameRaw !== hostnameRaw
+        ? `<strong>${displayName}</strong><span class="global-hostname-sub">(${hostname})</span>`
+        : `<strong>${displayName || hostname}</strong>`;
+      const customerLine = customerNameRaw
+        ? `<span class="admin-sub-host-customer">${customerName}</span>`
+        : "";
+      return `${title}${customerLine}`;
+    };
+
     const renderHostRows = () => {
       if (hosts.length === 0) {
         return '<tr data-row-type="host"><td colspan="3" class="muted">Keine Hosts vorhanden.</td></tr>';
@@ -3763,9 +3780,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
         const displayNameRaw = String(host.display_name || hostnameRaw || "").trim();
         const hostname = escapeHtml(hostnameRaw);
         const displayName = escapeHtml(displayNameRaw || hostnameRaw);
-        const hostLabel = displayNameRaw && hostnameRaw && displayNameRaw !== hostnameRaw
-          ? `<strong>${displayName}</strong><span class="global-hostname-sub">(${hostname})</span>`
-          : `<strong>${displayName || hostname}</strong>`;
+        const hostLabel = renderAdminHostLabel(host);
 
         const rowActions = `<div class="admin-sub-row-actions">
           <button type="button" class="admin-sub-row-bulk" data-scope="host" data-hostname="${hostname}" data-channel="mail" data-value="on">Mail alle an</button>
@@ -3857,8 +3872,8 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
       if (hosts.length === 0) {
         return {
           chips: '<p class="muted">Keine Länder verfügbar.</p>',
-          rows: '<tr data-row-type="host"><td colspan="3" class="muted">Keine Hosts vorhanden.</td></tr>',
-          firstColTitle: "Host",
+          list: '<p class="muted">Keine Hosts vorhanden.</p>',
+          selectedUser: "",
         };
       }
 
@@ -3873,8 +3888,8 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
       if (!selectedUser) {
         return {
           chips: '<p class="muted">Keine Benutzer vorhanden.</p>',
-          rows: '<tr data-row-type="host"><td colspan="3" class="muted">Keine Benutzer vorhanden.</td></tr>',
-          firstColTitle: "Host",
+          list: '<p class="muted">Keine Benutzer vorhanden.</p>',
+          selectedUser: "",
         };
       }
 
@@ -3902,71 +3917,71 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
         </button>`;
       }).join("")}</div>`;
 
-      const rows = countryCodes.map((countryCode) => {
+      const list = countryCodes.map((countryCode) => {
         const hostsInCountry = groupedByCountry.get(countryCode) || [];
         const countryLabel = countryCode === "__NONE__" ? "Ohne Land" : countryCode;
         const flagPath = countryCode === "__NONE__" ? "" : getCountryFlagIconPath(countryCode);
         const hostRows = hostsInCountry.map((host) => {
           const hostnameRaw = String(host.hostname || "").trim();
-          const displayNameRaw = String(host.display_name || hostnameRaw || "").trim();
           const hostname = escapeHtml(hostnameRaw);
-          const displayName = escapeHtml(displayNameRaw || hostnameRaw);
-          const hostLabel = displayNameRaw && hostnameRaw && displayNameRaw !== hostnameRaw
-            ? `<strong>${displayName}</strong><span class="global-hostname-sub">(${hostname})</span>`
-            : `<strong>${displayName || hostname}</strong>`;
+          const hostLabel = renderAdminHostLabel(host);
           const currentEntry = getCurrentEntry(selectedUser, hostnameRaw);
           const originalEntry = getOriginalEntry(selectedUser, hostnameRaw);
           const mailChecked = currentEntry.notify_mail;
           const telegramChecked = currentEntry.notify_telegram;
-          const overrideBadge = currentEntry.is_admin_override ? '<span class="admin-sub-override-pill" title="Admin-Override">Admin</span>' : "";
+          const displaySearch = `${String(host.display_name || "").trim()} ${hostnameRaw}`.toLowerCase();
 
-          return `<tr data-row-type="host" data-country-code="${escapeHtml(countryCode)}" data-hostname="${hostname}" data-display-name="${displayName}" data-username="${escapeHtml(selectedUser)}">
-            <td class="admin-sub-host-cell">${hostLabel}${overrideBadge}</td>
-            <td><label class="admin-sub-user-chip${currentEntry.is_admin_override ? " is-admin-override" : ""}">
-              <input type="checkbox" class="admin-sub-cb" data-username="${escapeHtml(selectedUser)}" data-hostname="${hostname}" data-channel="mail" data-original-checked="${originalEntry.notify_mail ? "1" : "0"}" ${mailChecked ? "checked" : ""}>
-              <span class="admin-sub-user-name">${escapeHtml(selectedUser)}</span>
-            </label></td>
-            <td><label class="admin-sub-user-chip${currentEntry.is_admin_override ? " is-admin-override" : ""}${telegramAvailable ? "" : " is-disabled"}">
-              <input type="checkbox" class="admin-sub-cb" data-username="${escapeHtml(selectedUser)}" data-hostname="${hostname}" data-channel="telegram" data-original-checked="${originalEntry.notify_telegram ? "1" : "0"}" ${telegramChecked ? "checked" : ""} ${telegramAvailable ? "" : "disabled"}>
-              <span class="admin-sub-user-name">${escapeHtml(selectedUser)}</span>
-            </label></td>
-          </tr>`;
+          return `<div class="host-interest-item admin-user-focus-host-row" data-row-type="host" data-country-code="${escapeHtml(countryCode)}" data-hostname="${hostname}" data-display-name="${escapeHtml(displaySearch)}" data-username="${escapeHtml(selectedUser)}">
+            <span class="host-interest-meta">${hostLabel}</span>
+            <span class="admin-user-focus-channels">
+              <label class="admin-sub-user-chip${currentEntry.is_admin_override ? " is-admin-override" : ""}">
+                <input type="checkbox" class="admin-sub-cb" data-username="${escapeHtml(selectedUser)}" data-hostname="${hostname}" data-channel="mail" data-original-checked="${originalEntry.notify_mail ? "1" : "0"}" ${mailChecked ? "checked" : ""}>
+                <span class="admin-sub-user-name">Mail</span>
+              </label>
+              <label class="admin-sub-user-chip${currentEntry.is_admin_override ? " is-admin-override" : ""}${telegramAvailable ? "" : " is-disabled"}">
+                <input type="checkbox" class="admin-sub-cb" data-username="${escapeHtml(selectedUser)}" data-hostname="${hostname}" data-channel="telegram" data-original-checked="${originalEntry.notify_telegram ? "1" : "0"}" ${telegramChecked ? "checked" : ""} ${telegramAvailable ? "" : "disabled"}>
+                <span class="admin-sub-user-name">Telegram</span>
+              </label>
+            </span>
+          </div>`;
         }).join("");
 
-        return `<tr data-row-type="country" data-country-code="${escapeHtml(countryCode)}" class="admin-sub-country-row">
-          <td colspan="3">
-            ${flagPath ? `<img src="${flagPath}" alt="${escapeHtml(countryCode)}" class="host-interest-country-flag" />` : ""}
-            <span class="admin-sub-country-title">Land: ${escapeHtml(countryLabel)}</span>
-            <span class="admin-sub-country-count">${hostsInCountry.length} Host${hostsInCountry.length === 1 ? "" : "s"}</span>
-          </td>
-        </tr>${hostRows}`;
+        const openByDefault = userFocusCountryFilter === "ALL" || userFocusCountryFilter === countryCode;
+        return `<details class="host-interest-country-group admin-user-focus-country-group" data-row-type="country" data-country-code="${escapeHtml(countryCode)}" ${openByDefault ? "open" : ""}>
+          <summary title="${escapeHtml(countryLabel)}">${flagPath ? `<img src="${flagPath}" alt="${escapeHtml(countryCode)}" class="host-interest-country-flag" />` : `<span class="host-interest-country-no-flag">${escapeHtml(countryLabel)}</span>`}<span class="host-interest-country-count">${hostsInCountry.length}</span></summary>
+          <div class="host-interest-country-group-body">${hostRows}</div>
+        </details>`;
       }).join("");
 
-      return { chips, rows, firstColTitle: "Host" };
+      return { chips, list, selectedUser };
     };
 
     let rows = "";
     let firstColTitle = "Host";
     let chips = "";
+    let userFocusList = "";
     if (viewMode === "user") {
       rows = renderUserRows();
       firstColTitle = "Benutzer";
     } else if (viewMode === "user-focus") {
       const result = renderUserFocusRows();
-      rows = result.rows;
-      firstColTitle = result.firstColTitle;
+      userFocusList = result.list;
       chips = result.chips;
     } else {
       rows = renderHostRows();
       firstColTitle = "Host";
     }
 
-    tableWrap.innerHTML = `${chips}<div class="table-wrap user-management-table-wrap">
-      <table class="user-management-table admin-alert-subscriptions-table">
-        <thead><tr><th>${firstColTitle}</th><th>Mail</th><th>Telegram</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
+    if (viewMode === "user-focus") {
+      tableWrap.innerHTML = `${chips}<div class="admin-user-focus-list">${userFocusList}</div>`;
+    } else {
+      tableWrap.innerHTML = `${chips}<div class="table-wrap user-management-table-wrap">
+        <table class="user-management-table admin-alert-subscriptions-table">
+          <thead><tr><th>${firstColTitle}</th><th>Mail</th><th>Telegram</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    }
 
     tableWrap.querySelectorAll(".admin-sub-country-filter-chip[data-country-filter]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -3981,7 +3996,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
   };
 
   const refreshChangedState = () => {
-    const allRows = Array.from(container.querySelectorAll("tbody tr[data-row-type]"));
+    const allRows = Array.from(container.querySelectorAll("[data-row-type]"));
     let changedCount = 0;
     for (const checkbox of container.querySelectorAll(".admin-sub-cb")) {
       const originalChecked = checkbox.dataset.originalChecked === "1";
@@ -4003,7 +4018,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     const selectedUser = String(document.getElementById("adminAlertSubsUserFilterSelect")?.value || "").trim();
     const onlyChanged = document.getElementById("adminAlertSubsOnlyChangedInput")?.checked === true;
     const viewMode = normalizeAdminAlertViewMode();
-    const rowsEls = Array.from(container.querySelectorAll("tbody tr[data-row-type]"));
+    const rowsEls = Array.from(container.querySelectorAll("[data-row-type]"));
     const dataRows = rowsEls.filter((row) => {
       const rowType = String(row.dataset.rowType || "");
       return viewMode === "user" ? rowType === "user" : rowType === "host";
@@ -4073,7 +4088,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
 
   const applyBulkToVisible = (channel, enabled) => {
     const selectedUser = String(document.getElementById("adminAlertSubsUserFilterSelect")?.value || "").trim();
-    const rowsEls = Array.from(container.querySelectorAll("tbody tr[data-row-type]"));
+    const rowsEls = Array.from(container.querySelectorAll("[data-row-type]"));
     let changedAny = false;
     for (const row of rowsEls) {
       if (row.classList.contains("admin-sub-row-hidden")) continue;
@@ -4094,7 +4109,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
   };
 
   const applyRowBulk = (scope, key, channel, enabled) => {
-    const rows = Array.from(container.querySelectorAll("tbody tr[data-row-type]"));
+    const rows = Array.from(container.querySelectorAll("[data-row-type]"));
     let changedAny = false;
     for (const row of rows) {
       if (scope === "host" && String(row.dataset.hostname || "") !== key) continue;
@@ -4118,6 +4133,18 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
   const userFilterSelect = document.getElementById("adminAlertSubsUserFilterSelect");
   if (userFilterSelect) {
     userFilterSelect.addEventListener("change", () => {
+      const selectedUser = String(userFilterSelect.value || "").trim();
+      const viewModeSelect = document.getElementById("adminAlertSubsViewModeSelect");
+      if (selectedUser && normalizeAdminAlertViewMode() !== "user-focus") {
+        captureCurrentFromDom();
+        state.adminAlertSubscriptionsViewMode = "user-focus";
+        if (viewModeSelect) {
+          viewModeSelect.value = "user-focus";
+        }
+        renderTable();
+        markUnsavedStatus();
+        return;
+      }
       if (normalizeAdminAlertViewMode() === "user-focus") {
         captureCurrentFromDom();
         renderTable();
