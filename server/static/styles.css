@@ -14522,7 +14522,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 
 /* Operations Focus mockup: reports area hierarchy and grouping */
 .reports-column .section-head {
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-radius: 16px;
 }
 
@@ -14543,19 +14543,19 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .reports-column .section-head .report-meta-row {
-  margin-top: 8px;
+  margin-top: 2px;
   display: grid;
-  grid-template-columns: minmax(420px, 1fr) auto;
+  grid-template-columns: minmax(520px, 1fr) auto;
   gap: 8px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .reports-column .section-head .report-customer-main-card,
 .reports-column .section-head .report-controls-card {
   display: grid;
   align-content: start;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 6px;
+  padding: 6px 10px;
   border: 1px solid #c7d7eb;
   border-radius: 12px;
   background: linear-gradient(180deg, #f8fbff 0%, #eef4fc 100%);
@@ -14563,16 +14563,16 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .reports-column .section-head .report-customer-main-card {
-  min-height: 118px;
+  min-height: 92px;
 }
 
 .reports-column .section-head .report-controls-card {
-  width: max-content;
+  width: clamp(360px, 34vw, 520px);
   max-width: 100%;
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  align-items: flex-start;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px 8px;
 }
 
 .reports-column .section-head .report-controls-card .header-first-row-controls,
@@ -14585,6 +14585,10 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   border: 0;
   background: transparent;
   box-shadow: none;
+}
+
+.reports-column .section-head .report-controls-card .header-first-row-controls {
+  flex: 1 1 100%;
 }
 
 .reports-column .section-head .report-customer-main-card .report-count-inline {
@@ -14614,7 +14618,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   display: grid;
   gap: 1px;
   width: 100%;
-  padding: 5px 2px 1px;
+  padding: 3px 2px 0;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -14630,7 +14634,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .report-customer-chip-wrap .selected-host-meta-card-main {
-  font-size: 28px;
+  font-size: 24px;
   line-height: 1.03;
   color: #163b6b;
   font-weight: 900;
@@ -14647,6 +14651,19 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.report-customer-chip-wrap .selected-host-meta-card--placeholder {
+  min-height: 62px;
+  align-items: center;
+}
+
+.report-customer-chip-wrap .selected-host-meta-card-placeholder-text {
+  font-size: 30px;
+  line-height: 1.05;
+  color: #58759b;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 .selected-host-meta-chip--os {
@@ -14773,6 +14790,10 @@ body[data-theme="dark"] .report-customer-chip-wrap .selected-host-meta-card-sub 
   color: #adc2de;
 }
 
+body[data-theme="dark"] .report-customer-chip-wrap .selected-host-meta-card-placeholder-text {
+  color: #b9cde7;
+}
+
 body[data-theme="dark"] .hosts-column .host-item {
   background: linear-gradient(180deg, #1a2c42 0%, #16263b 100%);
   border-color: #38506b;
@@ -14830,11 +14851,19 @@ body[data-theme="dark"] .reports-column #overviewFilesystemSection .fs-chart-car
     flex-wrap: wrap;
   }
 
+  .reports-column .section-head .report-controls-card .header-first-row-controls {
+    flex-basis: auto;
+  }
+
   .reports-column .section-head .report-customer-main-card .report-count-inline {
     justify-self: end;
   }
 
   .report-customer-chip-wrap .selected-host-meta-card-main {
     font-size: 22px;
+  }
+
+  .report-customer-chip-wrap .selected-host-meta-card-placeholder-text {
+    font-size: 24px;
   }
 }

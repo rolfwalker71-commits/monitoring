@@ -9224,6 +9224,12 @@ function renderSelectedHostCustomerChip(host) {
   </span>`;
 }
 
+function renderSelectedHostPlaceholderChip() {
+  return `<span class="selected-host-meta-card selected-host-meta-card--placeholder" title="Kein Host gewählt">
+    <strong class="selected-host-meta-card-placeholder-text">Host auswählen ...</strong>
+  </span>`;
+}
+
 function updateReportCustomerChip() {
   const chipWrap = document.getElementById("reportCustomerChip");
   if (!chipWrap) {
@@ -9231,14 +9237,14 @@ function updateReportCustomerChip() {
   }
   const selectedHost = getSelectedHostRecord();
   if ((!state.selectedHost && !state.selectedHostUid) || !selectedHost) {
-    chipWrap.innerHTML = "";
-    chipWrap.classList.add("hidden");
+    chipWrap.innerHTML = renderSelectedHostPlaceholderChip();
+    chipWrap.classList.remove("hidden");
     return;
   }
   const customerChip = renderSelectedHostCustomerChip(selectedHost);
   if (!customerChip) {
-    chipWrap.innerHTML = "";
-    chipWrap.classList.add("hidden");
+    chipWrap.innerHTML = renderSelectedHostPlaceholderChip();
+    chipWrap.classList.remove("hidden");
     return;
   }
   chipWrap.innerHTML = customerChip;
@@ -10768,13 +10774,11 @@ async function loadReportsForHost(options = {}) {
   const jumpToUtc = typeof options?.jumpToUtc === "string" ? options.jumpToUtc.trim() : "";
   const list = document.getElementById("reportList");
   const count = document.getElementById("reportCount");
-  const selectedHostTitle = document.getElementById("selectedHostTitle");
   const reportJumpDateInput = document.getElementById("reportJumpDateTimeInput");
   const reportJumpBounds = document.getElementById("reportJumpBounds");
 
   if (!state.selectedHost && !state.selectedHostUid) {
     state.currentReport = null;
-    selectedHostTitle.textContent = "🗂️ Meldungen";
     count.textContent = "";
     updateSelectedHostControls();
     if (reportJumpDateInput) {
@@ -10793,7 +10797,6 @@ async function loadReportsForHost(options = {}) {
     return;
   }
 
-  selectedHostTitle.textContent = "🗂️ Meldungen";
   list.innerHTML = "<p class=\"muted\">Lade Daten...</p>";
   count.textContent = "";
   updateSelectedHostControls();
@@ -10862,7 +10865,6 @@ async function loadReportsForHost(options = {}) {
     const shownIndex = state.reportOffset + 1;
     count.textContent = `Meldung ${shownIndex} von ${state.totalReports}`;
     state.selectedDisplayName = String(reports[0].display_name || reports[0].hostname || state.selectedHost);
-    selectedHostTitle.textContent = "🗂️ Meldungen";
     state.currentReport = reports[0];
     list.innerHTML = renderReportCard(state.currentReport);
     wireSapVersionMapCopyButtons(list);
