@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.197**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.197**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.198**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.198**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.198 | 01.06.2026 | Schriftwechsel auf **Sora** umgesetzt (globaler Import + Sans-Familien in UI-CSS). Zusätzlich die Menüpunkt-Typografie im Meldungsbereich wie gewünscht um **+2px** angehoben (Top-Tabs und Sidebar-Menüpunkte), während die zuvor reduzierten Detailgrößen in den Einzelmeldungen unverändert blieben. |
 | 1.7.197 | 01.06.2026 | Typografie-Feinschliff gemäß Screenshot: alle betroffenen Menüpunkte im Meldungsbereich um **-1px** reduziert (Top-Tabs + Sidebar-Menüeinträge). Zusätzlich im Bereich **Einzelmeldungen** die Detailtypografie ebenfalls um **-1px** reduziert (Section-Überschriften, Tabellen-Header/Zellen, Count-Labels). Umsetzung als finaler CSS-Override am Dateiende, damit bestehende frühere Regeln sicher übersteuert werden. |
 | 1.7.196 | 01.06.2026 | Globaler Font erneut auf **Plus Jakarta Sans** umgestellt. Die zuvor gesetzte verkleinerte Basisgröße (ca. 2px kleiner) wurde **beibehalten**; es wurden nur Schriftfamilie/Import geändert, keine zusätzlichen Größen- oder Gewichtsanpassungen. |
 | 1.7.195 | 01.06.2026 | Nächster Font-Kandidat global aktiviert: **Red Hat Text** (Import + Sans-Familien in der UI-CSS). Zusätzlich globale Basis um ca. **2px kleiner** gestellt über zentrale Defaults (`body` Font-Size sowie `--btn-height`/`--chip-height`). Größen/Gewichte einzelner Komponenten ansonsten unverändert. |
