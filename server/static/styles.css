@@ -14562,9 +14562,10 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .reports-column .section-head .report-customer-main-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  padding-bottom: 2px;
+  padding-bottom: 6px;
 }
 
 .reports-column .section-head .report-controls-card {
@@ -14608,6 +14609,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   justify-content: flex-end;
   justify-self: end;
   margin-left: 0;
+  width: max-content;
 }
 
 .reports-column .section-head .report-controls-card .header-first-row-controls,
@@ -14624,15 +14626,16 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 
 .reports-column .section-head .report-controls-card .selected-host-controls {
   margin-left: 0 !important;
+  justify-content: flex-end;
 }
 
 .reports-column .section-head .report-customer-main-card .report-count-inline {
-  display: block;
-  justify-self: end;
-  margin-top: 0;
+  position: absolute;
+  right: 9px;
+  bottom: 5px;
+  display: inline-block;
   text-align: right;
-  margin-right: 0;
-  margin-bottom: 0;
+  margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
@@ -14641,7 +14644,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   font-weight: 800;
   color: #4f6f94;
   white-space: nowrap;
-  transform: translateY(-4px);
+  transform: none;
 }
 
 .report-header-os-logo-wrap {
