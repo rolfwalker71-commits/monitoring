@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.188**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.188**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.189**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.189**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.189 | 01.06.2026 | Header-Fix für verbleibende Layout-Konflikte: rechte Aktionszeile auf Grid (links Aktionen, rechts Icon-Cluster) umgestellt, damit die Icons stabil ganz rechts stehen. Zusätzlich linke Kundenkarte vertikal weiter komprimiert und die Zeile „Meldung X von Y“ sichtbar höher gesetzt, damit die Kartenhöhen links/rechts konsistenter wirken. |
 | 1.7.188 | 01.06.2026 | Header-Karten erneut verdichtet (deutlich geringere Höhe durch kompaktere Innenabstände und reduzierte Mindesthöhe). Rechte Controls-Karte strukturell auf exakt zwei Zeilen umgebaut: obere Zeile nur Status-/Meta-Chips, untere Zeile Aktionen mit explizit rechtsbündiger Icon-Gruppe. Dadurch bleibt die Symbolgruppe stabil rechts ausgerichtet und der Gesamteindruck kompakter. |
 | 1.7.187 | 01.06.2026 | Reports-Header weiter verdichtet: beide Kopfkarten auf kompaktere Mindesthöhe gebracht, rechte Karte in der Breite stärker begrenzt (kein ausufernder Platzverbrauch), und Icon-Aktionen (Bearbeiten/Status/Favorit) in der rechten Karte explizit nach rechts gruppiert. Zusätzlich Typografie in der linken Kundenkarte angehoben (Kundenname und Hostzeile größer). |
 | 1.7.186 | 01.06.2026 | Reports-Header Feintuning: rechte Controls-Karte verschlankt und gegen Überlauf über den Container-Rand abgesichert, linke Kundenkarte per Grid-Stretch auf gleiche Höhe gebracht, und Symbol-Aktionen innerhalb der rechten Karte konsequent nach rechts ausgerichtet. |

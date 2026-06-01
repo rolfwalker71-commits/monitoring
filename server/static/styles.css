@@ -14547,7 +14547,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(300px, 27vw, 400px);
   gap: 8px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .reports-column .section-head .report-customer-main-card,
@@ -14564,6 +14564,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 .reports-column .section-head .report-customer-main-card {
   display: flex;
   flex-direction: column;
+  padding-bottom: 2px;
 }
 
 .reports-column .section-head .report-controls-card {
@@ -14588,9 +14589,9 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .reports-column .section-head .report-controls-card .report-controls-row--actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   min-width: 0;
 }
@@ -14605,7 +14606,8 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 
 .reports-column .section-head .report-controls-card .report-controls-actions-right {
   justify-content: flex-end;
-  margin-left: auto;
+  justify-self: end;
+  margin-left: 0;
 }
 
 .reports-column .section-head .report-controls-card .header-first-row-controls,
@@ -14620,20 +14622,26 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   box-shadow: none;
 }
 
+.reports-column .section-head .report-controls-card .selected-host-controls {
+  margin-left: 0 !important;
+}
+
 .reports-column .section-head .report-customer-main-card .report-count-inline {
   display: block;
   justify-self: end;
-  margin-top: 2px;
+  margin-top: 0;
   text-align: right;
   margin-right: 0;
   margin-bottom: 0;
   padding: 0;
   border: 0;
   background: transparent;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1;
   font-weight: 800;
   color: #4f6f94;
   white-space: nowrap;
+  transform: translateY(-4px);
 }
 
 .report-header-os-logo-wrap {
@@ -14647,9 +14655,9 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 
 .report-customer-chip-wrap .selected-host-meta-card {
   display: grid;
-  gap: 1px;
+  gap: 0;
   width: 100%;
-  padding: 1px 2px 0;
+  padding: 0 2px 0;
   border: 0;
   border-radius: 0;
   background: transparent;
