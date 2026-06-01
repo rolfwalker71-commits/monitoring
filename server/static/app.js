@@ -9121,6 +9121,16 @@ function renderApiKeyChip(host) {
   return `<span class="host-apikey-chip ${apiKeyChipMod}" title="${escapeHtml(apiKeyChipTitle)}">API</span>`;
 }
 
+function renderHostOsMetaChip(host) {
+  if (!host) {
+    return "";
+  }
+  const osInfo = resolveHostOsIcon(host.os);
+  const osLabel = asText(osInfo?.osLabel, "OS");
+  const osTitle = asText(host.os, osLabel);
+  return `<span class="selected-host-meta-chip selected-host-meta-chip--os" title="${escapeHtml(osTitle)}">${escapeHtml(osLabel)}</span>`;
+}
+
 function renderHeaderFirstRowControls(host) {
   if (!host) {
     return "";
@@ -9136,9 +9146,11 @@ function renderHeaderFirstRowControls(host) {
   const envChip = envLabel
     ? `<span class="selected-host-meta-chip selected-host-meta-chip--env selected-host-meta-chip--env-${escapeHtml(environmentType)}" title="Host-Umgebung">${escapeHtml(envLabel)}</span>`
     : "";
+  const osChip = renderHostOsMetaChip(host);
 
   return `
     ${renderApiKeyChip(host)}
+    ${osChip}
     ${envChip}
     <span class="selected-host-meta-chip" title="Gesendete Meldungen">📦 ${reportCount}</span>
   `;
@@ -9198,7 +9210,18 @@ function renderSelectedHostCustomerChip(host) {
   if (!customerName) {
     return "";
   }
-  return `<span class="selected-host-meta-chip" title="Kunde${customerProject ? ` · Maringo ${escapeHtml(customerProject)}` : ""}">${escapeHtml(customerName)}${customerProject ? ` · ${escapeHtml(customerProject)}` : ""}</span>`;
+  const hostLabelRaw = asText(host.display_name || host.hostname || "Host", "Host").trim() || "Host";
+  const customerLabel = customerProject
+    ? `${customerName} · ${customerProject}`
+    : customerName;
+  const customerTitle = customerProject
+    ? `Kunde · Maringo ${customerProject}`
+    : "Kunde";
+  return `<span class="selected-host-meta-card" title="${escapeHtml(customerTitle)}">
+    <span class="selected-host-meta-card-label">Kunde</span>
+    <strong class="selected-host-meta-card-main">${escapeHtml(customerLabel)}</strong>
+    <span class="selected-host-meta-card-sub">Host: ${escapeHtml(hostLabelRaw)}</span>
+  </span>`;
 }
 
 function updateReportCustomerChip() {
@@ -9228,6 +9251,13 @@ function updateReportHeaderOsLogo(host) {
   if (!wrap || !img) {
     return;
   }
+
+  // Operations focus: keep header center clear, OS appears as compact chip in first-row controls.
+  img.removeAttribute("src");
+  img.removeAttribute("title");
+  img.alt = "";
+  wrap.classList.add("hidden");
+  return;
 
   if (!host) {
     img.removeAttribute("src");

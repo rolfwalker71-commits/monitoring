@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.181**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.181**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.182**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.182**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.182 | 01.06.2026 | Operations-Focus Mockup im Meldungsbereich umgesetzt: Header neu in Gruppen-/Gesamtkarten strukturiert, Kunde als primäre Information (inkl. Host als sekundäre Zeile) hervorgehoben, großes zentriertes OS-Logo entfernt und als kompakter OS-Chip in die Meta-Leiste verlegt. Zusätzlich vier UX-Anpassungen realisiert: stärkere aktive Host-Hervorhebung bei ruhigeren passiven Host-Cards, klarere Sidebar-Tab-Hierarchie, sowie besser lesbare Filesystem-Chart-Karten mit stärkerer Titel/Meta/Footline-Struktur. |
 | 1.7.181 | 01.06.2026 | KPI-Trendpfeile visuell nachgeschärft: Pfeil wird jetzt direkt im Werte-Span neben der Zahl gerendert (keine zweite Zeile mehr) und mit höherem Schriftgewicht/Grösse dargestellt, damit der Trend sofort erkennbar ist. |
 | 1.7.180 | 01.06.2026 | KPI-Infobar erweitert: jede KPI-Karte zeigt jetzt einen Trendpfeil ohne Text (↑ steigend, ↓ fallend, → gleichbleibend) in fetter Darstellung. Die Richtung wird pro KPI gegen den vorherigen Messstand berechnet und bei jedem Header-Update aktualisiert. |
 | 1.7.179 | 01.06.2026 | SAP-Lizenzinfo-Liste besser lesbar gemacht: Zeilen unter „Lizenztyp / Anzahl“ jetzt im Zebra-Muster (abwechselnd hell und hellgrau) mit leichtem Innenabstand/Radius; Dark-Mode-Variante analog in zwei abgestuften dunklen Hintergründen umgesetzt. |
