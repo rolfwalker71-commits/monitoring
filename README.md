@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.205**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.205**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.206**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.206**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.206 | 01.06.2026 | Alert-Abos um Admin-Override erweitert: `web_user_alert_subscriptions` bekommt ein Override-Flag, User-Speicherungen respektieren gesperrte Einträge, und die Admin-Ansicht markiert diese Einträge sichtbar als Override. |
 | 1.7.205 | 01.06.2026 | Header-Kundenkarte final entkoppelt: zusätzlicher vertikaler Abstand unter dem Kundennamen bleibt bestehen, damit die Hostbezeichnung nicht mehr darüber läuft. Dazu die bestehende Wrap-Logik für Name/Host beibehalten, aber visuell klar getrennt. |
 | 1.7.204 | 01.06.2026 | Header-Kundenkarte nachgeschärft: zusätzlicher vertikaler Abstand unter dem Kundennamen (Bottom-Spacer), damit die Hostbezeichnung zuverlässig darunter bleibt und nicht mehr überdeckt wird. |
 | 1.7.203 | 01.06.2026 | Header-Kundenkarte überarbeitet: Label **„Kunde“** entfernt. Zusätzlich Überlappung/Abschneiden von Kundenname und Hostzeile behoben, indem die Texte mehrzeilig umbrechen dürfen (kein erzwungenes Ellipsis mehr) und in der Karte zusätzlicher unterer Platz für den rechts unten positionierten Meldungszähler reserviert wird. |

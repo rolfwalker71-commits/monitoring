@@ -1220,12 +1220,19 @@ def init_db() -> None:
                 hostname TEXT NOT NULL,
                 notify_mail INTEGER NOT NULL DEFAULT 1,
                 notify_telegram INTEGER NOT NULL DEFAULT 0,
+                is_admin_override INTEGER NOT NULL DEFAULT 0,
                 updated_at_utc TEXT NOT NULL,
                 PRIMARY KEY(username, hostname),
                 FOREIGN KEY(username) REFERENCES web_users(username)
             )
             """
         )
+        existing_web_user_alert_subscriptions_columns = {
+            str(row[1] or "")
+            for row in conn.execute("PRAGMA table_info(web_user_alert_subscriptions)").fetchall()
+        }
+        if "is_admin_override" not in existing_web_user_alert_subscriptions_columns:
+            conn.execute("ALTER TABLE web_user_alert_subscriptions ADD COLUMN is_admin_override INTEGER NOT NULL DEFAULT 0")
         conn.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_web_user_alert_subscriptions_host
@@ -6227,6 +6234,7 @@ def get_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str) ->
                COALESCE(h.display_name_override, ''),
                COALESCE(s.notify_mail, 0),
                COALESCE(s.notify_telegram, 0),
+               COALESCE(s.is_admin_override, 0),
                COALESCE(s.updated_at_utc, '')
         FROM web_user_alert_subscriptions s
         LEFT JOIN host_settings h ON h.hostname = s.hostname
@@ -6241,7 +6249,8 @@ def get_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str) ->
             "display_name": str(row[1] or "") if str(row[1] or "").strip() else str(row[0] or ""),
             "notify_mail": bool(int(row[2] or 0)),
             "notify_telegram": bool(int(row[3] or 0)),
-            "updated_at_utc": str(row[4] or ""),
+            "is_admin_override": bool(int(row[4] or 0)),
+            "updated_at_utc": str(row[5] or ""),
         }
         for row in rows
         if str(row[0] or "").strip()
@@ -6265,12 +6274,31 @@ def list_all_user_alert_subscriptions(conn: sqlite3.Connection) -> list[dict]:
     return result
 
 
-def replace_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str, subscriptions: list[dict]) -> list[dict]:
+def replace_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str, subscriptions: list[dict], *, admin_override: bool = False) -> list[dict]:
     user = get_web_user(conn, username)
     if user is None:
         raise ValueError("user not found")
 
     now_utc = utc_now_iso()
+    existing_rows = {
+        str(row[0] or "").strip(): {
+            "notify_mail": bool(int(row[1] or 0)),
+            "notify_telegram": bool(int(row[2] or 0)),
+            "is_admin_override": bool(int(row[3] or 0)),
+        }
+        for row in conn.execute(
+            """
+            SELECT hostname,
+                   COALESCE(notify_mail, 0),
+                   COALESCE(notify_telegram, 0),
+                   COALESCE(is_admin_override, 0)
+            FROM web_user_alert_subscriptions
+            WHERE username = ?
+            """,
+            (username,),
+        ).fetchall()
+        if str(row[0] or "").strip()
+    }
     normalized: dict[str, dict] = {}
     for item in subscriptions:
         if not isinstance(item, dict):
@@ -6285,9 +6313,60 @@ def replace_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str
             "notify_telegram": notify_telegram,
         }
 
-    conn.execute("DELETE FROM web_user_alert_subscriptions WHERE username = ?", (username,))
+    if admin_override:
+        conn.execute("DELETE FROM web_user_alert_subscriptions WHERE username = ?", (username,))
+        for hostname, channel_settings in normalized.items():
+            conn.execute(
+                """
+                INSERT INTO web_user_alert_subscriptions (
+                    username,
+                    hostname,
+                    notify_mail,
+                    notify_telegram,
+                    is_admin_override,
+                    updated_at_utc
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    username,
+                    hostname,
+                    1 if channel_settings["notify_mail"] else 0,
+                    1 if channel_settings["notify_telegram"] else 0,
+                    1,
+                    now_utc,
+                ),
+            )
+        return get_web_user_alert_subscriptions(conn, username)
+
+    merged_rows: dict[str, dict] = {
+        hostname: {
+            "notify_mail": existing["notify_mail"],
+            "notify_telegram": existing["notify_telegram"],
+            "is_admin_override": True,
+        }
+        for hostname, existing in existing_rows.items()
+        if existing["is_admin_override"]
+    }
 
     for hostname, channel_settings in normalized.items():
+        existing = existing_rows.get(hostname)
+        if existing and existing["is_admin_override"]:
+            merged_rows[hostname] = {
+                "notify_mail": existing["notify_mail"],
+                "notify_telegram": existing["notify_telegram"],
+                "is_admin_override": True,
+            }
+            continue
+        merged_rows[hostname] = {
+            "notify_mail": channel_settings["notify_mail"],
+            "notify_telegram": channel_settings["notify_telegram"],
+            "is_admin_override": False,
+        }
+
+    conn.execute("DELETE FROM web_user_alert_subscriptions WHERE username = ?", (username,))
+
+    for hostname, channel_settings in merged_rows.items():
         conn.execute(
             """
             INSERT INTO web_user_alert_subscriptions (
@@ -6295,15 +6374,17 @@ def replace_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str
                 hostname,
                 notify_mail,
                 notify_telegram,
+                is_admin_override,
                 updated_at_utc
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 username,
                 hostname,
                 1 if channel_settings["notify_mail"] else 0,
                 1 if channel_settings["notify_telegram"] else 0,
+                1 if channel_settings.get("is_admin_override") else 0,
                 now_utc,
             ),
         )
@@ -17226,7 +17307,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             try:
                 with sqlite3.connect(DB_PATH) as conn:
-                    saved = replace_web_user_alert_subscriptions(conn, target_username, subscriptions)
+                    saved = replace_web_user_alert_subscriptions(conn, target_username, subscriptions, admin_override=True)
                     conn.commit()
                 self._send_json(HTTPStatus.OK, {"status": "stored", "username": target_username, "subscriptions": saved})
             except ValueError as exc:

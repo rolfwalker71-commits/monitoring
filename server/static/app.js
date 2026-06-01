@@ -3259,7 +3259,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     }
     const hostMap = targetMap.get(username);
     if (!hostMap.has(hostname)) {
-      hostMap.set(hostname, { hostname, notify_mail: true, notify_telegram: true });
+      hostMap.set(hostname, { hostname, notify_mail: true, notify_telegram: true, is_admin_override: false });
     }
     return hostMap.get(hostname);
   };
@@ -3279,9 +3279,11 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
       const originalEntry = ensureHostEntry(originalSubscriptions, username, hostname);
       originalEntry.notify_mail = sub.notify_mail !== false;
       originalEntry.notify_telegram = sub.notify_telegram !== false;
+      originalEntry.is_admin_override = sub.is_admin_override === true;
       const currentEntry = ensureHostEntry(currentSubscriptions, username, hostname);
       currentEntry.notify_mail = originalEntry.notify_mail;
       currentEntry.notify_telegram = originalEntry.notify_telegram;
+      currentEntry.is_admin_override = originalEntry.is_admin_override;
     }
   }
 
@@ -3327,14 +3329,14 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
 
   const getCurrentEntry = (username, hostname) => {
     const userMap = currentSubscriptions.get(username);
-    if (!userMap) return { hostname, notify_mail: true, notify_telegram: true };
-    return userMap.get(hostname) || { hostname, notify_mail: true, notify_telegram: true };
+    if (!userMap) return { hostname, notify_mail: true, notify_telegram: true, is_admin_override: false };
+    return userMap.get(hostname) || { hostname, notify_mail: true, notify_telegram: true, is_admin_override: false };
   };
 
   const getOriginalEntry = (username, hostname) => {
     const userMap = originalSubscriptions.get(username);
-    if (!userMap) return { hostname, notify_mail: true, notify_telegram: true };
-    return userMap.get(hostname) || { hostname, notify_mail: true, notify_telegram: true };
+    if (!userMap) return { hostname, notify_mail: true, notify_telegram: true, is_admin_override: false };
+    return userMap.get(hostname) || { hostname, notify_mail: true, notify_telegram: true, is_admin_override: false };
   };
 
   const captureCurrentFromDom = () => {
@@ -3418,9 +3420,11 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
           const enabled = channel === "mail" ? currentEntry.notify_mail : currentEntry.notify_telegram;
           const originalEnabled = channel === "mail" ? originalEntry.notify_mail : originalEntry.notify_telegram;
           const disabled = channel === "telegram" && !telegramAvailable;
-          return `<label class="admin-sub-user-chip${userEntry.is_admin ? " is-admin" : ""}${disabled ? " is-disabled" : ""}" data-username="${username}">
+          const overrideBadge = currentEntry.is_admin_override ? '<span class="admin-sub-override-pill" title="Admin-Override">Admin</span>' : "";
+          return `<label class="admin-sub-user-chip${userEntry.is_admin ? " is-admin" : ""}${currentEntry.is_admin_override ? " is-admin-override" : ""}${disabled ? " is-disabled" : ""}" data-username="${username}" title="${currentEntry.is_admin_override ? "Admin-Override" : ""}">
             <input type="checkbox" class="admin-sub-cb" data-username="${username}" data-hostname="${hostname}" data-channel="${channel}" data-original-checked="${originalEnabled ? "1" : "0"}" ${enabled ? "checked" : ""} ${disabled ? "disabled" : ""}>
             <span class="admin-sub-user-name">${username}</span>
+            ${overrideBadge}
           </label>`;
         }).join("");
 
@@ -3471,9 +3475,11 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
           const hostLabel = displayNameRaw && hostnameRaw && displayNameRaw !== hostnameRaw
             ? `${displayName} (${hostname})`
             : `${displayName || hostname}`;
-          return `<label class="admin-sub-user-chip${disabled ? " is-disabled" : ""}" data-hostname="${hostname}">
+          const overrideBadge = currentEntry.is_admin_override ? '<span class="admin-sub-override-pill" title="Admin-Override">Admin</span>' : "";
+          return `<label class="admin-sub-user-chip${currentEntry.is_admin_override ? " is-admin-override" : ""}${disabled ? " is-disabled" : ""}" data-hostname="${hostname}" title="${currentEntry.is_admin_override ? "Admin-Override" : ""}">
             <input type="checkbox" class="admin-sub-cb" data-username="${username}" data-hostname="${hostname}" data-channel="${channel}" data-original-checked="${originalEnabled ? "1" : "0"}" ${enabled ? "checked" : ""} ${disabled ? "disabled" : ""}>
             <span class="admin-sub-user-name">${hostLabel}</span>
+            ${overrideBadge}
           </label>`;
         }).join("");
 
