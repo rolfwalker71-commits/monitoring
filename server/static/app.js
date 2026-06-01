@@ -313,7 +313,14 @@ const state = {
   userManagementLoaded: false,
   hostFilterNoMatches: false,
   hostInterestMode: "all",
+  hostInterestCountryCodes: new Set(),
+  hostInterestHostAdditions: new Set(),
+  hostInterestHostExclusions: new Set(),
   hostInterestHosts: new Set(),
+  hostInterestTargetHosts: [],
+  hostInterestTargetsLoaded: false,
+  hostInterestTargetsLoading: false,
+  hostInterestTargetsLoadingPromise: null,
   hostInterestsLoadedFor: "",
   hostInterestSearchQuery: "",
   adminAlertSubscriptionsLoaded: false,
@@ -684,12 +691,36 @@ async function loadUserPreferences() {
       state.criticalTrendsMetrics = metricsStr.split(",").map((m) => m.trim()).filter((m) => m.length > 0);
     }
     state.hostInterestMode = normalizeHostInterestMode(prefs.host_interest_mode || "all");
-    state.hostInterestHosts = new Set(
-      String(prefs.host_interest_hosts || "")
+    const parsedCountryCodes = new Set(
+      String(prefs.host_interest_country_codes || "")
         .split(",")
-        .map((item) => item.trim())
+        .map((item) => String(item || "").trim().toUpperCase())
+        .filter((item) => /^[A-Z]{2}$/.test(item))
+    );
+    const parsedHostAdditions = new Set(
+      String(prefs.host_interest_host_additions || prefs.host_interest_hosts || "")
+        .split(",")
+        .map((item) => String(item || "").trim())
         .filter((item) => item.length > 0)
     );
+    const parsedHostExclusions = new Set(
+      String(prefs.host_interest_host_exclusions || "")
+        .split(",")
+        .map((item) => String(item || "").trim())
+        .filter((item) => item.length > 0)
+    );
+    state.hostInterestCountryCodes = parsedCountryCodes;
+    state.hostInterestHostAdditions = parsedHostAdditions;
+    state.hostInterestHostExclusions = parsedHostExclusions;
+    if (state.hostInterestCountryCodes.size === 0 && state.hostInterestHostAdditions.size === 0 && state.hostInterestHostExclusions.size === 0) {
+      state.hostInterestHostAdditions = new Set(
+        String(prefs.host_interest_hosts || "")
+          .split(",")
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0)
+      );
+    }
+    state.hostInterestHosts = getEffectiveHostInterestHosts();
     state.hostInterestsLoadedFor = String(state.authDisplayName || state.authUser || "").trim();
     updateCriticalTrendsMetricsCheckboxes();
     renderHostInterestsEditor();
@@ -701,10 +732,95 @@ async function loadUserPreferences() {
 function resetUserScopedPreferences() {
   state.criticalTrendsMetrics = ["filesystem"];
   state.hostInterestMode = "all";
+  state.hostInterestCountryCodes = new Set();
+  state.hostInterestHostAdditions = new Set();
+  state.hostInterestHostExclusions = new Set();
   state.hostInterestHosts = new Set();
   state.hostInterestsLoadedFor = "";
   updateCriticalTrendsMetricsCheckboxes();
   renderHostInterestsEditor();
+}
+
+function getHostInterestCountryCode(host) {
+  return asText(host?.country_code || "", "").trim().toUpperCase();
+}
+
+function getHostInterestSelectedCountries() {
+  return new Set(Array.from(state.hostInterestCountryCodes || []).filter((code) => /^[A-Z]{2}$/.test(String(code || ""))));
+}
+
+function getHostInterestManualAdditions() {
+  return new Set(Array.from(state.hostInterestHostAdditions || []).map((hostname) => String(hostname || "").trim()).filter((item) => item.length > 0));
+}
+
+function getHostInterestManualExclusions() {
+  return new Set(Array.from(state.hostInterestHostExclusions || []).map((hostname) => String(hostname || "").trim()).filter((item) => item.length > 0));
+}
+
+function getHostInterestSelectorHosts() {
+  return Array.isArray(state.hostInterestTargetHosts) && state.hostInterestTargetHosts.length > 0
+    ? state.hostInterestTargetHosts
+    : (state.hosts || []);
+}
+
+function getEffectiveHostInterestHosts() {
+  const selectedCountries = getHostInterestSelectedCountries();
+  const additions = getHostInterestManualAdditions();
+  const exclusions = getHostInterestManualExclusions();
+  const effective = new Set();
+
+  for (const host of getHostInterestSelectorHosts()) {
+    const hostname = String(host.hostname || "").trim();
+    if (!hostname) continue;
+    const countryCode = getHostInterestCountryCode(host);
+    if (selectedCountries.has(countryCode) && !exclusions.has(hostname)) {
+      effective.add(hostname);
+    }
+  }
+
+  for (const hostname of additions) {
+    if (!exclusions.has(hostname)) {
+      effective.add(hostname);
+    }
+  }
+
+  return effective;
+}
+
+function syncEffectiveHostInterestSelection() {
+  state.hostInterestHosts = getEffectiveHostInterestHosts();
+}
+
+async function loadHostInterestTargets(force = false) {
+  if (state.hostInterestTargetsLoaded && !force) {
+    return state.hostInterestTargetsLoadingPromise || Promise.resolve();
+  }
+  if (state.hostInterestTargetsLoadingPromise) {
+    return state.hostInterestTargetsLoadingPromise;
+  }
+
+  state.hostInterestTargetsLoading = true;
+  state.hostInterestTargetsLoadingPromise = (async () => {
+    try {
+      const response = await fetch("/api/v1/host-interest-targets", { credentials: "same-origin" });
+      if (!response.ok) {
+        throw new Error("HTTP " + response.status);
+      }
+      const data = await response.json();
+      state.hostInterestTargetHosts = Array.isArray(data.hosts) ? data.hosts : [];
+      state.hostInterestTargetsLoaded = true;
+      syncEffectiveHostInterestSelection();
+      if (state.userSettingsSubMode === "hosts") {
+        renderHostInterestsEditor();
+      }
+    } catch (_error) {
+      // Ignore host-selector load errors; the editor falls back to the current host page.
+    } finally {
+      state.hostInterestTargetsLoading = false;
+      state.hostInterestTargetsLoadingPromise = null;
+    }
+  })();
+  return state.hostInterestTargetsLoadingPromise;
 }
 
 function updateCriticalTrendsMetricsCheckboxes() {
@@ -1831,13 +1947,28 @@ function renderHostInterestsEditor() {
   const listEl = document.getElementById("hostInterestsList");
   const summaryEl = document.getElementById("hostInterestsSummary");
   const loadedForEl = document.getElementById("hostInterestsLoadedFor");
+  const countrySummaryEl = document.getElementById("hostInterestCountrySummary");
+  const countryChipsEl = document.getElementById("hostInterestCountryChips");
   if (!listEl) {
     return;
   }
 
   syncHostInterestModeControls();
+  syncEffectiveHostInterestSelection();
 
-  const allHosts = [...(state.hosts || [])].sort((a, b) => {
+  if (!state.hostInterestTargetsLoaded && !state.hostInterestTargetsLoading) {
+    void loadHostInterestTargets();
+  }
+
+  const selectorHosts = Array.isArray(state.hostInterestTargetHosts) && state.hostInterestTargetHosts.length > 0
+    ? state.hostInterestTargetHosts
+    : (state.hosts || []);
+  const allHosts = [...selectorHosts].sort((a, b) => {
+    const customerA = String(a.customer_name || "").toLowerCase();
+    const customerB = String(b.customer_name || "").toLowerCase();
+    if (customerA !== customerB) {
+      return customerA.localeCompare(customerB);
+    }
     const nameA = String(a.display_name || a.hostname || "").toLowerCase();
     const nameB = String(b.display_name || b.hostname || "").toLowerCase();
     return nameA.localeCompare(nameB);
@@ -1847,55 +1978,163 @@ function renderHostInterestsEditor() {
     ? allHosts.filter((host) => {
       const hostname = String(host.hostname || "").toLowerCase();
       const displayName = String(host.display_name || host.hostname || "").toLowerCase();
-      return hostname.includes(query) || displayName.includes(query);
+      const customerName = String(host.customer_name || "").toLowerCase();
+      return hostname.includes(query) || displayName.includes(query) || customerName.includes(query);
     })
     : allHosts;
 
+  const selectedCountries = getHostInterestSelectedCountries();
+  const manualAdditions = getHostInterestManualAdditions();
+  const manualExclusions = getHostInterestManualExclusions();
+  const effectiveHosts = getEffectiveHostInterestHosts();
+  const countryGroups = new Map();
+  for (const host of visibleHosts) {
+    const countryCode = getHostInterestCountryCode(host) || "__NONE__";
+    if (!countryGroups.has(countryCode)) countryGroups.set(countryCode, []);
+    countryGroups.get(countryCode).push(host);
+  }
+  const countryCodes = Array.from(countryGroups.keys()).sort((a, b) => {
+    if (a === "__NONE__") return 1;
+    if (b === "__NONE__") return -1;
+    return a.localeCompare(b);
+  });
+
   if (summaryEl) {
     const modeLabel = normalizeHostInterestMode(state.hostInterestMode).replaceAll("_", " ");
-    summaryEl.textContent = `${state.hostInterestHosts.size} markiert | Modus: ${modeLabel}`;
+    summaryEl.textContent = `${effectiveHosts.size} Hosts aktiv | ${selectedCountries.size} Länder | ${manualAdditions.size} manuell | ${manualExclusions.size} Ausnahmen | Modus: ${modeLabel}`;
   }
   if (loadedForEl) {
     loadedForEl.textContent = state.hostInterestsLoadedFor
       ? `Geladene Präferenzen: ${state.hostInterestsLoadedFor}`
       : "Geladene Präferenzen: -";
   }
+  if (countrySummaryEl) {
+    countrySummaryEl.textContent = selectedCountries.size > 0
+      ? `Vorselektion aktiv für ${selectedCountries.size} Länder.`
+      : "Keine Länder vorselektiert.";
+  }
 
   if (allHosts.length === 0) {
     listEl.innerHTML = '<p class="muted">Noch keine Hosts geladen.</p>';
+    if (countryChipsEl) {
+      countryChipsEl.innerHTML = '<p class="muted">Keine Länder verfügbar.</p>';
+    }
     return;
   }
+
+  const allCountryGroups = new Map();
+  for (const host of allHosts) {
+    const countryCode = getHostInterestCountryCode(host) || "__NONE__";
+    if (!allCountryGroups.has(countryCode)) allCountryGroups.set(countryCode, []);
+    allCountryGroups.get(countryCode).push(host);
+  }
+
+  if (countryChipsEl) {
+    const countryCodesAll = Array.from(allCountryGroups.keys()).sort((a, b) => {
+      if (a === "__NONE__") return 1;
+      if (b === "__NONE__") return -1;
+      return a.localeCompare(b);
+    });
+    countryChipsEl.innerHTML = countryCodesAll.map((countryCode) => {
+      const hostsInCountry = allCountryGroups.get(countryCode) || [];
+      const label = countryCode === "__NONE__" ? "Ohne Land" : countryCode;
+      const flagPath = countryCode === "__NONE__" ? "" : getCountryFlagIconPath(countryCode);
+      const active = selectedCountries.has(countryCode);
+      return `<button type="button" class="host-interest-country-chip${active ? " is-active" : ""}" data-country-code="${escapeHtml(countryCode)}">
+        ${flagPath ? `<img src="${flagPath}" alt="${escapeHtml(countryCode)}" class="host-interest-country-flag" />` : ""}
+        <span>${escapeHtml(label)}</span>
+        <span class="count compact">${hostsInCountry.length}</span>
+      </button>`;
+    }).join("");
+
+    countryChipsEl.querySelectorAll("[data-country-code]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const countryCode = String(button.getAttribute("data-country-code") || "").trim().toUpperCase();
+        if (countryCode !== "__NONE__" && !/^[A-Z]{2}$/.test(countryCode)) {
+          return;
+        }
+        if (selectedCountries.has(countryCode)) {
+          selectedCountries.delete(countryCode);
+        } else {
+          selectedCountries.add(countryCode);
+        }
+        state.hostInterestCountryCodes = selectedCountries;
+        syncEffectiveHostInterestSelection();
+        renderHostInterestsEditor();
+      });
+    });
+  }
+
   if (visibleHosts.length === 0) {
     listEl.innerHTML = '<p class="muted">Keine Treffer für die Suche.</p>';
     return;
   }
 
-  listEl.innerHTML = visibleHosts.map((host) => {
-    const hostname = String(host.hostname || "");
-    const displayName = String(host.display_name || hostname || "");
+  const renderHostRow = (host) => {
+    const hostname = String(host.hostname || "").trim();
+    const displayName = String(host.display_name || hostname || "").trim();
     const customerName = String(host.customer_name || "").trim() || "Ohne Kunde";
-    const checked = state.hostInterestHosts.has(hostname) ? "checked" : "";
-    return `
-      <label class="host-interest-item">
-        <input type="checkbox" data-host-interest-host="${escapeHtml(hostname)}" ${checked} />
+    const countryCode = getHostInterestCountryCode(host);
+    const selectedByCountry = selectedCountries.has(countryCode);
+    const manualAdded = manualAdditions.has(hostname);
+    const excluded = manualExclusions.has(hostname);
+    const effective = effectiveHosts.has(hostname);
+    const hostLabel = displayName || hostname || "Host";
+    const badges = [];
+    if (selectedByCountry && !excluded) badges.push(`<span class="host-interest-source-pill country">Land</span>`);
+    if (manualAdded) badges.push(`<span class="host-interest-source-pill manual">Manuell</span>`);
+    if (excluded) badges.push(`<span class="host-interest-source-pill excluded">Ausnahme</span>`);
+    return `<label class="host-interest-item${effective ? " is-active" : ""}" data-host-interest-host="${escapeHtml(hostname)}" data-host-country-code="${escapeHtml(countryCode)}">
+      <input class="host-interest-toggle" type="checkbox" ${effective ? "checked" : ""} />
+      <span class="host-interest-meta">
         <span class="host-interest-customer">${escapeHtml(customerName)}</span>
-        <span class="host-interest-name">${escapeHtml(displayName)}</span>
-        <span class="host-interest-hostname">(${escapeHtml(hostname)})</span>
-      </label>
-    `;
+        <span class="host-interest-name">${escapeHtml(hostLabel)}</span>
+        <span class="host-interest-hostname">${escapeHtml(countryCode ? `${countryCode} · ${hostname}` : hostname)}</span>
+      </span>
+      <span class="host-interest-badges">${badges.join("")}</span>
+    </label>`;
+  };
+
+  const groupedSections = countryCodes.map((countryCode) => {
+    const hostsInCountry = countryGroups.get(countryCode) || [];
+    const label = countryCode === "__NONE__" ? "Ohne Land" : countryCode;
+    const flagPath = countryCode === "__NONE__" ? "" : getCountryFlagIconPath(countryCode);
+    const sectionOpen = selectedCountries.has(countryCode) || query.length > 0;
+    return `<details class="host-interest-country-group" ${sectionOpen ? "open" : ""} data-country-code="${escapeHtml(countryCode)}">
+      <summary>${flagPath ? `<img src="${flagPath}" alt="${escapeHtml(countryCode)}" class="host-interest-country-flag" />` : ""}${escapeHtml(label)} <span class="count compact">${hostsInCountry.length}</span></summary>
+      <div class="host-interest-country-group-body">
+        ${hostsInCountry.map(renderHostRow).join("")}
+      </div>
+    </details>`;
   }).join("");
 
-  listEl.querySelectorAll("[data-host-interest-host]").forEach((checkbox) => {
+  listEl.innerHTML = groupedSections || '<p class="muted">Keine Treffer für die Suche.</p>';
+
+  listEl.querySelectorAll("[data-host-interest-host]").forEach((row) => {
+    const checkbox = row.querySelector(".host-interest-toggle");
+    if (!checkbox) return;
     checkbox.addEventListener("change", () => {
-      const hostname = String(checkbox.getAttribute("data-host-interest-host") || "");
+      const hostname = String(row.getAttribute("data-host-interest-host") || "").trim();
+      const countryCode = String(row.getAttribute("data-host-country-code") || "").trim().toUpperCase();
       if (!hostname) {
         return;
       }
+      const countrySelected = selectedCountries.has(countryCode);
       if (checkbox.checked) {
-        state.hostInterestHosts.add(hostname);
+        manualExclusions.delete(hostname);
+        if (!countrySelected) {
+          manualAdditions.add(hostname);
+        }
       } else {
-        state.hostInterestHosts.delete(hostname);
+        if (countrySelected) {
+          manualExclusions.add(hostname);
+        } else {
+          manualAdditions.delete(hostname);
+        }
       }
+      state.hostInterestHostAdditions = manualAdditions;
+      state.hostInterestHostExclusions = manualExclusions;
+      syncEffectiveHostInterestSelection();
       renderHostInterestsEditor();
     });
   });
@@ -2386,9 +2625,14 @@ function syncHostInterestModeControls() {
 }
 
 async function saveHostInterestsPreferences() {
+  await loadHostInterestTargets();
+  syncEffectiveHostInterestSelection();
   const preferencesPayload = {
     critical_trends_metrics: state.criticalTrendsMetrics.join(","),
     host_interest_mode: normalizeHostInterestMode(state.hostInterestMode),
+    host_interest_country_codes: Array.from(getHostInterestSelectedCountries()).sort().join(","),
+    host_interest_host_additions: Array.from(getHostInterestManualAdditions()).sort().join(","),
+    host_interest_host_exclusions: Array.from(getHostInterestManualExclusions()).sort().join(","),
     host_interest_hosts: [...state.hostInterestHosts].sort().join(","),
   };
   const prefsResponse = await fetch("/api/v1/user-preferences", {
@@ -2410,10 +2654,10 @@ async function saveHostInterestsPreferences() {
       headers: { "Content-Type": "application/json" },
     });
     const currentSubs = subsResponse.ok ? await subsResponse.json() : [];
+    const selectedHosts = new Set(state.hostInterestHosts);
     
     // Build new subscriptions: sync selected hosts with notify_mail=true
     const newSubs = [];
-    const selectedHosts = new Set(state.hostInterestHosts);
     
     // For each currently subscribed host, preserve other settings
     for (const sub of currentSubs) {
@@ -10698,6 +10942,7 @@ async function loadHosts(options = {}) {
     state.totalHosts = Number(data.total_hosts || 0);
     const hosts = data.hosts || [];
     state.hosts = hosts;
+    syncEffectiveHostInterestSelection();
     updateHeaderStatChips();
     renderHostInterestsEditor();
     const { visibleHosts, hiddenHosts } = splitHosts(hosts);
@@ -14900,14 +15145,26 @@ function wireEvents() {
   const hostInterestsSelectAllButton = document.getElementById("hostInterestsSelectAllButton");
   if (hostInterestsSelectAllButton) {
     hostInterestsSelectAllButton.addEventListener("click", () => {
-      state.hostInterestHosts = new Set((state.hosts || []).map((host) => String(host.hostname || "")).filter((item) => item));
+      const selectorHosts = Array.isArray(state.hostInterestTargetHosts) && state.hostInterestTargetHosts.length > 0
+        ? state.hostInterestTargetHosts
+        : (state.hosts || []);
+      state.hostInterestCountryCodes = new Set(selectorHosts.map((host) => getHostInterestCountryCode(host)).filter((item) => /^[A-Z]{2}$/.test(item)));
+      const noCountryHosts = selectorHosts.filter((host) => !getHostInterestCountryCode(host)).map((host) => String(host.hostname || "").trim()).filter((item) => item.length > 0);
+      state.hostInterestHostAdditions = new Set([...(state.hostInterestHostAdditions || []), ...noCountryHosts]);
+      syncEffectiveHostInterestSelection();
       renderHostInterestsEditor();
     });
   }
   const hostInterestsClearButton = document.getElementById("hostInterestsClearButton");
   if (hostInterestsClearButton) {
     hostInterestsClearButton.addEventListener("click", () => {
-      state.hostInterestHosts = new Set();
+      const selectorHosts = Array.isArray(state.hostInterestTargetHosts) && state.hostInterestTargetHosts.length > 0
+        ? state.hostInterestTargetHosts
+        : (state.hosts || []);
+      state.hostInterestCountryCodes = new Set();
+      const noCountryHosts = selectorHosts.filter((host) => !getHostInterestCountryCode(host)).map((host) => String(host.hostname || "").trim()).filter((item) => item.length > 0);
+      state.hostInterestHostAdditions = new Set(Array.from(state.hostInterestHostAdditions || []).filter((hostname) => !noCountryHosts.includes(hostname)));
+      syncEffectiveHostInterestSelection();
       renderHostInterestsEditor();
     });
   }

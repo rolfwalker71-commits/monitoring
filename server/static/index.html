@@ -923,9 +923,14 @@
                   <input id="hostInterestSearchInput" type="text" placeholder="Host oder Titel suchen..." />
                 </label>
               </div>
+              <div class="host-interest-country-head">
+                <p class="count compact host-interest-country-hint">Länder setzen die Vorselektion. Einzelne Hosts können zusätzlich aufgenommen oder ausgenommen werden.</p>
+                <div id="hostInterestCountrySummary" class="count compact host-interest-country-summary"></div>
+                <div id="hostInterestCountryChips" class="host-interest-country-chips"></div>
+              </div>
               <div class="alarm-settings-actions">
-                <button id="hostInterestsSelectAllButton" type="button">Alle markieren</button>
-                <button id="hostInterestsClearButton" type="button">Alle abwaehlen</button>
+                <button id="hostInterestsSelectAllButton" type="button">Alle Länder</button>
+                <button id="hostInterestsClearButton" type="button">Keine Länder</button>
                 <button id="saveHostInterestsButton" type="button">Host-Interessen speichern</button>
                 <p id="hostInterestsStatus" class="count compact"></p>
               </div>

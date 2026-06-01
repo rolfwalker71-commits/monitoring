@@ -2374,10 +2374,181 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
   }
 }
+  .host-interest-country-head {
+    display: grid;
+    gap: 8px;
+    margin: 8px 0 10px;
+  }
+
+  .host-interest-country-hint {
+    margin: 0;
+  }
+
+  .host-interest-country-summary {
+    color: #334155;
+  }
+
+  .host-interest-country-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .host-interest-country-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 30px;
+    padding: 0 10px;
+    border: 1px solid #c7d3e8;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #1f3f6e;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .host-interest-country-chip:hover {
+    background: #eef6ff;
+  }
+
+  .host-interest-country-chip.is-active {
+    background: #dbeafe;
+    border-color: #93c5fd;
+  }
+
+  .host-interest-country-flag {
+    width: 18px;
+    height: 13px;
+    border-radius: 2px;
+    object-fit: cover;
+  }
+
 
 @media (max-width: 760px) {
   .alarm-settings-grid,
   .user-create-grid,
+
+  .host-interest-country-group {
+    border: 1px solid #d8e6f7;
+    border-radius: 12px;
+    background: #fbfdff;
+    overflow: hidden;
+  }
+
+  .host-interest-country-group + .host-interest-country-group {
+    margin-top: 10px;
+  }
+
+  .host-interest-country-group > summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 800;
+    color: #0f3f73;
+    background: #f4f8ff;
+  }
+
+  .host-interest-country-group > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .host-interest-country-group > summary::before {
+    content: "▸";
+    display: inline-block;
+    margin-right: 8px;
+    transition: transform 0.16s ease;
+  }
+
+  .host-interest-country-group[open] > summary::before {
+    transform: rotate(90deg);
+  }
+
+  .host-interest-country-group-body {
+    padding: 10px 12px 12px;
+  }
+
+  .host-interest-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: start;
+    padding: 8px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #ffffff;
+  }
+
+  .host-interest-item + .host-interest-item {
+    margin-top: 8px;
+  }
+
+  .host-interest-item:hover {
+    background: #f8fbff;
+  }
+
+  .host-interest-toggle {
+    margin-top: 2px;
+  }
+
+  .host-interest-meta {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .host-interest-customer {
+    font-size: 11px;
+    font-weight: 800;
+    color: #0f3f73;
+  }
+
+  .host-interest-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1f2937;
+  }
+
+  .host-interest-hostname {
+    font-size: 11px;
+    color: #64748b;
+  }
+
+  .host-interest-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+  }
+
+  .host-interest-source-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 18px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #334155;
+    font-size: 10px;
+    font-weight: 800;
+  }
+
+  .host-interest-source-pill.country {
+    background: #dbeafe;
+    color: #1d4ed8;
+  }
+
+  .host-interest-source-pill.manual {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .host-interest-source-pill.excluded {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
   .user-alert-subscription-grid {
     grid-template-columns: 1fr;
   }

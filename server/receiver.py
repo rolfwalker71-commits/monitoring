@@ -1277,11 +1277,24 @@ def init_db() -> None:
                 critical_trends_metrics TEXT NOT NULL DEFAULT 'filesystem',
                 host_interest_mode TEXT NOT NULL DEFAULT 'all',
                 host_interest_hosts TEXT NOT NULL DEFAULT '',
+                host_interest_country_codes TEXT NOT NULL DEFAULT '',
+                host_interest_host_additions TEXT NOT NULL DEFAULT '',
+                host_interest_host_exclusions TEXT NOT NULL DEFAULT '',
                 updated_at_utc TEXT NOT NULL,
                 FOREIGN KEY(username) REFERENCES web_users(username)
             )
             """
         )
+        existing_user_preferences_columns = {
+            str(row[1] or "")
+            for row in conn.execute("PRAGMA table_info(user_preferences)").fetchall()
+        }
+        if "host_interest_country_codes" not in existing_user_preferences_columns:
+            conn.execute("ALTER TABLE user_preferences ADD COLUMN host_interest_country_codes TEXT NOT NULL DEFAULT ''")
+        if "host_interest_host_additions" not in existing_user_preferences_columns:
+            conn.execute("ALTER TABLE user_preferences ADD COLUMN host_interest_host_additions TEXT NOT NULL DEFAULT ''")
+        if "host_interest_host_exclusions" not in existing_user_preferences_columns:
+            conn.execute("ALTER TABLE user_preferences ADD COLUMN host_interest_host_exclusions TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS filesystem_visibility (
@@ -4736,6 +4749,9 @@ def get_user_preferences(conn: sqlite3.Connection, username: str) -> dict:
         SELECT COALESCE(critical_trends_metrics, 'filesystem'),
                COALESCE(host_interest_mode, 'all'),
                COALESCE(host_interest_hosts, ''),
+               COALESCE(host_interest_country_codes, ''),
+               COALESCE(host_interest_host_additions, ''),
+               COALESCE(host_interest_host_exclusions, ''),
                COALESCE(updated_at_utc, '')
         FROM user_preferences
         WHERE username = ?
@@ -4747,16 +4763,34 @@ def get_user_preferences(conn: sqlite3.Connection, username: str) -> dict:
             "critical_trends_metrics": "filesystem",
             "host_interest_mode": "all",
             "host_interest_hosts": "",
+            "host_interest_country_codes": "",
+            "host_interest_host_additions": "",
+            "host_interest_host_exclusions": "",
             "updated_at_utc": "",
         }
     mode = str(row[1] or "all").strip().lower()
     if mode not in {"all", "interested_first", "interested_only"}:
         mode = "all"
+
+    def _normalize_csv(value: object) -> str:
+        return ",".join(
+            sorted(
+                {
+                    str(item or "").strip().upper()
+                    for item in str(value or "").split(",")
+                    if str(item or "").strip()
+                }
+            )
+        )
+
     return {
         "critical_trends_metrics": str(row[0] or "filesystem").strip() or "filesystem",
         "host_interest_mode": mode,
         "host_interest_hosts": str(row[2] or ""),
-        "updated_at_utc": str(row[3] or ""),
+        "host_interest_country_codes": _normalize_csv(row[3]),
+        "host_interest_host_additions": str(row[4] or ""),
+        "host_interest_host_exclusions": str(row[5] or ""),
+        "updated_at_utc": str(row[6] or ""),
     }
 
 
@@ -4765,22 +4799,84 @@ def save_user_preferences(conn: sqlite3.Connection, username: str, payload: dict
     metrics = str(payload.get("critical_trends_metrics", existing.get("critical_trends_metrics", "filesystem")) or "filesystem").strip()
     mode = str(payload.get("host_interest_mode", existing.get("host_interest_mode", "all")) or "all").strip().lower()
     hosts = str(payload.get("host_interest_hosts", existing.get("host_interest_hosts", "")) or "").strip()
+    country_codes = str(payload.get("host_interest_country_codes", existing.get("host_interest_country_codes", "")) or "").strip()
+    host_additions = str(payload.get("host_interest_host_additions", existing.get("host_interest_host_additions", "")) or "").strip()
+    host_exclusions = str(payload.get("host_interest_host_exclusions", existing.get("host_interest_host_exclusions", "")) or "").strip()
     if mode not in {"all", "interested_first", "interested_only"}:
         mode = "all"
     now_utc = utc_now_iso()
     conn.execute(
         """
-        INSERT INTO user_preferences (username, critical_trends_metrics, host_interest_mode, host_interest_hosts, updated_at_utc)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO user_preferences (
+            username,
+            critical_trends_metrics,
+            host_interest_mode,
+            host_interest_hosts,
+            host_interest_country_codes,
+            host_interest_host_additions,
+            host_interest_host_exclusions,
+            updated_at_utc
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(username) DO UPDATE SET
             critical_trends_metrics = excluded.critical_trends_metrics,
             host_interest_mode = excluded.host_interest_mode,
             host_interest_hosts = excluded.host_interest_hosts,
+            host_interest_country_codes = excluded.host_interest_country_codes,
+            host_interest_host_additions = excluded.host_interest_host_additions,
+            host_interest_host_exclusions = excluded.host_interest_host_exclusions,
             updated_at_utc = excluded.updated_at_utc
         """,
-        (username, metrics or "filesystem", mode, hosts, now_utc),
+        (username, metrics or "filesystem", mode, hosts, country_codes, host_additions, host_exclusions, now_utc),
     )
     return get_user_preferences(conn, username)
+
+
+def get_host_interest_targets(conn: sqlite3.Connection) -> list[dict]:
+    host_key_expr = reports_host_key_sql()
+    rows = conn.execute(
+        f"""
+        WITH grouped AS (
+            SELECT
+                {host_key_expr} AS host_key,
+                MAX(received_at_utc) AS last_seen_utc,
+                MAX(id) AS latest_id
+            FROM reports
+            GROUP BY {host_key_expr}
+        )
+        SELECT
+            g.host_key,
+            COALESCE(r_latest.hostname, '') AS hostname,
+            COALESCE(r_latest.payload_json, '{{}}') AS latest_payload_json,
+            COALESCE(r_latest.display_name, '') AS latest_display_name,
+            COALESCE(h.display_name_override, '') AS display_name_override,
+            COALESCE(h.country_code_override, '') AS country_code_override,
+            COALESCE(c.customer_name, '') AS customer_name
+        FROM grouped g
+        JOIN reports r_latest ON r_latest.id = g.latest_id
+        LEFT JOIN host_settings h ON h.hostname = r_latest.hostname
+        LEFT JOIN customers c ON c.id = h.customer_id
+        ORDER BY LOWER(COALESCE(NULLIF(h.display_name_override, ''), NULLIF(r_latest.display_name, ''), r_latest.hostname)), LOWER(r_latest.hostname)
+        """
+    ).fetchall()
+
+    items: list[dict] = []
+    for row in rows:
+        payload = parse_payload_json(str(row[2] or "{}"))
+        hostname = str(row[1] or "").strip() or str(row[0] or "").strip()
+        display_name = str(row[4] or "").strip() or str(row[3] or "").strip() or hostname
+        if not hostname:
+            continue
+        country_code = normalize_country_code(str(row[5] or "")) or extract_country_code_from_payload(payload)
+        items.append(
+            {
+                "hostname": hostname,
+                "display_name": display_name,
+                "country_code": country_code,
+                "customer_name": str(row[6] or "").strip(),
+            }
+        )
+    return items
 
 
 def get_filesystem_visibility_hidden(
@@ -14085,6 +14181,24 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 payload = get_user_preferences(conn, username)
             self._send_json(HTTPStatus.OK, payload)
+            return
+
+        if parsed.path == "/api/v1/host-interest-targets":
+            endpoint_timer = _new_endpoint_timer("/api/v1/host-interest-targets")
+            cache_key = "host-interest-targets:v1"
+            cached_data = _read_cache_get(cache_key)
+            if isinstance(cached_data, dict):
+                self._send_json(HTTPStatus.OK, cached_data)
+                _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
+                _finish_endpoint_timer(endpoint_timer, meta="cache=hit")
+                return
+            with sqlite3.connect(DB_PATH) as conn:
+                hosts = get_host_interest_targets(conn)
+            data = {"hosts": hosts, "total_hosts": len(hosts)}
+            _read_cache_set(cache_key, data, ttl_seconds=300)
+            self._send_json(HTTPStatus.OK, data)
+            _mark_endpoint_timer(endpoint_timer, "db+send")
+            _finish_endpoint_timer(endpoint_timer, meta=f"cache=miss total={len(hosts)}")
             return
 
         if parsed.path == "/api/v1/session/refresh":
