@@ -13538,7 +13538,7 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
   width: 100%;
   display: grid !important;
   grid-auto-flow: column;
-  grid-auto-columns: max-content;
+  grid-auto-columns: var(--kpi-uniform-card-width, max-content);
   justify-content: start;
   gap: 6px !important;
   overflow: hidden !important;
@@ -13968,6 +13968,8 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
 }
 
 .panel-header .header-kpi-strip > .header-stat-chip:not(.header-stat-chip-license) {
+  width: var(--kpi-uniform-card-width, auto);
+  max-width: var(--kpi-uniform-card-width, none);
   min-width: 70px;
   min-height: 44px;
   padding: 3px 6px;

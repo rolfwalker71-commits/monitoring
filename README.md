@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.172**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.172**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.173**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.173**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.173 | 01.06.2026 | KPI-Karten auf Wunsch gleichbreit umgesetzt: alle sichtbaren KPI-Chips erhalten jetzt dynamisch die Breite der jeweils breitesten Karte im Strip. Implementiert über JS-Messung + CSS-Variable (`--kpi-uniform-card-width`) inkl. Re-Sync bei KPI-Updates und Window-Resize. Ergebnis: optisch einheitliche Kartenbreiten ohne willkürlichen Stretch-Mix. |
 | 1.7.172 | 01.06.2026 | KPI-Strip final kompakt gestellt: im finalen Header-Override von gleichbreiten Karten (`1fr`) auf inhaltsbreite Karten (`max-content`) umgestellt und Typografie/Padding weiter reduziert. Ergebnis: deutlich schmalere KPI-Karten, kein überbreiter Stretch-Effekt und kein sichtbarer Scrollbalken im oberen KPI-Bereich. |
 | 1.7.171 | 31.05.2026 | KPI-Layout ohne Scrollbar: KPI-Karten wurden kompakter gemacht (kleinere Paddings, reduzierte Typografie, geringere Mindesthöhe/-breite, engeres Gap), und der Strip wurde wieder auf nicht-scrollendes Grid (`overflow: hidden`) umgestellt, sodass alle Karten in einer Zeile ohne sichtbaren Scrollbalken dargestellt werden. |
 | 1.7.170 | 31.05.2026 | KPI-Header-Strip korrigiert: letzte Karte wird nicht mehr abgeschnitten. Der Strip ist jetzt horizontal scrollbar (inkl. dezenter Light/Dark-Scrollbar), mit verbessertem rechtem Innenabstand und Snap-Verhalten für sauberes horizontales Navigieren bei vielen KPI-Karten. |

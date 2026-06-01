@@ -90,8 +90,42 @@ let hostLicenseHoverPopupEl = null;
 let hostLicenseHoverHideTimerId = null;
 let hostLicenseHoverActiveHost = "";
 let changelogRebuildPollTimerId = null;
+let headerKpiWidthSyncFrameId = null;
 const hostLicenseHoverCache = new Map();
 const SESSION_REFRESH_INTERVAL_SECONDS = 240;
+
+function syncHeaderKpiUniformCardWidth() {
+  const strips = Array.from(document.querySelectorAll(".panel-header .panel-actions .header-kpi-strip"));
+  for (const strip of strips) {
+    strip.style.removeProperty("--kpi-uniform-card-width");
+    const cards = Array.from(
+      strip.querySelectorAll(":scope > .header-stat-chip:not(.header-stat-chip-license):not(.hidden)")
+    );
+    if (cards.length === 0) {
+      continue;
+    }
+    let maxWidth = 0;
+    for (const card of cards) {
+      const width = Math.ceil(card.getBoundingClientRect().width || 0);
+      if (width > maxWidth) {
+        maxWidth = width;
+      }
+    }
+    if (maxWidth > 0) {
+      strip.style.setProperty("--kpi-uniform-card-width", `${maxWidth}px`);
+    }
+  }
+}
+
+function scheduleHeaderKpiUniformCardWidthSync() {
+  if (headerKpiWidthSyncFrameId !== null) {
+    window.cancelAnimationFrame(headerKpiWidthSyncFrameId);
+  }
+  headerKpiWidthSyncFrameId = window.requestAnimationFrame(() => {
+    headerKpiWidthSyncFrameId = null;
+    syncHeaderKpiUniformCardWidth();
+  });
+}
 
 const state = {
   hostLimit: 200,
@@ -13185,6 +13219,8 @@ function updateHeaderStatChips() {
       if (licenseExpiryItem) licenseExpiryItem.classList.add("hidden");
     }
   }
+
+  scheduleHeaderKpiUniformCardWidthSync();
 }
 
 function wireHeaderLicenseCopyButton() {
@@ -14872,6 +14908,7 @@ async function init() {
   const sapLicenseTypeMapPromise = loadSapLicenseTypeMap();
 
   wireEvents();
+  window.addEventListener("resize", scheduleHeaderKpiUniformCardWidthSync);
   mountAdminSettingsIntoGlobalView();
   updateViewMode();
   updateOverviewSection();
