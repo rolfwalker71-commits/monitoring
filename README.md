@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.222**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.222**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.223**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.223**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.223 | 01.06.2026 | Admin-Alert-Hostbasis auf dieselbe host_uid-orientierte Quelle wie Host-Interessen umgestellt (`list_available_alert_hosts` nutzt nun `get_host_interest_targets`). Länder-/Kundenauflösung priorisiert host_uid-spezifische Overrides vor hostname-Overrides, damit Hostanzahl und Länderzuordnung in Admin/User-Fokus konsistenter sind. |
 | 1.7.222 | 01.06.2026 | Kritischen Frontend-Blocker behoben: doppelte `const userFilterSelect`-Deklaration im Admin-Subscriptions-Renderer entfernte die gesamte Script-Ausführung (`Identifier ... already been declared`). Login-Overlay und App-Inhalt laden wieder normal. |
 | 1.7.221 | 01.06.2026 | Nach Login/Logout wird die Oberfläche wieder explizit auf die normale Übersicht zurückgesetzt, damit die App nicht in einer Full-Panel-Ansicht hängenbleibt und nur der Header sichtbar ist. |
 | 1.7.220 | 01.06.2026 | Admin-User-Fokus markiert den gewählten Benutzer jetzt direkt im Options-Rendering, damit die Auswahl beim Re-Render nicht mehr visuell auf **„Alle Benutzer“** zurückspringt. |

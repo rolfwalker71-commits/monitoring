@@ -2077,7 +2077,7 @@ def _repair_report_host_uids(conn: sqlite3.Connection, batch_size: int = 1000) -
                    COALESCE(agent_id, ''),
                    COALESCE(primary_ip, ''),
                    COALESCE(payload_json, '{}'),
-                   COALESCE(host_uid, '')
+                '' AS latest_display_name,
             FROM reports
             WHERE id > ?
             ORDER BY id ASC
@@ -4853,15 +4853,20 @@ def get_host_interest_targets(conn: sqlite3.Connection) -> list[dict]:
             COALESCE(r_latest.host_uid, '') AS host_uid,
             COALESCE(r_latest.hostname, '') AS hostname,
             COALESCE(r_latest.payload_json, '{{}}') AS latest_payload_json,
-            COALESCE(r_latest.display_name, '') AS latest_display_name,
-            COALESCE(h.display_name_override, '') AS display_name_override,
-            COALESCE(h.country_code_override, '') AS country_code_override,
-            COALESCE(c.customer_name, '') AS customer_name
+            '' AS latest_display_name,
+            COALESCE(hus.display_name_override, '') AS uid_display_name_override,
+            COALESCE(h.display_name_override, '') AS host_display_name_override,
+            COALESCE(hus.country_code_override, '') AS uid_country_code_override,
+            COALESCE(h.country_code_override, '') AS host_country_code_override,
+            COALESCE(c_uid.customer_name, '') AS uid_customer_name,
+            COALESCE(c_host.customer_name, '') AS host_customer_name
         FROM grouped g
         JOIN reports r_latest ON r_latest.id = g.latest_id
+        LEFT JOIN host_uid_settings hus ON COALESCE(r_latest.host_uid, '') <> '' AND hus.host_uid = r_latest.host_uid
         LEFT JOIN host_settings h ON h.hostname = r_latest.hostname
-        LEFT JOIN customers c ON c.id = h.customer_id
-        ORDER BY LOWER(COALESCE(NULLIF(h.display_name_override, ''), NULLIF(r_latest.display_name, ''), r_latest.hostname)), LOWER(r_latest.hostname)
+        LEFT JOIN customers c_uid ON c_uid.id = hus.customer_id
+        LEFT JOIN customers c_host ON c_host.id = h.customer_id
+        ORDER BY LOWER(COALESCE(NULLIF(hus.display_name_override, ''), NULLIF(h.display_name_override, ''), r_latest.hostname)), LOWER(r_latest.hostname)
         """
     ).fetchall()
 
@@ -4870,17 +4875,18 @@ def get_host_interest_targets(conn: sqlite3.Connection) -> list[dict]:
         payload = parse_payload_json(str(row[3] or "{}"))
         host_uid = str(row[1] or "").strip()
         hostname = str(row[2] or "").strip() or str(row[0] or "").strip()
-        display_name = str(row[5] or "").strip() or str(row[4] or "").strip() or hostname
+        display_name = str(row[5] or "").strip() or str(row[6] or "").strip() or str(row[4] or "").strip() or hostname
         if not hostname:
             continue
-        country_code = normalize_country_code(str(row[6] or "")) or extract_country_code_from_payload(payload)
+        country_code = normalize_country_code(str(row[7] or "")) or normalize_country_code(str(row[8] or "")) or extract_country_code_from_payload(payload)
+        customer_name = str(row[9] or "").strip() or str(row[10] or "").strip()
         items.append(
             {
                 "host_uid": host_uid,
                 "hostname": hostname,
                 "display_name": display_name,
                 "country_code": country_code,
-                "customer_name": str(row[7] or "").strip(),
+                "customer_name": customer_name,
             }
         )
     return items
@@ -6301,33 +6307,7 @@ def delete_filesystem_blacklist_pattern(conn: sqlite3.Connection, pattern_id: in
 
 
 def list_available_alert_hosts(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute(
-        """
-        SELECT r.hostname,
-               COALESCE(h.display_name_override, ''),
-               COALESCE(h.country_code_override, ''),
-               COALESCE(r.payload_json, '{}')
-        FROM reports r
-        LEFT JOIN host_settings h ON h.hostname = r.hostname
-        JOIN (
-            SELECT hostname, MAX(id) AS latest_id
-            FROM reports
-            WHERE COALESCE(hostname, '') != ''
-            GROUP BY hostname
-        ) latest ON latest.latest_id = r.id
-        WHERE COALESCE(r.hostname, '') != ''
-        ORDER BY LOWER(COALESCE(NULLIF(h.display_name_override, ''), r.hostname)), LOWER(r.hostname)
-        """
-    ).fetchall()
-    return [
-        {
-            "hostname": str(row[0] or ""),
-            "display_name": str(row[1] or "") if str(row[1] or "").strip() else str(row[0] or ""),
-            "country_code": normalize_country_code(str(row[2] or "")) or extract_country_code_from_payload(parse_payload_json(str(row[3] or "{}"))),
-        }
-        for row in rows
-        if str(row[0] or "").strip()
-    ]
+    return get_host_interest_targets(conn)
 
 
 def get_web_user_alert_subscriptions(conn: sqlite3.Connection, username: str) -> list[dict]:
