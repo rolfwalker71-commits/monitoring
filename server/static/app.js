@@ -3696,11 +3696,11 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
   </div>
   <div id="adminAlertSubscriptionsTableWrap"></div>`;
 
-  const userFilterSelect = document.getElementById("adminAlertSubsUserFilterSelect");
-  if (userFilterSelect) {
+  const userFilterSelectInit = document.getElementById("adminAlertSubsUserFilterSelect");
+  if (userFilterSelectInit) {
     const desiredUser = String(state.adminAlertSubscriptionsSelectedUser || "").trim();
     if (desiredUser) {
-      userFilterSelect.value = desiredUser;
+      userFilterSelectInit.value = desiredUser;
     }
   }
 
