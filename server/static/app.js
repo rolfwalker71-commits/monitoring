@@ -116,14 +116,14 @@ function ensureHeaderKpiTrendArrow(countElement) {
   if (!countElement) {
     return null;
   }
-  const next = countElement.nextElementSibling;
-  if (next && next.classList.contains("header-chip-trend")) {
-    return next;
+  const existing = countElement.querySelector(":scope > .header-chip-trend");
+  if (existing) {
+    return existing;
   }
   const trendEl = document.createElement("span");
   trendEl.className = "header-chip-trend header-chip-trend-flat";
   trendEl.setAttribute("aria-hidden", "true");
-  countElement.insertAdjacentElement("afterend", trendEl);
+  countElement.appendChild(trendEl);
   return trendEl;
 }
 

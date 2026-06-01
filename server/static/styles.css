@@ -14076,19 +14076,23 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
 }
 
 .panel-header .header-kpi-strip .header-chip-count {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
   font-size: 1.08rem;
   line-height: 1.02;
 }
 
 .panel-header .header-kpi-strip .header-chip-trend {
-  display: inline-flex;
+  display: inline-block;
   align-items: baseline;
-  margin-left: 4px;
-  font-size: 0.9rem;
+  margin-left: 2px;
+  font-size: 1rem;
   line-height: 1;
-  font-weight: 900;
+  font-weight: 1000;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
   letter-spacing: 0;
-  opacity: 0.98;
+  opacity: 1;
 }
 
 .panel-header .header-kpi-strip .header-chip-trend-up,
