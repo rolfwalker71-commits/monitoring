@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.194**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.194**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.195**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.195**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.195 | 01.06.2026 | Nächster Font-Kandidat global aktiviert: **Red Hat Text** (Import + Sans-Familien in der UI-CSS). Zusätzlich globale Basis um ca. **2px kleiner** gestellt über zentrale Defaults (`body` Font-Size sowie `--btn-height`/`--chip-height`). Größen/Gewichte einzelner Komponenten ansonsten unverändert. |
 | 1.7.194 | 01.06.2026 | Globale Schrift von Manrope auf **Source Sans 3** umgestellt (Google-Font-Import im Haupt-HTML + Sans-Familien in der UI-CSS). Schriftgrößen und Schriftgewichte unverändert belassen. |
 | 1.7.193 | 01.06.2026 | Globale Schrift von Plus Jakarta Sans auf **Manrope** umgestellt (inkl. Google-Font-Import im Haupt-HTML und Sans-Familien in der UI-CSS). Schriftgrößen und Schriftgewichte unverändert belassen, wie gewünscht. |
 | 1.7.192 | 01.06.2026 | Globale Schriftumstellung auf **Plus Jakarta Sans** durchgeführt (ohne Änderung an bestehenden Schriftgrößen/-gewichten). Dazu Font-Import im Haupt-HTML ergänzt und alle bisherigen IBM-Plex-Sans-Sans-Referenzen in der UI-CSS konsistent auf Plus Jakarta Sans umgestellt. |
