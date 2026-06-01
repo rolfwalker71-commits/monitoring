@@ -19,7 +19,7 @@
   --crit: #dc2626;
   --crit-bg: #fee2e2;
   --crit-border: #fca5a5;
-  --kv-label-family: "Manrope", "Segoe UI", sans-serif;
+  --kv-label-family: "Source Sans 3", "Segoe UI", sans-serif;
   --kv-label-size: 11px;
   --kv-label-weight: 600;
   --kv-label-letter: 0;
@@ -39,7 +39,7 @@
 
 body {
   margin: 0;
-  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
   background: #ffffff !important;
   min-height: 100vh;
   color: var(--text);
@@ -4600,7 +4600,7 @@ body[data-theme="dark"] .trend-progress-bar {
   border-color: #9fb7cf;
   background: linear-gradient(180deg, #e9f1f9 0%, #d9e6f3 100%);
   color: #2f4f6f;
-  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
   line-height: 1.1;
   border-radius: 4px;
   font-size: 10px;
@@ -6221,7 +6221,7 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
 .chart-axis-label {
   fill: #7689a2;
   font-size: 10px;
-  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
 }
 
 .chart-axis-label-x {
@@ -8149,7 +8149,7 @@ body[data-theme="dark"] .sap-b1-service-status-inactive {
 }
 
 .sap-license-list-item strong {
-  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
   font-size: 11px;
   font-weight: 400;
   letter-spacing: 0;
@@ -11484,7 +11484,7 @@ body[data-theme="dark"] .backup-row--hana td {
 }
 
 .so-license-type-name {
-  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
   font-size: 11px;
   font-weight: 400;
   letter-spacing: 0;
@@ -11499,7 +11499,7 @@ body[data-theme="dark"] .backup-row--hana td {
 }
 
 .so-license-label {
-  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
   font-size: 11px;
   font-weight: 400;
   letter-spacing: 0;
@@ -14076,7 +14076,7 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
   font-size: 1rem;
   line-height: 1;
   font-weight: 1000;
-  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
   letter-spacing: 0;
   opacity: 1;
 }

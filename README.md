@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.193**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.193**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.194**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.194**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.194 | 01.06.2026 | Globale Schrift von Manrope auf **Source Sans 3** umgestellt (Google-Font-Import im Haupt-HTML + Sans-Familien in der UI-CSS). Schriftgrößen und Schriftgewichte unverändert belassen. |
 | 1.7.193 | 01.06.2026 | Globale Schrift von Plus Jakarta Sans auf **Manrope** umgestellt (inkl. Google-Font-Import im Haupt-HTML und Sans-Familien in der UI-CSS). Schriftgrößen und Schriftgewichte unverändert belassen, wie gewünscht. |
 | 1.7.192 | 01.06.2026 | Globale Schriftumstellung auf **Plus Jakarta Sans** durchgeführt (ohne Änderung an bestehenden Schriftgrößen/-gewichten). Dazu Font-Import im Haupt-HTML ergänzt und alle bisherigen IBM-Plex-Sans-Sans-Referenzen in der UI-CSS konsistent auf Plus Jakarta Sans umgestellt. |
 | 1.7.191 | 01.06.2026 | Report-Jump-Leiste bereinigt: Hostbezeichnungs-Chip („SAP Test“) entfernt, da er rein informativ war und keine Funktion für Navigation/Filter ausgelöst hat. Zusätzlich neue Schriftvergleichs-Mockup-Seite erstellt (`/font-mockup.html`) mit realem Header-Layoutausschnitt und fünf empfohlenen UI-Fonts (Plus Jakarta Sans, Manrope, Source Sans 3, Red Hat Text, Sora). |
