@@ -13538,7 +13538,7 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
   width: 100%;
   display: grid !important;
   grid-auto-flow: column;
-  grid-auto-columns: var(--kpi-uniform-card-width, 158px);
+  grid-auto-columns: var(--kpi-uniform-card-width, 142px);
   justify-content: start;
   gap: 6px !important;
   overflow: hidden !important;
@@ -14009,8 +14009,8 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
 }
 
 .panel-header .header-kpi-strip > .header-stat-chip:not(.header-stat-chip-license) {
-  width: var(--kpi-uniform-card-width, 158px);
-  max-width: var(--kpi-uniform-card-width, 158px);
+  width: var(--kpi-uniform-card-width, 142px);
+  max-width: var(--kpi-uniform-card-width, 142px);
   min-width: 70px;
   min-height: 44px;
   padding: 3px 6px;

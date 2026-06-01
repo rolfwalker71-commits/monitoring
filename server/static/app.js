@@ -92,9 +92,9 @@ let hostLicenseHoverActiveHost = "";
 let changelogRebuildPollTimerId = null;
 let headerKpiWidthSyncFrameId = null;
 const HEADER_KPI_WIDTH_STORAGE_KEY = "monitoring.headerKpiUniformWidth";
-const HEADER_KPI_DEFAULT_WIDTH_PX = 158;
-const HEADER_KPI_MIN_WIDTH_PX = 120;
-const HEADER_KPI_MAX_WIDTH_PX = 280;
+const HEADER_KPI_DEFAULT_WIDTH_PX = 142;
+const HEADER_KPI_MIN_WIDTH_PX = 104;
+const HEADER_KPI_MAX_WIDTH_PX = 190;
 const hostLicenseHoverCache = new Map();
 const SESSION_REFRESH_INTERVAL_SECONDS = 240;
 
@@ -166,8 +166,17 @@ function syncHeaderKpiUniformCardWidth() {
       }
     }
     if (maxMeasuredWidth > 0) {
-      // Keep width monotonic during load to avoid visible multi-step shrinking/growing.
-      nextWidth = clampHeaderKpiWidth(Math.max(currentWidth, maxMeasuredWidth));
+      const desiredWidth = clampHeaderKpiWidth(maxMeasuredWidth);
+      const stripWidth = Math.floor(strip.clientWidth || 0);
+      const totalGap = Math.max(0, (cards.length - 1) * 6);
+      const fitWidth = stripWidth > totalGap ? Math.floor((stripWidth - totalGap) / cards.length) : 0;
+      const fitClampedWidth = clampHeaderKpiWidth(fitWidth);
+      if (fitClampedWidth > 0) {
+        // Keep cards in one row by honoring the available strip width cap.
+        nextWidth = Math.min(desiredWidth, fitClampedWidth);
+      } else {
+        nextWidth = desiredWidth;
+      }
     }
     strip.style.setProperty("--kpi-uniform-card-width", `${nextWidth}px`);
     widthToPersist = Math.max(widthToPersist, nextWidth);
