@@ -14545,7 +14545,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 .reports-column .section-head .report-meta-row {
   margin-top: 2px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(320px, 30vw, 440px);
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 27vw, 400px);
   gap: 8px;
   align-items: stretch;
 }
@@ -14555,22 +14555,22 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   display: grid;
   align-content: start;
   gap: 6px;
-  padding: 6px 10px;
+  padding: 5px 10px;
   border: 1px solid #c7d7eb;
   border-radius: 12px;
   background: linear-gradient(180deg, #f8fbff 0%, #eef4fc 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  min-height: 82px;
 }
 
 .reports-column .section-head .report-customer-main-card {
-  min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
 .reports-column .section-head .report-controls-card {
   width: 100%;
-  max-width: 440px;
+  max-width: 400px;
   min-width: 0;
   justify-self: end;
   display: flex;
@@ -14606,11 +14606,14 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 
 .reports-column .section-head .report-controls-card #editDisplayNameButton {
   order: 4;
+  margin-left: auto;
 }
 
 .reports-column .section-head .report-controls-card .selected-host-controls {
   order: 5;
-  margin-left: auto;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  margin-left: 0;
 }
 
 .reports-column .section-head .report-customer-main-card .report-count-inline {
@@ -14658,8 +14661,8 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .report-customer-chip-wrap .selected-host-meta-card-main {
-  font-size: 24px;
-  line-height: 1.03;
+  font-size: 34px;
+  line-height: 1.0;
   color: #163b6b;
   font-weight: 900;
   letter-spacing: -0.02em;
@@ -14669,9 +14672,10 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .report-customer-chip-wrap .selected-host-meta-card-sub {
-  font-size: 11px;
+  font-size: 18px;
   color: #5a7392;
   font-weight: 700;
+  line-height: 1.0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -14870,6 +14874,7 @@ body[data-theme="dark"] .reports-column #overviewFilesystemSection .fs-chart-car
     max-width: 100%;
     justify-content: flex-start;
     justify-self: auto;
+    min-height: 0;
   }
 
   .reports-column .section-head .report-controls-card .header-first-row-controls,
@@ -14890,7 +14895,11 @@ body[data-theme="dark"] .reports-column #overviewFilesystemSection .fs-chart-car
   }
 
   .report-customer-chip-wrap .selected-host-meta-card-main {
-    font-size: 22px;
+    font-size: 26px;
+  }
+
+  .report-customer-chip-wrap .selected-host-meta-card-sub {
+    font-size: 18px;
   }
 
   .report-customer-chip-wrap .selected-host-meta-card-placeholder-text {
