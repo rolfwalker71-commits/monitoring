@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.208**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.208**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.209**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.209**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.209 | 01.06.2026 | Host-Interessen UI nachgeschärft: vertikale Zentrierung, sauberer Abstand zwischen Flagge und Anzahl, untere Ländergruppen ohne redundante Länderkürzel (nur Flagge + Anzahl). Zusätzlich Länderklick schaltet alle Hosts des Landes aktiv (inkl. Aufhebung bestehender Ausnahmen für dieses Land). Neue Hosts gelten im Mailpfad standardmäßig als aktiv (opt-out per expliziter Abwahl), und die UI zeigt klar „X von Y Hosts im Mailversand“. |
 | 1.7.208 | 01.06.2026 | Alter Einzelhost-Flow in den Host-Interessen entfernt: aktive Logik nutzt nur noch Länder-Vorselektion plus manuelle Host-Ergänzungen/Ausnahmen. `host_interest_hosts` ist im Laufzeitpfad deaktiviert (nur noch einmalige Migration alter Daten in `host_interest_host_additions`). |
 | 1.7.207 | 01.06.2026 | Host-Interessen für Benutzer neu strukturiert: Länder können jetzt als Vorselektion gewählt werden, dazu kommen manuelle Host-Ergänzungen/Ausnahmen. Die Auswahlseite lädt dafür eine vollständige Hostliste mit Kunde/Host/Land, und die effektive Mail-Abo-Synchronisierung basiert nun auf dieser kombinierten Auswahl. |
 | 1.7.206 | 01.06.2026 | Alert-Abos um Admin-Override erweitert: `web_user_alert_subscriptions` bekommt ein Override-Flag, User-Speicherungen respektieren gesperrte Einträge, und die Admin-Ansicht markiert diese Einträge sichtbar als Override. |

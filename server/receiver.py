@@ -6550,11 +6550,22 @@ def get_user_alert_mail_host_scope(conn: sqlite3.Connection, username: str) -> s
     ).fetchall()
     if not rows:
         return None
-    return {
+    disabled_hosts = {
         str(row[0] or "").strip()
         for row in rows
-        if str(row[0] or "").strip() and bool(int(row[1] or 0))
+        if str(row[0] or "").strip() and not bool(int(row[1] or 0))
     }
+    if not disabled_hosts:
+        return None
+
+    known_hosts = {
+        str(item.get("hostname", "") or "").strip()
+        for item in get_host_interest_targets(conn)
+        if str(item.get("hostname", "") or "").strip()
+    }
+    if not known_hosts:
+        return None
+    return {hostname for hostname in known_hosts if hostname not in disabled_hosts}
 
 
 def collect_critical_trends(
@@ -10246,13 +10257,14 @@ def send_instant_alert_mails_to_users(
             SELECT u.username, COALESCE(s.alert_instant_min_severity, 'warning')
             FROM web_users u
             JOIN web_user_settings s ON s.username = u.username
-                        JOIN web_user_alert_subscriptions sub ON sub.username = u.username
+                        LEFT JOIN web_user_alert_subscriptions sub
+                                     ON sub.username = u.username
+                                    AND sub.hostname = ?
             WHERE COALESCE(u.is_disabled, 0) = 0
               AND COALESCE(s.alert_instant_mail_enabled, 0) = 1
               AND COALESCE(s.email_enabled, 0) = 1
               AND COALESCE(s.email_recipient, '') != ''
-                            AND sub.hostname = ?
-                            AND COALESCE(sub.notify_mail, 0) = 1
+                            AND COALESCE(sub.notify_mail, 1) = 1
             """
                         ,
                         (hostname,),
@@ -11114,7 +11126,7 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                     "SELECT notify_mail FROM web_user_alert_subscriptions WHERE username = ? AND hostname = ?",
                     (username, hostname),
                 ).fetchone()
-                if not sub or not bool(sub[0]):
+                if sub and not bool(sub[0]):
                     continue
 
                 user_settings = get_web_user_settings(conn, username)
@@ -11352,14 +11364,14 @@ def maybe_send_inactive_host_notifications(conn: sqlite3.Connection) -> None:
                 """
                 SELECT hostname
                 FROM web_user_alert_subscriptions
-                WHERE username = ? AND COALESCE(notify_mail, 0) = 1
+                WHERE username = ? AND COALESCE(notify_mail, 1) = 0
                 """,
                 (username,),
             ).fetchall()
-            subscribed_hosts = {str(sub_row[0] or "") for sub_row in subscribed_rows if str(sub_row[0] or "")}
+            disabled_hosts = {str(sub_row[0] or "") for sub_row in subscribed_rows if str(sub_row[0] or "")}
             selected_hosts = [
                 item for item in due_mail_hosts
-                if str(item.get("hostname") or "") in subscribed_hosts
+                if str(item.get("hostname") or "") not in disabled_hosts
             ]
             if not selected_hosts:
                 continue

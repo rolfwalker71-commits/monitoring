@@ -759,13 +759,17 @@ function getEffectiveHostInterestHosts() {
   const selectedCountries = getHostInterestSelectedCountries();
   const additions = getHostInterestManualAdditions();
   const exclusions = getHostInterestManualExclusions();
+  const selectorHosts = getHostInterestSelectorHosts();
   const effective = new Set();
+  const hasExplicitBaseSelection = selectedCountries.size > 0 || additions.size > 0;
 
-  for (const host of getHostInterestSelectorHosts()) {
+  for (const host of selectorHosts) {
     const hostname = String(host.hostname || "").trim();
     if (!hostname) continue;
     const countryCode = getHostInterestCountryCode(host);
-    if (selectedCountries.has(countryCode) && !exclusions.has(hostname)) {
+    const enabledByDefault = !hasExplicitBaseSelection;
+    const enabledByCountry = selectedCountries.has(countryCode);
+    if ((enabledByDefault || enabledByCountry) && !exclusions.has(hostname)) {
       effective.add(hostname);
     }
   }
@@ -1979,6 +1983,7 @@ function renderHostInterestsEditor() {
   const manualAdditions = getHostInterestManualAdditions();
   const manualExclusions = getHostInterestManualExclusions();
   const effectiveHosts = getEffectiveHostInterestHosts();
+  const totalHosts = allHosts.length;
   const countryGroups = new Map();
   for (const host of visibleHosts) {
     const countryCode = getHostInterestCountryCode(host) || "__NONE__";
@@ -1993,7 +1998,7 @@ function renderHostInterestsEditor() {
 
   if (summaryEl) {
     const modeLabel = normalizeHostInterestMode(state.hostInterestMode).replaceAll("_", " ");
-    summaryEl.textContent = `${effectiveHosts.size} Hosts aktiv | ${selectedCountries.size} Länder | ${manualAdditions.size} manuell | ${manualExclusions.size} Ausnahmen | Modus: ${modeLabel}`;
+    summaryEl.textContent = `${effectiveHosts.size} von ${totalHosts} Hosts für Mail aktiv | ${selectedCountries.size} Länder | ${manualAdditions.size} manuell | ${manualExclusions.size} Ausnahmen | Modus: ${modeLabel}`;
   }
   if (loadedForEl) {
     loadedForEl.textContent = state.hostInterestsLoadedFor
@@ -2002,8 +2007,8 @@ function renderHostInterestsEditor() {
   }
   if (countrySummaryEl) {
     countrySummaryEl.textContent = selectedCountries.size > 0
-      ? `Vorselektion aktiv für ${selectedCountries.size} Länder.`
-      : "Keine Länder vorselektiert.";
+      ? `Vorselektion aktiv für ${selectedCountries.size} Länder. ${effectiveHosts.size} von ${totalHosts} Hosts im Mailversand.`
+      : `${effectiveHosts.size} von ${totalHosts} Hosts im Mailversand.`;
   }
 
   if (allHosts.length === 0) {
@@ -2049,8 +2054,18 @@ function renderHostInterestsEditor() {
           selectedCountries.delete(countryCode);
         } else {
           selectedCountries.add(countryCode);
+          // Country selection means all hosts in this country are active by default.
+          for (const host of allHosts) {
+            const hostname = String(host.hostname || "").trim();
+            if (!hostname) continue;
+            const hostCountryCode = getHostInterestCountryCode(host) || "__NONE__";
+            if (hostCountryCode === countryCode) {
+              manualExclusions.delete(hostname);
+            }
+          }
         }
         state.hostInterestCountryCodes = selectedCountries;
+        state.hostInterestHostExclusions = manualExclusions;
         syncEffectiveHostInterestSelection();
         renderHostInterestsEditor();
       });
@@ -2081,7 +2096,7 @@ function renderHostInterestsEditor() {
       <span class="host-interest-meta">
         <span class="host-interest-customer">${escapeHtml(customerName)}</span>
         <span class="host-interest-name">${escapeHtml(hostLabel)}</span>
-        <span class="host-interest-hostname">${escapeHtml(countryCode ? `${countryCode} · ${hostname}` : hostname)}</span>
+        <span class="host-interest-hostname">${escapeHtml(hostname)}</span>
       </span>
       <span class="host-interest-badges">${badges.join("")}</span>
     </label>`;
@@ -2093,7 +2108,7 @@ function renderHostInterestsEditor() {
     const flagPath = countryCode === "__NONE__" ? "" : getCountryFlagIconPath(countryCode);
     const sectionOpen = selectedCountries.has(countryCode) || query.length > 0;
     return `<details class="host-interest-country-group" ${sectionOpen ? "open" : ""} data-country-code="${escapeHtml(countryCode)}">
-      <summary>${flagPath ? `<img src="${flagPath}" alt="${escapeHtml(countryCode)}" class="host-interest-country-flag" />` : ""}${escapeHtml(label)} <span class="count compact">${hostsInCountry.length}</span></summary>
+      <summary title="${escapeHtml(label)}">${flagPath ? `<img src="${flagPath}" alt="${escapeHtml(countryCode)}" class="host-interest-country-flag" />` : `<span class="host-interest-country-no-flag">${escapeHtml(label)}</span>`}<span class="count compact host-interest-country-count">${hostsInCountry.length}</span></summary>
       <div class="host-interest-country-group-body">
         ${hostsInCountry.map(renderHostRow).join("")}
       </div>
