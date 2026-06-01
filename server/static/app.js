@@ -3691,6 +3691,14 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
   </div>
   <div id="adminAlertSubscriptionsTableWrap"></div>`;
 
+  const userFilterSelect = document.getElementById("adminAlertSubsUserFilterSelect");
+  if (userFilterSelect) {
+    const desiredUser = String(state.adminAlertSubscriptionsSelectedUser || "").trim();
+    if (desiredUser) {
+      userFilterSelect.value = desiredUser;
+    }
+  }
+
   const getCurrentEntry = (username, hostname) => {
     const userMap = currentSubscriptions.get(username);
     if (!userMap) return { hostname, notify_mail: true, notify_telegram: true, is_admin_override: false };
@@ -3885,6 +3893,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
         if (userFilterSelect && selectedUser) {
           userFilterSelect.value = selectedUser;
         }
+        state.adminAlertSubscriptionsSelectedUser = selectedUser;
       }
       if (!selectedUser) {
         return {
@@ -3983,6 +3992,10 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
       if (allHostsButton) {
         allHostsButton.addEventListener("click", () => {
           userFocusCountryFilter = "ALL";
+          const userFilterSelect = document.getElementById("adminAlertSubsUserFilterSelect");
+          if (userFilterSelect && state.adminAlertSubscriptionsSelectedUser) {
+            userFilterSelect.value = state.adminAlertSubscriptionsSelectedUser;
+          }
           renderTable();
           markUnsavedStatus();
         });

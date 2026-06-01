@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.218**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.218**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.219**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.219**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.219 | 01.06.2026 | Admin-User-Fokus behält die ausgewählte Benutzerzeile jetzt stabil über Re-Renders und Reloads hinweg; die Auswahl springt nicht mehr auf **„Alle Benutzer“** zurück. |
 | 1.7.218 | 01.06.2026 | Admin-User-Fokus lädt beim Benutzerwechsel jetzt den frischen Abo-Stand vom Server neu und bietet einen Button **„Alle Hosts anzeigen“** für die globale Hostliste unabhängig vom Land. |
 | 1.7.217 | 01.06.2026 | Admin-User-Fokus-Toggles sprachlich an User-Settings angenähert: Chip-Beschriftungen auf **„Mail aktiv“** und **„Telegram aktiv“** vereinheitlicht. |
 | 1.7.216 | 01.06.2026 | Admin-Alert-Abos User-Filter auf User-Settings-Optik umgestellt: Auswahl eines Benutzers öffnet automatisch die Länder/Host-Ansicht im Stil von „Meine Host-Interessen“; pro Host stehen nun direkte Mail- und Telegram-Toggles bereit. Zusätzlich wird der Kundenname in der Hostliste sichtbar angezeigt. |
