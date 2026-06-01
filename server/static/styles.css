@@ -14900,3 +14900,32 @@ body[data-theme="dark"] .reports-column #overviewFilesystemSection .fs-chart-car
     font-size: 24px;
   }
 }
+
+/* Final UI sizing pass: screenshot menus -1px, Einzelmeldungen details -1px */
+.reports-column .view-tabs .tab-button {
+  font-size: 10px;
+}
+
+.reports-column .overview-sidebar-item {
+  font-size: 10px;
+}
+
+.reports-column #reportsView .detail-card h4,
+.reports-column #reportsView .report-card h4,
+.reports-column #reportsView .detail-card-collapsible > summary,
+.reports-column #reportsView .report-section-head h4 {
+  font-size: 12px;
+}
+
+.reports-column #reportsView .table-wrap table th {
+  font-size: 9px;
+}
+
+.reports-column #reportsView .table-wrap table td {
+  font-size: 8px;
+}
+
+.reports-column #reportsView .count,
+.reports-column #reportsView .count.compact {
+  font-size: 8px;
+}
