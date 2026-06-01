@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.216**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.216**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.217**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.217**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.217 | 01.06.2026 | Admin-User-Fokus-Toggles sprachlich an User-Settings angenähert: Chip-Beschriftungen auf **„Mail aktiv“** und **„Telegram aktiv“** vereinheitlicht. |
 | 1.7.216 | 01.06.2026 | Admin-Alert-Abos User-Filter auf User-Settings-Optik umgestellt: Auswahl eines Benutzers öffnet automatisch die Länder/Host-Ansicht im Stil von „Meine Host-Interessen“; pro Host stehen nun direkte Mail- und Telegram-Toggles bereit. Zusätzlich wird der Kundenname in der Hostliste sichtbar angezeigt. |
 | 1.7.215 | 01.06.2026 | Konsistenzfix zwischen User-Settings und Admin-Alert-Übersicht: Host-Interessen-Speichern schreibt Mail-Abos nun explizit für alle bekannten Selector-Hosts (gewählt=true, abgewählt=false), sodass abgewählte Hosts im Admin-View korrekt unmarkiert erscheinen. Zusätzlich wurde „User-Fokus (Flags)“ als Standard-Ansicht für Admin-Alert-Abos gesetzt. |
 | 1.7.214 | 01.06.2026 | Admin-Alert-Abos um neue Ansicht **„User-Fokus (Flags)”** erweitert: Benutzer per Dropdown wählen, Hosts nach Ländern mit Flaggen-Chips filtern und die Mail/Telegram-Selektion des gewählten Users direkt pro Host übersteuern. Bestehende Host-/User-Ansicht bleibt unverändert nutzbar. |

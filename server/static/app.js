@@ -3936,11 +3936,11 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
             <span class="admin-user-focus-channels">
               <label class="admin-sub-user-chip${currentEntry.is_admin_override ? " is-admin-override" : ""}">
                 <input type="checkbox" class="admin-sub-cb" data-username="${escapeHtml(selectedUser)}" data-hostname="${hostname}" data-channel="mail" data-original-checked="${originalEntry.notify_mail ? "1" : "0"}" ${mailChecked ? "checked" : ""}>
-                <span class="admin-sub-user-name">Mail</span>
+                <span class="admin-sub-user-name">Mail aktiv</span>
               </label>
               <label class="admin-sub-user-chip${currentEntry.is_admin_override ? " is-admin-override" : ""}${telegramAvailable ? "" : " is-disabled"}">
                 <input type="checkbox" class="admin-sub-cb" data-username="${escapeHtml(selectedUser)}" data-hostname="${hostname}" data-channel="telegram" data-original-checked="${originalEntry.notify_telegram ? "1" : "0"}" ${telegramChecked ? "checked" : ""} ${telegramAvailable ? "" : "disabled"}>
-                <span class="admin-sub-user-name">Telegram</span>
+                <span class="admin-sub-user-name">Telegram aktiv</span>
               </label>
             </span>
           </div>`;
