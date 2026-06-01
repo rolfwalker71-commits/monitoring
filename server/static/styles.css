@@ -2412,6 +2412,20 @@ button:disabled {
   cursor: pointer;
 }
 
+.host-interest-country-chip-label {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.host-interest-country-chip-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  line-height: 1;
+}
+
 .host-interest-country-chip:hover {
   background: #eef6ff;
 }
@@ -2468,7 +2482,12 @@ button:disabled {
 }
 
 .host-interest-country-count {
-  margin-left: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  margin-left: 6px;
+  line-height: 1;
 }
 
 .host-interest-country-no-flag {
@@ -2510,9 +2529,15 @@ button:disabled {
 }
 
 .host-interest-customer {
-  font-size: 11px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  white-space: normal;
+  font-size: 14px;
   font-weight: 800;
   color: #0f3f73;
+  line-height: 1.2;
 }
 
 .host-interest-name {
@@ -2522,8 +2547,9 @@ button:disabled {
 }
 
 .host-interest-hostname {
-  font-size: 11px;
+  font-size: 10px;
   color: #64748b;
+  line-height: 1.2;
 }
 
 .host-interest-badges {
@@ -10290,8 +10316,8 @@ body[data-theme="dark"] .host-interest-name {
 
 body[data-theme="dark"] .host-interest-customer {
   color: #fdba74;
-  background: rgba(234, 88, 12, 0.15);
-  border-color: rgba(234, 88, 12, 0.55);
+  background: transparent;
+  border: none;
 }
 
 body[data-theme="dark"] .host-interest-hostname {

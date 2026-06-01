@@ -323,6 +323,7 @@ const state = {
   hostInterestTargetsLoadingPromise: null,
   hostInterestsLoadedFor: "",
   hostInterestSearchQuery: "",
+  hostInterestShowUnselectedOnly: false,
   adminAlertSubscriptionsLoaded: false,
   adminAlertSubscriptionsViewMode: "host",
   adminAlertSubscriptionsUsers: [],
@@ -1945,8 +1946,13 @@ function renderHostInterestsEditor() {
   const loadedForEl = document.getElementById("hostInterestsLoadedFor");
   const countrySummaryEl = document.getElementById("hostInterestCountrySummary");
   const countryChipsEl = document.getElementById("hostInterestCountryChips");
+  const showUnselectedOnlyInput = document.getElementById("hostInterestShowUnselectedOnlyInput");
   if (!listEl) {
     return;
+  }
+
+  if (showUnselectedOnlyInput) {
+    showUnselectedOnlyInput.checked = state.hostInterestShowUnselectedOnly === true;
   }
 
   syncHostInterestModeControls();
@@ -1984,8 +1990,12 @@ function renderHostInterestsEditor() {
   const manualExclusions = getHostInterestManualExclusions();
   const effectiveHosts = getEffectiveHostInterestHosts();
   const totalHosts = allHosts.length;
+  const showUnselectedOnly = state.hostInterestShowUnselectedOnly === true;
+  const filteredHosts = showUnselectedOnly
+    ? visibleHosts.filter((host) => !effectiveHosts.has(String(host.hostname || "").trim()))
+    : visibleHosts;
   const countryGroups = new Map();
-  for (const host of visibleHosts) {
+  for (const host of filteredHosts) {
     const countryCode = getHostInterestCountryCode(host) || "__NONE__";
     if (!countryGroups.has(countryCode)) countryGroups.set(countryCode, []);
     countryGroups.get(countryCode).push(host);
@@ -1998,7 +2008,9 @@ function renderHostInterestsEditor() {
 
   if (summaryEl) {
     const modeLabel = normalizeHostInterestMode(state.hostInterestMode).replaceAll("_", " ");
-    summaryEl.textContent = `${effectiveHosts.size} von ${totalHosts} Hosts für Mail aktiv | ${selectedCountries.size} Länder | ${manualAdditions.size} manuell | ${manualExclusions.size} Ausnahmen | Modus: ${modeLabel}`;
+    const unselectedCount = Math.max(0, totalHosts - effectiveHosts.size);
+    const filterHint = showUnselectedOnly ? " | Filter: nur nicht markierte" : "";
+    summaryEl.textContent = `${effectiveHosts.size} von ${totalHosts} Hosts für Mail aktiv | ${unselectedCount} nicht markiert | ${selectedCountries.size} Länder | ${manualAdditions.size} manuell | ${manualExclusions.size} Ausnahmen | Modus: ${modeLabel}${filterHint}`;
   }
   if (loadedForEl) {
     loadedForEl.textContent = state.hostInterestsLoadedFor
@@ -2039,8 +2051,8 @@ function renderHostInterestsEditor() {
       const active = selectedCountries.has(countryCode);
       return `<button type="button" class="host-interest-country-chip${active ? " is-active" : ""}" data-country-code="${escapeHtml(countryCode)}">
         ${flagPath ? `<img src="${flagPath}" alt="${escapeHtml(countryCode)}" class="host-interest-country-flag" />` : ""}
-        <span>${escapeHtml(label)}</span>
-        <span class="count compact">${hostsInCountry.length}</span>
+        <span class="host-interest-country-chip-label">${escapeHtml(label)}</span>
+        <span class="host-interest-country-chip-count">${hostsInCountry.length}</span>
       </button>`;
     }).join("");
 
@@ -2072,8 +2084,10 @@ function renderHostInterestsEditor() {
     });
   }
 
-  if (visibleHosts.length === 0) {
-    listEl.innerHTML = '<p class="muted">Keine Treffer für die Suche.</p>';
+  if (filteredHosts.length === 0) {
+    listEl.innerHTML = showUnselectedOnly
+      ? '<p class="muted">Keine nicht markierten Hosts für den aktuellen Filter.</p>'
+      : '<p class="muted">Keine Treffer für die Suche.</p>';
     return;
   }
 
@@ -2108,7 +2122,7 @@ function renderHostInterestsEditor() {
     const flagPath = countryCode === "__NONE__" ? "" : getCountryFlagIconPath(countryCode);
     const sectionOpen = selectedCountries.has(countryCode) || query.length > 0;
     return `<details class="host-interest-country-group" ${sectionOpen ? "open" : ""} data-country-code="${escapeHtml(countryCode)}">
-      <summary title="${escapeHtml(label)}">${flagPath ? `<img src="${flagPath}" alt="${escapeHtml(countryCode)}" class="host-interest-country-flag" />` : `<span class="host-interest-country-no-flag">${escapeHtml(label)}</span>`}<span class="count compact host-interest-country-count">${hostsInCountry.length}</span></summary>
+      <summary title="${escapeHtml(label)}">${flagPath ? `<img src="${flagPath}" alt="${escapeHtml(countryCode)}" class="host-interest-country-flag" />` : `<span class="host-interest-country-no-flag">${escapeHtml(label)}</span>`}<span class="host-interest-country-count">${hostsInCountry.length}</span></summary>
       <div class="host-interest-country-group-body">
         ${hostsInCountry.map(renderHostRow).join("")}
       </div>
@@ -15158,6 +15172,14 @@ function wireEvents() {
   if (hostInterestSearchInput) {
     hostInterestSearchInput.addEventListener("input", () => {
       state.hostInterestSearchQuery = String(hostInterestSearchInput.value || "");
+      renderHostInterestsEditor();
+    });
+  }
+  const hostInterestShowUnselectedOnlyInput = document.getElementById("hostInterestShowUnselectedOnlyInput");
+  if (hostInterestShowUnselectedOnlyInput) {
+    hostInterestShowUnselectedOnlyInput.checked = state.hostInterestShowUnselectedOnly === true;
+    hostInterestShowUnselectedOnlyInput.addEventListener("change", () => {
+      state.hostInterestShowUnselectedOnly = hostInterestShowUnselectedOnlyInput.checked === true;
       renderHostInterestsEditor();
     });
   }
