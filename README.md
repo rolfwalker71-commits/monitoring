@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.191**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.191**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.192**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.192**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.192 | 01.06.2026 | Globale Schriftumstellung auf **Plus Jakarta Sans** durchgeführt (ohne Änderung an bestehenden Schriftgrößen/-gewichten). Dazu Font-Import im Haupt-HTML ergänzt und alle bisherigen IBM-Plex-Sans-Sans-Referenzen in der UI-CSS konsistent auf Plus Jakarta Sans umgestellt. |
 | 1.7.191 | 01.06.2026 | Report-Jump-Leiste bereinigt: Hostbezeichnungs-Chip („SAP Test“) entfernt, da er rein informativ war und keine Funktion für Navigation/Filter ausgelöst hat. Zusätzlich neue Schriftvergleichs-Mockup-Seite erstellt (`/font-mockup.html`) mit realem Header-Layoutausschnitt und fünf empfohlenen UI-Fonts (Plus Jakarta Sans, Manrope, Source Sans 3, Red Hat Text, Sora). |
 | 1.7.190 | 01.06.2026 | Finaler Header-Layout-Fix gegen verbleibende Override-Effekte: Die Zeile „Meldung X von Y“ ist jetzt in der linken Karte absolut positioniert (nimmt keine zusätzliche Layout-Höhe mehr ein), wodurch die Kartenhöhe links nicht mehr unnötig wächst. Zusätzlich wurde die rechte Icon-Gruppe in der Aktionszeile mit expliziter End-Ausrichtung und `width: max-content` stabil ganz rechts verankert. |
 | 1.7.189 | 01.06.2026 | Header-Fix für verbleibende Layout-Konflikte: rechte Aktionszeile auf Grid (links Aktionen, rechts Icon-Cluster) umgestellt, damit die Icons stabil ganz rechts stehen. Zusätzlich linke Kundenkarte vertikal weiter komprimiert und die Zeile „Meldung X von Y“ sichtbar höher gesetzt, damit die Kartenhöhen links/rechts konsistenter wirken. |
