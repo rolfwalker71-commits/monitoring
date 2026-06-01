@@ -3603,6 +3603,13 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     const normalized = String(value || "").trim().toUpperCase();
     return /^[A-Z]{2}$/.test(normalized) ? normalized : "";
   };
+  let userFocusCountryFilter = "ALL";
+
+  const normalizeAdminAlertViewMode = () => {
+    if (state.adminAlertSubscriptionsViewMode === "user") return "user";
+    if (state.adminAlertSubscriptionsViewMode === "user-focus") return "user-focus";
+    return "host";
+  };
 
   const originalSubscriptions = new Map();
   const currentSubscriptions = new Map();
@@ -3655,6 +3662,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
       <select id="adminAlertSubsViewModeSelect">
         <option value="host">Host-Ansicht</option>
         <option value="user">User-Ansicht</option>
+        <option value="user-focus">User-Fokus (Flags)</option>
       </select>
     </label>
     <label>
@@ -3727,7 +3735,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
   const renderTable = () => {
     const tableWrap = document.getElementById("adminAlertSubscriptionsTableWrap");
     if (!tableWrap) return;
-    const viewMode = state.adminAlertSubscriptionsViewMode === "user" ? "user" : "host";
+    const viewMode = normalizeAdminAlertViewMode();
 
     const renderHostRows = () => {
       if (hosts.length === 0) {
@@ -3845,15 +3853,129 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
       }).join("");
     };
 
-    const rows = viewMode === "user" ? renderUserRows() : renderHostRows();
-    const firstColTitle = viewMode === "user" ? "Benutzer" : "Host";
+    const renderUserFocusRows = () => {
+      if (hosts.length === 0) {
+        return {
+          chips: '<p class="muted">Keine Länder verfügbar.</p>',
+          rows: '<tr data-row-type="host"><td colspan="3" class="muted">Keine Hosts vorhanden.</td></tr>',
+          firstColTitle: "Host",
+        };
+      }
 
-    tableWrap.innerHTML = `<div class="table-wrap user-management-table-wrap">
+      const userFilterSelect = document.getElementById("adminAlertSubsUserFilterSelect");
+      let selectedUser = String(userFilterSelect?.value || "").trim();
+      if (!selectedUser) {
+        selectedUser = String(usersSorted[0]?.username || "").trim();
+        if (userFilterSelect && selectedUser) {
+          userFilterSelect.value = selectedUser;
+        }
+      }
+      if (!selectedUser) {
+        return {
+          chips: '<p class="muted">Keine Benutzer vorhanden.</p>',
+          rows: '<tr data-row-type="host"><td colspan="3" class="muted">Keine Benutzer vorhanden.</td></tr>',
+          firstColTitle: "Host",
+        };
+      }
+
+      const groupedByCountry = new Map();
+      for (const host of hosts) {
+        const countryCode = normalizeCountryCode(host.country_code) || "__NONE__";
+        if (!groupedByCountry.has(countryCode)) groupedByCountry.set(countryCode, []);
+        groupedByCountry.get(countryCode).push(host);
+      }
+      const countryCodes = Array.from(groupedByCountry.keys()).sort((a, b) => {
+        if (a === "__NONE__") return 1;
+        if (b === "__NONE__") return -1;
+        return a.localeCompare(b);
+      });
+
+      const chips = `<div class="host-interest-country-head admin-user-focus-country-head">${countryCodes.map((countryCode) => {
+        const hostsInCountry = groupedByCountry.get(countryCode) || [];
+        const label = countryCode === "__NONE__" ? "Ohne Land" : countryCode;
+        const flagPath = countryCode === "__NONE__" ? "" : getCountryFlagIconPath(countryCode);
+        const active = userFocusCountryFilter === countryCode;
+        return `<button type="button" class="host-interest-country-chip admin-sub-country-filter-chip${active ? " is-active" : ""}" data-country-filter="${escapeHtml(countryCode)}">
+          ${flagPath ? `<img src="${flagPath}" alt="${escapeHtml(countryCode)}" class="host-interest-country-flag" />` : ""}
+          <span class="host-interest-country-chip-label">${escapeHtml(label)}</span>
+          <span class="host-interest-country-chip-count">${hostsInCountry.length}</span>
+        </button>`;
+      }).join("")}</div>`;
+
+      const rows = countryCodes.map((countryCode) => {
+        const hostsInCountry = groupedByCountry.get(countryCode) || [];
+        const countryLabel = countryCode === "__NONE__" ? "Ohne Land" : countryCode;
+        const flagPath = countryCode === "__NONE__" ? "" : getCountryFlagIconPath(countryCode);
+        const hostRows = hostsInCountry.map((host) => {
+          const hostnameRaw = String(host.hostname || "").trim();
+          const displayNameRaw = String(host.display_name || hostnameRaw || "").trim();
+          const hostname = escapeHtml(hostnameRaw);
+          const displayName = escapeHtml(displayNameRaw || hostnameRaw);
+          const hostLabel = displayNameRaw && hostnameRaw && displayNameRaw !== hostnameRaw
+            ? `<strong>${displayName}</strong><span class="global-hostname-sub">(${hostname})</span>`
+            : `<strong>${displayName || hostname}</strong>`;
+          const currentEntry = getCurrentEntry(selectedUser, hostnameRaw);
+          const originalEntry = getOriginalEntry(selectedUser, hostnameRaw);
+          const mailChecked = currentEntry.notify_mail;
+          const telegramChecked = currentEntry.notify_telegram;
+          const overrideBadge = currentEntry.is_admin_override ? '<span class="admin-sub-override-pill" title="Admin-Override">Admin</span>' : "";
+
+          return `<tr data-row-type="host" data-country-code="${escapeHtml(countryCode)}" data-hostname="${hostname}" data-display-name="${displayName}" data-username="${escapeHtml(selectedUser)}">
+            <td class="admin-sub-host-cell">${hostLabel}${overrideBadge}</td>
+            <td><label class="admin-sub-user-chip${currentEntry.is_admin_override ? " is-admin-override" : ""}">
+              <input type="checkbox" class="admin-sub-cb" data-username="${escapeHtml(selectedUser)}" data-hostname="${hostname}" data-channel="mail" data-original-checked="${originalEntry.notify_mail ? "1" : "0"}" ${mailChecked ? "checked" : ""}>
+              <span class="admin-sub-user-name">${escapeHtml(selectedUser)}</span>
+            </label></td>
+            <td><label class="admin-sub-user-chip${currentEntry.is_admin_override ? " is-admin-override" : ""}${telegramAvailable ? "" : " is-disabled"}">
+              <input type="checkbox" class="admin-sub-cb" data-username="${escapeHtml(selectedUser)}" data-hostname="${hostname}" data-channel="telegram" data-original-checked="${originalEntry.notify_telegram ? "1" : "0"}" ${telegramChecked ? "checked" : ""} ${telegramAvailable ? "" : "disabled"}>
+              <span class="admin-sub-user-name">${escapeHtml(selectedUser)}</span>
+            </label></td>
+          </tr>`;
+        }).join("");
+
+        return `<tr data-row-type="country" data-country-code="${escapeHtml(countryCode)}" class="admin-sub-country-row">
+          <td colspan="3">
+            ${flagPath ? `<img src="${flagPath}" alt="${escapeHtml(countryCode)}" class="host-interest-country-flag" />` : ""}
+            <span class="admin-sub-country-title">Land: ${escapeHtml(countryLabel)}</span>
+            <span class="admin-sub-country-count">${hostsInCountry.length} Host${hostsInCountry.length === 1 ? "" : "s"}</span>
+          </td>
+        </tr>${hostRows}`;
+      }).join("");
+
+      return { chips, rows, firstColTitle: "Host" };
+    };
+
+    let rows = "";
+    let firstColTitle = "Host";
+    let chips = "";
+    if (viewMode === "user") {
+      rows = renderUserRows();
+      firstColTitle = "Benutzer";
+    } else if (viewMode === "user-focus") {
+      const result = renderUserFocusRows();
+      rows = result.rows;
+      firstColTitle = result.firstColTitle;
+      chips = result.chips;
+    } else {
+      rows = renderHostRows();
+      firstColTitle = "Host";
+    }
+
+    tableWrap.innerHTML = `${chips}<div class="table-wrap user-management-table-wrap">
       <table class="user-management-table admin-alert-subscriptions-table">
         <thead><tr><th>${firstColTitle}</th><th>Mail</th><th>Telegram</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
+
+    tableWrap.querySelectorAll(".admin-sub-country-filter-chip[data-country-filter]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const selected = String(button.getAttribute("data-country-filter") || "").trim().toUpperCase();
+        userFocusCountryFilter = userFocusCountryFilter === selected ? "ALL" : selected;
+        renderTable();
+        markUnsavedStatus();
+      });
+    });
 
     wireDynamicTableEvents();
   };
@@ -3880,7 +4002,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     const hostQuery = String(document.getElementById("adminAlertSubsHostSearchInput")?.value || "").trim().toLowerCase();
     const selectedUser = String(document.getElementById("adminAlertSubsUserFilterSelect")?.value || "").trim();
     const onlyChanged = document.getElementById("adminAlertSubsOnlyChangedInput")?.checked === true;
-    const viewMode = state.adminAlertSubscriptionsViewMode === "user" ? "user" : "host";
+    const viewMode = normalizeAdminAlertViewMode();
     const rowsEls = Array.from(container.querySelectorAll("tbody tr[data-row-type]"));
     const dataRows = rowsEls.filter((row) => {
       const rowType = String(row.dataset.rowType || "");
@@ -3899,12 +4021,19 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
         const hostname = String(row.dataset.hostname || "").toLowerCase();
         const displayName = String(row.dataset.displayName || "").toLowerCase();
         hostMatch = !hostQuery || hostname.includes(hostQuery) || displayName.includes(hostQuery);
-        userMatch = !selectedUser || Array.from(row.querySelectorAll(".admin-sub-cb[data-username]")).some((cb) => {
-          return String(cb.dataset.username || "") === selectedUser;
-        });
+        if (viewMode === "user-focus") {
+          const rowUser = String(row.dataset.username || "");
+          userMatch = !selectedUser || rowUser === selectedUser;
+        } else {
+          userMatch = !selectedUser || Array.from(row.querySelectorAll(".admin-sub-cb[data-username]")).some((cb) => {
+            return String(cb.dataset.username || "") === selectedUser;
+          });
+        }
       }
       const changedMatch = !onlyChanged || !!row.querySelector(".admin-sub-cb.is-changed");
-      const showRow = hostMatch && userMatch && changedMatch;
+      const countryCode = String(row.dataset.countryCode || "").trim().toUpperCase();
+      const countryMatch = viewMode !== "user-focus" || userFocusCountryFilter === "ALL" || countryCode === userFocusCountryFilter;
+      const showRow = hostMatch && userMatch && changedMatch && countryMatch;
       row.classList.toggle("admin-sub-row-hidden", !showRow);
 
       if (viewMode === "host") {
@@ -3919,7 +4048,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
 
     const countryRows = rowsEls.filter((row) => String(row.dataset.rowType || "") === "country");
     for (const countryRow of countryRows) {
-      if (viewMode !== "host") {
+      if (viewMode !== "host" && viewMode !== "user-focus") {
         countryRow.classList.add("admin-sub-row-hidden");
         continue;
       }
@@ -3987,14 +4116,33 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
   if (hostSearchInput) hostSearchInput.addEventListener("input", () => applyFilters());
 
   const userFilterSelect = document.getElementById("adminAlertSubsUserFilterSelect");
-  if (userFilterSelect) userFilterSelect.addEventListener("change", () => applyFilters());
+  if (userFilterSelect) {
+    userFilterSelect.addEventListener("change", () => {
+      if (normalizeAdminAlertViewMode() === "user-focus") {
+        captureCurrentFromDom();
+        renderTable();
+        markUnsavedStatus();
+        return;
+      }
+      applyFilters();
+    });
+  }
 
   const viewModeSelect = document.getElementById("adminAlertSubsViewModeSelect");
   if (viewModeSelect) {
-    viewModeSelect.value = state.adminAlertSubscriptionsViewMode === "user" ? "user" : "host";
+    viewModeSelect.value = normalizeAdminAlertViewMode();
     viewModeSelect.addEventListener("change", () => {
       captureCurrentFromDom();
-      state.adminAlertSubscriptionsViewMode = viewModeSelect.value === "user" ? "user" : "host";
+      if (viewModeSelect.value === "user") {
+        state.adminAlertSubscriptionsViewMode = "user";
+      } else if (viewModeSelect.value === "user-focus") {
+        state.adminAlertSubscriptionsViewMode = "user-focus";
+      } else {
+        state.adminAlertSubscriptionsViewMode = "host";
+      }
+      if (state.adminAlertSubscriptionsViewMode !== "user-focus") {
+        userFocusCountryFilter = "ALL";
+      }
       renderTable();
       markUnsavedStatus();
     });
