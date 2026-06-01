@@ -841,12 +841,6 @@ function getEffectiveHostInterestHosts() {
     }
   }
 
-  for (const token of additions) {
-    if (!exclusions.has(token)) {
-      effective.add(token);
-    }
-  }
-
   return effective;
 }
 

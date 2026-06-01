@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.212**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.212**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.213**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.213**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.213 | 01.06.2026 | Host-Interessen-Zähler korrigiert: effektive Auswahl wird jetzt ausschließlich aus bekannten Selector-Hosts gebildet (keine zusätzlichen Legacy-Tokens außerhalb der aktuellen Hostbasis). Dadurch sind Werte wie „85 von 64“ bzw. „106 von 64“ behoben und „aktiv“ bleibt konsistent ≤ Gesamtzahl. |
 | 1.7.212 | 01.06.2026 | Host-Interessen auf Host-Identität umgestellt (bevorzugt `host_uid`, Fallback `hostname`): Selector-Dedup, Auswahlstatus, „interested_only/interested_first“-Filter und Trend-Scope-Auflösung berücksichtigen jetzt konsistent `host_uid`-Tokens, ohne Legacy-Hostname-Präferenzen zu brechen. |
 | 1.7.211 | 01.06.2026 | Host-Interessen-Selector auf eindeutige Hostnamen konsolidiert (Dedup pro Hostname), damit Summary-Zähler (X von Y) und Filter **„Nur nicht markierte Hosts zeigen“** konsistent auf derselben Hostbasis arbeiten. |
 | 1.7.210 | 01.06.2026 | Host-Interessen-Panel optisch/funktional verfeinert: obere Länderchips horizontal sauber ausgerichtet (Flagge/Label/Anzahl), Kundenzeile ohne alten gelben Chip-Look, Typografie angepasst (Kundenname größer, Hostname kleiner) und neuer Filter **„Nur nicht markierte Hosts zeigen“** ergänzt, um fehlende Hosts sofort sichtbar zu machen. |
