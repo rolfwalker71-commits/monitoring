@@ -3654,7 +3654,8 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     .map((userEntry) => {
       const usernameRaw = String(userEntry.username || "").trim();
       const username = escapeHtml(usernameRaw);
-      return `<option value="${username}">${username}</option>`;
+      const selectedAttr = usernameRaw && usernameRaw === String(state.adminAlertSubscriptionsSelectedUser || "").trim() ? " selected" : "";
+      return `<option value="${username}"${selectedAttr}>${username}</option>`;
     })
     .join("");
 
