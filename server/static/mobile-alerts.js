@@ -421,16 +421,30 @@ function resolveUserDisplayLabel(item, field) {
   return String(item?.[field] || "").trim();
 }
 
+function buildAckByDetailLines(item) {
+  const ackBy = resolveUserDisplayLabel(item, "ack_by");
+  const ackAt = formatIsoLabel(item.ack_at_utc);
+  const valueParts = [];
+  if (ackBy) valueParts.push(ackBy);
+  if (ackAt && ackAt !== "—") valueParts.push(ackAt);
+  return {
+    label: "Quittiert von",
+    value: valueParts.length ? valueParts.join(" · ") : "—",
+    note: String(item.ack_note || "").trim(),
+  };
+}
+
 function buildAckStripHtml(item) {
   if (item.is_acknowledged !== true) return "";
-  const ackBy = resolveUserDisplayLabel(item, "ack_by");
-  const ackAt = formatRelativeTime(item.ack_at_utc) || formatIsoLabel(item.ack_at_utc);
-  const ackNote = String(item.ack_note || "").trim();
-  let text = "Quittiert";
-  if (ackBy) text += " von " + ackBy;
-  if (ackAt) text += " · " + ackAt;
-  if (ackNote) text += " — " + ackNote;
-  return '<p class="alert-ack-strip">✓ ' + mobileEsc(text) + "</p>";
+  const { label, value, note } = buildAckByDetailLines(item);
+  let html =
+    '<p class="alert-ack-strip">'
+    + '<span class="alert-ack-strip-label">' + mobileEsc(label) + "</span>"
+    + '<span class="alert-ack-strip-value">' + mobileEsc(value) + "</span>";
+  if (note) {
+    html += '<span class="alert-ack-strip-note">' + mobileEsc(note) + "</span>";
+  }
+  return html + "</p>";
 }
 
 function buildEnvironmentChip(environmentType) {
@@ -576,6 +590,25 @@ function hostSheetFactRow(label, value) {
   return "<div><dt>" + mobileEsc(label) + "</dt><dd>" + mobileEsc(text) + "</dd></div>";
 }
 
+function hostSheetFactRowHtml(label, html) {
+  const content = String(html || "").trim();
+  if (!content) return "";
+  return "<div><dt>" + mobileEsc(label) + "</dt><dd>" + content + "</dd></div>";
+}
+
+function hostSheetAckBlock(item) {
+  if (item.is_acknowledged !== true) return "";
+  const { label, value, note } = buildAckByDetailLines(item);
+  let html =
+    '<div class="host-sheet-fact-stack">'
+    + "<dt>" + mobileEsc(label) + "</dt>"
+    + "<dd>" + mobileEsc(value) + "</dd>";
+  if (note) {
+    html += '<dd class="host-sheet-ack-note">' + mobileEsc(note) + "</dd>";
+  }
+  return html + "</div>";
+}
+
 function openHostSheet(item) {
   if (!item) return;
 
@@ -612,12 +645,15 @@ function openHostSheet(item) {
   if (item.is_muted) statusBits.push("Stumm");
   if (item.is_heads_up_suppressed) statusBits.push("Heads-up aus");
 
+  const itContactHtml = buildItContactHtml(item);
+
   if (factsEl) {
     factsEl.innerHTML = [
       hostSheetFactRow("Hostname", hostname),
       hostSheetFactRow("Host-UID", hostUid),
       hostSheetFactRow("IP (letzter Report)", item.latest_report_ip),
       hostSheetFactRow("Kunde", item.customer_name),
+      hostSheetFactRowHtml("Ansprechpartner", itContactHtml),
       hostSheetFactRow("Umgebung", envLabel),
       hostSheetFactRow("Mountpoint", item.mountpoint),
       hostSheetFactRow("Severity", String(item.severity || "").toUpperCase()),
@@ -629,9 +665,7 @@ function openHostSheet(item) {
       hostSheetFactRow("Erstellt", formatIsoLabel(item.created_at_utc)),
       hostSheetFactRow("Zuletzt gesehen", formatIsoLabel(item.last_seen_at_utc)),
       hostSheetFactRow("Status", statusBits.join(", ") || "Offen"),
-      item.is_acknowledged ? hostSheetFactRow("Quittiert von", resolveUserDisplayLabel(item, "ack_by")) : "",
-      item.is_acknowledged ? hostSheetFactRow("Quittiert am", formatIsoLabel(item.ack_at_utc)) : "",
-      item.is_acknowledged ? hostSheetFactRow("Notiz", item.ack_note) : "",
+      hostSheetAckBlock(item),
       hostSheetFactRow("Alert-ID", "#" + String(item.id || "")),
     ].join("");
   }
@@ -728,10 +762,7 @@ function renderAlerts(items) {
     const barPercent = usagePercentForBar(item);
     const barWidth = barPercent.toFixed(1);
     const timeLabel = formatRelativeTime(item.last_seen_at_utc || item.created_at_utc);
-    const itHtml = buildItContactHtml(item);
-    const ackBy = mobileEsc(resolveUserDisplayLabel(item, "ack_by"));
-    const ackAt = formatRelativeTime(item.ack_at_utc);
-    const ackNote = mobileEsc(item.ack_note || "");
+    const ackDetail = isAck ? buildAckByDetailLines(item) : null;
     const desktopUrl = "/?alert_id=" + id;
 
     let moreHtml = "Alert #" + id;
@@ -741,11 +772,13 @@ function renderAlerts(items) {
       moreHtml += " · Δ " + Number(item.delta_used_percent).toFixed(1) + "%";
     }
     moreHtml += ' · <a href="' + mobileEsc(desktopUrl) + '">Am Desktop öffnen</a>';
-    if (isAck) {
-      moreHtml += '<div class="ack-line">Quittiert';
-      if (ackBy) moreHtml += " von " + ackBy;
-      if (ackAt) moreHtml += " (" + ackAt + ")";
-      if (ackNote) moreHtml += ": " + ackNote;
+    if (isAck && ackDetail) {
+      moreHtml += '<div class="ack-line ack-line-stacked">';
+      moreHtml += "<span>" + mobileEsc(ackDetail.label) + "</span>";
+      moreHtml += "<span>" + mobileEsc(ackDetail.value) + "</span>";
+      if (ackDetail.note) {
+        moreHtml += "<span>" + mobileEsc(ackDetail.note) + "</span>";
+      }
       moreHtml += "</div>";
     }
     if (isClosed) {
@@ -778,7 +811,7 @@ function renderAlerts(items) {
       '      <div class="usage-bar"><span class="usage-bar-fill" style="width:' + barWidth + '%"></span></div>' +
       '      <strong class="usage-bar-counter">' + barWidth + '%</strong>' +
       "    </div></div>" +
-      '  <p class="alert-meta">' + hostname + (itHtml ? " · IT: " + itHtml : "") + "</p>" +
+      '  <p class="alert-meta">' + hostname + "</p>" +
       '  <div class="alert-card-actions">' + ackBtn +
       '    <button type="button" class="btn-secondary btn-expand" data-action="toggle-more">Mehr</button>' +
       "  </div>" +
@@ -883,9 +916,7 @@ function syncFocusedCarouselCard(list) {
       bestIndex = Number(card.getAttribute("data-alert-index") || 0);
     }
   });
-  if (bestIndex !== state.focusedAlertIndex) {
-    updateAlertDetailPanel(bestIndex);
-  }
+  updateAlertDetailPanel(bestIndex);
 }
 
 function wireAlertsCarousel(list) {
