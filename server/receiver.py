@@ -15020,7 +15020,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                            h.customer_id,
                               COALESCE(h.environment_type, ''),
                            COALESCE(c.customer_name, ''),
-                           COALESCE(c.maringo_project_number, '')
+                           COALESCE(c.maringo_project_number, ''),
+                           COALESCE(c.logo_filename, ''),
+                           COALESCE(c.updated_at_utc, '')
                     FROM host_settings h
                     LEFT JOIN customers c ON c.id = h.customer_id
                     """
@@ -15041,7 +15043,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                                hus.customer_id,
                                COALESCE(hus.environment_type, ''),
                                COALESCE(c.customer_name, ''),
-                               COALESCE(c.maringo_project_number, '')
+                               COALESCE(c.maringo_project_number, ''),
+                               COALESCE(c.logo_filename, ''),
+                               COALESCE(c.updated_at_utc, '')
                         FROM host_uid_settings hus
                         LEFT JOIN customers c ON c.id = hus.customer_id
                         WHERE host_uid IN ({placeholders})
@@ -15063,6 +15067,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             "environment_type": str(uid_row[6] or "").strip().lower(),
                             "customer_name": str(uid_row[7] or ""),
                             "customer_maringo_project_number": str(uid_row[8] or ""),
+                            "logo_filename": str(uid_row[9] or ""),
+                            "logo_updated_at_utc": str(uid_row[10] or ""),
                         }
                         for uid_row in host_uid_rows
                         if str(uid_row[0] or "").strip()
