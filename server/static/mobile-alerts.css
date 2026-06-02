@@ -264,6 +264,14 @@ body {
   margin-bottom: 6px;
 }
 
+.alert-status-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 .severity-badge {
   font-size: 0.65rem;
   font-weight: 800;

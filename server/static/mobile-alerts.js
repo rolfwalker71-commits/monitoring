@@ -436,7 +436,6 @@ function buildCustomerLogoHtml(item) {
 function buildAlertIdentityHtml(item) {
   const customerName = String(item.customer_name || "").trim();
   const hostLabel = String(item.display_name || item.hostname || "-").trim();
-  const envChip = buildEnvironmentChip(item.environment_type);
   const logoHtml = buildCustomerLogoHtml(item);
   const hostRowAttrs =
     ' class="alert-host-row is-tappable" data-action="host-info" role="button" tabindex="0" aria-label="Host-Details"';
@@ -446,7 +445,7 @@ function buildAlertIdentityHtml(item) {
       '<div class="alert-identity">'
       + '<h2 class="alert-customer-name">' + mobileEsc(customerName) + "</h2>"
       + "<div" + hostRowAttrs + ">"
-      + '<div class="alert-host-main"><p class="alert-host-name">' + mobileEsc(hostLabel) + "</p>" + envChip + "</div>"
+      + '<div class="alert-host-main"><p class="alert-host-name">' + mobileEsc(hostLabel) + "</p></div>"
       + logoHtml
       + "</div></div>"
     );
@@ -455,7 +454,7 @@ function buildAlertIdentityHtml(item) {
   return (
     '<div class="alert-identity">'
     + "<div" + hostRowAttrs + ">"
-    + '<div class="alert-host-main"><h2 class="alert-customer-name">' + mobileEsc(hostLabel) + "</h2>" + envChip + "</div>"
+    + '<div class="alert-host-main"><h2 class="alert-customer-name">' + mobileEsc(hostLabel) + "</h2></div>"
     + logoHtml
     + "</div></div>"
   );
@@ -682,6 +681,7 @@ function renderAlerts(items) {
     const id = Number(item.id || 0);
     const hostname = mobileEsc(item.hostname || "-");
     const identityHtml = buildAlertIdentityHtml(item);
+    const envChip = buildEnvironmentChip(item.environment_type);
     const isAck = item.is_acknowledged === true;
     const isClosed = item.is_closed === true;
     const highlightClass = id === state.highlightAlertId ? " alert-card-highlight" : "";
@@ -718,7 +718,10 @@ function renderAlerts(items) {
     return (
       '<article class="alert-card ' + sev + highlightClass + '" data-alert-id="' + id + '" data-alert-index="' + index + '">' +
       '  <div class="alert-card-head">' +
-      '    <span class="severity-badge ' + sev + '">' + mobileEsc(sev) + "</span>" +
+      '    <div class="alert-status-group">' +
+      '      <span class="severity-badge ' + sev + '">' + mobileEsc(sev) + "</span>" +
+      envChip +
+      "    </div>" +
       '    <span class="alert-time">' + mobileEsc(timeLabel || "—") + "</span>" +
       "  </div>" +
       "  " + identityHtml +
