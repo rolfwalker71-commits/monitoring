@@ -631,6 +631,9 @@ function openHostSheet(item) {
       hostSheetFactRow("Erstellt", formatIsoLabel(item.created_at_utc)),
       hostSheetFactRow("Zuletzt gesehen", formatIsoLabel(item.last_seen_at_utc)),
       hostSheetFactRow("Status", statusBits.join(", ") || "Offen"),
+      item.is_acknowledged ? hostSheetFactRow("Quittiert von", resolveUserDisplayLabel(item, "ack_by")) : "",
+      item.is_acknowledged ? hostSheetFactRow("Quittiert am", formatIsoLabel(item.ack_at_utc)) : "",
+      item.is_acknowledged ? hostSheetFactRow("Notiz", item.ack_note) : "",
       hostSheetFactRow("Alert-ID", "#" + String(item.id || "")),
     ].join("");
   }
