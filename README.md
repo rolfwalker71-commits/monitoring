@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.252**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.252**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.253**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.253**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.253 | 02.06.2026 | Ansprechpartner-Persistenz weiter gehaertet: Backend akzeptiert in `PATCH /api/v1/customers/{id}` nun zusaetzlich Legacy-/Alias-Payloads (`customer_it_provider_*`, slot-indexierte `it_provider_contacts`-Objekte sowie Kontakt-Aliase wie `name/contact/email/phone`). Dadurch bleiben Ansprechpartnerdaten auch bei gecachten/alten Frontend-Builds stabil erhalten. |
 | 1.7.252 | 02.06.2026 | Fix fuer nicht persistente IT-Provider-Ansprechpartner in **Kundeninfos**: Backend haertet Customer-Schema-Migrationen zur Laufzeit ab (fehlende `customers`-Spalten werden bei Bedarf automatisch angelegt), verarbeitet Ansprechpartner-Payload robust (flat + `it_provider_contacts`) und verhindert unbeabsichtigtes Ueberschreiben bestehender Ansprechpartnerdaten bei Upsert-Szenarien. |
 | 1.7.251 | 02.06.2026 | Menüstruktur in der Host-Übersicht angepasst: **Kundeninfos** wurde aus der oberen Gruppe entfernt, durch einen Trennstrich vom restlichen Menü separiert und als letzter Menüpunkt ganz unten platziert (unterhalb des Zeitraum-Blocks). |
 | 1.7.250 | 02.06.2026 | Kundenlogo-Watermark nur noch in der linken Hostkarte: das Wasserzeichen in der oberen Header-Karte wurde entfernt. Damit bleibt der Effekt auf die Hostliste fokussiert und die Header-Darstellung ruhiger. |

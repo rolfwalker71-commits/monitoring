@@ -4190,20 +4190,44 @@ def _extract_it_provider_fields_from_payload(payload: dict, fallback: dict | Non
     contacts = source.get("it_provider_contacts")
     contacts_list = contacts if isinstance(contacts, list) else []
 
+    if isinstance(contacts, dict):
+        # Legacy clients may send a slot-indexed object instead of a list.
+        ordered_contacts: list[dict] = []
+        for slot_key in ("1", "2", "3"):
+            entry = contacts.get(slot_key)
+            if isinstance(entry, dict):
+                ordered_contacts.append(entry)
+        contacts_list = ordered_contacts
+
+    field_aliases = {
+        "it_provider_name": ["it_provider_name", "provider_name", "name"],
+        "it_provider_contact": ["it_provider_contact", "contact", "ansprechpartner"],
+        "it_provider_email": ["it_provider_email", "email", "mail"],
+        "it_provider_phone": ["it_provider_phone", "phone", "telefon", "tel"],
+    }
+
     def _fallback_value(key: str) -> str:
         return str(fallback_source.get(key, "") or "")
 
     def _value(field_base: str, slot: int) -> object:
         suffix = "" if slot == 1 else f"_{slot}"
-        key = f"{field_base}{suffix}"
-        if key in source:
-            return source.get(key, "")
+        preferred_key = f"{field_base}{suffix}"
+        top_level_keys = [
+            preferred_key,
+            f"customer_{preferred_key}",
+        ]
+        for key in top_level_keys:
+            if key in source:
+                return source.get(key, "")
 
         contact_entry = contacts_list[slot - 1] if slot - 1 < len(contacts_list) else None
-        if isinstance(contact_entry, dict) and field_base in contact_entry:
-            return contact_entry.get(field_base, "")
+        if isinstance(contact_entry, dict):
+            aliases = field_aliases.get(field_base, [field_base])
+            for alias in aliases:
+                if alias in contact_entry:
+                    return contact_entry.get(alias, "")
 
-        return _fallback_value(key)
+        return _fallback_value(preferred_key)
 
     return {
         "it_provider_name": _value("it_provider_name", 1),
