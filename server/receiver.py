@@ -4147,6 +4147,80 @@ def normalize_it_provider_phone(value: object) -> str:
     return str(value or "").strip()
 
 
+def ensure_customers_extended_columns(conn: sqlite3.Connection) -> None:
+    existing_columns = {
+        str(row[1] or "").strip().lower()
+        for row in conn.execute("PRAGMA table_info(customers)").fetchall()
+    }
+    alter_statements: list[str] = []
+    if "logo_filename" not in existing_columns:
+        alter_statements.append("ALTER TABLE customers ADD COLUMN logo_filename TEXT NOT NULL DEFAULT ''")
+    if "it_provider_name" not in existing_columns:
+        alter_statements.append("ALTER TABLE customers ADD COLUMN it_provider_name TEXT NOT NULL DEFAULT ''")
+    if "it_provider_contact" not in existing_columns:
+        alter_statements.append("ALTER TABLE customers ADD COLUMN it_provider_contact TEXT NOT NULL DEFAULT ''")
+    if "it_provider_email" not in existing_columns:
+        alter_statements.append("ALTER TABLE customers ADD COLUMN it_provider_email TEXT NOT NULL DEFAULT ''")
+    if "it_provider_phone" not in existing_columns:
+        alter_statements.append("ALTER TABLE customers ADD COLUMN it_provider_phone TEXT NOT NULL DEFAULT ''")
+    if "it_provider_name_2" not in existing_columns:
+        alter_statements.append("ALTER TABLE customers ADD COLUMN it_provider_name_2 TEXT NOT NULL DEFAULT ''")
+    if "it_provider_contact_2" not in existing_columns:
+        alter_statements.append("ALTER TABLE customers ADD COLUMN it_provider_contact_2 TEXT NOT NULL DEFAULT ''")
+    if "it_provider_email_2" not in existing_columns:
+        alter_statements.append("ALTER TABLE customers ADD COLUMN it_provider_email_2 TEXT NOT NULL DEFAULT ''")
+    if "it_provider_phone_2" not in existing_columns:
+        alter_statements.append("ALTER TABLE customers ADD COLUMN it_provider_phone_2 TEXT NOT NULL DEFAULT ''")
+    if "it_provider_name_3" not in existing_columns:
+        alter_statements.append("ALTER TABLE customers ADD COLUMN it_provider_name_3 TEXT NOT NULL DEFAULT ''")
+    if "it_provider_contact_3" not in existing_columns:
+        alter_statements.append("ALTER TABLE customers ADD COLUMN it_provider_contact_3 TEXT NOT NULL DEFAULT ''")
+    if "it_provider_email_3" not in existing_columns:
+        alter_statements.append("ALTER TABLE customers ADD COLUMN it_provider_email_3 TEXT NOT NULL DEFAULT ''")
+    if "it_provider_phone_3" not in existing_columns:
+        alter_statements.append("ALTER TABLE customers ADD COLUMN it_provider_phone_3 TEXT NOT NULL DEFAULT ''")
+
+    for statement in alter_statements:
+        conn.execute(statement)
+
+
+def _extract_it_provider_fields_from_payload(payload: dict, fallback: dict | None = None) -> dict:
+    source = payload if isinstance(payload, dict) else {}
+    fallback_source = fallback if isinstance(fallback, dict) else {}
+    contacts = source.get("it_provider_contacts")
+    contacts_list = contacts if isinstance(contacts, list) else []
+
+    def _fallback_value(key: str) -> str:
+        return str(fallback_source.get(key, "") or "")
+
+    def _value(field_base: str, slot: int) -> object:
+        suffix = "" if slot == 1 else f"_{slot}"
+        key = f"{field_base}{suffix}"
+        if key in source:
+            return source.get(key, "")
+
+        contact_entry = contacts_list[slot - 1] if slot - 1 < len(contacts_list) else None
+        if isinstance(contact_entry, dict) and field_base in contact_entry:
+            return contact_entry.get(field_base, "")
+
+        return _fallback_value(key)
+
+    return {
+        "it_provider_name": _value("it_provider_name", 1),
+        "it_provider_contact": _value("it_provider_contact", 1),
+        "it_provider_email": _value("it_provider_email", 1),
+        "it_provider_phone": _value("it_provider_phone", 1),
+        "it_provider_name_2": _value("it_provider_name", 2),
+        "it_provider_contact_2": _value("it_provider_contact", 2),
+        "it_provider_email_2": _value("it_provider_email", 2),
+        "it_provider_phone_2": _value("it_provider_phone", 2),
+        "it_provider_name_3": _value("it_provider_name", 3),
+        "it_provider_contact_3": _value("it_provider_contact", 3),
+        "it_provider_email_3": _value("it_provider_email", 3),
+        "it_provider_phone_3": _value("it_provider_phone", 3),
+    }
+
+
 def build_customer_logo_url(customer_id: object, logo_filename: object, updated_at_utc: object = "") -> str:
     try:
         cid = int(customer_id)
@@ -4204,6 +4278,7 @@ def _parse_customer_logo_upload_data(image_data: object, file_name: object) -> t
 
 
 def save_customer_logo(conn: sqlite3.Connection, customer_id: object, file_name: object, image_data: object) -> dict:
+    ensure_customers_extended_columns(conn)
     customer = get_customer_by_id(conn, customer_id)
     if not customer:
         raise ValueError("customer_id not found")
@@ -4263,6 +4338,7 @@ def _build_it_provider_contacts_from_row(row: tuple) -> list[dict]:
 
 
 def list_customers(conn: sqlite3.Connection) -> list[dict]:
+    ensure_customers_extended_columns(conn)
     rows = conn.execute(
         """
         SELECT id,
@@ -4315,6 +4391,7 @@ def list_customers(conn: sqlite3.Connection) -> list[dict]:
 
 
 def get_customer_by_id(conn: sqlite3.Connection, customer_id: object) -> dict | None:
+    ensure_customers_extended_columns(conn)
     try:
         cid = int(customer_id)
     except (TypeError, ValueError):
@@ -4389,6 +4466,7 @@ def upsert_customer(
     it_provider_email_3: object = "",
     it_provider_phone_3: object = "",
 ) -> dict:
+    ensure_customers_extended_columns(conn)
     name = normalize_customer_name(customer_name)
     project_no = normalize_maringo_project_number(maringo_project_number)
     provider_name = normalize_it_provider_name(it_provider_name)
@@ -4408,7 +4486,21 @@ def upsert_customer(
 
     existing = conn.execute(
         """
-        SELECT id, customer_name, COALESCE(maringo_project_number, '')
+        SELECT id,
+               customer_name,
+               COALESCE(maringo_project_number, ''),
+               COALESCE(it_provider_name, ''),
+               COALESCE(it_provider_contact, ''),
+               COALESCE(it_provider_email, ''),
+               COALESCE(it_provider_phone, ''),
+               COALESCE(it_provider_name_2, ''),
+               COALESCE(it_provider_contact_2, ''),
+               COALESCE(it_provider_email_2, ''),
+               COALESCE(it_provider_phone_2, ''),
+               COALESCE(it_provider_name_3, ''),
+               COALESCE(it_provider_contact_3, ''),
+               COALESCE(it_provider_email_3, ''),
+               COALESCE(it_provider_phone_3, '')
         FROM customers
         WHERE LOWER(customer_name) = LOWER(?)
         LIMIT 1
@@ -4419,6 +4511,32 @@ def upsert_customer(
     now_utc = utc_now_iso()
     if existing:
         customer_id = int(existing[0])
+        current_provider_name = str(existing[3] or "")
+        current_provider_contact = str(existing[4] or "")
+        current_provider_email = str(existing[5] or "")
+        current_provider_phone = str(existing[6] or "")
+        current_provider_name_2 = str(existing[7] or "")
+        current_provider_contact_2 = str(existing[8] or "")
+        current_provider_email_2 = str(existing[9] or "")
+        current_provider_phone_2 = str(existing[10] or "")
+        current_provider_name_3 = str(existing[11] or "")
+        current_provider_contact_3 = str(existing[12] or "")
+        current_provider_email_3 = str(existing[13] or "")
+        current_provider_phone_3 = str(existing[14] or "")
+
+        provider_name_final = provider_name or current_provider_name
+        provider_contact_final = provider_contact or current_provider_contact
+        provider_email_final = provider_email or current_provider_email
+        provider_phone_final = provider_phone or current_provider_phone
+        provider_name_2_final = provider_name_2 or current_provider_name_2
+        provider_contact_2_final = provider_contact_2 or current_provider_contact_2
+        provider_email_2_final = provider_email_2 or current_provider_email_2
+        provider_phone_2_final = provider_phone_2 or current_provider_phone_2
+        provider_name_3_final = provider_name_3 or current_provider_name_3
+        provider_contact_3_final = provider_contact_3 or current_provider_contact_3
+        provider_email_3_final = provider_email_3 or current_provider_email_3
+        provider_phone_3_final = provider_phone_3 or current_provider_phone_3
+
         if (
             project_no and project_no != str(existing[2] or "")
         ) or provider_name or provider_contact or provider_email or provider_phone or provider_name_2 or provider_contact_2 or provider_email_2 or provider_phone_2 or provider_name_3 or provider_contact_3 or provider_email_3 or provider_phone_3:
@@ -4443,18 +4561,18 @@ def upsert_customer(
                 """,
                 (
                     project_no,
-                    provider_name,
-                    provider_contact,
-                    provider_email,
-                    provider_phone,
-                    provider_name_2,
-                    provider_contact_2,
-                    provider_email_2,
-                    provider_phone_2,
-                    provider_name_3,
-                    provider_contact_3,
-                    provider_email_3,
-                    provider_phone_3,
+                    provider_name_final,
+                    provider_contact_final,
+                    provider_email_final,
+                    provider_phone_final,
+                    provider_name_2_final,
+                    provider_contact_2_final,
+                    provider_email_2_final,
+                    provider_phone_2_final,
+                    provider_name_3_final,
+                    provider_contact_3_final,
+                    provider_email_3_final,
+                    provider_phone_3_final,
                     now_utc,
                     customer_id,
                 ),
@@ -4527,6 +4645,7 @@ def update_customer_by_id(
     it_provider_email_3: object,
     it_provider_phone_3: object,
 ) -> dict:
+    ensure_customers_extended_columns(conn)
     try:
         cid = int(str(customer_id or 0))
     except (TypeError, ValueError):
@@ -13403,6 +13522,7 @@ def get_latest_report_rows_by_hostname(conn: sqlite3.Connection) -> dict[str, di
 
 
 def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "") -> dict:
+    ensure_customers_extended_columns(conn)
     row = conn.execute(
         """
         SELECT
@@ -18258,41 +18378,31 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             customer_name = payload.get("customer_name", "")
             maringo_project_number = payload.get("maringo_project_number", "")
-            it_provider_name = payload.get("it_provider_name", "")
-            it_provider_contact = payload.get("it_provider_contact", "")
-            it_provider_email = payload.get("it_provider_email", "")
-            it_provider_phone = payload.get("it_provider_phone", "")
-            it_provider_name_2 = payload.get("it_provider_name_2", "")
-            it_provider_contact_2 = payload.get("it_provider_contact_2", "")
-            it_provider_email_2 = payload.get("it_provider_email_2", "")
-            it_provider_phone_2 = payload.get("it_provider_phone_2", "")
-            it_provider_name_3 = payload.get("it_provider_name_3", "")
-            it_provider_contact_3 = payload.get("it_provider_contact_3", "")
-            it_provider_email_3 = payload.get("it_provider_email_3", "")
-            it_provider_phone_3 = payload.get("it_provider_phone_3", "")
+            provider_fields = _extract_it_provider_fields_from_payload(payload)
 
             try:
                 with sqlite3.connect(DB_PATH) as conn:
+                    ensure_customers_extended_columns(conn)
                     customer = upsert_customer(
                         conn,
                         customer_name,
                         maringo_project_number,
-                        it_provider_name,
-                        it_provider_contact,
-                        it_provider_email,
-                        it_provider_phone,
-                        it_provider_name_2,
-                        it_provider_contact_2,
-                        it_provider_email_2,
-                        it_provider_phone_2,
-                        it_provider_name_3,
-                        it_provider_contact_3,
-                        it_provider_email_3,
-                        it_provider_phone_3,
+                        provider_fields["it_provider_name"],
+                        provider_fields["it_provider_contact"],
+                        provider_fields["it_provider_email"],
+                        provider_fields["it_provider_phone"],
+                        provider_fields["it_provider_name_2"],
+                        provider_fields["it_provider_contact_2"],
+                        provider_fields["it_provider_email_2"],
+                        provider_fields["it_provider_phone_2"],
+                        provider_fields["it_provider_name_3"],
+                        provider_fields["it_provider_contact_3"],
+                        provider_fields["it_provider_email_3"],
+                        provider_fields["it_provider_phone_3"],
                     )
                     conn.commit()
                 self._send_json(HTTPStatus.OK, {"status": "stored", "customer": customer})
-            except ValueError as exc:
+            except (ValueError, sqlite3.DatabaseError) as exc:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             return
 
@@ -19668,30 +19778,32 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             try:
                 with sqlite3.connect(DB_PATH) as conn:
+                    ensure_customers_extended_columns(conn)
                     existing_customer = get_customer_by_id(conn, customer_id)
                     if not existing_customer:
                         raise ValueError("Kunde nicht gefunden.")
+                    provider_fields = _extract_it_provider_fields_from_payload(payload, existing_customer)
                     customer = update_customer_by_id(
                         conn,
                         customer_id,
                         payload.get("customer_name", existing_customer.get("customer_name", "")),
                         payload.get("maringo_project_number", existing_customer.get("maringo_project_number", "")),
-                        payload.get("it_provider_name", existing_customer.get("it_provider_name", "")),
-                        payload.get("it_provider_contact", existing_customer.get("it_provider_contact", "")),
-                        payload.get("it_provider_email", existing_customer.get("it_provider_email", "")),
-                        payload.get("it_provider_phone", existing_customer.get("it_provider_phone", "")),
-                        payload.get("it_provider_name_2", existing_customer.get("it_provider_name_2", "")),
-                        payload.get("it_provider_contact_2", existing_customer.get("it_provider_contact_2", "")),
-                        payload.get("it_provider_email_2", existing_customer.get("it_provider_email_2", "")),
-                        payload.get("it_provider_phone_2", existing_customer.get("it_provider_phone_2", "")),
-                        payload.get("it_provider_name_3", existing_customer.get("it_provider_name_3", "")),
-                        payload.get("it_provider_contact_3", existing_customer.get("it_provider_contact_3", "")),
-                        payload.get("it_provider_email_3", existing_customer.get("it_provider_email_3", "")),
-                        payload.get("it_provider_phone_3", existing_customer.get("it_provider_phone_3", "")),
+                        provider_fields["it_provider_name"],
+                        provider_fields["it_provider_contact"],
+                        provider_fields["it_provider_email"],
+                        provider_fields["it_provider_phone"],
+                        provider_fields["it_provider_name_2"],
+                        provider_fields["it_provider_contact_2"],
+                        provider_fields["it_provider_email_2"],
+                        provider_fields["it_provider_phone_2"],
+                        provider_fields["it_provider_name_3"],
+                        provider_fields["it_provider_contact_3"],
+                        provider_fields["it_provider_email_3"],
+                        provider_fields["it_provider_phone_3"],
                     )
                     conn.commit()
                 self._send_json(HTTPStatus.OK, {"status": "updated", "customer": customer})
-            except ValueError as exc:
+            except (ValueError, sqlite3.DatabaseError) as exc:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             return
 
