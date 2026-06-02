@@ -15003,23 +15003,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .reports-column .section-head .report-customer-main-card .report-count-inline {
-  position: absolute;
-  right: calc(var(--customer-logo-right-gap) + var(--customer-logo-card-width) + var(--customer-meta-gap) + 72px);
-  top: 50%;
-  display: inline-block;
-  text-align: right;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  font-size: 11px;
-  line-height: 1;
-  font-weight: 800;
-  color: #4f6f94;
-  white-space: nowrap;
-  line-height: 24px;
-  transform: translateY(-50%);
-  z-index: 2;
+  display: none;
 }
 
 .report-header-os-logo-wrap {

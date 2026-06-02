@@ -9773,11 +9773,14 @@ function renderHeaderFirstRowControls(host) {
   }
 
   const reportCount = Number(host.report_count || 0).toLocaleString("de-DE");
+  const currentReportIndex = state.currentReport ? Math.max(1, Number(state.reportOffset || 0) + 1) : 0;
   const osChip = renderHostOsMetaChip(host);
+  const reportIndexChip = `<span class="selected-host-meta-chip selected-host-meta-chip--report-index" title="Aktuelle Meldung">🔔 ${currentReportIndex}</span>`;
 
   return `
     ${renderApiKeyChip(host)}
     ${osChip}
+    ${reportIndexChip}
     <span class="selected-host-meta-chip" title="Gesendete Meldungen">📦 ${reportCount}</span>
   `;
 }
@@ -11522,18 +11525,20 @@ async function loadReportsForHost(options = {}) {
       if (reportJumpDateInput) {
         reportJumpDateInput.value = "";
       }
+      updateHeaderFirstRowControls();
       updateHeaderStatChips();
       updatePagerButtons();
       return;
     }
 
     const shownIndex = state.reportOffset + 1;
-  count.textContent = `Meldung ${shownIndex}`;
+    count.textContent = `Meldung ${shownIndex}`;
     state.selectedDisplayName = String(reports[0].display_name || reports[0].hostname || state.selectedHost);
     state.currentReport = reports[0];
     list.innerHTML = renderReportCard(state.currentReport);
     wireSapVersionMapCopyButtons(list);
     wireReportHierarchyToggleButtons(list);
+    updateHeaderFirstRowControls();
     updateHeaderStatChips();
     updatePagerButtons();
   } catch (error) {
