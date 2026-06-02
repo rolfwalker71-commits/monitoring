@@ -15019,6 +15019,18 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   min-height: 24px;
 }
 
+.report-customer-chip-wrap .selected-host-meta-chip--env-inline.selected-host-meta-chip--env-prod {
+  border-color: #90d6a8;
+  background: #e8faec;
+  color: #1f7148;
+}
+
+.report-customer-chip-wrap .selected-host-meta-chip--env-inline.selected-host-meta-chip--env-test {
+  border-color: #e6cd67;
+  background: #fff8cf;
+  color: #6f5d08;
+}
+
 .report-customer-chip-wrap .selected-host-meta-card--placeholder {
   min-height: 54px;
   align-items: center;
@@ -15163,6 +15175,18 @@ body[data-theme="dark"] .report-customer-chip-wrap .selected-host-meta-card-sub 
 
 body[data-theme="dark"] .report-customer-chip-wrap .selected-host-meta-chip--env-inline {
   color: #d6e6fb;
+}
+
+body[data-theme="dark"] .report-customer-chip-wrap .selected-host-meta-chip--env-inline.selected-host-meta-chip--env-prod {
+  border-color: #3ea26f;
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
+}
+
+body[data-theme="dark"] .report-customer-chip-wrap .selected-host-meta-chip--env-inline.selected-host-meta-chip--env-test {
+  border-color: #d97706;
+  background: rgba(217, 119, 6, 0.2);
+  color: #fdba74;
 }
 
 body[data-theme="dark"] .report-customer-chip-wrap .selected-host-meta-card-placeholder-text {
