@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.231**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.231**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.232**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.232**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.232 | 02.06.2026 | Header-Zählertext vereinfacht: statt `Meldung X von XX` wird nun nur noch `Meldung X` angezeigt. Im Leerstaat ohne Reports steht `Meldung 0`, da die Gesamtzahl bereits separat über den Report-Count-Chip verfügbar ist. |
 | 1.7.231 | 02.06.2026 | Analyse-Karten optisch ausgerichtet: stabile Zeilenhöhen in Trend-Karten (Header/Aktuell), damit RAM- und Swap-Progressbar auf derselben Höhe starten. Progressbar zudem dicker ausgeführt (`8px` -> `12px`) für bessere Lesbarkeit. |
 | 1.7.230 | 02.06.2026 | Fix für den unteren rechten Umgebungs-Chip in der linken Headerkarte: Prod/Test-Farbflächen werden jetzt über höher-spezifische Inline-Env-Selektoren erzwungen (inkl. Dark-Mode), damit der Chip nicht mehr mit weißem Standardhintergrund erscheint. |
 | 1.7.229 | 02.06.2026 | Header-Feinschliff: vertikaler Abstand zwischen Kundenname und `Name:`-Zeile vergrößert (Überlappung beseitigt). Umgebungs-Chips farblich angepasst: **Prod.** in hellgrün, **Test** in gelb. |

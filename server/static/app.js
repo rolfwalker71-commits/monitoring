@@ -11446,7 +11446,7 @@ async function loadReportsForHost(options = {}) {
     if (reports.length === 0) {
       state.currentReport = null;
       list.innerHTML = "<p class=\"muted\">Noch keine Daten vorhanden.</p>";
-      count.textContent = `0 von ${state.totalReports} Meldungen`;
+      count.textContent = "Meldung 0";
       if (reportJumpDateInput) {
         reportJumpDateInput.value = "";
       }
@@ -11456,7 +11456,7 @@ async function loadReportsForHost(options = {}) {
     }
 
     const shownIndex = state.reportOffset + 1;
-    count.textContent = `Meldung ${shownIndex} von ${state.totalReports}`;
+  count.textContent = `Meldung ${shownIndex}`;
     state.selectedDisplayName = String(reports[0].display_name || reports[0].hostname || state.selectedHost);
     state.currentReport = reports[0];
     list.innerHTML = renderReportCard(state.currentReport);
