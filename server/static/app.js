@@ -9562,6 +9562,7 @@ function renderSingleHostCard(host) {
   const hanaSidValue = cleanHostValue(host.hana_sid || "");
   const customerNameValue = cleanHostValue(host.customer_name || "");
   const customerProjectValue = cleanHostValue(host.customer_maringo_project_number || "");
+  const customerLogoUrl = asText(host.customer_logo_url || "", "").trim();
   const customerChipLabel = customerProjectValue
     ? `${customerNameValue} · ${customerProjectValue}`
     : customerNameValue;
@@ -9623,6 +9624,9 @@ function renderSingleHostCard(host) {
   const customerTitleLine = customerNameValue
     ? `<div class="host-customer-title-line"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span></span></div>`
     : "";
+  const customerCardWatermark = customerLogoUrl
+    ? `<span class="host-customer-bg-watermark" aria-hidden="true"><img src="${escapeHtml(customerLogoUrl)}" alt="" class="host-customer-bg-watermark-logo" loading="lazy" decoding="async" onerror="this.parentElement.style.display='none'"></span>`
+    : "";
   const designationBadgeLine = `<div class="host-designation-row"><span class="host-detail-line">${escapeHtml(hostDesignationLabel)}</span><span class="host-detail-clock" title="${escapeHtml(lastReportClock.title)}">${escapeHtml(lastReportClock.label)}</span></div>`;
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
@@ -9675,6 +9679,7 @@ function renderSingleHostCard(host) {
     <article class="${selectedClass}${envCardClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostIdentity)}">
       ${versionSideBarHtml}
       ${cornerIcons}
+      ${customerCardWatermark}
       <div class="host-card-main">
         ${customerTitleLine}
         ${designationBadgeLine}
