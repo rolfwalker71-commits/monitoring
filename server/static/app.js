@@ -5126,6 +5126,7 @@ async function loadAndRenderCustomerNotificationPanel(hostname, hostUid = "") {
         if (status) { status.textContent = "✅ Gespeichert"; setTimeout(() => { status.textContent = ""; }, 2500); }
         state.selectedDisplayName = state.selectedDisplayName || normalizedHostname;
         await loadHosts({ preserveScroll: true });
+        await loadAndRenderCustomerNotificationPanel(normalizedHostname, normalizedHostUid);
       } catch (err) {
         if (status) { status.textContent = `❌ ${err.message}`; setTimeout(() => { status.textContent = ""; }, 3000); }
       }
