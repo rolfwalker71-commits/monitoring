@@ -14854,12 +14854,26 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   min-width: 0;
 }
 
+.reports-column .section-head .report-controls-card.report-controls-card--active .report-controls-row--chips {
+  justify-content: flex-end;
+}
+
 .reports-column .section-head .report-controls-card .report-controls-row--actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.reports-column .section-head .report-controls-card.report-controls-card--active .report-controls-row--actions {
+  grid-template-columns: auto auto;
+  justify-content: flex-end;
+}
+
+.reports-column .section-head .report-controls-card.report-controls-card--empty .report-controls-row--chips,
+.reports-column .section-head .report-controls-card.report-controls-card--empty .report-controls-row--actions {
+  display: none;
 }
 
 .reports-column .section-head .report-controls-card .report-controls-actions-left,

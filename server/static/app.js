@@ -9899,6 +9899,20 @@ function updateHeaderFirstRowControls() {
   container.classList.remove("hidden");
 }
 
+function updateReportControlsCardState(selectedHost) {
+  const controlsCard = document.querySelector(".reports-column .section-head .report-controls-card");
+  if (!controlsCard) {
+    return;
+  }
+  if (selectedHost) {
+    controlsCard.classList.add("report-controls-card--active");
+    controlsCard.classList.remove("report-controls-card--empty");
+    return;
+  }
+  controlsCard.classList.add("report-controls-card--empty");
+  controlsCard.classList.remove("report-controls-card--active");
+}
+
 function updateSelectedHostControls() {
   updateHeaderFirstRowControls();
 
@@ -9908,6 +9922,7 @@ function updateSelectedHostControls() {
   }
 
   const selectedHost = getSelectedHostRecord();
+  updateReportControlsCardState(selectedHost);
 
   if ((!state.selectedHost && !state.selectedHostUid) || !selectedHost) {
     controls.innerHTML = "";
