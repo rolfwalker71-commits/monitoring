@@ -235,6 +235,7 @@ body {
 .alerts-list.alerts-carousel {
   display: flex;
   flex-direction: row;
+  align-items: flex-start;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
@@ -252,23 +253,20 @@ body {
 .alerts-carousel .skeleton-card,
 .alerts-carousel .carousel-empty {
   flex: 0 0 min(88vw, 392px);
+  align-self: flex-start;
   scroll-snap-align: center;
   scroll-snap-stop: always;
-}
-
-.alert-detail-links {
-  display: grid;
-  gap: 8px;
 }
 
 .alert-card {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 16px;
-  padding: 8px 10px;
+  padding: 8px 10px 6px;
   box-shadow: var(--shadow);
   position: relative;
   overflow: hidden;
+  height: fit-content;
 }
 
 .alert-card::before {
@@ -398,6 +396,7 @@ body {
 
 .alert-card-body {
   margin-top: 2px;
+  padding-bottom: 0;
 }
 
 .alert-card-body .alert-meta,
@@ -614,7 +613,8 @@ body {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 6px;
-  margin-top: 5px;
+  margin-top: 4px;
+  margin-bottom: 0;
 }
 
 .btn-primary {
@@ -957,19 +957,6 @@ body {
   word-break: break-word;
 }
 
-.host-sheet-links {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.host-sheet-links a {
-  display: block;
-  text-align: center;
-  text-decoration: none;
-}
-
 .host-sheet-close-btn {
   width: 100%;
 }
@@ -989,7 +976,7 @@ body {
 }
 
 .alert-detail-facts {
-  margin: 0 0 10px;
+  margin: 0;
   display: grid;
   gap: 6px;
 }
@@ -1010,12 +997,6 @@ body {
 .alert-detail-facts dd {
   margin: 0;
   word-break: break-word;
-}
-
-.alert-detail-link {
-  display: block;
-  text-align: center;
-  text-decoration: none;
 }
 
 .country-filter-chips {

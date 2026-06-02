@@ -590,8 +590,6 @@ function openHostSheet(item) {
   const subtitleEl = document.getElementById("hostSheetSubtitle");
   const factsEl = document.getElementById("hostSheetFacts");
   const logoEl = document.getElementById("hostSheetLogo");
-  const hostLink = document.getElementById("hostSheetDesktopHost");
-  const alertLink = document.getElementById("hostSheetDesktopAlert");
 
   if (titleEl) titleEl.textContent = displayName;
   if (subtitleEl) subtitleEl.textContent = subtitle;
@@ -638,12 +636,6 @@ function openHostSheet(item) {
       item.is_acknowledged ? hostSheetFactRow("Notiz", item.ack_note) : "",
       hostSheetFactRow("Alert-ID", "#" + String(item.id || "")),
     ].join("");
-  }
-
-  if (hostLink) hostLink.href = buildDesktopHostUrl(hostUid, hostname);
-  if (alertLink) {
-    const alertId = Number(item.id || 0);
-    alertLink.href = alertId > 0 ? "/?alert_id=" + alertId : "/";
   }
 
   openSheet("hostSheet");
@@ -917,14 +909,9 @@ function buildAlertDetailHtml(item) {
   if (item.is_closed) flags.push("Geschlossen");
   if (flags.length) push("Hinweis", flags.join(", "));
 
-  const hostUrl = buildDesktopHostUrl(hostUid, hostname);
   return (
     '<h4 class="alert-detail-title">Zusatzinfos · Alert #' + mobileEsc(String(item.id || "")) + "</h4>"
     + (lines.length ? '<dl class="alert-detail-facts">' + lines.join("") + "</dl>" : '<p class="sheet-hint">Keine weiteren Details.</p>')
-    + '<div class="alert-detail-links">'
-    + '<a class="btn-secondary alert-detail-link" href="' + mobileEsc(hostUrl) + '">Host im Desktop</a>'
-    + '<a class="btn-secondary alert-detail-link" href="/?alert_id=' + Number(item.id || 0) + '">Alert im Desktop</a>'
-    + "</div>"
   );
 }
 
