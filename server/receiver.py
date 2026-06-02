@@ -6579,6 +6579,72 @@ def _mark_stale_running_changelog_rebuild_jobs_failed(
     return updated
 
 
+def cancel_changelog_rebuild_jobs(
+    conn: sqlite3.Connection,
+    *,
+    job_id: int | None = None,
+    include_pending: bool = True,
+    reason: str = "",
+) -> dict:
+    """Mark active changelog rebuild jobs as failed so a new rebuild can be scheduled."""
+    _mark_stale_running_changelog_rebuild_jobs_failed(conn)
+
+    now_utc = utc_now_iso()
+    cancel_message = str(reason or "").strip() or "Manuell abgebrochen."
+    statuses = ["running"]
+    if include_pending:
+        statuses.append("pending")
+
+    cancelled: list[dict] = []
+    if job_id is not None and int(job_id) > 0:
+        target_id = int(job_id)
+        placeholders = ",".join("?" for _ in statuses)
+        rows = conn.execute(
+            f"""
+            SELECT id, status
+            FROM changelog_rebuild_jobs
+            WHERE id = ? AND status IN ({placeholders})
+            """,
+            (target_id, *statuses),
+        ).fetchall()
+    else:
+        placeholders = ",".join("?" for _ in statuses)
+        rows = conn.execute(
+            f"""
+            SELECT id, status
+            FROM changelog_rebuild_jobs
+            WHERE status IN ({placeholders})
+            ORDER BY id ASC
+            """,
+            tuple(statuses),
+        ).fetchall()
+
+    for row in rows:
+        row_id = int(row[0] or 0)
+        previous_status = str(row[1] or "")
+        conn.execute(
+            """
+            UPDATE changelog_rebuild_jobs
+            SET status = 'failed',
+                finished_at_utc = ?,
+                error_message = ?
+            WHERE id = ? AND status = ?
+            """,
+            (now_utc, cancel_message, row_id, previous_status),
+        )
+        if conn.execute("SELECT changes()").fetchone()[0] > 0:
+            cancelled.append({"id": row_id, "previous_status": previous_status})
+
+    if cancelled:
+        conn.commit()
+
+    return {
+        "cancelled_count": len(cancelled),
+        "cancelled": cancelled,
+        "message": cancel_message,
+    }
+
+
 def schedule_changelog_rebuild_job(
     conn: sqlite3.Connection,
     requested_by: str,
@@ -19904,6 +19970,55 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/v1/admin/changelog-rebuild/cancel":
+            if not self._require_admin_session():
+                return
+
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            if not isinstance(payload, dict):
+                payload = {}
+
+            try:
+                job_id_raw = payload.get("job_id")
+                job_id = int(job_id_raw) if job_id_raw not in (None, "") else None
+            except (TypeError, ValueError):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid job_id"})
+                return
+
+            include_pending = parse_bool(payload.get("include_pending"), True)
+            reason = str(payload.get("reason", "") or "").strip()
+
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    cancelled = cancel_changelog_rebuild_jobs(
+                        conn,
+                        job_id=job_id,
+                        include_pending=include_pending,
+                        reason=reason,
+                    )
+                    jobs = list_changelog_rebuild_jobs(conn, limit=20)
+                    conn.commit()
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "message": "Changelog-Rebuild-Job(s) abgebrochen",
+                    "cancelled": cancelled,
+                    "jobs": jobs,
+                },
+            )
+            return
+
         if path == "/api/v1/admin/changelog-rebuild/schedule":
             if not self._require_admin_session():
                 return
@@ -19944,7 +20059,19 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     )
                     immediate_result = []
                     if run_now:
-                        immediate_result = process_due_changelog_rebuild_jobs(conn, max_jobs=1)
+
+                        def _run_changelog_rebuild_job_async() -> None:
+                            try:
+                                with sqlite3.connect(DB_PATH) as conn:
+                                    process_due_changelog_rebuild_jobs(conn, max_jobs=1)
+                            except Exception as exc:
+                                print(f"[changelog-rebuild] background job failed: {exc}")
+
+                        threading.Thread(
+                            target=_run_changelog_rebuild_job_async,
+                            name="changelog-rebuild-job",
+                            daemon=True,
+                        ).start()
                     jobs = list_changelog_rebuild_jobs(conn, limit=20)
                     conn.commit()
             except Exception as exc:
@@ -19955,7 +20082,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "status": "ok",
-                    "message": "Changelog-Rebuild-Job geplant",
+                    "message": "Changelog-Rebuild-Job geplant"
+                    + (" und im Hintergrund gestartet" if run_now else ""),
                     "scheduled": scheduled,
                     "processed_now": immediate_result,
                     "jobs": jobs,
