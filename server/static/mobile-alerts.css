@@ -226,17 +226,17 @@ body {
 }
 
 .alerts-list {
-  padding: 4px 14px calc(20px + var(--safe-bottom));
+  padding: 4px 14px calc(16px + var(--safe-bottom));
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .alert-card {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 16px;
-  padding: 12px;
+  padding: 8px 10px;
   box-shadow: var(--shadow);
   position: relative;
   overflow: hidden;
@@ -260,8 +260,8 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 6px;
+  margin-bottom: 3px;
 }
 
 .alert-status-group {
@@ -273,9 +273,9 @@ body {
 }
 
 .severity-badge {
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 800;
-  padding: 4px 8px;
+  padding: 3px 7px;
   border-radius: 999px;
   text-transform: uppercase;
 }
@@ -296,62 +296,71 @@ body {
 }
 
 .alert-identity {
-  margin-bottom: 8px;
+  margin-bottom: 3px;
+}
+
+.alert-customer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 1px;
 }
 
 .alert-customer-name {
-  margin: 0 0 6px;
-  font-size: 1.18rem;
+  margin: 0;
+  font-size: 1.1rem;
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1.15;
   color: var(--ink);
+  flex: 1;
+  min-width: 0;
 }
 
 .alert-host-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .alert-host-main {
   min-width: 0;
   flex: 1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
 }
 
 .alert-host-name {
   margin: 0;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--muted);
+  line-height: 1.2;
 }
 
+.alert-customer-row.is-tappable,
 .alert-host-row.is-tappable {
   cursor: pointer;
-  border-radius: 10px;
-  margin: 0 -6px;
-  padding: 4px 6px;
+  border-radius: 8px;
+  margin-left: -4px;
+  margin-right: -4px;
+  padding: 2px 4px;
 }
 
+.alert-customer-row.is-tappable:active,
 .alert-host-row.is-tappable:active {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
-.alert-host-row.is-tappable .alert-host-name {
+.alert-host-row.is-tappable .alert-host-name,
+.alert-customer-row.is-tappable .alert-customer-name {
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
-  text-underline-offset: 3px;
+  text-underline-offset: 2px;
 }
 
 .customer-logo {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   object-fit: contain;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -458,9 +467,10 @@ body {
 }
 
 .alert-meta {
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   color: var(--muted);
-  margin: 4px 0;
+  margin: 1px 0;
+  line-height: 1.25;
 }
 
 .alert-meta a {
@@ -470,11 +480,11 @@ body {
 }
 
 .usage-bar {
-  height: 8px;
+  height: 6px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--line) 60%, transparent);
   overflow: hidden;
-  margin: 8px 0;
+  margin: 3px 0;
 }
 
 .usage-bar-fill {
@@ -495,14 +505,14 @@ body {
 .alert-card-actions {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 6px;
+  margin-top: 5px;
 }
 
 .btn-primary {
   border: 0;
   border-radius: 12px;
-  padding: 11px 14px;
+  padding: 9px 12px;
   font-weight: 800;
   font-family: inherit;
   font-size: 0.88rem;
@@ -515,7 +525,7 @@ body {
 .btn-danger {
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 11px 14px;
+  padding: 9px 12px;
   font-weight: 700;
   font-family: inherit;
   font-size: 0.88rem;
@@ -535,8 +545,8 @@ body {
 
 .alert-more {
   display: none;
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 6px;
+  padding-top: 6px;
   border-top: 1px dashed var(--line);
   font-size: 0.74rem;
   color: var(--muted);

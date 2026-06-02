@@ -428,7 +428,7 @@ function buildCustomerLogoHtml(item) {
   const logoUrl = String(item.customer_logo_url || "").trim();
   if (!logoUrl) return "";
   return (
-    '<img class="customer-logo customer-logo-right" data-src="' + mobileEsc(logoUrl) + '" alt="" width="36" height="36" '
+    '<img class="customer-logo customer-logo-right" data-src="' + mobileEsc(logoUrl) + '" alt="" width="32" height="32" '
     + 'data-load-state="loading" decoding="async" />'
   );
 }
@@ -439,22 +439,25 @@ function buildAlertIdentityHtml(item) {
   const logoHtml = buildCustomerLogoHtml(item);
   const hostRowAttrs =
     ' class="alert-host-row is-tappable" data-action="host-info" role="button" tabindex="0" aria-label="Host-Details"';
+  const titleRowAttrs =
+    ' class="alert-customer-row is-tappable" data-action="host-info" role="button" tabindex="0" aria-label="Host-Details"';
 
   if (customerName) {
     return (
       '<div class="alert-identity">'
+      + '<div class="alert-customer-row">'
       + '<h2 class="alert-customer-name">' + mobileEsc(customerName) + "</h2>"
-      + "<div" + hostRowAttrs + ">"
-      + '<div class="alert-host-main"><p class="alert-host-name">' + mobileEsc(hostLabel) + "</p></div>"
       + logoHtml
-      + "</div></div>"
+      + "</div>"
+      + "<div" + hostRowAttrs + '><p class="alert-host-name">' + mobileEsc(hostLabel) + "</p></div>"
+      + "</div>"
     );
   }
 
   return (
     '<div class="alert-identity">'
-    + "<div" + hostRowAttrs + ">"
-    + '<div class="alert-host-main"><h2 class="alert-customer-name">' + mobileEsc(hostLabel) + "</h2></div>"
+    + "<div" + titleRowAttrs + ">"
+    + '<h2 class="alert-customer-name">' + mobileEsc(hostLabel) + "</h2>"
     + logoHtml
     + "</div></div>"
   );
