@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.237**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.237**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.238**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.238**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.238 | 02.06.2026 | Header-Kundenlogo im Reports-Header neu ausgerichtet: Logo sitzt nun ganz rechts in eigener Spalte und läuft über beide Textzeilen, ohne die Kartenhöhe zu erhöhen. Darstellung bleibt strikt proportional (`object-fit: contain`). Zusätzlich wurde der künstliche Logo-Hintergrund entfernt, damit vorhandene Bild-Transparenz sichtbar bleibt. |
 | 1.7.237 | 02.06.2026 | Hotfix für `HTTP 502` bei `/api/v1/hosts`: Customer-Logo-Felder (`logo_filename`, `updated_at_utc`) wurden im Hosts-Query vollständig ergänzt (Host- und Host-UID-Settings) und korrekt gemappt, damit keine Row-Index-Fehler mehr auftreten. |
 | 1.7.236 | 02.06.2026 | Kundenlogo-v1 umgesetzt: Upload im Bereich **Kundeninfos** (PNG/JPG/WebP, max. 2 MB), serverseitige Speicherung unter `server/data/customer_logos`, Auslieferung über `/api/v1/customers/{id}/logo` und Einbindung der Logo-URL in Host-/Settings-Daten. Linke Headerkarte zeigt das Kundenlogo nun neben dem Kundennamen; zusätzlich Upload-Feld im Host-Metadaten-Dialog ergänzt. |
 | 1.7.235 | 02.06.2026 | Rechte Headerkarte auf inhaltsbasierte Breite umgestellt (schmaler, ohne Abschneiden), linke Karte dadurch breiter nutzbar. Zusätzlich in der oberen rechten Chip-Zeile ein OS-Logo (PNG, wie in der Hostkarte) ergänzt, inklusive Fallback auf `/icons/...`. |

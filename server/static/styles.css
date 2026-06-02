@@ -15037,6 +15037,25 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   align-content: start;
 }
 
+.report-customer-chip-wrap .selected-host-meta-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+}
+
+.report-customer-chip-wrap .selected-host-meta-card-body--with-logo {
+  grid-template-columns: minmax(0, 1fr) 92px;
+  column-gap: 10px;
+  align-items: stretch;
+}
+
+.report-customer-chip-wrap .selected-host-meta-card-copy {
+  display: grid;
+  grid-template-rows: auto auto;
+  min-width: 0;
+}
+
 .report-customer-chip-wrap .selected-host-meta-card-label {
   font-size: 9px;
   text-transform: uppercase;
@@ -15061,7 +15080,6 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 .report-customer-chip-wrap .selected-host-customer-main-row {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
   min-width: 0;
   max-width: 100%;
 }
@@ -15074,22 +15092,26 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .report-customer-chip-wrap .selected-host-customer-logo-wrap {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 70px;
-  height: 34px;
+  justify-content: flex-end;
+  width: 92px;
+  height: 100%;
+  min-height: 58px;
   border: 1px solid #cddbeb;
   border-radius: 8px;
-  background: linear-gradient(180deg, #ffffff 0%, #f3f8ff 100%);
+  background: transparent;
   flex-shrink: 0;
   overflow: hidden;
+  padding: 4px 6px;
+  align-self: stretch;
 }
 
 .report-customer-chip-wrap .selected-host-customer-logo {
-  max-width: 62px;
-  max-height: 28px;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
+  object-position: center right;
   display: block;
 }
 
