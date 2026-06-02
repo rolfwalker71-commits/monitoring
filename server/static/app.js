@@ -10058,10 +10058,14 @@ function renderSelectedHostCustomerChip(host) {
   const customerLogoHtml = customerLogoUrl
     ? `<span class="selected-host-customer-logo-wrap" title="Kundenlogo"><img src="${escapeHtml(customerLogoUrl)}" alt="Logo ${escapeHtml(customerLabel)}" class="selected-host-customer-logo" onerror="this.parentElement.style.display='none'"></span>`
     : "";
+  const customerBgLogoHtml = customerLogoUrl
+    ? `<span class="selected-host-customer-bg-watermark" aria-hidden="true"><img src="${escapeHtml(customerLogoUrl)}" alt="" class="selected-host-customer-bg-watermark-logo" loading="lazy" decoding="async" onerror="this.parentElement.style.display='none'"></span>`
+    : "";
   const cardBodyClass = customerLogoHtml
     ? "selected-host-meta-card-body selected-host-meta-card-body--with-logo"
     : "selected-host-meta-card-body";
   return `<span class="selected-host-meta-card" title="${escapeHtml(customerTitle)}">
+    ${customerBgLogoHtml}
     <span class="${cardBodyClass}">
       <span class="selected-host-meta-card-copy">
         <strong class="selected-host-meta-card-main"><span class="selected-host-customer-main-row"><span class="selected-host-customer-main-text">${escapeHtml(customerLabel)}</span></span></strong>
