@@ -71,10 +71,14 @@ const state = {
   pendingAckAlertId: 0,
   pendingCloseAlertId: 0,
   lastAlerts: [],
+  alertsLoading: false,
 };
+
+const SKELETON_CARD_COUNT = 4;
 
 let serviceWorkerRegistrationPromise = null;
 let toastTimer = null;
+let customerLogoObserver = null;
 
 function parseHighlightAlertId() {
   const raw = new URLSearchParams(window.location.search).get("alert_id");
@@ -385,6 +389,184 @@ function buildEnvironmentChip(environmentType) {
   return '<span class="env-chip ' + cssClass + '">' + mobileEsc(label) + "</span>";
 }
 
+function buildDesktopHostUrl(hostUid, hostname) {
+  const uid = String(hostUid || "").trim();
+  if (uid) return "/?host_uid=" + encodeURIComponent(uid);
+  const host = String(hostname || "").trim();
+  if (host) return "/?hostname=" + encodeURIComponent(host);
+  return "/";
+}
+
+function formatIsoLabel(iso) {
+  const raw = String(iso || "").trim();
+  if (!raw) return "—";
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const parsed = new Date(normalized.endsWith("Z") ? normalized : normalized + "Z");
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return parsed.toLocaleString("de-CH", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function buildCustomerRowHtml(item) {
+  const name = String(item.customer_name || "").trim();
+  if (!name) return "";
+  const logoUrl = String(item.customer_logo_url || "").trim();
+  const logoHtml = logoUrl
+    ? (
+      '<img class="customer-logo" data-src="' + mobileEsc(logoUrl) + '" alt="" width="28" height="28" '
+      + 'data-load-state="loading" decoding="async" />'
+    )
+    : "";
+  return '<p class="alert-meta alert-customer-row">' + logoHtml + "<span>Kunde: " + mobileEsc(name) + "</span></p>";
+}
+
+function renderSkeletonCards(count = SKELETON_CARD_COUNT) {
+  const list = document.getElementById("alertsList");
+  if (!list) return;
+  const chunks = [];
+  for (let i = 0; i < count; i += 1) {
+    chunks.push(
+      '<article class="skeleton-card" aria-hidden="true">'
+      + '<div class="skeleton-line wide"></div>'
+      + '<div class="skeleton-line medium"></div>'
+      + '<div class="skeleton-bar"></div>'
+      + '<div class="skeleton-line short"></div>'
+      + "</article>"
+    );
+  }
+  list.innerHTML = chunks.join("");
+}
+
+function setAlertsLoading(loading) {
+  state.alertsLoading = loading;
+  document.getElementById("alertsList")?.classList.toggle("is-loading", loading);
+}
+
+function wireCustomerLogos(list) {
+  const imgs = list.querySelectorAll("img.customer-logo[data-src]");
+  if (!imgs.length) return;
+
+  const applySrc = (img) => {
+    const src = img.getAttribute("data-src");
+    if (!src) return;
+    img.src = src;
+    img.removeAttribute("data-src");
+    img.addEventListener(
+      "load",
+      () => img.setAttribute("data-load-state", "loaded"),
+      { once: true }
+    );
+    img.addEventListener(
+      "error",
+      () => img.setAttribute("data-load-state", "error"),
+      { once: true }
+    );
+  };
+
+  if (!("IntersectionObserver" in window)) {
+    imgs.forEach(applySrc);
+    return;
+  }
+
+  if (!customerLogoObserver) {
+    customerLogoObserver = new IntersectionObserver(
+      (entries, observer) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          applySrc(entry.target);
+          observer.unobserve(entry.target);
+        });
+      },
+      { rootMargin: "120px 0px" }
+    );
+  }
+
+  imgs.forEach((img) => {
+    if (img.getAttribute("data-src")) {
+      customerLogoObserver.observe(img);
+    }
+  });
+}
+
+function hostSheetFactRow(label, value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return "<div><dt>" + mobileEsc(label) + "</dt><dd>" + mobileEsc(text) + "</dd></div>";
+}
+
+function openHostSheet(item) {
+  if (!item) return;
+
+  const displayName = String(item.display_name || item.hostname || "Host").trim();
+  const hostname = String(item.hostname || "").trim();
+  const hostUid = String(item.host_uid || "").trim();
+  const subtitle = hostname && hostname !== displayName ? hostname : hostUid || "Host-Details";
+
+  const titleEl = document.getElementById("hostSheetTitle");
+  const subtitleEl = document.getElementById("hostSheetSubtitle");
+  const factsEl = document.getElementById("hostSheetFacts");
+  const logoEl = document.getElementById("hostSheetLogo");
+  const hostLink = document.getElementById("hostSheetDesktopHost");
+  const alertLink = document.getElementById("hostSheetDesktopAlert");
+
+  if (titleEl) titleEl.textContent = displayName;
+  if (subtitleEl) subtitleEl.textContent = subtitle;
+
+  const logoUrl = String(item.customer_logo_url || "").trim();
+  if (logoEl) {
+    if (logoUrl) {
+      logoEl.src = logoUrl;
+      logoEl.classList.remove("hidden");
+      logoEl.onerror = () => logoEl.classList.add("hidden");
+      logoEl.onload = () => logoEl.classList.remove("hidden");
+    } else {
+      logoEl.removeAttribute("src");
+      logoEl.classList.add("hidden");
+    }
+  }
+
+  const envLabel = mobileEnvironmentLabel(item.environment_type) || "—";
+  const statusBits = [];
+  if (item.is_acknowledged) statusBits.push("Quittiert");
+  if (item.is_closed) statusBits.push("Geschlossen");
+  if (item.is_muted) statusBits.push("Stumm");
+  if (item.is_heads_up_suppressed) statusBits.push("Heads-up aus");
+
+  if (factsEl) {
+    factsEl.innerHTML = [
+      hostSheetFactRow("Hostname", hostname),
+      hostSheetFactRow("Host-UID", hostUid),
+      hostSheetFactRow("IP (letzter Report)", item.latest_report_ip),
+      hostSheetFactRow("Kunde", item.customer_name),
+      hostSheetFactRow("Umgebung", envLabel),
+      hostSheetFactRow("Mountpoint", item.mountpoint),
+      hostSheetFactRow("Severity", String(item.severity || "").toUpperCase()),
+      hostSheetFactRow("Belegt (Alert)", item.used_percent != null ? Number(item.used_percent).toFixed(1) + "%" : ""),
+      hostSheetFactRow(
+        "Aktuell",
+        item.current_used_percent != null ? Number(item.current_used_percent).toFixed(1) + "%" : ""
+      ),
+      hostSheetFactRow("Erstellt", formatIsoLabel(item.created_at_utc)),
+      hostSheetFactRow("Zuletzt gesehen", formatIsoLabel(item.last_seen_at_utc)),
+      hostSheetFactRow("Status", statusBits.join(", ") || "Offen"),
+      hostSheetFactRow("Alert-ID", "#" + String(item.id || "")),
+    ].join("");
+  }
+
+  if (hostLink) hostLink.href = buildDesktopHostUrl(hostUid, hostname);
+  if (alertLink) {
+    const alertId = Number(item.id || 0);
+    alertLink.href = alertId > 0 ? "/?alert_id=" + alertId : "/";
+  }
+
+  openSheet("hostSheet");
+}
+
 function buildItContactHtml(item) {
   const line = String(item.it_provider_contact_line || "").trim();
   const email = String(item.it_provider_email || "").trim();
@@ -459,12 +641,12 @@ function renderAlerts(items) {
     return;
   }
 
-  list.innerHTML = state.lastAlerts.map((item) => {
+  list.innerHTML = state.lastAlerts.map((item, index) => {
     const sev = String(item.severity || "warning").toLowerCase();
     const id = Number(item.id || 0);
     const title = mobileEsc(item.display_name || item.hostname || "-");
     const hostname = mobileEsc(item.hostname || "-");
-    const customer = mobileEsc(item.customer_name || "");
+    const customerRow = buildCustomerRowHtml(item);
     const isAck = item.is_acknowledged === true;
     const isClosed = item.is_closed === true;
     const envChip = buildEnvironmentChip(item.environment_type);
@@ -500,13 +682,15 @@ function renderAlerts(items) {
       : '<button type="button" class="btn-primary" data-action="ack">Quittieren</button>';
 
     return (
-      '<article class="alert-card ' + sev + highlightClass + '" data-alert-id="' + id + '">' +
+      '<article class="alert-card ' + sev + highlightClass + '" data-alert-id="' + id + '" data-alert-index="' + index + '">' +
       '  <div class="alert-card-head">' +
       '    <span class="severity-badge ' + sev + '">' + mobileEsc(sev) + "</span>" +
       '    <span class="alert-time">' + mobileEsc(timeLabel || "—") + "</span>" +
       "  </div>" +
-      '  <div class="alert-host-row"><h2>' + title + "</h2>" + envChip + "</div>" +
-      (customer ? '  <p class="alert-meta">Kunde: ' + customer + "</p>" : "") +
+      '  <div class="alert-host-row is-tappable" data-action="host-info" role="button" tabindex="0" aria-label="Host-Details">' +
+      '    <h2>' + title + "</h2>" + envChip +
+      "  </div>" +
+      customerRow +
       '  <p class="alert-meta">' + buildUsageLine(item) + "</p>" +
       '  <div class="usage-bar"><span class="usage-bar-fill" style="width:' + barWidth + '%"></span></div>' +
       '  <p class="alert-meta">' + hostname + (itHtml ? " · IT: " + itHtml : "") + "</p>" +
@@ -521,40 +705,69 @@ function renderAlerts(items) {
     );
   }).join("");
 
-  list.querySelectorAll("button[data-action]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const card = btn.closest(".alert-card");
-      const id = Number(card?.getAttribute("data-alert-id") || 0);
-      const action = String(btn.getAttribute("data-action") || "");
-      if (!id || !action) return;
-
-      if (action === "toggle-more") {
-        const expanded = card.classList.toggle("is-expanded");
-        btn.textContent = expanded ? "weniger" : "Mehr";
-        return;
-      }
-
-      try {
-        if (action === "ack") {
-          state.pendingAckAlertId = id;
-          const noteInput = document.getElementById("ackNoteInput");
-          if (noteInput) noteInput.value = "";
-          openSheet("ackSheet");
-        } else if (action === "unack") {
-          await callAlertAction("/api/v1/alert-unack", { alert_id: id }, "Quittierung aufgehoben.");
-          await loadAlerts();
-        } else if (action === "close") {
-          state.pendingCloseAlertId = id;
-          openSheet("closeSheet");
-        }
-      } catch (error) {
-        setStatus("Aktion fehlgeschlagen: " + (error?.message || String(error)), true);
-        showToast("Aktion fehlgeschlagen: " + (error?.message || String(error)), true);
-      }
-    });
-  });
-
+  wireCustomerLogos(list);
   highlightTargetCard();
+}
+
+function resolveAlertFromCard(card) {
+  const index = Number(card?.getAttribute("data-alert-index"));
+  if (Number.isFinite(index) && index >= 0 && index < state.lastAlerts.length) {
+    return state.lastAlerts[index];
+  }
+  const id = Number(card?.getAttribute("data-alert-id") || 0);
+  return state.lastAlerts.find((entry) => Number(entry?.id || 0) === id) || null;
+}
+
+async function handleAlertsListClick(event) {
+  const hostTarget = event.target.closest('[data-action="host-info"]');
+  if (hostTarget) {
+    const card = hostTarget.closest(".alert-card");
+    const item = resolveAlertFromCard(card);
+    if (item) openHostSheet(item);
+    return;
+  }
+
+  const btn = event.target.closest("button[data-action]");
+  if (!btn) return;
+
+  const card = btn.closest(".alert-card");
+  const id = Number(card?.getAttribute("data-alert-id") || 0);
+  const action = String(btn.getAttribute("data-action") || "");
+  if (!id || !action) return;
+
+  if (action === "toggle-more") {
+    const expanded = card.classList.toggle("is-expanded");
+    btn.textContent = expanded ? "weniger" : "Mehr";
+    return;
+  }
+
+  try {
+    if (action === "ack") {
+      state.pendingAckAlertId = id;
+      const noteInput = document.getElementById("ackNoteInput");
+      if (noteInput) noteInput.value = "";
+      openSheet("ackSheet");
+    } else if (action === "unack") {
+      await callAlertAction("/api/v1/alert-unack", { alert_id: id }, "Quittierung aufgehoben.");
+      await loadAlerts();
+    } else if (action === "close") {
+      state.pendingCloseAlertId = id;
+      openSheet("closeSheet");
+    }
+  } catch (error) {
+    setStatus("Aktion fehlgeschlagen: " + (error?.message || String(error)), true);
+    showToast("Aktion fehlgeschlagen: " + (error?.message || String(error)), true);
+  }
+}
+
+function handleAlertsListKeydown(event) {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const hostTarget = event.target.closest('[data-action="host-info"]');
+  if (!hostTarget) return;
+  event.preventDefault();
+  const card = hostTarget.closest(".alert-card");
+  const item = resolveAlertFromCard(card);
+  if (item) openHostSheet(item);
 }
 
 async function loadAlerts() {
@@ -563,32 +776,44 @@ async function loadAlerts() {
     return;
   }
 
-  setStatus("Lade Alerts...");
-  const params = new URLSearchParams();
-  params.set("status", state.showClosed ? "all" : "open");
-  params.set("severity", state.severity);
-  params.set("acknowledged", state.showAck ? "all" : "no");
-  params.set("limit", "200");
-  params.set("offset", "0");
-
-  const resp = await fetch("/api/v1/alerts?" + params.toString(), { credentials: "same-origin" });
-  if (resp.status === 401) {
-    state.authenticated = false;
-    showLoginOverlay(true);
-    setLoginStatus("Session abgelaufen. Bitte erneut anmelden.", true);
-    renderAlerts([]);
-    return;
-  }
-  if (!resp.ok) throw new Error("HTTP " + resp.status);
-
-  const payload = await resp.json();
-  let alerts = Array.isArray(payload.alerts) ? payload.alerts : [];
-  if (!state.showClosed) {
-    alerts = alerts.filter((item) => item && item.is_closed !== true);
+  const showSkeleton = state.lastAlerts.length === 0;
+  setAlertsLoading(true);
+  if (showSkeleton) {
+    renderSkeletonCards();
+    setStatus("Lade Alerts…");
+  } else {
+    setStatus("Aktualisiere…");
   }
 
-  renderAlerts(alerts);
-  setStatus(String(alerts.length) + " Alerts geladen.");
+  try {
+    const params = new URLSearchParams();
+    params.set("status", state.showClosed ? "all" : "open");
+    params.set("severity", state.severity);
+    params.set("acknowledged", state.showAck ? "all" : "no");
+    params.set("limit", "200");
+    params.set("offset", "0");
+
+    const resp = await fetch("/api/v1/alerts?" + params.toString(), { credentials: "same-origin" });
+    if (resp.status === 401) {
+      state.authenticated = false;
+      showLoginOverlay(true);
+      setLoginStatus("Session abgelaufen. Bitte erneut anmelden.", true);
+      renderAlerts([]);
+      return;
+    }
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+
+    const payload = await resp.json();
+    let alerts = Array.isArray(payload.alerts) ? payload.alerts : [];
+    if (!state.showClosed) {
+      alerts = alerts.filter((item) => item && item.is_closed !== true);
+    }
+
+    renderAlerts(alerts);
+    setStatus(String(alerts.length) + " Alerts geladen.");
+  } finally {
+    setAlertsLoading(false);
+  }
 }
 
 async function ensureAuthenticated() {
@@ -727,6 +952,14 @@ function wire() {
       showToast("Aktion fehlgeschlagen: " + (error?.message || String(error)), true);
     }
   });
+
+  const alertsList = document.getElementById("alertsList");
+  if (alertsList) {
+    alertsList.addEventListener("click", (event) => {
+      void handleAlertsListClick(event);
+    });
+    alertsList.addEventListener("keydown", handleAlertsListKeydown);
+  }
 
   wirePullToRefresh();
   syncSeverityChips();

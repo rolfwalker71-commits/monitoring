@@ -13918,6 +13918,7 @@ def _load_alert_mobile_context_map(
             environment_type = ""
         context_by_host_key[host_key] = {
             "customer_name": str(host_settings.get("customer_name", "") or "").strip(),
+            "customer_logo_url": str(host_settings.get("customer_logo_url", "") or "").strip(),
             "environment_type": environment_type,
             "it_provider_contact_line": contact_line,
             "it_provider_email": provider_email,
@@ -16857,6 +16858,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             "it_provider_contact_line": str(mobile_context.get("it_provider_contact_line", "") or ""),
                             "it_provider_email": str(mobile_context.get("it_provider_email", "") or ""),
                             "it_provider_phone": str(mobile_context.get("it_provider_phone", "") or ""),
+                            "customer_logo_url": str(mobile_context.get("customer_logo_url", "") or ""),
                             "mountpoint": mountpoint,
                             "severity": row[3],
                             "used_percent": row[4],
