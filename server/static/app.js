@@ -9790,20 +9790,18 @@ function updateReportCustomerChip() {
   if (!chipWrap) {
     return;
   }
+  chipWrap.classList.remove("hidden");
   const selectedHost = getSelectedHostRecord();
   if ((!state.selectedHost && !state.selectedHostUid) || !selectedHost) {
     chipWrap.innerHTML = renderSelectedHostPlaceholderChip();
-    chipWrap.classList.remove("hidden");
     return;
   }
   const customerChip = renderSelectedHostCustomerChip(selectedHost);
-  if (!customerChip) {
+  if (!asText(customerChip, "").trim()) {
     chipWrap.innerHTML = renderSelectedHostPlaceholderChip();
-    chipWrap.classList.remove("hidden");
     return;
   }
   chipWrap.innerHTML = customerChip;
-  chipWrap.classList.remove("hidden");
 }
 
 function updateReportHeaderOsLogo(host) {

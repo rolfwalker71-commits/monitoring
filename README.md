@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.224**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.224**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.225**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.225**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.225 | 02.06.2026 | Header-Hostkarte stabilisiert: Platzhalter **„Host auswählen ...“** ist jetzt auch ohne Selektion sofort sichtbar (Default-Markup + robustes Unhide im Renderpfad). Zusätzlich bleibt die Kartenhöhe beim Wechsel zwischen „kein Host“ und „Host ausgewählt“ konstant (fixe Kartenhöhe + einzeilige Ellipsis für Kunde/Name), sodass kein vertikales Aufspringen mehr auftritt. |
 | 1.7.224 | 02.06.2026 | Detail-Headerkarte verdichtet: `Meldung x von y` eine Zeile höher (rechts, bündig zur zweiten Kartenzeile), zweite Zeile von `Host:` auf `Name:` umbenannt und vertikale Abstände reduziert. Bei Host ohne Kunde wird `Kein Kunde` gezeigt; bei keinem ausgewählten Host bleibt der große Platzhalter `Host auswählen ...` sichtbar. |
 | 1.7.223 | 01.06.2026 | Admin-Alert-Hostbasis auf dieselbe host_uid-orientierte Quelle wie Host-Interessen umgestellt (`list_available_alert_hosts` nutzt nun `get_host_interest_targets`). Länder-/Kundenauflösung priorisiert host_uid-spezifische Overrides vor hostname-Overrides, damit Hostanzahl und Länderzuordnung in Admin/User-Fokus konsistenter sind. |
 | 1.7.222 | 01.06.2026 | Kritischen Frontend-Blocker behoben: doppelte `const userFilterSelect`-Deklaration im Admin-Subscriptions-Renderer entfernte die gesamte Script-Ausführung (`Identifier ... already been declared`). Login-Overlay und App-Inhalt laden wieder normal. |

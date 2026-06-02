@@ -14823,6 +14823,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   background: linear-gradient(180deg, #f8fbff 0%, #eef4fc 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
   min-height: 72px;
+  height: 72px;
 }
 
 .reports-column .section-head .report-customer-main-card {
@@ -14929,6 +14930,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  align-content: start;
 }
 
 .report-customer-chip-wrap .selected-host-meta-card-label {
@@ -14947,11 +14949,9 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   color: #163b6b;
   font-weight: 900;
   letter-spacing: -0.02em;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .report-customer-chip-wrap .selected-host-meta-card-sub {
@@ -14959,11 +14959,9 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   color: #5a7392;
   font-weight: 700;
   line-height: 1.05;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .report-customer-chip-wrap .selected-host-meta-card--placeholder {
@@ -14972,11 +14970,15 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .report-customer-chip-wrap .selected-host-meta-card-placeholder-text {
+  display: block;
   font-size: 36px;
   line-height: 1.05;
   color: #58759b;
   font-weight: 800;
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .selected-host-meta-chip--os {
