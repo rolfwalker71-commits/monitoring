@@ -10990,19 +10990,6 @@ async function exportGlobalAlertsCsv() {
   );
 }
 
-async function exportSelectedHostReportsJson() {
-  if (!state.selectedHost && !state.selectedHostUid) {
-    throw new Error("Bitte zuerst einen Host auswählen.");
-  }
-  const hostQuery = state.selectedHostUid
-    ? `host_uid=${encodeURIComponent(state.selectedHostUid)}`
-    : `hostname=${encodeURIComponent(state.selectedHost)}`;
-  return triggerFileDownload(
-    `/api/v1/export/reports.json?${hostQuery}`,
-    `monitoring-reports-${new Date().toISOString().replace(/[.:]/g, "-")}.json`,
-  );
-}
-
 function wireHostListInteractions() {
   const hostList = document.getElementById("hostList");
   if (!hostList || state.hostListDelegatedWired) {
@@ -15244,18 +15231,6 @@ function wireEvents() {
   document.getElementById("savePasswordButton").addEventListener("click", async () => {
     await changePassword();
   });
-
-  const exportHostReportsButton = document.getElementById("exportHostReportsButton");
-  if (exportHostReportsButton) {
-    exportHostReportsButton.addEventListener("click", async () => {
-      try {
-        const filename = await exportSelectedHostReportsJson();
-        window.alert(`Meldungen exportiert: ${filename}`);
-      } catch (error) {
-        window.alert(`Reports Export fehlgeschlagen: ${error.message}`);
-      }
-    });
-  }
 
   document.getElementById("globalSeverityFilter").addEventListener("change", async (event) => {
     state.globalSeverityFilter = String(event.target?.value || "all");

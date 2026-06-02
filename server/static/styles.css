@@ -2995,15 +2995,6 @@ button {
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
 }
 
-#exportHostReportsButton.btn-secondary--compact {
-  height: 24px;
-  padding: 0 10px;
-  font-size: 11px;
-  line-height: 22px;
-  border-radius: 10px;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
-}
-
 /* Icon-only button (e.g. pencil) */
 .btn-danger-outline {
   color: #b91c1c;
@@ -3781,8 +3772,7 @@ body[data-theme="dark"] .trend-progress-bar {
   font-size: 16px;
 }
 
-.reports-column .auto-refresh-interval-select,
-.reports-column #exportHostReportsButton.btn-secondary--compact {
+.reports-column .auto-refresh-interval-select {
   font-size: 9px;
   height: 20px;
   min-height: 20px;
