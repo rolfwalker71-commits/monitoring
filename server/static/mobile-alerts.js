@@ -43,6 +43,19 @@ function mobileEnvironmentLabel(value) {
   return "";
 }
 
+function formatRelativeTime(iso) {
+  const raw = String(iso || "").trim();
+  if (!raw) return "";
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const parsed = new Date(normalized.endsWith("Z") ? normalized : normalized + "Z");
+  if (Number.isNaN(parsed.getTime())) return "";
+  const sec = Math.max(0, Math.floor((Date.now() - parsed.getTime()) / 1000));
+  if (sec < 60) return "gerade eben";
+  if (sec < 3600) return "vor " + Math.floor(sec / 60) + " Min";
+  if (sec < 86400) return "vor " + Math.floor(sec / 3600) + " Std";
+  return "vor " + Math.floor(sec / 86400) + " Tag";
+}
+
 const state = {
   severity: "all",
   showAck: true,
@@ -55,9 +68,13 @@ const state = {
   authenticated: false,
   username: "",
   highlightAlertId: 0,
+  pendingAckAlertId: 0,
+  pendingCloseAlertId: 0,
+  lastAlerts: [],
 };
 
 let serviceWorkerRegistrationPromise = null;
+let toastTimer = null;
 
 function parseHighlightAlertId() {
   const raw = new URLSearchParams(window.location.search).get("alert_id");
@@ -69,14 +86,41 @@ function setStatus(text, isError = false) {
   const line = document.getElementById("statusLine");
   if (!line) return;
   line.textContent = text;
-  line.style.color = isError ? "#b42318" : "#4f6271";
+  line.classList.toggle("is-error", isError);
 }
 
 function setLoginStatus(text, isError = false) {
   const line = document.getElementById("mobileLoginStatus");
-  if (!line) return;
-  line.textContent = text;
-  line.style.color = isError ? "#b42318" : "#4f6271";
+  const banner = document.getElementById("mobileLoginBanner");
+  if (line) {
+    line.textContent = text;
+    line.style.color = isError ? "var(--critical)" : "var(--muted)";
+  }
+  if (banner) {
+    if (text && isError) {
+      banner.textContent = text;
+      banner.classList.remove("hidden");
+      banner.classList.add("is-error");
+    } else {
+      banner.classList.add("hidden");
+      banner.classList.remove("is-error");
+      banner.textContent = "";
+    }
+  }
+}
+
+function showToast(message, isError = false) {
+  const toast = document.getElementById("toast");
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.toggle("is-error", isError);
+  toast.classList.remove("hidden");
+  toast.classList.add("is-visible");
+  if (toastTimer) window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => {
+    toast.classList.remove("is-visible");
+    window.setTimeout(() => toast.classList.add("hidden"), 280);
+  }, 2600);
 }
 
 function showLoginOverlay(show) {
@@ -88,6 +132,32 @@ function updateUserLine() {
   const line = document.getElementById("mobileUserLine");
   if (!line) return;
   line.textContent = state.authenticated && state.username ? "Angemeldet als " + state.username : "";
+}
+
+function openSheet(sheetId) {
+  const sheet = document.getElementById(sheetId);
+  const backdrop = document.getElementById("sheetBackdrop");
+  if (!sheet || !backdrop) return;
+  backdrop.classList.remove("hidden");
+  backdrop.classList.add("is-open");
+  backdrop.setAttribute("aria-hidden", "false");
+  sheet.classList.remove("hidden");
+  requestAnimationFrame(() => sheet.classList.add("is-open"));
+}
+
+function closeAllSheets() {
+  document.querySelectorAll(".bottom-sheet.is-open").forEach((el) => el.classList.remove("is-open"));
+  const backdrop = document.getElementById("sheetBackdrop");
+  if (backdrop) {
+    backdrop.classList.remove("is-open");
+    backdrop.setAttribute("aria-hidden", "true");
+    window.setTimeout(() => backdrop.classList.add("hidden"), 220);
+  }
+  window.setTimeout(() => {
+    document.querySelectorAll(".bottom-sheet:not(.is-open)").forEach((el) => {
+      if (!el.classList.contains("is-open")) el.classList.add("hidden");
+    });
+  }, 300);
 }
 
 function base64UrlToUint8Array(base64Url) {
@@ -121,27 +191,32 @@ function renderPushButton() {
 
   if (!state.authenticated) {
     btn.disabled = true;
-    btn.textContent = "Push";
+    btn.textContent = "🔕";
+    btn.title = "Push (nicht angemeldet)";
     return;
   }
   if (state.loadingPush) {
     btn.disabled = true;
-    btn.textContent = "Push ...";
+    btn.textContent = "…";
+    btn.title = "Push wird geladen";
     return;
   }
   if (!state.pushSupported) {
     btn.disabled = true;
-    btn.textContent = "Push n/v";
+    btn.textContent = "🔕";
+    btn.title = "Push nicht unterstützt";
     return;
   }
   if (!state.pushConfigured) {
     btn.disabled = true;
-    btn.textContent = "Push aus";
+    btn.textContent = "🔕";
+    btn.title = "Push serverseitig nicht konfiguriert";
     return;
   }
 
   btn.disabled = false;
-  btn.textContent = state.pushEnabled ? "Push an" : "Push aus";
+  btn.textContent = state.pushEnabled ? "🔔" : "🔕";
+  btn.title = state.pushEnabled ? "Push deaktivieren" : "Push aktivieren";
 }
 
 async function refreshPushState() {
@@ -188,16 +263,16 @@ async function refreshPushState() {
 
 async function togglePush() {
   if (!state.authenticated) {
-    alert("Bitte zuerst anmelden.");
+    showToast("Bitte zuerst anmelden.", true);
     return;
   }
   if (state.loadingPush) return;
   if (!state.pushSupported) {
-    alert("Push wird auf diesem Gerät/Browsertyp nicht unterstützt.");
+    showToast("Push wird auf diesem Gerät nicht unterstützt.", true);
     return;
   }
   if (!state.pushConfigured) {
-    alert("Push ist serverseitig noch nicht konfiguriert.");
+    showToast("Push ist serverseitig noch nicht konfiguriert.", true);
     return;
   }
 
@@ -216,7 +291,7 @@ async function togglePush() {
       });
       await existing.unsubscribe();
       state.pushEnabled = false;
-      alert("Push deaktiviert.");
+      showToast("Push deaktiviert.");
       return;
     }
 
@@ -241,9 +316,9 @@ async function togglePush() {
       throw new Error(String(err.error || ("HTTP " + saveResp.status)));
     }
     state.pushEnabled = true;
-    alert("Push aktiviert.");
+    showToast("Push aktiviert.");
   } catch (error) {
-    alert("Push-Umstellung fehlgeschlagen: " + (error?.message || String(error)));
+    showToast("Push fehlgeschlagen: " + (error?.message || String(error)), true);
   } finally {
     state.loadingPush = false;
     renderPushButton();
@@ -253,9 +328,10 @@ async function togglePush() {
 
 async function sendTestPush() {
   const button = document.getElementById("testPushButton");
+  const menu = document.getElementById("headerMenu");
   if (button) {
     button.disabled = true;
-    button.textContent = "Sende...";
+    button.textContent = "Sende…";
   }
   try {
     const resp = await fetch("/api/v1/push-test", {
@@ -275,16 +351,17 @@ async function sendTestPush() {
     const success = Number(payload.success || 0);
     const failed = Number(payload.failed || 0);
     setStatus("Test Push gesendet (ok: " + success + ", failed: " + failed + ").");
-    alert("Test Push wurde ausgelöst.");
+    showToast("Test Push wurde ausgelöst.");
   } catch (error) {
     const details = error?.message || String(error);
     setStatus("Test Push fehlgeschlagen: " + details, true);
-    alert("Test Push fehlgeschlagen: " + details);
+    showToast("Test Push fehlgeschlagen: " + details, true);
   } finally {
     if (button) {
       button.disabled = false;
-      button.textContent = "Test Push";
+      button.textContent = "Test Push senden";
     }
+    menu?.classList.add("hidden");
   }
 }
 
@@ -298,6 +375,7 @@ async function callAlertAction(url, payload, okMessage) {
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) throw new Error(String(data.error || ("HTTP " + resp.status)));
   setStatus(okMessage);
+  showToast(okMessage);
 }
 
 function buildEnvironmentChip(environmentType) {
@@ -305,6 +383,59 @@ function buildEnvironmentChip(environmentType) {
   if (!label) return "";
   const cssClass = label === "Prod." ? "env-prod" : "env-test";
   return '<span class="env-chip ' + cssClass + '">' + mobileEsc(label) + "</span>";
+}
+
+function buildItContactHtml(item) {
+  const line = String(item.it_provider_contact_line || "").trim();
+  const email = String(item.it_provider_email || "").trim();
+  const phone = String(item.it_provider_phone || "").trim();
+  const parts = [];
+  if (line) parts.push(mobileEsc(line));
+  if (email) {
+    parts.push('<a href="mailto:' + mobileEsc(email) + '">' + mobileEsc(email) + "</a>");
+  }
+  if (phone) {
+    const tel = phone.replace(/[^\d+]/g, "");
+    parts.push('<a href="tel:' + mobileEsc(tel) + '">' + mobileEsc(phone) + "</a>");
+  }
+  if (!parts.length) return "";
+  return parts.join(" · ");
+}
+
+function usagePercentForBar(item) {
+  const current = item.current_used_percent;
+  if (current != null && Number.isFinite(Number(current))) {
+    return Math.min(100, Math.max(0, Number(current)));
+  }
+  return Math.min(100, Math.max(0, Number(item.used_percent || 0)));
+}
+
+function buildUsageLine(item) {
+  const used = Number(item.used_percent || 0).toFixed(1);
+  const current = item.current_used_percent;
+  const mount = mobileEsc(item.mountpoint || "-");
+  if (current != null && Number.isFinite(Number(current))) {
+    return mount + " · " + used + "% (jetzt " + Number(current).toFixed(1) + "%)";
+  }
+  return mount + " · " + used + "%";
+}
+
+function renderKpis(alerts) {
+  const open = alerts.filter((item) => item && item.is_closed !== true);
+  const critical = open.filter((item) => String(item.severity || "").toLowerCase() === "critical").length;
+  const warning = open.filter((item) => String(item.severity || "").toLowerCase() === "warning").length;
+  const elCritical = document.getElementById("kpiCritical");
+  const elWarning = document.getElementById("kpiWarning");
+  const elOpen = document.getElementById("kpiOpen");
+  if (elCritical) elCritical.textContent = String(critical);
+  if (elWarning) elWarning.textContent = String(warning);
+  if (elOpen) elOpen.textContent = String(open.length);
+}
+
+function syncSeverityChips() {
+  document.querySelectorAll(".filter-chips .chip[data-severity]").forEach((chip) => {
+    chip.classList.toggle("active", chip.getAttribute("data-severity") === state.severity);
+  });
 }
 
 function highlightTargetCard() {
@@ -320,40 +451,72 @@ function renderAlerts(items) {
   const list = document.getElementById("alertsList");
   if (!list) return;
 
-  if (!Array.isArray(items) || items.length === 0) {
-    list.innerHTML = '<div class="empty">Keine Alerts für den aktuellen Filter.</div>';
+  state.lastAlerts = Array.isArray(items) ? items : [];
+  renderKpis(state.lastAlerts);
+
+  if (!state.lastAlerts.length) {
+    list.innerHTML = '<div class="empty-state">Keine Alerts für den aktuellen Filter.</div>';
     return;
   }
 
-  list.innerHTML = items.map((item) => {
+  list.innerHTML = state.lastAlerts.map((item) => {
     const sev = String(item.severity || "warning").toLowerCase();
     const id = Number(item.id || 0);
     const title = mobileEsc(item.display_name || item.hostname || "-");
     const hostname = mobileEsc(item.hostname || "-");
     const customer = mobileEsc(item.customer_name || "");
-    const mountpoint = mobileEsc(item.mountpoint || "-");
-    const used = Number(item.used_percent || 0).toFixed(1);
     const isAck = item.is_acknowledged === true;
-    const contactLine = mobileEsc(item.it_provider_contact_line || "");
+    const isClosed = item.is_closed === true;
     const envChip = buildEnvironmentChip(item.environment_type);
     const highlightClass = id === state.highlightAlertId ? " alert-card-highlight" : "";
+    const barWidth = usagePercentForBar(item).toFixed(1);
+    const timeLabel = formatRelativeTime(item.last_seen_at_utc || item.created_at_utc);
+    const itHtml = buildItContactHtml(item);
+    const ackBy = mobileEsc(item.ack_by || "");
+    const ackAt = formatRelativeTime(item.ack_at_utc);
+    const ackNote = mobileEsc(item.ack_note || "");
+    const desktopUrl = "/?alert_id=" + id;
+
+    let moreHtml = "Alert #" + id;
+    if (item.is_muted) moreHtml += " · Stummgeschaltet";
+    if (item.is_heads_up_suppressed) moreHtml += " · Heads-up unterdrückt";
+    if (item.delta_used_percent != null) {
+      moreHtml += " · Δ " + Number(item.delta_used_percent).toFixed(1) + "%";
+    }
+    moreHtml += ' · <a href="' + mobileEsc(desktopUrl) + '">Am Desktop öffnen</a>';
+    if (isAck) {
+      moreHtml += '<div class="ack-line">Quittiert';
+      if (ackBy) moreHtml += " von " + ackBy;
+      if (ackAt) moreHtml += " (" + ackAt + ")";
+      if (ackNote) moreHtml += ": " + ackNote;
+      moreHtml += "</div>";
+    }
+    if (isClosed) {
+      moreHtml += '<div class="ack-line">Geschlossen</div>';
+    }
+
+    const ackBtn = isAck
+      ? '<button type="button" class="btn-secondary" data-action="unack">Unack</button>'
+      : '<button type="button" class="btn-primary" data-action="ack">Quittieren</button>';
 
     return (
       '<article class="alert-card ' + sev + highlightClass + '" data-alert-id="' + id + '">' +
-      '  <div class="alert-head">' +
-      '    <div class="alert-host">' + title + envChip + '</div>' +
-      '    <div class="alert-severity">' + mobileEsc(sev.toUpperCase()) + '</div>' +
-      '  </div>' +
-      (customer ? '  <div class="alert-meta">Kunde: ' + customer + "</div>" : "") +
-      '  <div class="alert-meta">' + hostname + " · " + mountpoint + "</div>" +
-      (contactLine ? '  <div class="alert-meta">IT: ' + contactLine + "</div>" : "") +
-      '  <div class="alert-usage">Belegt: ' + used + "%</div>" +
-      '  <div class="alert-actions">' +
-      '    <button class="btn-ok" data-action="ack">Quittieren</button>' +
-      '    <button data-action="unack">Unack</button>' +
-      '    <button class="btn-danger" data-action="close">Schliessen</button>' +
+      '  <div class="alert-card-head">' +
+      '    <span class="severity-badge ' + sev + '">' + mobileEsc(sev) + "</span>" +
+      '    <span class="alert-time">' + mobileEsc(timeLabel || "—") + "</span>" +
       "  </div>" +
-      (isAck ? '<div class="alert-meta">Bereits quittiert</div>' : "") +
+      '  <div class="alert-host-row"><h2>' + title + "</h2>" + envChip + "</div>" +
+      (customer ? '  <p class="alert-meta">Kunde: ' + customer + "</p>" : "") +
+      '  <p class="alert-meta">' + buildUsageLine(item) + "</p>" +
+      '  <div class="usage-bar"><span class="usage-bar-fill" style="width:' + barWidth + '%"></span></div>' +
+      '  <p class="alert-meta">' + hostname + (itHtml ? " · IT: " + itHtml : "") + "</p>" +
+      '  <div class="alert-card-actions">' + ackBtn +
+      '    <button type="button" class="btn-secondary btn-expand" data-action="toggle-more">Mehr</button>' +
+      "  </div>" +
+      '  <div class="alert-more">' + moreHtml +
+      '    <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+      '      <button type="button" class="btn-danger" data-action="close">Schliessen</button>' +
+      "    </div></div>" +
       "</article>"
     );
   }).join("");
@@ -365,19 +528,28 @@ function renderAlerts(items) {
       const action = String(btn.getAttribute("data-action") || "");
       if (!id || !action) return;
 
+      if (action === "toggle-more") {
+        const expanded = card.classList.toggle("is-expanded");
+        btn.textContent = expanded ? "weniger" : "Mehr";
+        return;
+      }
+
       try {
         if (action === "ack") {
-          const note = prompt("Optionale Notiz für Quittierung:", "") || "";
-          await callAlertAction("/api/v1/alert-ack", { alert_id: id, ack_note: note }, "Alert quittiert.");
+          state.pendingAckAlertId = id;
+          const noteInput = document.getElementById("ackNoteInput");
+          if (noteInput) noteInput.value = "";
+          openSheet("ackSheet");
         } else if (action === "unack") {
           await callAlertAction("/api/v1/alert-unack", { alert_id: id }, "Quittierung aufgehoben.");
+          await loadAlerts();
         } else if (action === "close") {
-          if (!confirm("Alert wirklich schliessen?")) return;
-          await callAlertAction("/api/v1/alert-close", { alert_id: id }, "Alert geschlossen.");
+          state.pendingCloseAlertId = id;
+          openSheet("closeSheet");
         }
-        await loadAlerts();
       } catch (error) {
         setStatus("Aktion fehlgeschlagen: " + (error?.message || String(error)), true);
+        showToast("Aktion fehlgeschlagen: " + (error?.message || String(error)), true);
       }
     });
   });
@@ -478,75 +650,86 @@ function wirePullToRefresh() {
 }
 
 function wire() {
-  const refreshBtn = document.getElementById("refreshButton");
-  const severityFilter = document.getElementById("severityFilter");
-  const showAckToggle = document.getElementById("showAckToggle");
-  const showClosedToggle = document.getElementById("showClosedToggle");
-  const pushToggleButton = document.getElementById("pushToggleButton");
-  const testPushButton = document.getElementById("testPushButton");
-  const loginSubmit = document.getElementById("mobileLoginSubmit");
-  const logoutButton = document.getElementById("mobileLogoutButton");
-  const loginPassword = document.getElementById("mobileLoginPassword");
+  document.getElementById("refreshButton")?.addEventListener("click", () => {
+    void loadAlerts().catch((error) => setStatus("Fehler: " + error.message, true));
+  });
 
-  if (refreshBtn) {
-    refreshBtn.addEventListener("click", () => {
+  document.querySelectorAll(".filter-chips .chip[data-severity]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      state.severity = String(chip.getAttribute("data-severity") || "all");
+      syncSeverityChips();
       void loadAlerts().catch((error) => setStatus("Fehler: " + error.message, true));
     });
-  }
-  if (severityFilter) {
-    severityFilter.addEventListener("change", () => {
-      state.severity = String(severityFilter.value || "all");
-      void loadAlerts().catch((error) => setStatus("Fehler: " + error.message, true));
-    });
-  }
-  if (showAckToggle) {
-    showAckToggle.addEventListener("change", () => {
-      state.showAck = showAckToggle.checked;
-      void loadAlerts().catch((error) => setStatus("Fehler: " + error.message, true));
-    });
-  }
-  if (showClosedToggle) {
-    showClosedToggle.addEventListener("change", () => {
-      state.showClosed = showClosedToggle.checked;
-      void loadAlerts().catch((error) => setStatus("Fehler: " + error.message, true));
-    });
-  }
-  if (pushToggleButton) {
-    pushToggleButton.addEventListener("click", () => {
-      void togglePush();
-    });
-  }
-  if (testPushButton) {
-    testPushButton.addEventListener("click", () => {
-      void sendTestPush();
-    });
-  }
-  if (loginSubmit) {
-    loginSubmit.addEventListener("click", () => {
-      void submitLogin();
-    });
-  }
-  if (loginPassword) {
-    loginPassword.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        void submitLogin();
-      }
-    });
-  }
-  if (logoutButton) {
-    logoutButton.addEventListener("click", async () => {
-      await mobileLogout();
-      state.authenticated = false;
-      state.username = "";
-      updateUserLine();
-      showLoginOverlay(true);
-      renderAlerts([]);
-      setStatus("");
-      renderPushButton();
-    });
-  }
+  });
+
+  document.getElementById("filterMoreButton")?.addEventListener("click", () => openSheet("filterSheet"));
+  document.getElementById("filterSheetApply")?.addEventListener("click", () => {
+    state.showAck = document.getElementById("showAckToggle")?.checked === true;
+    state.showClosed = document.getElementById("showClosedToggle")?.checked === true;
+    closeAllSheets();
+    void loadAlerts().catch((error) => setStatus("Fehler: " + error.message, true));
+  });
+
+  document.getElementById("pushToggleButton")?.addEventListener("click", () => void togglePush());
+  document.getElementById("testPushButton")?.addEventListener("click", () => void sendTestPush());
+
+  document.getElementById("menuToggleButton")?.addEventListener("click", () => {
+    document.getElementById("headerMenu")?.classList.toggle("hidden");
+  });
+
+  document.getElementById("mobileLogoutButton")?.addEventListener("click", async () => {
+    await mobileLogout();
+    state.authenticated = false;
+    state.username = "";
+    updateUserLine();
+    showLoginOverlay(true);
+    renderAlerts([]);
+    setStatus("");
+    renderPushButton();
+    document.getElementById("headerMenu")?.classList.add("hidden");
+  });
+
+  document.getElementById("mobileLoginSubmit")?.addEventListener("click", () => void submitLogin());
+  document.getElementById("mobileLoginPassword")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") void submitLogin();
+  });
+
+  document.getElementById("sheetBackdrop")?.addEventListener("click", closeAllSheets);
+  document.querySelectorAll("[data-sheet-close]").forEach((btn) => {
+    btn.addEventListener("click", closeAllSheets);
+  });
+
+  document.getElementById("ackSheetConfirm")?.addEventListener("click", async () => {
+    const id = state.pendingAckAlertId;
+    if (!id) return;
+    const note = document.getElementById("ackNoteInput")?.value || "";
+    closeAllSheets();
+    try {
+      await callAlertAction("/api/v1/alert-ack", { alert_id: id, ack_note: note }, "Alert quittiert.");
+      state.pendingAckAlertId = 0;
+      await loadAlerts();
+    } catch (error) {
+      setStatus("Aktion fehlgeschlagen: " + (error?.message || String(error)), true);
+      showToast("Aktion fehlgeschlagen: " + (error?.message || String(error)), true);
+    }
+  });
+
+  document.getElementById("closeSheetConfirm")?.addEventListener("click", async () => {
+    const id = state.pendingCloseAlertId;
+    if (!id) return;
+    closeAllSheets();
+    try {
+      await callAlertAction("/api/v1/alert-close", { alert_id: id }, "Alert geschlossen.");
+      state.pendingCloseAlertId = 0;
+      await loadAlerts();
+    } catch (error) {
+      setStatus("Aktion fehlgeschlagen: " + (error?.message || String(error)), true);
+      showToast("Aktion fehlgeschlagen: " + (error?.message || String(error)), true);
+    }
+  });
 
   wirePullToRefresh();
+  syncSeverityChips();
 }
 
 async function init() {

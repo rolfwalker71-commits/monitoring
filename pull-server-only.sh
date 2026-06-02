@@ -229,6 +229,7 @@ server/static/mobile-common.js
 server/static/mobile-alerts.html
 server/static/mobile-alerts.css
 server/static/mobile-alerts.js
+server/static/mobile-alerts-mockup.html
 server/static/icons/sap.png
 BUILD_VERSION
 AGENT_VERSION

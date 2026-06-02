@@ -13920,6 +13920,8 @@ def _load_alert_mobile_context_map(
             "customer_name": str(host_settings.get("customer_name", "") or "").strip(),
             "environment_type": environment_type,
             "it_provider_contact_line": contact_line,
+            "it_provider_email": provider_email,
+            "it_provider_phone": str(host_settings.get("customer_it_provider_phone", "") or "").strip(),
         }
     return context_by_host_key
 
@@ -16853,6 +16855,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             "customer_name": customer_name_value,
                             "environment_type": str(mobile_context.get("environment_type", "") or ""),
                             "it_provider_contact_line": str(mobile_context.get("it_provider_contact_line", "") or ""),
+                            "it_provider_email": str(mobile_context.get("it_provider_email", "") or ""),
+                            "it_provider_phone": str(mobile_context.get("it_provider_phone", "") or ""),
                             "mountpoint": mountpoint,
                             "severity": row[3],
                             "used_percent": row[4],
@@ -17197,6 +17201,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self.send_header("Location", "/mobile/alerts")
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
+            return
+
+        if parsed.path == "/mobile/alerts-mockup":
+            self._send_file(
+                STATIC_DIR / "mobile-alerts-mockup.html",
+                "text/html; charset=utf-8",
+                extra_headers={"Cache-Control": "no-store"},
+            )
             return
 
         if parsed.path == "/mobile/alerts":

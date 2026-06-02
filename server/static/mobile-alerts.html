@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>ANG Alerts</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/mobile-alerts.css?v=__ASSET_VERSION__" />
     <link rel="manifest" href="/manifest-mobile.json" />
     <link rel="apple-touch-icon" href="/icons/logo.png" />
@@ -14,9 +17,11 @@
   <body>
     <div id="mobileLoginOverlay" class="mobile-login-overlay hidden">
       <div class="mobile-login-card">
+        <img src="/icons/logo.png" alt="" class="mobile-login-logo" width="56" height="56" />
         <p class="eyebrow">ANG System Health</p>
         <h2>Anmeldung</h2>
         <p class="mobile-login-hint">Melde dich an, um Alerts zu sehen und zu verwalten.</p>
+        <p id="mobileLoginBanner" class="mobile-banner hidden" role="alert"></p>
         <label>
           Benutzername
           <input id="mobileLoginUsername" type="text" autocomplete="username" />
@@ -25,49 +30,83 @@
           Passwort
           <input id="mobileLoginPassword" type="password" autocomplete="current-password" />
         </label>
-        <button id="mobileLoginSubmit" type="button" class="primary">Anmelden</button>
+        <button id="mobileLoginSubmit" type="button" class="btn-primary">Anmelden</button>
         <p id="mobileLoginStatus" class="status"></p>
       </div>
     </div>
 
     <main id="mobileAppShell" class="mobile-shell hidden">
-      <header class="mobile-header">
-        <div>
-          <p class="eyebrow">Monitoring</p>
-          <h1>Alerts</h1>
-          <p id="mobileUserLine" class="mobile-user-line"></p>
+      <header class="mobile-topbar">
+        <div class="mobile-topbar-row">
+          <img src="/icons/logo.png" alt="" class="mobile-logo" width="40" height="40" />
+          <div class="mobile-brand">
+            <h1>ANG Alerts</h1>
+            <p id="mobileUserLine" class="mobile-user-line"></p>
+          </div>
+          <div class="mobile-icon-actions">
+            <button id="refreshButton" type="button" class="icon-btn" title="Aktualisieren" aria-label="Aktualisieren">↻</button>
+            <button id="pushToggleButton" type="button" class="icon-btn" title="Push" aria-label="Push">🔕</button>
+            <button id="menuToggleButton" type="button" class="icon-btn" title="Menü" aria-label="Menü">⋮</button>
+          </div>
         </div>
-        <div class="header-actions">
-          <button id="testPushButton" type="button" class="ghost">Test Push</button>
-          <button id="pushToggleButton" type="button" class="ghost">Push</button>
-          <button id="mobileLogoutButton" type="button" class="ghost">Logout</button>
+        <div id="headerMenu" class="header-menu hidden">
+          <button id="testPushButton" type="button">Test Push senden</button>
+          <button id="mobileLogoutButton" type="button">Abmelden</button>
+        </div>
+        <div class="kpi-strip" aria-label="Alert-Übersicht">
+          <div class="kpi kpi-critical"><strong id="kpiCritical">0</strong><span>Kritisch</span></div>
+          <div class="kpi kpi-warning"><strong id="kpiWarning">0</strong><span>Warning</span></div>
+          <div class="kpi"><strong id="kpiOpen">0</strong><span>Offen</span></div>
         </div>
       </header>
 
-      <section class="toolbar">
-        <button id="refreshButton" type="button">Aktualisieren</button>
-        <label>
-          Severity
-          <select id="severityFilter">
-            <option value="all">Alle</option>
-            <option value="critical">Kritisch</option>
-            <option value="warning">Warning</option>
-          </select>
-        </label>
-        <label class="checkline">
-          <input id="showAckToggle" type="checkbox" checked />
-          Quittierte zeigen
-        </label>
-        <label class="checkline">
-          <input id="showClosedToggle" type="checkbox" />
-          Geschlossene zeigen
-        </label>
+      <section class="filter-chips" aria-label="Filter">
+        <button type="button" class="chip active" data-severity="all">Alle</button>
+        <button type="button" class="chip" data-severity="critical">Kritisch</button>
+        <button type="button" class="chip" data-severity="warning">Warning</button>
+        <button type="button" class="chip chip-ghost" id="filterMoreButton">Filter ▾</button>
       </section>
 
-      <p id="statusLine" class="status">Lade Alerts...</p>
+      <p id="statusLine" class="status-line">Lade Alerts...</p>
 
       <section id="alertsList" class="alerts-list" aria-live="polite"></section>
     </main>
+
+    <div id="sheetBackdrop" class="sheet-backdrop hidden" aria-hidden="true"></div>
+
+    <div id="filterSheet" class="bottom-sheet hidden" role="dialog" aria-labelledby="filterSheetTitle">
+      <h3 id="filterSheetTitle">Filter</h3>
+      <label class="sheet-check">
+        <input id="showAckToggle" type="checkbox" checked />
+        Quittierte Alerts anzeigen
+      </label>
+      <label class="sheet-check">
+        <input id="showClosedToggle" type="checkbox" />
+        Geschlossene Alerts anzeigen
+      </label>
+      <button type="button" class="btn-primary" id="filterSheetApply">Übernehmen</button>
+    </div>
+
+    <div id="ackSheet" class="bottom-sheet hidden" role="dialog" aria-labelledby="ackSheetTitle">
+      <h3 id="ackSheetTitle">Alert quittieren</h3>
+      <label for="ackNoteInput">Optionale Notiz</label>
+      <textarea id="ackNoteInput" rows="3" placeholder="z.B. Ticket eröffnet"></textarea>
+      <div class="sheet-actions">
+        <button type="button" class="btn-secondary" data-sheet-close>Abbrechen</button>
+        <button type="button" class="btn-primary" id="ackSheetConfirm">Speichern</button>
+      </div>
+    </div>
+
+    <div id="closeSheet" class="bottom-sheet hidden" role="dialog" aria-labelledby="closeSheetTitle">
+      <h3 id="closeSheetTitle">Alert schliessen?</h3>
+      <p class="sheet-hint">Der Alert wird dauerhaft geschlossen.</p>
+      <div class="sheet-actions">
+        <button type="button" class="btn-secondary" data-sheet-close>Abbrechen</button>
+        <button type="button" class="btn-danger" id="closeSheetConfirm">Schliessen</button>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden" role="status"></div>
 
     <script src="/mobile-alerts.js?v=__ASSET_VERSION__"></script>
   </body>
