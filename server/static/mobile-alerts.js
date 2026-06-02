@@ -67,6 +67,7 @@ const state = {
   loadingPush: false,
   authenticated: false,
   username: "",
+  userDisplayName: "",
   highlightAlertId: 0,
   pendingAckAlertId: 0,
   pendingCloseAlertId: 0,
@@ -132,10 +133,21 @@ function showLoginOverlay(show) {
   document.getElementById("mobileAppShell")?.classList.toggle("hidden", show);
 }
 
+function resolveUserDisplayName(sessionOrLogin) {
+  const displayName = String(sessionOrLogin?.display_name || "").trim();
+  if (displayName) return displayName;
+  return String(sessionOrLogin?.username || state.username || "").trim();
+}
+
 function updateUserLine() {
   const line = document.getElementById("mobileUserLine");
   if (!line) return;
-  line.textContent = state.authenticated && state.username ? "Angemeldet als " + state.username : "";
+  if (!state.authenticated) {
+    line.textContent = "";
+    return;
+  }
+  const label = state.userDisplayName || state.username;
+  line.innerHTML = "User: <strong>" + mobileEsc(label) + "</strong>";
 }
 
 function openSheet(sheetId) {
@@ -412,17 +424,41 @@ function formatIsoLabel(iso) {
   });
 }
 
-function buildCustomerRowHtml(item) {
-  const name = String(item.customer_name || "").trim();
-  if (!name) return "";
+function buildCustomerLogoHtml(item) {
   const logoUrl = String(item.customer_logo_url || "").trim();
-  const logoHtml = logoUrl
-    ? (
-      '<img class="customer-logo" data-src="' + mobileEsc(logoUrl) + '" alt="" width="28" height="28" '
-      + 'data-load-state="loading" decoding="async" />'
-    )
-    : "";
-  return '<p class="alert-meta alert-customer-row">' + logoHtml + "<span>Kunde: " + mobileEsc(name) + "</span></p>";
+  if (!logoUrl) return "";
+  return (
+    '<img class="customer-logo customer-logo-right" data-src="' + mobileEsc(logoUrl) + '" alt="" width="36" height="36" '
+    + 'data-load-state="loading" decoding="async" />'
+  );
+}
+
+function buildAlertIdentityHtml(item) {
+  const customerName = String(item.customer_name || "").trim();
+  const hostLabel = String(item.display_name || item.hostname || "-").trim();
+  const envChip = buildEnvironmentChip(item.environment_type);
+  const logoHtml = buildCustomerLogoHtml(item);
+  const hostRowAttrs =
+    ' class="alert-host-row is-tappable" data-action="host-info" role="button" tabindex="0" aria-label="Host-Details"';
+
+  if (customerName) {
+    return (
+      '<div class="alert-identity">'
+      + '<h2 class="alert-customer-name">' + mobileEsc(customerName) + "</h2>"
+      + "<div" + hostRowAttrs + ">"
+      + '<div class="alert-host-main"><p class="alert-host-name">' + mobileEsc(hostLabel) + "</p>" + envChip + "</div>"
+      + logoHtml
+      + "</div></div>"
+    );
+  }
+
+  return (
+    '<div class="alert-identity">'
+    + "<div" + hostRowAttrs + ">"
+    + '<div class="alert-host-main"><h2 class="alert-customer-name">' + mobileEsc(hostLabel) + "</h2>" + envChip + "</div>"
+    + logoHtml
+    + "</div></div>"
+  );
 }
 
 function renderSkeletonCards(count = SKELETON_CARD_COUNT) {
@@ -644,12 +680,10 @@ function renderAlerts(items) {
   list.innerHTML = state.lastAlerts.map((item, index) => {
     const sev = String(item.severity || "warning").toLowerCase();
     const id = Number(item.id || 0);
-    const title = mobileEsc(item.display_name || item.hostname || "-");
     const hostname = mobileEsc(item.hostname || "-");
-    const customerRow = buildCustomerRowHtml(item);
+    const identityHtml = buildAlertIdentityHtml(item);
     const isAck = item.is_acknowledged === true;
     const isClosed = item.is_closed === true;
-    const envChip = buildEnvironmentChip(item.environment_type);
     const highlightClass = id === state.highlightAlertId ? " alert-card-highlight" : "";
     const barWidth = usagePercentForBar(item).toFixed(1);
     const timeLabel = formatRelativeTime(item.last_seen_at_utc || item.created_at_utc);
@@ -687,10 +721,7 @@ function renderAlerts(items) {
       '    <span class="severity-badge ' + sev + '">' + mobileEsc(sev) + "</span>" +
       '    <span class="alert-time">' + mobileEsc(timeLabel || "—") + "</span>" +
       "  </div>" +
-      '  <div class="alert-host-row is-tappable" data-action="host-info" role="button" tabindex="0" aria-label="Host-Details">' +
-      '    <h2>' + title + "</h2>" + envChip +
-      "  </div>" +
-      customerRow +
+      "  " + identityHtml +
       '  <p class="alert-meta">' + buildUsageLine(item) + "</p>" +
       '  <div class="usage-bar"><span class="usage-bar-fill" style="width:' + barWidth + '%"></span></div>' +
       '  <p class="alert-meta">' + hostname + (itHtml ? " · IT: " + itHtml : "") + "</p>" +
@@ -820,6 +851,7 @@ async function ensureAuthenticated() {
   const session = await mobileFetchSession();
   state.authenticated = session.authenticated === true;
   state.username = String(session.username || "");
+  state.userDisplayName = resolveUserDisplayName(session);
   updateUserLine();
   showLoginOverlay(!state.authenticated);
   return state.authenticated;
@@ -838,6 +870,7 @@ async function submitLogin() {
     const data = await mobileLogin(username, password);
     state.authenticated = true;
     state.username = String(data.username || username);
+    state.userDisplayName = resolveUserDisplayName(data);
     updateUserLine();
     showLoginOverlay(false);
     setLoginStatus("");
@@ -906,6 +939,7 @@ function wire() {
     await mobileLogout();
     state.authenticated = false;
     state.username = "";
+    state.userDisplayName = "";
     updateUserLine();
     showLoginOverlay(true);
     renderAlerts([]);

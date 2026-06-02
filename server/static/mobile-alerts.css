@@ -5,8 +5,8 @@
   --muted: #5a6f82;
   --line: #cfdae3;
   --accent: #0f6ea8;
-  --critical: #b42318;
-  --warning: #9a6700;
+  --critical: #8b1014;
+  --warning: #ea6b00;
   --ok: #157347;
   --shadow: 0 14px 32px rgba(20, 45, 77, 0.12);
   --safe-top: env(safe-area-inset-top, 0px);
@@ -21,8 +21,8 @@
     --muted: #9bb0c4;
     --line: #2a3f54;
     --accent: #3da8e8;
-    --critical: #ff8a82;
-    --warning: #f5c842;
+    --critical: #e85d5d;
+    --warning: #ff9f43;
     --ok: #5fd68a;
     --shadow: 0 14px 32px rgba(0, 0, 0, 0.35);
   }
@@ -89,6 +89,11 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.mobile-user-line strong {
+  color: var(--ink);
+  font-weight: 800;
 }
 
 .mobile-icon-actions {
@@ -282,18 +287,40 @@ body {
   color: var(--muted);
 }
 
+.alert-identity {
+  margin-bottom: 8px;
+}
+
+.alert-customer-name {
+  margin: 0 0 6px;
+  font-size: 1.18rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
 .alert-host-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+.alert-host-main {
+  min-width: 0;
+  flex: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-bottom: 4px;
 }
 
-.alert-host-row h2 {
+.alert-host-name {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 800;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .alert-host-row.is-tappable {
@@ -307,27 +334,24 @@ body {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
-.alert-host-row.is-tappable h2 {
+.alert-host-row.is-tappable .alert-host-name {
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
   text-underline-offset: 3px;
 }
 
-.alert-customer-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 4px 0;
-}
-
 .customer-logo {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   object-fit: contain;
   background: var(--panel);
   border: 1px solid var(--line);
   flex-shrink: 0;
+}
+
+.customer-logo-right {
+  margin-left: auto;
 }
 
 .customer-logo.is-hidden,
