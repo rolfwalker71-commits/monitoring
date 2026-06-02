@@ -1,0 +1,26 @@
+{
+  "name": "ANG Alerts",
+  "short_name": "Alerts",
+  "description": "Monitoring Alerts für unterwegs",
+  "start_url": "/mobile/alerts",
+  "scope": "/mobile/",
+  "display": "standalone",
+  "background_color": "#e9eef2",
+  "theme_color": "#0f2a3f",
+  "orientation": "portrait-primary",
+  "lang": "de",
+  "icons": [
+    {
+      "src": "/icons/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

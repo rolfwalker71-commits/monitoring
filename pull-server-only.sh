@@ -224,6 +224,8 @@ server/static/app.js
 server/static/styles.css
 server/static/sw.js
 server/static/manifest.json
+server/static/manifest-mobile.json
+server/static/mobile-common.js
 server/static/mobile-alerts.html
 server/static/mobile-alerts.css
 server/static/mobile-alerts.js

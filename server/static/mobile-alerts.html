@@ -2,23 +2,45 @@
 <html lang="de">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Mobile Alerts</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>ANG Alerts</title>
     <link rel="stylesheet" href="/mobile-alerts.css?v=__ASSET_VERSION__" />
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="/manifest-mobile.json" />
     <link rel="apple-touch-icon" href="/icons/logo.png" />
     <meta name="theme-color" content="#0f2a3f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="ANG Alerts" />
   </head>
   <body>
-    <main class="mobile-shell">
+    <div id="mobileLoginOverlay" class="mobile-login-overlay hidden">
+      <div class="mobile-login-card">
+        <p class="eyebrow">ANG System Health</p>
+        <h2>Anmeldung</h2>
+        <p class="mobile-login-hint">Melde dich an, um Alerts zu sehen und zu verwalten.</p>
+        <label>
+          Benutzername
+          <input id="mobileLoginUsername" type="text" autocomplete="username" />
+        </label>
+        <label>
+          Passwort
+          <input id="mobileLoginPassword" type="password" autocomplete="current-password" />
+        </label>
+        <button id="mobileLoginSubmit" type="button" class="primary">Anmelden</button>
+        <p id="mobileLoginStatus" class="status"></p>
+      </div>
+    </div>
+
+    <main id="mobileAppShell" class="mobile-shell hidden">
       <header class="mobile-header">
         <div>
           <p class="eyebrow">Monitoring</p>
           <h1>Alerts</h1>
+          <p id="mobileUserLine" class="mobile-user-line"></p>
         </div>
         <div class="header-actions">
           <button id="testPushButton" type="button" class="ghost">Test Push</button>
           <button id="pushToggleButton" type="button" class="ghost">Push</button>
+          <button id="mobileLogoutButton" type="button" class="ghost">Logout</button>
         </div>
       </header>
 
@@ -47,6 +69,7 @@
       <section id="alertsList" class="alerts-list" aria-live="polite"></section>
     </main>
 
+    <script src="/mobile-common.js?v=__ASSET_VERSION__"></script>
     <script src="/mobile-alerts.js?v=__ASSET_VERSION__"></script>
   </body>
 </html>

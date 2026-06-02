@@ -12672,6 +12672,7 @@ def maybe_send_alert_message(
     used_percent: float,
     conn: sqlite3.Connection | None = None,
     display_name: str = "",
+    alert_id: int = 0,
 ) -> None:
     if conn is not None:
         host_key = alert_host_key(hostname, host_uid)
@@ -12712,6 +12713,7 @@ def maybe_send_alert_message(
             severity,
             used_percent,
             display_name=display_name,
+            alert_id=alert_id,
         )
         send_instant_alert_telegram_to_users(
             conn,
@@ -12885,6 +12887,7 @@ def send_instant_alert_web_push_to_users(
     severity: str,
     used_percent: float,
     display_name: str = "",
+    alert_id: int = 0,
 ) -> None:
     if not web_push_is_configured():
         return
@@ -12916,6 +12919,10 @@ def send_instant_alert_web_push_to_users(
         f"{sev_icon} {sev_label} · {used_percent:.1f}%\n"
         f"🕐 {now_local}"
     )
+    normalized_alert_id = max(0, int(alert_id or 0))
+    mobile_url = "/mobile/alerts"
+    if normalized_alert_id > 0:
+        mobile_url = f"/mobile/alerts?alert_id={normalized_alert_id}"
     payload = {
         "title": title,
         "body": body,
@@ -12924,7 +12931,8 @@ def send_instant_alert_web_push_to_users(
         "tag": _push_tag_for_alert(host_uid, hostname, mountpoint),
         "renotify": event_type in {"opened", "escalated"},
         "data": {
-            "url": "/mobile/alerts",
+            "url": mobile_url,
+            "alert_id": normalized_alert_id,
             "hostname": hostname,
             "host_uid": alert_host_key(hostname, host_uid),
             "mountpoint": mountpoint,
@@ -13887,6 +13895,35 @@ def _load_host_metadata_maps(
     return host_settings_by_hostname, display_name_by_host_uid
 
 
+def _load_alert_mobile_context_map(
+    conn: sqlite3.Connection,
+    host_pairs: list[tuple[str, str]],
+) -> dict[str, dict[str, str]]:
+    context_by_host_key: dict[str, dict[str, str]] = {}
+    seen_keys: set[str] = set()
+    for hostname_raw, host_uid_raw in host_pairs:
+        hostname = str(hostname_raw or "").strip()
+        host_uid = str(host_uid_raw or "").strip()
+        host_key = alert_host_key(hostname, host_uid)
+        if not host_key or host_key in seen_keys:
+            continue
+        seen_keys.add(host_key)
+        host_settings = get_host_settings(conn, hostname, host_uid)
+        contact_name = str(host_settings.get("customer_it_provider_contact", "") or "").strip()
+        provider_name = str(host_settings.get("customer_it_provider_name", "") or "").strip()
+        provider_email = str(host_settings.get("customer_it_provider_email", "") or "").strip()
+        contact_line = contact_name or provider_name or provider_email
+        environment_type = str(host_settings.get("environment_type", "") or "").strip().lower()
+        if environment_type not in {"prod", "test"}:
+            environment_type = ""
+        context_by_host_key[host_key] = {
+            "customer_name": str(host_settings.get("customer_name", "") or "").strip(),
+            "environment_type": environment_type,
+            "it_provider_contact_line": contact_line,
+        }
+    return context_by_host_key
+
+
 def is_alert_muted(conn: sqlite3.Connection, host_key: str, mountpoint: str) -> bool:
     row = conn.execute(
         "SELECT 1 FROM muted_alert_rules WHERE host_uid = ? AND mountpoint = ?",
@@ -14473,7 +14510,18 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: 
                     """,
                     (now_utc, now_utc, report_id, open_alert[0]),
                 )
-                maybe_send_alert_message(alarm_settings, "resolved", hostname, alert_key, mountpoint, "ok", used_percent, conn=conn, display_name=display_name)
+                maybe_send_alert_message(
+                    alarm_settings,
+                    "resolved",
+                    hostname,
+                    alert_key,
+                    mountpoint,
+                    "ok",
+                    used_percent,
+                    conn=conn,
+                    display_name=display_name,
+                    alert_id=int(open_alert[0] or 0),
+                )
             continue
 
         if not open_alert and not alert_started:
@@ -14495,7 +14543,19 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: 
                 """,
                 (hostname, alert_key, mountpoint, severity, used_percent, now_utc, now_utc, report_id),
             )
-            maybe_send_alert_message(alarm_settings, "opened", hostname, alert_key, mountpoint, severity, used_percent, conn=conn, display_name=display_name)
+            new_alert_id = int(conn.execute("SELECT last_insert_rowid()").fetchone()[0] or 0)
+            maybe_send_alert_message(
+                alarm_settings,
+                "opened",
+                hostname,
+                alert_key,
+                mountpoint,
+                severity,
+                used_percent,
+                conn=conn,
+                display_name=display_name,
+                alert_id=new_alert_id,
+            )
             continue
 
         previous_severity = str(open_alert[1] or "warning")
@@ -14510,7 +14570,18 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: 
         )
 
         if previous_severity != "critical" and severity == "critical":
-            maybe_send_alert_message(alarm_settings, "escalated", hostname, alert_key, mountpoint, severity, used_percent, conn=conn, display_name=display_name)
+            maybe_send_alert_message(
+                alarm_settings,
+                "escalated",
+                hostname,
+                alert_key,
+                mountpoint,
+                severity,
+                used_percent,
+                conn=conn,
+                display_name=display_name,
+                alert_id=int(open_alert[0] or 0),
+            )
 
     if mountpoints_seen:
         placeholders = ",".join("?" for _ in mountpoints_seen)
@@ -16662,6 +16733,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if where_parts:
                 where_clause = "WHERE " + " AND ".join(where_parts)
 
+            mobile_context_by_host_key: dict[str, dict[str, str]] = {}
             with sqlite3.connect(DB_PATH) as conn:
                 all_rows = conn.execute(
                     f"""
@@ -16728,6 +16800,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     }
                 )
                 latest_details_by_host_key = _collect_latest_report_details_by_host_keys(conn, host_keys)
+                mobile_context_by_host_key = _load_alert_mobile_context_map(
+                    conn,
+                    [(str(row[1] or ""), str(row[6] or "")) for row in rows],
+                )
 
             _mark_endpoint_timer(endpoint_timer, "db")
 
@@ -16750,7 +16826,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         or str(host_settings.get("display_name_override", "") or "")
                         or hostname
                     )
-                    customer_name_value = str(host_settings.get("customer_name", "") or "").strip() or "Ohne Kunde"
+                    mobile_context = mobile_context_by_host_key.get(host_uid_value, {})
+                    customer_name_value = (
+                        str(mobile_context.get("customer_name", "") or "").strip()
+                        or str(host_settings.get("customer_name", "") or "").strip()
+                        or "Ohne Kunde"
+                    )
                     mountpoint = str(row[2] or "")
                     host_details = latest_details_by_host_key.get(host_uid_value, {})
                     host_usage = host_details.get("usage_by_mountpoint", {}) if isinstance(host_details, dict) else {}
@@ -16770,6 +16851,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             "host_uid": host_uid_value,
                             "display_name": display_name_value,
                             "customer_name": customer_name_value,
+                            "environment_type": str(mobile_context.get("environment_type", "") or ""),
+                            "it_provider_contact_line": str(mobile_context.get("it_provider_contact_line", "") or ""),
                             "mountpoint": mountpoint,
                             "severity": row[3],
                             "used_percent": row[4],
@@ -17109,6 +17192,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_index_with_asset_version()
             return
 
+        if parsed.path in {"/mobile", "/mobile/"}:
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header("Location", "/mobile/alerts")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return
+
         if parsed.path == "/mobile/alerts":
             self._send_html_with_asset_version(STATIC_DIR / "mobile-alerts.html")
             return
@@ -17164,6 +17254,26 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/sw.js":
             self._send_file(
                 STATIC_DIR / "sw.js",
+                "application/javascript; charset=utf-8",
+                extra_headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
+            return
+
+        if parsed.path == "/manifest-mobile.json":
+            self._send_file(
+                STATIC_DIR / "manifest-mobile.json",
+                "application/manifest+json; charset=utf-8",
+                extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+            )
+            return
+
+        if parsed.path == "/mobile-common.js":
+            self._send_file(
+                STATIC_DIR / "mobile-common.js",
                 "application/javascript; charset=utf-8",
                 extra_headers={
                     "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
@@ -17884,9 +17994,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             custom_title = ""
             custom_body = ""
+            custom_url = "/mobile/alerts"
             if isinstance(payload, dict):
                 custom_title = str(payload.get("title", "") or "").strip()
                 custom_body = str(payload.get("body", "") or "").strip()
+                custom_url = str(payload.get("url", "") or "").strip() or custom_url
 
             title = custom_title or "Monitoring Push Test"
             body = custom_body or f"Testnachricht für {username} um {datetime.now().astimezone().strftime('%d.%m.%Y %H:%M')}"
@@ -17894,7 +18006,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "title": title,
                 "body": body,
                 "tag": f"push-test:{username}",
-                "data": {"url": "/"},
+                "data": {"url": custom_url},
             }
 
             with sqlite3.connect(DB_PATH) as conn:

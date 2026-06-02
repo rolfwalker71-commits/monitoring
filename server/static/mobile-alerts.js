@@ -1,12 +1,3 @@
-function esc(value) {
-  return String(value || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
 const state = {
   severity: "all",
   showAck: true,
@@ -16,15 +7,42 @@ const state = {
   pushEnabled: false,
   vapidPublicKey: "",
   loadingPush: false,
+  authenticated: false,
+  username: "",
+  highlightAlertId: 0,
 };
 
 let serviceWorkerRegistrationPromise = null;
+
+function parseHighlightAlertId() {
+  const raw = new URLSearchParams(window.location.search).get("alert_id");
+  const parsed = Number(raw || 0);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
 
 function setStatus(text, isError = false) {
   const line = document.getElementById("statusLine");
   if (!line) return;
   line.textContent = text;
   line.style.color = isError ? "#b42318" : "#4f6271";
+}
+
+function setLoginStatus(text, isError = false) {
+  const line = document.getElementById("mobileLoginStatus");
+  if (!line) return;
+  line.textContent = text;
+  line.style.color = isError ? "#b42318" : "#4f6271";
+}
+
+function showLoginOverlay(show) {
+  document.getElementById("mobileLoginOverlay")?.classList.toggle("hidden", !show);
+  document.getElementById("mobileAppShell")?.classList.toggle("hidden", show);
+}
+
+function updateUserLine() {
+  const line = document.getElementById("mobileUserLine");
+  if (!line) return;
+  line.textContent = state.authenticated && state.username ? "Angemeldet als " + state.username : "";
 }
 
 function base64UrlToUint8Array(base64Url) {
@@ -56,6 +74,11 @@ function renderPushButton() {
   const btn = document.getElementById("pushToggleButton");
   if (!btn) return;
 
+  if (!state.authenticated) {
+    btn.disabled = true;
+    btn.textContent = "Push";
+    return;
+  }
   if (state.loadingPush) {
     btn.disabled = true;
     btn.textContent = "Push ...";
@@ -77,6 +100,14 @@ function renderPushButton() {
 }
 
 async function refreshPushState() {
+  if (!state.authenticated) {
+    state.pushSupported = false;
+    state.pushConfigured = false;
+    state.pushEnabled = false;
+    renderPushButton();
+    return;
+  }
+
   state.loadingPush = true;
   renderPushButton();
   try {
@@ -111,6 +142,10 @@ async function refreshPushState() {
 }
 
 async function togglePush() {
+  if (!state.authenticated) {
+    alert("Bitte zuerst anmelden.");
+    return;
+  }
   if (state.loadingPush) return;
   if (!state.pushSupported) {
     alert("Push wird auf diesem Gerät/Browsertyp nicht unterstützt.");
@@ -185,6 +220,7 @@ async function sendTestPush() {
       body: JSON.stringify({
         title: "Monitoring Test Push",
         body: "Diese Nachricht wurde über den Test-Button ausgelöst.",
+        url: "/mobile/alerts",
       }),
     });
     const payload = await resp.json().catch(() => ({}));
@@ -219,6 +255,22 @@ async function callAlertAction(url, payload, okMessage) {
   setStatus(okMessage);
 }
 
+function buildEnvironmentChip(environmentType) {
+  const label = mobileEnvironmentLabel(environmentType);
+  if (!label) return "";
+  const cssClass = label === "Prod." ? "env-prod" : "env-test";
+  return '<span class="env-chip ' + cssClass + '">' + mobileEsc(label) + "</span>";
+}
+
+function highlightTargetCard() {
+  if (!state.highlightAlertId) return;
+  const card = document.querySelector('.alert-card[data-alert-id="' + state.highlightAlertId + '"]');
+  if (!card) return;
+  card.classList.add("alert-card-highlight");
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  window.setTimeout(() => card.classList.remove("alert-card-highlight"), 4000);
+}
+
 function renderAlerts(items) {
   const list = document.getElementById("alertsList");
   if (!list) return;
@@ -231,27 +283,33 @@ function renderAlerts(items) {
   list.innerHTML = items.map((item) => {
     const sev = String(item.severity || "warning").toLowerCase();
     const id = Number(item.id || 0);
-    const title = esc(item.display_name || item.hostname || "-");
-    const hostname = esc(item.hostname || "-");
-    const mountpoint = esc(item.mountpoint || "-");
+    const title = mobileEsc(item.display_name || item.hostname || "-");
+    const hostname = mobileEsc(item.hostname || "-");
+    const customer = mobileEsc(item.customer_name || "");
+    const mountpoint = mobileEsc(item.mountpoint || "-");
     const used = Number(item.used_percent || 0).toFixed(1);
     const isAck = item.is_acknowledged === true;
+    const contactLine = mobileEsc(item.it_provider_contact_line || "");
+    const envChip = buildEnvironmentChip(item.environment_type);
+    const highlightClass = id === state.highlightAlertId ? " alert-card-highlight" : "";
 
     return (
-      '<article class="alert-card ' + sev + '" data-alert-id="' + id + '">' +
+      '<article class="alert-card ' + sev + highlightClass + '" data-alert-id="' + id + '">' +
       '  <div class="alert-head">' +
-      '    <div class="alert-host">' + title + '</div>' +
-      '    <div>' + esc(sev.toUpperCase()) + '</div>' +
+      '    <div class="alert-host">' + title + envChip + '</div>' +
+      '    <div class="alert-severity">' + mobileEsc(sev.toUpperCase()) + '</div>' +
       '  </div>' +
-      '  <div class="alert-meta">' + hostname + ' · ' + mountpoint + '</div>' +
-      '  <div class="alert-usage">Used: ' + used + '%</div>' +
+      (customer ? '  <div class="alert-meta">Kunde: ' + customer + "</div>" : "") +
+      '  <div class="alert-meta">' + hostname + " · " + mountpoint + "</div>" +
+      (contactLine ? '  <div class="alert-meta">IT: ' + contactLine + "</div>" : "") +
+      '  <div class="alert-usage">Belegt: ' + used + "%</div>" +
       '  <div class="alert-actions">' +
       '    <button class="btn-ok" data-action="ack">Quittieren</button>' +
       '    <button data-action="unack">Unack</button>' +
       '    <button class="btn-danger" data-action="close">Schliessen</button>' +
-      '  </div>' +
-      (isAck ? '<div class="alert-meta">Bereits quittiert</div>' : '') +
-      '</article>'
+      "  </div>" +
+      (isAck ? '<div class="alert-meta">Bereits quittiert</div>' : "") +
+      "</article>"
     );
   }).join("");
 
@@ -278,9 +336,16 @@ function renderAlerts(items) {
       }
     });
   });
+
+  highlightTargetCard();
 }
 
 async function loadAlerts() {
+  if (!state.authenticated) {
+    showLoginOverlay(true);
+    return;
+  }
+
   setStatus("Lade Alerts...");
   const params = new URLSearchParams();
   params.set("status", state.showClosed ? "all" : "open");
@@ -291,7 +356,9 @@ async function loadAlerts() {
 
   const resp = await fetch("/api/v1/alerts?" + params.toString(), { credentials: "same-origin" });
   if (resp.status === 401) {
-    setStatus("Nicht eingeloggt. Bitte zuerst im Haupt-Webclient anmelden.", true);
+    state.authenticated = false;
+    showLoginOverlay(true);
+    setLoginStatus("Session abgelaufen. Bitte erneut anmelden.", true);
     renderAlerts([]);
     return;
   }
@@ -307,6 +374,64 @@ async function loadAlerts() {
   setStatus(String(alerts.length) + " Alerts geladen.");
 }
 
+async function ensureAuthenticated() {
+  const session = await mobileFetchSession();
+  state.authenticated = session.authenticated === true;
+  state.username = String(session.username || "");
+  updateUserLine();
+  showLoginOverlay(!state.authenticated);
+  return state.authenticated;
+}
+
+async function submitLogin() {
+  const username = document.getElementById("mobileLoginUsername")?.value.trim() || "";
+  const password = document.getElementById("mobileLoginPassword")?.value || "";
+  if (!username || !password) {
+    setLoginStatus("Bitte Benutzername und Passwort eingeben.", true);
+    return;
+  }
+
+  setLoginStatus("Anmeldung läuft...");
+  try {
+    const data = await mobileLogin(username, password);
+    state.authenticated = true;
+    state.username = String(data.username || username);
+    updateUserLine();
+    showLoginOverlay(false);
+    setLoginStatus("");
+    await refreshPushState();
+    await loadAlerts();
+  } catch (error) {
+    state.authenticated = false;
+    showLoginOverlay(true);
+    setLoginStatus(error?.message || "Login fehlgeschlagen", true);
+  }
+}
+
+function wirePullToRefresh() {
+  let touchStartY = 0;
+  document.addEventListener(
+    "touchstart",
+    (event) => {
+      if (window.scrollY <= 0) {
+        touchStartY = event.touches[0]?.clientY || 0;
+      }
+    },
+    { passive: true }
+  );
+  document.addEventListener(
+    "touchend",
+    (event) => {
+      if (!state.authenticated || window.scrollY > 4) return;
+      const touchEndY = event.changedTouches[0]?.clientY || 0;
+      if (touchEndY - touchStartY > 90) {
+        void loadAlerts().catch((error) => setStatus("Fehler: " + error.message, true));
+      }
+    },
+    { passive: true }
+  );
+}
+
 function wire() {
   const refreshBtn = document.getElementById("refreshButton");
   const severityFilter = document.getElementById("severityFilter");
@@ -314,6 +439,9 @@ function wire() {
   const showClosedToggle = document.getElementById("showClosedToggle");
   const pushToggleButton = document.getElementById("pushToggleButton");
   const testPushButton = document.getElementById("testPushButton");
+  const loginSubmit = document.getElementById("mobileLoginSubmit");
+  const logoutButton = document.getElementById("mobileLogoutButton");
+  const loginPassword = document.getElementById("mobileLoginPassword");
 
   if (refreshBtn) {
     refreshBtn.addEventListener("click", () => {
@@ -348,14 +476,49 @@ function wire() {
       void sendTestPush();
     });
   }
+  if (loginSubmit) {
+    loginSubmit.addEventListener("click", () => {
+      void submitLogin();
+    });
+  }
+  if (loginPassword) {
+    loginPassword.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        void submitLogin();
+      }
+    });
+  }
+  if (logoutButton) {
+    logoutButton.addEventListener("click", async () => {
+      await mobileLogout();
+      state.authenticated = false;
+      state.username = "";
+      updateUserLine();
+      showLoginOverlay(true);
+      renderAlerts([]);
+      setStatus("");
+      renderPushButton();
+    });
+  }
+
+  wirePullToRefresh();
 }
 
 async function init() {
+  state.highlightAlertId = parseHighlightAlertId();
   wire();
-  await refreshPushState();
-  await loadAlerts();
+  try {
+    await ensureAuthenticated();
+    if (state.authenticated) {
+      await refreshPushState();
+      await loadAlerts();
+    } else {
+      setLoginStatus("Bitte anmelden, um Alerts zu laden.");
+    }
+  } catch (error) {
+    showLoginOverlay(true);
+    setLoginStatus("Initialisierung fehlgeschlagen: " + (error?.message || String(error)), true);
+  }
 }
 
-void init().catch((error) => {
-  setStatus("Initialisierung fehlgeschlagen: " + (error?.message || String(error)), true);
-});
+void init();
