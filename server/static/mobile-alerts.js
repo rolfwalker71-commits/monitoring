@@ -80,7 +80,8 @@ const state = {
 
 const SKELETON_CARD_COUNT = 4;
 const FLOATING_LOGO_STORAGE_KEY = "monitoring.mobile.floatingLogo";
-const FLOATING_LOGO_SIZE_PX = 52;
+const FLOATING_LOGO_WIDTH_PX = 80;
+const FLOATING_LOGO_HEIGHT_PX = 48;
 const FLOATING_LOGO_MARGIN_PX = 12;
 
 let serviceWorkerRegistrationPromise = null;
@@ -1128,19 +1129,19 @@ function defaultFloatingLogoPosition() {
     getComputedStyle(document.documentElement).getPropertyValue("--safe-bottom") || "0"
   ) || 0;
   return {
-    left: window.innerWidth - FLOATING_LOGO_SIZE_PX - FLOATING_LOGO_MARGIN_PX,
-    top: window.innerHeight - FLOATING_LOGO_SIZE_PX - FLOATING_LOGO_MARGIN_PX - safeBottom,
+    left: window.innerWidth - FLOATING_LOGO_WIDTH_PX - FLOATING_LOGO_MARGIN_PX,
+    top: window.innerHeight - FLOATING_LOGO_HEIGHT_PX - FLOATING_LOGO_MARGIN_PX - safeBottom,
   };
 }
 
 function clampFloatingLogoPosition(left, top) {
   const maxLeft = Math.max(
     FLOATING_LOGO_MARGIN_PX,
-    window.innerWidth - FLOATING_LOGO_SIZE_PX - FLOATING_LOGO_MARGIN_PX
+    window.innerWidth - FLOATING_LOGO_WIDTH_PX - FLOATING_LOGO_MARGIN_PX
   );
   const maxTop = Math.max(
     FLOATING_LOGO_MARGIN_PX,
-    window.innerHeight - FLOATING_LOGO_SIZE_PX - FLOATING_LOGO_MARGIN_PX
+    window.innerHeight - FLOATING_LOGO_HEIGHT_PX - FLOATING_LOGO_MARGIN_PX
   );
   return {
     left: Math.min(maxLeft, Math.max(FLOATING_LOGO_MARGIN_PX, left)),

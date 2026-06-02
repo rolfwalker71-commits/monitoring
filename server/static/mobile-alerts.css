@@ -49,10 +49,10 @@ body {
 .mobile-floating-logo {
   position: fixed;
   z-index: 35;
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  width: 80px;
+  height: 48px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
   border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
   box-shadow: 0 10px 24px rgba(20, 45, 77, 0.22);
   display: flex;
@@ -62,16 +62,17 @@ body {
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
-  padding: 4px;
+  padding: 4px 6px;
   transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .mobile-floating-logo img {
   display: block;
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
   pointer-events: none;
+  opacity: 0.94;
 }
 
 .mobile-floating-logo.is-dragging {
