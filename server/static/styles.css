@@ -15017,6 +15017,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 .report-customer-chip-wrap .selected-host-meta-chip--env-inline {
   flex: 0 0 auto;
   margin-left: auto;
+  margin-bottom: 3px;
   font-size: 14px;
   line-height: 1;
   font-weight: 800;
