@@ -9742,14 +9742,14 @@ body[data-theme="dark"] .host-group-title {
   font-weight: 900;
 }
 .selected-host-meta-chip--env-prod {
-  border-color: #9fd7b8;
-  background: #e9f8ef;
-  color: #1d6a46;
+  border-color: #90d6a8;
+  background: #e8faec;
+  color: #1f7148;
 }
 .selected-host-meta-chip--env-test {
-  border-color: #f1c28a;
-  background: #fff2e2;
-  color: #8a4c14;
+  border-color: #e6cd67;
+  background: #fff8cf;
+  color: #6f5d08;
 }
 
 body[data-theme="dark"] .host-group-toggle {
@@ -14977,7 +14977,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   display: block;
   font-size: 34px;
   line-height: 1.02;
-  margin-bottom: 2px;
+  margin-bottom: 6px;
   color: #163b6b;
   font-weight: 900;
   letter-spacing: -0.02em;
