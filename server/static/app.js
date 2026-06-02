@@ -11981,6 +11981,8 @@ async function openHostMetadataEditorDialog({
   const sortedCustomers = (Array.isArray(customers) ? customers : [])
     .slice()
     .sort((a, b) => String(a.customer_name || "").localeCompare(String(b.customer_name || ""), undefined, { sensitivity: "base" }));
+  const initialSelectedCustomer = sortedCustomers.find((item) => Number(item.id || 0) === Number(currentCustomerId || 0)) || null;
+  const initialCustomerLogoUrl = asText(initialSelectedCustomer?.logo_url, "").trim();
   const initialProviderContacts = normalizeItProviderContacts(currentItProviderContacts);
   const providerRowsHtml = initialProviderContacts.map((entry, index) => {
     const slot = index + 1;
@@ -12062,6 +12064,14 @@ async function openHostMetadataEditorDialog({
             <input id="hostMetaCustomerLogoInput" type="file" accept="image/png,image/jpeg,image/webp" />
           </label>
         </div>
+        <div class="host-meta-logo-preview-row">
+          <p class="settings-helper-text">Hinterlegtes Kundenlogo</p>
+          <div id="hostMetaCustomerLogoPreviewWrap" class="customer-logo-preview-wrap">
+            ${initialCustomerLogoUrl
+              ? `<img src="${escapeHtml(initialCustomerLogoUrl)}" alt="Kundenlogo" class="customer-logo-preview">`
+              : '<span class="customer-logo-preview-placeholder">Noch kein Logo</span>'}
+          </div>
+        </div>
         <p class="settings-helper-text">Hinweis: Bestehende Kunden bitte aus dem Dropdown wählen, um Dubletten zu vermeiden.</p>
         <div class="host-meta-modal-actions">
           <button type="button" class="btn-secondary" data-action="cancel">Abbrechen</button>
@@ -12080,6 +12090,7 @@ async function openHostMetadataEditorDialog({
   const newCustomerNameInput = modal.querySelector("#hostMetaNewCustomerNameInput");
   const newCustomerProjectInput = modal.querySelector("#hostMetaNewCustomerProjectInput");
   const addProviderRowButton = modal.querySelector("#hostMetaAddProviderRowBtn");
+  const logoPreviewWrap = modal.querySelector("#hostMetaCustomerLogoPreviewWrap");
   const providerInputRows = [1, 2, 3].map((slot) => ({
     slot,
     row: modal.querySelector(`[data-provider-row][data-provider-slot="${slot}"]`),
@@ -12091,6 +12102,25 @@ async function openHostMetadataEditorDialog({
   }));
   const customerLogoInput = modal.querySelector("#hostMetaCustomerLogoInput");
   let visibleProviderRows = deriveInitialVisibleItProviderRows(initialProviderContacts);
+
+  const buildLogoPreviewUrl = (url) => {
+    const raw = asText(url, "").trim();
+    if (!raw) return "";
+    const separator = raw.includes("?") ? "&" : "?";
+    return `${raw}${separator}preview_ts=${Date.now()}`;
+  };
+
+  const updateLogoPreview = (logoUrl) => {
+    if (!logoPreviewWrap) {
+      return;
+    }
+    const previewUrl = buildLogoPreviewUrl(logoUrl);
+    if (!previewUrl) {
+      logoPreviewWrap.innerHTML = '<span class="customer-logo-preview-placeholder">Noch kein Logo</span>';
+      return;
+    }
+    logoPreviewWrap.innerHTML = `<img src="${escapeHtml(previewUrl)}" alt="Kundenlogo" class="customer-logo-preview" onerror="this.parentElement.innerHTML='&lt;span class=&quot;customer-logo-preview-placeholder&quot;&gt;Logo konnte nicht geladen werden&lt;/span&gt;'">`;
+  };
 
   const syncProviderRowsUi = () => {
     for (const rowInputs of providerInputRows) {
@@ -12134,20 +12164,24 @@ async function openHostMetadataEditorDialog({
     wrapNew.classList.toggle("hidden", selectEl.value !== "__new__");
 
     if (selectEl.value === "__new__") {
+      updateLogoPreview("");
       return;
     }
 
     if (selectEl.value === "__none__") {
       setProviderRowsFromContacts([]);
+      updateLogoPreview("");
       return;
     }
 
     const selectedId = Number(selectEl.value || 0);
     const selectedCustomer = sortedCustomers.find((item) => Number(item.id || 0) === selectedId) || null;
     if (!selectedCustomer) {
+      updateLogoPreview("");
       return;
     }
     setProviderRowsFromContacts(getItProviderContactsFromCustomer(selectedCustomer));
+    updateLogoPreview(selectedCustomer.logo_url);
   };
   updateNewSection();
   if (selectEl) selectEl.addEventListener("change", updateNewSection);
