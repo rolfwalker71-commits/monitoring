@@ -9832,8 +9832,10 @@ function renderSelectedHostCustomerChip(host) {
     : environmentType === "test"
       ? "Test"
       : "";
+  const hasCustomerLogo = Boolean(customerLogoUrl);
+  const envChipFloatingClass = hasCustomerLogo ? " selected-host-meta-chip--env-floating" : "";
   const envChip = envLabel
-    ? `<span class="selected-host-meta-chip selected-host-meta-chip--env selected-host-meta-chip--env-inline selected-host-meta-chip--env-${escapeHtml(environmentType)}" title="Host-Umgebung">${escapeHtml(envLabel)}</span>`
+    ? `<span class="selected-host-meta-chip selected-host-meta-chip--env selected-host-meta-chip--env-inline${envChipFloatingClass} selected-host-meta-chip--env-${escapeHtml(environmentType)}" title="Host-Umgebung">${escapeHtml(envLabel)}</span>`
     : "";
   const customerLabel = customerName
     ? (customerProject ? `${customerName} · ${customerProject}` : customerName)
@@ -9853,9 +9855,10 @@ function renderSelectedHostCustomerChip(host) {
         <strong class="selected-host-meta-card-main"><span class="selected-host-customer-main-row"><span class="selected-host-customer-main-text">${escapeHtml(customerLabel)}</span></span></strong>
         <span class="selected-host-meta-card-sub-row">
           <span class="selected-host-meta-card-sub">Name: ${escapeHtml(hostLabelRaw)}</span>
-          ${envChip}
+          ${hasCustomerLogo ? "" : envChip}
         </span>
       </span>
+      ${hasCustomerLogo ? envChip : ""}
       ${customerLogoHtml}
     </span>
   </span>`;

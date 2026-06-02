@@ -14903,6 +14903,10 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   display: flex;
   flex-direction: column;
   padding-bottom: 28px;
+  --customer-logo-card-width: 112px;
+  --customer-logo-right-gap: 8px;
+  --customer-meta-gap: 10px;
+  --customer-meta-lane-width: 168px;
 }
 
 .reports-column .section-head .report-customer-main-card.report-customer-main-card--placeholder {
@@ -15000,8 +15004,8 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 
 .reports-column .section-head .report-customer-main-card .report-count-inline {
   position: absolute;
-  right: 9px;
-  top: 8px;
+  right: calc(var(--customer-logo-right-gap) + var(--customer-logo-card-width) + var(--customer-meta-gap) + 72px);
+  top: 39px;
   display: inline-block;
   text-align: right;
   margin: 0;
@@ -15050,7 +15054,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 .report-customer-chip-wrap .selected-host-meta-card-body--with-logo {
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  padding-right: 0;
+  padding-right: calc(var(--customer-logo-card-width) + var(--customer-meta-lane-width) + var(--customer-meta-gap) + var(--customer-logo-right-gap));
 }
 
 .report-customer-chip-wrap .selected-host-meta-card-copy {
@@ -15098,7 +15102,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 112px;
+  width: var(--customer-logo-card-width);
   min-height: 0;
   border: 1px solid #cddbeb;
   border-radius: 8px;
@@ -15107,7 +15111,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   padding: 2px 4px;
   position: absolute;
   top: 4px;
-  right: 96px;
+  right: var(--customer-logo-right-gap);
   bottom: 4px;
   z-index: 1;
 }
@@ -15152,6 +15156,14 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   font-weight: 800;
   padding: 3px 11px;
   min-height: 24px;
+}
+
+.report-customer-chip-wrap .selected-host-meta-chip--env-floating {
+  position: absolute;
+  right: calc(var(--customer-logo-right-gap) + var(--customer-logo-card-width) + var(--customer-meta-gap));
+  top: 37px;
+  margin: 0;
+  z-index: 2;
 }
 
 .report-customer-chip-wrap .selected-host-meta-chip--env-inline.selected-host-meta-chip--env-prod {
