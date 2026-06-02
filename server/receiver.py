@@ -4891,6 +4891,27 @@ def get_web_user(conn: sqlite3.Connection, username: str) -> dict | None:
     }
 
 
+def web_user_display_name_map(conn: sqlite3.Connection) -> dict[str, str]:
+    rows = conn.execute(
+        "SELECT username, COALESCE(display_name, '') FROM web_users",
+    ).fetchall()
+    mapping: dict[str, str] = {}
+    for row in rows:
+        username = str(row[0] or "").strip()
+        if not username:
+            continue
+        display_name = str(row[1] or "").strip()
+        mapping[username] = display_name or username
+    return mapping
+
+
+def resolve_web_user_display_label(mapping: dict[str, str], username: object) -> str:
+    key = str(username or "").strip()
+    if not key:
+        return ""
+    return mapping.get(key, key)
+
+
 def list_web_users(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         """
@@ -16866,6 +16887,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             alerts = []
             with sqlite3.connect(DB_PATH) as conn_mute:
+                user_display_names = web_user_display_name_map(conn_mute)
                 muted_pairs = {
                     (str(r[0]), str(r[1]))
                     for r in conn_mute.execute("SELECT host_uid, mountpoint FROM muted_alert_rules").fetchall()
@@ -16927,10 +16949,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             "report_id": row[10],
                             "ack_note": str(row[11] or ""),
                             "ack_by": str(row[12] or ""),
+                            "ack_by_label": resolve_web_user_display_label(user_display_names, row[12]),
                             "ack_at_utc": str(row[13] or ""),
                             "is_acknowledged": bool(str(row[13] or "").strip()),
                             "closed_at_utc": str(row[14] or ""),
                             "closed_by": str(row[15] or ""),
+                            "closed_by_label": resolve_web_user_display_label(user_display_names, row[15]),
                             "is_closed": bool(str(row[14] or "").strip()),
                             "is_muted": (host_uid_value, mountpoint) in muted_pairs,
                             "is_heads_up_suppressed": (host_uid_value, mountpoint) in heads_up_suppressed_pairs,

@@ -1241,6 +1241,22 @@ function renderSessionStatus() {
   badge.textContent = `Session ${formatSessionRemaining(secondsLeft)} (${timeoutMinutes}m)`;
 }
 
+function webUserDisplayLabel(username, displayName) {
+  const label = asText(displayName, "").trim();
+  if (label) return label;
+  return asText(username, "");
+}
+
+function resolveWebUserActionLabel(item, field) {
+  if (!item || typeof item !== "object") {
+    return asText(item, "");
+  }
+  const labelKey = `${field}_label`;
+  const resolved = asText(item[labelKey], "").trim();
+  if (resolved) return resolved;
+  return asText(item[field], "");
+}
+
 function getBrandProfileInitials(value) {
   const parts = asText(value, "")
     .trim()
@@ -3323,13 +3339,17 @@ function renderUserManagementRows(users) {
     const username = asText(user.username, "");
     const usernameEnc = encodeURIComponent(username);
     const displayName = asText(user.display_name, "");
+    const userLabel = webUserDisplayLabel(username, displayName);
     const adminPill = `<span class="user-flag-pill ${user.is_admin ? "on" : "off"}">${user.is_admin ? "Admin" : "User"}</span>`;
     const activePill = `<span class="user-flag-pill ${user.is_disabled ? "off" : "on"}">${user.is_disabled ? "Gesperrt" : "Aktiv"}</span>`;
     const oauthPill = `<span class="oauth-state-pill ${user.has_microsoft_oauth ? "connected" : "disconnected"}">${user.has_microsoft_oauth ? asText(user.microsoft_connected_email, "verbunden") : "nicht verbunden"}</span>`;
 
     return `
       <tr>
-        <td><strong>${escapeHtml(username)}</strong></td>
+        <td>
+          <strong>${escapeHtml(userLabel)}</strong>
+          ${displayName && displayName !== username ? `<div class="muted compact">Login: ${escapeHtml(username)}</div>` : ""}
+        </td>
         <td>
           <span class="user-display-name-text">${displayName ? escapeHtml(displayName) : '<span class="muted">—</span>'}</span>
           <button type="button" class="inline-edit-btn" data-user-action="display-name" data-username-enc="${usernameEnc}" data-current-name="${escapeHtml(displayName)}" title="Anzeigename bearbeiten">✏️</button>
@@ -3571,9 +3591,7 @@ async function loadAdminLoginAudit() {
     rowsEl.innerHTML = entries.map((entry) => {
       const username = asText(entry.username, "-");
       const displayName = asText(entry.display_name, "");
-      const who = displayName && displayName !== username
-        ? `${displayName} (${username})`
-        : username;
+      const who = webUserDisplayLabel(username, displayName);
       const timeText = asText(entry.logged_at_utc, "") ? formatUtcPlus2(asText(entry.logged_at_utc, "")) : "-";
       const sourceIp = asText(entry.source_ip, "-");
       const method = asText(entry.auth_method, "password");
@@ -3660,8 +3678,9 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
     .map((userEntry) => {
       const usernameRaw = String(userEntry.username || "").trim();
       const username = escapeHtml(usernameRaw);
+      const userLabel = escapeHtml(webUserDisplayLabel(usernameRaw, userEntry.display_name));
       const selectedAttr = usernameRaw && usernameRaw === String(state.adminAlertSubscriptionsSelectedUser || "").trim() ? " selected" : "";
-      return `<option value="${username}"${selectedAttr}>${username}</option>`;
+      return `<option value="${username}"${selectedAttr}>${userLabel}</option>`;
     })
     .join("");
 
@@ -3816,7 +3835,7 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
           const overrideBadge = currentEntry.is_admin_override ? '<span class="admin-sub-override-pill" title="Admin-Override">Admin</span>' : "";
           return `<label class="admin-sub-user-chip${userEntry.is_admin ? " is-admin" : ""}${currentEntry.is_admin_override ? " is-admin-override" : ""}${disabled ? " is-disabled" : ""}" data-username="${username}" title="${currentEntry.is_admin_override ? "Admin-Override" : ""}">
             <input type="checkbox" class="admin-sub-cb" data-username="${username}" data-hostname="${hostname}" data-channel="${channel}" data-original-checked="${originalEnabled ? "1" : "0"}" ${enabled ? "checked" : ""} ${disabled ? "disabled" : ""}>
-            <span class="admin-sub-user-name">${username}</span>
+            <span class="admin-sub-user-name">${escapeHtml(webUserDisplayLabel(usernameRaw, userEntry.display_name))}</span>
             ${overrideBadge}
           </label>`;
         }).join("");
@@ -3876,8 +3895,9 @@ function renderAdminAlertSubscriptionsContainer(users, availableHosts, telegramA
           </label>`;
         }).join("");
 
+        const userRowLabel = escapeHtml(webUserDisplayLabel(usernameRaw, userEntry.display_name));
         return `<tr data-row-type="user" data-username="${username}" data-host-search="${escapeHtml(hostSearchBlob)}">
-          <td class="admin-sub-host-cell"><strong>${username}</strong>${rowActions}</td>
+          <td class="admin-sub-host-cell"><strong>${userRowLabel}</strong>${rowActions}</td>
           <td><div class="admin-sub-user-stack">${renderChannelRows("mail")}</div></td>
           <td><div class="admin-sub-user-stack">${renderChannelRows("telegram")}</div></td>
         </tr>`;
@@ -12633,14 +12653,14 @@ async function loadAlertsForHost() {
         const isClosed = Boolean(item.is_closed);
         const ackNote = asText(item.ack_note);
         const ackTitle = isAcknowledged
-          ? `Quittiert von ${asText(item.ack_by, "-")} am ${formatUtcPlus2(item.ack_at_utc)}${ackNote ? ` | Notiz: ${ackNote}` : ""}`
+          ? `Quittiert von ${resolveWebUserActionLabel(item, "ack_by") || "-"} am ${formatUtcPlus2(item.ack_at_utc)}${ackNote ? ` | Notiz: ${ackNote}` : ""}`
           : "Alert quittieren";
         const isHeadsUpSuppressed = Boolean(item.is_heads_up_suppressed);
         const headsUpTitle = isHeadsUpSuppressed
           ? "Heads-Up wieder aktivieren"
           : "Heads-Up für diesen Alert unterdrücken";
         const closeTitle = isClosed
-          ? `Abgeschlossen von ${asText(item.closed_by, "-")} am ${formatUtcPlus2(item.closed_at_utc)} – klicken zum Wiederöffnen`
+          ? `Abgeschlossen von ${resolveWebUserActionLabel(item, "closed_by") || "-"} am ${formatUtcPlus2(item.closed_at_utc)} – klicken zum Wiederöffnen`
           : "Alert abschliessen";
         const hostUid = asText(item.host_uid || item.hostname);
         const alertId = Number(item.id || 0);
@@ -12649,10 +12669,10 @@ async function loadAlertsForHost() {
         const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-alert-id="${alertId}" data-acknowledged="${isAcknowledged ? "1" : "0"}" data-hostname="${escapeHtml(asText(item.hostname))}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
         const closeBtn = `<button class="alert-close-btn${isClosed ? " closed" : ""}" type="button" data-action="close" data-alert-id="${alertId}" data-hostname="${escapeHtml(asText(item.hostname))}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-closed="${isClosed ? "1" : "0"}" title="${escapeHtml(closeTitle)}">${isClosed ? "↺" : "✕"}</button>`;
         const ackMeta = isAcknowledged
-          ? `<div class="count compact">✅ ${escapeHtml(asText(item.ack_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.ack_at_utc))}</div>`
+          ? `<div class="count compact">✅ ${escapeHtml(resolveWebUserActionLabel(item, "ack_by") || "-")} | ${escapeHtml(formatUtcPlus2(item.ack_at_utc))}</div>`
           : "";
         const closeMeta = isClosed
-          ? `<div class="count compact alert-closed-meta">🔒 ${escapeHtml(asText(item.closed_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.closed_at_utc))}</div>`
+          ? `<div class="count compact alert-closed-meta">🔒 ${escapeHtml(resolveWebUserActionLabel(item, "closed_by") || "-")} | ${escapeHtml(formatUtcPlus2(item.closed_at_utc))}</div>`
           : "";
         const currentReportStand = asText(item.current_report_at_utc, "").trim();
         const currentReportStandHtml = currentReportStand
@@ -14708,14 +14728,14 @@ async function loadGlobalAlertsOverview(options = {}) {
         const isClosed = Boolean(item.is_closed);
         const ackNote = asText(item.ack_note);
         const ackTitle = isAcknowledged
-          ? `Quittiert von ${asText(item.ack_by, "-")} am ${formatUtcPlus2(item.ack_at_utc)}${ackNote ? ` | Notiz: ${ackNote}` : ""}`
+          ? `Quittiert von ${resolveWebUserActionLabel(item, "ack_by") || "-"} am ${formatUtcPlus2(item.ack_at_utc)}${ackNote ? ` | Notiz: ${ackNote}` : ""}`
           : "Alert quittieren";
         const isHeadsUpSuppressed = Boolean(item.is_heads_up_suppressed);
         const headsUpTitle = isHeadsUpSuppressed
           ? "Heads-Up wieder aktivieren"
           : "Heads-Up für diesen Alert unterdrücken";
         const closeTitle = isClosed
-          ? `Abgeschlossen von ${asText(item.closed_by, "-")} am ${formatUtcPlus2(item.closed_at_utc)} – klicken zum Wiederöffnen`
+          ? `Abgeschlossen von ${resolveWebUserActionLabel(item, "closed_by") || "-"} am ${formatUtcPlus2(item.closed_at_utc)} – klicken zum Wiederöffnen`
           : "Alert abschliessen";
         const hostUid = asText(item.host_uid || hostName);
         const alertId = Number(item.id || 0);
@@ -14724,10 +14744,10 @@ async function loadGlobalAlertsOverview(options = {}) {
         const ackBtn = `<button class="alert-ack-btn${isAcknowledged ? " acknowledged" : ""}" type="button" data-action="ack" data-alert-id="${alertId}" data-acknowledged="${isAcknowledged ? "1" : "0"}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-ack-note="${encodeURIComponent(ackNote)}" title="${escapeHtml(ackTitle)}">${isAcknowledged ? "✅" : "✓"}</button>`;
         const closeBtn = `<button class="alert-close-btn${isClosed ? " closed" : ""}" type="button" data-action="close" data-alert-id="${alertId}" data-hostname="${escapeHtml(hostName)}" data-host-uid="${escapeHtml(hostUid)}" data-mountpoint="${escapeHtml(asText(item.mountpoint))}" data-closed="${isClosed ? "1" : "0"}" title="${escapeHtml(closeTitle)}">${isClosed ? "↺" : "✕"}</button>`;
         const ackMeta = isAcknowledged
-          ? `<div class="count compact">✅ ${escapeHtml(asText(item.ack_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.ack_at_utc))}</div>`
+          ? `<div class="count compact">✅ ${escapeHtml(resolveWebUserActionLabel(item, "ack_by") || "-")} | ${escapeHtml(formatUtcPlus2(item.ack_at_utc))}</div>`
           : "";
         const closeMeta = isClosed
-          ? `<div class="count compact alert-closed-meta">🔒 ${escapeHtml(asText(item.closed_by, "-"))} | ${escapeHtml(formatUtcPlus2(item.closed_at_utc))}</div>`
+          ? `<div class="count compact alert-closed-meta">🔒 ${escapeHtml(resolveWebUserActionLabel(item, "closed_by") || "-")} | ${escapeHtml(formatUtcPlus2(item.closed_at_utc))}</div>`
           : "";
         const currentReportStand = asText(item.current_report_at_utc, "").trim();
         const currentReportStandHtml = currentReportStand

@@ -237,6 +237,7 @@ body {
   flex-direction: row;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
   gap: 10px;
   padding: 2px 14px 6px;
   -webkit-overflow-scrolling: touch;
@@ -252,6 +253,12 @@ body {
 .alerts-carousel .carousel-empty {
   flex: 0 0 min(88vw, 392px);
   scroll-snap-align: center;
+  scroll-snap-stop: always;
+}
+
+.alert-detail-links {
+  display: grid;
+  gap: 8px;
 }
 
 .alert-card {

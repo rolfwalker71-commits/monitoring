@@ -414,9 +414,16 @@ function buildCountryFlagHtml(countryCode) {
   );
 }
 
+function resolveUserDisplayLabel(item, field) {
+  const labelKey = field + "_label";
+  const label = String(item?.[labelKey] || "").trim();
+  if (label) return label;
+  return String(item?.[field] || "").trim();
+}
+
 function buildAckStripHtml(item) {
   if (item.is_acknowledged !== true) return "";
-  const ackBy = String(item.ack_by || "").trim();
+  const ackBy = resolveUserDisplayLabel(item, "ack_by");
   const ackAt = formatRelativeTime(item.ack_at_utc) || formatIsoLabel(item.ack_at_utc);
   const ackNote = String(item.ack_note || "").trim();
   let text = "Quittiert";
@@ -726,7 +733,7 @@ function renderAlerts(items) {
     const barWidth = usagePercentForBar(item).toFixed(1);
     const timeLabel = formatRelativeTime(item.last_seen_at_utc || item.created_at_utc);
     const itHtml = buildItContactHtml(item);
-    const ackBy = mobileEsc(item.ack_by || "");
+    const ackBy = mobileEsc(resolveUserDisplayLabel(item, "ack_by"));
     const ackAt = formatRelativeTime(item.ack_at_utc);
     const ackNote = mobileEsc(item.ack_note || "");
     const desktopUrl = "/?alert_id=" + id;
@@ -821,31 +828,38 @@ function buildAlertDetailHtml(item) {
     const text = String(value || "").trim();
     if (text) lines.push("<div><dt>" + mobileEsc(label) + "</dt><dd>" + mobileEsc(text) + "</dd></div>");
   };
-  push("Kunde", item.customer_name);
-  push("Host", item.display_name || item.hostname);
-  push("Hostname", item.hostname);
-  push("Land", item.country_code);
-  push("Mountpoint", item.mountpoint);
-  push("IP", item.latest_report_ip);
-  if (item.is_acknowledged) {
-    push("Quittiert von", item.ack_by);
-    push("Quittiert am", formatIsoLabel(item.ack_at_utc));
-    push("Notiz", item.ack_note);
+
+  const displayHost = String(item.display_name || "").trim();
+  const hostname = String(item.hostname || "").trim();
+  if (hostname && hostname !== displayHost) {
+    push("Hostname", hostname);
   }
+  push("IP", item.latest_report_ip);
   if (item.delta_used_percent != null) {
     push("Delta", Number(item.delta_used_percent).toFixed(1) + "%");
   }
   push("Erstellt", formatIsoLabel(item.created_at_utc));
-  push("Zuletzt", formatIsoLabel(item.last_seen_at_utc));
+  push("Zuletzt gesehen", formatIsoLabel(item.last_seen_at_utc));
+
+  const hostUid = String(item.host_uid || "").trim();
+  if (hostUid && hostUid !== hostname && hostUid !== displayHost) {
+    push("Host-UID", hostUid);
+  }
+
   const flags = [];
-  if (item.is_muted) flags.push("Stumm");
-  if (item.is_heads_up_suppressed) flags.push("Heads-up aus");
+  if (item.is_muted) flags.push("Stummgeschaltet");
+  if (item.is_heads_up_suppressed) flags.push("Heads-up unterdrückt");
   if (item.is_closed) flags.push("Geschlossen");
-  push("Status", flags.join(", ") || "Offen");
+  if (flags.length) push("Hinweis", flags.join(", "));
+
+  const hostUrl = buildDesktopHostUrl(hostUid, hostname);
   return (
-    '<h4 class="alert-detail-title">Alert #' + mobileEsc(String(item.id || "")) + "</h4>"
-    + '<dl class="alert-detail-facts">' + lines.join("") + "</dl>"
-    + '<a class="btn-secondary alert-detail-link" href="/?alert_id=' + Number(item.id || 0) + '">Am Desktop öffnen</a>'
+    '<h4 class="alert-detail-title">Zusatzinfos · Alert #' + mobileEsc(String(item.id || "")) + "</h4>"
+    + (lines.length ? '<dl class="alert-detail-facts">' + lines.join("") + "</dl>" : '<p class="sheet-hint">Keine weiteren Details.</p>')
+    + '<div class="alert-detail-links">'
+    + '<a class="btn-secondary alert-detail-link" href="' + mobileEsc(hostUrl) + '">Host im Desktop</a>'
+    + '<a class="btn-secondary alert-detail-link" href="/?alert_id=' + Number(item.id || 0) + '">Alert im Desktop</a>'
+    + "</div>"
   );
 }
 
@@ -863,31 +877,39 @@ function updateAlertDetailPanel(index) {
   panel.innerHTML = buildAlertDetailHtml(item);
 }
 
+function syncFocusedCarouselCard(list) {
+  const cards = list.querySelectorAll(".alert-card");
+  if (!cards.length) return;
+  const listRect = list.getBoundingClientRect();
+  const listCenter = listRect.left + listRect.width / 2;
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  cards.forEach((card) => {
+    const rect = card.getBoundingClientRect();
+    const cardCenter = rect.left + rect.width / 2;
+    const distance = Math.abs(cardCenter - listCenter);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = Number(card.getAttribute("data-alert-index") || 0);
+    }
+  });
+  if (bestIndex !== state.focusedAlertIndex) {
+    updateAlertDetailPanel(bestIndex);
+  }
+}
+
 function wireAlertsCarousel(list) {
   if (list.dataset.carouselWired === "1") return;
   list.dataset.carouselWired = "1";
   let scrollTimer = null;
+  const settle = () => syncFocusedCarouselCard(list);
   list.addEventListener("scroll", () => {
     if (scrollTimer) window.clearTimeout(scrollTimer);
-    scrollTimer = window.setTimeout(() => {
-      const cards = list.querySelectorAll(".alert-card");
-      if (!cards.length) return;
-      const listRect = list.getBoundingClientRect();
-      const listCenter = listRect.left + listRect.width / 2;
-      let bestIndex = 0;
-      let bestDistance = Number.POSITIVE_INFINITY;
-      cards.forEach((card) => {
-        const rect = card.getBoundingClientRect();
-        const cardCenter = rect.left + rect.width / 2;
-        const distance = Math.abs(cardCenter - listCenter);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestIndex = Number(card.getAttribute("data-alert-index") || 0);
-        }
-      });
-      updateAlertDetailPanel(bestIndex);
-    }, 80);
+    scrollTimer = window.setTimeout(settle, 420);
   }, { passive: true });
+  if ("onscrollend" in window) {
+    list.addEventListener("scrollend", settle, { passive: true });
+  }
 }
 
 function resolveAlertFromCard(card) {
