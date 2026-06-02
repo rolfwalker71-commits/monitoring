@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.241**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.241**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.242**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.242**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.242 | 02.06.2026 | Header-Feinschliff: `Meldung X` und Test/Prod-Chip jetzt exakt auf einer gemeinsamen, vertikal zentrierten Zeile (`top: 50%` + `translateY(-50%)`). Zusätzlich die Logo-Karte als feste Kachel (56px Höhe) vertikal mittig verankert, damit oben/unten immer derselbe Abstand bleibt – unabhängig von der tatsächlichen Logo-Grafikgröße. |
 | 1.7.241 | 02.06.2026 | Header-Layout erneut verfeinert: Logo-Karte nun ganz rechts; `Meldung X` und Test/Prod-Chip links davon auf einer gemeinsamen Zeile und auf der Höhe der Host-Zeile ausgerichtet. Dafür wurde der Env-Chip bei vorhandenem Kundenlogo als rechtsseitiges Floating-Element gerendert, damit keine Überdeckung und keine Grid-Brüche entstehen. |
 | 1.7.240 | 02.06.2026 | Header-Logo-Feintuning: Kundenlogo-Karte klebt nicht mehr am unteren Rand (`top/bottom`-Inset), Hintergrund der Logo-Karte auf Weiß gesetzt (bessere Wirkung bei nicht freigestellten Logos), Logo größer skaliert, und Logo nach links versetzt, sodass rechts eine freie Spur für `Meldung`-Text und Status-Chip bleibt (keine Überdeckung mehr). |
 | 1.7.239 | 02.06.2026 | Follow-up-Fix für Header-Kundenlogo: Layout stabilisiert, damit die linke Kundenkarte nicht mehr durch die Logo-Spalte verschoben/aufgebrochen wird. Logo ist nun rechts in der Karte absolut verankert (über beide Textzeilen), Text reserviert nur Platz per `padding-right`, Kartenhöhe bleibt unverändert. |

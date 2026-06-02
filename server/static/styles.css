@@ -15005,7 +15005,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 .reports-column .section-head .report-customer-main-card .report-count-inline {
   position: absolute;
   right: calc(var(--customer-logo-right-gap) + var(--customer-logo-card-width) + var(--customer-meta-gap) + 72px);
-  top: 39px;
+  top: 50%;
   display: inline-block;
   text-align: right;
   margin: 0;
@@ -15017,7 +15017,8 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   font-weight: 800;
   color: #4f6f94;
   white-space: nowrap;
-  transform: none;
+  line-height: 24px;
+  transform: translateY(-50%);
   z-index: 2;
 }
 
@@ -15103,16 +15104,16 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   align-items: center;
   justify-content: center;
   width: var(--customer-logo-card-width);
-  min-height: 0;
+  height: 56px;
   border: 1px solid #cddbeb;
   border-radius: 8px;
   background: #ffffff;
   overflow: hidden;
   padding: 2px 4px;
   position: absolute;
-  top: 4px;
+  top: 50%;
   right: var(--customer-logo-right-gap);
-  bottom: 4px;
+  transform: translateY(-50%);
   z-index: 1;
 }
 
@@ -15161,8 +15162,9 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 .report-customer-chip-wrap .selected-host-meta-chip--env-floating {
   position: absolute;
   right: calc(var(--customer-logo-right-gap) + var(--customer-logo-card-width) + var(--customer-meta-gap));
-  top: 37px;
+  top: 50%;
   margin: 0;
+  transform: translateY(-50%);
   z-index: 2;
 }
 
