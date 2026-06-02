@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.247**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.247**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.248**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.248**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.248 | 02.06.2026 | Stark verdichtetes Layout für IT-Provider-Ansprechpartner (bei 1-3 Kontakten): kleinere Schrift, reduzierte Input-Höhen, engere Grid-/Zeilen-Abstände und kompaktere `+ Ansprechpartner`/`entfernen`-Buttons. Ziel: deutlich bessere Platznutzung, damit mehrere Ansprechpartner ohne Scroll-/Platzprobleme erfasst werden können. |
 | 1.7.247 | 02.06.2026 | Visueller Test für Hostkarte: falls vorhanden, wird das Kundenlogo zusätzlich als **sehr dezente Hintergrund-Watermark** in der linken Hostkarte gerendert (niedrige Opazität, ohne teure Filter). Text/Chips bleiben über `z-index` priorisiert; Dark-Theme-Intensität wurde separat reduziert. |
 | 1.7.246 | 02.06.2026 | UX-Update für IT-Provider-Ansprechpartner: statt immer 3 Blöcken wird jetzt dynamisch gearbeitet. Standardmäßig nur notwendige Zeilen sichtbar; per `+ Ansprechpartner hinzufügen` bis max. 3 erweiterbar, und zusätzliche Zeilen können wieder entfernt werden. Gilt sowohl im Dialog **Host bearbeiten** als auch im Bereich **Kundeninfos**. |
 | 1.7.245 | 02.06.2026 | IT-Provider erweitert auf bis zu **3 Ansprechpartner** pro Kunde (je Slot: `IT Provider Name`, `Ansprechpartner`, `Mail`, `Telefon`). Umsetzung inkl. DB-Migration (`customers`), API-Erweiterung (`/api/v1/customers`, `/api/v1/customers/{id}`, `/api/v1/host-settings`) sowie UI in **Host bearbeiten** und **Kundeninfos**. Alle Daten bleiben kundenspezifisch gespeichert und werden in der Hostansicht geladen/editiert. |

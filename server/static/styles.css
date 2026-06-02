@@ -949,8 +949,8 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .host-meta-customer-provider {
   display: grid;
-  gap: 8px;
-  padding: 10px;
+  gap: 5px;
+  padding: 8px;
   border: 1px dashed #c8d5e6;
   border-radius: 10px;
   background: #f8fbff;
@@ -965,8 +965,8 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .host-meta-provider-row {
   display: grid;
-  gap: 6px;
-  padding-top: 8px;
+  gap: 3px;
+  padding-top: 6px;
   border-top: 1px dashed #d5e0ef;
 }
 
@@ -984,25 +984,29 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .host-meta-provider-row-title {
-  margin: 0;
+  margin: 0 0 1px;
+  font-size: 11px;
+  line-height: 1.1;
   font-weight: 700;
 }
 
 .host-meta-customer-provider-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(220px, 1fr));
-  gap: 10px 12px;
+  gap: 5px 8px;
 }
 
 .host-meta-customer-provider-grid label {
   display: grid;
-  gap: 4px;
-  font-size: 12px;
+  gap: 2px;
+  font-size: 11px;
   color: #475569;
 }
 
 .host-meta-customer-provider-grid input {
-  height: 34px;
+  height: 28px;
+  padding: 0 7px;
+  font-size: 11px;
 }
 
 .host-meta-customer-provider-span {
@@ -1010,18 +1014,46 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .customer-provider-row {
-  margin-top: 10px;
-  padding-top: 8px;
+  margin-top: 6px;
+  padding-top: 5px;
   border-top: 1px dashed #d7e3f2;
 }
 
 .customer-provider-row:first-of-type {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .customer-provider-row-title {
-  margin: 0 0 4px;
+  margin: 0 0 2px;
+  font-size: 11px;
+  line-height: 1.1;
   font-weight: 700;
+}
+
+.customer-provider-row .alarm-settings-group {
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.customer-provider-row .alarm-settings-group .settings-label {
+  flex: 0 0 170px;
+  font-size: 11px;
+  line-height: 1.1;
+}
+
+.customer-provider-row .alarm-settings-group .settings-input {
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.host-meta-provider-toolbar .btn-secondary--compact,
+.host-meta-provider-row-actions .btn-secondary--compact,
+.customer-provider-row-actions .btn-secondary--compact,
+#customerAddProviderRowBtn.btn-secondary--compact {
+  min-height: 22px;
+  padding: 0 10px;
+  font-size: 11px;
 }
 
 .host-meta-logo-upload-row label {
