@@ -46,6 +46,41 @@ body {
   margin: 0 auto;
 }
 
+.mobile-floating-logo {
+  position: fixed;
+  z-index: 35;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  box-shadow: 0 10px 24px rgba(20, 45, 77, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  padding: 4px;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.mobile-floating-logo img {
+  display: block;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  pointer-events: none;
+}
+
+.mobile-floating-logo.is-dragging {
+  cursor: grabbing;
+  transform: scale(1.04);
+  box-shadow: 0 14px 30px rgba(20, 45, 77, 0.28);
+  z-index: 46;
+}
+
 .mobile-topbar {
   position: sticky;
   top: 0;
@@ -78,8 +113,9 @@ body {
 
 .mobile-brand h1 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.02rem;
   font-weight: 800;
+  line-height: 1.15;
 }
 
 .mobile-user-line {

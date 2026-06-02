@@ -1,7 +1,7 @@
 {
-  "name": "ANG Alerts",
-  "short_name": "Alerts",
-  "description": "Monitoring Alerts für unterwegs",
+  "name": "SYSTEM Infoboard",
+  "short_name": "Infoboard",
+  "description": "SYSTEM Infoboard – Monitoring Alerts für unterwegs",
   "start_url": "/mobile/alerts",
   "scope": "/mobile/",
   "display": "standalone",

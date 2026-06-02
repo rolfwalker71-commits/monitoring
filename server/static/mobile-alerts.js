@@ -79,6 +79,9 @@ const state = {
 };
 
 const SKELETON_CARD_COUNT = 4;
+const FLOATING_LOGO_STORAGE_KEY = "monitoring.mobile.floatingLogo";
+const FLOATING_LOGO_SIZE_PX = 52;
+const FLOATING_LOGO_MARGIN_PX = 12;
 
 let serviceWorkerRegistrationPromise = null;
 let toastTimer = null;
@@ -1095,6 +1098,117 @@ async function submitLogin() {
   }
 }
 
+function readFloatingLogoPosition() {
+  try {
+    const raw = window.localStorage.getItem(FLOATING_LOGO_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const left = Number(parsed?.left);
+    const top = Number(parsed?.top);
+    if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
+    return { left, top };
+  } catch (_err) {
+    return null;
+  }
+}
+
+function saveFloatingLogoPosition(left, top) {
+  try {
+    window.localStorage.setItem(
+      FLOATING_LOGO_STORAGE_KEY,
+      JSON.stringify({ left: Math.round(left), top: Math.round(top) })
+    );
+  } catch (_err) {
+    // Ignore storage failures.
+  }
+}
+
+function defaultFloatingLogoPosition() {
+  const safeBottom = parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue("--safe-bottom") || "0"
+  ) || 0;
+  return {
+    left: window.innerWidth - FLOATING_LOGO_SIZE_PX - FLOATING_LOGO_MARGIN_PX,
+    top: window.innerHeight - FLOATING_LOGO_SIZE_PX - FLOATING_LOGO_MARGIN_PX - safeBottom,
+  };
+}
+
+function clampFloatingLogoPosition(left, top) {
+  const maxLeft = Math.max(
+    FLOATING_LOGO_MARGIN_PX,
+    window.innerWidth - FLOATING_LOGO_SIZE_PX - FLOATING_LOGO_MARGIN_PX
+  );
+  const maxTop = Math.max(
+    FLOATING_LOGO_MARGIN_PX,
+    window.innerHeight - FLOATING_LOGO_SIZE_PX - FLOATING_LOGO_MARGIN_PX
+  );
+  return {
+    left: Math.min(maxLeft, Math.max(FLOATING_LOGO_MARGIN_PX, left)),
+    top: Math.min(maxTop, Math.max(FLOATING_LOGO_MARGIN_PX, top)),
+  };
+}
+
+function applyFloatingLogoPosition(el, left, top, persist) {
+  const clamped = clampFloatingLogoPosition(left, top);
+  el.style.left = clamped.left + "px";
+  el.style.top = clamped.top + "px";
+  el.style.right = "auto";
+  el.style.bottom = "auto";
+  if (persist) {
+    saveFloatingLogoPosition(clamped.left, clamped.top);
+  }
+  return clamped;
+}
+
+function wireFloatingLogo() {
+  const el = document.getElementById("mobileFloatingLogo");
+  if (!el) return;
+
+  const saved = readFloatingLogoPosition();
+  const initial = saved || defaultFloatingLogoPosition();
+  applyFloatingLogoPosition(el, initial.left, initial.top, false);
+
+  let dragActive = false;
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
+
+  const endDrag = (event) => {
+    if (!dragActive) return;
+    dragActive = false;
+    el.classList.remove("is-dragging");
+    if (event?.pointerId != null && el.hasPointerCapture(event.pointerId)) {
+      el.releasePointerCapture(event.pointerId);
+    }
+    const rect = el.getBoundingClientRect();
+    applyFloatingLogoPosition(el, rect.left, rect.top, true);
+  };
+
+  el.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    dragActive = true;
+    el.classList.add("is-dragging");
+    const rect = el.getBoundingClientRect();
+    dragOffsetX = event.clientX - rect.left;
+    dragOffsetY = event.clientY - rect.top;
+    el.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+
+  el.addEventListener("pointermove", (event) => {
+    if (!dragActive) return;
+    applyFloatingLogoPosition(el, event.clientX - dragOffsetX, event.clientY - dragOffsetY, false);
+    event.preventDefault();
+  });
+
+  el.addEventListener("pointerup", endDrag);
+  el.addEventListener("pointercancel", endDrag);
+
+  window.addEventListener("resize", () => {
+    const rect = el.getBoundingClientRect();
+    applyFloatingLogoPosition(el, rect.left, rect.top, true);
+  });
+}
+
 function wirePullToRefresh() {
   let touchStartY = 0;
   document.addEventListener(
@@ -1210,6 +1324,7 @@ function wire() {
   }
 
   wirePullToRefresh();
+  wireFloatingLogo();
   syncSeverityChips();
 }
 

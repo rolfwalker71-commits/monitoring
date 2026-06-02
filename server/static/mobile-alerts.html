@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>ANG Alerts</title>
+    <title>SYSTEM Infoboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
@@ -12,13 +12,13 @@
     <link rel="apple-touch-icon" href="/icons/logo.png" />
     <meta name="theme-color" content="#0f2a3f" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="ANG Alerts" />
+    <meta name="apple-mobile-web-app-title" content="SYSTEM Infoboard" />
   </head>
   <body>
     <div id="mobileLoginOverlay" class="mobile-login-overlay hidden">
       <div class="mobile-login-card">
         <img src="/icons/logo.png" alt="" class="mobile-login-logo" width="56" height="56" />
-        <p class="eyebrow">ANG System Health</p>
+        <p class="eyebrow">SYSTEM Infoboard</p>
         <h2>Anmeldung</h2>
         <p class="mobile-login-hint">Melde dich an, um Alerts zu sehen und zu verwalten.</p>
         <p id="mobileLoginBanner" class="mobile-banner hidden" role="alert"></p>
@@ -40,7 +40,7 @@
         <div class="mobile-topbar-row">
           <img src="/icons/logo.png" alt="" class="mobile-logo" width="40" height="40" />
           <div class="mobile-brand">
-            <h1>ANG Alerts</h1>
+            <h1>SYSTEM Infoboard</h1>
             <p id="mobileUserLine" class="mobile-user-line"></p>
           </div>
           <div class="mobile-icon-actions">
@@ -124,6 +124,15 @@
     </div>
 
     <div id="toast" class="toast hidden" role="status"></div>
+
+    <div
+      id="mobileFloatingLogo"
+      class="mobile-floating-logo"
+      title="Logo verschieben: gedrückt halten und ziehen"
+      aria-label="ANG Logo"
+    >
+      <img src="/icons/logo.png" alt="" width="44" height="44" draggable="false" />
+    </div>
 
     <script src="/mobile-alerts.js?v=__ASSET_VERSION__"></script>
   </body>
