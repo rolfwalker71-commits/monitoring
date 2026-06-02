@@ -9766,19 +9766,16 @@ function renderSelectedHostCustomerChip(host) {
   }
   const customerName = asText(host.customer_name || "", "").trim();
   const customerProject = asText(host.customer_maringo_project_number || "", "").trim();
-  if (!customerName) {
-    return "";
-  }
   const hostLabelRaw = asText(host.display_name || host.hostname || "Host", "Host").trim() || "Host";
-  const customerLabel = customerProject
-    ? `${customerName} · ${customerProject}`
-    : customerName;
-  const customerTitle = customerProject
+  const customerLabel = customerName
+    ? (customerProject ? `${customerName} · ${customerProject}` : customerName)
+    : "Kein Kunde";
+  const customerTitle = customerName && customerProject
     ? `Kunde · Maringo ${customerProject}`
-    : "Kunde";
+    : (customerName ? "Kunde" : "Kein Kunde hinterlegt");
   return `<span class="selected-host-meta-card" title="${escapeHtml(customerTitle)}">
     <strong class="selected-host-meta-card-main">${escapeHtml(customerLabel)}</strong>
-    <span class="selected-host-meta-card-sub">Host: ${escapeHtml(hostLabelRaw)}</span>
+    <span class="selected-host-meta-card-sub">Name: ${escapeHtml(hostLabelRaw)}</span>
   </span>`;
 }
 

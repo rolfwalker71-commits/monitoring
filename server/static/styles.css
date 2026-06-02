@@ -14896,7 +14896,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 .reports-column .section-head .report-customer-main-card .report-count-inline {
   position: absolute;
   right: 9px;
-  bottom: 5px;
+  bottom: 24px;
   display: inline-block;
   text-align: right;
   margin: 0;
@@ -14943,7 +14943,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   display: block;
   font-size: 34px;
   line-height: 1.02;
-  margin-bottom: 8px;
+  margin-bottom: 2px;
   color: #163b6b;
   font-weight: 900;
   letter-spacing: -0.02em;
@@ -14967,12 +14967,12 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .report-customer-chip-wrap .selected-host-meta-card--placeholder {
-  min-height: 62px;
+  min-height: 54px;
   align-items: center;
 }
 
 .report-customer-chip-wrap .selected-host-meta-card-placeholder-text {
-  font-size: 30px;
+  font-size: 36px;
   line-height: 1.05;
   color: #58759b;
   font-weight: 800;
