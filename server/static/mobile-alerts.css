@@ -314,14 +314,14 @@ body {
 }
 
 .alert-ack-strip {
-  margin: 2px 0 3px;
-  padding: 5px 8px;
+  margin: 3px 0 4px;
+  padding: 6px 9px;
   border-radius: 8px;
   background: color-mix(in srgb, var(--ok) 14%, transparent);
   color: var(--ok);
-  font-size: 0.72rem;
+  font-size: 0.88rem;
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.3;
 }
 
 .alert-status-group {
@@ -390,10 +390,30 @@ body {
 
 .alert-host-name {
   margin: 0;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--muted);
-  line-height: 1.2;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.25;
+}
+
+.alert-card-body {
+  margin-top: 2px;
+}
+
+.alert-card-body .alert-meta,
+.alert-card-body .alert-usage-line {
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.alert-card-body .alert-ack-strip {
+  font-size: 0.88rem;
+}
+
+.alert-card-body .btn-primary,
+.alert-card-body .btn-secondary,
+.alert-card-body .btn-danger {
+  font-size: 0.92rem;
 }
 
 .alert-customer-row.is-tappable,
@@ -527,10 +547,10 @@ body {
 }
 
 .alert-meta {
-  font-size: 0.72rem;
+  font-size: 0.9rem;
   color: var(--muted);
-  margin: 1px 0;
-  line-height: 1.25;
+  margin: 2px 0;
+  line-height: 1.35;
 }
 
 .alert-meta a {
@@ -539,19 +559,47 @@ body {
   font-weight: 600;
 }
 
+.usage-bar-block {
+  margin: 4px 0 6px;
+}
+
+.usage-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .usage-bar {
-  height: 6px;
+  flex: 1;
+  height: 10px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--line) 60%, transparent);
   overflow: hidden;
-  margin: 3px 0;
 }
 
 .usage-bar-fill {
   display: block;
   height: 100%;
+  width: 0%;
   border-radius: 999px;
-  transition: width 0.2s ease;
+  transition: width 0.05s linear;
+}
+
+.usage-bar-counter {
+  min-width: 3.2rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  text-align: right;
+}
+
+.alert-card.critical .usage-bar-counter {
+  color: var(--critical);
+}
+
+.alert-card.warning .usage-bar-counter {
+  color: var(--warning);
 }
 
 .alert-card.critical .usage-bar-fill {

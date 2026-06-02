@@ -83,6 +83,8 @@ const SKELETON_CARD_COUNT = 4;
 let serviceWorkerRegistrationPromise = null;
 let toastTimer = null;
 let customerLogoObserver = null;
+let usageBarAnimFrame = null;
+const USAGE_BAR_ANIM_MS = 720;
 
 function parseHighlightAlertId() {
   const raw = new URLSearchParams(window.location.search).get("alert_id");
@@ -672,6 +674,56 @@ function usagePercentForBar(item) {
   return Math.min(100, Math.max(0, Number(item.used_percent || 0)));
 }
 
+function stopUsageBarAnimation() {
+  if (usageBarAnimFrame) {
+    cancelAnimationFrame(usageBarAnimFrame);
+    usageBarAnimFrame = null;
+  }
+}
+
+function setCardUsageBarInstant(card, percent) {
+  const fill = card?.querySelector(".usage-bar-fill");
+  const counter = card?.querySelector(".usage-bar-counter");
+  const value = Math.min(100, Math.max(0, Number(percent || 0)));
+  if (fill) fill.style.width = value.toFixed(1) + "%";
+  if (counter) counter.textContent = value.toFixed(1) + "%";
+}
+
+function animateUsageBarForCard(card) {
+  if (!card) return;
+  const fill = card.querySelector(".usage-bar-fill");
+  const counter = card.querySelector(".usage-bar-counter");
+  if (!fill || !counter) return;
+
+  const target = Math.min(100, Math.max(0, Number(fill.getAttribute("data-target-width") || 0)));
+  stopUsageBarAnimation();
+  fill.style.width = "0%";
+  counter.textContent = "0%";
+
+  const start = performance.now();
+  const tick = (now) => {
+    const progress = Math.min(1, (now - start) / USAGE_BAR_ANIM_MS);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = target * eased;
+    fill.style.width = current.toFixed(1) + "%";
+    counter.textContent = current.toFixed(1) + "%";
+    if (progress < 1) {
+      usageBarAnimFrame = requestAnimationFrame(tick);
+    } else {
+      usageBarAnimFrame = null;
+    }
+  };
+  usageBarAnimFrame = requestAnimationFrame(tick);
+}
+
+function resetInactiveCardUsageBars(list, activeCard) {
+  list.querySelectorAll(".alert-card").forEach((card) => {
+    if (card === activeCard) return;
+    const target = Number(card.querySelector(".usage-bar-fill")?.getAttribute("data-target-width") || 0);
+    setCardUsageBarInstant(card, target);
+  });
+}
+
 function buildUsageLine(item) {
   const used = Number(item.used_percent || 0).toFixed(1);
   const current = item.current_used_percent;
@@ -706,8 +758,13 @@ function highlightTargetCard() {
   if (!card) return;
   card.classList.add("alert-card-highlight");
   card.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  const list = document.getElementById("alertsList");
   const index = Number(card.getAttribute("data-alert-index") || 0);
   updateAlertDetailPanel(index);
+  if (list) {
+    resetInactiveCardUsageBars(list, card);
+    animateUsageBarForCard(card);
+  }
   window.setTimeout(() => card.classList.remove("alert-card-highlight"), 4000);
 }
 
@@ -733,7 +790,8 @@ function renderAlerts(items) {
     const isAck = item.is_acknowledged === true;
     const isClosed = item.is_closed === true;
     const highlightClass = id === state.highlightAlertId ? " alert-card-highlight" : "";
-    const barWidth = usagePercentForBar(item).toFixed(1);
+    const barPercent = usagePercentForBar(item);
+    const barWidth = barPercent.toFixed(1);
     const timeLabel = formatRelativeTime(item.last_seen_at_utc || item.created_at_utc);
     const itHtml = buildItContactHtml(item);
     const ackBy = mobileEsc(resolveUserDisplayLabel(item, "ack_by"));
@@ -777,9 +835,14 @@ function renderAlerts(items) {
       '    <span class="alert-time">' + mobileEsc(timeLabel || "—") + "</span>" +
       "  </div>" +
       "  " + identityHtml +
+      '<div class="alert-card-body">' +
       ackStrip +
-      '  <p class="alert-meta">' + buildUsageLine(item) + "</p>" +
-      '  <div class="usage-bar"><span class="usage-bar-fill" style="width:' + barWidth + '%"></span></div>' +
+      '  <p class="alert-meta alert-usage-line">' + buildUsageLine(item) + "</p>" +
+      '  <div class="usage-bar-block">' +
+      '    <div class="usage-bar-row">' +
+      '      <div class="usage-bar"><span class="usage-bar-fill" data-target-width="' + barWidth + '"></span></div>' +
+      '      <strong class="usage-bar-counter">0%</strong>' +
+      "    </div></div>" +
       '  <p class="alert-meta">' + hostname + (itHtml ? " · IT: " + itHtml : "") + "</p>" +
       '  <div class="alert-card-actions">' + ackBtn +
       '    <button type="button" class="btn-secondary btn-expand" data-action="toggle-more">Mehr</button>' +
@@ -787,16 +850,15 @@ function renderAlerts(items) {
       '  <div class="alert-more">' + moreHtml +
       '    <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
       '      <button type="button" class="btn-danger" data-action="close">Schliessen</button>' +
-      "    </div></div>" +
+      "    </div></div></div>" +
       "</article>"
     );
   }).join("");
 
   wireCustomerLogos(list);
-  highlightTargetCard();
   wireAlertsCarousel(list);
-  const focusIndex = state.lastAlerts.findIndex((entry) => Number(entry?.id || 0) === state.highlightAlertId);
-  updateAlertDetailPanel(focusIndex >= 0 ? focusIndex : 0);
+  highlightTargetCard();
+  syncFocusedCarouselCard(list);
 }
 
 function renderCountryFilterChips() {
@@ -886,6 +948,7 @@ function syncFocusedCarouselCard(list) {
   const listRect = list.getBoundingClientRect();
   const listCenter = listRect.left + listRect.width / 2;
   let bestIndex = 0;
+  let bestCard = null;
   let bestDistance = Number.POSITIVE_INFINITY;
   cards.forEach((card) => {
     const rect = card.getBoundingClientRect();
@@ -894,11 +957,14 @@ function syncFocusedCarouselCard(list) {
     if (distance < bestDistance) {
       bestDistance = distance;
       bestIndex = Number(card.getAttribute("data-alert-index") || 0);
+      bestCard = card;
     }
   });
   if (bestIndex !== state.focusedAlertIndex) {
     updateAlertDetailPanel(bestIndex);
   }
+  resetInactiveCardUsageBars(list, bestCard);
+  animateUsageBarForCard(bestCard);
 }
 
 function wireAlertsCarousel(list) {
