@@ -575,6 +575,14 @@ def init_db() -> None:
                 it_provider_contact TEXT NOT NULL DEFAULT '',
                 it_provider_email TEXT NOT NULL DEFAULT '',
                 it_provider_phone TEXT NOT NULL DEFAULT '',
+                it_provider_name_2 TEXT NOT NULL DEFAULT '',
+                it_provider_contact_2 TEXT NOT NULL DEFAULT '',
+                it_provider_email_2 TEXT NOT NULL DEFAULT '',
+                it_provider_phone_2 TEXT NOT NULL DEFAULT '',
+                it_provider_name_3 TEXT NOT NULL DEFAULT '',
+                it_provider_contact_3 TEXT NOT NULL DEFAULT '',
+                it_provider_email_3 TEXT NOT NULL DEFAULT '',
+                it_provider_phone_3 TEXT NOT NULL DEFAULT '',
                 created_at_utc TEXT NOT NULL,
                 updated_at_utc TEXT NOT NULL
             )
@@ -594,6 +602,22 @@ def init_db() -> None:
             conn.execute("ALTER TABLE customers ADD COLUMN it_provider_email TEXT NOT NULL DEFAULT ''")
         if "it_provider_phone" not in existing_customer_columns:
             conn.execute("ALTER TABLE customers ADD COLUMN it_provider_phone TEXT NOT NULL DEFAULT ''")
+        if "it_provider_name_2" not in existing_customer_columns:
+            conn.execute("ALTER TABLE customers ADD COLUMN it_provider_name_2 TEXT NOT NULL DEFAULT ''")
+        if "it_provider_contact_2" not in existing_customer_columns:
+            conn.execute("ALTER TABLE customers ADD COLUMN it_provider_contact_2 TEXT NOT NULL DEFAULT ''")
+        if "it_provider_email_2" not in existing_customer_columns:
+            conn.execute("ALTER TABLE customers ADD COLUMN it_provider_email_2 TEXT NOT NULL DEFAULT ''")
+        if "it_provider_phone_2" not in existing_customer_columns:
+            conn.execute("ALTER TABLE customers ADD COLUMN it_provider_phone_2 TEXT NOT NULL DEFAULT ''")
+        if "it_provider_name_3" not in existing_customer_columns:
+            conn.execute("ALTER TABLE customers ADD COLUMN it_provider_name_3 TEXT NOT NULL DEFAULT ''")
+        if "it_provider_contact_3" not in existing_customer_columns:
+            conn.execute("ALTER TABLE customers ADD COLUMN it_provider_contact_3 TEXT NOT NULL DEFAULT ''")
+        if "it_provider_email_3" not in existing_customer_columns:
+            conn.execute("ALTER TABLE customers ADD COLUMN it_provider_email_3 TEXT NOT NULL DEFAULT ''")
+        if "it_provider_phone_3" not in existing_customer_columns:
+            conn.execute("ALTER TABLE customers ADD COLUMN it_provider_phone_3 TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_name_ci
@@ -4215,6 +4239,29 @@ def save_customer_logo(conn: sqlite3.Connection, customer_id: object, file_name:
     return updated_customer
 
 
+def _build_it_provider_contacts_from_row(row: tuple) -> list[dict]:
+    return [
+        {
+            "it_provider_name": str(row[4] or ""),
+            "it_provider_contact": str(row[5] or ""),
+            "it_provider_email": str(row[6] or ""),
+            "it_provider_phone": str(row[7] or ""),
+        },
+        {
+            "it_provider_name": str(row[8] or ""),
+            "it_provider_contact": str(row[9] or ""),
+            "it_provider_email": str(row[10] or ""),
+            "it_provider_phone": str(row[11] or ""),
+        },
+        {
+            "it_provider_name": str(row[12] or ""),
+            "it_provider_contact": str(row[13] or ""),
+            "it_provider_email": str(row[14] or ""),
+            "it_provider_phone": str(row[15] or ""),
+        },
+    ]
+
+
 def list_customers(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         """
@@ -4226,6 +4273,14 @@ def list_customers(conn: sqlite3.Connection) -> list[dict]:
                COALESCE(it_provider_contact, ''),
                COALESCE(it_provider_email, ''),
                COALESCE(it_provider_phone, ''),
+             COALESCE(it_provider_name_2, ''),
+             COALESCE(it_provider_contact_2, ''),
+             COALESCE(it_provider_email_2, ''),
+             COALESCE(it_provider_phone_2, ''),
+             COALESCE(it_provider_name_3, ''),
+             COALESCE(it_provider_contact_3, ''),
+             COALESCE(it_provider_email_3, ''),
+             COALESCE(it_provider_phone_3, ''),
                created_at_utc,
                updated_at_utc
         FROM customers
@@ -4238,13 +4293,22 @@ def list_customers(conn: sqlite3.Connection) -> list[dict]:
             "customer_name": str(row[1] or ""),
             "maringo_project_number": str(row[2] or ""),
             "logo_filename": str(row[3] or ""),
-            "logo_url": build_customer_logo_url(row[0], row[3], row[9]),
+            "logo_url": build_customer_logo_url(row[0], row[3], row[17]),
             "it_provider_name": str(row[4] or ""),
             "it_provider_contact": str(row[5] or ""),
             "it_provider_email": str(row[6] or ""),
             "it_provider_phone": str(row[7] or ""),
-            "created_at_utc": str(row[8] or ""),
-            "updated_at_utc": str(row[9] or ""),
+            "it_provider_name_2": str(row[8] or ""),
+            "it_provider_contact_2": str(row[9] or ""),
+            "it_provider_email_2": str(row[10] or ""),
+            "it_provider_phone_2": str(row[11] or ""),
+            "it_provider_name_3": str(row[12] or ""),
+            "it_provider_contact_3": str(row[13] or ""),
+            "it_provider_email_3": str(row[14] or ""),
+            "it_provider_phone_3": str(row[15] or ""),
+            "it_provider_contacts": _build_it_provider_contacts_from_row(row),
+            "created_at_utc": str(row[16] or ""),
+            "updated_at_utc": str(row[17] or ""),
         }
         for row in rows
     ]
@@ -4267,6 +4331,14 @@ def get_customer_by_id(conn: sqlite3.Connection, customer_id: object) -> dict | 
                COALESCE(it_provider_contact, ''),
                COALESCE(it_provider_email, ''),
                COALESCE(it_provider_phone, ''),
+             COALESCE(it_provider_name_2, ''),
+             COALESCE(it_provider_contact_2, ''),
+             COALESCE(it_provider_email_2, ''),
+             COALESCE(it_provider_phone_2, ''),
+             COALESCE(it_provider_name_3, ''),
+             COALESCE(it_provider_contact_3, ''),
+             COALESCE(it_provider_email_3, ''),
+             COALESCE(it_provider_phone_3, ''),
                created_at_utc,
                updated_at_utc
         FROM customers
@@ -4281,13 +4353,22 @@ def get_customer_by_id(conn: sqlite3.Connection, customer_id: object) -> dict | 
         "customer_name": str(row[1] or ""),
         "maringo_project_number": str(row[2] or ""),
         "logo_filename": str(row[3] or ""),
-        "logo_url": build_customer_logo_url(row[0], row[3], row[9]),
+        "logo_url": build_customer_logo_url(row[0], row[3], row[17]),
         "it_provider_name": str(row[4] or ""),
         "it_provider_contact": str(row[5] or ""),
         "it_provider_email": str(row[6] or ""),
         "it_provider_phone": str(row[7] or ""),
-        "created_at_utc": str(row[8] or ""),
-        "updated_at_utc": str(row[9] or ""),
+        "it_provider_name_2": str(row[8] or ""),
+        "it_provider_contact_2": str(row[9] or ""),
+        "it_provider_email_2": str(row[10] or ""),
+        "it_provider_phone_2": str(row[11] or ""),
+        "it_provider_name_3": str(row[12] or ""),
+        "it_provider_contact_3": str(row[13] or ""),
+        "it_provider_email_3": str(row[14] or ""),
+        "it_provider_phone_3": str(row[15] or ""),
+        "it_provider_contacts": _build_it_provider_contacts_from_row(row),
+        "created_at_utc": str(row[16] or ""),
+        "updated_at_utc": str(row[17] or ""),
     }
 
 
@@ -4299,6 +4380,14 @@ def upsert_customer(
     it_provider_contact: object = "",
     it_provider_email: object = "",
     it_provider_phone: object = "",
+    it_provider_name_2: object = "",
+    it_provider_contact_2: object = "",
+    it_provider_email_2: object = "",
+    it_provider_phone_2: object = "",
+    it_provider_name_3: object = "",
+    it_provider_contact_3: object = "",
+    it_provider_email_3: object = "",
+    it_provider_phone_3: object = "",
 ) -> dict:
     name = normalize_customer_name(customer_name)
     project_no = normalize_maringo_project_number(maringo_project_number)
@@ -4306,6 +4395,14 @@ def upsert_customer(
     provider_contact = normalize_it_provider_contact(it_provider_contact)
     provider_email = normalize_it_provider_email(it_provider_email)
     provider_phone = normalize_it_provider_phone(it_provider_phone)
+    provider_name_2 = normalize_it_provider_name(it_provider_name_2)
+    provider_contact_2 = normalize_it_provider_contact(it_provider_contact_2)
+    provider_email_2 = normalize_it_provider_email(it_provider_email_2)
+    provider_phone_2 = normalize_it_provider_phone(it_provider_phone_2)
+    provider_name_3 = normalize_it_provider_name(it_provider_name_3)
+    provider_contact_3 = normalize_it_provider_contact(it_provider_contact_3)
+    provider_email_3 = normalize_it_provider_email(it_provider_email_3)
+    provider_phone_3 = normalize_it_provider_phone(it_provider_phone_3)
     if not name:
         raise ValueError("customer_name missing")
 
@@ -4324,7 +4421,7 @@ def upsert_customer(
         customer_id = int(existing[0])
         if (
             project_no and project_no != str(existing[2] or "")
-        ) or provider_name or provider_contact or provider_email or provider_phone:
+        ) or provider_name or provider_contact or provider_email or provider_phone or provider_name_2 or provider_contact_2 or provider_email_2 or provider_phone_2 or provider_name_3 or provider_contact_3 or provider_email_3 or provider_phone_3:
             conn.execute(
                 """
                 UPDATE customers
@@ -4333,10 +4430,34 @@ def upsert_customer(
                     it_provider_contact = ?,
                     it_provider_email = ?,
                     it_provider_phone = ?,
+                    it_provider_name_2 = ?,
+                    it_provider_contact_2 = ?,
+                    it_provider_email_2 = ?,
+                    it_provider_phone_2 = ?,
+                    it_provider_name_3 = ?,
+                    it_provider_contact_3 = ?,
+                    it_provider_email_3 = ?,
+                    it_provider_phone_3 = ?,
                     updated_at_utc = ?
                 WHERE id = ?
                 """,
-                (project_no, provider_name, provider_contact, provider_email, provider_phone, now_utc, customer_id),
+                (
+                    project_no,
+                    provider_name,
+                    provider_contact,
+                    provider_email,
+                    provider_phone,
+                    provider_name_2,
+                    provider_contact_2,
+                    provider_email_2,
+                    provider_phone_2,
+                    provider_name_3,
+                    provider_contact_3,
+                    provider_email_3,
+                    provider_phone_3,
+                    now_utc,
+                    customer_id,
+                ),
             )
     else:
         conn.execute(
@@ -4348,12 +4469,37 @@ def upsert_customer(
                 it_provider_contact,
                 it_provider_email,
                 it_provider_phone,
+                it_provider_name_2,
+                it_provider_contact_2,
+                it_provider_email_2,
+                it_provider_phone_2,
+                it_provider_name_3,
+                it_provider_contact_3,
+                it_provider_email_3,
+                it_provider_phone_3,
                 created_at_utc,
                 updated_at_utc
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (name, project_no, provider_name, provider_contact, provider_email, provider_phone, now_utc, now_utc),
+            (
+                name,
+                project_no,
+                provider_name,
+                provider_contact,
+                provider_email,
+                provider_phone,
+                provider_name_2,
+                provider_contact_2,
+                provider_email_2,
+                provider_phone_2,
+                provider_name_3,
+                provider_contact_3,
+                provider_email_3,
+                provider_phone_3,
+                now_utc,
+                now_utc,
+            ),
         )
         customer_id = int(conn.execute("SELECT last_insert_rowid()").fetchone()[0])
 
@@ -4372,6 +4518,14 @@ def update_customer_by_id(
     it_provider_contact: object,
     it_provider_email: object,
     it_provider_phone: object,
+    it_provider_name_2: object,
+    it_provider_contact_2: object,
+    it_provider_email_2: object,
+    it_provider_phone_2: object,
+    it_provider_name_3: object,
+    it_provider_contact_3: object,
+    it_provider_email_3: object,
+    it_provider_phone_3: object,
 ) -> dict:
     try:
         cid = int(str(customer_id or 0))
@@ -4387,6 +4541,14 @@ def update_customer_by_id(
     provider_contact = normalize_it_provider_contact(it_provider_contact)
     provider_email = normalize_it_provider_email(it_provider_email)
     provider_phone = normalize_it_provider_phone(it_provider_phone)
+    provider_name_2 = normalize_it_provider_name(it_provider_name_2)
+    provider_contact_2 = normalize_it_provider_contact(it_provider_contact_2)
+    provider_email_2 = normalize_it_provider_email(it_provider_email_2)
+    provider_phone_2 = normalize_it_provider_phone(it_provider_phone_2)
+    provider_name_3 = normalize_it_provider_name(it_provider_name_3)
+    provider_contact_3 = normalize_it_provider_contact(it_provider_contact_3)
+    provider_email_3 = normalize_it_provider_email(it_provider_email_3)
+    provider_phone_3 = normalize_it_provider_phone(it_provider_phone_3)
     clash = conn.execute(
         "SELECT id FROM customers WHERE LOWER(customer_name) = LOWER(?) AND id != ?",
         (name, cid),
@@ -4403,10 +4565,35 @@ def update_customer_by_id(
             it_provider_contact = ?,
             it_provider_email = ?,
             it_provider_phone = ?,
+            it_provider_name_2 = ?,
+            it_provider_contact_2 = ?,
+            it_provider_email_2 = ?,
+            it_provider_phone_2 = ?,
+            it_provider_name_3 = ?,
+            it_provider_contact_3 = ?,
+            it_provider_email_3 = ?,
+            it_provider_phone_3 = ?,
             updated_at_utc = ?
         WHERE id = ?
         """,
-        (name, project_no, provider_name, provider_contact, provider_email, provider_phone, now_utc, cid),
+        (
+            name,
+            project_no,
+            provider_name,
+            provider_contact,
+            provider_email,
+            provider_phone,
+            provider_name_2,
+            provider_contact_2,
+            provider_email_2,
+            provider_phone_2,
+            provider_name_3,
+            provider_contact_3,
+            provider_email_3,
+            provider_phone_3,
+            now_utc,
+            cid,
+        ),
     )
     if conn.execute("SELECT changes()").fetchone()[0] == 0:
         raise ValueError("Kunde nicht gefunden.")
@@ -13235,7 +13422,15 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
                     COALESCE(c.it_provider_name, ''),
                     COALESCE(c.it_provider_contact, ''),
                     COALESCE(c.it_provider_email, ''),
-                    COALESCE(c.it_provider_phone, '')
+                    COALESCE(c.it_provider_phone, ''),
+                    COALESCE(c.it_provider_name_2, ''),
+                    COALESCE(c.it_provider_contact_2, ''),
+                    COALESCE(c.it_provider_email_2, ''),
+                    COALESCE(c.it_provider_phone_2, ''),
+                    COALESCE(c.it_provider_name_3, ''),
+                    COALESCE(c.it_provider_contact_3, ''),
+                    COALESCE(c.it_provider_email_3, ''),
+                    COALESCE(c.it_provider_phone_3, '')
                 FROM host_settings h
                 LEFT JOIN customers c ON c.id = h.customer_id
                 WHERE h.hostname = ?
@@ -13260,6 +13455,19 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
             "customer_it_provider_contact": "",
             "customer_it_provider_email": "",
             "customer_it_provider_phone": "",
+            "customer_it_provider_name_2": "",
+            "customer_it_provider_contact_2": "",
+            "customer_it_provider_email_2": "",
+            "customer_it_provider_phone_2": "",
+            "customer_it_provider_name_3": "",
+            "customer_it_provider_contact_3": "",
+            "customer_it_provider_email_3": "",
+            "customer_it_provider_phone_3": "",
+            "customer_it_provider_contacts": [
+                {"it_provider_name": "", "it_provider_contact": "", "it_provider_email": "", "it_provider_phone": ""},
+                {"it_provider_name": "", "it_provider_contact": "", "it_provider_email": "", "it_provider_phone": ""},
+                {"it_provider_name": "", "it_provider_contact": "", "it_provider_email": "", "it_provider_phone": ""},
+            ],
         }
     else:
         customer_alert_min_severity = str(row[6] or "critical").strip().lower()
@@ -13292,7 +13500,35 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
             "customer_it_provider_contact": str(row[14] or "").strip(),
             "customer_it_provider_email": str(row[15] or "").strip(),
             "customer_it_provider_phone": str(row[16] or "").strip(),
+            "customer_it_provider_name_2": str(row[17] or "").strip(),
+            "customer_it_provider_contact_2": str(row[18] or "").strip(),
+            "customer_it_provider_email_2": str(row[19] or "").strip(),
+            "customer_it_provider_phone_2": str(row[20] or "").strip(),
+            "customer_it_provider_name_3": str(row[21] or "").strip(),
+            "customer_it_provider_contact_3": str(row[22] or "").strip(),
+            "customer_it_provider_email_3": str(row[23] or "").strip(),
+            "customer_it_provider_phone_3": str(row[24] or "").strip(),
         }
+        result["customer_it_provider_contacts"] = [
+            {
+                "it_provider_name": result["customer_it_provider_name"],
+                "it_provider_contact": result["customer_it_provider_contact"],
+                "it_provider_email": result["customer_it_provider_email"],
+                "it_provider_phone": result["customer_it_provider_phone"],
+            },
+            {
+                "it_provider_name": result["customer_it_provider_name_2"],
+                "it_provider_contact": result["customer_it_provider_contact_2"],
+                "it_provider_email": result["customer_it_provider_email_2"],
+                "it_provider_phone": result["customer_it_provider_phone_2"],
+            },
+            {
+                "it_provider_name": result["customer_it_provider_name_3"],
+                "it_provider_contact": result["customer_it_provider_contact_3"],
+                "it_provider_email": result["customer_it_provider_email_3"],
+                "it_provider_phone": result["customer_it_provider_phone_3"],
+            },
+        ]
 
     safe_host_uid = str(host_uid or "").strip()
     if not safe_host_uid:
@@ -13340,6 +13576,19 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
         result["customer_it_provider_contact"] = ""
         result["customer_it_provider_email"] = ""
         result["customer_it_provider_phone"] = ""
+        result["customer_it_provider_name_2"] = ""
+        result["customer_it_provider_contact_2"] = ""
+        result["customer_it_provider_email_2"] = ""
+        result["customer_it_provider_phone_2"] = ""
+        result["customer_it_provider_name_3"] = ""
+        result["customer_it_provider_contact_3"] = ""
+        result["customer_it_provider_email_3"] = ""
+        result["customer_it_provider_phone_3"] = ""
+        result["customer_it_provider_contacts"] = [
+            {"it_provider_name": "", "it_provider_contact": "", "it_provider_email": "", "it_provider_phone": ""},
+            {"it_provider_name": "", "it_provider_contact": "", "it_provider_email": "", "it_provider_phone": ""},
+            {"it_provider_name": "", "it_provider_contact": "", "it_provider_email": "", "it_provider_phone": ""},
+        ]
     else:
         try:
             result["customer_id"] = int(uid_customer_id)
@@ -13352,6 +13601,14 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
             result["customer_it_provider_contact"] = ""
             result["customer_it_provider_email"] = ""
             result["customer_it_provider_phone"] = ""
+            result["customer_it_provider_name_2"] = ""
+            result["customer_it_provider_contact_2"] = ""
+            result["customer_it_provider_email_2"] = ""
+            result["customer_it_provider_phone_2"] = ""
+            result["customer_it_provider_name_3"] = ""
+            result["customer_it_provider_contact_3"] = ""
+            result["customer_it_provider_email_3"] = ""
+            result["customer_it_provider_phone_3"] = ""
         if result["customer_id"] is not None:
             customer_row = conn.execute(
                 """
@@ -13362,7 +13619,15 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
                        COALESCE(it_provider_name, ''),
                        COALESCE(it_provider_contact, ''),
                        COALESCE(it_provider_email, ''),
-                       COALESCE(it_provider_phone, '')
+                      COALESCE(it_provider_phone, ''),
+                      COALESCE(it_provider_name_2, ''),
+                      COALESCE(it_provider_contact_2, ''),
+                      COALESCE(it_provider_email_2, ''),
+                      COALESCE(it_provider_phone_2, ''),
+                      COALESCE(it_provider_name_3, ''),
+                      COALESCE(it_provider_contact_3, ''),
+                      COALESCE(it_provider_email_3, ''),
+                      COALESCE(it_provider_phone_3, '')
                 FROM customers
                 WHERE id = ?
                 """,
@@ -13376,6 +13641,14 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
                 result["customer_it_provider_contact"] = str(customer_row[5] or "").strip()
                 result["customer_it_provider_email"] = str(customer_row[6] or "").strip()
                 result["customer_it_provider_phone"] = str(customer_row[7] or "").strip()
+                result["customer_it_provider_name_2"] = str(customer_row[8] or "").strip()
+                result["customer_it_provider_contact_2"] = str(customer_row[9] or "").strip()
+                result["customer_it_provider_email_2"] = str(customer_row[10] or "").strip()
+                result["customer_it_provider_phone_2"] = str(customer_row[11] or "").strip()
+                result["customer_it_provider_name_3"] = str(customer_row[12] or "").strip()
+                result["customer_it_provider_contact_3"] = str(customer_row[13] or "").strip()
+                result["customer_it_provider_email_3"] = str(customer_row[14] or "").strip()
+                result["customer_it_provider_phone_3"] = str(customer_row[15] or "").strip()
             else:
                 result["customer_name"] = ""
                 result["customer_maringo_project_number"] = ""
@@ -13384,6 +13657,35 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
                 result["customer_it_provider_contact"] = ""
                 result["customer_it_provider_email"] = ""
                 result["customer_it_provider_phone"] = ""
+                result["customer_it_provider_name_2"] = ""
+                result["customer_it_provider_contact_2"] = ""
+                result["customer_it_provider_email_2"] = ""
+                result["customer_it_provider_phone_2"] = ""
+                result["customer_it_provider_name_3"] = ""
+                result["customer_it_provider_contact_3"] = ""
+                result["customer_it_provider_email_3"] = ""
+                result["customer_it_provider_phone_3"] = ""
+
+    result["customer_it_provider_contacts"] = [
+        {
+            "it_provider_name": str(result.get("customer_it_provider_name", "") or ""),
+            "it_provider_contact": str(result.get("customer_it_provider_contact", "") or ""),
+            "it_provider_email": str(result.get("customer_it_provider_email", "") or ""),
+            "it_provider_phone": str(result.get("customer_it_provider_phone", "") or ""),
+        },
+        {
+            "it_provider_name": str(result.get("customer_it_provider_name_2", "") or ""),
+            "it_provider_contact": str(result.get("customer_it_provider_contact_2", "") or ""),
+            "it_provider_email": str(result.get("customer_it_provider_email_2", "") or ""),
+            "it_provider_phone": str(result.get("customer_it_provider_phone_2", "") or ""),
+        },
+        {
+            "it_provider_name": str(result.get("customer_it_provider_name_3", "") or ""),
+            "it_provider_contact": str(result.get("customer_it_provider_contact_3", "") or ""),
+            "it_provider_email": str(result.get("customer_it_provider_email_3", "") or ""),
+            "it_provider_phone": str(result.get("customer_it_provider_phone_3", "") or ""),
+        },
+    ]
 
     return result
 
@@ -17960,6 +18262,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             it_provider_contact = payload.get("it_provider_contact", "")
             it_provider_email = payload.get("it_provider_email", "")
             it_provider_phone = payload.get("it_provider_phone", "")
+            it_provider_name_2 = payload.get("it_provider_name_2", "")
+            it_provider_contact_2 = payload.get("it_provider_contact_2", "")
+            it_provider_email_2 = payload.get("it_provider_email_2", "")
+            it_provider_phone_2 = payload.get("it_provider_phone_2", "")
+            it_provider_name_3 = payload.get("it_provider_name_3", "")
+            it_provider_contact_3 = payload.get("it_provider_contact_3", "")
+            it_provider_email_3 = payload.get("it_provider_email_3", "")
+            it_provider_phone_3 = payload.get("it_provider_phone_3", "")
 
             try:
                 with sqlite3.connect(DB_PATH) as conn:
@@ -17971,6 +18281,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         it_provider_contact,
                         it_provider_email,
                         it_provider_phone,
+                        it_provider_name_2,
+                        it_provider_contact_2,
+                        it_provider_email_2,
+                        it_provider_phone_2,
+                        it_provider_name_3,
+                        it_provider_contact_3,
+                        it_provider_email_3,
+                        it_provider_phone_3,
                     )
                     conn.commit()
                 self._send_json(HTTPStatus.OK, {"status": "stored", "customer": customer})
@@ -19362,6 +19680,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         payload.get("it_provider_contact", existing_customer.get("it_provider_contact", "")),
                         payload.get("it_provider_email", existing_customer.get("it_provider_email", "")),
                         payload.get("it_provider_phone", existing_customer.get("it_provider_phone", "")),
+                        payload.get("it_provider_name_2", existing_customer.get("it_provider_name_2", "")),
+                        payload.get("it_provider_contact_2", existing_customer.get("it_provider_contact_2", "")),
+                        payload.get("it_provider_email_2", existing_customer.get("it_provider_email_2", "")),
+                        payload.get("it_provider_phone_2", existing_customer.get("it_provider_phone_2", "")),
+                        payload.get("it_provider_name_3", existing_customer.get("it_provider_name_3", "")),
+                        payload.get("it_provider_contact_3", existing_customer.get("it_provider_contact_3", "")),
+                        payload.get("it_provider_email_3", existing_customer.get("it_provider_email_3", "")),
+                        payload.get("it_provider_phone_3", existing_customer.get("it_provider_phone_3", "")),
                     )
                     conn.commit()
                 self._send_json(HTTPStatus.OK, {"status": "updated", "customer": customer})

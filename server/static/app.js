@@ -4816,14 +4816,114 @@ function wireSapLicenseTypeMapAdminSection(container) {
   });
 }
 
+function normalizeItProviderContacts(rawContacts, fallbackResolver) {
+  const contacts = [];
+  if (Array.isArray(rawContacts)) {
+    for (const item of rawContacts.slice(0, 3)) {
+      contacts.push({
+        it_provider_name: asText(item?.it_provider_name, "").trim(),
+        it_provider_contact: asText(item?.it_provider_contact, "").trim(),
+        it_provider_email: asText(item?.it_provider_email, "").trim(),
+        it_provider_phone: asText(item?.it_provider_phone, "").trim(),
+      });
+    }
+  }
+  while (contacts.length < 3) {
+    const idx = contacts.length;
+    const slot = typeof fallbackResolver === "function"
+      ? fallbackResolver(idx)
+      : {};
+    contacts.push({
+      it_provider_name: asText(slot?.it_provider_name, "").trim(),
+      it_provider_contact: asText(slot?.it_provider_contact, "").trim(),
+      it_provider_email: asText(slot?.it_provider_email, "").trim(),
+      it_provider_phone: asText(slot?.it_provider_phone, "").trim(),
+    });
+  }
+  return contacts.slice(0, 3);
+}
+
+function getItProviderContactsFromHostSettings(settings) {
+  return normalizeItProviderContacts(settings?.customer_it_provider_contacts, (index) => {
+    if (index === 0) {
+      return {
+        it_provider_name: settings?.customer_it_provider_name,
+        it_provider_contact: settings?.customer_it_provider_contact,
+        it_provider_email: settings?.customer_it_provider_email,
+        it_provider_phone: settings?.customer_it_provider_phone,
+      };
+    }
+    if (index === 1) {
+      return {
+        it_provider_name: settings?.customer_it_provider_name_2,
+        it_provider_contact: settings?.customer_it_provider_contact_2,
+        it_provider_email: settings?.customer_it_provider_email_2,
+        it_provider_phone: settings?.customer_it_provider_phone_2,
+      };
+    }
+    return {
+      it_provider_name: settings?.customer_it_provider_name_3,
+      it_provider_contact: settings?.customer_it_provider_contact_3,
+      it_provider_email: settings?.customer_it_provider_email_3,
+      it_provider_phone: settings?.customer_it_provider_phone_3,
+    };
+  });
+}
+
+function getItProviderContactsFromCustomer(customer) {
+  return normalizeItProviderContacts(customer?.it_provider_contacts, (index) => {
+    if (index === 0) {
+      return {
+        it_provider_name: customer?.it_provider_name,
+        it_provider_contact: customer?.it_provider_contact,
+        it_provider_email: customer?.it_provider_email,
+        it_provider_phone: customer?.it_provider_phone,
+      };
+    }
+    if (index === 1) {
+      return {
+        it_provider_name: customer?.it_provider_name_2,
+        it_provider_contact: customer?.it_provider_contact_2,
+        it_provider_email: customer?.it_provider_email_2,
+        it_provider_phone: customer?.it_provider_phone_2,
+      };
+    }
+    return {
+      it_provider_name: customer?.it_provider_name_3,
+      it_provider_contact: customer?.it_provider_contact_3,
+      it_provider_email: customer?.it_provider_email_3,
+      it_provider_phone: customer?.it_provider_phone_3,
+    };
+  });
+}
+
 function renderCustomerNotificationPanel(hostname, settings) {
   const customerId = Number(settings.customer_id || 0) || null;
   const customerName = asText(settings.customer_name, "");
   const customerProjectNo = asText(settings.customer_maringo_project_number, "");
-  const itProviderName = asText(settings.customer_it_provider_name, "");
-  const itProviderContact = asText(settings.customer_it_provider_contact, "");
-  const itProviderEmail = asText(settings.customer_it_provider_email, "");
-  const itProviderPhone = asText(settings.customer_it_provider_phone, "");
+  const itProviderContacts = getItProviderContactsFromHostSettings(settings);
+  const providerRowsHtml = itProviderContacts.map((entry, index) => {
+    const slot = index + 1;
+    return `<div class="customer-provider-row">
+      <p class="settings-helper-text customer-provider-row-title">Ansprechpartner ${slot}</p>
+      <div class="alarm-settings-group">
+        <label for="customerItProviderNameInput${slot}" class="settings-label">IT Provider Name</label>
+        <input id="customerItProviderNameInput${slot}" type="text" class="settings-input" placeholder="IT Provider Name" value="${escapeHtml(entry.it_provider_name)}">
+      </div>
+      <div class="alarm-settings-group">
+        <label for="customerItProviderContactInput${slot}" class="settings-label">Ansprechpartner</label>
+        <input id="customerItProviderContactInput${slot}" type="text" class="settings-input" placeholder="Ansprechpartner" value="${escapeHtml(entry.it_provider_contact)}">
+      </div>
+      <div class="alarm-settings-group">
+        <label for="customerItProviderEmailInput${slot}" class="settings-label">E-Mail</label>
+        <input id="customerItProviderEmailInput${slot}" type="email" class="settings-input" placeholder="it@example.com" value="${escapeHtml(entry.it_provider_email)}">
+      </div>
+      <div class="alarm-settings-group">
+        <label for="customerItProviderPhoneInput${slot}" class="settings-label">Telefon</label>
+        <input id="customerItProviderPhoneInput${slot}" type="text" class="settings-input" placeholder="+41 ..." value="${escapeHtml(entry.it_provider_phone)}">
+      </div>
+    </div>`;
+  }).join("");
   const customerLogoUrl = asText(settings.customer_logo_url, "").trim();
   const logoPreview = customerLogoUrl
     ? `<img src="${escapeHtml(customerLogoUrl)}" alt="Kundenlogo ${escapeHtml(customerName || "Kunde")}" class="customer-logo-preview" onerror="this.style.display='none'">`
@@ -4840,22 +4940,7 @@ function renderCustomerNotificationPanel(hostname, settings) {
         <label for="customerProjectInput" class="settings-label">Maringo Projektnummer</label>
         <input id="customerProjectInput" type="text" class="settings-input" placeholder="z.B. MAR-12345" value="${escapeHtml(customerProjectNo)}">
       </div>
-      <div class="alarm-settings-group">
-        <label for="customerItProviderNameInput" class="settings-label">IT Provider Name</label>
-        <input id="customerItProviderNameInput" type="text" class="settings-input" placeholder="IT Provider Name" value="${escapeHtml(itProviderName)}">
-      </div>
-      <div class="alarm-settings-group">
-        <label for="customerItProviderContactInput" class="settings-label">Ansprechpartner</label>
-        <input id="customerItProviderContactInput" type="text" class="settings-input" placeholder="Ansprechpartner" value="${escapeHtml(itProviderContact)}">
-      </div>
-      <div class="alarm-settings-group">
-        <label for="customerItProviderEmailInput" class="settings-label">E-Mail</label>
-        <input id="customerItProviderEmailInput" type="email" class="settings-input" placeholder="it@example.com" value="${escapeHtml(itProviderEmail)}">
-      </div>
-      <div class="alarm-settings-group">
-        <label for="customerItProviderPhoneInput" class="settings-label">Telefon</label>
-        <input id="customerItProviderPhoneInput" type="text" class="settings-input" placeholder="+41 ..." value="${escapeHtml(itProviderPhone)}">
-      </div>
+      ${providerRowsHtml}
       <div class="alarm-settings-actions">
         <button id="saveCustomerNameBtn" type="button" class="btn-primary btn-primary--compact">Kundendaten speichern</button>
         <span id="customerNameStatus" class="settings-status"></span>
@@ -4915,10 +5000,12 @@ async function loadAndRenderCustomerNotificationPanel(hostname, hostUid = "") {
       const status = container.querySelector("#customerNameStatus");
       const customerName = container.querySelector("#customerNameInput")?.value.trim() || "";
       const customerProject = container.querySelector("#customerProjectInput")?.value.trim() || "";
-      const providerName = container.querySelector("#customerItProviderNameInput")?.value.trim() || "";
-      const providerContact = container.querySelector("#customerItProviderContactInput")?.value.trim() || "";
-      const providerEmail = container.querySelector("#customerItProviderEmailInput")?.value.trim() || "";
-      const providerPhone = container.querySelector("#customerItProviderPhoneInput")?.value.trim() || "";
+      const providerContacts = [1, 2, 3].map((slot) => ({
+        it_provider_name: container.querySelector(`#customerItProviderNameInput${slot}`)?.value.trim() || "",
+        it_provider_contact: container.querySelector(`#customerItProviderContactInput${slot}`)?.value.trim() || "",
+        it_provider_email: container.querySelector(`#customerItProviderEmailInput${slot}`)?.value.trim() || "",
+        it_provider_phone: container.querySelector(`#customerItProviderPhoneInput${slot}`)?.value.trim() || "",
+      }));
       if (!customerName) {
         if (status) {
           status.textContent = "❌ Kundenname darf nicht leer sein";
@@ -4941,10 +5028,18 @@ async function loadAndRenderCustomerNotificationPanel(hostname, hostUid = "") {
           body: JSON.stringify({
             customer_name: customerName,
             maringo_project_number: customerProject,
-            it_provider_name: providerName,
-            it_provider_contact: providerContact,
-            it_provider_email: providerEmail,
-            it_provider_phone: providerPhone,
+            it_provider_name: providerContacts[0].it_provider_name,
+            it_provider_contact: providerContacts[0].it_provider_contact,
+            it_provider_email: providerContacts[0].it_provider_email,
+            it_provider_phone: providerContacts[0].it_provider_phone,
+            it_provider_name_2: providerContacts[1].it_provider_name,
+            it_provider_contact_2: providerContacts[1].it_provider_contact,
+            it_provider_email_2: providerContacts[1].it_provider_email,
+            it_provider_phone_2: providerContacts[1].it_provider_phone,
+            it_provider_name_3: providerContacts[2].it_provider_name,
+            it_provider_contact_3: providerContacts[2].it_provider_contact,
+            it_provider_email_3: providerContacts[2].it_provider_email,
+            it_provider_phone_3: providerContacts[2].it_provider_phone,
           }),
         });
         if (!r.ok) {
@@ -11653,10 +11748,7 @@ async function editDisplayName() {
     currentCustomerId: hostSettings.customer_id,
     currentCustomerName: asText(hostSettings.customer_name, ""),
     currentCustomerProjectNo: asText(hostSettings.customer_maringo_project_number, ""),
-    currentItProviderName: asText(hostSettings.customer_it_provider_name, ""),
-    currentItProviderContact: asText(hostSettings.customer_it_provider_contact, ""),
-    currentItProviderEmail: asText(hostSettings.customer_it_provider_email, ""),
-    currentItProviderPhone: asText(hostSettings.customer_it_provider_phone, ""),
+    currentItProviderContacts: getItProviderContactsFromHostSettings(hostSettings),
     customers,
   });
   if (!result) return;
@@ -11674,10 +11766,18 @@ async function editDisplayName() {
       body: JSON.stringify({
         customer_name: result.newCustomerName,
         maringo_project_number: result.newCustomerProjectNo,
-        it_provider_name: result.itProviderName,
-        it_provider_contact: result.itProviderContact,
-        it_provider_email: result.itProviderEmail,
-        it_provider_phone: result.itProviderPhone,
+        it_provider_name: result.itProviderContacts[0].it_provider_name,
+        it_provider_contact: result.itProviderContacts[0].it_provider_contact,
+        it_provider_email: result.itProviderContacts[0].it_provider_email,
+        it_provider_phone: result.itProviderContacts[0].it_provider_phone,
+        it_provider_name_2: result.itProviderContacts[1].it_provider_name,
+        it_provider_contact_2: result.itProviderContacts[1].it_provider_contact,
+        it_provider_email_2: result.itProviderContacts[1].it_provider_email,
+        it_provider_phone_2: result.itProviderContacts[1].it_provider_phone,
+        it_provider_name_3: result.itProviderContacts[2].it_provider_name,
+        it_provider_contact_3: result.itProviderContacts[2].it_provider_contact,
+        it_provider_email_3: result.itProviderContacts[2].it_provider_email,
+        it_provider_phone_3: result.itProviderContacts[2].it_provider_phone,
       }),
     });
     const createData = await createResp.json().catch(() => ({}));
@@ -11697,10 +11797,18 @@ async function editDisplayName() {
       body: JSON.stringify({
         customer_name: result.existingCustomerName,
         maringo_project_number: result.existingCustomerProjectNo,
-        it_provider_name: result.itProviderName,
-        it_provider_contact: result.itProviderContact,
-        it_provider_email: result.itProviderEmail,
-        it_provider_phone: result.itProviderPhone,
+        it_provider_name: result.itProviderContacts[0].it_provider_name,
+        it_provider_contact: result.itProviderContacts[0].it_provider_contact,
+        it_provider_email: result.itProviderContacts[0].it_provider_email,
+        it_provider_phone: result.itProviderContacts[0].it_provider_phone,
+        it_provider_name_2: result.itProviderContacts[1].it_provider_name,
+        it_provider_contact_2: result.itProviderContacts[1].it_provider_contact,
+        it_provider_email_2: result.itProviderContacts[1].it_provider_email,
+        it_provider_phone_2: result.itProviderContacts[1].it_provider_phone,
+        it_provider_name_3: result.itProviderContacts[2].it_provider_name,
+        it_provider_contact_3: result.itProviderContacts[2].it_provider_contact,
+        it_provider_email_3: result.itProviderContacts[2].it_provider_email,
+        it_provider_phone_3: result.itProviderContacts[2].it_provider_phone,
       }),
     });
     const patchData = await patchResp.json().catch(() => ({}));
@@ -11785,15 +11893,33 @@ async function openHostMetadataEditorDialog({
   currentCustomerId,
   currentCustomerName,
   currentCustomerProjectNo,
-  currentItProviderName,
-  currentItProviderContact,
-  currentItProviderEmail,
-  currentItProviderPhone,
+  currentItProviderContacts,
   customers,
 }) {
   const sortedCustomers = (Array.isArray(customers) ? customers : [])
     .slice()
     .sort((a, b) => String(a.customer_name || "").localeCompare(String(b.customer_name || ""), undefined, { sensitivity: "base" }));
+  const initialProviderContacts = normalizeItProviderContacts(currentItProviderContacts);
+  const providerRowsHtml = initialProviderContacts.map((entry, index) => {
+    const slot = index + 1;
+    return `<div class="host-meta-provider-row">
+      <p class="settings-helper-text host-meta-provider-row-title">Ansprechpartner ${slot}</p>
+      <div class="host-meta-customer-provider-grid">
+        <label class="host-meta-customer-provider-span">IT Provider Name
+          <input id="hostMetaItProviderNameInput${slot}" type="text" placeholder="IT Provider Name" value="${escapeHtml(entry.it_provider_name)}" />
+        </label>
+        <label class="host-meta-customer-provider-span">Ansprechpartner
+          <input id="hostMetaItProviderContactInput${slot}" type="text" placeholder="Ansprechpartner" value="${escapeHtml(entry.it_provider_contact)}" />
+        </label>
+        <label>Mail
+          <input id="hostMetaItProviderEmailInput${slot}" type="email" placeholder="it@example.com" value="${escapeHtml(entry.it_provider_email)}" />
+        </label>
+        <label>Telefon
+          <input id="hostMetaItProviderPhoneInput${slot}" type="text" placeholder="+41 ..." value="${escapeHtml(entry.it_provider_phone)}" />
+        </label>
+      </div>
+    </div>`;
+  }).join("");
 
   const modal = document.createElement("div");
   modal.className = "host-meta-modal";
@@ -11843,20 +11969,7 @@ async function openHostMetadataEditorDialog({
         </div>
         <div class="host-meta-customer-provider">
           <h4>IT-Provider (kundenspezifisch)</h4>
-          <div class="host-meta-customer-provider-grid">
-            <label class="host-meta-customer-provider-span">IT Provider Name
-              <input id="hostMetaItProviderNameInput" type="text" placeholder="IT Provider Name" value="${escapeHtml(currentItProviderName || "")}" />
-            </label>
-            <label class="host-meta-customer-provider-span">Ansprechpartner
-              <input id="hostMetaItProviderContactInput" type="text" placeholder="Ansprechpartner" value="${escapeHtml(currentItProviderContact || "")}" />
-            </label>
-            <label>Mail
-              <input id="hostMetaItProviderEmailInput" type="email" placeholder="it@example.com" value="${escapeHtml(currentItProviderEmail || "")}" />
-            </label>
-            <label>Telefon
-              <input id="hostMetaItProviderPhoneInput" type="text" placeholder="+41 ..." value="${escapeHtml(currentItProviderPhone || "")}" />
-            </label>
-          </div>
+          ${providerRowsHtml}
         </div>
         <div class="host-meta-logo-upload-row">
           <label>Kundenlogo (PNG/JPG/WebP, max. 2 MB)
@@ -11880,10 +11993,12 @@ async function openHostMetadataEditorDialog({
   const environmentTypeSelect = modal.querySelector("#hostMetaEnvironmentTypeSelect");
   const newCustomerNameInput = modal.querySelector("#hostMetaNewCustomerNameInput");
   const newCustomerProjectInput = modal.querySelector("#hostMetaNewCustomerProjectInput");
-  const itProviderNameInput = modal.querySelector("#hostMetaItProviderNameInput");
-  const itProviderContactInput = modal.querySelector("#hostMetaItProviderContactInput");
-  const itProviderEmailInput = modal.querySelector("#hostMetaItProviderEmailInput");
-  const itProviderPhoneInput = modal.querySelector("#hostMetaItProviderPhoneInput");
+  const providerInputRows = [1, 2, 3].map((slot) => ({
+    itProviderNameInput: modal.querySelector(`#hostMetaItProviderNameInput${slot}`),
+    itProviderContactInput: modal.querySelector(`#hostMetaItProviderContactInput${slot}`),
+    itProviderEmailInput: modal.querySelector(`#hostMetaItProviderEmailInput${slot}`),
+    itProviderPhoneInput: modal.querySelector(`#hostMetaItProviderPhoneInput${slot}`),
+  }));
   const customerLogoInput = modal.querySelector("#hostMetaCustomerLogoInput");
 
   const updateNewSection = () => {
@@ -11895,10 +12010,12 @@ async function openHostMetadataEditorDialog({
     }
 
     if (selectEl.value === "__none__") {
-      if (itProviderNameInput) itProviderNameInput.value = "";
-      if (itProviderContactInput) itProviderContactInput.value = "";
-      if (itProviderEmailInput) itProviderEmailInput.value = "";
-      if (itProviderPhoneInput) itProviderPhoneInput.value = "";
+      for (const rowInputs of providerInputRows) {
+        if (rowInputs.itProviderNameInput) rowInputs.itProviderNameInput.value = "";
+        if (rowInputs.itProviderContactInput) rowInputs.itProviderContactInput.value = "";
+        if (rowInputs.itProviderEmailInput) rowInputs.itProviderEmailInput.value = "";
+        if (rowInputs.itProviderPhoneInput) rowInputs.itProviderPhoneInput.value = "";
+      }
       return;
     }
 
@@ -11907,10 +12024,16 @@ async function openHostMetadataEditorDialog({
     if (!selectedCustomer) {
       return;
     }
-    if (itProviderNameInput) itProviderNameInput.value = asText(selectedCustomer.it_provider_name, "");
-    if (itProviderContactInput) itProviderContactInput.value = asText(selectedCustomer.it_provider_contact, "");
-    if (itProviderEmailInput) itProviderEmailInput.value = asText(selectedCustomer.it_provider_email, "");
-    if (itProviderPhoneInput) itProviderPhoneInput.value = asText(selectedCustomer.it_provider_phone, "");
+    const selectedProviderContacts = getItProviderContactsFromCustomer(selectedCustomer);
+    for (let index = 0; index < 3; index += 1) {
+      const values = selectedProviderContacts[index] || {};
+      const rowInputs = providerInputRows[index];
+      if (!rowInputs) continue;
+      if (rowInputs.itProviderNameInput) rowInputs.itProviderNameInput.value = asText(values.it_provider_name, "");
+      if (rowInputs.itProviderContactInput) rowInputs.itProviderContactInput.value = asText(values.it_provider_contact, "");
+      if (rowInputs.itProviderEmailInput) rowInputs.itProviderEmailInput.value = asText(values.it_provider_email, "");
+      if (rowInputs.itProviderPhoneInput) rowInputs.itProviderPhoneInput.value = asText(values.it_provider_phone, "");
+    }
   };
   updateNewSection();
   if (selectEl) selectEl.addEventListener("change", updateNewSection);
@@ -11948,10 +12071,12 @@ async function openHostMetadataEditorDialog({
       let existingCustomerProjectNo = "";
       let newCustomerName = "";
       let newCustomerProjectNo = "";
-      const itProviderName = String(itProviderNameInput?.value || "").trim();
-      const itProviderContact = String(itProviderContactInput?.value || "").trim();
-      const itProviderEmail = String(itProviderEmailInput?.value || "").trim();
-      const itProviderPhone = String(itProviderPhoneInput?.value || "").trim();
+      const itProviderContacts = providerInputRows.map((rowInputs) => ({
+        it_provider_name: String(rowInputs.itProviderNameInput?.value || "").trim(),
+        it_provider_contact: String(rowInputs.itProviderContactInput?.value || "").trim(),
+        it_provider_email: String(rowInputs.itProviderEmailInput?.value || "").trim(),
+        it_provider_phone: String(rowInputs.itProviderPhoneInput?.value || "").trim(),
+      }));
 
       if (customerSelectValue === "__new__") {
         customerMode = "new";
@@ -11989,10 +12114,7 @@ async function openHostMetadataEditorDialog({
         existingCustomerProjectNo,
         newCustomerName,
         newCustomerProjectNo,
-        itProviderName,
-        itProviderContact,
-        itProviderEmail,
-        itProviderPhone,
+        itProviderContacts,
         customerLogoFile,
       });
     });
