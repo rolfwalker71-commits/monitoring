@@ -2,7 +2,7 @@
 // Purpose: enables PWA installability; no offline caching of dynamic
 // dashboard data (live sensor readings should never come from cache).
 
-const CACHE_NAME = "monitoring-shell-v1";
+const CACHE_NAME = "monitoring-shell-v2";
 
 // Only static shell assets are cached so the app loads faster on re-open.
 const SHELL_ASSETS = [
@@ -76,10 +76,31 @@ self.addEventListener("push", (event) => {
     body: String(payload.body || "Neues Monitoring-Ereignis"),
     tag: String(payload.tag || "monitoring-alert"),
     renotify: Boolean(payload.renotify),
+    requireInteraction: Boolean(payload.requireInteraction),
+    silent: Boolean(payload.silent),
     data: payload.data && typeof payload.data === "object" ? payload.data : { url: "/" },
     icon: String(payload.icon || "/icons/logo.png"),
     badge: String(payload.badge || "/icons/logo.png"),
   };
+
+  const image = String(payload.image || "").trim();
+  if (image) {
+    options.image = image;
+  }
+
+  if (Array.isArray(payload.vibrate) && payload.vibrate.length) {
+    options.vibrate = payload.vibrate;
+  }
+
+  if (Array.isArray(payload.actions) && payload.actions.length) {
+    options.actions = payload.actions
+      .filter((item) => item && typeof item === "object")
+      .map((item) => ({
+        action: String(item.action || "open"),
+        title: String(item.title || "Öffnen"),
+      }))
+      .slice(0, 2);
+  }
 
   event.waitUntil(self.registration.showNotification(title, options));
 });

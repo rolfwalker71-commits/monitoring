@@ -10903,6 +10903,105 @@ def send_instant_alert_mails_to_users(
             pass
 
 
+def _instant_alert_event_icon_label(event_type: str) -> str:
+    return {
+        "opened": "🚨 ALERT OPEN",
+        "escalated": "⬆️ ALERT ESCALATED",
+        "resolved": "✅ ALERT RESOLVED",
+    }.get(event_type, "⚠️ ALERT")
+
+
+def _instant_alert_severity_icon(severity: str) -> str:
+    return {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(str(severity or "").strip().lower(), "⚪")
+
+
+def build_instant_alert_message_lines(
+    *,
+    event_type: str,
+    severity: str,
+    used_percent: float,
+    customer_label: str,
+    host_title: str,
+    hostname: str,
+    mountpoint: str,
+    username: str = "",
+    include_branding_header: bool = True,
+) -> list[str]:
+    now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
+    lines: list[str] = []
+    if include_branding_header:
+        lines.extend(["System Infoboard", ""])
+    lines.append(_instant_alert_event_icon_label(event_type))
+    user = str(username or "").strip()
+    if user:
+        lines.append(f"👤 {user}")
+    lines.extend(
+        [
+            f"👥 {customer_label}",
+            f"🖥️ {host_title} ({hostname})",
+            f"📂 {mountpoint}",
+            f"{_instant_alert_severity_icon(severity)} {severity}",
+            f"📊 {used_percent:.1f}%",
+            f"🕐 {now_local}",
+        ]
+    )
+    return lines
+
+
+def build_instant_alert_message_text(
+    *,
+    event_type: str,
+    severity: str,
+    used_percent: float,
+    customer_label: str,
+    host_title: str,
+    hostname: str,
+    mountpoint: str,
+    username: str = "",
+    include_branding_header: bool = True,
+) -> str:
+    return "\n".join(
+        build_instant_alert_message_lines(
+            event_type=event_type,
+            severity=severity,
+            used_percent=used_percent,
+            customer_label=customer_label,
+            host_title=host_title,
+            hostname=hostname,
+            mountpoint=mountpoint,
+            username=username,
+            include_branding_header=include_branding_header,
+        )
+    )
+
+
+def build_instant_alert_push_title_body(
+    *,
+    event_type: str,
+    severity: str,
+    used_percent: float,
+    customer_label: str,
+    host_title: str,
+    hostname: str,
+    mountpoint: str,
+    username: str = "",
+) -> tuple[str, str]:
+    lines = build_instant_alert_message_lines(
+        event_type=event_type,
+        severity=severity,
+        used_percent=used_percent,
+        customer_label=customer_label,
+        host_title=host_title,
+        hostname=hostname,
+        mountpoint=mountpoint,
+        username=username,
+        include_branding_header=True,
+    )
+    title = _instant_alert_event_icon_label(event_type)
+    body_lines = [line for line in lines if line != title]
+    return title, "\n".join(body_lines)
+
+
 def send_instant_alert_telegram_to_users(
     conn: sqlite3.Connection,
     event_type: str,
@@ -10941,15 +11040,9 @@ def send_instant_alert_telegram_to_users(
     except Exception:
         return
 
-    icon = {
-        "opened": "🚨 ALERT OPEN",
-        "escalated": "⬆️ ALERT ESCALATED",
-        "resolved": "✅ ALERT RESOLVED",
-    }.get(event_type, "⚠️ ALERT")
     host_ctx = collect_host_mail_context(conn, hostname, host_uid)
-    title = display_name.strip() if display_name.strip() else str(host_ctx.get("display_name") or hostname)
+    host_title = display_name.strip() if display_name.strip() else str(host_ctx.get("display_name") or hostname)
     customer_label = str(host_ctx.get("customer_name") or "").strip() or "Ohne Kunde"
-    now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
 
     for row in rows:
         username = str(row[0] or "").strip()
@@ -10960,18 +11053,16 @@ def send_instant_alert_telegram_to_users(
         if min_severity == "critical" and severity not in {"critical"}:
             continue
 
-        sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
-        text = (
-            "System Infoboard\n"
-            "\n"
-            f"{icon}\n"
-            f"👤 {username}\n"
-            f"👥 {customer_label}\n"
-            f"🖥️ {title} ({hostname})\n"
-            f"📂 {mountpoint}\n"
-            f"{sev_icon} {severity}\n"
-            f"📊 {used_percent:.1f}%\n"
-            f"🕐 {now_local}"
+        text = build_instant_alert_message_text(
+            event_type=event_type,
+            severity=severity,
+            used_percent=used_percent,
+            customer_label=customer_label,
+            host_title=host_title,
+            hostname=hostname,
+            mountpoint=mountpoint,
+            username=username,
+            include_branding_header=True,
         )
         reply_markup = build_telegram_alert_reply_markup(bot_token, hostname, mountpoint, event_type)
         telegram_send_to_chat(bot_token, chat_id, text, reply_markup=reply_markup)
@@ -12702,24 +12793,18 @@ def maybe_send_alert_message(
             return
 
     if settings.get("telegram_enabled"):
-        icon = {
-            "opened": "🚨 ALERT OPEN",
-            "escalated": "⬆️ ALERT ESCALATED",
-            "resolved": "✅ ALERT RESOLVED",
-        }.get(event_type, "⚠️ ALERT")
-        sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
         host_ctx = collect_host_mail_context(conn, hostname, host_uid) if conn is not None else {}
-        title = display_name.strip() if display_name.strip() else str(host_ctx.get("display_name") or hostname)
+        host_title = display_name.strip() if display_name.strip() else str(host_ctx.get("display_name") or hostname)
         customer_label = str(host_ctx.get("customer_name") or "").strip() or "Ohne Kunde"
-        now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
-        text = (
-            f"{icon}\n"
-            f"👥 {customer_label}\n"
-            f"🖥️ {title} ({hostname})\n"
-            f"📂 {mountpoint}\n"
-            f"{sev_icon} {severity}\n"
-            f"📊 {used_percent:.1f}%\n"
-            f"🕐 {now_local}"
+        text = build_instant_alert_message_text(
+            event_type=event_type,
+            severity=severity,
+            used_percent=used_percent,
+            customer_label=customer_label,
+            host_title=host_title,
+            hostname=hostname,
+            mountpoint=mountpoint,
+            include_branding_header=False,
         )
         bot_token = str(settings.get("telegram_bot_token", "") or "").strip()
         chat_id = str(settings.get("telegram_chat_id", "") or "").strip()
@@ -12919,53 +13004,15 @@ def send_instant_alert_web_push_to_users(
     host_ctx = collect_host_mail_context(conn, hostname, host_uid)
     host_title = display_name.strip() if display_name.strip() else str(host_ctx.get("display_name") or hostname)
     customer_label = str(host_ctx.get("customer_name") or "").strip() or "Ohne Kunde"
-    sev_label = "KRITISCH" if severity == "critical" else ("WARNUNG" if severity == "warning" else "OK")
-    sev_icon = {"critical": "🔴", "warning": "🟠", "ok": "🟢"}.get(severity, "⚪")
-    event_icon = {
-        "opened": "🚨",
-        "escalated": "⬆️",
-        "resolved": "✅",
-    }.get(event_type, "⚠️")
-    event_label = {
-        "opened": "ALERT OPEN",
-        "escalated": "ALERT ESCALATED",
-        "resolved": "ALERT RESOLVED",
-    }.get(event_type, "ALERT")
-    now_local = datetime.now().astimezone().strftime("%d.%m.%Y %H:%M")
-
-    title = f"{event_icon} {event_label}"
-    body = (
-        f"👥 {customer_label}\n"
-        f"🖥️ {host_title} ({hostname})\n"
-        f"📂 {mountpoint}\n"
-        f"{sev_icon} {sev_label} · {used_percent:.1f}%\n"
-        f"🕐 {now_local}"
-    )
     normalized_alert_id = max(0, int(alert_id or 0))
     mobile_url = "/mobile/alerts"
     if normalized_alert_id > 0:
         mobile_url = f"/mobile/alerts?alert_id={normalized_alert_id}"
-    payload = {
-        "title": title,
-        "body": body,
-        "icon": "/icons/logo.png",
-        "badge": "/icons/logo.png",
-        "tag": _push_tag_for_alert(host_uid, hostname, mountpoint),
-        "renotify": event_type in {"opened", "escalated"},
-        "data": {
-            "url": mobile_url,
-            "alert_id": normalized_alert_id,
-            "hostname": hostname,
-            "host_uid": alert_host_key(hostname, host_uid),
-            "mountpoint": mountpoint,
-            "severity": severity,
-            "event_type": event_type,
-        },
-    }
+    is_urgent = severity == "critical" and event_type in {"opened", "escalated"}
 
     target_rows = conn.execute(
         """
-        SELECT DISTINCT s.id, s.endpoint, s.p256dh, s.auth
+        SELECT DISTINCT s.id, s.endpoint, s.p256dh, s.auth, s.username
         FROM web_user_alert_subscriptions a
         JOIN web_push_subscriptions s
           ON s.username = a.username
@@ -12984,6 +13031,38 @@ def send_instant_alert_web_push_to_users(
         endpoint = str(row[1] or "")
         p256dh = str(row[2] or "")
         auth = str(row[3] or "")
+        username = str(row[4] or "").strip()
+        title, body = build_instant_alert_push_title_body(
+            event_type=event_type,
+            severity=severity,
+            used_percent=used_percent,
+            customer_label=customer_label,
+            host_title=host_title,
+            hostname=hostname,
+            mountpoint=mountpoint,
+            username=username,
+        )
+        payload = {
+            "title": title,
+            "body": body,
+            "icon": "/icons/logo.png",
+            "badge": "/icons/logo.png",
+            "image": "/icons/pwa-icon-512.png",
+            "tag": _push_tag_for_alert(host_uid, hostname, mountpoint),
+            "renotify": event_type in {"opened", "escalated"},
+            "requireInteraction": is_urgent,
+            "vibrate": [120, 60, 120, 60, 220] if is_urgent else [90, 45, 90],
+            "actions": [{"action": "open", "title": "Öffnen"}],
+            "data": {
+                "url": mobile_url,
+                "alert_id": normalized_alert_id,
+                "hostname": hostname,
+                "host_uid": alert_host_key(hostname, host_uid),
+                "mountpoint": mountpoint,
+                "severity": severity,
+                "event_type": event_type,
+            },
+        }
         ok, details, deactivate = _send_web_push_to_subscription(endpoint, p256dh, auth, payload)
         if ok:
             conn.execute(
@@ -18095,12 +18174,30 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 custom_body = str(payload.get("body", "") or "").strip()
                 custom_url = str(payload.get("url", "") or "").strip() or custom_url
 
-            title = custom_title or "Monitoring Push Test"
-            body = custom_body or f"Testnachricht für {username} um {datetime.now().astimezone().strftime('%d.%m.%Y %H:%M')}"
+            if custom_title or custom_body:
+                title = custom_title or "🚨 ALERT OPEN"
+                body = custom_body or ""
+            else:
+                title, body = build_instant_alert_push_title_body(
+                    event_type="opened",
+                    severity="warning",
+                    used_percent=87.4,
+                    customer_label="CT-X Rail Service AG",
+                    host_title="CT-X Rail Service",
+                    hostname="ctx-rail-prod",
+                    mountpoint="/hana/data",
+                    username=username,
+                )
             push_payload = {
                 "title": title,
                 "body": body,
+                "icon": "/icons/logo.png",
+                "badge": "/icons/logo.png",
+                "image": "/icons/pwa-icon-512.png",
                 "tag": f"push-test:{username}",
+                "renotify": True,
+                "vibrate": [90, 45, 90],
+                "actions": [{"action": "open", "title": "Öffnen"}],
                 "data": {"url": custom_url},
             }
 
