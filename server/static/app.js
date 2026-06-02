@@ -7180,137 +7180,6 @@ function renderSapB1InstalledServicesSection(payload) {
   `;
 }
 
-function normalizeSapServicePortsForDiff(portsText) {
-  const raw = asText(portsText, "").trim();
-  if (!raw || raw === "-") {
-    return "-";
-  }
-
-  const numeric = [];
-  const other = [];
-  raw.split(",").map((part) => asText(part, "").trim()).filter(Boolean).forEach((part) => {
-    if (/^\d+$/.test(part)) {
-      const n = Number(part);
-      if (Number.isFinite(n) && n >= 1 && n <= 65535) {
-        numeric.push(n);
-      }
-      return;
-    }
-    other.push(part.toLowerCase());
-  });
-
-  const normalized = [
-    ...Array.from(new Set(numeric)).sort((a, b) => a - b).map((n) => String(n)),
-    ...Array.from(new Set(other)).sort((a, b) => a.localeCompare(b, "de", { sensitivity: "base", numeric: true })),
-  ];
-  return normalized.length > 0 ? normalized.join(",") : "-";
-}
-
-function parseSapServicesChangelogEntries(rawValue) {
-  const text = asText(rawValue, "").trim();
-  if (!text || text === "-") {
-    return [];
-  }
-
-  return text
-    .split(";")
-    .map((part) => asText(part, "").trim())
-    .filter(Boolean)
-    .map((entry) => {
-      const idx = entry.indexOf(":");
-      const name = idx >= 0 ? asText(entry.slice(0, idx), "").trim() : entry;
-      const ports = idx >= 0 ? asText(entry.slice(idx + 1), "").trim() : "-";
-      return {
-        name,
-        ports,
-        key: name.toLowerCase(),
-        portsNorm: normalizeSapServicePortsForDiff(ports),
-      };
-    });
-}
-
-function buildSapServicesChangelogDiff(oldRawValue, newRawValue) {
-  const oldEntries = parseSapServicesChangelogEntries(oldRawValue);
-  const newEntries = parseSapServicesChangelogEntries(newRawValue);
-
-  const oldMap = new Map();
-  const newMap = new Map();
-  oldEntries.forEach((entry) => {
-    if (entry.key) oldMap.set(entry.key, entry);
-  });
-  newEntries.forEach((entry) => {
-    if (entry.key) newMap.set(entry.key, entry);
-  });
-
-  const stateByKey = new Map();
-  const keys = new Set([...oldMap.keys(), ...newMap.keys()]);
-  keys.forEach((key) => {
-    const oldEntry = oldMap.get(key) || null;
-    const newEntry = newMap.get(key) || null;
-    if (oldEntry && !newEntry) {
-      stateByKey.set(key, "removed");
-      return;
-    }
-    if (!oldEntry && newEntry) {
-      stateByKey.set(key, "added");
-      return;
-    }
-    if (oldEntry && newEntry && oldEntry.portsNorm !== newEntry.portsNorm) {
-      stateByKey.set(key, "changed");
-      return;
-    }
-    stateByKey.set(key, "unchanged");
-  });
-
-  return { oldEntries, newEntries, oldMap, newMap, stateByKey };
-}
-
-function renderSapServicesChangelogValue(rawValue, options = false) {
-  let isNew = false;
-  let diff = null;
-  if (typeof options === "boolean") {
-    isNew = options;
-  } else if (options && typeof options === "object") {
-    isNew = options.isNew === true;
-    diff = options.diff || null;
-  }
-
-  const text = asText(rawValue, "").trim();
-  if (!text || text === "-") {
-    return '<div class="sap-services-changelog-empty">-</div>';
-  }
-
-  const entries = parseSapServicesChangelogEntries(text);
-  if (entries.length === 0) {
-    return '<div class="sap-services-changelog-empty">-</div>';
-  }
-
-  const rows = entries.map((entry) => {
-    const name = asText(entry.name, "-").trim() || "-";
-    const ports = asText(entry.ports, "-").trim() || "-";
-    const status = diff && diff.stateByKey instanceof Map ? (diff.stateByKey.get(entry.key) || "unchanged") : "unchanged";
-    const marker = status === "added" ? "+" : (status === "removed" ? "-" : (status === "changed" ? "~" : "="));
-    let deltaInfo = "";
-    if (diff && status === "changed") {
-      const counterpart = isNew ? diff.oldMap.get(entry.key) : diff.newMap.get(entry.key);
-      if (counterpart) {
-        const deltaLabel = isNew ? "vorher:" : "neu:";
-        deltaInfo = `<span class="sap-services-changelog-delta">${deltaLabel} ${renderSapB1ServicePorts(counterpart.ports || "-")}</span>`;
-      }
-    }
-
-    return `
-      <div class="sap-services-changelog-item sap-services-changelog-item-${status}">
-        <span class="sap-services-changelog-marker" aria-hidden="true">${marker}</span>
-        <span class="sap-services-changelog-name">${escapeHtml(name || "-")}</span>
-        <span class="sap-services-changelog-ports">${renderSapB1ServicePorts(ports || "-")}${deltaInfo}</span>
-      </div>
-    `;
-  }).join("");
-
-  return `<div class="sap-services-changelog-list${isNew ? " is-new" : ""}">${rows}</div>`;
-}
-
 function renderSapB1ExtensionsSection(payload) {
   const sap = payload && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
   const ext = sap && typeof sap.extensions === "object" ? sap.extensions : null;
@@ -12807,11 +12676,6 @@ async function loadConfigChangelogForHost() {
             newFpInfo = ` <strong>(${escapeHtml(newFp)})</strong>`;
           }
         }
-        if (fieldKey === "sap_services_ports") {
-          const servicesDiff = buildSapServicesChangelogDiff(oldValue, newValue);
-          oldValueHtml = renderSapServicesChangelogValue(oldValue, { isNew: false, diff: servicesDiff });
-          newValueHtml = renderSapServicesChangelogValue(newValue, { isNew: true, diff: servicesDiff });
-        }
         if (deltaHtml) {
           newValueHtml = `<code>${escapeHtml(newValue)}</code> ${deltaHtml}`;
         }
@@ -13936,11 +13800,6 @@ async function loadHostConfigChanges() {
               if (newFp && newFp !== "-") {
                 newFpInfo = `<div class="host-config-change-subline"><strong>(${escapeHtml(newFp)})</strong></div>`;
               }
-            }
-            if (fieldKey === "sap_services_ports") {
-              const servicesDiff = buildSapServicesChangelogDiff(oldValue, newValue);
-              oldValueHtml = renderSapServicesChangelogValue(oldValue, { isNew: false, diff: servicesDiff });
-              newValueHtml = renderSapServicesChangelogValue(newValue, { isNew: true, diff: servicesDiff });
             }
             if (licenseDeltaHtml) {
               newValueHtml = `<div class="host-config-main-value"><strong>${escapeHtml(newValue)}</strong> ${licenseDeltaHtml}</div>`;

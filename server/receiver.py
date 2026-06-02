@@ -6179,6 +6179,7 @@ def get_host_config_changes_for_host(
                    COALESCE(c.source, 'agent-report')
             FROM host_config_changes c
             WHERE c.host_uid = ?
+              AND c.field_key NOT IN ('sap_services_ports')
             ORDER BY c.detected_at_utc DESC
             """,
             (host_uid_value,),
@@ -6194,6 +6195,7 @@ def get_host_config_changes_for_host(
                    COALESCE(c.source, 'agent-report')
             FROM host_config_changes c
             WHERE c.hostname = ?
+              AND c.field_key NOT IN ('sap_services_ports')
             ORDER BY c.detected_at_utc DESC
             """,
             (hostname,),
@@ -6211,6 +6213,7 @@ def get_host_config_changes_for_host(
             "source": row[5],
         }
         for row in rows
+        if str(row[2] or "").strip() not in HOST_CONFIG_CHANGELOG_EXCLUDED_FIELD_KEYS
     ]
 
     addon_items = _collect_sap_addon_change_items_for_host(conn, hostname, host_uid=host_uid_value)
@@ -7895,8 +7898,9 @@ HOST_CONFIG_TRACKED_FIELDS = (
     "hana_release",
     "hana_sid",
     "sql_release",
-    "sap_services_ports",
 )
+
+HOST_CONFIG_CHANGELOG_EXCLUDED_FIELD_KEYS = frozenset({"sap_services_ports"})
 
 HOST_CONFIG_FIELD_LABELS = {
     "os_release": "💻 OS Release",
@@ -7908,7 +7912,6 @@ HOST_CONFIG_FIELD_LABELS = {
     "hana_release": "HANA Release",
     "hana_sid": "HANA SID",
     "sql_release": "SQL Release",
-    "sap_services_ports": "SAP Services/Ports",
 }
 
 SAP_LICENSE_TYPE_FIELD_PREFIX = "sap_license_type::"
@@ -8020,57 +8023,6 @@ def _ensure_host_config_snapshot_schema(conn: sqlite3.Connection) -> None:
     )
 
 
-def _extract_sap_services_ports_snapshot(payload: dict) -> str:
-    sap_block = payload.get("sap_business_one") if isinstance(payload, dict) else None
-    if not isinstance(sap_block, dict):
-        return "-"
-
-    installed_services = sap_block.get("installed_services")
-    if not isinstance(installed_services, dict):
-        return "-"
-
-    services = installed_services.get("services")
-    if not isinstance(services, list) or not services:
-        return "-"
-
-    service_ports_map: dict[str, set[str]] = {}
-    for service in services:
-        if not isinstance(service, dict):
-            continue
-
-        service_label = str(service.get("description") or service.get("name") or "").strip()
-        if not service_label:
-            continue
-        service_label = re.sub(r"\s+", " ", service_label)
-
-        raw_ports = str(service.get("ports") or "")
-        ports_set = service_ports_map.setdefault(service_label, set())
-        for token in re.split(r"[^0-9]+", raw_ports):
-            part = token.strip()
-            if not part:
-                continue
-            try:
-                parsed = int(part)
-            except (TypeError, ValueError):
-                continue
-            if 1 <= parsed <= 65535:
-                ports_set.add(str(parsed))
-
-    if not service_ports_map:
-        return "-"
-
-    normalized_items: list[str] = []
-    for service_label in sorted(service_ports_map.keys(), key=lambda value: value.lower()):
-        raw_port_values = service_ports_map.get(service_label, set())
-        if raw_port_values:
-            ports_sorted = sorted(raw_port_values, key=lambda value: int(value))
-            normalized_items.append(f"{service_label}:{','.join(ports_sorted)}")
-        else:
-            normalized_items.append(f"{service_label}:-")
-
-    return "; ".join(normalized_items) if normalized_items else "-"
-
-
 def _normalize_config_value(field_key: str, value: object) -> str:
     raw = str(value or "").strip()
     if not raw:
@@ -8152,7 +8104,6 @@ def _extract_host_config_snapshot(payload: dict) -> dict[str, str]:
         "hana_release": str(release_info["hana_version"]),
         "hana_sid": str(release_info["hana_sid"]),
         "sql_release": _extract_sql_release(payload),
-        "sap_services_ports": _extract_sap_services_ports_snapshot(payload),
     }
 
 
@@ -8287,7 +8238,7 @@ def _track_host_config_changes(
 
     existing_row = conn.execute(
         """
-        SELECT os_release, kernel_release, cpu_cores, cpu_model_name, ram_gb, sap_release, hana_release, hana_sid, sql_release, sap_services_ports
+        SELECT os_release, kernel_release, cpu_cores, cpu_model_name, ram_gb, sap_release, hana_release, hana_sid, sql_release
         FROM host_config_snapshot
         WHERE hostname = ?
         """,
@@ -8305,7 +8256,6 @@ def _track_host_config_changes(
             "hana_release": _normalize_config_value("hana_release", existing_row[6]),
             "hana_sid": _normalize_config_value("hana_sid", existing_row[7]),
             "sql_release": _normalize_config_value("sql_release", existing_row[8]),
-            "sap_services_ports": _normalize_config_value("sap_services_ports", existing_row[9]),
         }
 
         dedupe_cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -8362,10 +8312,9 @@ def _track_host_config_changes(
             hana_release,
             hana_sid,
             sql_release,
-            sap_services_ports,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(hostname) DO UPDATE SET
             os_release = excluded.os_release,
             kernel_release = excluded.kernel_release,
@@ -8376,7 +8325,6 @@ def _track_host_config_changes(
             hana_release = excluded.hana_release,
             hana_sid = excluded.hana_sid,
             sql_release = excluded.sql_release,
-            sap_services_ports = excluded.sap_services_ports,
             updated_at_utc = excluded.updated_at_utc
         """,
         (
@@ -8390,7 +8338,6 @@ def _track_host_config_changes(
             new_snapshot["hana_release"],
             new_snapshot["hana_sid"],
             new_snapshot["sql_release"],
-            new_snapshot["sap_services_ports"],
             detected_at_utc,
         ),
     )
@@ -8782,6 +8729,7 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
         LEFT JOIN host_settings h ON h.hostname = chg.hostname
         LEFT JOIN customers cust ON cust.id = h.customer_id
         WHERE chg.detected_at_utc >= ?
+          AND chg.field_key NOT IN ('sap_services_ports')
         ORDER BY chg.detected_at_utc DESC, chg.id DESC
         LIMIT ?
         """,
@@ -9154,10 +9102,9 @@ def backfill_host_config_changes(
                 hana_release,
                 hana_sid,
                 sql_release,
-                sap_services_ports,
                 updated_at_utc
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(hostname) DO UPDATE SET
                 os_release = excluded.os_release,
                 kernel_release = excluded.kernel_release,
@@ -9168,7 +9115,6 @@ def backfill_host_config_changes(
                 hana_release = excluded.hana_release,
                 hana_sid = excluded.hana_sid,
                 sql_release = excluded.sql_release,
-                sap_services_ports = excluded.sap_services_ports,
                 updated_at_utc = excluded.updated_at_utc
             """,
             (
@@ -9182,7 +9128,6 @@ def backfill_host_config_changes(
                 snapshot["hana_release"],
                 snapshot["hana_sid"],
                 snapshot["sql_release"],
-                snapshot["sap_services_ports"],
                 updated_at_utc,
             ),
         )
