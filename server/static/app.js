@@ -9790,14 +9790,24 @@ function updateReportCustomerChip() {
   if (!chipWrap) {
     return;
   }
+  const customerCard = chipWrap.closest(".report-customer-main-card");
   chipWrap.classList.remove("hidden");
   const selectedHost = getSelectedHostRecord();
   if ((!state.selectedHost && !state.selectedHostUid) || !selectedHost) {
+    if (customerCard) {
+      customerCard.classList.add("report-customer-main-card--placeholder");
+    }
     chipWrap.innerHTML = renderSelectedHostPlaceholderChip();
     return;
   }
+  if (customerCard) {
+    customerCard.classList.remove("report-customer-main-card--placeholder");
+  }
   const customerChip = renderSelectedHostCustomerChip(selectedHost);
   if (!asText(customerChip, "").trim()) {
+    if (customerCard) {
+      customerCard.classList.add("report-customer-main-card--placeholder");
+    }
     chipWrap.innerHTML = renderSelectedHostPlaceholderChip();
     return;
   }
@@ -9904,13 +9914,27 @@ function updateReportControlsCardState(selectedHost) {
   if (!controlsCard) {
     return;
   }
+  const chipsRow = controlsCard.querySelector(".report-controls-row--chips");
+  const actionsRow = controlsCard.querySelector(".report-controls-row--actions");
   if (selectedHost) {
     controlsCard.classList.add("report-controls-card--active");
     controlsCard.classList.remove("report-controls-card--empty");
+    if (chipsRow) {
+      chipsRow.classList.remove("hidden");
+    }
+    if (actionsRow) {
+      actionsRow.classList.remove("hidden");
+    }
     return;
   }
   controlsCard.classList.add("report-controls-card--empty");
   controlsCard.classList.remove("report-controls-card--active");
+  if (chipsRow) {
+    chipsRow.classList.add("hidden");
+  }
+  if (actionsRow) {
+    actionsRow.classList.add("hidden");
+  }
 }
 
 function updateSelectedHostControls() {
