@@ -6655,7 +6655,7 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
   background: linear-gradient(180deg, #ffffff 0%, #f5f9ff 100%);
   padding: 10px;
   display: grid;
-  gap: 4px;
+  gap: 5px;
 }
 
 .trend-card-head {
@@ -6663,10 +6663,12 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-height: 32px;
 }
 
 .trend-card strong {
   font-size: 12px;
+  line-height: 1.15;
 }
 
 .trend-card span {
@@ -6682,6 +6684,9 @@ body[data-theme="dark"] .sidebar-tools .icon-filter-chip.active {
 }
 
 .trend-current {
+  display: block;
+  min-height: 24px;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
@@ -14201,7 +14206,7 @@ body[data-theme="dark"] .fs-chart-card {
 }
 
 .trend-progress-bar {
-  height: 8px;
+  height: 12px;
   border-radius: 999px;
   background: linear-gradient(180deg, #dbe6f3 0%, #e4edf8 100%);
 }
