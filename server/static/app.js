@@ -4897,6 +4897,29 @@ function getItProviderContactsFromCustomer(customer) {
   });
 }
 
+function itProviderContactHasData(contact) {
+  return Boolean(
+    asText(contact?.it_provider_name, "").trim()
+    || asText(contact?.it_provider_contact, "").trim()
+    || asText(contact?.it_provider_email, "").trim()
+    || asText(contact?.it_provider_phone, "").trim()
+  );
+}
+
+function deriveInitialVisibleItProviderRows(contacts) {
+  const normalized = normalizeItProviderContacts(contacts);
+  let highestFilled = -1;
+  for (let index = 0; index < normalized.length; index += 1) {
+    if (itProviderContactHasData(normalized[index])) {
+      highestFilled = index;
+    }
+  }
+  if (highestFilled < 0) {
+    return 1;
+  }
+  return Math.max(1, Math.min(3, highestFilled + 2));
+}
+
 function renderCustomerNotificationPanel(hostname, settings) {
   const customerId = Number(settings.customer_id || 0) || null;
   const customerName = asText(settings.customer_name, "");
@@ -4904,7 +4927,7 @@ function renderCustomerNotificationPanel(hostname, settings) {
   const itProviderContacts = getItProviderContactsFromHostSettings(settings);
   const providerRowsHtml = itProviderContacts.map((entry, index) => {
     const slot = index + 1;
-    return `<div class="customer-provider-row">
+    return `<div class="customer-provider-row" data-provider-row data-provider-slot="${slot}">
       <p class="settings-helper-text customer-provider-row-title">Ansprechpartner ${slot}</p>
       <div class="alarm-settings-group">
         <label for="customerItProviderNameInput${slot}" class="settings-label">IT Provider Name</label>
@@ -4922,6 +4945,7 @@ function renderCustomerNotificationPanel(hostname, settings) {
         <label for="customerItProviderPhoneInput${slot}" class="settings-label">Telefon</label>
         <input id="customerItProviderPhoneInput${slot}" type="text" class="settings-input" placeholder="+41 ..." value="${escapeHtml(entry.it_provider_phone)}">
       </div>
+      ${slot > 1 ? `<div class="customer-provider-row-actions"><button type="button" class="btn-secondary btn-secondary--compact" data-provider-remove-slot="${slot}">Ansprechpartner ${slot} entfernen</button></div>` : ""}
     </div>`;
   }).join("");
   const customerLogoUrl = asText(settings.customer_logo_url, "").trim();
@@ -4942,6 +4966,7 @@ function renderCustomerNotificationPanel(hostname, settings) {
       </div>
       ${providerRowsHtml}
       <div class="alarm-settings-actions">
+        <button id="customerAddProviderRowBtn" type="button" class="btn-secondary btn-secondary--compact">+ Ansprechpartner hinzufügen</button>
         <button id="saveCustomerNameBtn" type="button" class="btn-primary btn-primary--compact">Kundendaten speichern</button>
         <span id="customerNameStatus" class="settings-status"></span>
       </div>
@@ -4980,8 +5005,60 @@ async function loadAndRenderCustomerNotificationPanel(hostname, hostUid = "") {
     container.classList.remove("hidden");
 
     const saveButton = container.querySelector("#saveCustomerNameBtn");
+    const addProviderRowButton = container.querySelector("#customerAddProviderRowBtn");
     const logoButton = container.querySelector("#saveCustomerLogoBtn");
     const logoInput = container.querySelector("#customerLogoInput");
+    const providerRows = [1, 2, 3].map((slot) => ({
+      slot,
+      row: container.querySelector(`[data-provider-row][data-provider-slot="${slot}"]`),
+      removeBtn: container.querySelector(`[data-provider-remove-slot="${slot}"]`),
+    }));
+    let visibleProviderRows = deriveInitialVisibleItProviderRows(getItProviderContactsFromHostSettings(data));
+
+    const syncProviderRowsUi = () => {
+      for (const entry of providerRows) {
+        if (!entry.row) continue;
+        entry.row.classList.toggle("hidden", entry.slot > visibleProviderRows);
+        if (entry.removeBtn) {
+          entry.removeBtn.classList.toggle("hidden", entry.slot !== visibleProviderRows || visibleProviderRows <= 1);
+        }
+      }
+      if (addProviderRowButton) {
+        addProviderRowButton.classList.toggle("hidden", visibleProviderRows >= 3);
+      }
+    };
+
+    const clearProviderSlot = (slot) => {
+      const nameInput = container.querySelector(`#customerItProviderNameInput${slot}`);
+      const contactInput = container.querySelector(`#customerItProviderContactInput${slot}`);
+      const emailInput = container.querySelector(`#customerItProviderEmailInput${slot}`);
+      const phoneInput = container.querySelector(`#customerItProviderPhoneInput${slot}`);
+      if (nameInput) nameInput.value = "";
+      if (contactInput) contactInput.value = "";
+      if (emailInput) emailInput.value = "";
+      if (phoneInput) phoneInput.value = "";
+    };
+
+    addProviderRowButton?.addEventListener("click", () => {
+      visibleProviderRows = Math.min(3, visibleProviderRows + 1);
+      syncProviderRowsUi();
+    });
+
+    for (const entry of providerRows) {
+      entry.removeBtn?.addEventListener("click", () => {
+        if (entry.slot <= 1) {
+          return;
+        }
+        for (let slot = entry.slot; slot <= 3; slot += 1) {
+          clearProviderSlot(slot);
+        }
+        visibleProviderRows = Math.max(1, entry.slot - 1);
+        syncProviderRowsUi();
+      });
+    }
+
+    syncProviderRowsUi();
+
     const customerId = Number(data?.customer_id || 0) || null;
     if (saveButton && !customerId) {
       saveButton.disabled = true;
@@ -11902,7 +11979,7 @@ async function openHostMetadataEditorDialog({
   const initialProviderContacts = normalizeItProviderContacts(currentItProviderContacts);
   const providerRowsHtml = initialProviderContacts.map((entry, index) => {
     const slot = index + 1;
-    return `<div class="host-meta-provider-row">
+    return `<div class="host-meta-provider-row" data-provider-row data-provider-slot="${slot}">
       <p class="settings-helper-text host-meta-provider-row-title">Ansprechpartner ${slot}</p>
       <div class="host-meta-customer-provider-grid">
         <label class="host-meta-customer-provider-span">IT Provider Name
@@ -11918,6 +11995,7 @@ async function openHostMetadataEditorDialog({
           <input id="hostMetaItProviderPhoneInput${slot}" type="text" placeholder="+41 ..." value="${escapeHtml(entry.it_provider_phone)}" />
         </label>
       </div>
+      ${slot > 1 ? `<div class="host-meta-provider-row-actions"><button type="button" class="btn-secondary btn-secondary--compact" data-provider-remove-slot="${slot}">Ansprechpartner ${slot} entfernen</button></div>` : ""}
     </div>`;
   }).join("");
 
@@ -11969,6 +12047,9 @@ async function openHostMetadataEditorDialog({
         </div>
         <div class="host-meta-customer-provider">
           <h4>IT-Provider (kundenspezifisch)</h4>
+          <div class="host-meta-provider-toolbar">
+            <button id="hostMetaAddProviderRowBtn" type="button" class="btn-secondary btn-secondary--compact">+ Ansprechpartner hinzufügen</button>
+          </div>
           ${providerRowsHtml}
         </div>
         <div class="host-meta-logo-upload-row">
@@ -11993,13 +12074,55 @@ async function openHostMetadataEditorDialog({
   const environmentTypeSelect = modal.querySelector("#hostMetaEnvironmentTypeSelect");
   const newCustomerNameInput = modal.querySelector("#hostMetaNewCustomerNameInput");
   const newCustomerProjectInput = modal.querySelector("#hostMetaNewCustomerProjectInput");
+  const addProviderRowButton = modal.querySelector("#hostMetaAddProviderRowBtn");
   const providerInputRows = [1, 2, 3].map((slot) => ({
+    slot,
+    row: modal.querySelector(`[data-provider-row][data-provider-slot="${slot}"]`),
+    removeBtn: modal.querySelector(`[data-provider-remove-slot="${slot}"]`),
     itProviderNameInput: modal.querySelector(`#hostMetaItProviderNameInput${slot}`),
     itProviderContactInput: modal.querySelector(`#hostMetaItProviderContactInput${slot}`),
     itProviderEmailInput: modal.querySelector(`#hostMetaItProviderEmailInput${slot}`),
     itProviderPhoneInput: modal.querySelector(`#hostMetaItProviderPhoneInput${slot}`),
   }));
   const customerLogoInput = modal.querySelector("#hostMetaCustomerLogoInput");
+  let visibleProviderRows = deriveInitialVisibleItProviderRows(initialProviderContacts);
+
+  const syncProviderRowsUi = () => {
+    for (const rowInputs of providerInputRows) {
+      if (rowInputs.row) {
+        rowInputs.row.classList.toggle("hidden", rowInputs.slot > visibleProviderRows);
+      }
+      if (rowInputs.removeBtn) {
+        rowInputs.removeBtn.classList.toggle("hidden", rowInputs.slot !== visibleProviderRows || visibleProviderRows <= 1);
+      }
+    }
+    if (addProviderRowButton) {
+      addProviderRowButton.classList.toggle("hidden", visibleProviderRows >= 3);
+    }
+  };
+
+  const clearProviderSlot = (slot) => {
+    const rowInputs = providerInputRows[slot - 1];
+    if (!rowInputs) return;
+    if (rowInputs.itProviderNameInput) rowInputs.itProviderNameInput.value = "";
+    if (rowInputs.itProviderContactInput) rowInputs.itProviderContactInput.value = "";
+    if (rowInputs.itProviderEmailInput) rowInputs.itProviderEmailInput.value = "";
+    if (rowInputs.itProviderPhoneInput) rowInputs.itProviderPhoneInput.value = "";
+  };
+
+  const setProviderRowsFromContacts = (contacts) => {
+    const normalized = normalizeItProviderContacts(contacts);
+    for (let index = 0; index < providerInputRows.length; index += 1) {
+      const rowInputs = providerInputRows[index];
+      const values = normalized[index] || {};
+      if (rowInputs.itProviderNameInput) rowInputs.itProviderNameInput.value = asText(values.it_provider_name, "");
+      if (rowInputs.itProviderContactInput) rowInputs.itProviderContactInput.value = asText(values.it_provider_contact, "");
+      if (rowInputs.itProviderEmailInput) rowInputs.itProviderEmailInput.value = asText(values.it_provider_email, "");
+      if (rowInputs.itProviderPhoneInput) rowInputs.itProviderPhoneInput.value = asText(values.it_provider_phone, "");
+    }
+    visibleProviderRows = deriveInitialVisibleItProviderRows(normalized);
+    syncProviderRowsUi();
+  };
 
   const updateNewSection = () => {
     if (!selectEl || !wrapNew) return;
@@ -12010,12 +12133,7 @@ async function openHostMetadataEditorDialog({
     }
 
     if (selectEl.value === "__none__") {
-      for (const rowInputs of providerInputRows) {
-        if (rowInputs.itProviderNameInput) rowInputs.itProviderNameInput.value = "";
-        if (rowInputs.itProviderContactInput) rowInputs.itProviderContactInput.value = "";
-        if (rowInputs.itProviderEmailInput) rowInputs.itProviderEmailInput.value = "";
-        if (rowInputs.itProviderPhoneInput) rowInputs.itProviderPhoneInput.value = "";
-      }
+      setProviderRowsFromContacts([]);
       return;
     }
 
@@ -12024,19 +12142,30 @@ async function openHostMetadataEditorDialog({
     if (!selectedCustomer) {
       return;
     }
-    const selectedProviderContacts = getItProviderContactsFromCustomer(selectedCustomer);
-    for (let index = 0; index < 3; index += 1) {
-      const values = selectedProviderContacts[index] || {};
-      const rowInputs = providerInputRows[index];
-      if (!rowInputs) continue;
-      if (rowInputs.itProviderNameInput) rowInputs.itProviderNameInput.value = asText(values.it_provider_name, "");
-      if (rowInputs.itProviderContactInput) rowInputs.itProviderContactInput.value = asText(values.it_provider_contact, "");
-      if (rowInputs.itProviderEmailInput) rowInputs.itProviderEmailInput.value = asText(values.it_provider_email, "");
-      if (rowInputs.itProviderPhoneInput) rowInputs.itProviderPhoneInput.value = asText(values.it_provider_phone, "");
-    }
+    setProviderRowsFromContacts(getItProviderContactsFromCustomer(selectedCustomer));
   };
   updateNewSection();
   if (selectEl) selectEl.addEventListener("change", updateNewSection);
+
+  addProviderRowButton?.addEventListener("click", () => {
+    visibleProviderRows = Math.min(3, visibleProviderRows + 1);
+    syncProviderRowsUi();
+  });
+
+  for (const rowInputs of providerInputRows) {
+    rowInputs.removeBtn?.addEventListener("click", () => {
+      if (rowInputs.slot <= 1) {
+        return;
+      }
+      for (let slot = rowInputs.slot; slot <= 3; slot += 1) {
+        clearProviderSlot(slot);
+      }
+      visibleProviderRows = Math.max(1, rowInputs.slot - 1);
+      syncProviderRowsUi();
+    });
+  }
+
+  syncProviderRowsUi();
 
   if (displayNameInput) displayNameInput.focus();
 

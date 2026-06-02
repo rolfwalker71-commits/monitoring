@@ -970,6 +970,14 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   border-top: 1px dashed #d5e0ef;
 }
 
+.host-meta-provider-toolbar,
+.host-meta-provider-row-actions,
+.customer-provider-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .host-meta-provider-row:first-of-type {
   border-top: 0;
   padding-top: 0;

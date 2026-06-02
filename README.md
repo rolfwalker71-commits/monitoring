@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.245**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.245**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.246**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.246**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.246 | 02.06.2026 | UX-Update für IT-Provider-Ansprechpartner: statt immer 3 Blöcken wird jetzt dynamisch gearbeitet. Standardmäßig nur notwendige Zeilen sichtbar; per `+ Ansprechpartner hinzufügen` bis max. 3 erweiterbar, und zusätzliche Zeilen können wieder entfernt werden. Gilt sowohl im Dialog **Host bearbeiten** als auch im Bereich **Kundeninfos**. |
 | 1.7.245 | 02.06.2026 | IT-Provider erweitert auf bis zu **3 Ansprechpartner** pro Kunde (je Slot: `IT Provider Name`, `Ansprechpartner`, `Mail`, `Telefon`). Umsetzung inkl. DB-Migration (`customers`), API-Erweiterung (`/api/v1/customers`, `/api/v1/customers/{id}`, `/api/v1/host-settings`) sowie UI in **Host bearbeiten** und **Kundeninfos**. Alle Daten bleiben kundenspezifisch gespeichert und werden in der Hostansicht geladen/editiert. |
 | 1.7.244 | 02.06.2026 | Kundenspezifische IT-Provider-Daten ergänzt und persistiert: `IT Provider Name`, `Ansprechpartner`, `Mail`, `Telefon` werden nun am **Kunden** gespeichert (DB-Migration + API) und in der **Hostansicht** angezeigt/bearbeitet. Der Host-Bearbeiten-Dialog enthält dafür eine eigene 3-zeilige IT-Provider-Sektion; zusätzlich wurden die Felder in den Bereich **Kundeninfos** integriert. |
 | 1.7.243 | 02.06.2026 | `Meldung X` in die rechte Header-Karte verschoben: neue Chip-Reihenfolge ist jetzt `API | OS | 🔔 <Nummer> | 📦 <Datensätze>`. Damit steht die Meldungsnummer rechts vom OS-Logo und links von der Datensatzanzahl. Darstellung der Meldung kompakt nur als Zahl + semantisches Emoji; alte linke `Meldung`-Anzeige wurde ausgeblendet. |
