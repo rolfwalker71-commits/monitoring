@@ -9695,8 +9695,9 @@ function renderHostOsMetaChip(host) {
   }
   const osInfo = resolveHostOsIcon(host.os);
   const osLabel = asText(osInfo?.osLabel, "OS");
-  const osTitle = asText(host.os, osLabel);
-  return `<span class="selected-host-meta-chip selected-host-meta-chip--os" title="${escapeHtml(osTitle)}">${escapeHtml(osLabel)}</span>`;
+  const osTitle = asText(host.os, osLabel).trim() || osLabel;
+  const iconName = asText(osInfo?.iconName, "linux.png");
+  return `<span class="selected-host-meta-chip selected-host-meta-chip--os-logo" title="${escapeHtml(osTitle)}"><img src="icons/${escapeHtml(iconName)}" class="selected-host-os-logo-inline" alt="${escapeHtml(osLabel)}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${escapeHtml(iconName)}';}"></span>`;
 }
 
 function renderHeaderFirstRowControls(host) {
@@ -9705,9 +9706,11 @@ function renderHeaderFirstRowControls(host) {
   }
 
   const reportCount = Number(host.report_count || 0).toLocaleString("de-DE");
+  const osChip = renderHostOsMetaChip(host);
 
   return `
     ${renderApiKeyChip(host)}
+    ${osChip}
     <span class="selected-host-meta-chip" title="Gesendete Meldungen">📦 ${reportCount}</span>
   `;
 }

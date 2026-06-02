@@ -14804,7 +14804,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 .reports-column .section-head .report-meta-row {
   margin-top: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(240px, 23vw, 340px);
+  grid-template-columns: minmax(0, 1fr) max-content;
   gap: 8px;
   align-items: stretch;
 }
@@ -14847,8 +14847,8 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .reports-column .section-head .report-controls-card {
-  width: 100%;
-  max-width: 340px;
+  width: max-content;
+  max-width: none;
   min-width: 0;
   justify-self: end;
   display: grid;
@@ -14858,7 +14858,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 }
 
 .reports-column .section-head .report-controls-card .report-controls-row {
-  width: 100%;
+  width: auto;
 }
 
 .reports-column .section-head .report-controls-card .report-controls-row--chips {
@@ -15047,6 +15047,20 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 
 .selected-host-meta-chip--os {
   min-width: 56px;
+}
+
+.reports-column .section-head .report-controls-card .selected-host-meta-chip--os-logo {
+  width: 28px;
+  min-width: 28px;
+  height: 24px;
+  padding: 0;
+}
+
+.selected-host-os-logo-inline {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  display: block;
 }
 
 /* Host list: stronger active focus, calmer passive cards */

@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.234**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.234**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.235**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.235**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.235 | 02.06.2026 | Rechte Headerkarte auf inhaltsbasierte Breite umgestellt (schmaler, ohne Abschneiden), linke Karte dadurch breiter nutzbar. Zusätzlich in der oberen rechten Chip-Zeile ein OS-Logo (PNG, wie in der Hostkarte) ergänzt, inklusive Fallback auf `/icons/...`. |
 | 1.7.234 | 02.06.2026 | `Export JSON` im Host-Header entfernt: Button-Markup, Event-Wiring und Export-Funktion (`exportSelectedHostReportsJson`) inklusive zugehöriger CSS-Regeln vollständig gelöscht. |
 | 1.7.233 | 02.06.2026 | Statuschip (Prod/Test) in der linken Headerkarte mit zusätzlichem unteren Abstand versehen, damit der Chip nicht mehr am unteren Kartenrand klebt. |
 | 1.7.232 | 02.06.2026 | Header-Zählertext vereinfacht: statt `Meldung X von XX` wird nun nur noch `Meldung X` angezeigt. Im Leerstaat ohne Reports steht `Meldung 0`, da die Gesamtzahl bereits separat über den Report-Count-Chip verfügbar ist. |
