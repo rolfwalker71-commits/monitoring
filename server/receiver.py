@@ -571,6 +571,10 @@ def init_db() -> None:
                 customer_name TEXT NOT NULL,
                 maringo_project_number TEXT NOT NULL DEFAULT '',
                 logo_filename TEXT NOT NULL DEFAULT '',
+                it_provider_name TEXT NOT NULL DEFAULT '',
+                it_provider_contact TEXT NOT NULL DEFAULT '',
+                it_provider_email TEXT NOT NULL DEFAULT '',
+                it_provider_phone TEXT NOT NULL DEFAULT '',
                 created_at_utc TEXT NOT NULL,
                 updated_at_utc TEXT NOT NULL
             )
@@ -582,6 +586,14 @@ def init_db() -> None:
         }
         if "logo_filename" not in existing_customer_columns:
             conn.execute("ALTER TABLE customers ADD COLUMN logo_filename TEXT NOT NULL DEFAULT ''")
+        if "it_provider_name" not in existing_customer_columns:
+            conn.execute("ALTER TABLE customers ADD COLUMN it_provider_name TEXT NOT NULL DEFAULT ''")
+        if "it_provider_contact" not in existing_customer_columns:
+            conn.execute("ALTER TABLE customers ADD COLUMN it_provider_contact TEXT NOT NULL DEFAULT ''")
+        if "it_provider_email" not in existing_customer_columns:
+            conn.execute("ALTER TABLE customers ADD COLUMN it_provider_email TEXT NOT NULL DEFAULT ''")
+        if "it_provider_phone" not in existing_customer_columns:
+            conn.execute("ALTER TABLE customers ADD COLUMN it_provider_phone TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_name_ci
@@ -4095,6 +4107,22 @@ def normalize_maringo_project_number(value: object) -> str:
     return str(value or "").strip()
 
 
+def normalize_it_provider_name(value: object) -> str:
+    return " ".join(str(value or "").strip().split())
+
+
+def normalize_it_provider_contact(value: object) -> str:
+    return " ".join(str(value or "").strip().split())
+
+
+def normalize_it_provider_email(value: object) -> str:
+    return str(value or "").strip().lower()
+
+
+def normalize_it_provider_phone(value: object) -> str:
+    return str(value or "").strip()
+
+
 def build_customer_logo_url(customer_id: object, logo_filename: object, updated_at_utc: object = "") -> str:
     try:
         cid = int(customer_id)
@@ -4190,7 +4218,16 @@ def save_customer_logo(conn: sqlite3.Connection, customer_id: object, file_name:
 def list_customers(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         """
-        SELECT id, customer_name, COALESCE(maringo_project_number, ''), COALESCE(logo_filename, ''), created_at_utc, updated_at_utc
+        SELECT id,
+               customer_name,
+               COALESCE(maringo_project_number, ''),
+               COALESCE(logo_filename, ''),
+               COALESCE(it_provider_name, ''),
+               COALESCE(it_provider_contact, ''),
+               COALESCE(it_provider_email, ''),
+               COALESCE(it_provider_phone, ''),
+               created_at_utc,
+               updated_at_utc
         FROM customers
         ORDER BY LOWER(customer_name), id
         """
@@ -4201,9 +4238,13 @@ def list_customers(conn: sqlite3.Connection) -> list[dict]:
             "customer_name": str(row[1] or ""),
             "maringo_project_number": str(row[2] or ""),
             "logo_filename": str(row[3] or ""),
-            "logo_url": build_customer_logo_url(row[0], row[3], row[5]),
-            "created_at_utc": str(row[4] or ""),
-            "updated_at_utc": str(row[5] or ""),
+            "logo_url": build_customer_logo_url(row[0], row[3], row[9]),
+            "it_provider_name": str(row[4] or ""),
+            "it_provider_contact": str(row[5] or ""),
+            "it_provider_email": str(row[6] or ""),
+            "it_provider_phone": str(row[7] or ""),
+            "created_at_utc": str(row[8] or ""),
+            "updated_at_utc": str(row[9] or ""),
         }
         for row in rows
     ]
@@ -4218,7 +4259,16 @@ def get_customer_by_id(conn: sqlite3.Connection, customer_id: object) -> dict | 
         return None
     row = conn.execute(
         """
-        SELECT id, customer_name, COALESCE(maringo_project_number, ''), COALESCE(logo_filename, ''), created_at_utc, updated_at_utc
+        SELECT id,
+               customer_name,
+               COALESCE(maringo_project_number, ''),
+               COALESCE(logo_filename, ''),
+               COALESCE(it_provider_name, ''),
+               COALESCE(it_provider_contact, ''),
+               COALESCE(it_provider_email, ''),
+               COALESCE(it_provider_phone, ''),
+               created_at_utc,
+               updated_at_utc
         FROM customers
         WHERE id = ?
         """,
@@ -4231,15 +4281,31 @@ def get_customer_by_id(conn: sqlite3.Connection, customer_id: object) -> dict | 
         "customer_name": str(row[1] or ""),
         "maringo_project_number": str(row[2] or ""),
         "logo_filename": str(row[3] or ""),
-        "logo_url": build_customer_logo_url(row[0], row[3], row[5]),
-        "created_at_utc": str(row[4] or ""),
-        "updated_at_utc": str(row[5] or ""),
+        "logo_url": build_customer_logo_url(row[0], row[3], row[9]),
+        "it_provider_name": str(row[4] or ""),
+        "it_provider_contact": str(row[5] or ""),
+        "it_provider_email": str(row[6] or ""),
+        "it_provider_phone": str(row[7] or ""),
+        "created_at_utc": str(row[8] or ""),
+        "updated_at_utc": str(row[9] or ""),
     }
 
 
-def upsert_customer(conn: sqlite3.Connection, customer_name: object, maringo_project_number: object = "") -> dict:
+def upsert_customer(
+    conn: sqlite3.Connection,
+    customer_name: object,
+    maringo_project_number: object = "",
+    it_provider_name: object = "",
+    it_provider_contact: object = "",
+    it_provider_email: object = "",
+    it_provider_phone: object = "",
+) -> dict:
     name = normalize_customer_name(customer_name)
     project_no = normalize_maringo_project_number(maringo_project_number)
+    provider_name = normalize_it_provider_name(it_provider_name)
+    provider_contact = normalize_it_provider_contact(it_provider_contact)
+    provider_email = normalize_it_provider_email(it_provider_email)
+    provider_phone = normalize_it_provider_phone(it_provider_phone)
     if not name:
         raise ValueError("customer_name missing")
 
@@ -4256,18 +4322,38 @@ def upsert_customer(conn: sqlite3.Connection, customer_name: object, maringo_pro
     now_utc = utc_now_iso()
     if existing:
         customer_id = int(existing[0])
-        if project_no and project_no != str(existing[2] or ""):
+        if (
+            project_no and project_no != str(existing[2] or "")
+        ) or provider_name or provider_contact or provider_email or provider_phone:
             conn.execute(
-                "UPDATE customers SET maringo_project_number = ?, updated_at_utc = ? WHERE id = ?",
-                (project_no, now_utc, customer_id),
+                """
+                UPDATE customers
+                SET maringo_project_number = ?,
+                    it_provider_name = ?,
+                    it_provider_contact = ?,
+                    it_provider_email = ?,
+                    it_provider_phone = ?,
+                    updated_at_utc = ?
+                WHERE id = ?
+                """,
+                (project_no, provider_name, provider_contact, provider_email, provider_phone, now_utc, customer_id),
             )
     else:
         conn.execute(
             """
-            INSERT INTO customers (customer_name, maringo_project_number, created_at_utc, updated_at_utc)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO customers (
+                customer_name,
+                maringo_project_number,
+                it_provider_name,
+                it_provider_contact,
+                it_provider_email,
+                it_provider_phone,
+                created_at_utc,
+                updated_at_utc
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (name, project_no, now_utc, now_utc),
+            (name, project_no, provider_name, provider_contact, provider_email, provider_phone, now_utc, now_utc),
         )
         customer_id = int(conn.execute("SELECT last_insert_rowid()").fetchone()[0])
 
@@ -4282,6 +4368,10 @@ def update_customer_by_id(
     customer_id: object,
     customer_name: object,
     maringo_project_number: object,
+    it_provider_name: object,
+    it_provider_contact: object,
+    it_provider_email: object,
+    it_provider_phone: object,
 ) -> dict:
     try:
         cid = int(str(customer_id or 0))
@@ -4293,6 +4383,10 @@ def update_customer_by_id(
     if not name:
         raise ValueError("customer_name fehlt.")
     project_no = normalize_maringo_project_number(maringo_project_number)
+    provider_name = normalize_it_provider_name(it_provider_name)
+    provider_contact = normalize_it_provider_contact(it_provider_contact)
+    provider_email = normalize_it_provider_email(it_provider_email)
+    provider_phone = normalize_it_provider_phone(it_provider_phone)
     clash = conn.execute(
         "SELECT id FROM customers WHERE LOWER(customer_name) = LOWER(?) AND id != ?",
         (name, cid),
@@ -4301,8 +4395,18 @@ def update_customer_by_id(
         raise ValueError(f'Ein Kunde mit dem Namen "{name}" existiert bereits.')
     now_utc = utc_now_iso()
     conn.execute(
-        "UPDATE customers SET customer_name = ?, maringo_project_number = ?, updated_at_utc = ? WHERE id = ?",
-        (name, project_no, now_utc, cid),
+        """
+        UPDATE customers
+        SET customer_name = ?,
+            maringo_project_number = ?,
+            it_provider_name = ?,
+            it_provider_contact = ?,
+            it_provider_email = ?,
+            it_provider_phone = ?,
+            updated_at_utc = ?
+        WHERE id = ?
+        """,
+        (name, project_no, provider_name, provider_contact, provider_email, provider_phone, now_utc, cid),
     )
     if conn.execute("SELECT changes()").fetchone()[0] == 0:
         raise ValueError("Kunde nicht gefunden.")
@@ -13127,7 +13231,11 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
                     COALESCE(c.customer_name, ''),
                     COALESCE(c.maringo_project_number, ''),
                     COALESCE(c.logo_filename, ''),
-                    COALESCE(c.updated_at_utc, '')
+                    COALESCE(c.updated_at_utc, ''),
+                    COALESCE(c.it_provider_name, ''),
+                    COALESCE(c.it_provider_contact, ''),
+                    COALESCE(c.it_provider_email, ''),
+                    COALESCE(c.it_provider_phone, '')
                 FROM host_settings h
                 LEFT JOIN customers c ON c.id = h.customer_id
                 WHERE h.hostname = ?
@@ -13148,6 +13256,10 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
             "customer_name": "",
             "customer_maringo_project_number": "",
             "customer_logo_url": "",
+            "customer_it_provider_name": "",
+            "customer_it_provider_contact": "",
+            "customer_it_provider_email": "",
+            "customer_it_provider_phone": "",
         }
     else:
         customer_alert_min_severity = str(row[6] or "critical").strip().lower()
@@ -13176,6 +13288,10 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
             "customer_name": str(row[9] or "").strip(),
             "customer_maringo_project_number": str(row[10] or "").strip(),
             "customer_logo_url": build_customer_logo_url(row[7], row[11], row[12]),
+            "customer_it_provider_name": str(row[13] or "").strip(),
+            "customer_it_provider_contact": str(row[14] or "").strip(),
+            "customer_it_provider_email": str(row[15] or "").strip(),
+            "customer_it_provider_phone": str(row[16] or "").strip(),
         }
 
     safe_host_uid = str(host_uid or "").strip()
@@ -13220,6 +13336,10 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
         result["customer_name"] = ""
         result["customer_maringo_project_number"] = ""
         result["customer_logo_url"] = ""
+        result["customer_it_provider_name"] = ""
+        result["customer_it_provider_contact"] = ""
+        result["customer_it_provider_email"] = ""
+        result["customer_it_provider_phone"] = ""
     else:
         try:
             result["customer_id"] = int(uid_customer_id)
@@ -13227,19 +13347,43 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
             result["customer_id"] = None
             result["customer_name"] = ""
             result["customer_maringo_project_number"] = ""
+            result["customer_logo_url"] = ""
+            result["customer_it_provider_name"] = ""
+            result["customer_it_provider_contact"] = ""
+            result["customer_it_provider_email"] = ""
+            result["customer_it_provider_phone"] = ""
         if result["customer_id"] is not None:
             customer_row = conn.execute(
-                "SELECT COALESCE(customer_name, ''), COALESCE(maringo_project_number, ''), COALESCE(logo_filename, ''), COALESCE(updated_at_utc, '') FROM customers WHERE id = ?",
+                """
+                SELECT COALESCE(customer_name, ''),
+                       COALESCE(maringo_project_number, ''),
+                       COALESCE(logo_filename, ''),
+                       COALESCE(updated_at_utc, ''),
+                       COALESCE(it_provider_name, ''),
+                       COALESCE(it_provider_contact, ''),
+                       COALESCE(it_provider_email, ''),
+                       COALESCE(it_provider_phone, '')
+                FROM customers
+                WHERE id = ?
+                """,
                 (result["customer_id"],),
             ).fetchone()
             if customer_row:
                 result["customer_name"] = str(customer_row[0] or "").strip()
                 result["customer_maringo_project_number"] = str(customer_row[1] or "").strip()
                 result["customer_logo_url"] = build_customer_logo_url(result["customer_id"], customer_row[2], customer_row[3])
+                result["customer_it_provider_name"] = str(customer_row[4] or "").strip()
+                result["customer_it_provider_contact"] = str(customer_row[5] or "").strip()
+                result["customer_it_provider_email"] = str(customer_row[6] or "").strip()
+                result["customer_it_provider_phone"] = str(customer_row[7] or "").strip()
             else:
                 result["customer_name"] = ""
                 result["customer_maringo_project_number"] = ""
                 result["customer_logo_url"] = ""
+                result["customer_it_provider_name"] = ""
+                result["customer_it_provider_contact"] = ""
+                result["customer_it_provider_email"] = ""
+                result["customer_it_provider_phone"] = ""
 
     return result
 
@@ -17812,10 +17956,22 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             customer_name = payload.get("customer_name", "")
             maringo_project_number = payload.get("maringo_project_number", "")
+            it_provider_name = payload.get("it_provider_name", "")
+            it_provider_contact = payload.get("it_provider_contact", "")
+            it_provider_email = payload.get("it_provider_email", "")
+            it_provider_phone = payload.get("it_provider_phone", "")
 
             try:
                 with sqlite3.connect(DB_PATH) as conn:
-                    customer = upsert_customer(conn, customer_name, maringo_project_number)
+                    customer = upsert_customer(
+                        conn,
+                        customer_name,
+                        maringo_project_number,
+                        it_provider_name,
+                        it_provider_contact,
+                        it_provider_email,
+                        it_provider_phone,
+                    )
                     conn.commit()
                 self._send_json(HTTPStatus.OK, {"status": "stored", "customer": customer})
             except ValueError as exc:
@@ -19194,11 +19350,18 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             try:
                 with sqlite3.connect(DB_PATH) as conn:
+                    existing_customer = get_customer_by_id(conn, customer_id)
+                    if not existing_customer:
+                        raise ValueError("Kunde nicht gefunden.")
                     customer = update_customer_by_id(
                         conn,
                         customer_id,
-                        payload.get("customer_name", ""),
-                        payload.get("maringo_project_number", ""),
+                        payload.get("customer_name", existing_customer.get("customer_name", "")),
+                        payload.get("maringo_project_number", existing_customer.get("maringo_project_number", "")),
+                        payload.get("it_provider_name", existing_customer.get("it_provider_name", "")),
+                        payload.get("it_provider_contact", existing_customer.get("it_provider_contact", "")),
+                        payload.get("it_provider_email", existing_customer.get("it_provider_email", "")),
+                        payload.get("it_provider_phone", existing_customer.get("it_provider_phone", "")),
                     )
                     conn.commit()
                 self._send_json(HTTPStatus.OK, {"status": "updated", "customer": customer})

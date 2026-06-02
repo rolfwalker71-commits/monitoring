@@ -947,6 +947,43 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   gap: 4px;
 }
 
+.host-meta-customer-provider {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px dashed #c8d5e6;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.host-meta-customer-provider h4 {
+  margin: 0;
+  font-size: 12px;
+  color: #334155;
+  font-weight: 700;
+}
+
+.host-meta-customer-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 10px 12px;
+}
+
+.host-meta-customer-provider-grid label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.host-meta-customer-provider-grid input {
+  height: 34px;
+}
+
+.host-meta-customer-provider-span {
+  grid-column: 1 / -1;
+}
+
 .host-meta-logo-upload-row label {
   display: grid;
   gap: 4px;
@@ -963,6 +1000,16 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .host-meta-customer-provider-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .host-meta-customer-provider-span {
+    grid-column: auto;
+  }
 }
 
 /* Mountpoint table toggle */
@@ -10012,6 +10059,16 @@ body[data-theme="dark"] .host-meta-new-customer label {
 body[data-theme="dark"] .host-meta-new-customer {
   border-color: #2a3c59;
   background: #112036;
+}
+
+body[data-theme="dark"] .host-meta-customer-provider {
+  border-color: #2a3c59;
+  background: #112036;
+}
+
+body[data-theme="dark"] .host-meta-customer-provider h4,
+body[data-theme="dark"] .host-meta-customer-provider-grid label {
+  color: #9fb3cc;
 }
 
 body[data-theme="dark"] .host-meta-logo-upload-row label {

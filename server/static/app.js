@@ -4819,6 +4819,11 @@ function wireSapLicenseTypeMapAdminSection(container) {
 function renderCustomerNotificationPanel(hostname, settings) {
   const customerId = Number(settings.customer_id || 0) || null;
   const customerName = asText(settings.customer_name, "");
+  const customerProjectNo = asText(settings.customer_maringo_project_number, "");
+  const itProviderName = asText(settings.customer_it_provider_name, "");
+  const itProviderContact = asText(settings.customer_it_provider_contact, "");
+  const itProviderEmail = asText(settings.customer_it_provider_email, "");
+  const itProviderPhone = asText(settings.customer_it_provider_phone, "");
   const customerLogoUrl = asText(settings.customer_logo_url, "").trim();
   const logoPreview = customerLogoUrl
     ? `<img src="${escapeHtml(customerLogoUrl)}" alt="Kundenlogo ${escapeHtml(customerName || "Kunde")}" class="customer-logo-preview" onerror="this.style.display='none'">`
@@ -4831,8 +4836,28 @@ function renderCustomerNotificationPanel(hostname, settings) {
         <label for="customerNameInput" class="settings-label">Kundenname</label>
         <input id="customerNameInput" type="text" class="settings-input" placeholder="Kundenname" value="${escapeHtml(customerName)}">
       </div>
+      <div class="alarm-settings-group">
+        <label for="customerProjectInput" class="settings-label">Maringo Projektnummer</label>
+        <input id="customerProjectInput" type="text" class="settings-input" placeholder="z.B. MAR-12345" value="${escapeHtml(customerProjectNo)}">
+      </div>
+      <div class="alarm-settings-group">
+        <label for="customerItProviderNameInput" class="settings-label">IT Provider Name</label>
+        <input id="customerItProviderNameInput" type="text" class="settings-input" placeholder="IT Provider Name" value="${escapeHtml(itProviderName)}">
+      </div>
+      <div class="alarm-settings-group">
+        <label for="customerItProviderContactInput" class="settings-label">Ansprechpartner</label>
+        <input id="customerItProviderContactInput" type="text" class="settings-input" placeholder="Ansprechpartner" value="${escapeHtml(itProviderContact)}">
+      </div>
+      <div class="alarm-settings-group">
+        <label for="customerItProviderEmailInput" class="settings-label">E-Mail</label>
+        <input id="customerItProviderEmailInput" type="email" class="settings-input" placeholder="it@example.com" value="${escapeHtml(itProviderEmail)}">
+      </div>
+      <div class="alarm-settings-group">
+        <label for="customerItProviderPhoneInput" class="settings-label">Telefon</label>
+        <input id="customerItProviderPhoneInput" type="text" class="settings-input" placeholder="+41 ..." value="${escapeHtml(itProviderPhone)}">
+      </div>
       <div class="alarm-settings-actions">
-        <button id="saveCustomerNameBtn" type="button" class="btn-primary btn-primary--compact">Speichern</button>
+        <button id="saveCustomerNameBtn" type="button" class="btn-primary btn-primary--compact">Kundendaten speichern</button>
         <span id="customerNameStatus" class="settings-status"></span>
       </div>
       <div class="customer-logo-upload-block">
@@ -4889,6 +4914,11 @@ async function loadAndRenderCustomerNotificationPanel(hostname, hostUid = "") {
     saveButton?.addEventListener("click", async () => {
       const status = container.querySelector("#customerNameStatus");
       const customerName = container.querySelector("#customerNameInput")?.value.trim() || "";
+      const customerProject = container.querySelector("#customerProjectInput")?.value.trim() || "";
+      const providerName = container.querySelector("#customerItProviderNameInput")?.value.trim() || "";
+      const providerContact = container.querySelector("#customerItProviderContactInput")?.value.trim() || "";
+      const providerEmail = container.querySelector("#customerItProviderEmailInput")?.value.trim() || "";
+      const providerPhone = container.querySelector("#customerItProviderPhoneInput")?.value.trim() || "";
       if (!customerName) {
         if (status) {
           status.textContent = "❌ Kundenname darf nicht leer sein";
@@ -4908,7 +4938,14 @@ async function loadAndRenderCustomerNotificationPanel(hostname, hostUid = "") {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           credentials: "same-origin",
-          body: JSON.stringify({ customer_name: customerName }),
+          body: JSON.stringify({
+            customer_name: customerName,
+            maringo_project_number: customerProject,
+            it_provider_name: providerName,
+            it_provider_contact: providerContact,
+            it_provider_email: providerEmail,
+            it_provider_phone: providerPhone,
+          }),
         });
         if (!r.ok) {
           const d = await r.json().catch(() => ({}));
@@ -11616,6 +11653,10 @@ async function editDisplayName() {
     currentCustomerId: hostSettings.customer_id,
     currentCustomerName: asText(hostSettings.customer_name, ""),
     currentCustomerProjectNo: asText(hostSettings.customer_maringo_project_number, ""),
+    currentItProviderName: asText(hostSettings.customer_it_provider_name, ""),
+    currentItProviderContact: asText(hostSettings.customer_it_provider_contact, ""),
+    currentItProviderEmail: asText(hostSettings.customer_it_provider_email, ""),
+    currentItProviderPhone: asText(hostSettings.customer_it_provider_phone, ""),
     customers,
   });
   if (!result) return;
@@ -11633,6 +11674,10 @@ async function editDisplayName() {
       body: JSON.stringify({
         customer_name: result.newCustomerName,
         maringo_project_number: result.newCustomerProjectNo,
+        it_provider_name: result.itProviderName,
+        it_provider_contact: result.itProviderContact,
+        it_provider_email: result.itProviderEmail,
+        it_provider_phone: result.itProviderPhone,
       }),
     });
     const createData = await createResp.json().catch(() => ({}));
@@ -11642,6 +11687,25 @@ async function editDisplayName() {
     customerId = Number(createData?.customer?.id || 0);
     if (!Number.isFinite(customerId) || customerId <= 0) {
       throw new Error("Kunde konnte nicht angelegt werden.");
+    }
+  }
+
+  if (result.customerMode === "existing" && customerId) {
+    const patchResp = await fetch(`/api/v1/customers/${encodeURIComponent(customerId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customer_name: result.existingCustomerName,
+        maringo_project_number: result.existingCustomerProjectNo,
+        it_provider_name: result.itProviderName,
+        it_provider_contact: result.itProviderContact,
+        it_provider_email: result.itProviderEmail,
+        it_provider_phone: result.itProviderPhone,
+      }),
+    });
+    const patchData = await patchResp.json().catch(() => ({}));
+    if (!patchResp.ok) {
+      throw new Error(patchData.error || ("HTTP " + patchResp.status));
     }
   }
 
@@ -11721,6 +11785,10 @@ async function openHostMetadataEditorDialog({
   currentCustomerId,
   currentCustomerName,
   currentCustomerProjectNo,
+  currentItProviderName,
+  currentItProviderContact,
+  currentItProviderEmail,
+  currentItProviderPhone,
   customers,
 }) {
   const sortedCustomers = (Array.isArray(customers) ? customers : [])
@@ -11773,6 +11841,23 @@ async function openHostMetadataEditorDialog({
             <input id="hostMetaNewCustomerProjectInput" type="text" placeholder="z.B. MAR-12345" value="${escapeHtml(currentCustomerId ? "" : (currentCustomerProjectNo || ""))}" />
           </label>
         </div>
+        <div class="host-meta-customer-provider">
+          <h4>IT-Provider (kundenspezifisch)</h4>
+          <div class="host-meta-customer-provider-grid">
+            <label class="host-meta-customer-provider-span">IT Provider Name
+              <input id="hostMetaItProviderNameInput" type="text" placeholder="IT Provider Name" value="${escapeHtml(currentItProviderName || "")}" />
+            </label>
+            <label class="host-meta-customer-provider-span">Ansprechpartner
+              <input id="hostMetaItProviderContactInput" type="text" placeholder="Ansprechpartner" value="${escapeHtml(currentItProviderContact || "")}" />
+            </label>
+            <label>Mail
+              <input id="hostMetaItProviderEmailInput" type="email" placeholder="it@example.com" value="${escapeHtml(currentItProviderEmail || "")}" />
+            </label>
+            <label>Telefon
+              <input id="hostMetaItProviderPhoneInput" type="text" placeholder="+41 ..." value="${escapeHtml(currentItProviderPhone || "")}" />
+            </label>
+          </div>
+        </div>
         <div class="host-meta-logo-upload-row">
           <label>Kundenlogo (PNG/JPG/WebP, max. 2 MB)
             <input id="hostMetaCustomerLogoInput" type="file" accept="image/png,image/jpeg,image/webp" />
@@ -11795,11 +11880,37 @@ async function openHostMetadataEditorDialog({
   const environmentTypeSelect = modal.querySelector("#hostMetaEnvironmentTypeSelect");
   const newCustomerNameInput = modal.querySelector("#hostMetaNewCustomerNameInput");
   const newCustomerProjectInput = modal.querySelector("#hostMetaNewCustomerProjectInput");
+  const itProviderNameInput = modal.querySelector("#hostMetaItProviderNameInput");
+  const itProviderContactInput = modal.querySelector("#hostMetaItProviderContactInput");
+  const itProviderEmailInput = modal.querySelector("#hostMetaItProviderEmailInput");
+  const itProviderPhoneInput = modal.querySelector("#hostMetaItProviderPhoneInput");
   const customerLogoInput = modal.querySelector("#hostMetaCustomerLogoInput");
 
   const updateNewSection = () => {
     if (!selectEl || !wrapNew) return;
     wrapNew.classList.toggle("hidden", selectEl.value !== "__new__");
+
+    if (selectEl.value === "__new__") {
+      return;
+    }
+
+    if (selectEl.value === "__none__") {
+      if (itProviderNameInput) itProviderNameInput.value = "";
+      if (itProviderContactInput) itProviderContactInput.value = "";
+      if (itProviderEmailInput) itProviderEmailInput.value = "";
+      if (itProviderPhoneInput) itProviderPhoneInput.value = "";
+      return;
+    }
+
+    const selectedId = Number(selectEl.value || 0);
+    const selectedCustomer = sortedCustomers.find((item) => Number(item.id || 0) === selectedId) || null;
+    if (!selectedCustomer) {
+      return;
+    }
+    if (itProviderNameInput) itProviderNameInput.value = asText(selectedCustomer.it_provider_name, "");
+    if (itProviderContactInput) itProviderContactInput.value = asText(selectedCustomer.it_provider_contact, "");
+    if (itProviderEmailInput) itProviderEmailInput.value = asText(selectedCustomer.it_provider_email, "");
+    if (itProviderPhoneInput) itProviderPhoneInput.value = asText(selectedCustomer.it_provider_phone, "");
   };
   updateNewSection();
   if (selectEl) selectEl.addEventListener("change", updateNewSection);
@@ -11833,8 +11944,14 @@ async function openHostMetadataEditorDialog({
       const customerSelectValue = String(selectEl?.value || "__none__");
       let customerMode = "none";
       let existingCustomerId = null;
+      let existingCustomerName = "";
+      let existingCustomerProjectNo = "";
       let newCustomerName = "";
       let newCustomerProjectNo = "";
+      const itProviderName = String(itProviderNameInput?.value || "").trim();
+      const itProviderContact = String(itProviderContactInput?.value || "").trim();
+      const itProviderEmail = String(itProviderEmailInput?.value || "").trim();
+      const itProviderPhone = String(itProviderPhoneInput?.value || "").trim();
 
       if (customerSelectValue === "__new__") {
         customerMode = "new";
@@ -11848,6 +11965,9 @@ async function openHostMetadataEditorDialog({
       } else if (customerSelectValue !== "__none__") {
         customerMode = "existing";
         existingCustomerId = Number(customerSelectValue);
+        const selectedCustomer = sortedCustomers.find((item) => Number(item.id || 0) === existingCustomerId) || null;
+        existingCustomerName = asText(selectedCustomer?.customer_name, "");
+        existingCustomerProjectNo = asText(selectedCustomer?.maringo_project_number, "");
       }
 
       const customerLogoFile = customerLogoInput && customerLogoInput.files && customerLogoInput.files.length > 0
@@ -11865,8 +11985,14 @@ async function openHostMetadataEditorDialog({
         environmentType,
         customerMode,
         existingCustomerId,
+        existingCustomerName,
+        existingCustomerProjectNo,
         newCustomerName,
         newCustomerProjectNo,
+        itProviderName,
+        itProviderContact,
+        itProviderEmail,
+        itProviderPhone,
         customerLogoFile,
       });
     });
