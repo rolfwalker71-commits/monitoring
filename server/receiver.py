@@ -7596,6 +7596,7 @@ def _collect_latest_report_details_by_host_keys(conn: sqlite3.Connection, host_k
             "hostname": hostname,
             "latest_report_ip": latest_report_ip,
             "usage_by_mountpoint": usage_by_mountpoint,
+            "country_code": extract_country_code_from_payload(payload),
         }
 
     return details_by_host_key
@@ -13916,15 +13917,29 @@ def _load_alert_mobile_context_map(
         environment_type = str(host_settings.get("environment_type", "") or "").strip().lower()
         if environment_type not in {"prod", "test"}:
             environment_type = ""
+        country_override = normalize_country_code(str(host_settings.get("country_code_override", "") or ""))
         context_by_host_key[host_key] = {
             "customer_name": str(host_settings.get("customer_name", "") or "").strip(),
             "customer_logo_url": str(host_settings.get("customer_logo_url", "") or "").strip(),
             "environment_type": environment_type,
+            "country_code_override": country_override,
             "it_provider_contact_line": contact_line,
             "it_provider_email": provider_email,
             "it_provider_phone": str(host_settings.get("customer_it_provider_phone", "") or "").strip(),
         }
     return context_by_host_key
+
+
+def _resolve_alert_country_code(
+    mobile_context: dict[str, str],
+    host_details: dict | None,
+) -> str:
+    country_override = normalize_country_code(str(mobile_context.get("country_code_override", "") or ""))
+    if country_override:
+        return country_override
+    if isinstance(host_details, dict):
+        return normalize_country_code(str(host_details.get("country_code", "") or ""))
+    return ""
 
 
 def is_alert_muted(conn: sqlite3.Connection, host_key: str, mountpoint: str) -> bool:
@@ -16674,6 +16689,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             hostname_filter = query.get("hostname", [""])[0].strip()
             host_uid_filter = query.get("host_uid", [""])[0].strip()
+            country_filter = query.get("country", ["all"])[0].strip().upper()
+            if country_filter in {"", "ALL"}:
+                country_filter = ""
             limit = parse_int(query, "limit", default=50, min_value=1, max_value=500)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
 
@@ -16757,6 +16775,46 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     for row in all_rows
                     if not is_filesystem_blacklisted_by_patterns(str(row[2] or ""), blacklist_patterns)
                 ]
+
+                all_host_keys = sorted(
+                    {
+                        alert_host_key(str(row[1] or ""), str(row[6] or ""))
+                        for row in filtered_rows
+                    }
+                )
+                latest_details_by_host_key = _collect_latest_report_details_by_host_keys(conn, all_host_keys)
+                mobile_context_all = _load_alert_mobile_context_map(
+                    conn,
+                    [(str(row[1] or ""), str(row[6] or "")) for row in filtered_rows],
+                )
+                available_countries = sorted(
+                    {
+                        code
+                        for row in filtered_rows
+                        if (
+                            code := _resolve_alert_country_code(
+                                mobile_context_all.get(
+                                    alert_host_key(str(row[1] or ""), str(row[6] or "")),
+                                    {},
+                                ),
+                                latest_details_by_host_key.get(
+                                    alert_host_key(str(row[1] or ""), str(row[6] or "")),
+                                ),
+                            )
+                        )
+                    }
+                )
+                if country_filter:
+                    filtered_rows = [
+                        row
+                        for row in filtered_rows
+                        if _resolve_alert_country_code(
+                            mobile_context_all.get(alert_host_key(str(row[1] or ""), str(row[6] or "")), {}),
+                            latest_details_by_host_key.get(alert_host_key(str(row[1] or ""), str(row[6] or ""))),
+                        )
+                        == country_filter
+                    ]
+
                 total = len(filtered_rows)
                 rows = filtered_rows[offset : offset + limit]
 
@@ -16796,17 +16854,13 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         hostname,
                     )
 
-                host_keys = sorted(
-                    {
-                        alert_host_key(str(row[1] or ""), str(row[6] or ""))
-                        for row in rows
-                    }
-                )
-                latest_details_by_host_key = _collect_latest_report_details_by_host_keys(conn, host_keys)
-                mobile_context_by_host_key = _load_alert_mobile_context_map(
-                    conn,
-                    [(str(row[1] or ""), str(row[6] or "")) for row in rows],
-                )
+                mobile_context_by_host_key = {
+                    alert_host_key(str(row[1] or ""), str(row[6] or "")): mobile_context_all.get(
+                        alert_host_key(str(row[1] or ""), str(row[6] or "")),
+                        {},
+                    )
+                    for row in rows
+                }
 
             _mark_endpoint_timer(endpoint_timer, "db")
 
@@ -16859,6 +16913,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             "it_provider_email": str(mobile_context.get("it_provider_email", "") or ""),
                             "it_provider_phone": str(mobile_context.get("it_provider_phone", "") or ""),
                             "customer_logo_url": str(mobile_context.get("customer_logo_url", "") or ""),
+                            "country_code": _resolve_alert_country_code(mobile_context, host_details),
                             "mountpoint": mountpoint,
                             "severity": row[3],
                             "used_percent": row[4],
@@ -16894,6 +16949,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "heads_up_suppressed": heads_up_suppressed_filter,
                 "hostname": hostname_filter,
                 "host_uid": host_uid_filter,
+                "country": country_filter or "all",
+                "available_countries": available_countries,
                 "alerts": alerts,
             }
             self._send_json(HTTPStatus.OK, response_data)
@@ -16901,7 +16958,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             _finish_endpoint_timer(
                 endpoint_timer,
                 meta=(
-                    f"status={status_filter} severity={severity_filter} "
+                    f"status={status_filter} severity={severity_filter} country={country_filter or 'all'} "
                     f"offset={offset} limit={limit} count={len(alerts)} total={total}"
                 ),
             )

@@ -284,6 +284,8 @@ const state = {
   globalHeadsUpSuppressedOnly: false,
   hostAlertsCollapsed: false,
   globalSeverityFilter: "all",
+  globalCountryFilter: "all",
+  globalAvailableCountries: [],
   globalOpenAlertsCount: 0,
   globalCriticalOpenAlertsCount: 0,
   globalAcknowledgedOpenAlertsCount: 0,
@@ -11284,11 +11286,13 @@ async function triggerAdminDatabaseStatsNow() {
 
 async function exportGlobalAlertsCsv() {
   const severity = String(state.globalSeverityFilter || "all").trim().toLowerCase();
-  const severityParam = (severity && severity !== "all")
-    ? `?severity=${encodeURIComponent(severity)}`
-    : "";
+  const country = String(state.globalCountryFilter || "all").trim().toUpperCase();
+  const params = new URLSearchParams();
+  if (severity && severity !== "all") params.set("severity", severity);
+  if (country && country !== "ALL") params.set("country", country);
+  const query = params.toString() ? `?${params.toString()}` : "";
   return triggerFileDownload(
-    `/api/v1/export/alerts.csv${severityParam}`,
+    `/api/v1/export/alerts.csv${query}`,
     `monitoring-alerts-${new Date().toISOString().replace(/[.:]/g, "-")}.csv`,
   );
 }
@@ -14615,6 +14619,9 @@ async function loadGlobalAlertsOverview(options = {}) {
   const acknowledgedQuery = state.globalShowAcknowledged ? "" : "&acknowledged=no";
   const closedQuery = state.globalShowClosed ? "" : "&closed=no";
   const headsUpSuppressedQuery = state.globalHeadsUpSuppressedOnly ? "&heads_up_suppressed=yes" : "";
+  const countryQuery = state.globalCountryFilter && state.globalCountryFilter !== "all"
+    ? `&country=${encodeURIComponent(state.globalCountryFilter)}`
+    : "";
 
   if (updateList && rowsEl && !append) {
     rowsEl.innerHTML = "<tr><td colspan=\"8\" class=\"muted\">Lade globale Alerts...</td></tr>";
@@ -14642,7 +14649,7 @@ async function loadGlobalAlertsOverview(options = {}) {
       cache: "no-store",
     }).catch(() => null);
     const listPromise = updateList && rowsEl
-      ? fetch(`/api/v1/alerts?status=open&limit=${requestLimit}&offset=${requestOffset}${severityQuery}${acknowledgedQuery}${closedQuery}${headsUpSuppressedQuery}`, {
+      ? fetch(`/api/v1/alerts?status=open&limit=${requestLimit}&offset=${requestOffset}${severityQuery}${acknowledgedQuery}${closedQuery}${headsUpSuppressedQuery}${countryQuery}`, {
         credentials: "same-origin",
         cache: "no-store",
       })
@@ -14674,6 +14681,10 @@ async function loadGlobalAlertsOverview(options = {}) {
 
     const listData = await listResp.json();
     const alerts = listData.alerts || [];
+    if (Array.isArray(listData.available_countries)) {
+      state.globalAvailableCountries = listData.available_countries;
+      renderGlobalCountryFilterOptions();
+    }
     const accumulatedAlerts = append
       ? (Array.isArray(state.globalAlertsLoadedItems) ? state.globalAlertsLoadedItems : []).concat(alerts)
       : alerts;
@@ -14781,7 +14792,10 @@ async function loadGlobalAlertsOverview(options = {}) {
     globalAlertsTabButton.classList.toggle("alert-active", state.globalOpenAlertsCount > 0);
     updateHeaderStatChips();
     const headsUpScope = state.globalHeadsUpSuppressedOnly ? " · Heads-Up: nur unterdrückt" : "";
-    summaryEl.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}${headsUpScope}`;
+    const countryScope = state.globalCountryFilter && state.globalCountryFilter !== "all"
+      ? ` | Land: ${state.globalCountryFilter}`
+      : "";
+    summaryEl.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}${countryScope}${headsUpScope}`;
 
     rowsEl.querySelectorAll("[data-action='toggle-mute']").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
@@ -15818,6 +15832,16 @@ function wireEvents() {
     await loadGlobalAlertsOverview({ append: false });
   });
 
+  const globalCountryFilter = document.getElementById("globalCountryFilter");
+  if (globalCountryFilter) {
+    globalCountryFilter.value = state.globalCountryFilter || "all";
+    globalCountryFilter.addEventListener("change", async (event) => {
+      state.globalCountryFilter = String(event.target?.value || "all");
+      state.globalAlertsOffset = 0;
+      await loadGlobalAlertsOverview({ append: false });
+    });
+  }
+
   const globalShowAcknowledgedCheckbox = document.getElementById("globalShowAcknowledgedCheckbox");
   if (globalShowAcknowledgedCheckbox) {
     globalShowAcknowledgedCheckbox.checked = state.globalShowAcknowledged;
@@ -16345,6 +16369,27 @@ function getCountryFlagIconPath(countryCode) {
   const code = String(countryCode || "XX").toUpperCase().slice(0, 2);
   const validCodes = ["CH", "DE", "FR", "AT", "ANG", "HO"];
   return validCodes.includes(code) ? `/icons/${code}.png` : null;
+}
+
+function renderGlobalCountryFilterOptions() {
+  const select = document.getElementById("globalCountryFilter");
+  if (!select) return;
+  const current = String(state.globalCountryFilter || "all").trim().toUpperCase();
+  const countries = Array.isArray(state.globalAvailableCountries) ? state.globalAvailableCountries : [];
+  const options = ['<option value="all">Alle</option>'];
+  for (const code of countries) {
+    const normalized = String(code || "").trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(normalized)) continue;
+    const selected = current === normalized ? " selected" : "";
+    options.push(`<option value="${escapeHtml(normalized)}"${selected}>${escapeHtml(normalized)}</option>`);
+  }
+  select.innerHTML = options.join("");
+  if (current !== "ALL" && current !== "" && !countries.map((c) => String(c).toUpperCase()).includes(current)) {
+    state.globalCountryFilter = "all";
+    select.value = "all";
+  } else if (current !== "ALL" && current !== "") {
+    select.value = current;
+  }
 }
 
 function getOsIconPath(osName) {

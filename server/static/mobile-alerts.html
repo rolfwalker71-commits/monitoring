@@ -69,7 +69,10 @@
 
       <p id="statusLine" class="status-line">Lade Alerts...</p>
 
-      <section id="alertsList" class="alerts-list" aria-live="polite"></section>
+      <div class="alerts-carousel-shell">
+        <section id="alertsList" class="alerts-list alerts-carousel" aria-live="polite"></section>
+        <section id="alertDetailPanel" class="alert-detail-panel hidden" aria-label="Alert-Details"></section>
+      </div>
     </main>
 
     <div id="sheetBackdrop" class="sheet-backdrop hidden" aria-hidden="true"></div>
@@ -84,6 +87,8 @@
         <input id="showClosedToggle" type="checkbox" />
         Geschlossene Alerts anzeigen
       </label>
+      <p class="sheet-section-label">Land</p>
+      <div id="countryFilterChips" class="country-filter-chips"></div>
       <button type="button" class="btn-primary" id="filterSheetApply">Übernehmen</button>
     </div>
 

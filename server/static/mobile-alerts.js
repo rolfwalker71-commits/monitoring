@@ -58,8 +58,11 @@ function formatRelativeTime(iso) {
 
 const state = {
   severity: "all",
+  country: "all",
+  availableCountries: [],
   showAck: true,
   showClosed: false,
+  focusedAlertIndex: 0,
   pushSupported: false,
   pushConfigured: false,
   pushEnabled: false,
@@ -394,6 +397,35 @@ async function callAlertAction(url, payload, okMessage) {
   showToast(okMessage);
 }
 
+function getCountryFlagIconPath(countryCode) {
+  const code = String(countryCode || "").trim().toUpperCase().slice(0, 2);
+  const validCodes = ["CH", "DE", "FR", "AT", "ANG", "HO"];
+  return validCodes.includes(code) ? "/icons/" + code + ".png" : null;
+}
+
+function buildCountryFlagHtml(countryCode) {
+  const code = String(countryCode || "").trim().toUpperCase();
+  const iconPath = getCountryFlagIconPath(code);
+  if (!iconPath) return "";
+  return (
+    '<img class="alert-country-flag" src="' + mobileEsc(iconPath) + '" alt="' + mobileEsc(code) + '" '
+    + 'title="' + mobileEsc(code) + '" width="22" height="16" loading="lazy" decoding="async" '
+    + 'onerror="this.style.display=\'none\'" />'
+  );
+}
+
+function buildAckStripHtml(item) {
+  if (item.is_acknowledged !== true) return "";
+  const ackBy = String(item.ack_by || "").trim();
+  const ackAt = formatRelativeTime(item.ack_at_utc) || formatIsoLabel(item.ack_at_utc);
+  const ackNote = String(item.ack_note || "").trim();
+  let text = "Quittiert";
+  if (ackBy) text += " von " + ackBy;
+  if (ackAt) text += " · " + ackAt;
+  if (ackNote) text += " — " + ackNote;
+  return '<p class="alert-ack-strip">✓ ' + mobileEsc(text) + "</p>";
+}
+
 function buildEnvironmentChip(environmentType) {
   const label = mobileEnvironmentLabel(environmentType);
   if (!label) return "";
@@ -663,7 +695,9 @@ function highlightTargetCard() {
   const card = document.querySelector('.alert-card[data-alert-id="' + state.highlightAlertId + '"]');
   if (!card) return;
   card.classList.add("alert-card-highlight");
-  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  card.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  const index = Number(card.getAttribute("data-alert-index") || 0);
+  updateAlertDetailPanel(index);
   window.setTimeout(() => card.classList.remove("alert-card-highlight"), 4000);
 }
 
@@ -675,7 +709,8 @@ function renderAlerts(items) {
   renderKpis(state.lastAlerts);
 
   if (!state.lastAlerts.length) {
-    list.innerHTML = '<div class="empty-state">Keine Alerts für den aktuellen Filter.</div>';
+    list.innerHTML = '<div class="empty-state carousel-empty">Keine Alerts für den aktuellen Filter.</div>';
+    document.getElementById("alertDetailPanel")?.classList.add("hidden");
     return;
   }
 
@@ -718,6 +753,9 @@ function renderAlerts(items) {
       ? '<button type="button" class="btn-secondary" data-action="unack">Unack</button>'
       : '<button type="button" class="btn-primary" data-action="ack">Quittieren</button>';
 
+    const countryFlag = buildCountryFlagHtml(item.country_code);
+    const ackStrip = buildAckStripHtml(item);
+
     return (
       '<article class="alert-card ' + sev + highlightClass + '" data-alert-id="' + id + '" data-alert-index="' + index + '">' +
       '  <div class="alert-card-head">' +
@@ -725,9 +763,11 @@ function renderAlerts(items) {
       '      <span class="severity-badge ' + sev + '">' + mobileEsc(sev) + "</span>" +
       envChip +
       "    </div>" +
+      '    <div class="alert-head-center">' + countryFlag + "</div>" +
       '    <span class="alert-time">' + mobileEsc(timeLabel || "—") + "</span>" +
       "  </div>" +
       "  " + identityHtml +
+      ackStrip +
       '  <p class="alert-meta">' + buildUsageLine(item) + "</p>" +
       '  <div class="usage-bar"><span class="usage-bar-fill" style="width:' + barWidth + '%"></span></div>' +
       '  <p class="alert-meta">' + hostname + (itHtml ? " · IT: " + itHtml : "") + "</p>" +
@@ -744,6 +784,110 @@ function renderAlerts(items) {
 
   wireCustomerLogos(list);
   highlightTargetCard();
+  wireAlertsCarousel(list);
+  const focusIndex = state.lastAlerts.findIndex((entry) => Number(entry?.id || 0) === state.highlightAlertId);
+  updateAlertDetailPanel(focusIndex >= 0 ? focusIndex : 0);
+}
+
+function renderCountryFilterChips() {
+  const container = document.getElementById("countryFilterChips");
+  if (!container) return;
+  const countries = Array.isArray(state.availableCountries) ? state.availableCountries : [];
+  const chips = ['<button type="button" class="chip' + (state.country === "all" ? " active" : "") + '" data-country="all">Alle</button>'];
+  countries.forEach((code) => {
+    const normalized = String(code || "").trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(normalized)) return;
+    const flag = buildCountryFlagHtml(normalized);
+    chips.push(
+      '<button type="button" class="chip' + (state.country === normalized ? " active" : "") + '" data-country="'
+      + mobileEsc(normalized) + '">' + flag + "<span>" + mobileEsc(normalized) + "</span></button>"
+    );
+  });
+  container.innerHTML = chips.join("");
+  container.querySelectorAll(".chip[data-country]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      state.country = String(chip.getAttribute("data-country") || "all");
+      container.querySelectorAll(".chip[data-country]").forEach((el) => {
+        el.classList.toggle("active", el.getAttribute("data-country") === state.country);
+      });
+    });
+  });
+}
+
+function buildAlertDetailHtml(item) {
+  if (!item) return "";
+  const lines = [];
+  const push = (label, value) => {
+    const text = String(value || "").trim();
+    if (text) lines.push("<div><dt>" + mobileEsc(label) + "</dt><dd>" + mobileEsc(text) + "</dd></div>");
+  };
+  push("Kunde", item.customer_name);
+  push("Host", item.display_name || item.hostname);
+  push("Hostname", item.hostname);
+  push("Land", item.country_code);
+  push("Mountpoint", item.mountpoint);
+  push("IP", item.latest_report_ip);
+  if (item.is_acknowledged) {
+    push("Quittiert von", item.ack_by);
+    push("Quittiert am", formatIsoLabel(item.ack_at_utc));
+    push("Notiz", item.ack_note);
+  }
+  if (item.delta_used_percent != null) {
+    push("Delta", Number(item.delta_used_percent).toFixed(1) + "%");
+  }
+  push("Erstellt", formatIsoLabel(item.created_at_utc));
+  push("Zuletzt", formatIsoLabel(item.last_seen_at_utc));
+  const flags = [];
+  if (item.is_muted) flags.push("Stumm");
+  if (item.is_heads_up_suppressed) flags.push("Heads-up aus");
+  if (item.is_closed) flags.push("Geschlossen");
+  push("Status", flags.join(", ") || "Offen");
+  return (
+    '<h4 class="alert-detail-title">Alert #' + mobileEsc(String(item.id || "")) + "</h4>"
+    + '<dl class="alert-detail-facts">' + lines.join("") + "</dl>"
+    + '<a class="btn-secondary alert-detail-link" href="/?alert_id=' + Number(item.id || 0) + '">Am Desktop öffnen</a>'
+  );
+}
+
+function updateAlertDetailPanel(index) {
+  const panel = document.getElementById("alertDetailPanel");
+  if (!panel) return;
+  const item = state.lastAlerts[index];
+  if (!item) {
+    panel.classList.add("hidden");
+    panel.innerHTML = "";
+    return;
+  }
+  state.focusedAlertIndex = index;
+  panel.classList.remove("hidden");
+  panel.innerHTML = buildAlertDetailHtml(item);
+}
+
+function wireAlertsCarousel(list) {
+  if (list.dataset.carouselWired === "1") return;
+  list.dataset.carouselWired = "1";
+  let scrollTimer = null;
+  list.addEventListener("scroll", () => {
+    if (scrollTimer) window.clearTimeout(scrollTimer);
+    scrollTimer = window.setTimeout(() => {
+      const cards = list.querySelectorAll(".alert-card");
+      if (!cards.length) return;
+      const listRect = list.getBoundingClientRect();
+      const listCenter = listRect.left + listRect.width / 2;
+      let bestIndex = 0;
+      let bestDistance = Number.POSITIVE_INFINITY;
+      cards.forEach((card) => {
+        const rect = card.getBoundingClientRect();
+        const cardCenter = rect.left + rect.width / 2;
+        const distance = Math.abs(cardCenter - listCenter);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestIndex = Number(card.getAttribute("data-alert-index") || 0);
+        }
+      });
+      updateAlertDetailPanel(bestIndex);
+    }, 80);
+  }, { passive: true });
 }
 
 function resolveAlertFromCard(card) {
@@ -829,6 +973,9 @@ async function loadAlerts() {
     params.set("acknowledged", state.showAck ? "all" : "no");
     params.set("limit", "200");
     params.set("offset", "0");
+    if (state.country && state.country !== "all") {
+      params.set("country", state.country);
+    }
 
     const resp = await fetch("/api/v1/alerts?" + params.toString(), { credentials: "same-origin" });
     if (resp.status === 401) {
@@ -842,6 +989,10 @@ async function loadAlerts() {
 
     const payload = await resp.json();
     let alerts = Array.isArray(payload.alerts) ? payload.alerts : [];
+    if (Array.isArray(payload.available_countries)) {
+      state.availableCountries = payload.available_countries;
+      renderCountryFilterChips();
+    }
     if (!state.showClosed) {
       alerts = alerts.filter((item) => item && item.is_closed !== true);
     }
@@ -933,6 +1084,8 @@ function wire() {
     closeAllSheets();
     void loadAlerts().catch((error) => setStatus("Fehler: " + error.message, true));
   });
+
+  renderCountryFilterChips();
 
   document.getElementById("pushToggleButton")?.addEventListener("click", () => void togglePush());
   document.getElementById("testPushButton")?.addEventListener("click", () => void sendTestPush());
