@@ -15269,29 +15269,6 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   z-index: 3;
 }
 
-.report-customer-chip-wrap .selected-host-customer-bg-watermark {
-  position: absolute;
-  left: 8px;
-  top: 6px;
-  bottom: 6px;
-  right: calc(var(--customer-logo-card-width) + var(--customer-meta-lane-width) + var(--customer-meta-gap) + var(--customer-logo-right-gap));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  opacity: 0.075;
-  z-index: 0;
-  overflow: hidden;
-}
-
-.report-customer-chip-wrap .selected-host-customer-bg-watermark-logo {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center center;
-  display: block;
-}
-
 .report-customer-chip-wrap .selected-host-customer-logo {
   width: 100%;
   height: 100%;
@@ -15530,10 +15507,6 @@ body[data-theme="dark"] .report-customer-chip-wrap .selected-host-meta-chip--env
 body[data-theme="dark"] .report-customer-chip-wrap .selected-host-customer-logo-wrap {
   border-color: #355072;
   background: linear-gradient(180deg, #162741 0%, #13233b 100%);
-}
-
-body[data-theme="dark"] .report-customer-chip-wrap .selected-host-customer-bg-watermark {
-  opacity: 0.06;
 }
 
 body[data-theme="dark"] .host-customer-bg-watermark {

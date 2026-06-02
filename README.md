@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.249**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.249**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.250**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.250**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.250 | 02.06.2026 | Kundenlogo-Watermark nur noch in der linken Hostkarte: das Wasserzeichen in der oberen Header-Karte wurde entfernt. Damit bleibt der Effekt auf die Hostliste fokussiert und die Header-Darstellung ruhiger. |
 | 1.7.249 | 02.06.2026 | Watermark-Update fuer Kundenlogos: in der oberen Host-Headerkarte wird das Hintergrundlogo jetzt horizontal **und** vertikal zentriert angezeigt. Zusaetzlich wird auf der linken Hostliste ein dezentes Logo-Watermark fuer die **aktive (selektierte)** Hostkarte eingeblendet, damit der Effekt auch dort sichtbar ist, ohne die Lesbarkeit anderer Karten zu stoeren. |
 | 1.7.248 | 02.06.2026 | Stark verdichtetes Layout für IT-Provider-Ansprechpartner (bei 1-3 Kontakten): kleinere Schrift, reduzierte Input-Höhen, engere Grid-/Zeilen-Abstände und kompaktere `+ Ansprechpartner`/`entfernen`-Buttons. Ziel: deutlich bessere Platznutzung, damit mehrere Ansprechpartner ohne Scroll-/Platzprobleme erfasst werden können. |
 | 1.7.247 | 02.06.2026 | Visueller Test für Hostkarte: falls vorhanden, wird das Kundenlogo zusätzlich als **sehr dezente Hintergrund-Watermark** in der linken Hostkarte gerendert (niedrige Opazität, ohne teure Filter). Text/Chips bleiben über `z-index` priorisiert; Dark-Theme-Intensität wurde separat reduziert. |
