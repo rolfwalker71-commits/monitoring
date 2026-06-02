@@ -421,8 +421,21 @@ function resolveUserDisplayLabel(item, field) {
   return String(item?.[field] || "").trim();
 }
 
+function isPlaceholderAckText(text) {
+  const value = String(text || "").trim();
+  if (!value) return true;
+  return /^[-–—.\s]+$/.test(value);
+}
+
+function normalizeAckNote(note) {
+  const text = String(note || "").trim();
+  if (isPlaceholderAckText(text)) return "";
+  return text;
+}
+
 function buildAckByDetailLines(item) {
-  const ackBy = resolveUserDisplayLabel(item, "ack_by");
+  const ackByRaw = resolveUserDisplayLabel(item, "ack_by");
+  const ackBy = isPlaceholderAckText(ackByRaw) ? "" : ackByRaw;
   const ackAt = formatIsoLabel(item.ack_at_utc);
   const valueParts = [];
   if (ackBy) valueParts.push(ackBy);
@@ -430,7 +443,7 @@ function buildAckByDetailLines(item) {
   return {
     label: "Quittiert von",
     value: valueParts.length ? valueParts.join(" · ") : "—",
-    note: String(item.ack_note || "").trim(),
+    note: normalizeAckNote(item.ack_note),
   };
 }
 
