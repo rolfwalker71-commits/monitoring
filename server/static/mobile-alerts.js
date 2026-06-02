@@ -460,11 +460,11 @@ function buildAckStripHtml(item) {
   return html + "</p>";
 }
 
-function buildEnvironmentChip(environmentType) {
-  const label = mobileEnvironmentLabel(environmentType);
-  if (!label) return "";
-  const cssClass = label === "Prod." ? "env-prod" : "env-test";
-  return '<span class="env-chip ' + cssClass + '">' + mobileEsc(label) + "</span>";
+function buildEnvironmentCardClass(environmentType) {
+  const env = String(environmentType || "").trim().toLowerCase();
+  if (env === "prod") return " env-prod";
+  if (env === "test") return " env-test";
+  return "";
 }
 
 function buildDesktopHostUrl(hostUid, hostname) {
@@ -768,7 +768,7 @@ function renderAlerts(items) {
     const id = Number(item.id || 0);
     const hostname = mobileEsc(item.hostname || "-");
     const identityHtml = buildAlertIdentityHtml(item);
-    const envChip = buildEnvironmentChip(item.environment_type);
+    const envClass = buildEnvironmentCardClass(item.environment_type);
     const isAck = item.is_acknowledged === true;
     const isClosed = item.is_closed === true;
     const highlightClass = id === state.highlightAlertId ? " alert-card-highlight" : "";
@@ -806,11 +806,10 @@ function renderAlerts(items) {
     const ackStrip = buildAckStripHtml(item);
 
     return (
-      '<article class="alert-card ' + sev + highlightClass + '" data-alert-id="' + id + '" data-alert-index="' + index + '">' +
+      '<article class="alert-card ' + sev + envClass + highlightClass + '" data-alert-id="' + id + '" data-alert-index="' + index + '">' +
       '  <div class="alert-card-head">' +
       '    <div class="alert-status-group">' +
       '      <span class="severity-badge ' + sev + '">' + mobileEsc(sev) + "</span>" +
-      envChip +
       "    </div>" +
       '    <div class="alert-head-center">' + countryFlag + "</div>" +
       '    <span class="alert-time">' + mobileEsc(timeLabel || "—") + "</span>" +

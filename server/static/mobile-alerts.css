@@ -283,6 +283,24 @@ body {
   background: var(--critical);
 }
 
+.alert-card.env-prod::after,
+.alert-card.env-test::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+}
+
+.alert-card.env-prod::after {
+  background: #2a7fc1;
+}
+
+.alert-card.env-test::after {
+  background: #e0b020;
+}
+
 .alert-card-head {
   position: relative;
   display: grid;
@@ -363,6 +381,8 @@ body {
 }
 
 .severity-badge.warning {
+  font-size: 0.74rem;
+  padding: 4px 9px;
   background: color-mix(in srgb, var(--warning) 22%, transparent);
   color: var(--warning);
 }
@@ -535,32 +555,13 @@ body {
   }
 }
 
-.env-chip {
-  font-size: 0.65rem;
-  font-weight: 800;
-  padding: 3px 7px;
-  border-radius: 999px;
-}
-
-.env-chip.env-prod {
-  background: #d8f5e3;
-  color: #0f6a36;
-}
-
-.env-chip.env-test {
-  background: #fff2cc;
-  color: #8a6400;
-}
-
 @media (prefers-color-scheme: dark) {
-  .env-chip.env-prod {
-    background: #1a3d2a;
-    color: #5fd68a;
+  .alert-card.env-prod::after {
+    background: #4a9fd9;
   }
 
-  .env-chip.env-test {
-    background: #3d3518;
-    color: #f5c842;
+  .alert-card.env-test::after {
+    background: #f0c040;
   }
 }
 
