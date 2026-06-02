@@ -4819,6 +4819,10 @@ function wireSapLicenseTypeMapAdminSection(container) {
 function renderCustomerNotificationPanel(hostname, settings) {
   const customerId = Number(settings.customer_id || 0) || null;
   const customerName = asText(settings.customer_name, "");
+  const customerLogoUrl = asText(settings.customer_logo_url, "").trim();
+  const logoPreview = customerLogoUrl
+    ? `<img src="${escapeHtml(customerLogoUrl)}" alt="Kundenlogo ${escapeHtml(customerName || "Kunde")}" class="customer-logo-preview" onerror="this.style.display='none'">`
+    : '<span class="customer-logo-preview-placeholder">Noch kein Logo</span>';
   return `<details class="customer-notif-panel detail-card" id="customerNotificationDetails" open>
     <summary style="font-weight:700;font-size:14px;cursor:pointer;padding:4px 0;">Kundeninfos</summary>
     <div style="padding:10px 0 4px 0;">
@@ -4830,6 +4834,15 @@ function renderCustomerNotificationPanel(hostname, settings) {
       <div class="alarm-settings-actions">
         <button id="saveCustomerNameBtn" type="button" class="btn-primary btn-primary--compact">Speichern</button>
         <span id="customerNameStatus" class="settings-status"></span>
+      </div>
+      <div class="customer-logo-upload-block">
+        <p class="settings-helper-text">Kundenlogo (PNG/JPG/WebP, max. 2 MB)</p>
+        <div class="customer-logo-preview-wrap">${logoPreview}</div>
+        <div class="alarm-settings-actions customer-logo-upload-actions">
+          <input id="customerLogoInput" type="file" class="settings-input customer-logo-file-input" accept="image/png,image/jpeg,image/webp">
+          <button id="saveCustomerLogoBtn" type="button" class="btn-secondary btn-secondary--compact">Logo hochladen</button>
+          <span id="customerLogoStatus" class="settings-status"></span>
+        </div>
       </div>
       <p class="settings-helper-text">${customerId ? `Kunde-ID: ${customerId}` : "Kein Kunde für diesen Host zugeordnet."}</p>
     </div>
@@ -4857,10 +4870,20 @@ async function loadAndRenderCustomerNotificationPanel(hostname, hostUid = "") {
     container.classList.remove("hidden");
 
     const saveButton = container.querySelector("#saveCustomerNameBtn");
+    const logoButton = container.querySelector("#saveCustomerLogoBtn");
+    const logoInput = container.querySelector("#customerLogoInput");
     const customerId = Number(data?.customer_id || 0) || null;
     if (saveButton && !customerId) {
       saveButton.disabled = true;
       saveButton.title = "Nur bei einem zugeordneten Kunden verfügbar";
+    }
+    if (logoButton && !customerId) {
+      logoButton.disabled = true;
+      logoButton.title = "Nur bei einem zugeordneten Kunden verfügbar";
+    }
+    if (logoInput && !customerId) {
+      logoInput.disabled = true;
+      logoInput.title = "Nur bei einem zugeordneten Kunden verfügbar";
     }
 
     saveButton?.addEventListener("click", async () => {
@@ -4896,6 +4919,50 @@ async function loadAndRenderCustomerNotificationPanel(hostname, hostUid = "") {
         await loadHosts({ preserveScroll: true });
       } catch (err) {
         if (status) { status.textContent = `❌ ${err.message}`; setTimeout(() => { status.textContent = ""; }, 3000); }
+      }
+    });
+
+    logoButton?.addEventListener("click", async () => {
+      const status = container.querySelector("#customerLogoStatus");
+      const file = logoInput && logoInput.files && logoInput.files.length > 0 ? logoInput.files[0] : null;
+      if (!customerId) {
+        if (status) {
+          status.textContent = "❌ Kein Kunde zugeordnet";
+          setTimeout(() => { status.textContent = ""; }, 3000);
+        }
+        return;
+      }
+      if (!file) {
+        if (status) {
+          status.textContent = "❌ Bitte eine Datei auswählen";
+          setTimeout(() => { status.textContent = ""; }, 3000);
+        }
+        return;
+      }
+
+      if (status) {
+        status.textContent = "⏳ Upload läuft...";
+      }
+      if (logoButton) {
+        logoButton.disabled = true;
+      }
+      try {
+        await uploadCustomerLogo(customerId, file);
+        if (status) {
+          status.textContent = "✅ Logo gespeichert";
+        }
+        await loadHosts({ preserveScroll: true });
+        updateReportCustomerChip();
+        await loadAndRenderCustomerNotificationPanel(normalizedHostname, normalizedHostUid);
+      } catch (err) {
+        if (status) {
+          status.textContent = `❌ ${err.message || "Upload fehlgeschlagen"}`;
+          setTimeout(() => { status.textContent = ""; }, 3500);
+        }
+      } finally {
+        if (logoButton) {
+          logoButton.disabled = false;
+        }
       }
     });
   } catch {
@@ -9757,6 +9824,7 @@ function renderSelectedHostCustomerChip(host) {
   }
   const customerName = asText(host.customer_name || "", "").trim();
   const customerProject = asText(host.customer_maringo_project_number || "", "").trim();
+  const customerLogoUrl = asText(host.customer_logo_url || "", "").trim();
   const hostLabelRaw = asText(host.display_name || host.hostname || "Host", "Host").trim() || "Host";
   const environmentType = asText(host.environment_type, "").trim().toLowerCase();
   const envLabel = environmentType === "prod"
@@ -9773,8 +9841,11 @@ function renderSelectedHostCustomerChip(host) {
   const customerTitle = customerName && customerProject
     ? `Kunde · Maringo ${customerProject}`
     : (customerName ? "Kunde" : "Kein Kunde hinterlegt");
+  const customerLogoHtml = customerLogoUrl
+    ? `<span class="selected-host-customer-logo-wrap" title="Kundenlogo"><img src="${escapeHtml(customerLogoUrl)}" alt="Logo ${escapeHtml(customerLabel)}" class="selected-host-customer-logo" onerror="this.parentElement.style.display='none'"></span>`
+    : "";
   return `<span class="selected-host-meta-card" title="${escapeHtml(customerTitle)}">
-    <strong class="selected-host-meta-card-main">${escapeHtml(customerLabel)}</strong>
+    <strong class="selected-host-meta-card-main"><span class="selected-host-customer-main-row">${customerLogoHtml}<span class="selected-host-customer-main-text">${escapeHtml(customerLabel)}</span></span></strong>
     <span class="selected-host-meta-card-sub-row">
       <span class="selected-host-meta-card-sub">Name: ${escapeHtml(hostLabelRaw)}</span>
       ${envChip}
@@ -11565,8 +11636,65 @@ async function editDisplayName() {
     customer_id: customerId,
   }, state.selectedHostUid || "");
 
+  let logoUploadError = "";
+  if (result.customerLogoFile) {
+    if (!customerId) {
+      logoUploadError = "Bitte zuerst einen Kunden auswählen oder anlegen, bevor ein Logo hochgeladen wird.";
+    } else {
+      try {
+        await uploadCustomerLogo(customerId, result.customerLogoFile);
+      } catch (error) {
+        logoUploadError = error.message || "Logo-Upload fehlgeschlagen.";
+      }
+    }
+  }
+
   await loadHosts();
   await loadReportsForHost();
+  if (logoUploadError) {
+    window.alert(`Kundenlogo konnte nicht gespeichert werden: ${logoUploadError}`);
+  }
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Datei konnte nicht gelesen werden."));
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadCustomerLogo(customerId, file) {
+  const cid = Number(customerId || 0);
+  if (!Number.isFinite(cid) || cid <= 0) {
+    throw new Error("Ungültige Kunden-ID.");
+  }
+  if (!(file instanceof File)) {
+    throw new Error("Kein Logo ausgewählt.");
+  }
+  if (Number(file.size || 0) <= 0) {
+    throw new Error("Leere Datei.");
+  }
+  if (Number(file.size || 0) > 2 * 1024 * 1024) {
+    throw new Error("Logo ist zu groß (max. 2 MB).");
+  }
+
+  const imageData = await readFileAsDataUrl(file);
+  const response = await fetch("/api/v1/customers/logo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      customer_id: cid,
+      file_name: String(file.name || "logo.png"),
+      image_data: imageData,
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.error || ("HTTP " + response.status));
+  }
+  return payload;
 }
 
 async function openHostMetadataEditorDialog({
@@ -11629,6 +11757,11 @@ async function openHostMetadataEditorDialog({
             <input id="hostMetaNewCustomerProjectInput" type="text" placeholder="z.B. MAR-12345" value="${escapeHtml(currentCustomerId ? "" : (currentCustomerProjectNo || ""))}" />
           </label>
         </div>
+        <div class="host-meta-logo-upload-row">
+          <label>Kundenlogo (PNG/JPG/WebP, max. 2 MB)
+            <input id="hostMetaCustomerLogoInput" type="file" accept="image/png,image/jpeg,image/webp" />
+          </label>
+        </div>
         <p class="settings-helper-text">Hinweis: Bestehende Kunden bitte aus dem Dropdown wählen, um Dubletten zu vermeiden.</p>
         <div class="host-meta-modal-actions">
           <button type="button" class="btn-secondary" data-action="cancel">Abbrechen</button>
@@ -11646,6 +11779,7 @@ async function openHostMetadataEditorDialog({
   const environmentTypeSelect = modal.querySelector("#hostMetaEnvironmentTypeSelect");
   const newCustomerNameInput = modal.querySelector("#hostMetaNewCustomerNameInput");
   const newCustomerProjectInput = modal.querySelector("#hostMetaNewCustomerProjectInput");
+  const customerLogoInput = modal.querySelector("#hostMetaCustomerLogoInput");
 
   const updateNewSection = () => {
     if (!selectEl || !wrapNew) return;
@@ -11700,6 +11834,15 @@ async function openHostMetadataEditorDialog({
         existingCustomerId = Number(customerSelectValue);
       }
 
+      const customerLogoFile = customerLogoInput && customerLogoInput.files && customerLogoInput.files.length > 0
+        ? customerLogoInput.files[0]
+        : null;
+      if (customerLogoFile && customerMode === "none") {
+        window.alert("Bitte zuerst einen Kunden auswählen oder anlegen, damit das Logo gespeichert werden kann.");
+        selectEl?.focus();
+        return;
+      }
+
       close({
         displayName,
         countryCode,
@@ -11708,6 +11851,7 @@ async function openHostMetadataEditorDialog({
         existingCustomerId,
         newCustomerName,
         newCustomerProjectNo,
+        customerLogoFile,
       });
     });
 

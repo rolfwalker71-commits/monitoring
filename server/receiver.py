@@ -48,6 +48,7 @@ SAP_B1_VERSION_MAP_PATH = DATA_DIR / "sap_b1_version_map.json"
 SAP_LICENSE_TYPE_MAP_PATH = DATA_DIR / "sap_license_type_map.json"
 BACKUP_TEMP_DIR = DATA_DIR / "backup_jobs"
 AUTO_BACKUP_DIR = DATA_DIR / "auto_db_backups"
+CUSTOMER_LOGOS_DIR = DATA_DIR / "customer_logos"
 APP_LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
 ANG_LOGO_PATH = STATIC_DIR / "icons" / "ANG.png"
 LINUX_LOGO_PATH = STATIC_DIR / "icons" / "linux.png"
@@ -138,6 +139,7 @@ TELEGRAM_ACTION_TTL_MINUTES = max(10, min(10080, int(os.getenv("MONITORING_TELEG
 WEB_PUSH_VAPID_PUBLIC_KEY = os.getenv("MONITORING_WEB_PUSH_VAPID_PUBLIC_KEY", "").strip()
 WEB_PUSH_VAPID_PRIVATE_KEY = os.getenv("MONITORING_WEB_PUSH_VAPID_PRIVATE_KEY", "").strip()
 WEB_PUSH_VAPID_SUBJECT = os.getenv("MONITORING_WEB_PUSH_VAPID_SUBJECT", "mailto:monitoring@example.com").strip() or "mailto:monitoring@example.com"
+CUSTOMER_LOGO_MAX_BYTES = max(64 * 1024, min(10 * 1024 * 1024, int(os.getenv("MONITORING_CUSTOMER_LOGO_MAX_BYTES", str(2 * 1024 * 1024)) or str(2 * 1024 * 1024))))
 try:
     SCHEDULE_TIMEZONE = ZoneInfo(SCHEDULE_TIMEZONE_NAME)
 except ZoneInfoNotFoundError:
@@ -388,6 +390,7 @@ def alert_host_key(hostname: object, host_uid: object = "") -> str:
 
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CUSTOMER_LOGOS_DIR.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
@@ -567,11 +570,18 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 customer_name TEXT NOT NULL,
                 maringo_project_number TEXT NOT NULL DEFAULT '',
+                logo_filename TEXT NOT NULL DEFAULT '',
                 created_at_utc TEXT NOT NULL,
                 updated_at_utc TEXT NOT NULL
             )
             """
         )
+        existing_customer_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(customers)").fetchall()
+        }
+        if "logo_filename" not in existing_customer_columns:
+            conn.execute("ALTER TABLE customers ADD COLUMN logo_filename TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_name_ci
@@ -4085,10 +4095,102 @@ def normalize_maringo_project_number(value: object) -> str:
     return str(value or "").strip()
 
 
+def build_customer_logo_url(customer_id: object, logo_filename: object, updated_at_utc: object = "") -> str:
+    try:
+        cid = int(customer_id)
+    except (TypeError, ValueError):
+        return ""
+    if cid <= 0:
+        return ""
+    if not str(logo_filename or "").strip():
+        return ""
+    stamp = str(updated_at_utc or "").strip()
+    if not stamp:
+        return f"/api/v1/customers/{cid}/logo"
+    return f"/api/v1/customers/{cid}/logo?v={parse.quote(stamp, safe='')}"
+
+
+def _customer_logo_extension_from_name_or_mime(file_name: object, mime_type: object) -> str:
+    name_suffix = Path(str(file_name or "")).suffix.lower()
+    if name_suffix in {".png", ".jpg", ".jpeg", ".webp"}:
+        return ".jpg" if name_suffix == ".jpeg" else name_suffix
+    mime = str(mime_type or "").strip().lower()
+    return {
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/webp": ".webp",
+    }.get(mime, "")
+
+
+def _parse_customer_logo_upload_data(image_data: object, file_name: object) -> tuple[bytes, str]:
+    raw = str(image_data or "").strip()
+    if not raw:
+        raise ValueError("image_data fehlt.")
+
+    mime_type = ""
+    b64_payload = raw
+    if raw.startswith("data:"):
+        match = re.match(r"^data:([^;,]+);base64,(.+)$", raw, re.IGNORECASE | re.DOTALL)
+        if not match:
+            raise ValueError("image_data muss ein gültiges Data-URL-Format haben.")
+        mime_type = str(match.group(1) or "").strip().lower()
+        b64_payload = str(match.group(2) or "").strip()
+
+    file_ext = _customer_logo_extension_from_name_or_mime(file_name, mime_type)
+    if file_ext not in {".png", ".jpg", ".webp"}:
+        raise ValueError("Nur PNG, JPG oder WebP sind erlaubt.")
+
+    try:
+        decoded = base64.b64decode(b64_payload, validate=True)
+    except Exception as exc:
+        raise ValueError("image_data ist kein gültiges Base64.") from exc
+    if not decoded:
+        raise ValueError("Leere Bilddaten.")
+    if len(decoded) > CUSTOMER_LOGO_MAX_BYTES:
+        raise ValueError(f"Logo ist zu groß (max. {CUSTOMER_LOGO_MAX_BYTES // 1024} KB).")
+    return decoded, file_ext
+
+
+def save_customer_logo(conn: sqlite3.Connection, customer_id: object, file_name: object, image_data: object) -> dict:
+    customer = get_customer_by_id(conn, customer_id)
+    if not customer:
+        raise ValueError("customer_id not found")
+
+    decoded, file_ext = _parse_customer_logo_upload_data(image_data, file_name)
+    cid = int(customer["id"])
+    previous_file = str(customer.get("logo_filename", "") or "").strip()
+    new_file = f"customer-{cid}{file_ext}"
+
+    CUSTOMER_LOGOS_DIR.mkdir(parents=True, exist_ok=True)
+    final_path = CUSTOMER_LOGOS_DIR / new_file
+    tmp_path = CUSTOMER_LOGOS_DIR / f"{new_file}.tmp"
+    tmp_path.write_bytes(decoded)
+    tmp_path.replace(final_path)
+
+    if previous_file and previous_file != new_file:
+        previous_path = CUSTOMER_LOGOS_DIR / Path(previous_file).name
+        if previous_path.exists() and previous_path.is_file():
+            try:
+                previous_path.unlink()
+            except OSError:
+                pass
+
+    now_utc = utc_now_iso()
+    conn.execute(
+        "UPDATE customers SET logo_filename = ?, updated_at_utc = ? WHERE id = ?",
+        (new_file, now_utc, cid),
+    )
+
+    updated_customer = get_customer_by_id(conn, cid)
+    if not updated_customer:
+        raise ValueError("Kunde konnte nach Logo-Upload nicht geladen werden.")
+    return updated_customer
+
+
 def list_customers(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         """
-        SELECT id, customer_name, COALESCE(maringo_project_number, ''), created_at_utc, updated_at_utc
+        SELECT id, customer_name, COALESCE(maringo_project_number, ''), COALESCE(logo_filename, ''), created_at_utc, updated_at_utc
         FROM customers
         ORDER BY LOWER(customer_name), id
         """
@@ -4098,8 +4200,10 @@ def list_customers(conn: sqlite3.Connection) -> list[dict]:
             "id": int(row[0]),
             "customer_name": str(row[1] or ""),
             "maringo_project_number": str(row[2] or ""),
-            "created_at_utc": str(row[3] or ""),
-            "updated_at_utc": str(row[4] or ""),
+            "logo_filename": str(row[3] or ""),
+            "logo_url": build_customer_logo_url(row[0], row[3], row[5]),
+            "created_at_utc": str(row[4] or ""),
+            "updated_at_utc": str(row[5] or ""),
         }
         for row in rows
     ]
@@ -4114,7 +4218,7 @@ def get_customer_by_id(conn: sqlite3.Connection, customer_id: object) -> dict | 
         return None
     row = conn.execute(
         """
-        SELECT id, customer_name, COALESCE(maringo_project_number, ''), created_at_utc, updated_at_utc
+        SELECT id, customer_name, COALESCE(maringo_project_number, ''), COALESCE(logo_filename, ''), created_at_utc, updated_at_utc
         FROM customers
         WHERE id = ?
         """,
@@ -4126,8 +4230,10 @@ def get_customer_by_id(conn: sqlite3.Connection, customer_id: object) -> dict | 
         "id": int(row[0]),
         "customer_name": str(row[1] or ""),
         "maringo_project_number": str(row[2] or ""),
-        "created_at_utc": str(row[3] or ""),
-        "updated_at_utc": str(row[4] or ""),
+        "logo_filename": str(row[3] or ""),
+        "logo_url": build_customer_logo_url(row[0], row[3], row[5]),
+        "created_at_utc": str(row[4] or ""),
+        "updated_at_utc": str(row[5] or ""),
     }
 
 
@@ -13019,7 +13125,9 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
                     h.customer_id,
                     COALESCE(h.environment_type, ''),
                     COALESCE(c.customer_name, ''),
-                    COALESCE(c.maringo_project_number, '')
+                    COALESCE(c.maringo_project_number, ''),
+                    COALESCE(c.logo_filename, ''),
+                    COALESCE(c.updated_at_utc, '')
                 FROM host_settings h
                 LEFT JOIN customers c ON c.id = h.customer_id
                 WHERE h.hostname = ?
@@ -13039,6 +13147,7 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
             "environment_type": "",
             "customer_name": "",
             "customer_maringo_project_number": "",
+            "customer_logo_url": "",
         }
     else:
         customer_alert_min_severity = str(row[6] or "critical").strip().lower()
@@ -13066,6 +13175,7 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
             "environment_type": environment_type,
             "customer_name": str(row[9] or "").strip(),
             "customer_maringo_project_number": str(row[10] or "").strip(),
+            "customer_logo_url": build_customer_logo_url(row[7], row[11], row[12]),
         }
 
     safe_host_uid = str(host_uid or "").strip()
@@ -13109,6 +13219,7 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
         result["customer_id"] = None
         result["customer_name"] = ""
         result["customer_maringo_project_number"] = ""
+        result["customer_logo_url"] = ""
     else:
         try:
             result["customer_id"] = int(uid_customer_id)
@@ -13118,15 +13229,17 @@ def get_host_settings(conn: sqlite3.Connection, hostname: str, host_uid: str = "
             result["customer_maringo_project_number"] = ""
         if result["customer_id"] is not None:
             customer_row = conn.execute(
-                "SELECT COALESCE(customer_name, ''), COALESCE(maringo_project_number, '') FROM customers WHERE id = ?",
+                "SELECT COALESCE(customer_name, ''), COALESCE(maringo_project_number, ''), COALESCE(logo_filename, ''), COALESCE(updated_at_utc, '') FROM customers WHERE id = ?",
                 (result["customer_id"],),
             ).fetchone()
             if customer_row:
                 result["customer_name"] = str(customer_row[0] or "").strip()
                 result["customer_maringo_project_number"] = str(customer_row[1] or "").strip()
+                result["customer_logo_url"] = build_customer_logo_url(result["customer_id"], customer_row[2], customer_row[3])
             else:
                 result["customer_name"] = ""
                 result["customer_maringo_project_number"] = ""
+                result["customer_logo_url"] = ""
 
     return result
 
@@ -14334,6 +14447,40 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.OK, {"customers": list_customers(conn)})
             return
 
+        customer_logo_match = re.match(r"^/api/v1/customers/(\d+)/logo$", parsed.path)
+        if customer_logo_match:
+            if not self._require_web_session():
+                return
+            customer_id = int(customer_logo_match.group(1))
+            with sqlite3.connect(DB_PATH) as conn:
+                row = conn.execute(
+                    "SELECT COALESCE(logo_filename, '') FROM customers WHERE id = ?",
+                    (customer_id,),
+                ).fetchone()
+            logo_filename = str((row[0] if row else "") or "").strip()
+            if not logo_filename:
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "logo not found"})
+                return
+            safe_name = Path(logo_filename).name
+            if safe_name != logo_filename:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid logo reference"})
+                return
+            logo_path = CUSTOMER_LOGOS_DIR / safe_name
+            if not logo_path.exists() or not logo_path.is_file():
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "logo file missing"})
+                return
+            suffix = logo_path.suffix.lower()
+            if suffix == ".png":
+                mime = "image/png"
+            elif suffix in {".jpg", ".jpeg"}:
+                mime = "image/jpeg"
+            elif suffix == ".webp":
+                mime = "image/webp"
+            else:
+                mime = "application/octet-stream"
+            self._send_file(logo_path, mime)
+            return
+
         if parsed.path == "/api/v1/admin/user-alert-subscriptions":
             if not self._require_admin_session():
                 return
@@ -14691,7 +14838,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                            h.customer_id,
                               COALESCE(h.environment_type, ''),
                            COALESCE(c.customer_name, ''),
-                           COALESCE(c.maringo_project_number, '')
+                           COALESCE(c.maringo_project_number, ''),
+                           COALESCE(c.logo_filename, ''),
+                           COALESCE(c.updated_at_utc, '')
                     FROM host_settings h
                     LEFT JOIN customers c ON c.id = h.customer_id
                     """
@@ -14712,7 +14861,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                                hus.customer_id,
                                COALESCE(hus.environment_type, ''),
                                COALESCE(c.customer_name, ''),
-                               COALESCE(c.maringo_project_number, '')
+                               COALESCE(c.maringo_project_number, ''),
+                               COALESCE(c.logo_filename, ''),
+                               COALESCE(c.updated_at_utc, '')
                         FROM host_uid_settings hus
                         LEFT JOIN customers c ON c.id = hus.customer_id
                         WHERE host_uid IN ({placeholders})
@@ -14733,6 +14884,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             "environment_type": str(uid_row[6] or "").strip().lower(),
                             "customer_name": str(uid_row[7] or ""),
                             "customer_maringo_project_number": str(uid_row[8] or ""),
+                            "logo_filename": str(uid_row[9] or ""),
+                            "logo_updated_at_utc": str(uid_row[10] or ""),
                         }
                         for uid_row in host_uid_rows
                         if str(uid_row[0] or "").strip()
@@ -14927,6 +15080,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "environment_type": str(row[6] or "").strip().lower(),
                     "customer_name": str(row[7] or ""),
                     "customer_maringo_project_number": str(row[8] or ""),
+                    "logo_filename": str(row[9] or ""),
+                    "logo_updated_at_utc": str(row[10] or ""),
                 }
                 for row in settings_rows
             }
@@ -15020,6 +15175,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "customer_id": customer_id,
                         "customer_name": customer_name,
                         "customer_maringo_project_number": customer_maringo_project_number,
+                        "customer_logo_url": build_customer_logo_url(customer_id, host_uid_settings.get("logo_filename", host_settings.get("logo_filename", "")), host_uid_settings.get("logo_updated_at_utc", host_settings.get("logo_updated_at_utc", ""))),
                         "environment_type": environment_type,
                         "agent_api_key_status": str((latest_payload.get("agent_api_key") or {}).get("status", "off")),
                         "has_sap_license_info": has_sap_license_info,
@@ -15207,6 +15363,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "environment_type": host_settings["environment_type"],
                     "customer_name": host_settings["customer_name"],
                     "customer_maringo_project_number": host_settings["customer_maringo_project_number"],
+                    "customer_logo_url": host_settings.get("customer_logo_url", ""),
                 },
             )
             return
@@ -17659,6 +17816,36 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             return
 
+        if path == "/api/v1/customers/logo":
+            if not self._require_admin_session():
+                return
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "empty body"})
+                return
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid payload"})
+                return
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    customer = save_customer_logo(
+                        conn,
+                        payload.get("customer_id"),
+                        payload.get("file_name", ""),
+                        payload.get("image_data", ""),
+                    )
+                    conn.commit()
+                self._send_json(HTTPStatus.OK, {"status": "stored", "customer": customer})
+            except ValueError as exc:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            return
+
         if path == "/api/v1/host-settings":
             content_length = int(self.headers.get("Content-Length", "0"))
             if content_length <= 0:
@@ -17930,6 +18117,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "environment_type": stored_host_settings.get("environment_type", ""),
                     "customer_name": stored_host_settings.get("customer_name", ""),
                     "customer_maringo_project_number": stored_host_settings.get("customer_maringo_project_number", ""),
+                    "customer_logo_url": stored_host_settings.get("customer_logo_url", ""),
                 },
             )
             return
