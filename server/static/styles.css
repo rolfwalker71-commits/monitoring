@@ -14809,7 +14809,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 .reports-column .section-head .report-meta-row {
   margin-top: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(300px, 27vw, 400px);
+  grid-template-columns: minmax(0, 1fr) clamp(240px, 23vw, 340px);
   gap: 8px;
   align-items: stretch;
 }
@@ -14853,7 +14853,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 
 .reports-column .section-head .report-controls-card {
   width: 100%;
-  max-width: 400px;
+  max-width: 340px;
   min-width: 0;
   justify-self: end;
   display: grid;
@@ -14996,6 +14996,29 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   text-overflow: ellipsis;
 }
 
+.report-customer-chip-wrap .selected-host-meta-card-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.report-customer-chip-wrap .selected-host-meta-card-sub-row .selected-host-meta-card-sub {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.report-customer-chip-wrap .selected-host-meta-chip--env-inline {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 800;
+  padding: 3px 11px;
+  min-height: 24px;
+}
+
 .report-customer-chip-wrap .selected-host-meta-card--placeholder {
   min-height: 54px;
   align-items: center;
@@ -15136,6 +15159,10 @@ body[data-theme="dark"] .report-customer-chip-wrap .selected-host-meta-card-main
 
 body[data-theme="dark"] .report-customer-chip-wrap .selected-host-meta-card-sub {
   color: #adc2de;
+}
+
+body[data-theme="dark"] .report-customer-chip-wrap .selected-host-meta-chip--env-inline {
+  color: #d6e6fb;
 }
 
 body[data-theme="dark"] .report-customer-chip-wrap .selected-host-meta-card-placeholder-text {

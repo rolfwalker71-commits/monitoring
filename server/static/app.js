@@ -9705,21 +9705,9 @@ function renderHeaderFirstRowControls(host) {
   }
 
   const reportCount = Number(host.report_count || 0).toLocaleString("de-DE");
-  const environmentType = asText(host.environment_type, "").trim().toLowerCase();
-  const envLabel = environmentType === "prod"
-    ? "Prod."
-    : environmentType === "test"
-      ? "Test"
-      : "";
-  const envChip = envLabel
-    ? `<span class="selected-host-meta-chip selected-host-meta-chip--env selected-host-meta-chip--env-${escapeHtml(environmentType)}" title="Host-Umgebung">${escapeHtml(envLabel)}</span>`
-    : "";
-  const osChip = renderHostOsMetaChip(host);
 
   return `
     ${renderApiKeyChip(host)}
-    ${osChip}
-    ${envChip}
     <span class="selected-host-meta-chip" title="Gesendete Meldungen">📦 ${reportCount}</span>
   `;
 }
@@ -9767,6 +9755,15 @@ function renderSelectedHostCustomerChip(host) {
   const customerName = asText(host.customer_name || "", "").trim();
   const customerProject = asText(host.customer_maringo_project_number || "", "").trim();
   const hostLabelRaw = asText(host.display_name || host.hostname || "Host", "Host").trim() || "Host";
+  const environmentType = asText(host.environment_type, "").trim().toLowerCase();
+  const envLabel = environmentType === "prod"
+    ? "Prod."
+    : environmentType === "test"
+      ? "Test"
+      : "";
+  const envChip = envLabel
+    ? `<span class="selected-host-meta-chip selected-host-meta-chip--env selected-host-meta-chip--env-inline selected-host-meta-chip--env-${escapeHtml(environmentType)}" title="Host-Umgebung">${escapeHtml(envLabel)}</span>`
+    : "";
   const customerLabel = customerName
     ? (customerProject ? `${customerName} · ${customerProject}` : customerName)
     : "Kein Kunde";
@@ -9775,7 +9772,10 @@ function renderSelectedHostCustomerChip(host) {
     : (customerName ? "Kunde" : "Kein Kunde hinterlegt");
   return `<span class="selected-host-meta-card" title="${escapeHtml(customerTitle)}">
     <strong class="selected-host-meta-card-main">${escapeHtml(customerLabel)}</strong>
-    <span class="selected-host-meta-card-sub">Name: ${escapeHtml(hostLabelRaw)}</span>
+    <span class="selected-host-meta-card-sub-row">
+      <span class="selected-host-meta-card-sub">Name: ${escapeHtml(hostLabelRaw)}</span>
+      ${envChip}
+    </span>
   </span>`;
 }
 

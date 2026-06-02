@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.227**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.227**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.228**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.228**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.228 | 02.06.2026 | Header-Layout verfeinert: OS-Chip (Windows/Linux) aus der rechten Karte entfernt. Prod./Test-Chip von rechts in die linke Karte verschoben und rechtsbündig in derselben Zeile wie `Name:` platziert (größere Typografie). Zusätzlich Spaltenverhältnis zugunsten der linken Karte angepasst (rechts schmaler, links breiter). |
 | 1.7.227 | 02.06.2026 | Header ohne Hostauswahl bereinigt: rechte Steuerkarte startet nun im Empty-State und blendet Intervall/Export/Bearbeiten zuverlässig aus, bis ein Host selektiert ist (inkl. zusätzlichem JS-Toggle der Zeilen). Platzhalter **„Host auswählen ...“** in der linken Karte ist jetzt horizontal und vertikal zentriert. |
 | 1.7.226 | 02.06.2026 | Rechte Header-Steuerkarte bei leerer Hostauswahl bereinigt: Intervall/Export/Bearbeiten werden erst angezeigt, wenn ein Host selektiert ist. Im aktiven Zustand werden Chips und Aktionen zusätzlich nach rechts ausgerichtet, damit die Elemente direkt am rechten Rand und bündig zueinander stehen. |
 | 1.7.225 | 02.06.2026 | Header-Hostkarte stabilisiert: Platzhalter **„Host auswählen ...“** ist jetzt auch ohne Selektion sofort sichtbar (Default-Markup + robustes Unhide im Renderpfad). Zusätzlich bleibt die Kartenhöhe beim Wechsel zwischen „kein Host“ und „Host ausgewählt“ konstant (fixe Kartenhöhe + einzeilige Ellipsis für Kunde/Name), sodass kein vertikales Aufspringen mehr auftritt. |
