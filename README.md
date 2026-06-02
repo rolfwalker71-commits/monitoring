@@ -363,14 +363,15 @@ Mountpoints können mit Glob-Pattern-Matching (fnmatch) in die Blacklist aufgeno
 
 ## Versioning
 
-- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.239**)
-- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.239**)
+- Applikations-Version: `BUILD_VERSION` (semantisch, aktuell: **1.7.240**)
+- Agent-Version: `AGENT_VERSION` (separat versioniert, aktuell: **1.7.240**)
 - API-Spec: `openapi.yaml` (OpenAPI 3.0.3, Version folgt BUILD_VERSION)
 
 ### Recent Releases (v1.4.99+)
 
 | Version | Datum | Änderung |
 |---------|-------|----------|
+| 1.7.240 | 02.06.2026 | Header-Logo-Feintuning: Kundenlogo-Karte klebt nicht mehr am unteren Rand (`top/bottom`-Inset), Hintergrund der Logo-Karte auf Weiß gesetzt (bessere Wirkung bei nicht freigestellten Logos), Logo größer skaliert, und Logo nach links versetzt, sodass rechts eine freie Spur für `Meldung`-Text und Status-Chip bleibt (keine Überdeckung mehr). |
 | 1.7.239 | 02.06.2026 | Follow-up-Fix für Header-Kundenlogo: Layout stabilisiert, damit die linke Kundenkarte nicht mehr durch die Logo-Spalte verschoben/aufgebrochen wird. Logo ist nun rechts in der Karte absolut verankert (über beide Textzeilen), Text reserviert nur Platz per `padding-right`, Kartenhöhe bleibt unverändert. |
 | 1.7.238 | 02.06.2026 | Header-Kundenlogo im Reports-Header neu ausgerichtet: Logo sitzt nun ganz rechts in eigener Spalte und läuft über beide Textzeilen, ohne die Kartenhöhe zu erhöhen. Darstellung bleibt strikt proportional (`object-fit: contain`). Zusätzlich wurde der künstliche Logo-Hintergrund entfernt, damit vorhandene Bild-Transparenz sichtbar bleibt. |
 | 1.7.237 | 02.06.2026 | Hotfix für `HTTP 502` bei `/api/v1/hosts`: Customer-Logo-Felder (`logo_filename`, `updated_at_utc`) wurden im Hosts-Query vollständig ergänzt (Host- und Host-UID-Settings) und korrekt gemappt, damit keine Row-Index-Fehler mehr auftreten. |

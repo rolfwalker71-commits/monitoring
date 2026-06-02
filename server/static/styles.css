@@ -15001,7 +15001,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 .reports-column .section-head .report-customer-main-card .report-count-inline {
   position: absolute;
   right: 9px;
-  bottom: 24px;
+  top: 8px;
   display: inline-block;
   text-align: right;
   margin: 0;
@@ -15014,6 +15014,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   color: #4f6f94;
   white-space: nowrap;
   transform: none;
+  z-index: 2;
 }
 
 .report-header-os-logo-wrap {
@@ -15049,7 +15050,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
 .report-customer-chip-wrap .selected-host-meta-card-body--with-logo {
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  padding-right: 94px;
+  padding-right: 0;
 }
 
 .report-customer-chip-wrap .selected-host-meta-card-copy {
@@ -15097,24 +15098,25 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 86px;
+  width: 112px;
   min-height: 0;
   border: 1px solid #cddbeb;
   border-radius: 8px;
-  background: transparent;
+  background: #ffffff;
   overflow: hidden;
-  padding: 4px 6px;
+  padding: 2px 4px;
   position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  top: 4px;
+  right: 96px;
+  bottom: 4px;
+  z-index: 1;
 }
 
 .report-customer-chip-wrap .selected-host-customer-logo {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  object-position: center;
+  object-position: center center;
   display: block;
 }
 
