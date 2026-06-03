@@ -333,6 +333,67 @@ function Get-TextFromFileBytes {
     return [System.Text.Encoding]::Default.GetString($Bytes)
 }
 
+function Split-AngLogPhysicalLine {
+    param(
+        [Parameter(Mandatory = $true)][string]$Line
+    )
+
+    $trimmed = $Line.Trim()
+    if ($trimmed.Length -eq 0) {
+        return @()
+    }
+
+    $patterns = @(
+        '(?=\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})',
+        '(?=\[(?:\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}|\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}))'
+    )
+
+    $parts = @($trimmed)
+    foreach ($pattern in $patterns) {
+        $next = New-Object System.Collections.Generic.List[string]
+        foreach ($part in $parts) {
+            if ([string]::IsNullOrWhiteSpace($part)) {
+                continue
+            }
+            $split = [regex]::Split([string]$part, $pattern)
+            foreach ($chunk in $split) {
+                $chunkTrimmed = [string]$chunk.Trim()
+                if ($chunkTrimmed.Length -gt 0) {
+                    [void]$next.Add($chunkTrimmed)
+                }
+            }
+        }
+        if ($next.Count -gt 1) {
+            $parts = @($next.ToArray())
+        }
+    }
+
+    if ((Get-AngCollectionCount $parts) -eq 0) {
+        return ,@($trimmed)
+    }
+
+    return ,$parts
+}
+
+function Expand-AngLogPhysicalLines {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$PhysicalLines
+    )
+
+    $logicalLines = New-Object System.Collections.Generic.List[string]
+    foreach ($physicalLine in $PhysicalLines) {
+        foreach ($logicalLine in (Split-AngLogPhysicalLine -Line ([string]$physicalLine))) {
+            [void]$logicalLines.Add([string]$logicalLine)
+        }
+    }
+
+    if ($logicalLines.Count -eq 0) {
+        return @()
+    }
+
+    return ,@($logicalLines.ToArray())
+}
+
 function Read-LogFileTailLines {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -340,24 +401,29 @@ function Read-LogFileTailLines {
     )
 
     if ($TailLines -lt 1) {
-        return @()
+        return ,@()
     }
 
     $bytes = [System.IO.File]::ReadAllBytes($Path)
     if ($bytes.Length -eq 0) {
-        return @()
+        return ,@()
     }
 
     $text = Get-TextFromFileBytes -Bytes $bytes
     if ([string]::IsNullOrWhiteSpace($text)) {
-        return @()
+        return ,@()
     }
 
     $normalized = $text -replace "`r`n", "`n" -replace "`r", "`n"
-    $allLines = @($normalized -split "`n")
-    while ((Get-AngCollectionCount $allLines) -gt 0 -and [string]::IsNullOrWhiteSpace($allLines[(Get-AngCollectionCount $allLines) - 1])) {
-        $allLines = $allLines[0..((Get-AngCollectionCount $allLines) - 2)]
+    $physicalLines = @($normalized -split "`n")
+    while ((Get-AngCollectionCount $physicalLines) -gt 0 -and [string]::IsNullOrWhiteSpace($physicalLines[(Get-AngCollectionCount $physicalLines) - 1])) {
+        $physicalLines = $physicalLines[0..((Get-AngCollectionCount $physicalLines) - 2)]
     }
+    if ((Get-AngCollectionCount $physicalLines) -eq 0) {
+        return ,@()
+    }
+
+    $allLines = Expand-AngLogPhysicalLines -PhysicalLines $physicalLines
     if ((Get-AngCollectionCount $allLines) -eq 0) {
         return ,@()
     }

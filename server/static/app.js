@@ -8743,7 +8743,37 @@ function getAngLogsBlockFromPayload(payload) {
   return parseAngLogsBlock(payload?.ang_logs) || parseAngLogsBlock(payload?.ang_skripte_logs);
 }
 
-const ANG_SKRIPTE_LOG_LINE_SPLIT_RE = /(?=\[(?:\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}|\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}))/;
+const ANG_LOG_LINE_SPLIT_PATTERNS = [
+  /(?=\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})/,
+  /(?=\[(?:\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}|\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}))/,
+];
+
+function splitAngLogLogicalLine(line) {
+  const trimmed = asLogLineText(line).trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  let parts = [trimmed];
+  for (const pattern of ANG_LOG_LINE_SPLIT_PATTERNS) {
+    const next = [];
+    for (const part of parts) {
+      const chunks = part
+        .split(pattern)
+        .map((chunk) => chunk.replace(/^\s+/, "").trimEnd())
+        .filter((chunk) => chunk.length > 0);
+      if (chunks.length > 1) {
+        next.push(...chunks);
+      } else if (part) {
+        next.push(part);
+      }
+    }
+    if (next.length > 1) {
+      parts = next;
+    }
+  }
+  return parts.length > 0 ? parts : [trimmed];
+}
 
 function normalizeAngSkripteLogLines(rawLines) {
   if (Array.isArray(rawLines)) {
@@ -8774,28 +8804,24 @@ function expandAngSkripteLogLines(rawLines) {
   if (!normalized.length) {
     return [];
   }
-  if (normalized.length > 1) {
-    return normalized;
+
+  const expanded = [];
+  for (const line of normalized) {
+    const logicalLines = splitAngLogLogicalLine(line);
+    if (logicalLines.length > 1) {
+      expanded.push(...logicalLines);
+      continue;
+    }
+    if (line.includes("\n") || line.includes("\r")) {
+      expanded.push(...line.split(/\r?\n/).map((entry) => asLogLineText(entry)).filter((entry) => entry.length > 0));
+      continue;
+    }
+    if (line) {
+      expanded.push(line);
+    }
   }
 
-  const onlyLine = normalized[0];
-  if (!onlyLine) {
-    return normalized;
-  }
-
-  const splitByTimestamp = onlyLine
-    .split(ANG_SKRIPTE_LOG_LINE_SPLIT_RE)
-    .map((part) => part.replace(/^\s+/, ""))
-    .filter((part, index) => part.length > 0 || index === 0);
-  if (splitByTimestamp.length > 1) {
-    return splitByTimestamp;
-  }
-
-  if (onlyLine.includes("\n") || onlyLine.includes("\r")) {
-    return onlyLine.split(/\r?\n/).map((line) => asLogLineText(line));
-  }
-
-  return normalized;
+  return expanded.length > 0 ? expanded : normalized;
 }
 
 function renderLogfileLinesHtml(rawLines) {
