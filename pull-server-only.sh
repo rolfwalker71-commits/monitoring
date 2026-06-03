@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260603g"
+PULL_SCRIPT_VERSION="20260604a"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -406,6 +406,19 @@ GITHUB_COMMIT_TIME=""
 resolve_deploy_ref
 if [ -z "${REF:-}" ]; then
   echo "FEHLER: Deploy-Ref leer nach resolve_deploy_ref." >&2
+  exit 1
+fi
+if ! is_full_git_sha "$REF"; then
+  local_deployed="$(tr -d ' \t\r\n' < "$TARGET_DIR/DEPLOYED_COMMIT_SHA" 2>/dev/null || true)"
+  echo "FEHLER: Deploy-Ref ist kein Commit-SHA ('$REF') – Downloads wuerden raw/main nutzen (CDN oft veraltet, z.B. BUILD_VERSION 1.7.325)." >&2
+  if [ "$local_deployed" = "main" ] || [ "$local_deployed" = "$REF" ]; then
+    echo "  Dein Server hat DEPLOYED_COMMIT_SHA=$local_deployed – genau dieses Problem." >&2
+  fi
+  echo "  api.github.com und git ls-remote sind vom Server aus nicht nutzbar oder fehlgeschlagen." >&2
+  echo "  Einmalig erzwingen:" >&2
+  echo "    export MONITORING_DEPLOY_SHA=b6e5617de34d4b52dc9f0e83fa4b874616fb4afb" >&2
+  echo "    $TARGET_DIR/pull-server-only.sh" >&2
+  echo "  SHA ermitteln: curl -fsSL https://api.github.com/repos/$OWNER_REPO/commits/main | grep -m1 '\"sha\"'" >&2
   exit 1
 fi
 echo "Deploy-Pin: $REF"
