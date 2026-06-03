@@ -101,6 +101,8 @@ const HEADER_KPI_MIN_WIDTH_PX = 104;
 const HEADER_KPI_MAX_WIDTH_PX = 190;
 const hostLicenseHoverCache = new Map();
 const SESSION_REFRESH_INTERVAL_SECONDS = 240;
+const SESSION_LOGIN_GRACE_MS = 20000;
+let sessionEstablishedAtMs = 0;
 
 function resolveHeaderKpiTrendDirection(previousValue, currentValue) {
   if (!Number.isFinite(previousValue) || !Number.isFinite(currentValue)) {
@@ -1158,8 +1160,12 @@ function startSessionRefreshTimer() {
     return;
   }
   stopSessionRefreshTimer();
-  // Keep the sliding inactivity timeout alive proactively.
-  void refreshSession();
+  // First refresh delayed so the login Set-Cookie is applied before POST /session/refresh.
+  window.setTimeout(() => {
+    if (state.isAuthenticated) {
+      void refreshSession();
+    }
+  }, 2500);
   sessionRefreshTimerId = window.setInterval(() => {
     void refreshSession();
   }, SESSION_REFRESH_INTERVAL_SECONDS * 1000);
@@ -1184,6 +1190,10 @@ async function refreshSession() {
     if (!response.ok) {
       console.warn("Session refresh failed:", response.status);
       if (response.status === 401) {
+        if (Date.now() - sessionEstablishedAtMs < SESSION_LOGIN_GRACE_MS) {
+          console.warn("Session refresh 401 ignored during login grace window");
+          return;
+        }
         setAuthUiState(false);
         setLoginStatus("Session abgelaufen. Bitte neu anmelden.", true);
       }
@@ -2843,7 +2853,7 @@ async function saveHostInterestsPreferences() {
 }
 
 async function fetchSessionState() {
-  const response = await fetch("/api/v1/session");
+  const response = await fetch("/api/v1/session", { credentials: "same-origin" });
   if (!response.ok) {
     throw new Error("HTTP " + response.status);
   }
@@ -2918,6 +2928,7 @@ async function loginWebClient() {
     );
     loadHostFilterPreferences();
     resetUserScopedPreferences();
+    sessionEstablishedAtMs = Date.now();
     setAuthUiState(true);
     passwordInput.value = "";
     setLoginStatus("Anmeldung erfolgreich.");
@@ -15927,7 +15938,6 @@ function wireEvents() {
     }
     void refreshDashboard({ preserveScroll: false });
     startAutoRefreshTimer();
-    startSessionRefreshTimer();
   });
 
   document.getElementById("loginPasswordInput").addEventListener("keydown", async (event) => {
@@ -15940,7 +15950,6 @@ function wireEvents() {
     }
     void refreshDashboard({ preserveScroll: false });
     startAutoRefreshTimer();
-    startSessionRefreshTimer();
   });
 
   document.getElementById("logoutButton").addEventListener("click", async () => {
@@ -16436,9 +16445,11 @@ async function init() {
   document.getElementById("loginPasswordInput").value = "";
   const isAuthenticated = await ensureAuthenticatedSession();
   if (!isAuthenticated) {
+    setAuthUiState(false);
     setLoginStatus("Bitte anmelden, um den Webclient zu nutzen.");
     return;
   }
+  sessionEstablishedAtMs = Date.now();
   await loadSapB1VersionMap();
   await loadSapLicenseTypeMap();
   // sapB1VersionMapPromise runs in background — hosts render immediately,

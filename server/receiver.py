@@ -15059,6 +15059,26 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return True
         return False
 
+    def _request_is_https(self) -> bool:
+        scheme = (self.headers.get("X-Forwarded-Proto", "") or "").split(",")[0].strip().lower()
+        if scheme == "https":
+            return True
+        if self.headers.get("X-Forwarded-Ssl", "").lower() in {"on", "1", "true", "yes"}:
+            return True
+        return False
+
+    def _web_session_set_cookie_header(self, token: str) -> str:
+        parts = [f"{WEB_SESSION_COOKIE}={token}", "Path=/", "HttpOnly", "SameSite=Lax"]
+        if self._request_is_https():
+            parts.append("Secure")
+        return "; ".join(parts)
+
+    def _web_session_clear_cookie_header(self) -> str:
+        parts = [f"{WEB_SESSION_COOKIE}=", "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=0"]
+        if self._request_is_https():
+            parts.append("Secure")
+        return "; ".join(parts)
+
     def _cookie_value(self, cookie_name: str) -> str:
         cookie_header = self.headers.get("Cookie", "")
         for part in cookie_header.split(";"):
@@ -17847,7 +17867,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "inactivity_timeout_minutes": WEB_SESSION_INACTIVITY_MINUTES,
                 },
                 extra_headers={
-                    "Set-Cookie": f"{WEB_SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax",
+                    "Set-Cookie": self._web_session_set_cookie_header(token),
                 },
             )
             return
@@ -17863,7 +17883,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {"status": "logged_out"},
                 extra_headers={
-                    "Set-Cookie": f"{WEB_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
+                    "Set-Cookie": self._web_session_clear_cookie_header(),
                 },
             )
             return
@@ -17881,7 +17901,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             now_iso = utc_now_iso()
             expires_iso = web_session_expires_iso()
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite_connect() as conn:
                 result = conn.execute(
                     "UPDATE web_sessions SET last_activity_at_utc = ?, expires_at_utc = ? WHERE session_token = ?",
                     (now_iso, expires_iso, session_token),
@@ -17946,7 +17966,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "expires_at_utc": expires_at,
                 },
                 extra_headers={
-                    "Set-Cookie": f"{WEB_SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax",
+                    "Set-Cookie": self._web_session_set_cookie_header(token),
                 },
             )
             return
