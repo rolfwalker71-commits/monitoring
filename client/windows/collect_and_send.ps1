@@ -432,7 +432,9 @@ function Get-AngLogGroupKey {
 
 function Select-AngLogFilesByRotation {
     param(
-        [Parameter(Mandatory = $true)][System.IO.FileInfo[]]$LogFiles,
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [System.IO.FileInfo[]]$LogFiles,
         [Parameter(Mandatory = $true)][string]$RootPath,
         [int]$KeepPerGroup = 2
     )
@@ -467,9 +469,15 @@ function Select-AngLogFilesByRotation {
 
 function Limit-AngLogFilesByRecency {
     param(
-        [Parameter(Mandatory = $true)][System.IO.FileInfo[]]$LogFiles,
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [System.IO.FileInfo[]]$LogFiles,
         [int]$MaxFiles = 0
     )
+
+    if (-not $LogFiles -or $LogFiles.Count -eq 0) {
+        return @()
+    }
 
     if ($MaxFiles -le 0 -or $LogFiles.Count -le $MaxFiles) {
         return ,$LogFiles
@@ -480,12 +488,14 @@ function Limit-AngLogFilesByRecency {
 
 function Filter-AngLogFilesByMaxAge {
     param(
-        [Parameter(Mandatory = $true)][System.IO.FileInfo[]]$LogFiles,
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [System.IO.FileInfo[]]$LogFiles,
         [int]$MaxAgeDays = 7
     )
 
     if ($MaxAgeDays -le 0 -or -not $LogFiles -or $LogFiles.Count -eq 0) {
-        return ,$LogFiles
+        return @()
     }
 
     $cutoffUtc = (Get-Date).ToUniversalTime().AddDays(-1 * $MaxAgeDays)
