@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+on_pull_script_error() {
+  local exit_code=$?
+  echo "FEHLER in pull-server-only.sh (Zeile ${BASH_LINENO[0]:-?}, exit $exit_code)" >&2
+  exit "$exit_code"
+}
+trap on_pull_script_error ERR
+
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260603e"
+PULL_SCRIPT_VERSION="20260603f"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -119,6 +126,7 @@ is_full_git_sha() {
 }
 
 resolve_latest_main_sha_via_git() {
+  local sha=""
   if ! command -v git >/dev/null 2>&1; then
     return 0
   fi
@@ -126,7 +134,12 @@ resolve_latest_main_sha_via_git() {
   if [ -n "$GITHUB_TOKEN" ]; then
     git_url="https://x-access-token:${GITHUB_TOKEN}@github.com/$OWNER_REPO.git"
   fi
-  git ls-remote "$git_url" refs/heads/main 2>/dev/null | awk '{print $1; exit}'
+  # Mit pipefail wuerde ein git-Fehler sonst bei set -e den ganzen Pull abbrechen.
+  sha="$({ git ls-remote "$git_url" refs/heads/main 2>/dev/null || true; } | awk '{print $1; exit}')"
+  if [ -n "$sha" ]; then
+    printf '%s' "$sha"
+  fi
+  return 0
 }
 
 write_repo_text_to_target() {
@@ -188,7 +201,7 @@ bootstrap_pull_script_if_needed() {
     return 0
   fi
 
-  latest_sha="$(resolve_latest_main_sha_via_git)"
+  latest_sha="$(resolve_latest_main_sha_via_git || true)"
   bootstrap_ref="${MONITORING_DEPLOY_SHA:-$latest_sha}"
   if ! is_full_git_sha "$bootstrap_ref"; then
     echo "Bootstrap übersprungen: kein Commit-SHA (git ls-remote fehlgeschlagen)." >&2
@@ -314,7 +327,7 @@ pin_deploy_ref_to_main_sha() {
     return 0
   fi
 
-  sha="$(resolve_latest_main_sha_via_git)"
+  sha="$(resolve_latest_main_sha_via_git || true)"
   if [ -n "$sha" ]; then
     REF="$sha"
     echo "Deploy-Ref: $REF (git ls-remote $branch_ref – umgeht raw/main CDN-Cache)"
@@ -391,6 +404,11 @@ mkdir -p "$TARGET_DIR/server/static/icons" "$TARGET_DIR/server/data" "$TARGET_DI
 
 GITHUB_COMMIT_TIME=""
 resolve_deploy_ref
+if [ -z "${REF:-}" ]; then
+  echo "FEHLER: Deploy-Ref leer nach resolve_deploy_ref." >&2
+  exit 1
+fi
+echo "Deploy-Pin: $REF"
 RAW_BASE="https://raw.githubusercontent.com/$OWNER_REPO/$REF"
 
 # Hilfsfunction fuer parallele downloads
