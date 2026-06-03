@@ -8263,6 +8263,24 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   font-size: 0.92rem;
 }
 
+.log-viewer.ang-skripte-log-viewer {
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  padding: 10px 14px 12px;
+}
+
+.log-viewer.ang-skripte-log-viewer .log-line {
+  display: block;
+  min-height: 1.35em;
+  line-height: 1.45;
+  padding: 1px 0;
+}
+
+.log-viewer.ang-skripte-log-viewer .log-line--empty {
+  min-height: 0.65em;
+}
+
 .cron-content {
   margin: 0;
   border-top: 1px solid #d4e4f7;

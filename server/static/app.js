@@ -8736,6 +8736,8 @@ function parseAngSkripteLogsBlock(raw) {
   return null;
 }
 
+const ANG_SKRIPTE_LOG_LINE_SPLIT_RE = /(?=\[(?:\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}|\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}))/;
+
 function normalizeAngSkripteLogLines(rawLines) {
   if (Array.isArray(rawLines)) {
     return rawLines.map((line) => asLogLineText(line));
@@ -8760,6 +8762,57 @@ function normalizeAngSkripteLogLines(rawLines) {
   return [];
 }
 
+function expandAngSkripteLogLines(rawLines) {
+  const normalized = normalizeAngSkripteLogLines(rawLines);
+  if (!normalized.length) {
+    return [];
+  }
+  if (normalized.length > 1) {
+    return normalized;
+  }
+
+  const onlyLine = normalized[0];
+  if (!onlyLine) {
+    return normalized;
+  }
+
+  const splitByTimestamp = onlyLine
+    .split(ANG_SKRIPTE_LOG_LINE_SPLIT_RE)
+    .map((part) => part.replace(/^\s+/, ""))
+    .filter((part, index) => part.length > 0 || index === 0);
+  if (splitByTimestamp.length > 1) {
+    return splitByTimestamp;
+  }
+
+  if (onlyLine.includes("\n") || onlyLine.includes("\r")) {
+    return onlyLine.split(/\r?\n/).map((line) => asLogLineText(line));
+  }
+
+  return normalized;
+}
+
+function renderLogfileLinesHtml(rawLines) {
+  const expanded = expandAngSkripteLogLines(rawLines);
+  if (!expanded.length) {
+    return '<div class="log-line log-line--empty">(leer)</div>';
+  }
+  return expanded.map((line) => {
+    const html = line ? formatTerminalOutputLine(line) : "&nbsp;";
+    const extraClass = line ? "" : " log-line--empty";
+    return `<div class="log-line${extraClass}">${html}</div>`;
+  }).join("");
+}
+
+function renderAngSkripteLogTerminal(rawLines, metaLine = "") {
+  const metaHtml = metaLine ? `<p class="count compact">${escapeHtml(metaLine)}</p>` : "";
+  return `
+    <div class="terminal-viewer-section">
+      ${metaHtml}
+      <div class="log-viewer ang-skripte-log-viewer">${renderLogfileLinesHtml(rawLines)}</div>
+    </div>
+  `;
+}
+
 function renderAngSkripteLogs(angSkripteLogsBlock) {
   const block = parseAngSkripteLogsBlock(angSkripteLogsBlock) || {};
   const path = asText(block.path, "C:\\ang\\skripte");
@@ -8780,8 +8833,8 @@ function renderAngSkripteLogs(angSkripteLogsBlock) {
     const filePath = asText(file?.path);
     const fileError = String(file?.error || "").trim();
     const sizeBytes = Number(file?.size_bytes);
-    const allLines = normalizeAngSkripteLogLines(file?.lines);
-    const lineCount = Number(file?.line_count ?? allLines.length ?? 0);
+    const displayLines = expandAngSkripteLogLines(file?.lines);
+    const lineCount = displayLines.length;
     const sizeLabel = Number.isFinite(sizeBytes) && sizeBytes >= 0
       ? ` | Größe: ${formatBytes(sizeBytes)}`
       : "";
@@ -8794,20 +8847,22 @@ function renderAngSkripteLogs(angSkripteLogsBlock) {
         </section>
       `;
     }
-    const terminalBody = allLines.length > 0
-      ? allLines.join("\n")
-      : [
-        "STATUS=EMPTY",
-        "MESSAGE=Datei erkannt, aber keine lesbaren Zeilen im Payload.",
-        "HINWEIS=Nach Agent-Update erneut melden (UTF-8/UTF-16/ANSI wird jetzt unterstützt).",
-      ].join("\n");
+    const logMeta = lineCount > 0
+      ? `Pfad: ${filePath || "-"} | ${lineCount} Zeile${lineCount !== 1 ? "n" : ""} angezeigt${sizeLabel}`
+      : `Pfad: ${filePath || "-"} | keine lesbaren Zeilen${sizeLabel}`;
+    const logContent = lineCount > 0
+      ? renderAngSkripteLogTerminal(file?.lines, logMeta)
+      : renderTerminalViewer(
+        [
+          "STATUS=EMPTY",
+          "MESSAGE=Datei erkannt, aber keine lesbaren Zeilen im Payload.",
+        ].join("\n"),
+        logMeta
+      );
     return `
       <section class="detail-card ang-skripte-log-card">
         <h4>${escapeHtml(name)}</h4>
-        ${renderTerminalViewer(
-          terminalBody,
-          `Pfad: ${filePath || "-"} | letzte ${lineCount} Zeilen${sizeLabel}`
-        )}
+        ${logContent}
       </section>
     `;
   }).join("");
