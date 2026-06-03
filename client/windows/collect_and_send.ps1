@@ -47,7 +47,7 @@ $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { '
 $QueueQuarantineDir = if ($env:AGENT_QUEUE_QUARANTINE_DIR) { $env:AGENT_QUEUE_QUARANTINE_DIR } else { 'C:\ProgramData\monitoring-agent\queue-quarantine' }
 $PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
 $PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
-$EmbeddedAgentVersion = '1.7.345'
+$EmbeddedAgentVersion = '1.7.346'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -483,15 +483,20 @@ function Split-AngLogPhysicalLine {
         return @()
     }
 
-    # JSON/XML payloads: do not split on timestamps inside field values.
-    if ($trimmed.StartsWith('{') -or $trimmed.StartsWith('[')) {
+    # JSON payloads only (bracketed log timestamps like [2026-06-03 09:57:16] must still split).
+    if ($trimmed.StartsWith('{')) {
         return ,@($trimmed)
+    }
+    if ($trimmed.StartsWith('[') -and -not ($trimmed -match '^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}') -and -not ($trimmed -match '^\[\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}')) {
+        if ($trimmed.StartsWith('[{') -or $trimmed.StartsWith('["')) {
+            return ,@($trimmed)
+        }
     }
 
     $patterns = @(
         '(?=\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{1,6})?\s)',
-        '(?=\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:[.,]\d{1,6})?\s)',
-        '(?=\[\d{2}\.\d{2}\.\d{4} \d{2}:\d{2})'
+        '(?=\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:[.,]\d{1,6})?\])',
+        '(?=\[\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}(?::\d{2})?(?:[.,]\d{1,6})?\])'
     )
 
     $parts = @($trimmed)

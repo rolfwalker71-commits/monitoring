@@ -8795,17 +8795,27 @@ function getAngLogsBlockFromPayload(payload) {
 // Split merged log blobs (often one physical line / no newlines in file) before each timestamp.
 const ANG_LOG_LINE_SPLIT_PATTERNS = [
   /(?=\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{1,6})?\s)/,
-  /(?=\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:[.,]\d{1,6})?\s)/,
-  /(?=\[\d{2}\.\d{2}\.\d{4} \d{2}:\d{2})/,
+  /(?=\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:[.,]\d{1,6})?\])/,
+  /(?=\[\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}(?::\d{2})?(?:[.,]\d{1,6})?\])/,
 ];
+
+function looksLikeAngLogJsonLine(line) {
+  const trimmed = String(line || "").trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+    return false;
+  }
+  if (/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(trimmed) || /^\[\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}/.test(trimmed)) {
+    return false;
+  }
+  return trimmed.startsWith("{") || trimmed.startsWith("[{") || trimmed.startsWith('["') || trimmed.startsWith("[\n");
+}
 
 function shouldSplitAngLogLogicalLine(line) {
   const trimmed = asLogLineText(line).trim();
   if (!trimmed) {
     return false;
   }
-  // JSON/XML lines: keep intact (timestamps inside values must not start new rows).
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+  if (looksLikeAngLogJsonLine(trimmed)) {
     return false;
   }
   return true;
