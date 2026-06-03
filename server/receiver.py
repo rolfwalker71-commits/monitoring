@@ -9827,27 +9827,75 @@ def backfill_sap_addon_changes(
                         except Exception:
                             pass
 
-                if not inventory_greenfield and report_count % 1000 == 0:
-                    conn.commit()
-                elif inventory_greenfield:
+                if inventory_greenfield:
+                    if report_count % 250 == 0 or report_count == reports_total:
+                        conn.commit()
+                elif report_count % 1000 == 0:
                     conn.commit()
 
     finally:
         read_conn.close()
-    for host_key, snapshot in last_snapshot_by_host_key.items():
-        updated_at_utc = last_seen_at_by_host_key.get(host_key, utc_now_iso())
-        hostname_value = str(last_hostname_by_host_key.get(host_key, host_key) or host_key)
-        conn.execute(
-            """
-            INSERT INTO host_addon_snapshot (host_uid, hostname, snapshot_json, updated_at_utc)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(host_uid) DO UPDATE SET
-                hostname = excluded.hostname,
-                snapshot_json = excluded.snapshot_json,
-                updated_at_utc = excluded.updated_at_utc
-            """,
-            (host_key, hostname_value, json.dumps(snapshot, separators=(",", ":")), updated_at_utc),
-        )
+
+    conn.commit()
+
+    snapshot_hosts = list(last_snapshot_by_host_key.items())
+
+    def _emit_addon_finalize_progress(message: str, *, current_host: str = "") -> None:
+        if not callable(progress_callback):
+            return
+        try:
+            progress_callback({
+                "phase": "addon_backfill",
+                "phase_step": addon_phase_step,
+                "phase_steps_total": int(phase_steps_total or 3),
+                "reports_total": reports_total,
+                "reports_scanned": report_count,
+                "hosts_processed": hosts_processed,
+                "hosts_total": hosts_processed,
+                "current_host": current_host,
+                "inserted_changes": inserted_changes,
+                "message": message,
+            })
+        except Exception:
+            pass
+
+    _emit_addon_finalize_progress(
+        f"SAP-Add-ons: Reports fertig ({report_count}/{reports_total}), Speichere Snapshots…"
+    )
+
+    finalize_conn = sqlite_connect()
+    try:
+        finalize_conn.execute(f"PRAGMA busy_timeout = {_maintenance_sqlite_busy_timeout_ms()}")
+        for snap_idx, (host_key, snapshot) in enumerate(snapshot_hosts, start=1):
+            updated_at_utc = last_seen_at_by_host_key.get(host_key, utc_now_iso())
+            hostname_value = str(last_hostname_by_host_key.get(host_key, host_key) or host_key)
+            finalize_conn.execute(
+                """
+                INSERT INTO host_addon_snapshot (host_uid, hostname, snapshot_json, updated_at_utc)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(host_uid) DO UPDATE SET
+                    hostname = excluded.hostname,
+                    snapshot_json = excluded.snapshot_json,
+                    updated_at_utc = excluded.updated_at_utc
+                """,
+                (
+                    host_key,
+                    hostname_value,
+                    json.dumps(snapshot, separators=(",", ":")),
+                    updated_at_utc,
+                ),
+            )
+            finalize_conn.commit()
+            if inventory_greenfield or snap_idx == 1 or snap_idx == len(snapshot_hosts) or snap_idx % 5 == 0:
+                _emit_addon_finalize_progress(
+                    f"SAP-Add-ons: Speichere Snapshots ({snap_idx}/{len(snapshot_hosts)})…",
+                    current_host=hostname_value,
+                )
+    finally:
+        finalize_conn.close()
+
+    _emit_addon_finalize_progress("SAP-Add-ons abgeschlossen, weiter mit DB-Lifecycle…")
+    conn.commit()
 
     return {
         "days": window_days,
