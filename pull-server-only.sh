@@ -428,10 +428,30 @@ else
   echo "Commit-Status: UNBEKANNT (konnte latest main SHA nicht ermitteln)"
 fi
 
-echo -n "BUILD_VERSION lokal: "
-cat "$TARGET_DIR/BUILD_VERSION"
-echo -n "AGENT_VERSION lokal: "
-cat "$TARGET_DIR/AGENT_VERSION"
+LOCAL_BUILD_VERSION="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
+LOCAL_AGENT_VERSION="$(tr -d ' \t\r\n' < "$TARGET_DIR/AGENT_VERSION" 2>/dev/null || true)"
+REMOTE_BUILD_VERSION=""
+if REMOTE_BUILD_VERSION="$(curl_raw_github "https://raw.githubusercontent.com/$OWNER_REPO/main/BUILD_VERSION" 2>/dev/null | tr -d ' \t\r\n')"; then
+  :
+else
+  REMOTE_BUILD_VERSION=""
+fi
+
+echo "BUILD_VERSION deployiert: ${LOCAL_BUILD_VERSION:-?}"
+echo "AGENT_VERSION deployiert: ${LOCAL_AGENT_VERSION:-?}"
+if [ -n "$REMOTE_BUILD_VERSION" ]; then
+  echo "BUILD_VERSION GitHub main: $REMOTE_BUILD_VERSION"
+  if [ "$LOCAL_BUILD_VERSION" != "$REMOTE_BUILD_VERSION" ]; then
+    echo "WARNUNG: Deploy-Ordner BUILD_VERSION weicht von GitHub main ab." >&2
+  fi
+fi
+if [ -f "$TARGET_DIR/server/static/index.html" ]; then
+  if rg -q 'runInventoryChangelogRebuildButton' "$TARGET_DIR/server/static/index.html" 2>/dev/null; then
+    echo "UI-Check: Inventur/Abbrechen-Buttons in index.html vorhanden"
+  else
+    echo "WARNUNG: index.html ohne Inventur/Abbrechen-Buttons (alter Stand?)." >&2
+  fi
+fi
 ls -ld "$TARGET_DIR/server"
 
 # --- venv sicherstellen ---
@@ -508,6 +528,10 @@ else
   echo "  Bitte manuell ausführen: systemctl restart monitoring" >&2
 fi
 
+echo ""
+echo ""
+echo "Deploy-Verifikation im Browser (nach Hard-Refresh Strg+Shift+R):"
+echo "  fetch('/BUILD_VERSION').then(r=>r.text()).then(console.log)  // erwartet: $LOCAL_BUILD_VERSION"
 echo ""
 echo "Nächste Schritte (falls nötig):"
 echo "  1. API-Key prüfen:     nano $ENV_FILE"

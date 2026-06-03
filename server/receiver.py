@@ -930,6 +930,16 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS host_addon_snapshot (
+                host_uid TEXT PRIMARY KEY,
+                hostname TEXT NOT NULL,
+                snapshot_json TEXT NOT NULL DEFAULT '{}',
+                updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS changelog_rebuild_state (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 completed_at_utc TEXT NOT NULL,
@@ -5942,6 +5952,8 @@ def _track_database_lifecycle(
     if not hostname:
         return
 
+    current_dbs = _extract_database_inventory(payload)
+
     previous_row = conn.execute(
         """
         SELECT payload_json
@@ -5953,11 +5965,21 @@ def _track_database_lifecycle(
         (hostname, report_id),
     ).fetchone()
     if not previous_row:
+        for db_name in sorted(current_dbs, key=str.lower):
+            log_database_lifecycle_event(
+                conn,
+                hostname,
+                db_name,
+                "create",
+                triggered_by="system",
+                reason="Initial inventory from agent report",
+                report_id=report_id,
+                triggered_at_utc=detected_at_utc,
+            )
         return
 
     previous_payload = parse_payload_json(str(previous_row[0] or "{}"))
     previous_dbs = _extract_database_inventory(previous_payload)
-    current_dbs = _extract_database_inventory(payload)
 
     for db_name in sorted(current_dbs - previous_dbs, key=str.lower):
         log_database_lifecycle_event(
@@ -6251,10 +6273,6 @@ def get_host_config_changes_for_host(
         if str(row[2] or "").strip() not in HOST_CONFIG_CHANGELOG_EXCLUDED_FIELD_KEYS
     ]
 
-    addon_items = _collect_sap_addon_change_items_for_host(conn, hostname, host_uid=host_uid_value)
-    if addon_items:
-        items.extend(addon_items)
-
     db_items = _collect_database_lifecycle_change_items_for_host(conn, hostname, host_uid=host_uid_value)
     if db_items:
         items.extend(db_items)
@@ -6271,47 +6289,169 @@ def get_host_config_changes_for_host(
     }
 
 
-def backfill_database_lifecycle(conn: sqlite3.Connection, days: int = 7) -> dict:
-    """Backfill database_lifecycle table from historical reports."""
-    window_days = max(1, int(days or 7))
-    cutoff_iso = (datetime.now(timezone.utc) - timedelta(days=window_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+CHANGELOG_PROGRESS_REPORT_EVERY = max(
+    25,
+    min(2000, int(os.getenv("MONITORING_CHANGELOG_PROGRESS_REPORT_EVERY", "200") or "200")),
+)
 
-    # Stream reports to avoid loading large payload windows into memory.
-    row_iter = conn.execute(
+
+class ChangelogJobCancelled(RuntimeError):
+    """Raised when a changelog rebuild/backfill job is no longer running."""
+
+
+def _ensure_changelog_job_running(conn: sqlite3.Connection, job_id: int) -> None:
+    if int(job_id or 0) <= 0:
+        return
+    row = conn.execute(
         """
+        SELECT status, error_message
+        FROM changelog_rebuild_jobs
+        WHERE id = ?
+        """,
+        (int(job_id),),
+    ).fetchone()
+    if not row:
+        return
+    status = str(row[0] or "").strip().lower()
+    if status != "running":
+        message = str(row[1] or "").strip() or "Manuell abgebrochen."
+        raise ChangelogJobCancelled(message)
+
+
+def _should_check_changelog_job_cancel(report_count: int, reports_total: int) -> bool:
+    count = int(report_count or 0)
+    total = int(reports_total or 0)
+    if count <= 0:
+        return False
+    if count == 1 or count == total:
+        return True
+    return count % CHANGELOG_PROGRESS_REPORT_EVERY == 0
+
+
+def _changelog_window_days(days: object, *, default: int = 7) -> int:
+    try:
+        value = int(days if days is not None else default)
+    except (TypeError, ValueError):
+        value = default
+    return max(0, value)
+
+
+def _changelog_cutoff_iso(days: object, *, default: int = 7) -> str | None:
+    """Return UTC cutoff for report window; None means all reports (days=0)."""
+    window_days = _changelog_window_days(days, default=default)
+    if window_days <= 0:
+        return None
+    return (datetime.now(timezone.utc) - timedelta(days=window_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _count_reports_for_changelog_days(conn: sqlite3.Connection, days: int) -> int:
+    cutoff_iso = _changelog_cutoff_iso(days)
+    if cutoff_iso is None:
+        row = conn.execute("SELECT COUNT(*) FROM reports").fetchone()
+    else:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM reports WHERE received_at_utc >= ?",
+            (cutoff_iso,),
+        ).fetchone()
+    return int(row[0] or 0) if row else 0
+
+
+def _should_flush_changelog_progress(
+    progress: dict,
+    *,
+    last_phase: str,
+    last_hosts: int,
+    last_reports: int,
+) -> bool:
+    phase = str(progress.get("phase") or "")
+    hosts_processed = int(progress.get("hosts_processed", 0) or 0)
+    hosts_total = int(progress.get("hosts_total", 0) or 0)
+    reports_scanned = int(progress.get("reports_scanned", 0) or 0)
+    reports_total = int(progress.get("reports_total", 0) or 0)
+
+    if phase != last_phase:
+        return True
+    if phase in {"reset", "completed"}:
+        return True
+    if hosts_processed != last_hosts:
+        return True
+    if hosts_total > 0 and hosts_processed in {0, hosts_total}:
+        return True
+    if reports_total > 0 and (
+        reports_scanned <= 0
+        or reports_scanned >= reports_total
+        or reports_scanned - last_reports >= CHANGELOG_PROGRESS_REPORT_EVERY
+    ):
+        return True
+    return False
+
+
+def backfill_database_lifecycle(
+    conn: sqlite3.Connection,
+    days: int = 7,
+    progress_callback=None,
+    job_id: int = 0,
+    skip_pre_seed: bool = False,
+    phase_steps_total: int = 3,
+) -> dict:
+    """Backfill database_lifecycle table from historical reports."""
+    window_days = _changelog_window_days(days)
+    cutoff_iso = _changelog_cutoff_iso(days)
+    reports_total = _count_reports_for_changelog_days(conn, window_days)
+
+    reports_sql = """
         SELECT id, received_at_utc, hostname, payload_json
         FROM reports
-        WHERE received_at_utc >= ?
-        ORDER BY hostname COLLATE NOCASE ASC, received_at_utc ASC
-        """,
-        (cutoff_iso,),
-    )
+    """
+    reports_params: tuple = ()
+    if cutoff_iso is not None:
+        reports_sql += " WHERE received_at_utc >= ?"
+        reports_params = (cutoff_iso,)
+    reports_sql += " ORDER BY hostname COLLATE NOCASE ASC, received_at_utc ASC"
+    row_iter = conn.execute(reports_sql, reports_params)
 
-    # Pre-seed prev_dbs_by_host from the last report BEFORE the time window so that
-    # the first report inside the window is diffed against a real baseline.  Without
-    # this, the first report per host would make all its databases look "newly created",
-    # writing spurious create-events into database_lifecycle.
     prev_dbs_by_host: dict[str, set[str]] = {}
-    pre_rows = conn.execute(
-        """
-        SELECT r.hostname, r.payload_json
-        FROM reports r
-        INNER JOIN (
-            SELECT hostname, MAX(id) AS max_id
-            FROM reports
-            WHERE received_at_utc < ?
-            GROUP BY hostname
-        ) pre ON pre.max_id = r.id
-        """,
-        (cutoff_iso,),
-    ).fetchall()
-    for pre_row in pre_rows:
-        pre_hostname = str(pre_row[0] or "").strip()
-        if pre_hostname:
-            pre_payload = parse_payload_json(str(pre_row[1] or "{}"))
-            prev_dbs_by_host[pre_hostname] = _extract_database_inventory(pre_payload)
+    if not skip_pre_seed and cutoff_iso is not None:
+        pre_rows = conn.execute(
+            """
+            SELECT r.hostname, r.payload_json
+            FROM reports r
+            INNER JOIN (
+                SELECT hostname, MAX(id) AS max_id
+                FROM reports
+                WHERE received_at_utc < ?
+                GROUP BY hostname
+            ) pre ON pre.max_id = r.id
+            """,
+            (cutoff_iso,),
+        ).fetchall()
+        for pre_row in pre_rows:
+            pre_hostname = str(pre_row[0] or "").strip()
+            if pre_hostname:
+                pre_payload = parse_payload_json(str(pre_row[1] or "{}"))
+                prev_dbs_by_host[pre_hostname] = _extract_database_inventory(pre_payload)
     report_count = 0
     inserted_events = 0
+
+    db_phase_step = int(phase_steps_total or 3)
+    if db_phase_step < 3:
+        db_phase_step = 3
+
+    if callable(progress_callback):
+        try:
+            progress_callback({
+                "phase": "database_backfill",
+                "phase_step": db_phase_step,
+                "phase_steps_total": int(phase_steps_total or 3),
+                "reports_total": reports_total,
+                "reports_scanned": 0,
+                "hosts_processed": 0,
+                "hosts_total": 0,
+                "inserted_events": 0,
+                "message": "Baue DB-Lifecycle-Changelog (SQL/HANA-Schemas)…",
+            })
+        except Exception:
+            pass
 
     for row in row_iter:
         report_id = int(row[0] or 0)
@@ -6322,6 +6462,24 @@ def backfill_database_lifecycle(conn: sqlite3.Connection, days: int = 7) -> dict
 
         payload = parse_payload_json(str(row[3] or "{}"))
         report_count += 1
+
+        if _should_check_changelog_job_cancel(report_count, reports_total):
+            _ensure_changelog_job_running(conn, job_id)
+
+        if callable(progress_callback) and _should_check_changelog_job_cancel(report_count, reports_total):
+            try:
+                progress_callback({
+                    "phase": "database_backfill",
+                    "phase_step": db_phase_step,
+                    "phase_steps_total": int(phase_steps_total or 3),
+                    "reports_total": reports_total,
+                    "reports_scanned": report_count,
+                    "current_host": hostname,
+                    "inserted_events": inserted_events,
+                    "message": "Baue DB-Lifecycle-Changelog (SQL/HANA-Schemas)…",
+                })
+            except Exception:
+                pass
 
         current_dbs = _extract_database_inventory(payload)
 
@@ -6437,38 +6595,44 @@ def run_changelog_backfill_only(
     conn: sqlite3.Connection,
     days: int = 7,
     progress_callback=None,
+    job_id: int = 0,
 ) -> dict:
     window_days = max(1, min(int(days or 7), 365))
+    reports_total = _count_reports_for_changelog_days(conn, window_days)
     if callable(progress_callback):
         try:
             progress_callback({
                 "phase": "config_backfill",
+                "phase_step": 2,
+                "phase_steps_total": 3,
+                "reports_total": reports_total,
+                "reports_scanned": 0,
                 "hosts_processed": 0,
                 "hosts_total": 0,
-                "message": "Backfill Host-Config-Changelog...",
+                "inserted_changes": 0,
+                "message": "Backfill Host-Config-Changelog…",
             })
         except Exception:
             pass
+
+    _ensure_changelog_job_running(conn, job_id)
 
     config_result = backfill_host_config_changes(
         conn,
         days=window_days,
         progress_callback=progress_callback,
         include_initial_snapshot_events=True,
+        job_id=job_id,
     )
 
-    if callable(progress_callback):
-        try:
-            progress_callback({
-                "phase": "database_backfill",
-                "hosts_processed": int(config_result.get("hosts_processed", 0) or 0),
-                "hosts_total": int(config_result.get("hosts_total", 0) or 0),
-                "message": "Backfill DB-Lifecycle-Changelog...",
-            })
-        except Exception:
-            pass
+    _ensure_changelog_job_running(conn, job_id)
 
-    db_result = backfill_database_lifecycle(conn, days=window_days)
+    db_result = backfill_database_lifecycle(
+        conn,
+        days=window_days,
+        progress_callback=progress_callback,
+        job_id=job_id,
+    )
     return {
         "status": "completed",
         "mode": "backfill",
@@ -6487,6 +6651,7 @@ def rebuild_changelog_history(
     days: int = 15,
     force_rebuild: bool = False,
     progress_callback=None,
+    job_id: int = 0,
 ) -> dict:
     """Reset changelog tables and rebuild them from the last N report days.
 
@@ -6494,14 +6659,19 @@ def rebuild_changelog_history(
     greenfield rebuild of the changelog state.
     """
     window_days = max(1, min(int(days or 15), 365))
+    reports_total = _count_reports_for_changelog_days(conn, window_days)
 
     if callable(progress_callback):
         try:
             progress_callback({
                 "phase": "reset",
+                "phase_step": 1,
+                "phase_steps_total": 3,
+                "reports_total": reports_total,
+                "reports_scanned": 0,
                 "hosts_processed": 0,
                 "hosts_total": 0,
-                "message": "Setze Changelog-Tabellen zurück...",
+                "message": "Setze Changelog-Tabellen zurück…",
             })
         except Exception:
             pass
@@ -6520,37 +6690,26 @@ def rebuild_changelog_history(
     conn.execute("DELETE FROM database_lifecycle")
     conn.execute("DELETE FROM host_config_snapshot")
     conn.execute("DELETE FROM host_license_type_snapshot")
+    conn.execute("DELETE FROM host_addon_snapshot")
 
-    if callable(progress_callback):
-        try:
-            progress_callback({
-                "phase": "config_backfill",
-                "hosts_processed": 0,
-                "hosts_total": 0,
-                "message": "Baue Host-Config-Changelog neu auf...",
-            })
-        except Exception:
-            pass
+    _ensure_changelog_job_running(conn, job_id)
 
     config_result = backfill_host_config_changes(
         conn,
         days=window_days,
         progress_callback=progress_callback,
         include_initial_snapshot_events=True,
+        job_id=job_id,
     )
 
-    if callable(progress_callback):
-        try:
-            progress_callback({
-                "phase": "database_backfill",
-                "hosts_processed": int(config_result.get("hosts_processed", 0) or 0),
-                "hosts_total": int(config_result.get("hosts_total", 0) or 0),
-                "message": "Baue DB-Lifecycle-Changelog neu auf...",
-            })
-        except Exception:
-            pass
+    _ensure_changelog_job_running(conn, job_id)
 
-    db_result = backfill_database_lifecycle(conn, days=window_days)
+    db_result = backfill_database_lifecycle(
+        conn,
+        days=window_days,
+        progress_callback=progress_callback,
+        job_id=job_id,
+    )
 
     completed_at_utc = utc_now_iso()
     conn.execute(
@@ -6592,9 +6751,148 @@ def rebuild_changelog_history(
         try:
             progress_callback({
                 "phase": "completed",
+                "phase_step": 3,
+                "phase_steps_total": 3,
+                "reports_total": reports_total,
+                "reports_scanned": reports_total,
                 "hosts_processed": int(config_result.get("hosts_processed", 0) or 0),
                 "hosts_total": int(config_result.get("hosts_total", 0) or 0),
+                "inserted_changes": int(config_result.get("inserted_changes", 0) or 0),
+                "inserted_events": int(db_result.get("inserted_events", 0) or 0),
                 "message": "Changelog-Rebuild abgeschlossen.",
+            })
+        except Exception:
+            pass
+
+    return result
+
+
+def rebuild_changelog_inventory_history(
+    conn: sqlite3.Connection,
+    force_rebuild: bool = True,
+    progress_callback=None,
+    job_id: int = 0,
+) -> dict:
+    """Greenfield inventory rebuild: first report per host = baseline, then deltas (all reports)."""
+    window_days = 0
+    reports_total = _count_reports_for_changelog_days(conn, window_days)
+
+    if callable(progress_callback):
+        try:
+            progress_callback({
+                "phase": "reset",
+                "phase_step": 1,
+                "phase_steps_total": 4,
+                "reports_total": reports_total,
+                "reports_scanned": 0,
+                "hosts_processed": 0,
+                "hosts_total": 0,
+                "message": "Inventur-Rebuild: Tabellen leeren…",
+            })
+        except Exception:
+            pass
+
+    existing_state = conn.execute(
+        "SELECT completed_at_utc, days FROM changelog_rebuild_state WHERE id = 1"
+    ).fetchone()
+    if existing_state and not force_rebuild:
+        return {
+            "status": "skipped",
+            "completed_at_utc": str(existing_state[0] or ""),
+            "days": int(existing_state[1] or 0),
+        }
+
+    conn.execute("DELETE FROM host_config_changes")
+    conn.execute("DELETE FROM database_lifecycle")
+    conn.execute("DELETE FROM host_config_snapshot")
+    conn.execute("DELETE FROM host_license_type_snapshot")
+    conn.execute("DELETE FROM host_addon_snapshot")
+
+    _ensure_changelog_job_running(conn, job_id)
+
+    config_result = backfill_host_config_changes(
+        conn,
+        days=window_days,
+        progress_callback=progress_callback,
+        include_initial_snapshot_events=True,
+        job_id=job_id,
+        skip_pre_seed=True,
+        phase_steps_total=4,
+    )
+
+    _ensure_changelog_job_running(conn, job_id)
+
+    addon_result = backfill_sap_addon_changes(
+        conn,
+        days=window_days,
+        progress_callback=progress_callback,
+        include_initial_snapshot_events=True,
+        job_id=job_id,
+        skip_pre_seed=True,
+        phase_steps_total=4,
+    )
+
+    _ensure_changelog_job_running(conn, job_id)
+
+    db_result = backfill_database_lifecycle(
+        conn,
+        days=window_days,
+        progress_callback=progress_callback,
+        job_id=job_id,
+        skip_pre_seed=True,
+        phase_steps_total=4,
+    )
+
+    completed_at_utc = utc_now_iso()
+    conn.execute(
+        """
+        INSERT INTO changelog_rebuild_state (
+            id,
+            completed_at_utc,
+            days,
+            reports_scanned,
+            inserted_host_config_changes,
+            inserted_database_lifecycle_events
+        )
+        VALUES (1, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            completed_at_utc = excluded.completed_at_utc,
+            days = excluded.days,
+            reports_scanned = excluded.reports_scanned,
+            inserted_host_config_changes = excluded.inserted_host_config_changes,
+            inserted_database_lifecycle_events = excluded.inserted_database_lifecycle_events
+        """,
+        (
+            completed_at_utc,
+            window_days,
+            int(config_result.get("reports_scanned", 0) or 0),
+            int(config_result.get("inserted_changes", 0) or 0) + int(addon_result.get("inserted_changes", 0) or 0),
+            int(db_result.get("inserted_events", 0) or 0),
+        ),
+    )
+
+    result = {
+        "status": "inventory_rebuilt",
+        "completed_at_utc": completed_at_utc,
+        "days": window_days,
+        "config_result": config_result,
+        "addon_result": addon_result,
+        "database_result": db_result,
+    }
+
+    if callable(progress_callback):
+        try:
+            progress_callback({
+                "phase": "completed",
+                "phase_step": 4,
+                "phase_steps_total": 4,
+                "reports_total": reports_total,
+                "reports_scanned": reports_total,
+                "hosts_processed": int(config_result.get("hosts_processed", 0) or 0),
+                "hosts_total": int(config_result.get("hosts_total", 0) or 0),
+                "inserted_changes": int(config_result.get("inserted_changes", 0) or 0) + int(addon_result.get("inserted_changes", 0) or 0),
+                "inserted_events": int(db_result.get("inserted_events", 0) or 0),
+                "message": "Inventur-Rebuild abgeschlossen.",
             })
         except Exception:
             pass
@@ -6782,13 +7080,23 @@ def schedule_changelog_rebuild_job(
     _mark_stale_running_changelog_rebuild_jobs_failed(conn)
 
     safe_mode = str(job_mode or "rebuild").strip().lower()
-    if safe_mode not in {"rebuild", "backfill"}:
+    if safe_mode not in {"rebuild", "backfill", "inventory_rebuild"}:
         safe_mode = "rebuild"
-    safe_days = max(1, min(int(days or 1), 365 if safe_mode == "rebuild" else 30))
+    if safe_mode == "inventory_rebuild":
+        safe_days = 0
+    elif safe_mode == "backfill":
+        safe_days = max(1, min(int(days or 1), 30))
+    else:
+        safe_days = max(1, min(int(days or 1), 365))
     run_at = _normalize_utc_timestamp(scheduled_for_utc, default_to_now=True)
     requested_at = utc_now_iso()
     requester = str(requested_by or "").strip() or "webclient"
-    force_int = 0 if safe_mode == "backfill" else (1 if force_rebuild else 0)
+    if safe_mode == "backfill":
+        force_int = 0
+    elif safe_mode == "inventory_rebuild":
+        force_int = 1
+    else:
+        force_int = 1 if force_rebuild else 0
 
     existing_pending = conn.execute(
         """
@@ -6933,7 +7241,7 @@ def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int =
             window_days = int(row[1] or 1)
             force_rebuild = bool(int(row[2] or 0))
             job_mode = str(row[3] or "rebuild").strip().lower()
-            if job_mode not in {"rebuild", "backfill"}:
+            if job_mode not in {"rebuild", "backfill", "inventory_rebuild"}:
                 job_mode = "rebuild"
             started_at = utc_now_iso()
 
@@ -6956,23 +7264,37 @@ def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int =
             try:
                 last_progress_phase = ""
                 last_progress_hosts = -1
+                last_progress_reports = -1
 
                 def progress_reporter(progress: dict) -> None:
-                    nonlocal last_progress_phase, last_progress_hosts
+                    nonlocal last_progress_phase, last_progress_hosts, last_progress_reports
+                    _ensure_changelog_job_running(conn, job_id)
+                    if not _should_flush_changelog_progress(
+                        progress,
+                        last_phase=last_progress_phase,
+                        last_hosts=last_progress_hosts,
+                        last_reports=last_progress_reports,
+                    ):
+                        return
+
                     phase = str(progress.get("phase") or "")
                     hosts_processed = int(progress.get("hosts_processed", 0) or 0)
                     hosts_total = int(progress.get("hosts_total", 0) or 0)
-                    should_flush = phase != last_progress_phase or hosts_processed != last_progress_hosts
-                    if phase == "config_backfill" and hosts_total > 0:
-                        should_flush = should_flush and (hosts_processed in {0, hosts_total} or hosts_processed % 5 == 0)
-                    if not should_flush:
-                        return
+                    reports_scanned = int(progress.get("reports_scanned", 0) or 0)
+                    reports_total = int(progress.get("reports_total", 0) or 0)
 
                     payload = {
                         "progress": {
                             "phase": phase,
+                            "phase_step": int(progress.get("phase_step", 0) or 0),
+                            "phase_steps_total": int(progress.get("phase_steps_total", 3) or 3),
                             "hosts_processed": hosts_processed,
                             "hosts_total": hosts_total,
+                            "reports_scanned": reports_scanned,
+                            "reports_total": reports_total,
+                            "current_host": str(progress.get("current_host") or ""),
+                            "inserted_changes": int(progress.get("inserted_changes", 0) or 0),
+                            "inserted_events": int(progress.get("inserted_events", 0) or 0),
                             "message": str(progress.get("message") or ""),
                             "updated_at_utc": utc_now_iso(),
                         }
@@ -6988,12 +7310,21 @@ def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int =
                     conn.commit()
                     last_progress_phase = phase
                     last_progress_hosts = hosts_processed
+                    last_progress_reports = reports_scanned
 
-                if job_mode == "backfill":
+                if job_mode == "inventory_rebuild":
+                    result = rebuild_changelog_inventory_history(
+                        conn,
+                        force_rebuild=True,
+                        progress_callback=progress_reporter,
+                        job_id=job_id,
+                    )
+                elif job_mode == "backfill":
                     result = run_changelog_backfill_only(
                         conn,
                         days=window_days,
                         progress_callback=progress_reporter,
+                        job_id=job_id,
                     )
                 else:
                     result = rebuild_changelog_history(
@@ -7001,6 +7332,7 @@ def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int =
                         days=window_days,
                         force_rebuild=force_rebuild,
                         progress_callback=progress_reporter,
+                        job_id=job_id,
                     )
                 finished_at = utc_now_iso()
                 conn.execute(
@@ -7020,6 +7352,35 @@ def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int =
                     "status": "completed",
                     "finished_at_utc": finished_at,
                     "result": result,
+                })
+            except ChangelogJobCancelled as exc:
+                finished_at = utc_now_iso()
+                status_row = conn.execute(
+                    "SELECT status, error_message FROM changelog_rebuild_jobs WHERE id = ?",
+                    (job_id,),
+                ).fetchone()
+                current_status = str(status_row[0] or "").strip().lower() if status_row else ""
+                cancel_message = str(exc or "").strip() or (
+                    str(status_row[1] or "").strip() if status_row else ""
+                ) or "Manuell abgebrochen."
+                if current_status == "running":
+                    conn.execute(
+                        """
+                        UPDATE changelog_rebuild_jobs
+                        SET status = 'failed',
+                            finished_at_utc = ?,
+                            error_message = ?
+                        WHERE id = ?
+                        """,
+                        (finished_at, cancel_message, job_id),
+                    )
+                conn.commit()
+                processed.append({
+                    "id": job_id,
+                    "status": "failed",
+                    "finished_at_utc": finished_at,
+                    "error": cancel_message,
+                    "cancelled": True,
                 })
             except Exception as exc:
                 finished_at = utc_now_iso()
@@ -8331,6 +8692,11 @@ def _host_config_field_label(field_key: str, *, license_label_map: dict[str, tup
             return f"{display_name} ({raw_match_text})"
         return match_text or "-"
 
+    if field_key_text.startswith("sap_addon::"):
+        addon_name = field_key_text[len("sap_addon::"):]
+        label_source, plain_name = _describe_sap_addon_key(addon_name)
+        return f"{label_source}: {plain_name}"
+
     return field_key_text
 
 
@@ -8638,6 +9004,44 @@ def _track_host_config_changes(
                 """,
                 (detected_at_utc, host_key, hostname, field_key, old_value, new_value, report_id),
             )
+    else:
+        dedupe_cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        for field_key in HOST_CONFIG_TRACKED_FIELDS:
+            old_value = "-"
+            new_value = new_snapshot.get(field_key, "-")
+            if not _is_significant_config_change(field_key, old_value, new_value):
+                continue
+            duplicate = conn.execute(
+                """
+                SELECT 1
+                FROM host_config_changes
+                WHERE host_uid = ?
+                  AND field_key = ?
+                  AND old_value = ?
+                  AND new_value = ?
+                  AND detected_at_utc >= ?
+                LIMIT 1
+                """,
+                (host_key, field_key, old_value, new_value, dedupe_cutoff),
+            ).fetchone()
+            if duplicate:
+                continue
+            conn.execute(
+                """
+                INSERT INTO host_config_changes (
+                    detected_at_utc,
+                    host_uid,
+                    hostname,
+                    field_key,
+                    old_value,
+                    new_value,
+                    report_id,
+                    source
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'agent-report:init')
+                """,
+                (detected_at_utc, host_key, hostname, field_key, old_value, new_value, report_id),
+            )
 
     conn.execute(
         """
@@ -8859,6 +9263,340 @@ def _describe_sap_addon_key(addon_name: str) -> tuple[str, str]:
         plain_name = re.sub(r"(?i)^tenant", "", plain_name)
         plain_name = plain_name.replace("::", ":").lstrip(":")
     return label_source, plain_name
+
+
+def _ensure_host_addon_snapshot_schema(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS host_addon_snapshot (
+            host_uid TEXT PRIMARY KEY,
+            hostname TEXT NOT NULL,
+            snapshot_json TEXT NOT NULL DEFAULT '{}',
+            updated_at_utc TEXT NOT NULL
+        )
+        """
+    )
+
+
+def _insert_sap_addon_change_row(
+    conn: sqlite3.Connection,
+    *,
+    detected_at_utc: str,
+    host_key: str,
+    hostname: str,
+    addon_name: str,
+    old_value: str,
+    new_value: str,
+    report_id: int,
+    source: str,
+) -> bool:
+    field_key = f"sap_addon::{addon_name}"
+    existing = conn.execute(
+        """
+        SELECT 1
+        FROM host_config_changes
+        WHERE host_uid = ?
+          AND field_key = ?
+          AND report_id = ?
+          AND old_value = ?
+          AND new_value = ?
+        LIMIT 1
+        """,
+        (host_key, field_key, report_id, old_value, new_value),
+    ).fetchone()
+    if existing:
+        return False
+    conn.execute(
+        """
+        INSERT INTO host_config_changes (
+            detected_at_utc,
+            host_uid,
+            hostname,
+            field_key,
+            old_value,
+            new_value,
+            report_id,
+            source
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (detected_at_utc, host_key, hostname, field_key, old_value, new_value, report_id, source),
+    )
+    return True
+
+
+def backfill_sap_addon_changes(
+    conn: sqlite3.Connection,
+    days: int = 7,
+    progress_callback=None,
+    include_initial_snapshot_events: bool = False,
+    job_id: int = 0,
+    skip_pre_seed: bool = False,
+    phase_steps_total: int = 3,
+) -> dict:
+    _ensure_host_addon_snapshot_schema(conn)
+
+    window_days = _changelog_window_days(days)
+    cutoff_iso = _changelog_cutoff_iso(days)
+    reports_total = _count_reports_for_changelog_days(conn, window_days)
+
+    reports_sql = """
+        SELECT id, received_at_utc, hostname, COALESCE(host_uid, ''), payload_json
+        FROM reports
+    """
+    reports_params: tuple = ()
+    if cutoff_iso is not None:
+        reports_sql += " WHERE received_at_utc >= ?"
+        reports_params = (cutoff_iso,)
+    reports_sql += " ORDER BY COALESCE(NULLIF(host_uid, ''), hostname) COLLATE NOCASE ASC, id ASC"
+    row_iter = conn.execute(reports_sql, reports_params)
+
+    last_snapshot_by_host_key: dict[str, dict[str, str]] = {}
+    last_hostname_by_host_key: dict[str, str] = {}
+    last_seen_at_by_host_key: dict[str, str] = {}
+
+    if not skip_pre_seed and cutoff_iso is not None:
+        pre_rows = conn.execute(
+            """
+            SELECT r.hostname, COALESCE(r.host_uid, ''), r.payload_json
+            FROM reports r
+            INNER JOIN (
+                SELECT COALESCE(NULLIF(host_uid, ''), hostname) AS hkey, MAX(id) AS max_id
+                FROM reports
+                WHERE received_at_utc < ?
+                GROUP BY hkey
+            ) pre ON pre.max_id = r.id
+            """,
+            (cutoff_iso,),
+        ).fetchall()
+        for pre_row in pre_rows:
+            pre_hostname = str(pre_row[0] or "").strip()
+            pre_host_uid = str(pre_row[1] or "").strip()
+            if not pre_hostname:
+                continue
+            pre_host_key = alert_host_key(pre_hostname, pre_host_uid)
+            pre_payload = parse_payload_json(str(pre_row[2] or "{}"))
+            last_snapshot_by_host_key[pre_host_key] = _extract_sap_addon_snapshot(pre_payload)
+
+    report_count = 0
+    inserted_changes = 0
+    hosts_processed = 0
+    last_progress_host_key = ""
+    addon_phase_step = 3 if int(phase_steps_total or 3) >= 4 else 2
+
+    if callable(progress_callback):
+        try:
+            progress_callback({
+                "phase": "addon_backfill",
+                "phase_step": addon_phase_step,
+                "phase_steps_total": int(phase_steps_total or 3),
+                "reports_total": reports_total,
+                "reports_scanned": 0,
+                "hosts_processed": 0,
+                "hosts_total": 0,
+                "inserted_changes": 0,
+                "message": "SAP-Add-ons (Extensions/SARI/HANA)…",
+            })
+        except Exception:
+            pass
+
+    for row in row_iter:
+        report_id = int(row[0] or 0)
+        detected_at_utc = str(row[1] or "").strip()
+        hostname = str(row[2] or "").strip()
+        host_uid = str(row[3] or "").strip()
+        payload = parse_payload_json(str(row[4] or "{}"))
+        if not hostname:
+            continue
+        host_key = alert_host_key(hostname, host_uid)
+        host_changed = host_key != last_progress_host_key
+        if host_changed:
+            hosts_processed += 1
+            last_progress_host_key = host_key
+
+        report_count += 1
+        current_snapshot = _extract_sap_addon_snapshot(payload)
+        previous_snapshot = last_snapshot_by_host_key.get(host_key)
+
+        if _should_check_changelog_job_cancel(report_count, reports_total) or host_changed:
+            _ensure_changelog_job_running(conn, job_id)
+
+        if previous_snapshot is not None:
+            addon_names = sorted(set(previous_snapshot.keys()) | set(current_snapshot.keys()), key=str.lower)
+            for addon_name in addon_names:
+                old_value = str(previous_snapshot.get(addon_name, "-") or "-")
+                new_value = str(current_snapshot.get(addon_name, "-") or "-")
+                if old_value == new_value:
+                    continue
+                if _insert_sap_addon_change_row(
+                    conn,
+                    detected_at_utc=detected_at_utc or utc_now_iso(),
+                    host_key=host_key,
+                    hostname=hostname,
+                    addon_name=addon_name,
+                    old_value=old_value,
+                    new_value=new_value,
+                    report_id=report_id,
+                    source="backfill-addon",
+                ):
+                    inserted_changes += 1
+        elif include_initial_snapshot_events:
+            for addon_name in sorted(current_snapshot.keys(), key=str.lower):
+                new_value = str(current_snapshot.get(addon_name, "-") or "-")
+                if new_value == "-":
+                    continue
+                if _insert_sap_addon_change_row(
+                    conn,
+                    detected_at_utc=detected_at_utc or utc_now_iso(),
+                    host_key=host_key,
+                    hostname=hostname,
+                    addon_name=addon_name,
+                    old_value="-",
+                    new_value=new_value,
+                    report_id=report_id,
+                    source="backfill-addon-init",
+                ):
+                    inserted_changes += 1
+
+        last_snapshot_by_host_key[host_key] = current_snapshot
+        last_hostname_by_host_key[host_key] = hostname
+        last_seen_at_by_host_key[host_key] = detected_at_utc or utc_now_iso()
+
+        if callable(progress_callback) and (
+            _should_check_changelog_job_cancel(report_count, reports_total) or host_changed
+        ):
+            try:
+                progress_callback({
+                    "phase": "addon_backfill",
+                    "phase_step": addon_phase_step,
+                    "phase_steps_total": int(phase_steps_total or 3),
+                    "reports_total": reports_total,
+                    "reports_scanned": report_count,
+                    "hosts_processed": hosts_processed,
+                    "hosts_total": hosts_processed,
+                    "current_host": hostname,
+                    "inserted_changes": inserted_changes,
+                    "message": "SAP-Add-ons (Extensions/SARI/HANA)…",
+                })
+            except Exception:
+                pass
+
+        if report_count % 1000 == 0:
+            conn.commit()
+
+    for host_key, snapshot in last_snapshot_by_host_key.items():
+        updated_at_utc = last_seen_at_by_host_key.get(host_key, utc_now_iso())
+        hostname_value = str(last_hostname_by_host_key.get(host_key, host_key) or host_key)
+        conn.execute(
+            """
+            INSERT INTO host_addon_snapshot (host_uid, hostname, snapshot_json, updated_at_utc)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(host_uid) DO UPDATE SET
+                hostname = excluded.hostname,
+                snapshot_json = excluded.snapshot_json,
+                updated_at_utc = excluded.updated_at_utc
+            """,
+            (host_key, hostname_value, json.dumps(snapshot, separators=(",", ":")), updated_at_utc),
+        )
+
+    return {
+        "days": window_days,
+        "reports_scanned": report_count,
+        "hosts_processed": hosts_processed,
+        "inserted_changes": inserted_changes,
+    }
+
+
+def _track_sap_addon_changes(
+    conn: sqlite3.Connection,
+    hostname: str,
+    host_uid: str,
+    payload: dict,
+    report_id: int,
+    detected_at_utc: str,
+) -> None:
+    if not hostname:
+        return
+    _ensure_host_addon_snapshot_schema(conn)
+    host_key = alert_host_key(hostname, host_uid)
+    current_snapshot = _extract_sap_addon_snapshot(payload)
+
+    row = conn.execute(
+        "SELECT snapshot_json FROM host_addon_snapshot WHERE host_uid = ?",
+        (host_key,),
+    ).fetchone()
+    previous_snapshot: dict[str, str] | None = None
+    if row:
+        try:
+            parsed = json.loads(str(row[0] or "{}"))
+            if isinstance(parsed, dict):
+                previous_snapshot = {str(k): str(v or "-") for k, v in parsed.items()}
+        except json.JSONDecodeError:
+            previous_snapshot = None
+
+    dedupe_cutoff = (datetime.now(timezone.utc) - timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    if previous_snapshot is not None:
+        addon_names = sorted(set(previous_snapshot.keys()) | set(current_snapshot.keys()), key=str.lower)
+        for addon_name in addon_names:
+            old_value = str(previous_snapshot.get(addon_name, "-") or "-")
+            new_value = str(current_snapshot.get(addon_name, "-") or "-")
+            if old_value == new_value:
+                continue
+            duplicate = conn.execute(
+                """
+                SELECT 1
+                FROM host_config_changes
+                WHERE host_uid = ?
+                  AND field_key = ?
+                  AND old_value = ?
+                  AND new_value = ?
+                  AND detected_at_utc >= ?
+                LIMIT 1
+                """,
+                (host_key, f"sap_addon::{addon_name}", old_value, new_value, dedupe_cutoff),
+            ).fetchone()
+            if duplicate:
+                continue
+            _insert_sap_addon_change_row(
+                conn,
+                detected_at_utc=detected_at_utc,
+                host_key=host_key,
+                hostname=hostname,
+                addon_name=addon_name,
+                old_value=old_value,
+                new_value=new_value,
+                report_id=report_id,
+                source="agent-report:addon",
+            )
+    else:
+        for addon_name in sorted(current_snapshot.keys(), key=str.lower):
+            new_value = str(current_snapshot.get(addon_name, "-") or "-")
+            if new_value == "-":
+                continue
+            _insert_sap_addon_change_row(
+                conn,
+                detected_at_utc=detected_at_utc,
+                host_key=host_key,
+                hostname=hostname,
+                addon_name=addon_name,
+                old_value="-",
+                new_value=new_value,
+                report_id=report_id,
+                source="agent-report:addon-init",
+            )
+
+    conn.execute(
+        """
+        INSERT INTO host_addon_snapshot (host_uid, hostname, snapshot_json, updated_at_utc)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(host_uid) DO UPDATE SET
+            hostname = excluded.hostname,
+            snapshot_json = excluded.snapshot_json,
+            updated_at_utc = excluded.updated_at_utc
+        """,
+        (host_key, hostname, json.dumps(current_snapshot, separators=(",", ":")), detected_at_utc),
+    )
 
 
 def _collect_sap_addon_change_items_for_host(conn: sqlite3.Connection, hostname: str, host_uid: str = "") -> list[dict]:
@@ -9107,15 +9845,11 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
             }
         )
 
-    addon_items = _collect_sap_addon_change_items(conn, window_hours, row_limit)
-    if addon_items:
-        items.extend(addon_items)
-
     db_items = _collect_database_lifecycle_change_items(conn, window_hours, row_limit)
     if db_items:
         items.extend(db_items)
 
-    if addon_items or db_items:
+    if db_items:
         items.sort(key=lambda item: (str(item.get("detected_at_utc") or ""), int(item.get("id") or 0)), reverse=True)
         items = items[:row_limit]
 
@@ -9132,21 +9866,26 @@ def backfill_host_config_changes(
     days: int = 7,
     progress_callback=None,
     include_initial_snapshot_events: bool = False,
+    job_id: int = 0,
+    skip_pre_seed: bool = False,
+    phase_steps_total: int = 3,
 ) -> dict:
     _ensure_host_config_snapshot_schema(conn)
 
-    window_days = max(1, int(days or 7))
-    cutoff_iso = (datetime.now(timezone.utc) - timedelta(days=window_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    window_days = _changelog_window_days(days)
+    cutoff_iso = _changelog_cutoff_iso(days)
+    reports_total = _count_reports_for_changelog_days(conn, window_days)
 
-    row_iter = conn.execute(
-        """
+    reports_sql = """
         SELECT id, received_at_utc, hostname, COALESCE(host_uid, ''), payload_json
         FROM reports
-        WHERE received_at_utc >= ?
-        ORDER BY COALESCE(NULLIF(host_uid, ''), hostname) COLLATE NOCASE ASC, id ASC
-        """,
-        (cutoff_iso,),
-    )
+    """
+    reports_params: tuple = ()
+    if cutoff_iso is not None:
+        reports_sql += " WHERE received_at_utc >= ?"
+        reports_params = (cutoff_iso,)
+    reports_sql += " ORDER BY COALESCE(NULLIF(host_uid, ''), hostname) COLLATE NOCASE ASC, id ASC"
+    row_iter = conn.execute(reports_sql, reports_params)
 
     last_snapshot_by_host_key: dict[str, dict[str, str]] = {}
     last_license_counts_by_host_key: dict[str, dict[str, int]] = {}
@@ -9154,51 +9893,48 @@ def backfill_host_config_changes(
     last_seen_at_by_host_key: dict[str, str] = {}
     license_label_map = _build_sap_license_type_label_map()
 
-    # Pre-seed snapshots from the last report BEFORE the time window so that
-    # the first report inside the window is diffed against a real baseline.
-    # Without this, every existing host's first in-window report would hit the
-    # `elif include_initial_snapshot_events` branch and generate fake VORHER=-
-    # entries for all hardware/HANA fields.
-    pre_rows = conn.execute(
-        """
-        SELECT r.hostname, COALESCE(r.host_uid, ''), r.payload_json
-        FROM reports r
-        INNER JOIN (
-            SELECT COALESCE(NULLIF(host_uid, ''), hostname) AS hkey, MAX(id) AS max_id
-            FROM reports
-            WHERE received_at_utc < ?
-            GROUP BY hkey
-        ) pre ON pre.max_id = r.id
-        """,
-        (cutoff_iso,),
-    ).fetchall()
-    for pre_row in pre_rows:
-        pre_hostname = str(pre_row[0] or "").strip()
-        pre_host_uid = str(pre_row[1] or "").strip()
-        if not pre_hostname:
-            continue
-        pre_host_key = alert_host_key(pre_hostname, pre_host_uid)
-        pre_payload = parse_payload_json(str(pre_row[2] or "{}"))
-        last_snapshot_by_host_key[pre_host_key] = {
-            key: _normalize_config_value(key, value)
-            for key, value in _extract_host_config_snapshot(pre_payload).items()
-        }
-        last_license_counts_by_host_key[pre_host_key] = _extract_translated_sap_license_type_counts(
-            pre_payload, license_label_map=license_label_map
-        )
+    if not skip_pre_seed and cutoff_iso is not None:
+        pre_rows = conn.execute(
+            """
+            SELECT r.hostname, COALESCE(r.host_uid, ''), r.payload_json
+            FROM reports r
+            INNER JOIN (
+                SELECT COALESCE(NULLIF(host_uid, ''), hostname) AS hkey, MAX(id) AS max_id
+                FROM reports
+                WHERE received_at_utc < ?
+                GROUP BY hkey
+            ) pre ON pre.max_id = r.id
+            """,
+            (cutoff_iso,),
+        ).fetchall()
+        for pre_row in pre_rows:
+            pre_hostname = str(pre_row[0] or "").strip()
+            pre_host_uid = str(pre_row[1] or "").strip()
+            if not pre_hostname:
+                continue
+            pre_host_key = alert_host_key(pre_hostname, pre_host_uid)
+            pre_payload = parse_payload_json(str(pre_row[2] or "{}"))
+            last_snapshot_by_host_key[pre_host_key] = {
+                key: _normalize_config_value(key, value)
+                for key, value in _extract_host_config_snapshot(pre_payload).items()
+            }
+            last_license_counts_by_host_key[pre_host_key] = _extract_translated_sap_license_type_counts(
+                pre_payload, license_label_map=license_label_map
+            )
 
     report_count = 0
     inserted_changes = 0
-    hosts_total_row = conn.execute(
-        """
+    hosts_count_sql = """
         SELECT COUNT(DISTINCT COALESCE(NULLIF(host_uid, ''), hostname))
         FROM reports
-        WHERE received_at_utc >= ?
-          AND hostname IS NOT NULL
-          AND TRIM(hostname) <> ''
-        """,
-        (cutoff_iso,),
-    ).fetchone()
+    """
+    if cutoff_iso is not None:
+        hosts_count_sql += " WHERE received_at_utc >= ? AND hostname IS NOT NULL AND TRIM(hostname) <> ''"
+        hosts_count_params: tuple = (cutoff_iso,)
+    else:
+        hosts_count_sql += " WHERE hostname IS NOT NULL AND TRIM(hostname) <> ''"
+        hosts_count_params = ()
+    hosts_total_row = conn.execute(hosts_count_sql, hosts_count_params).fetchone()
     hosts_total = int((hosts_total_row[0] or 0) if hosts_total_row else 0)
     hosts_processed = 0
     last_progress_host_key = ""
@@ -9207,9 +9943,14 @@ def backfill_host_config_changes(
         try:
             progress_callback({
                 "phase": "config_backfill",
+                "phase_step": 2,
+                "phase_steps_total": int(phase_steps_total or 3),
+                "reports_total": reports_total,
+                "reports_scanned": 0,
                 "hosts_processed": 0,
                 "hosts_total": hosts_total,
-                "message": "Baue Host-Config-Changelog neu auf...",
+                "inserted_changes": 0,
+                "message": "Host-Config: OS, CPU, RAM, SAP/HANA, SQL, Lizenzen…",
             })
         except Exception:
             pass
@@ -9223,21 +9964,34 @@ def backfill_host_config_changes(
         if not hostname:
             continue
         host_key = alert_host_key(hostname, host_uid)
-        if host_key != last_progress_host_key:
+        host_changed = host_key != last_progress_host_key
+        if host_changed:
             hosts_processed += 1
             last_progress_host_key = host_key
-            if callable(progress_callback):
-                try:
-                    progress_callback({
-                        "phase": "config_backfill",
-                        "hosts_processed": hosts_processed,
-                        "hosts_total": hosts_total,
-                        "reports_scanned": report_count,
-                        "message": "Baue Host-Config-Changelog neu auf...",
-                    })
-                except Exception:
-                    pass
+
         report_count += 1
+
+        if _should_check_changelog_job_cancel(report_count, reports_total) or host_changed:
+            _ensure_changelog_job_running(conn, job_id)
+
+        if callable(progress_callback) and (
+            _should_check_changelog_job_cancel(report_count, reports_total) or host_changed
+        ):
+            try:
+                progress_callback({
+                    "phase": "config_backfill",
+                    "phase_step": 2,
+                    "phase_steps_total": int(phase_steps_total or 3),
+                    "reports_total": reports_total,
+                    "reports_scanned": report_count,
+                    "hosts_processed": hosts_processed,
+                    "hosts_total": hosts_total,
+                    "current_host": hostname,
+                    "inserted_changes": inserted_changes,
+                    "message": "Host-Config: OS, CPU, RAM, SAP/HANA, SQL, Lizenzen…",
+                })
+            except Exception:
+                pass
 
         current_snapshot = {
             key: _normalize_config_value(key, value)
@@ -14489,6 +15243,7 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
         force=False,
     )
     _track_host_config_changes(conn, hostname, incoming_host_uid, payload, report_id, report_received_at_utc)
+    _track_sap_addon_changes(conn, hostname, incoming_host_uid, payload, report_id, report_received_at_utc)
     _track_database_lifecycle(conn, hostname, payload, report_id, report_received_at_utc)
     prune_reports_for_host(conn, hostname, incoming_host_uid, MAX_REPORTS_PER_HOST)
     alarm_settings = get_alarm_settings(conn)
@@ -20428,14 +21183,19 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             run_now = parse_bool(payload.get("run_now"), False)
             job_mode = str(payload.get("mode", payload.get("job_mode", "rebuild")) or "rebuild").strip().lower()
-            if job_mode not in {"rebuild", "backfill"}:
+            if job_mode not in {"rebuild", "backfill", "inventory_rebuild"}:
                 job_mode = "rebuild"
             force_rebuild = parse_bool(payload.get("force_rebuild"), True) if job_mode == "rebuild" else False
             try:
                 days = int(payload.get("days", 1) or 1)
             except (TypeError, ValueError):
                 days = 1
-            days = max(1, min(days, 365 if job_mode == "rebuild" else 30))
+            if job_mode == "inventory_rebuild":
+                days = 0
+            elif job_mode == "rebuild":
+                days = max(1, min(days, 365))
+            else:
+                days = max(1, min(days, 30))
             scheduled_for_utc = str(payload.get("scheduled_for_utc", "") or "").strip()
             if run_now:
                 scheduled_for_utc = utc_now_iso()
@@ -20460,7 +21220,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
                 return
 
-            job_label = "Backfill" if job_mode == "backfill" else "Rebuild"
+            if job_mode == "inventory_rebuild":
+                job_label = "Inventur-Rebuild"
+            elif job_mode == "backfill":
+                job_label = "Backfill"
+            else:
+                job_label = "Rebuild"
             self._send_json(
                 HTTPStatus.OK,
                 {

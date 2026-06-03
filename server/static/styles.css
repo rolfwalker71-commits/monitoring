@@ -1153,6 +1153,22 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   border-radius: 4px;
   overflow: hidden;
 }
+.changelog-rebuild-progress-bar-wrap {
+  max-width: 100%;
+}
+.changelog-tools-version {
+  align-self: center;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text-muted, #6b7280);
+}
+.changelog-tools-version--stale {
+  color: #b45309;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 6px;
+  padding: 2px 8px;
+}
 .db-ops-progress-bar {
   height: 100%;
   width: 0%;
@@ -1174,6 +1190,13 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 .db-ops-progress-label.error { color: #dc2626; }
 .db-ops-progress-label.success { color: #16a34a; }
+.db-ops-progress-detail {
+  display: block;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--text-muted, #6b7280);
+  word-break: break-word;
+}
 
 .db-maintenance-panel {
   margin-top: 12px;

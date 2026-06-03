@@ -2,7 +2,7 @@
 // Purpose: enables PWA installability; no offline caching of dynamic
 // dashboard data (live sensor readings should never come from cache).
 
-const CACHE_NAME = "monitoring-shell-v2";
+const CACHE_NAME = "monitoring-shell-v3";
 
 // Only static shell assets are cached so the app loads faster on re-open.
 const SHELL_ASSETS = [
