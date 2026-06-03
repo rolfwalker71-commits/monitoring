@@ -7204,6 +7204,123 @@ def get_user_alert_mail_host_scope(conn: sqlite3.Connection, username: str) -> s
     return {hostname for hostname in known_hosts if hostname not in disabled_hosts}
 
 
+def host_identity_tokens_for_target(host_item: dict) -> set[str]:
+    tokens: set[str] = set()
+    hostname = str(host_item.get("hostname", "") or "").strip()
+    host_uid = str(host_item.get("host_uid", "") or "").strip()
+    identity = host_uid or hostname
+    if identity:
+        tokens.add(identity)
+    if hostname:
+        tokens.add(hostname)
+    if host_uid:
+        tokens.add(host_uid)
+    return tokens
+
+
+def host_identity_tokens_for_alert(hostname: str, host_uid: str = "") -> set[str]:
+    tokens: set[str] = set()
+    host_key = alert_host_key(hostname, host_uid)
+    if host_key:
+        tokens.add(host_key)
+    safe_hostname = str(hostname or "").strip()
+    if safe_hostname:
+        tokens.add(safe_hostname)
+    safe_uid = str(host_uid or "").strip()
+    if safe_uid:
+        tokens.add(safe_uid)
+    return tokens
+
+
+def host_matches_alert_visibility_tokens(hostname: str, host_uid: str, allowed_tokens: set[str]) -> bool:
+    if not allowed_tokens:
+        return False
+    return bool(host_identity_tokens_for_alert(hostname, host_uid) & allowed_tokens)
+
+
+def compute_user_host_interest_alert_tokens(conn: sqlite3.Connection, username: str) -> set[str] | None:
+    """Mirror web UI host-interest selection. None means no restriction."""
+    preferences = get_user_preferences(conn, username)
+    selected_country_codes = {
+        str(item or "").strip().upper()
+        for item in str(preferences.get("host_interest_country_codes", "") or "").split(",")
+        if str(item or "").strip() and re.fullmatch(r"[A-Z]{2}", str(item or "").strip().upper())
+    }
+    host_additions = parse_host_csv(preferences.get("host_interest_host_additions", ""))
+    host_exclusions = parse_host_csv(preferences.get("host_interest_host_exclusions", ""))
+    target_hosts = get_host_interest_targets(conn)
+
+    token_to_host_item: dict[str, dict] = {}
+    for host_item in target_hosts:
+        for token in host_identity_tokens_for_target(host_item):
+            token_to_host_item[token] = host_item
+
+    resolved_exclusions: set[str] = set()
+    for token in host_exclusions:
+        mapped = token_to_host_item.get(token)
+        if mapped:
+            resolved_exclusions.update(host_identity_tokens_for_target(mapped))
+        elif token:
+            resolved_exclusions.add(token)
+
+    has_explicit_base = bool(selected_country_codes) or bool(host_additions)
+    has_exclusions = bool(host_exclusions)
+    if not has_explicit_base and not has_exclusions:
+        return None
+
+    effective: set[str] = set()
+
+    def _is_excluded(host_item: dict) -> bool:
+        return bool(host_identity_tokens_for_target(host_item) & resolved_exclusions)
+
+    for host_item in target_hosts:
+        if _is_excluded(host_item):
+            continue
+        country_code = str(host_item.get("country_code", "") or "").strip().upper()
+        enabled_by_default = not has_explicit_base
+        enabled_by_country = country_code in selected_country_codes
+        if enabled_by_default or enabled_by_country:
+            effective.update(host_identity_tokens_for_target(host_item))
+
+    for token in host_additions:
+        mapped = token_to_host_item.get(token)
+        if mapped and not _is_excluded(mapped):
+            effective.update(host_identity_tokens_for_target(mapped))
+        elif token and token not in resolved_exclusions and token not in token_to_host_item:
+            effective.add(token)
+
+    return effective
+
+
+def get_user_alert_visibility_tokens(conn: sqlite3.Connection, username: str) -> set[str] | None:
+    if not username:
+        return None
+    user = get_web_user(conn, username)
+    if user and user.get("is_admin"):
+        return None
+
+    interest_tokens = compute_user_host_interest_alert_tokens(conn, username)
+    mail_hostnames = get_user_alert_mail_host_scope(conn, username)
+
+    mail_tokens: set[str] | None = None
+    if mail_hostnames is not None:
+        mail_tokens = set()
+        for host_item in get_host_interest_targets(conn):
+            hostname = str(host_item.get("hostname", "") or "").strip()
+            if hostname in mail_hostnames:
+                mail_tokens.update(host_identity_tokens_for_target(host_item))
+        if not mail_tokens:
+            mail_tokens = set(mail_hostnames)
+
+    if interest_tokens is None and mail_tokens is None:
+        return None
+    if interest_tokens is None:
+        return mail_tokens
+    if mail_tokens is None:
+        return interest_tokens
+    return interest_tokens & mail_tokens
+
+
 def collect_critical_trends(
     conn: sqlite3.Connection,
     hours: int,
@@ -7692,7 +7809,11 @@ def _collect_latest_report_details_by_host_keys(conn: sqlite3.Connection, host_k
     return details_by_host_key
 
 
-def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | None = None) -> list[dict]:
+def collect_open_alerts(
+    conn: sqlite3.Connection,
+    allowed_hostnames: set[str] | None = None,
+    allowed_tokens: set[str] | None = None,
+) -> list[dict]:
     rows = conn.execute(
         """
         SELECT id, hostname, COALESCE(host_uid, ''), mountpoint, severity, used_percent, created_at_utc, last_seen_at_utc
@@ -7715,8 +7836,15 @@ def collect_open_alerts(conn: sqlite3.Connection, allowed_hostnames: set[str] | 
     blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
     if blacklist_patterns:
         rows = [row for row in rows if not is_filesystem_blacklisted_by_patterns(str(row[3] or ""), blacklist_patterns)]
-    if allowed_hostnames is not None:
-        rows = [row for row in rows if str(row[1] or "") in allowed_hostnames]
+    scope_tokens = allowed_tokens
+    if scope_tokens is None and allowed_hostnames is not None:
+        scope_tokens = set(allowed_hostnames)
+    if scope_tokens is not None:
+        rows = [
+            row
+            for row in rows
+            if host_matches_alert_visibility_tokens(str(row[1] or ""), str(row[2] or ""), scope_tokens)
+        ]
 
     hostnames = sorted({str(row[1] or "") for row in rows if str(row[1] or "")})
     display_names: dict[str, str] = {}
@@ -9793,7 +9921,13 @@ def collect_customer_overview(conn: sqlite3.Connection) -> dict:
     }
 
 
-def export_alerts_rows(conn: sqlite3.Connection, *, status: str | None = None, severity: str | None = None) -> list[dict]:
+def export_alerts_rows(
+    conn: sqlite3.Connection,
+    *,
+    status: str | None = None,
+    severity: str | None = None,
+    allowed_tokens: set[str] | None = None,
+) -> list[dict]:
     status_filter = str(status or "").strip().lower()
     if status_filter not in {"active", "resolved", "all"}:
         status_filter = "active"
@@ -9819,6 +9953,7 @@ def export_alerts_rows(conn: sqlite3.Connection, *, status: str | None = None, s
         f"""
         SELECT a.id,
                a.hostname,
+               COALESCE(a.host_uid, ''),
                a.mountpoint,
                a.severity,
                a.used_percent,
@@ -9832,13 +9967,19 @@ def export_alerts_rows(conn: sqlite3.Connection, *, status: str | None = None, s
         tuple(params),
     ).fetchall()
     blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
+    if allowed_tokens is not None:
+        rows = [
+            row
+            for row in rows
+            if host_matches_alert_visibility_tokens(str(row[1] or ""), str(row[2] or ""), allowed_tokens)
+        ]
     hostnames = sorted({str(row[1] or "") for row in rows if str(row[1] or "")})
     latest_usage_by_host = _collect_latest_report_usage_by_host(conn, hostnames)
 
     result: list[dict] = []
     for row in rows:
         hostname = str(row[1] or "")
-        mountpoint = str(row[2] or "")
+        mountpoint = str(row[3] or "")
         if is_filesystem_blacklisted_by_patterns(mountpoint, blacklist_patterns):
             continue
         current_used_percent = None
@@ -9849,20 +9990,20 @@ def export_alerts_rows(conn: sqlite3.Connection, *, status: str | None = None, s
             current_used_percent = host_usage.get(normalize_mountpoint_key(mountpoint))
         delta_used_percent = None
         if current_used_percent is not None:
-            delta_used_percent = float(current_used_percent) - float(row[4] or 0.0)
+            delta_used_percent = float(current_used_percent) - float(row[5] or 0.0)
         result.append(
             {
                 "id": int(row[0] or 0),
                 "hostname": hostname,
                 "mountpoint": mountpoint,
-                "severity": str(row[3] or "warning"),
-                "used_percent": float(row[4] or 0.0),
+                "severity": str(row[4] or "warning"),
+                "used_percent": float(row[5] or 0.0),
                 "current_used_percent": current_used_percent,
                 "current_report_at_utc": current_report_at_utc,
                 "delta_used_percent": delta_used_percent,
-                "created_at_utc": str(row[5] or ""),
-                "last_seen_at_utc": str(row[6] or ""),
-                "resolved_at_utc": str(row[7] or ""),
+                "created_at_utc": str(row[6] or ""),
+                "last_seen_at_utc": str(row[7] or ""),
+                "resolved_at_utc": str(row[8] or ""),
             }
         )
     return result
@@ -10858,6 +10999,9 @@ def send_instant_alert_mails_to_users(
             continue
         if min_severity == "critical" and severity not in {"critical"}:
             continue
+        allowed_tokens = get_user_alert_visibility_tokens(conn, username)
+        if allowed_tokens is not None and not host_matches_alert_visibility_tokens(hostname, host_uid, allowed_tokens):
+            continue
         user_settings = get_web_user_settings(conn, username)
         recipient = user_settings.get("email_recipient", "").strip()
         if not recipient:
@@ -11062,6 +11206,9 @@ def send_instant_alert_telegram_to_users(
         if not username or not chat_id:
             continue
         if min_severity == "critical" and severity not in {"critical"}:
+            continue
+        allowed_tokens = get_user_alert_visibility_tokens(conn, username)
+        if allowed_tokens is not None and not host_matches_alert_visibility_tokens(hostname, host_uid, allowed_tokens):
             continue
 
         text = build_instant_alert_message_text(
@@ -11798,6 +11945,9 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                 ).fetchone()
                 if sub and not bool(sub[0]):
                     continue
+                allowed_tokens = get_user_alert_visibility_tokens(conn, username)
+                if allowed_tokens is not None and not host_matches_alert_visibility_tokens(hostname, host_uid, allowed_tokens):
+                    continue
 
                 user_settings = get_web_user_settings(conn, username)
                 recipient = user_settings.get("email_recipient", "").strip()
@@ -11868,6 +12018,9 @@ def maybe_send_alert_reminders(conn: sqlite3.Connection) -> None:
                     (username, hostname),
                 ).fetchone()
                 if not sub or not bool(sub[0]):
+                    continue
+                allowed_tokens = get_user_alert_visibility_tokens(conn, username)
+                if allowed_tokens is not None and not host_matches_alert_visibility_tokens(hostname, host_uid, allowed_tokens):
                     continue
 
                 text = (
@@ -12240,8 +12393,8 @@ def maybe_send_scheduled_user_mails(conn: sqlite3.Connection) -> None:
                 )
 
         if send_alert:
-            alert_allowed_hosts = get_user_alert_mail_host_scope(conn, username)
-            alerts = collect_open_alerts(conn, allowed_hostnames=alert_allowed_hosts)
+            alert_allowed_tokens = get_user_alert_visibility_tokens(conn, username)
+            alerts = collect_open_alerts(conn, allowed_tokens=alert_allowed_tokens)
             alert_recipients = resolve_user_alert_mail_recipients(
                 settings,
                 alert_digest_recipient_severity(alerts),
@@ -13043,6 +13196,9 @@ def send_instant_alert_web_push_to_users(
         p256dh = str(row[2] or "")
         auth = str(row[3] or "")
         username = str(row[4] or "").strip()
+        allowed_tokens = get_user_alert_visibility_tokens(conn, username)
+        if allowed_tokens is not None and not host_matches_alert_visibility_tokens(hostname, host_uid, allowed_tokens):
+            continue
         title, body = build_instant_alert_push_title_body(
             event_type=event_type,
             severity=severity,
@@ -16718,8 +16874,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             status = str(query.get("status", ["active"])[0] or "active").strip().lower()
             severity = str(query.get("severity", ["all"])[0] or "all").strip().lower()
+            username = self._web_session_username()
             with sqlite3.connect(DB_PATH) as conn:
-                rows = export_alerts_rows(conn, status=status, severity=severity)
+                allowed_tokens = get_user_alert_visibility_tokens(conn, username) if username else None
+                rows = export_alerts_rows(conn, status=status, severity=severity, allowed_tokens=allowed_tokens)
 
             header = "id,hostname,mountpoint,severity,used_percent,current_used_percent,delta_used_percent,created_at_utc,last_seen_at_utc,resolved_at_utc\n"
             lines = [header]
@@ -16886,6 +17044,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     for row in all_rows
                     if not is_filesystem_blacklisted_by_patterns(str(row[2] or ""), blacklist_patterns)
                 ]
+                session_username = self._web_session_username()
+                if session_username:
+                    allowed_tokens = get_user_alert_visibility_tokens(conn, session_username)
+                    if allowed_tokens is not None:
+                        filtered_rows = [
+                            row
+                            for row in filtered_rows
+                            if host_matches_alert_visibility_tokens(str(row[1] or ""), str(row[6] or ""), allowed_tokens)
+                        ]
 
                 all_host_keys = sorted(
                     {
@@ -17083,7 +17250,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             hostname_filter = query.get("hostname", [""])[0].strip()
             host_uid_filter = query.get("host_uid", [""])[0].strip()
-            cache_key = f"alerts-summary:{hostname_filter}:{host_uid_filter}"
+            summary_username = self._web_session_username()
+            cache_key = f"alerts-summary:{summary_username}:{hostname_filter}:{host_uid_filter}"
             cached_data = _read_cache_get(cache_key)
             if isinstance(cached_data, dict):
                 self._send_json(HTTPStatus.OK, cached_data)
@@ -17127,12 +17295,23 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             with sqlite3.connect(DB_PATH) as conn:
                 alarm_settings = get_alarm_settings(conn)
+                allowed_tokens = (
+                    get_user_alert_visibility_tokens(conn, summary_username)
+                    if summary_username
+                    else None
+                )
                 rows = conn.execute(
-                    f"SELECT severity, mountpoint FROM alerts {visible_where_clause}",
+                    f"""
+                    SELECT severity, mountpoint, hostname, COALESCE(host_uid, '')
+                    FROM alerts {visible_where_clause}
+                    """,
                     tuple(args),
                 ).fetchall()
                 muted_rows = conn.execute(
-                    f"SELECT 1 FROM alerts {muted_where_clause}",
+                    f"""
+                    SELECT 1, mountpoint, hostname, COALESCE(host_uid, '')
+                    FROM alerts {muted_where_clause}
+                    """,
                     tuple(args),
                 ).fetchall()
                 blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
@@ -17141,6 +17320,18 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     for row in rows
                     if not is_filesystem_blacklisted_by_patterns(str(row[1] or ""), blacklist_patterns)
                 ]
+                if allowed_tokens is not None:
+                    visible_rows = [
+                        row
+                        for row in visible_rows
+                        if host_matches_alert_visibility_tokens(str(row[2] or ""), str(row[3] or ""), allowed_tokens)
+                    ]
+                    muted_rows = [
+                        row
+                        for row in muted_rows
+                        if not is_filesystem_blacklisted_by_patterns(str(row[1] or ""), blacklist_patterns)
+                        and host_matches_alert_visibility_tokens(str(row[2] or ""), str(row[3] or ""), allowed_tokens)
+                    ]
                 muted_open = len(muted_rows)
                 total_open = len(visible_rows)
                 warning_open = sum(1 for row in visible_rows if str(row[0] or "").strip().lower() == "warning")
@@ -18360,7 +18551,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         sender_address=sender_address,
                     )
                 elif endpoint_mode == "alerts":
-                    alerts = collect_open_alerts(conn)
+                    alert_allowed_tokens = get_user_alert_visibility_tokens(conn, username)
+                    alerts = collect_open_alerts(conn, allowed_tokens=alert_allowed_tokens)
                     graph_cids, graph_attachments = build_alert_digest_graph_bundle(conn, alerts, hours=24)
                     all_alert_recipients = resolve_user_alert_mail_recipients(
                         settings,
