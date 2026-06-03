@@ -8772,9 +8772,11 @@ function getAngLogsBlockFromPayload(payload) {
   return parseAngLogsBlock(payload?.ang_logs) || parseAngLogsBlock(payload?.ang_skripte_logs);
 }
 
+// Split merged log blobs (often one physical line / no newlines in file) before each timestamp.
 const ANG_LOG_LINE_SPLIT_PATTERNS = [
-  /(?=^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})/m,
-  /(?=^\[(?:\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}|\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}))/m,
+  /(?=\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{1,6})?\s)/,
+  /(?=\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:[.,]\d{1,6})?\s)/,
+  /(?=\[\d{2}\.\d{2}\.\d{4} \d{2}:\d{2})/,
 ];
 
 function shouldSplitAngLogLogicalLine(line) {
@@ -8839,7 +8841,7 @@ function normalizeAngSkripteLogLines(rawLines) {
         // fall through to plain-text split
       }
     }
-    return trimmed.split(/\r?\n/).map((line) => asLogLineText(line));
+    return trimmed.split(/\r\n|\n|\r/).map((line) => asLogLineText(line));
   }
   return [];
 }
@@ -8858,7 +8860,12 @@ function expandAngSkripteLogLines(rawLines) {
       continue;
     }
     if (line.includes("\n") || line.includes("\r")) {
-      expanded.push(...line.split(/\r?\n/).map((entry) => asLogLineText(entry)).filter((entry) => entry.length > 0));
+      expanded.push(
+        ...line
+          .split(/\r\n|\n|\r/)
+          .map((entry) => asLogLineText(entry))
+          .filter((entry) => entry.length > 0),
+      );
       continue;
     }
     if (line) {
