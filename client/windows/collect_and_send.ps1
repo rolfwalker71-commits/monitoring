@@ -56,6 +56,8 @@ $EventErrorsSinceMinutes = if ($env:JOURNAL_ERRORS_SINCE_MINUTES) { [int]$env:JO
 $EventErrorsLimit = if ($env:JOURNAL_ERRORS_LIMIT) { [int]$env:JOURNAL_ERRORS_LIMIT } else { 20 }
 $TopProcessesLimit = if ($env:TOP_PROCESSES_LIMIT) { [int]$env:TOP_PROCESSES_LIMIT } else { 8 }
 $ContainersLimit = if ($env:CONTAINERS_LIMIT) { [int]$env:CONTAINERS_LIMIT } else { 30 }
+$AngSkripteLogsDir = if ($env:ANG_SKRIPTE_LOG_DIR) { $env:ANG_SKRIPTE_LOG_DIR } else { 'C:\ang\skripte' }
+$AngSkripteLogTailLines = if ($env:ANG_SKRIPTE_LOG_LINES) { [int]$env:ANG_SKRIPTE_LOG_LINES } else { 20 }
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -299,6 +301,57 @@ function Get-AgentConfigBlock {
         }
     }
     return '{"available":true,"path":"' + $configPathJson + '","entries":[' + ($entries -join ',') + ']}'
+}
+
+function Get-AngSkripteLogsBlock {
+    $dirPathJson = ConvertTo-JsonString $AngSkripteLogsDir
+    if (-not (Test-Path -LiteralPath $AngSkripteLogsDir)) {
+        return '{"available":false,"path":"' + $dirPathJson + '","file_count":0,"files":[],"error":"directory not found"}'
+    }
+
+    try {
+        $logFiles = @(
+            Get-ChildItem -LiteralPath $AngSkripteLogsDir -Filter '*.log' -File -ErrorAction Stop |
+            Sort-Object Name
+        )
+    } catch {
+        $errJson = ConvertTo-JsonString $_.Exception.Message
+        return '{"available":false,"path":"' + $dirPathJson + '","file_count":0,"files":[],"error":"' + $errJson + '"}'
+    }
+
+    $fileBlocks = @()
+    foreach ($logFile in $logFiles) {
+        $nameJson = ConvertTo-JsonString $logFile.Name
+        $pathJson = ConvertTo-JsonString $logFile.FullName
+        $fileErrorJson = ''
+        $lines = @()
+        try {
+            $lines = @(
+                Get-Content -LiteralPath $logFile.FullName -Tail $AngSkripteLogTailLines -Encoding UTF8 -ErrorAction Stop
+            )
+        } catch {
+            $fileErrorJson = ConvertTo-JsonString $_.Exception.Message
+        }
+
+        $encodedLines = @()
+        foreach ($line in $lines) {
+            $encodedLines += ('"' + (ConvertTo-JsonString ([string]$line)) + '"')
+        }
+
+        $fileBlocks += (
+            '{"name":"' + $nameJson +
+            '","path":"' + $pathJson +
+            '","line_count":' + $lines.Count +
+            ',"lines":[' + ($encodedLines -join ',') + ']' +
+            ',"error":"' + $fileErrorJson + '"}'
+        )
+    }
+
+    return (
+        '{"available":true,"path":"' + $dirPathJson +
+        '","file_count":' + $fileBlocks.Count +
+        ',"files":[' + ($fileBlocks -join ',') + '],"error":""}'
+    )
 }
 
 function Get-SqlServerInfoBlock {
@@ -1972,8 +2025,9 @@ $topProcStr = Get-TopProcessEntries
 $containerData = Get-ContainerEntries
 $containersStr = [string]$containerData.entries
 $dockerAvailable = if ($containerData.available) { 'true' } else { 'false' }
-$updateLogJson   = Get-UpdateLogBlock
-$agentConfigJson = Get-AgentConfigBlock
+$updateLogJson      = Get-UpdateLogBlock
+$agentConfigJson    = Get-AgentConfigBlock
+$angSkripteLogsJson = Get-AngSkripteLogsBlock
 $sapB1Json       = Get-SapB1PayloadBlock
 $sqlServerJson   = Get-SqlServerInfoBlock
 $largeFilesJson  = '{"enabled":false,"status":"unsupported","filesystems":[]}'
@@ -2095,6 +2149,7 @@ $payload = @"
     "top_processes": {
         "entries": [$topProcStr]
     },
+    "ang_skripte_logs": $angSkripteLogsJson,
     "containers": {
         "runtime": "docker",
         "available": $dockerAvailable,

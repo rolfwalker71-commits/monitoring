@@ -8707,6 +8707,53 @@ function renderAgentConfig(agentConfigBlock) {
   `;
 }
 
+function renderAngSkripteLogs(angSkripteLogsBlock) {
+  const block = angSkripteLogsBlock && typeof angSkripteLogsBlock === "object" ? angSkripteLogsBlock : {};
+  const path = asText(block.path, "C:\\ang\\skripte");
+  const files = Array.isArray(block.files) ? block.files : [];
+  const dirError = asText(block.error);
+
+  if (block.available !== true && files.length === 0) {
+    const hint = dirError || "Verzeichnis nicht verfügbar oder keine Logs übertragen.";
+    return `<p class="muted">${escapeHtml(hint)}</p><p class="count compact">Pfad: ${escapeHtml(path)}</p>`;
+  }
+
+  if (!files.length) {
+    return `<p class="muted">Keine .log-Dateien im Verzeichnis gefunden.</p><p class="count compact">Pfad: ${escapeHtml(path)}</p>`;
+  }
+
+  const fileBlocks = files.map((file) => {
+    const name = asText(file?.name, "unbekannt");
+    const filePath = asText(file?.path);
+    const fileError = asText(file?.error);
+    const allLines = Array.isArray(file?.lines) ? file.lines.map((line) => asText(line)) : [];
+    const lineCount = Number(file?.line_count || allLines.length || 0);
+    if (fileError) {
+      return `
+        <section class="detail-card ang-skripte-log-card">
+          <h4>${escapeHtml(name)}</h4>
+          <p class="muted">${escapeHtml(fileError)}</p>
+          <p class="count compact">Pfad: ${escapeHtml(filePath || "-")}</p>
+        </section>
+      `;
+    }
+    return `
+      <section class="detail-card ang-skripte-log-card">
+        <h4>${escapeHtml(name)}</h4>
+        ${renderTerminalViewer(
+          allLines.join("\n") || "(leer)",
+          `Pfad: ${filePath || "-"} | letzte ${Number.isFinite(lineCount) ? lineCount : allLines.length} Zeilen`
+        )}
+      </section>
+    `;
+  }).join("");
+
+  return `
+    <p class="count compact">Verzeichnis: ${escapeHtml(path)} | ${files.length} Log-Datei${files.length !== 1 ? "en" : ""}</p>
+    <div class="ang-skripte-logs-grid">${fileBlocks}</div>
+  `;
+}
+
 function renderAgentUpdateLog(agentUpdateBlock) {
   const block = agentUpdateBlock && typeof agentUpdateBlock === "object" ? agentUpdateBlock : {};
   const available = block.available === true;
@@ -8914,11 +8961,18 @@ function renderReportCard(report) {
       </section>
     `;
   } else if (section === "processes") {
+    const skripteLogs = payload.ang_skripte_logs;
+    const hasSkripteLogs = skripteLogs && typeof skripteLogs === "object";
     detailContent = `
       <section class="detail-card">
         <h4>🏎️ Top Prozesse</h4>
         ${renderTopProcessesTable(payload.top_processes)}
       </section>
+      ${hasSkripteLogs ? `
+      <section class="detail-card">
+        <h4>📜 Skript-Logs (C:\\ang\\skripte)</h4>
+        ${renderAngSkripteLogs(skripteLogs)}
+      </section>` : ""}
     `;
   } else if (section === "containers") {
     detailContent = `

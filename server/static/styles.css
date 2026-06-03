@@ -8252,6 +8252,17 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   transform: rotate(90deg);
 }
 
+.ang-skripte-logs-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.ang-skripte-log-card h4 {
+  margin: 0 0 8px;
+  font-size: 0.92rem;
+}
+
 .cron-content {
   margin: 0;
   border-top: 1px solid #d4e4f7;
