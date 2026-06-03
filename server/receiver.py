@@ -9849,7 +9849,7 @@ def export_alerts_rows(conn: sqlite3.Connection, *, status: str | None = None, s
             current_used_percent = host_usage.get(normalize_mountpoint_key(mountpoint))
         delta_used_percent = None
         if current_used_percent is not None:
-            delta_used_percent = abs(float(current_used_percent) - float(row[4] or 0.0))
+            delta_used_percent = float(current_used_percent) - float(row[4] or 0.0)
         result.append(
             {
                 "id": int(row[0] or 0),
@@ -17009,7 +17009,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         current_used_percent = host_usage.get(normalize_mountpoint_key(mountpoint))
                     delta_used_percent = None
                     if current_used_percent is not None:
-                        delta_used_percent = abs(float(current_used_percent) - float(row[4] or 0.0))
+                        delta_used_percent = float(current_used_percent) - float(row[4] or 0.0)
                     latest_report_ip = ""
                     if isinstance(host_details, dict):
                         latest_report_ip = str(host_details.get("latest_report_ip") or "").strip()
