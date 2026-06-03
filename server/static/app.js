@@ -14385,6 +14385,10 @@ function buildChangelogRebuildProgressView(progress, jobModeLabel) {
     detailParts.push(`${formatChangelogProgressCount(insertedEvents)} DB-Events`);
   }
   if (currentHost) detailParts.push(`aktuell: ${currentHost}`);
+  const buildVersion = asText(progress?.build_version, "");
+  const updatedAtUtc = asText(progress?.updated_at_utc, "");
+  if (buildVersion) detailParts.push(`Code ${buildVersion}`);
+  if (updatedAtUtc) detailParts.push(`Update ${formatUtcPlus2(updatedAtUtc)}`);
 
   return {
     label: title,

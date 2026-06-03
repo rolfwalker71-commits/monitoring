@@ -6374,12 +6374,12 @@ class ChangelogJobProgressWriter:
             or (now_mono - self._last_flush_mono) >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
         )
         with self._flush_lock:
-            if not _should_flush_changelog_progress(
+            if not force and not time_flush_due and not _should_flush_changelog_progress(
                 progress,
                 last_phase=self._last_phase,
                 last_hosts=self._last_hosts,
                 last_reports=self._last_reports,
-            ) and not force and not time_flush_due:
+            ):
                 return
 
             phase = str(progress.get("phase") or "")
@@ -6401,6 +6401,7 @@ class ChangelogJobProgressWriter:
                     "inserted_events": int(progress.get("inserted_events", 0) or 0),
                     "message": str(progress.get("message") or ""),
                     "updated_at_utc": utc_now_iso(),
+                    "build_version": read_build_version(),
                 }
             }
             last_locked_exc: sqlite3.OperationalError | None = None
@@ -6516,22 +6517,30 @@ def _count_reports_for_changelog_days(conn: sqlite3.Connection, days: int) -> in
 
 
 _CHANGELOG_REPORT_FETCH_BATCH_SIZE = 32
+_CHANGELOG_INVENTORY_FETCH_BATCH_SIZE = 1
+
+
+def _changelog_read_connect() -> sqlite3.Connection:
+    read_conn = sqlite_connect()
+    read_conn.execute(f"PRAGMA busy_timeout = {_maintenance_sqlite_busy_timeout_ms()}")
+    return read_conn
 
 
 def _iter_changelog_report_batches(
-    conn: sqlite3.Connection,
+    read_conn: sqlite3.Connection,
     reports_sql: str,
     reports_params: tuple,
+    *,
+    batch_size: int | None = None,
 ):
-    """Yield report rows in batches; commit between batches so progress writes are not blocked."""
-    cursor = conn.execute(reports_sql, reports_params)
+    """Yield rows from a dedicated read connection (INSERTs use a separate write conn)."""
+    cursor = read_conn.execute(reports_sql, reports_params)
     try:
         while True:
-            rows = cursor.fetchmany(_CHANGELOG_REPORT_FETCH_BATCH_SIZE)
+            rows = cursor.fetchmany(max(1, int(batch_size or _CHANGELOG_REPORT_FETCH_BATCH_SIZE)))
             if not rows:
                 break
             yield rows
-            conn.commit()
     finally:
         cursor.close()
 
@@ -6646,100 +6655,109 @@ def backfill_database_lifecycle(
             pass
     conn.commit()
 
-    for batch in _iter_changelog_report_batches(conn, reports_sql, reports_params):
-        for row in batch:
-            report_id = int(row[0] or 0)
-            report_time_utc = str(row[1] or "").strip()
-            hostname = str(row[2] or "").strip()
-            if not hostname:
-                continue
-
-            payload = parse_payload_json(str(row[3] or "{}"))
-            report_count += 1
-            if inventory_greenfield and report_count == 1:
-                conn.commit()
-
-            if _should_check_changelog_job_cancel(report_count, reports_total):
-                _ensure_changelog_job_running(conn, job_id)
-
-            if callable(progress_callback):
-                now_mono = time.monotonic()
-                emit_progress = (
-                    _should_emit_changelog_progress(report_count, reports_total)
-                    or (now_mono - last_progress_emit_mono)
-                    >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
-                )
-                if emit_progress:
-                    try:
-                        progress_callback({
-                            "phase": "database_backfill",
-                            "phase_step": db_phase_step,
-                            "phase_steps_total": int(phase_steps_total or 3),
-                            "reports_total": reports_total,
-                            "reports_scanned": report_count,
-                            "current_host": hostname,
-                            "inserted_events": inserted_events,
-                            "message": f"Report {report_count}/{reports_total}: {hostname}…",
-                        })
-                        last_progress_emit_mono = now_mono
-                    except Exception:
-                        pass
-
-            current_dbs = _extract_database_inventory(payload)
-
-            prev_dbs = prev_dbs_by_host.get(hostname, set())
-            new_dbs = current_dbs - prev_dbs
-            deleted_dbs = prev_dbs - current_dbs
-
-            for db_name in new_dbs:
-                instance_name = "MSSQLSERVER"
-                clean_db_name = db_name
-                if "::" in db_name:
-                    parts = db_name.split("::", 1)
-                    instance_name = str(parts[0] or "MSSQLSERVER").strip() or "MSSQLSERVER"
-                    clean_db_name = str(parts[1] or "").strip()
-
-                if not clean_db_name:
+    read_conn = _changelog_read_connect()
+    try:
+        for batch in _iter_changelog_report_batches(
+            read_conn,
+            reports_sql,
+            reports_params,
+            batch_size=_CHANGELOG_INVENTORY_FETCH_BATCH_SIZE if inventory_greenfield else _CHANGELOG_REPORT_FETCH_BATCH_SIZE,
+        ):
+            for row in batch:
+                report_id = int(row[0] or 0)
+                report_time_utc = str(row[1] or "").strip()
+                hostname = str(row[2] or "").strip()
+                if not hostname:
                     continue
 
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO database_lifecycle (
-                        hostname, database_name, action, triggered_by, triggered_at_utc, reason, report_id, instance_name
+                payload = parse_payload_json(str(row[3] or "{}"))
+                report_count += 1
+                if inventory_greenfield and report_count == 1:
+                    conn.commit()
+
+                if _should_check_changelog_job_cancel(report_count, reports_total):
+                    _ensure_changelog_job_running(conn, job_id)
+
+                if callable(progress_callback):
+                    now_mono = time.monotonic()
+                    emit_progress = (
+                        _should_emit_changelog_progress(report_count, reports_total)
+                        or (now_mono - last_progress_emit_mono)
+                        >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (hostname, clean_db_name, "create", "system", report_time_utc, "Detected in backfill", report_id, instance_name),
-                )
-                inserted_events += 1
+                    if emit_progress:
+                        try:
+                            progress_callback({
+                                "phase": "database_backfill",
+                                "phase_step": db_phase_step,
+                                "phase_steps_total": int(phase_steps_total or 3),
+                                "reports_total": reports_total,
+                                "reports_scanned": report_count,
+                                "current_host": hostname,
+                                "inserted_events": inserted_events,
+                                "message": f"Report {report_count}/{reports_total}: {hostname}…",
+                            })
+                            last_progress_emit_mono = now_mono
+                        except Exception:
+                            pass
 
-            for db_name in deleted_dbs:
-                instance_name = "MSSQLSERVER"
-                clean_db_name = db_name
-                if "::" in db_name:
-                    parts = db_name.split("::", 1)
-                    instance_name = str(parts[0] or "MSSQLSERVER").strip() or "MSSQLSERVER"
-                    clean_db_name = str(parts[1] or "").strip()
+                current_dbs = _extract_database_inventory(payload)
 
-                if not clean_db_name:
-                    continue
+                prev_dbs = prev_dbs_by_host.get(hostname, set())
+                new_dbs = current_dbs - prev_dbs
+                deleted_dbs = prev_dbs - current_dbs
 
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO database_lifecycle (
-                        hostname, database_name, action, triggered_by, triggered_at_utc, reason, report_id, instance_name
+                for db_name in new_dbs:
+                    instance_name = "MSSQLSERVER"
+                    clean_db_name = db_name
+                    if "::" in db_name:
+                        parts = db_name.split("::", 1)
+                        instance_name = str(parts[0] or "MSSQLSERVER").strip() or "MSSQLSERVER"
+                        clean_db_name = str(parts[1] or "").strip()
+
+                    if not clean_db_name:
+                        continue
+
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO database_lifecycle (
+                            hostname, database_name, action, triggered_by, triggered_at_utc, reason, report_id, instance_name
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (hostname, clean_db_name, "create", "system", report_time_utc, "Detected in backfill", report_id, instance_name),
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (hostname, clean_db_name, "delete", "system", report_time_utc, "Detected in backfill", report_id, instance_name),
-                )
-                inserted_events += 1
+                    inserted_events += 1
 
-            prev_dbs_by_host[hostname] = current_dbs
+                for db_name in deleted_dbs:
+                    instance_name = "MSSQLSERVER"
+                    clean_db_name = db_name
+                    if "::" in db_name:
+                        parts = db_name.split("::", 1)
+                        instance_name = str(parts[0] or "MSSQLSERVER").strip() or "MSSQLSERVER"
+                        clean_db_name = str(parts[1] or "").strip()
 
-            if inventory_greenfield or report_count % 1000 == 0:
-                conn.commit()
+                    if not clean_db_name:
+                        continue
 
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO database_lifecycle (
+                            hostname, database_name, action, triggered_by, triggered_at_utc, reason, report_id, instance_name
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (hostname, clean_db_name, "delete", "system", report_time_utc, "Detected in backfill", report_id, instance_name),
+                    )
+                    inserted_events += 1
+
+                prev_dbs_by_host[hostname] = current_dbs
+
+                if inventory_greenfield or report_count % 1000 == 0:
+                    conn.commit()
+
+    finally:
+        read_conn.close()
     return {
         "reports_scanned": report_count,
         "inserted_events": inserted_events,
@@ -6872,6 +6890,31 @@ def rebuild_changelog_history(
         except Exception:
             pass
 
+
+    read_conn = _changelog_read_connect()
+    try:
+        reports_total = _count_reports_for_changelog_days(read_conn, window_days)
+    finally:
+        read_conn.close()
+
+    if callable(progress_callback):
+        try:
+            progress_callback({
+                "phase": "config_backfill",
+                "phase_step": 2,
+                "phase_steps_total": 4,
+                "reports_total": reports_total,
+                "reports_scanned": 0,
+                "hosts_processed": 0,
+                "hosts_total": 0,
+                "inserted_changes": 0,
+                "message": f"Inventur: starte {reports_total} Reports (Host-Config)…",
+            })
+        except Exception:
+            pass
+    conn.commit()
+    print(f"[inventur] job={job_id} reports_total={reports_total} build={read_build_version()}")
+
     existing_state = conn.execute(
         "SELECT completed_at_utc, days FROM changelog_rebuild_state WHERE id = 1"
     ).fetchone()
@@ -6972,7 +7015,6 @@ def rebuild_changelog_inventory_history(
 ) -> dict:
     """Greenfield inventory rebuild: first report per host = baseline, then deltas (all reports)."""
     window_days = 0
-    reports_total = _count_reports_for_changelog_days(conn, window_days)
 
     if callable(progress_callback):
         try:
@@ -6980,7 +7022,7 @@ def rebuild_changelog_inventory_history(
                 "phase": "reset",
                 "phase_step": 1,
                 "phase_steps_total": 4,
-                "reports_total": reports_total,
+                "reports_total": 0,
                 "reports_scanned": 0,
                 "hosts_processed": 0,
                 "hosts_total": 0,
@@ -9600,111 +9642,120 @@ def backfill_sap_addon_changes(
             pass
     conn.commit()
 
-    for batch in _iter_changelog_report_batches(conn, reports_sql, reports_params):
-        for row in batch:
-            report_id = int(row[0] or 0)
-            detected_at_utc = str(row[1] or "").strip()
-            hostname = str(row[2] or "").strip()
-            host_uid = str(row[3] or "").strip()
-            payload = parse_payload_json(str(row[4] or "{}"))
-            if not hostname:
-                continue
-            host_key = alert_host_key(hostname, host_uid)
-            host_changed = host_key != last_progress_host_key
-            if host_changed:
-                hosts_processed += 1
-                last_progress_host_key = host_key
+    read_conn = _changelog_read_connect()
+    try:
+        for batch in _iter_changelog_report_batches(
+            read_conn,
+            reports_sql,
+            reports_params,
+            batch_size=_CHANGELOG_INVENTORY_FETCH_BATCH_SIZE if inventory_greenfield else _CHANGELOG_REPORT_FETCH_BATCH_SIZE,
+        ):
+            for row in batch:
+                report_id = int(row[0] or 0)
+                detected_at_utc = str(row[1] or "").strip()
+                hostname = str(row[2] or "").strip()
+                host_uid = str(row[3] or "").strip()
+                payload = parse_payload_json(str(row[4] or "{}"))
+                if not hostname:
+                    continue
+                host_key = alert_host_key(hostname, host_uid)
+                host_changed = host_key != last_progress_host_key
+                if host_changed:
+                    hosts_processed += 1
+                    last_progress_host_key = host_key
 
-            report_count += 1
-            if inventory_greenfield and report_count == 1:
-                conn.commit()
-            current_snapshot = _extract_sap_addon_snapshot(payload)
-            previous_snapshot = last_snapshot_by_host_key.get(host_key)
+                report_count += 1
+                if inventory_greenfield and report_count == 1:
+                    conn.commit()
+                current_snapshot = _extract_sap_addon_snapshot(payload)
+                previous_snapshot = last_snapshot_by_host_key.get(host_key)
 
-            if _should_check_changelog_job_cancel(report_count, reports_total) or host_changed:
-                _ensure_changelog_job_running(conn, job_id)
+                if _should_check_changelog_job_cancel(report_count, reports_total) or host_changed:
+                    _ensure_changelog_job_running(conn, job_id)
 
-            if previous_snapshot is not None:
-                addon_names = sorted(set(previous_snapshot.keys()) | set(current_snapshot.keys()), key=str.lower)
-                for addon_name in addon_names:
-                    old_value = str(previous_snapshot.get(addon_name, "-") or "-")
-                    new_value = str(current_snapshot.get(addon_name, "-") or "-")
-                    if old_value == new_value:
-                        continue
-                    if _insert_sap_addon_change_row(
-                        conn,
-                        detected_at_utc=detected_at_utc or utc_now_iso(),
-                        host_key=host_key,
-                        hostname=hostname,
-                        addon_name=addon_name,
-                        old_value=old_value,
-                        new_value=new_value,
-                        report_id=report_id,
-                        source="backfill-addon",
-                        skip_duplicate_check=skip_dup,
-                    ):
-                        inserted_changes += 1
-                        if inventory_greenfield:
-                            conn.commit()
-            elif include_initial_snapshot_events:
-                for addon_name in sorted(current_snapshot.keys(), key=str.lower):
-                    new_value = str(current_snapshot.get(addon_name, "-") or "-")
-                    if new_value == "-":
-                        continue
-                    if _insert_sap_addon_change_row(
-                        conn,
-                        detected_at_utc=detected_at_utc or utc_now_iso(),
-                        host_key=host_key,
-                        hostname=hostname,
-                        addon_name=addon_name,
-                        old_value="-",
-                        new_value=new_value,
-                        report_id=report_id,
-                        source="backfill-addon-init",
-                        skip_duplicate_check=skip_dup,
-                    ):
-                        inserted_changes += 1
-                        if inventory_greenfield:
-                            conn.commit()
+                if previous_snapshot is not None:
+                    addon_names = sorted(set(previous_snapshot.keys()) | set(current_snapshot.keys()), key=str.lower)
+                    for addon_name in addon_names:
+                        old_value = str(previous_snapshot.get(addon_name, "-") or "-")
+                        new_value = str(current_snapshot.get(addon_name, "-") or "-")
+                        if old_value == new_value:
+                            continue
+                        if _insert_sap_addon_change_row(
+                            conn,
+                            detected_at_utc=detected_at_utc or utc_now_iso(),
+                            host_key=host_key,
+                            hostname=hostname,
+                            addon_name=addon_name,
+                            old_value=old_value,
+                            new_value=new_value,
+                            report_id=report_id,
+                            source="backfill-addon",
+                            skip_duplicate_check=skip_dup,
+                        ):
+                            inserted_changes += 1
+                            if inventory_greenfield:
+                                conn.commit()
+                elif include_initial_snapshot_events:
+                    for addon_name in sorted(current_snapshot.keys(), key=str.lower):
+                        new_value = str(current_snapshot.get(addon_name, "-") or "-")
+                        if new_value == "-":
+                            continue
+                        if _insert_sap_addon_change_row(
+                            conn,
+                            detected_at_utc=detected_at_utc or utc_now_iso(),
+                            host_key=host_key,
+                            hostname=hostname,
+                            addon_name=addon_name,
+                            old_value="-",
+                            new_value=new_value,
+                            report_id=report_id,
+                            source="backfill-addon-init",
+                            skip_duplicate_check=skip_dup,
+                        ):
+                            inserted_changes += 1
+                            if inventory_greenfield:
+                                conn.commit()
 
-            last_snapshot_by_host_key[host_key] = current_snapshot
-            last_hostname_by_host_key[host_key] = hostname
-            last_seen_at_by_host_key[host_key] = detected_at_utc or utc_now_iso()
+                last_snapshot_by_host_key[host_key] = current_snapshot
+                last_hostname_by_host_key[host_key] = hostname
+                last_seen_at_by_host_key[host_key] = detected_at_utc or utc_now_iso()
 
-            if callable(progress_callback):
-                now_mono = time.monotonic()
-                emit_progress = (
-                    _should_emit_changelog_progress(
-                        report_count,
-                        reports_total,
-                        host_changed=host_changed,
+                if callable(progress_callback):
+                    now_mono = time.monotonic()
+                    emit_progress = (
+                        _should_emit_changelog_progress(
+                            report_count,
+                            reports_total,
+                            host_changed=host_changed,
+                        )
+                        or (now_mono - last_progress_emit_mono)
+                        >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
                     )
-                    or (now_mono - last_progress_emit_mono)
-                    >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
-                )
-                if emit_progress:
-                    try:
-                        progress_callback({
-                            "phase": "addon_backfill",
-                            "phase_step": addon_phase_step,
-                            "phase_steps_total": int(phase_steps_total or 3),
-                            "reports_total": reports_total,
-                            "reports_scanned": report_count,
-                            "hosts_processed": hosts_processed,
-                            "hosts_total": hosts_processed,
-                            "current_host": hostname,
-                            "inserted_changes": inserted_changes,
-                            "message": f"Report {report_count}/{reports_total}: {hostname}…",
-                        })
-                        last_progress_emit_mono = now_mono
-                    except Exception:
-                        pass
+                    if emit_progress:
+                        try:
+                            progress_callback({
+                                "phase": "addon_backfill",
+                                "phase_step": addon_phase_step,
+                                "phase_steps_total": int(phase_steps_total or 3),
+                                "reports_total": reports_total,
+                                "reports_scanned": report_count,
+                                "hosts_processed": hosts_processed,
+                                "hosts_total": hosts_processed,
+                                "current_host": hostname,
+                                "inserted_changes": inserted_changes,
+                                "message": f"Report {report_count}/{reports_total}: {hostname}…",
+                            })
+                            last_progress_emit_mono = now_mono
+                        except Exception:
+                            pass
 
-            if not inventory_greenfield and report_count % 1000 == 0:
-                conn.commit()
-            elif inventory_greenfield:
-                conn.commit()
+                if not inventory_greenfield and report_count % 1000 == 0:
+                    conn.commit()
+                elif inventory_greenfield:
+                    conn.commit()
 
+    finally:
+        read_conn.close()
     for host_key, snapshot in last_snapshot_by_host_key.items():
         updated_at_utc = last_seen_at_by_host_key.get(host_key, utc_now_iso())
         hostname_value = str(last_hostname_by_host_key.get(host_key, host_key) or host_key)
@@ -10241,115 +10292,73 @@ def backfill_host_config_changes(
             pass
     conn.commit()
 
-    for batch in _iter_changelog_report_batches(conn, reports_sql, reports_params):
-        for row in batch:
-            report_id = int(row[0] or 0)
-            detected_at_utc = str(row[1] or "").strip()
-            hostname = str(row[2] or "").strip()
-            host_uid = str(row[3] or "").strip()
-            if not hostname:
-                continue
-            host_key = alert_host_key(hostname, host_uid)
-            host_changed = host_key != last_progress_host_key
-            if host_changed:
-                hosts_processed += 1
-                last_progress_host_key = host_key
-                if inventory_greenfield:
-                    backfill_pulse_state["hosts_total"] = hosts_processed
+    read_conn = _changelog_read_connect()
+    try:
+        for batch in _iter_changelog_report_batches(
+            read_conn,
+            reports_sql,
+            reports_params,
+            batch_size=_CHANGELOG_INVENTORY_FETCH_BATCH_SIZE if inventory_greenfield else _CHANGELOG_REPORT_FETCH_BATCH_SIZE,
+        ):
+            for row in batch:
+                report_id = int(row[0] or 0)
+                detected_at_utc = str(row[1] or "").strip()
+                hostname = str(row[2] or "").strip()
+                host_uid = str(row[3] or "").strip()
+                if not hostname:
+                    continue
+                host_key = alert_host_key(hostname, host_uid)
+                host_changed = host_key != last_progress_host_key
+                if host_changed:
+                    hosts_processed += 1
+                    last_progress_host_key = host_key
+                    if inventory_greenfield:
+                        backfill_pulse_state["hosts_total"] = hosts_processed
 
-            report_count += 1
-            backfill_pulse_state["reports_active"] = report_count
-            backfill_pulse_state["reports_completed"] = report_count
-            backfill_pulse_state["hosts_processed"] = hosts_processed
-            backfill_pulse_state["current_host"] = hostname
-            backfill_pulse_state["pulse_message"] = (
-                f"Report {report_count}/{reports_total}: {hostname}…"
-            )
-            conn.commit()
-            if report_count == 1 or report_count % (25 if inventory_greenfield else 100) == 0:
-                _pulse_backfill_progress(
-                    progress_callback,
-                    backfill_pulse_state,
-                    inserted_changes=inserted_changes,
+                report_count += 1
+                backfill_pulse_state["reports_active"] = report_count
+                backfill_pulse_state["reports_completed"] = report_count
+                backfill_pulse_state["hosts_processed"] = hosts_processed
+                backfill_pulse_state["current_host"] = hostname
+                backfill_pulse_state["pulse_message"] = (
+                    f"Report {report_count}/{reports_total}: {hostname}…"
                 )
-
-            payload = parse_payload_json(str(row[4] or "{}"))
-
-            if _should_check_changelog_job_cancel(report_count, reports_total) or host_changed:
-                _ensure_changelog_job_running(conn, job_id)
-
-            current_snapshot = {
-                key: _normalize_config_value(key, value)
-                for key, value in _extract_host_config_snapshot(payload).items()
-            }
-            current_license_counts = _extract_translated_sap_license_type_counts(
-                payload, license_label_map=license_label_map
-            )
-            previous_snapshot = last_snapshot_by_host_key.get(host_key)
-            previous_license_counts = last_license_counts_by_host_key.get(host_key)
-            skip_dup = bool(inventory_greenfield)
-
-            if previous_snapshot is not None:
-                for field_key in HOST_CONFIG_TRACKED_FIELDS:
-                    old_value = previous_snapshot.get(field_key, "-")
-                    new_value = current_snapshot.get(field_key, "-")
-                    if not _is_significant_config_change(field_key, old_value, new_value):
-                        continue
-
-                    if not skip_dup:
-                        existing = conn.execute(
-                            """
-                            SELECT 1
-                            FROM host_config_changes
-                            WHERE host_uid = ?
-                              AND field_key = ?
-                              AND report_id = ?
-                              AND old_value = ?
-                              AND new_value = ?
-                            LIMIT 1
-                            """,
-                            (host_key, field_key, report_id, old_value, new_value),
-                        ).fetchone()
-                        if existing:
-                            continue
-
-                    conn.execute(
-                        """
-                        INSERT INTO host_config_changes (
-                            detected_at_utc,
-                            host_uid,
-                            hostname,
-                            field_key,
-                            old_value,
-                            new_value,
-                            report_id,
-                            source
+                conn.commit()
+                if report_count == 1 or report_count % (10 if inventory_greenfield else 100) == 0:
+                    _pulse_backfill_progress(
+                        progress_callback,
+                        backfill_pulse_state,
+                        inserted_changes=inserted_changes,
+                    )
+                    if inventory_greenfield and report_count in {1, 10, 100, 500}:
+                        print(
+                            f"[inventur] job={job_id} config {report_count}/{reports_total} "
+                            f"changes={inserted_changes} host={hostname}",
+                            flush=True,
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 'backfill')
-                        """,
-                        (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
-                    )
-                    inserted_changes += 1
-                    _commit_backfill_progress_batch(
-                        conn,
-                        inserted_changes,
-                        progress_callback=progress_callback,
-                        progress_state=backfill_pulse_state,
-                        inventory_greenfield=inventory_greenfield,
-                    )
 
-                if previous_license_counts is not None:
-                    for match_text_upper in sorted(current_license_counts.keys()):
-                        old_count = int(previous_license_counts.get(match_text_upper, 0) or 0)
-                        new_count = int(current_license_counts.get(match_text_upper, 0) or 0)
-                        if old_count == new_count:
-                            continue
-                        if old_count == 0 and new_count == 0:
-                            continue
+                payload = parse_payload_json(str(row[4] or "{}"))
 
-                        field_key = f"{SAP_LICENSE_TYPE_FIELD_PREFIX}{match_text_upper}"
-                        old_value = str(old_count)
-                        new_value = str(new_count)
+                if _should_check_changelog_job_cancel(report_count, reports_total) or host_changed:
+                    _ensure_changelog_job_running(conn, job_id)
+
+                current_snapshot = {
+                    key: _normalize_config_value(key, value)
+                    for key, value in _extract_host_config_snapshot(payload).items()
+                }
+                current_license_counts = _extract_translated_sap_license_type_counts(
+                    payload, license_label_map=license_label_map
+                )
+                previous_snapshot = last_snapshot_by_host_key.get(host_key)
+                previous_license_counts = last_license_counts_by_host_key.get(host_key)
+                skip_dup = bool(inventory_greenfield)
+
+                if previous_snapshot is not None:
+                    for field_key in HOST_CONFIG_TRACKED_FIELDS:
+                        old_value = previous_snapshot.get(field_key, "-")
+                        new_value = current_snapshot.get(field_key, "-")
+                        if not _is_significant_config_change(field_key, old_value, new_value):
+                            continue
 
                         if not skip_dup:
                             existing = conn.execute(
@@ -10380,7 +10389,7 @@ def backfill_host_config_changes(
                                 report_id,
                                 source
                             )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, 'backfill-license')
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 'backfill')
                             """,
                             (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
                         )
@@ -10392,136 +10401,193 @@ def backfill_host_config_changes(
                             progress_state=backfill_pulse_state,
                             inventory_greenfield=inventory_greenfield,
                         )
-            elif include_initial_snapshot_events:
-                for field_key in HOST_CONFIG_TRACKED_FIELDS:
-                    old_value = "-"
-                    new_value = current_snapshot.get(field_key, "-")
-                    if not _is_significant_config_change(field_key, old_value, new_value):
-                        continue
 
-                    if not skip_dup:
-                        existing = conn.execute(
-                            """
-                            SELECT 1
-                            FROM host_config_changes
-                            WHERE host_uid = ?
-                              AND field_key = ?
-                              AND report_id = ?
-                              AND old_value = ?
-                              AND new_value = ?
-                            LIMIT 1
-                            """,
-                            (host_key, field_key, report_id, old_value, new_value),
-                        ).fetchone()
-                        if existing:
+                    if previous_license_counts is not None:
+                        for match_text_upper in sorted(current_license_counts.keys()):
+                            old_count = int(previous_license_counts.get(match_text_upper, 0) or 0)
+                            new_count = int(current_license_counts.get(match_text_upper, 0) or 0)
+                            if old_count == new_count:
+                                continue
+                            if old_count == 0 and new_count == 0:
+                                continue
+
+                            field_key = f"{SAP_LICENSE_TYPE_FIELD_PREFIX}{match_text_upper}"
+                            old_value = str(old_count)
+                            new_value = str(new_count)
+
+                            if not skip_dup:
+                                existing = conn.execute(
+                                    """
+                                    SELECT 1
+                                    FROM host_config_changes
+                                    WHERE host_uid = ?
+                                      AND field_key = ?
+                                      AND report_id = ?
+                                      AND old_value = ?
+                                      AND new_value = ?
+                                    LIMIT 1
+                                    """,
+                                    (host_key, field_key, report_id, old_value, new_value),
+                                ).fetchone()
+                                if existing:
+                                    continue
+
+                            conn.execute(
+                                """
+                                INSERT INTO host_config_changes (
+                                    detected_at_utc,
+                                    host_uid,
+                                    hostname,
+                                    field_key,
+                                    old_value,
+                                    new_value,
+                                    report_id,
+                                    source
+                                )
+                                VALUES (?, ?, ?, ?, ?, ?, ?, 'backfill-license')
+                                """,
+                                (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
+                            )
+                            inserted_changes += 1
+                            _commit_backfill_progress_batch(
+                                conn,
+                                inserted_changes,
+                                progress_callback=progress_callback,
+                                progress_state=backfill_pulse_state,
+                                inventory_greenfield=inventory_greenfield,
+                            )
+                elif include_initial_snapshot_events:
+                    for field_key in HOST_CONFIG_TRACKED_FIELDS:
+                        old_value = "-"
+                        new_value = current_snapshot.get(field_key, "-")
+                        if not _is_significant_config_change(field_key, old_value, new_value):
                             continue
 
-                    conn.execute(
-                        """
-                        INSERT INTO host_config_changes (
-                            detected_at_utc,
-                            host_uid,
-                            hostname,
-                            field_key,
-                            old_value,
-                            new_value,
-                            report_id,
-                            source
-                        )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 'backfill-init')
-                        """,
-                        (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
-                    )
-                    inserted_changes += 1
-                    _commit_backfill_progress_batch(
-                        conn,
-                        inserted_changes,
-                        progress_callback=progress_callback,
-                        progress_state=backfill_pulse_state,
-                        inventory_greenfield=inventory_greenfield,
-                    )
+                        if not skip_dup:
+                            existing = conn.execute(
+                                """
+                                SELECT 1
+                                FROM host_config_changes
+                                WHERE host_uid = ?
+                                  AND field_key = ?
+                                  AND report_id = ?
+                                  AND old_value = ?
+                                  AND new_value = ?
+                                LIMIT 1
+                                """,
+                                (host_key, field_key, report_id, old_value, new_value),
+                            ).fetchone()
+                            if existing:
+                                continue
 
-                for match_text_upper in sorted(current_license_counts.keys()):
-                    field_key = f"{SAP_LICENSE_TYPE_FIELD_PREFIX}{match_text_upper}"
-                    old_value = "-"
-                    init_count = int(current_license_counts.get(match_text_upper, 0) or 0)
-                    if init_count == 0:
-                        continue
-                    new_value = str(init_count)
-
-                    if not skip_dup:
-                        existing = conn.execute(
+                        conn.execute(
                             """
-                            SELECT 1
-                            FROM host_config_changes
-                            WHERE host_uid = ?
-                              AND field_key = ?
-                              AND report_id = ?
-                              AND old_value = ?
-                              AND new_value = ?
-                            LIMIT 1
+                            INSERT INTO host_config_changes (
+                                detected_at_utc,
+                                host_uid,
+                                hostname,
+                                field_key,
+                                old_value,
+                                new_value,
+                                report_id,
+                                source
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 'backfill-init')
                             """,
-                            (host_key, field_key, report_id, old_value, new_value),
-                        ).fetchone()
-                        if existing:
-                            continue
-
-                    conn.execute(
-                        """
-                        INSERT INTO host_config_changes (
-                            detected_at_utc,
-                            host_uid,
-                            hostname,
-                            field_key,
-                            old_value,
-                            new_value,
-                            report_id,
-                            source
+                            (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, 'backfill-init-license')
-                        """,
-                        (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
-                    )
-                    inserted_changes += 1
-                    _commit_backfill_progress_batch(
-                        conn,
-                        inserted_changes,
-                        progress_callback=progress_callback,
-                        progress_state=backfill_pulse_state,
-                        inventory_greenfield=inventory_greenfield,
-                    )
+                        inserted_changes += 1
+                        _commit_backfill_progress_batch(
+                            conn,
+                            inserted_changes,
+                            progress_callback=progress_callback,
+                            progress_state=backfill_pulse_state,
+                            inventory_greenfield=inventory_greenfield,
+                        )
 
-            last_snapshot_by_host_key[host_key] = current_snapshot
-            last_license_counts_by_host_key[host_key] = current_license_counts
-            last_hostname_by_host_key[host_key] = hostname
-            last_seen_at_by_host_key[host_key] = detected_at_utc or utc_now_iso()
-            backfill_pulse_state["reports_completed"] = report_count
-            conn.commit()
+                    for match_text_upper in sorted(current_license_counts.keys()):
+                        field_key = f"{SAP_LICENSE_TYPE_FIELD_PREFIX}{match_text_upper}"
+                        old_value = "-"
+                        init_count = int(current_license_counts.get(match_text_upper, 0) or 0)
+                        if init_count == 0:
+                            continue
+                        new_value = str(init_count)
 
-            if callable(progress_callback):
-                now_mono = time.monotonic()
-                if (
-                    host_changed
-                    or _should_emit_changelog_progress(report_count, reports_total, host_changed=host_changed)
-                    or (now_mono - last_progress_emit_mono) >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
-                ):
-                    try:
-                        progress_callback({
-                            "phase": "config_backfill",
-                            "phase_step": 2,
-                            "phase_steps_total": int(phase_steps_total or 3),
-                            "reports_total": reports_total,
-                            "reports_scanned": report_count,
-                            "hosts_processed": hosts_processed,
-                            "hosts_total": backfill_pulse_state.get("hosts_total", hosts_total),
-                            "current_host": hostname,
-                            "inserted_changes": inserted_changes,
-                            "message": backfill_pulse_state["pulse_message"],
-                        })
-                        last_progress_emit_mono = now_mono
-                    except Exception:
-                        pass
+                        if not skip_dup:
+                            existing = conn.execute(
+                                """
+                                SELECT 1
+                                FROM host_config_changes
+                                WHERE host_uid = ?
+                                  AND field_key = ?
+                                  AND report_id = ?
+                                  AND old_value = ?
+                                  AND new_value = ?
+                                LIMIT 1
+                                """,
+                                (host_key, field_key, report_id, old_value, new_value),
+                            ).fetchone()
+                            if existing:
+                                continue
 
+                        conn.execute(
+                            """
+                            INSERT INTO host_config_changes (
+                                detected_at_utc,
+                                host_uid,
+                                hostname,
+                                field_key,
+                                old_value,
+                                new_value,
+                                report_id,
+                                source
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 'backfill-init-license')
+                            """,
+                            (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
+                        )
+                        inserted_changes += 1
+                        _commit_backfill_progress_batch(
+                            conn,
+                            inserted_changes,
+                            progress_callback=progress_callback,
+                            progress_state=backfill_pulse_state,
+                            inventory_greenfield=inventory_greenfield,
+                        )
+
+                last_snapshot_by_host_key[host_key] = current_snapshot
+                last_license_counts_by_host_key[host_key] = current_license_counts
+                last_hostname_by_host_key[host_key] = hostname
+                last_seen_at_by_host_key[host_key] = detected_at_utc or utc_now_iso()
+                backfill_pulse_state["reports_completed"] = report_count
+                conn.commit()
+
+                if callable(progress_callback):
+                    now_mono = time.monotonic()
+                    if (
+                        host_changed
+                        or _should_emit_changelog_progress(report_count, reports_total, host_changed=host_changed)
+                        or (now_mono - last_progress_emit_mono) >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
+                    ):
+                        try:
+                            progress_callback({
+                                "phase": "config_backfill",
+                                "phase_step": 2,
+                                "phase_steps_total": int(phase_steps_total or 3),
+                                "reports_total": reports_total,
+                                "reports_scanned": report_count,
+                                "hosts_processed": hosts_processed,
+                                "hosts_total": backfill_pulse_state.get("hosts_total", hosts_total),
+                                "current_host": hostname,
+                                "inserted_changes": inserted_changes,
+                                "message": backfill_pulse_state["pulse_message"],
+                            })
+                            last_progress_emit_mono = now_mono
+                        except Exception:
+                            pass
+
+    finally:
+        read_conn.close()
     for host_key, snapshot in last_snapshot_by_host_key.items():
         updated_at_utc = last_seen_at_by_host_key.get(host_key, utc_now_iso())
         conn.execute(
