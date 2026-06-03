@@ -56,8 +56,9 @@ $EventErrorsSinceMinutes = if ($env:JOURNAL_ERRORS_SINCE_MINUTES) { [int]$env:JO
 $EventErrorsLimit = if ($env:JOURNAL_ERRORS_LIMIT) { [int]$env:JOURNAL_ERRORS_LIMIT } else { 20 }
 $TopProcessesLimit = if ($env:TOP_PROCESSES_LIMIT) { [int]$env:TOP_PROCESSES_LIMIT } else { 8 }
 $ContainersLimit = if ($env:CONTAINERS_LIMIT) { [int]$env:CONTAINERS_LIMIT } else { 30 }
-$AngSkripteLogsDir = if ($env:ANG_SKRIPTE_LOG_DIR) { $env:ANG_SKRIPTE_LOG_DIR } else { 'C:\ang\skripte' }
-$AngSkripteLogTailLines = if ($env:ANG_SKRIPTE_LOG_LINES) { [int]$env:ANG_SKRIPTE_LOG_LINES } else { 20 }
+$AngLogsRoot = if ($env:ANG_LOG_ROOT) { $env:ANG_LOG_ROOT } elseif ($env:ANG_SKRIPTE_LOG_DIR) { $env:ANG_SKRIPTE_LOG_DIR } else { 'C:\ang' }
+$AngLogTailLines = if ($env:ANG_LOG_TAIL_LINES) { [int]$env:ANG_LOG_TAIL_LINES } elseif ($env:ANG_SKRIPTE_LOG_LINES) { [int]$env:ANG_SKRIPTE_LOG_LINES } else { 20 }
+$AngLogMaxFiles = if ($env:ANG_LOG_MAX_FILES) { [int]$env:ANG_LOG_MAX_FILES } else { 80 }
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -364,30 +365,52 @@ function Read-LogFileTailLines {
     return ,@($allLines[$startIndex..($allLines.Count - 1)])
 }
 
-function Get-AngSkripteLogsBlock {
-    $dirPathJson = ConvertTo-JsonString $AngSkripteLogsDir
-    if (-not (Test-Path -LiteralPath $AngSkripteLogsDir)) {
-        return '{"available":false,"path":"' + $dirPathJson + '","file_count":0,"files":[],"error":"directory not found"}'
+function Get-AngLogRelativePath {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootPath,
+        [Parameter(Mandatory = $true)][string]$FullPath
+    )
+
+    $root = [System.IO.Path]::GetFullPath($RootPath).TrimEnd('\')
+    $full = [System.IO.Path]::GetFullPath($FullPath)
+    if ($full.Length -le $root.Length) {
+        return [System.IO.Path]::GetFileName($FullPath)
+    }
+    if ($full.StartsWith($root + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $full.Substring($root.Length + 1)
+    }
+    return [System.IO.Path]::GetFileName($FullPath)
+}
+
+function Get-AngLogsBlock {
+    $rootPathJson = ConvertTo-JsonString $AngLogsRoot
+    if (-not (Test-Path -LiteralPath $AngLogsRoot)) {
+        return '{"available":false,"path":"' + $rootPathJson + '","file_count":0,"files":[],"error":"directory not found"}'
     }
 
     try {
         $logFiles = @(
-            Get-ChildItem -LiteralPath $AngSkripteLogsDir -Filter '*.log' -File -ErrorAction Stop |
-            Sort-Object Name
+            Get-ChildItem -LiteralPath $AngLogsRoot -Filter '*.log' -File -Recurse -ErrorAction SilentlyContinue |
+            Sort-Object FullName
         )
     } catch {
         $errJson = ConvertTo-JsonString $_.Exception.Message
-        return '{"available":false,"path":"' + $dirPathJson + '","file_count":0,"files":[],"error":"' + $errJson + '"}'
+        return '{"available":false,"path":"' + $rootPathJson + '","file_count":0,"files":[],"error":"' + $errJson + '"}'
+    }
+
+    if ($AngLogMaxFiles -gt 0 -and $logFiles.Count -gt $AngLogMaxFiles) {
+        $logFiles = $logFiles[0..($AngLogMaxFiles - 1)]
     }
 
     $fileBlocks = @()
     foreach ($logFile in $logFiles) {
         $nameJson = ConvertTo-JsonString $logFile.Name
         $pathJson = ConvertTo-JsonString $logFile.FullName
+        $relativePathJson = ConvertTo-JsonString (Get-AngLogRelativePath -RootPath $AngLogsRoot -FullPath $logFile.FullName)
         $fileErrorJson = ''
         $lines = @()
         try {
-            $lines = @(Read-LogFileTailLines -Path $logFile.FullName -TailLines $AngSkripteLogTailLines)
+            $lines = @(Read-LogFileTailLines -Path $logFile.FullName -TailLines $AngLogTailLines)
         } catch {
             $fileErrorJson = ConvertTo-JsonString $_.Exception.Message
         }
@@ -399,6 +422,7 @@ function Get-AngSkripteLogsBlock {
 
         $fileBlocks += (
             '{"name":"' + $nameJson +
+            '","relative_path":"' + $relativePathJson +
             '","path":"' + $pathJson +
             '","size_bytes":' + $logFile.Length +
             ',"line_count":' + $lines.Count +
@@ -408,7 +432,7 @@ function Get-AngSkripteLogsBlock {
     }
 
     return (
-        '{"available":true,"path":"' + $dirPathJson +
+        '{"available":true,"path":"' + $rootPathJson +
         '","file_count":' + $fileBlocks.Count +
         ',"files":[' + ($fileBlocks -join ',') + '],"error":""}'
     )
@@ -2087,7 +2111,7 @@ $containersStr = [string]$containerData.entries
 $dockerAvailable = if ($containerData.available) { 'true' } else { 'false' }
 $updateLogJson      = Get-UpdateLogBlock
 $agentConfigJson    = Get-AgentConfigBlock
-$angSkripteLogsJson = Get-AngSkripteLogsBlock
+$angLogsJson = Get-AngLogsBlock
 $sapB1Json       = Get-SapB1PayloadBlock
 $sqlServerJson   = Get-SqlServerInfoBlock
 $largeFilesJson  = '{"enabled":false,"status":"unsupported","filesystems":[]}'
@@ -2209,7 +2233,7 @@ $payload = @"
     "top_processes": {
         "entries": [$topProcStr]
     },
-    "ang_skripte_logs": $angSkripteLogsJson,
+    "ang_logs": $angLogsJson,
     "containers": {
         "runtime": "docker",
         "available": $dockerAvailable,

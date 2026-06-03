@@ -8252,32 +8252,33 @@ body[data-theme="dark"] .meta-groups .meta-group:nth-child(4) {
   transform: rotate(90deg);
 }
 
-.ang-skripte-logs-grid {
+.ang-logs-grid {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   margin-top: 8px;
 }
 
-.ang-skripte-log-card h4 {
-  margin: 0 0 8px;
-  font-size: 0.92rem;
+.ang-log-file-card > summary {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 500;
 }
 
-.log-viewer.ang-skripte-log-viewer {
+.log-viewer.ang-log-viewer {
   white-space: normal;
   word-break: normal;
   overflow-wrap: anywhere;
   padding: 10px 14px 12px;
 }
 
-.log-viewer.ang-skripte-log-viewer .log-line {
+.log-viewer.ang-log-viewer .log-line {
   display: block;
   min-height: 1.35em;
   line-height: 1.45;
   padding: 1px 0;
 }
 
-.log-viewer.ang-skripte-log-viewer .log-line--empty {
+.log-viewer.ang-log-viewer .log-line--empty {
   min-height: 0.65em;
 }
 

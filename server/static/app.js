@@ -8714,7 +8714,7 @@ function asLogLineText(value) {
   return String(value);
 }
 
-function parseAngSkripteLogsBlock(raw) {
+function parseAngLogsBlock(raw) {
   if (raw === null || raw === undefined) {
     return null;
   }
@@ -8734,6 +8734,10 @@ function parseAngSkripteLogsBlock(raw) {
     return raw;
   }
   return null;
+}
+
+function getAngLogsBlockFromPayload(payload) {
+  return parseAngLogsBlock(payload?.ang_logs) || parseAngLogsBlock(payload?.ang_skripte_logs);
 }
 
 const ANG_SKRIPTE_LOG_LINE_SPLIT_RE = /(?=\[(?:\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}|\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}))/;
@@ -8803,91 +8807,108 @@ function renderLogfileLinesHtml(rawLines) {
   }).join("");
 }
 
-function renderAngSkripteLogTerminal(rawLines, metaLine = "") {
+function renderAngLogTerminal(rawLines, metaLine = "") {
   const metaHtml = metaLine ? `<p class="count compact">${escapeHtml(metaLine)}</p>` : "";
   return `
     <div class="terminal-viewer-section">
       ${metaHtml}
-      <div class="log-viewer ang-skripte-log-viewer">${renderLogfileLinesHtml(rawLines)}</div>
+      <div class="log-viewer ang-log-viewer">${renderLogfileLinesHtml(rawLines)}</div>
     </div>
   `;
 }
 
-function renderAngSkripteLogs(angSkripteLogsBlock) {
-  const block = parseAngSkripteLogsBlock(angSkripteLogsBlock) || {};
-  const path = asText(block.path, "C:\\ang\\skripte");
+function renderAngLogFileSummary(file) {
+  const name = asText(file?.name, "unbekannt");
+  const relativePath = asText(file?.relative_path);
+  const label = relativePath && relativePath !== name ? relativePath : name;
+  const displayLines = expandAngSkripteLogLines(file?.lines);
+  const lineCount = displayLines.length;
+  const sizeBytes = Number(file?.size_bytes);
+  const sizeLabel = Number.isFinite(sizeBytes) && sizeBytes >= 0
+    ? ` · ${formatBytes(sizeBytes)}`
+    : "";
+  const lineLabel = lineCount > 0
+    ? `${lineCount} Zeile${lineCount !== 1 ? "n" : ""}`
+    : "leer";
+  const fileError = String(file?.error || "").trim();
+  const errorLabel = fileError ? " · Fehler" : "";
+  return `${escapeHtml(label)} · ${escapeHtml(lineLabel)}${escapeHtml(sizeLabel)}${escapeHtml(errorLabel)}`;
+}
+
+function renderAngLogFileBody(file) {
+  const filePath = asText(file?.path);
+  const fileError = String(file?.error || "").trim();
+  const sizeBytes = Number(file?.size_bytes);
+  const displayLines = expandAngSkripteLogLines(file?.lines);
+  const lineCount = displayLines.length;
+  const sizeLabel = Number.isFinite(sizeBytes) && sizeBytes >= 0
+    ? ` | Größe: ${formatBytes(sizeBytes)}`
+    : "";
+  if (fileError) {
+    return `
+      <p class="muted">${escapeHtml(fileError)}</p>
+      <p class="count compact">Pfad: ${escapeHtml(filePath || "-")}${escapeHtml(sizeLabel)}</p>
+    `;
+  }
+  const logMeta = lineCount > 0
+    ? `Pfad: ${filePath || "-"} | ${lineCount} Zeile${lineCount !== 1 ? "n" : ""} angezeigt${sizeLabel}`
+    : `Pfad: ${filePath || "-"} | keine lesbaren Zeilen${sizeLabel}`;
+  if (lineCount > 0) {
+    return renderAngLogTerminal(file?.lines, logMeta);
+  }
+  return renderTerminalViewer(
+    [
+      "STATUS=EMPTY",
+      "MESSAGE=Datei erkannt, aber keine lesbaren Zeilen im Payload.",
+    ].join("\n"),
+    logMeta
+  );
+}
+
+function renderAngLogs(angLogsBlock) {
+  const block = angLogsBlock || {};
+  const path = asText(block.path, "C:\\ang");
   const files = Array.isArray(block.files) ? block.files : [];
   const dirError = asText(block.error);
 
   if (block.available !== true && files.length === 0) {
-    const hint = dirError || `Keine Logfile-Infos aus ${path}.`;
-    return `<p class="muted">${escapeHtml(hint)}</p><p class="count compact">Pfad: ${escapeHtml(path)}</p>`;
+    const hint = dirError || `Keine Logfile-Infos unter ${path}.`;
+    return `<p class="muted">${escapeHtml(hint)}</p><p class="count compact">Wurzel: ${escapeHtml(path)} (rekursiv *.log)</p>`;
   }
 
   if (!files.length) {
-    return `<p class="muted">Keine Logfile-Infos aus ${escapeHtml(path)} (keine .log-Dateien gefunden).</p>`;
+    return `<p class="muted">Keine .log-Dateien unter ${escapeHtml(path)} gefunden.</p>`;
   }
 
-  const fileBlocks = files.map((file) => {
-    const name = asText(file?.name, "unbekannt");
-    const filePath = asText(file?.path);
-    const fileError = String(file?.error || "").trim();
-    const sizeBytes = Number(file?.size_bytes);
-    const displayLines = expandAngSkripteLogLines(file?.lines);
-    const lineCount = displayLines.length;
-    const sizeLabel = Number.isFinite(sizeBytes) && sizeBytes >= 0
-      ? ` | Größe: ${formatBytes(sizeBytes)}`
-      : "";
-    if (fileError) {
-      return `
-        <section class="detail-card ang-skripte-log-card">
-          <h4>${escapeHtml(name)}</h4>
-          <p class="muted">${escapeHtml(fileError)}</p>
-          <p class="count compact">Pfad: ${escapeHtml(filePath || "-")}${escapeHtml(sizeLabel)}</p>
-        </section>
-      `;
-    }
-    const logMeta = lineCount > 0
-      ? `Pfad: ${filePath || "-"} | ${lineCount} Zeile${lineCount !== 1 ? "n" : ""} angezeigt${sizeLabel}`
-      : `Pfad: ${filePath || "-"} | keine lesbaren Zeilen${sizeLabel}`;
-    const logContent = lineCount > 0
-      ? renderAngSkripteLogTerminal(file?.lines, logMeta)
-      : renderTerminalViewer(
-        [
-          "STATUS=EMPTY",
-          "MESSAGE=Datei erkannt, aber keine lesbaren Zeilen im Payload.",
-        ].join("\n"),
-        logMeta
-      );
-    return `
-      <section class="detail-card ang-skripte-log-card">
-        <h4>${escapeHtml(name)}</h4>
-        ${logContent}
-      </section>
-    `;
-  }).join("");
+  const fileBlocks = files.map((file) => `
+    <details class="detail-card detail-card-collapsible ang-log-file-card">
+      <summary>${renderAngLogFileSummary(file)}</summary>
+      ${renderAngLogFileBody(file)}
+    </details>
+  `).join("");
 
   return `
-    <p class="count compact">Verzeichnis: ${escapeHtml(path)} | ${files.length} Log-Datei${files.length !== 1 ? "en" : ""}</p>
-    <div class="ang-skripte-logs-grid">${fileBlocks}</div>
+    <p class="count compact">Wurzel: ${escapeHtml(path)} · rekursiv *.log · ${files.length} Datei${files.length !== 1 ? "en" : ""}</p>
+    <div class="ang-logs-grid">${fileBlocks}</div>
   `;
 }
 
 function renderLogfilesSection(payload) {
-  const defaultPath = "C:\\ang\\skripte";
-  const skripteLogs = parseAngSkripteLogsBlock(payload?.ang_skripte_logs);
-  if (!skripteLogs) {
+  const defaultPath = "C:\\ang";
+  const angLogs = getAngLogsBlockFromPayload(payload);
+  if (!angLogs) {
     return `
       <section class="detail-card">
         <h4>📜 Logfiles</h4>
-        <p class="muted">Keine Logfile-Infos aus ${escapeHtml(defaultPath)}.</p>
+        <p class="muted">Keine Logfile-Infos unter ${escapeHtml(defaultPath)}.</p>
+        <p class="count compact">Windows-Agent meldet rekursiv alle *.log unter ${escapeHtml(defaultPath)}.</p>
       </section>
     `;
   }
   return `
     <section class="detail-card">
       <h4>📜 Logfiles</h4>
-      ${renderAngSkripteLogs(skripteLogs)}
+      ${renderAngLogs(angLogs)}
     </section>
   `;
 }
