@@ -6320,10 +6320,12 @@ class ChangelogJobProgressWriter:
     """Writes changelog job progress to SQLite; heartbeat keeps UI fresh during slow per-report work."""
 
     def __init__(self, conn: sqlite3.Connection, job_id: int) -> None:
-        self._conn = conn
+        # Progress uses its own short-lived DB connections so the worker transaction
+        # (often thousands of reports without commit) cannot block UI updates.
         self._job_id = int(job_id)
         self._state: dict = {}
-        self._lock = threading.Lock()
+        self._state_lock = threading.Lock()
+        self._flush_lock = threading.Lock()
         self._last_flush_mono = 0.0
         self._last_phase = ""
         self._last_hosts = -1
@@ -6342,68 +6344,79 @@ class ChangelogJobProgressWriter:
         self._flush(force=True)
 
     def report(self, progress: dict) -> None:
-        with self._lock:
+        with self._state_lock:
             self._state = dict(progress)
         self._flush(force=False)
 
     def _heartbeat_loop(self) -> None:
         while not self._stop.wait(CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC):
-            self._flush(force=True)
+            try:
+                self._flush(force=True)
+            except ChangelogJobCancelled:
+                self._stop.set()
+                break
+            except Exception as exc:
+                print(f"[changelog-progress] heartbeat flush failed for job {self._job_id}: {exc}")
 
     def _flush(self, *, force: bool) -> None:
-        with self._lock:
+        with self._state_lock:
             progress = dict(self._state)
         if not progress:
             return
 
-        _ensure_changelog_job_running(self._conn, self._job_id)
         now_mono = time.monotonic()
         time_flush_due = (
             self._last_flush_mono <= 0.0
             or (now_mono - self._last_flush_mono) >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
         )
-        if not _should_flush_changelog_progress(
-            progress,
-            last_phase=self._last_phase,
-            last_hosts=self._last_hosts,
-            last_reports=self._last_reports,
-        ) and not force and not time_flush_due:
-            return
+        with self._flush_lock:
+            if not _should_flush_changelog_progress(
+                progress,
+                last_phase=self._last_phase,
+                last_hosts=self._last_hosts,
+                last_reports=self._last_reports,
+            ) and not force and not time_flush_due:
+                return
 
-        phase = str(progress.get("phase") or "")
-        hosts_processed = int(progress.get("hosts_processed", 0) or 0)
-        hosts_total = int(progress.get("hosts_total", 0) or 0)
-        reports_scanned = int(progress.get("reports_scanned", 0) or 0)
-        reports_total = int(progress.get("reports_total", 0) or 0)
-        payload = {
-            "progress": {
-                "phase": phase,
-                "phase_step": int(progress.get("phase_step", 0) or 0),
-                "phase_steps_total": int(progress.get("phase_steps_total", 3) or 3),
-                "hosts_processed": hosts_processed,
-                "hosts_total": hosts_total,
-                "reports_scanned": reports_scanned,
-                "reports_total": reports_total,
-                "current_host": str(progress.get("current_host") or ""),
-                "inserted_changes": int(progress.get("inserted_changes", 0) or 0),
-                "inserted_events": int(progress.get("inserted_events", 0) or 0),
-                "message": str(progress.get("message") or ""),
-                "updated_at_utc": utc_now_iso(),
+            phase = str(progress.get("phase") or "")
+            hosts_processed = int(progress.get("hosts_processed", 0) or 0)
+            hosts_total = int(progress.get("hosts_total", 0) or 0)
+            reports_scanned = int(progress.get("reports_scanned", 0) or 0)
+            reports_total = int(progress.get("reports_total", 0) or 0)
+            payload = {
+                "progress": {
+                    "phase": phase,
+                    "phase_step": int(progress.get("phase_step", 0) or 0),
+                    "phase_steps_total": int(progress.get("phase_steps_total", 3) or 3),
+                    "hosts_processed": hosts_processed,
+                    "hosts_total": hosts_total,
+                    "reports_scanned": reports_scanned,
+                    "reports_total": reports_total,
+                    "current_host": str(progress.get("current_host") or ""),
+                    "inserted_changes": int(progress.get("inserted_changes", 0) or 0),
+                    "inserted_events": int(progress.get("inserted_events", 0) or 0),
+                    "message": str(progress.get("message") or ""),
+                    "updated_at_utc": utc_now_iso(),
+                }
             }
-        }
-        self._conn.execute(
-            """
-            UPDATE changelog_rebuild_jobs
-            SET result_json = ?
-            WHERE id = ? AND status = 'running'
-            """,
-            (json.dumps(payload, separators=(",", ":")), self._job_id),
-        )
-        self._conn.commit()
-        self._last_phase = phase
-        self._last_hosts = hosts_processed
-        self._last_reports = reports_scanned
-        self._last_flush_mono = now_mono
+            with sqlite_connect() as progress_conn:
+                progress_conn.execute(
+                    f"PRAGMA busy_timeout = {_maintenance_sqlite_busy_timeout_ms()}"
+                )
+                _ensure_changelog_job_running(progress_conn, self._job_id)
+                progress_conn.execute(
+                    """
+                    UPDATE changelog_rebuild_jobs
+                    SET result_json = ?
+                    WHERE id = ? AND status = 'running'
+                    """,
+                    (json.dumps(payload, separators=(",", ":")), self._job_id),
+                )
+                progress_conn.commit()
+            self._last_phase = phase
+            self._last_hosts = hosts_processed
+            self._last_reports = reports_scanned
+            self._last_flush_mono = now_mono
 
 
 class ChangelogJobCancelled(RuntimeError):
@@ -10100,6 +10113,7 @@ def backfill_host_config_changes(
                         "message": "Host-Config: OS, CPU, RAM, SAP/HANA, SQL, Lizenzen…",
                     })
                     last_progress_emit_mono = now_mono
+                    conn.commit()
                 except Exception:
                     pass
 
@@ -10305,10 +10319,11 @@ def backfill_host_config_changes(
                         "message": "Host-Config: OS, CPU, RAM, SAP/HANA, SQL, Lizenzen…",
                     })
                     last_progress_emit_mono = now_mono
+                    conn.commit()
                 except Exception:
                     pass
 
-        if report_count % 1000 == 0:
+        if report_count % 250 == 0:
             conn.commit()
 
     for host_key, snapshot in last_snapshot_by_host_key.items():
