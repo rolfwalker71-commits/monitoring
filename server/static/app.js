@@ -14680,12 +14680,22 @@ async function loadChangelogRebuildJobsStatus() {
       return;
     }
     if (latestStatus === "failed") {
+      syncChangelogMaintenancePanelOpen({ forceOpen: true });
       const errorMessage = asText(latest.error_message, "Unbekannter Fehler");
-      const cancelledHint = /abgebrochen/i.test(errorMessage) ? " (abgebrochen)" : "";
-      setChangelogRebuildJobStatus(`${jobModeLabel} #${latestId} fehlgeschlagen${cancelledHint}: ${errorMessage}`, true);
+      const cancelledHint = /abgebrochen|unterbrochen|ueberholt|überholt/i.test(errorMessage) ? " (abgebrochen)" : "";
+      const restartHint = /neu gestartet|unterbrochen/i.test(errorMessage)
+        ? " — vermutlich Deploy/Restart während des Laufs; Inventur neu starten."
+        : "";
+      setChangelogMaintenanceSummaryHint(`${jobModeLabel} #${latestId} fehlgeschlagen`, true);
+      setChangelogRebuildJobStatus(
+        `${jobModeLabel} #${latestId} fehlgeschlagen${cancelledHint}: ${errorMessage}${restartHint}`,
+        true
+      );
       setChangelogRebuildProgress({
         visible: true,
-        label: "Rebuild fehlgeschlagen.",
+        label: `${jobModeLabel} #${latestId} fehlgeschlagen`,
+        detail: errorMessage,
+        percent: 0,
         indeterminate: false,
         isError: true,
       });

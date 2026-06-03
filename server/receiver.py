@@ -7120,25 +7120,36 @@ def _mark_stale_running_changelog_rebuild_jobs_failed(
         if isinstance(progress, dict):
             updated_at_utc = _normalize_utc_timestamp(str(progress.get("updated_at_utc") or ""))
 
-        # If a newer terminal job exists, this running job is stale/superseded.
+        # Only a newer *completed* job supersedes an older running one.
+        # A newer failed job (e.g. after service restart) must not kill a healthy running inventur.
         if latest_terminal_job_id > 0 and job_id < latest_terminal_job_id:
-            conn.execute(
+            terminal_row = conn.execute(
                 """
-                UPDATE changelog_rebuild_jobs
-                SET status = 'failed',
-                    finished_at_utc = ?,
-                    error_message = ?
-                WHERE id = ? AND status = 'running'
+                SELECT status, started_at_utc
+                FROM changelog_rebuild_jobs
+                WHERE id = ?
                 """,
-                (
-                    utc_now_iso(),
-                    f"Automatisch als fehlgeschlagen markiert (durch neueren Job #{latest_terminal_job_id} ueberholt).",
-                    job_id,
-                ),
-            )
-            if conn.execute("SELECT changes()").fetchone()[0] > 0:
-                updated += 1
-            continue
+                (latest_terminal_job_id,),
+            ).fetchone()
+            terminal_status = str(terminal_row[0] or "").strip().lower() if terminal_row else ""
+            if terminal_status == "completed":
+                conn.execute(
+                    """
+                    UPDATE changelog_rebuild_jobs
+                    SET status = 'failed',
+                        finished_at_utc = ?,
+                        error_message = ?
+                    WHERE id = ? AND status = 'running'
+                    """,
+                    (
+                        utc_now_iso(),
+                        f"Automatisch als fehlgeschlagen markiert (durch abgeschlossenen Job #{latest_terminal_job_id} ersetzt).",
+                        job_id,
+                    ),
+                )
+                if conn.execute("SELECT changes()").fetchone()[0] > 0:
+                    updated += 1
+                continue
 
         reference_utc = updated_at_utc or started_at_utc
         if not reference_utc:

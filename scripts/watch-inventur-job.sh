@@ -28,6 +28,7 @@ show_status() {
   if [ -n "$JOB_ID" ]; then
     sqlite3 -header -column "$DB" <<SQL
 SELECT id, status,
+       substr(error_message, 1, 80) AS error,
        json_extract(result_json,'$.progress.phase') AS phase,
        json_extract(result_json,'$.progress.reports_scanned') AS reports,
        json_extract(result_json,'$.progress.reports_total') AS total,
@@ -40,15 +41,15 @@ SQL
   else
     sqlite3 -header -column "$DB" <<'SQL'
 SELECT id, status,
+       substr(error_message, 1, 80) AS error,
        json_extract(result_json,'$.progress.phase') AS phase,
        json_extract(result_json,'$.progress.reports_scanned') AS reports,
        json_extract(result_json,'$.progress.reports_total') AS total,
        json_extract(result_json,'$.progress.inserted_changes') AS cfg,
-       json_extract(result_json,'$.progress.current_host') AS host,
        json_extract(result_json,'$.progress.updated_at_utc') AS updated
 FROM changelog_rebuild_jobs
 ORDER BY id DESC
-LIMIT 3;
+LIMIT 5;
 SQL
   fi
   echo "BUILD_VERSION: $(tr -d ' \t\r\n' < "$SERVER_DIR/BUILD_VERSION" 2>/dev/null || echo '?')"
