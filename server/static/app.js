@@ -8707,8 +8707,61 @@ function renderAgentConfig(agentConfigBlock) {
   `;
 }
 
+function asLogLineText(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  return String(value);
+}
+
+function parseAngSkripteLogsBlock(raw) {
+  if (raw === null || raw === undefined) {
+    return null;
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(trimmed);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (_error) {
+      return null;
+    }
+  }
+  if (typeof raw === "object") {
+    return raw;
+  }
+  return null;
+}
+
+function normalizeAngSkripteLogLines(rawLines) {
+  if (Array.isArray(rawLines)) {
+    return rawLines.map((line) => asLogLineText(line));
+  }
+  if (typeof rawLines === "string") {
+    const trimmed = rawLines.trim();
+    if (!trimmed) {
+      return [];
+    }
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map((line) => asLogLineText(line));
+        }
+      } catch (_error) {
+        // fall through to plain-text split
+      }
+    }
+    return trimmed.split(/\r?\n/).map((line) => asLogLineText(line));
+  }
+  return [];
+}
+
 function renderAngSkripteLogs(angSkripteLogsBlock) {
-  const block = angSkripteLogsBlock && typeof angSkripteLogsBlock === "object" ? angSkripteLogsBlock : {};
+  const block = parseAngSkripteLogsBlock(angSkripteLogsBlock) || {};
   const path = asText(block.path, "C:\\ang\\skripte");
   const files = Array.isArray(block.files) ? block.files : [];
   const dirError = asText(block.error);
@@ -8725,14 +8778,9 @@ function renderAngSkripteLogs(angSkripteLogsBlock) {
   const fileBlocks = files.map((file) => {
     const name = asText(file?.name, "unbekannt");
     const filePath = asText(file?.path);
-    const fileError = asText(file?.error);
+    const fileError = String(file?.error || "").trim();
     const sizeBytes = Number(file?.size_bytes);
-    let allLines = [];
-    if (Array.isArray(file?.lines)) {
-      allLines = file.lines.map((line) => asText(line));
-    } else if (typeof file?.lines === "string") {
-      allLines = String(file.lines).split(/\r?\n/).map((line) => asText(line));
-    }
+    const allLines = normalizeAngSkripteLogLines(file?.lines);
     const lineCount = Number(file?.line_count ?? allLines.length ?? 0);
     const sizeLabel = Number.isFinite(sizeBytes) && sizeBytes >= 0
       ? ` | Größe: ${formatBytes(sizeBytes)}`
@@ -8772,7 +8820,7 @@ function renderAngSkripteLogs(angSkripteLogsBlock) {
 
 function renderLogfilesSection(payload) {
   const defaultPath = "C:\\ang\\skripte";
-  const skripteLogs = payload && typeof payload.ang_skripte_logs === "object" ? payload.ang_skripte_logs : null;
+  const skripteLogs = parseAngSkripteLogsBlock(payload?.ang_skripte_logs);
   if (!skripteLogs) {
     return `
       <section class="detail-card">
