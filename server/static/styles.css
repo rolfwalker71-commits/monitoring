@@ -5141,40 +5141,24 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-license-info-badge--card {
   position: static;
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  min-height: 34px;
-  border: 1px solid #7eb6e8;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #e8f3fc 0%, #d4e9f8 100%);
-  color: #1e4f7a;
-  font-size: 15px;
+  width: auto;
+  height: auto;
+  min-width: 28px;
+  min-height: 28px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
   line-height: 1;
-  padding: 0;
-  box-shadow: 0 1px 2px rgba(21, 57, 95, 0.12);
+  padding: 4px;
+  box-shadow: none;
 }
 
 .host-license-info-badge--card:hover,
 .host-license-info-badge--card:focus-visible {
-  border-color: #4f95cf;
-  background: linear-gradient(180deg, #f2f8fd 0%, #dbeaf7 100%);
-  outline: 2px solid rgba(59, 130, 246, 0.35);
-  outline-offset: 1px;
-}
-
-.host-license-info-badge-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 17px;
-  font-weight: 700;
-  font-style: italic;
-  line-height: 1;
-  pointer-events: none;
+  background: transparent;
+  outline: none;
+  opacity: 1;
+  filter: brightness(1.05);
 }
 
 .host-license-info-badge--inline {
@@ -10110,19 +10094,6 @@ body[data-theme="dark"] .host-license-info-badge {
 body[data-theme="dark"] .host-license-info-badge--corner {
   background: transparent;
   box-shadow: none;
-}
-
-body[data-theme="dark"] .host-license-info-badge--card {
-  border-color: #4a7aa8;
-  background: linear-gradient(180deg, #1a3552 0%, #15395f 100%);
-  color: #d7e9fb;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-}
-
-body[data-theme="dark"] .host-license-info-badge--card:hover,
-body[data-theme="dark"] .host-license-info-badge--card:focus-visible {
-  border-color: #6ea3d4;
-  background: linear-gradient(180deg, #22466b 0%, #1a4a74 100%);
 }
 
 body[data-theme="dark"] .host-license-hover-popup {

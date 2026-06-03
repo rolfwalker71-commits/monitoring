@@ -90,6 +90,7 @@ let hostLicenseHoverPopupEl = null;
 let hostLicenseHoverActiveHost = "";
 let hostLicenseHoverPinnedKey = "";
 let hostLicenseOutsideClickWired = false;
+let hostLicenseSuppressOutsideCloseUntil = 0;
 let changelogRebuildPollTimerId = null;
 const CHANGELOG_REBUILD_DAYS = 7;
 let headerKpiWidthSyncFrameId = null;
@@ -9765,7 +9766,7 @@ function renderSingleHostCard(host) {
   const versionSideBarHtml = `<div class="${versionSideBarClass}" title="${escapeHtml(versionSideBarTitle)}" aria-hidden="true"></div>`;
   const hasSapLicenseInfo = Boolean(host.has_sap_license_info);
   const sapLicenseBadge = hasSapLicenseInfo
-    ? `<button type="button" class="host-license-info-badge host-license-info-badge--card" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}" title="SAP Lizenzinfos anzeigen (Klick)" aria-label="SAP Lizenzinfos anzeigen" aria-haspopup="dialog"><span class="host-license-info-badge-icon" aria-hidden="true">i</span></button>`
+    ? `<button type="button" class="host-license-info-badge host-license-info-badge--card" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}" title="SAP Lizenzinfos anzeigen" aria-label="SAP Lizenzinfos anzeigen" aria-haspopup="dialog">ℹ️</button>`
     : "";
   const cornerIcons = (sapLicenseBadge || flagIcon)
     ? `<div class="host-corner-icons">${sapLicenseBadge}${flagIcon}</div>`
@@ -10007,12 +10008,33 @@ function hideHostLicenseHoverPopup(clearPin = true) {
   }
 }
 
+function toggleHostLicensePopupFromBadge(licenseBadge) {
+  if (!licenseBadge) {
+    return;
+  }
+  const hostAttr = asText(licenseBadge.getAttribute("data-host-license-host"), "").trim();
+  const uidAttr = asText(licenseBadge.getAttribute("data-host-license-uid"), "").trim();
+  const activeKey = uidAttr || hostAttr;
+  if (!hostAttr || !activeKey) {
+    return;
+  }
+  if (hostLicenseHoverPopupEl && !hostLicenseHoverPopupEl.classList.contains("hidden") && hostLicenseHoverActiveHost === activeKey) {
+    hideHostLicenseHoverPopup(true);
+    return;
+  }
+  hostLicenseSuppressOutsideCloseUntil = Date.now() + 500;
+  void showHostLicenseHoverPopup(licenseBadge, hostAttr, uidAttr);
+}
+
 function ensureHostLicenseOutsideClickHandler() {
   if (hostLicenseOutsideClickWired) {
     return;
   }
   hostLicenseOutsideClickWired = true;
   document.addEventListener("click", (event) => {
+    if (Date.now() < hostLicenseSuppressOutsideCloseUntil) {
+      return;
+    }
     if (!hostLicenseHoverPinnedKey || !hostLicenseHoverPopupEl || hostLicenseHoverPopupEl.classList.contains("hidden")) {
       return;
     }
@@ -10079,10 +10101,6 @@ async function showHostLicenseHoverPopup(anchorEl, hostname, hostUid = "") {
   ensureHostLicenseOutsideClickHandler();
   const popup = ensureHostLicenseHoverPopup();
   hostLicenseHoverPinnedKey = key;
-  if (hostLicenseHoverHideTimerId !== null) {
-    window.clearTimeout(hostLicenseHoverHideTimerId);
-    hostLicenseHoverHideTimerId = null;
-  }
   hostLicenseHoverActiveHost = key;
   popup.innerHTML = `<div class="host-license-hover-head"><strong>ℹ️ SAP Lizenzinfos</strong><span>${escapeHtml(key)}</span></div><p class="muted">Lade Lizenzinfos…</p>`;
   popup.classList.remove("hidden");
@@ -11474,27 +11492,24 @@ function wireHostListInteractions() {
     loadAndRenderCustomerNotificationPanel(hostname, hostUid);
   };
 
+  hostList.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const licenseBadge = target ? target.closest(".host-license-info-badge") : null;
+    if (licenseBadge) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      toggleHostLicensePopupFromBadge(licenseBadge);
+    }
+  }, true);
+
   hostList.addEventListener("click", async (event) => {
     const target = event.target instanceof Element ? event.target : null;
     if (!target) {
       return;
     }
 
-    const licenseBadge = target.closest(".host-license-info-badge");
-    if (licenseBadge) {
-      event.preventDefault();
-      event.stopPropagation();
-      const hostAttr = asText(licenseBadge.getAttribute("data-host-license-host"), "").trim();
-      const uidAttr = asText(licenseBadge.getAttribute("data-host-license-uid"), "").trim();
-      const activeKey = uidAttr || hostAttr;
-      if (!hostAttr || !activeKey) {
-        return;
-      }
-      if (hostLicenseHoverPopupEl && !hostLicenseHoverPopupEl.classList.contains("hidden") && hostLicenseHoverActiveHost === activeKey) {
-        hideHostLicenseHoverPopup(true);
-        return;
-      }
-      void showHostLicenseHoverPopup(licenseBadge, hostAttr, uidAttr);
+    if (target.closest(".host-license-info-badge")) {
       return;
     }
 
@@ -11592,20 +11607,9 @@ function wireHostListInteractions() {
       return;
     }
     const target = event.target instanceof Element ? event.target : null;
-    const licenseBadge = target ? target.closest(".host-license-info-badge") : null;
-    if (licenseBadge) {
+    if (target && target.closest(".host-license-info-badge")) {
       event.preventDefault();
-      const hostAttr = asText(licenseBadge.getAttribute("data-host-license-host"), "").trim();
-      const uidAttr = asText(licenseBadge.getAttribute("data-host-license-uid"), "").trim();
-      const activeKey = uidAttr || hostAttr;
-      if (!hostAttr || !activeKey) {
-        return;
-      }
-      if (hostLicenseHoverPopupEl && !hostLicenseHoverPopupEl.classList.contains("hidden") && hostLicenseHoverActiveHost === activeKey) {
-        hideHostLicenseHoverPopup(true);
-      } else {
-        void showHostLicenseHoverPopup(licenseBadge, hostAttr, uidAttr);
-      }
+      toggleHostLicensePopupFromBadge(target.closest(".host-license-info-badge"));
       return;
     }
     const hostItem = target ? target.closest(".host-item") : null;
