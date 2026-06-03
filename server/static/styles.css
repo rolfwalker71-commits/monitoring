@@ -7512,10 +7512,37 @@ body[data-theme="dark"] .sap-services-changelog-item-changed {
 .report-sap-kpi-card {
   border: 1px solid #c9d6e6;
   border-radius: 12px;
-  background: linear-gradient(180deg, #f3f5f7 0%, #eceff3 100%);
+  background: linear-gradient(180deg, #eef2f7 0%, #e4eaf2 100%);
   padding: 7px 10px;
   min-height: 62px;
   box-sizing: border-box;
+}
+
+.report-sap-kpi-card--sap-release {
+  border-color: #b4cce8;
+  background: linear-gradient(180deg, #e6f0fa 0%, #d8e8f6 100%);
+}
+
+.report-sap-kpi-card--sap-release h4 {
+  color: #4a6f94;
+}
+
+.report-sap-kpi-card--patch {
+  border-color: #a9d4c4;
+  background: linear-gradient(180deg, #e5f4ed 0%, #d6ebdf 100%);
+}
+
+.report-sap-kpi-card--patch h4 {
+  color: #3f6f5c;
+}
+
+.report-sap-kpi-card--build {
+  border-color: #c4b8e4;
+  background: linear-gradient(180deg, #eeeaf8 0%, #e2dcf2 100%);
+}
+
+.report-sap-kpi-card--build h4 {
+  color: #5a4f82;
 }
 
 .report-sap-kpi-card h4 {
@@ -7695,6 +7722,33 @@ body[data-theme="dark"] .report-license-panel {
 body[data-theme="dark"] .report-sap-kpi-card {
   border-color: #355072;
   background: linear-gradient(180deg, #1a2e49 0%, #14263f 100%);
+}
+
+body[data-theme="dark"] .report-sap-kpi-card--sap-release {
+  border-color: #3d6288;
+  background: linear-gradient(180deg, #17304a 0%, #122840 100%);
+}
+
+body[data-theme="dark"] .report-sap-kpi-card--sap-release h4 {
+  color: #8eb8e3;
+}
+
+body[data-theme="dark"] .report-sap-kpi-card--patch {
+  border-color: #356b58;
+  background: linear-gradient(180deg, #143228 0%, #102a21 100%);
+}
+
+body[data-theme="dark"] .report-sap-kpi-card--patch h4 {
+  color: #8fd0b0;
+}
+
+body[data-theme="dark"] .report-sap-kpi-card--build {
+  border-color: #4a4278;
+  background: linear-gradient(180deg, #221c3d 0%, #1b1734 100%);
+}
+
+body[data-theme="dark"] .report-sap-kpi-card--build h4 {
+  color: #b7a8e8;
 }
 
 body[data-theme="dark"] .report-sap-kpi-card h4 {

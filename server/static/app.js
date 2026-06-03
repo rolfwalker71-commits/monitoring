@@ -9237,8 +9237,8 @@ function renderReportCard(report) {
     <article class="report-card">
       <div class="report-header">
         ${hasKpiCardData ? `<div class="report-sap-kpi-row">
-          <article class="report-sap-kpi-card report-sap-kpi-card--feature" title="Feature Pack">
-            <h4>FEATURE PACK</h4>
+          <article class="report-sap-kpi-card report-sap-kpi-card--sap-release" title="SAP Release">
+            <h4>SAP RELEASE</h4>
             <p>${escapeHtml(featurePackKpiValue)}</p>
           </article>
           <article class="report-sap-kpi-card report-sap-kpi-card--patch" title="HANA Release">
