@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260603f"
+PULL_SCRIPT_VERSION="20260603g"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -624,7 +624,7 @@ LATEST_SHA_AFTER="$(printf '%s\n' "$LATEST_META_AFTER" \
   | sed -n 's/.*"sha":[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' \
   | head -n 1)"
 if [ -z "$LATEST_SHA_AFTER" ]; then
-  LATEST_SHA_AFTER="$(resolve_latest_main_sha_via_git)"
+  LATEST_SHA_AFTER="$(resolve_latest_main_sha_via_git || true)"
 fi
 
 if is_full_git_sha "$REF"; then
