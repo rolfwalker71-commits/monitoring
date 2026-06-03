@@ -367,6 +367,21 @@ function Read-LogFileTailLines {
     return ,@($allLines[$startIndex..($allLines.Count - 1)])
 }
 
+function ConvertTo-AngLogFileInfoArray {
+    param(
+        [AllowNull()]
+        [object]$LogFiles
+    )
+
+    if ($null -eq $LogFiles) {
+        return @()
+    }
+    if ($LogFiles -is [System.IO.FileInfo]) {
+        return ,$LogFiles
+    }
+    return @($LogFiles)
+}
+
 function Get-AngLogRelativePath {
     param(
         [Parameter(Mandatory = $true)][string]$RootPath,
@@ -432,17 +447,16 @@ function Get-AngLogGroupKey {
 
 function Select-AngLogFilesByRotation {
     param(
-        [Parameter(Mandatory = $true)]
-        [AllowEmptyCollection()]
-        [System.IO.FileInfo[]]$LogFiles,
+        [System.IO.FileInfo[]]$LogFiles = @(),
         [Parameter(Mandatory = $true)][string]$RootPath,
         [int]$KeepPerGroup = 2
     )
 
+    $LogFiles = ConvertTo-AngLogFileInfoArray -LogFiles $LogFiles
     if ($KeepPerGroup -lt 1) {
         $KeepPerGroup = 1
     }
-    if (-not $LogFiles -or $LogFiles.Count -eq 0) {
+    if ($LogFiles.Count -eq 0) {
         return @()
     }
 
@@ -469,13 +483,12 @@ function Select-AngLogFilesByRotation {
 
 function Limit-AngLogFilesByRecency {
     param(
-        [Parameter(Mandatory = $true)]
-        [AllowEmptyCollection()]
-        [System.IO.FileInfo[]]$LogFiles,
+        [System.IO.FileInfo[]]$LogFiles = @(),
         [int]$MaxFiles = 0
     )
 
-    if (-not $LogFiles -or $LogFiles.Count -eq 0) {
+    $LogFiles = ConvertTo-AngLogFileInfoArray -LogFiles $LogFiles
+    if ($LogFiles.Count -eq 0) {
         return @()
     }
 
@@ -488,45 +501,55 @@ function Limit-AngLogFilesByRecency {
 
 function Filter-AngLogFilesByMaxAge {
     param(
-        [Parameter(Mandatory = $true)]
-        [AllowEmptyCollection()]
-        [System.IO.FileInfo[]]$LogFiles,
+        [System.IO.FileInfo[]]$LogFiles = @(),
         [int]$MaxAgeDays = 7
     )
 
-    if ($MaxAgeDays -le 0 -or -not $LogFiles -or $LogFiles.Count -eq 0) {
+    $LogFiles = ConvertTo-AngLogFileInfoArray -LogFiles $LogFiles
+    if ($MaxAgeDays -le 0 -or $LogFiles.Count -eq 0) {
         return @()
     }
 
     $cutoffUtc = (Get-Date).ToUniversalTime().AddDays(-1 * $MaxAgeDays)
-    return ,@(
-        $LogFiles |
-        Where-Object { $_.LastWriteTimeUtc -ge $cutoffUtc }
+    return ConvertTo-AngLogFileInfoArray -LogFiles @(
+        $LogFiles | Where-Object { $_.LastWriteTimeUtc -ge $cutoffUtc }
+    )
+}
+
+function Get-AngLogEmptyBlockJson {
+    param(
+        [string]$RootPath = $AngLogsRoot,
+        [string]$ErrorMessage = ''
+    )
+
+    $rootPathJson = ConvertTo-JsonString $RootPath
+    $errJson = ConvertTo-JsonString $ErrorMessage
+    return (
+        '{"available":false,"path":"' + $rootPathJson +
+        '","file_count":0,"discovered_file_count":0,"max_age_days":' + $AngLogMaxAgeDays +
+        ',"rotation_keep_per_group":' + $AngLogRotationKeep +
+        ',"files":[],"error":"' + $errJson + '"}'
     )
 }
 
 function Get-AngLogsBlock {
     $rootPathJson = ConvertTo-JsonString $AngLogsRoot
-    if (-not (Test-Path -LiteralPath $AngLogsRoot)) {
-        return '{"available":false,"path":"' + $rootPathJson + '","file_count":0,"discovered_file_count":0,"files":[],"error":"directory not found"}'
-    }
-
     try {
-        $discoveredLogFiles = @(
+        if (-not (Test-Path -LiteralPath $AngLogsRoot)) {
+            return (Get-AngLogEmptyBlockJson -RootPath $AngLogsRoot -ErrorMessage 'directory not found')
+        }
+
+        $discoveredLogFiles = ConvertTo-AngLogFileInfoArray -LogFiles @(
             Get-ChildItem -LiteralPath $AngLogsRoot -Filter '*.log' -File -Recurse -ErrorAction SilentlyContinue
         )
-    } catch {
-        $errJson = ConvertTo-JsonString $_.Exception.Message
-        return '{"available":false,"path":"' + $rootPathJson + '","file_count":0,"discovered_file_count":0,"files":[],"error":"' + $errJson + '"}'
-    }
 
-    $discoveredCount = $discoveredLogFiles.Count
-    $ageFilteredLogFiles = Filter-AngLogFilesByMaxAge -LogFiles $discoveredLogFiles -MaxAgeDays $AngLogMaxAgeDays
-    $logFiles = Select-AngLogFilesByRotation -LogFiles $ageFilteredLogFiles -RootPath $AngLogsRoot -KeepPerGroup $AngLogRotationKeep
-    $logFiles = Limit-AngLogFilesByRecency -LogFiles $logFiles -MaxFiles $AngLogMaxFiles
+        $discoveredCount = $discoveredLogFiles.Count
+        $ageFilteredLogFiles = Filter-AngLogFilesByMaxAge -LogFiles $discoveredLogFiles -MaxAgeDays $AngLogMaxAgeDays
+        $logFiles = Select-AngLogFilesByRotation -LogFiles $ageFilteredLogFiles -RootPath $AngLogsRoot -KeepPerGroup $AngLogRotationKeep
+        $logFiles = ConvertTo-AngLogFileInfoArray -LogFiles (Limit-AngLogFilesByRecency -LogFiles $logFiles -MaxFiles $AngLogMaxFiles)
 
-    $fileBlocks = @()
-    foreach ($logFile in $logFiles) {
+        $fileBlocks = @()
+        foreach ($logFile in $logFiles) {
         $nameJson = ConvertTo-JsonString $logFile.Name
         $pathJson = ConvertTo-JsonString $logFile.FullName
         $relativePathJson = ConvertTo-JsonString (Get-AngLogRelativePath -RootPath $AngLogsRoot -FullPath $logFile.FullName)
@@ -554,14 +577,25 @@ function Get-AngLogsBlock {
         )
     }
 
-    return (
-        '{"available":true,"path":"' + $rootPathJson +
-        '","discovered_file_count":' + $discoveredCount +
-        ',"file_count":' + $fileBlocks.Count +
-        ',"max_age_days":' + $AngLogMaxAgeDays +
-        ',"rotation_keep_per_group":' + $AngLogRotationKeep +
-        ',"files":[' + ($fileBlocks -join ',') + '],"error":""}'
-    )
+        return (
+            '{"available":true,"path":"' + $rootPathJson +
+            '","discovered_file_count":' + $discoveredCount +
+            ',"file_count":' + $fileBlocks.Count +
+            ',"max_age_days":' + $AngLogMaxAgeDays +
+            ',"rotation_keep_per_group":' + $AngLogRotationKeep +
+            ',"files":[' + ($fileBlocks -join ',') + '],"error":""}'
+        )
+    } catch {
+        return (Get-AngLogEmptyBlockJson -RootPath $AngLogsRoot -ErrorMessage $_.Exception.Message)
+    }
+}
+
+function Get-AngLogsBlockSafe {
+    try {
+        return Get-AngLogsBlock
+    } catch {
+        return (Get-AngLogEmptyBlockJson -RootPath $AngLogsRoot -ErrorMessage $_.Exception.Message)
+    }
 }
 
 function Get-SqlServerInfoBlock {
@@ -2237,7 +2271,7 @@ $containersStr = [string]$containerData.entries
 $dockerAvailable = if ($containerData.available) { 'true' } else { 'false' }
 $updateLogJson      = Get-UpdateLogBlock
 $agentConfigJson    = Get-AgentConfigBlock
-$angLogsJson = Get-AngLogsBlock
+$angLogsJson = Get-AngLogsBlockSafe
 $sapB1Json       = Get-SapB1PayloadBlock
 $sqlServerJson   = Get-SqlServerInfoBlock
 $largeFilesJson  = '{"enabled":false,"status":"unsupported","filesystems":[]}'
