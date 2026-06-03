@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604f"
+PULL_SCRIPT_VERSION="20260604g"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -314,6 +314,74 @@ is_valid_pull_script_file() {
     && grep -q 'resolve_deploy_ref' "$candidate"
 }
 
+upgrade_local_pull_script_from_main() {
+  if [ "${MONITORING_SKIP_PULL_SCRIPT_UPGRADE:-0}" = "1" ]; then
+    return 0
+  fi
+
+  local latest_sha="" local_script="" remote_script=""
+  latest_sha="$(resolve_latest_main_sha main || true)"
+  if ! is_full_git_sha "$latest_sha"; then
+    return 0
+  fi
+
+  local_script="$TARGET_DIR/pull-server-only.sh"
+  if [ ! -f "$local_script" ]; then
+    local_script="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+  fi
+
+  remote_script="$(mktemp "${TMPDIR:-/tmp}/pull-server-only.XXXXXX")"
+  if ! curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/$latest_sha/pull-server-only.sh")" \
+    -o "$remote_script" 2>/dev/null; then
+    rm -f "$remote_script"
+    return 0
+  fi
+  if ! is_valid_pull_script_file "$remote_script"; then
+    rm -f "$remote_script"
+    return 0
+  fi
+  if cmp -s "$remote_script" "$local_script" 2>/dev/null; then
+    rm -f "$remote_script"
+    return 0
+  fi
+
+  cp -f "$remote_script" "$local_script"
+  chmod +x "$local_script"
+  rm -f "$remote_script"
+  echo "pull-server-only.sh aktualisiert (main ${latest_sha:0:12}) – Deploy startet neu..."
+  exec "$local_script" "$@"
+}
+
+reconcile_deploy_to_latest_main() {
+  local latest_sha="" remote_bv="" local_bv=""
+  latest_sha="$(resolve_latest_main_sha main || true)"
+  if ! is_full_git_sha "$latest_sha"; then
+    return 0
+  fi
+
+  remote_bv="$(fetch_repo_text_at_ref BUILD_VERSION "$latest_sha")"
+  local_bv="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
+  if [ -z "$remote_bv" ] || [ "$remote_bv" = "$local_bv" ]; then
+    if is_full_git_sha "$latest_sha" && [ "$REF" != "$latest_sha" ]; then
+      REF="$latest_sha"
+      echo "$REF" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
+    fi
+    return 0
+  fi
+
+  echo "Nachziehen: lokal BUILD $local_bv, GitHub main ${latest_sha:0:12} hat $remote_bv – lade Dateien erneut..." >&2
+  REF="$latest_sha"
+  RAW_BASE="https://raw.githubusercontent.com/$OWNER_REPO/$REF"
+  export REF RAW_BASE
+  if ! printf '%s\n' "$FILES_LIST" | sed '/^$/d' | xargs -P "$MAX_PARALLEL_DOWNLOADS" -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"'; then
+    echo "FEHLER: Nachziehen auf main ${latest_sha:0:12} fehlgeschlagen." >&2
+    return 1
+  fi
+  force_refresh_version_files "$REF"
+  echo "$REF" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
+  return 0
+}
+
 bootstrap_pull_script_if_needed() {
   # Default: off. Bootstrap hat ein altes Skript via raw/main ueberschrieben (CDN) und exec beendete den Lauf.
   if [ "${MONITORING_BOOTSTRAP_PULL_SCRIPT:-0}" != "1" ]; then
@@ -516,6 +584,10 @@ resolve_deploy_ref() {
     REF="$latest_sha"
     echo "Deploy-Ref: $REF (repo/$fallback_ref, automatisch – kein MONITORING_DEPLOY_SHA noetig)"
     _resolve_deploy_ref_from_github_api "$fallback_ref" >/dev/null 2>&1 || true
+    pin_build="$(fetch_repo_text_at_ref BUILD_VERSION "$REF" || true)"
+    if [ -n "$pin_build" ]; then
+      echo "Ziel BUILD_VERSION @ Ref: $pin_build"
+    fi
     return 0
   fi
 
@@ -531,6 +603,13 @@ resolve_deploy_ref() {
 echo "pull-server-only.sh Version: $PULL_SCRIPT_VERSION"
 echo "Installiere Serverteil nach: $TARGET_DIR"
 
+if [ -n "${MONITORING_DEPLOY_SHA:-}" ]; then
+  echo "Hinweis: MONITORING_DEPLOY_SHA ist gesetzt (${MONITORING_DEPLOY_SHA}) – entfernen fuer automatisch neuestes main." >&2
+elif [ -f "$TARGET_ENV_FILE" ] && grep -q '^MONITORING_DEPLOY_SHA=' "$TARGET_ENV_FILE" 2>/dev/null; then
+  echo "Hinweis: $TARGET_ENV_FILE enthaelt MONITORING_DEPLOY_SHA – kann alten Stand pinnen." >&2
+fi
+
+upgrade_local_pull_script_from_main "$@"
 bootstrap_pull_script_if_needed
 echo "Starte Deploy (Ref wird ermittelt) ..."
 
@@ -660,7 +739,8 @@ verify_synced_file() {
 }
 
 export -f download_file download_repo_file checksum_file curl_github curl_raw_github \
-  append_raw_cache_bust fetch_repo_text_at_ref is_full_git_sha resolve_latest_main_sha_via_git
+  append_raw_cache_bust fetch_repo_text_at_ref is_full_git_sha resolve_latest_main_sha \
+  force_refresh_version_files reconcile_deploy_to_latest_main
 export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE REF OWNER_REPO CURL_CONNECT_TIMEOUT CURL_MAX_TIME MONITORING_PULL_USE_RAW_ONLY
 
 FILES_LIST="
@@ -702,6 +782,7 @@ if ! printf '%s\n' "$FILES_LIST" | sed '/^$/d' | xargs -P "$MAX_PARALLEL_DOWNLOA
 fi
 echo "Dateien geladen ✓"
 
+reconcile_deploy_to_latest_main
 force_refresh_version_files "$REF"
 
 if [ "$VERIFY_SYNC" = "1" ]; then
