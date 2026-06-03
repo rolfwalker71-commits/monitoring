@@ -323,6 +323,63 @@ function Get-AngLogReplacementCharCount {
     return $count
 }
 
+function Add-AngLogDecodedCandidate {
+    param(
+        [System.Collections.Generic.List[object]]$Candidates,
+        [string]$Label,
+        [string]$Text
+    )
+
+    if ($null -eq $Candidates) {
+        return
+    }
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return
+    }
+
+    $replacementCount = Get-AngLogReplacementCharCount -Text $Text
+    [void]$Candidates.Add([pscustomobject]@{
+        Label = $Label
+        Text = $Text
+        ReplacementCount = $replacementCount
+        Score = $Text.Length - ($replacementCount * 8)
+    })
+}
+
+function Select-BestAngLogDecodedText {
+    param(
+        [System.Collections.Generic.List[object]]$Candidates
+    )
+
+    if ($null -eq $Candidates -or $Candidates.Count -eq 0) {
+        return ''
+    }
+
+    $best = $null
+    foreach ($candidate in $Candidates) {
+        if ($null -eq $candidate) {
+            continue
+        }
+        if ($null -eq $best) {
+            $best = $candidate
+            continue
+        }
+        if ([int]$candidate.ReplacementCount -lt [int]$best.ReplacementCount) {
+            $best = $candidate
+            continue
+        }
+        if ([int]$candidate.ReplacementCount -eq [int]$best.ReplacementCount -and [int]$candidate.Score -gt [int]$best.Score) {
+            $best = $candidate
+        }
+    }
+
+    if ($null -eq $best) {
+        return ''
+    }
+
+    return [string]$best.Text
+}
+
 function Get-TextFromFileBytes {
     param([byte[]]$Bytes)
 
@@ -343,28 +400,9 @@ function Get-TextFromFileBytes {
 
     $candidates = New-Object System.Collections.Generic.List[object]
 
-    function Add-DecodedCandidate {
-        param(
-            [string]$Label,
-            [string]$Text
-        )
-
-        if ([string]::IsNullOrWhiteSpace($Text)) {
-            return
-        }
-
-        $replacementCount = Get-AngLogReplacementCharCount -Text $Text
-        $candidates.Add([pscustomobject]@{
-            Label = $Label
-            Text = $Text
-            ReplacementCount = $replacementCount
-            Score = $Text.Length - ($replacementCount * 8)
-        }) | Out-Null
-    }
-
     try {
         $utf8 = New-Object System.Text.UTF8Encoding $false, $false
-        Add-DecodedCandidate -Label 'utf-8' -Text $utf8.GetString($Bytes)
+        Add-AngLogDecodedCandidate -Candidates $candidates -Label 'utf-8' -Text $utf8.GetString($Bytes)
     } catch {
         # ignore
     }
@@ -372,24 +410,19 @@ function Get-TextFromFileBytes {
     foreach ($codePage in @(1252, 850, 28591)) {
         try {
             $encoding = [System.Text.Encoding]::GetEncoding($codePage)
-            Add-DecodedCandidate -Label ("cp$codePage") -Text $encoding.GetString($Bytes)
+            Add-AngLogDecodedCandidate -Candidates $candidates -Label ("cp$codePage") -Text $encoding.GetString($Bytes)
         } catch {
             # ignore unsupported code pages on older hosts
         }
     }
 
     try {
-        Add-DecodedCandidate -Label 'default' -Text ([System.Text.Encoding]::Default.GetString($Bytes))
+        Add-AngLogDecodedCandidate -Candidates $candidates -Label 'default' -Text ([System.Text.Encoding]::Default.GetString($Bytes))
     } catch {
         # ignore
     }
 
-    if ($candidates.Count -eq 0) {
-        return ''
-    }
-
-    $best = @($candidates | Sort-Object -Property @{ Expression = 'ReplacementCount' }; @{ Expression = 'Score'; Descending = $true } | Select-Object -First 1)
-    return [string]$best.Text
+    return Select-BestAngLogDecodedText -Candidates $candidates
 }
 
 function Split-AngLogPhysicalLine {
