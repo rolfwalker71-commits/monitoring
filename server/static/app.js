@@ -8889,9 +8889,17 @@ function renderAngLogs(angLogsBlock) {
   `).join("");
 
   const discoveredCount = Number(block.discovered_file_count);
+  const maxAgeDays = Number(block.max_age_days);
+  const rotationKeep = Number(block.rotation_keep_per_group) || 2;
+  const filterParts = [];
+  if (Number.isFinite(maxAgeDays) && maxAgeDays > 0) {
+    filterParts.push(`max. ${maxAgeDays} Tage alt`);
+  }
+  filterParts.push(`Rotation: je Gruppe max. ${rotationKeep} aktuellste`);
+  const filterHint = filterParts.join(" · ");
   const countHint = Number.isFinite(discoveredCount) && discoveredCount > files.length
-    ? `${files.length} von ${discoveredCount} Log-Dateien (Rotation: je Gruppe max. ${Number(block.rotation_keep_per_group) || 2} aktuellste)`
-    : `${files.length} Datei${files.length !== 1 ? "en" : ""}`;
+    ? `${files.length} von ${discoveredCount} Log-Dateien (${filterHint})`
+    : `${files.length} Datei${files.length !== 1 ? "en" : ""}${files.length > 0 ? ` (${filterHint})` : ""}`;
   return `
     <p class="count compact">Wurzel: ${escapeHtml(path)} · rekursiv *.log · ${escapeHtml(countHint)}</p>
     <div class="ang-logs-grid">${fileBlocks}</div>

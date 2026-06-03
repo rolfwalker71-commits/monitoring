@@ -60,6 +60,7 @@ $AngLogsRoot = if ($env:ANG_LOG_ROOT) { $env:ANG_LOG_ROOT } elseif ($env:ANG_SKR
 $AngLogTailLines = if ($env:ANG_LOG_TAIL_LINES) { [int]$env:ANG_LOG_TAIL_LINES } elseif ($env:ANG_SKRIPTE_LOG_LINES) { [int]$env:ANG_SKRIPTE_LOG_LINES } else { 20 }
 $AngLogMaxFiles = if ($env:ANG_LOG_MAX_FILES) { [int]$env:ANG_LOG_MAX_FILES } else { 80 }
 $AngLogRotationKeep = if ($env:ANG_LOG_ROTATION_KEEP) { [int]$env:ANG_LOG_ROTATION_KEEP } else { 2 }
+$AngLogMaxAgeDays = if ($env:ANG_LOG_MAX_AGE_DAYS) { [int]$env:ANG_LOG_MAX_AGE_DAYS } else { 7 }
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -477,6 +478,23 @@ function Limit-AngLogFilesByRecency {
     return ,@($LogFiles | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First $MaxFiles | Sort-Object FullName)
 }
 
+function Filter-AngLogFilesByMaxAge {
+    param(
+        [Parameter(Mandatory = $true)][System.IO.FileInfo[]]$LogFiles,
+        [int]$MaxAgeDays = 7
+    )
+
+    if ($MaxAgeDays -le 0 -or -not $LogFiles -or $LogFiles.Count -eq 0) {
+        return ,$LogFiles
+    }
+
+    $cutoffUtc = (Get-Date).ToUniversalTime().AddDays(-1 * $MaxAgeDays)
+    return ,@(
+        $LogFiles |
+        Where-Object { $_.LastWriteTimeUtc -ge $cutoffUtc }
+    )
+}
+
 function Get-AngLogsBlock {
     $rootPathJson = ConvertTo-JsonString $AngLogsRoot
     if (-not (Test-Path -LiteralPath $AngLogsRoot)) {
@@ -493,7 +511,8 @@ function Get-AngLogsBlock {
     }
 
     $discoveredCount = $discoveredLogFiles.Count
-    $logFiles = Select-AngLogFilesByRotation -LogFiles $discoveredLogFiles -RootPath $AngLogsRoot -KeepPerGroup $AngLogRotationKeep
+    $ageFilteredLogFiles = Filter-AngLogFilesByMaxAge -LogFiles $discoveredLogFiles -MaxAgeDays $AngLogMaxAgeDays
+    $logFiles = Select-AngLogFilesByRotation -LogFiles $ageFilteredLogFiles -RootPath $AngLogsRoot -KeepPerGroup $AngLogRotationKeep
     $logFiles = Limit-AngLogFilesByRecency -LogFiles $logFiles -MaxFiles $AngLogMaxFiles
 
     $fileBlocks = @()
@@ -529,6 +548,7 @@ function Get-AngLogsBlock {
         '{"available":true,"path":"' + $rootPathJson +
         '","discovered_file_count":' + $discoveredCount +
         ',"file_count":' + $fileBlocks.Count +
+        ',"max_age_days":' + $AngLogMaxAgeDays +
         ',"rotation_keep_per_group":' + $AngLogRotationKeep +
         ',"files":[' + ($fileBlocks -join ',') + '],"error":""}'
     )
