@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604c"
+PULL_SCRIPT_VERSION="20260604d"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -801,13 +801,56 @@ systemctl enable monitoring
 echo ""
 echo "systemd Service installiert: $SERVICE_FILE"
 
-echo "Versuche monitoring-Service neu zu starten ..."
-if systemctl restart monitoring; then
-  echo "✓ monitoring wurde neu gestartet"
-  systemctl --no-pager --full status monitoring | sed -n '1,14p' || true
+changelog_jobs_blocking_restart() {
+  local db_path="$TARGET_DIR/server/data/monitoring.db"
+  if [ ! -f "$db_path" ] || ! command -v sqlite3 >/dev/null 2>&1; then
+    return 1
+  fi
+  local running_count pending_count
+  running_count="$(sqlite3 "$db_path" \
+    "SELECT COUNT(*) FROM changelog_rebuild_jobs WHERE status = 'running';" 2>/dev/null || echo 0)"
+  pending_count="$(sqlite3 "$db_path" \
+    "SELECT COUNT(*) FROM changelog_rebuild_jobs WHERE status = 'pending';" 2>/dev/null || echo 0)"
+  if [ "${running_count:-0}" -gt 0 ] || [ "${pending_count:-0}" -gt 0 ]; then
+    sqlite3 -header -column "$db_path" \
+      "SELECT id, status, COALESCE(job_mode, 'rebuild') AS mode,
+              json_extract(result_json, '\$.progress.reports_scanned') AS reports,
+              json_extract(result_json, '\$.progress.reports_total') AS total
+       FROM changelog_rebuild_jobs
+       WHERE status IN ('running', 'pending')
+       ORDER BY id DESC
+       LIMIT 5;" 2>/dev/null || true
+    return 0
+  fi
+  return 1
+}
+
+SKIP_MONITORING_RESTART=0
+if [ "${MONITORING_FORCE_RESTART:-0}" = "1" ]; then
+  echo "MONITORING_FORCE_RESTART=1 – Neustart trotz laufendem Changelog-Job." >&2
+elif changelog_jobs_blocking_restart; then
+  SKIP_MONITORING_RESTART=1
+  echo "" >&2
+  echo "WARNUNG: Inventur/Rebuild-Job läuft oder ist pending – monitoring wird NICHT neu gestartet." >&2
+  echo "  Ein Restart würde den Job abbrechen (Changelog-Tabellen ggf. inkonsistent)." >&2
+  echo "  Dateien auf dem Server sind aktualisiert (BUILD_VERSION=${LOCAL_BUILD_VERSION:-?})." >&2
+  echo "  Nach Job-Ende: sudo systemctl restart monitoring" >&2
+  echo "  Nur UI-Änderungen (app.js): Hard-Refresh im Browser reicht bis zum Restart." >&2
+  echo "  Erzwingen (Job bricht ab): MONITORING_FORCE_RESTART=1 $TARGET_DIR/pull-server-only.sh" >&2
+fi
+
+if [ "$SKIP_MONITORING_RESTART" = "1" ]; then
+  echo "monitoring-Service läuft weiter mit bisherigem Prozess (kein Restart)."
+  systemctl --no-pager --full status monitoring | sed -n '1,10p' || true
 else
-  echo "✗ monitoring konnte nicht automatisch neu gestartet werden" >&2
-  echo "  Bitte manuell ausführen: systemctl restart monitoring" >&2
+  echo "Versuche monitoring-Service neu zu starten ..."
+  if systemctl restart monitoring; then
+    echo "✓ monitoring wurde neu gestartet"
+    systemctl --no-pager --full status monitoring | sed -n '1,14p' || true
+  else
+    echo "✗ monitoring konnte nicht automatisch neu gestartet werden" >&2
+    echo "  Bitte manuell ausführen: systemctl restart monitoring" >&2
+  fi
 fi
 
 echo ""
