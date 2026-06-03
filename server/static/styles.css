@@ -1171,7 +1171,44 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 }
 
 .host-config-changes-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin-bottom: 8px;
+}
+
+.host-config-changes-toolbar-main {
+  margin-bottom: 0;
+}
+
+.host-config-changes-toolbar-main .host-config-changes-summary {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.host-config-changes-toolbar-main .host-config-changes-search {
+  flex: 1 1 160px;
+  min-width: 120px;
+  max-width: 360px;
+}
+
+.host-config-changes-country-row {
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--ui-border-soft, #d8e2f0);
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--ui-surface-1, #f8fbff) 0%, var(--ui-surface-2, #f5f9ff) 100%);
+}
+
+#globalView .host-config-changes-country-row {
+  padding: 6px 10px;
+}
+
+body[data-theme="dark"] .host-config-changes-country-row {
+  border-color: #334155;
+  background: linear-gradient(180deg, #1a2332 0%, #162031 100%);
 }
 
 .changelog-maintenance-panel {

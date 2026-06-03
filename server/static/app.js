@@ -1984,6 +1984,7 @@ async function loadActiveGlobalSubMode() {
   }
   if (state.globalSubMode === "host-config-changes") {
     showHostConfigChangesIdleState("Bitte Filter setzen und dann Suchen/Refresh klicken.");
+    refreshHostConfigChangesCountryFilter();
     await loadChangelogRebuildJobsStatus();
     return;
   }
@@ -11747,6 +11748,9 @@ async function loadHosts(options = {}) {
     state.totalHosts = Number(data.total_hosts || 0);
     const hosts = data.hosts || [];
     state.hosts = hosts;
+    if (state.globalSubMode === "host-config-changes") {
+      refreshHostConfigChangesCountryFilter();
+    }
     syncEffectiveHostInterestSelection();
     updateHeaderStatChips();
     renderHostInterestsEditor();
@@ -13845,6 +13849,50 @@ function renderHostConfigNumericDelta(fieldKey, oldValue, newValue) {
   return `<span class="host-config-license-delta ${cssClass}">(${escapeHtml(signText)})</span>`;
 }
 
+function collectHostConfigChangesCountryCodes(extraCodes = []) {
+  const codes = new Set();
+  const addCode = (raw) => {
+    const code = String(raw || "").trim().toUpperCase();
+    if (/^[A-Z]{2}$/.test(code)) {
+      codes.add(code);
+    }
+  };
+
+  (Array.isArray(extraCodes) ? extraCodes : []).forEach(addCode);
+  (Array.isArray(state.hostConfigChangesAvailableCountries) ? state.hostConfigChangesAvailableCountries : []).forEach(addCode);
+  (Array.isArray(state.hosts) ? state.hosts : []).forEach((host) => addCode(host?.country_code));
+  try {
+    getHostInterestSelectedCountries().forEach(addCode);
+  } catch (_error) {
+    // Ignore if host-interest helpers are unavailable during early init.
+  }
+
+  const result = [...codes].sort();
+  if (!result.length) {
+    return ["AT", "CH", "DE", "FR"];
+  }
+  return result;
+}
+
+function refreshHostConfigChangesCountryFilter(extraCodes = []) {
+  const countryFilterEl = document.getElementById("hostConfigChangesCountryFilter");
+  if (!countryFilterEl) {
+    return;
+  }
+  const countriesForFilter = collectHostConfigChangesCountryCodes(extraCodes);
+  if (countriesForFilter.length) {
+    state.hostConfigChangesAvailableCountries = countriesForFilter;
+  }
+  const selected = countriesForFilter.includes(String(state.hostConfigChangesCountryFilter || "").toUpperCase())
+    ? String(state.hostConfigChangesCountryFilter || "").toUpperCase()
+    : "all";
+  state.hostConfigChangesCountryFilter = selected;
+  renderCountryFlagFilter(countryFilterEl, countriesForFilter, selected, (nextFilter) => {
+    state.hostConfigChangesCountryFilter = nextFilter;
+    showHostConfigChangesIdleState();
+  });
+}
+
 function renderCountryFlagFilter(filterEl, countryCodes, selectedCountryCode, onSelect) {
   if (!filterEl) return;
   const normalized = Array.from(new Set((Array.isArray(countryCodes) ? countryCodes : [])
@@ -13888,16 +13936,17 @@ function showHostConfigChangesIdleState(message = "Filter gesetzt. Bitte auf Suc
   if (groupsEl) {
     groupsEl.innerHTML = `<p class="muted">${escapeHtml(message)}</p>`;
   }
-  if (summaryEl) {
-    summaryEl.textContent = "";
+  if (summaryEl && !String(summaryEl.textContent || "").trim()) {
+    const hours = Number(state.hostConfigChangesHours || 72);
+    summaryEl.textContent = `Changelog · ${hours}h · Suchen/↻ zum Laden`;
   }
+  refreshHostConfigChangesCountryFilter();
 }
 
 async function loadHostConfigChanges() {
   const groupsEl = document.getElementById("hostConfigChangesGroups");
   const summaryEl = document.getElementById("hostConfigChangesSummary");
   const filterEl = document.getElementById("hostConfigChangesHoursFilter");
-  const countryFilterEl = document.getElementById("hostConfigChangesCountryFilter");
   if (!groupsEl) return;
   const searchEl = document.getElementById("hostConfigChangesSearchInput");
   if (searchEl) searchEl.value = state.hostConfigChangesSearchQuery;
@@ -13922,45 +13971,18 @@ async function loadHostConfigChanges() {
 
     if (!items.length) {
       groupsEl.innerHTML = '<p class="muted">Keine Änderungen im gewählten Zeitraum.</p>';
-      if (countryFilterEl) {
-        const cachedCountries = Array.isArray(state.hostConfigChangesAvailableCountries)
-          ? state.hostConfigChangesAvailableCountries
-          : [];
-        const selected = cachedCountries.includes(String(state.hostConfigChangesCountryFilter || "").toUpperCase())
-          ? String(state.hostConfigChangesCountryFilter || "").toUpperCase()
-          : "all";
-        state.hostConfigChangesCountryFilter = selected;
-        renderCountryFlagFilter(countryFilterEl, cachedCountries, selected, (nextFilter) => {
-          state.hostConfigChangesCountryFilter = nextFilter;
-          showHostConfigChangesIdleState();
-        });
-      }
+      refreshHostConfigChangesCountryFilter();
       return;
     }
 
-    // Collect unique country codes and render icon filter
-    const countries = new Set();
+    const countriesFromItems = [];
     items.forEach((item) => {
       const cc = asText(item.country_code, "").toUpperCase();
       if (cc && cc !== "-") {
-        countries.add(cc);
+        countriesFromItems.push(cc);
       }
     });
-    if (countryFilterEl) {
-      const sortedCountries = [...countries].sort();
-      const countriesForFilter = sortedCountries.length
-        ? sortedCountries
-        : (Array.isArray(state.hostConfigChangesAvailableCountries) ? state.hostConfigChangesAvailableCountries : []);
-      state.hostConfigChangesAvailableCountries = countriesForFilter;
-      const selected = countriesForFilter.includes(String(state.hostConfigChangesCountryFilter || "").toUpperCase())
-        ? String(state.hostConfigChangesCountryFilter || "").toUpperCase()
-        : "all";
-      state.hostConfigChangesCountryFilter = selected;
-      renderCountryFlagFilter(countryFilterEl, countriesForFilter, selected, (nextFilter) => {
-        state.hostConfigChangesCountryFilter = nextFilter;
-        showHostConfigChangesIdleState();
-      });
-    }
+    refreshHostConfigChangesCountryFilter(countriesFromItems);
 
     // Apply country filter
     let filteredItems = items;
@@ -15774,6 +15796,7 @@ function wireEvents() {
       state.globalSubMode = "host-config-changes";
       updateGlobalSubMode();
       showHostConfigChangesIdleState("Bitte Filter setzen und dann Suchen/Refresh klicken.");
+      refreshHostConfigChangesCountryFilter();
       await loadChangelogRebuildJobsStatus();
     });
   }
