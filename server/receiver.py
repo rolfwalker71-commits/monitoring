@@ -87,7 +87,7 @@ DEFAULT_TREND_DIGEST_TIME = "08:00"
 DEFAULT_ALERT_DIGEST_TIME = "08:05"
 SCHEDULE_TIMEZONE_NAME = os.getenv("MONITORING_SCHEDULE_TIMEZONE", "Europe/Zurich").strip() or "Europe/Zurich"
 DB_MAINTENANCE_INTERVAL_HOURS = max(1, min(24, int(os.getenv("MONITORING_DB_MAINT_INTERVAL_HOURS", "2") or "2")))
-SQLITE_BUSY_TIMEOUT_SECONDS = max(1.0, min(120.0, float(os.getenv("MONITORING_SQLITE_BUSY_TIMEOUT_SECONDS", "30") or "30")))
+SQLITE_BUSY_TIMEOUT_SECONDS = max(1.0, min(300.0, float(os.getenv("MONITORING_SQLITE_BUSY_TIMEOUT_SECONDS", "120") or "120")))
 SQLITE_CACHE_SIZE_MIB = max(8, min(512, int(os.getenv("MONITORING_SQLITE_CACHE_SIZE_MIB", "64") or "64")))
 SQLITE_MMAP_SIZE_MIB = max(0, min(2048, int(os.getenv("MONITORING_SQLITE_MMAP_SIZE_MIB", "256") or "256")))
 READ_ENDPOINT_CACHE_TTL_SECONDS = max(0.0, min(60.0, float(os.getenv("MONITORING_READ_ENDPOINT_CACHE_TTL_SECONDS", "8") or "8")))
@@ -151,6 +151,10 @@ _backup_jobs_lock = threading.Lock()
 _backup_jobs: dict[str, dict[str, str]] = {}
 _auto_backup_lock = threading.Lock()
 _db_maintenance_lock = threading.Lock()
+
+
+def _changelog_maintenance_active() -> bool:
+    return _db_maintenance_lock.locked()
 DB_CONNECT_TIMEOUT_SECONDS = max(5, int(os.getenv("MONITORING_DB_TIMEOUT_SECONDS", "30")))
 _web_session_purge_last_monotonic = 0.0
 _WEB_SESSION_PURGE_INTERVAL_SECONDS = max(60, int(os.getenv("MONITORING_WEB_SESSION_PURGE_INTERVAL_SECONDS", "300")))
@@ -6399,20 +6403,33 @@ class ChangelogJobProgressWriter:
                     "updated_at_utc": utc_now_iso(),
                 }
             }
-            with sqlite_connect() as progress_conn:
-                progress_conn.execute(
-                    f"PRAGMA busy_timeout = {_maintenance_sqlite_busy_timeout_ms()}"
-                )
-                _ensure_changelog_job_running(progress_conn, self._job_id)
-                progress_conn.execute(
-                    """
-                    UPDATE changelog_rebuild_jobs
-                    SET result_json = ?
-                    WHERE id = ? AND status = 'running'
-                    """,
-                    (json.dumps(payload, separators=(",", ":")), self._job_id),
-                )
-                progress_conn.commit()
+            last_locked_exc: sqlite3.OperationalError | None = None
+            for attempt in range(8):
+                try:
+                    with sqlite_connect() as progress_conn:
+                        progress_conn.execute(
+                            f"PRAGMA busy_timeout = {_maintenance_sqlite_busy_timeout_ms()}"
+                        )
+                        _ensure_changelog_job_running(progress_conn, self._job_id)
+                        progress_conn.execute(
+                            """
+                            UPDATE changelog_rebuild_jobs
+                            SET result_json = ?
+                            WHERE id = ? AND status = 'running'
+                            """,
+                            (json.dumps(payload, separators=(",", ":")), self._job_id),
+                        )
+                        progress_conn.commit()
+                    last_locked_exc = None
+                    break
+                except sqlite3.OperationalError as exc:
+                    error_text = str(exc).lower()
+                    if "locked" not in error_text and "busy" not in error_text:
+                        raise
+                    last_locked_exc = exc
+                    time.sleep(min(2.0, 0.15 * (attempt + 1)))
+            if last_locked_exc is not None:
+                raise last_locked_exc
             self._last_phase = phase
             self._last_hosts = hosts_processed
             self._last_reports = reports_scanned
@@ -7540,7 +7557,7 @@ def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int =
         return processed
     finally:
         _db_maintenance_lock.release()
-
+        _agent_ingest_queue_wakeup.set()
 
 
 def add_filesystem_blacklist_pattern(
@@ -15499,10 +15516,14 @@ def _agent_ingest_retry_backoff_seconds(attempt_count: int) -> int:
 
 def _agent_ingest_worker_loop() -> None:
     while True:
+        if _changelog_maintenance_active():
+            _agent_ingest_queue_wakeup.wait(AGENT_INGEST_WORKER_IDLE_SECONDS)
+            _agent_ingest_queue_wakeup.clear()
+            continue
+
         had_work = False
         try:
-            with sqlite3.connect(DB_PATH, timeout=30) as conn:
-                conn.execute("PRAGMA busy_timeout = 5000")
+            with sqlite_connect() as conn:
                 now_utc = utc_now_iso()
                 row = conn.execute(
                     """
@@ -21551,6 +21572,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
 
 def _startup_changelog_rebuild(days: int) -> None:
+    if not _db_maintenance_lock.acquire(blocking=False):
+        print("[startup] changelog rebuild skipped: andere Wartungsoperation aktiv.")
+        return
     _apply_background_maintenance_priority()
     try:
         with sqlite_connect() as conn:
@@ -21564,6 +21588,9 @@ def _startup_changelog_rebuild(days: int) -> None:
         )
     except Exception as exc:
         print(f"[startup] changelog rebuild failed: {exc}")
+    finally:
+        _db_maintenance_lock.release()
+        _agent_ingest_queue_wakeup.set()
 
 
 def main() -> None:
