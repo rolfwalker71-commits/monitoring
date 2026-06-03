@@ -303,6 +303,67 @@ function Get-AgentConfigBlock {
     return '{"available":true,"path":"' + $configPathJson + '","entries":[' + ($entries -join ',') + ']}'
 }
 
+function Get-TextFromFileBytes {
+    param([byte[]]$Bytes)
+
+    if (-not $Bytes -or $Bytes.Length -eq 0) {
+        return ''
+    }
+
+    if ($Bytes.Length -ge 3 -and $Bytes[0] -eq 0xEF -and $Bytes[1] -eq 0xBB -and $Bytes[2] -eq 0xBF) {
+        $utf8Bom = New-Object System.Text.UTF8Encoding $true
+        return $utf8Bom.GetString($Bytes, 3, $Bytes.Length - 3)
+    }
+    if ($Bytes.Length -ge 2 -and $Bytes[0] -eq 0xFF -and $Bytes[1] -eq 0xFE) {
+        return [System.Text.Encoding]::Unicode.GetString($Bytes, 2, $Bytes.Length - 2)
+    }
+    if ($Bytes.Length -ge 2 -and $Bytes[0] -eq 0xFE -and $Bytes[1] -eq 0xFF) {
+        return [System.Text.Encoding]::BigEndianUnicode.GetString($Bytes, 2, $Bytes.Length - 2)
+    }
+
+    $utf8 = New-Object System.Text.UTF8Encoding $false, $true
+    $decodedUtf8 = $utf8.GetString($Bytes)
+    if (-not [string]::IsNullOrWhiteSpace($decodedUtf8)) {
+        return $decodedUtf8
+    }
+
+    return [System.Text.Encoding]::Default.GetString($Bytes)
+}
+
+function Read-LogFileTailLines {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [int]$TailLines = 20
+    )
+
+    if ($TailLines -lt 1) {
+        return @()
+    }
+
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -eq 0) {
+        return @()
+    }
+
+    $text = Get-TextFromFileBytes -Bytes $bytes
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return @()
+    }
+
+    $normalized = $text -replace "`r`n", "`n" -replace "`r", "`n"
+    $allLines = $normalized -split "`n"
+    while ($allLines.Count -gt 0 -and [string]::IsNullOrWhiteSpace($allLines[$allLines.Count - 1])) {
+        $allLines = $allLines[0..($allLines.Count - 2)]
+    }
+    if ($allLines.Count -eq 0) {
+        return @()
+    }
+
+    $take = [Math]::Min($TailLines, $allLines.Count)
+    $startIndex = $allLines.Count - $take
+    return ,@($allLines[$startIndex..($allLines.Count - 1)])
+}
+
 function Get-AngSkripteLogsBlock {
     $dirPathJson = ConvertTo-JsonString $AngSkripteLogsDir
     if (-not (Test-Path -LiteralPath $AngSkripteLogsDir)) {
@@ -326,9 +387,7 @@ function Get-AngSkripteLogsBlock {
         $fileErrorJson = ''
         $lines = @()
         try {
-            $lines = @(
-                Get-Content -LiteralPath $logFile.FullName -Tail $AngSkripteLogTailLines -Encoding UTF8 -ErrorAction Stop
-            )
+            $lines = @(Read-LogFileTailLines -Path $logFile.FullName -TailLines $AngSkripteLogTailLines)
         } catch {
             $fileErrorJson = ConvertTo-JsonString $_.Exception.Message
         }
@@ -341,7 +400,8 @@ function Get-AngSkripteLogsBlock {
         $fileBlocks += (
             '{"name":"' + $nameJson +
             '","path":"' + $pathJson +
-            '","line_count":' + $lines.Count +
+            '","size_bytes":' + $logFile.Length +
+            ',"line_count":' + $lines.Count +
             ',"lines":[' + ($encodedLines -join ',') + ']' +
             ',"error":"' + $fileErrorJson + '"}'
         )

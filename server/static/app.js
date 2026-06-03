@@ -8726,23 +8726,39 @@ function renderAngSkripteLogs(angSkripteLogsBlock) {
     const name = asText(file?.name, "unbekannt");
     const filePath = asText(file?.path);
     const fileError = asText(file?.error);
-    const allLines = Array.isArray(file?.lines) ? file.lines.map((line) => asText(line)) : [];
-    const lineCount = Number(file?.line_count || allLines.length || 0);
+    const sizeBytes = Number(file?.size_bytes);
+    let allLines = [];
+    if (Array.isArray(file?.lines)) {
+      allLines = file.lines.map((line) => asText(line));
+    } else if (typeof file?.lines === "string") {
+      allLines = String(file.lines).split(/\r?\n/).map((line) => asText(line));
+    }
+    const lineCount = Number(file?.line_count ?? allLines.length ?? 0);
+    const sizeLabel = Number.isFinite(sizeBytes) && sizeBytes >= 0
+      ? ` | Größe: ${formatBytes(sizeBytes)}`
+      : "";
     if (fileError) {
       return `
         <section class="detail-card ang-skripte-log-card">
           <h4>${escapeHtml(name)}</h4>
           <p class="muted">${escapeHtml(fileError)}</p>
-          <p class="count compact">Pfad: ${escapeHtml(filePath || "-")}</p>
+          <p class="count compact">Pfad: ${escapeHtml(filePath || "-")}${escapeHtml(sizeLabel)}</p>
         </section>
       `;
     }
+    const terminalBody = allLines.length > 0
+      ? allLines.join("\n")
+      : [
+        "STATUS=EMPTY",
+        "MESSAGE=Datei erkannt, aber keine lesbaren Zeilen im Payload.",
+        "HINWEIS=Nach Agent-Update erneut melden (UTF-8/UTF-16/ANSI wird jetzt unterstützt).",
+      ].join("\n");
     return `
       <section class="detail-card ang-skripte-log-card">
         <h4>${escapeHtml(name)}</h4>
         ${renderTerminalViewer(
-          allLines.join("\n") || "(leer)",
-          `Pfad: ${filePath || "-"} | letzte ${Number.isFinite(lineCount) ? lineCount : allLines.length} Zeilen`
+          terminalBody,
+          `Pfad: ${filePath || "-"} | letzte ${lineCount} Zeilen${sizeLabel}`
         )}
       </section>
     `;
