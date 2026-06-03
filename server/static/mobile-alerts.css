@@ -234,12 +234,31 @@ body {
   letter-spacing: 0.04em;
 }
 
+.kpi-critical {
+  background: color-mix(in srgb, var(--critical) 11%, var(--panel));
+  border-color: color-mix(in srgb, var(--critical) 24%, var(--line));
+}
+
 .kpi-critical strong {
   color: var(--critical);
 }
 
+.kpi-warning {
+  background: color-mix(in srgb, var(--warning) 13%, var(--panel));
+  border-color: color-mix(in srgb, var(--warning) 26%, var(--line));
+}
+
 .kpi-warning strong {
   color: var(--warning);
+}
+
+.kpi-open {
+  background: color-mix(in srgb, var(--ink) 9%, var(--panel));
+  border-color: color-mix(in srgb, var(--ink) 16%, var(--line));
+}
+
+.kpi-open strong {
+  color: var(--ink);
 }
 
 .filter-chips {
