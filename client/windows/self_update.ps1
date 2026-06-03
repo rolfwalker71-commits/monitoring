@@ -328,7 +328,7 @@ function Download-RepoText {
 
         if ($curl) {
             try {
-                $result = & $curl.Source '--silent' '--show-error' '--fail' '--location' $url 2>&1
+                $result = & $curl.Source '--silent' '--show-error' '--fail' '--location' '--ssl-no-revoke' $url 2>&1
                 if ($LASTEXITCODE -eq 0) {
                     $txt = ($result | Out-String)
                     if ($txt) {
@@ -386,7 +386,7 @@ function Download-RepoFile {
 
         if ($curl) {
             try {
-                $result = & $curl.Source '--silent' '--show-error' '--fail' '--location' '--output' $DestinationPath $url 2>&1
+                $result = & $curl.Source '--silent' '--show-error' '--fail' '--location' '--ssl-no-revoke' '--output' $DestinationPath $url 2>&1
                 if ($LASTEXITCODE -eq 0) {
                     if (Test-DownloadedFileContent -RelativePath $RelativePath -Path $DestinationPath) {
                             $base = Get-UpdateBaseFromUrl -Url $url -RelativePath $RelativePath
@@ -464,7 +464,7 @@ function Test-ServerUrlReachable {
     $curl = Get-Command 'curl.exe' -ErrorAction SilentlyContinue
     if ($curl) {
         try {
-            $null = & $curl.Source '--silent' '--show-error' '--location' '--connect-timeout' '10' '--max-time' '20' '--output' 'NUL' $probeUrl 2>&1
+            $null = & $curl.Source '--silent' '--show-error' '--location' '--ssl-no-revoke' '--connect-timeout' '10' '--max-time' '20' '--output' 'NUL' $probeUrl 2>&1
             if ($LASTEXITCODE -eq 0) {
                 return $true
             }

@@ -5,11 +5,16 @@
     Installs the Windows monitoring agent.
 
 .EXAMPLE
-    # Download to temp file and run (as Administrator):
+    # Download to temp file and run (as Administrator, recommended on Windows):
     $tmp = "$env:TEMP\install_agent.ps1"
     (New-Object System.Net.WebClient).DownloadFile('https://monitoring.example.com/updates/client/windows/install_agent.ps1', $tmp)
-    & $tmp -ServerUrl 'https://monitoring.example.com'
+    & $tmp -ServerUrl 'https://monitoring.example.com' -ApiKey 'YOUR_API_KEY'
     Remove-Item $tmp -ErrorAction SilentlyContinue
+
+    # One-liner with curl (requires --ssl-no-revoke on many Windows hosts):
+    $u='https://monitoring.example.com/updates/client/windows/install_agent.ps1'
+    $s=(curl.exe -fsSL --ssl-no-revoke $u | Out-String)
+    & ([ScriptBlock]::Create($s)) -ServerUrl 'https://monitoring.example.com' -ApiKey 'YOUR_API_KEY'
 
     # Run directly from file (as Administrator):
     Set-ExecutionPolicy Bypass -Scope Process -Force

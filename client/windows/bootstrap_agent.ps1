@@ -135,7 +135,7 @@ function Download-FileBestEffort {
     $curl = Get-Command 'curl.exe' -ErrorAction SilentlyContinue
     if ($curl) {
         try {
-            $null = & $curl.Source '--silent' '--show-error' '--fail' '--location' '--output' $Destination $Url 2>&1
+            $null = & $curl.Source '--silent' '--show-error' '--fail' '--location' '--ssl-no-revoke' '--output' $Destination $Url 2>&1
             if ($LASTEXITCODE -eq 0) {
                 return $true
             }

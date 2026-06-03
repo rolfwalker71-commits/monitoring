@@ -65,7 +65,17 @@ curl -sSL https://infoboard.ang-schweiz.ch/updates/client/linux/install_agent.sh
 **Windows (PowerShell als Admin):**
 
 ```powershell
-irm https://infoboard.ang-schweiz.ch/updates/client/windows/install_agent.ps1 | iex
+$tmp = "$env:TEMP\install_agent.ps1"
+Invoke-WebRequest -Uri 'https://infoboard.ang-schweiz.ch/updates/client/windows/install_agent.ps1' -UseBasicParsing -OutFile $tmp
+& $tmp -ServerUrl 'https://infoboard.ang-schweiz.ch' -ApiKey 'DEIN_API_KEY'
+Remove-Item $tmp -ErrorAction SilentlyContinue
+```
+
+Falls du `curl.exe` nutzt: auf vielen Windows-Hosts schlägt HTTPS ohne `--ssl-no-revoke` fehl (`CRYPT_E_NO_REVOCATION_CHECK`). Dann z. B.:
+
+```powershell
+$s = (curl.exe -fsSL --ssl-no-revoke 'https://infoboard.ang-schweiz.ch/updates/client/windows/install_agent.ps1' | Out-String)
+& ([ScriptBlock]::Create($s)) -ServerUrl 'https://infoboard.ang-schweiz.ch' -ApiKey 'DEIN_API_KEY'
 ```
 
 **Windows repair/bootstrap für bestehende Hosts:**

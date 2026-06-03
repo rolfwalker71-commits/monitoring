@@ -385,11 +385,14 @@
           <li><strong>setup_harvest_sql_user.ps1</strong>: SQL-Harvest-User vorbereiten.</li>
           <li><strong>bulk_update_agents.ps1</strong>: Mehrere Windows Agents aktualisieren.</li>
         </ul>
-        <pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install_agent.ps1 
-  -ServerUrl https://monitoring.example.com 
-  -ApiKey MEIN_KEY 
-  -IntervalMinutes 15 
-  -UpdateHours 6</pre>
+        <pre>$tmp = "$env:TEMP\install_agent.ps1"
+Invoke-WebRequest -Uri 'https://infoboard.ang-schweiz.ch/updates/client/windows/install_agent.ps1' -UseBasicParsing -OutFile $tmp
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmp `
+  -ServerUrl https://infoboard.ang-schweiz.ch `
+  -ApiKey MEIN_KEY `
+  -IntervalMinutes 15 `
+  -UpdateHours 6
+# curl: --ssl-no-revoke bei CRYPT_E_NO_REVOCATION_CHECK</pre>
       </article>
 
       <article class="panel card accent-green">
