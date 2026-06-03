@@ -61,6 +61,7 @@ $AngLogTailLines = if ($env:ANG_LOG_TAIL_LINES) { [int]$env:ANG_LOG_TAIL_LINES }
 $AngLogMaxFiles = if ($env:ANG_LOG_MAX_FILES) { [int]$env:ANG_LOG_MAX_FILES } else { 80 }
 $AngLogRotationKeep = if ($env:ANG_LOG_ROTATION_KEEP) { [int]$env:ANG_LOG_ROTATION_KEEP } else { 2 }
 $AngLogMaxAgeDays = if ($env:ANG_LOG_MAX_AGE_DAYS) { [int]$env:ANG_LOG_MAX_AGE_DAYS } else { 7 }
+$AngLogMaxReadBytes = if ($env:ANG_LOG_MAX_READ_BYTES -match '^\d+$') { [int]$env:ANG_LOG_MAX_READ_BYTES } else { 524288 }
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -377,21 +378,142 @@ function Split-AngLogPhysicalLine {
 
 function Expand-AngLogPhysicalLines {
     param(
-        [Parameter(Mandatory = $true)][string[]]$PhysicalLines
+        [AllowNull()]
+        [string[]]$PhysicalLines = @()
     )
 
+    if ($null -eq $PhysicalLines) {
+        return ,@()
+    }
+
+    # Force array binding – a bare "" scalar would otherwise fail [string[]] binding.
+    $physicalLineArray = @($PhysicalLines)
+    if ((Get-AngCollectionCount $physicalLineArray) -eq 0) {
+        return ,@()
+    }
+
     $logicalLines = New-Object System.Collections.Generic.List[string]
-    foreach ($physicalLine in $PhysicalLines) {
+    foreach ($physicalLine in $physicalLineArray) {
+        if ([string]::IsNullOrWhiteSpace($physicalLine)) {
+            continue
+        }
         foreach ($logicalLine in (Split-AngLogPhysicalLine -Line ([string]$physicalLine))) {
-            [void]$logicalLines.Add([string]$logicalLine)
+            if (-not [string]::IsNullOrWhiteSpace($logicalLine)) {
+                [void]$logicalLines.Add([string]$logicalLine)
+            }
         }
     }
 
     if ($logicalLines.Count -eq 0) {
-        return @()
+        return ,@()
     }
 
     return ,@($logicalLines.ToArray())
+}
+
+function Read-FileBytesForLogTail {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [int]$MaxBytes = 524288
+    )
+
+    if ($MaxBytes -lt 4096) {
+        $MaxBytes = 4096
+    }
+
+    $share = [System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete
+    $attempts = 3
+    $delayMs = 120
+
+    for ($attempt = 1; $attempt -le $attempts; $attempt++) {
+        try {
+            $fs = [System.IO.File]::Open(
+                $Path,
+                [System.IO.FileMode]::Open,
+                [System.IO.FileAccess]::Read,
+                $share
+            )
+            try {
+                $length = [int64]$fs.Length
+                if ($length -le 0) {
+                    return ,@{
+                        Bytes = [byte[]]::new(0)
+                        Truncated = $false
+                    }
+                }
+
+                $readLen = [int][Math]::Min($MaxBytes, $length)
+                $truncated = $readLen -lt $length
+                if ($truncated) {
+                    [void]$fs.Seek($length - $readLen, [System.IO.SeekOrigin]::Begin)
+                }
+
+                $buffer = New-Object byte[] $readLen
+                $offset = 0
+                while ($offset -lt $readLen) {
+                    $read = $fs.Read($buffer, $offset, $readLen - $offset)
+                    if ($read -le 0) {
+                        break
+                    }
+                    $offset += $read
+                }
+
+                if ($offset -le 0) {
+                    return ,@{
+                        Bytes = [byte[]]::new(0)
+                        Truncated = $truncated
+                    }
+                }
+                if ($offset -lt $readLen) {
+                    $buffer = $buffer[0..($offset - 1)]
+                }
+
+                return ,@{
+                    Bytes = $buffer
+                    Truncated = $truncated
+                }
+            } finally {
+                $fs.Dispose()
+            }
+        } catch {
+            if ($attempt -ge $attempts) {
+                throw
+            }
+            Start-Sleep -Milliseconds $delayMs
+            $delayMs = [Math]::Min($delayMs * 2, 800)
+        }
+    }
+
+    return ,@{
+        Bytes = [byte[]]::new(0)
+        Truncated = $false
+    }
+}
+
+function Get-AngLogPhysicalLinesFromText {
+    param(
+        [Parameter(Mandatory = $true)][string]$Text,
+        [switch]$DropLeadingPartialLine
+    )
+
+    $normalized = $Text -replace "`r`n", "`n" -replace "`r", "`n"
+    if ($DropLeadingPartialLine) {
+        $firstNewline = $normalized.IndexOf("`n")
+        if ($firstNewline -ge 0) {
+            $normalized = $normalized.Substring($firstNewline + 1)
+        }
+    }
+
+    $physicalLines = New-Object System.Collections.Generic.List[string]
+    foreach ($segment in ($normalized -split "`n")) {
+        [void]$physicalLines.Add([string]$segment)
+    }
+    while ($physicalLines.Count -gt 0 -and [string]::IsNullOrWhiteSpace($physicalLines[$physicalLines.Count - 1])) {
+        $physicalLines.RemoveAt($physicalLines.Count - 1)
+    }
+
+    $filtered = @($physicalLines | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    return ,@($filtered)
 }
 
 function Read-LogFileTailLines {
@@ -404,8 +526,9 @@ function Read-LogFileTailLines {
         return ,@()
     }
 
-    $bytes = [System.IO.File]::ReadAllBytes($Path)
-    if ($bytes.Length -eq 0) {
+    $readResult = Read-FileBytesForLogTail -Path $Path -MaxBytes $AngLogMaxReadBytes
+    $bytes = $readResult.Bytes
+    if (-not $bytes -or $bytes.Length -eq 0) {
         return ,@()
     }
 
@@ -414,11 +537,7 @@ function Read-LogFileTailLines {
         return ,@()
     }
 
-    $normalized = $text -replace "`r`n", "`n" -replace "`r", "`n"
-    $physicalLines = @($normalized -split "`n")
-    while ((Get-AngCollectionCount $physicalLines) -gt 0 -and [string]::IsNullOrWhiteSpace($physicalLines[(Get-AngCollectionCount $physicalLines) - 1])) {
-        $physicalLines = $physicalLines[0..((Get-AngCollectionCount $physicalLines) - 2)]
-    }
+    $physicalLines = Get-AngLogPhysicalLinesFromText -Text $text -DropLeadingPartialLine:($readResult.Truncated)
     if ((Get-AngCollectionCount $physicalLines) -eq 0) {
         return ,@()
     }
