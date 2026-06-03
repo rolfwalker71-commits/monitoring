@@ -87,7 +87,6 @@ let sessionRefreshTimerId = null;
 let sessionCountdownTimerId = null;
 let hostSearchFilterDebounceTimerId = null;
 let hostLicenseHoverPopupEl = null;
-let hostLicenseHoverHideTimerId = null;
 let hostLicenseHoverActiveHost = "";
 let hostLicenseHoverPinnedKey = "";
 let hostLicenseOutsideClickWired = false;
@@ -9962,15 +9961,6 @@ function ensureHostLicenseHoverPopup() {
   popup.id = "hostLicenseHoverPopup";
   popup.className = "host-license-hover-popup hidden";
   popup.innerHTML = "<p class=\"muted\">Lade Lizenzinfos…</p>";
-  popup.addEventListener("mouseenter", () => {
-    if (hostLicenseHoverHideTimerId !== null) {
-      window.clearTimeout(hostLicenseHoverHideTimerId);
-      hostLicenseHoverHideTimerId = null;
-    }
-  });
-  popup.addEventListener("mouseleave", () => {
-    scheduleHideHostLicenseHoverPopup();
-  });
   popup.addEventListener("click", async (event) => {
     const button = event.target instanceof Element ? event.target.closest("[data-host-license-copy]") : null;
     if (!button) return;
@@ -10008,10 +9998,6 @@ function positionHostLicenseHoverPopup(anchorEl) {
 }
 
 function hideHostLicenseHoverPopup(clearPin = true) {
-  if (hostLicenseHoverHideTimerId !== null) {
-    window.clearTimeout(hostLicenseHoverHideTimerId);
-    hostLicenseHoverHideTimerId = null;
-  }
   if (hostLicenseHoverPopupEl) {
     hostLicenseHoverPopupEl.classList.add("hidden");
   }
@@ -10019,18 +10005,6 @@ function hideHostLicenseHoverPopup(clearPin = true) {
   if (clearPin) {
     hostLicenseHoverPinnedKey = "";
   }
-}
-
-function scheduleHideHostLicenseHoverPopup() {
-  if (hostLicenseHoverPinnedKey) {
-    return;
-  }
-  if (hostLicenseHoverHideTimerId !== null) {
-    window.clearTimeout(hostLicenseHoverHideTimerId);
-  }
-  hostLicenseHoverHideTimerId = window.setTimeout(() => {
-    hideHostLicenseHoverPopup(true);
-  }, 320);
 }
 
 function ensureHostLicenseOutsideClickHandler() {
@@ -10099,15 +10073,12 @@ function renderHostLicenseHoverPopupContent(hostname, data) {
   `;
 }
 
-async function showHostLicenseHoverPopup(anchorEl, hostname, hostUid = "", options = {}) {
+async function showHostLicenseHoverPopup(anchorEl, hostname, hostUid = "") {
   const key = asText(hostUid, "").trim() || asText(hostname, "").trim();
   if (!anchorEl || !key) return;
-  const pinOpen = options.pin === true;
   ensureHostLicenseOutsideClickHandler();
   const popup = ensureHostLicenseHoverPopup();
-  if (pinOpen) {
-    hostLicenseHoverPinnedKey = key;
-  }
+  hostLicenseHoverPinnedKey = key;
   if (hostLicenseHoverHideTimerId !== null) {
     window.clearTimeout(hostLicenseHoverHideTimerId);
     hostLicenseHoverHideTimerId = null;
@@ -11523,7 +11494,7 @@ function wireHostListInteractions() {
         hideHostLicenseHoverPopup(true);
         return;
       }
-      void showHostLicenseHoverPopup(licenseBadge, hostAttr, uidAttr, { pin: true });
+      void showHostLicenseHoverPopup(licenseBadge, hostAttr, uidAttr);
       return;
     }
 
@@ -11633,7 +11604,7 @@ function wireHostListInteractions() {
       if (hostLicenseHoverPopupEl && !hostLicenseHoverPopupEl.classList.contains("hidden") && hostLicenseHoverActiveHost === activeKey) {
         hideHostLicenseHoverPopup(true);
       } else {
-        void showHostLicenseHoverPopup(licenseBadge, hostAttr, uidAttr, { pin: true });
+        void showHostLicenseHoverPopup(licenseBadge, hostAttr, uidAttr);
       }
       return;
     }
@@ -11659,42 +11630,6 @@ function wireHostListInteractions() {
     event.preventDefault();
     event.stopPropagation();
     openHostContextMenu(hostname, hostUid, event.clientX, event.clientY);
-  });
-
-  hostList.addEventListener("mouseover", (event) => {
-    const target = event.target instanceof Element ? event.target.closest(".host-license-info-badge") : null;
-    if (!target) {
-      return;
-    }
-    const hostAttr = asText(target.getAttribute("data-host-license-host"), "").trim();
-    const uidAttr = asText(target.getAttribute("data-host-license-uid"), "").trim();
-    if (!hostAttr) {
-      return;
-    }
-    if (hostLicenseHoverPinnedKey) {
-      return;
-    }
-    void showHostLicenseHoverPopup(target, hostAttr, uidAttr, { pin: false });
-  });
-
-  hostList.addEventListener("mousemove", (event) => {
-    const target = event.target instanceof Element ? event.target.closest(".host-license-info-badge") : null;
-    if (!target) {
-      return;
-    }
-    positionHostLicenseHoverPopup(target);
-  });
-
-  hostList.addEventListener("mouseout", (event) => {
-    const fromBadge = event.target instanceof Element ? event.target.closest(".host-license-info-badge") : null;
-    if (!fromBadge) {
-      return;
-    }
-    const related = event.relatedTarget instanceof Element ? event.relatedTarget : null;
-    if (related && (related.closest(".host-license-info-badge") === fromBadge || related.closest("#hostLicenseHoverPopup"))) {
-      return;
-    }
-    scheduleHideHostLicenseHoverPopup();
   });
 
   state.hostListDelegatedWired = true;
