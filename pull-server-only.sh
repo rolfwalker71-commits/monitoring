@@ -41,19 +41,39 @@ if [ -z "$GITHUB_TOKEN" ] && [ -f "$TARGET_ENV_FILE" ]; then
   GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
 fi
 
+CURL_CONNECT_TIMEOUT="${CURL_CONNECT_TIMEOUT:-15}"
+CURL_MAX_TIME="${CURL_MAX_TIME:-120}"
+
 curl_github() {
   local accept_header="${1:-application/vnd.github+json}"
   shift || true
   if [ -n "$GITHUB_TOKEN" ]; then
-    curl -fsSL --retry 5 --retry-delay 1 \
+    curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" \
+      --retry 5 --retry-delay 1 \
       -H "Authorization: Bearer $GITHUB_TOKEN" \
       -H "Accept: $accept_header" \
       -H "X-GitHub-Api-Version: 2022-11-28" \
       -H "User-Agent: monitoring-pull-server-only" \
       "$@"
   else
-    curl -fsSL --retry 5 --retry-delay 1 \
+    curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" \
+      --retry 5 --retry-delay 1 \
       -H "Accept: $accept_header" \
+      -H "User-Agent: monitoring-pull-server-only" \
+      "$@"
+  fi
+}
+
+curl_raw_github() {
+  if [ -n "$GITHUB_TOKEN" ]; then
+    curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" \
+      --retry 5 --retry-delay 1 \
+      -H "Authorization: Bearer $GITHUB_TOKEN" \
+      -H "User-Agent: monitoring-pull-server-only" \
+      "$@"
+  else
+    curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" \
+      --retry 5 --retry-delay 1 \
       -H "User-Agent: monitoring-pull-server-only" \
       "$@"
   fi
@@ -64,14 +84,25 @@ download_repo_file() {
   local target_path="$2"
   local api_url="$GITHUB_API_BASE/contents/$source_path?ref=$REF"
   local api_url_main="$GITHUB_API_BASE/contents/$source_path?ref=main"
+  local raw_url="$RAW_BASE/$source_path"
+  local raw_url_main="https://raw.githubusercontent.com/$OWNER_REPO/main/$source_path"
   mkdir -p "$(dirname "$target_path")"
+
+  if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
+    curl_raw_github "$raw_url" -o "$target_path" \
+      || curl_raw_github "$raw_url_main" -o "$target_path"
+    return $?
+  fi
 
   if [ -n "$GITHUB_TOKEN" ]; then
     # Prefer pinned ref, then fallback to main if GitHub API returns not found.
     curl_github "application/vnd.github.raw" "$api_url" -o "$target_path" \
-      || curl_github "application/vnd.github.raw" "$api_url_main" -o "$target_path"
+      || curl_github "application/vnd.github.raw" "$api_url_main" -o "$target_path" \
+      || curl_raw_github "$raw_url" -o "$target_path" \
+      || curl_raw_github "$raw_url_main" -o "$target_path"
   else
-    curl_github "application/octet-stream" "$RAW_BASE/$source_path" -o "$target_path"
+    curl_raw_github "$raw_url" -o "$target_path" \
+      || curl_raw_github "$raw_url_main" -o "$target_path"
   fi
 }
 
@@ -87,6 +118,70 @@ Alternative: store MONITORING_GITHUB_TOKEN in monitoring.env on the server.
 EOF
 }
 
+print_github_unreachable_hint() {
+  cat >&2 <<'EOF'
+GitHub API (api.github.com) ist vom Server aus nicht erreichbar.
+Typische Ursachen: Firewall, Proxy, DNS, oder ausgehender HTTPS-Block.
+
+Workarounds fuer pull-server-only.sh:
+  export MONITORING_PULL_USE_RAW_ONLY=1
+  export MONITORING_DEPLOY_REF=main
+  # optional festen Commit pinnen (ohne API):
+  export MONITORING_DEPLOY_SHA=b612a18
+
+Pruefen:
+  curl -I --connect-timeout 5 https://api.github.com
+  curl -I --connect-timeout 5 https://raw.githubusercontent.com
+
+Wenn auch raw.githubusercontent.com blockiert ist: Dateien per rsync/scp vom
+Entwicklungsrechner nach TARGET_DIR kopieren und monitoring neu starten.
+EOF
+}
+
+resolve_deploy_ref() {
+  local fallback_ref="${MONITORING_DEPLOY_REF:-main}"
+  COMMIT_META_JSON=""
+
+  if [ -n "${MONITORING_DEPLOY_SHA:-}" ]; then
+    REF="${MONITORING_DEPLOY_SHA}"
+    echo "Deploy-Ref: $REF (MONITORING_DEPLOY_SHA, GitHub API uebersprungen)"
+    return 0
+  fi
+
+  if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
+    REF="$fallback_ref"
+    echo "Deploy-Ref: $REF (MONITORING_PULL_USE_RAW_ONLY=1, GitHub API uebersprungen)"
+    return 0
+  fi
+
+  if COMMIT_META_JSON="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE/commits/$fallback_ref" 2>/dev/null)"; then
+    SHA=""
+    if command -v python3 >/dev/null 2>&1; then
+      SHA="$(printf '%s\n' "$COMMIT_META_JSON" | python3 -c 'import json,sys; print((json.load(sys.stdin) or {}).get("sha", ""))' 2>/dev/null || true)"
+    fi
+    if [ -z "$SHA" ]; then
+      SHA="$(printf '%s\n' "$COMMIT_META_JSON" \
+        | awk 'match($0, /"sha"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"/) { m=substr($0, RSTART, RLENGTH); sub(/^.*"/, "", m); sub(/"$/, "", m); print m; exit }')"
+    fi
+    if [ -n "$SHA" ]; then
+      REF="$SHA"
+      GITHUB_COMMIT_ISO="$(printf '%s\n' "$COMMIT_META_JSON" \
+        | sed -n 's/.*"date":[[:space:]]*"\([0-9T:\-]\+Z\)".*/\1/p' \
+        | head -n 1)"
+      if [ -n "$GITHUB_COMMIT_ISO" ]; then
+        GITHUB_COMMIT_TIME="$(date -u -d "$GITHUB_COMMIT_ISO" '+%d.%m.%y %H:%M UTC' 2>/dev/null || date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$GITHUB_COMMIT_ISO" '+%d.%m.%y %H:%M UTC' 2>/dev/null || echo "")"
+      fi
+      echo "Deploy-Ref: $REF (via GitHub API /commits/$fallback_ref)"
+      return 0
+    fi
+  fi
+
+  REF="$fallback_ref"
+  echo "WARNUNG: api.github.com nicht erreichbar – Fallback auf ref=$REF via raw.githubusercontent.com" >&2
+  print_github_unreachable_hint
+  return 0
+}
+
 echo "Installiere Serverteil nach: $TARGET_DIR"
 
 # Speed/strictness tuning:
@@ -97,39 +192,9 @@ MAX_PARALLEL_DOWNLOADS="${MAX_PARALLEL_DOWNLOADS:-8}"
 
 mkdir -p "$TARGET_DIR/server/static/icons" "$TARGET_DIR/server/data" "$TARGET_DIR/updates/client/windows" "$TARGET_DIR/updates/client/linux"
 
-if ! COMMIT_META_JSON="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE/commits/main")"; then
-  echo "Konnte Commit-Metadaten von GitHub nicht laden." >&2
-  if [ -z "$GITHUB_TOKEN" ]; then
-    print_private_repo_hint
-  fi
-  exit 1
-fi
-
-SHA=""
-if command -v python3 >/dev/null 2>&1; then
-  SHA="$(printf '%s\n' "$COMMIT_META_JSON" | python3 -c 'import json,sys; print((json.load(sys.stdin) or {}).get("sha", ""))' 2>/dev/null || true)"
-fi
-if [ -z "$SHA" ]; then
-  SHA="$(printf '%s\n' "$COMMIT_META_JSON" \
-    | awk 'match($0, /"sha"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"/) { m=substr($0, RSTART, RLENGTH); sub(/^.*"/, "", m); sub(/"$/, "", m); print m; exit }')"
-fi
-
-GITHUB_COMMIT_ISO="$(printf '%s\n' "$COMMIT_META_JSON" \
-  | sed -n 's/.*"date":[[:space:]]*"\([0-9T:\-]\+Z\)".*/\1/p' \
-  | head -n 1)"
-
 GITHUB_COMMIT_TIME=""
-if [ -n "$GITHUB_COMMIT_ISO" ]; then
-  GITHUB_COMMIT_TIME="$(date -u -d "$GITHUB_COMMIT_ISO" '+%d.%m.%y %H:%M UTC' 2>/dev/null || date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$GITHUB_COMMIT_ISO" '+%d.%m.%y %H:%M UTC' 2>/dev/null || echo "")"
-fi
-
-if [ -z "$SHA" ]; then
-  echo "Konnte Commit-SHA nicht ermitteln." >&2
-  exit 1
-fi
-
-REF="$SHA"
-RAW_BASE="https://raw.githubusercontent.com/$OWNER_REPO/$SHA"
+resolve_deploy_ref
+RAW_BASE="https://raw.githubusercontent.com/$OWNER_REPO/$REF"
 
 # Hilfsfunction fuer parallele downloads
 download_file() {
@@ -214,8 +279,8 @@ verify_synced_file() {
   return 1
 }
 
-export -f download_file download_repo_file checksum_file curl_github
-export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE SHA REF OWNER_REPO
+export -f download_file download_repo_file checksum_file curl_github curl_raw_github
+export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE REF OWNER_REPO CURL_CONNECT_TIMEOUT CURL_MAX_TIME
 
 FILES_LIST="
 server/receiver.py
@@ -269,7 +334,7 @@ if [ "$VERIFY_SYNC" = "1" ]; then
     echo "Verifikation fehlgeschlagen: $VERIFY_ERRORS Datei(en) stimmen nicht mit dem gepinnten Commit ueberein." >&2
     exit 1
   fi
-  echo "Verifikation erfolgreich ✓ Alle Dateien entsprechen Commit $SHA"
+  echo "Verifikation erfolgreich ✓ Alle Dateien entsprechen Commit $REF"
 else
   echo "Verifikation uebersprungen (VERIFY_SYNC=0, Standard fuer schnellen Pull)"
 fi
@@ -300,39 +365,40 @@ else
   echo "WARNUNG: Konnte neue pull-server-only.sh nicht laden." >&2
 fi
 
-ICONS_API="$GITHUB_API_BASE/contents/server/static/icons?ref=$SHA"
 TMP_DIR="$(mktemp -d)"
 cleanup() {
   rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT
 
-ICONS_JSON="$TMP_DIR/icons.json"
-if ! curl_github "application/vnd.github+json" "$ICONS_API" -o "$ICONS_JSON"; then
-  echo "Konnte die Icon-Liste von GitHub nicht laden." >&2
-  if [ -z "$GITHUB_TOKEN" ]; then
-    print_private_repo_hint
-  fi
-  exit 1
-fi
-
 ICON_NAMES_FILE="$TMP_DIR/icon_names.txt"
-grep -o '"name":[[:space:]]*"[^"]*\.png"' "$ICONS_JSON" \
-  | cut -d '"' -f 4 \
-  | sort -u > "$ICON_NAMES_FILE"
+: > "$ICON_NAMES_FILE"
 
-if [ ! -s "$ICON_NAMES_FILE" ]; then
-  echo "Keine PNG-Icons geladen (Liste war leer oder ungeeignet)." >&2
-  exit 1
+if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" != "1" ]; then
+  ICONS_API="$GITHUB_API_BASE/contents/server/static/icons?ref=$REF"
+  ICONS_JSON="$TMP_DIR/icons.json"
+  if curl_github "application/vnd.github+json" "$ICONS_API" -o "$ICONS_JSON" 2>/dev/null; then
+    grep -o '"name":[[:space:]]*"[^"]*\.png"' "$ICONS_JSON" \
+      | cut -d '"' -f 4 \
+      | sort -u > "$ICON_NAMES_FILE"
+  else
+    echo "WARNUNG: Icon-Liste via API nicht verfuegbar – ueberspringe dynamische Icon-Sync." >&2
+  fi
+else
+  echo "Icon-Sync uebersprungen (MONITORING_PULL_USE_RAW_ONLY=1)."
 fi
 
-ICON_COUNT="$(wc -l < "$ICON_NAMES_FILE" | tr -d ' ')"
-echo "Lade ${ICON_COUNT} PNG-Icons parallel..."
-if ! sed 's#^#server/static/icons/#' "$ICON_NAMES_FILE" | xargs -P "$MAX_PARALLEL_DOWNLOADS" -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"'; then
-  echo "Fehler bei Icon-Downloads (nicht kritisch)" >&2
+if [ -s "$ICON_NAMES_FILE" ]; then
+  ICON_COUNT="$(wc -l < "$ICON_NAMES_FILE" | tr -d ' ')"
+  echo "Lade ${ICON_COUNT} PNG-Icons parallel..."
+  if ! sed 's#^#server/static/icons/#' "$ICON_NAMES_FILE" | xargs -P "$MAX_PARALLEL_DOWNLOADS" -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"'; then
+    echo "Fehler bei Icon-Downloads (nicht kritisch)" >&2
+  fi
+  echo "Icons geladen ✓"
+else
+  echo "Keine zusaetzlichen Icons zu laden."
 fi
-echo "Icons geladen ✓"
-echo "$SHA" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
+echo "$REF" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
 DEPLOY_TIME="$(date '+%d.%m.%y %H:%M')"
 
 LATEST_META_AFTER="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE/commits/main" || true)"
@@ -343,9 +409,9 @@ LATEST_SHA_AFTER="$(printf '%s\n' "$LATEST_META_AFTER" \
 DEPLOYED_SHA_FILE="$(cat "$TARGET_DIR/DEPLOYED_COMMIT_SHA" 2>/dev/null || true)"
 
 if [ -n "$GITHUB_COMMIT_TIME" ]; then
-  echo "Fertig. Deploy-Commit: $SHA [GitHub: $GITHUB_COMMIT_TIME | Deploy: $DEPLOY_TIME]"
+  echo "Fertig. Deploy-Commit: $REF [GitHub: $GITHUB_COMMIT_TIME | Deploy: $DEPLOY_TIME]"
 else
-  echo "Fertig. Deploy-Commit: $SHA [Deploy: $DEPLOY_TIME]"
+  echo "Fertig. Deploy-Commit: $REF [Deploy: $DEPLOY_TIME]"
 fi
 
 if [ -n "$LATEST_SHA_AFTER" ] && [ "$DEPLOYED_SHA_FILE" = "$LATEST_SHA_AFTER" ]; then
