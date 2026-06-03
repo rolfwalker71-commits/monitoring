@@ -7234,6 +7234,13 @@ def _mark_stale_running_changelog_rebuild_jobs_failed(
         if reference_dt >= cutoff_dt:
             continue
 
+        # Inventur near completion: long snapshot writes may pause progress timestamps briefly.
+        if isinstance(progress, dict):
+            reports_scanned = int(progress.get("reports_scanned", 0) or 0)
+            reports_total = int(progress.get("reports_total", 0) or 0)
+            if reports_total > 0 and reports_scanned >= max(1, int(reports_total * 0.95)):
+                continue
+
         conn.execute(
             """
             UPDATE changelog_rebuild_jobs
@@ -7496,13 +7503,86 @@ def list_changelog_rebuild_jobs(
     ]
 
 
+def list_changelog_rebuild_jobs_for_api(conn: sqlite3.Connection, limit: int = 20) -> list[dict]:
+    """Lightweight job list for UI polling (no mark_stale, SQL json_extract only)."""
+    safe_limit = max(1, min(int(limit or 20), 200))
+    rows = conn.execute(
+        """
+        SELECT id,
+               requested_at_utc,
+               requested_by,
+               scheduled_for_utc,
+               days,
+               force_rebuild,
+               status,
+               started_at_utc,
+               finished_at_utc,
+               error_message,
+               json_extract(result_json, '$.progress.phase'),
+               json_extract(result_json, '$.progress.phase_step'),
+               json_extract(result_json, '$.progress.phase_steps_total'),
+               json_extract(result_json, '$.progress.reports_scanned'),
+               json_extract(result_json, '$.progress.reports_total'),
+               json_extract(result_json, '$.progress.hosts_processed'),
+               json_extract(result_json, '$.progress.hosts_total'),
+               json_extract(result_json, '$.progress.current_host'),
+               json_extract(result_json, '$.progress.inserted_changes'),
+               json_extract(result_json, '$.progress.inserted_events'),
+               json_extract(result_json, '$.progress.message'),
+               json_extract(result_json, '$.progress.updated_at_utc'),
+               json_extract(result_json, '$.progress.build_version'),
+               COALESCE(job_mode, 'rebuild')
+        FROM changelog_rebuild_jobs
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (safe_limit,),
+    ).fetchall()
+    jobs: list[dict] = []
+    for row in rows:
+        progress = {
+            key: value
+            for key, value in {
+                "phase": row[10],
+                "phase_step": row[11],
+                "phase_steps_total": row[12],
+                "reports_scanned": row[13],
+                "reports_total": row[14],
+                "hosts_processed": row[15],
+                "hosts_total": row[16],
+                "current_host": row[17],
+                "inserted_changes": row[18],
+                "inserted_events": row[19],
+                "message": row[20],
+                "updated_at_utc": row[21],
+                "build_version": row[22],
+            }.items()
+            if value is not None and str(value).strip() != ""
+        }
+        result: dict = {"progress": progress} if progress else {}
+        jobs.append({
+            "id": int(row[0] or 0),
+            "requested_at_utc": str(row[1] or ""),
+            "requested_by": str(row[2] or ""),
+            "scheduled_for_utc": str(row[3] or ""),
+            "days": int(row[4] or 0),
+            "force_rebuild": bool(int(row[5] or 0)),
+            "status": str(row[6] or "pending"),
+            "started_at_utc": str(row[7] or ""),
+            "finished_at_utc": str(row[8] or ""),
+            "error_message": str(row[9] or ""),
+            "result": result,
+            "job_mode": str(row[23] or "rebuild"),
+        })
+    return jobs
+
+
 def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int = 1) -> list[dict]:
     if not _db_maintenance_lock.acquire(blocking=False):
         return []
 
     try:
         _apply_background_maintenance_priority()
-        _mark_stale_running_changelog_rebuild_jobs_failed(conn)
 
         safe_max = max(1, min(int(max_jobs or 1), 5))
         now_iso = utc_now_iso()
@@ -10324,7 +10404,11 @@ def backfill_host_config_changes(
                     f"Report {report_count}/{reports_total}: {hostname}…"
                 )
                 conn.commit()
-                if report_count == 1 or report_count % (10 if inventory_greenfield else 100) == 0:
+                reports_remaining = max(0, int(reports_total or 0) - report_count)
+                pulse_every = 10 if inventory_greenfield else 100
+                if reports_remaining <= 1000:
+                    pulse_every = 1 if inventory_greenfield else 5
+                if report_count == 1 or report_count % pulse_every == 0 or reports_remaining <= 50:
                     _pulse_backfill_progress(
                         progress_callback,
                         backfill_pulse_state,
@@ -10588,7 +10672,36 @@ def backfill_host_config_changes(
 
     finally:
         read_conn.close()
-    for host_key, snapshot in last_snapshot_by_host_key.items():
+
+    snapshot_hosts = list(last_snapshot_by_host_key.items())
+    license_hosts = [
+        (host_key, license_counts)
+        for host_key, license_counts in last_license_counts_by_host_key.items()
+        if license_counts
+    ]
+    if callable(progress_callback) and (snapshot_hosts or license_hosts):
+        try:
+            progress_callback({
+                "phase": "config_backfill",
+                "phase_step": 2,
+                "phase_steps_total": int(phase_steps_total or 3),
+                "reports_total": reports_total,
+                "reports_scanned": report_count,
+                "hosts_processed": hosts_processed,
+                "hosts_total": backfill_pulse_state.get("hosts_total", hosts_total),
+                "current_host": "",
+                "inserted_changes": inserted_changes,
+                "message": (
+                    f"Host-Config: Speichere Snapshots (0/{len(snapshot_hosts)})…"
+                    if snapshot_hosts
+                    else "Host-Config: Speichere Lizenz-Snapshots…"
+                ),
+            })
+        except Exception:
+            pass
+        conn.commit()
+
+    for snap_idx, (host_key, snapshot) in enumerate(snapshot_hosts, start=1):
         updated_at_utc = last_seen_at_by_host_key.get(host_key, utc_now_iso())
         conn.execute(
             """
@@ -10632,10 +10745,28 @@ def backfill_host_config_changes(
                 updated_at_utc,
             ),
         )
+        if callable(progress_callback) and (
+            snap_idx == 1 or snap_idx == len(snapshot_hosts) or snap_idx % 5 == 0
+        ):
+            try:
+                progress_callback({
+                    "phase": "config_backfill",
+                    "phase_step": 2,
+                    "phase_steps_total": int(phase_steps_total or 3),
+                    "reports_total": reports_total,
+                    "reports_scanned": report_count,
+                    "hosts_processed": hosts_processed,
+                    "hosts_total": backfill_pulse_state.get("hosts_total", hosts_total),
+                    "current_host": str(last_hostname_by_host_key.get(host_key, host_key) or host_key),
+                    "inserted_changes": inserted_changes,
+                    "message": f"Host-Config: Speichere Snapshots ({snap_idx}/{len(snapshot_hosts)})…",
+                })
+            except Exception:
+                pass
+        if snap_idx % 10 == 0:
+            conn.commit()
 
-    for host_key, license_counts in last_license_counts_by_host_key.items():
-        if not license_counts:
-            continue
+    for lic_idx, (host_key, license_counts) in enumerate(license_hosts, start=1):
         updated_at_utc = last_seen_at_by_host_key.get(host_key, utc_now_iso())
         hostname_value = str(last_hostname_by_host_key.get(host_key, host_key) or host_key)
         conn.execute("DELETE FROM host_license_type_snapshot WHERE host_uid = ?", (host_key,))
@@ -10659,6 +10790,25 @@ def backfill_host_config_changes(
                     updated_at_utc,
                 ),
             )
+        if callable(progress_callback) and (
+            lic_idx == 1 or lic_idx == len(license_hosts) or lic_idx % 5 == 0
+        ):
+            try:
+                progress_callback({
+                    "phase": "config_backfill",
+                    "phase_step": 2,
+                    "phase_steps_total": int(phase_steps_total or 3),
+                    "reports_total": reports_total,
+                    "reports_scanned": report_count,
+                    "hosts_processed": hosts_processed,
+                    "hosts_total": backfill_pulse_state.get("hosts_total", hosts_total),
+                    "current_host": hostname_value,
+                    "inserted_changes": inserted_changes,
+                    "message": f"Host-Config: Lizenz-Snapshots ({lic_idx}/{len(license_hosts)})…",
+                })
+            except Exception:
+                pass
+        conn.commit()
 
     return {
         "days": window_days,
@@ -16927,8 +17077,29 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             query = parse_qs(parsed.query)
             limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
-            with sqlite3.connect(DB_PATH) as conn:
-                jobs = list_changelog_rebuild_jobs(conn, limit=limit, mark_stale=False)
+            api_busy_ms = max(2000, min(15000, int(os.getenv("MONITORING_CHANGELOG_JOBS_BUSY_MS", "8000") or "8000")))
+            try:
+                with sqlite_connect() as conn:
+                    conn.execute(f"PRAGMA busy_timeout = {api_busy_ms}")
+                    jobs = list_changelog_rebuild_jobs_for_api(conn, limit=limit)
+            except sqlite3.OperationalError as exc:
+                error_text = str(exc).lower()
+                if "locked" in error_text or "busy" in error_text:
+                    self._send_json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {
+                            "status": "busy",
+                            "count": 0,
+                            "jobs": [],
+                            "message": (
+                                "Datenbank kurz gesperrt (Inventur/Rebuild). "
+                                "Status per Konsole: scripts/watch-inventur-job.sh --once"
+                            ),
+                        },
+                        extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+                    )
+                    return
+                raise
             self._send_json(
                 HTTPStatus.OK,
                 {

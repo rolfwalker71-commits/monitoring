@@ -14593,6 +14593,22 @@ async function loadChangelogRebuildJobsStatus() {
       credentials: "same-origin",
       cache: "no-store",
     });
+    if (response.status === 503) {
+      const data = await response.json().catch(() => ({}));
+      setChangelogRebuildJobStatus(
+        `${asText(data.message, "Datenbank beschäftigt (Inventur/Rebuild läuft).")} · Konsole: scripts/watch-inventur-job.sh --once`,
+        false,
+      );
+      setChangelogRebuildProgress({
+        visible: true,
+        label: "Job läuft – API kurz blockiert",
+        detail: "Fortschritt per SSH: /root/monitoring-server/scripts/watch-inventur-job.sh --once",
+        indeterminate: true,
+      });
+      pollAfterLoad = true;
+      pollDelayMs = 5000;
+      return;
+    }
     if (!response.ok) throw await buildHttpErrorFromResponse(response);
     const data = await response.json().catch(() => ({}));
     const jobs = Array.isArray(data.jobs) ? data.jobs : [];
@@ -14747,12 +14763,19 @@ async function loadChangelogRebuildJobsStatus() {
       return;
     }
   } catch (error) {
-    setChangelogRebuildJobStatus(`Job-Status Fehler: ${error.message}`, true);
+    const errorText = asText(error?.message, "unbekannter Fehler");
+    const isGatewayTimeout = /\b504\b/i.test(errorText) || /gateway timeout/i.test(errorText);
+    const isDbBusy = /\b503\b/i.test(errorText) || /service unavailable/i.test(errorText);
+    const hint = isGatewayTimeout || isDbBusy
+      ? " · Konsole: scripts/watch-inventur-job.sh --once (umgeht nginx/API-Timeout)"
+      : "";
+    setChangelogRebuildJobStatus(`Job-Status Fehler: ${errorText}${hint}`, true);
     setChangelogRebuildProgress({
       visible: true,
-      label: `Job-Status Fehler: ${error.message}`,
-      indeterminate: false,
-      isError: true,
+      label: `Job-Status Fehler: ${errorText}`,
+      detail: hint ? hint.replace(/^ · /, "") : "",
+      indeterminate: isGatewayTimeout || isDbBusy,
+      isError: !isGatewayTimeout && !isDbBusy,
     });
     pollAfterLoad = shouldPollChangelogRebuildJobs();
     pollDelayMs = 2500;
