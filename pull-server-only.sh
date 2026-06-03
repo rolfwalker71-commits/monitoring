@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260603d"
+PULL_SCRIPT_VERSION="20260603e"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -164,40 +164,57 @@ force_refresh_version_files() {
   fi
 }
 
+is_valid_pull_script_file() {
+  local candidate="$1"
+  [ -s "$candidate" ] \
+    && head -n 1 "$candidate" | grep -q '^#!/usr/bin/env bash' \
+    && grep -q 'PULL_SCRIPT_VERSION=' "$candidate" \
+    && grep -q 'resolve_deploy_ref' "$candidate"
+}
+
 bootstrap_pull_script_if_needed() {
-  if [ "${MONITORING_SKIP_PULL_BOOTSTRAP:-0}" = "1" ]; then
+  # Default: off. Bootstrap hat ein altes Skript via raw/main ueberschrieben (CDN) und exec beendete den Lauf.
+  if [ "${MONITORING_BOOTSTRAP_PULL_SCRIPT:-0}" != "1" ]; then
     return 0
   fi
 
   local latest_sha=""
   local bootstrap_ref=""
-  local script_path="${BASH_SOURCE[0]}"
+  local script_path
+  script_path="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
   local new_script="$TARGET_DIR/pull-server-only.sh.bootstrap"
+
+  if is_valid_pull_script_file "$script_path"; then
+    return 0
+  fi
 
   latest_sha="$(resolve_latest_main_sha_via_git)"
   bootstrap_ref="${MONITORING_DEPLOY_SHA:-$latest_sha}"
-  if [ -z "$bootstrap_ref" ]; then
-    bootstrap_ref="main"
+  if ! is_full_git_sha "$bootstrap_ref"; then
+    echo "Bootstrap übersprungen: kein Commit-SHA (git ls-remote fehlgeschlagen)." >&2
+    echo "  Manuell: curl -fsSL https://raw.githubusercontent.com/$OWNER_REPO/<SHA>/pull-server-only.sh -o $TARGET_DIR/pull-server-only.sh" >&2
+    return 0
   fi
 
   if ! curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/$bootstrap_ref/pull-server-only.sh")" \
     -o "$new_script" 2>/dev/null; then
+    echo "Bootstrap fehlgeschlagen: Download pull-server-only.sh ($bootstrap_ref)." >&2
     return 0
   fi
   chmod +x "$new_script"
 
-  if ! grep -q "PULL_SCRIPT_VERSION=\"$PULL_SCRIPT_VERSION\"" "$new_script" 2>/dev/null; then
-    if grep -q 'BUILD_VERSION GitHub main:' "$new_script" 2>/dev/null; then
-      echo "WARNUNG: Bootstrap-Skript auf GitHub ist noch eine alte pull-server-only-Version." >&2
-    fi
+  if ! is_valid_pull_script_file "$new_script"; then
+    echo "Bootstrap fehlgeschlagen: heruntergeladene Datei ist kein gueltiges pull-server-only.sh." >&2
+    rm -f "$new_script"
+    return 0
   fi
 
-  if [ ! -f "$script_path" ] \
-    || ! grep -q 'PULL_SCRIPT_VERSION=' "$script_path" 2>/dev/null \
-    || ! cmp -s "$new_script" "$script_path"; then
-    echo "Bootstrap: pull-server-only.sh wird aktualisiert (Ref ${bootstrap_ref:0:12}, Version $PULL_SCRIPT_VERSION) ..."
-    mv -f "$new_script" "$TARGET_DIR/pull-server-only.sh"
-    exec bash "$TARGET_DIR/pull-server-only.sh" "$@"
+  if [ "$script_path" != "$TARGET_DIR/pull-server-only.sh" ] || ! cmp -s "$new_script" "$TARGET_DIR/pull-server-only.sh" 2>/dev/null; then
+    echo "Bootstrap: pull-server-only.sh wird aktualisiert (Ref ${bootstrap_ref:0:12}) ..."
+    cp -f "$new_script" "$TARGET_DIR/pull-server-only.sh"
+    chmod +x "$TARGET_DIR/pull-server-only.sh"
+    echo "Bitte erneut ausfuehren: $TARGET_DIR/pull-server-only.sh"
+    exit 0
   fi
   rm -f "$new_script"
 }
@@ -362,6 +379,7 @@ echo "pull-server-only.sh Version: $PULL_SCRIPT_VERSION"
 echo "Installiere Serverteil nach: $TARGET_DIR"
 
 bootstrap_pull_script_if_needed
+echo "Starte Deploy (Ref wird ermittelt) ..."
 
 # Speed/strictness tuning:
 # - VERIFY_SYNC=1 enables costly re-download + hash verification.
