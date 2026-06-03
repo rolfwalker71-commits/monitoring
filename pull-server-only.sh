@@ -95,9 +95,9 @@ download_repo_file() {
   fi
 
   if [ -n "$GITHUB_TOKEN" ]; then
-    # Prefer pinned ref, then fallback to main if GitHub API returns not found.
-    curl_github "application/vnd.github.raw" "$api_url" -o "$target_path" \
-      || curl_github "application/vnd.github.raw" "$api_url_main" -o "$target_path" \
+    # Prefer pinned ref, then fallback to main/raw (API errors suppressed on stderr).
+    curl_github "application/vnd.github.raw" "$api_url" -o "$target_path" 2>/dev/null \
+      || curl_github "application/vnd.github.raw" "$api_url_main" -o "$target_path" 2>/dev/null \
       || curl_raw_github "$raw_url" -o "$target_path" \
       || curl_raw_github "$raw_url_main" -o "$target_path"
   else
@@ -144,13 +144,17 @@ resolve_deploy_ref() {
 
   if [ -n "${MONITORING_DEPLOY_SHA:-}" ]; then
     REF="${MONITORING_DEPLOY_SHA}"
-    echo "Deploy-Ref: $REF (MONITORING_DEPLOY_SHA, GitHub API uebersprungen)"
+    if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" != "1" ]; then
+      MONITORING_PULL_USE_RAW_ONLY=1
+      export MONITORING_PULL_USE_RAW_ONLY
+    fi
+    echo "Deploy-Ref: $REF (MONITORING_DEPLOY_SHA, nur raw.githubusercontent.com)"
     return 0
   fi
 
   if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
     REF="$fallback_ref"
-    echo "Deploy-Ref: $REF (MONITORING_PULL_USE_RAW_ONLY=1, GitHub API uebersprungen)"
+    echo "Deploy-Ref: $REF (MONITORING_PULL_USE_RAW_ONLY=1, nur raw.githubusercontent.com)"
     return 0
   fi
 
@@ -177,8 +181,10 @@ resolve_deploy_ref() {
   fi
 
   REF="$fallback_ref"
-  echo "WARNUNG: api.github.com nicht erreichbar – Fallback auf ref=$REF via raw.githubusercontent.com" >&2
-  print_github_unreachable_hint
+  MONITORING_PULL_USE_RAW_ONLY=1
+  export MONITORING_PULL_USE_RAW_ONLY
+  echo "WARNUNG: api.github.com nicht erreichbar – Downloads nur via raw.githubusercontent.com (ref=$REF)" >&2
+  echo "Hinweis: MONITORING_PULL_USE_RAW_ONLY=1 in monitoring.env vermeidet kuenftige API-Versuche." >&2
   return 0
 }
 
@@ -280,7 +286,7 @@ verify_synced_file() {
 }
 
 export -f download_file download_repo_file checksum_file curl_github curl_raw_github
-export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE REF OWNER_REPO CURL_CONNECT_TIMEOUT CURL_MAX_TIME
+export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE REF OWNER_REPO CURL_CONNECT_TIMEOUT CURL_MAX_TIME MONITORING_PULL_USE_RAW_ONLY
 
 FILES_LIST="
 server/receiver.py
