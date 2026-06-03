@@ -6311,9 +6311,99 @@ CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC = max(
     1.0,
     min(
         30.0,
-        float(os.getenv("MONITORING_CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC", "2") or "2"),
+        float(os.getenv("MONITORING_CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC", "1") or "1"),
     ),
 )
+
+
+class ChangelogJobProgressWriter:
+    """Writes changelog job progress to SQLite; heartbeat keeps UI fresh during slow per-report work."""
+
+    def __init__(self, conn: sqlite3.Connection, job_id: int) -> None:
+        self._conn = conn
+        self._job_id = int(job_id)
+        self._state: dict = {}
+        self._lock = threading.Lock()
+        self._last_flush_mono = 0.0
+        self._last_phase = ""
+        self._last_hosts = -1
+        self._last_reports = -1
+        self._stop = threading.Event()
+        self._thread = threading.Thread(
+            target=self._heartbeat_loop,
+            name=f"changelog-progress-{job_id}",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def close(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=3.0)
+        self._flush(force=True)
+
+    def report(self, progress: dict) -> None:
+        with self._lock:
+            self._state = dict(progress)
+        self._flush(force=False)
+
+    def _heartbeat_loop(self) -> None:
+        while not self._stop.wait(CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC):
+            self._flush(force=True)
+
+    def _flush(self, *, force: bool) -> None:
+        with self._lock:
+            progress = dict(self._state)
+        if not progress:
+            return
+
+        _ensure_changelog_job_running(self._conn, self._job_id)
+        now_mono = time.monotonic()
+        time_flush_due = (
+            self._last_flush_mono <= 0.0
+            or (now_mono - self._last_flush_mono) >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
+        )
+        if not _should_flush_changelog_progress(
+            progress,
+            last_phase=self._last_phase,
+            last_hosts=self._last_hosts,
+            last_reports=self._last_reports,
+        ) and not force and not time_flush_due:
+            return
+
+        phase = str(progress.get("phase") or "")
+        hosts_processed = int(progress.get("hosts_processed", 0) or 0)
+        hosts_total = int(progress.get("hosts_total", 0) or 0)
+        reports_scanned = int(progress.get("reports_scanned", 0) or 0)
+        reports_total = int(progress.get("reports_total", 0) or 0)
+        payload = {
+            "progress": {
+                "phase": phase,
+                "phase_step": int(progress.get("phase_step", 0) or 0),
+                "phase_steps_total": int(progress.get("phase_steps_total", 3) or 3),
+                "hosts_processed": hosts_processed,
+                "hosts_total": hosts_total,
+                "reports_scanned": reports_scanned,
+                "reports_total": reports_total,
+                "current_host": str(progress.get("current_host") or ""),
+                "inserted_changes": int(progress.get("inserted_changes", 0) or 0),
+                "inserted_events": int(progress.get("inserted_events", 0) or 0),
+                "message": str(progress.get("message") or ""),
+                "updated_at_utc": utc_now_iso(),
+            }
+        }
+        self._conn.execute(
+            """
+            UPDATE changelog_rebuild_jobs
+            SET result_json = ?
+            WHERE id = ? AND status = 'running'
+            """,
+            (json.dumps(payload, separators=(",", ":")), self._job_id),
+        )
+        self._conn.commit()
+        self._last_phase = phase
+        self._last_hosts = hosts_processed
+        self._last_reports = reports_scanned
+        self._last_flush_mono = now_mono
 
 
 class ChangelogJobCancelled(RuntimeError):
@@ -7309,78 +7399,20 @@ def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int =
                 continue
             conn.commit()
 
+            progress_writer = ChangelogJobProgressWriter(conn, job_id)
             try:
-                last_progress_phase = ""
-                last_progress_hosts = -1
-                last_progress_reports = -1
-                last_progress_flush_mono = 0.0
-
-                def progress_reporter(progress: dict) -> None:
-                    nonlocal last_progress_phase, last_progress_hosts, last_progress_reports
-                    nonlocal last_progress_flush_mono
-                    _ensure_changelog_job_running(conn, job_id)
-                    now_mono = time.monotonic()
-                    time_flush_due = (
-                        last_progress_flush_mono <= 0.0
-                        or (now_mono - last_progress_flush_mono)
-                        >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
-                    )
-                    if not _should_flush_changelog_progress(
-                        progress,
-                        last_phase=last_progress_phase,
-                        last_hosts=last_progress_hosts,
-                        last_reports=last_progress_reports,
-                    ) and not time_flush_due:
-                        return
-
-                    phase = str(progress.get("phase") or "")
-                    hosts_processed = int(progress.get("hosts_processed", 0) or 0)
-                    hosts_total = int(progress.get("hosts_total", 0) or 0)
-                    reports_scanned = int(progress.get("reports_scanned", 0) or 0)
-                    reports_total = int(progress.get("reports_total", 0) or 0)
-
-                    payload = {
-                        "progress": {
-                            "phase": phase,
-                            "phase_step": int(progress.get("phase_step", 0) or 0),
-                            "phase_steps_total": int(progress.get("phase_steps_total", 3) or 3),
-                            "hosts_processed": hosts_processed,
-                            "hosts_total": hosts_total,
-                            "reports_scanned": reports_scanned,
-                            "reports_total": reports_total,
-                            "current_host": str(progress.get("current_host") or ""),
-                            "inserted_changes": int(progress.get("inserted_changes", 0) or 0),
-                            "inserted_events": int(progress.get("inserted_events", 0) or 0),
-                            "message": str(progress.get("message") or ""),
-                            "updated_at_utc": utc_now_iso(),
-                        }
-                    }
-                    conn.execute(
-                        """
-                        UPDATE changelog_rebuild_jobs
-                        SET result_json = ?
-                        WHERE id = ? AND status = 'running'
-                        """,
-                        (json.dumps(payload, separators=(",", ":")), job_id),
-                    )
-                    conn.commit()
-                    last_progress_phase = phase
-                    last_progress_hosts = hosts_processed
-                    last_progress_reports = reports_scanned
-                    last_progress_flush_mono = now_mono
-
                 if job_mode == "inventory_rebuild":
                     result = rebuild_changelog_inventory_history(
                         conn,
                         force_rebuild=True,
-                        progress_callback=progress_reporter,
+                        progress_callback=progress_writer.report,
                         job_id=job_id,
                     )
                 elif job_mode == "backfill":
                     result = run_changelog_backfill_only(
                         conn,
                         days=window_days,
-                        progress_callback=progress_reporter,
+                        progress_callback=progress_writer.report,
                         job_id=job_id,
                     )
                 else:
@@ -7388,7 +7420,7 @@ def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int =
                         conn,
                         days=window_days,
                         force_rebuild=force_rebuild,
-                        progress_callback=progress_reporter,
+                        progress_callback=progress_writer.report,
                         job_id=job_id,
                     )
                 finished_at = utc_now_iso()
@@ -7458,6 +7490,8 @@ def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int =
                     "finished_at_utc": finished_at,
                     "error": str(exc),
                 })
+            finally:
+                progress_writer.close()
 
         return processed
     finally:
@@ -10047,16 +10081,11 @@ def backfill_host_config_changes(
 
         if callable(progress_callback):
             now_mono = time.monotonic()
-            emit_progress = (
-                _should_emit_changelog_progress(
-                    report_count,
-                    reports_total,
-                    host_changed=host_changed,
-                )
-                or (now_mono - last_progress_emit_mono)
-                >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
-            )
-            if emit_progress:
+            if (
+                host_changed
+                or _should_emit_changelog_progress(report_count, reports_total, host_changed=host_changed)
+                or (now_mono - last_progress_emit_mono) >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
+            ):
                 try:
                     progress_callback({
                         "phase": "config_backfill",
@@ -10258,6 +10287,26 @@ def backfill_host_config_changes(
         last_license_counts_by_host_key[host_key] = current_license_counts
         last_hostname_by_host_key[host_key] = hostname
         last_seen_at_by_host_key[host_key] = detected_at_utc or utc_now_iso()
+
+        if callable(progress_callback):
+            now_mono = time.monotonic()
+            if (now_mono - last_progress_emit_mono) >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC:
+                try:
+                    progress_callback({
+                        "phase": "config_backfill",
+                        "phase_step": 2,
+                        "phase_steps_total": int(phase_steps_total or 3),
+                        "reports_total": reports_total,
+                        "reports_scanned": report_count,
+                        "hosts_processed": hosts_processed,
+                        "hosts_total": hosts_total,
+                        "current_host": hostname,
+                        "inserted_changes": inserted_changes,
+                        "message": "Host-Config: OS, CPU, RAM, SAP/HANA, SQL, Lizenzen…",
+                    })
+                    last_progress_emit_mono = now_mono
+                except Exception:
+                    pass
 
         if report_count % 1000 == 0:
             conn.commit()
@@ -16573,6 +16622,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "count": len(jobs),
                     "jobs": jobs,
                 },
+                extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
             )
             return
 

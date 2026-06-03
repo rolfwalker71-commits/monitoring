@@ -14699,7 +14699,7 @@ async function loadChangelogRebuildJobsStatus() {
       );
       setChangelogMaintenanceSummaryHint(`${jobModeLabel} #${latestId} läuft`);
       pollAfterLoad = true;
-      pollDelayMs = 1000;
+      pollDelayMs = 800;
       return;
     }
     if (latestStatus === "pending") {

@@ -1250,10 +1250,27 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   border-top: 1px solid #e2e8f0;
 }
 
-.changelog-maintenance-toolbar {
+.changelog-maintenance-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 0;
-  background: transparent;
   padding: 8px 0 0;
+  background: transparent;
+}
+
+.changelog-maintenance-actions .btn-secondary-compact,
+.changelog-maintenance-actions .changelog-tools-version {
+  flex: 0 0 auto;
+}
+
+.changelog-maintenance-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
 }
 
 .changelog-maintenance-status-line {

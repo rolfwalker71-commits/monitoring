@@ -345,23 +345,27 @@
                   <span class="changelog-maintenance-summary-title">Wartung: Backfill / Rebuild / Jobs</span>
                   <span id="changelogMaintenanceSummaryHint" class="changelog-maintenance-summary-hint"></span>
                 </summary>
-                <div class="changelog-maintenance-panel-body inactive-hosts-toolbar changelog-maintenance-toolbar">
-                  <button id="backfillHostConfigChangesButton" type="button" class="btn-secondary-compact" title="Gefundene Reports neu einlesen und Changelog fuellen">📥 Backfill</button>
-                  <button id="runChangelogRebuildNowButton" type="button" class="btn-secondary-compact" title="Globales Changelog der letzten 7 Tage neu aufbauen (Job)">♻ Rebuild 7d</button>
-                  <button id="runInventoryChangelogRebuildButton" type="button" class="btn-secondary-compact" title="Inventur aus allen Reports: erster Report = Baseline, danach Deltas + Live">📋 Inventur (alle)</button>
-                  <button id="refreshChangelogRebuildJobsButton" type="button" class="btn-secondary-compact" title="Rebuild-Job-Status aktualisieren">📋 Jobs</button>
-                  <button id="cancelChangelogRebuildJobButton" type="button" class="btn-secondary-compact hidden" title="Laufenden Rebuild/Backfill-Job abbrechen">⏹ Abbrechen</button>
-                  <span id="changelogToolsBuildVersion" class="count compact changelog-tools-version" title="Server-Build auf infoboard (nach pull+restart)">UI v-</span>
-                  <p id="hostConfigChangesBackfillStatus" class="count compact changelog-maintenance-status-line"></p>
-                  <p id="changelogRebuildJobStatus" class="count compact changelog-maintenance-status-line"></p>
-                  <div id="changelogRebuildProgress" class="db-ops-progress changelog-maintenance-progress hidden">
-                    <div class="db-ops-progress-bar-wrap changelog-rebuild-progress-bar-wrap">
-                      <div id="changelogRebuildProgressBar" class="db-ops-progress-bar"></div>
-                    </div>
-                    <span id="changelogRebuildProgressLabel" class="db-ops-progress-label"></span>
-                    <span id="changelogRebuildProgressDetail" class="db-ops-progress-detail"></span>
+                <div class="changelog-maintenance-panel-body">
+                  <div class="inactive-hosts-toolbar changelog-maintenance-actions">
+                    <button id="backfillHostConfigChangesButton" type="button" class="btn-secondary-compact" title="Gefundene Reports neu einlesen und Changelog fuellen">📥 Backfill</button>
+                    <button id="runChangelogRebuildNowButton" type="button" class="btn-secondary-compact" title="Globales Changelog der letzten 7 Tage neu aufbauen (Job)">♻ Rebuild 7d</button>
+                    <button id="runInventoryChangelogRebuildButton" type="button" class="btn-secondary-compact" title="Inventur aus allen Reports: erster Report = Baseline, danach Deltas + Live">📋 Inventur (alle)</button>
+                    <button id="refreshChangelogRebuildJobsButton" type="button" class="btn-secondary-compact" title="Rebuild-Job-Status aktualisieren">📋 Jobs</button>
+                    <button id="cancelChangelogRebuildJobButton" type="button" class="btn-secondary-compact hidden" title="Laufenden Rebuild/Backfill-Job abbrechen">⏹ Abbrechen</button>
+                    <span id="changelogToolsBuildVersion" class="count compact changelog-tools-version" title="Server-Build auf infoboard (nach pull+restart)">UI v-</span>
                   </div>
-                  <p id="changelogRebuildWarningHint" class="count compact changelog-rebuild-warning">⚠ Rebuild 7d = letzte 7 Tage. Inventur (alle) = alle Reports, erster Report/Host = Inventur, danach Deltas. ⏹ bricht laufende Jobs ab.</p>
+                  <div class="changelog-maintenance-meta">
+                    <p id="hostConfigChangesBackfillStatus" class="count compact changelog-maintenance-status-line"></p>
+                    <p id="changelogRebuildJobStatus" class="count compact changelog-maintenance-status-line"></p>
+                    <div id="changelogRebuildProgress" class="db-ops-progress changelog-maintenance-progress hidden">
+                      <div class="db-ops-progress-bar-wrap changelog-rebuild-progress-bar-wrap">
+                        <div id="changelogRebuildProgressBar" class="db-ops-progress-bar"></div>
+                      </div>
+                      <span id="changelogRebuildProgressLabel" class="db-ops-progress-label"></span>
+                      <span id="changelogRebuildProgressDetail" class="db-ops-progress-detail"></span>
+                    </div>
+                    <p id="changelogRebuildWarningHint" class="count compact changelog-rebuild-warning">⚠ Rebuild 7d = letzte 7 Tage. Inventur (alle) = alle Reports, erster Report/Host = Inventur, danach Deltas. ⏹ bricht laufende Jobs ab.</p>
+                  </div>
                 </div>
               </details>
               <div id="hostConfigChangesGroups" class="host-config-changes-groups">
