@@ -89,6 +89,8 @@ let hostSearchFilterDebounceTimerId = null;
 let hostLicenseHoverPopupEl = null;
 let hostLicenseHoverHideTimerId = null;
 let hostLicenseHoverActiveHost = "";
+let hostLicenseHoverPinnedKey = "";
+let hostLicenseOutsideClickWired = false;
 let changelogRebuildPollTimerId = null;
 const CHANGELOG_REBUILD_DAYS = 7;
 let headerKpiWidthSyncFrameId = null;
@@ -9738,7 +9740,7 @@ function renderSingleHostCard(host) {
   const versionSideBarHtml = `<div class="${versionSideBarClass}" title="${escapeHtml(versionSideBarTitle)}" aria-hidden="true"></div>`;
   const hasSapLicenseInfo = Boolean(host.has_sap_license_info);
   const sapLicenseBadge = hasSapLicenseInfo
-    ? `<button type="button" class="host-license-info-badge host-license-info-badge--card" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}" title="SAP Lizenzinfos anzeigen" aria-label="SAP Lizenzinfos anzeigen">ℹ️</button>`
+    ? `<button type="button" class="host-license-info-badge host-license-info-badge--card" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}" title="SAP Lizenzinfos anzeigen (Klick)" aria-label="SAP Lizenzinfos anzeigen" aria-haspopup="dialog"><span class="host-license-info-badge-icon" aria-hidden="true">i</span></button>`
     : "";
   const cornerIcons = (sapLicenseBadge || flagIcon)
     ? `<div class="host-corner-icons">${sapLicenseBadge}${flagIcon}</div>`
@@ -9979,16 +9981,56 @@ function positionHostLicenseHoverPopup(anchorEl) {
   popup.style.top = `${top}px`;
 }
 
+function hideHostLicenseHoverPopup(clearPin = true) {
+  if (hostLicenseHoverHideTimerId !== null) {
+    window.clearTimeout(hostLicenseHoverHideTimerId);
+    hostLicenseHoverHideTimerId = null;
+  }
+  if (hostLicenseHoverPopupEl) {
+    hostLicenseHoverPopupEl.classList.add("hidden");
+  }
+  hostLicenseHoverActiveHost = "";
+  if (clearPin) {
+    hostLicenseHoverPinnedKey = "";
+  }
+}
+
 function scheduleHideHostLicenseHoverPopup() {
+  if (hostLicenseHoverPinnedKey) {
+    return;
+  }
   if (hostLicenseHoverHideTimerId !== null) {
     window.clearTimeout(hostLicenseHoverHideTimerId);
   }
   hostLicenseHoverHideTimerId = window.setTimeout(() => {
-    if (hostLicenseHoverPopupEl) {
-      hostLicenseHoverPopupEl.classList.add("hidden");
+    hideHostLicenseHoverPopup(true);
+  }, 320);
+}
+
+function ensureHostLicenseOutsideClickHandler() {
+  if (hostLicenseOutsideClickWired) {
+    return;
+  }
+  hostLicenseOutsideClickWired = true;
+  document.addEventListener("click", (event) => {
+    if (!hostLicenseHoverPinnedKey || !hostLicenseHoverPopupEl || hostLicenseHoverPopupEl.classList.contains("hidden")) {
+      return;
     }
-    hostLicenseHoverActiveHost = "";
-  }, 180);
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) {
+      return;
+    }
+    if (target.closest(".host-license-info-badge, #hostLicenseHoverPopup")) {
+      return;
+    }
+    hideHostLicenseHoverPopup(true);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !hostLicenseHoverPinnedKey) {
+      return;
+    }
+    hideHostLicenseHoverPopup(true);
+  });
 }
 
 function renderHostLicenseHoverPopupContent(hostname, data) {
@@ -10031,10 +10073,15 @@ function renderHostLicenseHoverPopupContent(hostname, data) {
   `;
 }
 
-async function showHostLicenseHoverPopup(anchorEl, hostname, hostUid = "") {
+async function showHostLicenseHoverPopup(anchorEl, hostname, hostUid = "", options = {}) {
   const key = asText(hostUid, "").trim() || asText(hostname, "").trim();
   if (!anchorEl || !key) return;
+  const pinOpen = options.pin === true;
+  ensureHostLicenseOutsideClickHandler();
   const popup = ensureHostLicenseHoverPopup();
+  if (pinOpen) {
+    hostLicenseHoverPinnedKey = key;
+  }
   if (hostLicenseHoverHideTimerId !== null) {
     window.clearTimeout(hostLicenseHoverHideTimerId);
     hostLicenseHoverHideTimerId = null;
@@ -10057,23 +10104,6 @@ async function showHostLicenseHoverPopup(anchorEl, hostname, hostUid = "") {
     }
     hostLicenseHoverPopupEl.innerHTML = `<div class="host-license-hover-head"><strong>ℹ️ SAP Lizenzinfos</strong><span>${escapeHtml(key)}</span></div><p class="muted">Fehler beim Laden: ${escapeHtml(error.message || "Unbekannt")}</p>`;
     positionHostLicenseHoverPopup(anchorEl);
-  }
-}
-
-function wireHostLicenseInfoBadges(hostList) {
-  for (const badge of (hostList || document).querySelectorAll(".host-license-info-badge")) {
-    const hostAttr = asText(badge.getAttribute("data-host-license-host"), "").trim();
-    const uidAttr = asText(badge.getAttribute("data-host-license-uid"), "").trim();
-    if (!hostAttr) continue;
-    badge.addEventListener("mouseenter", () => {
-      void showHostLicenseHoverPopup(badge, hostAttr, uidAttr);
-    });
-    badge.addEventListener("mousemove", () => {
-      positionHostLicenseHoverPopup(badge);
-    });
-    badge.addEventListener("mouseleave", () => {
-      scheduleHideHostLicenseHoverPopup();
-    });
   }
 }
 
@@ -11464,11 +11494,10 @@ function wireHostListInteractions() {
         return;
       }
       if (hostLicenseHoverPopupEl && !hostLicenseHoverPopupEl.classList.contains("hidden") && hostLicenseHoverActiveHost === activeKey) {
-        hostLicenseHoverPopupEl.classList.add("hidden");
-        hostLicenseHoverActiveHost = "";
+        hideHostLicenseHoverPopup(true);
         return;
       }
-      void showHostLicenseHoverPopup(licenseBadge, hostAttr, uidAttr);
+      void showHostLicenseHoverPopup(licenseBadge, hostAttr, uidAttr, { pin: true });
       return;
     }
 
@@ -11576,10 +11605,9 @@ function wireHostListInteractions() {
         return;
       }
       if (hostLicenseHoverPopupEl && !hostLicenseHoverPopupEl.classList.contains("hidden") && hostLicenseHoverActiveHost === activeKey) {
-        hostLicenseHoverPopupEl.classList.add("hidden");
-        hostLicenseHoverActiveHost = "";
+        hideHostLicenseHoverPopup(true);
       } else {
-        void showHostLicenseHoverPopup(licenseBadge, hostAttr, uidAttr);
+        void showHostLicenseHoverPopup(licenseBadge, hostAttr, uidAttr, { pin: true });
       }
       return;
     }
@@ -11617,7 +11645,10 @@ function wireHostListInteractions() {
     if (!hostAttr) {
       return;
     }
-    void showHostLicenseHoverPopup(target, hostAttr, uidAttr);
+    if (hostLicenseHoverPinnedKey) {
+      return;
+    }
+    void showHostLicenseHoverPopup(target, hostAttr, uidAttr, { pin: false });
   });
 
   hostList.addEventListener("mousemove", (event) => {
@@ -11633,8 +11664,8 @@ function wireHostListInteractions() {
     if (!fromBadge) {
       return;
     }
-    const related = event.relatedTarget instanceof Element ? event.relatedTarget.closest(".host-license-info-badge") : null;
-    if (related === fromBadge) {
+    const related = event.relatedTarget instanceof Element ? event.relatedTarget : null;
+    if (related && (related.closest(".host-license-info-badge") === fromBadge || related.closest("#hostLicenseHoverPopup"))) {
       return;
     }
     scheduleHideHostLicenseHoverPopup();
