@@ -2052,12 +2052,7 @@ function renderHostInterestsEditor() {
   });
   const query = String(state.hostInterestSearchQuery || "").toLowerCase().trim();
   const visibleHosts = query
-    ? allHosts.filter((host) => {
-      const hostname = String(host.hostname || "").toLowerCase();
-      const displayName = String(host.display_name || host.hostname || "").toLowerCase();
-      const customerName = String(host.customer_name || "").toLowerCase();
-      return hostname.includes(query) || displayName.includes(query) || customerName.includes(query);
-    })
+    ? allHosts.filter((host) => hostMatchesSearchQuery(host, query))
     : allHosts;
 
   const selectedCountries = getHostInterestSelectedCountries();
@@ -9160,6 +9155,37 @@ function renderHostIconFilters(hosts) {
   });
 }
 
+function getHostSearchBlob(host) {
+  const hostname = String(host?.hostname || "").trim();
+  const shortHostname = hostname.includes(".") ? hostname.split(".")[0] : hostname;
+  const customerName = String(host?.customer_name || "").trim();
+  const customerProject = String(host?.customer_maringo_project_number || "").trim();
+  const customerChipLabel = customerProject && customerName
+    ? `${customerName} · ${customerProject}`
+    : customerName;
+  const parts = [
+    host?.display_name,
+    hostname,
+    shortHostname,
+    customerName,
+    customerProject,
+    customerChipLabel,
+    host?.std_nic_ip,
+    host?.primary_ip,
+    host?.host_uid,
+  ];
+  return parts
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter((value) => value.length > 0)
+    .join(" ");
+}
+
+function hostMatchesSearchQuery(host, query) {
+  const q = String(query || "").toLowerCase().trim();
+  if (!q) return true;
+  return getHostSearchBlob(host).includes(q);
+}
+
 function filterAndSortHosts(hosts) {
   const query = state.hostSearchQuery.toLowerCase().trim();
   const osFilter = String(state.hostOsFilter || "all");
@@ -9167,16 +9193,7 @@ function filterAndSortHosts(hosts) {
 
   let filtered = hosts;
   if (query.length > 0) {
-    filtered = hosts.filter((host) => {
-      const displayName = (host.display_name || host.hostname || "").toLowerCase();
-      const hostname = (host.hostname || "").toLowerCase();
-      const customerName = (host.customer_name || "").toLowerCase();
-      const customerProject = (host.customer_maringo_project_number || "").toLowerCase();
-      return displayName.includes(query)
-        || hostname.includes(query)
-        || customerName.includes(query)
-        || customerProject.includes(query);
-    });
+    filtered = hosts.filter((host) => hostMatchesSearchQuery(host, query));
   }
 
   if (osFilter !== "all") {
