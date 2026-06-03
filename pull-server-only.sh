@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604e"
+PULL_SCRIPT_VERSION="20260604f"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -204,6 +204,38 @@ expand_deploy_ref() {
   return 1
 }
 
+extract_full_sha_from_commit_json() {
+  local meta="${1:-}"
+  local sha=""
+  if [ -z "$meta" ]; then
+    return 1
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    sha="$(printf '%s\n' "$meta" | python3 -c 'import json,sys; print((json.load(sys.stdin) or {}).get("sha", ""))' 2>/dev/null || true)"
+  fi
+  if [ -z "$sha" ]; then
+    sha="$(printf '%s\n' "$meta" \
+      | awk 'match($0, /"sha"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"/) { m=substr($0, RSTART, RLENGTH); sub(/^.*"/, "", m); sub(/"$/, "", m); print m; exit }')"
+  fi
+  if is_full_git_sha "$sha"; then
+    printf '%s' "$sha"
+    return 0
+  fi
+  return 1
+}
+
+resolve_latest_main_sha_via_github_api() {
+  local branch_ref="${1:-main}"
+  local meta=""
+  if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
+    return 1
+  fi
+  if ! meta="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE/commits/$branch_ref" 2>/dev/null)"; then
+    return 1
+  fi
+  extract_full_sha_from_commit_json "$meta"
+}
+
 resolve_latest_main_sha_via_git() {
   local sha=""
   if ! command -v git >/dev/null 2>&1; then
@@ -219,6 +251,24 @@ resolve_latest_main_sha_via_git() {
     printf '%s' "$sha"
   fi
   return 0
+}
+
+resolve_latest_main_sha() {
+  local branch_ref="${1:-main}"
+  local sha=""
+
+  sha="$(resolve_latest_main_sha_via_git || true)"
+  if is_full_git_sha "$sha"; then
+    printf '%s' "$sha"
+    return 0
+  fi
+
+  sha="$(resolve_latest_main_sha_via_github_api "$branch_ref" || true)"
+  if is_full_git_sha "$sha"; then
+    printf '%s' "$sha"
+    return 0
+  fi
+  return 1
 }
 
 write_repo_text_to_target() {
@@ -280,7 +330,7 @@ bootstrap_pull_script_if_needed() {
     return 0
   fi
 
-  latest_sha="$(resolve_latest_main_sha_via_git || true)"
+  latest_sha="$(resolve_latest_main_sha main || true)"
   bootstrap_ref="${MONITORING_DEPLOY_SHA:-$latest_sha}"
   if ! is_full_git_sha "$bootstrap_ref"; then
     echo "Bootstrap übersprungen: kein Commit-SHA (git ls-remote fehlgeschlagen)." >&2
@@ -382,11 +432,15 @@ print_github_unreachable_hint() {
 GitHub API (api.github.com) ist vom Server aus nicht erreichbar.
 Typische Ursachen: Firewall, Proxy, DNS, oder ausgehender HTTPS-Block.
 
-Workarounds fuer pull-server-only.sh:
+Normalerweise reicht:
+  /root/monitoring-server/pull-server-only.sh
+
+Nur bei blockierter GitHub-Erreichbarkeit:
   export MONITORING_PULL_USE_RAW_ONLY=1
   export MONITORING_DEPLOY_REF=main
-  # optional festen Commit pinnen (40 Zeichen, oder 7+ Hex – wird erweitert wenn API/raw erreichbar):
-  export MONITORING_DEPLOY_SHA=<40-stelliger-commit-sha>
+
+Optional einen Commit pinnen (7–40 Hex oder vollstaendig):
+  export MONITORING_DEPLOY_SHA=<commit-sha>
 
 Pruefen:
   curl -I --connect-timeout 5 https://api.github.com
@@ -397,25 +451,13 @@ Entwicklungsrechner nach TARGET_DIR kopieren und monitoring neu starten.
 EOF
 }
 
-pin_deploy_ref_to_main_sha() {
+enable_raw_main_fallback() {
   local branch_ref="${1:-main}"
-  local sha=""
-
-  if is_full_git_sha "$branch_ref"; then
-    REF="$branch_ref"
-    return 0
-  fi
-
-  sha="$(resolve_latest_main_sha_via_git || true)"
-  if [ -n "$sha" ]; then
-    REF="$sha"
-    echo "Deploy-Ref: $REF (git ls-remote $branch_ref – umgeht raw/main CDN-Cache)"
-    return 0
-  fi
-
   REF="$branch_ref"
-  echo "WARNUNG: main-SHA nicht ermittelbar – nutze Branch-Alias $REF (CDN kann veraltet sein)." >&2
-  return 0
+  MONITORING_PULL_USE_RAW_ONLY=1
+  export MONITORING_PULL_USE_RAW_ONLY
+  echo "Deploy-Ref: $REF (Branch-Alias, raw.githubusercontent.com mit Cache-Bust)" >&2
+  echo "Modus: MONITORING_PULL_USE_RAW_ONLY=1 (kein MONITORING_DEPLOY_SHA noetig)" >&2
 }
 
 _resolve_deploy_ref_from_github_api() {
@@ -431,13 +473,7 @@ _resolve_deploy_ref_from_github_api() {
   fi
 
   local sha=""
-  if command -v python3 >/dev/null 2>&1; then
-    sha="$(printf '%s\n' "$COMMIT_META_JSON" | python3 -c 'import json,sys; print((json.load(sys.stdin) or {}).get("sha", ""))' 2>/dev/null || true)"
-  fi
-  if [ -z "$sha" ]; then
-    sha="$(printf '%s\n' "$COMMIT_META_JSON" \
-      | awk 'match($0, /"sha"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"/) { m=substr($0, RSTART, RLENGTH); sub(/^.*"/, "", m); sub(/"$/, "", m); print m; exit }')"
-  fi
+  sha="$(extract_full_sha_from_commit_json "$COMMIT_META_JSON" || true)"
   if ! is_full_git_sha "$sha"; then
     return 1
   fi
@@ -456,33 +492,30 @@ _resolve_deploy_ref_from_github_api() {
 
 resolve_deploy_ref() {
   local fallback_ref="${MONITORING_DEPLOY_REF:-main}"
+  local latest_sha=""
   COMMIT_META_JSON=""
 
   if [ -n "${MONITORING_DEPLOY_SHA:-}" ]; then
     REF="$(normalize_sha_ref "$MONITORING_DEPLOY_SHA")"
-    if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" != "1" ]; then
-      MONITORING_PULL_USE_RAW_ONLY=1
-      export MONITORING_PULL_USE_RAW_ONLY
-    fi
     if ! is_full_git_sha "$REF"; then
       expanded="$(expand_deploy_ref "$REF" || true)"
       if [ -n "$expanded" ]; then
         REF="$expanded"
       fi
     fi
-    echo "Deploy-Ref: $REF (MONITORING_DEPLOY_SHA)"
+    if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" != "1" ] && { ! is_full_git_sha "$REF" || is_hex_sha_ref "$REF"; }; then
+      MONITORING_PULL_USE_RAW_ONLY=1
+      export MONITORING_PULL_USE_RAW_ONLY
+    fi
+    echo "Deploy-Ref: $REF (MONITORING_DEPLOY_SHA, optional)"
     return 0
   fi
 
-  local git_sha=""
-  git_sha="$(resolve_latest_main_sha_via_git || true)"
-  if is_full_git_sha "$git_sha"; then
-    REF="$git_sha"
-    echo "Deploy-Ref: $REF (git ls-remote $fallback_ref – bevorzugt, unabhaengig von api.github.com)"
+  latest_sha="$(resolve_latest_main_sha "$fallback_ref" || true)"
+  if is_full_git_sha "$latest_sha"; then
+    REF="$latest_sha"
+    echo "Deploy-Ref: $REF (repo/$fallback_ref, automatisch – kein MONITORING_DEPLOY_SHA noetig)"
     _resolve_deploy_ref_from_github_api "$fallback_ref" >/dev/null 2>&1 || true
-    if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
-      echo "Modus: MONITORING_PULL_USE_RAW_ONLY=1 (Downloads via raw.githubusercontent.com)"
-    fi
     return 0
   fi
 
@@ -490,20 +523,9 @@ resolve_deploy_ref() {
     return 0
   fi
 
-  if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
-    echo "WARNUNG: git ls-remote fehlgeschlagen – versuche Branch-Alias $fallback_ref (CDN-Risiko)." >&2
-    pin_deploy_ref_to_main_sha "$fallback_ref"
-    echo "Modus: MONITORING_PULL_USE_RAW_ONLY=1"
-    return 0
-  fi
-
-  echo "FEHLER: Konnte keinen Commit-SHA fuer $fallback_ref ermitteln (git ls-remote und GitHub API)." >&2
-  echo "  Pruefen: git ls-remote https://github.com/$OWNER_REPO.git refs/heads/main" >&2
-  echo "           curl -I --connect-timeout 5 https://api.github.com" >&2
-  echo "  Workaround:" >&2
-  echo "    export MONITORING_DEPLOY_SHA=<40-stelliger-commit-sha>" >&2
-  echo "    export MONITORING_PULL_USE_RAW_ONLY=1   # nur wenn API-Downloads blockiert sind" >&2
-  exit 1
+  echo "WARNUNG: Commit-SHA fuer $fallback_ref nicht ermittelbar (git ls-remote / GitHub API)." >&2
+  enable_raw_main_fallback "$fallback_ref"
+  return 0
 }
 
 echo "pull-server-only.sh Version: $PULL_SCRIPT_VERSION"
@@ -534,27 +556,24 @@ if ! is_full_git_sha "$REF"; then
 fi
 if ! is_full_git_sha "$REF"; then
   if is_hex_sha_ref "$REF" && probe_raw_ref_download "$REF"; then
-    echo "Deploy-Pin: $REF (Kurz-SHA, raw.githubusercontent.com)"
+    echo "Deploy-Pin: $REF (Kurz-SHA oder Branch, raw.githubusercontent.com)"
+  elif [ "$REF" = "main" ] || [ "$REF" = "${MONITORING_DEPLOY_REF:-}" ]; then
+    echo "Deploy-Pin: $REF (Branch mit Cache-Bust)"
   else
     local_deployed="$(tr -d ' \t\r\n' < "$TARGET_DIR/DEPLOYED_COMMIT_SHA" 2>/dev/null || true)"
-    echo "FEHLER: Deploy-Ref '$REF' ist kein gueltiger Commit (weder 40-stellig noch per API/raw aufloesbar)." >&2
+    echo "FEHLER: Deploy-Ref '$REF' ist weder aufloesbar noch als raw-Ref erreichbar." >&2
     if is_hex_sha_ref "$REF"; then
-      echo "  Du hast vermutlich einen Kurz-SHA gesetzt (z.B. d03ebe1). Bitte den vollen 40-stelligen SHA verwenden." >&2
-    elif [ "$REF" = "main" ] || [ "$local_deployed" = "main" ]; then
-      echo "  Branch-Alias 'main' auf raw CDN ist oft veraltet (z.B. BUILD_VERSION 1.7.325)." >&2
+      echo "  Tipp: Kurz-SHA (7–40 Hex) oder MONITORING_DEPLOY_REF=main – kein 40-stelliger SHA zwingend." >&2
     fi
     if [ -n "$local_deployed" ] && is_full_git_sha "$local_deployed"; then
-      echo "  Letzter erfolgreicher Deploy auf diesem Server: $local_deployed" >&2
+      echo "  Letzter erfolgreicher Deploy: $local_deployed" >&2
     fi
-    echo "  Pruefen: curl -fsSL --connect-timeout 10 https://raw.githubusercontent.com/$OWNER_REPO/<SHA>/BUILD_VERSION" >&2
-    echo "           git ls-remote https://github.com/$OWNER_REPO.git refs/heads/main" >&2
-    echo "  Beispiel 1.7.337:" >&2
-    echo "    export MONITORING_DEPLOY_SHA=d03ebe187672b72ccd3fb2ce4e70dec7b4acc97e" >&2
-    echo "    $TARGET_DIR/pull-server-only.sh" >&2
+    echo "  Optional pinnen: export MONITORING_DEPLOY_SHA=<commit|kurz-sha>" >&2
     exit 1
   fi
+else
+  echo "Deploy-Pin: $REF"
 fi
-echo "Deploy-Pin: $REF"
 RAW_BASE="https://raw.githubusercontent.com/$OWNER_REPO/$REF"
 
 # Hilfsfunction fuer parallele downloads
@@ -774,7 +793,7 @@ LATEST_SHA_AFTER="$(printf '%s\n' "$LATEST_META_AFTER" \
   | sed -n 's/.*"sha":[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' \
   | head -n 1)"
 if [ -z "$LATEST_SHA_AFTER" ]; then
-  LATEST_SHA_AFTER="$(resolve_latest_main_sha_via_git || true)"
+  LATEST_SHA_AFTER="$(resolve_latest_main_sha main || true)"
 fi
 
 if is_full_git_sha "$REF"; then
@@ -821,7 +840,7 @@ if [ -n "$REMOTE_MAIN_BUILD_VERSION" ] && [ "$REMOTE_MAIN_BUILD_VERSION" != "$RE
   echo "Hinweis: raw/main zeigt noch $REMOTE_MAIN_BUILD_VERSION (CDN-Cache) – Deploy-Ref $REMOTE_BUILD_REF ist massgeblich."
 fi
 if ! is_full_git_sha "$REF" && [ -z "$LATEST_SHA_AFTER" ]; then
-  echo "Hinweis: git ls-remote fehlgeschlagen – MONITORING_DEPLOY_SHA=<40-char-commit> setzen." >&2
+  echo "Hinweis: Commit-SHA unbekannt – Deploy lief ueber Branch $REF. Fuer Pin optional MONITORING_DEPLOY_SHA setzen." >&2
 fi
 if grep -q 'BUILD_VERSION GitHub main:' "$TARGET_DIR/pull-server-only.sh" 2>/dev/null; then
   echo "WARNUNG: $TARGET_DIR/pull-server-only.sh ist noch die alte Version (zeigt 'GitHub main')." >&2
