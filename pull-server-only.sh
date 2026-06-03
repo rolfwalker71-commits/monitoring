@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604b"
+PULL_SCRIPT_VERSION="20260604c"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -561,6 +561,7 @@ server/static/icons/sap.png
 BUILD_VERSION
 AGENT_VERSION
 openapi.yaml
+scripts/watch-inventur-job.sh
 client/windows/collect_and_send.ps1
 client/windows/collect_and_scan_sap_tables.ps1
 client/windows/bootstrap_agent.ps1
@@ -617,6 +618,9 @@ cp -f "$TARGET_DIR/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client
 cp -f "$TARGET_DIR/client/linux/install_agent.sh" "$TARGET_DIR/updates/client/linux/install_agent.sh"
 cp -f "$TARGET_DIR/client/linux/self_update.sh" "$TARGET_DIR/updates/client/linux/self_update.sh"
 chmod 0755 "$TARGET_DIR/updates/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/install_agent.sh" "$TARGET_DIR/updates/client/linux/self_update.sh"
+if [ -f "$TARGET_DIR/scripts/watch-inventur-job.sh" ]; then
+  chmod 0755 "$TARGET_DIR/scripts/watch-inventur-job.sh"
+fi
 
 # Selbst-Update: erst am Ende austauschen, damit das laufende Skript nicht waehrend
 # des Parsens ueberschrieben wird.
