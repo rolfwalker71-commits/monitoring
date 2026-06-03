@@ -323,24 +323,22 @@
             </div>
 
             <div id="hostConfigChangesView" class="hidden" role="tabpanel" aria-labelledby="hostConfigChangesTabButton">
-              <div class="host-config-changes-filter-bar">
-                <div class="inactive-hosts-toolbar host-config-changes-toolbar-main">
-                  <span id="hostConfigChangesSummary" class="count compact host-config-changes-summary"></span>
-                  <input id="hostConfigChangesSearchInput" type="text" class="search-input-compact host-config-changes-search" placeholder="Nach Host oder Feld suchen..." />
-                  <button id="applyHostConfigChangesFiltersButton" type="button" class="btn-secondary-compact">Suchen</button>
-                  <select id="hostConfigChangesHoursFilter" class="btn-secondary-compact" title="Zeitraum für Änderungen">
-                    <option value="24">24h</option>
-                    <option value="72" selected>3 Tage</option>
-                    <option value="168">7 Tage</option>
-                    <option value="720">30 Tage</option>
-                    <option value="4320">6 Monate</option>
-                    <option value="8760">1 Jahr</option>
-                    <option value="17520">2 Jahre</option>
-                    <option value="26280">3 Jahre</option>
-                  </select>
-                  <button id="refreshHostConfigChangesButton" type="button" class="btn-secondary-compact" title="Changelog-Liste neu laden">↻</button>
-                </div>
-                <div id="hostConfigChangesCountryFilter" class="system-overview-country-filter host-config-changes-country-row" aria-label="Land Filter"></div>
+              <div class="inactive-hosts-toolbar host-config-changes-filter-bar">
+                <span id="hostConfigChangesSummary" class="count compact host-config-changes-summary"></span>
+                <input id="hostConfigChangesSearchInput" type="text" class="search-input-compact host-config-changes-search" placeholder="Nach Host oder Feld suchen..." />
+                <button id="applyHostConfigChangesFiltersButton" type="button" class="btn-secondary-compact">Suchen</button>
+                <div id="hostConfigChangesCountryFilter" class="system-overview-country-filter host-config-changes-country-filter" aria-label="Land Filter"></div>
+                <select id="hostConfigChangesHoursFilter" class="btn-secondary-compact" title="Zeitraum für Änderungen">
+                  <option value="24">24h</option>
+                  <option value="72" selected>3 Tage</option>
+                  <option value="168">7 Tage</option>
+                  <option value="720">30 Tage</option>
+                  <option value="4320">6 Monate</option>
+                  <option value="8760">1 Jahr</option>
+                  <option value="17520">2 Jahre</option>
+                  <option value="26280">3 Jahre</option>
+                </select>
+                <button id="refreshHostConfigChangesButton" type="button" class="btn-secondary-compact" title="Changelog-Liste neu laden">↻</button>
               </div>
               <details id="changelogMaintenancePanel" class="changelog-maintenance-panel">
                 <summary class="changelog-maintenance-summary">
