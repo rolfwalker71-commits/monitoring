@@ -40,7 +40,7 @@ const AUTO_REFRESH_INTERVAL_OPTIONS = new Map([
   [480, "8 Min."],
   [0, "Aus"],
 ]);
-const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "containers", "sap-b1-systeminfo", "agent-update", "dir-listings", "network", "filesystems", "databases"]);
+const REPORT_SECTION_OPTIONS = new Set(["overview", "journal", "processes", "logfiles", "containers", "sap-b1-systeminfo", "agent-update", "dir-listings", "network", "filesystems", "databases"]);
 
 let SAP_B1_VERSION_MAP = new Map([
   ["10.00.330", { featurePack: "FP 2605", patchLevel: "PL 23", releaseDate: "May 2026" }],
@@ -8615,7 +8615,7 @@ function renderTopProcessesTable(topProcesses) {
     .join("");
 
   return `
-    <p class="count compact">Top Prozesse nach CPU-Auslastung</p>
+    <p class="count compact">Prozesse nach CPU-Auslastung</p>
     <div class="table-wrap">
       <table class="report-subtable top-processes-table">
         <thead>
@@ -8714,12 +8714,12 @@ function renderAngSkripteLogs(angSkripteLogsBlock) {
   const dirError = asText(block.error);
 
   if (block.available !== true && files.length === 0) {
-    const hint = dirError || "Verzeichnis nicht verfügbar oder keine Logs übertragen.";
+    const hint = dirError || `Keine Logfile-Infos aus ${path}.`;
     return `<p class="muted">${escapeHtml(hint)}</p><p class="count compact">Pfad: ${escapeHtml(path)}</p>`;
   }
 
   if (!files.length) {
-    return `<p class="muted">Keine .log-Dateien im Verzeichnis gefunden.</p><p class="count compact">Pfad: ${escapeHtml(path)}</p>`;
+    return `<p class="muted">Keine Logfile-Infos aus ${escapeHtml(path)} (keine .log-Dateien gefunden).</p>`;
   }
 
   const fileBlocks = files.map((file) => {
@@ -8751,6 +8751,25 @@ function renderAngSkripteLogs(angSkripteLogsBlock) {
   return `
     <p class="count compact">Verzeichnis: ${escapeHtml(path)} | ${files.length} Log-Datei${files.length !== 1 ? "en" : ""}</p>
     <div class="ang-skripte-logs-grid">${fileBlocks}</div>
+  `;
+}
+
+function renderLogfilesSection(payload) {
+  const defaultPath = "C:\\ang\\skripte";
+  const skripteLogs = payload && typeof payload.ang_skripte_logs === "object" ? payload.ang_skripte_logs : null;
+  if (!skripteLogs) {
+    return `
+      <section class="detail-card">
+        <h4>📜 Logfiles</h4>
+        <p class="muted">Keine Logfile-Infos aus ${escapeHtml(defaultPath)}.</p>
+      </section>
+    `;
+  }
+  return `
+    <section class="detail-card">
+      <h4>📜 Logfiles</h4>
+      ${renderAngSkripteLogs(skripteLogs)}
+    </section>
   `;
 }
 
@@ -8961,19 +8980,14 @@ function renderReportCard(report) {
       </section>
     `;
   } else if (section === "processes") {
-    const skripteLogs = payload.ang_skripte_logs;
-    const hasSkripteLogs = skripteLogs && typeof skripteLogs === "object";
     detailContent = `
       <section class="detail-card">
-        <h4>🏎️ Top Prozesse</h4>
+        <h4>🏎️ Prozesse</h4>
         ${renderTopProcessesTable(payload.top_processes)}
       </section>
-      ${hasSkripteLogs ? `
-      <section class="detail-card">
-        <h4>📜 Skript-Logs (C:\\ang\\skripte)</h4>
-        ${renderAngSkripteLogs(skripteLogs)}
-      </section>` : ""}
     `;
+  } else if (section === "logfiles") {
+    detailContent = renderLogfilesSection(payload);
   } else if (section === "containers") {
     detailContent = `
       <section class="detail-card">

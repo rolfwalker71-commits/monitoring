@@ -15653,7 +15653,7 @@ body[data-theme="dark"] .reports-column #overviewFilesystemSection .fs-chart-car
   word-break: break-all;
 }
 
-/* Top Prozesse: narrow columns, compact command with hover full value via title */
+/* Prozesse: narrow columns, compact command with hover full value via title */
 .reports-column #reportsView .top-processes-table {
   table-layout: fixed;
 }
