@@ -14338,6 +14338,8 @@ async function loadChangelogRebuildJobsStatus() {
     const latestStatus = asText(latest.status, "-").toLowerCase();
     const latestId = Number(latest.id || 0);
     const latestDays = Number(latest.days || 0);
+    const latestMode = asText(latest.job_mode, "rebuild");
+    const jobModeLabel = latestMode === "backfill" ? "Backfill" : "Rebuild";
     const latestResult = latest && typeof latest.result === "object" ? latest.result : {};
     const latestProgress = latestResult && typeof latestResult.progress === "object" ? latestResult.progress : {};
     if (latestStatus === "completed") {
@@ -14345,14 +14347,26 @@ async function loadChangelogRebuildJobsStatus() {
       const finishedAtMs = Date.parse(finishedAt);
       const completedTooOld = Number.isFinite(finishedAtMs) && (Date.now() - finishedAtMs) > 24 * 60 * 60 * 1000;
       if (completedTooOld) {
-        setChangelogRebuildJobStatus("Kein laufender Rebuild-Job.");
+        setChangelogRebuildJobStatus("Kein laufender Wartungs-Job.");
         setChangelogRebuildProgress({ visible: false });
         return;
       }
       const configResult = latestResult && typeof latestResult.config_result === "object" ? latestResult.config_result : {};
       const hostsTotal = Number(configResult.hosts_total || configResult.hosts_touched || 0);
       const hostsProcessed = Number(configResult.hosts_processed || configResult.hosts_touched || 0);
-      setChangelogRebuildJobStatus(`Job #${latestId} abgeschlossen (${latestDays} Tag(e)) · ${formatUtcPlus2(finishedAt)}`);
+      const insertedChanges = Number(
+        latestResult.inserted_changes ?? configResult.inserted_changes ?? 0
+      );
+      const insertedEvents = Number(
+        latestResult.inserted_events ?? latestResult.database_result?.inserted_events ?? 0
+      );
+      const resultHint =
+        insertedChanges > 0 || insertedEvents > 0
+          ? ` · ${insertedChanges} Config + ${insertedEvents} DB-Events`
+          : "";
+      setChangelogRebuildJobStatus(
+        `${jobModeLabel} #${latestId} abgeschlossen (${latestDays} Tag(e))${resultHint} · ${formatUtcPlus2(finishedAt)}`
+      );
       setChangelogRebuildProgress({
         visible: hostsTotal > 0,
         processed: hostsProcessed,
@@ -14364,7 +14378,7 @@ async function loadChangelogRebuildJobsStatus() {
     }
     if (latestStatus === "failed") {
       const errorMessage = asText(latest.error_message, "Unbekannter Fehler");
-      setChangelogRebuildJobStatus(`Job #${latestId} fehlgeschlagen: ${errorMessage}`, true);
+      setChangelogRebuildJobStatus(`${jobModeLabel} #${latestId} fehlgeschlagen: ${errorMessage}`, true);
       setChangelogRebuildProgress({
         visible: true,
         label: "Rebuild fehlgeschlagen.",
@@ -14376,10 +14390,12 @@ async function loadChangelogRebuildJobsStatus() {
     if (latestStatus === "running") {
       const phase = asText(latestProgress.phase, "running");
       const phaseLabel = phase === "config_backfill"
-        ? "Host-Config Rebuild"
+        ? `Host-Config ${jobModeLabel}`
         : phase === "database_backfill"
-          ? "DB-Lifecycle Rebuild"
-          : "Rebuild läuft";
+          ? `DB-Lifecycle ${jobModeLabel}`
+          : phase === "reset"
+            ? `${jobModeLabel} Reset`
+            : `${jobModeLabel} läuft`;
       const hostsTotal = Number(latestProgress.hosts_total || 0);
       const hostsProcessed = Number(latestProgress.hosts_processed || 0);
       if (hostsTotal > 0) {
@@ -14397,15 +14413,15 @@ async function loadChangelogRebuildJobsStatus() {
           indeterminate: true,
         });
       }
-      setChangelogRebuildJobStatus(`Job #${latestId} läuft (${latestDays} Tag(e))...`);
+      setChangelogRebuildJobStatus(`${jobModeLabel} #${latestId} läuft im Hintergrund (${latestDays} Tag(e))...`);
       scheduleChangelogRebuildPoll(1800);
       return;
     }
     const scheduledAt = asText(latest.scheduled_for_utc, "");
-    setChangelogRebuildJobStatus(`Job #${latestId} geplant (${latestDays} Tag(e)) · ${formatUtcPlus2(scheduledAt)}`);
+    setChangelogRebuildJobStatus(`${jobModeLabel} #${latestId} geplant (${latestDays} Tag(e)) · ${formatUtcPlus2(scheduledAt)}`);
     setChangelogRebuildProgress({
       visible: true,
-      label: "Rebuild-Job geplant...",
+      label: `${jobModeLabel}-Job geplant...`,
       indeterminate: true,
     });
     scheduleChangelogRebuildPoll(1800);
@@ -14435,10 +14451,10 @@ async function runChangelogRebuildNow(days = CHANGELOG_REBUILD_DAYS) {
   }
 
   if (button) button.disabled = true;
-  setChangelogRebuildJobStatus("Rebuild-Job wird gestartet...");
+  setChangelogRebuildJobStatus("Rebuild-Job wird im Hintergrund gestartet (niedrige Priorität)...");
   setChangelogRebuildProgress({
     visible: true,
-    label: "Rebuild wird gestartet...",
+    label: "Rebuild startet im Hintergrund...",
     indeterminate: true,
   });
 
@@ -14456,17 +14472,12 @@ async function runChangelogRebuildNow(days = CHANGELOG_REBUILD_DAYS) {
     if (!response.ok) throw await buildHttpErrorFromResponse(response);
     const data = await response.json().catch(() => ({}));
 
-    const processed = Array.isArray(data.processed_now) ? data.processed_now : [];
-    if (processed.length > 0 && asText(processed[0]?.status, "") === "completed") {
-      const result = processed[0]?.result || {};
-      const cfg = result?.config_result || {};
-      const db = result?.database_result || {};
-      setChangelogRebuildJobStatus(
-        `Rebuild OK: ${Number(cfg.inserted_changes || 0)} Config-Changes + ${Number(db.inserted_events || 0)} DB-Events.`
-      );
-    } else {
-      setChangelogRebuildJobStatus("Rebuild-Job gestartet.");
-    }
+    const scheduledJobId = Number(data?.scheduled?.job?.id || 0);
+    setChangelogRebuildJobStatus(
+      scheduledJobId > 0
+        ? `Rebuild-Job #${scheduledJobId} im Hintergrund gestartet. Fortschritt wird automatisch aktualisiert.`
+        : "Rebuild-Job im Hintergrund gestartet. Fortschritt wird automatisch aktualisiert."
+    );
 
     await loadHostConfigChanges();
     if (state.selectedHost) {
@@ -14490,32 +14501,49 @@ async function runChangelogRebuildNow(days = CHANGELOG_REBUILD_DAYS) {
 async function runCombinedBackfill(days = 7) {
   const button = document.getElementById("backfillHostConfigChangesButton");
   const targetDays = Math.max(1, Math.min(30, Number(days) || 7));
-  const confirmed = window.confirm(`Backfill (Config-Changes + DB-Lifecycle) für die letzten ${targetDays} Tage jetzt starten?`);
+  const confirmed = window.confirm(
+    `Backfill (Config-Changes + DB-Lifecycle) für die letzten ${targetDays} Tage im Hintergrund starten?\n\nDie UI bleibt nutzbar; Fortschritt siehst du beim Rebuild-Status.`
+  );
   if (!confirmed) return;
 
   if (button) button.disabled = true;
-  setHostConfigChangesBackfillStatus("Backfill läuft...");
+  setHostConfigChangesBackfillStatus("Backfill-Job wird im Hintergrund gestartet...");
+  setChangelogRebuildProgress({
+    visible: true,
+    label: "Backfill startet im Hintergrund...",
+    indeterminate: true,
+  });
 
   try {
     const response = await fetch("/api/v1/host-config-changes/backfill", {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ days: targetDays }),
+      body: JSON.stringify({ days: targetDays, async: true, run_now: true }),
     });
 
     if (!response.ok) throw await buildHttpErrorFromResponse(response);
     const data = await response.json();
-    const result = data?.result || {};
-
-    const message = `Backfill OK: ${Number(result.inserted_changes || 0)} Änderungen + ${Number(result.inserted_events || 0)} DB-Events aus ${Number(result.reports_scanned || 0)} Reports.`;
-    setHostConfigChangesBackfillStatus(message, false);
-    await loadHostConfigChanges();
-    if (state.selectedHost) {
-      await loadConfigChangelogForHost();
+    const scheduledJobId = Number(data?.scheduled?.job?.id || 0);
+    const statusText = asText(data?.scheduled?.status, "");
+    if (statusText === "already_scheduled") {
+      setHostConfigChangesBackfillStatus("Backfill läuft bereits (siehe Status unten).");
+    } else {
+      setHostConfigChangesBackfillStatus(
+        scheduledJobId > 0
+          ? `Backfill-Job #${scheduledJobId} im Hintergrund gestartet (niedrige Priorität).`
+          : "Backfill-Job im Hintergrund gestartet (niedrige Priorität)."
+      );
     }
+    await loadChangelogRebuildJobsStatus();
   } catch (error) {
     setHostConfigChangesBackfillStatus(`Backfill Fehler: ${error.message}`, true);
+    setChangelogRebuildProgress({
+      visible: true,
+      label: `Backfill Fehler: ${error.message}`,
+      indeterminate: false,
+      isError: true,
+    });
   } finally {
     if (button) button.disabled = false;
   }

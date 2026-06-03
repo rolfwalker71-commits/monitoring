@@ -969,6 +969,14 @@ def init_db() -> None:
             ON changelog_rebuild_jobs(finished_at_utc DESC, id DESC)
             """
         )
+        existing_changelog_rebuild_job_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(changelog_rebuild_jobs)").fetchall()
+        }
+        if "job_mode" not in existing_changelog_rebuild_job_columns:
+            conn.execute(
+                "ALTER TABLE changelog_rebuild_jobs ADD COLUMN job_mode TEXT NOT NULL DEFAULT 'rebuild'"
+            )
         existing_host_config_snapshot_columns = {
             str(row[1])
             for row in conn.execute("PRAGMA table_info(host_config_snapshot)").fetchall()
@@ -6384,6 +6392,96 @@ def backfill_database_lifecycle(conn: sqlite3.Connection, days: int = 7) -> dict
     }
 
 
+def _apply_background_maintenance_priority() -> None:
+    """Lower CPU/IO priority for long-running rebuild/backfill work."""
+    nice_level = max(0, min(19, int(os.getenv("MONITORING_MAINTENANCE_NICE", "19") or "19")))
+    try:
+        os.nice(nice_level)
+    except OSError:
+        pass
+    if os.name == "posix":
+        try:
+            subprocess.run(
+                ["ionice", "-c", "3", "-p", str(os.getpid())],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=3,
+            )
+        except Exception:
+            pass
+
+
+def _maintenance_sqlite_busy_timeout_ms() -> int:
+    return max(5000, int(os.getenv("MONITORING_MAINTENANCE_BUSY_TIMEOUT_MS", "120000") or "120000"))
+
+
+def _start_background_changelog_jobs(max_jobs: int = 1) -> None:
+    def _worker() -> None:
+        _apply_background_maintenance_priority()
+        try:
+            with sqlite_connect() as conn:
+                conn.execute(f"PRAGMA busy_timeout = {_maintenance_sqlite_busy_timeout_ms()}")
+                process_due_changelog_rebuild_jobs(conn, max_jobs=max_jobs)
+        except Exception as exc:
+            print(f"[changelog-maintenance] background job failed: {exc}")
+
+    threading.Thread(
+        target=_worker,
+        name="changelog-maintenance-job",
+        daemon=True,
+    ).start()
+
+
+def run_changelog_backfill_only(
+    conn: sqlite3.Connection,
+    days: int = 7,
+    progress_callback=None,
+) -> dict:
+    window_days = max(1, min(int(days or 7), 365))
+    if callable(progress_callback):
+        try:
+            progress_callback({
+                "phase": "config_backfill",
+                "hosts_processed": 0,
+                "hosts_total": 0,
+                "message": "Backfill Host-Config-Changelog...",
+            })
+        except Exception:
+            pass
+
+    config_result = backfill_host_config_changes(
+        conn,
+        days=window_days,
+        progress_callback=progress_callback,
+        include_initial_snapshot_events=True,
+    )
+
+    if callable(progress_callback):
+        try:
+            progress_callback({
+                "phase": "database_backfill",
+                "hosts_processed": int(config_result.get("hosts_processed", 0) or 0),
+                "hosts_total": int(config_result.get("hosts_total", 0) or 0),
+                "message": "Backfill DB-Lifecycle-Changelog...",
+            })
+        except Exception:
+            pass
+
+    db_result = backfill_database_lifecycle(conn, days=window_days)
+    return {
+        "status": "completed",
+        "mode": "backfill",
+        "days": window_days,
+        "completed_at_utc": utc_now_iso(),
+        "config_result": config_result,
+        "database_result": db_result,
+        "inserted_changes": int(config_result.get("inserted_changes", 0) or 0),
+        "inserted_events": int(db_result.get("inserted_events", 0) or 0),
+        "reports_scanned": int(config_result.get("reports_scanned", 0) or 0),
+    }
+
+
 def rebuild_changelog_history(
     conn: sqlite3.Connection,
     days: int = 15,
@@ -6679,27 +6777,32 @@ def schedule_changelog_rebuild_job(
     days: int = 1,
     scheduled_for_utc: str = "",
     force_rebuild: bool = True,
+    job_mode: str = "rebuild",
 ) -> dict:
     _mark_stale_running_changelog_rebuild_jobs_failed(conn)
 
-    safe_days = max(1, min(int(days or 1), 365))
+    safe_mode = str(job_mode or "rebuild").strip().lower()
+    if safe_mode not in {"rebuild", "backfill"}:
+        safe_mode = "rebuild"
+    safe_days = max(1, min(int(days or 1), 365 if safe_mode == "rebuild" else 30))
     run_at = _normalize_utc_timestamp(scheduled_for_utc, default_to_now=True)
     requested_at = utc_now_iso()
     requester = str(requested_by or "").strip() or "webclient"
-    force_int = 1 if force_rebuild else 0
+    force_int = 0 if safe_mode == "backfill" else (1 if force_rebuild else 0)
 
     existing_pending = conn.execute(
         """
         SELECT id, requested_at_utc, requested_by, scheduled_for_utc, days, force_rebuild, status,
-               started_at_utc, finished_at_utc, error_message, result_json
+               started_at_utc, finished_at_utc, error_message, result_json, job_mode
         FROM changelog_rebuild_jobs
         WHERE status IN ('pending', 'running')
           AND days = ?
           AND force_rebuild = ?
+          AND job_mode = ?
         ORDER BY id DESC
         LIMIT 1
         """,
-        (safe_days, force_int),
+        (safe_days, force_int, safe_mode),
     ).fetchone()
     if existing_pending:
         return {
@@ -6716,6 +6819,7 @@ def schedule_changelog_rebuild_job(
                 "finished_at_utc": str(existing_pending[8] or ""),
                 "error_message": str(existing_pending[9] or ""),
                 "result": parse_payload_json(str(existing_pending[10] or "{}")),
+                "job_mode": str(existing_pending[11] or safe_mode),
             },
         }
 
@@ -6731,11 +6835,12 @@ def schedule_changelog_rebuild_job(
             started_at_utc,
             finished_at_utc,
             error_message,
-            result_json
+            result_json,
+            job_mode
         )
-        VALUES (?, ?, ?, ?, ?, 'pending', '', '', '', '')
+        VALUES (?, ?, ?, ?, ?, 'pending', '', '', '', '', ?)
         """,
-        (requested_at, requester, run_at, safe_days, force_int),
+        (requested_at, requester, run_at, safe_days, force_int, safe_mode),
     )
 
     return {
@@ -6752,6 +6857,7 @@ def schedule_changelog_rebuild_job(
             "finished_at_utc": "",
             "error_message": "",
             "result": {},
+            "job_mode": safe_mode,
         },
     }
 
@@ -6772,7 +6878,8 @@ def list_changelog_rebuild_jobs(conn: sqlite3.Connection, limit: int = 20) -> li
                started_at_utc,
                finished_at_utc,
                error_message,
-               result_json
+               result_json,
+               COALESCE(job_mode, 'rebuild')
         FROM changelog_rebuild_jobs
         ORDER BY id DESC
         LIMIT ?
@@ -6792,6 +6899,7 @@ def list_changelog_rebuild_jobs(conn: sqlite3.Connection, limit: int = 20) -> li
             "finished_at_utc": str(row[8] or ""),
             "error_message": str(row[9] or ""),
             "result": parse_payload_json(str(row[10] or "{}")),
+            "job_mode": str(row[11] or "rebuild"),
         }
         for row in rows
     ]
@@ -6802,13 +6910,14 @@ def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int =
         return []
 
     try:
+        _apply_background_maintenance_priority()
         _mark_stale_running_changelog_rebuild_jobs_failed(conn)
 
         safe_max = max(1, min(int(max_jobs or 1), 5))
         now_iso = utc_now_iso()
         jobs = conn.execute(
             """
-            SELECT id, days, force_rebuild
+            SELECT id, days, force_rebuild, COALESCE(job_mode, 'rebuild')
             FROM changelog_rebuild_jobs
             WHERE status = 'pending'
               AND scheduled_for_utc <= ?
@@ -6823,6 +6932,9 @@ def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int =
             job_id = int(row[0] or 0)
             window_days = int(row[1] or 1)
             force_rebuild = bool(int(row[2] or 0))
+            job_mode = str(row[3] or "rebuild").strip().lower()
+            if job_mode not in {"rebuild", "backfill"}:
+                job_mode = "rebuild"
             started_at = utc_now_iso()
 
             conn.execute(
@@ -6877,12 +6989,19 @@ def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int =
                     last_progress_phase = phase
                     last_progress_hosts = hosts_processed
 
-                result = rebuild_changelog_history(
-                    conn,
-                    days=window_days,
-                    force_rebuild=force_rebuild,
-                    progress_callback=progress_reporter,
-                )
+                if job_mode == "backfill":
+                    result = run_changelog_backfill_only(
+                        conn,
+                        days=window_days,
+                        progress_callback=progress_reporter,
+                    )
+                else:
+                    result = rebuild_changelog_history(
+                        conn,
+                        days=window_days,
+                        force_rebuild=force_rebuild,
+                        progress_callback=progress_reporter,
+                    )
                 finished_at = utc_now_iso()
                 conn.execute(
                     """
@@ -18795,14 +18914,53 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             except json.JSONDecodeError:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
                 return
+            if not isinstance(payload, dict):
+                payload = {}
 
             days = 7
-            if isinstance(payload, dict) and "days" in payload:
+            if "days" in payload:
                 try:
                     days = max(1, min(int(payload.get("days", 7)), 30))
                 except (TypeError, ValueError):
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "days must be an integer between 1 and 30"})
                     return
+
+            run_now = parse_bool(payload.get("run_now"), True)
+            async_mode = parse_bool(payload.get("async"), True)
+            requested_by = self._web_session_username() or "webclient"
+
+            if async_mode:
+                try:
+                    with sqlite_connect() as conn:
+                        scheduled = schedule_changelog_rebuild_job(
+                            conn,
+                            requested_by,
+                            days=days,
+                            scheduled_for_utc=utc_now_iso() if run_now else "",
+                            force_rebuild=False,
+                            job_mode="backfill",
+                        )
+                        if run_now:
+                            _start_background_changelog_jobs(max_jobs=1)
+                        jobs = list_changelog_rebuild_jobs(conn, limit=20)
+                        conn.commit()
+                except Exception as exc:
+                    self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                    return
+
+                self._send_json(
+                    HTTPStatus.OK,
+                    {
+                        "status": "ok",
+                        "message": "Backfill-Job im Hintergrund gestartet (niedrige Priorität)"
+                        if run_now
+                        else "Backfill-Job geplant",
+                        "scheduled": scheduled,
+                        "jobs": jobs,
+                        "job_mode": "backfill",
+                    },
+                )
+                return
 
             if not _db_maintenance_lock.acquire(blocking=False):
                 self._send_json(
@@ -18815,14 +18973,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                with sqlite3.connect(DB_PATH) as conn:
-                    conn.execute("PRAGMA busy_timeout = 120000")
-                    config_result = backfill_host_config_changes(
-                        conn,
-                        days=days,
-                        include_initial_snapshot_events=True,
-                    )
-                    db_result = backfill_database_lifecycle(conn, days=days)
+                _apply_background_maintenance_priority()
+                with sqlite_connect() as conn:
+                    conn.execute(f"PRAGMA busy_timeout = {_maintenance_sqlite_busy_timeout_ms()}")
+                    result = run_changelog_backfill_only(conn, days=days)
                     conn.commit()
 
                 self._send_json(
@@ -18830,11 +18984,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     {
                         "status": "ok",
                         "result": {
-                            "config_changes": config_result,
-                            "database_lifecycle": db_result,
-                            "inserted_changes": config_result.get("inserted_changes", 0),
-                            "reports_scanned": config_result.get("reports_scanned", 0),
-                            "inserted_events": db_result.get("inserted_events", 0),
+                            "config_changes": result.get("config_result", {}),
+                            "database_lifecycle": result.get("database_result", {}),
+                            "inserted_changes": result.get("inserted_changes", 0),
+                            "reports_scanned": result.get("reports_scanned", 0),
+                            "inserted_events": result.get("inserted_events", 0),
                         },
                     },
                 )
@@ -20273,12 +20427,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             run_now = parse_bool(payload.get("run_now"), False)
-            force_rebuild = parse_bool(payload.get("force_rebuild"), True)
+            job_mode = str(payload.get("mode", payload.get("job_mode", "rebuild")) or "rebuild").strip().lower()
+            if job_mode not in {"rebuild", "backfill"}:
+                job_mode = "rebuild"
+            force_rebuild = parse_bool(payload.get("force_rebuild"), True) if job_mode == "rebuild" else False
             try:
                 days = int(payload.get("days", 1) or 1)
             except (TypeError, ValueError):
                 days = 1
-            days = max(1, min(days, 365))
+            days = max(1, min(days, 365 if job_mode == "rebuild" else 30))
             scheduled_for_utc = str(payload.get("scheduled_for_utc", "") or "").strip()
             if run_now:
                 scheduled_for_utc = utc_now_iso()
@@ -20286,44 +20443,34 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             requested_by = self._web_session_username() or "webclient"
 
             try:
-                with sqlite3.connect(DB_PATH) as conn:
+                with sqlite_connect() as conn:
                     scheduled = schedule_changelog_rebuild_job(
                         conn,
                         requested_by,
                         days=days,
                         scheduled_for_utc=scheduled_for_utc,
                         force_rebuild=force_rebuild,
+                        job_mode=job_mode,
                     )
-                    immediate_result = []
                     if run_now:
-
-                        def _run_changelog_rebuild_job_async() -> None:
-                            try:
-                                with sqlite3.connect(DB_PATH) as conn:
-                                    process_due_changelog_rebuild_jobs(conn, max_jobs=1)
-                            except Exception as exc:
-                                print(f"[changelog-rebuild] background job failed: {exc}")
-
-                        threading.Thread(
-                            target=_run_changelog_rebuild_job_async,
-                            name="changelog-rebuild-job",
-                            daemon=True,
-                        ).start()
+                        _start_background_changelog_jobs(max_jobs=1)
                     jobs = list_changelog_rebuild_jobs(conn, limit=20)
                     conn.commit()
             except Exception as exc:
                 self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
                 return
 
+            job_label = "Backfill" if job_mode == "backfill" else "Rebuild"
             self._send_json(
                 HTTPStatus.OK,
                 {
                     "status": "ok",
-                    "message": "Changelog-Rebuild-Job geplant"
-                    + (" und im Hintergrund gestartet" if run_now else ""),
+                    "message": f"Changelog-{job_label}-Job geplant"
+                    + (" und im Hintergrund gestartet (niedrige Priorität)" if run_now else ""),
                     "scheduled": scheduled,
-                    "processed_now": immediate_result,
+                    "processed_now": [],
                     "jobs": jobs,
+                    "job_mode": job_mode,
                 },
             )
             return
@@ -20462,8 +20609,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
 
 def _startup_changelog_rebuild(days: int) -> None:
+    _apply_background_maintenance_priority()
     try:
         with sqlite_connect() as conn:
+            conn.execute(f"PRAGMA busy_timeout = {_maintenance_sqlite_busy_timeout_ms()}")
             rebuild_result = rebuild_changelog_history(conn, days=days)
             conn.commit()
         print(
