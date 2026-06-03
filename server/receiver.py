@@ -6842,6 +6842,7 @@ def rebuild_changelog_history(
     conn.execute("DELETE FROM host_config_snapshot")
     conn.execute("DELETE FROM host_license_type_snapshot")
     conn.execute("DELETE FROM host_addon_snapshot")
+    conn.commit()
 
     _ensure_changelog_job_running(conn, job_id)
 
@@ -6958,6 +6959,7 @@ def rebuild_changelog_inventory_history(
     conn.execute("DELETE FROM host_config_snapshot")
     conn.execute("DELETE FROM host_license_type_snapshot")
     conn.execute("DELETE FROM host_addon_snapshot")
+    conn.commit()
 
     _ensure_changelog_job_running(conn, job_id)
 
@@ -7321,8 +7323,14 @@ def schedule_changelog_rebuild_job(
     }
 
 
-def list_changelog_rebuild_jobs(conn: sqlite3.Connection, limit: int = 20) -> list[dict]:
-    _mark_stale_running_changelog_rebuild_jobs_failed(conn)
+def list_changelog_rebuild_jobs(
+    conn: sqlite3.Connection,
+    limit: int = 20,
+    *,
+    mark_stale: bool = True,
+) -> list[dict]:
+    if mark_stale:
+        _mark_stale_running_changelog_rebuild_jobs_failed(conn)
 
     safe_limit = max(1, min(int(limit or 20), 200))
     rows = conn.execute(
@@ -16629,7 +16637,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
             with sqlite3.connect(DB_PATH) as conn:
-                jobs = list_changelog_rebuild_jobs(conn, limit=limit)
+                jobs = list_changelog_rebuild_jobs(conn, limit=limit, mark_stale=False)
             self._send_json(
                 HTTPStatus.OK,
                 {
