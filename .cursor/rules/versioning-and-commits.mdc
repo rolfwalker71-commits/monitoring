@@ -1,0 +1,39 @@
+---
+description: BUILD/AGENT version bumps and v-prefixed commit messages
+alwaysApply: true
+---
+
+# Versioning and commits
+
+## Version files
+
+On every release-worthy change, bump **both** in the same commit:
+
+- `BUILD_VERSION` (server/UI)
+- `AGENT_VERSION` (agents under `client/` and `/updates`)
+
+Keep them on the **same** semantic version (e.g. both `1.7.344`). Do not bump only one unless the user explicitly asks for a server-only or agent-only exception.
+
+Also sync Windows embedded fallback when agent scripts change:
+
+- `client/windows/collect_and_send.ps1` → `$EmbeddedAgentVersion`
+- `client/windows/collect_and_scan_sap_tables.ps1` → `$EmbeddedAgentVersion`
+
+## Commit message format
+
+Use the project prefix **`vX.Y.Z:`** at the start of the subject line (not `(v1.7.x)` at the end).
+
+Good:
+
+```
+v1.7.344: fix ANG log viewer splitting merged tail lines
+```
+
+Bad:
+
+```
+Fix ANG log viewer (v1.7.344).
+Bump AGENT_VERSION to 1.7.343
+```
+
+Body (optional) explains why; subject stays short with the version prefix.
