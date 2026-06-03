@@ -354,17 +354,30 @@ function Read-LogFileTailLines {
     }
 
     $normalized = $text -replace "`r`n", "`n" -replace "`r", "`n"
-    $allLines = $normalized -split "`n"
-    while ($allLines.Count -gt 0 -and [string]::IsNullOrWhiteSpace($allLines[$allLines.Count - 1])) {
-        $allLines = $allLines[0..($allLines.Count - 2)]
+    $allLines = @($normalized -split "`n")
+    while ((Get-AngCollectionCount $allLines) -gt 0 -and [string]::IsNullOrWhiteSpace($allLines[(Get-AngCollectionCount $allLines) - 1])) {
+        $allLines = $allLines[0..((Get-AngCollectionCount $allLines) - 2)]
     }
-    if ($allLines.Count -eq 0) {
-        return @()
+    if ((Get-AngCollectionCount $allLines) -eq 0) {
+        return ,@()
     }
 
-    $take = [Math]::Min($TailLines, $allLines.Count)
-    $startIndex = $allLines.Count - $take
-    return ,@($allLines[$startIndex..($allLines.Count - 1)])
+    $lineCount = Get-AngCollectionCount $allLines
+    $take = [Math]::Min($TailLines, $lineCount)
+    $startIndex = $lineCount - $take
+    return ,@($allLines[$startIndex..($lineCount - 1)])
+}
+
+function Get-AngCollectionCount {
+    param(
+        [AllowNull()]
+        [object]$Value
+    )
+
+    if ($null -eq $Value) {
+        return 0
+    }
+    return @($Value).Count
 }
 
 function ConvertTo-AngLogFileInfoArray {
@@ -456,8 +469,8 @@ function Select-AngLogFilesByRotation {
     if ($KeepPerGroup -lt 1) {
         $KeepPerGroup = 1
     }
-    if ($LogFiles.Count -eq 0) {
-        return @()
+    if ((Get-AngCollectionCount $LogFiles) -eq 0) {
+        return ,@()
     }
 
     $groups = @{}
@@ -472,7 +485,7 @@ function Select-AngLogFilesByRotation {
     $selected = New-Object System.Collections.Generic.List[object]
     foreach ($groupKey in $groups.Keys) {
         $sorted = @($groups[$groupKey] | Sort-Object LastWriteTimeUtc -Descending)
-        $take = [Math]::Min($KeepPerGroup, $sorted.Count)
+        $take = [Math]::Min($KeepPerGroup, (Get-AngCollectionCount $sorted))
         for ($i = 0; $i -lt $take; $i++) {
             [void]$selected.Add($sorted[$i])
         }
@@ -488,12 +501,12 @@ function Limit-AngLogFilesByRecency {
     )
 
     $LogFiles = ConvertTo-AngLogFileInfoArray -LogFiles $LogFiles
-    if ($LogFiles.Count -eq 0) {
-        return @()
+    if ((Get-AngCollectionCount $LogFiles) -eq 0) {
+        return ,@()
     }
 
-    if ($MaxFiles -le 0 -or $LogFiles.Count -le $MaxFiles) {
-        return ,$LogFiles
+    if ($MaxFiles -le 0 -or (Get-AngCollectionCount $LogFiles) -le $MaxFiles) {
+        return ,@($LogFiles)
     }
 
     return ,@($LogFiles | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First $MaxFiles | Sort-Object FullName)
@@ -506,8 +519,8 @@ function Filter-AngLogFilesByMaxAge {
     )
 
     $LogFiles = ConvertTo-AngLogFileInfoArray -LogFiles $LogFiles
-    if ($MaxAgeDays -le 0 -or $LogFiles.Count -eq 0) {
-        return @()
+    if ($MaxAgeDays -le 0 -or (Get-AngCollectionCount $LogFiles) -eq 0) {
+        return ,@()
     }
 
     $cutoffUtc = (Get-Date).ToUniversalTime().AddDays(-1 * $MaxAgeDays)
@@ -543,7 +556,7 @@ function Get-AngLogsBlock {
             Get-ChildItem -LiteralPath $AngLogsRoot -Filter '*.log' -File -Recurse -ErrorAction SilentlyContinue
         )
 
-        $discoveredCount = $discoveredLogFiles.Count
+        $discoveredCount = Get-AngCollectionCount $discoveredLogFiles
         $ageFilteredLogFiles = Filter-AngLogFilesByMaxAge -LogFiles $discoveredLogFiles -MaxAgeDays $AngLogMaxAgeDays
         $logFiles = Select-AngLogFilesByRotation -LogFiles $ageFilteredLogFiles -RootPath $AngLogsRoot -KeepPerGroup $AngLogRotationKeep
         $logFiles = ConvertTo-AngLogFileInfoArray -LogFiles (Limit-AngLogFilesByRecency -LogFiles $logFiles -MaxFiles $AngLogMaxFiles)
@@ -571,7 +584,7 @@ function Get-AngLogsBlock {
             '","relative_path":"' + $relativePathJson +
             '","path":"' + $pathJson +
             '","size_bytes":' + $logFile.Length +
-            ',"line_count":' + $lines.Count +
+            ',"line_count":' + (Get-AngCollectionCount $lines) +
             ',"lines":[' + ($encodedLines -join ',') + ']' +
             ',"error":"' + $fileErrorJson + '"}'
         )
@@ -580,7 +593,7 @@ function Get-AngLogsBlock {
         return (
             '{"available":true,"path":"' + $rootPathJson +
             '","discovered_file_count":' + $discoveredCount +
-            ',"file_count":' + $fileBlocks.Count +
+            ',"file_count":' + (Get-AngCollectionCount $fileBlocks) +
             ',"max_age_days":' + $AngLogMaxAgeDays +
             ',"rotation_keep_per_group":' + $AngLogRotationKeep +
             ',"files":[' + ($fileBlocks -join ',') + '],"error":""}'
