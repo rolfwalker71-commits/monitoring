@@ -10671,13 +10671,18 @@ def backfill_host_config_changes(
     finally:
         read_conn.close()
 
+    conn.commit()
+
     snapshot_hosts = list(last_snapshot_by_host_key.items())
     license_hosts = [
         (host_key, license_counts)
         for host_key, license_counts in last_license_counts_by_host_key.items()
         if license_counts
     ]
-    if callable(progress_callback) and (snapshot_hosts or license_hosts):
+
+    def _emit_config_finalize_progress(message: str, *, current_host: str = "") -> None:
+        if not callable(progress_callback):
+            return
         try:
             progress_callback({
                 "phase": "config_backfill",
@@ -10687,125 +10692,108 @@ def backfill_host_config_changes(
                 "reports_scanned": report_count,
                 "hosts_processed": hosts_processed,
                 "hosts_total": backfill_pulse_state.get("hosts_total", hosts_total),
-                "current_host": "",
+                "current_host": current_host,
                 "inserted_changes": inserted_changes,
-                "message": (
-                    f"Host-Config: Speichere Snapshots (0/{len(snapshot_hosts)})…"
-                    if snapshot_hosts
-                    else "Host-Config: Speichere Lizenz-Snapshots…"
-                ),
+                "message": message,
             })
         except Exception:
             pass
-        conn.commit()
 
-    for snap_idx, (host_key, snapshot) in enumerate(snapshot_hosts, start=1):
-        updated_at_utc = last_seen_at_by_host_key.get(host_key, utc_now_iso())
-        conn.execute(
-            """
-            INSERT INTO host_config_snapshot (
-                hostname,
-                os_release,
-                kernel_release,
-                cpu_cores,
-                cpu_model_name,
-                ram_gb,
-                sap_release,
-                hana_release,
-                hana_sid,
-                sql_release,
-                updated_at_utc
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(hostname) DO UPDATE SET
-                os_release = excluded.os_release,
-                kernel_release = excluded.kernel_release,
-                cpu_cores = excluded.cpu_cores,
-                cpu_model_name = excluded.cpu_model_name,
-                ram_gb = excluded.ram_gb,
-                sap_release = excluded.sap_release,
-                hana_release = excluded.hana_release,
-                hana_sid = excluded.hana_sid,
-                sql_release = excluded.sql_release,
-                updated_at_utc = excluded.updated_at_utc
-            """,
-            (
-                host_key,
-                snapshot["os_release"],
-                snapshot["kernel_release"],
-                snapshot["cpu_cores"],
-                snapshot["cpu_model_name"],
-                snapshot["ram_gb"],
-                snapshot["sap_release"],
-                snapshot["hana_release"],
-                snapshot["hana_sid"],
-                snapshot["sql_release"],
-                updated_at_utc,
-            ),
-        )
-        if callable(progress_callback) and (
-            snap_idx == 1 or snap_idx == len(snapshot_hosts) or snap_idx % 5 == 0
-        ):
-            try:
-                progress_callback({
-                    "phase": "config_backfill",
-                    "phase_step": 2,
-                    "phase_steps_total": int(phase_steps_total or 3),
-                    "reports_total": reports_total,
-                    "reports_scanned": report_count,
-                    "hosts_processed": hosts_processed,
-                    "hosts_total": backfill_pulse_state.get("hosts_total", hosts_total),
-                    "current_host": str(last_hostname_by_host_key.get(host_key, host_key) or host_key),
-                    "inserted_changes": inserted_changes,
-                    "message": f"Host-Config: Speichere Snapshots ({snap_idx}/{len(snapshot_hosts)})…",
-                })
-            except Exception:
-                pass
-        conn.commit()
+    _emit_config_finalize_progress(
+        f"Host-Config: Reports fertig ({report_count}/{reports_total}), Speichere Snapshots…"
+    )
 
-    for lic_idx, (host_key, license_counts) in enumerate(license_hosts, start=1):
-        updated_at_utc = last_seen_at_by_host_key.get(host_key, utc_now_iso())
-        hostname_value = str(last_hostname_by_host_key.get(host_key, host_key) or host_key)
-        conn.execute("DELETE FROM host_license_type_snapshot WHERE host_uid = ?", (host_key,))
-        for match_text_upper in sorted(license_counts.keys()):
-            conn.execute(
+    # Snapshots on a separate connection so the progress heartbeat can still UPDATE the job row.
+    finalize_conn = sqlite_connect()
+    try:
+        finalize_conn.execute(f"PRAGMA busy_timeout = {_maintenance_sqlite_busy_timeout_ms()}")
+        for snap_idx, (host_key, snapshot) in enumerate(snapshot_hosts, start=1):
+            updated_at_utc = last_seen_at_by_host_key.get(host_key, utc_now_iso())
+            hostname_value = str(last_hostname_by_host_key.get(host_key, host_key) or host_key)
+            finalize_conn.execute(
                 """
-                INSERT INTO host_license_type_snapshot (
-                    host_uid,
+                INSERT INTO host_config_snapshot (
                     hostname,
-                    license_type_match_text,
-                    count_value,
+                    os_release,
+                    kernel_release,
+                    cpu_cores,
+                    cpu_model_name,
+                    ram_gb,
+                    sap_release,
+                    hana_release,
+                    hana_sid,
+                    sql_release,
                     updated_at_utc
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(hostname) DO UPDATE SET
+                    os_release = excluded.os_release,
+                    kernel_release = excluded.kernel_release,
+                    cpu_cores = excluded.cpu_cores,
+                    cpu_model_name = excluded.cpu_model_name,
+                    ram_gb = excluded.ram_gb,
+                    sap_release = excluded.sap_release,
+                    hana_release = excluded.hana_release,
+                    hana_sid = excluded.hana_sid,
+                    sql_release = excluded.sql_release,
+                    updated_at_utc = excluded.updated_at_utc
                 """,
                 (
                     host_key,
-                    hostname_value,
-                    match_text_upper,
-                    int(license_counts.get(match_text_upper, 0) or 0),
+                    snapshot["os_release"],
+                    snapshot["kernel_release"],
+                    snapshot["cpu_cores"],
+                    snapshot["cpu_model_name"],
+                    snapshot["ram_gb"],
+                    snapshot["sap_release"],
+                    snapshot["hana_release"],
+                    snapshot["hana_sid"],
+                    snapshot["sql_release"],
                     updated_at_utc,
                 ),
             )
-        if callable(progress_callback) and (
-            lic_idx == 1 or lic_idx == len(license_hosts) or lic_idx % 5 == 0
-        ):
-            try:
-                progress_callback({
-                    "phase": "config_backfill",
-                    "phase_step": 2,
-                    "phase_steps_total": int(phase_steps_total or 3),
-                    "reports_total": reports_total,
-                    "reports_scanned": report_count,
-                    "hosts_processed": hosts_processed,
-                    "hosts_total": backfill_pulse_state.get("hosts_total", hosts_total),
-                    "current_host": hostname_value,
-                    "inserted_changes": inserted_changes,
-                    "message": f"Host-Config: Lizenz-Snapshots ({lic_idx}/{len(license_hosts)})…",
-                })
-            except Exception:
-                pass
-        conn.commit()
+            finalize_conn.commit()
+            if inventory_greenfield or snap_idx == 1 or snap_idx == len(snapshot_hosts) or snap_idx % 5 == 0:
+                _emit_config_finalize_progress(
+                    f"Host-Config: Speichere Snapshots ({snap_idx}/{len(snapshot_hosts)})…",
+                    current_host=hostname_value,
+                )
+
+        for lic_idx, (host_key, license_counts) in enumerate(license_hosts, start=1):
+            updated_at_utc = last_seen_at_by_host_key.get(host_key, utc_now_iso())
+            hostname_value = str(last_hostname_by_host_key.get(host_key, host_key) or host_key)
+            finalize_conn.execute("DELETE FROM host_license_type_snapshot WHERE host_uid = ?", (host_key,))
+            for match_text_upper in sorted(license_counts.keys()):
+                finalize_conn.execute(
+                    """
+                    INSERT INTO host_license_type_snapshot (
+                        host_uid,
+                        hostname,
+                        license_type_match_text,
+                        count_value,
+                        updated_at_utc
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        host_key,
+                        hostname_value,
+                        match_text_upper,
+                        int(license_counts.get(match_text_upper, 0) or 0),
+                        updated_at_utc,
+                    ),
+                )
+            finalize_conn.commit()
+            if inventory_greenfield or lic_idx == 1 or lic_idx == len(license_hosts) or lic_idx % 5 == 0:
+                _emit_config_finalize_progress(
+                    f"Host-Config: Lizenz-Snapshots ({lic_idx}/{len(license_hosts)})…",
+                    current_host=hostname_value,
+                )
+    finally:
+        finalize_conn.close()
+
+    _emit_config_finalize_progress("Host-Config abgeschlossen, weiter mit SAP-Add-ons…")
+    conn.commit()
 
     return {
         "days": window_days,

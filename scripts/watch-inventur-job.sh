@@ -34,6 +34,7 @@ SELECT id, status,
        json_extract(result_json,'$.progress.reports_total') AS total,
        json_extract(result_json,'$.progress.inserted_changes') AS cfg,
        json_extract(result_json,'$.progress.current_host') AS host,
+       json_extract(result_json,'$.progress.build_version') AS code,
        json_extract(result_json,'$.progress.updated_at_utc') AS updated
 FROM changelog_rebuild_jobs
 WHERE id = ${JOB_ID};
@@ -46,6 +47,7 @@ SELECT id, status,
        json_extract(result_json,'$.progress.reports_scanned') AS reports,
        json_extract(result_json,'$.progress.reports_total') AS total,
        json_extract(result_json,'$.progress.inserted_changes') AS cfg,
+       json_extract(result_json,'$.progress.build_version') AS code,
        json_extract(result_json,'$.progress.updated_at_utc') AS updated
 FROM changelog_rebuild_jobs
 ORDER BY id DESC
