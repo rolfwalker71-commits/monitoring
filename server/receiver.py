@@ -7155,6 +7155,29 @@ def _mark_stale_running_changelog_rebuild_jobs_failed(
     return updated
 
 
+def _mark_interrupted_changelog_rebuild_jobs_on_startup(conn: sqlite3.Connection) -> int:
+    """Running jobs cannot survive a process restart; mark them failed so the UI does not show ghosts."""
+    now_iso = utc_now_iso()
+    cursor = conn.execute(
+        """
+        UPDATE changelog_rebuild_jobs
+        SET status = 'failed',
+            finished_at_utc = ?,
+            error_message = ?
+        WHERE status = 'running'
+        """,
+        (
+            now_iso,
+            "Unterbrochen: monitoring.service wurde neu gestartet waehrend der Job lief.",
+        ),
+    )
+    updated = int(cursor.rowcount or 0)
+    if updated > 0:
+        conn.commit()
+        print(f"[startup] {updated} unterbrochene Changelog-Job(s) als fehlgeschlagen markiert.")
+    return updated
+
+
 def cancel_changelog_rebuild_jobs(
     conn: sqlite3.Connection,
     *,
@@ -21556,6 +21579,12 @@ def main() -> None:
     args = parser.parse_args()
 
     init_db()
+    try:
+        with sqlite_connect() as conn:
+            _mark_interrupted_changelog_rebuild_jobs_on_startup(conn)
+    except Exception as exc:
+        print(f"[startup] changelog job recovery failed: {exc}")
+
     startup_rebuild_days = parse_startup_rebuild_days(
         os.getenv("MONITORING_REBUILD_CHANGELOG_DAYS", ""),
         default=18,
