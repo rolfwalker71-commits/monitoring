@@ -154,9 +154,7 @@ function updateUserLine() {
     return;
   }
   const label = state.userDisplayName || state.username;
-  line.innerHTML =
-    '<span class="mobile-user-label">angemeldet als</span>'
-    + '<span class="mobile-user-badge">' + mobileEsc(label) + "</span>";
+  line.innerHTML = '<span class="mobile-user-badge">' + mobileEsc(label) + "</span>";
 }
 
 function openSheet(sheetId) {
