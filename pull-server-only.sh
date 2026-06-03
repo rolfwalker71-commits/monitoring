@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604a"
+PULL_SCRIPT_VERSION="20260604b"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -339,6 +339,42 @@ pin_deploy_ref_to_main_sha() {
   return 0
 }
 
+_resolve_deploy_ref_from_github_api() {
+  local fallback_ref="$1"
+  COMMIT_META_JSON=""
+
+  if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
+    return 1
+  fi
+
+  if ! COMMIT_META_JSON="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE/commits/$fallback_ref" 2>/dev/null)"; then
+    return 1
+  fi
+
+  local sha=""
+  if command -v python3 >/dev/null 2>&1; then
+    sha="$(printf '%s\n' "$COMMIT_META_JSON" | python3 -c 'import json,sys; print((json.load(sys.stdin) or {}).get("sha", ""))' 2>/dev/null || true)"
+  fi
+  if [ -z "$sha" ]; then
+    sha="$(printf '%s\n' "$COMMIT_META_JSON" \
+      | awk 'match($0, /"sha"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"/) { m=substr($0, RSTART, RLENGTH); sub(/^.*"/, "", m); sub(/"$/, "", m); print m; exit }')"
+  fi
+  if ! is_full_git_sha "$sha"; then
+    return 1
+  fi
+
+  REF="$sha"
+  local github_commit_iso=""
+  github_commit_iso="$(printf '%s\n' "$COMMIT_META_JSON" \
+    | sed -n 's/.*"date":[[:space:]]*"\([0-9T:\-]\+Z\)".*/\1/p' \
+    | head -n 1)"
+  if [ -n "$github_commit_iso" ]; then
+    GITHUB_COMMIT_TIME="$(date -u -d "$github_commit_iso" '+%d.%m.%y %H:%M UTC' 2>/dev/null || date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$github_commit_iso" '+%d.%m.%y %H:%M UTC' 2>/dev/null || echo "")"
+  fi
+  echo "Deploy-Ref: $REF (via GitHub API /commits/$fallback_ref)"
+  return 0
+}
+
 resolve_deploy_ref() {
   local fallback_ref="${MONITORING_DEPLOY_REF:-main}"
   COMMIT_META_JSON=""
@@ -353,39 +389,36 @@ resolve_deploy_ref() {
     return 0
   fi
 
+  local git_sha=""
+  git_sha="$(resolve_latest_main_sha_via_git || true)"
+  if is_full_git_sha "$git_sha"; then
+    REF="$git_sha"
+    echo "Deploy-Ref: $REF (git ls-remote $fallback_ref – bevorzugt, unabhaengig von api.github.com)"
+    _resolve_deploy_ref_from_github_api "$fallback_ref" >/dev/null 2>&1 || true
+    if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
+      echo "Modus: MONITORING_PULL_USE_RAW_ONLY=1 (Downloads via raw.githubusercontent.com)"
+    fi
+    return 0
+  fi
+
+  if _resolve_deploy_ref_from_github_api "$fallback_ref"; then
+    return 0
+  fi
+
   if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
+    echo "WARNUNG: git ls-remote fehlgeschlagen – versuche Branch-Alias $fallback_ref (CDN-Risiko)." >&2
     pin_deploy_ref_to_main_sha "$fallback_ref"
     echo "Modus: MONITORING_PULL_USE_RAW_ONLY=1"
     return 0
   fi
 
-  if COMMIT_META_JSON="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE/commits/$fallback_ref" 2>/dev/null)"; then
-    SHA=""
-    if command -v python3 >/dev/null 2>&1; then
-      SHA="$(printf '%s\n' "$COMMIT_META_JSON" | python3 -c 'import json,sys; print((json.load(sys.stdin) or {}).get("sha", ""))' 2>/dev/null || true)"
-    fi
-    if [ -z "$SHA" ]; then
-      SHA="$(printf '%s\n' "$COMMIT_META_JSON" \
-        | awk 'match($0, /"sha"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"/) { m=substr($0, RSTART, RLENGTH); sub(/^.*"/, "", m); sub(/"$/, "", m); print m; exit }')"
-    fi
-    if [ -n "$SHA" ]; then
-      REF="$SHA"
-      GITHUB_COMMIT_ISO="$(printf '%s\n' "$COMMIT_META_JSON" \
-        | sed -n 's/.*"date":[[:space:]]*"\([0-9T:\-]\+Z\)".*/\1/p' \
-        | head -n 1)"
-      if [ -n "$GITHUB_COMMIT_ISO" ]; then
-        GITHUB_COMMIT_TIME="$(date -u -d "$GITHUB_COMMIT_ISO" '+%d.%m.%y %H:%M UTC' 2>/dev/null || date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$GITHUB_COMMIT_ISO" '+%d.%m.%y %H:%M UTC' 2>/dev/null || echo "")"
-      fi
-      echo "Deploy-Ref: $REF (via GitHub API /commits/$fallback_ref)"
-      return 0
-    fi
-  fi
-
-  MONITORING_PULL_USE_RAW_ONLY=1
-  export MONITORING_PULL_USE_RAW_ONLY
-  echo "WARNUNG: api.github.com nicht erreichbar – Downloads via raw.githubusercontent.com + git ls-remote." >&2
-  pin_deploy_ref_to_main_sha "$fallback_ref"
-  return 0
+  echo "FEHLER: Konnte keinen Commit-SHA fuer $fallback_ref ermitteln (git ls-remote und GitHub API)." >&2
+  echo "  Pruefen: git ls-remote https://github.com/$OWNER_REPO.git refs/heads/main" >&2
+  echo "           curl -I --connect-timeout 5 https://api.github.com" >&2
+  echo "  Workaround:" >&2
+  echo "    export MONITORING_DEPLOY_SHA=<40-stelliger-commit-sha>" >&2
+  echo "    export MONITORING_PULL_USE_RAW_ONLY=1   # nur wenn API-Downloads blockiert sind" >&2
+  exit 1
 }
 
 echo "pull-server-only.sh Version: $PULL_SCRIPT_VERSION"

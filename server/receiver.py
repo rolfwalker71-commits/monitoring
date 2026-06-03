@@ -15454,14 +15454,42 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
     return report_id
 
 
+def _run_sqlite_with_busy_retry(
+    operation,
+    *,
+    attempts: int = 12,
+    label: str = "sqlite-write",
+):
+    last_exc: sqlite3.OperationalError | None = None
+    safe_attempts = max(1, min(int(attempts or 1), 30))
+    for attempt in range(safe_attempts):
+        try:
+            with sqlite_connect() as conn:
+                return operation(conn)
+        except sqlite3.OperationalError as exc:
+            error_text = str(exc).lower()
+            if "locked" not in error_text and "busy" not in error_text:
+                raise
+            last_exc = exc
+            sleep_seconds = min(2.5, 0.12 * (attempt + 1))
+            print(
+                f"[sqlite-retry] {label}: database busy "
+                f"(attempt {attempt + 1}/{safe_attempts}, sleep {sleep_seconds:.2f}s)"
+            )
+            time.sleep(sleep_seconds)
+    if last_exc is not None:
+        raise last_exc
+    raise sqlite3.OperationalError("database is locked")
+
+
 def enqueue_agent_report(payload: dict, report_received_at_utc: str) -> int:
     hostname = str(payload.get("hostname", "")).strip()
     host_uid = str(payload.get("host_uid", "") or "").strip()
     payload_json = json.dumps(payload, separators=(",", ":"))
     payload_bytes = len(payload_json.encode("utf-8"))
     now_utc = utc_now_iso()
-    with sqlite3.connect(DB_PATH, timeout=30) as conn:
-        conn.execute("PRAGMA busy_timeout = 5000")
+
+    def _enqueue(conn: sqlite3.Connection) -> int:
         cursor = conn.execute(
             """
             INSERT INTO agent_ingest_queue (
@@ -15505,6 +15533,11 @@ def enqueue_agent_report(payload: dict, report_received_at_utc: str) -> int:
             payload_file_path=payload_file_path,
         )
         conn.commit()
+        return queue_id
+
+    queue_id = int(
+        _run_sqlite_with_busy_retry(_enqueue, label="enqueue_agent_report")
+    )
     _agent_ingest_queue_wakeup.set()
     return queue_id
 
@@ -21505,7 +21538,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         incoming_host_uid = _derive_host_uid(payload, hostname, incoming_agent_id, incoming_primary_ip)
         payload["host_uid"] = incoming_host_uid
 
-        queue_id = enqueue_agent_report(payload, report_received_at_utc)
+        try:
+            queue_id = enqueue_agent_report(payload, report_received_at_utc)
+        except sqlite3.OperationalError as exc:
+            error_text = str(exc)
+            if "locked" in error_text.lower() or "busy" in error_text.lower():
+                self._send_json(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    {
+                        "error": "Datenbank voruebergehend gesperrt (Wartungsjob). Bitte Report erneut senden.",
+                        "code": "database_locked",
+                        "retry": True,
+                    },
+                )
+                return
+            raise
 
         self._send_json(
             HTTPStatus.ACCEPTED,
