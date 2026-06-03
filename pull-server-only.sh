@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
+PULL_SCRIPT_VERSION="20260603d"
+
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
 GITHUB_API_BASE="https://api.github.com/repos/$OWNER_REPO"
@@ -111,6 +114,94 @@ fetch_repo_text_at_ref() {
   printf '%s' "$value"
 }
 
+is_full_git_sha() {
+  [[ "${1:-}" =~ ^[0-9a-f]{40}$ ]]
+}
+
+resolve_latest_main_sha_via_git() {
+  if ! command -v git >/dev/null 2>&1; then
+    return 0
+  fi
+  local git_url="https://github.com/$OWNER_REPO.git"
+  if [ -n "$GITHUB_TOKEN" ]; then
+    git_url="https://x-access-token:${GITHUB_TOKEN}@github.com/$OWNER_REPO.git"
+  fi
+  git ls-remote "$git_url" refs/heads/main 2>/dev/null | awk '{print $1; exit}'
+}
+
+write_repo_text_to_target() {
+  local source_path="$1"
+  local ref="$2"
+  local target_path="$3"
+  local value=""
+
+  value="$(fetch_repo_text_at_ref "$source_path" "$ref")"
+  if [ -z "$value" ]; then
+    return 1
+  fi
+  mkdir -p "$(dirname "$target_path")"
+  printf '%s\n' "$value" > "$target_path"
+}
+
+force_refresh_version_files() {
+  local version_ref="$1"
+  local refreshed=0
+
+  if ! is_full_git_sha "$version_ref"; then
+    return 0
+  fi
+
+  for version_file in BUILD_VERSION AGENT_VERSION; do
+    if write_repo_text_to_target "$version_file" "$version_ref" "$TARGET_DIR/$version_file"; then
+      refreshed=1
+    fi
+  done
+
+  if [ "$refreshed" -eq 1 ]; then
+    cp -f "$TARGET_DIR/BUILD_VERSION" "$TARGET_DIR/updates/BUILD_VERSION" 2>/dev/null || true
+    cp -f "$TARGET_DIR/AGENT_VERSION" "$TARGET_DIR/updates/AGENT_VERSION" 2>/dev/null || true
+    echo "Version-Dateien neu geladen (Ref ${version_ref:0:12})."
+  fi
+}
+
+bootstrap_pull_script_if_needed() {
+  if [ "${MONITORING_SKIP_PULL_BOOTSTRAP:-0}" = "1" ]; then
+    return 0
+  fi
+
+  local latest_sha=""
+  local bootstrap_ref=""
+  local script_path="${BASH_SOURCE[0]}"
+  local new_script="$TARGET_DIR/pull-server-only.sh.bootstrap"
+
+  latest_sha="$(resolve_latest_main_sha_via_git)"
+  bootstrap_ref="${MONITORING_DEPLOY_SHA:-$latest_sha}"
+  if [ -z "$bootstrap_ref" ]; then
+    bootstrap_ref="main"
+  fi
+
+  if ! curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/$bootstrap_ref/pull-server-only.sh")" \
+    -o "$new_script" 2>/dev/null; then
+    return 0
+  fi
+  chmod +x "$new_script"
+
+  if ! grep -q "PULL_SCRIPT_VERSION=\"$PULL_SCRIPT_VERSION\"" "$new_script" 2>/dev/null; then
+    if grep -q 'BUILD_VERSION GitHub main:' "$new_script" 2>/dev/null; then
+      echo "WARNUNG: Bootstrap-Skript auf GitHub ist noch eine alte pull-server-only-Version." >&2
+    fi
+  fi
+
+  if [ ! -f "$script_path" ] \
+    || ! grep -q 'PULL_SCRIPT_VERSION=' "$script_path" 2>/dev/null \
+    || ! cmp -s "$new_script" "$script_path"; then
+    echo "Bootstrap: pull-server-only.sh wird aktualisiert (Ref ${bootstrap_ref:0:12}, Version $PULL_SCRIPT_VERSION) ..."
+    mv -f "$new_script" "$TARGET_DIR/pull-server-only.sh"
+    exec bash "$TARGET_DIR/pull-server-only.sh" "$@"
+  fi
+  rm -f "$new_script"
+}
+
 download_repo_file() {
   local source_path="$1"
   local target_path="$2"
@@ -118,24 +209,51 @@ download_repo_file() {
   local api_url_main="$GITHUB_API_BASE/contents/$source_path?ref=main"
   local raw_url="$RAW_BASE/$source_path"
   local raw_url_main="https://raw.githubusercontent.com/$OWNER_REPO/main/$source_path"
+  local allow_main_fallback=1
   mkdir -p "$(dirname "$target_path")"
 
+  if is_full_git_sha "$REF"; then
+    allow_main_fallback=0
+  fi
+
   if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
-    curl_raw_github "$(append_raw_cache_bust "$raw_url")" -o "$target_path" \
-      || curl_raw_github "$(append_raw_cache_bust "$raw_url_main")" -o "$target_path"
-    return $?
+    if curl_raw_github "$(append_raw_cache_bust "$raw_url")" -o "$target_path"; then
+      return 0
+    fi
+    if [ "$allow_main_fallback" -eq 1 ]; then
+      curl_raw_github "$(append_raw_cache_bust "$raw_url_main")" -o "$target_path"
+      return $?
+    fi
+    return 1
   fi
 
   if [ -n "$GITHUB_TOKEN" ]; then
     # Prefer pinned ref, then fallback to main/raw (API errors suppressed on stderr).
-    curl_github "application/vnd.github.raw" "$api_url" -o "$target_path" 2>/dev/null \
-      || curl_github "application/vnd.github.raw" "$api_url_main" -o "$target_path" 2>/dev/null \
-      || curl_raw_github "$(append_raw_cache_bust "$raw_url")" -o "$target_path" \
-      || curl_raw_github "$(append_raw_cache_bust "$raw_url_main")" -o "$target_path"
-  else
-    curl_raw_github "$(append_raw_cache_bust "$raw_url")" -o "$target_path" \
-      || curl_raw_github "$(append_raw_cache_bust "$raw_url_main")" -o "$target_path"
+    if curl_github "application/vnd.github.raw" "$api_url" -o "$target_path" 2>/dev/null; then
+      return 0
+    fi
+    if [ "$allow_main_fallback" -eq 1 ] \
+      && curl_github "application/vnd.github.raw" "$api_url_main" -o "$target_path" 2>/dev/null; then
+      return 0
+    fi
+    if curl_raw_github "$(append_raw_cache_bust "$raw_url")" -o "$target_path"; then
+      return 0
+    fi
+    if [ "$allow_main_fallback" -eq 1 ]; then
+      curl_raw_github "$(append_raw_cache_bust "$raw_url_main")" -o "$target_path"
+      return $?
+    fi
+    return 1
   fi
+
+  if curl_raw_github "$(append_raw_cache_bust "$raw_url")" -o "$target_path"; then
+    return 0
+  fi
+  if [ "$allow_main_fallback" -eq 1 ]; then
+    curl_raw_github "$(append_raw_cache_bust "$raw_url_main")" -o "$target_path"
+    return $?
+  fi
+  return 1
 }
 
 print_private_repo_hint() {
@@ -170,6 +288,27 @@ Entwicklungsrechner nach TARGET_DIR kopieren und monitoring neu starten.
 EOF
 }
 
+pin_deploy_ref_to_main_sha() {
+  local branch_ref="${1:-main}"
+  local sha=""
+
+  if is_full_git_sha "$branch_ref"; then
+    REF="$branch_ref"
+    return 0
+  fi
+
+  sha="$(resolve_latest_main_sha_via_git)"
+  if [ -n "$sha" ]; then
+    REF="$sha"
+    echo "Deploy-Ref: $REF (git ls-remote $branch_ref – umgeht raw/main CDN-Cache)"
+    return 0
+  fi
+
+  REF="$branch_ref"
+  echo "WARNUNG: main-SHA nicht ermittelbar – nutze Branch-Alias $REF (CDN kann veraltet sein)." >&2
+  return 0
+}
+
 resolve_deploy_ref() {
   local fallback_ref="${MONITORING_DEPLOY_REF:-main}"
   COMMIT_META_JSON=""
@@ -180,13 +319,13 @@ resolve_deploy_ref() {
       MONITORING_PULL_USE_RAW_ONLY=1
       export MONITORING_PULL_USE_RAW_ONLY
     fi
-    echo "Deploy-Ref: $REF (MONITORING_DEPLOY_SHA, nur raw.githubusercontent.com)"
+    echo "Deploy-Ref: $REF (MONITORING_DEPLOY_SHA)"
     return 0
   fi
 
   if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
-    REF="$fallback_ref"
-    echo "Deploy-Ref: $REF (MONITORING_PULL_USE_RAW_ONLY=1, nur raw.githubusercontent.com)"
+    pin_deploy_ref_to_main_sha "$fallback_ref"
+    echo "Modus: MONITORING_PULL_USE_RAW_ONLY=1"
     return 0
   fi
 
@@ -212,15 +351,17 @@ resolve_deploy_ref() {
     fi
   fi
 
-  REF="$fallback_ref"
   MONITORING_PULL_USE_RAW_ONLY=1
   export MONITORING_PULL_USE_RAW_ONLY
-  echo "WARNUNG: api.github.com nicht erreichbar – Downloads nur via raw.githubusercontent.com (ref=$REF)" >&2
-  echo "Hinweis: MONITORING_PULL_USE_RAW_ONLY=1 in monitoring.env vermeidet kuenftige API-Versuche." >&2
+  echo "WARNUNG: api.github.com nicht erreichbar – Downloads via raw.githubusercontent.com + git ls-remote." >&2
+  pin_deploy_ref_to_main_sha "$fallback_ref"
   return 0
 }
 
+echo "pull-server-only.sh Version: $PULL_SCRIPT_VERSION"
 echo "Installiere Serverteil nach: $TARGET_DIR"
+
+bootstrap_pull_script_if_needed
 
 # Speed/strictness tuning:
 # - VERIFY_SYNC=1 enables costly re-download + hash verification.
@@ -317,7 +458,8 @@ verify_synced_file() {
   return 1
 }
 
-export -f download_file download_repo_file checksum_file curl_github curl_raw_github
+export -f download_file download_repo_file checksum_file curl_github curl_raw_github \
+  append_raw_cache_bust fetch_repo_text_at_ref is_full_git_sha resolve_latest_main_sha_via_git
 export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE REF OWNER_REPO CURL_CONNECT_TIMEOUT CURL_MAX_TIME MONITORING_PULL_USE_RAW_ONLY
 
 FILES_LIST="
@@ -357,6 +499,8 @@ if ! printf '%s\n' "$FILES_LIST" | sed '/^$/d' | xargs -P "$MAX_PARALLEL_DOWNLOA
   exit 1
 fi
 echo "Dateien geladen ✓"
+
+force_refresh_version_files "$REF"
 
 if [ "$VERIFY_SYNC" = "1" ]; then
   echo "Pruefe heruntergeladene Dateien gegen gepinnten Commit (VERIFY_SYNC=1)..."
@@ -443,6 +587,16 @@ LATEST_META_AFTER="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE
 LATEST_SHA_AFTER="$(printf '%s\n' "$LATEST_META_AFTER" \
   | sed -n 's/.*"sha":[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' \
   | head -n 1)"
+if [ -z "$LATEST_SHA_AFTER" ]; then
+  LATEST_SHA_AFTER="$(resolve_latest_main_sha_via_git)"
+fi
+
+if is_full_git_sha "$REF"; then
+  force_refresh_version_files "$REF"
+fi
+if [ -n "$LATEST_SHA_AFTER" ] && [ "$LATEST_SHA_AFTER" != "$REF" ]; then
+  force_refresh_version_files "$LATEST_SHA_AFTER"
+fi
 
 DEPLOYED_SHA_FILE="$(cat "$TARGET_DIR/DEPLOYED_COMMIT_SHA" 2>/dev/null || true)"
 
@@ -480,8 +634,12 @@ fi
 if [ -n "$REMOTE_MAIN_BUILD_VERSION" ] && [ "$REMOTE_MAIN_BUILD_VERSION" != "$REMOTE_BUILD_VERSION" ]; then
   echo "Hinweis: raw/main zeigt noch $REMOTE_MAIN_BUILD_VERSION (CDN-Cache) – Deploy-Ref $REMOTE_BUILD_REF ist massgeblich."
 fi
-if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ] && [ "$REF" = "main" ] && [ -z "$LATEST_SHA_AFTER" ]; then
-  echo "Hinweis: Bei raw-only ohne GitHub-API MONITORING_DEPLOY_SHA=<commit> setzen, falls main veraltet wirkt." >&2
+if ! is_full_git_sha "$REF" && [ -z "$LATEST_SHA_AFTER" ]; then
+  echo "Hinweis: git ls-remote fehlgeschlagen – MONITORING_DEPLOY_SHA=<40-char-commit> setzen." >&2
+fi
+if grep -q 'BUILD_VERSION GitHub main:' "$TARGET_DIR/pull-server-only.sh" 2>/dev/null; then
+  echo "WARNUNG: $TARGET_DIR/pull-server-only.sh ist noch die alte Version (zeigt 'GitHub main')." >&2
+  echo "         Einmalig: curl -fsSL 'https://raw.githubusercontent.com/$OWNER_REPO/main/pull-server-only.sh' -o $TARGET_DIR/pull-server-only.sh" >&2
 fi
 if [ -f "$TARGET_DIR/server/static/index.html" ]; then
   if rg -q 'runInventoryChangelogRebuildButton' "$TARGET_DIR/server/static/index.html" 2>/dev/null; then
