@@ -307,6 +307,22 @@ function Get-AgentConfigBlock {
     return '{"available":true,"path":"' + $configPathJson + '","entries":[' + ($entries -join ',') + ']}'
 }
 
+function Get-AngLogReplacementCharCount {
+    param([string]$Text)
+
+    if (-not $Text) {
+        return 0
+    }
+
+    $count = 0
+    foreach ($ch in $Text.ToCharArray()) {
+        if ([int]$ch -eq 0xFFFD) {
+            $count++
+        }
+    }
+    return $count
+}
+
 function Get-TextFromFileBytes {
     param([byte[]]$Bytes)
 
@@ -315,7 +331,7 @@ function Get-TextFromFileBytes {
     }
 
     if ($Bytes.Length -ge 3 -and $Bytes[0] -eq 0xEF -and $Bytes[1] -eq 0xBB -and $Bytes[2] -eq 0xBF) {
-        $utf8Bom = New-Object System.Text.UTF8Encoding $true
+        $utf8Bom = New-Object System.Text.UTF8Encoding $true, $false
         return $utf8Bom.GetString($Bytes, 3, $Bytes.Length - 3)
     }
     if ($Bytes.Length -ge 2 -and $Bytes[0] -eq 0xFF -and $Bytes[1] -eq 0xFE) {
@@ -325,13 +341,55 @@ function Get-TextFromFileBytes {
         return [System.Text.Encoding]::BigEndianUnicode.GetString($Bytes, 2, $Bytes.Length - 2)
     }
 
-    $utf8 = New-Object System.Text.UTF8Encoding $false, $true
-    $decodedUtf8 = $utf8.GetString($Bytes)
-    if (-not [string]::IsNullOrWhiteSpace($decodedUtf8)) {
-        return $decodedUtf8
+    $candidates = New-Object System.Collections.Generic.List[object]
+
+    function Add-DecodedCandidate {
+        param(
+            [string]$Label,
+            [string]$Text
+        )
+
+        if ([string]::IsNullOrWhiteSpace($Text)) {
+            return
+        }
+
+        $replacementCount = Get-AngLogReplacementCharCount -Text $Text
+        $candidates.Add([pscustomobject]@{
+            Label = $Label
+            Text = $Text
+            ReplacementCount = $replacementCount
+            Score = $Text.Length - ($replacementCount * 8)
+        }) | Out-Null
     }
 
-    return [System.Text.Encoding]::Default.GetString($Bytes)
+    try {
+        $utf8 = New-Object System.Text.UTF8Encoding $false, $false
+        Add-DecodedCandidate -Label 'utf-8' -Text $utf8.GetString($Bytes)
+    } catch {
+        # ignore
+    }
+
+    foreach ($codePage in @(1252, 850, 28591)) {
+        try {
+            $encoding = [System.Text.Encoding]::GetEncoding($codePage)
+            Add-DecodedCandidate -Label ("cp$codePage") -Text $encoding.GetString($Bytes)
+        } catch {
+            # ignore unsupported code pages on older hosts
+        }
+    }
+
+    try {
+        Add-DecodedCandidate -Label 'default' -Text ([System.Text.Encoding]::Default.GetString($Bytes))
+    } catch {
+        # ignore
+    }
+
+    if ($candidates.Count -eq 0) {
+        return ''
+    }
+
+    $best = @($candidates | Sort-Object -Property @{ Expression = 'ReplacementCount' }; @{ Expression = 'Score'; Descending = $true } | Select-Object -First 1)
+    return [string]$best.Text
 }
 
 function Split-AngLogPhysicalLine {
