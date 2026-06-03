@@ -8739,11 +8739,31 @@ function renderAgentConfig(agentConfigBlock) {
   `;
 }
 
+function repairUtf8MojibakeLatin1(text) {
+  const raw = String(text ?? "");
+  if (!raw || !/Ã.|â€/.test(raw)) {
+    return raw;
+  }
+  try {
+    const bytes = new Uint8Array(raw.length);
+    for (let index = 0; index < raw.length; index += 1) {
+      bytes[index] = raw.charCodeAt(index) & 0xff;
+    }
+    const repaired = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    if (repaired && repaired !== raw && !/Ã.|â€/.test(repaired)) {
+      return repaired;
+    }
+  } catch (_error) {
+    // keep original when repair is not valid UTF-8
+  }
+  return raw;
+}
+
 function asLogLineText(value) {
   if (value === null || value === undefined) {
     return "";
   }
-  return String(value);
+  return repairUtf8MojibakeLatin1(String(value));
 }
 
 function parseAngLogsBlock(raw) {

@@ -47,7 +47,7 @@ $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { '
 $QueueQuarantineDir = if ($env:AGENT_QUEUE_QUARANTINE_DIR) { $env:AGENT_QUEUE_QUARANTINE_DIR } else { 'C:\ProgramData\monitoring-agent\queue-quarantine' }
 $PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
 $PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
-$EmbeddedAgentVersion = '1.7.344'
+$EmbeddedAgentVersion = '1.7.345'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -323,6 +323,33 @@ function Get-AngLogReplacementCharCount {
     return $count
 }
 
+function Get-AngLogMojibakeScore {
+    param([string]$Text)
+
+    if ([string]::IsNullOrEmpty($Text)) {
+        return 0
+    }
+
+    # UTF-8 bytes misread as Windows-1252/Latin-1 (e.g. Ã¼ instead of ü).
+    return [regex]::Matches($Text, 'Ã.|â€').Count
+}
+
+function Test-BytesAreValidUtf8 {
+    param([byte[]]$Bytes)
+
+    if (-not $Bytes -or $Bytes.Length -eq 0) {
+        return $true
+    }
+
+    try {
+        $strictUtf8 = New-Object System.Text.UTF8Encoding $false, $true
+        $null = $strictUtf8.GetString($Bytes)
+        return $true
+    } catch {
+        return $false
+    }
+}
+
 function Add-AngLogDecodedCandidate {
     param(
         [System.Collections.Generic.List[object]]$Candidates,
@@ -338,11 +365,13 @@ function Add-AngLogDecodedCandidate {
     }
 
     $replacementCount = Get-AngLogReplacementCharCount -Text $Text
+    $mojibakeCount = Get-AngLogMojibakeScore -Text $Text
     [void]$Candidates.Add([pscustomobject]@{
         Label = $Label
         Text = $Text
         ReplacementCount = $replacementCount
-        Score = $Text.Length - ($replacementCount * 8)
+        MojibakeCount = $mojibakeCount
+        Score = $Text.Length - ($replacementCount * 8) - ($mojibakeCount * 12)
     })
 }
 
@@ -368,7 +397,17 @@ function Select-BestAngLogDecodedText {
             $best = $candidate
             continue
         }
-        if ([int]$candidate.ReplacementCount -eq [int]$best.ReplacementCount -and [int]$candidate.Score -gt [int]$best.Score) {
+        if ([int]$candidate.ReplacementCount -gt [int]$best.ReplacementCount) {
+            continue
+        }
+        if ([int]$candidate.MojibakeCount -lt [int]$best.MojibakeCount) {
+            $best = $candidate
+            continue
+        }
+        if ([int]$candidate.MojibakeCount -gt [int]$best.MojibakeCount) {
+            continue
+        }
+        if ([int]$candidate.Score -gt [int]$best.Score) {
             $best = $candidate
         }
     }
@@ -396,6 +435,15 @@ function Get-TextFromFileBytes {
     }
     if ($Bytes.Length -ge 2 -and $Bytes[0] -eq 0xFE -and $Bytes[1] -eq 0xFF) {
         return [System.Text.Encoding]::BigEndianUnicode.GetString($Bytes, 2, $Bytes.Length - 2)
+    }
+
+    if (Test-BytesAreValidUtf8 -Bytes $Bytes) {
+        try {
+            $utf8 = New-Object System.Text.UTF8Encoding $false, $false
+            return $utf8.GetString($Bytes)
+        } catch {
+            # fall through to candidate scoring
+        }
     }
 
     $candidates = New-Object System.Collections.Generic.List[object]
