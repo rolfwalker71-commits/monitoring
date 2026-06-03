@@ -1169,6 +1169,91 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   border-radius: 6px;
   padding: 2px 8px;
 }
+
+.host-config-changes-filter-bar {
+  margin-bottom: 8px;
+}
+
+.changelog-maintenance-panel {
+  margin-bottom: 12px;
+  border: 1px solid #d8e2f0;
+  border-radius: 8px;
+  background: #f8fbff;
+  overflow: hidden;
+}
+
+.changelog-maintenance-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1e3a5f;
+  user-select: none;
+}
+
+.changelog-maintenance-summary::-webkit-details-marker {
+  display: none;
+}
+
+.changelog-maintenance-summary::before {
+  content: "▸";
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  color: #64748b;
+  transition: transform 0.15s ease;
+}
+
+.changelog-maintenance-panel[open] > .changelog-maintenance-summary::before {
+  transform: rotate(90deg);
+}
+
+.changelog-maintenance-summary-hint {
+  font-weight: 500;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.changelog-maintenance-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 10px 10px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.changelog-maintenance-toolbar {
+  margin-bottom: 0;
+  background: transparent;
+  padding: 8px 0 0;
+}
+
+.changelog-maintenance-status-line {
+  width: 100%;
+  margin: 0;
+}
+
+.changelog-maintenance-progress {
+  width: 100%;
+  max-width: 100%;
+}
+
+body[data-theme="dark"] .changelog-maintenance-panel {
+  background: #1a2332;
+  border-color: #334155;
+}
+
+body[data-theme="dark"] .changelog-maintenance-summary {
+  color: #e2e8f0;
+}
+
+body[data-theme="dark"] .changelog-maintenance-panel-body {
+  border-top-color: #334155;
+}
 .db-ops-progress-bar {
   height: 100%;
   width: 0%;

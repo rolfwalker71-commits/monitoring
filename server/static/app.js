@@ -93,6 +93,7 @@ let hostLicenseOutsideClickWired = false;
 let hostLicenseSuppressOutsideCloseUntil = 0;
 let changelogRebuildPollTimerId = null;
 const CHANGELOG_REBUILD_DAYS = 7;
+const CHANGELOG_MAINTENANCE_PANEL_OPEN_KEY = "monitoring.changelogMaintenancePanelOpen";
 let headerKpiWidthSyncFrameId = null;
 let headerKpiTrendPreviousValues = null;
 const HEADER_KPI_WIDTH_STORAGE_KEY = "monitoring.headerKpiUniformWidth";
@@ -2655,13 +2656,8 @@ function updateAdminSettingsVisibility() {
   const adminOnlyTabsLegend = document.getElementById("adminOnlyTabsLegend");
   const globalAdminNavShell = document.getElementById("globalAdminNavShell");
   const globalAdminOpsSection = document.getElementById("globalAdminOpsSection");
-  const hostConfigChangesBackfillButton = document.getElementById("backfillHostConfigChangesButton");
-  const runChangelogRebuildNowButton = document.getElementById("runChangelogRebuildNowButton");
-  const runInventoryChangelogRebuildButton = document.getElementById("runInventoryChangelogRebuildButton");
+  const changelogMaintenancePanel = document.getElementById("changelogMaintenancePanel");
   const cancelChangelogRebuildJobButton = document.getElementById("cancelChangelogRebuildJobButton");
-  const refreshChangelogRebuildJobsButton = document.getElementById("refreshChangelogRebuildJobsButton");
-  const hostConfigChangesBackfillStatus = document.getElementById("hostConfigChangesBackfillStatus");
-  const changelogRebuildWarningHint = document.getElementById("changelogRebuildWarningHint");
   const changelogRebuildProgress = document.getElementById("changelogRebuildProgress");
   const anyAdminSectionActive = [
     "agent-source-status",
@@ -2699,27 +2695,12 @@ function updateAdminSettingsVisibility() {
   if (globalAdminOpsSection) {
     globalAdminOpsSection.classList.toggle("hidden", !state.isAdmin);
   }
-  if (hostConfigChangesBackfillButton) {
-    hostConfigChangesBackfillButton.classList.toggle("hidden", !state.isAdmin);
-  }
-  if (runChangelogRebuildNowButton) {
-    runChangelogRebuildNowButton.classList.toggle("hidden", !state.isAdmin);
-  }
-  if (runInventoryChangelogRebuildButton) {
-    runInventoryChangelogRebuildButton.classList.toggle("hidden", !state.isAdmin);
-  }
-  if (refreshChangelogRebuildJobsButton) {
-    refreshChangelogRebuildJobsButton.classList.toggle("hidden", !state.isAdmin);
+  if (changelogMaintenancePanel) {
+    changelogMaintenancePanel.classList.toggle("hidden", !state.isAdmin);
   }
   if (cancelChangelogRebuildJobButton) {
     const canCancel = state.isAdmin && Number(state.changelogActiveJobId || 0) > 0;
     cancelChangelogRebuildJobButton.classList.toggle("hidden", !canCancel);
-  }
-  if (hostConfigChangesBackfillStatus) {
-    hostConfigChangesBackfillStatus.classList.toggle("hidden", !state.isAdmin);
-  }
-  if (changelogRebuildWarningHint) {
-    changelogRebuildWarningHint.classList.toggle("hidden", !state.isAdmin);
   }
   if (changelogRebuildProgress && !state.isAdmin) {
     changelogRebuildProgress.classList.add("hidden");
@@ -14284,10 +14265,18 @@ function clearChangelogRebuildPollTimer() {
   }
 }
 
+function shouldPollChangelogRebuildJobs() {
+  const onChangelogTab = state.viewMode === "global" && state.globalSubMode === "host-config-changes";
+  const activeJobId = Number(state.changelogActiveJobId || 0);
+  const activeStatus = String(state.changelogActiveJobStatus || "").toLowerCase();
+  const jobStillActive = activeJobId > 0 && (activeStatus === "running" || activeStatus === "pending");
+  return onChangelogTab || jobStillActive;
+}
+
 function scheduleChangelogRebuildPoll(delayMs = 2000) {
   clearChangelogRebuildPollTimer();
   changelogRebuildPollTimerId = window.setTimeout(() => {
-    if (state.viewMode !== "global" || state.globalSubMode !== "host-config-changes") {
+    if (!shouldPollChangelogRebuildJobs()) {
       return;
     }
     void loadChangelogRebuildJobsStatus();
@@ -14467,6 +14456,44 @@ function updateChangelogToolsBuildVersionBadge(versionText) {
     : "Server-Build aktiv (Inventur/Abbrechen verfuegbar ab v1.7.314).";
 }
 
+function initChangelogMaintenancePanel() {
+  const panelEl = document.getElementById("changelogMaintenancePanel");
+  if (!panelEl) {
+    return;
+  }
+  const stored = localStorage.getItem(CHANGELOG_MAINTENANCE_PANEL_OPEN_KEY);
+  if (stored === "0") {
+    panelEl.open = false;
+  } else if (stored === "1") {
+    panelEl.open = true;
+  } else {
+    panelEl.open = false;
+  }
+  panelEl.addEventListener("toggle", () => {
+    localStorage.setItem(CHANGELOG_MAINTENANCE_PANEL_OPEN_KEY, panelEl.open ? "1" : "0");
+  });
+}
+
+function setChangelogMaintenanceSummaryHint(text) {
+  const hintEl = document.getElementById("changelogMaintenanceSummaryHint");
+  if (!hintEl) {
+    return;
+  }
+  const value = String(text || "").trim();
+  hintEl.textContent = value ? ` — ${value}` : "";
+}
+
+function syncChangelogMaintenancePanelOpen({ forceOpen = false } = {}) {
+  const panelEl = document.getElementById("changelogMaintenancePanel");
+  if (!panelEl) {
+    return;
+  }
+  if (forceOpen) {
+    panelEl.open = true;
+    localStorage.setItem(CHANGELOG_MAINTENANCE_PANEL_OPEN_KEY, "1");
+  }
+}
+
 function updateChangelogCancelButton() {
   const button = document.getElementById("cancelChangelogRebuildJobButton");
   if (!button) return;
@@ -14526,7 +14553,10 @@ async function cancelActiveChangelogRebuildJob() {
 async function loadChangelogRebuildJobsStatus() {
   const statusEl = document.getElementById("changelogRebuildJobStatus");
   if (!statusEl) return;
+  setChangelogMaintenanceSummaryHint("");
   clearChangelogRebuildPollTimer();
+  let pollAfterLoad = false;
+  let pollDelayMs = 2000;
   try {
     const response = await fetch("/api/v1/admin/changelog-rebuild/jobs?limit=5", {
       credentials: "same-origin",
@@ -14629,6 +14659,7 @@ async function loadChangelogRebuildJobsStatus() {
       return;
     }
     if (latestStatus === "running") {
+      syncChangelogMaintenancePanelOpen({ forceOpen: true });
       const runningView = buildChangelogRebuildProgressView(latestProgress, jobModeLabel);
       setChangelogRebuildProgress({
         visible: true,
@@ -14644,8 +14675,16 @@ async function loadChangelogRebuildJobsStatus() {
       setChangelogRebuildJobStatus(
         `${jobModeLabel} #${latestId} läuft (${daysLabel}${reportsHint})…`
       );
-      scheduleChangelogRebuildPoll(1200);
+      setChangelogMaintenanceSummaryHint(`${jobModeLabel} #${latestId} läuft`);
+      pollAfterLoad = true;
+      pollDelayMs = 1000;
       return;
+    }
+    if (latestStatus === "pending") {
+      syncChangelogMaintenancePanelOpen({ forceOpen: true });
+      setChangelogMaintenanceSummaryHint(`${jobModeLabel} #${latestId} geplant`);
+      pollAfterLoad = true;
+      pollDelayMs = 1500;
     }
     const scheduledAt = asText(latest.scheduled_for_utc, "");
     setChangelogRebuildJobStatus(`${jobModeLabel} #${latestId} geplant (${daysLabel}) · ${formatUtcPlus2(scheduledAt)}`);
@@ -14654,7 +14693,9 @@ async function loadChangelogRebuildJobsStatus() {
       label: `${jobModeLabel}-Job geplant...`,
       indeterminate: true,
     });
-    scheduleChangelogRebuildPoll(1800);
+    if (latestStatus === "pending") {
+      return;
+    }
   } catch (error) {
     setChangelogRebuildJobStatus(`Job-Status Fehler: ${error.message}`, true);
     setChangelogRebuildProgress({
@@ -14663,6 +14704,12 @@ async function loadChangelogRebuildJobsStatus() {
       indeterminate: false,
       isError: true,
     });
+    pollAfterLoad = shouldPollChangelogRebuildJobs();
+    pollDelayMs = 2500;
+  } finally {
+    if (pollAfterLoad && shouldPollChangelogRebuildJobs()) {
+      scheduleChangelogRebuildPoll(pollDelayMs);
+    }
   }
 }
 
@@ -15778,6 +15825,7 @@ function wireEvents() {
       await cancelActiveChangelogRebuildJob();
     });
   }
+  initChangelogMaintenancePanel();
   const hostConfigChangesHoursFilter = document.getElementById("hostConfigChangesHoursFilter");
   if (hostConfigChangesHoursFilter) {
     hostConfigChangesHoursFilter.addEventListener("change", () => {

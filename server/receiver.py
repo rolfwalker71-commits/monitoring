@@ -6289,9 +6289,30 @@ def get_host_config_changes_for_host(
     }
 
 
+CHANGELOG_PROGRESS_UI_EVERY = max(
+    5,
+    min(500, int(os.getenv("MONITORING_CHANGELOG_PROGRESS_UI_EVERY", "25") or "25")),
+)
+# Backwards-compatible alias for env MONITORING_CHANGELOG_PROGRESS_REPORT_EVERY.
 CHANGELOG_PROGRESS_REPORT_EVERY = max(
-    25,
-    min(2000, int(os.getenv("MONITORING_CHANGELOG_PROGRESS_REPORT_EVERY", "200") or "200")),
+    5,
+    min(
+        2000,
+        int(
+            os.getenv(
+                "MONITORING_CHANGELOG_PROGRESS_REPORT_EVERY",
+                str(CHANGELOG_PROGRESS_UI_EVERY),
+            )
+            or str(CHANGELOG_PROGRESS_UI_EVERY)
+        ),
+    ),
+)
+CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC = max(
+    1.0,
+    min(
+        30.0,
+        float(os.getenv("MONITORING_CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC", "2") or "2"),
+    ),
 )
 
 
@@ -6325,7 +6346,24 @@ def _should_check_changelog_job_cancel(report_count: int, reports_total: int) ->
         return False
     if count == 1 or count == total:
         return True
-    return count % CHANGELOG_PROGRESS_REPORT_EVERY == 0
+    return count % CHANGELOG_PROGRESS_UI_EVERY == 0
+
+
+def _should_emit_changelog_progress(
+    report_count: int,
+    reports_total: int,
+    *,
+    host_changed: bool = False,
+) -> bool:
+    if host_changed:
+        return True
+    count = int(report_count or 0)
+    total = int(reports_total or 0)
+    if count <= 0:
+        return False
+    if count == 1 or (total > 0 and count >= total):
+        return True
+    return count % CHANGELOG_PROGRESS_UI_EVERY == 0
 
 
 def _changelog_window_days(days: object, *, default: int = 7) -> int:
@@ -6380,7 +6418,7 @@ def _should_flush_changelog_progress(
     if reports_total > 0 and (
         reports_scanned <= 0
         or reports_scanned >= reports_total
-        or reports_scanned - last_reports >= CHANGELOG_PROGRESS_REPORT_EVERY
+        or reports_scanned - last_reports >= CHANGELOG_PROGRESS_UI_EVERY
     ):
         return True
     return False
@@ -6432,6 +6470,7 @@ def backfill_database_lifecycle(
                 prev_dbs_by_host[pre_hostname] = _extract_database_inventory(pre_payload)
     report_count = 0
     inserted_events = 0
+    last_progress_emit_mono = 0.0
 
     db_phase_step = int(phase_steps_total or 3)
     if db_phase_step < 3:
@@ -6450,6 +6489,7 @@ def backfill_database_lifecycle(
                 "inserted_events": 0,
                 "message": "Baue DB-Lifecycle-Changelog (SQL/HANA-Schemas)…",
             })
+            last_progress_emit_mono = time.monotonic()
         except Exception:
             pass
 
@@ -6466,20 +6506,28 @@ def backfill_database_lifecycle(
         if _should_check_changelog_job_cancel(report_count, reports_total):
             _ensure_changelog_job_running(conn, job_id)
 
-        if callable(progress_callback) and _should_check_changelog_job_cancel(report_count, reports_total):
-            try:
-                progress_callback({
-                    "phase": "database_backfill",
-                    "phase_step": db_phase_step,
-                    "phase_steps_total": int(phase_steps_total or 3),
-                    "reports_total": reports_total,
-                    "reports_scanned": report_count,
-                    "current_host": hostname,
-                    "inserted_events": inserted_events,
-                    "message": "Baue DB-Lifecycle-Changelog (SQL/HANA-Schemas)…",
-                })
-            except Exception:
-                pass
+        if callable(progress_callback):
+            now_mono = time.monotonic()
+            emit_progress = (
+                _should_emit_changelog_progress(report_count, reports_total)
+                or (now_mono - last_progress_emit_mono)
+                >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
+            )
+            if emit_progress:
+                try:
+                    progress_callback({
+                        "phase": "database_backfill",
+                        "phase_step": db_phase_step,
+                        "phase_steps_total": int(phase_steps_total or 3),
+                        "reports_total": reports_total,
+                        "reports_scanned": report_count,
+                        "current_host": hostname,
+                        "inserted_events": inserted_events,
+                        "message": "Baue DB-Lifecycle-Changelog (SQL/HANA-Schemas)…",
+                    })
+                    last_progress_emit_mono = now_mono
+                except Exception:
+                    pass
 
         current_dbs = _extract_database_inventory(payload)
 
@@ -7265,16 +7313,24 @@ def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int =
                 last_progress_phase = ""
                 last_progress_hosts = -1
                 last_progress_reports = -1
+                last_progress_flush_mono = 0.0
 
                 def progress_reporter(progress: dict) -> None:
                     nonlocal last_progress_phase, last_progress_hosts, last_progress_reports
+                    nonlocal last_progress_flush_mono
                     _ensure_changelog_job_running(conn, job_id)
+                    now_mono = time.monotonic()
+                    time_flush_due = (
+                        last_progress_flush_mono <= 0.0
+                        or (now_mono - last_progress_flush_mono)
+                        >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
+                    )
                     if not _should_flush_changelog_progress(
                         progress,
                         last_phase=last_progress_phase,
                         last_hosts=last_progress_hosts,
                         last_reports=last_progress_reports,
-                    ):
+                    ) and not time_flush_due:
                         return
 
                     phase = str(progress.get("phase") or "")
@@ -7311,6 +7367,7 @@ def process_due_changelog_rebuild_jobs(conn: sqlite3.Connection, max_jobs: int =
                     last_progress_phase = phase
                     last_progress_hosts = hosts_processed
                     last_progress_reports = reports_scanned
+                    last_progress_flush_mono = now_mono
 
                 if job_mode == "inventory_rebuild":
                     result = rebuild_changelog_inventory_history(
@@ -9382,6 +9439,7 @@ def backfill_sap_addon_changes(
     inserted_changes = 0
     hosts_processed = 0
     last_progress_host_key = ""
+    last_progress_emit_mono = 0.0
     addon_phase_step = 3 if int(phase_steps_total or 3) >= 4 else 2
 
     if callable(progress_callback):
@@ -9397,6 +9455,7 @@ def backfill_sap_addon_changes(
                 "inserted_changes": 0,
                 "message": "SAP-Add-ons (Extensions/SARI/HANA)…",
             })
+            last_progress_emit_mono = time.monotonic()
         except Exception:
             pass
 
@@ -9462,24 +9521,34 @@ def backfill_sap_addon_changes(
         last_hostname_by_host_key[host_key] = hostname
         last_seen_at_by_host_key[host_key] = detected_at_utc or utc_now_iso()
 
-        if callable(progress_callback) and (
-            _should_check_changelog_job_cancel(report_count, reports_total) or host_changed
-        ):
-            try:
-                progress_callback({
-                    "phase": "addon_backfill",
-                    "phase_step": addon_phase_step,
-                    "phase_steps_total": int(phase_steps_total or 3),
-                    "reports_total": reports_total,
-                    "reports_scanned": report_count,
-                    "hosts_processed": hosts_processed,
-                    "hosts_total": hosts_processed,
-                    "current_host": hostname,
-                    "inserted_changes": inserted_changes,
-                    "message": "SAP-Add-ons (Extensions/SARI/HANA)…",
-                })
-            except Exception:
-                pass
+        if callable(progress_callback):
+            now_mono = time.monotonic()
+            emit_progress = (
+                _should_emit_changelog_progress(
+                    report_count,
+                    reports_total,
+                    host_changed=host_changed,
+                )
+                or (now_mono - last_progress_emit_mono)
+                >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
+            )
+            if emit_progress:
+                try:
+                    progress_callback({
+                        "phase": "addon_backfill",
+                        "phase_step": addon_phase_step,
+                        "phase_steps_total": int(phase_steps_total or 3),
+                        "reports_total": reports_total,
+                        "reports_scanned": report_count,
+                        "hosts_processed": hosts_processed,
+                        "hosts_total": hosts_processed,
+                        "current_host": hostname,
+                        "inserted_changes": inserted_changes,
+                        "message": "SAP-Add-ons (Extensions/SARI/HANA)…",
+                    })
+                    last_progress_emit_mono = now_mono
+                except Exception:
+                    pass
 
         if report_count % 1000 == 0:
             conn.commit()
@@ -9938,6 +10007,7 @@ def backfill_host_config_changes(
     hosts_total = int((hosts_total_row[0] or 0) if hosts_total_row else 0)
     hosts_processed = 0
     last_progress_host_key = ""
+    last_progress_emit_mono = 0.0
 
     if callable(progress_callback):
         try:
@@ -9952,6 +10022,7 @@ def backfill_host_config_changes(
                 "inserted_changes": 0,
                 "message": "Host-Config: OS, CPU, RAM, SAP/HANA, SQL, Lizenzen…",
             })
+            last_progress_emit_mono = time.monotonic()
         except Exception:
             pass
 
@@ -9974,24 +10045,34 @@ def backfill_host_config_changes(
         if _should_check_changelog_job_cancel(report_count, reports_total) or host_changed:
             _ensure_changelog_job_running(conn, job_id)
 
-        if callable(progress_callback) and (
-            _should_check_changelog_job_cancel(report_count, reports_total) or host_changed
-        ):
-            try:
-                progress_callback({
-                    "phase": "config_backfill",
-                    "phase_step": 2,
-                    "phase_steps_total": int(phase_steps_total or 3),
-                    "reports_total": reports_total,
-                    "reports_scanned": report_count,
-                    "hosts_processed": hosts_processed,
-                    "hosts_total": hosts_total,
-                    "current_host": hostname,
-                    "inserted_changes": inserted_changes,
-                    "message": "Host-Config: OS, CPU, RAM, SAP/HANA, SQL, Lizenzen…",
-                })
-            except Exception:
-                pass
+        if callable(progress_callback):
+            now_mono = time.monotonic()
+            emit_progress = (
+                _should_emit_changelog_progress(
+                    report_count,
+                    reports_total,
+                    host_changed=host_changed,
+                )
+                or (now_mono - last_progress_emit_mono)
+                >= CHANGELOG_PROGRESS_FLUSH_INTERVAL_SEC
+            )
+            if emit_progress:
+                try:
+                    progress_callback({
+                        "phase": "config_backfill",
+                        "phase_step": 2,
+                        "phase_steps_total": int(phase_steps_total or 3),
+                        "reports_total": reports_total,
+                        "reports_scanned": report_count,
+                        "hosts_processed": hosts_processed,
+                        "hosts_total": hosts_total,
+                        "current_host": hostname,
+                        "inserted_changes": inserted_changes,
+                        "message": "Host-Config: OS, CPU, RAM, SAP/HANA, SQL, Lizenzen…",
+                    })
+                    last_progress_emit_mono = now_mono
+                except Exception:
+                    pass
 
         current_snapshot = {
             key: _normalize_config_value(key, value)

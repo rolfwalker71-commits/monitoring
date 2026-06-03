@@ -323,7 +323,7 @@
             </div>
 
             <div id="hostConfigChangesView" class="hidden" role="tabpanel" aria-labelledby="hostConfigChangesTabButton">
-              <div class="inactive-hosts-toolbar">
+              <div class="inactive-hosts-toolbar host-config-changes-filter-bar">
                 <span id="hostConfigChangesSummary" class="count compact"></span>
                 <input id="hostConfigChangesSearchInput" type="text" class="search-input-compact" placeholder="Nach Host oder Feld suchen..." />
                 <button id="applyHostConfigChangesFiltersButton" type="button" class="btn-secondary-compact">Suchen</button>
@@ -338,24 +338,32 @@
                   <option value="17520">2 Jahre</option>
                   <option value="26280">3 Jahre</option>
                 </select>
-                <button id="backfillHostConfigChangesButton" type="button" class="btn-secondary-compact" title="Gefundene Reports neu einlesen und Changelog fuellen">📥 Backfill</button>
-                <button id="runChangelogRebuildNowButton" type="button" class="btn-secondary-compact" title="Globales Changelog der letzten 7 Tage neu aufbauen (Job)">♻ Rebuild 7d</button>
-                <button id="runInventoryChangelogRebuildButton" type="button" class="btn-secondary-compact" title="Inventur aus allen Reports: erster Report = Baseline, danach Deltas + Live">📋 Inventur (alle)</button>
-                <button id="refreshChangelogRebuildJobsButton" type="button" class="btn-secondary-compact" title="Rebuild-Job-Status aktualisieren">📋 Jobs</button>
-                <button id="cancelChangelogRebuildJobButton" type="button" class="btn-secondary-compact hidden" title="Laufenden Rebuild/Backfill-Job abbrechen">⏹ Abbrechen</button>
-                <button id="refreshHostConfigChangesButton" type="button" class="btn-secondary-compact">↻</button>
-                <span id="changelogToolsBuildVersion" class="count compact changelog-tools-version" title="Server-Build auf infoboard (nach pull+restart)">UI v-</span>
-                <p id="hostConfigChangesBackfillStatus" class="count compact"></p>
-                <p id="changelogRebuildJobStatus" class="count compact"></p>
-                <div id="changelogRebuildProgress" class="db-ops-progress hidden">
-                  <div class="db-ops-progress-bar-wrap changelog-rebuild-progress-bar-wrap">
-                    <div id="changelogRebuildProgressBar" class="db-ops-progress-bar"></div>
-                  </div>
-                  <span id="changelogRebuildProgressLabel" class="db-ops-progress-label"></span>
-                  <span id="changelogRebuildProgressDetail" class="db-ops-progress-detail"></span>
-                </div>
-                <p id="changelogRebuildWarningHint" class="count compact changelog-rebuild-warning hidden">⚠ Rebuild 7d = letzte 7 Tage. Inventur (alle) = alle Reports, erster Report/Host = Inventur, danach Deltas. ⏹ bricht laufende Jobs ab.</p>
+                <button id="refreshHostConfigChangesButton" type="button" class="btn-secondary-compact" title="Changelog-Liste neu laden">↻</button>
               </div>
+              <details id="changelogMaintenancePanel" class="changelog-maintenance-panel">
+                <summary class="changelog-maintenance-summary">
+                  <span class="changelog-maintenance-summary-title">Wartung: Backfill / Rebuild / Jobs</span>
+                  <span id="changelogMaintenanceSummaryHint" class="changelog-maintenance-summary-hint"></span>
+                </summary>
+                <div class="changelog-maintenance-panel-body inactive-hosts-toolbar changelog-maintenance-toolbar">
+                  <button id="backfillHostConfigChangesButton" type="button" class="btn-secondary-compact" title="Gefundene Reports neu einlesen und Changelog fuellen">📥 Backfill</button>
+                  <button id="runChangelogRebuildNowButton" type="button" class="btn-secondary-compact" title="Globales Changelog der letzten 7 Tage neu aufbauen (Job)">♻ Rebuild 7d</button>
+                  <button id="runInventoryChangelogRebuildButton" type="button" class="btn-secondary-compact" title="Inventur aus allen Reports: erster Report = Baseline, danach Deltas + Live">📋 Inventur (alle)</button>
+                  <button id="refreshChangelogRebuildJobsButton" type="button" class="btn-secondary-compact" title="Rebuild-Job-Status aktualisieren">📋 Jobs</button>
+                  <button id="cancelChangelogRebuildJobButton" type="button" class="btn-secondary-compact hidden" title="Laufenden Rebuild/Backfill-Job abbrechen">⏹ Abbrechen</button>
+                  <span id="changelogToolsBuildVersion" class="count compact changelog-tools-version" title="Server-Build auf infoboard (nach pull+restart)">UI v-</span>
+                  <p id="hostConfigChangesBackfillStatus" class="count compact changelog-maintenance-status-line"></p>
+                  <p id="changelogRebuildJobStatus" class="count compact changelog-maintenance-status-line"></p>
+                  <div id="changelogRebuildProgress" class="db-ops-progress changelog-maintenance-progress hidden">
+                    <div class="db-ops-progress-bar-wrap changelog-rebuild-progress-bar-wrap">
+                      <div id="changelogRebuildProgressBar" class="db-ops-progress-bar"></div>
+                    </div>
+                    <span id="changelogRebuildProgressLabel" class="db-ops-progress-label"></span>
+                    <span id="changelogRebuildProgressDetail" class="db-ops-progress-detail"></span>
+                  </div>
+                  <p id="changelogRebuildWarningHint" class="count compact changelog-rebuild-warning">⚠ Rebuild 7d = letzte 7 Tage. Inventur (alle) = alle Reports, erster Report/Host = Inventur, danach Deltas. ⏹ bricht laufende Jobs ab.</p>
+                </div>
+              </details>
               <div id="hostConfigChangesGroups" class="host-config-changes-groups">
                 <p class="muted">Lade Daten…</p>
               </div>
