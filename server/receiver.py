@@ -151,6 +151,9 @@ _backup_jobs_lock = threading.Lock()
 _backup_jobs: dict[str, dict[str, str]] = {}
 _auto_backup_lock = threading.Lock()
 _db_maintenance_lock = threading.Lock()
+DB_CONNECT_TIMEOUT_SECONDS = max(5, int(os.getenv("MONITORING_DB_TIMEOUT_SECONDS", "30")))
+_web_session_purge_last_monotonic = 0.0
+_WEB_SESSION_PURGE_INTERVAL_SECONDS = max(60, int(os.getenv("MONITORING_WEB_SESSION_PURGE_INTERVAL_SECONDS", "300")))
 _read_endpoint_cache_lock = threading.Lock()
 _read_endpoint_cache: dict[str, tuple[float, object]] = {}
 _endpoint_timing_file_log_lock = threading.Lock()
@@ -366,6 +369,30 @@ def parse_positive_int(value: object, default: int = 0, max_value: int = 365) ->
     if parsed <= 0:
         return default
     return min(parsed, max_value)
+
+
+def parse_startup_rebuild_days(value: object, *, default: int = 18, max_value: int = 365) -> int:
+    raw = str(value or "").strip()
+    if raw == "0":
+        return 0
+    return parse_positive_int(raw, default=default, max_value=max_value)
+
+
+def sqlite_connect() -> sqlite3.Connection:
+    return sqlite3.connect(DB_PATH, timeout=DB_CONNECT_TIMEOUT_SECONDS)
+
+
+def _purge_expired_web_sessions(conn: sqlite3.Connection) -> None:
+    global _web_session_purge_last_monotonic
+    now = time.monotonic()
+    if now - _web_session_purge_last_monotonic < _WEB_SESSION_PURGE_INTERVAL_SECONDS:
+        return
+    _web_session_purge_last_monotonic = now
+    session_cutoff_iso = web_session_cutoff_iso()
+    conn.execute(
+        "DELETE FROM web_sessions WHERE last_activity_at_utc <= ?",
+        (session_cutoff_iso,),
+    )
 
 
 def reports_host_key_sql(alias: str = "") -> str:
@@ -15045,12 +15072,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if not token:
             return ""
 
-        with sqlite3.connect(DB_PATH) as conn:
-            session_cutoff_iso = web_session_cutoff_iso()
-            conn.execute(
-                "DELETE FROM web_sessions WHERE last_activity_at_utc <= ?",
-                (session_cutoff_iso,),
-            )
+        with sqlite_connect() as conn:
+            _purge_expired_web_sessions(conn)
             row = conn.execute(
                 """
                 SELECT s.username
@@ -17793,7 +17816,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "username/password required"})
                 return
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite_connect() as conn:
                 user = get_web_user(conn, username)
                 if not user or user.get("is_disabled"):
                     self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid credentials"})
@@ -17819,7 +17842,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "status": "authenticated",
                     "username": username,
                     "display_name": str(user.get("display_name", "") or ""),
+                    "is_admin": bool(user.get("is_admin")),
                     "expires_at_utc": expires_at,
+                    "inactivity_timeout_minutes": WEB_SESSION_INACTIVITY_MINUTES,
                 },
                 extra_headers={
                     "Set-Cookie": f"{WEB_SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax",
@@ -20416,6 +20441,20 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
 
+def _startup_changelog_rebuild(days: int) -> None:
+    try:
+        with sqlite_connect() as conn:
+            rebuild_result = rebuild_changelog_history(conn, days=days)
+            conn.commit()
+        print(
+            "[startup] changelog rebuild: "
+            f"{rebuild_result.get('status')} (days={rebuild_result.get('days')}, "
+            f"completed_at_utc={rebuild_result.get('completed_at_utc')})"
+        )
+    except Exception as exc:
+        print(f"[startup] changelog rebuild failed: {exc}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Simple monitoring receiver")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind")
@@ -20429,23 +20468,15 @@ def main() -> None:
     args = parser.parse_args()
 
     init_db()
-    startup_rebuild_days = parse_positive_int(os.getenv("MONITORING_REBUILD_CHANGELOG_DAYS", ""), default=18, max_value=365)
+    startup_rebuild_days = parse_startup_rebuild_days(
+        os.getenv("MONITORING_REBUILD_CHANGELOG_DAYS", ""),
+        default=18,
+        max_value=365,
+    )
     if args.rebuild_changelog_days > 0:
         startup_rebuild_days = args.rebuild_changelog_days
-    if startup_rebuild_days > 0:
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                rebuild_result = rebuild_changelog_history(conn, days=startup_rebuild_days)
-                conn.commit()
-            print(
-                "[startup] changelog rebuild: "
-                f"{rebuild_result.get('status')} (days={rebuild_result.get('days')}, "
-                f"completed_at_utc={rebuild_result.get('completed_at_utc')})"
-            )
-        except Exception as exc:
-            print(f"[startup] changelog rebuild failed: {exc}")
     try:
-        with sqlite3.connect(DB_PATH) as conn:
+        with sqlite_connect() as conn:
             _ensure_db_maintenance_snapshot(conn, force_if_empty=True)
     except Exception as exc:
         print(f"[startup] db maintenance snapshot failed: {exc}")
@@ -20473,6 +20504,14 @@ def main() -> None:
 
     server = ThreadingHTTPServer((args.host, args.port), MonitoringHandler)
     print(f"Monitoring receiver running on http://{args.host}:{args.port}")
+    if startup_rebuild_days > 0:
+        threading.Thread(
+            target=_startup_changelog_rebuild,
+            args=(startup_rebuild_days,),
+            name="startup-changelog-rebuild",
+            daemon=True,
+        ).start()
+        print(f"[startup] changelog rebuild scheduled in background (days={startup_rebuild_days})")
     server.serve_forever()
 
 

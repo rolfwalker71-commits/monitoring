@@ -2367,6 +2367,21 @@ function setLoginStatus(message, isError = false) {
   statusEl.classList.toggle("status-error", isError);
 }
 
+function setLoginBusy(busy) {
+  const submitButton = document.getElementById("loginSubmitButton");
+  const usernameInput = document.getElementById("loginUsernameInput");
+  const passwordInput = document.getElementById("loginPasswordInput");
+  if (submitButton) {
+    submitButton.disabled = busy;
+  }
+  if (usernameInput) {
+    usernameInput.disabled = busy;
+  }
+  if (passwordInput) {
+    passwordInput.disabled = busy;
+  }
+}
+
 function setPasswordChangeStatus(message, isError = false) {
   const statusEl = document.getElementById("passwordChangeStatus");
   if (!statusEl) {
@@ -2874,45 +2889,50 @@ async function loginWebClient() {
     return false;
   }
 
-  const response = await fetch("/api/v1/web-login", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ username, password }),
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    setLoginStatus(data.error || ("Login fehlgeschlagen (HTTP " + response.status + ")"), true);
-    return false;
-  }
-
-  state.authUser = asText(data.username, username);
-  state.viewMode = "overview";
-  state.overviewSection = "main";
-  updateSessionExpiry(
-    asText(data.expires_at_utc, ""),
-    Number.parseInt(String(data.inactivity_timeout_minutes || ""), 10)
-  );
+  setLoginBusy(true);
+  setLoginStatus("Anmeldung läuft…");
   try {
-    const session = await fetchSessionState();
-    state.isAdmin = session.is_admin === true;
-    state.authDisplayName = asText(session.display_name, "");
+    const response = await fetch("/api/v1/web-login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "same-origin",
+      body: JSON.stringify({ username, password }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setLoginStatus(data.error || ("Login fehlgeschlagen (HTTP " + response.status + ")"), true);
+      return false;
+    }
+
+    state.authUser = asText(data.username, username);
+    state.authDisplayName = asText(data.display_name, "");
+    state.isAdmin = data.is_admin === true;
+    state.viewMode = "overview";
+    state.overviewSection = "main";
     updateSessionExpiry(
-      asText(session.expires_at_utc, ""),
-      Number.parseInt(String(session.inactivity_timeout_minutes || ""), 10)
+      asText(data.expires_at_utc, ""),
+      Number.parseInt(String(data.inactivity_timeout_minutes || ""), 10)
     );
-  } catch {
-    state.isAdmin = false;
+    loadHostFilterPreferences();
+    resetUserScopedPreferences();
+    setAuthUiState(true);
+    passwordInput.value = "";
+    setLoginStatus("Anmeldung erfolgreich.");
+    void loadUserPreferences().then(() => {
+      if (state.hosts && state.hosts.length > 0) {
+        renderHosts(state.hosts);
+      }
+    });
+    return true;
+  } catch (error) {
+    setLoginStatus(error?.message || "Anmeldung fehlgeschlagen.", true);
+    return false;
+  } finally {
+    setLoginBusy(false);
   }
-  loadHostFilterPreferences();
-  resetUserScopedPreferences();
-  await loadUserPreferences();
-  setLoginStatus("Anmeldung erfolgreich.");
-  setAuthUiState(true);
-  passwordInput.value = "";
-  return true;
 }
 
 async function logoutWebClient() {
@@ -15905,7 +15925,7 @@ function wireEvents() {
     if (!ok) {
       return;
     }
-    await refreshDashboard({ preserveScroll: false });
+    void refreshDashboard({ preserveScroll: false });
     startAutoRefreshTimer();
     startSessionRefreshTimer();
   });
@@ -15918,7 +15938,7 @@ function wireEvents() {
     if (!ok) {
       return;
     }
-    await refreshDashboard({ preserveScroll: false });
+    void refreshDashboard({ preserveScroll: false });
     startAutoRefreshTimer();
     startSessionRefreshTimer();
   });
