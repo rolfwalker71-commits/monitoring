@@ -464,30 +464,16 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .brand-profile-card {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  align-items: stretch;
   min-width: 0;
-  padding: 0 7px 0 3px;
-}
-
-.brand-profile-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #5b8ef2 0%, #264f9f 100%);
-  color: #eff6ff;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  padding: 0 7px 0 6px;
 }
 
 .brand-profile-copy {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -502,17 +488,18 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 .brand-user-badge {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
-  background: transparent;
-  color: #1f3653;
-  border-radius: 12px;
-  min-height: 17px;
-  padding: 0;
+  align-self: flex-start;
+  background: linear-gradient(135deg, #5b8ef2 0%, #264f9f 100%);
+  color: #eff6ff;
+  border-radius: 999px;
+  padding: 3px 10px;
   font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
+  font-weight: 800;
+  line-height: 1.15;
   white-space: nowrap;
   box-sizing: border-box;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  letter-spacing: 0.02em;
 }
 
 .brand-user-badge::before {
@@ -12362,13 +12349,13 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
 }
 
 .brand-user-badge {
-  height: 32px;
-  padding: 0 10px;
-  border-radius: 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
   border: 0;
-  background: transparent;
-  color: #27486d;
-  font-weight: 700;
+  background: linear-gradient(135deg, #5b8ef2 0%, #264f9f 100%);
+  color: #eff6ff;
+  font-weight: 800;
+  line-height: 1.15;
 }
 
 .brand-user-badge::before {
@@ -12632,7 +12619,8 @@ body[data-theme="dark"] .subtitle-meta {
 }
 
 body[data-theme="dark"] .brand-user-badge {
-  color: #c5dcf7;
+  color: #eff6ff;
+  background: linear-gradient(135deg, #5f8fe3 0%, #2d5ab3 100%);
 }
 
 body[data-theme="dark"] .brand-profile-label,
@@ -12648,10 +12636,6 @@ body[data-theme="dark"] .brand-platform-pill {
   border-color: rgba(91, 126, 170, 0.34);
   background: rgba(20, 38, 63, 0.72);
   color: #a8c4e7;
-}
-
-body[data-theme="dark"] .brand-profile-avatar {
-  background: linear-gradient(135deg, #5f8fe3 0%, #2d5ab3 100%);
 }
 
 body[data-theme="dark"] .brand-logout-icon {

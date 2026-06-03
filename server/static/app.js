@@ -1271,13 +1271,9 @@ function getBrandProfileInitials(value) {
 
 function syncBrandProfileIdentity() {
   const badge = document.getElementById("brandUserBadge");
-  const avatar = document.getElementById("brandProfileAvatar");
   const displayName = state.authDisplayName || state.authUser || "";
   if (badge) {
     badge.textContent = displayName;
-  }
-  if (avatar) {
-    avatar.textContent = getBrandProfileInitials(displayName);
   }
 }
 
@@ -2940,10 +2936,6 @@ async function logoutWebClient() {
   const brandUserBadge = document.getElementById("brandUserBadge");
   if (brandUserBadge) {
     brandUserBadge.textContent = "";
-  }
-  const brandProfileAvatar = document.getElementById("brandProfileAvatar");
-  if (brandProfileAvatar) {
-    brandProfileAvatar.textContent = "--";
   }
   state.authDisplayName = "";
   state.sessionExpiresAtUtc = "";

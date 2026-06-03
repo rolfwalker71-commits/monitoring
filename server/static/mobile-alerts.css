@@ -121,16 +121,46 @@ body {
 
 .mobile-user-line {
   margin: 2px 0 0;
-  font-size: 0.72rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.mobile-user-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--muted);
+  line-height: 1.1;
+}
+
+.mobile-user-badge {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  max-width: 100%;
+  background: linear-gradient(135deg, #5b8ef2 0%, #264f9f 100%);
+  color: #eff6ff;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  letter-spacing: 0.02em;
 }
 
-.mobile-user-line strong {
-  color: var(--ink);
-  font-weight: 800;
+@media (prefers-color-scheme: dark) {
+  .mobile-user-badge {
+    background: linear-gradient(135deg, #5f8fe3 0%, #2d5ab3 100%);
+  }
 }
 
 .mobile-icon-actions {
