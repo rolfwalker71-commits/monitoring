@@ -8775,14 +8775,30 @@ function getAngLogsBlockFromPayload(payload) {
 }
 
 const ANG_LOG_LINE_SPLIT_PATTERNS = [
-  /(?=\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})/,
-  /(?=\[(?:\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}|\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}))/,
+  /(?=^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})/m,
+  /(?=^\[(?:\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}|\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}))/m,
 ];
+
+function shouldSplitAngLogLogicalLine(line) {
+  const trimmed = asLogLineText(line).trim();
+  if (!trimmed) {
+    return false;
+  }
+  // JSON/XML lines: keep intact (timestamps inside values must not start new rows).
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    return false;
+  }
+  return true;
+}
 
 function splitAngLogLogicalLine(line) {
   const trimmed = asLogLineText(line).trim();
   if (!trimmed) {
     return [];
+  }
+
+  if (!shouldSplitAngLogLogicalLine(trimmed)) {
+    return [trimmed];
   }
 
   let parts = [trimmed];

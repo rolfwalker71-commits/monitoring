@@ -435,9 +435,14 @@ function Split-AngLogPhysicalLine {
         return @()
     }
 
+    # JSON/XML payloads: do not split on timestamps inside field values.
+    if ($trimmed.StartsWith('{') -or $trimmed.StartsWith('[')) {
+        return ,@($trimmed)
+    }
+
     $patterns = @(
-        '(?=\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})',
-        '(?=\[(?:\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}|\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}))'
+        '(?m)(?=^\s*\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2})',
+        '(?m)(?=^\s*\[(?:\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}|\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}))'
     )
 
     $parts = @($trimmed)
