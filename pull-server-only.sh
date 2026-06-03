@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604g"
+PULL_SCRIPT_VERSION="20260604h"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -352,33 +352,82 @@ upgrade_local_pull_script_from_main() {
   exec "$local_script" "$@"
 }
 
+redeploy_files_from_ref() {
+  local redeploy_ref="$1"
+  if ! is_full_git_sha "$redeploy_ref"; then
+    return 1
+  fi
+  REF="$redeploy_ref"
+  RAW_BASE="https://raw.githubusercontent.com/$OWNER_REPO/$REF"
+  export REF RAW_BASE
+  if ! printf '%s\n' "$FILES_LIST" | sed '/^$/d' | xargs -P "$MAX_PARALLEL_DOWNLOADS" -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"'; then
+    return 1
+  fi
+  force_refresh_version_files "$REF"
+  echo "$REF" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
+  return 0
+}
+
+probe_ref_with_matching_version_files() {
+  local candidate_ref="" remote_bv="" remote_av=""
+  for candidate_ref in "$@"; do
+    [ -n "$candidate_ref" ] || continue
+    if ! is_full_git_sha "$candidate_ref"; then
+      expanded="$(expand_deploy_ref "$candidate_ref" || true)"
+      if is_full_git_sha "$expanded"; then
+        candidate_ref="$expanded"
+      else
+        continue
+      fi
+    fi
+    remote_bv="$(fetch_repo_text_at_ref BUILD_VERSION "$candidate_ref")"
+    remote_av="$(fetch_repo_text_at_ref AGENT_VERSION "$candidate_ref")"
+    if [ -n "$remote_bv" ] && [ "$remote_bv" = "$remote_av" ]; then
+      printf '%s' "$candidate_ref"
+      return 0
+    fi
+  done
+  return 1
+}
+
 reconcile_deploy_to_latest_main() {
-  local latest_sha="" remote_bv="" local_bv=""
+  local latest_sha="" remote_bv="" local_bv="" local_av="" sync_ref=""
+
+  local_bv="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
+  local_av="$(tr -d ' \t\r\n' < "$TARGET_DIR/AGENT_VERSION" 2>/dev/null || true)"
+
   latest_sha="$(resolve_latest_main_sha main || true)"
-  if ! is_full_git_sha "$latest_sha"; then
+  sync_ref="$(probe_ref_with_matching_version_files "$latest_sha" "$REF" || true)"
+
+  if [ -z "$sync_ref" ] && [ "$local_bv" != "$local_av" ] && is_full_git_sha "$REF"; then
+    echo "Nachziehen: BUILD ($local_bv) und AGENT ($local_av) lokal unterschiedlich – synchronisiere von $REF..." >&2
+    if redeploy_files_from_ref "$REF"; then
+      return 0
+    fi
+  fi
+
+  if [ -z "$sync_ref" ]; then
+    if [ "$local_bv" != "$local_av" ]; then
+      echo "WARNUNG: BUILD ($local_bv) != AGENT ($local_av). git ls-remote/API nicht erreichbar – Commit-SHA pinnen." >&2
+      echo "  Beispiel: export MONITORING_DEPLOY_SHA=a0f294e6b4e63acae71f4af2d7cfdeb8f1b2b34c" >&2
+    fi
     return 0
   fi
 
-  remote_bv="$(fetch_repo_text_at_ref BUILD_VERSION "$latest_sha")"
-  local_bv="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
-  if [ -z "$remote_bv" ] || [ "$remote_bv" = "$local_bv" ]; then
-    if is_full_git_sha "$latest_sha" && [ "$REF" != "$latest_sha" ]; then
-      REF="$latest_sha"
+  remote_bv="$(fetch_repo_text_at_ref BUILD_VERSION "$sync_ref")"
+  if [ -n "$remote_bv" ] && [ "$remote_bv" = "$local_bv" ] && [ "$local_bv" = "$local_av" ]; then
+    if [ "$REF" != "$sync_ref" ]; then
+      REF="$sync_ref"
       echo "$REF" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
     fi
     return 0
   fi
 
-  echo "Nachziehen: lokal BUILD $local_bv, GitHub main ${latest_sha:0:12} hat $remote_bv – lade Dateien erneut..." >&2
-  REF="$latest_sha"
-  RAW_BASE="https://raw.githubusercontent.com/$OWNER_REPO/$REF"
-  export REF RAW_BASE
-  if ! printf '%s\n' "$FILES_LIST" | sed '/^$/d' | xargs -P "$MAX_PARALLEL_DOWNLOADS" -I {} bash -c 'download_file "{}" "$TARGET_DIR/{}"'; then
-    echo "FEHLER: Nachziehen auf main ${latest_sha:0:12} fehlgeschlagen." >&2
+  echo "Nachziehen: lokal BUILD $local_bv / AGENT $local_av, Ziel-Ref ${sync_ref:0:12} hat $remote_bv – lade Dateien erneut..." >&2
+  if ! redeploy_files_from_ref "$sync_ref"; then
+    echo "FEHLER: Nachziehen auf ${sync_ref:0:12} fehlgeschlagen." >&2
     return 1
   fi
-  force_refresh_version_files "$REF"
-  echo "$REF" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
   return 0
 }
 
@@ -740,7 +789,7 @@ verify_synced_file() {
 
 export -f download_file download_repo_file checksum_file curl_github curl_raw_github \
   append_raw_cache_bust fetch_repo_text_at_ref is_full_git_sha resolve_latest_main_sha \
-  force_refresh_version_files reconcile_deploy_to_latest_main
+  force_refresh_version_files redeploy_files_from_ref reconcile_deploy_to_latest_main
 export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE REF OWNER_REPO CURL_CONNECT_TIMEOUT CURL_MAX_TIME MONITORING_PULL_USE_RAW_ONLY
 
 FILES_LIST="
@@ -911,11 +960,18 @@ fi
 
 echo "BUILD_VERSION deployiert: ${LOCAL_BUILD_VERSION:-?}"
 echo "AGENT_VERSION deployiert: ${LOCAL_AGENT_VERSION:-?}"
+if [ -n "$LOCAL_BUILD_VERSION" ] && [ -n "$LOCAL_AGENT_VERSION" ] && [ "$LOCAL_BUILD_VERSION" != "$LOCAL_AGENT_VERSION" ]; then
+  echo "WARNUNG: BUILD und AGENT Version unterscheiden sich – Deploy ist inkonsistent (oft raw/main CDN)." >&2
+fi
 if [ -n "$REMOTE_BUILD_VERSION" ]; then
   echo "BUILD_VERSION GitHub ($REMOTE_BUILD_REF): $REMOTE_BUILD_VERSION"
   if [ "$LOCAL_BUILD_VERSION" != "$REMOTE_BUILD_VERSION" ]; then
     echo "WARNUNG: Deploy-Ordner BUILD_VERSION weicht vom Deploy-Ref ab." >&2
   fi
+fi
+REMOTE_AGENT_VERSION="$(fetch_repo_text_at_ref AGENT_VERSION "$REMOTE_BUILD_REF")"
+if [ -n "$REMOTE_AGENT_VERSION" ]; then
+  echo "AGENT_VERSION GitHub ($REMOTE_BUILD_REF): $REMOTE_AGENT_VERSION"
 fi
 if [ -n "$REMOTE_MAIN_BUILD_VERSION" ] && [ "$REMOTE_MAIN_BUILD_VERSION" != "$REMOTE_BUILD_VERSION" ]; then
   echo "Hinweis: raw/main zeigt noch $REMOTE_MAIN_BUILD_VERSION (CDN-Cache) – Deploy-Ref $REMOTE_BUILD_REF ist massgeblich."
