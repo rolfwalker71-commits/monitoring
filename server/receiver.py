@@ -7178,7 +7178,7 @@ def _mark_stale_running_changelog_rebuild_jobs_failed(
 
     running_rows = conn.execute(
         """
-        SELECT id, started_at_utc, result_json
+        SELECT id, started_at_utc, result_json, COALESCE(job_mode, 'rebuild')
         FROM changelog_rebuild_jobs
         WHERE status = 'running'
         """
@@ -7187,11 +7187,16 @@ def _mark_stale_running_changelog_rebuild_jobs_failed(
     for row in running_rows:
         job_id = int(row[0] or 0)
         started_at_utc = _normalize_utc_timestamp(str(row[1] or ""))
+        job_mode = str(row[3] or "rebuild").strip().lower()
         payload = parse_payload_json(str(row[2] or "{}"))
         progress = payload.get("progress") if isinstance(payload, dict) else None
         updated_at_utc = ""
         if isinstance(progress, dict):
             updated_at_utc = _normalize_utc_timestamp(str(progress.get("updated_at_utc") or ""))
+
+        # Inventur over all reports: never auto-fail via stale detector (snapshot phase pauses UI briefly).
+        if job_mode == "inventory_rebuild":
+            continue
 
         # Only a newer *completed* job supersedes an older running one.
         # A newer failed job (e.g. after service restart) must not kill a healthy running inventur.
@@ -7233,13 +7238,6 @@ def _mark_stale_running_changelog_rebuild_jobs_failed(
             continue
         if reference_dt >= cutoff_dt:
             continue
-
-        # Inventur near completion: long snapshot writes may pause progress timestamps briefly.
-        if isinstance(progress, dict):
-            reports_scanned = int(progress.get("reports_scanned", 0) or 0)
-            reports_total = int(progress.get("reports_total", 0) or 0)
-            if reports_total > 0 and reports_scanned >= max(1, int(reports_total * 0.95)):
-                continue
 
         conn.execute(
             """
@@ -10763,8 +10761,7 @@ def backfill_host_config_changes(
                 })
             except Exception:
                 pass
-        if snap_idx % 10 == 0:
-            conn.commit()
+        conn.commit()
 
     for lic_idx, (host_key, license_counts) in enumerate(license_hosts, start=1):
         updated_at_utc = last_seen_at_by_host_key.get(host_key, utc_now_iso())
@@ -17077,7 +17074,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             query = parse_qs(parsed.query)
             limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
-            api_busy_ms = max(2000, min(15000, int(os.getenv("MONITORING_CHANGELOG_JOBS_BUSY_MS", "8000") or "8000")))
+            api_busy_ms = max(500, min(5000, int(os.getenv("MONITORING_CHANGELOG_JOBS_BUSY_MS", "1500") or "1500")))
             try:
                 with sqlite_connect() as conn:
                     conn.execute(f"PRAGMA busy_timeout = {api_busy_ms}")

@@ -14581,6 +14581,21 @@ async function cancelActiveChangelogRebuildJob() {
   }
 }
 
+async function fetchChangelogRebuildJobs(limit = 5) {
+  const controller = new AbortController();
+  const timeoutMs = 6000;
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(`/api/v1/admin/changelog-rebuild/jobs?limit=${limit}`, {
+      credentials: "same-origin",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
 async function loadChangelogRebuildJobsStatus() {
   const statusEl = document.getElementById("changelogRebuildJobStatus");
   if (!statusEl) return;
@@ -14589,10 +14604,7 @@ async function loadChangelogRebuildJobsStatus() {
   let pollAfterLoad = false;
   let pollDelayMs = 2000;
   try {
-    const response = await fetch("/api/v1/admin/changelog-rebuild/jobs?limit=5", {
-      credentials: "same-origin",
-      cache: "no-store",
-    });
+    const response = await fetchChangelogRebuildJobs(5);
     if (response.status === 503) {
       const data = await response.json().catch(() => ({}));
       setChangelogRebuildJobStatus(
@@ -14743,7 +14755,7 @@ async function loadChangelogRebuildJobsStatus() {
       );
       setChangelogMaintenanceSummaryHint(`${jobModeLabel} #${latestId} läuft`);
       pollAfterLoad = true;
-      pollDelayMs = 800;
+      pollDelayMs = latestMode === "inventory_rebuild" ? 15000 : 5000;
       return;
     }
     if (latestStatus === "pending") {
@@ -14764,10 +14776,29 @@ async function loadChangelogRebuildJobsStatus() {
     }
   } catch (error) {
     const errorText = asText(error?.message, "unbekannter Fehler");
-    const isGatewayTimeout = /\b504\b/i.test(errorText) || /gateway timeout/i.test(errorText);
+    const isAbort = error?.name === "AbortError";
+    const isGatewayTimeout = isAbort || /\b504\b/i.test(errorText) || /gateway timeout/i.test(errorText) || /aborted/i.test(errorText);
     const isDbBusy = /\b503\b/i.test(errorText) || /service unavailable/i.test(errorText);
+    const activeJobId = Number(state.changelogActiveJobId || 0);
+    const activeRunning = asText(state.changelogActiveJobStatus, "").toLowerCase() === "running";
+    if ((isGatewayTimeout || isDbBusy) && activeJobId > 0 && activeRunning) {
+      setChangelogRebuildJobStatus(
+        `Inventur/Rebuild #${activeJobId} läuft vermutlich weiter (API blockiert durch DB-Last).`,
+        false,
+      );
+      setChangelogRebuildProgress({
+        visible: true,
+        label: `Job #${activeJobId} – Status per Konsole`,
+        detail: "/root/monitoring-server/scripts/watch-inventur-job.sh --once",
+        indeterminate: true,
+        isError: false,
+      });
+      pollAfterLoad = shouldPollChangelogRebuildJobs();
+      pollDelayMs = 20000;
+      return;
+    }
     const hint = isGatewayTimeout || isDbBusy
-      ? " · Konsole: scripts/watch-inventur-job.sh --once (umgeht nginx/API-Timeout)"
+      ? " · Konsole: scripts/watch-inventur-job.sh --once"
       : "";
     setChangelogRebuildJobStatus(`Job-Status Fehler: ${errorText}${hint}`, true);
     setChangelogRebuildProgress({
@@ -14778,7 +14809,7 @@ async function loadChangelogRebuildJobsStatus() {
       isError: !isGatewayTimeout && !isDbBusy,
     });
     pollAfterLoad = shouldPollChangelogRebuildJobs();
-    pollDelayMs = 2500;
+    pollDelayMs = isGatewayTimeout ? 20000 : 2500;
   } finally {
     if (pollAfterLoad && shouldPollChangelogRebuildJobs()) {
       scheduleChangelogRebuildPoll(pollDelayMs);
