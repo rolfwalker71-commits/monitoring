@@ -90,6 +90,7 @@ let hostLicenseHoverPopupEl = null;
 let hostLicenseHoverHideTimerId = null;
 let hostLicenseHoverActiveHost = "";
 let changelogRebuildPollTimerId = null;
+const CHANGELOG_REBUILD_DAYS = 7;
 let headerKpiWidthSyncFrameId = null;
 let headerKpiTrendPreviousValues = null;
 const HEADER_KPI_WIDTH_STORAGE_KEY = "monitoring.headerKpiUniformWidth";
@@ -14364,9 +14365,9 @@ async function loadChangelogRebuildJobsStatus() {
   }
 }
 
-async function runChangelogRebuildNow(days = 1) {
+async function runChangelogRebuildNow(days = CHANGELOG_REBUILD_DAYS) {
   const button = document.getElementById("runChangelogRebuildNowButton");
-  const targetDays = Math.max(1, Math.min(365, Number(days) || 1));
+  const targetDays = Math.max(1, Math.min(365, Number(days) || CHANGELOG_REBUILD_DAYS));
   const confirmed = window.confirm(
     `WARNUNG: Das globale Changelog wird komplett neu aufgebaut (Stichtag heute, ${targetDays} Tag(e)).\n\nDabei werden alle vorhandenen Changelog-Daten gelöscht und aus Reports neu erzeugt (Host-Config + DB-Lifecycle).\n\nFortfahren?`
   );
@@ -15376,7 +15377,7 @@ function wireEvents() {
   const runChangelogRebuildNowButton = document.getElementById("runChangelogRebuildNowButton");
   if (runChangelogRebuildNowButton) {
     runChangelogRebuildNowButton.addEventListener("click", async () => {
-      await runChangelogRebuildNow(30);
+      await runChangelogRebuildNow(CHANGELOG_REBUILD_DAYS);
     });
   }
   const refreshChangelogRebuildJobsButton = document.getElementById("refreshChangelogRebuildJobsButton");

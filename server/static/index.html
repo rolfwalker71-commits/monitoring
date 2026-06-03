@@ -339,7 +339,7 @@
                   <option value="26280">3 Jahre</option>
                 </select>
                 <button id="backfillHostConfigChangesButton" type="button" class="btn-secondary-compact" title="Gefundene Reports neu einlesen und Changelog fuellen">📥 Backfill</button>
-                <button id="runChangelogRebuildNowButton" type="button" class="btn-secondary-compact" title="Globales Changelog der letzten 30 Tage neu aufbauen (Job)">♻ Rebuild 30d</button>
+                <button id="runChangelogRebuildNowButton" type="button" class="btn-secondary-compact" title="Globales Changelog der letzten 7 Tage neu aufbauen (Job)">♻ Rebuild 7d</button>
                 <button id="refreshChangelogRebuildJobsButton" type="button" class="btn-secondary-compact" title="Rebuild-Job-Status aktualisieren">📋 Jobs</button>
                 <button id="refreshHostConfigChangesButton" type="button" class="btn-secondary-compact">↻</button>
                 <p id="hostConfigChangesBackfillStatus" class="count compact"></p>
@@ -350,7 +350,7 @@
                   </div>
                   <span id="changelogRebuildProgressLabel" class="db-ops-progress-label"></span>
                 </div>
-                <p id="changelogRebuildWarningHint" class="count compact changelog-rebuild-warning hidden">⚠ Rebuild heute löscht und baut alle Changelog-Daten komplett neu auf (Host-Config inkl. OS/CPU/RAM + DB-Lifecycle).</p>
+                <p id="changelogRebuildWarningHint" class="count compact changelog-rebuild-warning hidden">⚠ Rebuild 7d löscht und baut alle Changelog-Daten der letzten 7 Tage komplett neu auf (Host-Config inkl. OS/CPU/RAM + DB-Lifecycle).</p>
               </div>
               <div id="hostConfigChangesGroups" class="host-config-changes-groups">
                 <p class="muted">Lade Daten…</p>
