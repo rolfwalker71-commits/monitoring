@@ -14368,15 +14368,9 @@ function buildChangelogRebuildProgressView(progress, jobModeLabel) {
   const detailParts = [];
   if (message && message !== title) detailParts.push(message);
   if (reportsTotal > 0) {
-    const reportPulseMatch = message.match(/Report\s+(\d+)\s*\/\s*([\d'.,\s]+)/i);
-    if (reportsScanned <= 0 && reportPulseMatch) {
-      const activeReport = Number(String(reportPulseMatch[1] || "").replace(/[^\d]/g, "") || 0);
-      detailParts.push(
-        `Reports: bearbeite ${formatChangelogProgressCount(activeReport)} / ${formatChangelogProgressCount(reportsTotal)} (Zähler steigt nach Abschluss des Reports)`
-      );
-    } else {
-      detailParts.push(`Reports ${formatChangelogProgressCount(reportsScanned)} / ${formatChangelogProgressCount(reportsTotal)}`);
-    }
+    detailParts.push(
+      `Reports ${formatChangelogProgressCount(reportsScanned)} / ${formatChangelogProgressCount(reportsTotal)}`
+    );
   }
   if (hostsTotal > 0) {
     detailParts.push(`Hosts ${formatChangelogProgressCount(hostsProcessed)} / ${formatChangelogProgressCount(hostsTotal)}`);
