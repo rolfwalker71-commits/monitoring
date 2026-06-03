@@ -14374,7 +14374,10 @@ function buildChangelogRebuildProgressView(progress, jobModeLabel) {
     detailParts.push(`Hosts ${formatChangelogProgressCount(hostsProcessed)} / ${formatChangelogProgressCount(hostsTotal)}`);
   }
   if (phase === "config_backfill" && insertedChanges > 0) {
-    detailParts.push(`${formatChangelogProgressCount(insertedChanges)} Config-Einträge`);
+    const cfgLabel = reportsScanned <= 0
+      ? `${formatChangelogProgressCount(insertedChanges)} Config-Einträge (Report wird verarbeitet…)`
+      : `${formatChangelogProgressCount(insertedChanges)} Config-Einträge`;
+    detailParts.push(cfgLabel);
   }
   if (phase === "database_backfill" && insertedEvents > 0) {
     detailParts.push(`${formatChangelogProgressCount(insertedEvents)} DB-Events`);

@@ -10025,10 +10025,47 @@ def collect_host_config_changes(conn: sqlite3.Connection, hours: int = 24, limit
     }
 
 
-def _commit_backfill_progress_batch(conn: sqlite3.Connection, inserted_changes: int) -> None:
+def _pulse_backfill_progress(progress_callback, state: dict, *, inserted_changes: int) -> None:
+    if not callable(progress_callback):
+        return
+    try:
+        progress_callback({
+            "phase": "config_backfill",
+            "phase_step": 2,
+            "phase_steps_total": int(state.get("phase_steps_total") or 3),
+            "reports_total": int(state.get("reports_total") or 0),
+            "reports_scanned": int(state.get("reports_completed") or 0),
+            "hosts_processed": int(state.get("hosts_processed") or 0),
+            "hosts_total": int(state.get("hosts_total") or 0),
+            "current_host": str(state.get("current_host") or ""),
+            "inserted_changes": int(inserted_changes or 0),
+            "message": str(state.get("pulse_message") or "Host-Config: OS, CPU, RAM, SAP/HANA, SQL, Lizenzen…"),
+        })
+    except Exception:
+        pass
+
+
+def _commit_backfill_progress_batch(
+    conn: sqlite3.Connection,
+    inserted_changes: int,
+    *,
+    progress_callback=None,
+    progress_state: dict | None = None,
+) -> None:
     """Release SQLite write locks during large per-report inventur inserts."""
-    if int(inserted_changes or 0) > 0 and int(inserted_changes) % 50 == 0:
+    count = int(inserted_changes or 0)
+    if count <= 0:
+        return
+    should_commit = count % 10 == 0
+    should_pulse = bool(progress_callback and progress_state) and (
+        count % 25 == 0 or should_commit
+    )
+    if not should_commit and not should_pulse:
+        return
+    if should_commit:
         conn.commit()
+    if should_pulse:
+        _pulse_backfill_progress(progress_callback, progress_state, inserted_changes=count)
 
 
 def backfill_host_config_changes(
@@ -10109,6 +10146,15 @@ def backfill_host_config_changes(
     hosts_processed = 0
     last_progress_host_key = ""
     last_progress_emit_mono = 0.0
+    backfill_pulse_state = {
+        "phase_steps_total": int(phase_steps_total or 3),
+        "reports_total": reports_total,
+        "reports_completed": 0,
+        "hosts_processed": 0,
+        "hosts_total": hosts_total,
+        "current_host": "",
+        "pulse_message": "Host-Config: OS, CPU, RAM, SAP/HANA, SQL, Lizenzen…",
+    }
 
     if callable(progress_callback):
         try:
@@ -10126,6 +10172,7 @@ def backfill_host_config_changes(
             last_progress_emit_mono = time.monotonic()
         except Exception:
             pass
+    conn.commit()
 
     for row in row_iter:
         report_id = int(row[0] or 0)
@@ -10142,6 +10189,19 @@ def backfill_host_config_changes(
             last_progress_host_key = host_key
 
         report_count += 1
+        backfill_pulse_state["reports_completed"] = max(0, report_count - 1)
+        backfill_pulse_state["hosts_processed"] = hosts_processed
+        backfill_pulse_state["current_host"] = hostname
+        backfill_pulse_state["pulse_message"] = (
+            f"Report {report_count}/{reports_total}: {hostname}…"
+        )
+        conn.commit()
+        if report_count == 1 or report_count % 250 == 0:
+            _pulse_backfill_progress(
+                progress_callback,
+                backfill_pulse_state,
+                inserted_changes=inserted_changes,
+            )
 
         if _should_check_changelog_job_cancel(report_count, reports_total) or host_changed:
             _ensure_changelog_job_running(conn, job_id)
@@ -10194,7 +10254,12 @@ def backfill_host_config_changes(
                     (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
                 )
                 inserted_changes += 1
-                _commit_backfill_progress_batch(conn, inserted_changes)
+                _commit_backfill_progress_batch(
+                    conn,
+                    inserted_changes,
+                    progress_callback=progress_callback,
+                    progress_state=backfill_pulse_state,
+                )
 
             if previous_license_counts is not None:
                 for match_text_upper in sorted(current_license_counts.keys()):
@@ -10243,7 +10308,12 @@ def backfill_host_config_changes(
                         (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
                     )
                     inserted_changes += 1
-                    _commit_backfill_progress_batch(conn, inserted_changes)
+                    _commit_backfill_progress_batch(
+                        conn,
+                        inserted_changes,
+                        progress_callback=progress_callback,
+                        progress_state=backfill_pulse_state,
+                    )
         elif include_initial_snapshot_events:
             for field_key in HOST_CONFIG_TRACKED_FIELDS:
                 old_value = "-"
@@ -10284,7 +10354,12 @@ def backfill_host_config_changes(
                     (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
                 )
                 inserted_changes += 1
-                _commit_backfill_progress_batch(conn, inserted_changes)
+                _commit_backfill_progress_batch(
+                    conn,
+                    inserted_changes,
+                    progress_callback=progress_callback,
+                    progress_state=backfill_pulse_state,
+                )
 
             for match_text_upper in sorted(current_license_counts.keys()):
                 field_key = f"{SAP_LICENSE_TYPE_FIELD_PREFIX}{match_text_upper}"
@@ -10328,12 +10403,18 @@ def backfill_host_config_changes(
                     (detected_at_utc or utc_now_iso(), host_key, hostname, field_key, old_value, new_value, report_id),
                 )
                 inserted_changes += 1
-                _commit_backfill_progress_batch(conn, inserted_changes)
+                _commit_backfill_progress_batch(
+                    conn,
+                    inserted_changes,
+                    progress_callback=progress_callback,
+                    progress_state=backfill_pulse_state,
+                )
 
         last_snapshot_by_host_key[host_key] = current_snapshot
         last_license_counts_by_host_key[host_key] = current_license_counts
         last_hostname_by_host_key[host_key] = hostname
         last_seen_at_by_host_key[host_key] = detected_at_utc or utc_now_iso()
+        backfill_pulse_state["reports_completed"] = report_count
         conn.commit()
 
         if callable(progress_callback):
