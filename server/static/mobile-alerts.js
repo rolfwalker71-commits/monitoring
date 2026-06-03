@@ -725,6 +725,18 @@ function buildUsageLine(item) {
   return mount + " · " + used + "%";
 }
 
+function buildHeadsUpActionButton(item) {
+  const isSuppressed = item.is_heads_up_suppressed === true;
+  const label = isSuppressed ? "Heads-up wieder aktivieren" : "Heads-up unterdrücken";
+  const icon = isSuppressed ? "⏸️" : "📣";
+  const extraClass = isSuppressed ? " is-suppressed" : "";
+  return (
+    '<button type="button" class="btn-secondary btn-headsup' + extraClass + '" data-action="toggle-headsup" '
+    + 'data-headsup-suppressed="' + (isSuppressed ? "1" : "0") + '" aria-pressed="' + (isSuppressed ? "true" : "false") + '">'
+    + mobileEsc(icon + " " + label) + "</button>"
+  );
+}
+
 function renderKpis(alerts) {
   const open = alerts.filter((item) => item && item.is_closed !== true);
   const critical = open.filter((item) => String(item.severity || "").toLowerCase() === "critical").length;
@@ -831,6 +843,7 @@ function renderAlerts(items) {
       '  <div class="alert-card-actions">' + ackBtn +
       '    <button type="button" class="btn-secondary btn-expand" data-action="toggle-more">Mehr</button>' +
       "  </div>" +
+      '  <div class="alert-card-headsup">' + buildHeadsUpActionButton(item) + "</div>" +
       '  <div class="alert-more">' + moreHtml +
       '    <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
       '      <button type="button" class="btn-danger" data-action="close">Schliessen</button>' +
@@ -993,6 +1006,16 @@ async function handleAlertsListClick(event) {
     } else if (action === "close") {
       state.pendingCloseAlertId = id;
       openSheet("closeSheet");
+    } else if (action === "toggle-headsup") {
+      const item = resolveAlertFromCard(card);
+      const suppressed = item?.is_heads_up_suppressed === true
+        || btn.getAttribute("data-headsup-suppressed") === "1";
+      const endpoint = suppressed
+        ? "/api/v1/alert-headsup-unsuppress"
+        : "/api/v1/alert-headsup-suppress";
+      const okMessage = suppressed ? "Heads-up wieder aktiv." : "Heads-up unterdrückt.";
+      await callAlertAction(endpoint, { alert_id: id }, okMessage);
+      await loadAlerts();
     }
   } catch (error) {
     setStatus("Aktion fehlgeschlagen: " + (error?.message || String(error)), true);

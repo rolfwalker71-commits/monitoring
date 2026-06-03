@@ -744,6 +744,20 @@ body {
   min-width: 72px;
 }
 
+.alert-card-headsup {
+  margin-top: 6px;
+}
+
+.btn-headsup {
+  width: 100%;
+  text-align: left;
+}
+
+.btn-headsup.is-suppressed {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  color: var(--accent);
+}
+
 .alert-more {
   display: none;
   margin-top: 6px;
