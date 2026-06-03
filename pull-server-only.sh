@@ -79,6 +79,38 @@ curl_raw_github() {
   fi
 }
 
+# raw.githubusercontent.com caches branch aliases (e.g. /main/) aggressively.
+append_raw_cache_bust() {
+  local url="$1"
+  local stamp
+  stamp="$(date +%s)"
+  if [[ "$url" == *"?"* ]]; then
+    printf '%s&_=%s' "$url" "$stamp"
+  else
+    printf '%s?_=%s' "$url" "$stamp"
+  fi
+}
+
+fetch_repo_text_at_ref() {
+  local source_path="$1"
+  local ref="$2"
+  local value=""
+
+  if [ -z "$ref" ]; then
+    return 0
+  fi
+
+  if [ -n "$GITHUB_TOKEN" ]; then
+    value="$(curl_github "application/vnd.github.raw" "$GITHUB_API_BASE/contents/$source_path?ref=$ref" 2>/dev/null \
+      | tr -d ' \t\r\n' || true)"
+  fi
+  if [ -z "$value" ]; then
+    value="$(curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/$ref/$source_path")" 2>/dev/null \
+      | tr -d ' \t\r\n' || true)"
+  fi
+  printf '%s' "$value"
+}
+
 download_repo_file() {
   local source_path="$1"
   local target_path="$2"
@@ -89,8 +121,8 @@ download_repo_file() {
   mkdir -p "$(dirname "$target_path")"
 
   if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
-    curl_raw_github "$raw_url" -o "$target_path" \
-      || curl_raw_github "$raw_url_main" -o "$target_path"
+    curl_raw_github "$(append_raw_cache_bust "$raw_url")" -o "$target_path" \
+      || curl_raw_github "$(append_raw_cache_bust "$raw_url_main")" -o "$target_path"
     return $?
   fi
 
@@ -98,11 +130,11 @@ download_repo_file() {
     # Prefer pinned ref, then fallback to main/raw (API errors suppressed on stderr).
     curl_github "application/vnd.github.raw" "$api_url" -o "$target_path" 2>/dev/null \
       || curl_github "application/vnd.github.raw" "$api_url_main" -o "$target_path" 2>/dev/null \
-      || curl_raw_github "$raw_url" -o "$target_path" \
-      || curl_raw_github "$raw_url_main" -o "$target_path"
+      || curl_raw_github "$(append_raw_cache_bust "$raw_url")" -o "$target_path" \
+      || curl_raw_github "$(append_raw_cache_bust "$raw_url_main")" -o "$target_path"
   else
-    curl_raw_github "$raw_url" -o "$target_path" \
-      || curl_raw_github "$raw_url_main" -o "$target_path"
+    curl_raw_github "$(append_raw_cache_bust "$raw_url")" -o "$target_path" \
+      || curl_raw_github "$(append_raw_cache_bust "$raw_url_main")" -o "$target_path"
   fi
 }
 
@@ -430,20 +462,26 @@ fi
 
 LOCAL_BUILD_VERSION="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
 LOCAL_AGENT_VERSION="$(tr -d ' \t\r\n' < "$TARGET_DIR/AGENT_VERSION" 2>/dev/null || true)"
-REMOTE_BUILD_VERSION=""
-if REMOTE_BUILD_VERSION="$(curl_raw_github "https://raw.githubusercontent.com/$OWNER_REPO/main/BUILD_VERSION" 2>/dev/null | tr -d ' \t\r\n')"; then
-  :
-else
-  REMOTE_BUILD_VERSION=""
+REMOTE_BUILD_REF="${LATEST_SHA_AFTER:-$REF}"
+REMOTE_BUILD_VERSION="$(fetch_repo_text_at_ref BUILD_VERSION "$REMOTE_BUILD_REF")"
+REMOTE_MAIN_BUILD_VERSION=""
+if [ "$REMOTE_BUILD_REF" != "main" ]; then
+  REMOTE_MAIN_BUILD_VERSION="$(fetch_repo_text_at_ref BUILD_VERSION main)"
 fi
 
 echo "BUILD_VERSION deployiert: ${LOCAL_BUILD_VERSION:-?}"
 echo "AGENT_VERSION deployiert: ${LOCAL_AGENT_VERSION:-?}"
 if [ -n "$REMOTE_BUILD_VERSION" ]; then
-  echo "BUILD_VERSION GitHub main: $REMOTE_BUILD_VERSION"
+  echo "BUILD_VERSION GitHub ($REMOTE_BUILD_REF): $REMOTE_BUILD_VERSION"
   if [ "$LOCAL_BUILD_VERSION" != "$REMOTE_BUILD_VERSION" ]; then
-    echo "WARNUNG: Deploy-Ordner BUILD_VERSION weicht von GitHub main ab." >&2
+    echo "WARNUNG: Deploy-Ordner BUILD_VERSION weicht vom Deploy-Ref ab." >&2
   fi
+fi
+if [ -n "$REMOTE_MAIN_BUILD_VERSION" ] && [ "$REMOTE_MAIN_BUILD_VERSION" != "$REMOTE_BUILD_VERSION" ]; then
+  echo "Hinweis: raw/main zeigt noch $REMOTE_MAIN_BUILD_VERSION (CDN-Cache) – Deploy-Ref $REMOTE_BUILD_REF ist massgeblich."
+fi
+if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ] && [ "$REF" = "main" ] && [ -z "$LATEST_SHA_AFTER" ]; then
+  echo "Hinweis: Bei raw-only ohne GitHub-API MONITORING_DEPLOY_SHA=<commit> setzen, falls main veraltet wirkt." >&2
 fi
 if [ -f "$TARGET_DIR/server/static/index.html" ]; then
   if rg -q 'runInventoryChangelogRebuildButton' "$TARGET_DIR/server/static/index.html" 2>/dev/null; then
