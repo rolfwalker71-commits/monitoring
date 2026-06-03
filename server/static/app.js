@@ -8888,8 +8888,12 @@ function renderAngLogs(angLogsBlock) {
     </details>
   `).join("");
 
+  const discoveredCount = Number(block.discovered_file_count);
+  const countHint = Number.isFinite(discoveredCount) && discoveredCount > files.length
+    ? `${files.length} von ${discoveredCount} Log-Dateien (Rotation: je Gruppe max. ${Number(block.rotation_keep_per_group) || 2} aktuellste)`
+    : `${files.length} Datei${files.length !== 1 ? "en" : ""}`;
   return `
-    <p class="count compact">Wurzel: ${escapeHtml(path)} · rekursiv *.log · ${files.length} Datei${files.length !== 1 ? "en" : ""}</p>
+    <p class="count compact">Wurzel: ${escapeHtml(path)} · rekursiv *.log · ${escapeHtml(countHint)}</p>
     <div class="ang-logs-grid">${fileBlocks}</div>
   `;
 }

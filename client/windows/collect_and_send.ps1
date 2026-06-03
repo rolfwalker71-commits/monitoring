@@ -59,6 +59,7 @@ $ContainersLimit = if ($env:CONTAINERS_LIMIT) { [int]$env:CONTAINERS_LIMIT } els
 $AngLogsRoot = if ($env:ANG_LOG_ROOT) { $env:ANG_LOG_ROOT } elseif ($env:ANG_SKRIPTE_LOG_DIR) { $env:ANG_SKRIPTE_LOG_DIR } else { 'C:\ang' }
 $AngLogTailLines = if ($env:ANG_LOG_TAIL_LINES) { [int]$env:ANG_LOG_TAIL_LINES } elseif ($env:ANG_SKRIPTE_LOG_LINES) { [int]$env:ANG_SKRIPTE_LOG_LINES } else { 20 }
 $AngLogMaxFiles = if ($env:ANG_LOG_MAX_FILES) { [int]$env:ANG_LOG_MAX_FILES } else { 80 }
+$AngLogRotationKeep = if ($env:ANG_LOG_ROTATION_KEEP) { [int]$env:ANG_LOG_ROTATION_KEEP } else { 2 }
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -382,25 +383,118 @@ function Get-AngLogRelativePath {
     return [System.IO.Path]::GetFileName($FullPath)
 }
 
+function Normalize-AngLogStem {
+    param(
+        [Parameter(Mandatory = $true)][string]$FileName
+    )
+
+    $stem = [System.IO.Path]::GetFileNameWithoutExtension($FileName)
+    while ($stem -match '(?i)\.log$') {
+        $stem = [System.IO.Path]::GetFileNameWithoutExtension($stem)
+    }
+
+    $patterns = @(
+        '(?i)[_\-\.]\d{4}[_\-\.]\d{2}[_\-\.]\d{2}$',
+        '(?i)[_\-\.]\d{8}$',
+        '(?i)[\-\.]\d{1,4}$',
+        '(?i)[_\-]\d{1,4}$'
+    )
+
+    $changed = $true
+    while ($changed) {
+        $changed = $false
+        foreach ($pattern in $patterns) {
+            $newStem = [regex]::Replace($stem, $pattern, '')
+            if ($newStem -ne $stem) {
+                $stem = $newStem
+                $changed = $true
+            }
+        }
+    }
+
+    return $stem.TrimEnd('_', '-', '.').ToLowerInvariant()
+}
+
+function Get-AngLogGroupKey {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootPath,
+        [Parameter(Mandatory = $true)][string]$FullPath
+    )
+
+    $relativePath = Get-AngLogRelativePath -RootPath $RootPath -FullPath $FullPath
+    $dir = Split-Path -Parent $relativePath
+    $name = Split-Path -Leaf $relativePath
+    $dirKey = if ($dir) { $dir.ToLowerInvariant() } else { '.' }
+    $stemKey = Normalize-AngLogStem -FileName $name
+    return ($dirKey + '|' + $stemKey)
+}
+
+function Select-AngLogFilesByRotation {
+    param(
+        [Parameter(Mandatory = $true)][System.IO.FileInfo[]]$LogFiles,
+        [Parameter(Mandatory = $true)][string]$RootPath,
+        [int]$KeepPerGroup = 2
+    )
+
+    if ($KeepPerGroup -lt 1) {
+        $KeepPerGroup = 1
+    }
+    if (-not $LogFiles -or $LogFiles.Count -eq 0) {
+        return @()
+    }
+
+    $groups = @{}
+    foreach ($logFile in $LogFiles) {
+        $groupKey = Get-AngLogGroupKey -RootPath $RootPath -FullPath $logFile.FullName
+        if (-not $groups.ContainsKey($groupKey)) {
+            $groups[$groupKey] = New-Object System.Collections.Generic.List[object]
+        }
+        [void]$groups[$groupKey].Add($logFile)
+    }
+
+    $selected = New-Object System.Collections.Generic.List[object]
+    foreach ($groupKey in $groups.Keys) {
+        $sorted = @($groups[$groupKey] | Sort-Object LastWriteTimeUtc -Descending)
+        $take = [Math]::Min($KeepPerGroup, $sorted.Count)
+        for ($i = 0; $i -lt $take; $i++) {
+            [void]$selected.Add($sorted[$i])
+        }
+    }
+
+    return ,@($selected | Sort-Object FullName)
+}
+
+function Limit-AngLogFilesByRecency {
+    param(
+        [Parameter(Mandatory = $true)][System.IO.FileInfo[]]$LogFiles,
+        [int]$MaxFiles = 0
+    )
+
+    if ($MaxFiles -le 0 -or $LogFiles.Count -le $MaxFiles) {
+        return ,$LogFiles
+    }
+
+    return ,@($LogFiles | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First $MaxFiles | Sort-Object FullName)
+}
+
 function Get-AngLogsBlock {
     $rootPathJson = ConvertTo-JsonString $AngLogsRoot
     if (-not (Test-Path -LiteralPath $AngLogsRoot)) {
-        return '{"available":false,"path":"' + $rootPathJson + '","file_count":0,"files":[],"error":"directory not found"}'
+        return '{"available":false,"path":"' + $rootPathJson + '","file_count":0,"discovered_file_count":0,"files":[],"error":"directory not found"}'
     }
 
     try {
-        $logFiles = @(
-            Get-ChildItem -LiteralPath $AngLogsRoot -Filter '*.log' -File -Recurse -ErrorAction SilentlyContinue |
-            Sort-Object FullName
+        $discoveredLogFiles = @(
+            Get-ChildItem -LiteralPath $AngLogsRoot -Filter '*.log' -File -Recurse -ErrorAction SilentlyContinue
         )
     } catch {
         $errJson = ConvertTo-JsonString $_.Exception.Message
-        return '{"available":false,"path":"' + $rootPathJson + '","file_count":0,"files":[],"error":"' + $errJson + '"}'
+        return '{"available":false,"path":"' + $rootPathJson + '","file_count":0,"discovered_file_count":0,"files":[],"error":"' + $errJson + '"}'
     }
 
-    if ($AngLogMaxFiles -gt 0 -and $logFiles.Count -gt $AngLogMaxFiles) {
-        $logFiles = $logFiles[0..($AngLogMaxFiles - 1)]
-    }
+    $discoveredCount = $discoveredLogFiles.Count
+    $logFiles = Select-AngLogFilesByRotation -LogFiles $discoveredLogFiles -RootPath $AngLogsRoot -KeepPerGroup $AngLogRotationKeep
+    $logFiles = Limit-AngLogFilesByRecency -LogFiles $logFiles -MaxFiles $AngLogMaxFiles
 
     $fileBlocks = @()
     foreach ($logFile in $logFiles) {
@@ -433,7 +527,9 @@ function Get-AngLogsBlock {
 
     return (
         '{"available":true,"path":"' + $rootPathJson +
-        '","file_count":' + $fileBlocks.Count +
+        '","discovered_file_count":' + $discoveredCount +
+        ',"file_count":' + $fileBlocks.Count +
+        ',"rotation_keep_per_group":' + $AngLogRotationKeep +
         ',"files":[' + ($fileBlocks -join ',') + '],"error":""}'
     )
 }
