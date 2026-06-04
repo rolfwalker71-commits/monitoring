@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604q"
+PULL_SCRIPT_VERSION="20260604r"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -349,6 +349,35 @@ extract_full_sha_from_commit_json() {
   return 1
 }
 
+resolve_deploy_commit_ref() {
+  local candidate=""
+  local expanded=""
+
+  candidate="$(normalize_sha_ref "${1:-}")"
+  if is_full_git_sha "$candidate"; then
+    printf '%s' "$candidate"
+    return 0
+  fi
+  if [ -n "$candidate" ]; then
+    expanded="$(expand_deploy_ref "$candidate" 2>/dev/null || true)"
+    if is_full_git_sha "$expanded"; then
+      printf '%s' "$expanded"
+      return 0
+    fi
+  fi
+  candidate="$(normalize_sha_ref "${REF:-}")"
+  if is_full_git_sha "$candidate"; then
+    printf '%s' "$candidate"
+    return 0
+  fi
+  expanded="$(expand_deploy_ref "$candidate" 2>/dev/null || true)"
+  if is_full_git_sha "$expanded"; then
+    printf '%s' "$expanded"
+    return 0
+  fi
+  return 1
+}
+
 extract_commit_message_from_json() {
   local meta="${1:-}"
   if [ -z "$meta" ]; then
@@ -365,8 +394,15 @@ msg = str((data.get("commit") or {}).get("message") or "").strip()
 if not msg:
     sys.exit(1)
 print(msg)
-' 2>/dev/null
-    return 0
+' 2>/dev/null && return 0
+  fi
+  if command -v jq >/dev/null 2>&1; then
+    local jq_msg=""
+    jq_msg="$(printf '%s\n' "$meta" | jq -r '.commit.message // empty' 2>/dev/null || true)"
+    if [ -n "$jq_msg" ]; then
+      printf '%s' "$jq_msg"
+      return 0
+    fi
   fi
   return 1
 }
@@ -398,18 +434,28 @@ fetch_commit_meta_json_for_ref() {
     fi
   fi
 
-  if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" != "1" ]; then
+  # API auch bei RAW_ONLY versuchen, wenn Token gesetzt (private Repo).
+  if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" != "1" ] || [ -n "$GITHUB_TOKEN" ]; then
     if meta="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE/commits/$ref" 2>/dev/null)"; then
       if extract_full_sha_from_commit_json "$meta" >/dev/null; then
         printf '%s' "$meta"
         return 0
       fi
     fi
-    meta="$(curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" \
-      --retry 3 --retry-delay 1 \
-      -H "Accept: application/vnd.github+json" \
-      -H "User-Agent: monitoring-pull-server-only" \
-      "https://api.github.com/repos/$OWNER_REPO/commits/$ref" 2>/dev/null || true)"
+    if [ -n "$GITHUB_TOKEN" ]; then
+      meta="$(curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" \
+        --retry 3 --retry-delay 1 \
+        -H "Authorization: Bearer $GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github+json" \
+        -H "User-Agent: monitoring-pull-server-only" \
+        "https://api.github.com/repos/$OWNER_REPO/commits/$ref" 2>/dev/null || true)"
+    else
+      meta="$(curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" \
+        --retry 3 --retry-delay 1 \
+        -H "Accept: application/vnd.github+json" \
+        -H "User-Agent: monitoring-pull-server-only" \
+        "https://api.github.com/repos/$OWNER_REPO/commits/$ref" 2>/dev/null || true)"
+    fi
     if extract_full_sha_from_commit_json "$meta" >/dev/null; then
       printf '%s' "$meta"
       return 0
@@ -418,30 +464,119 @@ fetch_commit_meta_json_for_ref() {
   return 1
 }
 
-print_deployed_commit_message_summary() {
-  local deploy_ref="${1:-}"
+fetch_commit_message_via_github_patch() {
+  local ref=""
   local expanded=""
-  local meta=""
+  local patch=""
   local message=""
-  local line=""
+  local patch_url=""
 
-  if ! is_full_git_sha "$(normalize_sha_ref "$deploy_ref")"; then
-    expanded="$(expand_deploy_ref "$deploy_ref" 2>/dev/null || true)"
+  ref="$(normalize_sha_ref "${1:-}")"
+  if ! is_full_git_sha "$ref"; then
+    expanded="$(expand_deploy_ref "$ref" || true)"
     if is_full_git_sha "$expanded"; then
-      deploy_ref="$expanded"
+      ref="$expanded"
     else
-      return 0
+      return 1
     fi
   fi
 
-  meta="$(fetch_commit_meta_json_for_ref "$deploy_ref" || true)"
+  patch_url="https://github.com/$OWNER_REPO/commit/${ref}.patch"
+  if [ -n "$GITHUB_TOKEN" ]; then
+    patch="$(curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" \
+      --retry 3 --retry-delay 1 \
+      -H "Authorization: Bearer $GITHUB_TOKEN" \
+      -H "User-Agent: monitoring-pull-server-only" \
+      "$patch_url" 2>/dev/null || true)"
+  else
+    patch="$(curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" \
+      --retry 3 --retry-delay 1 \
+      -H "User-Agent: monitoring-pull-server-only" \
+      "$patch_url" 2>/dev/null || true)"
+  fi
+  if [ -z "$patch" ]; then
+    return 1
+  fi
+
+  message="$(printf '%s\n' "$patch" | awk '
+    /^Subject: / {
+      line = $0
+      sub(/^Subject: /, "", line)
+      sub(/^\[PATCH\] /, "", line)
+      if (line != "") {
+        if (msg != "") msg = msg "\n" line
+        else msg = line
+      }
+      in_body = 1
+      next
+    }
+    in_body && /^---$/ { exit }
+    in_body && /^diff --git / { exit }
+    in_body && NF {
+      if (msg == "") msg = $0
+      else msg = msg "\n" $0
+    }
+    END { print msg }
+  ')"
+  message="$(printf '%s\n' "$message" | sed '/^$/d' | head -n 20)"
+  if [ -n "$message" ]; then
+    printf '%s' "$message"
+    return 0
+  fi
+  return 1
+}
+
+COMMIT_MESSAGE_SOURCE=""
+
+fetch_commit_message_for_ref() {
+  local ref=""
+  local meta=""
+  local message=""
+
+  COMMIT_MESSAGE_SOURCE=""
+  ref="$(resolve_deploy_commit_ref "${1:-}")"
+  if [ -z "$ref" ]; then
+    return 1
+  fi
+
+  meta="$(fetch_commit_meta_json_for_ref "$ref" || true)"
   message="$(extract_commit_message_from_json "$meta" || true)"
-  if [ -z "$message" ]; then
-    echo "Commit-Text (${deploy_ref:0:12}): nicht verfuegbar (GitHub API blockiert oder kein Token)"
+  if [ -n "$message" ]; then
+    COMMIT_MESSAGE_SOURCE="GitHub API"
+    printf '%s' "$message"
     return 0
   fi
 
-  echo "Commit-Text (${deploy_ref:0:12}):"
+  message="$(fetch_commit_message_via_github_patch "$ref" || true)"
+  if [ -n "$message" ]; then
+    COMMIT_MESSAGE_SOURCE="github.com/commit/*.patch"
+    printf '%s' "$message"
+    return 0
+  fi
+  return 1
+}
+
+print_deployed_commit_message_summary() {
+  local deploy_ref=""
+  local message=""
+  local line=""
+  local source_hint=""
+
+  deploy_ref="$(resolve_deploy_commit_ref "${1:-}")"
+  if [ -z "$deploy_ref" ]; then
+    echo "Commit-Text: nicht ermittelbar (Deploy-SHA fehlt, Ref='${REF:-?}')"
+    return 0
+  fi
+
+  message="$(fetch_commit_message_for_ref "$deploy_ref" || true)"
+  if [ -z "$message" ]; then
+    echo "Commit-Text (${deploy_ref:0:12}): nicht verfuegbar"
+    echo "  Tipp: MONITORING_GITHUB_TOKEN in monitoring.env setzen oder api.github.com / github.com erreichbar machen."
+    return 0
+  fi
+
+  source_hint="${COMMIT_MESSAGE_SOURCE:-unbekannt}"
+  echo "Commit-Text (${deploy_ref:0:12}, ${source_hint}):"
   while IFS= read -r line || [ -n "$line" ]; do
     echo "  $line"
   done <<< "$message"
@@ -1133,6 +1268,11 @@ if ! is_full_git_sha "$REF"; then
 else
   echo "Deploy-Pin: $REF"
 fi
+if is_full_git_sha "$REF"; then
+  if [ -z "${COMMIT_META_JSON:-}" ] || [ "$(extract_full_sha_from_commit_json "$COMMIT_META_JSON" || true)" != "$REF" ]; then
+    COMMIT_META_JSON="$(fetch_commit_meta_json_for_ref "$REF" || true)"
+  fi
+fi
 RAW_BASE="https://raw.githubusercontent.com/$OWNER_REPO/$REF"
 
 # Hilfsfunction fuer parallele downloads
@@ -1352,7 +1492,7 @@ repair_deploy_if_integrity_failed
 
 LATEST_SHA_AFTER="$(resolve_latest_main_sha main || true)"
 
-DEPLOYED_SHA_FILE="$(cat "$TARGET_DIR/DEPLOYED_COMMIT_SHA" 2>/dev/null || true)"
+DEPLOYED_SHA="$(tr -d ' \t\r\n' < "$TARGET_DIR/DEPLOYED_COMMIT_SHA" 2>/dev/null || true)"
 
 if [ -n "$GITHUB_COMMIT_TIME" ]; then
   echo "Fertig. Deploy-Commit: $REF [GitHub: $GITHUB_COMMIT_TIME | Deploy: $DEPLOY_TIME]"
@@ -1360,10 +1500,10 @@ else
   echo "Fertig. Deploy-Commit: $REF [Deploy: $DEPLOY_TIME]"
 fi
 
-if [ -n "$LATEST_SHA_AFTER" ] && [ "$DEPLOYED_SHA_FILE" = "$LATEST_SHA_AFTER" ]; then
+if [ -n "$LATEST_SHA_AFTER" ] && [ "$DEPLOYED_SHA" = "$LATEST_SHA_AFTER" ]; then
   echo "Commit-Status: AKTUELL (deployter Commit entspricht repo/main)"
 elif [ -n "$LATEST_SHA_AFTER" ]; then
-  echo "Commit-Status: NICHT AKTUELL (deployt=$DEPLOYED_SHA_FILE, repo/main=$LATEST_SHA_AFTER)"
+  echo "Commit-Status: NICHT AKTUELL (deployt=$DEPLOYED_SHA, repo/main=$LATEST_SHA_AFTER)"
 else
   echo "Commit-Status: UNBEKANNT (konnte latest main SHA nicht ermitteln)"
 fi
@@ -1404,11 +1544,17 @@ if [ -n "$REMOTE_AGENT_VERSION" ]; then
     echo "AGENT_VERSION GitHub ($REMOTE_BUILD_REF): $REMOTE_AGENT_VERSION"
   fi
 fi
+echo ""
+print_deployed_commit_message_summary "${DEPLOYED_SHA:-$REF}"
+echo ""
 if is_branch_ref "${REF:-}"; then
   echo "WARNUNG: Deploy lief ueber Branch-Alias '$REF' – fuer reproduzierbare Deploys Commit-SHA nutzen." >&2
 fi
 if ! is_full_git_sha "$REF" && [ -z "$LATEST_SHA_AFTER" ]; then
   echo "Hinweis: Commit-SHA unbekannt – Deploy lief ueber Branch $REF. Fuer Pin optional MONITORING_DEPLOY_SHA setzen." >&2
+fi
+if ! grep -q 'print_deployed_commit_message_summary' "$TARGET_DIR/pull-server-only.sh" 2>/dev/null; then
+  echo "WARNUNG: $TARGET_DIR/pull-server-only.sh ohne Commit-Text-Funktion – Skript von main aktualisieren und Pull erneut starten." >&2
 fi
 if grep -q 'BUILD_VERSION GitHub main:' "$TARGET_DIR/pull-server-only.sh" 2>/dev/null; then
   echo "WARNUNG: $TARGET_DIR/pull-server-only.sh ist noch die alte Version (zeigt 'GitHub main')." >&2
@@ -1540,9 +1686,6 @@ else
   fi
 fi
 
-echo ""
-print_deployed_commit_message_summary "${DEPLOYED_SHA_FILE:-$REF}"
-echo ""
 echo "Deploy-Verifikation im Browser (nach Hard-Refresh Strg+Shift+R):"
 echo "  fetch('/BUILD_VERSION').then(r=>r.text()).then(console.log)  // erwartet: $LOCAL_BUILD_VERSION"
 echo ""
