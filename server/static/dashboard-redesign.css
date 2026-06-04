@@ -60,34 +60,44 @@
   display: none !important;
 }
 
-/* KPI strip: grouped stat cells (not individual pill cards) */
+/* KPI strip: grouped stat cells – override styles.css grid (142px columns clip KPIs) */
 .panel-header .panel-actions {
+  display: flex !important;
   flex-wrap: wrap !important;
   align-items: center !important;
   gap: 10px !important;
+  grid-template-columns: none !important;
 }
 
-.panel-header .header-kpi-strip {
+.panel-header .panel-actions .header-kpi-strip {
   display: flex !important;
-  flex: 1 1 auto;
+  flex: 1 1 auto !important;
   flex-wrap: wrap !important;
   align-items: stretch !important;
   gap: 10px !important;
   overflow: visible !important;
   padding: 0 !important;
   min-width: 0 !important;
+  width: auto !important;
+  max-width: 100% !important;
+  grid-auto-flow: unset !important;
+  grid-auto-columns: unset !important;
+  grid-template-columns: none !important;
 }
 
 .panel-header .header-kpi-group {
   display: inline-flex !important;
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
   align-items: stretch !important;
-  flex: 0 1 auto;
-  min-width: 0;
+  width: max-content !important;
+  max-width: none !important;
+  min-width: max-content !important;
   border: 1px solid var(--dr-line) !important;
   border-radius: 8px !important;
   background: #f8fafc !important;
   box-shadow: none !important;
-  overflow: hidden;
+  overflow: visible !important;
 }
 
 .panel-header .header-kpi-group--alerts {
@@ -109,11 +119,13 @@
   align-items: flex-start !important;
   justify-content: center !important;
   gap: 1px !important;
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
   width: auto !important;
-  min-width: 4.5rem !important;
+  min-width: 3.5rem !important;
   max-width: none !important;
-  min-height: 44px !important;
-  padding: 5px 12px !important;
+  min-height: 40px !important;
+  padding: 4px 10px !important;
   margin: 0 !important;
   border: none !important;
   border-left: none !important;
@@ -124,6 +136,25 @@
   color: #334155 !important;
   font-weight: 600 !important;
   transform: none !important;
+  overflow: visible !important;
+}
+
+.panel-header .header-kpi-group > .header-stat-chip-acknowledged,
+.panel-header .header-kpi-group > .header-stat-chip-muted {
+  min-width: 4.25rem !important;
+}
+
+.panel-header .header-kpi-group > .header-stat-chip-db-reports {
+  min-width: 4.5rem !important;
+}
+
+.panel-header .header-kpi-group > .header-stat-chip-db-size,
+.panel-header .header-kpi-group > .header-stat-chip-db-size-delta {
+  min-width: 5rem !important;
+}
+
+.panel-header .header-kpi-group > .header-stat-chip-db-reports-hour {
+  min-width: 3.75rem !important;
 }
 
 .panel-header .header-kpi-group > .header-stat-chip:last-child {
@@ -137,22 +168,32 @@
 }
 
 .panel-header .header-kpi-strip .header-chip-label {
-  font-size: 10px !important;
+  font-size: 9px !important;
   font-weight: 600 !important;
   letter-spacing: 0.01em !important;
   text-transform: none !important;
   color: var(--dr-muted) !important;
-  line-height: 1.2 !important;
+  line-height: 1.15 !important;
   white-space: nowrap;
+  overflow: visible !important;
 }
 
 .panel-header .header-kpi-strip .header-chip-count {
-  font-size: 15px !important;
+  font-size: 13px !important;
   font-weight: 800 !important;
   font-variant-numeric: tabular-nums;
-  line-height: 1.15 !important;
+  line-height: 1.1 !important;
   color: #0f172a !important;
   white-space: nowrap;
+  overflow: visible !important;
+  max-width: none !important;
+}
+
+/* Legacy rules target direct .header-stat-chip children – keep groups visible */
+.panel-header .header-kpi-strip > .header-kpi-group > .header-stat-chip {
+  width: auto !important;
+  max-width: none !important;
+  min-width: 3.5rem !important;
 }
 
 .panel-header .header-kpi-group--alerts > .header-stat-chip-alert.header-stat-chip--alarm-active {
@@ -923,4 +964,17 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
   background: #1e3a5f !important;
   border-color: #3b82f6 !important;
   color: #93c5fd !important;
+}
+
+/* Final pass: legacy styles.css grid must not shrink KPI groups (shows only 2 cells each) */
+.panel-header .panel-actions .header-kpi-strip > .header-kpi-group {
+  width: max-content !important;
+  max-width: none !important;
+  overflow: visible !important;
+}
+
+.panel-header .panel-actions .header-kpi-strip > .header-kpi-group > .header-stat-chip:not(.header-stat-chip-license) {
+  width: auto !important;
+  max-width: none !important;
+  min-width: 3.5rem !important;
 }

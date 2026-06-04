@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604m"
+PULL_SCRIPT_VERSION="20260604n"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -111,13 +111,49 @@ curl_raw_github() {
 # raw.githubusercontent.com caches branch aliases (e.g. /main/) aggressively.
 append_raw_cache_bust() {
   local url="$1"
-  local stamp
-  stamp="$(date +%s)"
+  local stamp="${2:-}"
+  if [ -z "$stamp" ]; then
+    stamp="$(date +%s)-$$-${RANDOM:-0}"
+  fi
   if [[ "$url" == *"?"* ]]; then
     printf '%s&_=%s' "$url" "$stamp"
   else
     printf '%s?_=%s' "$url" "$stamp"
   fi
+}
+
+# Semver-ish compare for BUILD_VERSION (1.7.364 vs 1.7.365).
+version_gt() {
+  local a="${1:-}" b="${2:-}"
+  [ -n "$a" ] && [ -n "$b" ] && [ "$a" != "$b" ] \
+    && [ "$(printf '%s\n%s\n' "$b" "$a" | sort -V | tail -n 1)" = "$a" ]
+}
+
+fetch_build_version_at_ref() {
+  local ref="$1"
+  tr -d ' \t\r\n' <<< "$(fetch_repo_text_at_ref BUILD_VERSION "$ref" || true)"
+}
+
+# Pick SHA with highest BUILD_VERSION among candidates (handles stale MAIN_HEAD_SHA CDN).
+pick_best_sha_by_build_version() {
+  local sha="" bv="" best_sha="" best_bv=""
+  for sha in "$@"; do
+    sha="$(normalize_sha_ref "$sha")"
+    if ! is_full_git_sha "$sha"; then
+      continue
+    fi
+    bv="$(fetch_build_version_at_ref "$sha")"
+    [ -n "$bv" ] || continue
+    if [ -z "$best_bv" ] || version_gt "$bv" "$best_bv"; then
+      best_bv="$bv"
+      best_sha="$sha"
+    fi
+  done
+  if is_full_git_sha "$best_sha"; then
+    printf '%s' "$best_sha"
+    return 0
+  fi
+  return 1
 }
 
 is_branch_ref() {
@@ -324,12 +360,32 @@ resolve_latest_main_sha_via_github_api() {
 
 # When api.github.com is blocked but raw.githubusercontent.com works (common on locked-down servers).
 resolve_latest_main_sha_via_raw_main_head_file() {
-  local sha=""
-  sha="$(curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/main/MAIN_HEAD_SHA")" 2>/dev/null \
+  local sha_a="" sha_b="" sha_c="" pick=""
+  sha_a="$(curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/main/MAIN_HEAD_SHA" "a-$(date +%s)-$$")" 2>/dev/null \
     | tr -d ' \t\r\n' || true)"
-  if is_full_git_sha "$sha"; then
-    echo "main-SHA via raw MAIN_HEAD_SHA: ${sha:0:12}" >&2
-    printf '%s' "$sha"
+  sleep 0.4
+  sha_b="$(curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/main/MAIN_HEAD_SHA" "b-${RANDOM:-0}-$(date +%s)")" 2>/dev/null \
+    | tr -d ' \t\r\n' || true)"
+  pick="$(pick_best_sha_by_build_version "$sha_a" "$sha_b" || true)"
+  if ! is_full_git_sha "$pick"; then
+    if is_full_git_sha "$sha_a"; then
+      pick="$sha_a"
+    elif is_full_git_sha "$sha_b"; then
+      pick="$sha_b"
+    fi
+  fi
+  if [ "$sha_a" != "$sha_b" ] && is_full_git_sha "$sha_a" && is_full_git_sha "$sha_b"; then
+    sleep 0.6
+    sha_c="$(curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/main/MAIN_HEAD_SHA" "c-${RANDOM:-0}-$(date +%s)")" 2>/dev/null \
+      | tr -d ' \t\r\n' || true)"
+    pick="$(pick_best_sha_by_build_version "$pick" "$sha_c" || true)"
+    if ! is_full_git_sha "$pick"; then
+      pick="$(pick_best_sha_by_build_version "$sha_a" "$sha_b" "$sha_c" || true)"
+    fi
+  fi
+  if is_full_git_sha "$pick"; then
+    echo "main-SHA via raw MAIN_HEAD_SHA: ${pick:0:12} (BUILD $(fetch_build_version_at_ref "$pick"))" >&2
+    printf '%s' "$pick"
     return 0
   fi
   return 1
@@ -478,7 +534,12 @@ upgrade_local_pull_script_from_main() {
     rm -f "$remote_script"
     return 0
   fi
-  if cmp -s "$remote_script" "$local_script" 2>/dev/null; then
+  local local_bv="" remote_bv=""
+  local_bv="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
+  remote_bv="$(fetch_build_version_at_ref "$latest_sha")"
+
+  if cmp -s "$remote_script" "$local_script" 2>/dev/null \
+    && { [ -z "$remote_bv" ] || [ "$remote_bv" = "$local_bv" ]; }; then
     rm -f "$remote_script"
     return 0
   fi
@@ -486,7 +547,7 @@ upgrade_local_pull_script_from_main() {
   cp -f "$remote_script" "$local_script"
   chmod +x "$local_script"
   rm -f "$remote_script"
-  echo "pull-server-only.sh aktualisiert (main ${latest_sha:0:12}) – Deploy startet neu..."
+  echo "pull-server-only.sh aktualisiert (main ${latest_sha:0:12}, BUILD ${remote_bv:-?}) – Deploy startet neu..."
   exec "$local_script" "$@"
 }
 
@@ -649,6 +710,44 @@ reconcile_deploy_to_latest_main() {
     echo "FEHLER: Nachziehen auf ${sync_ref:0:12} fehlgeschlagen." >&2
     return 1
   fi
+  return 0
+}
+
+# One ./pull-server-only.sh should suffice: re-resolve MAIN_HEAD_SHA and redeploy if BUILD still lags.
+finalize_deploy_until_version_match() {
+  local attempt=1 max_attempts=3
+  local latest_sha="" remote_bv="" local_bv="" deployed_sha=""
+
+  while [ "$attempt" -le "$max_attempts" ]; do
+    latest_sha="$(resolve_latest_main_sha main || true)"
+    if ! is_full_git_sha "$latest_sha"; then
+      return 0
+    fi
+    local_bv="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
+    remote_bv="$(fetch_build_version_at_ref "$latest_sha")"
+    deployed_sha="$(tr -d ' \t\r\n' < "$TARGET_DIR/DEPLOYED_COMMIT_SHA" 2>/dev/null || true)"
+    if [ -n "$remote_bv" ] && [ "$local_bv" = "$remote_bv" ] && [ "$deployed_sha" = "$latest_sha" ]; then
+      REF="$latest_sha"
+      if [ "$attempt" -gt 1 ]; then
+        echo "Version-Sync OK: BUILD $local_bv @ ${latest_sha:0:12} (Versuch $attempt)" >&2
+      fi
+      return 0
+    fi
+    if [ "$attempt" -ge "$max_attempts" ]; then
+      echo "WARNUNG: BUILD lokal ${local_bv:-?}, Ziel ${remote_bv:-?} @ ${latest_sha:0:12} – bitte Pull in 1–2 Min. erneut oder MONITORING_DEPLOY_SHA pinnen." >&2
+      return 1
+    fi
+    echo "Version-Nachzug (${attempt}/${max_attempts}): lokal BUILD ${local_bv:-?} -> ${remote_bv:-?} @ ${latest_sha:0:12}..." >&2
+    if redeploy_files_from_ref "$latest_sha"; then
+      REF="$latest_sha"
+      mirror_update_payloads
+      repair_deploy_if_integrity_failed
+    else
+      echo "WARNUNG: Nachzug-Versuch $attempt fehlgeschlagen." >&2
+    fi
+    attempt=$((attempt + 1))
+    sleep 1
+  done
   return 0
 }
 
@@ -868,6 +967,7 @@ resolve_deploy_ref() {
 
 echo "pull-server-only.sh Version: $PULL_SCRIPT_VERSION"
 echo "Installiere Serverteil nach: $TARGET_DIR"
+echo "Hinweis: Ein Lauf genuegt – bei CDN-Verzoegerung wird BUILD_VERSION automatisch nachgezogen." >&2
 
 if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
   echo "Hinweis: MONITORING_PULL_USE_RAW_ONLY=1 – SHA-Aufloesung eingeschraenkt. Fuer neuestes main: unset MONITORING_PULL_USE_RAW_ONLY" >&2
@@ -1012,10 +1112,11 @@ verify_synced_file() {
 }
 
 export -f download_file download_repo_file checksum_file curl_github curl_raw_github \
-  append_raw_cache_bust fetch_repo_text_at_ref is_full_git_sha is_branch_ref \
-  resolve_branch_ref_to_commit_sha resolve_latest_main_sha \
+  append_raw_cache_bust fetch_repo_text_at_ref fetch_build_version_at_ref pick_best_sha_by_build_version \
+  is_full_git_sha is_branch_ref resolve_branch_ref_to_commit_sha resolve_latest_main_sha \
   force_refresh_version_files redeploy_files_from_ref reconcile_deploy_to_latest_main \
-  mirror_update_payloads verify_deployed_payload_integrity repair_deploy_if_integrity_failed
+  finalize_deploy_until_version_match mirror_update_payloads verify_deployed_payload_integrity \
+  repair_deploy_if_integrity_failed
 export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE REF OWNER_REPO CURL_CONNECT_TIMEOUT CURL_MAX_TIME MONITORING_PULL_USE_RAW_ONLY
 
 FILES_LIST="
@@ -1060,6 +1161,7 @@ fi
 echo "Dateien geladen ✓"
 
 reconcile_deploy_to_latest_main
+finalize_deploy_until_version_match || true
 force_refresh_version_files "$REF"
 
 if [ "$VERIFY_SYNC" = "1" ]; then
@@ -1135,39 +1237,13 @@ fi
 echo "$REF" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
 DEPLOY_TIME="$(date '+%d.%m.%y %H:%M')"
 
-LATEST_META_AFTER="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE/commits/main" || true)"
-LATEST_SHA_AFTER="$(extract_full_sha_from_commit_json "$LATEST_META_AFTER" || true)"
-if [ -z "$LATEST_SHA_AFTER" ]; then
-  LATEST_SHA_AFTER="$(resolve_latest_main_sha main || true)"
-fi
-
 if is_full_git_sha "$REF"; then
   force_refresh_version_files "$REF"
 fi
-LOCAL_BUILD_VERSION="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
-if [ -n "$LATEST_SHA_AFTER" ] && is_full_git_sha "$LATEST_SHA_AFTER"; then
-  REMOTE_LATEST_BV="$(fetch_repo_text_at_ref BUILD_VERSION "$LATEST_SHA_AFTER")"
-  if [ -n "$REMOTE_LATEST_BV" ] && [ "$REMOTE_LATEST_BV" != "$LOCAL_BUILD_VERSION" ]; then
-    echo "Nachziehen: BUILD_VERSION lokal ${LOCAL_BUILD_VERSION:-?}, main ${LATEST_SHA_AFTER:0:12} hat $REMOTE_LATEST_BV – erzwinge Voll-Deploy..." >&2
-    if redeploy_files_from_ref "$LATEST_SHA_AFTER"; then
-      REF="$LATEST_SHA_AFTER"
-      LOCAL_BUILD_VERSION="$REMOTE_LATEST_BV"
-      mirror_update_payloads
-      repair_deploy_if_integrity_failed
-    fi
-  fi
-fi
-if [ -n "$LATEST_SHA_AFTER" ] && [ "$LATEST_SHA_AFTER" != "$REF" ]; then
-  echo "Hinweis: repo/main (${LATEST_SHA_AFTER:0:12}) ist neuer als Deploy-Ref (${REF:0:12}) – ziehe Dateien nach..." >&2
-  if redeploy_files_from_ref "$LATEST_SHA_AFTER"; then
-    REF="$LATEST_SHA_AFTER"
-    mirror_update_payloads
-    repair_deploy_if_integrity_failed
-  else
-    echo "WARNUNG: Nachziehen auf neuestes main fehlgeschlagen." >&2
-  fi
-fi
+finalize_deploy_until_version_match || true
 repair_deploy_if_integrity_failed
+
+LATEST_SHA_AFTER="$(resolve_latest_main_sha main || true)"
 
 DEPLOYED_SHA_FILE="$(cat "$TARGET_DIR/DEPLOYED_COMMIT_SHA" 2>/dev/null || true)"
 
