@@ -87,6 +87,13 @@
           </div>
           <button type="button" class="icon-btn icon-btn-compact" id="activeHostsRefreshButton" title="Aktualisieren" aria-label="Aktualisieren">↻</button>
         </div>
+        <div class="host-list-toolbar">
+          <label class="host-search-pill">
+            <span class="host-search-icon" aria-hidden="true">⌕</span>
+            <input type="search" id="activeHostsSearchInput" placeholder="Suchen…" autocomplete="off" enterkeyhint="search" />
+          </label>
+          <div id="activeHostsCountryFilter" class="host-country-filter" role="group" aria-label="Land filtern"></div>
+        </div>
         <p id="activeHostsStatusLine" class="status-line">Lade Hosts…</p>
         <section id="activeHostsList" class="inactive-hosts-stack" aria-live="polite"></section>
       </div>
@@ -99,6 +106,13 @@
             <p id="inactiveHostsSubtitle" class="mobile-subpage-hint"></p>
           </div>
           <button type="button" class="icon-btn icon-btn-compact" id="inactiveHostsRefreshButton" title="Aktualisieren" aria-label="Aktualisieren">↻</button>
+        </div>
+        <div class="host-list-toolbar">
+          <label class="host-search-pill">
+            <span class="host-search-icon" aria-hidden="true">⌕</span>
+            <input type="search" id="inactiveHostsSearchInput" placeholder="Suchen…" autocomplete="off" enterkeyhint="search" />
+          </label>
+          <div id="inactiveHostsCountryFilter" class="host-country-filter" role="group" aria-label="Land filtern"></div>
         </div>
         <p id="inactiveHostsStatusLine" class="status-line">Lade Hosts…</p>
         <section id="inactiveHostsList" class="inactive-hosts-stack" aria-live="polite"></section>

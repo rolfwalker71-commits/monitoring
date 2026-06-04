@@ -175,95 +175,96 @@ function buildCountryFlagIconHtml(countryCode) {
   );
 }
 
-function renderInactiveHostCard(host) {
+function getHostListLabels(host) {
   const hostname = String(host.hostname || "").trim() || "—";
   const displayName = String(host.display_name || "").trim() || hostname;
   const customerName = String(host.customer_name || "").trim();
   const hasCustomer = customerName && customerName !== "-" && customerName !== "--";
+  const customerLabel = hasCustomer ? customerName : displayName;
+  const hostLabel = hasCustomer ? (displayName !== hostname ? displayName : hostname) : hostname;
+  return { hostname, displayName, customerLabel, hostLabel, hasCustomer };
+}
+
+function collectHostListCountries(hosts) {
+  const codes = new Set();
+  (Array.isArray(hosts) ? hosts : []).forEach((host) => {
+    const code = String(host.country_code || "").trim().toUpperCase();
+    if (/^[A-Z]{2}$/.test(code)) {
+      codes.add(code);
+    }
+  });
+  return Array.from(codes).sort();
+}
+
+function filterHostListItems(hosts, countryFilter, searchQuery) {
+  const country = String(countryFilter || "all").trim().toUpperCase();
+  const query = String(searchQuery || "").trim().toLowerCase();
+  return (Array.isArray(hosts) ? hosts : []).filter((host) => {
+    if (country !== "ALL") {
+      const hostCountry = String(host.country_code || "").trim().toUpperCase();
+      if (hostCountry !== country) {
+        return false;
+      }
+    }
+    if (!query) {
+      return true;
+    }
+    const haystack = [
+      host.customer_name,
+      host.display_name,
+      host.hostname,
+      host.host_uid,
+      host.country_code,
+      host.os,
+      host.primary_ip,
+      host.std_nic_ip,
+    ]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(query);
+  });
+}
+
+function renderHostCountryFilter(containerId, countries, selectedCountry, onSelect) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const selected = String(selectedCountry || "all").trim().toUpperCase();
+  const chips = [
+    '<button type="button" class="host-country-chip' + (selected === "ALL" ? " active" : "") + '" data-country="all">Alle</button>',
+  ];
+  countries.forEach((code) => {
+    const flag = buildCountryFlagHtml(code);
+    chips.push(
+      '<button type="button" class="host-country-chip' + (selected === code ? " active" : "") + '" data-country="'
+      + mobileEsc(code) + '">' + flag + "<span>" + mobileEsc(code) + "</span></button>"
+    );
+  });
+  container.innerHTML = chips.join("");
+  container.querySelectorAll(".host-country-chip[data-country]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      onSelect(String(chip.getAttribute("data-country") || "all"));
+    });
+  });
+}
+
+function hostListStatusBadge(host, variant) {
+  if (variant === "active") {
+    const label = host.online === true ? "Online" : "Aktiv";
+    return '<span class="online-status-badge">' + mobileEsc(label) + "</span>";
+  }
   const hoursInactive = Number(host.hours_inactive || 0);
   const longInactive = hoursInactive > 12;
-  const osIcon = resolveHostOsIconMobile(host.os);
-  const countryHtml = buildCountryFlagIconHtml(host.country_code);
-  const openAlerts = Math.max(0, Number(host.open_alert_count || 0));
-  const hostUid = truncateMobileText(String(host.host_uid || hostname), 40);
-  const primaryIp = String(host.primary_ip || "").trim() || "—";
-  const osLabel = String(host.os || "").trim() || "—";
-  const countryLabel = String(host.country_code || "").trim().toUpperCase() || "—";
-  const lastReport = formatUtcPlus2Mobile(host.last_report_time_utc);
-  const relative = formatRelativeTime(host.last_report_time_utc);
-
-  let alertsFact = "Keine";
-  if (openAlerts > 0) {
-    alertsFact = '<span class="inactive-alerts-pill">' + openAlerts + " offen</span>";
-  }
-
-  const customerLine = hasCustomer
-    ? '<p class="inactive-host-customer">' + mobileEsc(customerName) + "</p>"
-    : '<p class="inactive-host-customer">' + mobileEsc(displayName) + "</p>";
-  const displayLine =
-    hasCustomer && displayName !== hostname
-      ? '<p class="inactive-host-display">' + mobileEsc(displayName) + "</p>"
-      : "";
-
-  return (
-    '<article class="inactive-host-card' + (longInactive ? " is-long-inactive" : "") + '">' +
-    '  <div class="inactive-host-card-head">' +
-    '    <div class="inactive-host-icons">' + countryHtml +
-    '      <img src="/icons/' + mobileEsc(osIcon) + '" class="inactive-host-icon" alt="" onerror="this.src=\'/icons/linux.png\'" />' +
-    "    </div>" +
-    '    <span class="inactive-hours-badge">' + hoursInactive.toFixed(1) + "h inaktiv</span>" +
-    "  </div>" +
-    customerLine +
-    displayLine +
-    '  <p class="inactive-host-display"><strong>Hostname:</strong> ' + mobileEsc(hostname) + "</p>" +
-    '  <dl class="inactive-host-facts">' +
-    "    <div><dt>Letzter Report</dt><dd>" + mobileEsc(lastReport) + (relative ? " <span>(" + mobileEsc(relative) + ")</span>" : "") + "</dd></div>" +
-    "    <div><dt>Betriebssystem</dt><dd>" + mobileEsc(osLabel) + "</dd></div>" +
-    "    <div><dt>IP</dt><dd>" + mobileEsc(primaryIp) + "</dd></div>" +
-    "    <div><dt>Land</dt><dd>" + mobileEsc(countryLabel) + "</dd></div>" +
-    "    <div><dt>Offene Alerts</dt><dd>" + alertsFact + "</dd></div>" +
-    "    <div><dt>Host-ID</dt><dd><code>" + mobileEsc(hostUid) + "</code></dd></div>" +
-    "  </dl>" +
-    "</article>"
-  );
+  return '<span class="inactive-hours-badge">' + hoursInactive.toFixed(1) + "h inaktiv</span>";
 }
 
-function renderInactiveHostsList(hosts, hours) {
-  const list = document.getElementById("inactiveHostsList");
-  if (!list) return;
-
-  const items = Array.isArray(hosts) ? hosts : [];
-  if (!items.length) {
-    list.innerHTML =
-      '<div class="inactive-hosts-empty">Alle Hosts sind aktiv.<br>Keine Inaktivität seit ' +
-      hours +
-      " Stunde" +
-      (hours === 1 ? "" : "n") +
-      ".</div>";
-    return;
-  }
-
-  list.innerHTML = items.map((host) => renderInactiveHostCard(host)).join("");
-}
-
-function renderActiveHostCard(host) {
-  const hostname = String(host.hostname || "").trim() || "—";
-  const displayName = String(host.display_name || "").trim() || hostname;
-  const customerName = String(host.customer_name || "").trim();
-  const hasCustomer = customerName && customerName !== "-" && customerName !== "--";
-  const osIcon = resolveHostOsIconMobile(host.os);
-  const countryHtml = buildCountryFlagIconHtml(host.country_code);
-  const openAlerts = Math.max(0, Number(host.open_alert_count || 0));
-  const openCritical = Math.max(0, Number(host.open_critical_alert_count || 0));
+function buildHostListDetailFacts(host, variant) {
+  const { hostname } = getHostListLabels(host);
   const hostUid = truncateMobileText(String(host.host_uid || hostname), 40);
   const primaryIp = String(host.primary_ip || host.std_nic_ip || "").trim() || "—";
   const osLabel = String(host.os || "").trim() || "—";
   const countryLabel = String(host.country_code || "").trim().toUpperCase() || "—";
-  const lastReport = formatUtcPlus2Mobile(host.last_seen_utc);
-  const relative = formatRelativeTime(host.last_seen_utc);
-  const envLabel = mobileEnvironmentLabel(host.environment_type);
-  const agentVersion = String(host.agent_version || "").trim() || "—";
-  const reportCount = Math.max(0, Number(host.report_count || 0));
+  const openAlerts = Math.max(0, Number(host.open_alert_count || 0));
+  const openCritical = Math.max(0, Number(host.open_critical_alert_count || 0));
 
   let alertsFact = "Keine";
   if (openAlerts > 0) {
@@ -273,54 +274,221 @@ function renderActiveHostCard(host) {
     }
   }
 
-  const customerLine = hasCustomer
-    ? '<p class="inactive-host-customer">' + mobileEsc(customerName) + "</p>"
-    : '<p class="inactive-host-customer">' + mobileEsc(displayName) + "</p>";
-  const displayLine =
-    hasCustomer && displayName !== hostname
-      ? '<p class="inactive-host-display">' + mobileEsc(displayName) + "</p>"
-      : "";
+  const rows = [];
+  const push = (label, value) => {
+    rows.push(
+      "    <div><dt>" + mobileEsc(label) + "</dt><dd>" + value + "</dd></div>"
+    );
+  };
 
-  const onlineLabel = host.online === true ? "Online" : "Aktiv";
+  if (variant === "inactive") {
+    const lastReport = formatUtcPlus2Mobile(host.last_report_time_utc);
+    const relative = formatRelativeTime(host.last_report_time_utc);
+    push("Letzter Report", mobileEsc(lastReport) + (relative ? " <span>(" + mobileEsc(relative) + ")</span>" : ""));
+    push("Inaktiv seit", mobileEsc(Number(host.hours_inactive || 0).toFixed(1) + " Stunden"));
+  } else {
+    const lastReport = formatUtcPlus2Mobile(host.last_seen_utc);
+    const relative = formatRelativeTime(host.last_seen_utc);
+    push("Letzter Report", mobileEsc(lastReport) + (relative ? " <span>(" + mobileEsc(relative) + ")</span>" : ""));
+    const envLabel = mobileEnvironmentLabel(host.environment_type);
+    if (envLabel) push("Umgebung", mobileEsc(envLabel));
+    push("Agent-Version", mobileEsc(String(host.agent_version || "").trim() || "—"));
+    push("Reports (DB)", String(Math.max(0, Number(host.report_count || 0))));
+  }
+
+  push("Hostname", mobileEsc(hostname));
+  push("Betriebssystem", mobileEsc(osLabel));
+  push("IP", mobileEsc(primaryIp));
+  push("Land", mobileEsc(countryLabel));
+  push("Offene Alerts", alertsFact);
+  push("Host-ID", "<code>" + mobileEsc(hostUid) + "</code>");
+
+  return rows.join("\n");
+}
+
+function renderHostListCard(host, variant, index) {
+  const { customerLabel, hostLabel } = getHostListLabels(host);
+  const osIcon = resolveHostOsIconMobile(host.os);
+  const countryHtml = buildCountryFlagIconHtml(host.country_code);
+  const countryCode = String(host.country_code || "").trim().toUpperCase() || "—";
+  const osShort = truncateMobileText(String(host.os || "").trim() || "—", 28);
+  const longInactive = variant === "inactive" && Number(host.hours_inactive || 0) > 12;
+  const cardClass =
+    "host-list-card inactive-host-card"
+    + (variant === "active" ? " is-active-host" : "")
+    + (longInactive ? " is-long-inactive" : "");
 
   return (
-    '<article class="inactive-host-card is-active-host">' +
-    '  <div class="inactive-host-card-head">' +
-    '    <div class="inactive-host-icons">' + countryHtml +
-    '      <img src="/icons/' + mobileEsc(osIcon) + '" class="inactive-host-icon" alt="" onerror="this.src=\'/icons/linux.png\'" />' +
+    '<details class="' + cardClass + '">' +
+    '  <summary class="host-list-summary">' +
+    '    <div class="host-list-summary-main">' +
+    '      <p class="host-list-customer">' + mobileEsc(customerLabel) + "</p>" +
+    '      <p class="host-list-host-label">' + mobileEsc(hostLabel) + "</p>" +
+    '      <div class="host-list-meta-row">' +
+    '        <span class="host-list-meta-pill">' + countryHtml + "<span>" + mobileEsc(countryCode) + "</span></span>" +
+    '        <span class="host-list-meta-pill"><img src="/icons/' + mobileEsc(osIcon) + '" alt="" onerror="this.src=\'/icons/linux.png\'" /><span>'
+    + mobileEsc(osShort) + "</span></span>" +
+    "      </div>" +
     "    </div>" +
-    '    <span class="online-status-badge">' + mobileEsc(onlineLabel) + "</span>" +
+    '    <div class="host-list-summary-side">' +
+    hostListStatusBadge(host, variant) +
+    '      <span class="host-list-chevron" aria-hidden="true">▾</span>' +
+    "    </div>" +
+    "  </summary>" +
+    '  <div class="host-list-details-body">' +
+    '    <dl class="inactive-host-facts">' +
+    buildHostListDetailFacts(host, variant) +
+    "    </dl>" +
+    '    <button type="button" class="btn-secondary btn-host-list-sheet" data-action="host-list-sheet" data-host-list="'
+    + mobileEsc(variant) + '" data-host-index="' + index + '">Alle Details</button>' +
     "  </div>" +
-    customerLine +
-    displayLine +
-    '  <p class="inactive-host-display"><strong>Hostname:</strong> ' + mobileEsc(hostname) + "</p>" +
-    '  <dl class="inactive-host-facts">' +
-    "    <div><dt>Letzter Report</dt><dd>" + mobileEsc(lastReport) + (relative ? " <span>(" + mobileEsc(relative) + ")</span>" : "") + "</dd></div>" +
-    "    <div><dt>Betriebssystem</dt><dd>" + mobileEsc(osLabel) + "</dd></div>" +
-    "    <div><dt>IP</dt><dd>" + mobileEsc(primaryIp) + "</dd></div>" +
-    "    <div><dt>Land</dt><dd>" + mobileEsc(countryLabel) + "</dd></div>" +
-    (envLabel ? "    <div><dt>Umgebung</dt><dd>" + mobileEsc(envLabel) + "</dd></div>" : "") +
-    "    <div><dt>Agent-Version</dt><dd>" + mobileEsc(agentVersion) + "</dd></div>" +
-    "    <div><dt>Reports (DB)</dt><dd>" + reportCount + "</dd></div>" +
-    "    <div><dt>Offene Alerts</dt><dd>" + alertsFact + "</dd></div>" +
-    "    <div><dt>Host-ID</dt><dd><code>" + mobileEsc(hostUid) + "</code></dd></div>" +
-    "  </dl>" +
-    "</article>"
+    "</details>"
   );
 }
 
-function renderActiveHostsList(hosts) {
+function openMobileHostListSheet(host, variant) {
+  if (!host) return;
+  const { hostname, displayName, customerLabel } = getHostListLabels(host);
+  const titleEl = document.getElementById("hostSheetTitle");
+  const subtitleEl = document.getElementById("hostSheetSubtitle");
+  const factsEl = document.getElementById("hostSheetFacts");
+  const logoEl = document.getElementById("hostSheetLogo");
+
+  if (titleEl) titleEl.textContent = customerLabel;
+  if (subtitleEl) subtitleEl.textContent = hostname !== displayName ? hostname : String(host.host_uid || "").trim();
+
+  const logoUrl = String(host.customer_logo_url || "").trim();
+  if (logoEl) {
+    if (logoUrl) {
+      logoEl.src = logoUrl;
+      logoEl.classList.remove("hidden");
+      logoEl.onerror = () => logoEl.classList.add("hidden");
+    } else {
+      logoEl.removeAttribute("src");
+      logoEl.classList.add("hidden");
+    }
+  }
+
+  const rows = [];
+  const push = (label, value) => {
+    const text = String(value || "").trim();
+    if (text) rows.push(hostSheetFactRow(label, text));
+  };
+
+  if (variant === "inactive") {
+    push("Letzter Report", formatUtcPlus2Mobile(host.last_report_time_utc));
+    push("Relativ", formatRelativeTime(host.last_report_time_utc));
+    push("Inaktiv seit", Number(host.hours_inactive || 0).toFixed(1) + " h");
+  } else {
+    push("Letzter Report", formatUtcPlus2Mobile(host.last_seen_utc));
+    push("Relativ", formatRelativeTime(host.last_seen_utc));
+    push("Status", host.online === true ? "Online" : "Aktiv");
+    push("Umgebung", mobileEnvironmentLabel(host.environment_type));
+    push("Agent-Version", host.agent_version);
+    push("Reports (DB)", String(host.report_count || 0));
+  }
+
+  push("Hostbezeichnung", displayName);
+  push("Hostname", hostname);
+  push("Host-ID", host.host_uid);
+  push("Kunde", host.customer_name);
+  push("Land", host.country_code);
+  push("Betriebssystem", host.os);
+  push("IP", host.primary_ip || host.std_nic_ip);
+  push("Offene Alerts", host.open_alert_count > 0 ? String(host.open_alert_count) : "");
+
+  if (factsEl) factsEl.innerHTML = rows.join("");
+  openSheet("hostSheet");
+}
+
+function handleHostListSheetClick(event) {
+  const btn = event.target.closest('[data-action="host-list-sheet"]');
+  if (!btn) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const variant = String(btn.getAttribute("data-host-list") || "");
+  const index = Number(btn.getAttribute("data-host-index") || -1);
+  if (index < 0) return;
+
+  const hosts =
+    variant === "active"
+      ? filterHostListItems(state.activeHosts, state.activeHostsCountryFilter, state.activeHostsSearchQuery)
+      : filterHostListItems(state.inactiveHosts, state.inactiveHostsCountryFilter, state.inactiveHostsSearchQuery);
+  if (!hosts[index]) return;
+  openMobileHostListSheet(hosts[index], variant);
+}
+
+function updateActiveHostsListView() {
+  const allHosts = Array.isArray(state.activeHosts) ? state.activeHosts : [];
+  const filtered = filterHostListItems(allHosts, state.activeHostsCountryFilter, state.activeHostsSearchQuery);
+  const countries = collectHostListCountries(allHosts);
+
+  renderHostCountryFilter("activeHostsCountryFilter", countries, state.activeHostsCountryFilter, (country) => {
+    state.activeHostsCountryFilter = country;
+    updateActiveHostsListView();
+  });
+
   const list = document.getElementById("activeHostsList");
   if (!list) return;
 
-  const items = Array.isArray(hosts) ? hosts : [];
-  if (!items.length) {
-    list.innerHTML =
-      '<div class="inactive-hosts-empty">Keine aktiven Hosts in der letzten Stunde.</div>';
+  if (!allHosts.length) {
+    list.innerHTML = '<div class="inactive-hosts-empty">Keine aktiven Hosts in der letzten Stunde.</div>';
+    setActiveHostsStatus("Keine aktiven Hosts");
     return;
   }
 
-  list.innerHTML = items.map((host) => renderActiveHostCard(host)).join("");
+  if (!filtered.length) {
+    list.innerHTML = '<div class="inactive-hosts-empty">Keine Hosts für Suche oder Land-Filter.</div>';
+    setActiveHostsStatus("0 von " + allHosts.length + " Hosts (gefiltert)");
+    return;
+  }
+
+  list.innerHTML = filtered.map((host, index) => renderHostListCard(host, "active", index)).join("");
+  setActiveHostsStatus(
+    filtered.length === allHosts.length
+      ? filtered.length + " aktive Hosts"
+      : filtered.length + " von " + allHosts.length + " Hosts"
+  );
+}
+
+function updateInactiveHostsListView(hours) {
+  const allHosts = Array.isArray(state.inactiveHosts) ? state.inactiveHosts : [];
+  const filtered = filterHostListItems(allHosts, state.inactiveHostsCountryFilter, state.inactiveHostsSearchQuery);
+  const countries = collectHostListCountries(allHosts);
+  const resolvedHours = Number(hours || state.inactiveHostsHours || 1);
+
+  renderHostCountryFilter("inactiveHostsCountryFilter", countries, state.inactiveHostsCountryFilter, (country) => {
+    state.inactiveHostsCountryFilter = country;
+    updateInactiveHostsListView(resolvedHours);
+  });
+
+  const list = document.getElementById("inactiveHostsList");
+  if (!list) return;
+
+  if (!allHosts.length) {
+    list.innerHTML =
+      '<div class="inactive-hosts-empty">Alle Hosts sind aktiv.<br>Keine Inaktivität seit '
+      + resolvedHours
+      + " Stunde"
+      + (resolvedHours === 1 ? "" : "n")
+      + ".</div>";
+    setInactiveHostsStatus("Keine inaktiven Hosts");
+    return;
+  }
+
+  if (!filtered.length) {
+    list.innerHTML = '<div class="inactive-hosts-empty">Keine Hosts für Suche oder Land-Filter.</div>';
+    setInactiveHostsStatus("0 von " + allHosts.length + " Hosts (gefiltert)");
+    return;
+  }
+
+  list.innerHTML = filtered.map((host, index) => renderHostListCard(host, "inactive", index)).join("");
+  setInactiveHostsStatus(
+    filtered.length === allHosts.length
+      ? filtered.length + " inaktive Hosts"
+      : filtered.length + " von " + allHosts.length + " Hosts"
+  );
+}
 }
 
 async function loadActiveHostsList(options = {}) {
@@ -370,12 +538,7 @@ async function loadActiveHostsList(options = {}) {
         state.activeHostsCount + " Host" + (state.activeHostsCount === 1 ? "" : "s") + " · letzte Stunde";
     }
 
-    renderActiveHostsList(hosts);
-    setActiveHostsStatus(
-      state.activeHostsCount
-        ? state.activeHostsCount + " aktive Hosts"
-        : "Keine aktiven Hosts in der letzten Stunde"
-    );
+    updateActiveHostsListView();
   } catch (error) {
     if (list) {
       list.innerHTML =
@@ -432,12 +595,7 @@ async function loadInactiveHostsList(options = {}) {
         state.inactiveHostsCount + " Host" + (state.inactiveHostsCount === 1 ? "" : "s") + " · Schwelle " + resolvedHours + "h";
     }
 
-    renderInactiveHostsList(hosts, resolvedHours);
-    setInactiveHostsStatus(
-      state.inactiveHostsCount
-        ? state.inactiveHostsCount + " inaktive Hosts"
-        : "Keine inaktiven Hosts in diesem Zeitraum"
-    );
+    updateInactiveHostsListView(resolvedHours);
   } catch (error) {
     if (list) {
       list.innerHTML =
@@ -551,8 +709,12 @@ const state = {
   inactiveHosts: [],
   inactiveHostsHours: 1,
   inactiveHostsLoading: false,
+  inactiveHostsCountryFilter: "all",
+  inactiveHostsSearchQuery: "",
   activeHosts: [],
   activeHostsLoading: false,
+  activeHostsCountryFilter: "all",
+  activeHostsSearchQuery: "",
 };
 
 const SKELETON_CARD_COUNT = 4;
@@ -1853,6 +2015,23 @@ function wire() {
   document.getElementById("inactiveHostsRefreshButton")?.addEventListener("click", () => {
     void loadInactiveHostsList().catch((error) => setInactiveHostsStatus("Fehler: " + error.message, true));
   });
+
+  document.getElementById("activeHostsSearchInput")?.addEventListener("input", (event) => {
+    state.activeHostsSearchQuery = String(event.target?.value || "");
+    if (isActiveHostsViewActive() && !state.activeHostsLoading) {
+      updateActiveHostsListView();
+    }
+  });
+
+  document.getElementById("inactiveHostsSearchInput")?.addEventListener("input", (event) => {
+    state.inactiveHostsSearchQuery = String(event.target?.value || "");
+    if (isInactiveHostsViewActive() && !state.inactiveHostsLoading) {
+      updateInactiveHostsListView(state.inactiveHostsHours);
+    }
+  });
+
+  document.getElementById("activeHostsList")?.addEventListener("click", handleHostListSheetClick);
+  document.getElementById("inactiveHostsList")?.addEventListener("click", handleHostListSheetClick);
 
   document.getElementById("refreshButton")?.addEventListener("click", () => {
     void refreshMobileData().catch((error) => {
