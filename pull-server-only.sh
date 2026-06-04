@@ -180,7 +180,7 @@ ensure_deploy_ref_is_latest_commit() {
     if is_branch_ref "$REF"; then
       echo "WARNUNG: main-SHA nicht ermittelbar (git ls-remote / GitHub API)." >&2
       echo "  Deploy ueber raw/main mit Cache-Bust – Versions-Check nach dem Download." >&2
-      echo "  Besser: export MONITORING_DEPLOY_SHA=\$(curl -fsSL https://api.github.com/repos/$OWNER_REPO/commits/main | grep -m1 '\"sha\"' | cut -d'\"' -f4)" >&2
+      echo "  Besser: export MONITORING_DEPLOY_SHA=\$(curl -fsSL \"https://raw.githubusercontent.com/$OWNER_REPO/main/MAIN_HEAD_SHA?_=\$(date +%s)\" | tr -d ' \\t\\r\\n')" >&2
       MONITORING_PULL_USE_RAW_ONLY=1
       export MONITORING_PULL_USE_RAW_ONLY
       return 0
