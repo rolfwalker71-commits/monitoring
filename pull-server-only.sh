@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604k"
+PULL_SCRIPT_VERSION="20260604l"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -178,11 +178,12 @@ ensure_deploy_ref_is_latest_commit() {
   latest_sha="$(resolve_latest_main_sha main || true)"
   if ! is_full_git_sha "$latest_sha"; then
     if is_branch_ref "$REF"; then
-      echo "FEHLER: Branch '$REF' ohne Commit-SHA – git ls-remote und GitHub API nicht nutzbar." >&2
-      echo "  Pruefen: git ls-remote https://github.com/$OWNER_REPO.git refs/heads/main" >&2
-      echo "  Oder: unset MONITORING_PULL_USE_RAW_ONLY  und MONITORING_DEPLOY_SHA" >&2
-      echo "  Oder pinnen: export MONITORING_DEPLOY_SHA=\$(curl -fsSL https://api.github.com/repos/$OWNER_REPO/commits/main | grep -m1 '\"sha\"' | cut -d'\"' -f4)" >&2
-      exit 1
+      echo "WARNUNG: main-SHA nicht ermittelbar (git ls-remote / GitHub API)." >&2
+      echo "  Deploy ueber raw/main mit Cache-Bust – Versions-Check nach dem Download." >&2
+      echo "  Besser: export MONITORING_DEPLOY_SHA=\$(curl -fsSL https://api.github.com/repos/$OWNER_REPO/commits/main | grep -m1 '\"sha\"' | cut -d'\"' -f4)" >&2
+      MONITORING_PULL_USE_RAW_ONLY=1
+      export MONITORING_PULL_USE_RAW_ONLY
+      return 0
     fi
     return 0
   fi
@@ -315,12 +316,21 @@ extract_full_sha_from_commit_json() {
 resolve_latest_main_sha_via_github_api() {
   local branch_ref="${1:-main}"
   local meta=""
-  if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
-    return 1
-  fi
   if ! meta="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE/commits/$branch_ref" 2>/dev/null)"; then
     return 1
   fi
+  extract_full_sha_from_commit_json "$meta"
+}
+
+# Fallback when curl_github wrapper fails (proxy/SSL); still tries api.github.com.
+resolve_latest_main_sha_via_plain_curl() {
+  local branch_ref="${1:-main}"
+  local meta=""
+  meta="$(curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" \
+    --retry 3 --retry-delay 1 \
+    -H "Accept: application/vnd.github+json" \
+    -H "User-Agent: monitoring-pull-server-only" \
+    "https://api.github.com/repos/$OWNER_REPO/commits/$branch_ref" 2>/dev/null || true)"
   extract_full_sha_from_commit_json "$meta"
 }
 
@@ -353,6 +363,13 @@ resolve_latest_main_sha() {
 
   sha="$(resolve_latest_main_sha_via_github_api "$branch_ref" || true)"
   if is_full_git_sha "$sha"; then
+    printf '%s' "$sha"
+    return 0
+  fi
+
+  sha="$(resolve_latest_main_sha_via_plain_curl "$branch_ref" || true)"
+  if is_full_git_sha "$sha"; then
+    echo "main-SHA via api.github.com (plain curl): ${sha:0:12}" >&2
     printf '%s' "$sha"
     return 0
   fi
@@ -751,10 +768,6 @@ enable_raw_main_fallback() {
 _resolve_deploy_ref_from_github_api() {
   local fallback_ref="$1"
   COMMIT_META_JSON=""
-
-  if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
-    return 1
-  fi
 
   if ! COMMIT_META_JSON="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE/commits/$fallback_ref" 2>/dev/null)"; then
     return 1
