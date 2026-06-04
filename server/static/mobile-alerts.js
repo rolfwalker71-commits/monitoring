@@ -539,12 +539,109 @@ function mobileFormatUptime(seconds) {
   return m + " min";
 }
 
-function resolveSapReleaseMobile(host, payload) {
+let mobileSapB1VersionMap = null;
+
+function getDefaultMobileSapB1VersionMap() {
+  return new Map([
+    ["10.00.330", { featurePack: "FP 2605", patchLevel: "PL 23", releaseDate: "May 2026" }],
+    ["10.00.320", { featurePack: "FP 2602", patchLevel: "PL 22", releaseDate: "Feb 2026" }],
+    ["10.00.310", { featurePack: "FP 2511", patchLevel: "PL 21", releaseDate: "Nov 2025" }],
+    ["10.00.300", { featurePack: "FP 2508", patchLevel: "PL 20", releaseDate: "Aug 2025" }],
+    ["10.00.291", { featurePack: "FP 2505 HF1", patchLevel: "PL 19", releaseDate: "Jun 2025" }],
+    ["10.00.290", { featurePack: "FP 2505", patchLevel: "PL 19", releaseDate: "May 2025" }],
+    ["10.00.280", { featurePack: "FP 2502", patchLevel: "PL 18", releaseDate: "Feb 2025" }],
+    ["10.00.270", { featurePack: "FP 2411", patchLevel: "PL 17", releaseDate: "Nov 2024" }],
+    ["10.00.261", { featurePack: "FP 2408 HF1", patchLevel: "PL 16 HF1", releaseDate: "Okt 2024" }],
+    ["10.00.260", { featurePack: "FP 2408", patchLevel: "PL 16", releaseDate: "Aug 2024" }],
+    ["10.00.250", { featurePack: "FP 2405", patchLevel: "PL 15", releaseDate: "May 2024" }],
+    ["10.00.240", { featurePack: "FP 2402", patchLevel: "PL 14", releaseDate: "Feb 2024" }],
+    ["10.00.230", { featurePack: "FP 2311", patchLevel: "PL 13", releaseDate: "Nov 2023" }],
+    ["10.00.220", { featurePack: "FP 2308", patchLevel: "PL 12", releaseDate: "Aug 2023" }],
+    ["10.00.210", { featurePack: "FP 2305", patchLevel: "PL 11", releaseDate: "May 2023" }],
+    ["10.00.180", { featurePack: "FP 2208", patchLevel: "PL 08", releaseDate: "Aug 2022" }],
+    ["10.00.170", { featurePack: "FP 2205", patchLevel: "PL 07", releaseDate: "May 2022" }],
+    ["10.00.160", { featurePack: "FP 2202", patchLevel: "PL 06", releaseDate: "Feb 2022" }],
+    ["10.00.150", { featurePack: "FP 2111", patchLevel: "PL 05", releaseDate: "Nov 2021" }],
+    ["10.00.140", { featurePack: "FP 2108", patchLevel: "PL 04", releaseDate: "Aug 2021" }],
+    ["10.00.130", { featurePack: "FP 2105", patchLevel: "PL 03", releaseDate: "May 2021" }],
+    ["10.00.120", { featurePack: "FP 2102", patchLevel: "PL 02", releaseDate: "Feb 2021" }],
+    ["10.00.110", { featurePack: "FP 2008", patchLevel: "PL 01", releaseDate: "Aug 2020" }],
+    ["10.00.100", { featurePack: "FP 2005", patchLevel: "PL 00", releaseDate: "May 2020" }],
+  ]);
+}
+
+function getMobileSapB1VersionMap() {
+  if (!mobileSapB1VersionMap) {
+    mobileSapB1VersionMap = getDefaultMobileSapB1VersionMap();
+  }
+  return mobileSapB1VersionMap;
+}
+
+async function loadMobileSapB1VersionMap() {
+  try {
+    const resp = await fetch("/api/v1/sap-b1-version-map", { credentials: "same-origin" });
+    if (!resp.ok) return;
+    const contentType = String(resp.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.includes("application/json")) return;
+    const data = await resp.json().catch(() => ({}));
+    if (!Array.isArray(data.entries)) return;
+    mobileSapB1VersionMap = new Map(
+      data.entries
+        .map((entry) => {
+          const build = String(entry.build || "").trim();
+          if (!build) return null;
+          return [
+            build,
+            {
+              featurePack: String(entry.feature_pack || "").trim(),
+              patchLevel: String(entry.patch_level || "").trim(),
+              releaseDate: String(entry.release_date || "").trim(),
+            },
+          ];
+        })
+        .filter(Boolean)
+    );
+  } catch (_error) {
+    // Built-in map bleibt aktiv.
+  }
+}
+
+function resolveSapReleaseRawMobile(host, payload) {
   const p = payload && typeof payload === "object" ? payload : {};
   const h = host && typeof host === "object" ? host : {};
+  const versionBlock =
+    p.sap_business_one &&
+    typeof p.sap_business_one === "object" &&
+    p.sap_business_one.server_components_version &&
+    typeof p.sap_business_one.server_components_version === "object"
+      ? p.sap_business_one.server_components_version
+      : null;
+  const fromPayloadVersion = String(versionBlock?.version || "").trim();
   return String(
-    p.sap_release || p.sap_feature_pack || h.sap_release || h.sap_feature_pack || ""
+    fromPayloadVersion ||
+      p.sap_release ||
+      p.sap_feature_pack ||
+      h.sap_release ||
+      h.sap_feature_pack ||
+      ""
   ).trim();
+}
+
+function resolveSapReleaseDisplayMobile(sapRelease) {
+  const raw = String(sapRelease || "").trim();
+  if (!raw) return "";
+  if (/^(FP|SP)\s*\S/i.test(raw)) {
+    return raw;
+  }
+
+  const map = getMobileSapB1VersionMap();
+  const buildMatch = raw.match(/(10\.00\.\d{3})/i);
+  const buildKey = buildMatch ? buildMatch[1] : raw.match(/\d+\.\d+\.\d+/)?.[0] || raw;
+  const mapping = map.get(buildKey);
+  if (mapping?.featurePack) {
+    return String(mapping.featurePack).trim();
+  }
+  return raw;
 }
 
 function resolveHanaReleaseMobile(host, payload) {
@@ -627,16 +724,21 @@ function buildInsightResourcesBody(payload) {
 }
 
 function buildInsightSapBody(host, payload) {
-  const sap = resolveSapReleaseMobile(host, payload) || "—";
+  const sapRaw = resolveSapReleaseRawMobile(host, payload);
+  const sap = resolveSapReleaseDisplayMobile(sapRaw) || "—";
   const hana = resolveHanaReleaseMobile(host, payload) || "—";
   const sid = resolveHanaSidMobile(host, payload) || "—";
+  const sapHint =
+    sapRaw && sap !== sapRaw
+      ? '<p class="insight-hint">Build im Report: ' + mobileEsc(sapRaw) + "</p>"
+      : '<p class="insight-hint">SAP Release aus Mapping-Tabelle (FP/SP), HANA/SID aus letztem Report.</p>';
   return (
     '<div class="insight-kpi-grid">' +
     mobileInsightKpi("SAP Release", sap) +
     mobileInsightKpi("HANA Release", hana) +
     mobileInsightKpi("HANA SID", sid) +
     "</div>" +
-    '<p class="insight-hint">Werte aus dem letzten Agent-Report (Feature Pack / Version / SID).</p>'
+    sapHint
   );
 }
 
@@ -914,6 +1016,7 @@ async function openHostInsightCarousel(host, variant) {
   renderHostInsightDots(1);
   syncHostInsightCarouselUi();
 
+  await loadMobileSapB1VersionMap();
   const { report, payload, error } = await fetchLatestHostReport(host);
   if (overlay.classList.contains("hidden")) return;
 
@@ -2377,6 +2480,7 @@ async function submitLogin() {
     showLoginOverlay(false);
     setLoginStatus("");
     startMobileSessionKeepAlive();
+    await loadMobileSapB1VersionMap();
     await refreshPushState();
     await refreshMobileData();
   } catch (error) {
@@ -2722,6 +2826,7 @@ async function init() {
     if (state.authenticated) {
       mobileSessionEstablishedAtMs = Date.now();
       startMobileSessionKeepAlive();
+      await loadMobileSapB1VersionMap();
       await refreshPushState();
       await refreshMobileData();
     } else {

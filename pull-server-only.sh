@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604p"
+PULL_SCRIPT_VERSION="20260604q"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -347,6 +347,104 @@ extract_full_sha_from_commit_json() {
     return 0
   fi
   return 1
+}
+
+extract_commit_message_from_json() {
+  local meta="${1:-}"
+  if [ -z "$meta" ]; then
+    return 1
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    printf '%s\n' "$meta" | python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin) or {}
+except Exception:
+    sys.exit(1)
+msg = str((data.get("commit") or {}).get("message") or "").strip()
+if not msg:
+    sys.exit(1)
+print(msg)
+' 2>/dev/null
+    return 0
+  fi
+  return 1
+}
+
+fetch_commit_meta_json_for_ref() {
+  local ref=""
+  local expanded=""
+  local cached_sha=""
+  local meta=""
+
+  ref="$(normalize_sha_ref "${1:-}")"
+  if [ -z "$ref" ]; then
+    return 1
+  fi
+  if ! is_full_git_sha "$ref"; then
+    expanded="$(expand_deploy_ref "$ref" || true)"
+    if is_full_git_sha "$expanded"; then
+      ref="$expanded"
+    else
+      return 1
+    fi
+  fi
+
+  if [ -n "${COMMIT_META_JSON:-}" ]; then
+    cached_sha="$(extract_full_sha_from_commit_json "$COMMIT_META_JSON" || true)"
+    if [ "$cached_sha" = "$ref" ]; then
+      printf '%s' "$COMMIT_META_JSON"
+      return 0
+    fi
+  fi
+
+  if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" != "1" ]; then
+    if meta="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE/commits/$ref" 2>/dev/null)"; then
+      if extract_full_sha_from_commit_json "$meta" >/dev/null; then
+        printf '%s' "$meta"
+        return 0
+      fi
+    fi
+    meta="$(curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" \
+      --retry 3 --retry-delay 1 \
+      -H "Accept: application/vnd.github+json" \
+      -H "User-Agent: monitoring-pull-server-only" \
+      "https://api.github.com/repos/$OWNER_REPO/commits/$ref" 2>/dev/null || true)"
+    if extract_full_sha_from_commit_json "$meta" >/dev/null; then
+      printf '%s' "$meta"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+print_deployed_commit_message_summary() {
+  local deploy_ref="${1:-}"
+  local expanded=""
+  local meta=""
+  local message=""
+  local line=""
+
+  if ! is_full_git_sha "$(normalize_sha_ref "$deploy_ref")"; then
+    expanded="$(expand_deploy_ref "$deploy_ref" 2>/dev/null || true)"
+    if is_full_git_sha "$expanded"; then
+      deploy_ref="$expanded"
+    else
+      return 0
+    fi
+  fi
+
+  meta="$(fetch_commit_meta_json_for_ref "$deploy_ref" || true)"
+  message="$(extract_commit_message_from_json "$meta" || true)"
+  if [ -z "$message" ]; then
+    echo "Commit-Text (${deploy_ref:0:12}): nicht verfuegbar (GitHub API blockiert oder kein Token)"
+    return 0
+  fi
+
+  echo "Commit-Text (${deploy_ref:0:12}):"
+  while IFS= read -r line || [ -n "$line" ]; do
+    echo "  $line"
+  done <<< "$message"
 }
 
 resolve_latest_main_sha_via_github_api() {
@@ -1443,6 +1541,7 @@ else
 fi
 
 echo ""
+print_deployed_commit_message_summary "${DEPLOYED_SHA_FILE:-$REF}"
 echo ""
 echo "Deploy-Verifikation im Browser (nach Hard-Refresh Strg+Shift+R):"
 echo "  fetch('/BUILD_VERSION').then(r=>r.text()).then(console.log)  // erwartet: $LOCAL_BUILD_VERSION"
