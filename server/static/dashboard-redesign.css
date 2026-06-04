@@ -54,6 +54,30 @@
   padding-bottom: 6px !important;
 }
 
+/* Logo ohne Karten-Rahmen – frei im Header */
+.brand-header .app-logo {
+  width: 56px !important;
+  height: 56px !important;
+  flex: 0 0 56px !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.brand-header .app-logo img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+
+body[data-theme="dark"] .brand-header .app-logo {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 .header-stat-chip .header-chip-scope,
 .header-stat-chip .header-chip-icon,
 .header-chip-trend {
