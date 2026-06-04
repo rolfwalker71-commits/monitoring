@@ -57,7 +57,7 @@
           <div class="kpi kpi-critical"><strong id="kpiCritical">0</strong><span>Kritisch</span></div>
           <div class="kpi kpi-warning"><strong id="kpiWarning">0</strong><span>Warning</span></div>
           <div class="kpi kpi-open"><strong id="kpiOpen">0</strong><span>Offen</span></div>
-          <div class="kpi kpi-active" title="Online bzw. Meldung in der letzten Stunde"><strong id="kpiActiveHosts">0</strong><span>Aktiv</span></div>
+          <button type="button" class="kpi kpi-active kpi-tap" id="kpiActiveNav" title="Aktive Hosts anzeigen (Meldung in der letzten Stunde)"><strong id="kpiActiveHosts">0</strong><span>Aktiv</span></button>
           <button type="button" class="kpi kpi-inactive kpi-tap" id="kpiInactiveNav" title="Inaktive Hosts anzeigen (keine Meldung in der letzten Stunde)"><strong id="kpiInactiveHosts">0</strong><span>Inaktiv</span></button>
         </div>
       </header>
@@ -76,6 +76,19 @@
           <section id="alertsList" class="alerts-list alerts-carousel" aria-live="polite"></section>
           <section id="alertDetailPanel" class="alert-detail-panel hidden" aria-label="Alert-Details"></section>
         </div>
+      </div>
+
+      <div id="activeHostsView" class="mobile-view hidden" aria-label="Aktive Hosts">
+        <div class="mobile-subpage-bar">
+          <button type="button" class="btn-back" id="activeHostsBackButton" aria-label="Zurück zu Alerts">← Alerts</button>
+          <div class="mobile-subpage-titles">
+            <h2>Aktive Hosts</h2>
+            <p id="activeHostsSubtitle" class="mobile-subpage-hint"></p>
+          </div>
+          <button type="button" class="icon-btn icon-btn-compact" id="activeHostsRefreshButton" title="Aktualisieren" aria-label="Aktualisieren">↻</button>
+        </div>
+        <p id="activeHostsStatusLine" class="status-line">Lade Hosts…</p>
+        <section id="activeHostsList" class="inactive-hosts-stack" aria-live="polite"></section>
       </div>
 
       <div id="inactiveHostsView" class="mobile-view hidden" aria-label="Inaktive Hosts">

@@ -111,22 +111,37 @@ function setInactiveHostsStatus(text, isError = false) {
   line.classList.toggle("is-error", isError);
 }
 
+function setActiveHostsStatus(text, isError = false) {
+  const line = document.getElementById("activeHostsStatusLine");
+  if (!line) return;
+  line.textContent = text;
+  line.classList.toggle("is-error", isError);
+}
+
 function isInactiveHostsViewActive() {
   return state.mobileView === "inactive-hosts";
+}
+
+function isActiveHostsViewActive() {
+  return state.mobileView === "active-hosts";
 }
 
 function showAlertsHomeView() {
   state.mobileView = "alerts";
   document.getElementById("alertsHomeView")?.classList.remove("hidden");
   document.getElementById("inactiveHostsView")?.classList.add("hidden");
+  document.getElementById("activeHostsView")?.classList.add("hidden");
   document.getElementById("kpiInactiveNav")?.classList.remove("is-active");
+  document.getElementById("kpiActiveNav")?.classList.remove("is-active");
 }
 
 function showInactiveHostsView() {
   state.mobileView = "inactive-hosts";
   document.getElementById("alertsHomeView")?.classList.add("hidden");
+  document.getElementById("activeHostsView")?.classList.add("hidden");
   document.getElementById("inactiveHostsView")?.classList.remove("hidden");
   document.getElementById("kpiInactiveNav")?.classList.add("is-active");
+  document.getElementById("kpiActiveNav")?.classList.remove("is-active");
   const hours = Math.max(1, Math.min(24 * 30, Number(state.hostKpisHours) || 1));
   state.inactiveHostsHours = hours;
   const subtitle = document.getElementById("inactiveHostsSubtitle");
@@ -134,6 +149,20 @@ function showInactiveHostsView() {
     subtitle.textContent = "Keine Meldung seit " + hours + " Stunde" + (hours === 1 ? "" : "n");
   }
   void loadInactiveHostsList();
+}
+
+function showActiveHostsView() {
+  state.mobileView = "active-hosts";
+  document.getElementById("alertsHomeView")?.classList.add("hidden");
+  document.getElementById("inactiveHostsView")?.classList.add("hidden");
+  document.getElementById("activeHostsView")?.classList.remove("hidden");
+  document.getElementById("kpiActiveNav")?.classList.add("is-active");
+  document.getElementById("kpiInactiveNav")?.classList.remove("is-active");
+  const subtitle = document.getElementById("activeHostsSubtitle");
+  if (subtitle) {
+    subtitle.textContent = "Meldung in der letzten Stunde";
+  }
+  void loadActiveHostsList();
 }
 
 function buildCountryFlagIconHtml(countryCode) {
@@ -217,6 +246,147 @@ function renderInactiveHostsList(hosts, hours) {
   list.innerHTML = items.map((host) => renderInactiveHostCard(host)).join("");
 }
 
+function renderActiveHostCard(host) {
+  const hostname = String(host.hostname || "").trim() || "—";
+  const displayName = String(host.display_name || "").trim() || hostname;
+  const customerName = String(host.customer_name || "").trim();
+  const hasCustomer = customerName && customerName !== "-" && customerName !== "--";
+  const osIcon = resolveHostOsIconMobile(host.os);
+  const countryHtml = buildCountryFlagIconHtml(host.country_code);
+  const openAlerts = Math.max(0, Number(host.open_alert_count || 0));
+  const openCritical = Math.max(0, Number(host.open_critical_alert_count || 0));
+  const hostUid = truncateMobileText(String(host.host_uid || hostname), 40);
+  const primaryIp = String(host.primary_ip || host.std_nic_ip || "").trim() || "—";
+  const osLabel = String(host.os || "").trim() || "—";
+  const countryLabel = String(host.country_code || "").trim().toUpperCase() || "—";
+  const lastReport = formatUtcPlus2Mobile(host.last_seen_utc);
+  const relative = formatRelativeTime(host.last_seen_utc);
+  const envLabel = mobileEnvironmentLabel(host.environment_type);
+  const agentVersion = String(host.agent_version || "").trim() || "—";
+  const reportCount = Math.max(0, Number(host.report_count || 0));
+
+  let alertsFact = "Keine";
+  if (openAlerts > 0) {
+    alertsFact = '<span class="inactive-alerts-pill">' + openAlerts + " offen</span>";
+    if (openCritical > 0) {
+      alertsFact += ' <span class="inactive-alerts-pill">' + openCritical + " kritisch</span>";
+    }
+  }
+
+  const customerLine = hasCustomer
+    ? '<p class="inactive-host-customer">' + mobileEsc(customerName) + "</p>"
+    : '<p class="inactive-host-customer">' + mobileEsc(displayName) + "</p>";
+  const displayLine =
+    hasCustomer && displayName !== hostname
+      ? '<p class="inactive-host-display">' + mobileEsc(displayName) + "</p>"
+      : "";
+
+  const onlineLabel = host.online === true ? "Online" : "Aktiv";
+
+  return (
+    '<article class="inactive-host-card is-active-host">' +
+    '  <div class="inactive-host-card-head">' +
+    '    <div class="inactive-host-icons">' + countryHtml +
+    '      <img src="/icons/' + mobileEsc(osIcon) + '" class="inactive-host-icon" alt="" onerror="this.src=\'/icons/linux.png\'" />' +
+    "    </div>" +
+    '    <span class="online-status-badge">' + mobileEsc(onlineLabel) + "</span>" +
+    "  </div>" +
+    customerLine +
+    displayLine +
+    '  <p class="inactive-host-display"><strong>Hostname:</strong> ' + mobileEsc(hostname) + "</p>" +
+    '  <dl class="inactive-host-facts">' +
+    "    <div><dt>Letzter Report</dt><dd>" + mobileEsc(lastReport) + (relative ? " <span>(" + mobileEsc(relative) + ")</span>" : "") + "</dd></div>" +
+    "    <div><dt>Betriebssystem</dt><dd>" + mobileEsc(osLabel) + "</dd></div>" +
+    "    <div><dt>IP</dt><dd>" + mobileEsc(primaryIp) + "</dd></div>" +
+    "    <div><dt>Land</dt><dd>" + mobileEsc(countryLabel) + "</dd></div>" +
+    (envLabel ? "    <div><dt>Umgebung</dt><dd>" + mobileEsc(envLabel) + "</dd></div>" : "") +
+    "    <div><dt>Agent-Version</dt><dd>" + mobileEsc(agentVersion) + "</dd></div>" +
+    "    <div><dt>Reports (DB)</dt><dd>" + reportCount + "</dd></div>" +
+    "    <div><dt>Offene Alerts</dt><dd>" + alertsFact + "</dd></div>" +
+    "    <div><dt>Host-ID</dt><dd><code>" + mobileEsc(hostUid) + "</code></dd></div>" +
+    "  </dl>" +
+    "</article>"
+  );
+}
+
+function renderActiveHostsList(hosts) {
+  const list = document.getElementById("activeHostsList");
+  if (!list) return;
+
+  const items = Array.isArray(hosts) ? hosts : [];
+  if (!items.length) {
+    list.innerHTML =
+      '<div class="inactive-hosts-empty">Keine aktiven Hosts in der letzten Stunde.</div>';
+    return;
+  }
+
+  list.innerHTML = items.map((host) => renderActiveHostCard(host)).join("");
+}
+
+async function loadActiveHostsList(options = {}) {
+  if (!state.authenticated || !isActiveHostsViewActive()) {
+    return;
+  }
+  const authRetried = options.authRetried === true;
+  const list = document.getElementById("activeHostsList");
+
+  state.activeHostsLoading = true;
+  if (list && !options.silent) {
+    list.innerHTML = '<div class="inactive-hosts-empty">Lade aktive Hosts…</div>';
+  }
+  setActiveHostsStatus("Lade aktive Hosts…");
+
+  try {
+    const resp = await fetch("/api/v1/hosts?limit=200&offset=0", { credentials: "same-origin" });
+
+    if (resp.status === 401) {
+      if (!authRetried && (await mobileRecoverSessionAfter401())) {
+        return loadActiveHostsList({ authRetried: true, silent: options.silent });
+      }
+      mobileForceLogout("Session abgelaufen. Bitte erneut anmelden.");
+      return;
+    }
+
+    if (!resp.ok) {
+      throw new Error("HTTP " + resp.status);
+    }
+
+    const data = await resp.json();
+    const allHosts = Array.isArray(data.hosts) ? data.hosts : [];
+    const hosts = allHosts.filter((host) => isHostActive(host));
+    hosts.sort((a, b) => {
+      const ta = parseUtcIso(a?.last_seen_utc || "")?.getTime() || 0;
+      const tb = parseUtcIso(b?.last_seen_utc || "")?.getTime() || 0;
+      return tb - ta;
+    });
+
+    state.activeHosts = hosts;
+    state.activeHostsCount = hosts.length;
+    renderHostKpis();
+
+    const subtitle = document.getElementById("activeHostsSubtitle");
+    if (subtitle) {
+      subtitle.textContent =
+        state.activeHostsCount + " Host" + (state.activeHostsCount === 1 ? "" : "s") + " · letzte Stunde";
+    }
+
+    renderActiveHostsList(hosts);
+    setActiveHostsStatus(
+      state.activeHostsCount
+        ? state.activeHostsCount + " aktive Hosts"
+        : "Keine aktiven Hosts in der letzten Stunde"
+    );
+  } catch (error) {
+    if (list) {
+      list.innerHTML =
+        '<div class="inactive-hosts-empty">Fehler beim Laden: ' + mobileEsc(error?.message || String(error)) + "</div>";
+    }
+    setActiveHostsStatus("Fehler: " + (error?.message || String(error)), true);
+  } finally {
+    state.activeHostsLoading = false;
+  }
+}
+
 async function loadInactiveHostsList(options = {}) {
   if (!state.authenticated || !isInactiveHostsViewActive()) {
     return;
@@ -291,6 +461,7 @@ function mobileForceLogout(message) {
   state.activeHostsCount = 0;
   state.inactiveHostsCount = 0;
   state.inactiveHosts = [];
+  state.activeHosts = [];
   renderHostKpis();
   state.pushSupported = false;
   state.pushConfigured = false;
@@ -380,6 +551,8 @@ const state = {
   inactiveHosts: [],
   inactiveHostsHours: 1,
   inactiveHostsLoading: false,
+  activeHosts: [],
+  activeHostsLoading: false,
 };
 
 const SKELETON_CARD_COUNT = 4;
@@ -1055,19 +1228,20 @@ function parseUtcIso(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function isHostActive(host) {
+  if (!host) return false;
+  if (host.online === true) {
+    return true;
+  }
+  const parsedLastSeen = parseUtcIso(host.last_seen_utc || host.last_report_utc || "");
+  if (!parsedLastSeen) {
+    return false;
+  }
+  return Date.now() - parsedLastSeen.getTime() <= 60 * 60 * 1000;
+}
+
 function countActiveHosts(hosts) {
-  const nowMs = Date.now();
-  const oneHourMs = 60 * 60 * 1000;
-  return (Array.isArray(hosts) ? hosts : []).reduce((sum, host) => {
-    if (host && host.online === true) {
-      return sum + 1;
-    }
-    const parsedLastSeen = parseUtcIso(host?.last_seen_utc || host?.last_report_utc || "");
-    if (!parsedLastSeen) {
-      return sum;
-    }
-    return nowMs - parsedLastSeen.getTime() <= oneHourMs ? sum + 1 : sum;
-  }, 0);
+  return (Array.isArray(hosts) ? hosts : []).filter((host) => isHostActive(host)).length;
 }
 
 function renderHostKpis() {
@@ -1131,6 +1305,10 @@ async function loadHostKpis(options = {}) {
 async function refreshMobileData() {
   if (isInactiveHostsViewActive()) {
     await Promise.all([loadInactiveHostsList(), loadHostKpis()]);
+    return;
+  }
+  if (isActiveHostsViewActive()) {
+    await Promise.all([loadActiveHostsList(), loadHostKpis()]);
     return;
   }
   await Promise.all([loadAlerts(), loadHostKpis()]);
@@ -1648,14 +1826,28 @@ function wirePullToRefresh() {
 }
 
 function wire() {
+  document.getElementById("kpiActiveNav")?.addEventListener("click", () => {
+    if (!state.authenticated) return;
+    showActiveHostsView();
+  });
+
   document.getElementById("kpiInactiveNav")?.addEventListener("click", () => {
     if (!state.authenticated) return;
     showInactiveHostsView();
   });
 
+  document.getElementById("activeHostsBackButton")?.addEventListener("click", () => {
+    showAlertsHomeView();
+    setActiveHostsStatus("");
+  });
+
   document.getElementById("inactiveHostsBackButton")?.addEventListener("click", () => {
     showAlertsHomeView();
     setInactiveHostsStatus("");
+  });
+
+  document.getElementById("activeHostsRefreshButton")?.addEventListener("click", () => {
+    void loadActiveHostsList().catch((error) => setActiveHostsStatus("Fehler: " + error.message, true));
   });
 
   document.getElementById("inactiveHostsRefreshButton")?.addEventListener("click", () => {
@@ -1667,6 +1859,8 @@ function wire() {
       const msg = error?.message || String(error);
       if (isInactiveHostsViewActive()) {
         setInactiveHostsStatus("Fehler: " + msg, true);
+      } else if (isActiveHostsViewActive()) {
+        setActiveHostsStatus("Fehler: " + msg, true);
       } else {
         setStatus("Fehler: " + msg, true);
       }
@@ -1711,9 +1905,11 @@ function wire() {
     state.activeHostsCount = 0;
     state.inactiveHostsCount = 0;
     state.inactiveHosts = [];
+    state.activeHosts = [];
     renderHostKpis();
     setStatus("");
     setInactiveHostsStatus("");
+    setActiveHostsStatus("");
     renderPushButton();
     document.getElementById("headerMenu")?.classList.add("hidden");
   });

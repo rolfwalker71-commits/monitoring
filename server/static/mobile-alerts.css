@@ -313,6 +313,10 @@ body {
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--critical) 35%, transparent);
 }
 
+.kpi-active.kpi-tap.is-active {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ok) 40%, transparent);
+}
+
 .mobile-view.hidden {
   display: none !important;
 }
@@ -393,6 +397,10 @@ body {
   background: var(--critical);
 }
 
+.inactive-host-card.is-active-host::before {
+  background: var(--ok);
+}
+
 .inactive-host-card-head {
   display: flex;
   align-items: center;
@@ -427,6 +435,16 @@ body {
 .inactive-host-card.is-long-inactive .inactive-hours-badge {
   background: color-mix(in srgb, var(--critical) 12%, var(--panel));
   color: var(--critical);
+}
+
+.online-status-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ok) 14%, var(--panel));
+  color: var(--ok);
+  white-space: nowrap;
 }
 
 .inactive-host-customer {
