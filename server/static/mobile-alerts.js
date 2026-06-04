@@ -515,9 +515,73 @@ function getAngLogsFromPayloadMobile(payload) {
   return parseAngLogsBlockMobile(p.ang_logs) || parseAngLogsBlockMobile(p.ang_skripte_logs);
 }
 
-function normalizeLogLinesMobile(rawLines) {
+const MOBILE_ANG_LOG_LINE_SPLIT_PATTERNS = [
+  /(?=\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{1,6})?\s)/,
+  /(?=\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:[.,]\d{1,6})?\])/,
+  /(?=\[\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}(?::\d{2})?(?:[.,]\d{1,6})?\])/,
+];
+
+function repairUtf8MojibakeLatin1Mobile(text) {
+  const raw = String(text ?? "");
+  if (!raw || !/Ã.|â€/.test(raw)) return raw;
+  try {
+    const bytes = new Uint8Array(raw.length);
+    for (let index = 0; index < raw.length; index += 1) {
+      bytes[index] = raw.charCodeAt(index) & 0xff;
+    }
+    const repaired = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    if (repaired && repaired !== raw && !/Ã.|â€/.test(repaired)) return repaired;
+  } catch (_error) {
+    // keep original
+  }
+  return raw;
+}
+
+function asLogLineTextMobile(value) {
+  if (value === null || value === undefined) return "";
+  return repairUtf8MojibakeLatin1Mobile(String(value));
+}
+
+function looksLikeAngLogJsonLineMobile(line) {
+  const trimmed = String(line || "").trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return false;
+  if (/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(trimmed) || /^\[\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}/.test(trimmed)) {
+    return false;
+  }
+  return trimmed.startsWith("{") || trimmed.startsWith("[{") || trimmed.startsWith('["') || trimmed.startsWith("[\n");
+}
+
+function shouldSplitAngLogLogicalLineMobile(line) {
+  const trimmed = asLogLineTextMobile(line).trim();
+  if (!trimmed) return false;
+  if (looksLikeAngLogJsonLineMobile(trimmed)) return false;
+  return true;
+}
+
+function splitAngLogLogicalLineMobile(line) {
+  const trimmed = asLogLineTextMobile(line).trim();
+  if (!trimmed) return [];
+  if (!shouldSplitAngLogLogicalLineMobile(trimmed)) return [trimmed];
+
+  let parts = [trimmed];
+  for (const pattern of MOBILE_ANG_LOG_LINE_SPLIT_PATTERNS) {
+    const next = [];
+    for (const part of parts) {
+      const chunks = part
+        .split(pattern)
+        .map((chunk) => chunk.replace(/^\s+/, "").trimEnd())
+        .filter((chunk) => chunk.length > 0);
+      if (chunks.length > 1) next.push(...chunks);
+      else if (part) next.push(part);
+    }
+    if (next.length > 1) parts = next;
+  }
+  return parts.length > 0 ? parts : [trimmed];
+}
+
+function normalizeAngSkripteLogLinesMobile(rawLines) {
   if (Array.isArray(rawLines)) {
-    return rawLines.map((line) => String(line ?? "").trimEnd());
+    return rawLines.map((line) => asLogLineTextMobile(line));
   }
   if (typeof rawLines === "string") {
     const trimmed = rawLines.trim();
@@ -526,34 +590,45 @@ function normalizeLogLinesMobile(rawLines) {
       try {
         const parsed = JSON.parse(trimmed);
         if (Array.isArray(parsed)) {
-          return parsed.map((line) => String(line ?? "").trimEnd());
+          return parsed.map((line) => asLogLineTextMobile(line));
         }
       } catch (_error) {
         // plain-text split
       }
     }
-    return trimmed.split(/\r\n|\n|\r/).map((line) => String(line).trimEnd());
+    return trimmed.split(/\r\n|\n|\r/).map((line) => asLogLineTextMobile(line));
   }
   return [];
 }
 
-function expandLogLinesMobile(rawLines) {
-  const normalized = normalizeLogLinesMobile(rawLines);
+function expandAngSkripteLogLinesMobile(rawLines) {
+  const normalized = normalizeAngSkripteLogLinesMobile(rawLines);
+  if (!normalized.length) return [];
+
   const expanded = [];
   for (const line of normalized) {
-    const text = String(line || "");
-    if (text.includes("\n") || text.includes("\r")) {
-      expanded.push(...text.split(/\r\n|\n|\r/).map((entry) => entry.trimEnd()).filter(Boolean));
-    } else if (text) {
-      expanded.push(text);
+    const logicalLines = splitAngLogLogicalLineMobile(line);
+    if (logicalLines.length > 1) {
+      expanded.push(...logicalLines);
+      continue;
     }
+    if (line.includes("\n") || line.includes("\r")) {
+      expanded.push(
+        ...line
+          .split(/\r\n|\n|\r/)
+          .map((entry) => asLogLineTextMobile(entry))
+          .filter((entry) => entry.length > 0)
+      );
+      continue;
+    }
+    if (line) expanded.push(line);
   }
-  return expanded.length > 0 ? expanded : normalized.filter(Boolean);
+  return expanded.length > 0 ? expanded : normalized;
 }
 
 function takeLastLogLinesMobile(rawLines, maxLines) {
-  const limit = Math.max(1, Number(maxLines) || 24);
-  const expanded = expandLogLinesMobile(rawLines);
+  const limit = Math.max(1, Number(maxLines) || 50);
+  const expanded = expandAngSkripteLogLinesMobile(rawLines);
   if (expanded.length <= limit) return expanded;
   return expanded.slice(-limit);
 }
@@ -936,8 +1011,8 @@ function buildInsightLogsBody(payload) {
   return files
     .map((file) => {
       const name = String(file.relative_path || file.name || "Log").trim();
-      const allLines = expandLogLinesMobile(file.lines);
-      const lines = takeLastLogLinesMobile(file.lines, 24);
+      const allLines = expandAngSkripteLogLinesMobile(file.lines);
+      const lines = takeLastLogLinesMobile(file.lines, 50);
       const viewer = lines.length
         ? '<div class="insight-log-viewer">' + mobileRenderLogfileLinesHtml(lines) + "</div>"
         : '<p class="insight-empty">Datei leer oder nicht lesbar.</p>';

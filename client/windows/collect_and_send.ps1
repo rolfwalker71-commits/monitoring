@@ -27,7 +27,7 @@ param(
 )
 
 # Bump when collect_and_send.ps1 logic changes (embedded in outgoing reports).
-$script:CollectScriptMarker = '20260605c'
+$script:CollectScriptMarker = '20260605d'
 
 function Get-MonitoringProcessAncestorNames {
     param([int]$MaxDepth = 12)
@@ -230,7 +230,7 @@ $EventErrorsLimit = if ($env:JOURNAL_ERRORS_LIMIT) { [int]$env:JOURNAL_ERRORS_LI
 $TopProcessesLimit = if ($env:TOP_PROCESSES_LIMIT) { [int]$env:TOP_PROCESSES_LIMIT } else { 8 }
 $ContainersLimit = if ($env:CONTAINERS_LIMIT) { [int]$env:CONTAINERS_LIMIT } else { 30 }
 $AngLogsRoot = if ($env:ANG_LOG_ROOT) { $env:ANG_LOG_ROOT } elseif ($env:ANG_SKRIPTE_LOG_DIR) { $env:ANG_SKRIPTE_LOG_DIR } else { 'C:\ang' }
-$AngLogTailLines = if ($env:ANG_LOG_TAIL_LINES) { [int]$env:ANG_LOG_TAIL_LINES } elseif ($env:ANG_SKRIPTE_LOG_LINES) { [int]$env:ANG_SKRIPTE_LOG_LINES } else { 20 }
+$AngLogTailLines = if ($env:ANG_LOG_TAIL_LINES) { [int]$env:ANG_LOG_TAIL_LINES } elseif ($env:ANG_SKRIPTE_LOG_LINES) { [int]$env:ANG_SKRIPTE_LOG_LINES } else { 50 }
 $AngLogMaxFiles = if ($env:ANG_LOG_MAX_FILES) { [int]$env:ANG_LOG_MAX_FILES } else { 80 }
 $AngLogRotationKeep = if ($env:ANG_LOG_ROTATION_KEEP) { [int]$env:ANG_LOG_ROTATION_KEEP } else { 2 }
 $AngLogMaxAgeDays = if ($env:ANG_LOG_MAX_AGE_DAYS) { [int]$env:ANG_LOG_MAX_AGE_DAYS } else { 7 }
@@ -872,7 +872,7 @@ function Get-AngLogPhysicalLinesFromText {
 function Read-LogFileTailLines {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
-        [int]$TailLines = 20
+        [int]$TailLines = 50
     )
 
     if ($TailLines -lt 1) {

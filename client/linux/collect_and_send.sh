@@ -12,6 +12,10 @@ PRIORITY_UPDATE_CHECK_MINUTES="${PRIORITY_UPDATE_CHECK_MINUTES:-60}"
 PRIORITY_UPDATE_STATE_FILE="${PRIORITY_UPDATE_STATE_FILE:-/var/lib/monitoring-agent/last_priority_update_check}"
 UPDATE_LOG_FILE="${UPDATE_LOG_FILE:-/var/log/monitoring-agent-update.log}"
 UPDATE_LOG_LINES="${UPDATE_LOG_LINES:-40}"
+ANG_LOG_ROOT="${ANG_LOG_ROOT:-/opt/ang}"
+ANG_LOG_TAIL_LINES="${ANG_LOG_TAIL_LINES:-50}"
+ANG_LOG_MAX_FILES="${ANG_LOG_MAX_FILES:-80}"
+ANG_LOG_MAX_AGE_DAYS="${ANG_LOG_MAX_AGE_DAYS:-7}"
 JOURNAL_ERRORS_LIMIT="${JOURNAL_ERRORS_LIMIT:-20}"
 JOURNAL_ERRORS_SINCE_MINUTES="${JOURNAL_ERRORS_SINCE_MINUTES:-180}"
 TOP_PROCESSES_LIMIT="${TOP_PROCESSES_LIMIT:-8}"
@@ -2529,6 +2533,68 @@ EOF
   printf '%s' "$entries"
 }
 
+collect_ang_logs_json() {
+  local root="${ANG_LOG_ROOT:-/opt/ang}"
+  local files_json="" file_count=0 discovered=0
+  local log_file rel_path lines_json line_count size_bytes file_entry
+  local -a log_files=()
+
+  if [[ ! -d "$root" ]]; then
+    printf '{"available":false,"path":"%s","discovered_file_count":0,"file_count":0,"max_age_days":%s,"rotation_keep_per_group":2,"files":[],"error":"directory not found"}' \
+      "$(json_escape "$root")" \
+      "$ANG_LOG_MAX_AGE_DAYS"
+    return
+  fi
+
+  while IFS= read -r -d '' log_file; do
+    log_files+=("$log_file")
+  done < <(find "$root" -type f -name '*.log' -print0 2>/dev/null || true)
+
+  discovered="${#log_files[@]}"
+  if [[ "$discovered" -eq 0 ]]; then
+    printf '{"available":true,"path":"%s","discovered_file_count":0,"file_count":0,"max_age_days":%s,"rotation_keep_per_group":2,"files":[],"error":""}' \
+      "$(json_escape "$root")" \
+      "$ANG_LOG_MAX_AGE_DAYS"
+    return
+  fi
+
+  # Neueste Log-Dateien zuerst, analog Windows (Recency-Limit).
+  while IFS= read -r log_file; do
+    [[ -n "$log_file" ]] || continue
+    [[ "$file_count" -ge "$ANG_LOG_MAX_FILES" ]] && break
+
+    rel_path="${log_file#"$root"/}"
+    lines_json=""
+    line_count=0
+    while IFS= read -r line; do
+      lines_json="$(append_json_entry "$lines_json" "\"$(json_escape "$line")\"")"
+      line_count=$((line_count + 1))
+    done < <(tail -n "$ANG_LOG_TAIL_LINES" "$log_file" 2>/dev/null || true)
+
+    size_bytes="$(stat -c '%s' "$log_file" 2>/dev/null || echo 0)"
+    file_entry=$(printf '{"name":"%s","relative_path":"%s","path":"%s","size_bytes":%s,"line_count":%s,"lines":[%s],"error":""}' \
+      "$(json_escape "$(basename "$log_file")")" \
+      "$(json_escape "$rel_path")" \
+      "$(json_escape "$log_file")" \
+      "$size_bytes" \
+      "$line_count" \
+      "$lines_json")
+    files_json="$(append_json_entry "$files_json" "$file_entry")"
+    file_count=$((file_count + 1))
+  done < <(
+    for log_file in "${log_files[@]}"; do
+      printf '%s\t%s\n' "$(stat -c '%Y' "$log_file" 2>/dev/null || echo 0)" "$log_file"
+    done | sort -t $'\t' -k1,1 -nr | head -n "$ANG_LOG_MAX_FILES" | cut -f2-
+  )
+
+  printf '{"available":true,"path":"%s","discovered_file_count":%s,"file_count":%s,"max_age_days":%s,"rotation_keep_per_group":2,"files":[%s],"error":""}' \
+    "$(json_escape "$root")" \
+    "$discovered" \
+    "$file_count" \
+    "$ANG_LOG_MAX_AGE_DAYS" \
+    "$files_json"
+}
+
 collect_top_processes_json() {
   local entries="" pid user pcpu pmem rss comm cmd entry
 
@@ -3172,6 +3238,7 @@ HANA_MULTITENANT_DISCOVERY_JSON="$(collect_hana_multitenant_discovery_json)"
 DIR_LISTINGS_JSON="$(collect_dir_listings_json)"
 DIR_DEEP_LISTINGS_JSON="$(collect_dir_deep_listings_json)"
 CRON_INFO_JSON="$(collect_cron_json)"
+ANG_LOGS_JSON="$(collect_ang_logs_json)"
 SEND_STARTED_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 DOCKER_AVAILABLE=false
@@ -3253,7 +3320,8 @@ PAYLOAD=$(cat <<EOF
   "hana_multitenant_discovery": ${HANA_MULTITENANT_DISCOVERY_JSON},
   "dir_listings": ${DIR_LISTINGS_JSON},
   "dir_deep_listings": ${DIR_DEEP_LISTINGS_JSON},
-  "cron_info": ${CRON_INFO_JSON}
+  "cron_info": ${CRON_INFO_JSON},
+  "ang_logs": ${ANG_LOGS_JSON}
 }
 EOF
 )
