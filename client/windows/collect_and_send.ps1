@@ -102,7 +102,10 @@ $NoJitter = $cli.NoJitter
 $DebugPayload = $cli.DebugPayload
 $JitterMaxSec = $cli.JitterMaxSec
 foreach ($w in @($cli.Warnings)) {
-    if ($w) { $script:CollectWarnings.Add($w) | Out-Null }
+    if ($w) {
+        $script:CollectWarnings.Add($w) | Out-Null
+        Write-Warning $w
+    }
 }
 
 function Add-CollectWarning {
@@ -143,7 +146,7 @@ $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { '
 $QueueQuarantineDir = if ($env:AGENT_QUEUE_QUARANTINE_DIR) { $env:AGENT_QUEUE_QUARANTINE_DIR } else { 'C:\ProgramData\monitoring-agent\queue-quarantine' }
 $PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
 $PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
-$EmbeddedAgentVersion = '1.7.372'
+$EmbeddedAgentVersion = '1.7.373'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -1698,10 +1701,10 @@ function Ensure-EmergencyServerConfig {
     }
     if ($localCfg.ContainsKey('SERVER_URL') -and $localCfg['SERVER_URL']) {
         $script:ServerUrl = [string]$localCfg['SERVER_URL']
-        if (-not $cfg) { $script:cfg = @{} }
-        $script:cfg['SERVER_URL'] = $script:ServerUrl
-        if ($localCfg.ContainsKey('AGENT_ID')) { $script:cfg['AGENT_ID'] = $localCfg['AGENT_ID'] }
-        if ($localCfg.ContainsKey('HOSTNAME')) { $script:cfg['HOSTNAME'] = $localCfg['HOSTNAME'] }
+        if (-not $cfg) { $cfg = @{} }
+        $cfg['SERVER_URL'] = $script:ServerUrl
+        if ($localCfg.ContainsKey('AGENT_ID')) { $cfg['AGENT_ID'] = $localCfg['AGENT_ID'] }
+        if ($localCfg.ContainsKey('HOSTNAME')) { $cfg['HOSTNAME'] = $localCfg['HOSTNAME'] }
         if ($localCfg.ContainsKey('API_KEY')) { $script:ApiKey = $localCfg['API_KEY'] }
         return $true
     }

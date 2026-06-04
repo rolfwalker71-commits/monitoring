@@ -481,7 +481,9 @@ function Test-CollectScriptSafeToInstall {
 function Sync-MonitoringUpdateTaskSchedule {
     try {
         $updateHours = 1
-        if ($cfg.ContainsKey('UPDATE_HOURS')) {
+        if ($script:RefuseCollectFallback) {
+            $updateHours = 0
+        } elseif ($cfg.ContainsKey('UPDATE_HOURS')) {
             try {
                 $parsed = [int]$cfg['UPDATE_HOURS']
                 if ($parsed -ge 1 -and $parsed -le 24) {
@@ -512,15 +514,19 @@ function Sync-MonitoringUpdateTaskSchedule {
             return
         }
 
-        $desiredInterval = New-TimeSpan -Hours $updateHours
+        $desiredInterval = if ($updateHours -le 0) {
+            New-TimeSpan -Minutes 15
+        } else {
+            New-TimeSpan -Hours $updateHours
+        }
         $currentInterval = $null
         foreach ($trigger in @($existingTask.Triggers)) {
-            if ($null -ne $trigger.RepetitionInterval -and $trigger.RepetitionInterval.TotalHours -gt 0) {
+            if ($null -ne $trigger.RepetitionInterval -and $trigger.RepetitionInterval.TotalMinutes -gt 0) {
                 $currentInterval = $trigger.RepetitionInterval
                 break
             }
         }
-        if ($null -ne $currentInterval -and [Math]::Abs($currentInterval.TotalHours - $desiredInterval.TotalHours) -lt 0.01) {
+        if ($null -ne $currentInterval -and [Math]::Abs($currentInterval.TotalMinutes - $desiredInterval.TotalMinutes) -lt 1) {
             return
         }
 
@@ -598,6 +604,11 @@ function Use-LocalScriptFallback {
         [string]$DestinationPath
     )
 
+    if ($script:RefuseCollectFallback -and $RelativePath -ieq 'client/windows/collect_and_send.ps1') {
+        Write-Warning 'Refusing local fallback for collect_and_send.ps1 because the installed copy does not parse.'
+        return $false
+    }
+
     $leaf = [System.IO.Path]::GetFileName($RelativePath)
     $installedPath = Join-Path $InstallDir $leaf
     if (-not (Test-Path $installedPath)) {
@@ -618,6 +629,126 @@ function Use-LocalScriptFallback {
     Write-Warning "Using local fallback for $leaf because remote download was blocked/invalid.$details"
     return $true
 }
+
+$script:RefuseCollectFallback = $false
+$script:PendingUpdateCommandId = 0
+$script:PendingUpdateCommandMessage = ''
+
+$AgentServerUrl = if ($cfg.ContainsKey('SERVER_URL') -and $cfg['SERVER_URL']) { [string]$cfg['SERVER_URL'] } else { $CanonicalServerUrl }
+$AgentApiKey = if ($cfg.ContainsKey('API_KEY') -and $cfg['API_KEY']) { [string]$cfg['API_KEY'] } elseif ($cfg.ContainsKey('X_API_KEY')) { [string]$cfg['X_API_KEY'] } else { '' }
+$AgentHostname = try { [System.Net.Dns]::GetHostEntry('').HostName } catch { $env:COMPUTERNAME }
+if (-not $AgentHostname) { $AgentHostname = $env:COMPUTERNAME }
+$AgentId = if ($cfg.ContainsKey('AGENT_ID') -and $cfg['AGENT_ID']) { [string]$cfg['AGENT_ID'] } else { $AgentHostname }
+
+function ConvertTo-AgentJsonString {
+    param([string]$Value)
+    if ($null -eq $Value) { return '' }
+    return ($Value -replace '\\', '\\\\' -replace '"', '\"' -replace "`r", '\r' -replace "`n", '\n' -replace "`t", '\t')
+}
+
+function Invoke-AgentServerGet {
+    param([string]$Uri)
+
+    try {
+        $client = New-Object System.Net.WebClient
+        $client.Encoding = [System.Text.Encoding]::UTF8
+        if ($AgentApiKey) { $client.Headers.Add('X-Api-Key', $AgentApiKey) }
+        return $client.DownloadString($Uri)
+    } catch {
+        $curl = Get-Command 'curl.exe' -ErrorAction SilentlyContinue
+        if (-not $curl) { throw }
+        $curlArgs = @('--silent', '--show-error', '--fail', '--ssl-no-revoke')
+        if ($AgentApiKey) { $curlArgs += @('-H', ('X-Api-Key: ' + $AgentApiKey)) }
+        $curlArgs += $Uri
+        $result = & $curl.Source @curlArgs 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw ($result | Out-String).Trim()
+        }
+        return ($result | Out-String)
+    }
+}
+
+function Send-AgentCommandResult {
+    param(
+        [int]$CommandId,
+        [string]$Status,
+        [string]$Message
+    )
+
+    if ($CommandId -le 0) { return }
+
+    $body = '{' +
+      '"hostname":"' + (ConvertTo-AgentJsonString $AgentHostname) + '",' +
+      '"agent_id":"' + (ConvertTo-AgentJsonString $AgentId) + '",' +
+      '"command_id":' + $CommandId + ',' +
+      '"status":"' + (ConvertTo-AgentJsonString $Status) + '",' +
+      '"result":{"message":"' + (ConvertTo-AgentJsonString $Message) + '"}' +
+    '}'
+
+    try {
+        $uri = ($AgentServerUrl.TrimEnd('/')) + '/api/v1/agent-command-result'
+        $client = New-Object System.Net.WebClient
+        $client.Encoding = [System.Text.Encoding]::UTF8
+        $client.Headers.Add('Content-Type', 'application/json')
+        if ($AgentApiKey) { $client.Headers.Add('X-Api-Key', $AgentApiKey) }
+        $client.UploadString($uri, 'POST', $body) | Out-Null
+    } catch { }
+}
+
+function Test-UpdateFailureIsSoftSuccess {
+    param([string]$FailureMessage)
+
+    $message = [string]$FailureMessage
+    if (-not $message) { return $false }
+    if ($message -notmatch 'download|remote version is empty|no self-update source|timed out|name could not be resolved|unable to connect|could not|connection|proxy|forbidden|not found|404|503|502') {
+        return $false
+    }
+    return $true
+}
+
+function Invoke-RemoteAgentCommands {
+    if (-not $AgentServerUrl) { return }
+
+    try {
+        $uri = ($AgentServerUrl.TrimEnd('/')) + '/api/v1/agent-commands?hostname=' + [Uri]::EscapeDataString($AgentHostname) + '&agent_id=' + [Uri]::EscapeDataString($AgentId) + '&limit=10'
+        $raw = Invoke-AgentServerGet -Uri $uri
+        if (-not $raw) { return }
+        $data = $raw | ConvertFrom-Json
+        foreach ($cmd in @($data.commands)) {
+            $cmdId = [int]$cmd.id
+            $cmdType = [string]$cmd.command_type
+            if ($cmdId -le 0) { continue }
+
+            if ($cmdType -eq 'update-now') {
+                $script:PendingUpdateCommandId = $cmdId
+                continue
+            }
+
+            if ($cmdType -eq 'set-api-key') {
+                $nextApiKey = ''
+                if ($cmd.command_payload -and $cmd.command_payload.api_key) {
+                    $nextApiKey = [string]$cmd.command_payload.api_key
+                }
+                if ($nextApiKey) {
+                    Set-ConfigValue -Path $ConfigFile -Key 'API_KEY' -Value $nextApiKey
+                    $cfg['API_KEY'] = $nextApiKey
+                    $script:AgentApiKey = $nextApiKey
+                    Send-AgentCommandResult -CommandId $cmdId -Status 'completed' -Message 'api key updated'
+                } else {
+                    Send-AgentCommandResult -CommandId $cmdId -Status 'failed' -Message 'api key update failed'
+                }
+            }
+        }
+    } catch { }
+}
+
+$localCollectPath = Join-Path $InstallDir 'collect_and_send.ps1'
+if ((Test-Path -LiteralPath $localCollectPath) -and -not (Test-PowerShellScriptParses -Path $localCollectPath)) {
+    $script:RefuseCollectFallback = $true
+    Write-Warning "Installed collect_and_send.ps1 failed parse check; remote download required."
+}
+
+Invoke-RemoteAgentCommands
 
 # ---- Version check ----
 $remoteVersion = ''
@@ -660,6 +791,7 @@ function Compare-Versions {
 $tmpDir = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), [System.IO.Path]::GetRandomFileName())
 New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
 
+$script:UpdateRunOk = $false
 try {
     if (-not (Download-RepoFile -RelativePath 'client/windows/collect_and_send.ps1' -DestinationPath "$tmpDir\collect_and_send.ps1")) {
         if (-not (Use-LocalScriptFallback -RelativePath 'client/windows/collect_and_send.ps1' -DestinationPath "$tmpDir\collect_and_send.ps1")) {
@@ -674,6 +806,11 @@ try {
     if (-not (Download-RepoFile -RelativePath 'client/windows/setup_harvest_sql_user.ps1' -DestinationPath "$tmpDir\setup_harvest_sql_user.ps1")) {
         if (-not (Use-LocalScriptFallback -RelativePath 'client/windows/setup_harvest_sql_user.ps1' -DestinationPath "$tmpDir\setup_harvest_sql_user.ps1")) {
             throw "Failed to download setup_harvest_sql_user.ps1 from configured update sources. Details: $global:LastDownloadRepoFileError"
+        }
+    }
+    if (-not (Download-RepoFile -RelativePath 'client/windows/self_update.ps1' -DestinationPath "$tmpDir\self_update.ps1")) {
+        if (-not (Use-LocalScriptFallback -RelativePath 'client/windows/self_update.ps1' -DestinationPath "$tmpDir\self_update.ps1")) {
+            throw "Failed to download self_update.ps1 from configured update sources. Details: $global:LastDownloadRepoFileError"
         }
     }
     # Guard against stale or incompatible script payloads before replacing local files.
@@ -702,7 +839,10 @@ try {
     Copy-Item "$tmpDir\collect_and_send.ps1" "$InstallDir\collect_and_send.ps1" -Force
     Copy-Item "$tmpDir\collect_and_scan_sap_tables.ps1" "$InstallDir\collect_and_scan_sap_tables.ps1" -Force
     Copy-Item "$tmpDir\setup_harvest_sql_user.ps1" "$InstallDir\setup_harvest_sql_user.ps1" -Force
+    Copy-Item "$tmpDir\self_update.ps1" "$InstallDir\self_update.ps1" -Force
     Copy-Item "$tmpDir\AGENT_VERSION"        $VersionFile                       -Force
+
+    $script:PendingUpdateCommandMessage = "updated to $remoteVersion"
 
     $effectiveUpdateBaseUrl = if ($global:LastSuccessfulUpdateBaseUrl) { $global:LastSuccessfulUpdateBaseUrl } else { $PrimaryUpdateBaseUrl }
     $normalizedServerUrl = $OriginalServerUrl
@@ -723,11 +863,36 @@ try {
         Set-ConfigValue -Path $ConfigFile -Key 'RAW_BASE_URL' -Value $effectiveUpdateBaseUrl
     }
     Set-ConfigValue -Path $ConfigFile -Key 'GITHUB_REPO' -Value ''
+    $script:UpdateRunOk = $true
+    $script:PendingUpdateCommandMessage = "updated to $remoteVersion"
+} catch {
+    $script:PendingUpdateCommandMessage = $_.Exception.Message
 } finally {
     Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 Sync-MonitoringUpdateTaskSchedule
+
+if ($script:PendingUpdateCommandId -gt 0) {
+    $cmdMessage = [string]$script:PendingUpdateCommandMessage
+    if ($script:UpdateRunOk) {
+        Send-AgentCommandResult -CommandId $script:PendingUpdateCommandId -Status 'completed' -Message $cmdMessage
+    } elseif (Test-UpdateFailureIsSoftSuccess -FailureMessage $cmdMessage) {
+        $softMessage = "update source unreachable; agent stays on $localVersion"
+        if ($cmdMessage) {
+            $softMessage = "$softMessage | $cmdMessage"
+        }
+        Send-AgentCommandResult -CommandId $script:PendingUpdateCommandId -Status 'completed' -Message $softMessage
+    } else {
+        if (-not $cmdMessage) { $cmdMessage = 'update command failed' }
+        Send-AgentCommandResult -CommandId $script:PendingUpdateCommandId -Status 'failed' -Message $cmdMessage
+    }
+}
+
+if (-not $script:UpdateRunOk) {
+    Write-Error ([string]$script:PendingUpdateCommandMessage)
+    exit 1
+}
 
 if (Compare-Versions -Newer $remoteVersion -Older $localVersion) {
     $ts = (Get-Date).ToString('dd.MM.yyyy HH:mm')
