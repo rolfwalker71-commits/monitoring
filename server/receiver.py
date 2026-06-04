@@ -1856,6 +1856,23 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def minutes_since_utc_iso(value: str) -> int | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        if raw.endswith("Z"):
+            parsed = datetime.strptime(raw, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        else:
+            parsed = datetime.fromisoformat(raw)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+        delta = datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)
+        return max(0, int(delta.total_seconds() // 60))
+    except (TypeError, ValueError):
+        return None
+
+
 def web_session_cutoff_iso() -> str:
     return utc_minutes_ago_iso(WEB_SESSION_INACTIVITY_MINUTES)
 
@@ -17972,6 +17989,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 if not isinstance(agent_update, dict):
                     agent_update = {}
 
+                last_report_utc = str(latest_report.get("received_at_utc", ""))
+                minutes_since_report = minutes_since_utc_iso(last_report_utc)
+
                 hosts.append(
                     {
                         "host_uid": _derive_host_uid(
@@ -17984,7 +18004,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "display_name": effective_display_name(payload, overrides.get(hostname, ""), hostname),
                         "customer_name": customer_names.get(hostname, ""),
                         "agent_version": str(payload.get("agent_version", "")),
-                        "last_report_utc": str(latest_report.get("received_at_utc", "")),
+                        "last_report_utc": last_report_utc,
+                        "minutes_since_report": minutes_since_report,
                         "command_status": command_status,
                         "command_created_at_utc": str(command.get("created_at_utc", "")),
                         "command_executed_at_utc": str(command.get("executed_at_utc", "")),
@@ -17995,6 +18016,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "priority_check_minutes": payload_int(agent_update, "priority_check_minutes", 0),
                         "recurring_update_hours": payload_int(agent_update, "recurring_update_hours", 0),
                         "recurring_update_hint": str(agent_update.get("recurring_update_hint", "")),
+                        "agent_update_last_crash": str(agent_update.get("last_crash", "")),
                     }
                 )
 
@@ -18004,7 +18026,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 {
                     "total_hosts": len(hosts),
                     "summary": summary,
-                    "default_schedule_note": "Linux und Windows planen den Fallback-Self-Update standardmässig alle 1 Stunde (Minute 11 bei Linux-Cron). Der priorisierte Zusatz-Check läuft während Collect standardmässig alle 60 Minuten.",
+                    "default_schedule_note": "Windows/Linux: Fallback-Self-Update alle 1 h (Task/Cron relativ zum Installationszeitpunkt, nicht 0/6/12/18 Uhr). Ab v1.7.373 holt self_update auch Infoboard-Commands (update-now). Priorisierter Zusatz-Check im Collect alle 60 min – nur wenn collect_and_send läuft.",
+                    "recovery_note": "Server /updates deployen, dann „Update für alle Hosts“. Stille Hosts werden vom geplanten monitoring-agent-update-Task (SYSTEM) geholt, sofern Outbound zum Infoboard funktioniert.",
                     "hosts": hosts,
                 },
             )

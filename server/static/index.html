@@ -712,9 +712,50 @@
               </div>
 
               <div id="adminOpsAgentUpdateCard" class="agent-update-admin-status admin-ops-card">
+                <div class="agent-recovery-callout" id="agentRecoveryCallout">
+                  <strong>Recovery ohne Host-Zugriff</strong>
+                  <p id="agentRecoveryNote" class="count compact">Server <code>/updates</code> deployen → „Update für alle Hosts“ → geplanter Task <code>monitoring-agent-update</code> (als SYSTEM). Intervall <code>UPDATE_HOURS</code> ist relativ zur Task-Installation, nicht 0/6/12/18 Uhr.</p>
+                </div>
+
                 <div class="agent-update-admin-status-head">
+                  <h6>Hosts ohne aktuelle Meldung</h6>
+                  <div class="agent-silent-filter-actions">
+                    <label class="agent-silent-threshold-label" for="agentSilentThresholdSelect">
+                      Stille seit mindestens
+                      <select id="agentSilentThresholdSelect" class="settings-input settings-input-compact" title="Hosts mit älterem letztem Report">
+                        <option value="2">2 Stunden</option>
+                        <option value="6" selected>6 Stunden</option>
+                        <option value="12">12 Stunden</option>
+                        <option value="24">24 Stunden</option>
+                      </select>
+                    </label>
+                    <button id="triggerAllAgentsUpdateFromAgentCardButton" class="global-update-chip global-update-chip-inline" type="button" title="Update-Command für alle bekannten Hosts queue'n">⟳ Update für alle Hosts</button>
+                    <button id="refreshAgentUpdateStatusButton" type="button" class="btn-secondary-compact" title="Status neu laden">↻</button>
+                  </div>
+                </div>
+                <p id="agentSilentHostsSummary" class="count compact">Lade stille Hosts...</p>
+                <div class="agent-update-admin-table-wrap">
+                  <table class="agent-update-admin-table agent-silent-hosts-table">
+                    <thead>
+                      <tr>
+                        <th>Host</th>
+                        <th>Kunde</th>
+                        <th>Agent</th>
+                        <th>Letzter Report</th>
+                        <th>Stille</th>
+                        <th>Update-Command</th>
+                        <th>Recurring (h)</th>
+                        <th>Letzter Crash / Hinweis</th>
+                      </tr>
+                    </thead>
+                    <tbody id="agentSilentHostsTableBody">
+                      <tr><td colspan="8" class="muted">Lade Daten...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="agent-update-admin-status-head" style="margin-top:1.25rem;">
                   <h6>Agent Update Status (Alle Hosts)</h6>
-                  <button id="refreshAgentUpdateStatusButton" type="button" class="btn-secondary-compact">↻</button>
                 </div>
                 <p id="agentUpdateStatusSummary" class="count compact">Lade Update-Status...</p>
                 <div class="agent-update-admin-table-wrap">

@@ -531,6 +531,8 @@ const state = {
   adminAlertSubscriptionsUsers: [],
   adminAlertAvailableHosts: [],
   adminAlertTelegramAvailable: false,
+  agentUpdateStatusHosts: [],
+  agentSilentThresholdHours: 6,
   pushSupported: false,
   pushConfigured: false,
   pushEnabled: false,
@@ -1838,6 +1840,133 @@ function getAgentVersionLagInfo(latestVersion, hostVersion) {
   return { isBehind: true, steps: null, majorMinorDifferent: true };
 }
 
+function getHostMinutesSinceReport(host) {
+  const fromApi = Number(host?.minutes_since_report);
+  if (Number.isFinite(fromApi) && fromApi >= 0) {
+    return fromApi;
+  }
+  const lastReport = asText(host?.last_report_utc || "");
+  const parsed = Date.parse(lastReport);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return Math.max(0, Math.floor((Date.now() - parsed) / 60000));
+}
+
+function formatMinutesAsSilenceDuration(minutes) {
+  if (minutes === null || minutes === undefined || !Number.isFinite(minutes)) {
+    return "-";
+  }
+  const total = Math.max(0, Math.floor(minutes));
+  if (total < 60) {
+    return `${total} min`;
+  }
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  if (hours < 48) {
+    return mins ? `${hours} h ${mins} min` : `${hours} h`;
+  }
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return remHours ? `${days} T ${remHours} h` : `${days} T`;
+}
+
+function filterSilentHosts(hosts, thresholdHours) {
+  const thresholdMinutes = Math.max(1, Number(thresholdHours) || 6) * 60;
+  return (Array.isArray(hosts) ? hosts : []).filter((host) => {
+    const minutes = getHostMinutesSinceReport(host);
+    return minutes === null || minutes >= thresholdMinutes;
+  });
+}
+
+function renderSilentHostsTableRows(hosts, thresholdHours) {
+  const silentHosts = filterSilentHosts(hosts, thresholdHours)
+    .sort((left, right) => {
+      const leftMinutes = getHostMinutesSinceReport(left);
+      const rightMinutes = getHostMinutesSinceReport(right);
+      const leftWeight = leftMinutes === null ? 99999999 : leftMinutes;
+      const rightWeight = rightMinutes === null ? 99999999 : rightMinutes;
+      if (leftWeight !== rightWeight) {
+        return rightWeight - leftWeight;
+      }
+      const versionCompare = compareSemverLike(asText(left?.agent_version || ""), asText(right?.agent_version || ""));
+      if (versionCompare !== null && versionCompare !== 0) {
+        return versionCompare;
+      }
+      return asText(left?.display_name || left?.hostname).localeCompare(asText(right?.display_name || right?.hostname));
+    });
+
+  if (!silentHosts.length) {
+    return `<tr><td colspan="8" class="muted">Keine Hosts mit letztem Report älter als ${thresholdHours} Stunden.</td></tr>`;
+  }
+
+  return silentHosts.map((host) => {
+    const displayName = asText(host?.display_name || host?.hostname, "-");
+    const hostname = asText(host?.hostname, "-");
+    const customerName = asText(host?.customer_name || "-") || "-";
+    const agentVersion = asText(host?.agent_version || "-", "-");
+    const lastReport = host?.last_report_utc ? formatUtcPlus2(host.last_report_utc) : "nie";
+    const silence = formatMinutesAsSilenceDuration(getHostMinutesSinceReport(host));
+    const status = asText(host?.command_status || "idle").toLowerCase();
+    const recurringHours = Number(host?.recurring_update_hours || 0) > 0 ? Number(host.recurring_update_hours) : "-";
+    const recurringHint = asText(host?.recurring_update_hint || "");
+    const lastCrash = asText(host?.agent_update_last_crash || "");
+    const commandMessage = asText(host?.command_result_message || "");
+    const hintParts = [];
+    if (lastCrash) {
+      hintParts.push(lastCrash);
+    }
+    if (commandMessage && status === "failed") {
+      hintParts.push(commandMessage);
+    }
+    if (!hintParts.length && recurringHint) {
+      hintParts.push(recurringHint);
+    }
+    const hint = hintParts.join(" | ") || "—";
+
+    return `
+      <tr class="agent-silent-host-row">
+        <td>
+          <div class="agent-update-admin-host">
+            <strong>${escapeHtml(displayName)}</strong>
+            <span class="agent-update-admin-hostname">${escapeHtml(hostname)}</span>
+          </div>
+        </td>
+        <td>${escapeHtml(customerName)}</td>
+        <td>${escapeHtml(agentVersion)}</td>
+        <td>${escapeHtml(lastReport)}</td>
+        <td>${escapeHtml(silence)}</td>
+        <td><span class="agent-update-status-badge ${escapeHtml(status)}">${escapeHtml(updateStatusBadgeLabel(status))}</span></td>
+        <td title="${escapeHtml(recurringHint)}">${escapeHtml(String(recurringHours))}</td>
+        <td class="agent-update-admin-message">${escapeHtml(hint)}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderAgentSilentHostsSection(hosts, thresholdHours, latestVersion) {
+  const summaryEl = document.getElementById("agentSilentHostsSummary");
+  const tableBodyEl = document.getElementById("agentSilentHostsTableBody");
+  if (!summaryEl || !tableBodyEl) {
+    return;
+  }
+
+  const silentHosts = filterSilentHosts(hosts, thresholdHours);
+  const pendingSilent = silentHosts.filter((host) => asText(host?.command_status || "idle").toLowerCase() === "pending").length;
+  const oldVersionSilent = silentHosts.filter((host) => {
+    const lag = getAgentVersionLagInfo(latestVersion, host?.agent_version || "");
+    return lag.isBehind && (lag.majorMinorDifferent || Number(lag.steps || 0) >= 3);
+  }).length;
+
+  summaryEl.textContent = `${silentHosts.length} Host(s) ohne Meldung seit ≥ ${thresholdHours} h`
+    + (latestVersion !== "-" ? ` | Repo: ${latestVersion}` : "")
+    + ` | ${pendingSilent} mit pending update-now`
+    + (oldVersionSilent ? ` | ${oldVersionSilent} mit veralteter Agent-Version (≥3 zurück)` : "")
+    + ". Recurring (h) = letzter bekannter Wert aus dem letzten Report.";
+
+  tableBodyEl.innerHTML = renderSilentHostsTableRows(hosts, thresholdHours);
+}
+
 function renderLaggingAgentVersionRows(hosts, latestVersion, threshold = 5) {
   if (!Array.isArray(hosts) || hosts.length === 0) {
     return '<tr><td colspan="6" class="muted">Keine Hostdaten vorhanden.</td></tr>';
@@ -1899,12 +2028,24 @@ async function loadAgentUpdateStatus() {
   const tableBodyEl = document.getElementById("agentUpdateStatusTableBody");
   const lagSummaryEl = document.getElementById("agentVersionLagSummary");
   const lagTableBodyEl = document.getElementById("agentVersionLagTableBody");
+  const recoveryNoteEl = document.getElementById("agentRecoveryNote");
+  const silentSummaryEl = document.getElementById("agentSilentHostsSummary");
+  const silentTableBodyEl = document.getElementById("agentSilentHostsTableBody");
   const lagThreshold = 5;
+  const silentThresholdHours = Number(state.agentSilentThresholdHours) > 0
+    ? Number(state.agentSilentThresholdHours)
+    : 6;
   if (!summaryEl) {
     return;
   }
 
   summaryEl.textContent = "Lade Update-Status...";
+  if (silentSummaryEl) {
+    silentSummaryEl.textContent = "Lade stille Hosts...";
+  }
+  if (silentTableBodyEl) {
+    silentTableBodyEl.innerHTML = '<tr><td colspan="8" class="muted">Lade Daten...</td></tr>';
+  }
   if (listEl) {
     listEl.innerHTML = "";
   }
@@ -1927,8 +2068,16 @@ async function loadAgentUpdateStatus() {
     const data = await response.json();
     const latestVersion = asText(state.latestAgentRelease, "-");
     const hosts = Array.isArray(data.hosts) ? data.hosts : [];
+    state.agentUpdateStatusHosts = hosts;
     const summary = data.summary || {};
-    summaryEl.textContent = `Status: ${Number(summary.pending || 0)} pending | ${Number(summary.completed || 0)} completed | ${Number(summary.failed || 0)} failed | ${Number(summary.expired || 0)} expired | ${Number(summary.idle || 0)} idle. ${asText(data.default_schedule_note)}`;
+    const silentCount = filterSilentHosts(hosts, silentThresholdHours).length;
+    if (recoveryNoteEl) {
+      const recoveryNote = asText(data.recovery_note || "");
+      const scheduleNote = asText(data.default_schedule_note || "");
+      recoveryNoteEl.textContent = [recoveryNote, scheduleNote].filter(Boolean).join(" ");
+    }
+    summaryEl.textContent = `Status: ${Number(summary.pending || 0)} pending | ${Number(summary.completed || 0)} completed | ${Number(summary.failed || 0)} failed | ${Number(summary.expired || 0)} expired | ${Number(summary.idle || 0)} idle | ${silentCount} stille Hosts (≥${silentThresholdHours} h). ${asText(data.default_schedule_note)}`;
+    renderAgentSilentHostsSection(hosts, silentThresholdHours, latestVersion);
     if (listEl) {
       listEl.innerHTML = renderAgentUpdateStatusRows(hosts);
     }
@@ -1956,6 +2105,12 @@ async function loadAgentUpdateStatus() {
     }
     state.agentUpdateStatusLoaded = true;
   } catch (error) {
+    if (silentSummaryEl) {
+      silentSummaryEl.textContent = `Stille Hosts konnten nicht geladen werden: ${error.message}`;
+    }
+    if (silentTableBodyEl) {
+      silentTableBodyEl.innerHTML = '<tr><td colspan="8" class="muted">Fehler beim Laden.</td></tr>';
+    }
     summaryEl.textContent = `Update-Status konnte nicht geladen werden: ${error.message}`;
     if (listEl) {
       listEl.innerHTML = "";
@@ -16658,7 +16813,7 @@ function wireEvents() {
     });
   }
 
-  document.getElementById("triggerAllAgentsUpdateButton").addEventListener("click", async () => {
+  async function handleTriggerAllAgentsUpdateClick() {
     try {
       const result = await triggerAgentUpdateForAllHosts();
       const totalHosts = Number(result.total_hosts || 0);
@@ -16669,7 +16824,31 @@ function wireEvents() {
     } catch (error) {
       window.alert(`Globaler Update-Trigger fehlgeschlagen: ${error.message}`);
     }
-  });
+  }
+
+  const triggerAllAgentsUpdateButton = document.getElementById("triggerAllAgentsUpdateButton");
+  if (triggerAllAgentsUpdateButton) {
+    triggerAllAgentsUpdateButton.addEventListener("click", handleTriggerAllAgentsUpdateClick);
+  }
+
+  const triggerAllAgentsUpdateFromAgentCardButton = document.getElementById("triggerAllAgentsUpdateFromAgentCardButton");
+  if (triggerAllAgentsUpdateFromAgentCardButton) {
+    triggerAllAgentsUpdateFromAgentCardButton.addEventListener("click", handleTriggerAllAgentsUpdateClick);
+  }
+
+  const agentSilentThresholdSelect = document.getElementById("agentSilentThresholdSelect");
+  if (agentSilentThresholdSelect) {
+    agentSilentThresholdSelect.value = String(state.agentSilentThresholdHours || 6);
+    agentSilentThresholdSelect.addEventListener("change", () => {
+      const nextHours = Number(agentSilentThresholdSelect.value) || 6;
+      state.agentSilentThresholdHours = nextHours;
+      renderAgentSilentHostsSection(
+        state.agentUpdateStatusHosts,
+        nextHours,
+        asText(state.latestAgentRelease, "-"),
+      );
+    });
+  }
 
   const refreshAgentUpdateStatusButton = document.getElementById("refreshAgentUpdateStatusButton");
   if (refreshAgentUpdateStatusButton) {
