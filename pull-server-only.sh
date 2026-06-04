@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604n"
+PULL_SCRIPT_VERSION="20260604o"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -512,6 +512,9 @@ upgrade_local_pull_script_from_main() {
   if [ "${MONITORING_SKIP_PULL_SCRIPT_UPGRADE:-0}" = "1" ]; then
     return 0
   fi
+  if [ "${MONITORING_PULL_SCRIPT_UPGRADE_DEPTH:-0}" -ge 1 ]; then
+    return 0
+  fi
 
   local latest_sha="" local_script="" remote_script=""
   latest_sha="$(resolve_latest_main_sha main || true)"
@@ -534,12 +537,7 @@ upgrade_local_pull_script_from_main() {
     rm -f "$remote_script"
     return 0
   fi
-  local local_bv="" remote_bv=""
-  local_bv="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
-  remote_bv="$(fetch_build_version_at_ref "$latest_sha")"
-
-  if cmp -s "$remote_script" "$local_script" 2>/dev/null \
-    && { [ -z "$remote_bv" ] || [ "$remote_bv" = "$local_bv" ]; }; then
+  if cmp -s "$remote_script" "$local_script" 2>/dev/null; then
     rm -f "$remote_script"
     return 0
   fi
@@ -547,8 +545,8 @@ upgrade_local_pull_script_from_main() {
   cp -f "$remote_script" "$local_script"
   chmod +x "$local_script"
   rm -f "$remote_script"
-  echo "pull-server-only.sh aktualisiert (main ${latest_sha:0:12}, BUILD ${remote_bv:-?}) – Deploy startet neu..."
-  exec "$local_script" "$@"
+  echo "pull-server-only.sh aktualisiert (main ${latest_sha:0:12}) – Deploy startet neu..."
+  exec env MONITORING_PULL_SCRIPT_UPGRADE_DEPTH=1 "$local_script" "$@"
 }
 
 redeploy_files_from_ref() {
