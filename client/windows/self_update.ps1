@@ -445,61 +445,114 @@ $QueueDir = if ($cfg.ContainsKey('AGENT_QUEUE_DIR')) { $cfg['AGENT_QUEUE_DIR'] }
 $UpdateLogFile = if ($cfg.ContainsKey('UPDATE_LOG_FILE')) { $cfg['UPDATE_LOG_FILE'] } else { Join-Path $InstallDir 'monitoring-agent-update.log' }
 $TaskNameUpdate = 'monitoring-agent-update'
 
+function Test-PowerShellScriptParses {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $false
+    }
+
+    $errors = $null
+    $tokens = $null
+    $null = [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$tokens, [ref]$errors)
+    return ($null -eq $errors -or $errors.Count -eq 0)
+}
+
+function Test-CollectScriptSafeToInstall {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-PowerShellScriptParses -Path $Path)) {
+        return $false
+    }
+
+    $text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+    if ($text -match 'function\s+Get-AngLogMojibakeScore' -and $text -notmatch '\[char\]0x00C3') {
+        return $false
+    }
+    return $true
+}
+
 function Sync-MonitoringUpdateTaskSchedule {
-    $updateHours = 1
-    if ($cfg.ContainsKey('UPDATE_HOURS')) {
-        try {
-            $parsed = [int]$cfg['UPDATE_HOURS']
-            if ($parsed -ge 1 -and $parsed -le 24) {
-                $updateHours = $parsed
+    try {
+        $updateHours = 1
+        if ($cfg.ContainsKey('UPDATE_HOURS')) {
+            try {
+                $parsed = [int]$cfg['UPDATE_HOURS']
+                if ($parsed -ge 1 -and $parsed -le 24) {
+                    $updateHours = $parsed
+                }
+            } catch {
+                $updateHours = 1
             }
-        } catch {
+        }
+        if ($updateHours -eq 6) {
             $updateHours = 1
         }
+
+        try {
+            Set-ConfigValue -Path $ConfigFile -Key 'UPDATE_HOURS' -Value ([string]$updateHours)
+            $cfg['UPDATE_HOURS'] = [string]$updateHours
+        } catch {
+            Write-Warning ("Could not write UPDATE_HOURS to agent.conf: " + $_.Exception.Message)
+        }
+
+        $existingTask = Get-ScheduledTask -TaskName $TaskNameUpdate -ErrorAction SilentlyContinue
+        if (-not $existingTask) {
+            return
+        }
+
+        $scriptPath = Join-Path $InstallDir 'self_update.ps1'
+        if (-not (Test-Path -LiteralPath $scriptPath)) {
+            return
+        }
+
+        $desiredInterval = New-TimeSpan -Hours $updateHours
+        $currentInterval = $null
+        foreach ($trigger in @($existingTask.Triggers)) {
+            if ($null -ne $trigger.RepetitionInterval -and $trigger.RepetitionInterval.TotalHours -gt 0) {
+                $currentInterval = $trigger.RepetitionInterval
+                break
+            }
+        }
+        if ($null -ne $currentInterval -and [Math]::Abs($currentInterval.TotalHours - $desiredInterval.TotalHours) -lt 0.01) {
+            return
+        }
+
+        $psArgs = '-NonInteractive -NoProfile -ExecutionPolicy Bypass -Command ' +
+                  '"' +
+                  "`$env:CONFIG_FILE='$ConfigFile'; " +
+                  "`$env:AGENT_VERSION_FILE='$InstallDir\AGENT_VERSION'; " +
+                  "`$env:AGENT_QUEUE_DIR='$QueueDir'; " +
+                  "& '$scriptPath' *>> '$UpdateLogFile'" +
+                  '"'
+
+        $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $psArgs
+        $trigger = New-ScheduledTaskTrigger -Once `
+            -At (Get-Date).AddSeconds(30) `
+            -RepetitionInterval $desiredInterval
+        $settings = New-ScheduledTaskSettingsSet `
+            -ExecutionTimeLimit (New-TimeSpan -Hours 1) `
+            -MultipleInstances IgnoreNew `
+            -StartWhenAvailable
+        $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+
+        Register-ScheduledTask `
+            -TaskName $TaskNameUpdate `
+            -Action $action `
+            -Trigger $trigger `
+            -Settings $settings `
+            -Principal $principal `
+            -Description 'Monitoring agent - self update' `
+            -Force | Out-Null
+    } catch {
+        Write-Warning ("Schedule sync skipped (existing update task left unchanged): " + $_.Exception.Message)
     }
-    if ($updateHours -eq 6) {
-        $updateHours = 1
-    }
-
-    Set-ConfigValue -Path $ConfigFile -Key 'UPDATE_HOURS' -Value ([string]$updateHours)
-    $cfg['UPDATE_HOURS'] = [string]$updateHours
-
-    $existingTask = Get-ScheduledTask -TaskName $TaskNameUpdate -ErrorAction SilentlyContinue
-    if (-not $existingTask) {
-        return
-    }
-
-    $scriptPath = Join-Path $InstallDir 'self_update.ps1'
-    if (-not (Test-Path -LiteralPath $scriptPath)) {
-        return
-    }
-
-    $psArgs = '-NonInteractive -NoProfile -ExecutionPolicy Bypass -Command ' +
-              '"' +
-              "`$env:CONFIG_FILE='$ConfigFile'; " +
-              "`$env:AGENT_VERSION_FILE='$InstallDir\AGENT_VERSION'; " +
-              "`$env:AGENT_QUEUE_DIR='$QueueDir'; " +
-              "& '$scriptPath' *>> '$UpdateLogFile'" +
-              '"'
-
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $psArgs
-    $trigger = New-ScheduledTaskTrigger -Once `
-        -At (Get-Date).AddSeconds(30) `
-        -RepetitionInterval (New-TimeSpan -Hours $updateHours)
-    $settings = New-ScheduledTaskSettingsSet `
-        -ExecutionTimeLimit (New-TimeSpan -Hours 1) `
-        -MultipleInstances IgnoreNew `
-        -StartWhenAvailable
-    $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
-
-    Register-ScheduledTask `
-        -TaskName $TaskNameUpdate `
-        -Action $action `
-        -Trigger $trigger `
-        -Settings $settings `
-        -Principal $principal `
-        -Description 'Monitoring agent - self update' `
-        -Force | Out-Null
 }
 
 function Test-ServerUrlReachable {
@@ -628,6 +681,9 @@ try {
     if ($collectContent -match '\$[A-Za-z_][A-Za-z0-9_]*\s*\?\s*') {
         throw 'Downloaded collect_and_send.ps1 contains unsupported ternary syntax for PowerShell 5.1.'
     }
+    if (-not (Test-CollectScriptSafeToInstall -Path "$tmpDir\collect_and_send.ps1")) {
+        throw 'Downloaded collect_and_send.ps1 failed parser/mojibake safety checks; keeping existing local scripts.'
+    }
 
     if ((Compare-Versions -Newer $remoteVersion -Older $localVersion) -and $global:UsedLocalFallback) {
         $fallbackFiles = 'unknown'
@@ -671,11 +727,7 @@ try {
     Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-try {
-    Sync-MonitoringUpdateTaskSchedule
-} catch {
-    Write-Warning ("Could not sync monitoring-agent-update schedule: " + $_.Exception.Message)
-}
+Sync-MonitoringUpdateTaskSchedule
 
 if (Compare-Versions -Newer $remoteVersion -Older $localVersion) {
     $ts = (Get-Date).ToString('dd.MM.yyyy HH:mm')

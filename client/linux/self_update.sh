@@ -164,6 +164,10 @@ if ! download_update_file "client/linux/collect_and_send.sh" "$tmp_dir/collect_a
   echo "Failed to download collect_and_send.sh from configured update sources." >&2
   exit 1
 fi
+if ! bash -n "$tmp_dir/collect_and_send.sh" 2>/dev/null; then
+  echo "Downloaded collect_and_send.sh failed bash -n syntax check; keeping existing local scripts." >&2
+  exit 1
+fi
 if ! download_update_file "client/linux/self_update.sh" "$tmp_dir/self_update.sh"; then
   echo "Failed to download self_update.sh from configured update sources." >&2
   exit 1
@@ -253,10 +257,8 @@ fi
 sync_linux_update_cron_schedule() {
   local update_hours="${UPDATE_HOURS:-1}"
   local cron_file="/etc/cron.d/monitoring-agent"
-  local log_file="/var/log/monitoring-agent.log"
   local update_log_file="/var/log/monitoring-agent-update.log"
-  local cron_tag="# monitoring-agent"
-  local collect_cron_line update_cron_line interval_minutes
+  local update_cron_line tmp_cron
 
   if ! [[ "$update_hours" =~ ^[0-9]+$ ]] || [[ "$update_hours" -lt 1 ]] || [[ "$update_hours" -gt 24 ]]; then
     update_hours=1
@@ -264,42 +266,40 @@ sync_linux_update_cron_schedule() {
   if [[ "$update_hours" == "6" ]]; then
     update_hours=1
   fi
-  ensure_config_value "UPDATE_HOURS" "$update_hours"
+
+  ensure_config_value "UPDATE_HOURS" "$update_hours" || return 0
   UPDATE_HOURS="$update_hours"
 
-  interval_minutes="${INTERVAL_MINUTES:-15}"
-  if ! [[ "$interval_minutes" =~ ^[0-9]+$ ]] || [[ "$interval_minutes" -lt 1 ]]; then
-    interval_minutes=15
-  fi
-
-  collect_cron_line="*/${interval_minutes} * * * * root CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/collect_and_send.sh >> $log_file 2>&1"
   update_cron_line="11 */${update_hours} * * * root CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/self_update.sh >> $update_log_file 2>&1"
 
-  if [[ -d /etc/cron.d ]]; then
-    cat > "$cron_file" <<EOF
-SHELL=/bin/bash
-PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-
-$cron_tag collect
-$collect_cron_line
-$cron_tag update
-$update_cron_line
-EOF
-    chmod 0644 "$cron_file"
+  if [[ ! -f "$cron_file" ]]; then
+    return 0
+  fi
+  if [[ ! -w "$cron_file" ]]; then
+    echo "Schedule sync skipped: not writable ($cron_file)" >&2
     return 0
   fi
 
-  if command -v crontab >/dev/null 2>&1; then
-    local existing
-    existing="$(crontab -l 2>/dev/null | grep -v 'monitoring-agent' || true)"
-    {
-      printf '%s\n' "$existing"
-      printf '%s collect\n' "$cron_tag"
-      printf '%s\n' "${collect_cron_line/root /}"
-      printf '%s update\n' "$cron_tag"
-      printf '%s\n' "${update_cron_line/root /}"
-    } | sed '/^$/N;/^\n$/D' | crontab -
+  if ! grep -q 'self_update\.sh' "$cron_file" 2>/dev/null; then
+    return 0
   fi
+
+  cp -f "$cron_file" "${cron_file}.bak.selfupdate" 2>/dev/null || true
+  tmp_cron="$(mktemp)"
+  if ! sed -E "s|^.*self_update\.sh.*|${update_cron_line}|" "$cron_file" > "$tmp_cron"; then
+    rm -f "$tmp_cron"
+    return 0
+  fi
+  if ! grep -q 'collect_and_send\.sh' "$tmp_cron" 2>/dev/null; then
+    rm -f "$tmp_cron"
+    echo "Schedule sync skipped: collect cron line missing after patch" >&2
+    return 0
+  fi
+  if ! mv -f "$tmp_cron" "$cron_file"; then
+    rm -f "$tmp_cron"
+    return 0
+  fi
+  chmod 0644 "$cron_file" 2>/dev/null || true
 }
 
 sync_linux_update_cron_schedule || true
