@@ -489,7 +489,6 @@ function updateInactiveHostsListView(hours) {
       : filtered.length + " von " + allHosts.length + " Hosts"
   );
 }
-}
 
 async function loadActiveHostsList(options = {}) {
   if (!state.authenticated || !isActiveHostsViewActive()) {
