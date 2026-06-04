@@ -478,6 +478,68 @@ function Test-CollectScriptSafeToInstall {
     return $true
 }
 
+function Get-TaskTriggerRepetitionTimespan {
+    param($Trigger)
+
+    if ($null -eq $Trigger) {
+        return $null
+    }
+
+    $prop = $Trigger.PSObject.Properties['RepetitionInterval']
+    if ($prop -and $null -ne $prop.Value) {
+        try {
+            $val = [TimeSpan]$prop.Value
+            if ($val.TotalMinutes -gt 0) {
+                return $val
+            }
+        } catch {
+            # Fall through to Repetition.Interval parsing.
+        }
+    }
+
+    try {
+        $rep = $Trigger.Repetition
+        if ($null -eq $rep) {
+            return $null
+        }
+        $intervalStr = [string]$rep.Interval
+        if (-not $intervalStr) {
+            return $null
+        }
+        if ($intervalStr -match '^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$') {
+            $hours = 0
+            $minutes = 0
+            $seconds = 0
+            if ($Matches[1]) { $hours = [int]$Matches[1] }
+            if ($Matches[2]) { $minutes = [int]$Matches[2] }
+            if ($Matches[3]) { $seconds = [int]$Matches[3] }
+            $span = New-TimeSpan -Hours $hours -Minutes $minutes -Seconds $seconds
+            if ($span.TotalMinutes -gt 0) {
+                return $span
+            }
+        }
+    } catch {
+        return $null
+    }
+
+    return $null
+}
+
+function New-MonitoringRepeatingTaskTrigger {
+    param(
+        [Parameter(Mandatory = $true)]
+        [TimeSpan]$RepeatInterval
+    )
+
+    $startAt = (Get-Date).AddSeconds(30)
+    $duration = New-TimeSpan -Days 9999
+    try {
+        return New-ScheduledTaskTrigger -Once -At $startAt -RepetitionInterval $RepeatInterval -RepetitionDuration $duration
+    } catch {
+        return New-ScheduledTaskTrigger -Once -At $startAt -RepetitionInterval $RepeatInterval
+    }
+}
+
 function Sync-MonitoringUpdateTaskSchedule {
     try {
         $updateHours = 1
@@ -521,8 +583,9 @@ function Sync-MonitoringUpdateTaskSchedule {
         }
         $currentInterval = $null
         foreach ($trigger in @($existingTask.Triggers)) {
-            if ($null -ne $trigger.RepetitionInterval -and $trigger.RepetitionInterval.TotalMinutes -gt 0) {
-                $currentInterval = $trigger.RepetitionInterval
+            $parsedInterval = Get-TaskTriggerRepetitionTimespan -Trigger $trigger
+            if ($null -ne $parsedInterval) {
+                $currentInterval = $parsedInterval
                 break
             }
         }
@@ -539,9 +602,7 @@ function Sync-MonitoringUpdateTaskSchedule {
                   '"'
 
         $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $psArgs
-        $trigger = New-ScheduledTaskTrigger -Once `
-            -At (Get-Date).AddSeconds(30) `
-            -RepetitionInterval $desiredInterval
+        $trigger = New-MonitoringRepeatingTaskTrigger -RepeatInterval $desiredInterval
         $settings = New-ScheduledTaskSettingsSet `
             -ExecutionTimeLimit (New-TimeSpan -Hours 1) `
             -MultipleInstances IgnoreNew `
