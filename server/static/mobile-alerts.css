@@ -2006,17 +2006,100 @@ body.host-insight-open {
   display: none;
 }
 
-.insight-log-pre {
+.insight-log-viewer {
   margin: 0;
-  padding: 8px 10px;
-  max-height: 160px;
+  padding: 8px 10px 10px;
+  max-height: 200px;
   overflow: auto;
-  font-size: 0.62rem;
-  line-height: 1.35;
-  background: #0b1520;
-  color: #d8e8f4;
-  white-space: pre-wrap;
+  border-radius: 8px;
+  border: 1px solid #2a3f54;
+  background: #0f172a;
+  color: #dbeafe;
+  font-family: "IBM Plex Mono", "Consolas", "Menlo", monospace;
+  font-size: 0.58rem;
+  line-height: 1.4;
+  -webkit-overflow-scrolling: touch;
+}
+
+.insight-log-viewer .log-line {
+  display: block;
+  min-height: 1.3em;
+  padding: 1px 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.insight-log-viewer .log-line--empty {
+  min-height: 0.6em;
+}
+
+.insight-log-viewer .terminal-token-comment {
+  color: #64748b;
+}
+
+.insight-log-viewer .terminal-token-muted {
+  color: #dbeafe;
+}
+
+.insight-log-viewer .terminal-token-heading {
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.insight-log-viewer .terminal-token-field,
+.insight-log-viewer .terminal-token-key {
+  color: #93c5fd;
+  font-weight: 700;
+}
+
+.insight-log-viewer .terminal-token-separator {
+  color: #64748b;
+}
+
+.insight-log-viewer .terminal-token-system {
+  color: #facc15;
+  font-weight: 700;
+}
+
+.insight-log-viewer .terminal-token-path {
+  color: #7dd3fc;
+}
+
+.insight-log-viewer .terminal-token-date {
+  color: #fdba74;
+}
+
+.insight-log-viewer .terminal-token-metric {
+  color: #22d3ee;
+  font-weight: 700;
+}
+
+.insight-log-viewer .terminal-token-version {
+  color: #f9a8d4;
+}
+
+.insight-log-viewer .terminal-token-size {
+  color: #c4b5fd;
+}
+
+.insight-log-viewer .terminal-token-info {
+  color: #38bdf8;
+}
+
+.insight-log-viewer .terminal-token-good {
+  color: #4ade80;
+  font-weight: 700;
+}
+
+.insight-log-viewer .terminal-token-warn {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+.insight-log-viewer .terminal-token-bad {
+  color: #f87171;
+  font-weight: 700;
 }
 
 .insight-empty,

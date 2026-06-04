@@ -515,17 +515,138 @@ function getAngLogsFromPayloadMobile(payload) {
   return parseAngLogsBlockMobile(p.ang_logs) || parseAngLogsBlockMobile(p.ang_skripte_logs);
 }
 
-function flattenLogLinesMobile(rawLines, maxLines) {
-  const limit = Math.max(1, Number(maxLines) || 20);
-  let lines = [];
+function normalizeLogLinesMobile(rawLines) {
   if (Array.isArray(rawLines)) {
-    lines = rawLines.map((line) => String(line ?? ""));
-  } else if (typeof rawLines === "string") {
-    lines = rawLines.split(/\r?\n/);
+    return rawLines.map((line) => String(line ?? "").trimEnd());
   }
-  const trimmed = lines.map((line) => String(line).trimEnd()).filter((line) => line.length > 0);
-  if (trimmed.length <= limit) return trimmed;
-  return trimmed.slice(-limit);
+  if (typeof rawLines === "string") {
+    const trimmed = rawLines.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map((line) => String(line ?? "").trimEnd());
+        }
+      } catch (_error) {
+        // plain-text split
+      }
+    }
+    return trimmed.split(/\r\n|\n|\r/).map((line) => String(line).trimEnd());
+  }
+  return [];
+}
+
+function expandLogLinesMobile(rawLines) {
+  const normalized = normalizeLogLinesMobile(rawLines);
+  const expanded = [];
+  for (const line of normalized) {
+    const text = String(line || "");
+    if (text.includes("\n") || text.includes("\r")) {
+      expanded.push(...text.split(/\r\n|\n|\r/).map((entry) => entry.trimEnd()).filter(Boolean));
+    } else if (text) {
+      expanded.push(text);
+    }
+  }
+  return expanded.length > 0 ? expanded : normalized.filter(Boolean);
+}
+
+function takeLastLogLinesMobile(rawLines, maxLines) {
+  const limit = Math.max(1, Number(maxLines) || 24);
+  const expanded = expandLogLinesMobile(rawLines);
+  if (expanded.length <= limit) return expanded;
+  return expanded.slice(-limit);
+}
+
+function mobileFormatTerminalOutputLine(line) {
+  if (!line) return "";
+  if (/^\s*#/.test(line)) {
+    return '<span class="terminal-token-comment">' + mobileEsc(line) + "</span>";
+  }
+  const trimmed = String(line).trim();
+  if (/^\[[^\]]+\]$/.test(trimmed)) {
+    const leadingWhitespace = String(line).match(/^\s*/)?.[0] || "";
+    return mobileEsc(leadingWhitespace) + '<span class="terminal-token-heading">' + mobileEsc(trimmed) + "</span>";
+  }
+  const keyValueMatch = String(line).match(/^(\s*)([A-Z][A-Z0-9_ ]*)(=)(.*)$/);
+  if (keyValueMatch) {
+    const leadingWhitespace = keyValueMatch[1] || "";
+    const key = keyValueMatch[2] || "";
+    const separator = keyValueMatch[3] || "";
+    const rawValue = keyValueMatch[4] || "";
+    return (
+      mobileEsc(leadingWhitespace) +
+      '<span class="terminal-token-field">' + mobileEsc(key.trimEnd()) + "</span>" +
+      '<span class="terminal-token-separator">' + mobileEsc(separator) + "</span>" +
+      mobileFormatTerminalInline(rawValue)
+    );
+  }
+  return mobileFormatTerminalInline(line);
+}
+
+function mobileRenderTerminalToken(token) {
+  const value = String(token || "");
+  const upperValue = value.toUpperCase();
+  let className = "terminal-token-muted";
+
+  if (/^\[[^\]]+\]$/.test(value)) {
+    className = "terminal-token-heading";
+  } else if (/^(PATH|STATUS|SIZE|VERSION|SID|BRANCH|BUILD|FEATURE_PACK|PATCH_LEVEL|RELEASE|ERROR|MESSAGE)$/i.test(value)) {
+    className = "terminal-token-field";
+  } else if (/^(SAP|HANA|SQL|SARI|CATALINA|BUSINESSONE|BUSINESS_ONE)$/i.test(value)) {
+    className = "terminal-token-system";
+  } else if (/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?$/i.test(value)) {
+    className = "terminal-token-date";
+  } else if (/^\d+(?:\.\d+)?%$/i.test(value)) {
+    className = "terminal-token-metric";
+  } else if (/^(ERROR|ERR|WARN(?:ING)?|FAIL(?:ED)?|CRIT(?:ICAL)?|FATAL|MISSING|UNAVAILABLE|DISABLED|INACTIVE|ABSENT|NOT_FOUND|FALSE|NO|NEIN)$/i.test(value)) {
+    className = upperValue.startsWith("WARN") ? "terminal-token-warn" : "terminal-token-bad";
+  } else if (/^(OK|SUCCESS|DONE|RUNNING|AVAILABLE|ENABLED|ACTIVE|PRESENT|TRUE|YES|JA)$/i.test(value)) {
+    className = "terminal-token-good";
+  } else if (/^(INFO|DEBUG|TRACE|NOTICE)$/i.test(value)) {
+    className = "terminal-token-info";
+  } else if (/^[A-Z][A-Z0-9_]{2,}$/.test(value)) {
+    className = "terminal-token-key";
+  } else if (/^\d+(?:\.\d+){1,}$/.test(value)) {
+    className = "terminal-token-version";
+  } else if (/^\d+(?:KB|MB|GB|TB|PB)$/i.test(value)) {
+    className = "terminal-token-size";
+  } else if (/^(?:[A-Za-z]:\\|\/)/.test(value)) {
+    className = "terminal-token-path";
+  }
+
+  return '<span class="' + className + '">' + mobileEsc(value) + "</span>";
+}
+
+function mobileFormatTerminalInline(text) {
+  const source = String(text ?? "");
+  const tokenRe =
+    /(\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?\b|\b\d+(?:\.\d+)?%\b|\b(?:ERROR|ERR|WARN(?:ING)?|FAIL(?:ED)?|CRIT(?:ICAL)?|FATAL|MISSING|UNAVAILABLE|DISABLED|INACTIVE|ABSENT|NOT_FOUND)\b|\b(?:OK|SUCCESS|DONE|RUNNING|AVAILABLE|ENABLED|ACTIVE|PRESENT)\b|\b(?:INFO|DEBUG|TRACE|NOTICE)\b|\b(?:TRUE|FALSE|YES|NO|JA|NEIN)\b|\b(?:SAP|HANA|SQL|SARI|CATALINA|BUSINESSONE|BUSINESS_ONE|FEATURE_PACK|PATCH_LEVEL|SID|BRANCH|BUILD|RELEASE|VERSION|STATUS|PATH|SIZE|ERROR|MESSAGE)\b|\b[A-Z][A-Z0-9_]{2,}(?==)|\b\d+(?:\.\d+){1,}\b|\b\d+(?:KB|MB|GB|TB|PB)\b|(?:[A-Za-z]:\\[^\s]+|\/[^\s]+))/gi;
+  let result = "";
+  let lastIndex = 0;
+  let match;
+  while ((match = tokenRe.exec(source)) !== null) {
+    const token = match[0];
+    result += mobileEsc(source.slice(lastIndex, match.index));
+    result += mobileRenderTerminalToken(token);
+    lastIndex = match.index + token.length;
+  }
+  result += mobileEsc(source.slice(lastIndex));
+  return result;
+}
+
+function mobileRenderLogfileLinesHtml(lines) {
+  const expanded = Array.isArray(lines) ? lines : [];
+  if (!expanded.length) {
+    return '<div class="log-line log-line--empty">(leer)</div>';
+  }
+  return expanded
+    .map((line) => {
+      const html = line ? mobileFormatTerminalOutputLine(line) : "&nbsp;";
+      const extraClass = line ? "" : " log-line--empty";
+      return '<div class="log-line' + extraClass + '">' + html + "</div>";
+    })
+    .join("");
 }
 
 function mobileFormatUptime(seconds) {
@@ -815,14 +936,19 @@ function buildInsightLogsBody(payload) {
   return files
     .map((file) => {
       const name = String(file.relative_path || file.name || "Log").trim();
-      const lines = flattenLogLinesMobile(file.lines, 18);
-      const pre = lines.length
-        ? '<pre class="insight-log-pre">' + mobileEsc(lines.join("\n")) + "</pre>"
+      const allLines = expandLogLinesMobile(file.lines);
+      const lines = takeLastLogLinesMobile(file.lines, 24);
+      const viewer = lines.length
+        ? '<div class="insight-log-viewer">' + mobileRenderLogfileLinesHtml(lines) + "</div>"
         : '<p class="insight-empty">Datei leer oder nicht lesbar.</p>';
+      const lineLabel =
+        allLines.length > lines.length
+          ? lines.length + " von " + allLines.length + " Zeilen (letzte)"
+          : lines.length + " Zeile" + (lines.length !== 1 ? "n" : "");
       return (
         '<details class="insight-log-file">' +
-        "<summary>" + mobileEsc(name) + " · " + lines.length + " Zeilen</summary>" +
-        pre +
+        "<summary>" + mobileEsc(name) + " · " + mobileEsc(lineLabel) + "</summary>" +
+        viewer +
         "</details>"
       );
     })
