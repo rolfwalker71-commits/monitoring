@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604o"
+PULL_SCRIPT_VERSION="20260604p"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -508,15 +508,17 @@ is_valid_pull_script_file() {
     && grep -q 'resolve_deploy_ref' "$candidate"
 }
 
+pull_script_version_from_file() {
+  local candidate="$1"
+  sed -n 's/^PULL_SCRIPT_VERSION="\(.*\)".*/\1/p' "$candidate" 2>/dev/null | head -n 1
+}
+
 upgrade_local_pull_script_from_main() {
   if [ "${MONITORING_SKIP_PULL_SCRIPT_UPGRADE:-0}" = "1" ]; then
     return 0
   fi
-  if [ "${MONITORING_PULL_SCRIPT_UPGRADE_DEPTH:-0}" -ge 1 ]; then
-    return 0
-  fi
 
-  local latest_sha="" local_script="" remote_script=""
+  local latest_sha="" local_script="" remote_script="" local_pv="" remote_pv=""
   latest_sha="$(resolve_latest_main_sha main || true)"
   if ! is_full_git_sha "$latest_sha"; then
     return 0
@@ -537,6 +539,13 @@ upgrade_local_pull_script_from_main() {
     rm -f "$remote_script"
     return 0
   fi
+
+  local_pv="$(pull_script_version_from_file "$local_script")"
+  remote_pv="$(pull_script_version_from_file "$remote_script")"
+  if [ -n "$local_pv" ] && [ -n "$remote_pv" ] && [ "$local_pv" = "$remote_pv" ]; then
+    rm -f "$remote_script"
+    return 0
+  fi
   if cmp -s "$remote_script" "$local_script" 2>/dev/null; then
     rm -f "$remote_script"
     return 0
@@ -545,8 +554,10 @@ upgrade_local_pull_script_from_main() {
   cp -f "$remote_script" "$local_script"
   chmod +x "$local_script"
   rm -f "$remote_script"
-  echo "pull-server-only.sh aktualisiert (main ${latest_sha:0:12}) – Deploy startet neu..."
-  exec env MONITORING_PULL_SCRIPT_UPGRADE_DEPTH=1 "$local_script" "$@"
+  echo "pull-server-only.sh aktualisiert (${local_pv:-?} -> ${remote_pv:-?}, Ref ${latest_sha:0:12})." >&2
+  echo "Bitte einmal erneut ausfuehren (kein automatischer Neustart – verhindert Endlosschleifen):" >&2
+  echo "  cd $TARGET_DIR && ./pull-server-only.sh" >&2
+  exit 0
 }
 
 redeploy_files_from_ref() {
