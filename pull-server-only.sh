@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604j"
+PULL_SCRIPT_VERSION="20260604k"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -120,6 +120,26 @@ append_raw_cache_bust() {
   fi
 }
 
+is_branch_ref() {
+  local ref
+  ref="$(normalize_sha_ref "${1:-}")"
+  [ "$ref" = "main" ] || [ "$ref" = "master" ]
+}
+
+resolve_branch_ref_to_commit_sha() {
+  local branch_ref="${1:-main}"
+  local sha=""
+  if ! is_branch_ref "$branch_ref"; then
+    return 1
+  fi
+  sha="$(resolve_latest_main_sha "$branch_ref" || true)"
+  if is_full_git_sha "$sha"; then
+    printf '%s' "$sha"
+    return 0
+  fi
+  return 1
+}
+
 fetch_repo_text_at_ref() {
   local source_path="$1"
   local ref="$2"
@@ -127,6 +147,14 @@ fetch_repo_text_at_ref() {
 
   if [ -z "$ref" ]; then
     return 0
+  fi
+
+  if is_branch_ref "$ref"; then
+    local resolved_ref=""
+    resolved_ref="$(resolve_branch_ref_to_commit_sha "$ref" || true)"
+    if is_full_git_sha "$resolved_ref"; then
+      ref="$resolved_ref"
+    fi
   fi
 
   if [ -n "$GITHUB_TOKEN" ]; then
@@ -138,6 +166,47 @@ fetch_repo_text_at_ref() {
       | tr -d ' \t\r\n' || true)"
   fi
   printf '%s' "$value"
+}
+
+ensure_deploy_ref_is_latest_commit() {
+  local latest_sha="" remote_bv="" ref_bv="" local_bv=""
+
+  if [ -n "${MONITORING_DEPLOY_SHA:-}" ]; then
+    return 0
+  fi
+
+  latest_sha="$(resolve_latest_main_sha main || true)"
+  if ! is_full_git_sha "$latest_sha"; then
+    if is_branch_ref "$REF"; then
+      echo "FEHLER: Branch '$REF' ohne Commit-SHA – git ls-remote und GitHub API nicht nutzbar." >&2
+      echo "  Pruefen: git ls-remote https://github.com/$OWNER_REPO.git refs/heads/main" >&2
+      echo "  Oder: unset MONITORING_PULL_USE_RAW_ONLY  und MONITORING_DEPLOY_SHA" >&2
+      echo "  Oder pinnen: export MONITORING_DEPLOY_SHA=\$(curl -fsSL https://api.github.com/repos/$OWNER_REPO/commits/main | grep -m1 '\"sha\"' | cut -d'\"' -f4)" >&2
+      exit 1
+    fi
+    return 0
+  fi
+
+  remote_bv="$(fetch_repo_text_at_ref BUILD_VERSION "$latest_sha")"
+  local_bv="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
+
+  if is_full_git_sha "$REF"; then
+    if [ "$REF" = "$latest_sha" ]; then
+      :
+    else
+      ref_bv="$(fetch_repo_text_at_ref BUILD_VERSION "$REF")"
+      if [ -n "$ref_bv" ] && [ -n "$remote_bv" ] && [ "$ref_bv" = "$remote_bv" ]; then
+        return 0
+      fi
+      echo "Deploy-Pin: ${REF:0:12} (${ref_bv:-?}) -> ${latest_sha:0:12} (${remote_bv:-?})" >&2
+    fi
+  elif is_branch_ref "$REF"; then
+    echo "Deploy-Pin: ${latest_sha:0:12} (main HEAD, BUILD ${remote_bv:-?})" >&2
+  fi
+
+  REF="$latest_sha"
+  MONITORING_PULL_USE_RAW_ONLY=0
+  export MONITORING_PULL_USE_RAW_ONLY
 }
 
 is_full_git_sha() {
@@ -754,6 +823,10 @@ resolve_deploy_ref() {
 echo "pull-server-only.sh Version: $PULL_SCRIPT_VERSION"
 echo "Installiere Serverteil nach: $TARGET_DIR"
 
+if [ "${MONITORING_PULL_USE_RAW_ONLY:-0}" = "1" ]; then
+  echo "Hinweis: MONITORING_PULL_USE_RAW_ONLY=1 – SHA-Aufloesung eingeschraenkt. Fuer neuestes main: unset MONITORING_PULL_USE_RAW_ONLY" >&2
+fi
+
 if [ -n "${MONITORING_DEPLOY_SHA:-}" ]; then
   echo "Hinweis: MONITORING_DEPLOY_SHA ist gesetzt (${MONITORING_DEPLOY_SHA}) – entfernen fuer automatisch neuestes main." >&2
 elif [ -f "$TARGET_ENV_FILE" ] && grep -q '^MONITORING_DEPLOY_SHA=' "$TARGET_ENV_FILE" 2>/dev/null; then
@@ -785,11 +858,13 @@ if ! is_full_git_sha "$REF"; then
     REF="$expanded"
   fi
 fi
+ensure_deploy_ref_is_latest_commit
+
 if ! is_full_git_sha "$REF"; then
   if is_hex_sha_ref "$REF" && probe_raw_ref_download "$REF"; then
     echo "Deploy-Pin: $REF (Kurz-SHA oder Branch, raw.githubusercontent.com)"
-  elif [ "$REF" = "main" ] || [ "$REF" = "${MONITORING_DEPLOY_REF:-}" ]; then
-    echo "Deploy-Pin: $REF (Branch mit Cache-Bust)"
+  elif is_branch_ref "$REF"; then
+    echo "Deploy-Pin: $REF (Branch – sollte durch ensure_deploy_ref abgefangen sein)" >&2
   else
     local_deployed="$(tr -d ' \t\r\n' < "$TARGET_DIR/DEPLOYED_COMMIT_SHA" 2>/dev/null || true)"
     echo "FEHLER: Deploy-Ref '$REF' ist weder aufloesbar noch als raw-Ref erreichbar." >&2
@@ -891,7 +966,8 @@ verify_synced_file() {
 }
 
 export -f download_file download_repo_file checksum_file curl_github curl_raw_github \
-  append_raw_cache_bust fetch_repo_text_at_ref is_full_git_sha resolve_latest_main_sha \
+  append_raw_cache_bust fetch_repo_text_at_ref is_full_git_sha is_branch_ref \
+  resolve_branch_ref_to_commit_sha resolve_latest_main_sha \
   force_refresh_version_files redeploy_files_from_ref reconcile_deploy_to_latest_main \
   mirror_update_payloads verify_deployed_payload_integrity repair_deploy_if_integrity_failed
 export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE REF OWNER_REPO CURL_CONNECT_TIMEOUT CURL_MAX_TIME MONITORING_PULL_USE_RAW_ONLY
@@ -1013,9 +1089,7 @@ echo "$REF" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
 DEPLOY_TIME="$(date '+%d.%m.%y %H:%M')"
 
 LATEST_META_AFTER="$(curl_github "application/vnd.github+json" "$GITHUB_API_BASE/commits/main" || true)"
-LATEST_SHA_AFTER="$(printf '%s\n' "$LATEST_META_AFTER" \
-  | sed -n 's/.*"sha":[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' \
-  | head -n 1)"
+LATEST_SHA_AFTER="$(extract_full_sha_from_commit_json "$LATEST_META_AFTER" || true)"
 if [ -z "$LATEST_SHA_AFTER" ]; then
   LATEST_SHA_AFTER="$(resolve_latest_main_sha main || true)"
 fi
@@ -1066,30 +1140,42 @@ fi
 
 LOCAL_BUILD_VERSION="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
 LOCAL_AGENT_VERSION="$(tr -d ' \t\r\n' < "$TARGET_DIR/AGENT_VERSION" 2>/dev/null || true)"
-REMOTE_BUILD_REF="${LATEST_SHA_AFTER:-$REF}"
-REMOTE_BUILD_VERSION="$(fetch_repo_text_at_ref BUILD_VERSION "$REMOTE_BUILD_REF")"
-REMOTE_MAIN_BUILD_VERSION=""
-if [ "$REMOTE_BUILD_REF" != "main" ]; then
-  REMOTE_MAIN_BUILD_VERSION="$(fetch_repo_text_at_ref BUILD_VERSION main)"
+MAIN_HEAD_SHA="${LATEST_SHA_AFTER:-}"
+if ! is_full_git_sha "$MAIN_HEAD_SHA"; then
+  MAIN_HEAD_SHA="$(resolve_latest_main_sha main || true)"
+fi
+REMOTE_BUILD_REF="${MAIN_HEAD_SHA:-$REF}"
+REMOTE_BUILD_VERSION=""
+REMOTE_AGENT_VERSION=""
+if is_full_git_sha "$REMOTE_BUILD_REF"; then
+  REMOTE_BUILD_VERSION="$(fetch_repo_text_at_ref BUILD_VERSION "$REMOTE_BUILD_REF")"
+  REMOTE_AGENT_VERSION="$(fetch_repo_text_at_ref AGENT_VERSION "$REMOTE_BUILD_REF")"
 fi
 
 echo "BUILD_VERSION deployiert: ${LOCAL_BUILD_VERSION:-?}"
 echo "AGENT_VERSION deployiert: ${LOCAL_AGENT_VERSION:-?}"
 if [ -n "$LOCAL_BUILD_VERSION" ] && [ -n "$LOCAL_AGENT_VERSION" ] && [ "$LOCAL_BUILD_VERSION" != "$LOCAL_AGENT_VERSION" ]; then
-  echo "WARNUNG: BUILD und AGENT Version unterscheiden sich – Deploy ist inkonsistent (oft raw/main CDN)." >&2
+  echo "WARNUNG: BUILD und AGENT Version unterscheiden sich – Deploy ist inkonsistent." >&2
 fi
 if [ -n "$REMOTE_BUILD_VERSION" ]; then
-  echo "BUILD_VERSION GitHub ($REMOTE_BUILD_REF): $REMOTE_BUILD_VERSION"
+  if is_full_git_sha "$REMOTE_BUILD_REF"; then
+    echo "BUILD_VERSION GitHub (main @ ${REMOTE_BUILD_REF:0:12}): $REMOTE_BUILD_VERSION"
+  else
+    echo "BUILD_VERSION GitHub ($REMOTE_BUILD_REF): $REMOTE_BUILD_VERSION"
+  fi
   if [ "$LOCAL_BUILD_VERSION" != "$REMOTE_BUILD_VERSION" ]; then
-    echo "WARNUNG: Deploy-Ordner BUILD_VERSION weicht vom Deploy-Ref ab." >&2
+    echo "WARNUNG: Deploy-Ordner BUILD_VERSION weicht von main HEAD ab – Pull erneut oder MONITORING_DEPLOY_SHA pruefen." >&2
   fi
 fi
-REMOTE_AGENT_VERSION="$(fetch_repo_text_at_ref AGENT_VERSION "$REMOTE_BUILD_REF")"
 if [ -n "$REMOTE_AGENT_VERSION" ]; then
-  echo "AGENT_VERSION GitHub ($REMOTE_BUILD_REF): $REMOTE_AGENT_VERSION"
+  if is_full_git_sha "$REMOTE_BUILD_REF"; then
+    echo "AGENT_VERSION GitHub (main @ ${REMOTE_BUILD_REF:0:12}): $REMOTE_AGENT_VERSION"
+  else
+    echo "AGENT_VERSION GitHub ($REMOTE_BUILD_REF): $REMOTE_AGENT_VERSION"
+  fi
 fi
-if [ -n "$REMOTE_MAIN_BUILD_VERSION" ] && [ "$REMOTE_MAIN_BUILD_VERSION" != "$REMOTE_BUILD_VERSION" ]; then
-  echo "Hinweis: raw/main zeigt noch $REMOTE_MAIN_BUILD_VERSION (CDN-Cache) – Deploy-Ref $REMOTE_BUILD_REF ist massgeblich."
+if is_branch_ref "${REF:-}"; then
+  echo "WARNUNG: Deploy lief ueber Branch-Alias '$REF' – fuer reproduzierbare Deploys Commit-SHA nutzen." >&2
 fi
 if ! is_full_git_sha "$REF" && [ -z "$LATEST_SHA_AFTER" ]; then
   echo "Hinweis: Commit-SHA unbekannt – Deploy lief ueber Branch $REF. Fuer Pin optional MONITORING_DEPLOY_SHA setzen." >&2
