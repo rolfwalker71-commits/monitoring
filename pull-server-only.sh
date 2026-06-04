@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604s"
+PULL_SCRIPT_VERSION="20260605a"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -233,6 +233,10 @@ ensure_deploy_ref_is_latest_commit() {
     else
       ref_bv="$(fetch_repo_text_at_ref BUILD_VERSION "$REF")"
       if [ -n "$ref_bv" ] && [ -n "$remote_bv" ] && [ "$ref_bv" = "$remote_bv" ]; then
+        return 0
+      fi
+      if [ -n "$ref_bv" ] && [ -n "$remote_bv" ] && version_gt "$ref_bv" "$remote_bv"; then
+        echo "Deploy-Pin: behalte ${REF:0:12} (BUILD $ref_bv) – erkanntes main ${latest_sha:0:12} nur BUILD $remote_bv (stale MAIN_HEAD_SHA/CDN?)" >&2
         return 0
       fi
       echo "Deploy-Pin: ${REF:0:12} (${ref_bv:-?}) -> ${latest_sha:0:12} (${remote_bv:-?})" >&2
@@ -657,45 +661,67 @@ resolve_latest_main_sha_via_git() {
   return 0
 }
 
-resolve_latest_main_sha() {
+collect_main_sha_candidates() {
   local branch_ref="${1:-main}"
-  local sha=""
-
-  sha="$(resolve_latest_main_sha_via_raw_main_head_file || true)"
-  if is_full_git_sha "$sha"; then
-    printf '%s' "$sha"
-    return 0
-  fi
+  local -a candidates=()
+  local sha="" sha_a="" sha_b="" sha_c="" pick=""
 
   sha="$(resolve_latest_main_sha_via_git || true)"
   if is_full_git_sha "$sha"; then
-    printf '%s' "$sha"
-    return 0
+    candidates+=("$sha")
+    echo "main-SHA Kandidat git ls-remote: ${sha:0:12} (BUILD $(fetch_build_version_at_ref "$sha"))" >&2
   fi
 
   if github_api_reachable; then
     sha="$(resolve_latest_main_sha_via_github_api "$branch_ref" || true)"
     if is_full_git_sha "$sha"; then
-      printf '%s' "$sha"
-      return 0
+      candidates+=("$sha")
+      echo "main-SHA Kandidat GitHub API: ${sha:0:12} (BUILD $(fetch_build_version_at_ref "$sha"))" >&2
     fi
-
     sha="$(resolve_latest_main_sha_via_plain_curl "$branch_ref" || true)"
     if is_full_git_sha "$sha"; then
-      echo "main-SHA via api.github.com (plain curl): ${sha:0:12}" >&2
-      printf '%s' "$sha"
-      return 0
+      candidates+=("$sha")
+      echo "main-SHA Kandidat api.github.com (plain curl): ${sha:0:12} (BUILD $(fetch_build_version_at_ref "$sha"))" >&2
     fi
   else
-    echo "Hinweis: api.github.com nicht erreichbar – nutze raw MAIN_HEAD_SHA / raw/main." >&2
+    echo "Hinweis: api.github.com nicht erreichbar – nutze git ls-remote und raw MAIN_HEAD_SHA." >&2
   fi
 
-  sha="$(resolve_latest_main_sha_via_raw_main_head_file || true)"
-  if is_full_git_sha "$sha"; then
-    printf '%s' "$sha"
-    return 0
+  sha_a="$(curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/main/MAIN_HEAD_SHA" "a-$(date +%s)-$$")" 2>/dev/null \
+    | tr -d ' \t\r\n' || true)"
+  sleep 0.3
+  sha_b="$(curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/main/MAIN_HEAD_SHA" "b-${RANDOM:-0}-$(date +%s)")" 2>/dev/null \
+    | tr -d ' \t\r\n' || true)"
+  for sha in "$sha_a" "$sha_b"; do
+    if is_full_git_sha "$sha"; then
+      candidates+=("$sha")
+    fi
+  done
+  if [ "$sha_a" != "$sha_b" ] && is_full_git_sha "$sha_a" && is_full_git_sha "$sha_b"; then
+    sleep 0.5
+    sha_c="$(curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/main/MAIN_HEAD_SHA" "c-${RANDOM:-0}-$(date +%s)")" 2>/dev/null \
+      | tr -d ' \t\r\n' || true)"
+    if is_full_git_sha "$sha_c"; then
+      candidates+=("$sha_c")
+    fi
   fi
-  return 1
+
+  if [ "${#candidates[@]}" -eq 0 ]; then
+    return 1
+  fi
+
+  pick="$(pick_best_sha_by_build_version "${candidates[@]}" || true)"
+  if ! is_full_git_sha "$pick"; then
+    return 1
+  fi
+  echo "main-SHA gewaehlt: ${pick:0:12} (BUILD $(fetch_build_version_at_ref "$pick"), aus ${#candidates[@]} Kandidaten)" >&2
+  printf '%s' "$pick"
+  return 0
+}
+
+resolve_latest_main_sha() {
+  local branch_ref="${1:-main}"
+  collect_main_sha_candidates "$branch_ref" || return 1
 }
 
 write_repo_text_to_target() {
@@ -752,18 +778,14 @@ upgrade_local_pull_script_from_main() {
   fi
 
   local latest_sha="" local_script="" remote_script="" local_pv="" remote_pv=""
-  latest_sha="$(resolve_latest_main_sha main || true)"
-  if ! is_full_git_sha "$latest_sha"; then
-    return 0
-  fi
-
   local_script="$TARGET_DIR/pull-server-only.sh"
   if [ ! -f "$local_script" ]; then
     local_script="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
   fi
 
   remote_script="$(mktemp "${TMPDIR:-/tmp}/pull-server-only.XXXXXX")"
-  if ! curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/$latest_sha/pull-server-only.sh")" \
+  # Always fetch pull script from branch main (not stale MAIN_HEAD_SHA CDN pin).
+  if ! curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/main/pull-server-only.sh")" \
     -o "$remote_script" 2>/dev/null; then
     rm -f "$remote_script"
     return 0
@@ -787,7 +809,7 @@ upgrade_local_pull_script_from_main() {
   cp -f "$remote_script" "$local_script"
   chmod +x "$local_script"
   rm -f "$remote_script"
-  echo "pull-server-only.sh aktualisiert (${local_pv:-?} -> ${remote_pv:-?}, Ref ${latest_sha:0:12})." >&2
+  echo "pull-server-only.sh aktualisiert (${local_pv:-?} -> ${remote_pv:-?}, Quelle branch main)." >&2
   echo "Bitte einmal erneut ausfuehren (kein automatischer Neustart – verhindert Endlosschleifen):" >&2
   echo "  cd $TARGET_DIR && ./pull-server-only.sh" >&2
   exit 0
