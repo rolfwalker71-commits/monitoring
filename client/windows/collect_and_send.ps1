@@ -47,7 +47,7 @@ $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { '
 $QueueQuarantineDir = if ($env:AGENT_QUEUE_QUARANTINE_DIR) { $env:AGENT_QUEUE_QUARANTINE_DIR } else { 'C:\ProgramData\monitoring-agent\queue-quarantine' }
 $PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
 $PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
-$EmbeddedAgentVersion = '1.7.349'
+$EmbeddedAgentVersion = '1.7.350'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -330,8 +330,9 @@ function Get-AngLogMojibakeScore {
         return 0
     }
 
-    # UTF-8 bytes misread as Windows-1252/Latin-1 (e.g. Ã¼ instead of ü).
-    return [regex]::Matches($Text, 'Ã.|â€').Count
+    # UTF-8 misread as Latin-1: U+00C3 + any char, or U+00E2 U+20AC (ASCII-safe pattern for PS 5.1).
+    $pattern = ([char]0x00C3).ToString() + '.|' + ([char]0x00E2).ToString() + ([char]0x20AC).ToString()
+    return [regex]::Matches($Text, $pattern).Count
 }
 
 function Test-BytesAreValidUtf8 {
@@ -536,7 +537,7 @@ function Expand-AngLogPhysicalLines {
         return ,@()
     }
 
-    # Force array binding – a bare "" scalar would otherwise fail [string[]] binding.
+    # Force array binding - a bare "" scalar would otherwise fail [string[]] binding.
     $physicalLineArray = @($PhysicalLines)
     if ((Get-AngCollectionCount $physicalLineArray) -eq 0) {
         return ,@()
@@ -962,7 +963,7 @@ function Get-SqlServerInfoBlock {
             $instanceName = $prop.Name   # e.g. MSSQLSERVER or SQLEXPRESS
             $serviceKey   = $prop.Value  # e.g. MSSQL$SQLEXPRESS
 
-            # Version from Registry — works even when service is stopped
+            # Version from Registry - works even when service is stopped
             $version = ''
             try {
                 $verPath = "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\$serviceKey\MSSQLServer\CurrentVersion"
@@ -1046,7 +1047,7 @@ ORDER BY
                 $rdr.Close()
 
                 # Last backup per database (Full=D, Differential=I, Log=L)
-                # Uses full msdb.dbo.backupset qualifier — no USE needed
+                # Uses full msdb.dbo.backupset qualifier - no USE needed
                 $bkCmd = $conn.CreateCommand()
                 $bkCmd.CommandTimeout = 10
                 $bkCmd.CommandText = @"
@@ -1118,7 +1119,7 @@ function Get-SapB1InfoBlock {
         return $empty
     }
     try {
-        # Read raw content and regex-match the Version val attribute directly —
+        # Read raw content and regex-match the Version val attribute directly -
         # avoids PowerShell XML property navigation quirks.
         $raw = [System.IO.File]::ReadAllText($xmlPath, [System.Text.Encoding]::UTF8)
         if ($raw -match '<Version\s+val="(\d{7}\s+SP:\d+\s+PL:\d+)"') {
@@ -1136,7 +1137,7 @@ function Get-SapB1InfoBlock {
             }
         }
     } catch {
-        # File unreadable — return empty block
+        # File unreadable - return empty block
     }
     return $empty
 }
@@ -2521,7 +2522,7 @@ foreach ($dns in $dnsServers) {
 }
 $dnsServersJson = $dnsServerEntries -join ','
 
-# CPU — measure over 1 second with Get-Counter (mirrors Linux /proc/stat approach);
+# CPU - measure over 1 second with Get-Counter (mirrors Linux /proc/stat approach);
 # fall back to WMI LoadPercentage if the performance counter is unavailable.
 
 # CPU cores and model name
