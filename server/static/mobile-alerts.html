@@ -167,6 +167,22 @@
       <button type="button" class="btn-secondary host-sheet-close-btn" data-sheet-close>Schliessen</button>
     </div>
 
+    <div id="hostInsightOverlay" class="host-insight-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="hostInsightTitle">
+      <div class="host-insight-panel">
+        <header class="host-insight-header">
+          <button type="button" class="host-insight-close" id="hostInsightCloseBtn" aria-label="Schließen">✕</button>
+          <div class="host-insight-header-text">
+            <h3 id="hostInsightTitle">Host</h3>
+            <p id="hostInsightSubtitle" class="host-insight-subtitle"></p>
+          </div>
+          <span id="hostInsightCounter" class="host-insight-counter" aria-live="polite">1 / 1</span>
+        </header>
+        <div id="hostInsightTrack" class="host-insight-track" tabindex="-1"></div>
+        <div id="hostInsightDots" class="host-insight-dots" role="tablist" aria-label="Insight-Karten"></div>
+        <p class="host-insight-swipe-hint">← Wischen für weitere Karten · Daten aus letztem Report</p>
+      </div>
+    </div>
+
     <div id="toast" class="toast hidden" role="status"></div>
 
     <div

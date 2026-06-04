@@ -311,7 +311,7 @@ function renderHostListCard(host, variant, index) {
   const osIcon = resolveHostOsIconMobile(host.os);
   const countryHtml = buildCountryFlagIconHtml(host.country_code);
   const countryCode = String(host.country_code || "").trim().toUpperCase() || "—";
-  const osShort = truncateMobileText(String(host.os || "").trim() || "—", 28);
+  const osLabel = String(host.os || "").trim() || "—";
   const longInactive = variant === "inactive" && Number(host.hours_inactive || 0) > 12;
   const cardClass =
     "host-list-card inactive-host-card"
@@ -325,9 +325,9 @@ function renderHostListCard(host, variant, index) {
     '      <p class="host-list-customer">' + mobileEsc(customerLabel) + "</p>" +
     '      <p class="host-list-host-label">' + mobileEsc(hostLabel) + "</p>" +
     '      <div class="host-list-meta-row">' +
-    '        <span class="host-list-meta-pill">' + countryHtml + "<span>" + mobileEsc(countryCode) + "</span></span>" +
-    '        <span class="host-list-meta-pill"><img src="/icons/' + mobileEsc(osIcon) + '" alt="" onerror="this.src=\'/icons/linux.png\'" /><span>'
-    + mobileEsc(osShort) + "</span></span>" +
+    '        <span class="host-list-meta-pill host-list-meta-pill-country">' + countryHtml + "<span>" + mobileEsc(countryCode) + "</span></span>" +
+    '        <span class="host-list-meta-pill host-list-meta-pill-os"><img src="/icons/' + mobileEsc(osIcon) + '" alt="" onerror="this.src=\'/icons/linux.png\'" /><span>'
+    + mobileEsc(osLabel) + "</span></span>" +
     "      </div>" +
     "    </div>" +
     '    <div class="host-list-summary-side">' +
@@ -401,6 +401,541 @@ function openMobileHostListSheet(host, variant) {
   openSheet("hostSheet");
 }
 
+const HOST_INSIGHT_SLIDE_DEFS = [
+  { id: "overview", icon: "🏠", title: "Übersicht" },
+  { id: "resources", icon: "📊", title: "CPU & RAM" },
+  { id: "sap", icon: "📦", title: "SAP & HANA" },
+  { id: "filesystems", icon: "💾", title: "Dateisysteme" },
+  { id: "processes", icon: "⚡", title: "Top-Prozesse" },
+  { id: "logs", icon: "📜", title: "Logfiles" },
+  { id: "system", icon: "🖥️", title: "System & Netz" },
+];
+
+let hostInsightScrollRaf = 0;
+
+function mobileFormatPercent(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(1) + "%" : "—";
+}
+
+function mobileFormatKb(kbValue) {
+  const kb = Number(kbValue);
+  if (!Number.isFinite(kb) || kb < 0) return "—";
+  const mib = kb / 1024;
+  if (mib < 1024) return mib.toFixed(0) + " MiB";
+  return (mib / 1024).toFixed(2) + " GiB";
+}
+
+function mobileMetricBarFillClass(percent) {
+  const n = Number(percent);
+  if (!Number.isFinite(n)) return "metric-bar-fill--low";
+  if (n >= 85) return "metric-bar-fill--high";
+  if (n >= 65) return "metric-bar-fill--mid";
+  return "metric-bar-fill--low";
+}
+
+function mobileMetricBarRow(label, percent, sublineHtml) {
+  const numeric = Number(percent);
+  const width = Number.isFinite(numeric) ? Math.min(100, Math.max(0, numeric)) : 0;
+  const fillClass = mobileMetricBarFillClass(numeric);
+  const sub = String(sublineHtml || "").trim()
+    ? '<div class="insight-metric-sub">' + sublineHtml + "</div>"
+    : "";
+  return (
+    '<div class="insight-metric-bar">' +
+    '<div class="insight-metric-head"><span>' + mobileEsc(label) + "</span><span>" + mobileEsc(mobileFormatPercent(numeric)) + "</span></div>" +
+    '<div class="insight-metric-track"><div class="insight-metric-fill ' + fillClass + '" style="width:' + width + '%"></div></div>' +
+    sub +
+    "</div>"
+  );
+}
+
+function mobileInsightFactRow(label, value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return (
+    '<div class="insight-fact-row"><dt>' + mobileEsc(label) + "</dt><dd>" + text + "</dd></div>"
+  );
+}
+
+function mobileInsightKpi(label, value) {
+  return (
+    '<div class="insight-kpi">' +
+    '<span class="insight-kpi-label">' + mobileEsc(label) + "</span>" +
+    '<strong class="insight-kpi-value">' + mobileEsc(String(value || "").trim() || "—") + "</strong>" +
+    "</div>"
+  );
+}
+
+function insightSlideFooter(reportLabel) {
+  return (
+    '<footer class="host-insight-slide-footer">' +
+    '<span class="host-insight-report-time">Letzter Report: ' + mobileEsc(reportLabel || "—") + "</span>" +
+    "</footer>"
+  );
+}
+
+function wrapInsightSlide(icon, title, bodyHtml, reportLabel) {
+  return (
+    '<article class="host-insight-slide" data-slide-title="' + mobileEsc(title) + '">' +
+    '<div class="host-insight-slide-head"><span class="host-insight-slide-icon" aria-hidden="true">' + icon + "</span><h4>" + mobileEsc(title) + "</h4></div>" +
+    '<div class="host-insight-slide-body">' + bodyHtml + "</div>" +
+    insightSlideFooter(reportLabel) +
+    "</article>"
+  );
+}
+
+function resolveInsightReportLabel(report, payload, host, variant) {
+  const fromReport = formatUtcPlus2Mobile(report?.received_at_utc || payload?.timestamp_utc || "");
+  if (fromReport && fromReport !== "—") return fromReport;
+  if (variant === "inactive") {
+    return formatUtcPlus2Mobile(host?.last_report_time_utc || "");
+  }
+  return formatUtcPlus2Mobile(host?.last_seen_utc || host?.last_report_time_utc || "");
+}
+
+function parseAngLogsBlockMobile(raw) {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    try {
+      const parsed = JSON.parse(trimmed);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (_error) {
+      return null;
+    }
+  }
+  if (typeof raw === "object") return raw;
+  return null;
+}
+
+function getAngLogsFromPayloadMobile(payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  return parseAngLogsBlockMobile(p.ang_logs) || parseAngLogsBlockMobile(p.ang_skripte_logs);
+}
+
+function flattenLogLinesMobile(rawLines, maxLines) {
+  const limit = Math.max(1, Number(maxLines) || 20);
+  let lines = [];
+  if (Array.isArray(rawLines)) {
+    lines = rawLines.map((line) => String(line ?? ""));
+  } else if (typeof rawLines === "string") {
+    lines = rawLines.split(/\r?\n/);
+  }
+  const trimmed = lines.map((line) => String(line).trimEnd()).filter((line) => line.length > 0);
+  if (trimmed.length <= limit) return trimmed;
+  return trimmed.slice(-limit);
+}
+
+function mobileFormatUptime(seconds) {
+  const s = Number(seconds);
+  if (!Number.isFinite(s) || s < 0) return "—";
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return d + " T " + h + " h";
+  if (h > 0) return h + " h " + m + " min";
+  return m + " min";
+}
+
+function resolveSapReleaseMobile(host, payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const h = host && typeof host === "object" ? host : {};
+  return String(
+    p.sap_release || p.sap_feature_pack || h.sap_release || h.sap_feature_pack || ""
+  ).trim();
+}
+
+function resolveHanaReleaseMobile(host, payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const h = host && typeof host === "object" ? host : {};
+  const hi = p.hana_info && typeof p.hana_info === "object" ? p.hana_info : null;
+  const raw = String(
+    p.hana_release || p.hana_version || (hi?.available ? hi.version : "") || h.hana_release || h.hana_version || ""
+  ).trim();
+  if (!raw) return "";
+  const parts = raw.split(".");
+  return parts.length >= 3 ? parts.slice(0, 3).join(".") : raw;
+}
+
+function resolveHanaSidMobile(host, payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const h = host && typeof host === "object" ? host : {};
+  const hi = p.hana_info && typeof p.hana_info === "object" ? p.hana_info : null;
+  return String(p.hana_sid || (hi?.available ? hi.sid : "") || h.hana_sid || "").trim();
+}
+
+function buildInsightOverviewBody(host, variant) {
+  const { hostname, displayName, customerLabel } = getHostListLabels(host);
+  const envLabel = mobileEnvironmentLabel(host.environment_type);
+  const primaryIp = String(host.primary_ip || host.std_nic_ip || "").trim() || "—";
+  const country = String(host.country_code || "").trim().toUpperCase() || "—";
+  const osLabel = String(host.os || "").trim() || "—";
+  const alerts = Number(host.open_alert_count || 0);
+  const rows = [
+    mobileInsightFactRow("Kunde", mobileEsc(customerLabel)),
+    mobileInsightFactRow("Hostbezeichnung", mobileEsc(displayName)),
+    mobileInsightFactRow("Hostname", mobileEsc(hostname)),
+    mobileInsightFactRow("IP", mobileEsc(primaryIp)),
+    mobileInsightFactRow("Land", mobileEsc(country)),
+    mobileInsightFactRow("Betriebssystem", mobileEsc(osLabel)),
+  ];
+  if (envLabel) rows.push(mobileInsightFactRow("Umgebung", mobileEsc(envLabel)));
+  rows.push(mobileInsightFactRow("Offene Alerts", alerts > 0 ? mobileEsc(String(alerts)) : mobileEsc("keine")));
+  if (variant === "inactive") {
+    rows.push(
+      mobileInsightFactRow("Inaktiv seit", mobileEsc(Number(host.hours_inactive || 0).toFixed(1) + " h")),
+      mobileInsightFactRow(
+        "Relativ",
+        mobileEsc(formatRelativeTime(host.last_report_time_utc) || "—")
+      )
+    );
+  } else {
+    rows.push(
+      mobileInsightFactRow("Status", mobileEsc(host.online === true ? "Online" : "Aktiv")),
+      mobileInsightFactRow("Agent", mobileEsc(String(host.agent_version || "").trim() || "—")),
+      mobileInsightFactRow("Reports (DB)", mobileEsc(String(Math.max(0, Number(host.report_count || 0)))))
+    );
+  }
+  rows.push(mobileInsightFactRow("Host-ID", "<code>" + mobileEsc(String(host.host_uid || "").trim()) + "</code>"));
+  return '<dl class="insight-facts">' + rows.filter(Boolean).join("") + "</dl>";
+}
+
+function buildInsightResourcesBody(payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const cpu = p.cpu && typeof p.cpu === "object" ? p.cpu : {};
+  const memory = p.memory && typeof p.memory === "object" ? p.memory : {};
+  const swap = p.swap && typeof p.swap === "object" ? p.swap : {};
+  if (!Object.keys(cpu).length && !Object.keys(memory).length) {
+    return '<p class="insight-empty">Keine Ressourcen-Daten im letzten Report.</p>';
+  }
+  const loadLine =
+    "load " +
+    [cpu.load_avg_1, cpu.load_avg_5, cpu.load_avg_15]
+      .map((v) => (Number.isFinite(Number(v)) ? Number(v).toFixed(2) : "—"))
+      .join(" / ");
+  const ramSub = mobileFormatKb(memory.used_kb) + " / " + mobileFormatKb(memory.total_kb);
+  const cores = Number(cpu.cores);
+  const model = String(cpu.model_name || cpu.model || "").trim() || "—";
+  const coresModel = (Number.isFinite(cores) && cores > 0 ? String(Math.floor(cores)) : "—") + " · " + model;
+  return (
+    mobileMetricBarRow("CPU", cpu.usage_percent, "<span>Load Ø</span><span>" + mobileEsc(loadLine) + "</span>") +
+    mobileMetricBarRow("RAM", memory.used_percent, "<span>Belegung</span><span>" + mobileEsc(ramSub) + "</span>") +
+    mobileMetricBarRow("SWAP", swap.used_percent, "<span>Kerne / Modell</span><span>" + mobileEsc(coresModel) + "</span>")
+  );
+}
+
+function buildInsightSapBody(host, payload) {
+  const sap = resolveSapReleaseMobile(host, payload) || "—";
+  const hana = resolveHanaReleaseMobile(host, payload) || "—";
+  const sid = resolveHanaSidMobile(host, payload) || "—";
+  return (
+    '<div class="insight-kpi-grid">' +
+    mobileInsightKpi("SAP Release", sap) +
+    mobileInsightKpi("HANA Release", hana) +
+    mobileInsightKpi("HANA SID", sid) +
+    "</div>" +
+    '<p class="insight-hint">Werte aus dem letzten Agent-Report (Feature Pack / Version / SID).</p>'
+  );
+}
+
+function buildInsightFilesystemsBody(payload) {
+  const list = Array.isArray(payload?.filesystems) ? payload.filesystems.slice() : [];
+  if (!list.length) {
+    return '<p class="insight-empty">Keine Dateisystem-Daten im letzten Report.</p>';
+  }
+  list.sort((a, b) => Number(b?.used_percent || 0) - Number(a?.used_percent || 0));
+  const top = list.slice(0, 6);
+  const rows = top
+    .map((fs) => {
+      const mount = String(fs.mountpoint || fs.fs || "—").trim();
+      const pct = Number(fs.used_percent);
+      const width = Number.isFinite(pct) ? Math.min(100, Math.max(0, pct)) : 0;
+      const fillClass = mobileMetricBarFillClass(pct);
+      const used = mobileFormatKb(fs.used);
+      const total = mobileFormatKb(fs.blocks);
+      return (
+        '<div class="insight-fs-row">' +
+        '<div class="insight-fs-head"><span class="insight-fs-mount">' + mobileEsc(mount) + "</span>" +
+        '<span class="insight-fs-pct">' + mobileEsc(Number.isFinite(pct) ? pct.toFixed(1) + "%" : "—") + "</span></div>" +
+        '<div class="insight-metric-track"><div class="insight-metric-fill ' + fillClass + '" style="width:' + width + '%"></div></div>' +
+        '<p class="insight-fs-sub">' + mobileEsc(used) + " / " + mobileEsc(total) + "</p>" +
+        "</div>"
+      );
+    })
+    .join("");
+  const more = list.length > top.length ? '<p class="insight-hint">+' + (list.length - top.length) + " weitere Mounts im Desktop-Report.</p>" : "";
+  return rows + more;
+}
+
+function buildInsightProcessesBody(payload) {
+  const block = payload?.top_processes && typeof payload.top_processes === "object" ? payload.top_processes : {};
+  const entries = Array.isArray(block.entries) ? block.entries.slice(0, 8) : [];
+  if (!entries.length) {
+    return '<p class="insight-empty">Keine Prozessdaten im letzten Report.</p>';
+  }
+  return (
+    '<ul class="insight-process-list">' +
+    entries
+      .map((entry) => {
+        const cmd = String(entry.command || entry.name || "—").trim();
+        const shortCmd = cmd.length > 48 ? cmd.slice(0, 45) + "…" : cmd;
+        const cpu = Number(entry.cpu_percent);
+        const mem = Number(entry.memory_percent);
+        const cpuText = Number.isFinite(cpu) ? cpu.toFixed(1) + "% CPU" : "";
+        const memText = Number.isFinite(mem) ? mem.toFixed(1) + "% RAM" : "";
+        const stats = [cpuText, memText].filter(Boolean).join(" · ") || "—";
+        return (
+          '<li class="insight-process-item">' +
+          '<span class="insight-process-stats">' + mobileEsc(stats) + "</span>" +
+          '<span class="insight-process-cmd" title="' + mobileEsc(cmd) + '">' + mobileEsc(shortCmd) + "</span>" +
+          "</li>"
+        );
+      })
+      .join("") +
+    "</ul>"
+  );
+}
+
+function buildInsightLogsBody(payload) {
+  const angLogs = getAngLogsFromPayloadMobile(payload);
+  if (
+    !angLogs ||
+    (angLogs.available !== true && !(Array.isArray(angLogs.files) && angLogs.files.length))
+  ) {
+    return '<p class="insight-empty">Keine Logfile-Daten im letzten Report (Windows: *.log unter C:\\ang).</p>';
+  }
+  const files = Array.isArray(angLogs.files) ? angLogs.files.slice(0, 5) : [];
+  if (!files.length) {
+    return '<p class="insight-empty">Keine .log-Dateien im letzten Report gefunden.</p>';
+  }
+  return files
+    .map((file) => {
+      const name = String(file.relative_path || file.name || "Log").trim();
+      const lines = flattenLogLinesMobile(file.lines, 18);
+      const pre = lines.length
+        ? '<pre class="insight-log-pre">' + mobileEsc(lines.join("\n")) + "</pre>"
+        : '<p class="insight-empty">Datei leer oder nicht lesbar.</p>';
+      return (
+        '<details class="insight-log-file">' +
+        "<summary>" + mobileEsc(name) + " · " + lines.length + " Zeilen</summary>" +
+        pre +
+        "</details>"
+      );
+    })
+    .join("");
+}
+
+function buildInsightSystemBody(payload, report) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const network = p.network && typeof p.network === "object" ? p.network : {};
+  const deliveryMode = String(p.delivery_mode || "").toLowerCase();
+  const isDelayed = deliveryMode === "delayed" || p.is_delayed === true;
+  const journal = Array.isArray(p.journal_errors) ? p.journal_errors : [];
+  const dns = Array.isArray(network.dns_servers)
+    ? network.dns_servers.map((s) => String(s || "").trim()).filter(Boolean).join(", ")
+    : "";
+  const rows = [
+    mobileInsightFactRow("OS", mobileEsc(String(p.os || "").trim() || "—")),
+    mobileInsightFactRow("Kernel", mobileEsc(String(p.kernel || "").trim() || "—")),
+    mobileInsightFactRow("Uptime", mobileEsc(mobileFormatUptime(p.uptime_seconds))),
+    mobileInsightFactRow("Agent-Version", mobileEsc(String(p.agent_version || "").trim() || "—")),
+    mobileInsightFactRow("Zustellung", mobileEsc(isDelayed ? "DELAYED" : "LIVE")),
+    mobileInsightFactRow("Queue", mobileEsc(String(p.queue_depth != null ? p.queue_depth : "—") + " Dateien")),
+    mobileInsightFactRow("Primary IP", mobileEsc(String(report?.primary_ip || p.primary_ip || "").trim() || "—")),
+    mobileInsightFactRow("Default GW", mobileEsc(String(network.default_gateway || "").trim() || "—")),
+    mobileInsightFactRow("DNS", mobileEsc(dns || "—")),
+    mobileInsightFactRow("Journal-Fehler", mobileEsc(journal.length ? String(journal.length) + " Einträge" : "keine")),
+  ];
+  return '<dl class="insight-facts">' + rows.filter(Boolean).join("") + "</dl>";
+}
+
+function buildHostInsightSlides(host, variant, report, payload) {
+  const reportLabel = resolveInsightReportLabel(report, payload, host, variant);
+  const hasPayload = payload && typeof payload === "object" && Object.keys(payload).length > 0;
+
+  if (!hasPayload) {
+    return [
+      wrapInsightSlide(
+        "ℹ️",
+        "Kein Report",
+        '<p class="insight-empty">Für diesen Host liegt kein aktueller Report-Payload vor. Host-Stammdaten siehe Übersicht.</p>' +
+          buildInsightOverviewBody(host, variant),
+        reportLabel
+      ),
+    ];
+  }
+
+  const builders = {
+    overview: () => buildInsightOverviewBody(host, variant),
+    resources: () => buildInsightResourcesBody(payload),
+    sap: () => buildInsightSapBody(host, payload),
+    filesystems: () => buildInsightFilesystemsBody(payload),
+    processes: () => buildInsightProcessesBody(payload),
+    logs: () => buildInsightLogsBody(payload),
+    system: () => buildInsightSystemBody(payload, report),
+  };
+
+  return HOST_INSIGHT_SLIDE_DEFS.map((def) =>
+    wrapInsightSlide(def.icon, def.title, builders[def.id](), reportLabel)
+  );
+}
+
+function renderHostInsightDots(slideCount) {
+  const dotsEl = document.getElementById("hostInsightDots");
+  if (!dotsEl) return;
+  if (slideCount <= 1) {
+    dotsEl.innerHTML = "";
+    dotsEl.classList.add("hidden");
+    return;
+  }
+  dotsEl.classList.remove("hidden");
+  dotsEl.innerHTML = Array.from({ length: slideCount }, (_, index) => {
+    const active = index === 0 ? " is-active" : "";
+    return (
+      '<button type="button" class="host-insight-dot' + active + '" data-insight-index="' + index + '" ' +
+      'role="tab" aria-label="Karte ' + (index + 1) + '" aria-selected="' + (index === 0 ? "true" : "false") + '"></button>'
+    );
+  }).join("");
+}
+
+function syncHostInsightCarouselUi() {
+  const track = document.getElementById("hostInsightTrack");
+  const counter = document.getElementById("hostInsightCounter");
+  const dotsEl = document.getElementById("hostInsightDots");
+  if (!track) return;
+
+  const slides = track.querySelectorAll(".host-insight-slide");
+  const count = slides.length || 1;
+  const slideWidth = slides[0]?.offsetWidth || track.clientWidth || 1;
+  const index = Math.max(0, Math.min(count - 1, Math.round(track.scrollLeft / Math.max(slideWidth, 1))));
+
+  if (counter) counter.textContent = index + 1 + " / " + count;
+
+  if (dotsEl) {
+    dotsEl.querySelectorAll(".host-insight-dot").forEach((dot, dotIndex) => {
+      const active = dotIndex === index;
+      dot.classList.toggle("is-active", active);
+      dot.setAttribute("aria-selected", active ? "true" : "false");
+    });
+  }
+}
+
+function bindHostInsightCarouselOnce() {
+  const track = document.getElementById("hostInsightTrack");
+  if (!track || track.dataset.bound === "1") return;
+  track.dataset.bound = "1";
+
+  track.addEventListener(
+    "scroll",
+    () => {
+      if (hostInsightScrollRaf) window.cancelAnimationFrame(hostInsightScrollRaf);
+      hostInsightScrollRaf = window.requestAnimationFrame(syncHostInsightCarouselUi);
+    },
+    { passive: true }
+  );
+
+  document.getElementById("hostInsightDots")?.addEventListener("click", (event) => {
+    const dot = event.target.closest(".host-insight-dot");
+    if (!dot || !track) return;
+    const index = Number(dot.getAttribute("data-insight-index") || 0);
+    const slides = track.querySelectorAll(".host-insight-slide");
+    const target = slides[index];
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
+  });
+}
+
+function closeHostInsightCarousel() {
+  const overlay = document.getElementById("hostInsightOverlay");
+  if (overlay) overlay.classList.add("hidden");
+  document.body.classList.remove("host-insight-open");
+}
+
+async function fetchLatestHostReport(host, options = {}) {
+  const authRetried = options.authRetried === true;
+  const hostUid = String(host?.host_uid || "").trim();
+  const hostname = String(host?.hostname || "").trim();
+  if (!hostUid && !hostname) {
+    return { report: null, payload: null, error: "Kein Host-Identifier" };
+  }
+
+  const url = hostUid
+    ? "/api/v1/host-reports?host_uid=" + encodeURIComponent(hostUid) + "&limit=1&offset=0"
+    : "/api/v1/host-reports?hostname=" + encodeURIComponent(hostname) + "&limit=1&offset=0";
+
+  try {
+    const resp = await fetch(url, { credentials: "same-origin" });
+    if (resp.status === 401) {
+      if (!authRetried && (await mobileRecoverSessionAfter401())) {
+        return fetchLatestHostReport(host, { authRetried: true });
+      }
+      return { report: null, payload: null, error: "Session abgelaufen" };
+    }
+    if (!resp.ok) {
+      return { report: null, payload: null, error: "HTTP " + resp.status };
+    }
+    const data = await resp.json().catch(() => ({}));
+    const reports = Array.isArray(data?.reports) ? data.reports : [];
+    const report = reports[0] && typeof reports[0] === "object" ? reports[0] : null;
+    const payload =
+      report && typeof report.payload === "object" ? report.payload : null;
+    return { report, payload, error: null };
+  } catch (error) {
+    return { report: null, payload: null, error: error?.message || String(error) };
+  }
+}
+
+async function openHostInsightCarousel(host, variant) {
+  if (!host) return;
+
+  const overlay = document.getElementById("hostInsightOverlay");
+  const track = document.getElementById("hostInsightTrack");
+  const titleEl = document.getElementById("hostInsightTitle");
+  const subtitleEl = document.getElementById("hostInsightSubtitle");
+  if (!overlay || !track) return;
+
+  const { hostname, displayName, customerLabel } = getHostListLabels(host);
+  if (titleEl) titleEl.textContent = customerLabel;
+  if (subtitleEl) {
+    subtitleEl.textContent = hostname !== displayName ? hostname : String(host.host_uid || "").trim();
+  }
+
+  track.innerHTML =
+    '<article class="host-insight-slide host-insight-slide--loading">' +
+    '<p class="insight-loading">Lade letzten Report…</p>' +
+    "</article>";
+
+  overlay.classList.remove("hidden");
+  document.body.classList.add("host-insight-open");
+  bindHostInsightCarouselOnce();
+  renderHostInsightDots(1);
+  syncHostInsightCarouselUi();
+
+  const { report, payload, error } = await fetchLatestHostReport(host);
+  if (overlay.classList.contains("hidden")) return;
+
+  let slides = buildHostInsightSlides(host, variant, report, payload);
+  if (error && (!payload || !Object.keys(payload || {}).length)) {
+    const reportLabel = resolveInsightReportLabel(null, null, host, variant);
+    slides = [
+      wrapInsightSlide(
+        "⚠️",
+        "Hinweis",
+        '<p class="insight-empty">' + mobileEsc(error) + "</p>" + buildInsightOverviewBody(host, variant),
+        reportLabel
+      ),
+    ];
+  }
+
+  track.innerHTML = slides.join("");
+  renderHostInsightDots(slides.length);
+  track.scrollLeft = 0;
+  syncHostInsightCarouselUi();
+}
+
 function handleHostListSheetClick(event) {
   const btn = event.target.closest('[data-action="host-list-sheet"]');
   if (!btn) return;
@@ -415,7 +950,7 @@ function handleHostListSheetClick(event) {
       ? filterHostListItems(state.activeHosts, state.activeHostsCountryFilter, state.activeHostsSearchQuery)
       : filterHostListItems(state.inactiveHosts, state.inactiveHostsCountryFilter, state.inactiveHostsSearchQuery);
   if (!hosts[index]) return;
-  openMobileHostListSheet(hosts[index], variant);
+  void openHostInsightCarousel(hosts[index], variant);
 }
 
 function updateActiveHostsListView() {
@@ -2031,6 +2566,16 @@ function wire() {
 
   document.getElementById("activeHostsList")?.addEventListener("click", handleHostListSheetClick);
   document.getElementById("inactiveHostsList")?.addEventListener("click", handleHostListSheetClick);
+
+  document.getElementById("hostInsightCloseBtn")?.addEventListener("click", closeHostInsightCarousel);
+  document.getElementById("hostInsightOverlay")?.addEventListener("click", (event) => {
+    if (event.target.id === "hostInsightOverlay") closeHostInsightCarousel();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const overlay = document.getElementById("hostInsightOverlay");
+    if (overlay && !overlay.classList.contains("hidden")) closeHostInsightCarousel();
+  });
 
   document.getElementById("refreshButton")?.addEventListener("click", () => {
     void refreshMobileData().catch((error) => {
