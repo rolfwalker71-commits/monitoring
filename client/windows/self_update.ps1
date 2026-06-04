@@ -497,10 +497,14 @@ function Test-CollectScriptSupportsLinuxStyleCli {
     if ($Text -notmatch 'function\s+Resolve-CollectAndSendCliArgs') {
         return $false
     }
+    # Native [switch]$NoJitter (install -NoJitter) or empty param() + $args CLI (--no-jitter).
     if ($Text -match '(?ms)^\s*param\s*\(\s*\[switch\]\s*\$NoJitter') {
-        return $false
+        return $true
     }
-    return $true
+    if ($Text -match '(?ms)^\s*param\s*\(\s*\)') {
+        return $true
+    }
+    return $false
 }
 
 function Get-CimPropertyValue {

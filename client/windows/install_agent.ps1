@@ -251,7 +251,7 @@ Write-Host "Running harvest SQL user setup..."
 $harvestSetup = "`$env:CONFIG_FILE='$ConfigFile'; & '$InstallDir\setup_harvest_sql_user.ps1' *>> '$LogFile'"
 & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command $harvestSetup
 
-$selfTestCollect = "`$env:CONFIG_FILE='$ConfigFile'; `$env:AGENT_VERSION_FILE='$InstallDir\AGENT_VERSION'; `$env:AGENT_QUEUE_DIR='$QueueDir'; & '$InstallDir\collect_and_send.ps1' -NoJitter *>> '$LogFile'"
+$selfTestCollect = "`$env:CONFIG_FILE='$ConfigFile'; `$env:AGENT_VERSION_FILE='$InstallDir\AGENT_VERSION'; `$env:AGENT_QUEUE_DIR='$QueueDir'; `$env:MONITORING_NO_JITTER='1'; & '$InstallDir\collect_and_send.ps1' -NoJitter --no-jitter *>> '$LogFile'"
 & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command $selfTestCollect
 
 $selfTestUpdate = "`$env:CONFIG_FILE='$ConfigFile'; `$env:AGENT_VERSION_FILE='$InstallDir\AGENT_VERSION'; `$env:AGENT_QUEUE_DIR='$QueueDir'; & '$InstallDir\self_update.ps1' *>> '$UpdateLogFile'"

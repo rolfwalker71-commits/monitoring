@@ -18,10 +18,16 @@
     Aliases: --debug-payload
 #>
 [CmdletBinding()]
-param()
+param(
+    [Alias('nojitter')]
+    [switch]$NoJitter,
+    [Alias('debugpayload')]
+    [switch]$DebugPayload,
+    [int]$JitterMaxSec = 0
+)
 
 # Bump when collect_and_send.ps1 logic changes (embedded in outgoing reports).
-$script:CollectScriptMarker = '20260605b'
+$script:CollectScriptMarker = '20260605c'
 
 function Get-MonitoringProcessAncestorNames {
     param([int]$MaxDepth = 12)
@@ -166,9 +172,9 @@ Usage: collect_and_send.ps1 [-NoJitter] [-DebugPayload] [-JitterMaxSec <seconds>
 
 $script:CollectWarnings = [System.Collections.Generic.List[string]]::new()
 $cli = Resolve-CollectAndSendCliArgs
-$NoJitter = $cli.NoJitter
-$DebugPayload = $cli.DebugPayload
-$JitterMaxSec = $cli.JitterMaxSec
+if ($cli.NoJitter) { $NoJitter = $true }
+if ($cli.DebugPayload) { $DebugPayload = $true }
+if ($cli.JitterMaxSec -gt 0) { $JitterMaxSec = $cli.JitterMaxSec }
 foreach ($w in @($cli.Warnings)) {
     if ($w) {
         $script:CollectWarnings.Add($w) | Out-Null
