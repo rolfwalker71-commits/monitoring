@@ -9,7 +9,9 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260605a"
+PULL_SCRIPT_VERSION="20260605b"
+# Bump when FILES_LIST changes (must match script_guardian entries).
+PULL_FILES_MANIFEST="guardian-32-v1"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -772,6 +774,56 @@ pull_script_version_from_file() {
   sed -n 's/^PULL_SCRIPT_VERSION="\(.*\)".*/\1/p' "$candidate" 2>/dev/null | head -n 1
 }
 
+pull_script_manifest_from_file() {
+  local candidate="$1"
+  sed -n 's/^PULL_FILES_MANIFEST="\(.*\)".*/\1/p' "$candidate" 2>/dev/null | head -n 1
+}
+
+pull_script_has_guardian_files_list() {
+  local candidate="$1"
+  [ -f "$candidate" ] \
+    && grep -q 'client/linux/script_guardian.sh' "$candidate" 2>/dev/null \
+    && grep -q 'client/windows/script_guardian.ps1' "$candidate" 2>/dev/null
+}
+
+reexec_if_pull_script_missing_guardian_files() {
+  local self="" new_script=""
+  self="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+  if pull_script_has_guardian_files_list "$self"; then
+    return 0
+  fi
+
+  echo "FEHLER: Dieses pull-server-only.sh hat keine Guardian-Dateien in FILES_LIST (typisch: 29 statt 32 Dateien)." >&2
+  echo "Erzwinge Neu-Download von GitHub branch main ..." >&2
+  new_script="$TARGET_DIR/pull-server-only.sh.forced"
+  if ! curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/main/pull-server-only.sh" "force-$$-$(date +%s)")" \
+    -o "$new_script" 2>/dev/null; then
+    echo "FEHLER: Download von main/pull-server-only.sh fehlgeschlagen." >&2
+    exit 1
+  fi
+  if ! pull_script_has_guardian_files_list "$new_script"; then
+    echo "FEHLER: Auch frisch von main geladenes Skript enthaelt keine script_guardian-Eintraege (CDN?)." >&2
+    echo "  Nutze: curl -fsSL .../scripts/deploy-agent-guardian.sh | bash -s $TARGET_DIR" >&2
+    exit 1
+  fi
+  chmod +x "$new_script"
+  mv -f "$new_script" "$TARGET_DIR/pull-server-only.sh"
+  echo "pull-server-only.sh ersetzt – starte Deploy neu ..." >&2
+  exec "$TARGET_DIR/pull-server-only.sh" "$@"
+}
+
+install_pull_script_from_main_branch() {
+  local dest="$1"
+  if curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/main/pull-server-only.sh" "main-pull-$$-$(date +%s)")" \
+    -o "$dest" 2>/dev/null \
+    && is_valid_pull_script_file "$dest" \
+    && pull_script_has_guardian_files_list "$dest"; then
+    chmod +x "$dest"
+    return 0
+  fi
+  return 1
+}
+
 upgrade_local_pull_script_from_main() {
   if [ "${MONITORING_SKIP_PULL_SCRIPT_UPGRADE:-0}" = "1" ]; then
     return 0
@@ -797,7 +849,12 @@ upgrade_local_pull_script_from_main() {
 
   local_pv="$(pull_script_version_from_file "$local_script")"
   remote_pv="$(pull_script_version_from_file "$remote_script")"
-  if [ -n "$local_pv" ] && [ -n "$remote_pv" ] && [ "$local_pv" = "$remote_pv" ]; then
+  local_pm="$(pull_script_manifest_from_file "$local_script")"
+  remote_pm="$(pull_script_manifest_from_file "$remote_script")"
+  if [ -n "$local_pv" ] && [ -n "$remote_pv" ] && [ "$local_pv" = "$remote_pv" ] \
+    && [ -n "$local_pm" ] && [ "$local_pm" = "$remote_pm" ] \
+    && pull_script_has_guardian_files_list "$local_script" \
+    && pull_script_has_guardian_files_list "$remote_script"; then
     rm -f "$remote_script"
     return 0
   fi
@@ -1231,7 +1288,9 @@ resolve_deploy_ref() {
   return 0
 }
 
-echo "pull-server-only.sh Version: $PULL_SCRIPT_VERSION"
+reexec_if_pull_script_missing_guardian_files "$@"
+
+echo "pull-server-only.sh Version: $PULL_SCRIPT_VERSION (Manifest: ${PULL_FILES_MANIFEST:-?}, erwartet 32 Deploy-Dateien)"
 echo "Installiere Serverteil nach: $TARGET_DIR"
 echo "Hinweis: Ein Lauf genuegt – bei CDN-Verzoegerung wird BUILD_VERSION automatisch nachgezogen." >&2
 
@@ -1464,16 +1523,48 @@ if [ -f "$TARGET_DIR/scripts/watch-inventur-job.sh" ]; then
   chmod 0755 "$TARGET_DIR/scripts/watch-inventur-job.sh"
 fi
 
-# Selbst-Update: erst am Ende austauschen, damit das laufende Skript nicht waehrend
-# des Parsens ueberschrieben wird.
+# Selbst-Update am Ende: immer branch main (nie REF=a9edd8e o.ae. – sonst 29-Dateien-Skript zurueck).
 NEW_PULL_SCRIPT="$TARGET_DIR/pull-server-only.sh.new"
-if download_file "pull-server-only.sh" "$NEW_PULL_SCRIPT"; then
-  chmod +x "$NEW_PULL_SCRIPT"
+if install_pull_script_from_main_branch "$NEW_PULL_SCRIPT"; then
   mv -f "$NEW_PULL_SCRIPT" "$TARGET_DIR/pull-server-only.sh"
-  echo "Self-Update abgeschlossen: pull-server-only.sh aktualisiert"
+  echo "Self-Update abgeschlossen: pull-server-only.sh von branch main (Manifest ${PULL_FILES_MANIFEST:-?})"
 else
-  echo "WARNUNG: Konnte neue pull-server-only.sh nicht laden." >&2
+  rm -f "$NEW_PULL_SCRIPT"
+  echo "WARNUNG: pull-server-only.sh Self-Update von main fehlgeschlagen (lokale Kopie unveraendert)." >&2
 fi
+
+ensure_guardian_update_files_present() {
+  local missing=0 rel dest
+  for rel in \
+    "client/linux/script_guardian.sh" \
+    "client/windows/script_guardian.ps1" \
+    "updates/client/linux/script_guardian.sh" \
+    "updates/client/windows/script_guardian.ps1"; do
+    dest="$TARGET_DIR/$rel"
+    if [ -s "$dest" ]; then
+      continue
+    fi
+    missing=1
+    echo "Guardian fehlt, lade nach: $rel" >&2
+    mkdir -p "$(dirname "$dest")"
+    if ! download_repo_file "$rel" "$dest"; then
+      if ! curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/main/$rel")" \
+        -o "$dest" 2>/dev/null; then
+        echo "FEHLER: Guardian-Datei konnte nicht geladen werden: $rel" >&2
+        return 1
+      fi
+    fi
+    if [ "$rel" = "client/linux/script_guardian.sh" ] || [ "$rel" = "updates/client/linux/script_guardian.sh" ]; then
+      chmod 0755 "$dest" 2>/dev/null || true
+    fi
+  done
+  if [ "$missing" -eq 1 ]; then
+    echo "Guardian-Dateien nachinstalliert." >&2
+  fi
+  return 0
+}
+
+ensure_guardian_update_files_present || true
 
 TMP_DIR="$(mktemp -d)"
 cleanup() {
