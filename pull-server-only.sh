@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604r"
+PULL_SCRIPT_VERSION="20260604s"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
