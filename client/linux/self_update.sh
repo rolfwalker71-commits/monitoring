@@ -23,6 +23,165 @@ SECONDARY_UPDATE_BASE_URL="${SECONDARY_SERVER_URL%/}/updates"
 LEGACY_UPDATE_BASE_URL="${LEGACY_SERVER_URL%/}/updates"
 AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-$INSTALL_DIR/AGENT_VERSION}"
 TLS_INSECURE="${TLS_INSECURE:-0}"
+
+ensure_config_value() {
+  local key="$1"
+  local value="$2"
+  if grep -qE "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null; then
+    sed -i -E "s|^[[:space:]]*${key}[[:space:]]*=.*$|${key}=\"$(printf '%s' "$value" | sed 's/[&|\\]/\\&/g')\"|" "$CONFIG_FILE"
+  else
+    printf '\n%s="%s"\n' "$key" "$value" >> "$CONFIG_FILE"
+  fi
+}
+
+parse_collect_interval_minutes_from_cron() {
+  local cron_file="$1"
+  local line=""
+  local value=""
+
+  if [[ ! -f "$cron_file" ]]; then
+    printf '%s' "15"
+    return 0
+  fi
+
+  line="$(grep -E 'collect_and_send\.sh' "$cron_file" 2>/dev/null | grep -Ev '^[[:space:]]*#' | head -n 1 || true)"
+  if [[ "$line" =~ ^\*/([0-9]+)[[:space:]] ]]; then
+    value="${BASH_REMATCH[1]}"
+    if [[ "$value" -ge 1 && "$value" -le 59 ]]; then
+      printf '%s' "$value"
+      return 0
+    fi
+  fi
+
+  printf '%s' "15"
+}
+
+normalize_update_hours() {
+  local value="${1:-1}"
+  if ! [[ "$value" =~ ^[0-9]+$ ]] || [[ "$value" -lt 1 ]] || [[ "$value" -gt 24 ]]; then
+    printf '%s' "1"
+    return 0
+  fi
+  printf '%s' "$value"
+}
+
+linux_monitoring_cron_file_is_valid() {
+  local cron_file="$1"
+  local first_line=""
+
+  [[ -f "$cron_file" ]] || return 1
+  if grep -qE '^[0-9*/-]+[[:space:]]+[0-9*/-]+[[:space:]]+.*SHELL=' "$cron_file" 2>/dev/null; then
+    return 1
+  fi
+  first_line="$(grep -Ev '^[[:space:]]*($|#)' "$cron_file" 2>/dev/null | head -n 1 || true)"
+  [[ "$first_line" == SHELL=* ]] || return 1
+  grep -Eq '^[^#[:space:]].*[[:space:]]root[[:space:]].*collect_and_send\.sh' "$cron_file" 2>/dev/null || return 1
+  grep -Eq '^[^#[:space:]].*[[:space:]]root[[:space:]].*self_update\.sh' "$cron_file" 2>/dev/null || return 1
+  return 0
+}
+
+write_linux_monitoring_cron_file() {
+  local cron_file="$1"
+  local interval_minutes="$2"
+  local update_hours="$3"
+  local collect_log_file="${4:-/var/log/monitoring-agent.log}"
+  local update_log_file="${5:-/var/log/monitoring-agent-update.log}"
+  local tmp_cron=""
+
+  if [[ $EUID -ne 0 ]]; then
+    echo "Cron repair skipped: root required" >&2
+    return 1
+  fi
+  if [[ ! -d /etc/cron.d ]]; then
+    return 0
+  fi
+
+  tmp_cron="$(mktemp)"
+  cat > "$tmp_cron" <<EOF
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# monitoring-agent collect
+*/${interval_minutes} * * * * root CONFIG_FILE=${CONFIG_FILE} AGENT_VERSION_FILE=${INSTALL_DIR}/AGENT_VERSION ${INSTALL_DIR}/collect_and_send.sh >> ${collect_log_file} 2>&1
+# monitoring-agent update
+11 */${update_hours} * * * root CONFIG_FILE=${CONFIG_FILE} AGENT_VERSION_FILE=${INSTALL_DIR}/AGENT_VERSION ${INSTALL_DIR}/self_update.sh >> ${update_log_file} 2>&1
+
+EOF
+
+  if ! grep -q 'collect_and_send\.sh' "$tmp_cron" || ! grep -q 'self_update\.sh' "$tmp_cron"; then
+    rm -f "$tmp_cron"
+    echo "Cron repair failed: generated file incomplete" >&2
+    return 1
+  fi
+
+  if [[ -f "$cron_file" ]]; then
+    cp -f "$cron_file" "${cron_file}.bak.selfupdate" 2>/dev/null || true
+  fi
+  if ! mv -f "$tmp_cron" "$cron_file"; then
+    rm -f "$tmp_cron"
+    echo "Cron repair failed: could not install $cron_file" >&2
+    return 1
+  fi
+  chmod 0644 "$cron_file" 2>/dev/null || true
+  return 0
+}
+
+repair_linux_monitoring_cron_schedule() {
+  local cron_file="/etc/cron.d/monitoring-agent"
+  local collect_log_file="/var/log/monitoring-agent.log"
+  local update_log_file="/var/log/monitoring-agent-update.log"
+  local interval_minutes="15"
+  local desired_update_hours=""
+  local current_update_hours=""
+  local config_update_hours=""
+
+  interval_minutes="$(parse_collect_interval_minutes_from_cron "$cron_file")"
+  if [[ "${COLLECT_INTERVAL_MINUTES:-}" =~ ^[0-9]+$ ]] \
+    && [[ "${COLLECT_INTERVAL_MINUTES}" -ge 1 ]] \
+    && [[ "${COLLECT_INTERVAL_MINUTES}" -le 59 ]]; then
+    interval_minutes="${COLLECT_INTERVAL_MINUTES}"
+  fi
+
+  config_update_hours="$(normalize_update_hours "${UPDATE_HOURS:-1}")"
+  desired_update_hours="$config_update_hours"
+
+  if [[ -f "$cron_file" ]]; then
+    current_update_hours="$(grep -E 'self_update\.sh' "$cron_file" 2>/dev/null | grep -Ev '^[[:space:]]*#' | head -n 1 || true)"
+    if [[ "$current_update_hours" =~ ^[0-9]+[[:space:]]+\*/([0-9]+)[[:space:]] ]]; then
+      current_update_hours="${BASH_REMATCH[1]}"
+      if [[ "$current_update_hours" =~ ^[0-9]+$ ]] \
+        && [[ "$current_update_hours" -ge 1 ]] \
+        && [[ "$current_update_hours" -le 24 ]] \
+        && linux_monitoring_cron_file_is_valid "$cron_file"; then
+        desired_update_hours="$(normalize_update_hours "$current_update_hours")"
+      fi
+    fi
+  fi
+
+  if linux_monitoring_cron_file_is_valid "$cron_file" \
+    && [[ "$desired_update_hours" == "$config_update_hours" ]]; then
+    return 0
+  fi
+
+  if ! write_linux_monitoring_cron_file "$cron_file" "$interval_minutes" "$desired_update_hours" "$collect_log_file" "$update_log_file"; then
+    return 1
+  fi
+
+  if ! linux_monitoring_cron_file_is_valid "$cron_file"; then
+    echo "Cron repair failed: $cron_file still invalid after rewrite" >&2
+    return 1
+  fi
+
+  ensure_config_value "UPDATE_HOURS" "$desired_update_hours" || true
+  systemctl reload cron 2>/dev/null || systemctl reload crond 2>/dev/null || service cron reload 2>/dev/null || true
+  echo "Repaired monitoring cron file: $cron_file (collect */${interval_minutes} min, update every ${desired_update_hours} h)" >&2
+  return 0
+}
+
+if [[ "${REPAIR_CRON_SCHEDULE_ONLY:-0}" == "1" ]]; then
+  repair_linux_monitoring_cron_schedule || true
+  exit 0
+fi
 CURL_CONNECT_TIMEOUT_SEC="${CURL_CONNECT_TIMEOUT_SEC:-10}"
 CURL_MAX_TIME_SEC="${CURL_MAX_TIME_SEC:-45}"
 
@@ -238,16 +397,6 @@ else
   echo "${ts} Monitoring agent updated from ${local_version} to ${remote_version} (source: ${remote_version_source})"
 fi
 
-ensure_config_value() {
-  local key="$1"
-  local value="$2"
-  if grep -qE "^[[:space:]]*${key}[[:space:]]*=" "$CONFIG_FILE" 2>/dev/null; then
-    sed -i -E "s|^[[:space:]]*${key}[[:space:]]*=.*$|${key}=\"$(printf '%s' "$value" | sed 's/[&|\\]/\\&/g')\"|" "$CONFIG_FILE"
-  else
-    printf '\n%s="%s"\n' "$key" "$value" >> "$CONFIG_FILE"
-  fi
-}
-
 DETECTED_HANA_SID="${HANA_SID:-}"
 if [[ -z "$DETECTED_HANA_SID" ]] && [[ -d /hana/shared ]]; then
   DETECTED_HANA_SID="$(find /hana/shared -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
@@ -304,52 +453,4 @@ if grep -qE '^[[:space:]]*DIR_SCAN_DEEP_PATHS[[:space:]]*=[[:space:]]*"?/hana/sh
   echo "Migration: reset stale DIR_SCAN_DEEP_PATHS in $CONFIG_FILE (will be re-detected on next run)"
 fi
 
-sync_linux_update_cron_schedule() {
-  local update_hours="${UPDATE_HOURS:-1}"
-  local cron_file="/etc/cron.d/monitoring-agent"
-  local update_log_file="/var/log/monitoring-agent-update.log"
-  local update_cron_line tmp_cron
-
-  if ! [[ "$update_hours" =~ ^[0-9]+$ ]] || [[ "$update_hours" -lt 1 ]] || [[ "$update_hours" -gt 24 ]]; then
-    update_hours=1
-  fi
-  if [[ "$update_hours" == "6" ]]; then
-    update_hours=1
-  fi
-
-  ensure_config_value "UPDATE_HOURS" "$update_hours" || return 0
-  UPDATE_HOURS="$update_hours"
-
-  update_cron_line="11 */${update_hours} * * * root CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/self_update.sh >> $update_log_file 2>&1"
-
-  if [[ ! -f "$cron_file" ]]; then
-    return 0
-  fi
-  if [[ ! -w "$cron_file" ]]; then
-    echo "Schedule sync skipped: not writable ($cron_file)" >&2
-    return 0
-  fi
-
-  if ! grep -q 'self_update\.sh' "$cron_file" 2>/dev/null; then
-    return 0
-  fi
-
-  cp -f "$cron_file" "${cron_file}.bak.selfupdate" 2>/dev/null || true
-  tmp_cron="$(mktemp)"
-  if ! sed -E "s|^.*self_update\.sh.*|${update_cron_line}|" "$cron_file" > "$tmp_cron"; then
-    rm -f "$tmp_cron"
-    return 0
-  fi
-  if ! grep -q 'collect_and_send\.sh' "$tmp_cron" 2>/dev/null; then
-    rm -f "$tmp_cron"
-    echo "Schedule sync skipped: collect cron line missing after patch" >&2
-    return 0
-  fi
-  if ! mv -f "$tmp_cron" "$cron_file"; then
-    rm -f "$tmp_cron"
-    return 0
-  fi
-  chmod 0644 "$cron_file" 2>/dev/null || true
-}
-
-sync_linux_update_cron_schedule || true
+repair_linux_monitoring_cron_schedule || true

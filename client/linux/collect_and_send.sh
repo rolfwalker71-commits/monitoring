@@ -93,6 +93,16 @@ if [[ -z "${SERVER_URL:-}" ]]; then
   exit 1
 fi
 
+if [[ $EUID -eq 0 ]]; then
+  agent_install_dir="${INSTALL_DIR:-/opt/monitoring-agent}"
+  agent_updater="${agent_install_dir}/self_update.sh"
+  if [[ -x "$agent_updater" ]]; then
+    CONFIG_FILE="$CONFIG_FILE" INSTALL_DIR="$agent_install_dir" \
+      AGENT_VERSION_FILE="${AGENT_VERSION_FILE:-$agent_install_dir/AGENT_VERSION}" \
+      REPAIR_CRON_SCHEDULE_ONLY=1 "$agent_updater" >> "${UPDATE_LOG_FILE:-/var/log/monitoring-agent-update.log}" 2>&1 || true
+  fi
+fi
+
 if [[ "$DISABLE_JITTER" != true ]] && [[ "$SEND_JITTER_MAX_SEC" =~ ^[0-9]+$ ]] && [[ "$SEND_JITTER_MAX_SEC" -gt 0 ]]; then
   jitter_identity="${AGENT_ID:-$(hostname -f 2>/dev/null || hostname)}"
   jitter_sec="$(printf '%s' "$jitter_identity" | cksum | awk -v max="$SEND_JITTER_MAX_SEC" '{print $1 % (max + 1)}')"
