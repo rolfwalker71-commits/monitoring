@@ -19201,6 +19201,18 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if parsed.path == "/dashboard-redesign.css":
+            self._send_file(
+                STATIC_DIR / "dashboard-redesign.css",
+                "text/css; charset=utf-8",
+                extra_headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
+            return
+
         if parsed.path == "/sw.js":
             self._send_file(
                 STATIC_DIR / "sw.js",
