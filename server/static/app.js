@@ -9603,8 +9603,14 @@ function renderReportCard(report) {
   const reportTimestampTime = asText(reportTimestampParts.join(","), "").trim();
 
   // Helper function to render meta-group items
-  function renderMetaItem(label, value) {
-    return `<p class="meta-group-item"><strong class="kv-label">${label}</strong><span class="kv-value">${escapeHtml(asText(value || "-"))}</span></p>`;
+  function renderMetaItem(label, value, options = {}) {
+    let valueHtml = escapeHtml(asText(value || "-"));
+    if (options.truncate === "hostname") {
+      valueHtml = renderTruncatedHostnameHtml(value);
+    } else if (options.truncate) {
+      valueHtml = renderTruncatedTextHtml(value);
+    }
+    return `<p class="meta-group-item"><strong class="kv-label">${label}</strong><span class="kv-value">${valueHtml}</span></p>`;
   }
 
   function renderMetaItemHtml(label, html) {
@@ -9616,7 +9622,7 @@ function renderReportCard(report) {
     <div class="meta-group">
       <div class="meta-group-title">Agent-Info</div>
       <div class="meta-group-content">
-        ${renderMetaItem("Agent ID", report.agent_id || payload.agent_id)}
+        ${renderMetaItem("Agent ID", report.agent_id || payload.agent_id, { truncate: "hostname" })}
         ${renderMetaItem("Version", payload.agent_version)}
         ${renderMetaItem("API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}
       </div>
@@ -10921,7 +10927,6 @@ function renderOverviewHostMetrics() {
   const hanaSidChip = asText(payload.hana_sid || host.hana_sid || "", "-");
   const hostname = asText(host.hostname, "-");
   const hostUid = asText(host.host_uid, "").trim();
-  const hostUidShort = hostUid.length > 12 ? `${hostUid.slice(0, 8)}…${hostUid.slice(-4)}` : (hostUid || "-");
   const countryCode = normalizeHostCountryCode(host) || "-";
   const envLabel = asText(host.environment_type, "").trim().toUpperCase() || "-";
   const customerProject = asText(host.customer_maringo_project_number, "").trim();
@@ -10934,12 +10939,22 @@ function renderOverviewHostMetrics() {
   const ramSub = `${formatKilobytes(memory.used_kb)} / ${formatKilobytes(memory.total_kb)}`;
   const coresModel = `${Number.isFinite(cpuCores) && cpuCores > 0 ? String(Math.floor(cpuCores)) : "-"} · ${cpuModelName}`;
 
-  const metricRow = (label, value) => `
+  const metricRow = (label, value, options = {}) => {
+    let valueHtml = escapeHtml(asText(value, "-"));
+    if (options.truncate === "hostname") {
+      valueHtml = renderTruncatedHostnameHtml(value);
+    } else if (options.truncate === "uid") {
+      valueHtml = renderTruncatedHostUidHtml(value);
+    } else if (options.truncate) {
+      valueHtml = renderTruncatedTextHtml(value);
+    }
+    return `
     <div class="metric-row">
       <span class="metric-label">${escapeHtml(label)}</span>
-      <span class="metric-value">${escapeHtml(asText(value, "-"))}</span>
+      <span class="metric-value">${valueHtml}</span>
     </div>
   `;
+  };
 
   const sapChipsHtml = `
     <div class="overview-sap-chips">
@@ -10956,10 +10971,10 @@ function renderOverviewHostMetrics() {
     <div class="overview-metrics-grid">
       <article class="metric-card">
         <h4>Host &amp; Identität</h4>
-        ${metricRow("Kunde", customerLabel)}
-        ${metricRow("Bezeichnung", displayLabel)}
-        ${metricRow("Hostname", hostname)}
-        ${metricRow("Host-UID", hostUidShort)}
+        ${metricRow("Kunde", customerLabel, { truncate: true })}
+        ${metricRow("Bezeichnung", displayLabel, { truncate: true })}
+        ${metricRow("Hostname", hostname, { truncate: "hostname" })}
+        ${metricRow("Host-UID", hostUid, { truncate: "uid" })}
         ${metricRow("Land", countryCode)}
         ${metricRow("Umgebung", envLabel)}
         ${customerProject ? metricRow("Projekt", customerProject) : ""}
@@ -10967,7 +10982,7 @@ function renderOverviewHostMetrics() {
       </article>
       <article class="metric-card">
         <h4>Agent</h4>
-        ${metricRow("Agent ID", report?.agent_id || payload.agent_id || "-")}
+        ${metricRow("Agent ID", report?.agent_id || payload.agent_id || "-", { truncate: "hostname" })}
         ${metricRow("Version", payload.agent_version || host.agent_version || "-")}
         ${metricRow("API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}
         ${metricRow("Queue", `${queueDepthLabel(payload.queue_depth)} Dateien`)}
@@ -17915,6 +17930,72 @@ function formatShortHostname(hostname) {
   const raw = String(hostname || "").trim();
   if (!raw) return "-";
   return raw.split(".")[0] || raw;
+}
+
+function truncateDisplayText(value, options = {}) {
+  const full = asText(value, "");
+  const fallback = options.fallback ?? "-";
+  if (!full || full === "-") {
+    return { display: fallback, full: "", truncated: false };
+  }
+  const maxLen = Number(options.maxLen) > 0 ? Number(options.maxLen) : 28;
+  if (full.length <= maxLen) {
+    return { display: full, full, truncated: false };
+  }
+  const headLen = Number(options.headLen) > 0
+    ? Number(options.headLen)
+    : Math.max(8, Math.floor(maxLen * 0.5));
+  const tailLen = Number(options.tailLen) > 0
+    ? Number(options.tailLen)
+    : Math.max(6, maxLen - headLen - 1);
+  return {
+    display: `${full.slice(0, headLen)}…${full.slice(-tailLen)}`,
+    full,
+    truncated: true,
+  };
+}
+
+function truncateHostnameForDisplay(hostname) {
+  const full = asText(hostname, "");
+  if (!full || full === "-") {
+    return { display: "-", full: "", truncated: false };
+  }
+  if (full.length <= 28) {
+    return { display: full, full, truncated: false };
+  }
+  const parts = full.split(".").filter(Boolean);
+  if (parts.length >= 2) {
+    const display = `${parts[0]}…${parts[parts.length - 1]}`;
+    if (display.length <= 34) {
+      return { display, full, truncated: true };
+    }
+  }
+  return truncateDisplayText(full, { headLen: 14, tailLen: 12 });
+}
+
+function renderTruncatedSpanHtml(info) {
+  const display = escapeHtml(info.display);
+  if (!info.full || info.full === info.display) {
+    return `<span class="text-truncate-mid">${display}</span>`;
+  }
+  return `<span class="text-truncate-mid" title="${escapeHtml(info.full)}">${display}</span>`;
+}
+
+function renderTruncatedHostnameHtml(hostname) {
+  return renderTruncatedSpanHtml(truncateHostnameForDisplay(hostname));
+}
+
+function renderTruncatedTextHtml(value, options = {}) {
+  return renderTruncatedSpanHtml(truncateDisplayText(value, options));
+}
+
+function renderTruncatedHostUidHtml(hostUid) {
+  const full = asText(hostUid, "").trim();
+  if (!full) {
+    return '<span class="text-truncate-mid">-</span>';
+  }
+  const display = full.length > 12 ? `${full.slice(0, 8)}…${full.slice(-4)}` : full;
+  return renderTruncatedSpanHtml({ display, full, truncated: full.length > 12 });
 }
 
 function updateSystemOverviewAddonsToggleButton() {

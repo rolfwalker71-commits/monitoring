@@ -771,7 +771,7 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
 .metric-row {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
   padding: 5px 0;
   border-bottom: 1px solid #f1f5f9;
@@ -780,6 +780,7 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
 .metric-row:last-child { border-bottom: 0; }
 
 .metric-row .metric-label {
+  flex: 0 0 auto;
   font-weight: 600;
   color: #475569;
   font-size: 12px;
@@ -791,6 +792,18 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
   font-weight: 600;
   color: #1e293b;
   text-align: right;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.metric-row .metric-value .text-truncate-mid,
+.meta-group-item .kv-value .text-truncate-mid {
+  display: inline-block;
+  max-width: min(240px, 62vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
 .metric-bar-row {
@@ -875,6 +888,8 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
 
 .meta-group-item .kv-value {
   text-align: right !important;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .report-card .report-header {
