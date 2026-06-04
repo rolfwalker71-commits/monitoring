@@ -364,6 +364,10 @@ function applyInitialHeaderKpiWidth() {
   const storedWidth = readStoredHeaderKpiWidth();
   const initialWidth = clampHeaderKpiWidth(storedWidth || HEADER_KPI_DEFAULT_WIDTH_PX);
   for (const strip of strips) {
+    if (strip.querySelector(".header-kpi-group")) {
+      strip.style.removeProperty("--kpi-uniform-card-width");
+      continue;
+    }
     if (!strip.style.getPropertyValue("--kpi-uniform-card-width")) {
       strip.style.setProperty("--kpi-uniform-card-width", `${initialWidth}px`);
     }
@@ -375,6 +379,10 @@ function syncHeaderKpiUniformCardWidth() {
   const storedWidth = readStoredHeaderKpiWidth();
   let widthToPersist = 0;
   for (const strip of strips) {
+    if (strip.querySelector(".header-kpi-group")) {
+      strip.style.removeProperty("--kpi-uniform-card-width");
+      continue;
+    }
     const cssCurrent = parseFloat(strip.style.getPropertyValue("--kpi-uniform-card-width") || "0");
     const currentWidth = clampHeaderKpiWidth(cssCurrent || storedWidth || HEADER_KPI_DEFAULT_WIDTH_PX);
     const cards = Array.from(
