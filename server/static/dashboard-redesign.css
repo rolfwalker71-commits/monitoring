@@ -14,6 +14,8 @@
   --dr-accent-soft: #eff6ff;
   --dr-alarm: #c2410c;
   --dr-crit: #b91c1c;
+  --dr-host-active: #15803d;
+  --dr-host-inactive: #b91c1c;
 }
 
 /* Unified card surfaces (host list, KPIs, report meta, panels) */
@@ -173,6 +175,27 @@
 .panel-header .header-kpi-group--alerts > .header-stat-chip-critical.header-stat-chip--alarm-active .header-chip-label {
   color: inherit !important;
   font-weight: 700 !important;
+}
+
+/* Hosts: Aktiv grün, Inaktiv rot (immer) */
+.panel-header .header-kpi-group--hosts > .header-stat-chip-active-hosts .header-chip-label,
+.panel-header .header-kpi-group--hosts > .header-stat-chip-active-hosts .header-chip-count {
+  color: var(--dr-host-active) !important;
+}
+
+.panel-header .header-kpi-group--hosts > .header-stat-chip-inactive .header-chip-label,
+.panel-header .header-kpi-group--hosts > .header-stat-chip-inactive .header-chip-count {
+  color: var(--dr-host-inactive) !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-group--hosts > .header-stat-chip-active-hosts .header-chip-label,
+body[data-theme="dark"] .panel-header .header-kpi-group--hosts > .header-stat-chip-active-hosts .header-chip-count {
+  color: #4ade80 !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-group--hosts > .header-stat-chip-inactive .header-chip-label,
+body[data-theme="dark"] .panel-header .header-kpi-group--hosts > .header-stat-chip-inactive .header-chip-count {
+  color: #f87171 !important;
 }
 
 .panel-header .panel-actions .header-toolbar {
