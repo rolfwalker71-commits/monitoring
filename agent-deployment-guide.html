@@ -509,6 +509,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
               <tr><td><code>-DebugPayload</code></td><td>Gibt den JSON-Payload auf stdout aus statt ihn zu senden.</td></tr>
             </tbody>
           </table>
+          <div class="callout"><strong>Fehler:</strong> Unbekannte CLI-Flags werden ignoriert (Collect läuft weiter). Bei Absturz/Sendefehler wird ein Notfall-Report mit <code>last_crash</code> / <code>journal_errors</code> an den Server gesendet. Lokal: <code>last-collect-crash.txt</code>, <code>monitoring-agent.log</code>.</div>
           <div class="callout"><strong>Queue:</strong> Fehlgeschlagene Reports landen in <code>C:\ProgramData\monitoring-agent\queue</code> und werden später erneut gesendet.</div>
         </div>
         <div class="subcard">

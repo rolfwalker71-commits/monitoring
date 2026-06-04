@@ -19,6 +19,9 @@
 [CmdletBinding()]
 param()
 
+# Bump when collect_and_send.ps1 logic changes (embedded in outgoing reports).
+$script:CollectScriptMarker = '20260605a'
+
 function Test-CollectCliSwitch {
     param(
         [string]$Token,
@@ -38,6 +41,7 @@ function Resolve-CollectAndSendCliArgs {
     $noJitter = $false
     $debugPayload = $false
     $jitterMaxSec = 0
+    $warnings = [System.Collections.Generic.List[string]]::new()
     $idx = 0
     while ($idx -lt $args.Count) {
         $token = [string]$args[$idx]
@@ -53,9 +57,15 @@ function Resolve-CollectAndSendCliArgs {
         }
         if (Test-CollectCliSwitch -Token $token -Names @('jittermaxsec', 'jitter-max-sec')) {
             if ($idx + 1 -ge $args.Count) {
-                throw 'Missing value for --jitter-max-sec / -JitterMaxSec'
+                $warnings.Add('Missing value for --jitter-max-sec / -JitterMaxSec (ignored).')
+                $idx++
+                continue
             }
-            $jitterMaxSec = [int]$args[$idx + 1]
+            try {
+                $jitterMaxSec = [int]$args[$idx + 1]
+            } catch {
+                $warnings.Add("Invalid --jitter-max-sec '$($args[$idx + 1])' (ignored).")
+            }
             $idx += 2
             continue
         }
@@ -75,36 +85,50 @@ Usage: collect_and_send.ps1 [-NoJitter] [-DebugPayload] [-JitterMaxSec <seconds>
 '@
             exit 0
         }
-        throw @"
-Unknown argument: $token
-Use -NoJitter (not bare --nojitter bound to JitterMaxSec). Accepted: -NoJitter, --no-jitter, --nojitter, -DebugPayload, -JitterMaxSec <sec>
-"@
+        $warnings.Add("Unknown CLI argument '$token' ignored (collect continues).")
+        $idx++
     }
     return [pscustomobject]@{
         NoJitter       = $noJitter
         DebugPayload   = $debugPayload
         JitterMaxSec   = $jitterMaxSec
+        Warnings       = @($warnings)
     }
 }
 
+$script:CollectWarnings = [System.Collections.Generic.List[string]]::new()
 $cli = Resolve-CollectAndSendCliArgs
 $NoJitter = $cli.NoJitter
 $DebugPayload = $cli.DebugPayload
 $JitterMaxSec = $cli.JitterMaxSec
+foreach ($w in @($cli.Warnings)) {
+    if ($w) { $script:CollectWarnings.Add($w) | Out-Null }
+}
+
+function Add-CollectWarning {
+    param([string]$Message)
+    if ([string]::IsNullOrWhiteSpace($Message)) {
+        return
+    }
+    $script:CollectWarnings.Add($Message.Trim()) | Out-Null
+}
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# ---- Global crash trap: catches any unhandled terminating error ----
-# Writes to stdout (captured by scheduled task log) and to a persistent crash file.
+# ---- Global crash trap: log + try emergency report so the server still sees the failure ----
 trap {
     $crashMsg = "COLLECT_CRASH $(([System.DateTime]::UtcNow).ToString('yyyy-MM-ddTHH:mm:ssZ')): $($_.Exception.Message)"
     try { Write-Host $crashMsg } catch { }
     try {
-        $crashFile = 'C:\ProgramData\monitoring-agent\last-collect-crash.txt'
-        [System.IO.File]::WriteAllText($crashFile, "$crashMsg`n$($_.ScriptStackTrace)`n", [System.Text.Encoding]::UTF8)
+        Write-CollectCrashFile -Message $crashMsg -StackTrace $_.ScriptStackTrace
     } catch { }
-    break
+    try {
+        Send-EmergencyAgentReport -ErrorMessage $crashMsg -StackTrace $_.ScriptStackTrace
+    } catch {
+        try { Write-Host ("Emergency report failed: " + $_.Exception.Message) } catch { }
+    }
+    exit 1
 }
 
 # Enable TLS 1.2 for older Windows versions
@@ -119,7 +143,7 @@ $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { '
 $QueueQuarantineDir = if ($env:AGENT_QUEUE_QUARANTINE_DIR) { $env:AGENT_QUEUE_QUARANTINE_DIR } else { 'C:\ProgramData\monitoring-agent\queue-quarantine' }
 $PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
 $PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
-$EmbeddedAgentVersion = '1.7.371'
+$EmbeddedAgentVersion = '1.7.372'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -134,6 +158,10 @@ $AngLogMaxFiles = if ($env:ANG_LOG_MAX_FILES) { [int]$env:ANG_LOG_MAX_FILES } el
 $AngLogRotationKeep = if ($env:ANG_LOG_ROTATION_KEEP) { [int]$env:ANG_LOG_ROTATION_KEEP } else { 2 }
 $AngLogMaxAgeDays = if ($env:ANG_LOG_MAX_AGE_DAYS) { [int]$env:ANG_LOG_MAX_AGE_DAYS } else { 7 }
 $AngLogMaxReadBytes = if ($env:ANG_LOG_MAX_READ_BYTES -match '^\d+$') { [int]$env:ANG_LOG_MAX_READ_BYTES } else { 524288 }
+
+$cfg = @{}
+$ServerUrl = ''
+$ApiKey = ''
 
 if (-not (Test-Path $ConfigFile)) {
     Write-Error "Config file not found: $ConfigFile"
@@ -273,6 +301,31 @@ function ConvertTo-JsonString([string]$s) {
         -replace "`n",   '\n' `
         -replace "`r",   '\r' `
         -replace "`t",   '\t'
+}
+
+function Write-CollectCrashFile {
+    param(
+        [string]$Message,
+        [string]$StackTrace = ''
+    )
+    $crashFile = if ($env:MONITORING_LAST_CRASH_FILE) { $env:MONITORING_LAST_CRASH_FILE } else { 'C:\ProgramData\monitoring-agent\last-collect-crash.txt' }
+    $body = "$Message`n"
+    if ($StackTrace) {
+        $body += "$StackTrace`n"
+    }
+    [System.IO.File]::WriteAllText($crashFile, $body, [System.Text.Encoding]::UTF8)
+}
+
+function Get-CollectWarningsJsonArray {
+    $items = @()
+    foreach ($w in @($script:CollectWarnings)) {
+        if ([string]::IsNullOrWhiteSpace($w)) { continue }
+        $items += ('"' + (ConvertTo-JsonString ([string]$w)) + '"')
+    }
+    if ($items.Count -eq 0) {
+        return '[]'
+    }
+    return '[' + ($items -join ',') + ']'
 }
 
 function Select-AgentVersion {
@@ -1628,6 +1681,117 @@ function Send-Payload([string]$body) {
     Invoke-ServerJsonPost -Uri $uri -Body $body | Out-Null
 }
 
+function Ensure-EmergencyServerConfig {
+    if ($ServerUrl) {
+        return $true
+    }
+    if (-not (Test-Path $ConfigFile)) {
+        return $false
+    }
+    $localCfg = @{}
+    foreach ($line in Get-Content -Path $ConfigFile -Encoding UTF8 -ErrorAction SilentlyContinue) {
+        if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"(.*?)"\s*$') {
+            $localCfg[$Matches[1]] = $Matches[2]
+        } elseif ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(\S+)\s*$') {
+            $localCfg[$Matches[1]] = $Matches[2]
+        }
+    }
+    if ($localCfg.ContainsKey('SERVER_URL') -and $localCfg['SERVER_URL']) {
+        $script:ServerUrl = [string]$localCfg['SERVER_URL']
+        if (-not $cfg) { $script:cfg = @{} }
+        $script:cfg['SERVER_URL'] = $script:ServerUrl
+        if ($localCfg.ContainsKey('AGENT_ID')) { $script:cfg['AGENT_ID'] = $localCfg['AGENT_ID'] }
+        if ($localCfg.ContainsKey('HOSTNAME')) { $script:cfg['HOSTNAME'] = $localCfg['HOSTNAME'] }
+        if ($localCfg.ContainsKey('API_KEY')) { $script:ApiKey = $localCfg['API_KEY'] }
+        return $true
+    }
+    return $false
+}
+
+function Send-EmergencyAgentReport {
+    param(
+        [string]$ErrorMessage,
+        [string]$StackTrace = '',
+        [string[]]$ExtraLines = @()
+    )
+
+    if (-not (Ensure-EmergencyServerConfig)) {
+        return
+    }
+
+    $ts = [System.DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ', $IC)
+    $hostValue = [string]$env:COMPUTERNAME
+    if ($cfg -and $cfg.ContainsKey('HOSTNAME') -and $cfg['HOSTNAME']) {
+        $hostValue = [string]$cfg['HOSTNAME']
+    }
+    $agentIdValue = $hostValue
+    if ($cfg -and $cfg.ContainsKey('AGENT_ID') -and $cfg['AGENT_ID']) {
+        $agentIdValue = [string]$cfg['AGENT_ID']
+    }
+    $agentVerValue = Select-AgentVersion -EmbeddedVersion $EmbeddedAgentVersion -FilePath $VersionFile
+
+    $journalEntries = @()
+    $journalEntries += ('{"time_utc":"' + $ts + '","priority":"crit","unit":"collect_and_send","message":"' + (ConvertTo-JsonString $ErrorMessage) + '"}')
+    foreach ($line in @($ExtraLines)) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $journalEntries += ('{"time_utc":"' + $ts + '","priority":"err","unit":"collect_and_send","message":"' + (ConvertTo-JsonString ([string]$line)) + '"}')
+    }
+    foreach ($line in ($StackTrace -split "`n" | Select-Object -First 12)) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $journalEntries += ('{"time_utc":"' + $ts + '","priority":"err","unit":"stack","message":"' + (ConvertTo-JsonString ($line.Trim())) + '"}')
+    }
+    foreach ($w in @($script:CollectWarnings)) {
+        if ([string]::IsNullOrWhiteSpace($w)) { continue }
+        $journalEntries += ('{"time_utc":"' + $ts + '","priority":"warn","unit":"cli","message":"' + (ConvertTo-JsonString ([string]$w)) + '"}')
+    }
+
+    $crashEsc = ConvertTo-JsonString ($ErrorMessage + $(if ($StackTrace) { "`n$StackTrace" } else { '' }))
+    $logPathEsc = ConvertTo-JsonString $UpdateLogFile
+    $agentUpdateJson = '{"available":true,"path":"' + $logPathEsc + '","line_count":1,"lines":["' + $crashEsc + '"],"last_crash":"' + $crashEsc + '","priority_check_minutes":0,"last_priority_check_utc":"","next_priority_check_utc":"","recurring_update_hours":0,"recurring_update_hint":""}'
+
+    $warningsJson = Get-CollectWarningsJsonArray
+    $body = @"
+{
+  "agent_id": "$(ConvertTo-JsonString $agentIdValue)",
+  "agent_version": "$(ConvertTo-JsonString $agentVerValue)",
+  "hostname": "$(ConvertTo-JsonString $hostValue)",
+  "primary_ip": "",
+  "all_ips": "",
+  "kernel": "",
+  "os": "Windows",
+  "uptime_seconds": 0,
+  "timestamp_utc": "$ts",
+  "delivery_mode": "live",
+  "is_delayed": false,
+  "queued_at_utc": "",
+  "queue_depth": 0,
+  "agent_runtime": {
+    "script_path": "$(ConvertTo-JsonString ($PSCommandPath))",
+    "embedded_version": "$(ConvertTo-JsonString $EmbeddedAgentVersion)",
+    "version_file_value": "$(ConvertTo-JsonString (Get-VersionFileValue -FilePath $VersionFile))",
+    "version_file_path": "$(ConvertTo-JsonString $VersionFile)",
+    "selected_version": "$(ConvertTo-JsonString $agentVerValue)",
+    "collect_warnings": $warningsJson,
+    "emergency_report": true
+  },
+  "filesystems": [],
+  "journal_errors": {
+    "since_minutes": 0,
+    "entries": [$(($journalEntries -join ','))]
+  },
+  "agent_update": $agentUpdateJson
+}
+"@
+
+    try {
+        Send-Payload $body
+        Write-Host 'Emergency agent report sent (collector error fallback).'
+    } catch {
+        Write-Host ("Emergency agent report failed: " + $_.Exception.Message)
+        throw
+    }
+}
+
 function Save-PayloadSnapshot {
     param([string]$Body)
 
@@ -2755,6 +2919,7 @@ foreach ($focusType in @($licenseInfo.focus_license_types)) {
     $focusLicenseTypeEntries += ('{"license_type":"' + $focusTypeNameEsc + '","count":' + $focusTypeCount + '}')
 }
 $focusLicenseTypesJson = '[' + ($focusLicenseTypeEntries -join ',') + ']'
+$collectWarningsJson = Get-CollectWarningsJsonArray
 
 $payload = @"
 {
@@ -2778,7 +2943,9 @@ $payload = @"
         "embedded_version": "$embeddedVerEsc",
         "version_file_value": "$fileVerEsc",
         "version_file_path": "$versionFilePathEsc",
-        "selected_version": "$agentVerEsc"
+        "selected_version": "$agentVerEsc",
+        "collect_warnings": $collectWarningsJson,
+        "emergency_report": false
     },
     "cpu": {
         "usage_percent": $cpuUsagePctStr,
@@ -2851,6 +3018,17 @@ try {
     Send-Payload $payload
 } catch {
     $sendErrorSummary = Get-HttpExceptionSummary $_.Exception
+    $sendMsg = "COLLECT_SEND_FAILED: " + $(if ($sendErrorSummary) { $sendErrorSummary } else { $_.Exception.Message })
+    Add-CollectWarning $sendMsg
+    try {
+        Write-CollectCrashFile -Message $sendMsg -StackTrace $_.ScriptStackTrace
+    } catch { }
+    try {
+        Send-EmergencyAgentReport -ErrorMessage $sendMsg -StackTrace $_.ScriptStackTrace -ExtraLines @('Primary payload queued for retry.')
+    } catch {
+        Write-Warning ("Emergency report after send failure also failed: " + $_.Exception.Message)
+    }
+
     $queuedAt = [System.DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ', $IC)
     $delayed  = $payload `
                   -replace '"delivery_mode": "live"',  '"delivery_mode": "delayed"' `
