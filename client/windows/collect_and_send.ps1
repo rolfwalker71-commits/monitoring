@@ -6,19 +6,91 @@
 
 .PARAMETER NoJitter
     Skip startup jitter sleep (useful for manual tests).
+    Aliases: -nojitter, --no-jitter, --nojitter (Linux-style).
 
 .PARAMETER JitterMaxSec
     Override maximum jitter delay for this run (in seconds).
+    Aliases: --jitter-max-sec <sec>
 
 .PARAMETER DebugPayload
     Print JSON payload to stdout instead of sending it (useful for debugging).
+    Aliases: --debug-payload
 #>
 [CmdletBinding()]
-param(
-    [switch]$NoJitter,
-    [int]$JitterMaxSec = 0,
-    [switch]$DebugPayload
-)
+param()
+
+function Test-CollectCliSwitch {
+    param(
+        [string]$Token,
+        [string[]]$Names
+    )
+    $bare = ($Token -replace '^-+', '').ToLowerInvariant() -replace '-', ''
+    foreach ($name in $Names) {
+        $want = ($name -replace '-', '').ToLowerInvariant()
+        if ($bare -eq $want) {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Resolve-CollectAndSendCliArgs {
+    $noJitter = $false
+    $debugPayload = $false
+    $jitterMaxSec = 0
+    $idx = 0
+    while ($idx -lt $args.Count) {
+        $token = [string]$args[$idx]
+        if (Test-CollectCliSwitch -Token $token -Names @('nojitter', 'no-jitter')) {
+            $noJitter = $true
+            $idx++
+            continue
+        }
+        if (Test-CollectCliSwitch -Token $token -Names @('debugpayload', 'debug-payload')) {
+            $debugPayload = $true
+            $idx++
+            continue
+        }
+        if (Test-CollectCliSwitch -Token $token -Names @('jittermaxsec', 'jitter-max-sec')) {
+            if ($idx + 1 -ge $args.Count) {
+                throw 'Missing value for --jitter-max-sec / -JitterMaxSec'
+            }
+            $jitterMaxSec = [int]$args[$idx + 1]
+            $idx += 2
+            continue
+        }
+        if ($token -match '^(?i)-{0,2}jittermaxsec:(\d+)$') {
+            $jitterMaxSec = [int]$Matches[1]
+            $idx++
+            continue
+        }
+        if ($token -match '^(?i)(-help|--help|/\?|-h|-\?)$') {
+            Write-Host @'
+Usage: collect_and_send.ps1 [-NoJitter] [-DebugPayload] [-JitterMaxSec <seconds>]
+       collect_and_send.ps1 [--no-jitter] [--debug-payload] [--jitter-max-sec <seconds>]
+
+  -NoJitter / --no-jitter / --nojitter   Skip startup jitter
+  -DebugPayload / --debug-payload        Print JSON only, do not send
+  -JitterMaxSec <n> / --jitter-max-sec <n>   Override max jitter seconds
+'@
+            exit 0
+        }
+        throw @"
+Unknown argument: $token
+Use -NoJitter (not bare --nojitter bound to JitterMaxSec). Accepted: -NoJitter, --no-jitter, --nojitter, -DebugPayload, -JitterMaxSec <sec>
+"@
+    }
+    return [pscustomobject]@{
+        NoJitter       = $noJitter
+        DebugPayload   = $debugPayload
+        JitterMaxSec   = $jitterMaxSec
+    }
+}
+
+$cli = Resolve-CollectAndSendCliArgs
+$NoJitter = $cli.NoJitter
+$DebugPayload = $cli.DebugPayload
+$JitterMaxSec = $cli.JitterMaxSec
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -47,7 +119,7 @@ $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { '
 $QueueQuarantineDir = if ($env:AGENT_QUEUE_QUARANTINE_DIR) { $env:AGENT_QUEUE_QUARANTINE_DIR } else { 'C:\ProgramData\monitoring-agent\queue-quarantine' }
 $PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
 $PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
-$EmbeddedAgentVersion = '1.7.370'
+$EmbeddedAgentVersion = '1.7.371'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
