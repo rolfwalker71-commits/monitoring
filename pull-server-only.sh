@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604l"
+PULL_SCRIPT_VERSION="20260604m"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -322,6 +322,23 @@ resolve_latest_main_sha_via_github_api() {
   extract_full_sha_from_commit_json "$meta"
 }
 
+# When api.github.com is blocked but raw.githubusercontent.com works (common on locked-down servers).
+resolve_latest_main_sha_via_raw_main_head_file() {
+  local sha=""
+  sha="$(curl_raw_github "$(append_raw_cache_bust "https://raw.githubusercontent.com/$OWNER_REPO/main/MAIN_HEAD_SHA")" 2>/dev/null \
+    | tr -d ' \t\r\n' || true)"
+  if is_full_git_sha "$sha"; then
+    echo "main-SHA via raw MAIN_HEAD_SHA: ${sha:0:12}" >&2
+    printf '%s' "$sha"
+    return 0
+  fi
+  return 1
+}
+
+github_api_reachable() {
+  curl -fsSL --connect-timeout 3 --max-time 8 -o /dev/null "https://api.github.com" 2>/dev/null
+}
+
 # Fallback when curl_github wrapper fails (proxy/SSL); still tries api.github.com.
 resolve_latest_main_sha_via_plain_curl() {
   local branch_ref="${1:-main}"
@@ -355,21 +372,37 @@ resolve_latest_main_sha() {
   local branch_ref="${1:-main}"
   local sha=""
 
+  sha="$(resolve_latest_main_sha_via_raw_main_head_file || true)"
+  if is_full_git_sha "$sha"; then
+    printf '%s' "$sha"
+    return 0
+  fi
+
   sha="$(resolve_latest_main_sha_via_git || true)"
   if is_full_git_sha "$sha"; then
     printf '%s' "$sha"
     return 0
   fi
 
-  sha="$(resolve_latest_main_sha_via_github_api "$branch_ref" || true)"
-  if is_full_git_sha "$sha"; then
-    printf '%s' "$sha"
-    return 0
+  if github_api_reachable; then
+    sha="$(resolve_latest_main_sha_via_github_api "$branch_ref" || true)"
+    if is_full_git_sha "$sha"; then
+      printf '%s' "$sha"
+      return 0
+    fi
+
+    sha="$(resolve_latest_main_sha_via_plain_curl "$branch_ref" || true)"
+    if is_full_git_sha "$sha"; then
+      echo "main-SHA via api.github.com (plain curl): ${sha:0:12}" >&2
+      printf '%s' "$sha"
+      return 0
+    fi
+  else
+    echo "Hinweis: api.github.com nicht erreichbar – nutze raw MAIN_HEAD_SHA / raw/main." >&2
   fi
 
-  sha="$(resolve_latest_main_sha_via_plain_curl "$branch_ref" || true)"
+  sha="$(resolve_latest_main_sha_via_raw_main_head_file || true)"
   if is_full_git_sha "$sha"; then
-    echo "main-SHA via api.github.com (plain curl): ${sha:0:12}" >&2
     printf '%s' "$sha"
     return 0
   fi
@@ -733,26 +766,21 @@ EOF
 }
 
 print_github_unreachable_hint() {
-  cat >&2 <<'EOF'
+  cat >&2 <<EOF
 GitHub API (api.github.com) ist vom Server aus nicht erreichbar.
 Typische Ursachen: Firewall, Proxy, DNS, oder ausgehender HTTPS-Block.
 
-Normalerweise reicht:
-  /root/monitoring-server/pull-server-only.sh
-
-Nur bei blockierter GitHub-Erreichbarkeit:
-  export MONITORING_PULL_USE_RAW_ONLY=1
-  export MONITORING_DEPLOY_REF=main
-
-Optional einen Commit pinnen (7–40 Hex oder vollstaendig):
-  export MONITORING_DEPLOY_SHA=<commit-sha>
+Pull-Skript per MAIN_HEAD_SHA holen (nur raw.githubusercontent.com):
+  SHA=\$(curl -fsSL "https://raw.githubusercontent.com/$OWNER_REPO/main/MAIN_HEAD_SHA?_=\$(date +%s)")
+  curl -fsSL "https://raw.githubusercontent.com/$OWNER_REPO/\${SHA}/pull-server-only.sh?_=\$(date +%s)" \\
+    -o $TARGET_DIR/pull-server-only.sh
+  chmod +x $TARGET_DIR/pull-server-only.sh
+  $TARGET_DIR/pull-server-only.sh
 
 Pruefen:
-  curl -I --connect-timeout 5 https://api.github.com
   curl -I --connect-timeout 5 https://raw.githubusercontent.com
 
-Wenn auch raw.githubusercontent.com blockiert ist: Dateien per rsync/scp vom
-Entwicklungsrechner nach TARGET_DIR kopieren und monitoring neu starten.
+Wenn auch raw blockiert ist: Dateien per rsync/scp vom Entwicklungsrechner kopieren.
 EOF
 }
 
@@ -798,7 +826,10 @@ resolve_deploy_ref() {
 
   if [ -n "${MONITORING_DEPLOY_SHA:-}" ]; then
     REF="$(normalize_sha_ref "$MONITORING_DEPLOY_SHA")"
-    if ! is_full_git_sha "$REF"; then
+    if [ -z "$REF" ] || ! is_hex_sha_ref "$REF"; then
+      echo "WARNUNG: MONITORING_DEPLOY_SHA ungueltig oder leer (api.github.com blockiert?) – ignoriere Pin." >&2
+      REF=""
+    elif ! is_full_git_sha "$REF"; then
       expanded="$(expand_deploy_ref "$REF" || true)"
       if [ -n "$expanded" ]; then
         REF="$expanded"
@@ -808,8 +839,10 @@ resolve_deploy_ref() {
       MONITORING_PULL_USE_RAW_ONLY=1
       export MONITORING_PULL_USE_RAW_ONLY
     fi
-    echo "Deploy-Ref: $REF (MONITORING_DEPLOY_SHA, optional)"
-    return 0
+    if [ -n "$REF" ]; then
+      echo "Deploy-Ref: $REF (MONITORING_DEPLOY_SHA, optional)"
+      return 0
+    fi
   fi
 
   latest_sha="$(resolve_latest_main_sha "$fallback_ref" || true)"
@@ -1002,6 +1035,7 @@ server/static/mobile-alerts-mockup.html
 server/static/icons/sap.png
 BUILD_VERSION
 AGENT_VERSION
+MAIN_HEAD_SHA
 openapi.yaml
 scripts/watch-inventur-job.sh
 client/windows/collect_and_send.ps1
