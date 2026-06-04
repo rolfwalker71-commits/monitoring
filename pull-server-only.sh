@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604h"
+PULL_SCRIPT_VERSION="20260604i"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -45,10 +45,29 @@ detect_target_dir() {
 TARGET_DIR="$(detect_target_dir "${1:-}")"
 TARGET_ENV_FILE="$TARGET_DIR/monitoring.env"
 
-if [ -z "$GITHUB_TOKEN" ] && [ -f "$TARGET_ENV_FILE" ]; then
-  # shellcheck disable=SC1090
-  source "$TARGET_ENV_FILE"
-  GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
+load_github_token_from_env_file() {
+  local line key val
+  [ -f "$TARGET_ENV_FILE" ] || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%%#*}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    [[ "$line" =~ ^(MONITORING_GITHUB_TOKEN|GITHUB_TOKEN|GH_TOKEN)[[:space:]]*=[[:space:]]*(.+)$ ]] || continue
+    val="${BASH_REMATCH[2]}"
+    val="${val%\"}"
+    val="${val#\"}"
+    val="${val%\'}"
+    val="${val#\'}"
+    if [ -n "$val" ]; then
+      GITHUB_TOKEN="$val"
+      export GITHUB_TOKEN
+      return 0
+    fi
+  done < "$TARGET_ENV_FILE"
+  return 1
+}
+
+if [ -z "$GITHUB_TOKEN" ]; then
+  load_github_token_from_env_file || true
 fi
 
 CURL_CONNECT_TIMEOUT="${CURL_CONNECT_TIMEOUT:-15}"
@@ -364,7 +383,78 @@ redeploy_files_from_ref() {
     return 1
   fi
   force_refresh_version_files "$REF"
+  mirror_update_payloads
   echo "$REF" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
+  return 0
+}
+
+mirror_update_payloads() {
+  cp -f "$TARGET_DIR/BUILD_VERSION" "$TARGET_DIR/updates/BUILD_VERSION"
+  cp -f "$TARGET_DIR/AGENT_VERSION" "$TARGET_DIR/updates/AGENT_VERSION"
+  cp -f "$TARGET_DIR/client/windows/collect_and_send.ps1" "$TARGET_DIR/updates/client/windows/collect_and_send.ps1"
+  cp -f "$TARGET_DIR/client/windows/collect_and_scan_sap_tables.ps1" "$TARGET_DIR/updates/client/windows/collect_and_scan_sap_tables.ps1"
+  cp -f "$TARGET_DIR/client/windows/bootstrap_agent.ps1" "$TARGET_DIR/updates/client/windows/bootstrap_agent.ps1"
+  cp -f "$TARGET_DIR/client/windows/install_agent.ps1" "$TARGET_DIR/updates/client/windows/install_agent.ps1"
+  cp -f "$TARGET_DIR/client/windows/self_update.ps1" "$TARGET_DIR/updates/client/windows/self_update.ps1"
+  cp -f "$TARGET_DIR/client/windows/setup_harvest_sql_user.ps1" "$TARGET_DIR/updates/client/windows/setup_harvest_sql_user.ps1"
+  cp -f "$TARGET_DIR/client/windows/probe_sap_services.ps1" "$TARGET_DIR/updates/client/windows/probe_sap_services.ps1"
+  cp -f "$TARGET_DIR/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/collect_and_send.sh"
+  cp -f "$TARGET_DIR/client/linux/install_agent.sh" "$TARGET_DIR/updates/client/linux/install_agent.sh"
+  cp -f "$TARGET_DIR/client/linux/self_update.sh" "$TARGET_DIR/updates/client/linux/self_update.sh"
+  chmod 0755 "$TARGET_DIR/updates/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/install_agent.sh" "$TARGET_DIR/updates/client/linux/self_update.sh" 2>/dev/null || true
+}
+
+verify_deployed_payload_integrity() {
+  local agent_ver="" expected_embedded="" ps1=""
+  agent_ver="$(tr -d ' \t\r\n' < "$TARGET_DIR/AGENT_VERSION" 2>/dev/null || true)"
+  [ -n "$agent_ver" ] || return 1
+
+  ps1="$TARGET_DIR/client/windows/collect_and_send.ps1"
+  if [ ! -f "$ps1" ]; then
+    return 1
+  fi
+  expected_embedded="\$EmbeddedAgentVersion = '$agent_ver'"
+  if ! grep -qF "$expected_embedded" "$ps1" 2>/dev/null; then
+    return 1
+  fi
+  if grep -q 'function Get-AngLogMojibakeScore' "$ps1" 2>/dev/null \
+    && ! grep -q '\[char\]0x00C3' "$ps1" 2>/dev/null; then
+    return 1
+  fi
+
+  if [ -f "$TARGET_DIR/updates/client/windows/collect_and_send.ps1" ] \
+    && ! grep -qF "$expected_embedded" "$TARGET_DIR/updates/client/windows/collect_and_send.ps1" 2>/dev/null; then
+    return 1
+  fi
+  return 0
+}
+
+repair_deploy_if_integrity_failed() {
+  local repair_ref="" remote_av=""
+  if verify_deployed_payload_integrity; then
+    return 0
+  fi
+
+  echo "WARNUNG: Deploy-Inkonsistenz (AGENT_VERSION passt nicht zu collect_and_send.ps1)." >&2
+  repair_ref="$(resolve_latest_main_sha main || true)"
+  if ! is_full_git_sha "$repair_ref"; then
+    repair_ref="$(probe_ref_with_matching_version_files "$REF" || true)"
+  fi
+  if ! is_full_git_sha "$repair_ref"; then
+    echo "FEHLER: Integritaets-Reparatur nicht moeglich (kein Commit-SHA)." >&2
+    return 1
+  fi
+
+  remote_av="$(fetch_repo_text_at_ref AGENT_VERSION "$repair_ref")"
+  echo "Reparatur-Deploy von Ref ${repair_ref:0:12} (AGENT_VERSION=${remote_av:-?})..." >&2
+  if ! redeploy_files_from_ref "$repair_ref"; then
+    return 1
+  fi
+  if ! verify_deployed_payload_integrity; then
+    echo "FEHLER: Nach Reparatur-Deploy weiterhin inkonsistent." >&2
+    return 1
+  fi
+  echo "Reparatur-Deploy erfolgreich."
   return 0
 }
 
@@ -655,7 +745,8 @@ echo "Installiere Serverteil nach: $TARGET_DIR"
 if [ -n "${MONITORING_DEPLOY_SHA:-}" ]; then
   echo "Hinweis: MONITORING_DEPLOY_SHA ist gesetzt (${MONITORING_DEPLOY_SHA}) – entfernen fuer automatisch neuestes main." >&2
 elif [ -f "$TARGET_ENV_FILE" ] && grep -q '^MONITORING_DEPLOY_SHA=' "$TARGET_ENV_FILE" 2>/dev/null; then
-  echo "Hinweis: $TARGET_ENV_FILE enthaelt MONITORING_DEPLOY_SHA – kann alten Stand pinnen." >&2
+  echo "Hinweis: $TARGET_ENV_FILE enthaelt MONITORING_DEPLOY_SHA (wird nicht mehr automatisch geladen)." >&2
+  echo "  Nur aktiv per: export MONITORING_DEPLOY_SHA=<sha>" >&2
 fi
 
 upgrade_local_pull_script_from_main "$@"
@@ -789,7 +880,8 @@ verify_synced_file() {
 
 export -f download_file download_repo_file checksum_file curl_github curl_raw_github \
   append_raw_cache_bust fetch_repo_text_at_ref is_full_git_sha resolve_latest_main_sha \
-  force_refresh_version_files redeploy_files_from_ref reconcile_deploy_to_latest_main
+  force_refresh_version_files redeploy_files_from_ref reconcile_deploy_to_latest_main \
+  mirror_update_payloads verify_deployed_payload_integrity repair_deploy_if_integrity_failed
 export RAW_BASE TARGET_DIR GITHUB_COMMIT_TIME GITHUB_TOKEN GITHUB_API_BASE REF OWNER_REPO CURL_CONNECT_TIMEOUT CURL_MAX_TIME MONITORING_PULL_USE_RAW_ONLY
 
 FILES_LIST="
@@ -854,19 +946,8 @@ else
 fi
 
 # Mirror update payloads to /updates so agents can update from SERVER_URL.
-cp -f "$TARGET_DIR/BUILD_VERSION" "$TARGET_DIR/updates/BUILD_VERSION"
-cp -f "$TARGET_DIR/AGENT_VERSION" "$TARGET_DIR/updates/AGENT_VERSION"
-cp -f "$TARGET_DIR/client/windows/collect_and_send.ps1" "$TARGET_DIR/updates/client/windows/collect_and_send.ps1"
-cp -f "$TARGET_DIR/client/windows/collect_and_scan_sap_tables.ps1" "$TARGET_DIR/updates/client/windows/collect_and_scan_sap_tables.ps1"
-cp -f "$TARGET_DIR/client/windows/bootstrap_agent.ps1" "$TARGET_DIR/updates/client/windows/bootstrap_agent.ps1"
-cp -f "$TARGET_DIR/client/windows/install_agent.ps1" "$TARGET_DIR/updates/client/windows/install_agent.ps1"
-cp -f "$TARGET_DIR/client/windows/self_update.ps1" "$TARGET_DIR/updates/client/windows/self_update.ps1"
-cp -f "$TARGET_DIR/client/windows/setup_harvest_sql_user.ps1" "$TARGET_DIR/updates/client/windows/setup_harvest_sql_user.ps1"
-cp -f "$TARGET_DIR/client/windows/probe_sap_services.ps1" "$TARGET_DIR/updates/client/windows/probe_sap_services.ps1"
-cp -f "$TARGET_DIR/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/collect_and_send.sh"
-cp -f "$TARGET_DIR/client/linux/install_agent.sh" "$TARGET_DIR/updates/client/linux/install_agent.sh"
-cp -f "$TARGET_DIR/client/linux/self_update.sh" "$TARGET_DIR/updates/client/linux/self_update.sh"
-chmod 0755 "$TARGET_DIR/updates/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/install_agent.sh" "$TARGET_DIR/updates/client/linux/self_update.sh"
+mirror_update_payloads
+repair_deploy_if_integrity_failed
 if [ -f "$TARGET_DIR/scripts/watch-inventur-job.sh" ]; then
   chmod 0755 "$TARGET_DIR/scripts/watch-inventur-job.sh"
 fi
@@ -930,8 +1011,16 @@ if is_full_git_sha "$REF"; then
   force_refresh_version_files "$REF"
 fi
 if [ -n "$LATEST_SHA_AFTER" ] && [ "$LATEST_SHA_AFTER" != "$REF" ]; then
-  force_refresh_version_files "$LATEST_SHA_AFTER"
+  echo "Hinweis: repo/main (${LATEST_SHA_AFTER:0:12}) ist neuer als Deploy-Ref (${REF:0:12}) – ziehe Dateien nach..." >&2
+  if redeploy_files_from_ref "$LATEST_SHA_AFTER"; then
+    REF="$LATEST_SHA_AFTER"
+    mirror_update_payloads
+    repair_deploy_if_integrity_failed
+  else
+    echo "WARNUNG: Nachziehen auf neuestes main fehlgeschlagen." >&2
+  fi
 fi
+repair_deploy_if_integrity_failed
 
 DEPLOYED_SHA_FILE="$(cat "$TARGET_DIR/DEPLOYED_COMMIT_SHA" 2>/dev/null || true)"
 
