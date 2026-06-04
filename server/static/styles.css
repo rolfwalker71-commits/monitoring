@@ -47,10 +47,6 @@ body {
 }
 
 body[data-theme="dark"] {
-  background: var(--bg) !important;
-}
-    min-height: var(--chip-height);
-    padding: 0 8px;
   --bg: #0d1728;
   --panel: #111b2f;
   --text: #e6edf7;
@@ -62,36 +58,35 @@ body[data-theme="dark"] {
   --btn-primary-border: #4f78ac;
   --btn-primary-text: #dcecff;
   --kv-label-color: #c8dbf7;
-    padding: 0 8px;
   color-scheme: dark;
-  background: radial-gradient(circle at top left, #1b2b45 0%, var(--bg) 48%);
+  background: radial-gradient(circle at top left, #1b2b45 0%, var(--bg) 48%) !important;
 }
 
 .kv-label {
   font-family: var(--kv-label-family);
   font-size: var(--kv-label-size);
   font-weight: var(--kv-label-weight);
-    min-width: 14px;
   letter-spacing: var(--kv-label-letter);
-    display: block;
   color: var(--kv-label-color);
 }
-  }
 
-  .so-country-header .so-country-flag,
-  .system-overview-toggle .so-country-flag,
-  .so-country-filter-btn img {
-    width: 14px;
-    height: 10px;
-    min-width: 14px;
-    max-width: 14px;
-    max-height: 10px;
-    object-fit: cover;
-    display: inline-block;
+.kv-value {
   font-family: var(--kv-value-family);
   font-size: var(--kv-value-size);
   font-weight: var(--kv-value-weight);
   color: var(--kv-value-color);
+}
+
+.so-country-header .so-country-flag,
+.system-overview-toggle .so-country-flag,
+.so-country-filter-btn img {
+  width: 14px;
+  height: 10px;
+  min-width: 14px;
+  max-width: 14px;
+  max-height: 10px;
+  object-fit: cover;
+  display: inline-block;
 }
 
 .login-overlay {

@@ -10054,7 +10054,6 @@ function renderSingleHostCard(host) {
   const sapLicenseBadge = hasSapLicenseInfo
     ? `<button type="button" class="host-license-info-badge host-license-info-badge--card" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}" title="SAP Lizenzinfos anzeigen" aria-label="SAP Lizenzinfos anzeigen" aria-haspopup="dialog">ℹ️</button>`
     : "";
-  const countryCode = normalizeHostCountryCode(host);
   const countryCodeHtml = /^[A-Z]{2}$/.test(countryCode)
     ? `<span class="host-card-country-code">${escapeHtml(countryCode)}</span>`
     : "";
