@@ -33,6 +33,7 @@ const ANALYSIS_RANGE_STORAGE_KEY = "monitoring.analysisHours";
 const THEME_STORAGE_KEY = "monitoring.theme";
 const HOST_FILTERS_STORAGE_KEY_PREFIX = "monitoring.hostFilters.";
 const AUTO_REFRESH_STORAGE_KEY = "monitoring.autoRefreshInterval";
+const ADMIN_UI_STATE_STORAGE_KEY = "monitoring.adminUiState";
 const AUTO_REFRESH_INTERVAL_OPTIONS = new Map([
   [30, "30 Sek."],
   [60, "1 Min."],
@@ -678,6 +679,63 @@ function normalizeAdminOperationsSubMode(value) {
   return "quick";
 }
 
+function persistAdminUiState() {
+  try {
+    window.sessionStorage.setItem(
+      ADMIN_UI_STATE_STORAGE_KEY,
+      JSON.stringify({
+        adminSettingsSubMode: state.adminSettingsSubMode,
+        adminOperationsSubMode: state.adminOperationsSubMode,
+        agentSilentThresholdHours: state.agentSilentThresholdHours,
+      }),
+    );
+  } catch (_error) {
+    // Ignore storage failures (private mode, quota).
+  }
+}
+
+function restoreAdminUiStateFromStorage() {
+  try {
+    const raw = window.sessionStorage.getItem(ADMIN_UI_STATE_STORAGE_KEY);
+    if (!raw) {
+      return;
+    }
+    const data = JSON.parse(raw);
+    if (data && typeof data === "object") {
+      state.adminSettingsSubMode = normalizeAdminSettingsSubMode(data.adminSettingsSubMode);
+      state.adminOperationsSubMode = normalizeAdminOperationsSubMode(data.adminOperationsSubMode);
+      const thresholdHours = Number.parseInt(String(data.agentSilentThresholdHours || ""), 10);
+      if (thresholdHours > 0) {
+        state.agentSilentThresholdHours = thresholdHours;
+      }
+    }
+  } catch (_error) {
+    // Ignore corrupt storage payloads.
+  }
+}
+
+function reapplyAdminWorkspaceUi() {
+  if (!state.isAdmin) {
+    return;
+  }
+
+  mountAdminSettingsIntoGlobalView();
+  const container = document.getElementById("globalAdminSettingsContainer");
+  if (container) {
+    ensureAdminSettingsSplitLayout(container);
+  }
+
+  const opsSection = document.getElementById("globalAdminOpsSection");
+  if (opsSection && state.globalSubMode === "admin-settings") {
+    applyAdminOperationsSubMode(opsSection);
+  }
+
+  const thresholdSelect = document.getElementById("agentSilentThresholdSelect");
+  if (thresholdSelect) {
+    thresholdSelect.value = String(state.agentSilentThresholdHours || 6);
+  }
+}
+
 function applyAdminOperationsSubMode(section) {
   if (!section) {
     return;
@@ -718,6 +776,7 @@ function ensureAdminOperationsSplitLayout(section) {
       button.addEventListener("click", () => {
         state.adminOperationsSubMode = normalizeAdminOperationsSubMode(button.getAttribute("data-admin-ops-mode"));
         applyAdminOperationsSubMode(section);
+        persistAdminUiState();
       });
     });
     shell.setAttribute("data-wired", "1");
@@ -789,6 +848,7 @@ function ensureAdminSettingsSplitLayout(container) {
       button.addEventListener("click", () => {
         state.adminSettingsSubMode = normalizeAdminSettingsSubMode(button.getAttribute("data-admin-settings-mode"));
         applyAdminSettingsSubMode(container);
+        persistAdminUiState();
       });
     });
     shell.setAttribute("data-wired", "1");
@@ -1566,6 +1626,9 @@ async function refreshDashboard(options = {}) {
         console.warn("loadSettingsPanel failed:", error);
       }
     }
+    if (state.viewMode === "global" && state.globalSubMode === "admin-settings" && state.isAdmin) {
+      reapplyAdminWorkspaceUi();
+    }
     updateSummaryStrip();
   } finally {
     autoRefreshInProgress = false;
@@ -2308,6 +2371,10 @@ function updateGlobalSubMode() {
     adminNavSettingsButton.classList.toggle("active", state.adminSubMode === "admin-settings");
     adminNavSettingsButton.setAttribute("aria-selected", state.adminSubMode === "admin-settings" ? "true" : "false");
   }
+
+  if (adminSettingsActive) {
+    reapplyAdminWorkspaceUi();
+  }
 }
 
 async function loadActiveGlobalSubMode() {
@@ -3048,7 +3115,9 @@ function updateAdminSettingsVisibility() {
   if (globalAdminNavShell) {
     globalAdminNavShell.classList.toggle("hidden", !state.isAdmin || !anyAdminSectionActive);
   }
-  if (globalAdminOpsSection) {
+  if (state.isAdmin && state.globalSubMode === "admin-settings") {
+    reapplyAdminWorkspaceUi();
+  } else if (globalAdminOpsSection) {
     globalAdminOpsSection.classList.toggle("hidden", !state.isAdmin);
   }
   if (changelogMaintenancePanel) {
@@ -5695,6 +5764,7 @@ async function loadGlobalAdminSettingsPanel(force = false) {
     await wireCustomerAlertTestSection(container);
   }
   ensureAdminSettingsSplitLayout(container);
+  reapplyAdminWorkspaceUi();
 }
 
 async function loadSettingsPanel(force = false) {
@@ -16842,6 +16912,7 @@ function wireEvents() {
     agentSilentThresholdSelect.addEventListener("change", () => {
       const nextHours = Number(agentSilentThresholdSelect.value) || 6;
       state.agentSilentThresholdHours = nextHours;
+      persistAdminUiState();
       renderAgentSilentHostsSection(
         state.agentUpdateStatusHosts,
         nextHours,
@@ -17671,6 +17742,7 @@ async function init() {
     });
   }
   mountAdminSettingsIntoGlobalView();
+  restoreAdminUiStateFromStorage();
   updateViewMode();
   updateOverviewSection();
   updateAnalysisRangeUi();

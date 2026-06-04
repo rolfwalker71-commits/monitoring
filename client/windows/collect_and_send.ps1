@@ -27,7 +27,11 @@ function Test-CollectCliSwitch {
         [string]$Token,
         [string[]]$Names
     )
-    $bare = ($Token -replace '^-+', '').ToLowerInvariant() -replace '-', ''
+    $bare = ($Token -replace '^-+', '').ToLowerInvariant()
+    while ($bare.StartsWith('-')) {
+        $bare = $bare.Substring(1)
+    }
+    $bare = $bare -replace '-', ''
     foreach ($name in $Names) {
         $want = ($name -replace '-', '').ToLowerInvariant()
         if ($bare -eq $want) {
@@ -39,6 +43,9 @@ function Test-CollectCliSwitch {
 
 function Resolve-CollectAndSendCliArgs {
     $noJitter = $false
+    if ($env:MONITORING_NO_JITTER -match '^(?i)(1|true|yes|on)$') {
+        $noJitter = $true
+    }
     $debugPayload = $false
     $jitterMaxSec = 0
     $warnings = [System.Collections.Generic.List[string]]::new()
@@ -82,6 +89,9 @@ Usage: collect_and_send.ps1 [-NoJitter] [-DebugPayload] [-JitterMaxSec <seconds>
   -NoJitter / --no-jitter / --nojitter   Skip startup jitter
   -DebugPayload / --debug-payload        Print JSON only, do not send
   -JitterMaxSec <n> / --jitter-max-sec <n>   Override max jitter seconds
+
+  From cmd.exe use: powershell -File script.ps1 -NoJitter
+  (or inside PowerShell: & script.ps1 --nojitter). Env: MONITORING_NO_JITTER=1
 '@
             exit 0
         }
@@ -146,7 +156,7 @@ $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { '
 $QueueQuarantineDir = if ($env:AGENT_QUEUE_QUARANTINE_DIR) { $env:AGENT_QUEUE_QUARANTINE_DIR } else { 'C:\ProgramData\monitoring-agent\queue-quarantine' }
 $PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
 $PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
-$EmbeddedAgentVersion = '1.7.374'
+$EmbeddedAgentVersion = '1.7.375'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }

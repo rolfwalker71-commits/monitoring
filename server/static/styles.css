@@ -15264,6 +15264,14 @@ body[data-theme="dark"] #globalView .global-admin-nav-divider {
 #globalAdminSettingsContainer {
   display: grid;
   gap: 10px;
+  min-width: 0;
+}
+
+#globalAdminSettingsContainer #globalAdminOpsSection,
+#globalAdminSettingsContainer .admin-ops-card,
+#globalAdminSettingsContainer .db-maintenance-panel {
+  min-width: 0;
+  max-width: 100%;
 }
 
 #globalView .admin-settings-split-shell {
