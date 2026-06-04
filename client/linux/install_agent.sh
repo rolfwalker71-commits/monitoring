@@ -14,7 +14,7 @@ API_KEY=""
 AGENT_ID=""
 DISPLAY_NAME=""
 INTERVAL_MINUTES="15"
-UPDATE_HOURS="6"
+UPDATE_HOURS="1"
 RAW_BASE_URL=""
 AGENT_QUEUE_DIR="/var/lib/monitoring-agent/queue"
 COLLECT_SCRIPT_URL=""
@@ -25,7 +25,7 @@ CURL_INSECURE="0"
 
 usage() {
   cat <<EOF
-Usage: $0 --server-url URL [--api-key KEY] [--agent-id ID] [--display-name NAME] [--interval-minutes 15] [--update-hours 6] [--collect-script-url URL] [--insecure-tls]
+Usage: $0 --server-url URL [--api-key KEY] [--agent-id ID] [--display-name NAME] [--interval-minutes 15] [--update-hours 1] [--collect-script-url URL] [--insecure-tls]
 
 Example:
   curl -fsSL https://monitoring.example.com/updates/client/linux/install_agent.sh \

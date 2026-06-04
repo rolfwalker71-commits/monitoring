@@ -64,7 +64,7 @@ if [[ -z "${AGENT_QUEUE_DIR:-}" ]]; then
 fi
 
 if [[ -z "${UPDATE_HOURS:-}" ]]; then
-  UPDATE_HOURS="6"
+  UPDATE_HOURS="1"
 fi
 
 if [[ -z "${PRIORITY_UPDATE_CHECK_MINUTES:-}" ]]; then

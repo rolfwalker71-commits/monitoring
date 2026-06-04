@@ -2322,10 +2322,10 @@ collect_update_log_json() {
   local next_epoch=0
   local last_priority_check_utc=""
   local next_priority_check_utc=""
-  local recurring_update_hours="${UPDATE_HOURS:-6}"
+  local recurring_update_hours="${UPDATE_HOURS:-1}"
 
   if ! [[ "$recurring_update_hours" =~ ^[0-9]+$ ]]; then
-    recurring_update_hours=6
+    recurring_update_hours=1
   fi
 
   if [[ -f "$PRIORITY_UPDATE_STATE_FILE" ]]; then

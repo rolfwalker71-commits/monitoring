@@ -249,3 +249,57 @@ if grep -qE '^[[:space:]]*DIR_SCAN_DEEP_PATHS[[:space:]]*=[[:space:]]*"?/hana/sh
   sed -i -E 's|^[[:space:]]*DIR_SCAN_DEEP_PATHS[[:space:]]*=.*$|DIR_SCAN_DEEP_PATHS=""|' "$CONFIG_FILE"
   echo "Migration: reset stale DIR_SCAN_DEEP_PATHS in $CONFIG_FILE (will be re-detected on next run)"
 fi
+
+sync_linux_update_cron_schedule() {
+  local update_hours="${UPDATE_HOURS:-1}"
+  local cron_file="/etc/cron.d/monitoring-agent"
+  local log_file="/var/log/monitoring-agent.log"
+  local update_log_file="/var/log/monitoring-agent-update.log"
+  local cron_tag="# monitoring-agent"
+  local collect_cron_line update_cron_line interval_minutes
+
+  if ! [[ "$update_hours" =~ ^[0-9]+$ ]] || [[ "$update_hours" -lt 1 ]] || [[ "$update_hours" -gt 24 ]]; then
+    update_hours=1
+  fi
+  if [[ "$update_hours" == "6" ]]; then
+    update_hours=1
+  fi
+  ensure_config_value "UPDATE_HOURS" "$update_hours"
+  UPDATE_HOURS="$update_hours"
+
+  interval_minutes="${INTERVAL_MINUTES:-15}"
+  if ! [[ "$interval_minutes" =~ ^[0-9]+$ ]] || [[ "$interval_minutes" -lt 1 ]]; then
+    interval_minutes=15
+  fi
+
+  collect_cron_line="*/${interval_minutes} * * * * root CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/collect_and_send.sh >> $log_file 2>&1"
+  update_cron_line="11 */${update_hours} * * * root CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/self_update.sh >> $update_log_file 2>&1"
+
+  if [[ -d /etc/cron.d ]]; then
+    cat > "$cron_file" <<EOF
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+$cron_tag collect
+$collect_cron_line
+$cron_tag update
+$update_cron_line
+EOF
+    chmod 0644 "$cron_file"
+    return 0
+  fi
+
+  if command -v crontab >/dev/null 2>&1; then
+    local existing
+    existing="$(crontab -l 2>/dev/null | grep -v 'monitoring-agent' || true)"
+    {
+      printf '%s\n' "$existing"
+      printf '%s collect\n' "$cron_tag"
+      printf '%s\n' "${collect_cron_line/root /}"
+      printf '%s update\n' "$cron_tag"
+      printf '%s\n' "${update_cron_line/root /}"
+    } | sed '/^$/N;/^\n$/D' | crontab -
+  fi
+}
+
+sync_linux_update_cron_schedule || true

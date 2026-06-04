@@ -88,7 +88,7 @@ Der Wrapper zieht die aktuellen Windows-Skripte von `/updates`, repariert eine b
 
 ### Self-Update
 
-Agents prüfen selbständig (alle ~6 Stunden, plus bei jedem Sammellauf wenn die Version veraltet ist) die vom Server bereitgestellten Pakete unter `/updates` und aktualisieren sich automatisch. Die aktuelle Agent-Version steht in `AGENT_VERSION`.
+Agents prüfen selbständig (Fallback-Self-Update alle ~1 Stunde, plus bei jedem Sammellauf alle ~60 Minuten wenn die Version veraltet ist) die vom Server bereitgestellten Pakete unter `/updates` und aktualisieren sich automatisch. Die aktuelle Agent-Version steht in `AGENT_VERSION`.
 
 Wichtig für die Domain-Migration: Self-Update und Repair schreiben vorhandene Hosts aktiv auf die neue Canonical-URL `https://infoboard.ang-schweiz.ch` um, aber nur wenn die URL vom Host aus erreichbar ist. Als sichere Fallback-Quellen bleiben `https://infoboard.an-group.work/updates` und `https://monitoring.rolfwalker.ch/updates` aktiv.
 

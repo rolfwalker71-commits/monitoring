@@ -441,6 +441,67 @@ function Set-ConfigValue {
     [System.IO.File]::WriteAllLines($Path, $newContent, [System.Text.Encoding]::UTF8)
 }
 
+$QueueDir = if ($cfg.ContainsKey('AGENT_QUEUE_DIR')) { $cfg['AGENT_QUEUE_DIR'] } else { Join-Path $InstallDir 'queue' }
+$UpdateLogFile = if ($cfg.ContainsKey('UPDATE_LOG_FILE')) { $cfg['UPDATE_LOG_FILE'] } else { Join-Path $InstallDir 'monitoring-agent-update.log' }
+$TaskNameUpdate = 'monitoring-agent-update'
+
+function Sync-MonitoringUpdateTaskSchedule {
+    $updateHours = 1
+    if ($cfg.ContainsKey('UPDATE_HOURS')) {
+        try {
+            $parsed = [int]$cfg['UPDATE_HOURS']
+            if ($parsed -ge 1 -and $parsed -le 24) {
+                $updateHours = $parsed
+            }
+        } catch {
+            $updateHours = 1
+        }
+    }
+    if ($updateHours -eq 6) {
+        $updateHours = 1
+    }
+
+    Set-ConfigValue -Path $ConfigFile -Key 'UPDATE_HOURS' -Value ([string]$updateHours)
+    $cfg['UPDATE_HOURS'] = [string]$updateHours
+
+    $existingTask = Get-ScheduledTask -TaskName $TaskNameUpdate -ErrorAction SilentlyContinue
+    if (-not $existingTask) {
+        return
+    }
+
+    $scriptPath = Join-Path $InstallDir 'self_update.ps1'
+    if (-not (Test-Path -LiteralPath $scriptPath)) {
+        return
+    }
+
+    $psArgs = '-NonInteractive -NoProfile -ExecutionPolicy Bypass -Command ' +
+              '"' +
+              "`$env:CONFIG_FILE='$ConfigFile'; " +
+              "`$env:AGENT_VERSION_FILE='$InstallDir\AGENT_VERSION'; " +
+              "`$env:AGENT_QUEUE_DIR='$QueueDir'; " +
+              "& '$scriptPath' *>> '$UpdateLogFile'" +
+              '"'
+
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $psArgs
+    $trigger = New-ScheduledTaskTrigger -Once `
+        -At (Get-Date).AddSeconds(30) `
+        -RepetitionInterval (New-TimeSpan -Hours $updateHours)
+    $settings = New-ScheduledTaskSettingsSet `
+        -ExecutionTimeLimit (New-TimeSpan -Hours 1) `
+        -MultipleInstances IgnoreNew `
+        -StartWhenAvailable
+    $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+
+    Register-ScheduledTask `
+        -TaskName $TaskNameUpdate `
+        -Action $action `
+        -Trigger $trigger `
+        -Settings $settings `
+        -Principal $principal `
+        -Description 'Monitoring agent - self update' `
+        -Force | Out-Null
+}
+
 function Test-ServerUrlReachable {
     param(
         [Parameter(Mandatory = $true)]
@@ -608,6 +669,12 @@ try {
     Set-ConfigValue -Path $ConfigFile -Key 'GITHUB_REPO' -Value ''
 } finally {
     Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+try {
+    Sync-MonitoringUpdateTaskSchedule
+} catch {
+    Write-Warning ("Could not sync monitoring-agent-update schedule: " + $_.Exception.Message)
 }
 
 if (Compare-Versions -Newer $remoteVersion -Older $localVersion) {

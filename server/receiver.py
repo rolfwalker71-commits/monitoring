@@ -18004,7 +18004,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 {
                     "total_hosts": len(hosts),
                     "summary": summary,
-                    "default_schedule_note": "Linux-Installer im Repo plant den Fallback-Check standardmässig um 00:11, 06:11, 12:11 und 18:11 Uhr. Windows plant standardmässig alle 6 Stunden relativ zum Installationszeitpunkt. Der priorisierte Zusatz-Check läuft standardmässig alle 60 Minuten seit dem letzten Check.",
+                    "default_schedule_note": "Linux und Windows planen den Fallback-Self-Update standardmässig alle 1 Stunde (Minute 11 bei Linux-Cron). Der priorisierte Zusatz-Check läuft während Collect standardmässig alle 60 Minuten.",
                     "hosts": hosts,
                 },
             )

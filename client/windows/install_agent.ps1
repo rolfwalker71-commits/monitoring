@@ -40,7 +40,7 @@ param(
 
     [Parameter(Mandatory = $false)]
     [ValidateRange(1, 24)]
-    [int] $UpdateHours = 6,
+    [int] $UpdateHours = 1,
 
     [Parameter(Mandatory = $false)]
     [string] $RawBaseUrl = ''
@@ -233,7 +233,7 @@ Register-MonitoringTask `
     -Description        'Monitoring agent - collect and send system metrics' `
     -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
 
-Write-Host "Registering scheduled task: $TaskNameUpdate (every 6 h)..."
+Write-Host "Registering scheduled task: $TaskNameUpdate (every $UpdateHours h)..."
 Register-MonitoringTask `
     -TaskName           $TaskNameUpdate `
     -ScriptPath         "$InstallDir\self_update.ps1" `

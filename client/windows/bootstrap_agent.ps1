@@ -338,7 +338,7 @@ try {
             $existingApiKey = Get-ConfigValue -Config $config -Key 'API_KEY' -Default ''
             $existingAgentId = Get-ConfigValue -Config $config -Key 'AGENT_ID' -Default ''
             $existingDisplayName = Get-ConfigValue -Config $config -Key 'DISPLAY_NAME' -Default ''
-            $existingUpdateHours = Get-ConfigIntValue -Config $config -Key 'UPDATE_HOURS' -Default 6
+            $existingUpdateHours = Get-ConfigIntValue -Config $config -Key 'UPDATE_HOURS' -Default 1
             $existingIntervalMinutes = Get-ConfigIntValue -Config $config -Key 'INTERVAL_MINUTES' -Default 15
 
             if ($existingApiKey) {
