@@ -9547,23 +9547,21 @@ function renderReportCard(report) {
 function updatePagerButtons() {
   const hostsPrevButton = document.getElementById("hostsPrevButton");
   const hostsNextButton = document.getElementById("hostsNextButton");
-  const reportsPrevButton = document.getElementById("reportsPrevButton");
-  const reportsNextButton = document.getElementById("reportsNextButton");
   const reportsPrevButtonTop = document.getElementById("reportsPrevButtonTop");
   const reportsNextButtonTop = document.getElementById("reportsNextButtonTop");
 
   hostsPrevButton.disabled = state.hostOffset <= 0;
   hostsNextButton.disabled = state.hostOffset + state.hostLimit >= state.totalHosts;
 
-  reportsPrevButton.disabled = state.reportOffset <= 0 || (!state.selectedHost && !state.selectedHostUid);
-  reportsNextButton.disabled =
+  const reportsPrevDisabled = state.reportOffset <= 0 || (!state.selectedHost && !state.selectedHostUid);
+  const reportsNextDisabled =
     (!state.selectedHost && !state.selectedHostUid) || state.reportOffset + state.reportLimit >= state.totalReports;
 
   if (reportsPrevButtonTop) {
-    reportsPrevButtonTop.disabled = reportsPrevButton.disabled;
+    reportsPrevButtonTop.disabled = reportsPrevDisabled;
   }
   if (reportsNextButtonTop) {
-    reportsNextButtonTop.disabled = reportsNextButton.disabled;
+    reportsNextButtonTop.disabled = reportsNextDisabled;
   }
 }
 
@@ -10330,7 +10328,7 @@ function ensureHostLicenseOutsideClickHandler() {
     if (!target) {
       return;
     }
-    if (target.closest(".host-license-info-badge, #hostLicenseHoverPopup")) {
+    if (target.closest(".host-license-info-badge, #hostLicenseHoverPopup, #hostContextMenu")) {
       return;
     }
     hideHostLicenseHoverPopup(true);
@@ -11000,10 +10998,11 @@ function closeHostContextMenu() {
 function ensureHostContextMenu() {
   let menu = document.getElementById("hostContextMenu");
   if (menu) {
-    if (!menu.querySelector("button[data-action='copy-host']")) {
+    if (!menu.querySelector("button[data-action='show-license']")) {
       menu.innerHTML = `
         <div class="host-context-menu-label"></div>
         <button type="button" data-action="copy-host">In Zwischenablage kopieren</button>
+        <button type="button" data-action="show-license">Lizenzinfos anzeigen</button>
         <button type="button" data-action="agent-update">Agent-Update anstoßen</button>
         <button type="button" data-action="delete-host-card">Karte löschen…</button>
       `;
@@ -11017,6 +11016,7 @@ function ensureHostContextMenu() {
   menu.innerHTML = `
     <div class="host-context-menu-label"></div>
     <button type="button" data-action="copy-host">In Zwischenablage kopieren</button>
+    <button type="button" data-action="show-license">Lizenzinfos anzeigen</button>
     <button type="button" data-action="agent-update">Agent-Update anstoßen</button>
     <button type="button" data-action="delete-host-card">Karte löschen…</button>
   `;
@@ -11024,9 +11024,10 @@ function ensureHostContextMenu() {
 
   menu.addEventListener("click", async (event) => {
     const copyTrigger = event.target.closest("button[data-action='copy-host']");
+    const licenseTrigger = event.target.closest("button[data-action='show-license']");
     const updateTrigger = event.target.closest("button[data-action='agent-update']");
     const deleteTrigger = event.target.closest("button[data-action='delete-host-card']");
-    if (!copyTrigger && !updateTrigger && !deleteTrigger) {
+    if (!copyTrigger && !licenseTrigger && !updateTrigger && !deleteTrigger) {
       return;
     }
 
@@ -11036,6 +11037,22 @@ function ensureHostContextMenu() {
     const hostUid = String(menu.dataset.hostUid || "").trim();
     closeHostContextMenu();
     if (!hostname && !hostUid) {
+      return;
+    }
+
+    if (licenseTrigger) {
+      const host = (Array.isArray(state.hosts) ? state.hosts : []).find((entry) => {
+        const uid = asText(entry?.host_uid, "").trim();
+        const name = asText(entry?.hostname, "").trim();
+        return (hostUid && uid === hostUid) || (hostname && name === hostname);
+      });
+      const effectiveHostname = hostname || asText(host?.hostname, "").trim();
+      if (!effectiveHostname && !hostUid) {
+        window.alert("Kein Host angegeben.");
+        return;
+      }
+      hostLicenseSuppressOutsideCloseUntil = Date.now() + 500;
+      void showHostLicenseHoverPopup(licenseTrigger, effectiveHostname, hostUid);
       return;
     }
 
@@ -12352,6 +12369,7 @@ async function loadReportsForHost(options = {}) {
     }
     if (reportJumpBounds) {
       reportJumpBounds.textContent = "";
+      reportJumpBounds.classList.add("hidden");
     }
     list.innerHTML = state.hostFilterNoMatches
       ? "<p class=\"muted\">Keine Daten zum Suchfilter vorhanden.</p>"
@@ -12400,12 +12418,13 @@ async function loadReportsForHost(options = {}) {
     if (reportJumpBounds) {
       if (oldestReportAtUtc) {
         const oldestReportText = asText(formatUtcPlus2(oldestReportAtUtc), "-").trim();
-        const oldestReportParts = oldestReportText.split(",");
-        const oldestReportDate = asText(oldestReportParts.shift(), oldestReportText).trim();
-        const oldestReportTime = asText(oldestReportParts.join(","), "").trim();
-        reportJumpBounds.innerHTML = `<span class="report-jump-label">Erste Nachricht:</span><span class="report-jump-value">${escapeHtml(oldestReportDate)}${oldestReportTime ? `<br>${escapeHtml(oldestReportTime)}` : ""}</span>`;
+        reportJumpBounds.textContent = `Erste Nachricht: ${oldestReportText}`;
+        reportJumpBounds.title = `Älteste gespeicherte Meldung für diesen Host (${oldestReportText})`;
+        reportJumpBounds.classList.remove("hidden");
       } else {
         reportJumpBounds.textContent = "";
+        reportJumpBounds.removeAttribute("title");
+        reportJumpBounds.classList.add("hidden");
       }
     }
     if (Number.isFinite(Number(data.offset))) {
@@ -17359,9 +17378,6 @@ function wireEvents() {
       setUserManagementStatus(error.message, true);
     }
   });
-
-  document.getElementById("reportsPrevButton").addEventListener("click", goToPreviousReport);
-  document.getElementById("reportsNextButton").addEventListener("click", goToNextReport);
 
   const reportJumpDateTimeInput = document.getElementById("reportJumpDateTimeInput");
   const reportJumpLatestButton = document.getElementById("reportJumpLatestButton");
