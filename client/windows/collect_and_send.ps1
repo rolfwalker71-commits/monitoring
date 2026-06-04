@@ -5,8 +5,9 @@
     Mirrors the Linux collect_and_send.sh payload format exactly.
 
 .PARAMETER NoJitter
-    Skip startup jitter sleep (useful for manual tests).
+    Force skip startup jitter (optional; interactive console runs skip jitter automatically).
     Aliases: -nojitter, --no-jitter, --nojitter (Linux-style).
+    Scheduled/automated runs keep jitter unless this switch or MONITORING_NO_JITTER is set.
 
 .PARAMETER JitterMaxSec
     Override maximum jitter delay for this run (in seconds).
@@ -20,7 +21,64 @@
 param()
 
 # Bump when collect_and_send.ps1 logic changes (embedded in outgoing reports).
-$script:CollectScriptMarker = '20260605a'
+$script:CollectScriptMarker = '20260605b'
+
+function Get-MonitoringProcessAncestorNames {
+    param([int]$MaxDepth = 12)
+
+    $names = [System.Collections.Generic.List[string]]::new()
+    try {
+        $proc = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop
+        $depth = 0
+        while ($null -ne $proc -and $depth -lt $MaxDepth) {
+            if ($proc.Name) {
+                $names.Add([string]$proc.Name) | Out-Null
+            }
+            if ($proc.ParentProcessId -le 0) {
+                break
+            }
+            $proc = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$($proc.ParentProcessId)" -ErrorAction SilentlyContinue
+            $depth++
+        }
+    } catch {
+        # Best-effort only.
+    }
+    return @($names)
+}
+
+function Test-MonitoringCollectRunIsAutomated {
+    if ($env:MONITORING_COLLECT_SCHEDULED -match '^(?i)(1|true|yes|on)$') {
+        return $true
+    }
+    if ($env:MONITORING_COLLECT_SCHEDULED -match '^(?i)(0|false|no|off)$') {
+        return $false
+    }
+
+    if (-not [Environment]::UserInteractive) {
+        return $true
+    }
+
+    foreach ($name in (Get-MonitoringProcessAncestorNames)) {
+        $lower = $name.ToLowerInvariant()
+        if ($lower -in @('taskeng.exe', 'taskhostw.exe', 'taskhost.exe')) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Test-ShouldSkipSendJitter {
+    param([bool]$ExplicitNoJitter)
+
+    if ($ExplicitNoJitter) {
+        return $true
+    }
+    if (Test-MonitoringCollectRunIsAutomated) {
+        return $false
+    }
+    return $true
+}
 
 function Test-CollectCliSwitch {
     param(
@@ -86,12 +144,12 @@ function Resolve-CollectAndSendCliArgs {
 Usage: collect_and_send.ps1 [-NoJitter] [-DebugPayload] [-JitterMaxSec <seconds>]
        collect_and_send.ps1 [--no-jitter] [--debug-payload] [--jitter-max-sec <seconds>]
 
-  -NoJitter / --no-jitter / --nojitter   Skip startup jitter
+  -NoJitter / --no-jitter / --nojitter   Force skip jitter (optional in interactive PS)
   -DebugPayload / --debug-payload        Print JSON only, do not send
   -JitterMaxSec <n> / --jitter-max-sec <n>   Override max jitter seconds
 
-  From cmd.exe use: powershell -File script.ps1 -NoJitter
-  (or inside PowerShell: & script.ps1 --nojitter). Env: MONITORING_NO_JITTER=1
+  Interactive console: just run collect_and_send.ps1 (jitter off automatically).
+  Scheduled task runs keep jitter. Env: MONITORING_COLLECT_SCHEDULED=1 forces scheduled mode.
 '@
             exit 0
         }
@@ -156,7 +214,7 @@ $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { '
 $QueueQuarantineDir = if ($env:AGENT_QUEUE_QUARANTINE_DIR) { $env:AGENT_QUEUE_QUARANTINE_DIR } else { 'C:\ProgramData\monitoring-agent\queue-quarantine' }
 $PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
 $PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
-$EmbeddedAgentVersion = '1.7.377'
+$EmbeddedAgentVersion = '1.7.378'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -2718,7 +2776,11 @@ if (-not $hostUidValue) {
     }
 }
 
-if (-not $NoJitter -and $SendJitterMaxSec -gt 0) {
+$skipSendJitter = Test-ShouldSkipSendJitter -ExplicitNoJitter $NoJitter
+if (-not $skipSendJitter -and -not (Test-MonitoringCollectRunIsAutomated)) {
+    Write-Host 'Interactive run: send jitter skipped (scheduled/automated runs keep jitter).'
+}
+if (-not $skipSendJitter -and $SendJitterMaxSec -gt 0) {
     $jitterIdentity = "$hostnameValue$agentId"
     $hashProvider = [System.Security.Cryptography.SHA256]::Create()
     try {

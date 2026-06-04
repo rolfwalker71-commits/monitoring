@@ -201,6 +201,7 @@ function Register-MonitoringTask {
               "`$env:CONFIG_FILE='$ConfigFile'; " +
               "`$env:AGENT_VERSION_FILE='$InstallDir\AGENT_VERSION'; " +
               "`$env:AGENT_QUEUE_DIR='$QueueDir'; " +
+              "`$env:MONITORING_COLLECT_SCHEDULED='1'; " +
               "& '$ScriptPath' *>> '$LogPath'" +
               '"'
 
