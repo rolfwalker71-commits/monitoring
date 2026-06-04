@@ -9484,6 +9484,43 @@ function renderLogfilesSection(payload) {
   `;
 }
 
+function renderScriptGuardianLog(scriptGuardianBlock) {
+  const block = scriptGuardianBlock && typeof scriptGuardianBlock === "object" ? scriptGuardianBlock : {};
+  const available = block.available === true;
+  const path = asText(block.path);
+  const allLines = Array.isArray(block.lines) ? block.lines.map((line) => asText(line)) : [];
+  const lineCount = Number(block.line_count || allLines.length || 0);
+  const lines = allLines.slice(-15);
+  const intervalMinutes = Number(block.interval_minutes || 125);
+  const lastRun = asText(block.last_run_utc);
+  const nextRun = asText(block.next_run_utc);
+  const scheduleHint = asText(block.schedule_hint);
+
+  if (!available && lines.length === 0) {
+    return `
+      <p class="muted">Kein Script-Guardian-Log übertragen.</p>
+      <p class="count compact">Pfad: ${escapeHtml(path || "-")} | Intervall: ${Number.isFinite(intervalMinutes) ? intervalMinutes : 125} min</p>
+      ${scheduleHint ? `<p class="count compact">${escapeHtml(scheduleHint)}</p>` : ""}
+    `;
+  }
+
+  const meta = [
+    `Pfad: ${path || "-"}`,
+    `Zeilen: ${Number.isFinite(lineCount) ? lineCount : allLines.length} (letzte 15)`,
+    `Intervall: ${Number.isFinite(intervalMinutes) ? intervalMinutes : 125} min`,
+    lastRun ? `Letzter Lauf: ${lastRun}` : "",
+    nextRun ? `Nächster Lauf: ${nextRun}` : "",
+    scheduleHint || "",
+  ].filter(Boolean).join(" | ");
+
+  return `
+    ${renderTerminalViewer(
+      lines.join("\n") || "Log-Datei ist vorhanden, enthaelt aber aktuell keine Zeilen.",
+      meta
+    )}
+  `;
+}
+
 function renderAgentUpdateLog(agentUpdateBlock) {
   const block = agentUpdateBlock && typeof agentUpdateBlock === "object" ? agentUpdateBlock : {};
   const available = block.available === true;
@@ -9725,6 +9762,11 @@ function renderReportCard(report) {
         <details class="detail-card detail-card-collapsible">
           <summary>⟳ Agent Update Log</summary>
           ${renderAgentUpdateLog(payload.agent_update)}
+        </details>
+
+        <details class="detail-card detail-card-collapsible">
+          <summary>🛡️ Script Guardian Log</summary>
+          ${renderScriptGuardianLog(payload.script_guardian)}
         </details>
 
         <details class="detail-card detail-card-collapsible">

@@ -11,6 +11,8 @@ COLLECT_LOCK_FILE="${COLLECT_LOCK_FILE:-/var/lib/monitoring-agent/collect.lock}"
 PRIORITY_UPDATE_CHECK_MINUTES="${PRIORITY_UPDATE_CHECK_MINUTES:-60}"
 PRIORITY_UPDATE_STATE_FILE="${PRIORITY_UPDATE_STATE_FILE:-/var/lib/monitoring-agent/last_priority_update_check}"
 UPDATE_LOG_FILE="${UPDATE_LOG_FILE:-/var/log/monitoring-agent-update.log}"
+GUARDIAN_LOG_FILE="${GUARDIAN_LOG_FILE:-/var/log/monitoring-agent-guardian.log}"
+GUARDIAN_LOG_LINES="${GUARDIAN_LOG_LINES:-30}"
 UPDATE_LOG_LINES="${UPDATE_LOG_LINES:-40}"
 ANG_LOG_ROOT="${ANG_LOG_ROOT:-/opt/ang}"
 ANG_LOG_TAIL_LINES="${ANG_LOG_TAIL_LINES:-50}"
@@ -91,6 +93,11 @@ fi
 
 # shellcheck source=/dev/null
 source "$CONFIG_FILE"
+
+INSTALL_DIR="${INSTALL_DIR:-/opt/monitoring-agent}"
+GUARDIAN_LOG_FILE="${GUARDIAN_LOG_FILE:-/var/log/monitoring-agent-guardian.log}"
+SCRIPT_GUARDIAN_INTERVAL_MINUTES="${SCRIPT_GUARDIAN_INTERVAL_MINUTES:-125}"
+SCRIPT_GUARDIAN_LAST_RUN_FILE="${SCRIPT_GUARDIAN_LAST_RUN_FILE:-$INSTALL_DIR/.script_guardian_last_run_epoch}"
 
 if [[ -z "${SERVER_URL:-}" ]]; then
   echo "SERVER_URL is not set in $CONFIG_FILE" >&2
@@ -2330,6 +2337,50 @@ epoch_to_utc() {
   date -u -d "@$epoch_value" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || printf ''
 }
 
+collect_script_guardian_log_json() {
+  local entries="" line line_count=0
+  local last_epoch=0 next_epoch=0
+  local last_run_utc="" next_run_utc=""
+  local interval_minutes="${SCRIPT_GUARDIAN_INTERVAL_MINUTES:-125}"
+
+  if ! [[ "$interval_minutes" =~ ^[0-9]+$ ]] || [[ "$interval_minutes" -lt 30 ]]; then
+    interval_minutes=125
+  fi
+
+  if [[ -f "$SCRIPT_GUARDIAN_LAST_RUN_FILE" ]]; then
+    last_epoch="$(head -n 1 "$SCRIPT_GUARDIAN_LAST_RUN_FILE" 2>/dev/null || echo 0)"
+    if [[ "$last_epoch" =~ ^[0-9]+$ ]] && [[ "$last_epoch" -gt 0 ]]; then
+      next_epoch=$(( last_epoch + (interval_minutes * 60) ))
+      last_run_utc="$(epoch_to_utc "$last_epoch")"
+      next_run_utc="$(epoch_to_utc "$next_epoch")"
+    fi
+  fi
+
+  if [[ ! -r "$GUARDIAN_LOG_FILE" ]]; then
+    printf '{"available":false,"path":"%s","line_count":0,"lines":[],"interval_minutes":%s,"last_run_utc":"%s","next_run_utc":"%s","schedule_hint":"%s"}' \
+      "$(json_escape "$GUARDIAN_LOG_FILE")" \
+      "$interval_minutes" \
+      "$(json_escape "$last_run_utc")" \
+      "$(json_escape "$next_run_utc")" \
+      "$(json_escape "Script-Guardian alle ${interval_minutes} Min (Linux: stündlicher Cron + Intervall-Throttle)")"
+    return
+  fi
+
+  while IFS= read -r line; do
+    entries="$(append_json_entry "$entries" "\"$(json_escape "$line")\"")"
+    line_count=$((line_count + 1))
+  done < <(tail -n "$GUARDIAN_LOG_LINES" "$GUARDIAN_LOG_FILE" 2>/dev/null || true)
+
+  printf '{"available":true,"path":"%s","line_count":%s,"lines":[%s],"interval_minutes":%s,"last_run_utc":"%s","next_run_utc":"%s","schedule_hint":"%s"}' \
+    "$(json_escape "$GUARDIAN_LOG_FILE")" \
+    "$line_count" \
+    "$entries" \
+    "$interval_minutes" \
+    "$(json_escape "$last_run_utc")" \
+    "$(json_escape "$next_run_utc")" \
+    "$(json_escape "Script-Guardian alle ${interval_minutes} Min (Linux: stündlicher Cron + Intervall-Throttle)")"
+}
+
 collect_update_log_json() {
   local entries="" line line_count=0
   local last_epoch=0
@@ -3227,6 +3278,7 @@ JOURNAL_ERRORS_JSON="$(collect_journal_errors_json)"
 TOP_PROCESSES_JSON="$(collect_top_processes_json)"
 CONTAINERS_JSON="$(collect_containers_json)"
 AGENT_UPDATE_JSON="$(collect_update_log_json)"
+SCRIPT_GUARDIAN_JSON="$(collect_script_guardian_log_json)"
 AGENT_CONFIG_JSON="$(collect_agent_config_json)"
 LARGE_FILES_JSON="$(collect_large_files_json)"
 SAP_LICENSE_JSON="$(collect_sap_license_json)"
@@ -3310,6 +3362,7 @@ PAYLOAD=$(cat <<EOF
     "entries": [${CONTAINERS_JSON}]
   },
   "agent_update": ${AGENT_UPDATE_JSON},
+  "script_guardian": ${SCRIPT_GUARDIAN_JSON},
   "agent_config": ${AGENT_CONFIG_JSON},
   "large_files": ${LARGE_FILES_JSON},
   "sap_license": ${SAP_LICENSE_JSON},

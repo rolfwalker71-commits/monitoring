@@ -444,6 +444,8 @@ function Set-ConfigValue {
 $QueueDir = if ($cfg.ContainsKey('AGENT_QUEUE_DIR')) { $cfg['AGENT_QUEUE_DIR'] } else { Join-Path $InstallDir 'queue' }
 $UpdateLogFile = if ($cfg.ContainsKey('UPDATE_LOG_FILE')) { $cfg['UPDATE_LOG_FILE'] } else { Join-Path $InstallDir 'monitoring-agent-update.log' }
 $TaskNameUpdate = 'monitoring-agent-update'
+$TaskNameGuardian = 'monitoring-agent-guardian'
+$GuardianLogFile = if ($cfg.ContainsKey('GUARDIAN_LOG_FILE') -and $cfg['GUARDIAN_LOG_FILE']) { $cfg['GUARDIAN_LOG_FILE'] } else { Join-Path $InstallDir 'monitoring-agent-guardian.log' }
 
 function Test-PowerShellScriptParses {
     param(
@@ -580,6 +582,100 @@ function New-MonitoringRepeatingTaskTrigger {
         return New-ScheduledTaskTrigger -Once -At $startAt -RepetitionInterval $RepeatInterval -RepetitionDuration $duration
     } catch {
         return New-ScheduledTaskTrigger -Once -At $startAt -RepetitionInterval $RepeatInterval
+    }
+}
+
+function Ensure-ScriptGuardianBootstrap {
+    try {
+        $guardianPath = Join-Path $InstallDir 'script_guardian.ps1'
+        if (-not (Test-Path -LiteralPath $guardianPath)) {
+            $tmpDir = Join-Path ([System.IO.Path]::GetTempPath()) ('monitoring-guardian-bootstrap-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
+            try {
+                if (-not (Download-RepoFile -RelativePath 'client/windows/script_guardian.ps1' -DestinationPath (Join-Path $tmpDir 'script_guardian.ps1'))) {
+                    Write-Warning 'script_guardian bootstrap skipped: download failed'
+                    return
+                }
+                if (-not (Test-PowerShellScriptParses -Path (Join-Path $tmpDir 'script_guardian.ps1'))) {
+                    Write-Warning 'script_guardian bootstrap skipped: parser check failed'
+                    return
+                }
+                Copy-Item (Join-Path $tmpDir 'script_guardian.ps1') $guardianPath -Force
+                Write-Host 'Installed missing script_guardian.ps1 from update source'
+            } finally {
+                Remove-Item -Path $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        if (-not (Test-Path -LiteralPath $guardianPath)) {
+            return
+        }
+
+        Set-ConfigValue -Path $ConfigFile -Key 'GUARDIAN_LOG_FILE' -Value $GuardianLogFile
+        Set-ConfigValue -Path $ConfigFile -Key 'SCRIPT_GUARDIAN_INTERVAL_MINUTES' -Value '125'
+    } catch {
+        Write-Warning ("script_guardian bootstrap skipped: " + $_.Exception.Message)
+    }
+}
+
+function Sync-MonitoringGuardianTaskSchedule {
+    try {
+        $intervalMinutes = 125
+        if ($cfg.ContainsKey('SCRIPT_GUARDIAN_INTERVAL_MINUTES')) {
+            try {
+                $parsed = [int]$cfg['SCRIPT_GUARDIAN_INTERVAL_MINUTES']
+                if ($parsed -ge 30 -and $parsed -le 720) {
+                    $intervalMinutes = $parsed
+                }
+            } catch { }
+        }
+
+        $scriptPath = Join-Path $InstallDir 'script_guardian.ps1'
+        if (-not (Test-Path -LiteralPath $scriptPath)) {
+            return
+        }
+
+        $desiredInterval = New-TimeSpan -Minutes $intervalMinutes
+        $existingTask = Get-ScheduledTask -TaskName $TaskNameGuardian -ErrorAction SilentlyContinue
+        if ($existingTask) {
+            $currentInterval = $null
+            foreach ($trigger in @($existingTask.Triggers)) {
+                $parsedInterval = Get-TaskTriggerRepetitionTimespan -Trigger $trigger
+                if ($null -ne $parsedInterval) {
+                    $currentInterval = $parsedInterval
+                    break
+                }
+            }
+            if ($null -ne $currentInterval -and [Math]::Abs($currentInterval.TotalMinutes - $desiredInterval.TotalMinutes) -lt 1) {
+                return
+            }
+        }
+
+        $psArgs = '-NonInteractive -NoProfile -ExecutionPolicy Bypass -Command ' +
+                  '"' +
+                  "`$env:CONFIG_FILE='$ConfigFile'; " +
+                  "`$env:AGENT_VERSION_FILE='$InstallDir\AGENT_VERSION'; " +
+                  "& '$scriptPath' *>> '$GuardianLogFile'" +
+                  '"'
+
+        $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $psArgs
+        $trigger = New-MonitoringRepeatingTaskTrigger -RepeatInterval $desiredInterval
+        $settings = New-ScheduledTaskSettingsSet `
+            -ExecutionTimeLimit (New-TimeSpan -Minutes 20) `
+            -MultipleInstances IgnoreNew `
+            -StartWhenAvailable
+        $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+
+        Register-ScheduledTask `
+            -TaskName $TaskNameGuardian `
+            -Action $action `
+            -Trigger $trigger `
+            -Settings $settings `
+            -Principal $principal `
+            -Description 'Monitoring agent - script guardian (collect/self_update refresh)' `
+            -Force | Out-Null
+    } catch {
+        Write-Warning ("Guardian schedule sync skipped: " + $_.Exception.Message)
     }
 }
 
@@ -976,6 +1072,8 @@ try {
     Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+Ensure-ScriptGuardianBootstrap
+Sync-MonitoringGuardianTaskSchedule
 Sync-MonitoringUpdateTaskSchedule
 
 if ($script:PendingUpdateCommandId -gt 0) {

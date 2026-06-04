@@ -823,7 +823,9 @@ mirror_update_payloads() {
   cp -f "$TARGET_DIR/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/collect_and_send.sh"
   cp -f "$TARGET_DIR/client/linux/install_agent.sh" "$TARGET_DIR/updates/client/linux/install_agent.sh"
   cp -f "$TARGET_DIR/client/linux/self_update.sh" "$TARGET_DIR/updates/client/linux/self_update.sh"
-  chmod 0755 "$TARGET_DIR/updates/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/install_agent.sh" "$TARGET_DIR/updates/client/linux/self_update.sh" 2>/dev/null || true
+  cp -f "$TARGET_DIR/client/windows/script_guardian.ps1" "$TARGET_DIR/updates/client/windows/script_guardian.ps1"
+  cp -f "$TARGET_DIR/client/linux/script_guardian.sh" "$TARGET_DIR/updates/client/linux/script_guardian.sh"
+  chmod 0755 "$TARGET_DIR/updates/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/install_agent.sh" "$TARGET_DIR/updates/client/linux/self_update.sh" "$TARGET_DIR/updates/client/linux/script_guardian.sh" 2>/dev/null || true
 }
 
 verify_deployed_payload_integrity() {
@@ -1391,11 +1393,13 @@ client/windows/collect_and_scan_sap_tables.ps1
 client/windows/bootstrap_agent.ps1
 client/windows/install_agent.ps1
 client/windows/self_update.ps1
+client/windows/script_guardian.ps1
 client/windows/setup_harvest_sql_user.ps1
 client/windows/probe_sap_services.ps1
 client/linux/collect_and_send.sh
 client/linux/install_agent.sh
 client/linux/self_update.sh
+client/linux/script_guardian.sh
 "
 
 # Parallele downloads: standardmaessig bis zu 8 gleichzeitig

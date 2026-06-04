@@ -86,6 +86,7 @@ write_linux_monitoring_cron_file() {
   local update_hours="$3"
   local collect_log_file="${4:-/var/log/monitoring-agent.log}"
   local update_log_file="${5:-/var/log/monitoring-agent-update.log}"
+  local guardian_log_file="${6:-/var/log/monitoring-agent-guardian.log}"
   local tmp_cron=""
 
   if [[ $EUID -ne 0 ]]; then
@@ -105,6 +106,8 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 */${interval_minutes} * * * * root CONFIG_FILE=${CONFIG_FILE} AGENT_VERSION_FILE=${INSTALL_DIR}/AGENT_VERSION ${INSTALL_DIR}/collect_and_send.sh >> ${collect_log_file} 2>&1
 # monitoring-agent update
 11 */${update_hours} * * * root CONFIG_FILE=${CONFIG_FILE} AGENT_VERSION_FILE=${INSTALL_DIR}/AGENT_VERSION ${INSTALL_DIR}/self_update.sh >> ${update_log_file} 2>&1
+# monitoring-agent script-guardian (hourly trigger, min ${SCRIPT_GUARDIAN_INTERVAL_MINUTES:-125} min between runs)
+23 * * * * root CONFIG_FILE=${CONFIG_FILE} AGENT_VERSION_FILE=${INSTALL_DIR}/AGENT_VERSION SCRIPT_GUARDIAN_INTERVAL_MINUTES=${SCRIPT_GUARDIAN_INTERVAL_MINUTES:-125} GUARDIAN_LOG_FILE=${guardian_log_file} ${INSTALL_DIR}/script_guardian.sh >> ${guardian_log_file} 2>&1
 
 EOF
 
@@ -130,10 +133,12 @@ repair_linux_monitoring_cron_schedule() {
   local cron_file="/etc/cron.d/monitoring-agent"
   local collect_log_file="/var/log/monitoring-agent.log"
   local update_log_file="/var/log/monitoring-agent-update.log"
+  local guardian_log_file="${GUARDIAN_LOG_FILE:-/var/log/monitoring-agent-guardian.log}"
   local interval_minutes="15"
   local desired_update_hours=""
   local current_update_hours=""
   local config_update_hours=""
+  local guardian_missing=0
 
   interval_minutes="$(parse_collect_interval_minutes_from_cron "$cron_file")"
   if [[ "${COLLECT_INTERVAL_MINUTES:-}" =~ ^[0-9]+$ ]] \
@@ -158,12 +163,17 @@ repair_linux_monitoring_cron_schedule() {
     fi
   fi
 
+  if [[ -f "$cron_file" ]] && ! grep -q 'script_guardian\.sh' "$cron_file" 2>/dev/null; then
+    guardian_missing=1
+  fi
+
   if linux_monitoring_cron_file_is_valid "$cron_file" \
-    && [[ "$desired_update_hours" == "$config_update_hours" ]]; then
+    && [[ "$desired_update_hours" == "$config_update_hours" ]] \
+    && [[ "$guardian_missing" -eq 0 ]]; then
     return 0
   fi
 
-  if ! write_linux_monitoring_cron_file "$cron_file" "$interval_minutes" "$desired_update_hours" "$collect_log_file" "$update_log_file"; then
+  if ! write_linux_monitoring_cron_file "$cron_file" "$interval_minutes" "$desired_update_hours" "$collect_log_file" "$update_log_file" "$guardian_log_file"; then
     return 1
   fi
 
@@ -453,4 +463,46 @@ if grep -qE '^[[:space:]]*DIR_SCAN_DEEP_PATHS[[:space:]]*=[[:space:]]*"?/hana/sh
   echo "Migration: reset stale DIR_SCAN_DEEP_PATHS in $CONFIG_FILE (will be re-detected on next run)"
 fi
 
+ensure_script_guardian_bootstrap() {
+  local guardian_path="$INSTALL_DIR/script_guardian.sh"
+  local guardian_log="${GUARDIAN_LOG_FILE:-/var/log/monitoring-agent-guardian.log}"
+  local tmp_guardian=""
+  local has_guardian_cron=0
+
+  if [[ ! -x "$guardian_path" ]]; then
+    tmp_guardian="$(mktemp)"
+    if download_update_file "client/linux/script_guardian.sh" "$tmp_guardian" 2>/dev/null \
+      && bash -n "$tmp_guardian" 2>/dev/null \
+      && grep -q 'script_guardian\|Script guardian' "$tmp_guardian" 2>/dev/null; then
+      install -m 0755 "$tmp_guardian" "$guardian_path"
+      echo "Installed missing script_guardian.sh from update source" >&2
+    else
+      echo "script_guardian bootstrap skipped: download or validation failed" >&2
+    fi
+    rm -f "$tmp_guardian"
+  fi
+
+  if [[ ! -x "$guardian_path" ]]; then
+    return 0
+  fi
+
+  ensure_config_value "GUARDIAN_LOG_FILE" "$guardian_log" || true
+  ensure_config_value "SCRIPT_GUARDIAN_INTERVAL_MINUTES" "${SCRIPT_GUARDIAN_INTERVAL_MINUTES:-125}" || true
+
+  if [[ -f /etc/cron.d/monitoring-agent ]] \
+    && grep -q 'script_guardian\.sh' /etc/cron.d/monitoring-agent 2>/dev/null; then
+    has_guardian_cron=1
+  fi
+  if [[ "$has_guardian_cron" -eq 0 ]] && command -v crontab >/dev/null 2>&1; then
+    if crontab -l 2>/dev/null | grep -q 'script_guardian\.sh'; then
+      has_guardian_cron=1
+    fi
+  fi
+
+  if [[ "$has_guardian_cron" -eq 0 ]]; then
+    repair_linux_monitoring_cron_schedule || true
+  fi
+}
+
+ensure_script_guardian_bootstrap || true
 repair_linux_monitoring_cron_schedule || true

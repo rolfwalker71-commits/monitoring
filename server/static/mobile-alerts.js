@@ -1030,6 +1030,27 @@ function buildInsightLogsBody(payload) {
     .join("");
 }
 
+function buildInsightGuardianLogHtml(scriptGuardian) {
+  const block = scriptGuardian && typeof scriptGuardian === "object" ? scriptGuardian : {};
+  const lines = Array.isArray(block.lines) ? block.lines.map((line) => String(line || "")).filter(Boolean) : [];
+  const tail = lines.slice(-12);
+  if (!tail.length) {
+    return "";
+  }
+  const meta =
+    "Intervall " +
+    (block.interval_minutes != null ? String(block.interval_minutes) : "125") +
+    " min · " +
+    (block.path ? String(block.path) : "guardian.log");
+  return (
+    '<details class="insight-log-file">' +
+    "<summary>🛡️ Script Guardian · " + mobileEsc(meta) + "</summary>" +
+    '<div class="insight-log-viewer">' +
+    mobileRenderLogfileLinesHtml(tail) +
+    "</div></details>"
+  );
+}
+
 function buildInsightSystemBody(payload, report) {
   const p = payload && typeof payload === "object" ? payload : {};
   const network = p.network && typeof p.network === "object" ? p.network : {};
@@ -1051,7 +1072,10 @@ function buildInsightSystemBody(payload, report) {
     mobileInsightFactRow("DNS", mobileEsc(dns || "—")),
     mobileInsightFactRow("Journal-Fehler", mobileEsc(journal.length ? String(journal.length) + " Einträge" : "keine")),
   ];
-  return '<dl class="insight-facts">' + rows.filter(Boolean).join("") + "</dl>";
+  const guardianHtml = buildInsightGuardianLogHtml(p.script_guardian);
+  return (
+    '<dl class="insight-facts">' + rows.filter(Boolean).join("") + "</dl>" + (guardianHtml || "")
+  );
 }
 
 function buildHostInsightSlides(host, variant, report, payload) {

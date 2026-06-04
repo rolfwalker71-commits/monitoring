@@ -65,6 +65,9 @@ $LogFile         = "$InstallDir\monitoring-agent.log"
 $UpdateLogFile   = "$InstallDir\monitoring-agent-update.log"
 $TaskNameCollect = 'monitoring-agent-collect'
 $TaskNameUpdate  = 'monitoring-agent-update'
+$TaskNameGuardian = 'monitoring-agent-guardian'
+$GuardianLogFile = "$InstallDir\monitoring-agent-guardian.log"
+$ScriptGuardianIntervalMinutes = 125
 
 function Invoke-Icacls {
     param(
@@ -135,6 +138,9 @@ $wc.DownloadFile("$RawBaseUrl/client/windows/setup_harvest_sql_user.ps1", "$Inst
 Write-Host "Downloading self_update.ps1..."
 $wc.DownloadFile("$RawBaseUrl/client/windows/self_update.ps1", "$InstallDir\self_update.ps1")
 
+Write-Host "Downloading script_guardian.ps1..."
+$wc.DownloadFile("$RawBaseUrl/client/windows/script_guardian.ps1", "$InstallDir\script_guardian.ps1")
+
 Write-Host "Downloading AGENT_VERSION..."
 try {
     $wc.DownloadFile("$RawBaseUrl/AGENT_VERSION", "$InstallDir\AGENT_VERSION")
@@ -171,6 +177,8 @@ UPDATE_HOURS="$UpdateHours"
 PRIORITY_UPDATE_CHECK_MINUTES="60"
 SEND_JITTER_MAX_SEC="300"
 UPDATE_LOG_FILE="$UpdateLogFile"
+GUARDIAN_LOG_FILE="$GuardianLogFile"
+SCRIPT_GUARDIAN_INTERVAL_MINUTES="$ScriptGuardianIntervalMinutes"
 HARVEST_SQL_SERVER="localhost"
 HARVEST_SQL_USER="harvest"
 HARVEST_SQL_PASSWORD="0djKUt&xbLK0AYr"
@@ -242,6 +250,15 @@ Register-MonitoringTask `
     -RepeatInterval     (New-TimeSpan -Hours $UpdateHours) `
     -Description        'Monitoring agent - self update' `
     -ExecutionTimeLimit (New-TimeSpan -Hours 1)
+
+Write-Host "Registering scheduled task: $TaskNameGuardian (every $ScriptGuardianIntervalMinutes min)..."
+Register-MonitoringTask `
+    -TaskName           $TaskNameGuardian `
+    -ScriptPath         "$InstallDir\script_guardian.ps1" `
+    -LogPath            $GuardianLogFile `
+    -RepeatInterval     (New-TimeSpan -Minutes $ScriptGuardianIntervalMinutes) `
+    -Description        'Monitoring agent - script guardian (collect/self_update refresh)' `
+    -ExecutionTimeLimit (New-TimeSpan -Minutes 20)
 
 # Non-interactive post-install self-test: run collector and updater once immediately.
 Write-Host "Running self-test (collect and update)..."

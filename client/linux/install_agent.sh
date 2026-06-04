@@ -7,6 +7,8 @@ CONFIG_FILE="$CONFIG_DIR/agent.conf"
 CRON_FILE="/etc/cron.d/monitoring-agent"
 LOG_FILE="/var/log/monitoring-agent.log"
 UPDATE_LOG_FILE="/var/log/monitoring-agent-update.log"
+GUARDIAN_LOG_FILE="/var/log/monitoring-agent-guardian.log"
+SCRIPT_GUARDIAN_INTERVAL_MINUTES="125"
 CRON_TAG="# monitoring-agent"
 
 SERVER_URL=""
@@ -19,6 +21,7 @@ RAW_BASE_URL=""
 AGENT_QUEUE_DIR="/var/lib/monitoring-agent/queue"
 COLLECT_SCRIPT_URL=""
 SELF_UPDATE_SCRIPT_URL=""
+GUARDIAN_SCRIPT_URL=""
 AGENT_VERSION_URL=""
 SELF_TEST_STATUS="ok"
 CURL_INSECURE="0"
@@ -118,6 +121,9 @@ fi
 if [[ -z "$SELF_UPDATE_SCRIPT_URL" ]]; then
   SELF_UPDATE_SCRIPT_URL="$RAW_BASE_URL/client/linux/self_update.sh"
 fi
+if [[ -z "$GUARDIAN_SCRIPT_URL" ]]; then
+  GUARDIAN_SCRIPT_URL="$RAW_BASE_URL/client/linux/script_guardian.sh"
+fi
 if [[ -z "$AGENT_VERSION_URL" ]]; then
   AGENT_VERSION_URL="$RAW_BASE_URL/AGENT_VERSION"
 fi
@@ -132,6 +138,7 @@ install_cron_in_crond() {
   local update_cron_line
   collect_cron_line="*/$INTERVAL_MINUTES * * * * root CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/collect_and_send.sh >> $LOG_FILE 2>&1"
   update_cron_line="11 */$UPDATE_HOURS * * * root CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/self_update.sh >> $UPDATE_LOG_FILE 2>&1"
+  guardian_cron_line="23 * * * * root CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION SCRIPT_GUARDIAN_INTERVAL_MINUTES=$SCRIPT_GUARDIAN_INTERVAL_MINUTES GUARDIAN_LOG_FILE=$GUARDIAN_LOG_FILE $INSTALL_DIR/script_guardian.sh >> $GUARDIAN_LOG_FILE 2>&1"
 
   if [[ ! -d "/etc/cron.d" ]]; then
     return 1
@@ -145,6 +152,8 @@ $CRON_TAG collect
 $collect_cron_line
 $CRON_TAG update
 $update_cron_line
+$CRON_TAG script-guardian
+$guardian_cron_line
 EOF
 
   chmod 0644 "$CRON_FILE"
@@ -154,9 +163,11 @@ EOF
 install_cron_in_crontab() {
   local collect_cron_line
   local update_cron_line
+  local guardian_cron_line
   local existing
   collect_cron_line="*/$INTERVAL_MINUTES * * * * CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/collect_and_send.sh >> $LOG_FILE 2>&1"
   update_cron_line="11 */$UPDATE_HOURS * * * CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION $INSTALL_DIR/self_update.sh >> $UPDATE_LOG_FILE 2>&1"
+  guardian_cron_line="23 * * * * CONFIG_FILE=$CONFIG_FILE AGENT_VERSION_FILE=$INSTALL_DIR/AGENT_VERSION SCRIPT_GUARDIAN_INTERVAL_MINUTES=$SCRIPT_GUARDIAN_INTERVAL_MINUTES GUARDIAN_LOG_FILE=$GUARDIAN_LOG_FILE $INSTALL_DIR/script_guardian.sh >> $GUARDIAN_LOG_FILE 2>&1"
 
   if ! command -v crontab >/dev/null 2>&1; then
     return 1
@@ -169,6 +180,8 @@ install_cron_in_crontab() {
     printf '%s\n' "$collect_cron_line"
     printf '%s update\n' "$CRON_TAG"
     printf '%s\n' "$update_cron_line"
+    printf '%s script-guardian\n' "$CRON_TAG"
+    printf '%s\n' "$guardian_cron_line"
   } | sed '/^$/N;/^\n$/D' | crontab -
 
   return 0
@@ -179,8 +192,10 @@ chmod 0750 "$AGENT_QUEUE_DIR"
 
 curl "${CURL_BASE_ARGS[@]}" "$COLLECT_SCRIPT_URL" -o "$INSTALL_DIR/collect_and_send.sh"
 curl "${CURL_BASE_ARGS[@]}" "$SELF_UPDATE_SCRIPT_URL" -o "$INSTALL_DIR/self_update.sh"
+curl "${CURL_BASE_ARGS[@]}" "$GUARDIAN_SCRIPT_URL" -o "$INSTALL_DIR/script_guardian.sh"
 chmod 0755 "$INSTALL_DIR/collect_and_send.sh"
 chmod 0755 "$INSTALL_DIR/self_update.sh"
+chmod 0755 "$INSTALL_DIR/script_guardian.sh"
 
 if ! curl "${CURL_BASE_ARGS[@]}" "$AGENT_VERSION_URL" -o "$INSTALL_DIR/AGENT_VERSION"; then
   if ! curl "${CURL_BASE_ARGS[@]}" "$RAW_BASE_URL/BUILD_VERSION" -o "$INSTALL_DIR/AGENT_VERSION"; then
@@ -223,6 +238,8 @@ AGENT_QUEUE_DIR="$AGENT_QUEUE_DIR"
 UPDATE_HOURS="$UPDATE_HOURS"
 PRIORITY_UPDATE_CHECK_MINUTES="60"
 UPDATE_LOG_FILE="$UPDATE_LOG_FILE"
+GUARDIAN_LOG_FILE="$GUARDIAN_LOG_FILE"
+SCRIPT_GUARDIAN_INTERVAL_MINUTES="$SCRIPT_GUARDIAN_INTERVAL_MINUTES"
 TLS_INSECURE="$CURL_INSECURE"
 HANA_SID="$DETECTED_HANA_SID"
 HANA_ADDONS_ENABLED="1"
@@ -278,6 +295,7 @@ echo "Config: $CONFIG_FILE"
 echo "Display name: $DISPLAY_NAME"
 echo "Collector: $INSTALL_DIR/collect_and_send.sh"
 echo "Updater: $INSTALL_DIR/self_update.sh"
+echo "Script guardian: $INSTALL_DIR/script_guardian.sh (every ${SCRIPT_GUARDIAN_INTERVAL_MINUTES} min, cron hourly + throttle)"
 echo "Agent version file: $INSTALL_DIR/AGENT_VERSION"
 echo "Queue dir: $AGENT_QUEUE_DIR"
 echo "Cron schedule: every $INTERVAL_MINUTES minutes"
@@ -285,6 +303,7 @@ echo "Update check: every $UPDATE_HOURS hours"
 echo "Cron target: $CRON_TARGET"
 echo "Log file: $LOG_FILE"
 echo "Update log file: $UPDATE_LOG_FILE"
+echo "Guardian log file: $GUARDIAN_LOG_FILE"
 echo "TLS insecure mode: $CURL_INSECURE"
 echo "Self-test status: $SELF_TEST_STATUS"
 echo "Installed agent version: $INSTALLED_AGENT_VERSION"

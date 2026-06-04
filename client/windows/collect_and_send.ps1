@@ -220,7 +220,7 @@ $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { '
 $QueueQuarantineDir = if ($env:AGENT_QUEUE_QUARANTINE_DIR) { $env:AGENT_QUEUE_QUARANTINE_DIR } else { 'C:\ProgramData\monitoring-agent\queue-quarantine' }
 $PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
 $PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
-$EmbeddedAgentVersion = '1.7.384'
+$EmbeddedAgentVersion = '1.7.385'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
@@ -484,6 +484,44 @@ function Get-UpdateLogBlock {
     }
 
     return '{"available":true,"path":"' + $logPathJson + '","line_count":' + $lines.Count + ',"lines":[' + ($encodedLines -join ',') + '],"last_crash":"' + (ConvertTo-JsonString $lastCrash) + '","priority_check_minutes":' + $priorityMinutes + ',"last_priority_check_utc":"' + (ConvertTo-JsonString $lastPriorityCheckUtc) + '","next_priority_check_utc":"' + (ConvertTo-JsonString $nextPriorityCheckUtc) + '","recurring_update_hours":' + $recurringUpdateHours + ',"recurring_update_hint":"' + (ConvertTo-JsonString ("Windows-Fallback-Update standardmaessig alle {0} Stunden relativ zum Installationszeitpunkt" -f $recurringUpdateHours)) + '"}'
+}
+
+function Get-ScriptGuardianLogBlock {
+    $installDir = if ($cfg.ContainsKey('INSTALL_DIR') -and $cfg['INSTALL_DIR']) { $cfg['INSTALL_DIR'] } else { 'C:\ProgramData\monitoring-agent' }
+    $guardianLogFile = if ($cfg.ContainsKey('GUARDIAN_LOG_FILE') -and $cfg['GUARDIAN_LOG_FILE']) { $cfg['GUARDIAN_LOG_FILE'] } else { Join-Path $installDir 'monitoring-agent-guardian.log' }
+    $guardianLogLines = if ($env:GUARDIAN_LOG_LINES -match '^\d+$') { [int]$env:GUARDIAN_LOG_LINES } else { 30 }
+    $lastRunFile = Join-Path $installDir '.script_guardian_last_run_epoch'
+    $intervalMinutes = 125
+    if ($cfg.ContainsKey('SCRIPT_GUARDIAN_INTERVAL_MINUTES')) {
+        try {
+            $parsed = [int]$cfg['SCRIPT_GUARDIAN_INTERVAL_MINUTES']
+            if ($parsed -ge 30 -and $parsed -le 720) { $intervalMinutes = $parsed }
+        } catch { }
+    }
+
+    $logPathJson = ConvertTo-JsonString $guardianLogFile
+    $lastRunUtc = ''
+    $nextRunUtc = ''
+    if (Test-Path $lastRunFile) {
+        $raw = (Get-Content $lastRunFile -TotalCount 1 -ErrorAction SilentlyContinue | Select-Object -First 1)
+        if ($raw -match '^\d+$') {
+            $lastUnix = [long]$raw
+            $lastRunUtc = [DateTimeOffset]::FromUnixTimeSeconds($lastUnix).UtcDateTime.ToString('yyyy-MM-ddTHH:mm:ssZ', $IC)
+            $nextRunUtc = [DateTimeOffset]::FromUnixTimeSeconds($lastUnix + ($intervalMinutes * 60)).UtcDateTime.ToString('yyyy-MM-ddTHH:mm:ssZ', $IC)
+        }
+    }
+
+    $scheduleHint = "Script-Guardian alle ${intervalMinutes} Min (Windows Scheduled Task)"
+    if (-not (Test-Path $guardianLogFile)) {
+        return '{"available":false,"path":"' + $logPathJson + '","line_count":0,"lines":[],"interval_minutes":' + $intervalMinutes + ',"last_run_utc":"' + (ConvertTo-JsonString $lastRunUtc) + '","next_run_utc":"' + (ConvertTo-JsonString $nextRunUtc) + '","schedule_hint":"' + (ConvertTo-JsonString $scheduleHint) + '"}'
+    }
+
+    $lines = @(Get-Content -Path $guardianLogFile -Tail $guardianLogLines -Encoding UTF8 -ErrorAction SilentlyContinue)
+    $encodedLines = @()
+    foreach ($line in $lines) {
+        $encodedLines += ('"' + (ConvertTo-JsonString ([string]$line)) + '"')
+    }
+    return '{"available":true,"path":"' + $logPathJson + '","line_count":' + $lines.Count + ',"lines":[' + ($encodedLines -join ',') + '],"interval_minutes":' + $intervalMinutes + ',"last_run_utc":"' + (ConvertTo-JsonString $lastRunUtc) + '","next_run_utc":"' + (ConvertTo-JsonString $nextRunUtc) + '","schedule_hint":"' + (ConvertTo-JsonString $scheduleHint) + '"}'
 }
 
 function Get-AgentConfigBlock {
@@ -2936,6 +2974,7 @@ $containerData = Get-ContainerEntries
 $containersStr = [string]$containerData.entries
 $dockerAvailable = if ($containerData.available) { 'true' } else { 'false' }
 $updateLogJson      = Get-UpdateLogBlock
+$scriptGuardianJson = Get-ScriptGuardianLogBlock
 $agentConfigJson    = Get-AgentConfigBlock
 $angLogsJson = Get-AngLogsBlockSafe
 $sapB1Json       = Get-SapB1PayloadBlock
@@ -3069,6 +3108,7 @@ $payload = @"
         "entries": [$containersStr]
     },
     "agent_update": $updateLogJson,
+    "script_guardian": $scriptGuardianJson,
     "agent_config": $agentConfigJson,
     "sap_business_one": $sapB1Json,
     "sql_server_info": $sqlServerJson,
