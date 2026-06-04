@@ -58,22 +58,37 @@
           <div class="kpi kpi-warning"><strong id="kpiWarning">0</strong><span>Warning</span></div>
           <div class="kpi kpi-open"><strong id="kpiOpen">0</strong><span>Offen</span></div>
           <div class="kpi kpi-active" title="Online bzw. Meldung in der letzten Stunde"><strong id="kpiActiveHosts">0</strong><span>Aktiv</span></div>
-          <div class="kpi kpi-inactive" title="Keine Meldung in der letzten Stunde"><strong id="kpiInactiveHosts">0</strong><span>Inaktiv</span></div>
+          <button type="button" class="kpi kpi-inactive kpi-tap" id="kpiInactiveNav" title="Inaktive Hosts anzeigen (keine Meldung in der letzten Stunde)"><strong id="kpiInactiveHosts">0</strong><span>Inaktiv</span></button>
         </div>
       </header>
 
-      <section class="filter-chips" aria-label="Filter">
-        <button type="button" class="chip active" data-severity="all">Alle</button>
-        <button type="button" class="chip" data-severity="critical">Kritisch</button>
-        <button type="button" class="chip" data-severity="warning">Warning</button>
-        <button type="button" class="chip chip-ghost" id="filterMoreButton">Filter ▾</button>
-      </section>
+      <div id="alertsHomeView" class="mobile-view">
+        <section class="filter-chips" aria-label="Filter">
+          <button type="button" class="chip active" data-severity="all">Alle</button>
+          <button type="button" class="chip" data-severity="critical">Kritisch</button>
+          <button type="button" class="chip" data-severity="warning">Warning</button>
+          <button type="button" class="chip chip-ghost" id="filterMoreButton">Filter ▾</button>
+        </section>
 
-      <p id="statusLine" class="status-line">Lade Alerts...</p>
+        <p id="statusLine" class="status-line">Lade Alerts...</p>
 
-      <div class="alerts-carousel-shell">
-        <section id="alertsList" class="alerts-list alerts-carousel" aria-live="polite"></section>
-        <section id="alertDetailPanel" class="alert-detail-panel hidden" aria-label="Alert-Details"></section>
+        <div class="alerts-carousel-shell">
+          <section id="alertsList" class="alerts-list alerts-carousel" aria-live="polite"></section>
+          <section id="alertDetailPanel" class="alert-detail-panel hidden" aria-label="Alert-Details"></section>
+        </div>
+      </div>
+
+      <div id="inactiveHostsView" class="mobile-view hidden" aria-label="Inaktive Hosts">
+        <div class="mobile-subpage-bar">
+          <button type="button" class="btn-back" id="inactiveHostsBackButton" aria-label="Zurück zu Alerts">← Alerts</button>
+          <div class="mobile-subpage-titles">
+            <h2>Inaktive Hosts</h2>
+            <p id="inactiveHostsSubtitle" class="mobile-subpage-hint"></p>
+          </div>
+          <button type="button" class="icon-btn icon-btn-compact" id="inactiveHostsRefreshButton" title="Aktualisieren" aria-label="Aktualisieren">↻</button>
+        </div>
+        <p id="inactiveHostsStatusLine" class="status-line">Lade Hosts…</p>
+        <section id="inactiveHostsList" class="inactive-hosts-stack" aria-live="polite"></section>
       </div>
     </main>
 
