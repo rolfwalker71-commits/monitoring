@@ -461,6 +461,12 @@
   margin-left: auto;
   padding: 0;
   font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* Keep tab row visible: Zeitraum is margin-left:auto; Kundeninfos must sit before it in DOM */
+#overviewView .overview-sidebar > .overview-sidebar-item {
+  flex-shrink: 0;
 }
 
 .reports-column .overview-sidebar-range select,
