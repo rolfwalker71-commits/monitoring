@@ -48,6 +48,26 @@ fi
 add_update_base_candidate "$CONFIG_UPDATE_BASE_URL"
 add_update_base_candidate "$CONFIG_RAW_BASE_URL"
 
+# Prefer agent.conf sources first (internal NPM / private Infoboard) before public fallbacks.
+reorder_update_base_candidates() {
+  local config_bases=() public_bases=() base=""
+  for base in "${UPDATE_BASE_CANDIDATES[@]}"; do
+    case "$base" in
+      "$CONFIG_UPDATE_BASE_URL"|"$CONFIG_RAW_BASE_URL")
+        config_bases+=("$base")
+        ;;
+      "${CONFIG_SERVER_URL%/}/updates")
+        config_bases+=("$base")
+        ;;
+      *)
+        public_bases+=("$base")
+        ;;
+    esac
+  done
+  UPDATE_BASE_CANDIDATES=("${config_bases[@]}" "${public_bases[@]}")
+}
+reorder_update_base_candidates
+
 CURL_BASE_ARGS=(--fail --silent --show-error --location --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC" --max-time "$CURL_MAX_TIME_SEC")
 if [[ "$TLS_INSECURE" == "1" ]]; then
   CURL_BASE_ARGS+=(--insecure)
@@ -97,6 +117,35 @@ fetch_remote_version_file() {
   return 1
 }
 
+diagnose_update_sources() {
+  local rel="${1:-AGENT_VERSION}"
+  local base="" url="" body="" http_code=""
+  local probe_args=(--silent --show-error --location --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC" --max-time "$CURL_MAX_TIME_SEC" -o /dev/null -w "%{http_code}")
+  if [[ "$TLS_INSECURE" == "1" ]]; then
+    probe_args+=(--insecure)
+  fi
+  echo "Update source probe for /$rel (from $CONFIG_FILE):" >&2
+  for base in "${UPDATE_BASE_CANDIDATES[@]}"; do
+    url="$base/$rel"
+    http_code="$(curl "${probe_args[@]}" "$url" 2>/dev/null || printf '000')"
+    local body_args=(--silent --location --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC" --max-time "$CURL_MAX_TIME_SEC")
+    if [[ "$TLS_INSECURE" == "1" ]]; then
+      body_args+=(--insecure)
+    fi
+    body="$(curl "${body_args[@]}" "$url" 2>/dev/null | tr -d '[:space:]' | head -c 120 || true)"
+    if [[ -z "$body" ]]; then
+      body="(empty or unreachable)"
+    fi
+    echo "  $url -> HTTP $http_code body='$body'" >&2
+  done
+  if [[ -n "$CONFIG_SERVER_URL" ]]; then
+    local api_probe="${CONFIG_SERVER_URL%/}/api/v1/agent-commands"
+    http_code="$(curl "${probe_args[@]}" "$api_probe" 2>/dev/null || printf '000')"
+    echo "  API probe ${api_probe} -> HTTP $http_code (collect uses POST /api/v1/agent-report)" >&2
+  fi
+  echo "NPM/internal proxy must forward both /updates/* and /api/v1/* to the monitoring receiver." >&2
+}
+
 local_version="unknown"
 if [[ -f "$AGENT_VERSION_FILE" ]]; then
   local_version="$(head -n 1 "$AGENT_VERSION_FILE" | tr -d '[:space:]')"
@@ -140,6 +189,7 @@ fi
 
 if [[ -z "$remote_version" ]]; then
   echo "Remote version lookup failed (AGENT_VERSION/BUILD_VERSION empty or invalid); aborting update check." >&2
+  diagnose_update_sources "AGENT_VERSION"
   exit 1
 fi
 
