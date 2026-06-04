@@ -1,0 +1,1524 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard Redesign – Mockup (4 Zonen)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --panel: #ffffff;
+      --line: #e2e8f0;
+      --line-strong: #cbd5e1;
+      --text: #1e293b;
+      --muted: #64748b;
+      --accent: #2563eb;
+      --accent-soft: #eff6ff;
+      --ok: #16a34a;
+      --warn: #d97706;
+      --alarm: #c2410c;
+      --crit: #b91c1c;
+      --radius-control: 6px;
+      --radius-card: 12px;
+      --mono: "IBM Plex Mono", "Consolas", monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Manrope", "Segoe UI", sans-serif;
+      font-size: 12px;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.4;
+    }
+
+    .page-wrap {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+    }
+
+    .doc-header {
+      margin-bottom: 20px;
+      padding: 16px 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+    }
+
+    .doc-header h1 {
+      margin: 0 0 6px;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .doc-header p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 920px;
+    }
+
+    .doc-header .tag {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 3px 10px;
+      border-radius: var(--radius-control);
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      color: #92400e;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .compare-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    @media (max-width: 900px) {
+      .compare-row { grid-template-columns: 1fr; }
+    }
+
+    .compare-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      padding: 12px 14px;
+    }
+
+    .compare-card h2 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+
+    .compare-card ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--text);
+    }
+
+    .compare-card li { margin-bottom: 4px; }
+
+    /* —— App shell —— */
+    .app {
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-card);
+      overflow: hidden;
+      background: var(--panel);
+      box-shadow: 0 8px 28px rgba(15, 23, 42, 0.06);
+    }
+
+    /* Zone 1 */
+    .zone-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .zone-brand .logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #1e3a5f, #2563eb);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 11px;
+    }
+
+    .zone-brand .title-block h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .zone-brand .title-block .meta {
+      font-size: 10px;
+      color: var(--muted);
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .zone-brand .meta-pill {
+      padding: 1px 6px;
+      border-radius: var(--radius-control);
+      border: 1px solid var(--line);
+      background: #f8fafc;
+      font-weight: 600;
+      font-size: 9px;
+      color: var(--muted);
+    }
+
+    .zone-brand .spacer { flex: 1; }
+
+    .zone-brand .user-strip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .zone-brand .partner {
+      width: 48px;
+      height: 20px;
+      border-radius: 4px;
+      background: #e2e8f0;
+      display: grid;
+      place-items: center;
+      font-size: 9px;
+      font-weight: 800;
+      color: #475569;
+    }
+
+    .zone-kpi {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fafbfc;
+    }
+
+    .kpi-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: var(--radius-control);
+      border: 1px solid var(--line);
+      background: #fff;
+      color: #334155;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .kpi-pill .ico { opacity: 0.65; font-size: 10px; }
+    .kpi-pill .num { font-family: var(--mono); font-weight: 800; }
+
+    .kpi-pill.is-alarm {
+      background: #fff7ed;
+      border-color: #fdba74;
+      color: #9a3412;
+    }
+
+    .kpi-pill.is-alarm .num { color: var(--alarm); }
+
+    .kpi-pill.is-crit {
+      background: #fef2f2;
+      border-color: #fca5a5;
+      color: #991b1b;
+    }
+
+    .kpi-pill.is-crit .num { color: var(--crit); }
+
+    .kpi-tools {
+      margin-left: auto;
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-icon {
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-control);
+      background: #fff;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .btn-icon:hover { background: #f1f5f9; }
+
+    /* Zone 2 */
+    .zone-filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .search-input {
+      flex: 1 1 200px;
+      min-width: 180px;
+      max-width: 320px;
+      height: 30px;
+      padding: 0 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-control);
+      font: inherit;
+    }
+
+    .filter-select {
+      height: 30px;
+      padding: 0 28px 0 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-control);
+      background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%2364748b' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E") no-repeat right 10px center;
+      appearance: none;
+      font: inherit;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Zone 3 + 4 layout */
+    .zone-body {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 520px;
+    }
+
+    .hosts-col {
+      border-right: 1px solid var(--line);
+      padding: 10px;
+      background: #fafbfc;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .hosts-col h3 {
+      margin: 0 0 4px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+
+    .host-card {
+      position: relative;
+      padding: 10px 10px 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: #fff;
+      cursor: pointer;
+      transition: border-color 0.12s, box-shadow 0.12s;
+    }
+
+    .host-card:hover { border-color: #94a3b8; }
+
+    .host-card.is-selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+
+    .host-card .country {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: #94a3b8;
+    }
+
+    .host-card .customer {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 2px;
+      padding-right: 24px;
+    }
+
+    .host-card .hostline {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-dot.ok { background: var(--ok); }
+    .status-dot.crit { background: var(--crit); }
+
+    .host-card .sub {
+      margin-top: 4px;
+      font-size: 10px;
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .host-card.muted-card { opacity: 0.72; }
+
+    /* Context menu */
+    .ctx-menu {
+      position: fixed;
+      z-index: 100;
+      min-width: 200px;
+      padding: 6px 0;
+      background: #fff;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-control);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+      display: none;
+    }
+
+    .ctx-menu.is-open { display: block; }
+
+    .ctx-menu .ctx-label {
+      padding: 6px 12px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 4px;
+    }
+
+    .ctx-menu button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 8px 12px;
+      border: 0;
+      background: transparent;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .ctx-menu button:hover { background: #f1f5f9; }
+
+    .ctx-menu button.danger { color: var(--crit); }
+
+    /* Zone 4 */
+    .detail-col {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .report-title-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .report-title-bar .main-title {
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .report-title-bar .main-title .sep {
+      color: var(--line-strong);
+      font-weight: 500;
+      margin: 0 4px;
+    }
+
+    .env-pill {
+      padding: 2px 8px;
+      border-radius: var(--radius-control);
+      border: 1px solid var(--line);
+      background: #f8fafc;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+
+    .env-pill.prod {
+      border-color: #86efac;
+      background: #f0fdf4;
+      color: #166534;
+    }
+
+    .report-title-bar .date-right {
+      margin-left: auto;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .main-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fafbfc;
+    }
+
+    .main-nav button {
+      padding: 6px 12px;
+      border: 1px solid transparent;
+      border-radius: var(--radius-control);
+      background: transparent;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .main-nav button:hover {
+      background: #fff;
+      border-color: var(--line);
+      color: var(--text);
+    }
+
+    .main-nav button.is-active {
+      background: var(--accent-soft);
+      border-color: #93c5fd;
+      color: var(--accent);
+    }
+
+    .sub-nav {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 6px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .sub-nav .sub-tabs {
+      display: flex;
+      gap: 4px;
+    }
+
+    .sub-nav .sub-tabs button {
+      padding: 5px 10px;
+      border: 0;
+      border-radius: var(--radius-control);
+      background: transparent;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .sub-nav-primary {
+      padding: 0 14px;
+      border-bottom: 2px solid var(--line);
+      background: #fff;
+    }
+
+    .sub-nav-primary .sub-tabs {
+      display: flex;
+      gap: 0;
+    }
+
+    .sub-nav-primary .sub-tabs button {
+      padding: 10px 14px 8px;
+      border: 0;
+      border-bottom: 3px solid transparent;
+      border-radius: 0;
+      background: transparent;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
+      margin-bottom: -2px;
+    }
+
+    .sub-nav-primary .sub-tabs button:hover {
+      color: var(--text);
+      background: transparent;
+    }
+
+    .sub-nav-primary .sub-tabs button.is-active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: transparent;
+    }
+
+    .nav-mode-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fafbfc;
+      min-height: 44px;
+    }
+
+    .nav-mode-bar.is-hidden {
+      display: none;
+    }
+
+    .nav-mode-label {
+      width: 100%;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #94a3b8;
+      margin: -2px 0 2px;
+      flex: 1 0 100%;
+    }
+
+    .nav-mode-bar button {
+      padding: 6px 12px;
+      border: 1px solid transparent;
+      border-radius: var(--radius-control);
+      background: transparent;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .nav-mode-bar button:hover {
+      background: #fff;
+      border-color: var(--line);
+      color: var(--text);
+    }
+
+    .nav-mode-bar button.is-active {
+      background: var(--accent-soft);
+      border-color: #93c5fd;
+      color: var(--accent);
+    }
+
+    .overview-range {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .overview-range select {
+      height: 28px;
+      padding: 0 24px 0 8px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-control);
+      font: inherit;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .overview-range.is-hidden {
+      display: none;
+    }
+
+    .time-nav {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .time-nav button,
+    .time-nav .time-btn {
+      height: 28px;
+      padding: 0 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-control);
+      background: #fff;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--text);
+    }
+
+    .time-nav button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .content-area {
+      padding: 14px;
+      flex: 1;
+      background: #f8fafc;
+      min-height: 380px;
+    }
+
+    .mode-panel {
+      display: none;
+    }
+
+    .mode-panel.is-visible {
+      display: block;
+    }
+
+    .ov-section {
+      display: none;
+    }
+
+    .ov-section.is-visible {
+      display: block;
+    }
+
+    .rep-section {
+      display: none;
+    }
+
+    .rep-section.is-visible {
+      display: block;
+    }
+
+    .content-card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      padding: 12px 14px;
+      margin-bottom: 12px;
+    }
+
+    .content-card h4 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .demo-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+
+    .demo-table th,
+    .demo-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #f1f5f9;
+      text-align: left;
+    }
+
+    .demo-table th {
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 10px;
+      text-transform: uppercase;
+    }
+
+    .demo-empty {
+      color: var(--muted);
+      font-style: italic;
+      padding: 12px 0;
+    }
+
+    .chart-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .chart-mini {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-control);
+      padding: 10px;
+      background: #fafbfc;
+    }
+
+    .chart-mini strong {
+      display: block;
+      font-size: 11px;
+      margin-bottom: 6px;
+    }
+
+    .chart-mini .bar-track {
+      margin-top: 4px;
+    }
+
+    .placeholder-lines {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .metrics-area {
+      padding: 0;
+      flex: unset;
+      background: transparent;
+      min-height: 0;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .overview-metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    @media (max-width: 1200px) {
+      .overview-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 700px) {
+      .overview-metrics-grid { grid-template-columns: 1fr; }
+    }
+
+    .overview-metrics-grid .metric-card--wide {
+      grid-column: 1 / -1;
+    }
+
+    .overview-metrics-grid .resource-bars {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    @media (max-width: 900px) {
+      .overview-metrics-grid .resource-bars { grid-template-columns: 1fr; }
+    }
+
+    .sap-inline-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .sap-chip {
+      padding: 6px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-control);
+      background: #f8fafc;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .sap-chip span {
+      display: block;
+      font-size: 12px;
+      color: var(--text);
+      font-family: var(--mono);
+      margin-top: 2px;
+    }
+
+    @media (max-width: 1100px) {
+      .metrics-grid { grid-template-columns: 1fr; }
+      .zone-body { grid-template-columns: 240px 1fr; }
+    }
+
+    .metric-card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      padding: 12px 14px;
+    }
+
+    .metric-card h4 {
+      margin: 0 0 10px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      padding: 5px 0;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .metric-row:last-child { border-bottom: 0; }
+
+    .metric-row .label {
+      font-weight: 600;
+      color: #475569;
+      flex-shrink: 0;
+    }
+
+    .metric-row .value {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text);
+      text-align: right;
+    }
+
+    .bar-row {
+      padding: 6px 0 8px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .bar-row:last-child { border-bottom: 0; }
+
+    .bar-head {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      font-weight: 600;
+      color: #475569;
+    }
+
+    .bar-head .pct {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .bar-track {
+      height: 6px;
+      border-radius: 3px;
+      background: #e2e8f0;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s ease, background 0.2s;
+    }
+
+    .bar-fill.low { background: #22c55e; }
+    .bar-fill.mid { background: #f59e0b; }
+    .bar-fill.high { background: #ef4444; }
+
+    .footnote {
+      margin-top: 14px;
+      padding: 10px 14px;
+      font-size: 11px;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .rules {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    @media (max-width: 800px) {
+      .rules { grid-template-columns: 1fr; }
+    }
+
+    .rule-card {
+      padding: 12px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      font-size: 11px;
+    }
+
+    .rule-card strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-wrap">
+    <header class="doc-header">
+      <h1>System Infoboard – Layout-Redesign (Mockup)</h1>
+      <p>
+        Zielbild basierend auf dem Produktiv-Screenshot (Bübchen Werke / Admin Server, v1.7.352).
+        Vier Zonen, Grau-Prinzip, horizontale Report-Navigation. Nur zur Ansicht – noch nicht in app.js umgesetzt.
+      </p>
+      <span class="tag">Klick: Übersicht ↔ Einzelmeldungen wechselt die Navigationszeile darunter · Rechtsklick Host: Kontextmenü</span>
+    </header>
+
+    <div class="compare-row">
+      <div class="compare-card">
+        <h2>Ist (Screenshot)</h2>
+        <ul>
+          <li>Bunte KPI-Kacheln mit Zusatztext („Alle“, „Online“)</li>
+          <li>OS- und Länder-<strong>Flaggen-Chips</strong></li>
+          <li>Host-Karten mit Kundenlogo-Wasserzeichen</li>
+          <li>Großer blauer Kunden-Header + vertikale Sidebar</li>
+        </ul>
+      </div>
+      <div class="compare-card">
+        <h2>Soll (dieses Mockup)</h2>
+        <ul>
+          <li>Neutrale KPIs; nur OFFEN/KRITISCH farbig bei Wert &gt; 0</li>
+          <li>Dropdowns „OS: Alle“, „Land: Alle“</li>
+          <li>Flache weiße Karten, Status-Punkt, Länderkürzel DE</li>
+          <li>Übersicht „Alarme &amp; Infos“: volles System-/Netzwerk-/Host-Grid + Alerts + Analyse</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="app" id="appMock">
+      <!-- Zone 1: Brand + KPI -->
+      <div class="zone-brand">
+        <div class="logo" aria-hidden="true">SI</div>
+        <div class="title-block">
+          <h2>System Infoboard</h2>
+          <div class="meta">
+            <span>v1.7.352</span>
+            <span class="meta-pill">Linux</span>
+            <span class="meta-pill">Windows</span>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <div class="user-strip">
+          <span>angemeldet als <strong>Rolf</strong></span>
+          <button type="button" class="btn-icon" title="Abmelden">⎋</button>
+        </div>
+        <div class="partner">ANG</div>
+      </div>
+
+      <div class="zone-kpi">
+        <span class="kpi-pill is-alarm"><span class="ico">△</span> OFFEN: <span class="num">2</span></span>
+        <span class="kpi-pill is-crit"><span class="ico">✖</span> KRITISCH: <span class="num">1</span></span>
+        <span class="kpi-pill"><span class="ico">✓</span> QUITTIERT: <span class="num">6</span></span>
+        <span class="kpi-pill"><span class="ico">⊘</span> STUMM: <span class="num">0</span></span>
+        <span class="kpi-pill"><span class="ico">●</span> AKTIVE HOSTS: <span class="num">46</span></span>
+        <span class="kpi-pill"><span class="ico">◴</span> INAKTIVE HOSTS: <span class="num">24</span></span>
+        <span class="kpi-pill"><span class="ico">▤</span> BERICHTE: <span class="num">90 003</span></span>
+        <span class="kpi-pill"><span class="ico">▣</span> DB GRÖSSE: <span class="num">1 816 MB</span></span>
+        <span class="kpi-pill"><span class="ico">◷</span> BERICHTE 1H: <span class="num">180</span></span>
+        <span class="kpi-pill"><span class="ico">Δ</span> DB DIFF 1H: <span class="num">+7.9 MB</span></span>
+        <div class="kpi-tools">
+          <button type="button" class="btn-icon" title="Einstellungen">⚙</button>
+          <button type="button" class="btn-icon" title="Neu laden">↻</button>
+        </div>
+      </div>
+
+      <!-- Zone 2: Filter -->
+      <div class="zone-filters">
+        <input class="search-input" type="search" placeholder="Host, Bezeichnung, IP, Kunde…" value="bübchen" />
+        <select class="filter-select" aria-label="Interessen">
+          <option>Interessen: Alle Hosts</option>
+        </select>
+        <select class="filter-select" aria-label="Betriebssystem">
+          <option>OS: Alle</option>
+          <option>OS: Windows</option>
+          <option>OS: Linux</option>
+        </select>
+        <select class="filter-select" aria-label="Land">
+          <option>Land: Alle</option>
+          <option>Land: DE</option>
+          <option>Land: CH</option>
+          <option>Land: AT</option>
+        </select>
+      </div>
+
+      <!-- Zone 3 + 4 -->
+      <div class="zone-body">
+        <aside class="hosts-col">
+          <h3>Hosts</h3>
+          <article class="host-card is-selected" data-host="RB17SRV015" tabindex="0">
+            <span class="country">DE</span>
+            <div class="customer">Bübchen Werke</div>
+            <div class="hostline">
+              <span class="status-dot ok" title="OK"></span>
+              <span>Admin Server</span>
+            </div>
+            <div class="sub">RB17SRV015 · 10.17.13.15</div>
+          </article>
+          <article class="host-card muted-card" data-host="example2" tabindex="0">
+            <span class="country">CH</span>
+            <div class="customer">Muster AG</div>
+            <div class="hostline">
+              <span class="status-dot crit" title="Fehler"></span>
+              <span>HANA Prod</span>
+            </div>
+            <div class="sub">srv-hana-01 · 10.0.0.12</div>
+          </article>
+          <article class="host-card" data-host="example3" tabindex="0">
+            <span class="country">AT</span>
+            <div class="customer">Demo Kunde</div>
+            <div class="hostline">
+              <span class="status-dot ok"></span>
+              <span>App Server</span>
+            </div>
+            <div class="sub">app-02 · 192.168.1.50</div>
+          </article>
+        </aside>
+
+        <section class="detail-col">
+          <div class="report-title-bar report-chrome-bar">
+            <span class="report-chrome-logo-wrap" title="Kundenlogo Bübchen">
+              <span style="font-size:9px;font-weight:800;color:#94a3b8">LOGO</span>
+            </span>
+            <div class="main-title report-chrome-title">
+              Bübchen Werke<span class="sep">|</span>Admin Server
+            </div>
+            <span class="env-pill prod">PROD</span>
+            <time class="date-right">03.06.2026 · 23:30</time>
+          </div>
+
+          <!-- Ebene 1: Übersicht | Einzelmeldungen -->
+          <div class="sub-nav-primary">
+            <div class="sub-tabs" role="tablist" aria-label="Hauptansicht">
+              <button type="button" id="btnModeOverview" class="is-active" data-mode="overview">Übersicht</button>
+              <button type="button" id="btnModeReports" data-mode="reports">Einzelmeldungen</button>
+            </div>
+          </div>
+
+          <!-- Ebene 2a: Nur bei Übersicht -->
+          <nav id="navOverview" class="nav-mode-bar" aria-label="Übersicht-Unternavigation">
+            <span class="nav-mode-label">Navigationszeile · Modus Übersicht</span>
+            <button type="button" class="is-active" data-ov="alerts">Alarme &amp; Infos</button>
+            <button type="button" data-ov="filesystems">Filesysteme</button>
+            <button type="button" data-ov="dbchangelog">DB Changelog</button>
+            <button type="button" data-ov="changelog">Changelog</button>
+            <button type="button" data-ov="customer">Kundeninfos</button>
+            <label id="overviewRangeWrap" class="overview-range">
+              <span>Zeitraum</span>
+              <select id="overviewRangeSelect" aria-label="Analyse-Zeitraum">
+                <option>Letzte 6 Std.</option>
+                <option>Letzte 24 Std.</option>
+                <option selected>Letzte 7 Tage</option>
+                <option>Letzte 30 Tage</option>
+              </select>
+            </label>
+          </nav>
+
+          <!-- Ebene 2b: Nur bei Einzelmeldungen -->
+          <nav id="navReports" class="nav-mode-bar is-hidden" aria-label="Einzelmeldungs-Navigation">
+            <span class="nav-mode-label">Navigationszeile · Modus Einzelmeldungen</span>
+            <button type="button" class="is-active" data-rep="system">System</button>
+            <button type="button" data-rep="journal">Journal</button>
+            <button type="button" data-rep="processes">Prozesse</button>
+            <button type="button" data-rep="logfiles">Logfiles</button>
+            <button type="button" data-rep="sap">SAP B1</button>
+            <button type="button" data-rep="containers" title="Nur wo Docker läuft">Container</button>
+            <button type="button" data-rep="export" title="Nur HANA Systeme">Export</button>
+            <button type="button" data-rep="agent">Agent</button>
+            <div class="time-nav">
+              <button type="button" title="Ältere Meldung">‹</button>
+              <button type="button" title="Neuere Meldung">›</button>
+              <button type="button" class="time-btn">Aktuellste</button>
+            </div>
+          </nav>
+
+          <div class="content-area">
+            <!-- Inhalt Übersicht -->
+            <div id="panelOverview" class="mode-panel is-visible">
+              <section class="ov-section is-visible" data-ov-panel="alerts">
+                <div class="sap-inline-chips" aria-label="SAP/HANA Kennzahlen">
+                  <div class="sap-chip">SAP RELEASE<span>FP2208</span></div>
+                  <div class="sap-chip">HANA RELEASE<span>—</span></div>
+                  <div class="sap-chip">HANA SID<span>—</span></div>
+                  <div class="sap-chip">LETZTE MELDUNG<span>03.06.2026, 23:30</span></div>
+                  <div class="sap-chip">ZUSTELLUNG<span>LIVE</span></div>
+                </div>
+
+                <div class="overview-metrics-grid">
+                  <article class="metric-card">
+                    <h4>Host &amp; Identität</h4>
+                    <div class="metric-row"><span class="label">Kunde</span><span class="value">Bübchen Werke</span></div>
+                    <div class="metric-row"><span class="label">Bezeichnung</span><span class="value">Admin Server</span></div>
+                    <div class="metric-row"><span class="label">Hostname</span><span class="value">RB17SRV015</span></div>
+                    <div class="metric-row"><span class="label">Host-UID</span><span class="value" style="font-size:9px">a1b2c3…f015</span></div>
+                    <div class="metric-row"><span class="label">Land</span><span class="value">DE</span></div>
+                    <div class="metric-row"><span class="label">Umgebung</span><span class="value">PROD</span></div>
+                    <div class="metric-row"><span class="label">Meldungen</span><span class="value">1 284</span></div>
+                  </article>
+
+                  <article class="metric-card">
+                    <h4>Agent</h4>
+                    <div class="metric-row"><span class="label">Agent ID</span><span class="value" style="font-size:9px">win-RB17SRV015</span></div>
+                    <div class="metric-row"><span class="label">Version</span><span class="value">1.7.352</span></div>
+                    <div class="metric-row"><span class="label">API-Key</span><span class="value">OK</span></div>
+                    <div class="metric-row"><span class="label">Queue</span><span class="value">0 Dateien</span></div>
+                    <div class="metric-row"><span class="label">Interesse</span><span class="value">Ja</span></div>
+                  </article>
+
+                  <article class="metric-card">
+                    <h4>System</h4>
+                    <div class="metric-row"><span class="label">OS</span><span class="value" style="font-size:9px">Windows Server 2019 Standard</span></div>
+                    <div class="metric-row"><span class="label">Kernel</span><span class="value">10.0.17763</span></div>
+                    <div class="metric-row"><span class="label">Uptime</span><span class="value">4d 7h 19m</span></div>
+                    <div class="metric-row"><span class="label">Architektur</span><span class="value">x64</span></div>
+                  </article>
+
+                  <article class="metric-card">
+                    <h4>Netzwerk</h4>
+                    <div class="metric-row"><span class="label">Primary IP</span><span class="value">10.17.13.15</span></div>
+                    <div class="metric-row"><span class="label">Std. NIC IP</span><span class="value">10.17.13.15</span></div>
+                    <div class="metric-row"><span class="label">Default NIC</span><span class="value">Ethernet</span></div>
+                    <div class="metric-row"><span class="label">Gateway</span><span class="value">10.17.13.1</span></div>
+                    <div class="metric-row"><span class="label">DNS</span><span class="value">10.17.13.2</span></div>
+                  </article>
+
+                  <article class="metric-card metric-card--wide">
+                    <h4>Ressourcen (aktuell)</h4>
+                    <div class="resource-bars">
+                      <div class="bar-row">
+                        <div class="bar-head"><span>CPU</span><span class="pct">0.0%</span></div>
+                        <div class="bar-track"><div class="bar-fill low" style="width:2%"></div></div>
+                        <div class="metric-row" style="border:0;padding-top:4px"><span class="label">Load Ø</span><span class="value">0.02 / 0.05 / 0.08</span></div>
+                      </div>
+                      <div class="bar-row">
+                        <div class="bar-head"><span>RAM</span><span class="pct">45.2%</span></div>
+                        <div class="bar-track"><div class="bar-fill mid" style="width:45%"></div></div>
+                        <div class="metric-row" style="border:0;padding-top:4px"><span class="label">Belegung</span><span class="value">29.1 / 64.0 GB</span></div>
+                      </div>
+                      <div class="bar-row">
+                        <div class="bar-head"><span>SWAP</span><span class="pct">2.1%</span></div>
+                        <div class="bar-track"><div class="bar-fill low" style="width:2%"></div></div>
+                        <div class="metric-row" style="border:0;padding-top:4px"><span class="label">Kerne / Modell</span><span class="value" style="font-size:9px">8 · Xeon Gold 6248R</span></div>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+
+                <div class="content-card">
+                  <h4>Alerts</h4>
+                  <table class="demo-table">
+                    <thead>
+                      <tr>
+                        <th>Status</th>
+                        <th>Severity</th>
+                        <th>Mountpoint</th>
+                        <th>Initial</th>
+                        <th>Aktiv seit</th>
+                        <th>Aktion</th>
+                      </tr>
+                    </thead>
+                    <tbody><tr><td colspan="6" class="demo-empty">Keine Alerts vorhanden</td></tr></tbody>
+                  </table>
+                </div>
+                <div class="content-card">
+                  <h4 id="analysisTitle">Analyse (Letzte 7 Tage)</h4>
+                  <p style="margin:0 0 10px;font-size:11px;color:var(--muted)">Trend-Charts für CPU, RAM, Swap — wie heute unterhalb der Metriken.</p>
+                  <div class="chart-strip">
+                    <div class="chart-mini"><strong>CPU</strong><span class="demo-empty" style="padding:0">Min Ø Max im Zeitraum</span><div class="bar-track"><div class="bar-fill low" style="width:35%"></div></div></div>
+                    <div class="chart-mini"><strong>RAM</strong><span class="demo-empty" style="padding:0">Spitze 52%</span><div class="bar-track"><div class="bar-fill mid" style="width:52%"></div></div></div>
+                    <div class="chart-mini"><strong>Swap</strong><span class="demo-empty" style="padding:0">Stabil &lt; 5%</span><div class="bar-track"><div class="bar-fill low" style="width:4%"></div></div></div>
+                  </div>
+                </div>
+              </section>
+              <section class="ov-section" data-ov-panel="filesystems">
+                <div class="content-card">
+                  <h4>Filesysteme (Letzte 7 Tage)</h4>
+                  <p class="demo-empty">Mountpoints, Belegung und Trends — gleiche Daten wie heute, nur ohne linke Sidebar.</p>
+                </div>
+              </section>
+              <section class="ov-section" data-ov-panel="dbchangelog">
+                <div class="content-card">
+                  <h4>DB Changelog</h4>
+                  <p class="demo-empty">Datenbank-Lifecycle-Ereignisse für den gewählten Host.</p>
+                </div>
+              </section>
+              <section class="ov-section" data-ov-panel="changelog">
+                <div class="content-card">
+                  <h4>Changelog (Host-Konfiguration)</h4>
+                  <ul class="placeholder-lines">
+                    <li>display_name geändert · 02.06.2026</li>
+                    <li>country_code: DE · 15.05.2026</li>
+                  </ul>
+                </div>
+              </section>
+              <section class="ov-section" data-ov-panel="customer">
+                <div class="content-card">
+                  <h4>Kundeninfos</h4>
+                  <p class="demo-empty">IT-Kontakt, Wartungsfenster, Freitext — Panel wie heute unter „Kundeninfos“.</p>
+                </div>
+              </section>
+            </div>
+
+            <!-- Inhalt Einzelmeldungen -->
+            <div id="panelReports" class="mode-panel">
+              <section class="rep-section is-visible" data-rep-panel="system">
+                <div class="metrics-area">
+                  <div class="metrics-grid">
+                    <article class="metric-card">
+                      <h4>Ressourcen</h4>
+                      <div class="bar-row">
+                        <div class="bar-head"><span>CPU</span><span class="pct">22%</span></div>
+                        <div class="bar-track"><div class="bar-fill low" style="width:22%"></div></div>
+                      </div>
+                      <div class="bar-row">
+                        <div class="bar-head"><span>RAM</span><span class="pct">65%</span></div>
+                        <div class="bar-track"><div class="bar-fill mid" style="width:65%"></div></div>
+                      </div>
+                      <div class="bar-row">
+                        <div class="bar-head"><span>SWAP</span><span class="pct">8%</span></div>
+                        <div class="bar-track"><div class="bar-fill low" style="width:8%"></div></div>
+                      </div>
+                      <div class="metric-row"><span class="label">Kerne</span><span class="value">8</span></div>
+                      <div class="metric-row"><span class="label">Modell</span><span class="value" style="font-size:9px">Intel Xeon Gold 6248R</span></div>
+                    </article>
+                    <article class="metric-card">
+                      <h4>Netzwerk</h4>
+                      <div class="metric-row"><span class="label">Primary IP</span><span class="value">10.17.13.15</span></div>
+                      <div class="metric-row"><span class="label">Std. NIC IP</span><span class="value">10.17.13.15</span></div>
+                      <div class="metric-row"><span class="label">Gateway</span><span class="value">10.17.13.1</span></div>
+                      <div class="metric-row"><span class="label">DNS</span><span class="value">10.17.13.2</span></div>
+                    </article>
+                    <article class="metric-card">
+                      <h4>System Info</h4>
+                      <div class="metric-row"><span class="label">OS</span><span class="value" style="font-size:9px">Windows Server 2019</span></div>
+                      <div class="metric-row"><span class="label">Kernel</span><span class="value">10.0.17763</span></div>
+                      <div class="metric-row"><span class="label">Uptime</span><span class="value">4d 7h 19m</span></div>
+                      <div class="metric-row"><span class="label">Queue</span><span class="value">0 Dateien</span></div>
+                    </article>
+                  </div>
+                </div>
+              </section>
+              <section class="rep-section" data-rep-panel="journal">
+                <div class="content-card"><h4>Journal Fehler (kritisch)</h4><p class="demo-empty">Tabelle journal_errors aus der gewählten Meldung.</p></div>
+              </section>
+              <section class="rep-section" data-rep-panel="processes">
+                <div class="content-card"><h4>Prozesse</h4><p class="demo-empty">Top-Prozesse nach CPU/RAM.</p></div>
+              </section>
+              <section class="rep-section" data-rep-panel="logfiles">
+                <div class="content-card"><h4>Logfiles</h4><p class="demo-empty">Log-Viewer und Dateiliste.</p></div>
+              </section>
+              <section class="rep-section" data-rep-panel="sap">
+                <div class="content-card"><h4>SAP B1</h4><p class="demo-empty">SAP/HANA Systeminfo-Karten.</p></div>
+              </section>
+              <section class="rep-section" data-rep-panel="containers">
+                <div class="content-card"><h4>Container</h4><p class="demo-empty">Docker-Status (nur wenn vorhanden).</p></div>
+              </section>
+              <section class="rep-section" data-rep-panel="export">
+                <div class="content-card"><h4>Export</h4><p class="demo-empty">Verzeichnis-Listings HANA.</p></div>
+              </section>
+              <section class="rep-section" data-rep-panel="agent">
+                <div class="content-card"><h4>Agent</h4><p class="demo-empty">Update-Log, agent.conf, Crontab.</p></div>
+              </section>
+            </div>
+          </div>
+
+          <p class="footnote" id="navFootnote">
+            <strong>Aktiv:</strong> Übersicht → Alarme &amp; Infos · Zeitraum rechts in der Navigationszeile. Wechsel zu „Einzelmeldungen“ zeigt System/Journal/… + Meldungsnavigation (‹ › Aktuellste).
+          </p>
+        </section>
+      </div>
+    </div>
+
+    <div class="rules">
+      <div class="rule-card">
+        <strong>Regel 1 – Ecken</strong>
+        Buttons, Inputs, Dropdowns: 6px. Inhaltskarten: 12px.
+      </div>
+      <div class="rule-card">
+        <strong>Regel 2 – Achse</strong>
+        Bezeichnungen linksbündig, harte Werte rechtsbündig (siehe Netzwerk/System).
+      </div>
+      <div class="rule-card">
+        <strong>Regel 3 – Grau-Prinzip</strong>
+        KPIs und Karten neutral; Rot/Orange nur OFFEN/KRITISCH &gt; 0; Blau = aktiver Tab.
+      </div>
+    </div>
+  </div>
+
+  <div id="hostContextMenu" class="ctx-menu" role="menu">
+    <div class="ctx-label">RB17SRV015</div>
+    <button type="button" data-action="copy">In Zwischenablage kopieren</button>
+    <button type="button" data-action="agent-update">Agent-Update anstoßen</button>
+    <button type="button" data-action="delete" class="danger">Karte löschen…</button>
+  </div>
+
+  <script>
+    (function () {
+      const menu = document.getElementById("hostContextMenu");
+      const hostCards = document.querySelectorAll(".host-card[data-host]");
+
+      hostCards.forEach((card) => {
+        card.addEventListener("click", () => {
+          hostCards.forEach((c) => c.classList.remove("is-selected"));
+          card.classList.add("is-selected");
+          const label = menu.querySelector(".ctx-label");
+          if (label) label.textContent = card.dataset.host || "";
+        });
+
+        card.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          hostCards.forEach((c) => c.classList.remove("is-selected"));
+          card.classList.add("is-selected");
+          const label = menu.querySelector(".ctx-label");
+          if (label) label.textContent = card.dataset.host || "";
+          menu.classList.add("is-open");
+          const w = menu.offsetWidth || 200;
+          const h = menu.offsetHeight || 120;
+          menu.style.left = Math.min(e.clientX, window.innerWidth - w - 8) + "px";
+          menu.style.top = Math.min(e.clientY, window.innerHeight - h - 8) + "px";
+        });
+      });
+
+      document.addEventListener("click", () => menu.classList.remove("is-open"));
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") menu.classList.remove("is-open");
+      });
+
+      menu.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const action = btn.dataset.action;
+          menu.classList.remove("is-open");
+          const host = menu.querySelector(".ctx-label")?.textContent || "";
+          if (action === "copy") {
+            navigator.clipboard?.writeText(host).catch(() => {});
+            alert("Demo: \"" + host + "\" kopiert");
+          } else if (action === "agent-update") {
+            alert("Demo: Agent-Update für " + host + " anstoßen");
+          } else if (action === "delete") {
+            if (confirm("Demo: Karte " + host + " löschen?")) alert("Nur Mockup – keine Aktion.");
+          }
+        });
+      });
+
+      const btnModeOverview = document.getElementById("btnModeOverview");
+      const btnModeReports = document.getElementById("btnModeReports");
+      const navOverview = document.getElementById("navOverview");
+      const navReports = document.getElementById("navReports");
+      const panelOverview = document.getElementById("panelOverview");
+      const panelReports = document.getElementById("panelReports");
+      const overviewRangeWrap = document.getElementById("overviewRangeWrap");
+      const overviewRangeSelect = document.getElementById("overviewRangeSelect");
+      const analysisTitle = document.getElementById("analysisTitle");
+      const navFootnote = document.getElementById("navFootnote");
+
+      let viewMode = "overview";
+      let overviewSection = "alerts";
+      let reportSection = "system";
+
+      const overviewLabels = {
+        alerts: "Alarme & Infos",
+        filesystems: "Filesysteme",
+        dbchangelog: "DB Changelog",
+        changelog: "Changelog",
+        customer: "Kundeninfos",
+      };
+
+      const reportLabels = {
+        system: "System",
+        journal: "Journal",
+        processes: "Prozesse",
+        logfiles: "Logfiles",
+        sap: "SAP B1",
+        containers: "Container",
+        export: "Export",
+        agent: "Agent",
+      };
+
+      function setActiveButtons(container, activeBtn) {
+        container.querySelectorAll("button[data-ov], button[data-rep]").forEach((b) => {
+          b.classList.toggle("is-active", b === activeBtn);
+        });
+      }
+
+      function updateFootnote() {
+        if (!navFootnote) return;
+        if (viewMode === "overview") {
+          const range = overviewRangeSelect?.selectedOptions?.[0]?.textContent || "";
+          const hideRange = overviewSection === "customer" || overviewSection === "changelog" || overviewSection === "dbchangelog";
+          navFootnote.innerHTML =
+            "<strong>Aktiv:</strong> Übersicht → <em>" + overviewLabels[overviewSection] + "</em>" +
+            (overviewSection === "alerts"
+              ? " · Host/Agent/System/Netzwerk/Ressourcen oben, darunter Alerts + Analyse"
+              : "") +
+            (hideRange ? " · Zeitraum ausgeblendet" : " · Zeitraum: " + range);
+        } else {
+          navFootnote.innerHTML =
+            "<strong>Aktiv:</strong> Einzelmeldungen → <em>" + reportLabels[reportSection] + "</em>" +
+            " · Meldungshistorie mit ‹ › Aktuellste rechts in der Navigationszeile";
+        }
+      }
+
+      function showOverviewSection(key) {
+        overviewSection = key;
+        document.querySelectorAll(".ov-section").forEach((el) => {
+          el.classList.toggle("is-visible", el.dataset.ovPanel === key);
+        });
+        const hideRange = key === "customer" || key === "changelog" || key === "dbchangelog";
+        overviewRangeWrap?.classList.toggle("is-hidden", hideRange);
+        updateFootnote();
+      }
+
+      function showReportSection(key) {
+        reportSection = key;
+        document.querySelectorAll(".rep-section").forEach((el) => {
+          el.classList.toggle("is-visible", el.dataset.repPanel === key);
+        });
+        updateFootnote();
+      }
+
+      function setViewMode(mode) {
+        viewMode = mode;
+        const isOverview = mode === "overview";
+
+        btnModeOverview?.classList.toggle("is-active", isOverview);
+        btnModeReports?.classList.toggle("is-active", !isOverview);
+
+        navOverview?.classList.toggle("is-hidden", !isOverview);
+        navReports?.classList.toggle("is-hidden", isOverview);
+
+        panelOverview?.classList.toggle("is-visible", isOverview);
+        panelReports?.classList.toggle("is-visible", !isOverview);
+
+        updateFootnote();
+      }
+
+      btnModeOverview?.addEventListener("click", () => setViewMode("overview"));
+      btnModeReports?.addEventListener("click", () => setViewMode("reports"));
+
+      navOverview?.querySelectorAll("button[data-ov]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          setActiveButtons(navOverview, btn);
+          showOverviewSection(btn.dataset.ov || "alerts");
+        });
+      });
+
+      navReports?.querySelectorAll("button[data-rep]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          setActiveButtons(navReports, btn);
+          showReportSection(btn.dataset.rep || "system");
+        });
+      });
+
+      overviewRangeSelect?.addEventListener("change", () => {
+        const label = overviewRangeSelect.selectedOptions[0]?.textContent || "";
+        if (analysisTitle) {
+          analysisTitle.textContent = "Analyse (" + label + ")";
+        }
+        const fsTitle = document.querySelector('[data-ov-panel="filesystems"] h4');
+        if (fsTitle) fsTitle.textContent = "Filesysteme (" + label + ")";
+        updateFootnote();
+      });
+
+      setViewMode("overview");
+      showOverviewSection("alerts");
+      showReportSection("system");
+    })();
+  </script>
+</body>
+</html>

@@ -19141,6 +19141,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if parsed.path == "/dashboard-redesign-mockup":
+            self._send_file(
+                STATIC_DIR / "dashboard-redesign-mockup.html",
+                "text/html; charset=utf-8",
+                extra_headers={"Cache-Control": "no-store"},
+            )
+            return
+
         if parsed.path == "/mobile/alerts":
             self._send_html_with_asset_version(STATIC_DIR / "mobile-alerts.html")
             return

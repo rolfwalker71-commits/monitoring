@@ -97,6 +97,14 @@ const CHANGELOG_MAINTENANCE_PANEL_OPEN_KEY = "monitoring.changelogMaintenancePan
 let headerKpiWidthSyncFrameId = null;
 let headerKpiTrendPreviousValues = null;
 const HEADER_KPI_WIDTH_STORAGE_KEY = "monitoring.headerKpiUniformWidth";
+const HEADER_SECTIONS_STORAGE_KEY_PREFIX = "monitoring.headerSections.";
+const LEGACY_HEADER_KPI_SECTION_OPEN_KEY = "monitoring.headerKpiSectionOpen";
+const LEGACY_HEADER_FILTERS_SECTION_OPEN_KEY = "monitoring.headerFiltersSectionOpen";
+const DEFAULT_HEADER_SECTION_PREFS = {
+  kpiOpen: true,
+  filtersOpen: false,
+};
+let headerSectionCollapsiblesWired = false;
 const HEADER_KPI_DEFAULT_WIDTH_PX = 142;
 const HEADER_KPI_MIN_WIDTH_PX = 104;
 const HEADER_KPI_MAX_WIDTH_PX = 190;
@@ -171,6 +179,181 @@ function persistHeaderKpiWidth(widthValue) {
   } catch {
     // Storage might be unavailable in hardened browser contexts.
   }
+}
+
+function getHeaderSectionsStorageKey() {
+  const username = String(state.authUser || "").trim().toLowerCase();
+  if (!username) {
+    return "";
+  }
+  return `${HEADER_SECTIONS_STORAGE_KEY_PREFIX}${username}`;
+}
+
+function normalizeHeaderSectionOpenValue(value, defaultOpen) {
+  if (value === undefined || value === null || value === "") {
+    return defaultOpen;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") {
+    return true;
+  }
+  if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") {
+    return false;
+  }
+  return defaultOpen;
+}
+
+function readLegacyHeaderSectionOpenPreference(storageKey, defaultOpen) {
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (raw === null || raw === undefined || raw === "") {
+      return defaultOpen;
+    }
+    return normalizeHeaderSectionOpenValue(raw, defaultOpen);
+  } catch {
+    return defaultOpen;
+  }
+}
+
+function loadHeaderSectionPreferences() {
+  const defaults = {
+    kpiOpen: DEFAULT_HEADER_SECTION_PREFS.kpiOpen,
+    filtersOpen: DEFAULT_HEADER_SECTION_PREFS.filtersOpen,
+  };
+  const storageKey = getHeaderSectionsStorageKey();
+  if (!storageKey) {
+    return defaults;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      const migrated = {
+        kpiOpen: readLegacyHeaderSectionOpenPreference(
+          LEGACY_HEADER_KPI_SECTION_OPEN_KEY,
+          defaults.kpiOpen,
+        ),
+        filtersOpen: readLegacyHeaderSectionOpenPreference(
+          LEGACY_HEADER_FILTERS_SECTION_OPEN_KEY,
+          defaults.filtersOpen,
+        ),
+      };
+      window.localStorage.setItem(storageKey, JSON.stringify(migrated));
+      return migrated;
+    }
+    const saved = JSON.parse(raw);
+    return {
+      kpiOpen: normalizeHeaderSectionOpenValue(saved.kpiOpen, defaults.kpiOpen),
+      filtersOpen: normalizeHeaderSectionOpenValue(saved.filtersOpen, defaults.filtersOpen),
+    };
+  } catch {
+    return defaults;
+  }
+}
+
+function persistHeaderSectionPreferences(updates = {}) {
+  const storageKey = getHeaderSectionsStorageKey();
+  if (!storageKey) {
+    return;
+  }
+  const current = loadHeaderSectionPreferences();
+  const next = {
+    kpiOpen: normalizeHeaderSectionOpenValue(
+      updates.kpiOpen !== undefined ? updates.kpiOpen : current.kpiOpen,
+      current.kpiOpen,
+    ),
+    filtersOpen: normalizeHeaderSectionOpenValue(
+      updates.filtersOpen !== undefined ? updates.filtersOpen : current.filtersOpen,
+      current.filtersOpen,
+    ),
+  };
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(next));
+  } catch {
+    // Storage might be unavailable in hardened browser contexts.
+  }
+}
+
+function applyHeaderSectionExpanded(toggleButton, bodyElement, collapsibleElement, expanded) {
+  if (!toggleButton || !bodyElement) {
+    return;
+  }
+  const isExpanded = expanded === true;
+  toggleButton.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+  bodyElement.classList.toggle("hidden", !isExpanded);
+  if (collapsibleElement) {
+    collapsibleElement.classList.toggle("is-expanded", isExpanded);
+  }
+  const chevron = toggleButton.querySelector(".header-collapsible-chevron");
+  if (chevron) {
+    chevron.textContent = isExpanded ? "▼" : "▶";
+  }
+}
+
+function applyHeaderSectionPreferences() {
+  const prefs = loadHeaderSectionPreferences();
+  const kpiToggle = document.getElementById("toggleHeaderKpiSection");
+  const kpiBody = document.getElementById("headerKpiSectionBody");
+  const kpiCollapsible = document.getElementById("headerKpiCollapsible");
+  const filtersToggle = document.getElementById("toggleHeaderFiltersSection");
+  const filtersBody = document.getElementById("headerFiltersSectionBody");
+  const filtersCollapsible = document.getElementById("headerFiltersCollapsible");
+
+  if (kpiToggle && kpiBody) {
+    applyHeaderSectionExpanded(kpiToggle, kpiBody, kpiCollapsible, prefs.kpiOpen);
+    if (prefs.kpiOpen) {
+      scheduleHeaderKpiUniformCardWidthSync();
+    }
+  }
+  if (filtersToggle && filtersBody) {
+    applyHeaderSectionExpanded(filtersToggle, filtersBody, filtersCollapsible, prefs.filtersOpen);
+  }
+}
+
+function wireHeaderSectionCollapsibles() {
+  if (headerSectionCollapsiblesWired) {
+    return;
+  }
+
+  const kpiToggle = document.getElementById("toggleHeaderKpiSection");
+  const kpiBody = document.getElementById("headerKpiSectionBody");
+  const kpiCollapsible = document.getElementById("headerKpiCollapsible");
+  const filtersToggle = document.getElementById("toggleHeaderFiltersSection");
+  const filtersBody = document.getElementById("headerFiltersSectionBody");
+  const filtersCollapsible = document.getElementById("headerFiltersCollapsible");
+
+  if (kpiToggle && kpiBody) {
+    kpiToggle.addEventListener("click", () => {
+      const nextOpen = kpiBody.classList.contains("hidden");
+      applyHeaderSectionExpanded(kpiToggle, kpiBody, kpiCollapsible, nextOpen);
+      persistHeaderSectionPreferences({ kpiOpen: nextOpen });
+      if (nextOpen) {
+        scheduleHeaderKpiUniformCardWidthSync();
+      }
+    });
+  }
+
+  if (filtersToggle && filtersBody) {
+    filtersToggle.addEventListener("click", () => {
+      const nextOpen = filtersBody.classList.contains("hidden");
+      applyHeaderSectionExpanded(filtersToggle, filtersBody, filtersCollapsible, nextOpen);
+      persistHeaderSectionPreferences({ filtersOpen: nextOpen });
+    });
+  }
+
+  headerSectionCollapsiblesWired = true;
+}
+
+function initHeaderSectionCollapsibles() {
+  wireHeaderSectionCollapsibles();
+  applyHeaderSectionPreferences();
+}
+
+function reloadHeaderSectionPreferencesForUser() {
+  applyHeaderSectionPreferences();
 }
 
 function applyInitialHeaderKpiWidth() {
@@ -1854,7 +2037,10 @@ function updateViewMode() {
 
   // tab views only relevant when layout is visible
   if (overviewView) overviewView.classList.toggle("hidden", !overviewActive);
-  if (reportsView) reportsView.classList.toggle("hidden", !reportsActive);
+  if (reportsView) {
+    reportsView.classList.toggle("hidden", !reportsActive);
+    reportsView.classList.toggle("reports-mode-active", reportsActive);
+  }
 
   overviewTabButton.classList.toggle("active", overviewActive);
   reportsTabButton.classList.toggle("active", reportsActive);
@@ -2296,6 +2482,12 @@ function updateOverviewSection() {
   if (notificationTabButton) notificationTabButton.setAttribute("aria-selected", showNotification ? "true" : "false");
   if (databaseChangelogTabButton) databaseChangelogTabButton.setAttribute("aria-selected", showDatabaseChangelog ? "true" : "false");
   if (configChangelogTabButton) configChangelogTabButton.setAttribute("aria-selected", showConfigChangelog ? "true" : "false");
+
+  const rangeWrap = document.querySelector("#overviewView .overview-sidebar-range");
+  if (rangeWrap) {
+    const hideRange = showNotification || showDatabaseChangelog || showConfigChangelog;
+    rangeWrap.classList.toggle("hidden", hideRange);
+  }
 }
 
 function setAlarmSettingsStatus(message, isError = false) {
@@ -2591,14 +2783,14 @@ async function toggleMobilePush() {
 function setAuthUiState(authenticated) {
   const loginOverlay = document.getElementById("loginOverlay");
   const appPanel = document.getElementById("appPanel");
-  const hostToolsHeader = document.getElementById("hostToolsHeader");
+  const headerFiltersCollapsible = document.getElementById("headerFiltersCollapsible");
   const brandAccountShell = document.getElementById("brandAccountShell");
   const brandUserBadge = document.getElementById("brandUserBadge");
   const logoutButton = document.getElementById("logoutButton");
   loginOverlay.classList.toggle("hidden", authenticated);
   appPanel.classList.toggle("hidden", !authenticated);
-  if (hostToolsHeader) {
-    hostToolsHeader.classList.toggle("hidden", !authenticated);
+  if (headerFiltersCollapsible) {
+    headerFiltersCollapsible.classList.toggle("hidden", !authenticated);
   }
   if (brandAccountShell) {
     brandAccountShell.classList.toggle("hidden", !authenticated);
@@ -2871,6 +3063,7 @@ async function ensureAuthenticatedSession() {
     setAuthUiState(session.authenticated === true);
     if (session.authenticated === true) {
       loadHostFilterPreferences();
+      reloadHeaderSectionPreferencesForUser();
       // Load user preferences in background — does not block hosts from rendering.
       // Re-render host list once prefs arrive so hostInterestMode filter is applied.
       loadUserPreferences().then(() => {
@@ -2925,6 +3118,7 @@ async function loginWebClient() {
       Number.parseInt(String(data.inactivity_timeout_minutes || ""), 10)
     );
     loadHostFilterPreferences();
+    reloadHeaderSectionPreferencesForUser();
     resetUserScopedPreferences();
     sessionEstablishedAtMs = Date.now();
     setAuthUiState(true);
@@ -9208,15 +9402,16 @@ function renderReportCard(report) {
     </div>
   `;
 
+  const loadLine = `load ${formatNumber(cpu.load_avg_1, 2)} / ${formatNumber(cpu.load_avg_5, 2)} / ${formatNumber(cpu.load_avg_15, 2)}`;
+  const ramSub = `${formatKilobytes(memory.used_kb)} / ${formatKilobytes(memory.total_kb)}`;
+  const coresModel = `${Number.isFinite(cpuCores) && cpuCores > 0 ? String(Math.floor(cpuCores)) : "-"} · ${cpuModelName}`;
   const resourcesGroup = `
-    <div class="meta-group">
+    <div class="meta-group meta-group--resources">
       <div class="meta-group-title">Ressourcen</div>
       <div class="meta-group-content">
-        ${renderMetaItem("CPU", formatPercent(cpu.usage_percent) + " | load " + formatNumber(cpu.load_avg_1, 2) + " / " + formatNumber(cpu.load_avg_5, 2) + " / " + formatNumber(cpu.load_avg_15, 2))}
-        ${renderMetaItem("Kerne", Number.isFinite(cpuCores) && cpuCores > 0 ? String(Math.floor(cpuCores)) : "-")}
-        ${renderMetaItem("Modell", cpuModelName)}
-        ${renderMetaItem("RAM", formatPercent(memory.used_percent) + " | " + formatKilobytes(memory.used_kb) + " / " + formatKilobytes(memory.total_kb))}
-        ${renderMetaItem("Swap", formatPercent(swap.used_percent) + " | " + formatKilobytes(swap.used_kb) + " / " + formatKilobytes(swap.total_kb))}
+        ${renderMetricBarRow("CPU", cpu.usage_percent, `<span class="metric-label">Load Ø</span><span class="metric-value">${escapeHtml(loadLine)}</span>`)}
+        ${renderMetricBarRow("RAM", memory.used_percent, `<span class="metric-label">Belegung</span><span class="metric-value">${escapeHtml(ramSub)}</span>`)}
+        ${renderMetricBarRow("SWAP", swap.used_percent, `<span class="metric-label">Kerne / Modell</span><span class="metric-value">${escapeHtml(coresModel)}</span>`)}
       </div>
     </div>
   `;
@@ -9422,26 +9617,20 @@ function normalizeHostCountryCode(host) {
   return asText(host?.country_code || "", "").trim().toUpperCase();
 }
 
+let hostOsFilterSelectWired = false;
+let hostCountryFilterSelectWired = false;
+
 function renderHostIconFilters(hosts) {
+  const osSelect = document.getElementById("hostOsFilterSelect");
+  const countrySelect = document.getElementById("hostCountryFilterSelect");
   const osContainer = document.getElementById("hostOsFilterChips");
   const countryContainer = document.getElementById("hostCountryFilterChips");
-  if (!osContainer || !countryContainer) {
-    return;
-  }
 
   const osFamilies = Array.from(new Set((hosts || []).map((host) => normalizeHostOsFamily(host))));
   const osOptions = ["all", ...osFamilies.filter((item) => item !== "all")];
   if (!osOptions.includes(state.hostOsFilter)) {
     state.hostOsFilter = "all";
   }
-  osContainer.innerHTML = osOptions.map((item) => {
-    if (item === "all") {
-      return `<button class="icon-filter-chip${state.hostOsFilter === "all" ? " active" : ""}" type="button" data-os-filter="all" title="Alle Betriebssysteme">Alle</button>`;
-    }
-    const iconName = item === "windows" ? "windows.png" : "linux.png";
-    const label = item === "windows" ? "Windows" : "Linux";
-    return `<button class="icon-filter-chip${state.hostOsFilter === item ? " active" : ""}" type="button" data-os-filter="${item}" title="${label}"><img src="icons/${iconName}" alt="${label}" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='/icons/${iconName}';}"></button>`;
-  }).join("");
 
   const countryCodes = Array.from(
     new Set((hosts || []).map((host) => normalizeHostCountryCode(host)).filter((code) => /^[A-Z]{2}$/.test(code))),
@@ -9450,40 +9639,55 @@ function renderHostIconFilters(hosts) {
   if (state.hostCountryFilter !== "all" && !countryOptions.includes(state.hostCountryFilter)) {
     state.hostCountryFilter = "all";
   }
-  countryContainer.innerHTML = countryOptions.map((code) => {
-    if (code === "all") {
-      return `<button class="icon-filter-chip${state.hostCountryFilter === "all" ? " active" : ""}" type="button" data-country-filter="all" title="Alle Länder">Alle</button>`;
+
+  if (osSelect) {
+    osSelect.innerHTML = osOptions.map((item) => {
+      const label = item === "all" ? "Alle" : (item === "windows" ? "Windows" : "Linux");
+      return `<option value="${escapeHtml(item)}">${escapeHtml(label)}</option>`;
+    }).join("");
+    osSelect.value = state.hostOsFilter;
+    if (!hostOsFilterSelectWired) {
+      hostOsFilterSelectWired = true;
+      osSelect.addEventListener("change", async (event) => {
+        const nextFilter = String(event.target?.value || "all");
+        if (state.hostOsFilter === nextFilter) {
+          return;
+        }
+        state.hostOsFilter = nextFilter;
+        state.hostOffset = 0;
+        persistHostFilterPreferences();
+        await applyHostFiltersLocally({ preserveScroll: true });
+      });
     }
-    const lower = code.toLowerCase();
-    return `<button class="icon-filter-chip${state.hostCountryFilter === code ? " active" : ""}" type="button" data-country-filter="${code}" title="Land ${code}"><img src="icons/${code}.png" alt="${code}" onerror="if(!this.dataset.fallback1){this.dataset.fallback1='1';this.src='/icons/${code}.png';return;}if(!this.dataset.fallback2){this.dataset.fallback2='1';this.src='/icons/${lower}.png';return;}if(!this.dataset.fallback3){this.dataset.fallback3='1';this.src='/icons/${lower}.svg';return;}this.parentElement.style.display='none';"></button>`;
-  }).join("");
+  }
 
-  osContainer.querySelectorAll("[data-os-filter]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const nextFilter = String(button.getAttribute("data-os-filter") || "all");
-      if (state.hostOsFilter === nextFilter) {
-        return;
-      }
-      state.hostOsFilter = nextFilter;
-      state.hostOffset = 0;
-      persistHostFilterPreferences();
-      await applyHostFiltersLocally({ preserveScroll: true });
-    });
-  });
+  if (countrySelect) {
+    countrySelect.innerHTML = countryOptions.map((code) => {
+      const label = code === "all" ? "Alle" : code;
+      return `<option value="${escapeHtml(code)}">${escapeHtml(label)}</option>`;
+    }).join("");
+    countrySelect.value = state.hostCountryFilter;
+    if (!hostCountryFilterSelectWired) {
+      hostCountryFilterSelectWired = true;
+      countrySelect.addEventListener("change", async (event) => {
+        const nextFilterRaw = String(event.target?.value || "all");
+        const nextFilter = nextFilterRaw.toUpperCase() === "ALL" ? "all" : nextFilterRaw.toUpperCase();
+        if (state.hostCountryFilter === nextFilter) {
+          return;
+        }
+        state.hostCountryFilter = nextFilter;
+        state.hostOffset = 0;
+        persistHostFilterPreferences();
+        await applyHostFiltersLocally({ preserveScroll: true });
+      });
+    }
+  }
 
-  countryContainer.querySelectorAll("[data-country-filter]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const nextFilterRaw = String(button.getAttribute("data-country-filter") || "all");
-      const nextFilter = nextFilterRaw.toUpperCase() === "ALL" ? "all" : nextFilterRaw.toUpperCase();
-      if (state.hostCountryFilter === nextFilter) {
-        return;
-      }
-      state.hostCountryFilter = nextFilter;
-      state.hostOffset = 0;
-      persistHostFilterPreferences();
-      await applyHostFiltersLocally({ preserveScroll: true });
-    });
-  });
+  if (!osContainer || !countryContainer) {
+    return;
+  }
+  osContainer.innerHTML = "";
+  countryContainer.innerHTML = "";
 }
 
 function getHostSearchBlob(host) {
@@ -9850,15 +10054,17 @@ function renderSingleHostCard(host) {
   const sapLicenseBadge = hasSapLicenseInfo
     ? `<button type="button" class="host-license-info-badge host-license-info-badge--card" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}" title="SAP Lizenzinfos anzeigen" aria-label="SAP Lizenzinfos anzeigen" aria-haspopup="dialog">ℹ️</button>`
     : "";
-  const cornerIcons = (sapLicenseBadge || flagIcon)
-    ? `<div class="host-corner-icons">${sapLicenseBadge}${flagIcon}</div>`
+  const countryCode = normalizeHostCountryCode(host);
+  const countryCodeHtml = /^[A-Z]{2}$/.test(countryCode)
+    ? `<span class="host-card-country-code">${escapeHtml(countryCode)}</span>`
+    : "";
+  const cornerIcons = sapLicenseBadge
+    ? `<div class="host-corner-icons">${sapLicenseBadge}</div>`
     : "";
   const customerTitleLine = customerNameValue
     ? `<div class="host-customer-title-line"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span></span></div>`
     : "";
-  const customerCardWatermark = customerLogoUrl
-    ? `<span class="host-customer-bg-watermark" aria-hidden="true"><img src="${escapeHtml(customerLogoUrl)}" alt="" class="host-customer-bg-watermark-logo" loading="lazy" decoding="async" onerror="this.parentElement.style.display='none'"></span>`
-    : "";
+  const customerCardWatermark = "";
   const designationBadgeLine = `<div class="host-designation-row"><span class="host-detail-line">${escapeHtml(hostDesignationLabel)}</span><span class="host-detail-clock" title="${escapeHtml(lastReportClock.title)}">${escapeHtml(lastReportClock.label)}</span></div>`;
 
   const sapRawForDebug = asText(host.sap_release || host.sap_feature_pack || "", "").trim();
@@ -9910,6 +10116,7 @@ function renderSingleHostCard(host) {
   return `
     <article class="${selectedClass}${envCardClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostIdentity)}">
       ${versionSideBarHtml}
+      ${countryCodeHtml}
       ${cornerIcons}
       ${customerCardWatermark}
       <div class="host-card-main">
@@ -9917,7 +10124,7 @@ function renderSingleHostCard(host) {
         ${designationBadgeLine}
         <div class="host-tech-line">
           <span class="host-tech-row host-tech-row--host"><span class="${statusPulseClass}" aria-hidden="true"></span><span class="host-meta-v" title="${escapeHtml(shortHostname)}">${escapeHtml(shortHostname)}</span></span>
-          <span class="host-tech-row host-tech-row--ip"><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span>${osIcon}</span>
+          <span class="host-tech-row host-tech-row--ip"><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span></span>
         </div>
       </div>
       ${mutedAlertsSection}
@@ -10336,6 +10543,228 @@ function renderSelectedHostPlaceholderChip() {
   </span>`;
 }
 
+function metricBarFillClass(percent) {
+  const value = Number(percent);
+  if (!Number.isFinite(value)) {
+    return "metric-bar-fill--low";
+  }
+  if (value >= 85) {
+    return "metric-bar-fill--high";
+  }
+  if (value >= 70) {
+    return "metric-bar-fill--mid";
+  }
+  return "metric-bar-fill--low";
+}
+
+function renderMetricBarRow(label, percent, sublineHtml = "") {
+  const numeric = Number(percent);
+  const width = Number.isFinite(numeric) ? Math.min(100, Math.max(0, numeric)) : 0;
+  const fillClass = metricBarFillClass(numeric);
+  const subline = asText(sublineHtml, "").trim()
+    ? `<div class="metric-row" style="border:0;padding-top:4px">${sublineHtml}</div>`
+    : "";
+  return `
+    <div class="metric-bar-row">
+      <div class="metric-bar-head"><span>${escapeHtml(label)}</span><span>${escapeHtml(formatPercent(numeric))}</span></div>
+      <div class="metric-bar-track"><div class="metric-bar-fill ${fillClass}" style="width:${width}%"></div></div>
+      ${subline}
+    </div>
+  `;
+}
+
+function updateReportChromeBar() {
+  const titleEl = document.getElementById("reportChromeTitle");
+  const envEl = document.getElementById("reportChromeEnv");
+  const dateEl = document.getElementById("reportChromeDate");
+  const logoWrap = document.getElementById("reportChromeLogoWrap");
+  const logoImg = document.getElementById("reportChromeLogo");
+  if (!titleEl) {
+    return;
+  }
+
+  const host = getSelectedHostRecord();
+  if (!host) {
+    titleEl.innerHTML = '<span class="report-chrome-placeholder">Host auswählen …</span>';
+    if (envEl) {
+      envEl.textContent = "";
+      envEl.classList.add("hidden");
+    }
+    if (dateEl) {
+      dateEl.textContent = "";
+    }
+    if (logoWrap) {
+      logoWrap.classList.add("hidden");
+    }
+    if (logoImg) {
+      logoImg.removeAttribute("src");
+      logoImg.alt = "";
+    }
+    return;
+  }
+
+  const customerName = asText(host.customer_name, "").trim();
+  const displayName = asText(host.display_name || host.hostname, "").trim();
+  const customerPart = customerName || "Kein Kunde";
+  const customerLogoUrl = asText(host.customer_logo_url, "").trim();
+  titleEl.innerHTML = `${escapeHtml(customerPart)}<span class="sep">|</span>${escapeHtml(displayName)}`;
+
+  if (logoWrap && logoImg) {
+    if (customerLogoUrl) {
+      logoImg.src = customerLogoUrl;
+      logoImg.alt = `Logo ${customerPart}`;
+      logoImg.title = customerName ? `Kundenlogo ${customerName}` : "Kundenlogo";
+      logoImg.onerror = function onReportChromeLogoError() {
+        logoWrap.classList.add("hidden");
+      };
+      logoWrap.classList.remove("hidden");
+    } else {
+      logoImg.removeAttribute("src");
+      logoImg.alt = "";
+      logoWrap.classList.add("hidden");
+    }
+  }
+
+  const environmentType = asText(host.environment_type, "").trim().toLowerCase();
+  if (envEl) {
+    if (environmentType === "prod" || environmentType === "test") {
+      envEl.textContent = environmentType === "prod" ? "PROD" : "TEST";
+      envEl.classList.remove("hidden");
+      envEl.classList.toggle("env-prod", environmentType === "prod");
+    } else {
+      envEl.textContent = "";
+      envEl.classList.add("hidden");
+      envEl.classList.remove("env-prod");
+    }
+  }
+
+  if (dateEl) {
+    const report = state.currentReport;
+    const payload = report && typeof report.payload === "object" ? report.payload : {};
+    const ts = formatUtcPlus2(report?.received_at_utc || payload.timestamp_utc || host.last_report_utc || "");
+    dateEl.textContent = ts && ts !== "-" ? ts.replace(",", " ·") : "";
+  }
+}
+
+function renderOverviewHostMetrics() {
+  const container = document.getElementById("overviewHostMetrics");
+  if (!container) {
+    return;
+  }
+
+  const host = getSelectedHostRecord();
+  if (!host) {
+    container.innerHTML = "";
+    return;
+  }
+
+  const report = state.currentReport;
+  const payload = report && typeof report.payload === "object" ? report.payload : {};
+  const cpu = payload.cpu || {};
+  const memory = payload.memory || {};
+  const swap = payload.swap || {};
+  const network = payload.network || {};
+  const cpuCores = Number(cpu.cores ?? cpu.core_count ?? cpu.logical_cores ?? payload.cpu_cores);
+  const cpuModelName = asText(cpu.model_name || cpu.model || cpu.name || payload.cpu_model_name || "-");
+  const defaultNicIpv4 = resolveDefaultNicIpv4(report, payload, network);
+  const deliveryMode = asText(report?.delivery_mode || payload.delivery_mode || "live", "live").toLowerCase();
+  const deliveryLabel = deliveryMode === "delayed" ? "DELAYED" : "LIVE";
+  const reportTimestamp = formatUtcPlus2(report?.received_at_utc || payload.timestamp_utc || host.last_report_utc || "");
+  const sapReleaseRaw = asText(
+    payload.sap_release || payload.sap_feature_pack || host.sap_release || host.sap_feature_pack || "",
+  ).trim();
+  const sapVersionInfo = parseSapB1Version(sapReleaseRaw);
+  const sapChip = asText(
+    sapVersionInfo.mapping?.featurePack
+      || (sapReleaseRaw.toUpperCase().startsWith("FP") ? sapReleaseRaw : "")
+      || sapReleaseRaw
+      || "-",
+  );
+  const hanaVersionRaw = asText(
+    payload.hana_release || payload.hana_version || host.hana_release || host.hana_version || "",
+  ).trim();
+  const hanaChip = hanaVersionRaw ? (hanaVersionRaw.split(".").slice(0, 3).join(".") || hanaVersionRaw) : "-";
+  const hanaSidChip = asText(payload.hana_sid || host.hana_sid || "", "-");
+  const hostname = asText(host.hostname, "-");
+  const hostUid = asText(host.host_uid, "").trim();
+  const hostUidShort = hostUid.length > 12 ? `${hostUid.slice(0, 8)}…${hostUid.slice(-4)}` : (hostUid || "-");
+  const countryCode = normalizeHostCountryCode(host) || "-";
+  const envLabel = asText(host.environment_type, "").trim().toUpperCase() || "-";
+  const customerProject = asText(host.customer_maringo_project_number, "").trim();
+  const customerLabel = asText(host.customer_name, "Kein Kunde");
+  const displayLabel = asText(host.display_name || hostname, hostname);
+  const totalReports = Number.isFinite(Number(host.report_count)) ? Number(host.report_count).toLocaleString("de-CH") : "-";
+  const primaryIp = asText(report?.primary_ip || payload.primary_ip || host.primary_ip || host.std_nic_ip, "-");
+  const stdNicIp = asText(defaultNicIpv4 || host.std_nic_ip, "-");
+  const loadLine = `load ${formatNumber(cpu.load_avg_1, 2)} / ${formatNumber(cpu.load_avg_5, 2)} / ${formatNumber(cpu.load_avg_15, 2)}`;
+  const ramSub = `${formatKilobytes(memory.used_kb)} / ${formatKilobytes(memory.total_kb)}`;
+  const coresModel = `${Number.isFinite(cpuCores) && cpuCores > 0 ? String(Math.floor(cpuCores)) : "-"} · ${cpuModelName}`;
+
+  const metricRow = (label, value) => `
+    <div class="metric-row">
+      <span class="metric-label">${escapeHtml(label)}</span>
+      <span class="metric-value">${escapeHtml(asText(value, "-"))}</span>
+    </div>
+  `;
+
+  const sapChipsHtml = `
+    <div class="overview-sap-chips">
+      <div class="overview-sap-chip">SAP RELEASE<span>${escapeHtml(sapChip)}</span></div>
+      <div class="overview-sap-chip">HANA RELEASE<span>${escapeHtml(hanaChip)}</span></div>
+      <div class="overview-sap-chip">HANA SID<span>${escapeHtml(hanaSidChip)}</span></div>
+      <div class="overview-sap-chip">LETZTE MELDUNG<span>${escapeHtml(reportTimestamp)}</span></div>
+      <div class="overview-sap-chip">ZUSTELLUNG<span>${escapeHtml(deliveryLabel)}</span></div>
+    </div>
+  `;
+
+  container.innerHTML = `
+    ${sapChipsHtml}
+    <div class="overview-metrics-grid">
+      <article class="metric-card">
+        <h4>Host &amp; Identität</h4>
+        ${metricRow("Kunde", customerLabel)}
+        ${metricRow("Bezeichnung", displayLabel)}
+        ${metricRow("Hostname", hostname)}
+        ${metricRow("Host-UID", hostUidShort)}
+        ${metricRow("Land", countryCode)}
+        ${metricRow("Umgebung", envLabel)}
+        ${customerProject ? metricRow("Projekt", customerProject) : ""}
+        ${metricRow("Meldungen", totalReports)}
+      </article>
+      <article class="metric-card">
+        <h4>Agent</h4>
+        ${metricRow("Agent ID", report?.agent_id || payload.agent_id || "-")}
+        ${metricRow("Version", payload.agent_version || host.agent_version || "-")}
+        ${metricRow("API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}
+        ${metricRow("Queue", `${queueDepthLabel(payload.queue_depth)} Dateien`)}
+      </article>
+      <article class="metric-card">
+        <h4>System</h4>
+        ${metricRow("OS", payload.os || host.os || "-")}
+        ${metricRow("Kernel", payload.kernel || "-")}
+        ${metricRow("Uptime", formatUptime(payload.uptime_seconds))}
+        ${metricRow("Architektur", payload.architecture || payload.arch || "-")}
+      </article>
+      <article class="metric-card">
+        <h4>Netzwerk</h4>
+        ${metricRow("Primary IP", primaryIp)}
+        ${metricRow("Std. NIC IP", stdNicIp)}
+        ${metricRow("Default NIC", network.default_interface || "-")}
+        ${metricRow("Gateway", network.default_gateway || "-")}
+        ${metricRow("DNS", Array.isArray(network.dns_servers) ? network.dns_servers.filter(Boolean).join(", ") || "-" : asText(network.dns_servers, "-"))}
+      </article>
+      <article class="metric-card metric-card--wide">
+        <h4>Ressourcen (aktuell)</h4>
+        <div class="overview-resource-bars">
+          ${renderMetricBarRow("CPU", cpu.usage_percent, `<span class="metric-label">Load Ø</span><span class="metric-value">${escapeHtml(loadLine)}</span>`)}
+          ${renderMetricBarRow("RAM", memory.used_percent, `<span class="metric-label">Belegung</span><span class="metric-value">${escapeHtml(ramSub)}</span>`)}
+          ${renderMetricBarRow("SWAP", swap.used_percent, `<span class="metric-label">Kerne / Modell</span><span class="metric-value">${escapeHtml(coresModel)}</span>`)}
+        </div>
+      </article>
+    </div>
+  `;
+}
+
 function updateReportCustomerChip() {
   const chipWrap = document.getElementById("reportCustomerChip");
   if (!chipWrap) {
@@ -10349,6 +10778,8 @@ function updateReportCustomerChip() {
       customerCard.classList.add("report-customer-main-card--placeholder");
     }
     chipWrap.innerHTML = renderSelectedHostPlaceholderChip();
+    updateReportChromeBar();
+    renderOverviewHostMetrics();
     return;
   }
   if (customerCard) {
@@ -10363,6 +10794,8 @@ function updateReportCustomerChip() {
     return;
   }
   chipWrap.innerHTML = customerChip;
+  updateReportChromeBar();
+  renderOverviewHostMetrics();
 }
 
 function updateReportHeaderOsLogo(host) {
@@ -10568,6 +11001,14 @@ function closeHostContextMenu() {
 function ensureHostContextMenu() {
   let menu = document.getElementById("hostContextMenu");
   if (menu) {
+    if (!menu.querySelector("button[data-action='copy-host']")) {
+      menu.innerHTML = `
+        <div class="host-context-menu-label"></div>
+        <button type="button" data-action="copy-host">In Zwischenablage kopieren</button>
+        <button type="button" data-action="agent-update">Agent-Update anstoßen</button>
+        <button type="button" data-action="delete-host-card">Karte löschen…</button>
+      `;
+    }
     return menu;
   }
 
@@ -10576,13 +11017,17 @@ function ensureHostContextMenu() {
   menu.className = "host-context-menu hidden";
   menu.innerHTML = `
     <div class="host-context-menu-label"></div>
-    <button type="button" data-action="delete-host-card">🗑️ Karte löschen…</button>
+    <button type="button" data-action="copy-host">In Zwischenablage kopieren</button>
+    <button type="button" data-action="agent-update">Agent-Update anstoßen</button>
+    <button type="button" data-action="delete-host-card">Karte löschen…</button>
   `;
   document.body.appendChild(menu);
 
   menu.addEventListener("click", async (event) => {
-    const trigger = event.target.closest("button[data-action='delete-host-card']");
-    if (!trigger) {
+    const copyTrigger = event.target.closest("button[data-action='copy-host']");
+    const updateTrigger = event.target.closest("button[data-action='agent-update']");
+    const deleteTrigger = event.target.closest("button[data-action='delete-host-card']");
+    if (!copyTrigger && !updateTrigger && !deleteTrigger) {
       return;
     }
 
@@ -10592,6 +11037,39 @@ function ensureHostContextMenu() {
     const hostUid = String(menu.dataset.hostUid || "").trim();
     closeHostContextMenu();
     if (!hostname && !hostUid) {
+      return;
+    }
+
+    if (copyTrigger) {
+      const host = (Array.isArray(state.hosts) ? state.hosts : []).find((entry) => {
+        const uid = asText(entry?.host_uid, "").trim();
+        const name = asText(entry?.hostname, "").trim();
+        return (hostUid && uid === hostUid) || (hostname && name === hostname);
+      });
+      const lines = [
+        asText(host?.display_name || hostname, hostname),
+        asText(host?.hostname, hostname),
+        asText(host?.std_nic_ip || host?.primary_ip, ""),
+      ].filter(Boolean);
+      try {
+        await navigator.clipboard.writeText(lines.join("\n"));
+      } catch {
+        window.prompt("Kopieren:", lines.join("\n"));
+      }
+      return;
+    }
+
+    if (updateTrigger) {
+      if (!hostname) {
+        window.alert("Agent-Update benötigt einen Hostnamen.");
+        return;
+      }
+      try {
+        await triggerAgentUpdate(hostname);
+        window.alert(`Agent-Update für ${hostname} angestoßen.`);
+      } catch (error) {
+        window.alert(`Agent-Update fehlgeschlagen: ${error.message}`);
+      }
       return;
     }
 
@@ -11959,11 +12437,15 @@ async function loadReportsForHost(options = {}) {
     wireReportHierarchyToggleButtons(list);
     updateHeaderFirstRowControls();
     updateHeaderStatChips();
+    updateReportChromeBar();
+    renderOverviewHostMetrics();
     updatePagerButtons();
   } catch (error) {
     state.currentReport = null;
     list.innerHTML = `<p class=\"muted\">Fehler: ${escapeHtml(error.message)}</p>`;
     updateHeaderStatChips();
+    updateReportChromeBar();
+    renderOverviewHostMetrics();
   }
 }
 
@@ -12005,6 +12487,8 @@ function renderCurrentReportInView() {
   list.innerHTML = renderReportCard(state.currentReport);
   wireSapVersionMapCopyButtons(list);
   wireReportHierarchyToggleButtons(list);
+  updateReportChromeBar();
+  renderOverviewHostMetrics();
 }
 
 async function editDisplayName() {
@@ -13525,7 +14009,7 @@ function renderBackupStatus(data) {
 
     return `<details class="backup-customer-group"${groupOpenAttr}>
       <summary class="${groupClass}">
-        <span class="backup-customer-name">🏢 ${escapeHtml(group.customerName)}</span>
+        <span class="backup-customer-name">${escapeHtml(group.customerName)}</span>
         ${projectHtml}
         <span class="backup-customer-chip">Hosts: ${hostsCount}</span>
         <span class="backup-customer-chip backup-customer-chip--ok">Aktuelle Backups: ${currentDirs}</span>
@@ -15232,6 +15716,15 @@ function updateHeaderStatChips() {
     setHeaderKpiTrendArrow(chipEl, countEl, direction);
   }
   headerKpiTrendPreviousValues = { ...currentTrendValues };
+
+  if (alertChip) {
+    const alertValue = Math.max(0, Number(state.globalOpenAlertsCount || 0));
+    alertChip.classList.toggle("header-stat-chip--alarm-active", alertValue > 0);
+  }
+  if (criticalChip) {
+    const criticalValue = Math.max(0, Number.parseInt(String(criticalCount?.textContent || "0"), 10) || 0);
+    criticalChip.classList.toggle("header-stat-chip--alarm-active", criticalValue > 0);
+  }
 
   scheduleHeaderKpiUniformCardWidthSync();
 }
@@ -16961,6 +17454,7 @@ async function init() {
   const sapLicenseTypeMapPromise = loadSapLicenseTypeMap();
 
   wireEvents();
+  initHeaderSectionCollapsibles();
   applyInitialHeaderKpiWidth();
   window.addEventListener("resize", scheduleHeaderKpiUniformCardWidthSync);
   if (document.fonts && document.fonts.ready) {
@@ -17693,9 +18187,9 @@ function formatSystemOverviewTableRow(host, osName, customerName, sapVersionMap,
         <div class="so-cell-sub">HANA Release: ${hanaVersion}</div>
         <div class="so-cell-sub">HANA SID: ${hanaSid}</div>
       </td>
-      <td>
+      <td class="so-status-cell">
         <div class="so-cell-main">${statusBadge}</div>
-        <div class="so-cell-sub">${escapeHtml(lastUpdate)}</div>
+        <div class="so-status-time" title="${escapeHtml(lastUpdate)}">${escapeHtml(lastUpdate)}</div>
       </td>
     </tr>
   `;

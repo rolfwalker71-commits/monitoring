@@ -618,10 +618,60 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .panel-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   margin-bottom: 8px;
+}
+
+.header-collapsible {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.header-collapsible-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid #d7e1ef;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f7fc 100%);
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.header-collapsible-toggle:hover {
+  border-color: #b8c9de;
+  background: linear-gradient(180deg, #f8fbff 0%, #eaf1f9 100%);
+}
+
+.header-collapsible-chevron {
+  display: inline-flex;
+  width: 14px;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  color: #475569;
+}
+
+.header-collapsible-label {
+  letter-spacing: 0.02em;
+}
+
+.header-collapsible-body {
+  min-width: 0;
+}
+
+.header-collapsible-body.hidden {
+  display: none;
 }
 
 .panel-actions {
@@ -12043,7 +12093,7 @@ body[data-theme="dark"] .backup-row--hana td {
 .system-overview-table td:nth-child(5) { width: 12%; min-width: 150px; }
 
 .system-overview-table th:nth-child(6),
-.system-overview-table td:nth-child(6) { width: 6%; min-width: 90px; }
+.system-overview-table td:nth-child(6) { width: 7%; min-width: 102px; }
 
 .system-overview-table tr {
   vertical-align: top;
@@ -12110,6 +12160,21 @@ body[data-theme="dark"] .backup-row--hana td {
   font-size: 11px;
   color: #475569;
   line-height: 1.35;
+}
+
+.so-status-cell .so-cell-main {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.so-status-time {
+  margin-top: 3px;
+  font-size: 9px;
+  color: #475569;
+  line-height: 1.25;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .so-addon-details {
@@ -12412,6 +12477,10 @@ body[data-theme="dark"] .so-host-short {
 
 body[data-theme="dark"] .so-cell-main {
   color: #e2e8f0;
+}
+
+body[data-theme="dark"] .so-status-time {
+  color: #9fb3cc;
 }
 
 body[data-theme="dark"] .so-cell-sub {
@@ -12912,6 +12981,21 @@ body[data-theme="dark"] .panel-header {
   border-color: #2b405f;
   background: rgba(17, 29, 47, 0.88);
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3);
+}
+
+body[data-theme="dark"] .header-collapsible-toggle {
+  border-color: #2a3c59;
+  background: linear-gradient(180deg, #1a2b42 0%, #142339 100%);
+  color: #dbeafe;
+}
+
+body[data-theme="dark"] .header-collapsible-toggle:hover {
+  border-color: #4a6f9f;
+  background: linear-gradient(180deg, #203550 0%, #17304d 100%);
+}
+
+body[data-theme="dark"] .header-collapsible-chevron {
+  color: #9fb3cc;
 }
 
 body[data-theme="dark"] .header-host-tools {

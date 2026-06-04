@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/styles.css?v=__ASSET_VERSION__&uihotfix=20260518a" />
+    <link rel="stylesheet" href="/dashboard-redesign.css?v=__ASSET_VERSION__" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#1e3a5f" />
     <link rel="apple-touch-icon" href="/icons/logo.png" />
@@ -81,18 +82,30 @@
 
       <section id="appPanel" class="panel hidden">
         <div class="panel-header">
+          <div id="headerKpiCollapsible" class="header-collapsible is-expanded">
+            <button
+              id="toggleHeaderKpiSection"
+              class="header-collapsible-toggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="headerKpiSectionBody"
+            >
+              <span class="header-collapsible-chevron" aria-hidden="true">▼</span>
+              <span class="header-collapsible-label">Kennzahlen &amp; Schnellaktionen</span>
+            </button>
+            <div id="headerKpiSectionBody" class="header-collapsible-body">
           <div class="panel-actions">
             <div class="header-kpi-strip">
-              <span id="headerAlertChip" class="header-stat-chip header-stat-chip-alert" title="Globale offene Alerts (Alle)"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">△</span> OFFEN</span><span id="headerAlertCount" class="header-chip-count">0</span><span class="header-chip-scope">Alle</span></span>
-              <span id="headerCriticalChip" class="header-stat-chip header-stat-chip-critical" title="Globale offene kritische Alerts"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">✖</span> KRITISCH</span><span id="headerCriticalCount" class="header-chip-count">0</span><span class="header-chip-scope">Offen</span></span>
-              <span id="headerAcknowledgedChip" class="header-stat-chip header-stat-chip-acknowledged" title="Globale offene quittierte Alerts"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">✓</span> QUITTIERT</span><span id="headerAcknowledgedCount" class="header-chip-count">0</span><span class="header-chip-scope">Offen</span></span>
-              <span id="headerMutedChip" class="header-stat-chip header-stat-chip-muted" title="Globale gemutete offene Alerts"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">⊘</span> STUMM</span><span id="headerMutedCount" class="header-chip-count">0</span><span class="header-chip-scope">Offen</span></span>
-              <span id="headerActiveHostsChip" class="header-stat-chip header-stat-chip-active-hosts kpi-group-start" title="Aktive Hosts (online)"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">●</span> AKTIVE HOSTS</span><span id="headerActiveHostsCount" class="header-chip-count">0</span><span class="header-chip-scope">Online</span></span>
-              <span id="headerInactiveChip" class="header-stat-chip header-stat-chip-inactive" title="Inaktive Hosts (1h)"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">◴</span> INAKTIVE HOSTS</span><span id="headerInactiveCount" class="header-chip-count">0</span><span class="header-chip-scope">Schwelle 1h</span></span>
-              <span id="headerDbReportsChip" class="header-stat-chip header-stat-chip-db-reports kpi-group-start" title="Berichte in der Datenbank"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">▤</span> BERICHTE</span><span id="headerDbReportsCount" class="header-chip-count">0</span><span class="header-chip-scope">Gesamtbestand</span></span>
-              <span id="headerDbSizeChip" class="header-stat-chip header-stat-chip-db-size" title="Groesse der Datenbankdateien (SQLite + WAL + SHM)"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">▣</span> DB GROESSE</span><span id="headerDbSizeValue" class="header-chip-count">-</span><span class="header-chip-scope">Datenvolumen</span></span>
-              <span id="headerDbReportsHourChip" class="header-stat-chip header-stat-chip-db-reports-hour" title="Anzahl Berichte in den letzten 60 Minuten"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">◷</span> BERICHTE</span><span id="headerDbReportsHourCount" class="header-chip-count">-</span><span class="header-chip-scope">Letzte Stunde</span></span>
-              <span id="headerDbSizeDeltaChip" class="header-stat-chip header-stat-chip-db-size-delta" title="Änderung der DB-Größe gegenüber vor 1 Stunde"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">Δ</span> DB DIFFERENZ 1H</span><span id="headerDbSizeDeltaValue" class="header-chip-count">-</span><span class="header-chip-scope">Änderung zu 1h</span></span>
+              <span id="headerAlertChip" class="header-stat-chip header-stat-chip-alert" title="Globale offene Alerts (Alle)"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">△</span> OFFEN:</span><span id="headerAlertCount" class="header-chip-count">0</span></span>
+              <span id="headerCriticalChip" class="header-stat-chip header-stat-chip-critical" title="Globale offene kritische Alerts"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">✖</span> KRITISCH:</span><span id="headerCriticalCount" class="header-chip-count">0</span></span>
+              <span id="headerAcknowledgedChip" class="header-stat-chip header-stat-chip-acknowledged" title="Globale offene quittierte Alerts"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">✓</span> QUITTIERT:</span><span id="headerAcknowledgedCount" class="header-chip-count">0</span></span>
+              <span id="headerMutedChip" class="header-stat-chip header-stat-chip-muted" title="Globale gemutete offene Alerts"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">⊘</span> STUMM:</span><span id="headerMutedCount" class="header-chip-count">0</span></span>
+              <span id="headerActiveHostsChip" class="header-stat-chip header-stat-chip-active-hosts kpi-group-start" title="Aktive Hosts (online)"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">●</span> AKTIVE HOSTS:</span><span id="headerActiveHostsCount" class="header-chip-count">0</span></span>
+              <span id="headerInactiveChip" class="header-stat-chip header-stat-chip-inactive" title="Inaktive Hosts (1h)"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">◴</span> INAKTIVE HOSTS:</span><span id="headerInactiveCount" class="header-chip-count">0</span></span>
+              <span id="headerDbReportsChip" class="header-stat-chip header-stat-chip-db-reports kpi-group-start" title="Berichte in der Datenbank"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">▤</span> BERICHTE:</span><span id="headerDbReportsCount" class="header-chip-count">0</span></span>
+              <span id="headerDbSizeChip" class="header-stat-chip header-stat-chip-db-size" title="Groesse der Datenbankdateien (SQLite + WAL + SHM)"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">▣</span> DB GRÖSSE:</span><span id="headerDbSizeValue" class="header-chip-count">-</span></span>
+              <span id="headerDbReportsHourChip" class="header-stat-chip header-stat-chip-db-reports-hour" title="Anzahl Berichte in den letzten 60 Minuten"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">◷</span> BERICHTE 1H:</span><span id="headerDbReportsHourCount" class="header-chip-count">-</span></span>
+              <span id="headerDbSizeDeltaChip" class="header-stat-chip header-stat-chip-db-size-delta" title="Änderung der DB-Größe gegenüber vor 1 Stunde"><span class="header-chip-label"><span class="header-chip-icon" aria-hidden="true">Δ</span> DB DIFF 1H:</span><span id="headerDbSizeDeltaValue" class="header-chip-count">-</span></span>
             </div>
             <div class="header-toolbar" aria-label="Schnellaktionen">
               <button id="openUserSettingsButton" class="btn-emoji-pill" type="button" title="Benutzereinstellungen">👤</button>
@@ -102,7 +115,21 @@
               <button id="refreshButton" class="btn-emoji-pill" title="Neu laden">↻</button>
             </div>
           </div>
-          <section id="hostToolsHeader" class="header-host-tools hidden" aria-label="Host-Schnellfilter">
+            </div>
+          </div>
+          <div id="headerFiltersCollapsible" class="header-collapsible">
+            <button
+              id="toggleHeaderFiltersSection"
+              class="header-collapsible-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="headerFiltersSectionBody"
+            >
+              <span class="header-collapsible-chevron" aria-hidden="true">▶</span>
+              <span class="header-collapsible-label">Host-Filter</span>
+            </button>
+            <div id="headerFiltersSectionBody" class="header-collapsible-body hidden">
+          <section id="hostToolsHeader" class="header-host-tools" aria-label="Host-Schnellfilter">
             <div class="host-filters host-filters-header host-filters-inline">
               <div class="host-search-box">
                 <input id="hostSearchInput" type="text" placeholder="Host, Bezeichnung, IP, Kunde…" class="search-input" />
@@ -115,16 +142,24 @@
                   <option value="interested_only">Nur interessante</option>
                 </select>
               </label>
-              <div class="host-filter-control host-filter-control-icons">
+              <label class="host-filter-control host-filter-select-wrap" for="hostOsFilterSelect">
                 <span>OS</span>
-                <div id="hostOsFilterChips" class="icon-filter-chips"></div>
-              </div>
-              <div class="host-filter-control host-filter-control-icons">
+                <select id="hostOsFilterSelect" aria-label="Betriebssystem filtern">
+                  <option value="all">Alle</option>
+                </select>
+              </label>
+              <label class="host-filter-control host-filter-select-wrap" for="hostCountryFilterSelect">
                 <span>Land</span>
-                <div id="hostCountryFilterChips" class="icon-filter-chips"></div>
-              </div>
+                <select id="hostCountryFilterSelect" aria-label="Land filtern">
+                  <option value="all">Alle</option>
+                </select>
+              </label>
+              <div id="hostOsFilterChips" class="icon-filter-chips hidden" hidden></div>
+              <div id="hostCountryFilterChips" class="icon-filter-chips hidden" hidden></div>
             </div>
           </section>
+            </div>
+          </div>
         </div>
 
         <div id="globalView" class="view-section hidden settings-view">
@@ -1213,6 +1248,29 @@
           </aside>
 
           <section class="reports-column">
+            <div id="reportChromeBar" class="report-chrome-bar">
+              <span id="reportChromeLogoWrap" class="report-chrome-logo-wrap hidden" aria-hidden="true">
+                <img id="reportChromeLogo" class="report-chrome-logo" alt="" />
+              </span>
+              <div id="reportChromeTitle" class="report-chrome-title">
+                <span class="report-chrome-placeholder">Host auswählen …</span>
+              </div>
+              <span id="reportChromeEnv" class="report-chrome-env hidden"></span>
+              <time id="reportChromeDate" class="report-chrome-date"></time>
+              <div class="report-chrome-actions">
+                <label class="auto-refresh-interval-label" for="autoRefreshIntervalSelect" title="Auto-Refresh Intervall">
+                  <select id="autoRefreshIntervalSelect" class="auto-refresh-interval-select">
+                    <option value="30">⟳ 30s</option>
+                    <option value="60">⟳ 1 Min.</option>
+                    <option value="300">⟳ 5 Min.</option>
+                    <option value="480" selected>⟳ 8 Min.</option>
+                    <option value="0">⟳ Aus</option>
+                  </select>
+                </label>
+                <button id="editDisplayNameButton" class="btn-icon btn-icon--compact" type="button" title="Host bearbeiten (Titel, Land, Kunde)">✏️</button>
+                <div id="selectedHostControls" class="selected-host-controls hidden"></div>
+              </div>
+            </div>
             <div class="section-head">
               <div id="reportHeaderOsLogoWrap" class="report-header-os-logo-wrap hidden" aria-hidden="true">
                 <img id="reportHeaderOsLogo" class="report-header-os-logo" alt="">
@@ -1230,23 +1288,6 @@
                   <div class="report-controls-row report-controls-row--chips">
                     <div id="headerFirstRowControls" class="header-first-row-controls hidden"></div>
                   </div>
-                  <div class="report-controls-row report-controls-row--actions">
-                    <div class="report-controls-actions-left">
-                      <label class="auto-refresh-interval-label" for="autoRefreshIntervalSelect" title="Auto-Refresh Intervall">
-                        <select id="autoRefreshIntervalSelect" class="auto-refresh-interval-select">
-                          <option value="30">⟳ 30s</option>
-                          <option value="60">⟳ 1 Min.</option>
-                          <option value="300">⟳ 5 Min.</option>
-                          <option value="480" selected>⟳ 8 Min.</option>
-                          <option value="0">⟳ Aus</option>
-                        </select>
-                      </label>
-                    </div>
-                    <div class="report-controls-actions-right">
-                      <button id="editDisplayNameButton" class="btn-icon btn-icon--compact" type="button" title="Host bearbeiten (Titel, Land, Kunde)">✏️</button>
-                      <div id="selectedHostControls" class="selected-host-controls hidden"></div>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1260,7 +1301,7 @@
 
             <div id="overviewView" class="view-section" role="tabpanel" aria-labelledby="overviewTabButton">
               <div class="overview-layout">
-                <nav class="overview-sidebar" role="tablist" aria-label="Übersichts-Register">
+                <nav class="overview-sidebar overview-sidebar--overview-only" role="tablist" aria-label="Übersichts-Register">
                   <button id="overviewMainTabButton" type="button" class="overview-sidebar-item active" role="tab" aria-selected="true" aria-controls="overviewMainSection">
                     <span class="osi-icon">🔔</span> Alarme &amp; Infos
                   </button>
@@ -1294,6 +1335,7 @@
                 <div class="overview-content">
 
               <section id="overviewMainSection" class="overview-subsection overview-scroll-panel" role="tabpanel" aria-labelledby="overviewMainTabButton">
+                <div id="overviewHostMetrics" class="overview-host-metrics" aria-live="polite"></div>
                 <section class="alerts-panel">
                   <div class="analysis-header">
                     <h4>Alerts</h4>
@@ -1448,32 +1490,29 @@
 
             <div id="reportsView" class="view-section hidden" role="tabpanel" aria-labelledby="reportsTabButton">
               <div class="overview-layout">
-                <nav class="overview-sidebar" role="tablist" aria-label="Einzelmeldungs-Register">
-                  <button type="button" class="overview-sidebar-item active" role="tab" aria-selected="true" data-report-section="overview"><span class="osi-icon">📋</span> System</button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="journal"><span class="osi-icon">📓</span> Journal</button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="processes"><span class="osi-icon">⚙️</span> Prozesse</button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="logfiles"><span class="osi-icon">📜</span> Logfiles</button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="sap-b1-systeminfo"><span class="osi-icon">🔷</span> SAP B1</button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="containers"><span class="osi-icon">📦</span><span style="display:flex;flex-direction:column;line-height:1.2">Container<span style="font-size:9px;font-weight:400;opacity:0.5;">Nur wo Docker läuft</span></span></button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="dir-listings"><span class="osi-icon">📤</span><span style="display:flex;flex-direction:column;line-height:1.2">Export<span style="font-size:9px;font-weight:400;opacity:0.5;">Nur HANA Systeme</span></span></button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="agent-update"><span class="osi-icon">🤖</span> Agent</button>
-                  <div class="overview-sidebar-divider"></div>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="network"><span class="osi-icon">🌐</span> Netzwerk</button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="filesystems"><span class="osi-icon">🗄️</span> Filesysteme</button>
-                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="databases"><span class="osi-icon">🗃️</span> Datenbanken</button>
+                <nav class="overview-sidebar overview-sidebar--reports-only" role="tablist" aria-label="Einzelmeldungs-Register">
+                  <button type="button" class="overview-sidebar-item active" role="tab" aria-selected="true" data-report-section="overview">System</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="journal">Journal</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="processes">Prozesse</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="logfiles">Logfiles</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="sap-b1-systeminfo" title="SAP Business One">SAP B1</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="containers" title="Nur wo Docker läuft">Container</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="dir-listings" title="Nur HANA Systeme">Export</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="agent-update">Agent</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="network">Netzwerk</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="filesystems">Filesysteme</button>
+                  <button type="button" class="overview-sidebar-item" role="tab" aria-selected="false" data-report-section="databases">Datenbanken</button>
+                  <div class="report-jump-row report-jump-row--inline">
+                    <button id="reportsPrevButtonTop" class="report-nav-btn" type="button" title="Ältere Meldung">‹</button>
+                    <button id="reportsNextButtonTop" class="report-nav-btn" type="button" title="Neuere Meldung">›</button>
+                    <label class="report-jump-control" for="reportJumpDateTimeInput">
+                      <input id="reportJumpDateTimeInput" type="datetime-local" step="60" />
+                    </label>
+                    <button id="reportJumpLatestButton" class="report-nav-btn time-btn" type="button">Aktuellste</button>
+                  </div>
                 </nav>
                 <div class="overview-content">
-                  <div class="pager report-jump-row">
-                    <div class="report-jump-left">
-                      <button id="reportsPrevButtonTop" class="report-nav-btn" type="button">Zurück</button>
-                      <button id="reportsNextButtonTop" class="report-nav-btn" type="button">Vor</button>
-                      <label class="report-jump-control" for="reportJumpDateTimeInput">
-                        <input id="reportJumpDateTimeInput" type="datetime-local" step="60" />
-                      </label>
-                      <button id="reportJumpLatestButton" class="report-nav-btn" type="button">Aktuellste</button>
-                    </div>
-                    <p id="reportJumpBounds" class="count compact"></p>
-                  </div>
+                  <p id="reportJumpBounds" class="count compact report-jump-bounds-line"></p>
                   <div id="reportList" class="report-list"></div>
                   <div class="pager">
                     <button id="reportsPrevButton" class="report-nav-btn" type="button">Zurück</button>
