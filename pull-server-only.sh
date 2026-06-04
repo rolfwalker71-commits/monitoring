@@ -1388,6 +1388,7 @@ AGENT_VERSION
 MAIN_HEAD_SHA
 openapi.yaml
 scripts/watch-inventur-job.sh
+scripts/deploy-agent-guardian.sh
 client/windows/collect_and_send.ps1
 client/windows/collect_and_scan_sap_tables.ps1
 client/windows/bootstrap_agent.ps1
