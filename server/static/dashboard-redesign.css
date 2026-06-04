@@ -213,6 +213,34 @@
 .host-status-pulse--critical { background: #dc2626 !important; }
 .host-status-pulse--unknown { background: #94a3b8 !important; }
 
+.host-license-dot {
+  width: 7px;
+  height: 7px;
+  min-width: 7px;
+  min-height: 7px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  background: #6366f1;
+  box-shadow: 0 0 0 1px #c7d2fe;
+  cursor: pointer;
+  flex-shrink: 0;
+  vertical-align: middle;
+  touch-action: manipulation;
+}
+
+.host-license-dot:hover,
+.host-license-dot:focus-visible {
+  background: #4f46e5;
+  box-shadow: 0 0 0 1px #a5b4fc;
+  outline: none;
+}
+
+.host-tech-row--host .host-license-dot {
+  align-self: center;
+}
+
 .host-card-country-code {
   position: absolute;
   top: 8px;
@@ -763,6 +791,17 @@ body[data-theme="dark"] .header-stat-chip {
 body[data-theme="dark"] .host-list article.host-item.selected,
 body[data-theme="dark"] .hosts-column .host-item.selected {
   border-color: #3b82f6 !important;
+}
+
+body[data-theme="dark"] .host-license-dot {
+  background: #818cf8;
+  border-color: #111b2f;
+  box-shadow: 0 0 0 1px #4338ca;
+}
+
+body[data-theme="dark"] .host-license-dot:hover,
+body[data-theme="dark"] .host-license-dot:focus-visible {
+  background: #a5b4fc;
 }
 
 body[data-theme="dark"] .reports-column .overview-content,

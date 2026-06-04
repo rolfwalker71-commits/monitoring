@@ -10049,15 +10049,13 @@ function renderSingleHostCard(host) {
   const versionSideBarTitle = `Version Host ${hostAgentVersion || "-"} vs Repo ${latestAgentVersion || "-"} | ${versionSideBarText}`;
   const versionSideBarHtml = `<div class="${versionSideBarClass}" title="${escapeHtml(versionSideBarTitle)}" aria-hidden="true"></div>`;
   const hasSapLicenseInfo = Boolean(host.has_sap_license_info);
-  const sapLicenseBadge = hasSapLicenseInfo
-    ? `<button type="button" class="host-license-info-badge host-license-info-badge--card" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}" title="SAP Lizenzinfos anzeigen" aria-label="SAP Lizenzinfos anzeigen" aria-haspopup="dialog">ℹ️</button>`
+  const licenseDotHtml = hasSapLicenseInfo
+    ? `<button type="button" class="host-license-dot host-license-info-badge" data-host-license-host="${escapeHtml(hostname)}" data-host-license-uid="${escapeHtml(hostIdentity)}" title="SAP-Lizenzdatei (B01.txt) hinterlegt — Klicken für Lizenzinfos" aria-label="Lizenzdatei vorhanden"></button>`
     : "";
   const countryCodeHtml = /^[A-Z]{2}$/.test(countryCode)
     ? `<span class="host-card-country-code">${escapeHtml(countryCode)}</span>`
     : "";
-  const cornerIcons = sapLicenseBadge
-    ? `<div class="host-corner-icons">${sapLicenseBadge}</div>`
-    : "";
+  const cornerIcons = "";
   const customerTitleLine = customerNameValue
     ? `<div class="host-customer-title-line"><span class="host-customer-row host-customer-row--top"><span class="host-customer-line" title="Kunde${customerProjectValue ? ` · Maringo ${escapeHtml(customerProjectValue)}` : ""}">${escapeHtml(customerChipLabel)}</span></span></div>`
     : "";
@@ -10120,7 +10118,7 @@ function renderSingleHostCard(host) {
         ${customerTitleLine}
         ${designationBadgeLine}
         <div class="host-tech-line">
-          <span class="host-tech-row host-tech-row--host"><span class="${statusPulseClass}" aria-hidden="true"></span><span class="host-meta-v" title="${escapeHtml(shortHostname)}">${escapeHtml(shortHostname)}</span></span>
+          <span class="host-tech-row host-tech-row--host"><span class="${statusPulseClass}" aria-hidden="true"></span>${licenseDotHtml}<span class="host-meta-v" title="${escapeHtml(shortHostname)}">${escapeHtml(shortHostname)}</span></span>
           <span class="host-tech-row host-tech-row--ip"><span class="host-meta-v" title="${escapeHtml(hostCardIp)}">${escapeHtml(hostCardIp)}</span></span>
         </div>
       </div>
@@ -12171,7 +12169,7 @@ function wireHostListInteractions() {
       return;
     }
 
-    if (target.closest(".host-mini-action, .host-license-info-badge, [data-action='toggle-muted-list'], [data-action='unmute-alert']")) {
+    if (target.closest(".host-mini-action, .host-license-info-badge, .host-license-dot, [data-action='toggle-muted-list'], [data-action='unmute-alert']")) {
       return;
     }
 
