@@ -452,6 +452,7 @@ const state = {
   hostSearchQuery: "",
   hostOsFilter: "all",
   hostCountryFilter: "all",
+  hostSortMode: "customer_alpha",
   systemOverviewCountryFilter: "all",
   systemOverviewSearchQuery: "",
   systemOverviewAddonsExpanded: false,
@@ -924,26 +925,45 @@ function persistAnalysisRangePreference() {
   }
 }
 
+const HOST_SORT_MODES = new Set([
+  "customer_alpha",
+  "report_desc",
+  "report_asc",
+  "online_first",
+]);
+
+function normalizeHostSortMode(value) {
+  const mode = String(value || "").trim().toLowerCase();
+  return HOST_SORT_MODES.has(mode) ? mode : "customer_alpha";
+}
+
 function loadHostFilterPreferences() {
   state.hostSearchQuery = "";
   state.hostOsFilter = "all";
   state.hostCountryFilter = "all";
+  state.hostSortMode = "customer_alpha";
 
   const username = String(state.authUser || "").trim().toLowerCase();
   if (!username) {
+    syncHostSortControl();
     return;
   }
 
   try {
     const raw = window.localStorage.getItem(`${HOST_FILTERS_STORAGE_KEY_PREFIX}${username}`);
-    if (!raw) return;
+    if (!raw) {
+      syncHostSortControl();
+      return;
+    }
     const saved = JSON.parse(raw);
     if (saved.hostSearchQuery !== undefined) state.hostSearchQuery = String(saved.hostSearchQuery);
     if (saved.hostOsFilter !== undefined) state.hostOsFilter = String(saved.hostOsFilter);
     if (saved.hostCountryFilter !== undefined) state.hostCountryFilter = String(saved.hostCountryFilter);
+    if (saved.hostSortMode !== undefined) state.hostSortMode = normalizeHostSortMode(saved.hostSortMode);
   } catch (_error) {
     // Ignore
   }
+  syncHostSortControl();
 }
 
 async function loadUserPreferences() {
@@ -1200,6 +1220,7 @@ function persistHostFilterPreferences() {
       hostSearchQuery: state.hostSearchQuery,
       hostOsFilter: state.hostOsFilter,
       hostCountryFilter: state.hostCountryFilter,
+      hostSortMode: normalizeHostSortMode(state.hostSortMode),
     }));
   } catch (_error) {
     // Ignore
@@ -9606,7 +9627,7 @@ function renderReportCard(report) {
   function renderMetaItem(label, value, options = {}) {
     let valueHtml = escapeHtml(asText(value || "-"));
     if (options.truncate === "hostname") {
-      valueHtml = renderTruncatedHostnameHtml(value);
+      valueHtml = renderTruncatedHostnameHtml(value, { maxLen: options.truncateMaxLen });
     } else if (options.truncate) {
       valueHtml = renderTruncatedTextHtml(value);
     }
@@ -9622,7 +9643,7 @@ function renderReportCard(report) {
     <div class="meta-group">
       <div class="meta-group-title">Agent-Info</div>
       <div class="meta-group-content">
-        ${renderMetaItem("Agent ID", report.agent_id || payload.agent_id, { truncate: "hostname" })}
+        ${renderMetaItem("Agent ID", report.agent_id || payload.agent_id, { truncate: "hostname", truncateMaxLen: 22 })}
         ${renderMetaItem("Version", payload.agent_version)}
         ${renderMetaItem("API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}
       </div>
@@ -9856,6 +9877,15 @@ function normalizeHostCountryCode(host) {
 
 let hostOsFilterSelectWired = false;
 let hostCountryFilterSelectWired = false;
+let hostSortSelectWired = false;
+
+function syncHostSortControl() {
+  const sortSelect = document.getElementById("hostSortSelect");
+  if (!sortSelect) {
+    return;
+  }
+  sortSelect.value = normalizeHostSortMode(state.hostSortMode);
+}
 
 function renderHostIconFilters(hosts) {
   const osSelect = document.getElementById("hostOsFilterSelect");
@@ -9958,6 +9988,77 @@ function hostMatchesSearchQuery(host, query) {
   return getHostSearchBlob(host).includes(q);
 }
 
+function hostReportSortTimestamp(host) {
+  const raw = asText(
+    host?.last_report_utc
+    || host?.last_seen_utc
+    || host?.report_time_utc
+    || host?.last_report_time_utc
+    || "",
+  ).trim();
+  if (!raw) {
+    return 0;
+  }
+  const ms = Date.parse(raw);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function compareHostsCustomerAlpha(a, b) {
+  const customerA = String(a.customer_name || "").trim();
+  const customerB = String(b.customer_name || "").trim();
+  const hasCustomerA = customerA.length > 0;
+  const hasCustomerB = customerB.length > 0;
+  if (hasCustomerA !== hasCustomerB) {
+    return hasCustomerA ? -1 : 1;
+  }
+  if (customerA !== customerB) {
+    return customerA.localeCompare(customerB, "de", { sensitivity: "base" });
+  }
+  const nameA = String(a.display_name || a.hostname || "").toLowerCase();
+  const nameB = String(b.display_name || b.hostname || "").toLowerCase();
+  return nameA.localeCompare(nameB, "de", { sensitivity: "base" });
+}
+
+function compareHostsByReportTime(a, b, direction) {
+  const tsA = hostReportSortTimestamp(a);
+  const tsB = hostReportSortTimestamp(b);
+  const hasA = tsA > 0;
+  const hasB = tsB > 0;
+  if (!hasA && !hasB) {
+    return compareHostsCustomerAlpha(a, b);
+  }
+  if (!hasA) {
+    return 1;
+  }
+  if (!hasB) {
+    return -1;
+  }
+  const diff = direction === "asc" ? tsA - tsB : tsB - tsA;
+  if (diff !== 0) {
+    return diff;
+  }
+  return compareHostsCustomerAlpha(a, b);
+}
+
+function compareHostsBySortMode(a, b, sortMode) {
+  const mode = normalizeHostSortMode(sortMode);
+  if (mode === "report_desc") {
+    return compareHostsByReportTime(a, b, "desc");
+  }
+  if (mode === "report_asc") {
+    return compareHostsByReportTime(a, b, "asc");
+  }
+  if (mode === "online_first") {
+    const onlineA = a?.online === true ? 1 : 0;
+    const onlineB = b?.online === true ? 1 : 0;
+    if (onlineA !== onlineB) {
+      return onlineB - onlineA;
+    }
+    return compareHostsCustomerAlpha(a, b);
+  }
+  return compareHostsCustomerAlpha(a, b);
+}
+
 function filterAndSortHosts(hosts) {
   const query = state.hostSearchQuery.toLowerCase().trim();
   const osFilter = String(state.hostOsFilter || "all");
@@ -9982,6 +10083,7 @@ function filterAndSortHosts(hosts) {
     filtered = filtered.filter((host) => hostInterestSetHasHost(interestSet, host));
   }
 
+  const sortMode = normalizeHostSortMode(state.hostSortMode);
   filtered.sort((a, b) => {
     if (interestMode === "interested_first" && interestSet.size > 0) {
       const interestedA = hostInterestSetHasHost(interestSet, a) ? 1 : 0;
@@ -9990,21 +10092,7 @@ function filterAndSortHosts(hosts) {
         return interestedB - interestedA;
       }
     }
-
-    const customerA = String(a.customer_name || "").trim();
-    const customerB = String(b.customer_name || "").trim();
-    const hasCustomerA = customerA.length > 0;
-    const hasCustomerB = customerB.length > 0;
-    if (hasCustomerA !== hasCustomerB) {
-      return hasCustomerA ? -1 : 1;
-    }
-    if (customerA !== customerB) {
-      return customerA.localeCompare(customerB, "de", { sensitivity: "base" });
-    }
-
-    const nameA = (a.display_name || a.hostname || "").toLowerCase();
-    const nameB = (b.display_name || b.hostname || "").toLowerCase();
-    return nameA.localeCompare(nameB);
+    return compareHostsBySortMode(a, b, sortMode);
   });
 
   return filtered;
@@ -10584,9 +10672,14 @@ function ensureHostLicenseOutsideClickHandler() {
   });
 }
 
+function renderHostLicensePopupHostIdHtml(hostKey) {
+  const key = asText(hostKey, "").trim() || "-";
+  return `<span class="host-license-hover-host-id">${renderTruncatedHostnameHtml(key, { maxLen: 22 })}</span>`;
+}
+
 function renderHostLicenseHoverPopupContent(hostname, data) {
   if (!data?.hasData) {
-    return `<div class="host-license-hover-head"><strong>ℹ️ SAP Lizenzinfos</strong><span>${escapeHtml(hostname)}</span></div><p class="muted">${escapeHtml(data?.message || "Keine SAP Lizenzinfos verfügbar.")}</p>`;
+    return `<div class="host-license-hover-head"><strong>ℹ️ SAP Lizenzinfos</strong>${renderHostLicensePopupHostIdHtml(hostname)}</div><p class="muted">${escapeHtml(data?.message || "Keine SAP Lizenzinfos verfügbar.")}</p>`;
   }
   const f = data.fields || {};
   const rows = [
@@ -10615,7 +10708,7 @@ function renderHostLicenseHoverPopupContent(hostname, data) {
   return `
     <div class="host-license-hover-head">
       <strong>ℹ️ SAP Lizenzinfos</strong>
-      <span>${escapeHtml(hostname)}</span>
+      ${renderHostLicensePopupHostIdHtml(hostname)}
       <button type="button" class="header-license-copy-btn" data-host-license-copy="${escapeHtml(data.copyText || "")}">📋 Kopieren</button>
     </div>
     <div class="host-license-hover-grid">${rows}</div>
@@ -10631,7 +10724,7 @@ async function showHostLicenseHoverPopup(anchorEl, hostname, hostUid = "") {
   const popup = ensureHostLicenseHoverPopup();
   hostLicenseHoverPinnedKey = key;
   hostLicenseHoverActiveHost = key;
-  popup.innerHTML = `<div class="host-license-hover-head"><strong>ℹ️ SAP Lizenzinfos</strong><span>${escapeHtml(key)}</span></div><p class="muted">Lade Lizenzinfos…</p>`;
+  popup.innerHTML = `<div class="host-license-hover-head"><strong>ℹ️ SAP Lizenzinfos</strong>${renderHostLicensePopupHostIdHtml(key)}</div><p class="muted">Lade Lizenzinfos…</p>`;
   popup.classList.remove("hidden");
   requestAnimationFrame(() => positionHostLicenseHoverPopup());
 
@@ -10646,7 +10739,7 @@ async function showHostLicenseHoverPopup(anchorEl, hostname, hostUid = "") {
     if (hostLicenseHoverActiveHost !== key || !hostLicenseHoverPopupEl) {
       return;
     }
-    hostLicenseHoverPopupEl.innerHTML = `<div class="host-license-hover-head"><strong>ℹ️ SAP Lizenzinfos</strong><span>${escapeHtml(key)}</span></div><p class="muted">Fehler beim Laden: ${escapeHtml(error.message || "Unbekannt")}</p>`;
+    hostLicenseHoverPopupEl.innerHTML = `<div class="host-license-hover-head"><strong>ℹ️ SAP Lizenzinfos</strong>${renderHostLicensePopupHostIdHtml(key)}</div><p class="muted">Fehler beim Laden: ${escapeHtml(error.message || "Unbekannt")}</p>`;
     requestAnimationFrame(() => positionHostLicenseHoverPopup());
   }
 }
@@ -10942,7 +11035,7 @@ function renderOverviewHostMetrics() {
   const metricRow = (label, value, options = {}) => {
     let valueHtml = escapeHtml(asText(value, "-"));
     if (options.truncate === "hostname") {
-      valueHtml = renderTruncatedHostnameHtml(value);
+      valueHtml = renderTruncatedHostnameHtml(value, { maxLen: options.truncateMaxLen });
     } else if (options.truncate === "uid") {
       valueHtml = renderTruncatedHostUidHtml(value);
     } else if (options.truncate) {
@@ -10973,7 +11066,7 @@ function renderOverviewHostMetrics() {
         <h4>Host &amp; Identität</h4>
         ${metricRow("Kunde", customerLabel, { truncate: true })}
         ${metricRow("Bezeichnung", displayLabel, { truncate: true })}
-        ${metricRow("Hostname", hostname, { truncate: "hostname" })}
+        ${metricRow("Hostname", hostname, { truncate: "hostname", truncateMaxLen: 22 })}
         ${metricRow("Host-UID", hostUid, { truncate: "uid" })}
         ${metricRow("Land", countryCode)}
         ${metricRow("Umgebung", envLabel)}
@@ -10982,7 +11075,7 @@ function renderOverviewHostMetrics() {
       </article>
       <article class="metric-card">
         <h4>Agent</h4>
-        ${metricRow("Agent ID", report?.agent_id || payload.agent_id || "-", { truncate: "hostname" })}
+        ${metricRow("Agent ID", report?.agent_id || payload.agent_id || "-", { truncate: "hostname", truncateMaxLen: 22 })}
         ${metricRow("Version", payload.agent_version || host.agent_version || "-")}
         ${metricRow("API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}
         ${metricRow("Queue", `${queueDepthLabel(payload.queue_depth)} Dateien`)}
@@ -17706,6 +17799,21 @@ function wireEvents() {
     }, 120);
   });
 
+  const hostSortSelect = document.getElementById("hostSortSelect");
+  if (hostSortSelect && !hostSortSelectWired) {
+    hostSortSelectWired = true;
+    syncHostSortControl();
+    hostSortSelect.addEventListener("change", async (event) => {
+      const nextSort = normalizeHostSortMode(event.target?.value || "customer_alpha");
+      if (state.hostSortMode === nextSort) {
+        return;
+      }
+      state.hostSortMode = nextSort;
+      persistHostFilterPreferences();
+      await applyHostFiltersLocally({ preserveScroll: true });
+    });
+  }
+
   document.addEventListener("visibilitychange", () => {
     if (document.hidden || !state.isAuthenticated) {
       return;
@@ -17955,22 +18063,23 @@ function truncateDisplayText(value, options = {}) {
   };
 }
 
-function truncateHostnameForDisplay(hostname) {
+function truncateHostnameForDisplay(hostname, options = {}) {
   const full = asText(hostname, "");
   if (!full || full === "-") {
     return { display: "-", full: "", truncated: false };
   }
-  if (full.length <= 28) {
+  const maxLen = Number(options.maxLen) > 0 ? Number(options.maxLen) : 22;
+  if (full.length <= maxLen) {
     return { display: full, full, truncated: false };
   }
   const parts = full.split(".").filter(Boolean);
   if (parts.length >= 2) {
     const display = `${parts[0]}…${parts[parts.length - 1]}`;
-    if (display.length <= 34) {
-      return { display, full, truncated: true };
-    }
+    return { display, full, truncated: true };
   }
-  return truncateDisplayText(full, { headLen: 14, tailLen: 12 });
+  const headLen = Math.min(14, Math.max(8, Math.floor(maxLen * 0.55)));
+  const tailLen = Math.max(6, maxLen - headLen - 1);
+  return truncateDisplayText(full, { headLen, tailLen, maxLen });
 }
 
 function renderTruncatedSpanHtml(info) {
@@ -17981,8 +18090,8 @@ function renderTruncatedSpanHtml(info) {
   return `<span class="text-truncate-mid" title="${escapeHtml(info.full)}">${display}</span>`;
 }
 
-function renderTruncatedHostnameHtml(hostname) {
-  return renderTruncatedSpanHtml(truncateHostnameForDisplay(hostname));
+function renderTruncatedHostnameHtml(hostname, options = {}) {
+  return renderTruncatedSpanHtml(truncateHostnameForDisplay(hostname, options));
 }
 
 function renderTruncatedTextHtml(value, options = {}) {

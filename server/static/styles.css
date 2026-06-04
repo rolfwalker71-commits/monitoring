@@ -5406,8 +5406,11 @@ body[data-theme="dark"] .trend-progress-bar {
   position: fixed;
   z-index: 1300;
   width: min(640px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
   max-height: calc(100vh - 32px);
+  overflow-x: hidden;
   overflow-y: auto;
+  box-sizing: border-box;
   border: 1px solid #cfd8e3;
   border-left: 4px solid #fbbf24;
   border-radius: 12px;
@@ -5419,8 +5422,10 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-license-hover-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
   margin-bottom: 8px;
+  min-width: 0;
 }
 
 .host-license-hover-head strong {
@@ -5428,46 +5433,77 @@ body[data-theme="dark"] .trend-progress-bar {
   font-size: 13px;
 }
 
-.host-license-hover-head > span {
+.host-license-hover-head > span,
+.host-license-hover-head .host-license-hover-host-id {
   color: #4a6687;
   font-size: 11px;
   font-family: "IBM Plex Mono", monospace;
+  min-width: 0;
+  flex: 1 1 8rem;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .host-license-hover-head .header-license-copy-btn {
   margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.host-license-hover-head .host-license-hover-host-id .text-truncate-mid {
+  display: block;
+  max-width: 100%;
+}
+
+@media (max-width: 560px) {
+  .host-license-hover-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .host-license-hover-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px 12px;
+  min-width: 0;
+}
+
+.host-license-hover-item {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, auto) minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: baseline;
+  min-width: 0;
 }
 
 .host-license-hover-item span {
-  display: block;
   font-size: 9px;
   color: #4a6687;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 
 .host-license-hover-item strong {
-  display: block;
-  margin-top: 2px;
-  font-size: 16px;
+  margin: 0;
+  font-size: 13px;
   color: #1f3f5f;
   font-family: "IBM Plex Mono", monospace;
-  line-height: 1.15;
+  line-height: 1.25;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: right;
+}
+
+.host-license-hover-item--holder {
+  grid-template-columns: minmax(4.5rem, auto) minmax(0, 1fr);
 }
 
 .host-license-hover-item--holder strong {
   white-space: normal;
-  overflow: visible;
-  text-overflow: initial;
+  overflow: hidden;
+  text-overflow: ellipsis;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -5488,6 +5524,8 @@ body[data-theme="dark"] .trend-progress-bar {
   margin-top: 10px;
   border-top: 1px solid #d6e1ee;
   padding-top: 8px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .host-license-hover-types-head {
@@ -5523,6 +5561,7 @@ body[data-theme="dark"] .trend-progress-bar {
   gap: 10px;
   color: #28486a;
   font-size: 12px;
+  min-width: 0;
 }
 
 .host-license-hover-types .host-license-hover-type-row:nth-of-type(odd) {
@@ -5543,11 +5582,12 @@ body[data-theme="dark"] .trend-progress-bar {
 }
 
 .host-license-hover-type-name-wrap {
-  display: inline-flex;
+  display: flex;
   align-items: baseline;
-  gap: 6px;
-  min-width: 0;
   flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .host-license-hover-type-name {
@@ -5560,7 +5600,10 @@ body[data-theme="dark"] .trend-progress-bar {
 .host-license-hover-type-raw {
   color: #6b7f97;
   font-family: "IBM Plex Mono", monospace;
-  font-size: 12px;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .host-customer-line {
@@ -12891,6 +12934,10 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
   background: #ffffff;
   color: #1f3555;
   cursor: pointer;
+}
+
+.header-host-tools #hostSortSelect {
+  min-width: 188px;
 }
 
 .header-host-tools .host-filter-control-icons {
