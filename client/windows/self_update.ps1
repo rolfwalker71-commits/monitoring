@@ -475,7 +475,49 @@ function Test-CollectScriptSafeToInstall {
     if ($text -match 'function\s+Get-AngLogMojibakeScore' -and $text -notmatch '\[char\]0x00C3') {
         return $false
     }
+    if (-not (Test-CollectScriptSupportsLinuxStyleCli -Text $text)) {
+        return $false
+    }
     return $true
+}
+
+function Test-CollectScriptSupportsLinuxStyleCli {
+    param(
+        [string]$Path = '',
+        [string]$Text = ''
+    )
+
+    if (-not $Text) {
+        if (-not $Path -or -not (Test-Path -LiteralPath $Path)) {
+            return $false
+        }
+        $Text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
+    }
+
+    if ($Text -notmatch 'function\s+Resolve-CollectAndSendCliArgs') {
+        return $false
+    }
+    if ($Text -match '(?ms)^\s*param\s*\(\s*\[switch\]\s*\$NoJitter') {
+        return $false
+    }
+    return $true
+}
+
+function Get-CimPropertyValue {
+    param(
+        $Object,
+        [string]$Name
+    )
+
+    if ($null -eq $Object -or -not $Name) {
+        return $null
+    }
+
+    $prop = $Object.PSObject.Properties[$Name]
+    if (-not $prop) {
+        return $null
+    }
+    return $prop.Value
 }
 
 function Get-TaskTriggerRepetitionTimespan {
@@ -485,10 +527,10 @@ function Get-TaskTriggerRepetitionTimespan {
         return $null
     }
 
-    $prop = $Trigger.PSObject.Properties['RepetitionInterval']
-    if ($prop -and $null -ne $prop.Value) {
+    $intervalValue = Get-CimPropertyValue -Object $Trigger -Name 'RepetitionInterval'
+    if ($null -ne $intervalValue) {
         try {
-            $val = [TimeSpan]$prop.Value
+            $val = [TimeSpan]$intervalValue
             if ($val.TotalMinutes -gt 0) {
                 return $val
             }
@@ -497,29 +539,26 @@ function Get-TaskTriggerRepetitionTimespan {
         }
     }
 
-    try {
-        $rep = $Trigger.Repetition
-        if ($null -eq $rep) {
-            return $null
-        }
-        $intervalStr = [string]$rep.Interval
-        if (-not $intervalStr) {
-            return $null
-        }
-        if ($intervalStr -match '^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$') {
-            $hours = 0
-            $minutes = 0
-            $seconds = 0
-            if ($Matches[1]) { $hours = [int]$Matches[1] }
-            if ($Matches[2]) { $minutes = [int]$Matches[2] }
-            if ($Matches[3]) { $seconds = [int]$Matches[3] }
-            $span = New-TimeSpan -Hours $hours -Minutes $minutes -Seconds $seconds
-            if ($span.TotalMinutes -gt 0) {
-                return $span
-            }
-        }
-    } catch {
+    $rep = Get-CimPropertyValue -Object $Trigger -Name 'Repetition'
+    if ($null -eq $rep) {
         return $null
+    }
+
+    $intervalStr = [string](Get-CimPropertyValue -Object $rep -Name 'Interval')
+    if (-not $intervalStr) {
+        return $null
+    }
+    if ($intervalStr -match '^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$') {
+        $hours = 0
+        $minutes = 0
+        $seconds = 0
+        if ($Matches[1]) { $hours = [int]$Matches[1] }
+        if ($Matches[2]) { $minutes = [int]$Matches[2] }
+        if ($Matches[3]) { $seconds = [int]$Matches[3] }
+        $span = New-TimeSpan -Hours $hours -Minutes $minutes -Seconds $seconds
+        if ($span.TotalMinutes -gt 0) {
+            return $span
+        }
     }
 
     return $null
@@ -543,9 +582,7 @@ function New-MonitoringRepeatingTaskTrigger {
 function Sync-MonitoringUpdateTaskSchedule {
     try {
         $updateHours = 1
-        if ($script:RefuseCollectFallback) {
-            $updateHours = 0
-        } elseif ($cfg.ContainsKey('UPDATE_HOURS')) {
+        if ($cfg.ContainsKey('UPDATE_HOURS')) {
             try {
                 $parsed = [int]$cfg['UPDATE_HOURS']
                 if ($parsed -ge 1 -and $parsed -le 24) {
@@ -880,7 +917,7 @@ try {
         throw 'Downloaded collect_and_send.ps1 contains unsupported ternary syntax for PowerShell 5.1.'
     }
     if (-not (Test-CollectScriptSafeToInstall -Path "$tmpDir\collect_and_send.ps1")) {
-        throw 'Downloaded collect_and_send.ps1 failed parser/mojibake safety checks; keeping existing local scripts.'
+        throw 'Downloaded collect_and_send.ps1 failed safety checks (parser, mojibake, or missing --nojitter CLI support); keeping existing local scripts.'
     }
 
     if ((Compare-Versions -Newer $remoteVersion -Older $localVersion) -and $global:UsedLocalFallback) {
@@ -898,6 +935,9 @@ try {
     [System.IO.File]::WriteAllText("$tmpDir\AGENT_VERSION", "$remoteVersion`n", [System.Text.Encoding]::UTF8)
 
     Copy-Item "$tmpDir\collect_and_send.ps1" "$InstallDir\collect_and_send.ps1" -Force
+    if (-not (Test-CollectScriptSupportsLinuxStyleCli -Path "$InstallDir\collect_and_send.ps1")) {
+        throw 'collect_and_send.ps1 on disk is still missing --nojitter / -NoJitter CLI support after copy.'
+    }
     Copy-Item "$tmpDir\collect_and_scan_sap_tables.ps1" "$InstallDir\collect_and_scan_sap_tables.ps1" -Force
     Copy-Item "$tmpDir\setup_harvest_sql_user.ps1" "$InstallDir\setup_harvest_sql_user.ps1" -Force
     Copy-Item "$tmpDir\self_update.ps1" "$InstallDir\self_update.ps1" -Force
