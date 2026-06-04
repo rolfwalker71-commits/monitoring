@@ -10268,18 +10268,18 @@ function ensureHostLicenseHoverPopup() {
   return popup;
 }
 
-function positionHostLicenseHoverPopup(anchorEl) {
-  if (!hostLicenseHoverPopupEl || !anchorEl) return;
-  const rect = anchorEl.getBoundingClientRect();
+function positionHostLicenseHoverPopup() {
+  if (!hostLicenseHoverPopupEl) {
+    return;
+  }
   const popup = hostLicenseHoverPopupEl;
-  const margin = 10;
-  const left = Math.min(window.innerWidth - popup.offsetWidth - margin, Math.max(margin, rect.left - 16));
-  const topPreferred = rect.bottom + margin;
-  const top = topPreferred + popup.offsetHeight + margin > window.innerHeight
-    ? Math.max(margin, rect.top - popup.offsetHeight - margin)
-    : topPreferred;
-  popup.style.left = `${left}px`;
-  popup.style.top = `${top}px`;
+  const margin = 16;
+  const width = popup.offsetWidth || popup.getBoundingClientRect().width;
+  const height = popup.offsetHeight || popup.getBoundingClientRect().height;
+  const left = Math.max(margin, (window.innerWidth - width) / 2);
+  const top = Math.max(margin, (window.innerHeight - height) / 2);
+  popup.style.left = `${Math.round(left)}px`;
+  popup.style.top = `${Math.round(top)}px`;
 }
 
 function hideHostLicenseHoverPopup(clearPin = true) {
@@ -10337,6 +10337,12 @@ function ensureHostLicenseOutsideClickHandler() {
     }
     hideHostLicenseHoverPopup(true);
   });
+  window.addEventListener("resize", () => {
+    if (!hostLicenseHoverPopupEl || hostLicenseHoverPopupEl.classList.contains("hidden")) {
+      return;
+    }
+    positionHostLicenseHoverPopup();
+  });
 }
 
 function renderHostLicenseHoverPopupContent(hostname, data) {
@@ -10388,7 +10394,7 @@ async function showHostLicenseHoverPopup(anchorEl, hostname, hostUid = "") {
   hostLicenseHoverActiveHost = key;
   popup.innerHTML = `<div class="host-license-hover-head"><strong>ℹ️ SAP Lizenzinfos</strong><span>${escapeHtml(key)}</span></div><p class="muted">Lade Lizenzinfos…</p>`;
   popup.classList.remove("hidden");
-  positionHostLicenseHoverPopup(anchorEl);
+  requestAnimationFrame(() => positionHostLicenseHoverPopup());
 
   try {
     const data = await loadHostLicenseInfoForHover(hostname, hostUid);
@@ -10396,13 +10402,13 @@ async function showHostLicenseHoverPopup(anchorEl, hostname, hostUid = "") {
       return;
     }
     hostLicenseHoverPopupEl.innerHTML = renderHostLicenseHoverPopupContent(key, data);
-    positionHostLicenseHoverPopup(anchorEl);
+    requestAnimationFrame(() => positionHostLicenseHoverPopup());
   } catch (error) {
     if (hostLicenseHoverActiveHost !== key || !hostLicenseHoverPopupEl) {
       return;
     }
     hostLicenseHoverPopupEl.innerHTML = `<div class="host-license-hover-head"><strong>ℹ️ SAP Lizenzinfos</strong><span>${escapeHtml(key)}</span></div><p class="muted">Fehler beim Laden: ${escapeHtml(error.message || "Unbekannt")}</p>`;
-    positionHostLicenseHoverPopup(anchorEl);
+    requestAnimationFrame(() => positionHostLicenseHoverPopup());
   }
 }
 
