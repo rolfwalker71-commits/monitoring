@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260604i"
+PULL_SCRIPT_VERSION="20260604j"
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -487,6 +487,18 @@ reconcile_deploy_to_latest_main() {
   local_av="$(tr -d ' \t\r\n' < "$TARGET_DIR/AGENT_VERSION" 2>/dev/null || true)"
 
   latest_sha="$(resolve_latest_main_sha main || true)"
+  if is_full_git_sha "$latest_sha"; then
+    remote_bv="$(fetch_repo_text_at_ref BUILD_VERSION "$latest_sha")"
+    if [ -n "$remote_bv" ] && [ "$remote_bv" != "$local_bv" ]; then
+      echo "Nachziehen: lokal BUILD ${local_bv:-?}, repo/main ${latest_sha:0:12} hat $remote_bv – lade Dateien erneut..." >&2
+      if redeploy_files_from_ref "$latest_sha"; then
+        return 0
+      fi
+      echo "FEHLER: Nachziehen auf ${latest_sha:0:12} fehlgeschlagen." >&2
+      return 1
+    fi
+  fi
+
   sync_ref="$(probe_ref_with_matching_version_files "$latest_sha" "$REF" || true)"
 
   if [ -z "$sync_ref" ] && [ "$local_bv" != "$local_av" ] && is_full_git_sha "$REF"; then
@@ -889,6 +901,7 @@ server/receiver.py
 server/static/index.html
 server/static/app.js
 server/static/styles.css
+server/static/dashboard-redesign.css
 server/static/sw.js
 server/static/manifest.json
 server/static/manifest-mobile.json
@@ -1009,6 +1022,19 @@ fi
 
 if is_full_git_sha "$REF"; then
   force_refresh_version_files "$REF"
+fi
+LOCAL_BUILD_VERSION="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
+if [ -n "$LATEST_SHA_AFTER" ] && is_full_git_sha "$LATEST_SHA_AFTER"; then
+  REMOTE_LATEST_BV="$(fetch_repo_text_at_ref BUILD_VERSION "$LATEST_SHA_AFTER")"
+  if [ -n "$REMOTE_LATEST_BV" ] && [ "$REMOTE_LATEST_BV" != "$LOCAL_BUILD_VERSION" ]; then
+    echo "Nachziehen: BUILD_VERSION lokal ${LOCAL_BUILD_VERSION:-?}, main ${LATEST_SHA_AFTER:0:12} hat $REMOTE_LATEST_BV – erzwinge Voll-Deploy..." >&2
+    if redeploy_files_from_ref "$LATEST_SHA_AFTER"; then
+      REF="$LATEST_SHA_AFTER"
+      LOCAL_BUILD_VERSION="$REMOTE_LATEST_BV"
+      mirror_update_payloads
+      repair_deploy_if_integrity_failed
+    fi
+  fi
 fi
 if [ -n "$LATEST_SHA_AFTER" ] && [ "$LATEST_SHA_AFTER" != "$REF" ]; then
   echo "Hinweis: repo/main (${LATEST_SHA_AFTER:0:12}) ist neuer als Deploy-Ref (${REF:0:12}) – ziehe Dateien nach..." >&2
