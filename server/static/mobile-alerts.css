@@ -208,30 +208,38 @@ body {
 
 .kpi-strip {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
   margin-top: 12px;
 }
 
 .kpi {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 8px;
+  border-radius: 10px;
+  padding: 6px 3px;
   text-align: center;
+  min-width: 0;
 }
 
 .kpi strong {
   display: block;
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   font-weight: 800;
+  line-height: 1.1;
 }
 
 .kpi span {
-  font-size: 0.65rem;
+  display: block;
+  margin-top: 2px;
+  font-size: 0.56rem;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kpi-critical {
@@ -259,6 +267,26 @@ body {
 
 .kpi-open strong {
   color: var(--ink);
+}
+
+.kpi-active {
+  background: color-mix(in srgb, var(--ok) 12%, var(--panel));
+  border-color: color-mix(in srgb, var(--ok) 28%, var(--line));
+}
+
+.kpi-active strong,
+.kpi-active span {
+  color: var(--ok);
+}
+
+.kpi-inactive {
+  background: color-mix(in srgb, var(--critical) 11%, var(--panel));
+  border-color: color-mix(in srgb, var(--critical) 24%, var(--line));
+}
+
+.kpi-inactive strong,
+.kpi-inactive span {
+  color: var(--critical);
 }
 
 .filter-chips {

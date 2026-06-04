@@ -30,10 +30,95 @@ async function mobileLogin(username, password) {
 }
 
 async function mobileLogout() {
+  stopMobileSessionKeepAlive();
   await fetch("/api/v1/web-logout", {
     method: "POST",
     credentials: "same-origin",
   }).catch(() => {});
+}
+
+function stopMobileSessionKeepAlive() {
+  if (mobileSessionRefreshTimerId !== null) {
+    window.clearInterval(mobileSessionRefreshTimerId);
+    mobileSessionRefreshTimerId = null;
+  }
+}
+
+async function mobileRefreshSession() {
+  try {
+    const response = await fetch("/api/v1/session/refresh", {
+      method: "POST",
+      credentials: "same-origin",
+    });
+    if (!response.ok) {
+      if (response.status === 401 && Date.now() - mobileSessionEstablishedAtMs < MOBILE_SESSION_LOGIN_GRACE_MS) {
+        return true;
+      }
+      return false;
+    }
+    const data = await response.json().catch(() => ({}));
+    state.authenticated = true;
+    if (data.username) {
+      state.username = String(data.username || state.username);
+      state.userDisplayName = resolveUserDisplayName(data);
+      updateUserLine();
+    }
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function startMobileSessionKeepAlive() {
+  if (!state.authenticated) {
+    return;
+  }
+  stopMobileSessionKeepAlive();
+  window.setTimeout(() => {
+    if (state.authenticated) {
+      void mobileRefreshSession();
+    }
+  }, 2500);
+  mobileSessionRefreshTimerId = window.setInterval(() => {
+    void mobileRefreshSession();
+  }, MOBILE_SESSION_REFRESH_INTERVAL_MS);
+}
+
+async function mobileRecoverSessionAfter401() {
+  if (Date.now() - mobileSessionEstablishedAtMs < MOBILE_SESSION_LOGIN_GRACE_MS) {
+    return true;
+  }
+  if (!(await mobileRefreshSession())) {
+    return false;
+  }
+  const session = await mobileFetchSession().catch(() => ({ authenticated: false }));
+  if (session.authenticated !== true) {
+    return false;
+  }
+  state.authenticated = true;
+  state.username = String(session.username || state.username);
+  state.userDisplayName = resolveUserDisplayName(session);
+  updateUserLine();
+  showLoginOverlay(false);
+  startMobileSessionKeepAlive();
+  return true;
+}
+
+function mobileForceLogout(message) {
+  stopMobileSessionKeepAlive();
+  state.authenticated = false;
+  showLoginOverlay(true);
+  if (message) {
+    setLoginStatus(message, true);
+  }
+  renderAlerts([]);
+  state.activeHostsCount = 0;
+  state.inactiveHostsCount = 0;
+  renderHostKpis();
+  state.pushSupported = false;
+  state.pushConfigured = false;
+  state.pushEnabled = false;
+  renderPushButton();
 }
 
 function mobileEnvironmentLabel(value) {
@@ -76,6 +161,9 @@ const state = {
   pendingCloseAlertId: 0,
   lastAlerts: [],
   alertsLoading: false,
+  activeHostsCount: 0,
+  inactiveHostsCount: 0,
+  hostKpisHours: 1,
 };
 
 const SKELETON_CARD_COUNT = 4;
@@ -83,10 +171,15 @@ const FLOATING_LOGO_STORAGE_KEY = "monitoring.mobile.floatingLogo";
 const FLOATING_LOGO_WIDTH_PX = 80;
 const FLOATING_LOGO_HEIGHT_PX = 48;
 const FLOATING_LOGO_MARGIN_PX = 12;
+/** Gleiches Intervall wie Desktop: Session bleibt bei offener App aktiv (Server-Timeout default 30 min). */
+const MOBILE_SESSION_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
+const MOBILE_SESSION_LOGIN_GRACE_MS = 20000;
 
 let serviceWorkerRegistrationPromise = null;
 let toastTimer = null;
 let customerLogoObserver = null;
+let mobileSessionRefreshTimerId = null;
+let mobileSessionEstablishedAtMs = 0;
 
 function parseHighlightAlertId() {
   const raw = new URLSearchParams(window.location.search).get("alert_id");
@@ -737,6 +830,37 @@ function buildHeadsUpActionButton(item) {
   );
 }
 
+function parseUtcIso(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const withZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized) ? normalized : normalized + "Z";
+  const parsed = new Date(withZone);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function countActiveHosts(hosts) {
+  const nowMs = Date.now();
+  const oneHourMs = 60 * 60 * 1000;
+  return (Array.isArray(hosts) ? hosts : []).reduce((sum, host) => {
+    if (host && host.online === true) {
+      return sum + 1;
+    }
+    const parsedLastSeen = parseUtcIso(host?.last_seen_utc || host?.last_report_utc || "");
+    if (!parsedLastSeen) {
+      return sum;
+    }
+    return nowMs - parsedLastSeen.getTime() <= oneHourMs ? sum + 1 : sum;
+  }, 0);
+}
+
+function renderHostKpis() {
+  const elActive = document.getElementById("kpiActiveHosts");
+  const elInactive = document.getElementById("kpiInactiveHosts");
+  if (elActive) elActive.textContent = String(Math.max(0, Number(state.activeHostsCount) || 0));
+  if (elInactive) elInactive.textContent = String(Math.max(0, Number(state.inactiveHostsCount) || 0));
+}
+
 function renderKpis(alerts) {
   const open = alerts.filter((item) => item && item.is_closed !== true);
   const critical = open.filter((item) => String(item.severity || "").toLowerCase() === "critical").length;
@@ -747,6 +871,49 @@ function renderKpis(alerts) {
   if (elCritical) elCritical.textContent = String(critical);
   if (elWarning) elWarning.textContent = String(warning);
   if (elOpen) elOpen.textContent = String(open.length);
+  renderHostKpis();
+}
+
+async function loadHostKpis(options = {}) {
+  if (!state.authenticated) {
+    return;
+  }
+  const authRetried = options.authRetried === true;
+
+  const hours = Math.max(1, Math.min(24 * 30, Number(state.hostKpisHours) || 1));
+  try {
+    const [inactiveResp, hostsResp] = await Promise.all([
+      fetch("/api/v1/inactive-hosts?hours=" + encodeURIComponent(String(hours)), { credentials: "same-origin" }),
+      fetch("/api/v1/hosts?limit=200&offset=0", { credentials: "same-origin" }),
+    ]);
+
+    if (inactiveResp.status === 401 || hostsResp.status === 401) {
+      if (!authRetried && (await mobileRecoverSessionAfter401())) {
+        return loadHostKpis({ authRetried: true });
+      }
+      mobileForceLogout("Session abgelaufen. Bitte erneut anmelden.");
+      return;
+    }
+
+    if (inactiveResp.ok) {
+      const inactivePayload = await inactiveResp.json();
+      state.inactiveHostsCount = Math.max(0, Number(inactivePayload.total || 0));
+    }
+
+    if (hostsResp.ok) {
+      const hostsPayload = await hostsResp.json();
+      const hosts = Array.isArray(hostsPayload.hosts) ? hostsPayload.hosts : [];
+      state.activeHostsCount = countActiveHosts(hosts);
+    }
+
+    renderHostKpis();
+  } catch (_error) {
+    // Host-KPIs sind optional; Alert-Liste bleibt nutzbar.
+  }
+}
+
+async function refreshMobileData() {
+  await Promise.all([loadAlerts(), loadHostKpis()]);
 }
 
 function syncSeverityChips() {
@@ -1033,11 +1200,12 @@ function handleAlertsListKeydown(event) {
   if (item) openHostSheet(item);
 }
 
-async function loadAlerts() {
+async function loadAlerts(options = {}) {
   if (!state.authenticated) {
     showLoginOverlay(true);
     return;
   }
+  const authRetried = options.authRetried === true;
 
   const showSkeleton = state.lastAlerts.length === 0;
   setAlertsLoading(true);
@@ -1061,10 +1229,10 @@ async function loadAlerts() {
 
     const resp = await fetch("/api/v1/alerts?" + params.toString(), { credentials: "same-origin" });
     if (resp.status === 401) {
-      state.authenticated = false;
-      showLoginOverlay(true);
-      setLoginStatus("Session abgelaufen. Bitte erneut anmelden.", true);
-      renderAlerts([]);
+      if (!authRetried && (await mobileRecoverSessionAfter401())) {
+        return loadAlerts({ authRetried: true });
+      }
+      mobileForceLogout("Session abgelaufen. Bitte erneut anmelden.");
       return;
     }
     if (!resp.ok) throw new Error("HTTP " + resp.status);
@@ -1110,11 +1278,13 @@ async function submitLogin() {
     state.authenticated = true;
     state.username = String(data.username || username);
     state.userDisplayName = resolveUserDisplayName(data);
+    mobileSessionEstablishedAtMs = Date.now();
     updateUserLine();
     showLoginOverlay(false);
     setLoginStatus("");
+    startMobileSessionKeepAlive();
     await refreshPushState();
-    await loadAlerts();
+    await refreshMobileData();
   } catch (error) {
     state.authenticated = false;
     showLoginOverlay(true);
@@ -1250,7 +1420,7 @@ function wirePullToRefresh() {
       if (!state.authenticated || window.scrollY > 4) return;
       const touchEndY = event.changedTouches[0]?.clientY || 0;
       if (touchEndY - touchStartY > 90) {
-        void loadAlerts().catch((error) => setStatus("Fehler: " + error.message, true));
+        void refreshMobileData().catch((error) => setStatus("Fehler: " + error.message, true));
       }
     },
     { passive: true }
@@ -1259,14 +1429,14 @@ function wirePullToRefresh() {
 
 function wire() {
   document.getElementById("refreshButton")?.addEventListener("click", () => {
-    void loadAlerts().catch((error) => setStatus("Fehler: " + error.message, true));
+    void refreshMobileData().catch((error) => setStatus("Fehler: " + error.message, true));
   });
 
   document.querySelectorAll(".filter-chips .chip[data-severity]").forEach((chip) => {
     chip.addEventListener("click", () => {
       state.severity = String(chip.getAttribute("data-severity") || "all");
       syncSeverityChips();
-      void loadAlerts().catch((error) => setStatus("Fehler: " + error.message, true));
+      void refreshMobileData().catch((error) => setStatus("Fehler: " + error.message, true));
     });
   });
 
@@ -1275,7 +1445,7 @@ function wire() {
     state.showAck = document.getElementById("showAckToggle")?.checked === true;
     state.showClosed = document.getElementById("showClosedToggle")?.checked === true;
     closeAllSheets();
-    void loadAlerts().catch((error) => setStatus("Fehler: " + error.message, true));
+    void refreshMobileData().catch((error) => setStatus("Fehler: " + error.message, true));
   });
 
   renderCountryFilterChips();
@@ -1289,12 +1459,16 @@ function wire() {
 
   document.getElementById("mobileLogoutButton")?.addEventListener("click", async () => {
     await mobileLogout();
+    mobileSessionEstablishedAtMs = 0;
     state.authenticated = false;
     state.username = "";
     state.userDisplayName = "";
     updateUserLine();
     showLoginOverlay(true);
     renderAlerts([]);
+    state.activeHostsCount = 0;
+    state.inactiveHostsCount = 0;
+    renderHostKpis();
     setStatus("");
     renderPushButton();
     document.getElementById("headerMenu")?.classList.add("hidden");
@@ -1350,6 +1524,31 @@ function wire() {
   wirePullToRefresh();
   wireFloatingLogo();
   syncSeverityChips();
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden || !state.authenticated) {
+      return;
+    }
+    void (async () => {
+      const ok = await mobileRefreshSession();
+      if (!ok) {
+        const recovered = await mobileRecoverSessionAfter401();
+        if (!recovered) {
+          mobileForceLogout("Session abgelaufen. Bitte erneut anmelden.");
+          return;
+        }
+      }
+      await refreshPushState();
+      await refreshMobileData();
+    })().catch((error) => setStatus("Fehler: " + (error?.message || String(error)), true));
+  });
+
+  window.addEventListener("focus", () => {
+    if (!state.authenticated) {
+      return;
+    }
+    void mobileRefreshSession();
+  });
 }
 
 async function init() {
@@ -1358,8 +1557,10 @@ async function init() {
   try {
     await ensureAuthenticated();
     if (state.authenticated) {
+      mobileSessionEstablishedAtMs = Date.now();
+      startMobileSessionKeepAlive();
       await refreshPushState();
-      await loadAlerts();
+      await refreshMobileData();
     } else {
       setLoginStatus("Bitte anmelden, um Alerts zu laden.");
     }
