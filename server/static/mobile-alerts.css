@@ -217,16 +217,18 @@ body {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 6px 3px;
+  padding: 5px 2px 4px;
   text-align: center;
   min-width: 0;
 }
 
 .kpi strong {
   display: block;
-  font-size: 1.05rem;
-  font-weight: 800;
-  line-height: 1.1;
+  font-size: clamp(1.28rem, 5.2vw, 1.48rem);
+  font-weight: 900;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 .kpi span {

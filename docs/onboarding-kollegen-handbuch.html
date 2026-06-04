@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SYSTEM Infoboard – Technisches Onboarding-Handbuch</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #eef4fb;
+      --panel: rgba(255, 255, 255, 0.96);
+      --text: #1f2a3a;
+      --muted: #5a6c84;
+      --line: #cfdceb;
+      --accent: #2a5caa;
+      --accent-soft: #e8f0ff;
+      --ok: #1c7c54;
+      --warn: #b66a00;
+      --crit: #9f1239;
+      --code-bg: #0f172a;
+      --code-text: #dbeafe;
+      --mono: "IBM Plex Mono", "Consolas", monospace;
+      --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+      --shadow: 0 18px 44px rgba(31, 42, 58, 0.1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--text);
+      background: radial-gradient(circle at top left, rgba(42, 92, 170, 0.14), transparent 34%), var(--bg);
+      line-height: 1.55;
+    }
+    .layout {
+      width: min(1240px, calc(100% - 28px));
+      margin: 20px auto 56px;
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+    .toc {
+      position: sticky;
+      top: 16px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      font-size: 13px;
+    }
+    .toc h2 { font-size: 14px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+    .toc a {
+      display: block;
+      padding: 5px 0;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .toc a:hover { text-decoration: underline; }
+    .toc .sub { padding-left: 12px; font-weight: 500; color: var(--muted); font-size: 12px; }
+    main { display: grid; gap: 16px; min-width: 0; }
+    .hero, .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      padding: 22px 24px;
+      display: grid;
+      gap: 14px;
+    }
+    .eyebrow {
+      display: inline-flex;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      width: fit-content;
+    }
+    h1 { margin: 0; font-size: clamp(28px, 4vw, 40px); line-height: 1.1; }
+    h2 { margin: 0; font-size: 24px; }
+    h3 { margin: 0; font-size: 17px; }
+    p { margin: 0; color: var(--muted); }
+    .hero-grid, .two-col, .grid-3 { display: grid; gap: 14px; }
+    .hero-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+    .two-col { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .subcard {
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+      display: grid;
+      gap: 10px;
+    }
+    .subcard.ok { border-color: rgba(28, 124, 84, 0.28); background: linear-gradient(180deg, rgba(28,124,84,0.05), #fff); }
+    .subcard.warn { border-color: rgba(182, 106, 0, 0.3); background: linear-gradient(180deg, rgba(182,106,0,0.06), #fff); }
+    .subcard.crit { border-color: rgba(159, 18, 57, 0.28); background: linear-gradient(180deg, rgba(159,18,57,0.05), #fff); }
+    .tag {
+      display: inline-flex;
+      width: fit-content;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #eef4ff;
+      color: #1d4ed8;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    pre {
+      margin: 0;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: var(--code-bg);
+      color: var(--code-text);
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.5;
+      overflow: auto;
+      white-space: pre-wrap;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+    }
+    code { font-family: var(--mono); font-size: 0.92em; }
+    ul, ol { margin: 0; padding-left: 20px; color: var(--muted); display: grid; gap: 6px; }
+    li strong { color: var(--text); }
+    table { width: 100%; border-collapse: collapse; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; font-size: 13px; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e8eef5; vertical-align: top; }
+    th { background: #f4f8fd; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .callout {
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #f7fbff;
+      color: var(--muted);
+    }
+    .callout strong { color: var(--text); }
+    .mermaid-wrap {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 10px;
+      overflow-x: auto;
+    }
+    .figure {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+    }
+    .figure img, .figure iframe, .screenshot-slot {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+    }
+    .screenshot-slot {
+      min-height: 200px;
+      display: grid;
+      place-content: center;
+      text-align: center;
+      padding: 24px;
+      border-style: dashed;
+      border-width: 2px;
+      color: var(--muted);
+      font-size: 13px;
+      gap: 8px;
+    }
+    .screenshot-slot strong { color: var(--accent); }
+    figcaption { font-size: 12px; color: var(--muted); }
+    .checklist { list-style: none; padding: 0; }
+    .checklist li::before { content: "☐ "; font-weight: 700; color: var(--accent); }
+    .footer { font-size: 12px; color: var(--muted); }
+    @media (max-width: 960px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc { position: static; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav class="toc" aria-label="Inhaltsverzeichnis">
+      <h2>Inhalt</h2>
+      <a href="#einfuehrung">1. Einführung</a>
+      <a href="#architektur">2. Architektur</a>
+      <a href="#infoboard">3. Infoboard UI</a>
+      <a class="sub" href="#screenshots">3.1 Screenshots</a>
+      <a href="#windows">4. Windows-Agent</a>
+      <a href="#linux">5. Linux-Agent</a>
+      <a href="#hana">6. HANA (Linux)</a>
+      <a href="#sql-harvest">7. SQL Harvest (Windows)</a>
+      <a href="#nt-authority">8. NT AUTHORITY / DB-Größen</a>
+      <a href="#troubleshooting">9. Troubleshooting</a>
+      <a href="#referenzen">10. Weitere Docs</a>
+    </nav>
+
+    <main>
+      <section class="hero" id="einfuehrung">
+        <div class="eyebrow">Onboarding · Technisches Handbuch</div>
+        <h1>SYSTEM Infoboard – Betrieb &amp; Agent-Rollout</h1>
+        <p>Dieses Handbuch richtet sich an neue Kolleginnen und Kollegen im technischen Betrieb. Ziel: Linux- und Windows-Agents ausrollen, HANA- und SQL-Harvest konfigurieren, typische Infoboard-Funktionen nutzen und bekannte Stolpersteine (z.&nbsp;B. fehlende SQL-Datenbankgrößen) selbst beheben.</p>
+        <div class="callout"><strong>Screenshots:</strong> Die Abbildungen unten stammen aus der lokalen Instanz (<code>http://127.0.0.1:8080</code>) bzw. aus UI-Mockups mit echten Styles. Für Schulungen in Produktion können die PNG-Dateien unter <code>docs/assets/</code> durch Screenshots aus eurer Umgebung ersetzt werden.</div>
+        <div class="hero-grid">
+          <div class="subcard ok"><h3>Du kannst danach …</h3><ul><li>Windows- und Linux-Agents installieren und updaten</li><li><code>agent.conf</code> für HANA/SQL anpassen</li><li>SQL-Grants für <code>NT AUTHORITY\SYSTEM</code> setzen</li><li>Hosts, Alerts und Mobile-App bedienen</li></ul></div>
+          <div class="subcard warn"><h3>Wichtig</h3><p><strong>HANA-Abfragen (hdbsql) gibt es nur auf Linux.</strong> Windows liefert SAP B1 / SQL Server, nicht HANA-Memory-Schemas.</p></div>
+          <div class="subcard"><h3>Pfade</h3><ul><li>Infoboard-URL: z.&nbsp;B. <code>https://infoboard.ang-schweiz.ch</code></li><li>Updates: <code>{SERVER_URL}/updates</code></li><li>API-Upload: <code>POST /api/v1/agent-report</code></li></ul></div>
+        </div>
+      </section>
+
+      <section class="card" id="architektur">
+        <h2>2. Gesamtarchitektur</h2>
+        <div class="mermaid-wrap">
+          <div class="mermaid">
+flowchart TB
+  subgraph Hosts
+    WA[Windows Agent\nScheduled Task]
+    LA[Linux Agent\ncron.d]
+  end
+  subgraph Server
+    R[receiver.py\nInfoboard + API]
+    DB[(SQLite monitoring.db)]
+  end
+  subgraph Clients
+    UI[Web-UI / Desktop]
+    MOB[/mobile/alerts]
+  end
+  WA -->|POST agent-report| R
+  LA -->|POST agent-report| R
+  R --> DB
+  UI -->|Session + REST| R
+  MOB -->|Session + REST| R
+  R -->|Web Push| MOB
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="subcard">
+            <h3>Agent-Lebenszyklus</h3>
+            <div class="mermaid-wrap">
+              <div class="mermaid">
+flowchart LR
+  A[Collect] --> B{HTTP 202?}
+  B -->|Ja| C[Report in DB]
+  B -->|Nein| D[Queue *.json]
+  D --> E[Nächster Collect]
+  E --> A
+  C --> F[UI zeigt Host]
+              </div>
+            </div>
+          </div>
+          <div class="subcard">
+            <h3>Prüf-Checkliste nach Rollout</h3>
+            <ul class="checklist">
+              <li>Manuell: <code>collect</code> mit <code>--no-jitter</code> / <code>-NoJitter</code></li>
+              <li>Log: HTTP 202 oder <code>Payload queued</code></li>
+              <li>Infoboard: Host-Karte erscheint, „online“/letzte Meldung plausibel</li>
+              <li>Einzelmeldung: SAP/HANA/SQL-Abschnitte je nach OS</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="infoboard">
+        <h2>3. Infoboard – Standardfunktionen</h2>
+        <p>Die Weboberfläche ist in <strong>Übersicht</strong> (Host-Karten, Filter, KPIs) und <strong>Globale Ansichten</strong> (Alerts, Trends, inaktive Hosts, …) gegliedert. Rechtsklick auf Host-Karten öffnet Kontextaktionen (Update, Lizenz, Ein-/Ausblenden).</p>
+        <table>
+          <thead><tr><th>Bereich</th><th>Funktion</th><th>Typischer Use-Case</th></tr></thead>
+          <tbody>
+            <tr><td>Host-Übersicht</td><td>Karten mit Kunde, Status-Punkt, SAP/HANA-Chips</td><td>Schneller Gesundheitscheck aller Kunden</td></tr>
+            <tr><td>Host-Filter</td><td>Suche, OS, Land, Sortierung, Interessen</td><td>„Alle Prod-Server in DE, zuletzt gemeldet“</td></tr>
+            <tr><td>KPI-Leiste</td><td>Offen, Kritisch, Aktiv, Inaktiv, DB-KPIs</td><td>Lagebild ohne einzelne Hosts zu öffnen</td></tr>
+            <tr><td>Einzelmeldung</td><td>Report-Navigation, Metriken, DB, Journal</td><td>Detailanalyse eines Hosts</td></tr>
+            <tr><td>Globale Alerts</td><td>Quittieren, Stummschalten, Schließen</td><td>Alert-Arbeit ohne Host zu suchen</td></tr>
+            <tr><td>Remote Commands</td><td><code>update-now</code> an Agent</td><td>Skript-Update ohne SSH/RDP</td></tr>
+            <tr><td>Mobile</td><td><code>/mobile/alerts</code> + Push</td><td>Alerts unterwegs; Session-Keep-Alive ab 1.7.383</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="screenshots">3.1 UI-Abbildungen &amp; Screenshots</h3>
+        <p>Unten: eingebettetes <strong>UI-Mockup</strong> (statisch). Für Schulungsunterlagen echte Screenshots aus eurer Umgebung in die Platzhalter kopieren (PNG, max. 1200&nbsp;px breit).</p>
+
+        <figure class="figure">
+          <iframe src="/dashboard-redesign-mockup" title="Dashboard Mockup" height="480" loading="lazy"></iframe>
+          <figcaption>Interaktives Layout-Mockup (lokal nur wenn Infoboard-Server läuft). Sonst Datei <code>server/static/dashboard-redesign-mockup.html</code> im Browser öffnen.</figcaption>
+        </figure>
+
+        <div class="grid-3">
+          <figure class="figure">
+            <img src="/docs/assets/ui-host-overview.png" alt="Host-Übersicht mit KPI-Leiste und Host-Karten (Layout-Mockup)" width="1200" loading="lazy" />
+            <figcaption>Abb. 1 – Übersicht Hosts (Dashboard-Mockup, Stand lokal erzeugt)</figcaption>
+          </figure>
+          <figure class="figure">
+            <img src="/docs/assets/ui-databases.png" alt="SQL Server Diagnose mit Grant-Skript bei fehlenden DB-Größen" width="1200" loading="lazy" />
+            <figcaption>Abb. 2 – SQL-Diagnose / NT-AUTHORITY-Grant-Hinweis</figcaption>
+          </figure>
+          <figure class="figure">
+            <img src="/docs/assets/ui-mobile-alerts.png" alt="Mobile Alerts mit KPI-Zeile und Alert-Karten" width="430" loading="lazy" />
+            <figcaption>Abb. 3 – Mobile Alerts (UI-Mockup)</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="card" id="windows">
+        <h2>4. Windows-Agent ausrollen</h2>
+        <div class="section-head" style="display:flex;align-items:center;gap:12px;">
+          <img src="/icons/windows.png" alt="" width="48" height="48" style="border-radius:10px;border:1px solid var(--line);padding:6px;background:#fff;">
+        </div>
+        <div class="subcard">
+          <h3>Neuinstallation (empfohlen)</h3>
+          <pre>$tmp = "$env:TEMP\install_agent.ps1"
+Invoke-WebRequest -Uri 'https://infoboard.ang-schweiz.ch/updates/client/windows/install_agent.ps1' -UseBasicParsing -OutFile $tmp
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmp `
+  -ServerUrl 'https://infoboard.ang-schweiz.ch' `
+  -ApiKey 'IHR_API_KEY' `
+  -AgentId 'HOST01.domain.local' `
+  -DisplayName 'Kundenname Server' `
+  -IntervalMinutes 15 `
+  -UpdateHours 1</pre>
+        </div>
+        <table>
+          <thead><tr><th>Komponente</th><th>Pfad / Name</th></tr></thead>
+          <tbody>
+            <tr><td>Installation</td><td><code>C:\ProgramData\monitoring-agent</code></td></tr>
+            <tr><td>Konfiguration</td><td><code>C:\ProgramData\monitoring-agent\agent.conf</code></td></tr>
+            <tr><td>Collect-Task</td><td><code>monitoring-agent-collect</code> (SYSTEM, alle 15&nbsp;min)</td></tr>
+            <tr><td>Update-Task</td><td><code>monitoring-agent-update</code></td></tr>
+            <tr><td>Log Collect</td><td><code>C:\ProgramData\monitoring-agent\monitoring-agent.log</code></td></tr>
+            <tr><td>Queue</td><td><code>C:\ProgramData\monitoring-agent\queue\</code></td></tr>
+          </tbody>
+        </table>
+        <div class="two-col">
+          <div class="subcard">
+            <h3>Manueller Test</h3>
+            <pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  C:\ProgramData\monitoring-agent\collect_and_send.ps1 -NoJitter
+
+# Danach self_update testen:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  C:\ProgramData\monitoring-agent\self_update.ps1</pre>
+            <p>Interaktive PowerShell überspringt Jitter automatisch. Der geplante Task nutzt Jitter (Standard bis 300&nbsp;s) – Task-Zeitlimit im Aufgabenplaner prüfen (mind. 15&nbsp;min empfohlen).</p>
+          </div>
+          <div class="subcard warn">
+            <h3>Bootstrap / Reparatur</h3>
+            <pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  C:\ProgramData\monitoring-agent\bootstrap_agent.ps1 `
+  -ServerUrl 'https://infoboard.ang-schweiz.ch'</pre>
+            <p>Lädt fehlende Skripte von <code>/updates</code> nach. Collect-Task wird bei Install neu angelegt, nicht bei jedem <code>self_update</code> synchronisiert.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="linux">
+        <h2>5. Linux-Agent ausrollen</h2>
+        <img src="/icons/linux.png" alt="" width="48" height="48" style="border-radius:10px;border:1px solid var(--line);padding:6px;background:#fff;">
+        <div class="subcard">
+          <pre>curl -fsSL 'https://infoboard.ang-schweiz.ch/updates/client/linux/install_agent.sh' | sudo bash -s -- \
+  --server-url 'https://infoboard.ang-schweiz.ch' \
+  --api-key 'IHR_API_KEY' \
+  --agent-id 'host.domain.local' \
+  --display-name 'Kundenname Server' \
+  --interval-minutes 15 \
+  --update-hours 1</pre>
+        </div>
+        <table>
+          <thead><tr><th>Komponente</th><th>Pfad</th></tr></thead>
+          <tbody>
+            <tr><td>Skripte</td><td><code>/opt/monitoring-agent/</code></td></tr>
+            <tr><td>Config</td><td><code>/etc/monitoring-agent/agent.conf</code></td></tr>
+            <tr><td>Cron</td><td><code>/etc/cron.d/monitoring-agent</code></td></tr>
+            <tr><td>Log</td><td><code>/var/log/monitoring-agent.log</code></td></tr>
+            <tr><td>Queue</td><td><code>/var/lib/monitoring-agent/queue/</code></td></tr>
+          </tbody>
+        </table>
+        <div class="two-col">
+          <div class="subcard ok">
+            <h3>Manueller Test</h3>
+            <pre>sudo /opt/monitoring-agent/collect_and_send.sh --no-jitter
+sudo CONFIG_FILE=/etc/monitoring-agent/agent.conf \
+  /opt/monitoring-agent/self_update.sh</pre>
+          </div>
+          <div class="subcard warn">
+            <h3>Cron reparieren (ab Agent 1.7.381)</h3>
+            <pre>sudo CONFIG_FILE=/etc/monitoring-agent/agent.conf INSTALL_DIR=/opt/monitoring-agent \
+  REPAIR_CRON_SCHEDULE_ONLY=1 /opt/monitoring-agent/self_update.sh
+
+sudo cat /etc/cron.d/monitoring-agent</pre>
+            <p>Erste Zeile muss <code>SHELL=/bin/bash</code> sein – keine Schedule-Zeile mit <code>SHELL=</code> vermischen.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="hana">
+        <h2>6. HANA-Anpassungen (nur Linux)</h2>
+        <p>HANA-Daten (Version, AddOns, Schema-Memory) werden per <code>hdbsql</code> als User <code>&lt;SID&gt;adm</code> bzw. konfiguriertem DB-User geholt.</p>
+        <table>
+          <thead><tr><th>Schlüssel in agent.conf</th><th>Bedeutung</th><th>Default</th></tr></thead>
+          <tbody>
+            <tr><td><code>HANA_SID</code></td><td>SAP HANA System-ID</td><td>Auto aus <code>/hana/shared/&lt;SID&gt;</code></td></tr>
+            <tr><td><code>HANA_ADDONS_ENABLED</code></td><td>AddOn-Queries</td><td><code>1</code></td></tr>
+            <tr><td><code>HANA_ADDONS_USER</code></td><td>SQL-User für hdbsql</td><td><code>HARVEST</code></td></tr>
+            <tr><td><code>HANA_ADDONS_PASSWORD</code></td><td>Passwort</td><td>(projektspezifisch)</td></tr>
+            <tr><td><code>HANA_ADDONS_HOST</code></td><td>SQL Endpoint</td><td><code>127.0.0.1</code></td></tr>
+            <tr><td><code>HANA_ADDONS_PORT</code></td><td>Port (3xx15)</td><td><code>30015</code></td></tr>
+          </tbody>
+        </table>
+        <div class="subcard">
+          <h3>Typisches Vorgehen</h3>
+          <ol>
+            <li>SID prüfen: <code>ls /hana/shared</code> → z.&nbsp;B. <code>BUP</code></li>
+            <li>In <code>/etc/monitoring-agent/agent.conf</code> setzen: <code>HANA_SID="BUP"</code></li>
+            <li>DB-User <code>HARVEST</code> in HANA anlegen (SELECT auf SLDDATA/SBOCOMMON – siehe Agent-Queries in <a href="/docs/agent-deployment-guide">Deployment Guide</a>)</li>
+            <li><code>sudo /opt/monitoring-agent/repair_agent_conf.sh</code> oder <code>self_update.sh</code> für fehlende Keys</li>
+            <li>Collect mit <code>--no-jitter</code>, im Report HANA-Abschnitt prüfen</li>
+          </ol>
+        </div>
+        <div class="callout"><strong>Symptom:</strong> HANA leer, Rest OK → meist SID, Port, Firewall localhost, oder Rechte des HARVEST-Users. Log: <code>/var/log/monitoring-agent.log</code>.</div>
+      </section>
+
+      <section class="card" id="sql-harvest">
+        <h2>7. SQL Harvest User (Windows / SAP B1)</h2>
+        <p>Für Datenbankgrößen, Extensions und SARI-AddOns nutzt der Windows-Agent einen SQL-Login <code>harvest</code> (oder Windows-Auth über SYSTEM – siehe nächstes Kapitel).</p>
+        <div class="subcard">
+          <h3>Setup-Skript ausführen</h3>
+          <pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  C:\ProgramData\monitoring-agent\setup_harvest_sql_user.ps1</pre>
+          <p>Legt Login an, vergibt Server- und DB-Rechte (best effort), schreibt <code>HARVEST_SQL_*</code> in <code>agent.conf</code>.</p>
+        </div>
+        <table>
+          <thead><tr><th>agent.conf</th><th>Zweck</th></tr></thead>
+          <tbody>
+            <tr><td><code>HARVEST_SQL_SERVER</code></td><td>Instanz, z.&nbsp;B. <code>localhost</code> oder <code>.\SQLEXPRESS</code></td></tr>
+            <tr><td><code>HARVEST_SQL_USER</code> / <code>HARVEST_SQL_PASSWORD</code></td><td>SQL-Auth für Harvest-Queries</td></tr>
+            <tr><td><code>HARVEST_SETUP_SQL_ADMIN_USER</code></td><td>Optional: sa-ähnlicher Admin für GRANTs</td></tr>
+            <tr><td><code>HARVEST_SETUP_SQL_ADMIN_PASSWORD</code></td><td>Passwort zum Admin-Login</td></tr>
+            <tr><td><code>ENABLE_SAP_SCAN</code></td><td>SAP-Tabellen-Scan ein/aus</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card" id="nt-authority">
+        <h2>8. Fehlende Datenbankgrößen – Grant an NT AUTHORITY\SYSTEM</h2>
+        <div class="subcard crit">
+          <span class="tag">Häufiger SAP-B1-Fall</span>
+          <h3>Symptom</h3>
+          <ul>
+            <li>Im Infoboard unter <strong>Einzelmeldung → Datenbanken</strong> erscheint SQL-Instanz/Version, aber <strong>keine Größen</strong> oder leere Liste</li>
+            <li>Im Report steht unter Diagnose z.&nbsp;B. <code>SYSTEM_USER: NT AUTHORITY\SYSTEM</code></li>
+            <li><code>sys.master_files</code> liefert 0 Zeilen oder Verbindungsfehler</li>
+          </ul>
+        </div>
+        <p>Der Collect-Task läuft als <strong>SYSTEM</strong>. Für Größenabfragen braucht dieser Kontext Server-Rechte <code>VIEW SERVER STATE</code> und <code>VIEW ANY DEFINITION</code> (nicht nur der Harvest-SQL-User).</p>
+        <div class="subcard">
+          <h3>Diagnose im Infoboard</h3>
+          <p>In der DB-Karte aufklappen: <strong>SQL Authentifizierung (für Diag)</strong> – dort stehen <code>SYSTEM_USER</code>, <code>ORIGINAL_LOGIN</code>, <code>SUSER_SNAME</code>. Das vorgeschlagene Skript im UI an diese Werte anpassen.</p>
+        </div>
+        <div class="subcard">
+          <h3>SQL-Skript (Vorlage – Werte anpassen!)</h3>
+          <pre>-- 1) Windows-Logins anlegen (falls noch nicht vorhanden)
+IF SUSER_ID(N'NT AUTHORITY\SYSTEM') IS NULL
+    CREATE LOGIN [NT AUTHORITY\SYSTEM] FROM WINDOWS;
+
+-- Falls der Agent unter Maschinenkonto läuft (ORIGINAL_LOGIN aus Diagnose):
+-- IF SUSER_ID(N'IHRDOMAIN\IHRHOST$') IS NULL
+--     CREATE LOGIN [IHRDOMAIN\IHRHOST$] FROM WINDOWS;
+
+-- 2) Server-Rechte für Größenabfragen (master_files)
+GRANT VIEW SERVER STATE TO [NT AUTHORITY\SYSTEM];
+GRANT VIEW ANY DEFINITION TO [NT AUTHORITY\SYSTEM];
+
+-- Optional zweites Konto aus ORIGINAL_LOGIN:
+-- GRANT VIEW SERVER STATE TO [IHRDOMAIN\IHRHOST$];
+-- GRANT VIEW ANY DEFINITION TO [IHRDOMAIN\IHRHOST$];</pre>
+          <p>Auf deutschen Windows-Installationen heißt der Login im UI oft <code>NT-AUTORITÄT\SYSTEM</code> – im SQL-SSMS exakt den Namen aus <strong>SYSTEM_USER</strong> verwenden.</p>
+        </div>
+        <div class="two-col">
+          <div class="subcard ok">
+            <h3>Nach dem Grant</h3>
+            <ol>
+              <li>Als <code>sa</code> / Sysadmin ausführen</li>
+              <li><code>collect_and_send.ps1 -NoJitter</code></li>
+              <li>Neue Meldung im Infoboard: DB-Tabelle mit Größen (MB/GB)</li>
+            </ol>
+          </div>
+          <div class="subcard warn">
+            <h3>Wenn weiterhin leer</h3>
+            <ul>
+              <li>Harvest-User (<code>harvest</code>) separat mit <code>setup_harvest_sql_user.ps1</code> prüfen</li>
+              <li>SQL Browser / Instanzname in <code>HARVEST_SQL_SERVER</code></li>
+              <li>Firewall, Named Pipes vs. TCP</li>
+            </ul>
+          </div>
+        </div>
+        <figure class="figure">
+          <img src="/docs/assets/ui-databases.png" alt="Aufgeklappte SQL-Authentifizierung mit Grant-Skript" width="1200" loading="lazy" />
+          <figcaption>Abb. 4 – NT-AUTHORITY-Diagnose im UI (Beispielansicht)</figcaption>
+        </figure>
+      </section>
+
+      <section class="card" id="troubleshooting">
+        <h2>9. Troubleshooting-Matrix</h2>
+        <table>
+          <thead><tr><th>Symptom</th><th>Wahrscheinliche Ursache</th><th>Maßnahme</th></tr></thead>
+          <tbody>
+            <tr><td>Host fehlt im Infoboard</td><td>Kein erfolgreicher POST, falscher SERVER_URL/API_KEY</td><td>Manueller Collect, Log/Queue, curl Test zu <code>/api/v1/agent-report</code></td></tr>
+            <tr><td>Linux: Collect manuell OK, Cron nicht</td><td>Kaputte <code>/etc/cron.d/monitoring-agent</code></td><td>Cron-Datei reparieren (Kap. 5), <code>systemctl reload cron</code></td></tr>
+            <tr><td>Windows: manuell OK, Task nicht</td><td>Task-Timeout 5&nbsp;min + Jitter 300&nbsp;s</td><td>Zeitlimit erhöhen oder <code>SEND_JITTER_MAX_SEC</code> senken</td></tr>
+            <tr><td>Queue wächst</td><td>Netzwerk/TLS/401</td><td>API_KEY, Proxy, SERVER_URL prüfen</td></tr>
+            <tr><td>DB-Größen fehlen (Windows)</td><td>NT AUTHORITY ohne VIEW SERVER STATE</td><td>Kap. 8 – GRANTs</td></tr>
+            <tr><td>HANA leer (Linux)</td><td>SID/User/Port</td><td>Kap. 6, hdbsql als &lt;sid&gt;adm testen</td></tr>
+            <tr><td>Mobile: ständig Login</td><td>Session-Timeout 30&nbsp;min (alt)</td><td>Agent/Server ≥ 1.7.383, Keep-Alive aktiv</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card" id="referenzen">
+        <h2>10. Weitere Dokumentation</h2>
+        <div class="grid-3">
+          <div class="subcard">
+            <h3>Agent-Details</h3>
+            <ul>
+              <li><a href="/docs/agent-deployment-guide">Agent Deployment Guide</a> (Skripte, Payload, Endpoints)</li>
+              <li><code>AGENT_LINUX_TECHNICAL.md</code> / <code>AGENT_WINDOWS_TECHNICAL.md</code> im Repo</li>
+            </ul>
+          </div>
+          <div class="subcard">
+            <h3>Prozesse</h3>
+            <ul>
+              <li><a href="/docs/processes/">Prozessdokumente (HTML)</a></li>
+              <li>Alert-Routing, Datenholung, Self-Update E2E</li>
+            </ul>
+          </div>
+          <div class="subcard">
+            <h3>Mockups</h3>
+            <ul>
+              <li><a href="/dashboard-redesign-mockup">Dashboard-Mockup</a></li>
+              <li><a href="/mobile/alerts-mockup">Mobile-Alerts-Mockup</a> (falls Route aktiv)</li>
+            </ul>
+          </div>
+        </div>
+        <p class="footer">Stand: erzeugt aus Repository-Quellen (client/linux, client/windows, server/static). Bei Abweichungen in Produktion gilt der deployed Code auf dem Infoboard-Server.</p>
+      </section>
+    </main>
+  </div>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, securityLevel: "loose", theme: "default" });
+  </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Handbuch – SQL Grant Vorschau</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/dashboard-redesign.css" />
+  <style>
+    body { margin: 0; background: #f4f6f9; padding: 20px; font-family: "Segoe UI", sans-serif; }
+    .wrap { max-width: 920px; margin: 0 auto; }
+    .banner { font-size: 11px; color: #64748b; margin-bottom: 12px; padding: 8px 12px; background: #fff; border: 1px dashed #94a3b8; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="banner">Beispielansicht Einzelmeldung → Datenbanken (SQL Server, ohne DB-Größen – Grant-Diagnose)</p>
+    <section class="detail-card">
+      <h4>🗃️ SQL Server</h4>
+      <div class="db-instance-meta">
+        <span class="db-meta-item"><strong>Instanz:</strong> MSSQLSERVER</span>
+        <span class="db-meta-item"><strong>Version:</strong> 15.0.2000.5</span>
+        <span class="db-meta-item"><strong>Release:</strong> SQL Server 2019</span>
+        <span class="db-meta-item"><strong>Edition:</strong> Standard Edition (64-bit)</span>
+        <span class="db-meta-item"><strong>Dienst:</strong> <span class="db-status-badge db-status-ok">Running</span></span>
+      </div>
+      <p class="muted">Keine Datenbanken gefunden.</p>
+      <details class="db-diag-info db-diag-collapsible" open>
+        <summary class="db-diag-label">🔐 SQL Authentifizierung (für Diag):</summary>
+        <span class="db-diag-item"><strong>SYSTEM_USER:</strong> <code>NT AUTHORITY\SYSTEM</code></span>
+        <span class="db-diag-item"><strong>ORIGINAL_LOGIN:</strong> <code>NT AUTHORITY\SYSTEM</code></span>
+        <span class="db-diag-item"><strong>SUSER_SNAME:</strong> <code>NT AUTHORITY\SYSTEM</code></span>
+        <span class="db-diag-item"><strong>sys.master_files Zeilen:</strong> 0</span>
+        <p class="db-diag-snippet-label">SQL Script:</p>
+        <pre class="db-diag-sql"><code>-- 1) Logins anlegen (falls noch nicht vorhanden)
+IF SUSER_ID(N'NT-AUTORITÄT\SYSTEM') IS NULL
+    CREATE LOGIN [NT-AUTORITÄT\SYSTEM] FROM WINDOWS;
+
+IF SUSER_ID(N'AD\LMS-AP01$') IS NULL
+    CREATE LOGIN [AD\LMS-AP01$] FROM WINDOWS;
+
+-- 2) Benötigte Server-Rechte vergeben
+GRANT VIEW SERVER STATE TO [NT-AUTORITÄT\SYSTEM];
+GRANT VIEW ANY DEFINITION TO [NT-AUTORITÄT\SYSTEM];
+
+GRANT VIEW SERVER STATE TO [AD\LMS-AP01$];
+GRANT VIEW ANY DEFINITION TO [AD\LMS-AP01$];</code></pre>
+        <p class="count compact">Hinweis: Das Skript muss ggf. anhand der Diagnose-Werte angepasst werden. Basis: <code>AD\LMS-AP01$</code> durch den Wert in <strong>ORIGINAL_LOGIN</strong> ersetzen und <code>NT-AUTORITÄT\SYSTEM</code> durch den Wert in <strong>SYSTEM_USER</strong>.</p>
+      </details>
+    </section>
+  </div>
+</body>
+</html>

@@ -53,10 +53,14 @@ APP_LOGO_PATH = STATIC_DIR / "icons" / "logo.png"
 ANG_LOGO_PATH = STATIC_DIR / "icons" / "ANG.png"
 LINUX_LOGO_PATH = STATIC_DIR / "icons" / "linux.png"
 WINDOWS_LOGO_PATH = STATIC_DIR / "icons" / "windows.png"
-BUILD_VERSION_PATH = BASE_DIR.parent / "BUILD_VERSION"
-AGENT_VERSION_PATH = BASE_DIR.parent / "AGENT_VERSION"
-OPENAPI_SPEC_PATH = BASE_DIR.parent / "openapi.yaml"
-UPDATES_DIR = BASE_DIR.parent / "updates"
+REPO_ROOT = BASE_DIR.parent
+BUILD_VERSION_PATH = REPO_ROOT / "BUILD_VERSION"
+AGENT_VERSION_PATH = REPO_ROOT / "AGENT_VERSION"
+OPENAPI_SPEC_PATH = REPO_ROOT / "openapi.yaml"
+UPDATES_DIR = REPO_ROOT / "updates"
+DOCS_DIR = REPO_ROOT / "docs"
+DOCS_ASSETS_DIR = DOCS_DIR / "assets"
+DOCS_PROCESSES_DIR = DOCS_DIR / "processes"
 API_KEY = os.getenv("MONITORING_API_KEY", "")
 API_KEY_GRACE_ALLOW_KNOWN_HOSTS = os.getenv("MONITORING_API_KEY_GRACE_ALLOW_KNOWN_HOSTS", "1").strip().lower() in {"1", "true", "yes", "on"}
 REPORT_RETENTION_DAYS = max(1, int(os.getenv("MONITORING_REPORT_RETENTION_DAYS", "42")))
@@ -16524,6 +16528,76 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         except OSError:
             return False
 
+    @staticmethod
+    def _docs_content_type(path: Path) -> str:
+        suffix = path.suffix.lower()
+        return {
+            ".html": "text/html; charset=utf-8",
+            ".css": "text/css; charset=utf-8",
+            ".js": "application/javascript; charset=utf-8",
+            ".json": "application/json; charset=utf-8",
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".svg": "image/svg+xml",
+            ".md": "text/markdown; charset=utf-8",
+            ".yaml": "application/yaml; charset=utf-8",
+            ".yml": "application/yaml; charset=utf-8",
+        }.get(suffix, "application/octet-stream")
+
+    def _try_send_docs(self, request_path: str) -> bool:
+        """Serve repository documentation under /docs/. Returns True if handled."""
+        normalized = request_path.rstrip("/") or "/"
+        doc_aliases = {
+            "/docs/onboarding-handbuch": DOCS_DIR / "onboarding-kollegen-handbuch.html",
+            "/docs/onboarding-kollegen-handbuch": DOCS_DIR / "onboarding-kollegen-handbuch.html",
+            "/docs/agent-deployment-guide": REPO_ROOT / "agent-deployment-guide.html",
+        }
+        if normalized in doc_aliases:
+            self._send_file(
+                doc_aliases[normalized],
+                self._docs_content_type(doc_aliases[normalized]),
+                extra_headers={"Cache-Control": "no-store"},
+            )
+            return True
+
+        if normalized in {"/docs/processes", "/docs/processes/index.html"}:
+            index_path = DOCS_PROCESSES_DIR / "index.html"
+            if index_path.is_file():
+                self._send_file(index_path, "text/html; charset=utf-8", extra_headers={"Cache-Control": "no-store"})
+                return True
+            self.send_error(HTTPStatus.NOT_FOUND, "Not found")
+            return True
+
+        rel_raw = ""
+        base_dir: Path | None = None
+        if normalized.startswith("/docs/assets/"):
+            rel_raw = normalized[len("/docs/assets/") :].strip("/")
+            base_dir = DOCS_ASSETS_DIR
+        elif normalized.startswith("/docs/processes/"):
+            rel_raw = normalized[len("/docs/processes/") :].strip("/")
+            base_dir = DOCS_PROCESSES_DIR
+
+        if not base_dir or not rel_raw:
+            return False
+
+        rel_path = Path(rel_raw)
+        if rel_path.is_absolute() or ".." in rel_path.parts:
+            self.send_error(HTTPStatus.BAD_REQUEST, "Invalid path")
+            return True
+
+        file_path = base_dir / rel_path
+        if not (file_path.exists() and file_path.is_file()):
+            self.send_error(HTTPStatus.NOT_FOUND, "Not found")
+            return True
+
+        self._send_file(
+            file_path,
+            self._docs_content_type(file_path),
+            extra_headers={"Cache-Control": "no-store"},
+        )
+        return True
+
     def _send_index_with_asset_version(self) -> None:
         path = STATIC_DIR / "index.html"
         if not path.exists() or not path.is_file():
@@ -19143,6 +19217,9 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     ]
                 },
             )
+            return
+
+        if self._try_send_docs(parsed.path):
             return
 
         if parsed.path == "/":
