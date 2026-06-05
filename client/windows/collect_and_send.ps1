@@ -6,7 +6,7 @@
 
 .PARAMETER NoJitter
     Force skip startup jitter (optional; interactive console runs skip jitter automatically).
-    Aliases: -nojitter, --no-jitter, --nojitter (Linux-style).
+    Linux-style: --no-jitter / --nojitter via script args (see Resolve-CollectAndSendCliArgs).
     Scheduled/automated runs keep jitter unless this switch or MONITORING_NO_JITTER is set.
 
 .PARAMETER JitterMaxSec
@@ -15,19 +15,17 @@
 
 .PARAMETER DebugPayload
     Print JSON payload to stdout instead of sending it (useful for debugging).
-    Aliases: --debug-payload
+    Linux-style: --debug-payload via script args.
 #>
 [CmdletBinding()]
 param(
-    [Alias('nojitter')]
     [switch]$NoJitter,
-    [Alias('debugpayload')]
     [switch]$DebugPayload,
     [int]$JitterMaxSec = 0
 )
 
 # Bump when collect_and_send.ps1 logic changes (embedded in outgoing reports).
-$script:CollectScriptMarker = '20260605d'
+$script:CollectScriptMarker = '20260605e'
 
 function Get-MonitoringProcessAncestorNames {
     param([int]$MaxDepth = 12)
@@ -220,7 +218,7 @@ $QueueDir    = if ($env:AGENT_QUEUE_DIR)    { $env:AGENT_QUEUE_DIR }    else { '
 $QueueQuarantineDir = if ($env:AGENT_QUEUE_QUARANTINE_DIR) { $env:AGENT_QUEUE_QUARANTINE_DIR } else { 'C:\ProgramData\monitoring-agent\queue-quarantine' }
 $PayloadArchiveDir = if ($env:PAYLOAD_ARCHIVE_DIR) { $env:PAYLOAD_ARCHIVE_DIR } else { 'C:\ProgramData\monitoring-agent\payload-history' }
 $PayloadArchiveKeep = if ($env:PAYLOAD_ARCHIVE_KEEP -match '^\d+$') { [int]$env:PAYLOAD_ARCHIVE_KEEP } else { 4 }
-$EmbeddedAgentVersion = '1.7.385'
+$EmbeddedAgentVersion = '1.7.386'
 $PriorityUpdateMinutes = if ($env:PRIORITY_UPDATE_CHECK_MINUTES) { [int]$env:PRIORITY_UPDATE_CHECK_MINUTES } else { 60 }
 $PriorityUpdateStateFile = if ($env:PRIORITY_UPDATE_STATE_FILE) { $env:PRIORITY_UPDATE_STATE_FILE } else { 'C:\ProgramData\monitoring-agent\last_priority_update_check' }
 $UpdateLogFile = if ($env:UPDATE_LOG_FILE) { $env:UPDATE_LOG_FILE } else { 'C:\ProgramData\monitoring-agent\monitoring-agent-update.log' }
