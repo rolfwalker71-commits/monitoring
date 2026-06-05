@@ -97,7 +97,7 @@ const CHANGELOG_REBUILD_DAYS = 7;
 const CHANGELOG_MAINTENANCE_PANEL_OPEN_KEY = "monitoring.changelogMaintenancePanelOpen";
 let headerKpiWidthSyncFrameId = null;
 let headerKpiTrendPreviousValues = null;
-const LIVE_REPORT_FEED_MAX_ITEMS = 8;
+const LIVE_REPORT_FEED_MAX_ITEMS = 5;
 const LIVE_REPORT_FEED_POSITION_KEY = "monitoring.liveReportFeedPosition";
 const LIVE_REPORT_FEED_ENABLED_KEY = "monitoring.liveReportFeedEnabled";
 const LIVE_REPORT_POLL_INTERVAL_MS = 25000;
@@ -12831,23 +12831,7 @@ function toggleLiveReportFeedEnabled() {
   setLiveReportFeedEnabled(!liveReportFeedEnabled);
 }
 
-function renderLiveReportFeed() {
-  wireLiveReportFeed();
-  const panel = document.getElementById("liveReportFeed");
-  const body = document.getElementById("liveReportFeedBody");
-  const countEl = document.getElementById("liveReportFeedCount");
-  if (!panel || !body) {
-    return;
-  }
-  if (!liveReportFeedEnabled || liveReportFeedItems.length === 0) {
-    panel.classList.add("hidden");
-    return;
-  }
-  panel.classList.remove("hidden");
-  panel.classList.toggle("is-minimized", liveReportFeedMinimized);
-  if (countEl) {
-    countEl.textContent = `${liveReportFeedItems.length}`;
-  }
+function hydrateLiveReportFeedItemLogos() {
   for (const item of liveReportFeedItems) {
     if (!item.customerLogoUrl) {
       item.customerLogoUrl = resolveLiveReportCustomerLogoUrl(
@@ -12857,17 +12841,18 @@ function renderLiveReportFeed() {
       );
     }
   }
-  body.innerHTML = liveReportFeedItems.map((item) => {
-    const statsHtml = item.metricsText
-      ? `<span class="live-report-feed-stats">${escapeHtml(item.metricsText)}</span>`
-      : `<span class="live-report-feed-stats live-report-feed-stats--empty" aria-hidden="true"></span>`;
-    const customerLogoHtml = item.customerLogoUrl
-      ? `<span class="live-report-feed-customer-logo-wrap" aria-hidden="true">
-          <img src="${escapeHtml(item.customerLogoUrl)}" alt="" class="live-report-feed-customer-logo" loading="lazy" decoding="async" onerror="this.closest('.live-report-feed-customer-logo-wrap').style.display='none'">
-        </span>`
-      : "";
-    return `
-    <button type="button" class="live-report-feed-item${item.isNew ? " is-new" : ""}" data-live-feed-host="${escapeHtml(item.hostname)}" data-live-feed-uid="${escapeHtml(item.hostIdentity)}">
+}
+
+function buildLiveReportFeedItemInnerHtml(item) {
+  const statsHtml = item.metricsText
+    ? `<span class="live-report-feed-stats">${escapeHtml(item.metricsText)}</span>`
+    : `<span class="live-report-feed-stats live-report-feed-stats--empty" aria-hidden="true"></span>`;
+  const customerLogoHtml = item.customerLogoUrl
+    ? `<span class="live-report-feed-customer-logo-wrap" aria-hidden="true">
+        <img src="${escapeHtml(item.customerLogoUrl)}" alt="" class="live-report-feed-customer-logo" loading="lazy" decoding="async" onerror="this.closest('.live-report-feed-customer-logo-wrap').style.display='none'">
+      </span>`
+    : "";
+  return `
       <div class="live-report-feed-item-head">
         <span class="live-report-feed-customer-row">
           ${customerLogoHtml}
@@ -12885,12 +12870,163 @@ function renderLiveReportFeed() {
         ${statsHtml}
         <span class="${item.deliveryClass}">${escapeHtml(item.deliveryLabel)}</span>
       </div>
+  `;
+}
+
+function buildLiveReportFeedItemClassName(item, extraClasses = []) {
+  const classes = ["live-report-feed-item"];
+  if (item.isNew) {
+    classes.push("is-new");
+  }
+  for (const extraClass of extraClasses) {
+    if (extraClass) {
+      classes.push(extraClass);
+    }
+  }
+  return classes.join(" ");
+}
+
+function createLiveReportFeedItemElement(item, extraClasses = []) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = buildLiveReportFeedItemClassName(item, extraClasses);
+  button.dataset.liveFeedId = item.id;
+  button.dataset.liveFeedHost = item.hostname;
+  button.dataset.liveFeedUid = item.hostIdentity;
+  button.innerHTML = buildLiveReportFeedItemInnerHtml(item);
+  return button;
+}
+
+function renderLiveReportFeedStatic(body) {
+  body.innerHTML = liveReportFeedItems.map((item) => {
+    const extraClass = item.isNew ? " is-new" : "";
+    return `
+    <button type="button" class="live-report-feed-item${extraClass}" data-live-feed-id="${escapeHtml(item.id)}" data-live-feed-host="${escapeHtml(item.hostname)}" data-live-feed-uid="${escapeHtml(item.hostIdentity)}">
+      ${buildLiveReportFeedItemInnerHtml(item)}
     </button>
   `;
   }).join("");
   for (const item of liveReportFeedItems) {
     item.isNew = false;
   }
+}
+
+function animateLiveReportFeedDom(body) {
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (prefersReducedMotion) {
+    renderLiveReportFeedStatic(body);
+    return;
+  }
+
+  const previousRects = new Map();
+  body.querySelectorAll(".live-report-feed-item").forEach((element) => {
+    const itemId = String(element.dataset.liveFeedId || "");
+    if (itemId) {
+      previousRects.set(itemId, element.getBoundingClientRect());
+    }
+  });
+
+  const desiredIds = liveReportFeedItems.map((item) => item.id);
+  const existingElements = new Map();
+  body.querySelectorAll(".live-report-feed-item").forEach((element) => {
+    const itemId = String(element.dataset.liveFeedId || "");
+    if (itemId) {
+      existingElements.set(itemId, element);
+    }
+  });
+
+  for (const [itemId, element] of existingElements.entries()) {
+    if (!desiredIds.includes(itemId)) {
+      element.remove();
+    }
+  }
+
+  body.classList.add("is-animating");
+  for (let index = 0; index < liveReportFeedItems.length; index += 1) {
+    const item = liveReportFeedItems[index];
+    let element = existingElements.get(item.id);
+    const extraClasses = [];
+    if (!element) {
+      if (item.isNew) {
+        extraClasses.push("is-entering");
+      }
+      element = createLiveReportFeedItemElement(item, extraClasses);
+      body.insertBefore(element, body.children[index] || null);
+      continue;
+    }
+    if (item.isNew) {
+      element.classList.add("is-new");
+    }
+    if (body.children[index] !== element) {
+      body.insertBefore(element, body.children[index] || null);
+    }
+  }
+
+  window.requestAnimationFrame(() => {
+    body.querySelectorAll(".live-report-feed-item:not(.is-exiting)").forEach((element) => {
+      const itemId = String(element.dataset.liveFeedId || "");
+      const previousRect = previousRects.get(itemId);
+      if (!previousRect) {
+        return;
+      }
+      const nextRect = element.getBoundingClientRect();
+      const deltaY = previousRect.top - nextRect.top;
+      if (Math.abs(deltaY) < 1) {
+        return;
+      }
+      element.style.transform = `translateY(${deltaY}px)`;
+      element.style.transition = "none";
+      window.requestAnimationFrame(() => {
+        element.style.transition = "transform 0.38s cubic-bezier(0.22, 1, 0.36, 1)";
+        element.style.transform = "";
+      });
+    });
+
+    body.querySelectorAll(".live-report-feed-item.is-entering").forEach((element) => {
+      window.requestAnimationFrame(() => {
+        element.classList.remove("is-entering");
+      });
+    });
+
+    window.setTimeout(() => {
+      body.classList.remove("is-animating");
+      body.querySelectorAll(".live-report-feed-item").forEach((element) => {
+        element.style.transition = "";
+        element.style.transform = "";
+      });
+    }, 420);
+  });
+
+  for (const item of liveReportFeedItems) {
+    item.isNew = false;
+  }
+}
+
+function renderLiveReportFeed(options = {}) {
+  wireLiveReportFeed();
+  const panel = document.getElementById("liveReportFeed");
+  const body = document.getElementById("liveReportFeedBody");
+  const countEl = document.getElementById("liveReportFeedCount");
+  if (!panel || !body) {
+    return;
+  }
+  if (!liveReportFeedEnabled || liveReportFeedItems.length === 0) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  panel.classList.toggle("is-minimized", liveReportFeedMinimized);
+  if (countEl) {
+    countEl.textContent = `${liveReportFeedItems.length}`;
+  }
+  hydrateLiveReportFeedItemLogos();
+
+  const shouldAnimate = Boolean(options.animate) && body.childElementCount > 0;
+  if (shouldAnimate) {
+    animateLiveReportFeedDom(body);
+    return;
+  }
+  renderLiveReportFeedStatic(body);
 }
 
 function applyLiveReportFeedPosition() {
@@ -12945,7 +13081,7 @@ function enqueueLiveReportFeedFromEvents(events) {
     liveReportFeedItems = [preview, ...liveReportFeedItems.filter((item) => item.id !== preview.id)];
   }
   liveReportFeedItems = liveReportFeedItems.slice(0, LIVE_REPORT_FEED_MAX_ITEMS);
-  renderLiveReportFeed();
+  renderLiveReportFeed({ animate: true });
 }
 
 function stopLiveReportPoll() {
