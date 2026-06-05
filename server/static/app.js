@@ -6533,29 +6533,6 @@ function renderLargeFilesPanel(largeFiles, hiddenMountpoints = []) {
     .join("");
 }
 
-function resourceTroubleshootingHint(label, value, suffix) {
-  const v = Number(value?.current);
-  if (!Number.isFinite(v)) return "";
-  let hint = "";
-  if (label.includes("Swap") && v >= 50) {
-    hint = v >= 80
-      ? "Swap kritisch: Speicherleck möglich. Prüfe: <code>ps aux --sort=-%mem | head -10</code> — ggf. Dienst neu starten oder RAM erweitern."
-      : "Swap erhöht: RAM-Auslastung beobachten. Prüfe: <code>free -h</code> und speicherintensive Prozesse mit <code>top -o %MEM</code>.";
-  } else if (label.includes("RAM") && v >= 85) {
-    hint = v >= 95
-      ? "RAM kritisch: Sofort prüfen. <code>ps aux --sort=-%mem | head -10</code> — Dienst mit Leak neu starten."
-      : "RAM hoch: Prüfe mit <code>ps aux --sort=-%mem | head</code> welcher Prozess am meisten verbraucht.";
-  } else if (label.includes("CPU") && v >= 80) {
-    hint = v >= 95
-      ? "CPU kritisch: <code>top</code> oder <code>htop</code> — überlastenden Prozess identifizieren und Logs prüfen."
-      : "CPU hoch: Prüfe mit <code>top -o %CPU</code> welcher Prozess belastet. Cronjobs oder Backups als Ursache ausschliessen.";
-  } else if (label.includes("Load") && v >= 4) {
-    hint = "Load erhöht: Prüfe Prozessanzahl mit <code>ps aux | wc -l</code> und I/O-Last mit <code>iostat -x 1 5</code>.";
-  }
-  if (!hint) return "";
-  return `<span class="trend-hint">💡 ${hint}</span>`;
-}
-
 function aiSeverityLabel(value) {
   const normalized = String(value || "").toLowerCase();
   if (normalized === "critical") return "Kritisch";
@@ -6594,66 +6571,6 @@ function renderAiCodeBlocks(blocks) {
           <header><strong>${escapeHtml(title)}</strong><span>${escapeHtml(shell)}</span></header>
           ${description ? `<p>${escapeHtml(description)}</p>` : ""}
           <pre><code>${escapeHtml(command)}</code></pre>
-        </article>
-      `;
-    })
-    .join("");
-}
-
-function renderResourceTrendCards(resourceTrends, latestReportTimeUtc, swapTotalKb, memoryTotalKb) {
-  const standText = formatUtcPlus2(latestReportTimeUtc);
-  const entries = [
-    ["🧠 CPU", resourceTrends.cpu_usage_percent, "%", "cpu_usage_percent"],
-    ["📉 Load 1m", resourceTrends.load_avg_1, "", ""],
-    ["🧮 RAM", resourceTrends.memory_used_percent, "%", "memory_used_percent"],
-    ["💤 Swap", resourceTrends.swap_used_percent, "%", "swap_used_percent"],
-  ];
-
-  return entries
-    .map(([label, value, suffix, metricKey]) => {
-      if (!value) {
-        return `
-          <article class="trend-card muted">
-            <strong>${label}</strong>
-            <span>Keine Daten</span>
-          </article>
-        `;
-      }
-
-      const swapSizeLine = label.includes("Swap") && swapTotalKb != null && swapTotalKb > 0
-        ? `<span>Gesamt: ${formatKilobytes(swapTotalKb)}</span>`
-        : "";
-      const memorySizeLine = label.includes("RAM") && memoryTotalKb != null && memoryTotalKb > 0
-        ? `<span>Gesamt: ${formatKilobytes(memoryTotalKb)}</span>`
-        : "";
-
-      const aiButton = metricKey
-        ? `<button class="btn-secondary btn-secondary--compact trend-ai-btn" type="button" data-ai-metric="${escapeHtml(metricKey)}" data-ai-label="${escapeHtml(label)}">🤖 KI Analyse</button>`
-        : "";
-
-      const pct = suffix === "%" ? Math.min(100, Math.max(0, Number(value.current) || 0)) : null;
-      const barColor = pct === null ? null
-        : pct >= 90 ? "#ef4444"
-        : pct >= 70 ? "#f59e0b"
-        : "#22c55e";
-      const progressBar = pct !== null
-        ? `<div class="trend-progress-bar"><div class="trend-progress-fill" style="width:${pct}%;background:${barColor};"></div></div>`
-        : "";
-
-      return `
-        <article class="trend-card">
-          <div class="trend-card-head">
-            <strong>${label}</strong>
-            ${aiButton}
-          </div>
-          <span class="trend-current">Aktuell: ${formatNumber(value.current)}${suffix} <span class="trend-stand">(${standText})</span></span>
-          ${progressBar}
-          <span>Min/Max: ${formatNumber(value.min)}${suffix} / ${formatNumber(value.max)}${suffix}</span>
-          <span>Avg: ${formatNumber(value.avg)}${suffix}</span>
-          <span>Delta: ${formatSignedPercent(value.delta)}${suffix === "%" ? "" : ""}</span>
-          ${memorySizeLine}
-          ${swapSizeLine}
-          ${resourceTroubleshootingHint(label, value, suffix)}
         </article>
       `;
     })
@@ -13521,7 +13438,6 @@ async function loadAnalysisForHost() {
   const resourceCharts = document.getElementById("resourceCharts");
   const filesystemStats = document.getElementById("filesystemStats");
   const filesystemCharts = document.getElementById("filesystemCharts");
-  const resourceTrendCards = document.getElementById("resourceTrendCards");
   const largeFilesPanel = document.getElementById("largeFilesPanel");
   const largeFilesBody = document.getElementById("largeFilesBody");
 
@@ -13536,7 +13452,6 @@ async function loadAnalysisForHost() {
     resourceCharts.innerHTML = "";
     filesystemStats.textContent = "";
     filesystemCharts.innerHTML = "";
-    resourceTrendCards.innerHTML = "";
     if (largeFilesPanel) largeFilesPanel.classList.add("hidden");
     if (largeFilesBody) largeFilesBody.innerHTML = "";
     analysisRows.innerHTML = state.hostFilterNoMatches
@@ -13551,7 +13466,6 @@ async function loadAnalysisForHost() {
   analysisRows.innerHTML = "<tr><td colspan=\"7\" class=\"muted\">Lade Analyse...</td></tr>";
   resourceCharts.innerHTML = "";
   filesystemCharts.innerHTML = "";
-  resourceTrendCards.innerHTML = "";
   if (largeFilesPanel) largeFilesPanel.classList.add("hidden");
   if (largeFilesBody) largeFilesBody.innerHTML = "";
   analysisSummary.textContent = "";
@@ -13583,19 +13497,12 @@ async function loadAnalysisForHost() {
     const visibleTrendRows = filterFilesystemTrendsByVisibility(trendRows, state.fsFocusHiddenMountpoints);
     const chartEligibleRows = visibleTrendRows.filter((row) => shouldShowFilesystemGraph(row?.mountpoint));
     const sortedTrendRows = sortFilesystemByMountpointAscending(chartEligibleRows);
-    const resourceTrends = data.resource_trends || {};
     const resourceSeries = data.resource_series || {};
     const latestMax = formatPercent(data.latest_max_used_percent);
     const reportCount = Number(data.report_count || 0).toLocaleString("de-DE");
 
     analysisSummary.textContent = `${reportCount} Reports, hoechste aktuelle FS-Auslastung: ${latestMax}`;
     resourceCharts.innerHTML = renderResourceCharts(resourceSeries, data.latest_report_time_utc);
-    resourceTrendCards.innerHTML = renderResourceTrendCards(
-      resourceTrends,
-      data.latest_report_time_utc,
-      data.latest_swap_total_kb,
-      data.latest_memory_total_kb,
-    );
     filesystemCharts.innerHTML = renderFilesystemTrendCharts(sortedTrendRows, data.latest_report_time_utc);
     renderLargeFilesPanel(data.large_files || {}, state.largeFilesHiddenMountpoints);
 
@@ -16667,24 +16574,6 @@ function wireEvents() {
   if (aiModalBackdrop) {
     aiModalBackdrop.addEventListener("click", () => {
       closeAiTroubleshootModal();
-    });
-  }
-
-  const resourceTrendCards = document.getElementById("resourceTrendCards");
-  if (resourceTrendCards) {
-    resourceTrendCards.addEventListener("click", async (event) => {
-      const button = event.target instanceof Element ? event.target.closest(".trend-ai-btn") : null;
-      if (!button) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      const metricKey = String(button.getAttribute("data-ai-metric") || "").trim();
-      const metricLabel = String(button.getAttribute("data-ai-label") || metricKey || "Metrik");
-      if (!metricKey) {
-        return;
-      }
-      await openAiTroubleshootModal(metricKey, metricLabel);
     });
   }
 
