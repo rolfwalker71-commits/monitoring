@@ -11097,10 +11097,11 @@ function renderOverviewHostMetrics() {
     } else if (options.truncate) {
       valueHtml = renderTruncatedTextHtml(value);
     }
+    const valueClass = options.nowrap ? " metric-value--nowrap" : "";
     return `
     <div class="metric-row">
       <span class="metric-label">${escapeHtml(label)}</span>
-      <span class="metric-value">${valueHtml}</span>
+      <span class="metric-value${valueClass}">${valueHtml}</span>
     </div>
   `;
   };
@@ -11115,41 +11116,43 @@ function renderOverviewHostMetrics() {
     </div>
   `;
 
+  const hostIdentityRows = [
+    metricRow("Kunde", customerLabel, { truncate: true }),
+    metricRow("Bezeichnung", displayLabel, { truncate: true }),
+    metricRow("Hostname", hostname, { truncate: "hostname", truncateMaxLen: 36 }),
+    metricRow("Host-UID", hostUid, { truncate: "uid" }),
+    metricRow("Land", countryCode),
+    metricRow("Umgebung", envLabel),
+    customerProject ? metricRow("Projekt", customerProject) : "",
+    metricRow("Meldungen", totalReports),
+    metricRow("Agent ID", report?.agent_id || payload.agent_id || "-", { truncate: "hostname", truncateMaxLen: 36 }),
+    metricRow("Version", payload.agent_version || host.agent_version || "-"),
+    metricRow("API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config)),
+    metricRow("Queue", `${queueDepthLabel(payload.queue_depth)} Dateien`),
+  ].filter(Boolean).join("");
+
+  const systemNetworkRows = [
+    metricRow("OS", payload.os || host.os || "-"),
+    metricRow("Kernel", payload.kernel || "-"),
+    metricRow("Uptime", formatUptime(payload.uptime_seconds)),
+    metricRow("Architektur", payload.architecture || payload.arch || "-"),
+    metricRow("Primary IP", primaryIp, { nowrap: true }),
+    metricRow("Std. NIC IP", stdNicIp, { nowrap: true }),
+    metricRow("Default NIC", network.default_interface || "-"),
+    metricRow("Gateway", network.default_gateway || "-", { nowrap: true }),
+    metricRow("DNS", Array.isArray(network.dns_servers) ? network.dns_servers.filter(Boolean).join(", ") || "-" : asText(network.dns_servers, "-"), { nowrap: true }),
+  ].join("");
+
   container.innerHTML = `
     ${sapChipsHtml}
     <div class="overview-metrics-grid">
       <article class="metric-card">
-        <h4>Host &amp; Identität</h4>
-        ${metricRow("Kunde", customerLabel, { truncate: true })}
-        ${metricRow("Bezeichnung", displayLabel, { truncate: true })}
-        ${metricRow("Hostname", hostname, { truncate: "hostname", truncateMaxLen: 22 })}
-        ${metricRow("Host-UID", hostUid, { truncate: "uid" })}
-        ${metricRow("Land", countryCode)}
-        ${metricRow("Umgebung", envLabel)}
-        ${customerProject ? metricRow("Projekt", customerProject) : ""}
-        ${metricRow("Meldungen", totalReports)}
+        <h4>Host &amp; Agent</h4>
+        ${hostIdentityRows}
       </article>
       <article class="metric-card">
-        <h4>Agent</h4>
-        ${metricRow("Agent ID", report?.agent_id || payload.agent_id || "-", { truncate: "hostname", truncateMaxLen: 22 })}
-        ${metricRow("Version", payload.agent_version || host.agent_version || "-")}
-        ${metricRow("API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}
-        ${metricRow("Queue", `${queueDepthLabel(payload.queue_depth)} Dateien`)}
-      </article>
-      <article class="metric-card">
-        <h4>System</h4>
-        ${metricRow("OS", payload.os || host.os || "-")}
-        ${metricRow("Kernel", payload.kernel || "-")}
-        ${metricRow("Uptime", formatUptime(payload.uptime_seconds))}
-        ${metricRow("Architektur", payload.architecture || payload.arch || "-")}
-      </article>
-      <article class="metric-card">
-        <h4>Netzwerk</h4>
-        ${metricRow("Primary IP", primaryIp)}
-        ${metricRow("Std. NIC IP", stdNicIp)}
-        ${metricRow("Default NIC", network.default_interface || "-")}
-        ${metricRow("Gateway", network.default_gateway || "-")}
-        ${metricRow("DNS", Array.isArray(network.dns_servers) ? network.dns_servers.filter(Boolean).join(", ") || "-" : asText(network.dns_servers, "-"))}
+        <h4>System &amp; Netzwerk</h4>
+        ${systemNetworkRows}
       </article>
       <article class="metric-card metric-card--wide">
         <h4>Ressourcen (aktuell)</h4>
@@ -18120,18 +18123,21 @@ function truncateDisplayText(value, options = {}) {
 }
 
 function truncateHostnameForDisplay(hostname, options = {}) {
-  const full = asText(hostname, "");
+  const full = asText(hostname, "").trim();
   if (!full || full === "-") {
     return { display: "-", full: "", truncated: false };
   }
   const maxLen = Number(options.maxLen) > 0 ? Number(options.maxLen) : 22;
-  if (full.length <= maxLen) {
-    return { display: full, full, truncated: false };
-  }
   const parts = full.split(".").filter(Boolean);
+  // FQDN immer als Erster…Letzter-Label kuerzen (auch unter maxLen – sonst bricht CSS unschoen ab).
   if (parts.length >= 2) {
     const display = `${parts[0]}…${parts[parts.length - 1]}`;
-    return { display, full, truncated: true };
+    if (display !== full) {
+      return { display, full, truncated: true };
+    }
+  }
+  if (full.length <= maxLen) {
+    return { display: full, full, truncated: false };
   }
   const headLen = Math.min(14, Math.max(8, Math.floor(maxLen * 0.55)));
   const tailLen = Math.max(6, maxLen - headLen - 1);
