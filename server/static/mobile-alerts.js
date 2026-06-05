@@ -61,8 +61,11 @@ async function mobileRefreshSession() {
     if (data.username) {
       state.username = String(data.username || state.username);
     }
-    if (data.username || data.display_name) {
-      state.userDisplayName = resolveUserDisplayName(data);
+    // Refresh liefert display_name erst ab neuerer Server-Version; ohne Feld den
+    // bereits aus /api/v1/session geladenen Anzeigenamen nicht überschreiben.
+    if (Object.prototype.hasOwnProperty.call(data, "display_name")) {
+      const displayName = String(data.display_name || "").trim();
+      state.userDisplayName = displayName || state.username;
       updateUserLine();
     }
     return true;
