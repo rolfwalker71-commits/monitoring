@@ -9,10 +9,10 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260605e"
+PULL_SCRIPT_VERSION="20260605f"
 # Bump when FILES_LIST changes (must match script_guardian entries).
-PULL_FILES_MANIFEST="guardian-32-v1"
-PULL_FILES_EXPECTED_COUNT=32
+PULL_FILES_MANIFEST="guardian-33-v1"
+PULL_FILES_EXPECTED_COUNT=33
 _DEPLOY_MAIN_SHA_CACHED=""
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
@@ -1409,7 +1409,7 @@ resolve_deploy_ref() {
 
 reexec_if_pull_script_missing_guardian_files "$@"
 
-echo "pull-server-only.sh Version: $PULL_SCRIPT_VERSION (Manifest: ${PULL_FILES_MANIFEST:-?}, erwartet 32 Deploy-Dateien)"
+echo "pull-server-only.sh Version: $PULL_SCRIPT_VERSION (Manifest: ${PULL_FILES_MANIFEST:-?}, erwartet 33 Deploy-Dateien)"
 echo "Installiere Serverteil nach: $TARGET_DIR"
 echo "Hinweis: Ein Lauf genuegt – bei CDN-Verzoegerung wird BUILD_VERSION automatisch nachgezogen." >&2
 
@@ -1434,7 +1434,7 @@ echo "Starte Deploy (Ref wird ermittelt) ..."
 VERIFY_SYNC="${VERIFY_SYNC:-0}"
 MAX_PARALLEL_DOWNLOADS="${MAX_PARALLEL_DOWNLOADS:-8}"
 
-mkdir -p "$TARGET_DIR/server/static/icons" "$TARGET_DIR/server/data" "$TARGET_DIR/updates/client/windows" "$TARGET_DIR/updates/client/linux"
+mkdir -p "$TARGET_DIR/server/static/icons" "$TARGET_DIR/server/static/vendor" "$TARGET_DIR/server/data" "$TARGET_DIR/updates/client/windows" "$TARGET_DIR/updates/client/linux"
 
 GITHUB_COMMIT_TIME=""
 resolve_deploy_ref
@@ -1581,6 +1581,7 @@ server/static/mobile-common.js
 server/static/mobile-alerts.html
 server/static/mobile-alerts.css
 server/static/mobile-alerts.js
+server/static/vendor/html2canvas.min.js
 server/static/mobile-alerts-mockup.html
 server/static/icons/sap.png
 BUILD_VERSION

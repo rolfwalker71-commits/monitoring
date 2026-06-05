@@ -19400,6 +19400,18 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if parsed.path == "/vendor/html2canvas.min.js":
+            self._send_file(
+                STATIC_DIR / "vendor" / "html2canvas.min.js",
+                "application/javascript; charset=utf-8",
+                extra_headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
+            return
+
         if parsed.path == "/app.js":
             self._send_file(
                 STATIC_DIR / "app.js",

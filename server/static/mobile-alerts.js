@@ -2251,6 +2251,178 @@ function buildMountpointLine(item) {
   return mobileEsc(String(item.mountpoint || "-").trim() || "-");
 }
 
+let html2canvasLoadPromise = null;
+
+function loadHtml2Canvas() {
+  if (window.html2canvas) {
+    return Promise.resolve(window.html2canvas);
+  }
+  if (!html2canvasLoadPromise) {
+    html2canvasLoadPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "/vendor/html2canvas.min.js";
+      script.async = true;
+      script.onload = () => {
+        if (window.html2canvas) {
+          resolve(window.html2canvas);
+          return;
+        }
+        reject(new Error("html2canvas nicht verfügbar"));
+      };
+      script.onerror = () => reject(new Error("html2canvas konnte nicht geladen werden"));
+      document.head.appendChild(script);
+    });
+  }
+  return html2canvasLoadPromise;
+}
+
+function syncClonedImages(source, clone) {
+  const sourceImgs = source.querySelectorAll("img");
+  const cloneImgs = clone.querySelectorAll("img");
+  cloneImgs.forEach((cloneImg, index) => {
+    const sourceImg = sourceImgs[index];
+    if (!sourceImg) return;
+    const src = sourceImg.currentSrc || sourceImg.src || sourceImg.getAttribute("data-src") || "";
+    if (!src) return;
+    cloneImg.src = src;
+    cloneImg.removeAttribute("data-src");
+    cloneImg.classList.remove("is-hidden", "hidden");
+    cloneImg.style.display = "";
+    cloneImg.crossOrigin = "anonymous";
+  });
+}
+
+function waitForShareImages(root, timeoutMs = 4500) {
+  const imgs = Array.from(root.querySelectorAll("img")).filter((img) => String(img.src || "").trim());
+  if (!imgs.length) return Promise.resolve();
+  return Promise.all(
+    imgs.map(
+      (img) =>
+        new Promise((resolve) => {
+          if (img.complete && img.naturalWidth > 0) {
+            resolve();
+            return;
+          }
+          const done = () => resolve();
+          img.addEventListener("load", done, { once: true });
+          img.addEventListener("error", done, { once: true });
+          window.setTimeout(done, timeoutMs);
+        })
+    )
+  );
+}
+
+function buildAlertShareCaptureElement(sourceCard, item) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "mobile-share-capture";
+
+  const cardClone = sourceCard.cloneNode(true);
+  cardClone.classList.remove("alert-card-highlight", "is-expanded");
+  cardClone.querySelectorAll(".alert-card-actions, .alert-card-headsup, .alert-more").forEach((el) => el.remove());
+  setUsageBarFinalValue(cardClone);
+  syncClonedImages(sourceCard, cardClone);
+
+  const detail = document.createElement("section");
+  detail.className = "alert-detail-panel mobile-share-capture-detail";
+  detail.innerHTML = buildAlertDetailHtml(item);
+
+  const cardWidth = Math.max(280, Math.round(sourceCard.getBoundingClientRect().width || 0));
+  wrapper.style.width = cardWidth + "px";
+  wrapper.appendChild(cardClone);
+  wrapper.appendChild(detail);
+  return wrapper;
+}
+
+function buildAlertShareText(item) {
+  const customer = String(item.customer_name || "").trim();
+  const hostLabel = String(item.display_name || item.hostname || "-").trim();
+  const hostname = String(item.hostname || "").trim();
+  const mount = String(item.mountpoint || "-").trim();
+  const percent = usagePercentForBar(item).toFixed(1);
+  const lines = [
+    "SYSTEM Infoboard Alert #" + String(item.id || ""),
+    "Severity: " + String(item.severity || "").toUpperCase(),
+  ];
+  if (customer) lines.push("Kunde: " + customer);
+  lines.push("Host: " + hostLabel);
+  if (hostname && hostname !== hostLabel) lines.push("Hostname: " + hostname);
+  lines.push("Mountpoint: " + mount);
+  lines.push("Aktuell: " + percent + "%");
+  return lines.join("\n");
+}
+
+function downloadShareBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+async function shareAlertCard(card) {
+  const item = resolveAlertFromCard(card);
+  if (!item || !card) return;
+
+  showToast("Bild wird erstellt…", false);
+
+  const captureRoot = document.getElementById("mobileShareCaptureRoot");
+  if (!captureRoot) {
+    showToast("Teilen nicht verfügbar.", true);
+    return;
+  }
+
+  try {
+    const html2canvas = await loadHtml2Canvas();
+    const wrapper = buildAlertShareCaptureElement(card, item);
+    captureRoot.innerHTML = "";
+    captureRoot.appendChild(wrapper);
+    await waitForShareImages(wrapper);
+
+    const canvas = await html2canvas(wrapper, {
+      backgroundColor: "#ffffff",
+      scale: Math.min(2, Math.max(1.5, window.devicePixelRatio || 1.5)),
+      useCORS: true,
+      logging: false,
+    });
+    captureRoot.innerHTML = "";
+
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((value) => {
+        if (value) resolve(value);
+        else reject(new Error("PNG-Erstellung fehlgeschlagen"));
+      }, "image/png", 0.95);
+    });
+
+    const alertId = Number(item.id || 0);
+    const filename = "system-infoboard-alert-" + (alertId || "share") + ".png";
+    const file = new File([blob], filename, { type: "image/png" });
+    const title = "SYSTEM Infoboard · Alert #" + (alertId || "");
+
+    if (navigator.share) {
+      const sharePayload = { files: [file], title };
+      if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+        await navigator.share(sharePayload);
+        showToast("Geteilt.", false);
+        return;
+      }
+      await navigator.share({ title, text: buildAlertShareText(item) });
+      showToast("Als Text geteilt.", false);
+      return;
+    }
+
+    downloadShareBlob(blob, filename);
+    showToast("Bild gespeichert.", false);
+  } catch (error) {
+    captureRoot.innerHTML = "";
+    if (error?.name === "AbortError") return;
+    showToast("Teilen fehlgeschlagen: " + (error?.message || String(error)), true);
+  }
+}
+
 function cancelUsageBarAnimation(card) {
   if (!card) return;
   const animState = usageBarAnimStates.get(card);
@@ -2538,6 +2710,7 @@ function renderAlerts(items) {
       '      <strong class="usage-bar-counter" data-target-percent="' + barWidth + '">0.0%</strong>' +
       "    </div></div>" +
       '  <div class="alert-card-actions">' + ackBtn +
+      '    <button type="button" class="btn-secondary btn-share" data-action="share" title="Teilen" aria-label="Alert teilen">Teilen</button>' +
       '    <button type="button" class="btn-secondary btn-expand" data-action="toggle-more">Mehr</button>' +
       "  </div>" +
       '  <div class="alert-card-headsup">' + buildHeadsUpActionButton(item) + "</div>" +
@@ -2693,6 +2866,11 @@ async function handleAlertsListClick(event) {
   if (action === "toggle-more") {
     const expanded = card.classList.toggle("is-expanded");
     btn.textContent = expanded ? "weniger" : "Mehr";
+    return;
+  }
+
+  if (action === "share") {
+    void shareAlertCard(card);
     return;
   }
 

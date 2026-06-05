@@ -1160,10 +1160,16 @@ body {
 
 .alert-card-actions {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 6px;
   margin-top: 4px;
   margin-bottom: 0;
+}
+
+.btn-share {
+  min-width: 64px;
+  padding-left: 10px;
+  padding-right: 10px;
 }
 
 .btn-primary {
@@ -2548,4 +2554,29 @@ body.host-insight-open {
       0 4px 10px rgba(0, 0, 0, 0.32),
       0 8px 16px rgba(0, 0, 0, 0.24);
   }
+}
+
+.mobile-share-capture-root {
+  position: fixed;
+  left: -12000px;
+  top: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.mobile-share-capture {
+  width: min(88vw, 392px);
+  background: #ffffff;
+  color: #143047;
+  font-family: Manrope, "Segoe UI", sans-serif;
+}
+
+.mobile-share-capture .alert-card {
+  margin: 0;
+}
+
+.mobile-share-capture-detail {
+  display: block !important;
+  margin: 10px 0 0;
 }
