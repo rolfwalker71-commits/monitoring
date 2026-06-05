@@ -1132,6 +1132,80 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
   color: #93c5fd !important;
 }
 
+/* Systemübersicht: stabile Toolbar ohne Sprung beim Tippen */
+#systemOverviewView .inactive-hosts-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, max-content) minmax(200px, 260px) repeat(4, max-content);
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+#systemOverviewView #systemOverviewStats {
+  grid-column: 1;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+#systemOverviewView #systemOverviewCountryFilter {
+  grid-column: 2;
+  min-width: 0;
+}
+
+#systemOverviewView #systemOverviewSearchInput {
+  grid-column: 3;
+  width: 100%;
+  max-width: none;
+  min-width: 200px;
+  flex: unset;
+}
+
+#systemOverviewView #toggleSystemOverviewSortModeButton {
+  grid-column: 4;
+}
+
+#systemOverviewView #toggleSystemOverviewAddonsButton {
+  grid-column: 5;
+}
+
+#systemOverviewView #expandAllSystemOverviewButton {
+  grid-column: 6;
+}
+
+#systemOverviewView #refreshSystemOverviewButton {
+  grid-column: 7;
+}
+
+@media (max-width: 1180px) {
+  #systemOverviewView .inactive-hosts-toolbar {
+    grid-template-columns: minmax(0, max-content) minmax(0, max-content) minmax(180px, 1fr);
+    grid-template-rows: auto auto;
+  }
+
+  #systemOverviewView #systemOverviewStats {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  #systemOverviewView #systemOverviewCountryFilter {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  #systemOverviewView #systemOverviewSearchInput {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+
+  #systemOverviewView #toggleSystemOverviewSortModeButton,
+  #systemOverviewView #toggleSystemOverviewAddonsButton,
+  #systemOverviewView #expandAllSystemOverviewButton,
+  #systemOverviewView #refreshSystemOverviewButton {
+    grid-row: 1;
+  }
+}
+
 /* Brand header: account card + compact toggle column */
 .brand-user-controls {
   display: flex;

@@ -87,6 +87,7 @@ let autoRefreshCountdownTimerId = null;
 let sessionRefreshTimerId = null;
 let sessionCountdownTimerId = null;
 let hostSearchFilterDebounceTimerId = null;
+let systemOverviewSearchDebounceTimerId = null;
 let hostLicenseHoverPopupEl = null;
 let hostLicenseHoverActiveHost = "";
 let hostLicenseHoverPinnedKey = "";
@@ -17446,9 +17447,15 @@ function wireEvents() {
   }
   const systemOverviewSearchInput = document.getElementById("systemOverviewSearchInput");
   if (systemOverviewSearchInput) {
-    systemOverviewSearchInput.addEventListener("input", async () => {
-      state.systemOverviewSearchQuery = String(systemOverviewSearchInput.value || "").trim();
-      await loadSystemOverview();
+    systemOverviewSearchInput.addEventListener("input", () => {
+      state.systemOverviewSearchQuery = String(systemOverviewSearchInput.value || "");
+      if (systemOverviewSearchDebounceTimerId !== null) {
+        window.clearTimeout(systemOverviewSearchDebounceTimerId);
+      }
+      systemOverviewSearchDebounceTimerId = window.setTimeout(() => {
+        systemOverviewSearchDebounceTimerId = null;
+        void loadSystemOverview();
+      }, 280);
     });
   }
   const hostConfigChangesTabButton = document.getElementById("hostConfigChangesTabButton");
@@ -19273,12 +19280,23 @@ function renderSystemOverviewCountryFilter(countryCodes) {
 
   if (!normalized.length) {
     filterEl.innerHTML = "";
+    filterEl.dataset.signature = "";
     return;
   }
 
   if (state.systemOverviewCountryFilter !== "all" && !normalized.includes(state.systemOverviewCountryFilter)) {
     state.systemOverviewCountryFilter = "all";
   }
+
+  const signature = normalized.join("|");
+  if (filterEl.dataset.signature === signature && filterEl.querySelector(".so-country-filter-list")) {
+    filterEl.querySelectorAll(".so-country-filter-btn").forEach((button) => {
+      const code = String(button.getAttribute("data-country-filter") || "all");
+      button.classList.toggle("active", code === state.systemOverviewCountryFilter);
+    });
+    return;
+  }
+  filterEl.dataset.signature = signature;
 
   const buttons = [
     `<button type="button" class="so-country-filter-btn ${state.systemOverviewCountryFilter === "all" ? "active" : ""}" data-country-filter="all">Alle</button>`,
@@ -19380,13 +19398,11 @@ async function loadSystemOverview() {
   updateSystemOverviewSearchInputMode();
   if (!container) return;
 
-  if (searchEl) {
+  if (searchEl && document.activeElement !== searchEl) {
     searchEl.value = String(state.systemOverviewSearchQuery || "");
   }
 
   container.innerHTML = '<p class="muted">Lade Systemdaten...</p>';
-  if (statsEl) statsEl.textContent = "";
-  if (filterEl) filterEl.innerHTML = "";
 
   try {
     const searchQuery = String(state.systemOverviewSearchQuery || "").trim().toLowerCase();
@@ -19685,10 +19701,6 @@ async function loadSystemOverview() {
         `Land: ${scope}`,
         modeLabel,
       ];
-      if (searchQuery) {
-        const label = isAddonSortMode ? "AddOn-Filter" : "Suche";
-        chips.push(`${label}: ${state.systemOverviewSearchQuery}`);
-      }
       statsEl.innerHTML = chips
         .map((chip, idx) => `<span class="system-overview-stat-chip${idx === 0 ? " is-primary" : ""}">${escapeHtml(chip)}</span>`)
         .join("");
