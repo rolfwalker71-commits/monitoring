@@ -3345,6 +3345,8 @@ async function loginWebClient() {
 
   setLoginBusy(true);
   setLoginStatus("Anmeldung läuft…");
+  const loginAbort = new AbortController();
+  const loginTimeoutId = window.setTimeout(() => loginAbort.abort(), 45000);
   try {
     const response = await fetch("/api/v1/web-login", {
       method: "POST",
@@ -3352,11 +3354,16 @@ async function loginWebClient() {
         "Content-Type": "application/json",
       },
       credentials: "same-origin",
+      signal: loginAbort.signal,
       body: JSON.stringify({ username, password }),
     });
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (response.status === 503 && data.code === "database_locked") {
+        setLoginStatus(data.error || "Datenbank vorübergehend gesperrt. Bitte kurz warten und erneut versuchen.", true);
+        return false;
+      }
       setLoginStatus(data.error || ("Login fehlgeschlagen (HTTP " + response.status + ")"), true);
       return false;
     }
@@ -3384,9 +3391,16 @@ async function loginWebClient() {
     });
     return true;
   } catch (error) {
-    setLoginStatus(error?.message || "Anmeldung fehlgeschlagen.", true);
+    let message = error?.message || "Anmeldung fehlgeschlagen.";
+    if (error?.name === "AbortError") {
+      message = "Zeitüberschreitung: Server antwortet nicht (Wartungsjob oder Service hängt). Bitte monitoring-Service prüfen.";
+    } else if (/failed to fetch/i.test(message)) {
+      message = "Verbindung fehlgeschlagen (Netzwerk/Proxy). F12 → Netzwerk → web-login prüfen; auf dem Server: systemctl status monitoring";
+    }
+    setLoginStatus(message, true);
     return false;
   } finally {
+    window.clearTimeout(loginTimeoutId);
     setLoginBusy(false);
   }
 }

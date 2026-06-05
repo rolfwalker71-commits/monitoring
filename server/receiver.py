@@ -92,6 +92,10 @@ DEFAULT_ALERT_DIGEST_TIME = "08:05"
 SCHEDULE_TIMEZONE_NAME = os.getenv("MONITORING_SCHEDULE_TIMEZONE", "Europe/Zurich").strip() or "Europe/Zurich"
 DB_MAINTENANCE_INTERVAL_HOURS = max(1, min(24, int(os.getenv("MONITORING_DB_MAINT_INTERVAL_HOURS", "2") or "2")))
 SQLITE_BUSY_TIMEOUT_SECONDS = max(1.0, min(300.0, float(os.getenv("MONITORING_SQLITE_BUSY_TIMEOUT_SECONDS", "120") or "120")))
+WEB_AUTH_BUSY_TIMEOUT_MS = max(
+    1000,
+    int(os.getenv("MONITORING_WEB_AUTH_BUSY_TIMEOUT_MS", "8000") or "8000"),
+)
 SQLITE_CACHE_SIZE_MIB = max(8, min(512, int(os.getenv("MONITORING_SQLITE_CACHE_SIZE_MIB", "64") or "64")))
 SQLITE_MMAP_SIZE_MIB = max(0, min(2048, int(os.getenv("MONITORING_SQLITE_MMAP_SIZE_MIB", "256") or "256")))
 READ_ENDPOINT_CACHE_TTL_SECONDS = max(0.0, min(60.0, float(os.getenv("MONITORING_READ_ENDPOINT_CACHE_TTL_SECONDS", "8") or "8")))
@@ -388,6 +392,21 @@ def parse_startup_rebuild_days(value: object, *, default: int = 18, max_value: i
 
 def sqlite_connect() -> sqlite3.Connection:
     return sqlite3.connect(DB_PATH, timeout=DB_CONNECT_TIMEOUT_SECONDS)
+
+
+def sqlite_connect_interactive() -> sqlite3.Connection:
+    """Short busy timeout for login/session paths (avoid proxy/browser timeouts)."""
+    conn = sqlite_connect()
+    try:
+        conn.execute(f"PRAGMA busy_timeout = {WEB_AUTH_BUSY_TIMEOUT_MS}")
+    except sqlite3.Error:
+        pass
+    return conn
+
+
+def _sqlite_operational_error_is_lock(exc: sqlite3.OperationalError) -> bool:
+    text = str(exc).lower()
+    return "locked" in text or "busy" in text
 
 
 def _purge_expired_web_sessions(conn: sqlite3.Connection) -> None:
@@ -19479,25 +19498,37 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "username/password required"})
                 return
 
-            with sqlite_connect() as conn:
-                user = get_web_user(conn, username)
-                if not user or user.get("is_disabled"):
-                    self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid credentials"})
-                    return
-                if not verify_password(password, str(user["password_hash"]), str(user["password_salt"])):
-                    self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid credentials"})
-                    return
+            try:
+                with sqlite_connect_interactive() as conn:
+                    user = get_web_user(conn, username)
+                    if not user or user.get("is_disabled"):
+                        self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid credentials"})
+                        return
+                    if not verify_password(password, str(user["password_hash"]), str(user["password_salt"])):
+                        self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid credentials"})
+                        return
 
-                token, expires_at = create_web_session(conn, username)
-                record_web_login_event(
-                    conn,
-                    username=username,
-                    display_name=str(user.get("display_name", "") or ""),
-                    source_ip=self._request_client_ip(),
-                    auth_method="password",
-                    user_agent=str(self.headers.get("User-Agent", "") or ""),
-                )
-                conn.commit()
+                    token, expires_at = create_web_session(conn, username)
+                    record_web_login_event(
+                        conn,
+                        username=username,
+                        display_name=str(user.get("display_name", "") or ""),
+                        source_ip=self._request_client_ip(),
+                        auth_method="password",
+                        user_agent=str(self.headers.get("User-Agent", "") or ""),
+                    )
+                    conn.commit()
+            except sqlite3.OperationalError as exc:
+                if _sqlite_operational_error_is_lock(exc):
+                    self._send_json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {
+                            "error": "Datenbank voruebergehend gesperrt (Wartungsjob). Bitte in 1–2 Minuten erneut.",
+                            "code": "database_locked",
+                        },
+                    )
+                    return
+                raise
 
             self._send_json(
                 HTTPStatus.OK,
