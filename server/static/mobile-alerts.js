@@ -131,22 +131,60 @@ function isActiveHostsViewActive() {
   return state.mobileView === "active-hosts";
 }
 
-function showAlertsHomeView() {
-  state.mobileView = "alerts";
-  document.getElementById("alertsHomeView")?.classList.remove("hidden");
+function hideAllMobileSubViews() {
+  document.getElementById("alertsHomeView")?.classList.add("hidden");
   document.getElementById("inactiveHostsView")?.classList.add("hidden");
   document.getElementById("activeHostsView")?.classList.add("hidden");
+  document.getElementById("criticalTrendsView")?.classList.add("hidden");
+  document.getElementById("backupStatusView")?.classList.add("hidden");
+}
+
+function clearMobileKpiNavActive() {
   document.getElementById("kpiInactiveNav")?.classList.remove("is-active");
   document.getElementById("kpiActiveNav")?.classList.remove("is-active");
+  document.getElementById("kpiTrendsNav")?.classList.remove("is-active");
+  document.getElementById("kpiBackupNav")?.classList.remove("is-active");
+}
+
+function showAlertsHomeView() {
+  state.mobileView = "alerts";
+  hideAllMobileSubViews();
+  document.getElementById("alertsHomeView")?.classList.remove("hidden");
+  clearMobileKpiNavActive();
+}
+
+function isCriticalTrendsViewActive() {
+  return state.mobileView === "critical-trends";
+}
+
+function isBackupStatusViewActive() {
+  return state.mobileView === "backup-status";
+}
+
+function showCriticalTrendsView() {
+  state.mobileView = "critical-trends";
+  hideAllMobileSubViews();
+  document.getElementById("criticalTrendsView")?.classList.remove("hidden");
+  clearMobileKpiNavActive();
+  document.getElementById("kpiTrendsNav")?.classList.add("is-active");
+  void loadCriticalTrendsList();
+}
+
+function showBackupStatusView() {
+  state.mobileView = "backup-status";
+  hideAllMobileSubViews();
+  document.getElementById("backupStatusView")?.classList.remove("hidden");
+  clearMobileKpiNavActive();
+  document.getElementById("kpiBackupNav")?.classList.add("is-active");
+  void loadBackupStatusList();
 }
 
 function showInactiveHostsView() {
   state.mobileView = "inactive-hosts";
-  document.getElementById("alertsHomeView")?.classList.add("hidden");
-  document.getElementById("activeHostsView")?.classList.add("hidden");
+  hideAllMobileSubViews();
   document.getElementById("inactiveHostsView")?.classList.remove("hidden");
+  clearMobileKpiNavActive();
   document.getElementById("kpiInactiveNav")?.classList.add("is-active");
-  document.getElementById("kpiActiveNav")?.classList.remove("is-active");
   const hours = Math.max(1, Math.min(24 * 30, Number(state.hostKpisHours) || 1));
   state.inactiveHostsHours = hours;
   const subtitle = document.getElementById("inactiveHostsSubtitle");
@@ -158,11 +196,10 @@ function showInactiveHostsView() {
 
 function showActiveHostsView() {
   state.mobileView = "active-hosts";
-  document.getElementById("alertsHomeView")?.classList.add("hidden");
-  document.getElementById("inactiveHostsView")?.classList.add("hidden");
+  hideAllMobileSubViews();
   document.getElementById("activeHostsView")?.classList.remove("hidden");
+  clearMobileKpiNavActive();
   document.getElementById("kpiActiveNav")?.classList.add("is-active");
-  document.getElementById("kpiInactiveNav")?.classList.remove("is-active");
   const subtitle = document.getElementById("activeHostsSubtitle");
   if (subtitle) {
     subtitle.textContent = "Meldung in der letzten Stunde";
@@ -328,7 +365,7 @@ function renderHostListCard(host, variant, index) {
     '  <summary class="host-list-summary">' +
     '    <div class="host-list-summary-main">' +
     '      <p class="host-list-customer">' + mobileEsc(customerLabel) + "</p>" +
-    '      <p class="host-list-host-label">' + mobileEsc(hostLabel) + "</p>" +
+    '      <p class="host-list-host-label">' + mobileEsc(hostLabel) + buildAgentVersionBadgeHtml(host.agent_version) + "</p>" +
     '      <div class="host-list-meta-row">' +
     '        <span class="host-list-meta-pill host-list-meta-pill-country">' + countryHtml + "<span>" + mobileEsc(countryCode) + "</span></span>" +
     '        <span class="host-list-meta-pill host-list-meta-pill-os"><img src="/icons/' + mobileEsc(osIcon) + '" alt="" onerror="this.src=\'/icons/linux.png\'" /><span>'
@@ -411,6 +448,9 @@ const HOST_INSIGHT_SLIDE_DEFS = [
   { id: "resources", icon: "📊", title: "CPU & RAM" },
   { id: "sap", icon: "📦", title: "SAP & HANA" },
   { id: "filesystems", icon: "💾", title: "Dateisysteme" },
+  { id: "databases", icon: "🗄️", title: "Datenbanken" },
+  { id: "containers", icon: "🐳", title: "Container" },
+  { id: "journal", icon: "📰", title: "Journal" },
   { id: "processes", icon: "⚡", title: "Top-Prozesse" },
   { id: "logs", icon: "📜", title: "Logfiles" },
   { id: "system", icon: "🖥️", title: "System & Netz" },
@@ -892,7 +932,7 @@ function buildInsightOverviewBody(host, variant) {
   } else {
     rows.push(
       mobileInsightFactRow("Status", mobileEsc(host.online === true ? "Online" : "Aktiv")),
-      mobileInsightFactRow("Agent", mobileEsc(String(host.agent_version || "").trim() || "—")),
+      mobileInsightFactRow("Agent", mobileEsc(String(host.agent_version || "").trim() || "—") + buildAgentVersionBadgeHtml(host.agent_version)),
       mobileInsightFactRow("Reports (DB)", mobileEsc(String(Math.max(0, Number(host.report_count || 0)))))
     );
   }
@@ -1061,7 +1101,7 @@ function buildInsightSystemBody(payload, report) {
   const network = p.network && typeof p.network === "object" ? p.network : {};
   const deliveryMode = String(p.delivery_mode || "").toLowerCase();
   const isDelayed = deliveryMode === "delayed" || p.is_delayed === true;
-  const journal = Array.isArray(p.journal_errors) ? p.journal_errors : [];
+  const journal = getJournalEntriesFromPayload(p);
   const dns = Array.isArray(network.dns_servers)
     ? network.dns_servers.map((s) => String(s || "").trim()).filter(Boolean).join(", ")
     : "";
@@ -1069,7 +1109,7 @@ function buildInsightSystemBody(payload, report) {
     mobileInsightFactRow("OS", mobileEsc(String(p.os || "").trim() || "—")),
     mobileInsightFactRow("Kernel", mobileEsc(String(p.kernel || "").trim() || "—")),
     mobileInsightFactRow("Uptime", mobileEsc(mobileFormatUptime(p.uptime_seconds))),
-    mobileInsightFactRow("Agent-Version", mobileEsc(String(p.agent_version || "").trim() || "—")),
+    mobileInsightFactRow("Agent-Version", mobileEsc(String(p.agent_version || "").trim() || "—") + buildAgentVersionBadgeHtml(p.agent_version)),
     mobileInsightFactRow("Zustellung", mobileEsc(isDelayed ? "DELAYED" : "LIVE")),
     mobileInsightFactRow("Queue", mobileEsc(String(p.queue_depth != null ? p.queue_depth : "—") + " Dateien")),
     mobileInsightFactRow("Primary IP", mobileEsc(String(report?.primary_ip || p.primary_ip || "").trim() || "—")),
@@ -1104,6 +1144,9 @@ function buildHostInsightSlides(host, variant, report, payload) {
     resources: () => buildInsightResourcesBody(payload),
     sap: () => buildInsightSapBody(host, payload),
     filesystems: () => buildInsightFilesystemsBody(payload),
+    databases: () => buildInsightDatabasesBody(payload),
+    containers: () => buildInsightContainersBody(payload),
+    journal: () => buildInsightJournalBody(payload),
     processes: () => buildInsightProcessesBody(payload),
     logs: () => buildInsightLogsBody(payload),
     system: () => buildInsightSystemBody(payload, report),
@@ -1583,7 +1626,19 @@ const state = {
   activeHostsLoading: false,
   activeHostsCountryFilter: "all",
   activeHostsSearchQuery: "",
+  criticalTrendsHours: 24,
+  criticalTrendsProjectHours: 72,
+  criticalTrendsCount: 0,
+  criticalTrendsLoading: false,
+  backupMissingCount: 0,
+  backupStatusLoading: false,
+  backupFilterSql: false,
+  backupFilterHana: false,
+  backupCountryFilter: "all",
+  latestAgentVersion: "",
 };
+
+const alertTrendCache = new Map();
 
 const SKELETON_CARD_COUNT = 4;
 /** Gleiches Intervall wie Desktop: Session bleibt bei offener App aktiv (Server-Timeout default 30 min). */
@@ -2239,6 +2294,527 @@ function buildItContactHtml(item) {
   return parts.join(" · ");
 }
 
+function buildAlertItContactLineHtml(item) {
+  const html = buildItContactHtml(item);
+  if (!html) return "";
+  return '<p class="alert-it-contact">IT: ' + html + "</p>";
+}
+
+function buildMuteButtonHtml(item) {
+  const isMuted = item?.is_muted === true;
+  const label = isMuted ? "🔇" : "🔔";
+  const title = isMuted ? "Stummschaltung aufheben" : "Alert stummschalten";
+  const extra = isMuted ? " is-muted" : "";
+  return (
+    '<button type="button" class="btn-secondary btn-mute' + extra + '" data-action="toggle-mute" '
+    + 'data-muted="' + (isMuted ? "1" : "0") + '" title="' + mobileEsc(title) + '" aria-label="' + mobileEsc(title) + '">'
+    + label + "</button>"
+  );
+}
+
+function parseVersionPartsMobile(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const parts = raw.split(/[.\-_]/).map((part) => Number.parseInt(part, 10)).filter((n) => Number.isFinite(n));
+  return parts.length ? parts : null;
+}
+
+function compareSemverLikeMobile(left, right) {
+  const leftParts = parseVersionPartsMobile(left);
+  const rightParts = parseVersionPartsMobile(right);
+  if (!leftParts || !rightParts) return null;
+  const maxLen = Math.max(leftParts.length, rightParts.length);
+  for (let index = 0; index < maxLen; index += 1) {
+    const l = leftParts[index] || 0;
+    const r = rightParts[index] || 0;
+    if (l !== r) return l < r ? -1 : 1;
+  }
+  return 0;
+}
+
+function getAgentVersionLagInfoMobile(latestVersion, hostVersion) {
+  const latestParts = parseVersionPartsMobile(latestVersion);
+  const hostParts = parseVersionPartsMobile(hostVersion);
+  if (!latestParts || !hostParts) {
+    return { isBehind: false, steps: null, majorMinorDifferent: false };
+  }
+  const compare = compareSemverLikeMobile(hostVersion, latestVersion);
+  if (compare === null || compare >= 0) {
+    return { isBehind: false, steps: 0, majorMinorDifferent: false };
+  }
+  const latest = [latestParts[0] || 0, latestParts[1] || 0, latestParts[2] || 0];
+  const host = [hostParts[0] || 0, hostParts[1] || 0, hostParts[2] || 0];
+  const sameMajorMinor = latest[0] === host[0] && latest[1] === host[1];
+  if (sameMajorMinor) {
+    return { isBehind: true, steps: Math.max(0, latest[2] - host[2]), majorMinorDifferent: false };
+  }
+  return { isBehind: true, steps: null, majorMinorDifferent: true };
+}
+
+function buildAgentVersionBadgeHtml(version) {
+  const hostVersion = String(version || "").trim();
+  if (!hostVersion) return "";
+  const latest = String(state.latestAgentVersion || "").trim();
+  if (!latest) return "";
+  const lag = getAgentVersionLagInfoMobile(latest, hostVersion);
+  if (!lag.isBehind) return "";
+  const label = lag.majorMinorDifferent
+    ? "Agent veraltet"
+    : "Agent −" + String(lag.steps || 1);
+  return '<span class="host-agent-badge" title="Neueste Agent-Version: ' + mobileEsc(latest) + '">⚠ ' + mobileEsc(label) + "</span>";
+}
+
+function normalizeMountpointMatch(value) {
+  return String(value || "").trim().replace(/\/+$/, "").toLowerCase();
+}
+
+function alertTrendCacheKey(item) {
+  const hostUid = String(item?.host_uid || "").trim();
+  const hostname = String(item?.hostname || "").trim();
+  const mount = normalizeMountpointMatch(item?.mountpoint);
+  return (hostUid || hostname) + "::" + mount;
+}
+
+function buildSparklineSvg(points) {
+  const values = (Array.isArray(points) ? points : [])
+    .map((point) => Number(point?.used_percent))
+    .filter((value) => Number.isFinite(value));
+  if (values.length < 2) return "";
+  const width = 120;
+  const height = 22;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(0.5, max - min);
+  const coords = values.map((value, index) => {
+    const x = (index / (values.length - 1)) * width;
+    const y = height - ((value - min) / span) * (height - 4) - 2;
+    return x.toFixed(1) + "," + y.toFixed(1);
+  });
+  return (
+    '<svg viewBox="0 0 ' + width + " " + height + '" preserveAspectRatio="none" aria-hidden="true">' +
+    '<polyline fill="none" stroke="currentColor" stroke-width="2" points="' + coords.join(" ") + '"></polyline></svg>'
+  );
+}
+
+function buildAlertTrendLineHtml(item, trendData) {
+  if (!trendData) {
+    return '<div class="alert-trend-line" data-alert-trend-placeholder="1"><span class="alert-trend-text">Trend 24h …</span></div>';
+  }
+  const delta = Number(trendData.delta_used_percent);
+  const hasDelta = Number.isFinite(delta);
+  const deltaClass = hasDelta ? (delta > 0.05 ? "is-up" : delta < -0.05 ? "is-down" : "") : "";
+  const arrow = hasDelta ? (delta > 0.05 ? "▲" : delta < -0.05 ? "▼" : "→") : "→";
+  const deltaText = hasDelta ? arrow + " " + (delta >= 0 ? "+" : "") + delta.toFixed(1) + "% (24h)" : "Kein Verlauf";
+  const spark = buildSparklineSvg(trendData.series);
+  return (
+    '<div class="alert-trend-line">' +
+    '<span class="alert-trend-text ' + deltaClass + '">' + mobileEsc(deltaText) + "</span>" +
+    (spark ? '<span class="alert-trend-spark">' + spark + "</span>" : "") +
+    "</div>"
+  );
+}
+
+async function loadAlertTrendForItem(item) {
+  if (!item) return null;
+  const cacheKey = alertTrendCacheKey(item);
+  if (alertTrendCache.has(cacheKey)) {
+    return alertTrendCache.get(cacheKey);
+  }
+  const hostUid = String(item.host_uid || "").trim();
+  const hostname = String(item.hostname || "").trim();
+  if (!hostUid && !hostname) return null;
+  const query = hostUid
+    ? "host_uid=" + encodeURIComponent(hostUid)
+    : "hostname=" + encodeURIComponent(hostname);
+  try {
+    const resp = await fetch("/api/v1/analysis?" + query + "&hours=24", { credentials: "same-origin" });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const mount = normalizeMountpointMatch(item.mountpoint);
+    const trends = Array.isArray(data.filesystem_trends) ? data.filesystem_trends : [];
+    const match = trends.find((row) => normalizeMountpointMatch(row?.mountpoint) === mount) || trends[0];
+    const trendData = match
+      ? {
+          delta_used_percent: match.delta_used_percent,
+          current_used_percent: match.current_used_percent,
+          series: Array.isArray(match.series) ? match.series : [],
+        }
+      : null;
+    alertTrendCache.set(cacheKey, trendData);
+    return trendData;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function updateAlertTrendOnCard(card, item) {
+  if (!card || !item) return;
+  const placeholder = card.querySelector("[data-alert-trend-placeholder]");
+  if (!placeholder) return;
+  void loadAlertTrendForItem(item).then((trendData) => {
+    if (!card.isConnected) return;
+    const line = buildAlertTrendLineHtml(item, trendData);
+    const current = card.querySelector(".alert-trend-line");
+    if (current) current.outerHTML = line;
+  });
+}
+
+function getJournalEntriesFromPayload(payload) {
+  const block = payload?.journal_errors;
+  if (Array.isArray(block)) return block;
+  if (block && typeof block === "object" && Array.isArray(block.entries)) return block.entries;
+  return [];
+}
+
+function buildInsightJournalBody(payload) {
+  const entries = getJournalEntriesFromPayload(payload);
+  if (!entries.length) {
+    return '<p class="insight-empty">Keine kritischen Journal-Fehler im letzten Report.</p>';
+  }
+  const items = entries.slice(0, 12).map((entry) => {
+    const time = formatUtcPlus2Mobile(entry.time_utc || entry.time || "");
+    const priority = String(entry.priority || "-").trim();
+    const unit = String(entry.unit || "-").trim();
+    const message = String(entry.message || "-").trim();
+    return (
+      '<li class="insight-journal-item">' +
+      "<time>" + mobileEsc(time) + " · " + mobileEsc(priority) + " · " + mobileEsc(unit) + "</time>" +
+      "<span>" + mobileEsc(message) + "</span></li>"
+    );
+  });
+  return '<ul class="insight-journal-list">' + items.join("") + "</ul>";
+}
+
+function buildInsightContainersBody(payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const block = p.containers && typeof p.containers === "object" ? p.containers : {};
+  const entries = Array.isArray(block.entries) ? block.entries : [];
+  if (!block.available && !entries.length) {
+    return '<p class="insight-empty">Container-Runtime nicht verfügbar.</p>';
+  }
+  if (!entries.length) {
+    return '<p class="insight-empty">Keine Container gefunden.</p>';
+  }
+  return (
+    '<div class="insight-container-list">' +
+    entries.slice(0, 20).map((entry) => {
+      const state = String(entry.state || "-").trim().toLowerCase();
+      const bad = state !== "running";
+      return (
+        '<article class="insight-container-item' + (bad ? " is-bad" : "") + '">' +
+        '<p class="insight-container-name">' + mobileEsc(String(entry.name || "-")) + "</p>" +
+        '<p class="insight-container-meta">' + mobileEsc(String(entry.image || "-")) + " · " + mobileEsc(String(entry.state || "-")) +
+        (entry.health ? " · " + mobileEsc(String(entry.health)) : "") +
+        "</p></article>"
+      );
+    }).join("") +
+    "</div>"
+  );
+}
+
+function buildInsightDatabasesBody(payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const sqlInfo = p.sql_server_info && typeof p.sql_server_info === "object" ? p.sql_server_info : null;
+  const hanaInfo = p.hana_db_info && typeof p.hana_db_info === "object" ? p.hana_db_info : null;
+  const parts = [];
+
+  if (sqlInfo) {
+    if (sqlInfo.available === false) {
+      parts.push('<p class="insight-empty">SQL Server nicht gefunden.</p>');
+    } else {
+      const instances = Array.isArray(sqlInfo.instances) ? sqlInfo.instances : [];
+      instances.forEach((inst) => {
+        const dbs = Array.isArray(inst.databases) ? inst.databases : [];
+        const dbLines = dbs.slice(0, 8).map((db) => {
+          const totalMb = Number(db.data_mb || 0) + Number(db.log_mb || 0);
+          return (
+            '<article class="insight-db-item">' +
+            '<p class="insight-db-name">' + mobileEsc(String(db.name || "-")) + "</p>" +
+            '<p class="insight-db-meta">' + mobileEsc(String(db.state || "-")) + " · " + mobileFormatMb(totalMb) + "</p></article>"
+          );
+        });
+        parts.push(
+          '<p class="insight-section-label">SQL · ' + mobileEsc(String(inst.name || "MSSQLSERVER")) + "</p>" +
+          (dbLines.length ? '<div class="insight-db-list">' + dbLines.join("") + "</div>" : '<p class="insight-empty">Keine DB-Liste.</p>')
+        );
+      });
+    }
+  }
+
+  if (hanaInfo && Array.isArray(hanaInfo.databases) && hanaInfo.databases.length) {
+    const rows = hanaInfo.databases.slice(0, 12).map((db) =>
+      '<article class="insight-db-item"><p class="insight-db-name">' + mobileEsc(String(db.database_name || db.name || "-")) +
+      '</p><p class="insight-db-meta">' + mobileEsc(String(db.active_status || db.status || "-")) + "</p></article>"
+    );
+    parts.push('<p class="insight-section-label">HANA</p><div class="insight-db-list">' + rows.join("") + "</div>");
+  }
+
+  if (!parts.length) {
+    return '<p class="insight-empty">Keine Datenbank-Informationen im letzten Report.</p>';
+  }
+  return parts.join("");
+}
+
+function mobileFormatMb(value) {
+  const mb = Number(value);
+  if (!Number.isFinite(mb) || mb <= 0) return "—";
+  if (mb >= 1024) return (mb / 1024).toFixed(2) + " GiB";
+  return mb.toFixed(0) + " MiB";
+}
+
+function setCriticalTrendsStatus(text, isError = false) {
+  const line = document.getElementById("criticalTrendsStatusLine");
+  if (!line) return;
+  line.textContent = text;
+  line.classList.toggle("is-error", isError);
+}
+
+function setBackupStatusStatus(text, isError = false) {
+  const line = document.getElementById("backupStatusStatusLine");
+  if (!line) return;
+  line.textContent = text;
+  line.classList.toggle("is-error", isError);
+}
+
+function renderCriticalTrendsMobile(data) {
+  const warnings = Array.isArray(data?.warnings) ? data.warnings : [];
+  const hours = Number(data?.hours || state.criticalTrendsHours);
+  if (!warnings.length) {
+    return '<div class="mobile-ops-empty">Keine kritischen Trends in den letzten ' + hours + " Std.</div>";
+  }
+  const byHost = new Map();
+  warnings.forEach((warning) => {
+    const host = String(warning.hostname || "").trim() || "—";
+    if (!byHost.has(host)) byHost.set(host, []);
+    byHost.get(host).push(warning);
+  });
+  return Array.from(byHost.entries()).map(([hostname, items]) => {
+    const customer = String(items[0]?.customer_name || "").trim();
+    const displayName = String(items[0]?.display_name || hostname).trim();
+    const crit = items.filter((row) => row.level === "crit").length;
+    const cardClass = crit > 0 ? "is-crit" : "is-warn";
+    const rows = items.map((row) => {
+      const projected = Number(row.projected);
+      const current = row.current != null ? Number(row.current) : null;
+      const bar = Number.isFinite(projected) ? Math.min(100, Math.max(0, projected)) : 0;
+      const barClass = row.level === "crit" ? "is-crit" : "";
+      const eta = row.critical_eta_utc
+        ? " · Kritisch ca. " + formatUtcPlus2Mobile(row.critical_eta_utc)
+        : "";
+      return (
+        '<div class="mobile-ops-row">' +
+        '<div class="mobile-ops-row-top"><span>' + mobileEsc(String(row.metric || row.type || "Metric")) + "</span>" +
+        "<span>" + (Number.isFinite(current) ? current.toFixed(1) + "%" : "—") + " → " + (Number.isFinite(projected) ? projected.toFixed(1) + "%" : "—") + "</span></div>" +
+        '<div class="mobile-ops-bar ' + barClass + '"><span style="width:' + bar.toFixed(1) + '%"></span></div>' +
+        '<p class="mobile-ops-meta">Projektion' + mobileEsc(eta) + "</p></div>"
+      );
+    }).join("");
+    return (
+      '<article class="mobile-ops-card ' + cardClass + '">' +
+      '<div class="mobile-ops-card-head"><h3>' + mobileEsc(displayName) + "</h3>" +
+      (customer ? "<p>" + mobileEsc(customer) + "</p>" : "") +
+      (hostname !== displayName ? '<p class="mobile-ops-meta">' + mobileEsc(hostname) + "</p>" : "") +
+      "</div><div class="mobile-ops-card-body">" + rows + "</div></article>"
+    );
+  }).join("");
+}
+
+async function loadCriticalTrendsList(options = {}) {
+  if (!state.authenticated) return;
+  const authRetried = options.authRetried === true;
+  const list = document.getElementById("criticalTrendsList");
+  if (!list) return;
+  state.criticalTrendsLoading = true;
+  setCriticalTrendsStatus("Lade Trends…");
+  list.innerHTML = '<div class="mobile-ops-empty">Lade…</div>';
+  try {
+    const hours = Math.max(1, Number(state.criticalTrendsHours) || 24);
+    const projectHours = Math.max(1, Number(state.criticalTrendsProjectHours) || 72);
+    const resp = await fetch(
+      "/api/v1/critical-trends?hours=" + encodeURIComponent(String(hours)) + "&project_hours=" + encodeURIComponent(String(projectHours)),
+      { credentials: "same-origin" }
+    );
+    if (resp.status === 401) {
+      if (!authRetried && (await mobileRecoverSessionAfter401())) {
+        return loadCriticalTrendsList({ authRetried: true });
+      }
+      mobileForceLogout("Session abgelaufen. Bitte erneut anmelden.");
+      return;
+    }
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+    const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+    state.criticalTrendsCount = warnings.length;
+    const elTrends = document.getElementById("kpiTrends");
+    if (elTrends) elTrends.textContent = String(state.criticalTrendsCount);
+    list.innerHTML = renderCriticalTrendsMobile(data);
+    setCriticalTrendsStatus(warnings.length + " Trend-Warnung" + (warnings.length === 1 ? "" : "en") + " geladen.");
+  } catch (error) {
+    list.innerHTML = '<div class="mobile-ops-empty">Fehler beim Laden.</div>';
+    setCriticalTrendsStatus("Fehler: " + (error?.message || String(error)), true);
+  } finally {
+    state.criticalTrendsLoading = false;
+  }
+}
+
+function filterBackupHostsMobile(hosts) {
+  return (Array.isArray(hosts) ? hosts : []).filter((host) => {
+    const country = String(host?.country_code || "").trim().toUpperCase();
+    const countryFilter = String(state.backupCountryFilter || "all").toUpperCase();
+    if (countryFilter !== "ALL" && country !== countryFilter) return false;
+    const wantSql = state.backupFilterSql === true;
+    const wantHana = state.backupFilterHana === true;
+    if (!wantSql && !wantHana) return true;
+    return (wantSql && Boolean(host?.has_sql)) || (wantHana && Boolean(host?.has_hana));
+  });
+}
+
+function renderBackupStatusMobile(data) {
+  const allHosts = Array.isArray(data?.hosts) ? data.hosts : [];
+  const hosts = filterBackupHostsMobile(allHosts);
+  if (!allHosts.length) {
+    return '<div class="mobile-ops-empty">Keine Hosts mit Backup-Konfiguration.</div>';
+  }
+  if (!hosts.length) {
+    return '<div class="mobile-ops-empty">Keine Hosts für den aktuellen Filter.</div>';
+  }
+  const groups = new Map();
+  hosts.forEach((host) => {
+    const customer = String(host.customer_name || "Ohne Kunde").trim() || "Ohne Kunde";
+    if (!groups.has(customer)) groups.set(customer, []);
+    groups.get(customer).push(host);
+  });
+  return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0], "de")).map(([customer, customerHosts]) => {
+    const missing = customerHosts.filter((host) => Boolean(host.has_missing_backup)).length;
+    const cardClass = missing > 0 ? "is-warn" : "";
+    const hostCards = customerHosts.map((host) => {
+      const displayName = String(host.display_name || host.hostname || "—").trim();
+      const dirs = Array.isArray(host.dirs) ? host.dirs : [];
+      const missingDirs = dirs.filter((dir) => dir && dir.has_today_backup !== true).length;
+      const bad = Boolean(host.has_missing_backup);
+      const rows = dirs.slice(0, 6).map((dir) => {
+        const ok = dir.has_today_backup === true;
+        return (
+          '<div class="mobile-ops-row">' +
+          '<div class="mobile-ops-row-top"><span>' + mobileEsc(String(dir.subdir_name || dir.subdir_path || "Verzeichnis")) + "</span>" +
+          '<span>' + (ok ? "OK" : "Fehlt") + "</span></div>" +
+          '<p class="mobile-ops-meta">' + mobileEsc(String(dir.newest_item_name || "")) +
+          (dir.newest_item_modified ? " · " + mobileEsc(String(dir.newest_item_modified)) : "") + "</p></div>"
+        );
+      }).join("");
+      return (
+        '<article class="mobile-ops-card' + (bad ? " is-crit" : "") + '">' +
+        '<div class="mobile-ops-card-head"><h3>' + mobileEsc(displayName) + "</h3>" +
+        '<p class="mobile-ops-meta">' + mobileEsc(String(host.hostname || "")) +
+        (missingDirs ? " · " + missingDirs + " ohne aktuelles Backup" : " · aktuell") +
+        "</p></div>" +
+        (rows ? '<div class="mobile-ops-card-body">' + rows + "</div>" : "") +
+        "</article>"
+      );
+    }).join("");
+    return (
+      '<section class="mobile-ops-card ' + cardClass + '">' +
+      '<div class="mobile-ops-card-head"><h3>' + mobileEsc(customer) + "</h3>" +
+      "<p>" + customerHosts.length + " Host(s)" + (missing ? " · " + missing + " mit fehlendem Backup" : "") + "</p></div>" +
+      '<div class="mobile-ops-card-body">' + hostCards + "</div></section>"
+    );
+  }).join("");
+}
+
+async function loadBackupStatusList(options = {}) {
+  if (!state.authenticated) return;
+  const authRetried = options.authRetried === true;
+  const list = document.getElementById("backupStatusList");
+  if (!list) return;
+  state.backupStatusLoading = true;
+  setBackupStatusStatus("Lade Backups…");
+  list.innerHTML = '<div class="mobile-ops-empty">Lade…</div>';
+  try {
+    const resp = await fetch("/api/v1/backup-status-overview", { credentials: "same-origin" });
+    if (resp.status === 401) {
+      if (!authRetried && (await mobileRecoverSessionAfter401())) {
+        return loadBackupStatusList({ authRetried: true });
+      }
+      mobileForceLogout("Session abgelaufen. Bitte erneut anmelden.");
+      return;
+    }
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+    const allHosts = Array.isArray(data.hosts) ? data.hosts : [];
+    const filtered = filterBackupHostsMobile(allHosts);
+    state.backupMissingCount = filtered.filter((host) => Boolean(host.has_missing_backup)).length;
+    const elBackup = document.getElementById("kpiBackupMissing");
+    if (elBackup) elBackup.textContent = String(state.backupMissingCount);
+    const countries = [...new Set(allHosts.map((host) => String(host.country_code || "").trim().toUpperCase()).filter((code) => /^[A-Z]{2}$/.test(code)))].sort();
+    renderHostCountryFilter("backupStatusCountryFilter", countries, state.backupCountryFilter, (country) => {
+      state.backupCountryFilter = country;
+      list.innerHTML = renderBackupStatusMobile(data);
+      const missing = filterBackupHostsMobile(allHosts).filter((host) => Boolean(host.has_missing_backup)).length;
+      setBackupStatusStatus(missing > 0 ? missing + " Host(s) ohne aktuelles Backup" : "Alle Backups aktuell");
+    });
+    list.innerHTML = renderBackupStatusMobile(data);
+    setBackupStatusStatus(
+      state.backupMissingCount > 0
+        ? state.backupMissingCount + " Host(s) ohne aktuelles Backup (<24h)"
+        : filtered.length + " Host(s) — Backups aktuell"
+    );
+  } catch (error) {
+    list.innerHTML = '<div class="mobile-ops-empty">Fehler beim Laden.</div>';
+    setBackupStatusStatus("Fehler: " + (error?.message || String(error)), true);
+  } finally {
+    state.backupStatusLoading = false;
+  }
+}
+
+async function openCustomerInfoSheet() {
+  const item = state.lastAlerts[state.focusedAlertIndex] || state.lastAlerts[0];
+  if (!item) {
+    showToast("Kein Alert fokussiert.", true);
+    return;
+  }
+  const hostUid = String(item.host_uid || "").trim();
+  const hostname = String(item.hostname || "").trim();
+  if (!hostUid && !hostname) {
+    showToast("Kein Host für Kundeninfos.", true);
+    return;
+  }
+  const titleEl = document.getElementById("customerInfoSheetTitle");
+  const hintEl = document.getElementById("customerInfoSheetHint");
+  const factsEl = document.getElementById("customerInfoSheetFacts");
+  if (titleEl) titleEl.textContent = String(item.customer_name || item.display_name || "Kundeninfos").trim() || "Kundeninfos";
+  if (hintEl) hintEl.textContent = "Stammdaten zum fokussierten Alert #" + String(item.id || "");
+  if (factsEl) factsEl.innerHTML = '<p class="sheet-hint">Lade…</p>';
+  openSheet("customerInfoSheet");
+  try {
+    const params = new URLSearchParams();
+    if (hostname) params.set("hostname", hostname);
+    if (hostUid) params.set("host_uid", hostUid);
+    const resp = await fetch("/api/v1/host-settings?" + params.toString(), { credentials: "same-origin" });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+    const rows = [];
+    const push = (label, value) => {
+      const text = String(value || "").trim();
+      if (text) rows.push(hostSheetFactRow(label, text));
+    };
+    push("Kundenname", data.customer_name);
+    push("Maringo-Projekt", data.customer_maringo_project_number);
+    push("IT-Anbieter", data.it_provider_name);
+    push("Ansprechpartner", data.it_provider_contact);
+    push("E-Mail", data.it_provider_email);
+    push("Telefon", data.it_provider_phone);
+    push("IT-Anbieter 2", data.it_provider_name_2);
+    push("Ansprechpartner 2", data.it_provider_contact_2);
+    push("E-Mail 2", data.it_provider_email_2);
+    push("Telefon 2", data.it_provider_phone_2);
+    if (factsEl) {
+      factsEl.innerHTML = rows.length ? rows.join("") : '<p class="sheet-hint">Keine Kundeninfos hinterlegt.</p>';
+    }
+  } catch (error) {
+    if (factsEl) factsEl.innerHTML = '<p class="sheet-hint">Fehler: ' + mobileEsc(error?.message || String(error)) + "</p>";
+  }
+}
+
 function usagePercentForBar(item) {
   const current = item.current_used_percent;
   if (current != null && Number.isFinite(Number(current))) {
@@ -2667,8 +3243,12 @@ function countActiveHosts(hosts) {
 function renderHostKpis() {
   const elActive = document.getElementById("kpiActiveHosts");
   const elInactive = document.getElementById("kpiInactiveHosts");
+  const elTrends = document.getElementById("kpiTrends");
+  const elBackup = document.getElementById("kpiBackupMissing");
   if (elActive) elActive.textContent = String(Math.max(0, Number(state.activeHostsCount) || 0));
   if (elInactive) elInactive.textContent = String(Math.max(0, Number(state.inactiveHostsCount) || 0));
+  if (elTrends) elTrends.textContent = String(Math.max(0, Number(state.criticalTrendsCount) || 0));
+  if (elBackup) elBackup.textContent = String(Math.max(0, Number(state.backupMissingCount) || 0));
 }
 
 function renderKpis(alerts) {
@@ -2692,9 +3272,11 @@ async function loadHostKpis(options = {}) {
 
   const hours = Math.max(1, Math.min(24 * 30, Number(state.hostKpisHours) || 1));
   try {
-    const [inactiveResp, hostsResp] = await Promise.all([
+    const [inactiveResp, hostsResp, trendsResp, backupResp] = await Promise.all([
       fetch("/api/v1/inactive-hosts?hours=" + encodeURIComponent(String(hours)), { credentials: "same-origin" }),
       fetch("/api/v1/hosts?limit=200&offset=0", { credentials: "same-origin" }),
+      fetch("/api/v1/critical-trends?hours=24&project_hours=72", { credentials: "same-origin" }),
+      fetch("/api/v1/backup-status-overview", { credentials: "same-origin" }),
     ]);
 
     if (inactiveResp.status === 401 || hostsResp.status === 401) {
@@ -2716,6 +3298,18 @@ async function loadHostKpis(options = {}) {
       state.activeHostsCount = countActiveHosts(hosts);
     }
 
+    if (trendsResp.ok) {
+      const trendsPayload = await trendsResp.json();
+      const warnings = Array.isArray(trendsPayload.warnings) ? trendsPayload.warnings : [];
+      state.criticalTrendsCount = warnings.length;
+    }
+
+    if (backupResp.ok) {
+      const backupPayload = await backupResp.json();
+      const backupHosts = Array.isArray(backupPayload.hosts) ? backupPayload.hosts : [];
+      state.backupMissingCount = backupHosts.filter((host) => Boolean(host?.has_missing_backup)).length;
+    }
+
     renderHostKpis();
   } catch (_error) {
     // Host-KPIs sind optional; Alert-Liste bleibt nutzbar.
@@ -2729,6 +3323,14 @@ async function refreshMobileData() {
   }
   if (isActiveHostsViewActive()) {
     await Promise.all([loadActiveHostsList(), loadHostKpis()]);
+    return;
+  }
+  if (isCriticalTrendsViewActive()) {
+    await Promise.all([loadCriticalTrendsList(), loadHostKpis()]);
+    return;
+  }
+  if (isBackupStatusViewActive()) {
+    await Promise.all([loadBackupStatusList(), loadHostKpis()]);
     return;
   }
   await Promise.all([loadAlerts(), loadHostKpis()]);
@@ -2804,6 +3406,9 @@ function renderAlerts(items) {
 
     const countryFlag = buildCountryFlagHtml(item.country_code);
     const ackStrip = buildAckStripHtml(item);
+    const itContactHtml = buildAlertItContactLineHtml(item);
+    const trendHtml = buildAlertTrendLineHtml(item, alertTrendCache.get(alertTrendCacheKey(item)) || null);
+    const muteBtn = buildMuteButtonHtml(item);
 
     return (
       '<article class="alert-card ' + sev + envClass + highlightClass + '" data-alert-id="' + id + '" data-alert-index="' + index + '">' +
@@ -2817,13 +3422,15 @@ function renderAlerts(items) {
       "  " + identityHtml +
       '<div class="alert-card-body">' +
       ackStrip +
+      itContactHtml +
       '  <p class="alert-meta alert-mountpoint-line">' + buildMountpointLine(item) + "</p>" +
+      trendHtml +
       '  <div class="usage-bar-block">' +
       '    <div class="usage-bar-row">' +
       '      <div class="usage-bar"><span class="usage-bar-fill" data-target-percent="' + barWidth + '" style="width:0%"></span></div>' +
       '      <strong class="usage-bar-counter" data-target-percent="' + barWidth + '">0.0%</strong>' +
       "    </div></div>" +
-      '  <div class="alert-card-actions">' + ackBtn +
+      '  <div class="alert-card-actions">' + ackBtn + muteBtn +
       '    <button type="button" class="btn-secondary btn-share" data-action="share" title="Teilen" aria-label="Alert teilen">Teilen</button>' +
       '    <button type="button" class="btn-secondary btn-expand" data-action="toggle-more">Mehr</button>' +
       "  </div>" +
@@ -2882,8 +3489,16 @@ function buildAlertDetailHtml(item) {
     push("Hostname", hostname);
   }
   push("IP", item.latest_report_ip);
+  const itHtml = buildItContactHtml(item);
+  if (itHtml) {
+    lines.push("<div><dt>" + mobileEsc("IT-Kontakt") + "</dt><dd>" + itHtml + "</dd></div>");
+  }
   if (item.delta_used_percent != null) {
     push("Delta", Number(item.delta_used_percent).toFixed(1) + "%");
+  }
+  const trend = alertTrendCache.get(alertTrendCacheKey(item));
+  if (trend && trend.delta_used_percent != null) {
+    push("Trend 24h", Number(trend.delta_used_percent).toFixed(1) + "%");
   }
   push("Erstellt", formatIsoLabel(item.created_at_utc));
   push("Zuletzt gesehen", formatIsoLabel(item.last_seen_at_utc));
@@ -2931,6 +3546,11 @@ function syncFocusedCarouselCard(list) {
     }
   });
   updateAlertDetailPanel(bestIndex);
+  const focusedCard = Array.from(cards).find((card) => Number(card.getAttribute("data-alert-index")) === bestIndex);
+  const focusedItem = state.lastAlerts[bestIndex];
+  if (focusedCard && focusedItem) {
+    updateAlertTrendOnCard(focusedCard, focusedItem);
+  }
   if (bestIndex !== lastUsageBarCarouselIndex) {
     triggerUsageBarAnimationForCarouselIndex(list, bestIndex);
     lastUsageBarCarouselIndex = bestIndex;
@@ -3009,6 +3629,17 @@ async function handleAlertsListClick(event) {
         : "/api/v1/alert-headsup-suppress";
       const okMessage = suppressed ? "Heads-up wieder aktiv." : "Heads-up unterdrückt.";
       await callAlertAction(endpoint, { alert_id: id }, okMessage);
+      await loadAlerts();
+    } else if (action === "toggle-mute") {
+      const item = resolveAlertFromCard(card);
+      const isMuted = item?.is_muted === true || btn.getAttribute("data-muted") === "1";
+      const endpoint = isMuted ? "/api/v1/alert-unmute" : "/api/v1/alert-mute";
+      await callAlertAction(endpoint, {
+        alert_id: id,
+        hostname: String(item?.hostname || ""),
+        host_uid: String(item?.host_uid || ""),
+        mountpoint: String(item?.mountpoint || ""),
+      }, isMuted ? "Stummschaltung aufgehoben." : "Alert stummgeschaltet.");
       await loadAlerts();
     }
   } catch (error) {
@@ -3692,6 +4323,69 @@ function wire() {
     showInactiveHostsView();
   });
 
+  document.getElementById("kpiTrendsNav")?.addEventListener("click", () => {
+    if (!state.authenticated) return;
+    showCriticalTrendsView();
+  });
+
+  document.getElementById("kpiBackupNav")?.addEventListener("click", () => {
+    if (!state.authenticated) return;
+    showBackupStatusView();
+  });
+
+  document.getElementById("criticalTrendsBackButton")?.addEventListener("click", () => {
+    showAlertsHomeView();
+    setCriticalTrendsStatus("");
+  });
+
+  document.getElementById("backupStatusBackButton")?.addEventListener("click", () => {
+    showAlertsHomeView();
+    setBackupStatusStatus("");
+  });
+
+  document.getElementById("criticalTrendsRefreshButton")?.addEventListener("click", () => {
+    void loadCriticalTrendsList().catch((error) => setCriticalTrendsStatus("Fehler: " + error.message, true));
+  });
+
+  document.getElementById("backupStatusRefreshButton")?.addEventListener("click", () => {
+    void loadBackupStatusList().catch((error) => setBackupStatusStatus("Fehler: " + error.message, true));
+  });
+
+  document.getElementById("criticalTrendsHoursSelect")?.addEventListener("change", (event) => {
+    state.criticalTrendsHours = Math.max(1, Number(event.target?.value) || 24);
+    void loadCriticalTrendsList();
+  });
+
+  document.getElementById("criticalTrendsProjectSelect")?.addEventListener("change", (event) => {
+    state.criticalTrendsProjectHours = Math.max(1, Number(event.target?.value) || 72);
+    void loadCriticalTrendsList();
+  });
+
+  document.getElementById("backupFilterSql")?.addEventListener("change", (event) => {
+    state.backupFilterSql = event.target?.checked === true;
+    if (isBackupStatusViewActive()) void loadBackupStatusList();
+  });
+
+  document.getElementById("backupFilterHana")?.addEventListener("change", (event) => {
+    state.backupFilterHana = event.target?.checked === true;
+    if (isBackupStatusViewActive()) void loadBackupStatusList();
+  });
+
+  document.getElementById("menuCriticalTrendsButton")?.addEventListener("click", () => {
+    document.getElementById("headerMenu")?.classList.add("hidden");
+    showCriticalTrendsView();
+  });
+
+  document.getElementById("menuBackupStatusButton")?.addEventListener("click", () => {
+    document.getElementById("headerMenu")?.classList.add("hidden");
+    showBackupStatusView();
+  });
+
+  document.getElementById("menuCustomerInfoButton")?.addEventListener("click", () => {
+    document.getElementById("headerMenu")?.classList.add("hidden");
+    void openCustomerInfoSheet();
+  });
+
   document.getElementById("activeHostsBackButton")?.addEventListener("click", () => {
     showAlertsHomeView();
     setActiveHostsStatus("");
@@ -3744,6 +4438,10 @@ function wire() {
         setInactiveHostsStatus("Fehler: " + msg, true);
       } else if (isActiveHostsViewActive()) {
         setActiveHostsStatus("Fehler: " + msg, true);
+      } else if (isCriticalTrendsViewActive()) {
+        setCriticalTrendsStatus("Fehler: " + msg, true);
+      } else if (isBackupStatusViewActive()) {
+        setBackupStatusStatus("Fehler: " + msg, true);
       } else {
         setStatus("Fehler: " + msg, true);
       }
@@ -3906,6 +4604,7 @@ async function loadMobileReleaseVersions() {
     }
     const buildText = (await buildResp.text()).trim();
     const agentText = agentResp.ok ? (await agentResp.text()).trim() : buildText;
+    state.latestAgentVersion = agentText || "";
     setBuildVersions(buildText || "-");
     setAgentVersions(agentText || "-");
   } catch (_error) {

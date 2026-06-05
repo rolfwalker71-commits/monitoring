@@ -58,17 +58,26 @@
           </div>
         </div>
         <div id="headerMenu" class="header-menu hidden">
+          <button id="menuCriticalTrendsButton" type="button">Kritische Trends</button>
+          <button id="menuBackupStatusButton" type="button">Backup-Status</button>
+          <button id="menuCustomerInfoButton" type="button">Kundeninfos (Alert)</button>
           <button id="liveFeedDetailsMenuButton" type="button">Report-Details (Live)</button>
           <button id="liveFeedShowMenuButton" type="button">Live Meldungen einblenden</button>
           <button id="testPushButton" type="button">Test Push senden</button>
           <button id="mobileLogoutButton" type="button">Abmelden</button>
         </div>
-        <div class="kpi-strip" aria-label="KPI-Übersicht">
-          <div class="kpi kpi-critical"><strong id="kpiCritical">0</strong><span>Kritisch</span></div>
-          <div class="kpi kpi-warning"><strong id="kpiWarning">0</strong><span>Warning</span></div>
-          <div class="kpi kpi-open"><strong id="kpiOpen">0</strong><span>Offen</span></div>
-          <button type="button" class="kpi kpi-active kpi-tap" id="kpiActiveNav" title="Aktive Hosts anzeigen (Meldung in der letzten Stunde)"><strong id="kpiActiveHosts">0</strong><span>Aktiv</span></button>
-          <button type="button" class="kpi kpi-inactive kpi-tap" id="kpiInactiveNav" title="Inaktive Hosts anzeigen (keine Meldung in der letzten Stunde)"><strong id="kpiInactiveHosts">0</strong><span>Inaktiv</span></button>
+        <div class="kpi-strip-wrap" aria-label="KPI-Übersicht">
+          <div class="kpi-strip">
+            <div class="kpi kpi-critical"><strong id="kpiCritical">0</strong><span>Kritisch</span></div>
+            <div class="kpi kpi-warning"><strong id="kpiWarning">0</strong><span>Warning</span></div>
+            <div class="kpi kpi-open"><strong id="kpiOpen">0</strong><span>Offen</span></div>
+            <button type="button" class="kpi kpi-active kpi-tap" id="kpiActiveNav" title="Aktive Hosts anzeigen (Meldung in der letzten Stunde)"><strong id="kpiActiveHosts">0</strong><span>Aktiv</span></button>
+            <button type="button" class="kpi kpi-inactive kpi-tap" id="kpiInactiveNav" title="Inaktive Hosts anzeigen (keine Meldung in der letzten Stunde)"><strong id="kpiInactiveHosts">0</strong><span>Inaktiv</span></button>
+          </div>
+          <div class="kpi-strip kpi-strip--secondary">
+            <button type="button" class="kpi kpi-trends kpi-tap" id="kpiTrendsNav" title="Kritische Trends"><strong id="kpiTrends">0</strong><span>Trends</span></button>
+            <button type="button" class="kpi kpi-backup kpi-tap" id="kpiBackupNav" title="Backup-Status"><strong id="kpiBackupMissing">0</strong><span>Backup</span></button>
+          </div>
         </div>
       </header>
 
@@ -106,6 +115,55 @@
         </div>
         <p id="activeHostsStatusLine" class="status-line">Lade Hosts…</p>
         <section id="activeHostsList" class="inactive-hosts-stack" aria-live="polite"></section>
+      </div>
+
+      <div id="criticalTrendsView" class="mobile-view hidden" aria-label="Kritische Trends">
+        <div class="mobile-subpage-bar">
+          <button type="button" class="btn-back" id="criticalTrendsBackButton" aria-label="Zurück zu Alerts">← Alerts</button>
+          <div class="mobile-subpage-titles">
+            <h2>Kritische Trends</h2>
+            <p id="criticalTrendsSubtitle" class="mobile-subpage-hint">Projektion aus letzten 24 Std.</p>
+          </div>
+          <button type="button" class="icon-btn icon-btn-compact" id="criticalTrendsRefreshButton" title="Aktualisieren" aria-label="Aktualisieren">↻</button>
+        </div>
+        <div class="mobile-ops-toolbar">
+          <label class="mobile-range-label">
+            <span>Zeitraum</span>
+            <select id="criticalTrendsHoursSelect">
+              <option value="6">6 Std.</option>
+              <option value="24" selected>24 Std.</option>
+              <option value="72">3 Tage</option>
+            </select>
+          </label>
+          <label class="mobile-range-label">
+            <span>Projektion</span>
+            <select id="criticalTrendsProjectSelect">
+              <option value="8">8 Std.</option>
+              <option value="24">1 Tag</option>
+              <option value="72" selected>3 Tage</option>
+            </select>
+          </label>
+        </div>
+        <p id="criticalTrendsStatusLine" class="status-line">Lade Trends…</p>
+        <section id="criticalTrendsList" class="mobile-ops-stack" aria-live="polite"></section>
+      </div>
+
+      <div id="backupStatusView" class="mobile-view hidden" aria-label="Backup-Status">
+        <div class="mobile-subpage-bar">
+          <button type="button" class="btn-back" id="backupStatusBackButton" aria-label="Zurück zu Alerts">← Alerts</button>
+          <div class="mobile-subpage-titles">
+            <h2>Backup-Status</h2>
+            <p id="backupStatusSubtitle" class="mobile-subpage-hint">Aktualität &lt; 24h</p>
+          </div>
+          <button type="button" class="icon-btn icon-btn-compact" id="backupStatusRefreshButton" title="Aktualisieren" aria-label="Aktualisieren">↻</button>
+        </div>
+        <div class="mobile-ops-toolbar mobile-ops-toolbar--wrap">
+          <label class="sheet-check sheet-check--inline"><input id="backupFilterSql" type="checkbox" /> SQL</label>
+          <label class="sheet-check sheet-check--inline"><input id="backupFilterHana" type="checkbox" /> HANA</label>
+          <div id="backupStatusCountryFilter" class="host-country-filter" role="group" aria-label="Land filtern"></div>
+        </div>
+        <p id="backupStatusStatusLine" class="status-line">Lade Backups…</p>
+        <section id="backupStatusList" class="mobile-ops-stack" aria-live="polite"></section>
       </div>
 
       <div id="inactiveHostsView" class="mobile-view hidden" aria-label="Inaktive Hosts">
@@ -163,6 +221,13 @@
         <button type="button" class="btn-secondary" data-sheet-close>Abbrechen</button>
         <button type="button" class="btn-danger" id="closeSheetConfirm">Schliessen</button>
       </div>
+    </div>
+
+    <div id="customerInfoSheet" class="bottom-sheet bottom-sheet-tall hidden" role="dialog" aria-labelledby="customerInfoSheetTitle">
+      <h3 id="customerInfoSheetTitle">Kundeninfos</h3>
+      <p id="customerInfoSheetHint" class="sheet-hint"></p>
+      <dl class="host-sheet-facts" id="customerInfoSheetFacts"></dl>
+      <button type="button" class="btn-secondary host-sheet-close-btn" data-sheet-close>Schliessen</button>
     </div>
 
     <div id="hostSheet" class="bottom-sheet bottom-sheet-tall hidden" role="dialog" aria-labelledby="hostSheetTitle">
