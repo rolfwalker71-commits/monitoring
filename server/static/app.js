@@ -11090,7 +11090,9 @@ function renderOverviewHostMetrics() {
 
   const metricRow = (label, value, options = {}) => {
     let valueHtml = escapeHtml(asText(value, "-"));
-    if (options.truncate === "hostname") {
+    if (options.ellipsisFull) {
+      valueHtml = renderFullValueWithEllipsisHtml(value);
+    } else if (options.truncate === "hostname") {
       valueHtml = renderTruncatedHostnameHtml(value, { maxLen: options.truncateMaxLen });
     } else if (options.truncate === "uid") {
       valueHtml = renderTruncatedHostUidHtml(value);
@@ -11119,13 +11121,13 @@ function renderOverviewHostMetrics() {
   const hostIdentityRows = [
     metricRow("Kunde", customerLabel, { truncate: true }),
     metricRow("Bezeichnung", displayLabel, { truncate: true }),
-    metricRow("Hostname", hostname, { truncate: "hostname", truncateMaxLen: 36 }),
+    metricRow("Hostname", hostname, { ellipsisFull: true }),
     metricRow("Host-UID", hostUid, { truncate: "uid" }),
     metricRow("Land", countryCode),
     metricRow("Umgebung", envLabel),
     customerProject ? metricRow("Projekt", customerProject) : "",
     metricRow("Meldungen", totalReports),
-    metricRow("Agent ID", report?.agent_id || payload.agent_id || "-", { truncate: "hostname", truncateMaxLen: 36 }),
+    metricRow("Agent ID", report?.agent_id || payload.agent_id || "-", { ellipsisFull: true }),
     metricRow("Version", payload.agent_version || host.agent_version || "-"),
     metricRow("API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config)),
     metricRow("Queue", `${queueDepthLabel(payload.queue_depth)} Dateien`),
@@ -18142,6 +18144,15 @@ function truncateHostnameForDisplay(hostname, options = {}) {
   const headLen = Math.min(14, Math.max(8, Math.floor(maxLen * 0.55)));
   const tailLen = Math.max(6, maxLen - headLen - 1);
   return truncateDisplayText(full, { headLen, tailLen, maxLen });
+}
+
+function renderFullValueWithEllipsisHtml(value) {
+  const full = asText(value, "-");
+  const display = escapeHtml(full);
+  if (!full || full === "-") {
+    return '<span class="text-truncate-mid">-</span>';
+  }
+  return `<span class="text-truncate-mid" title="${escapeHtml(full)}">${display}</span>`;
 }
 
 function renderTruncatedSpanHtml(info) {
