@@ -59,7 +59,6 @@
         </div>
         <div id="headerMenu" class="header-menu hidden">
           <button id="menuCriticalTrendsButton" type="button">Kritische Trends</button>
-          <button id="menuBackupStatusButton" type="button">Backup-Status</button>
           <button id="menuCustomerInfoButton" type="button">Kundeninfos (Alert)</button>
           <button id="liveFeedDetailsMenuButton" type="button">Report-Details (Live)</button>
           <button id="liveFeedShowMenuButton" type="button">Live Meldungen einblenden</button>
@@ -76,7 +75,6 @@
           </div>
           <div class="kpi-strip kpi-strip--secondary">
             <button type="button" class="kpi kpi-trends kpi-tap" id="kpiTrendsNav" title="Kritische Trends"><strong id="kpiTrends">0</strong><span>Trends</span></button>
-            <button type="button" class="kpi kpi-backup kpi-tap" id="kpiBackupNav" title="Backup-Status"><strong id="kpiBackupMissing">0</strong><span>Backup</span></button>
           </div>
         </div>
       </header>
@@ -146,24 +144,6 @@
         </div>
         <p id="criticalTrendsStatusLine" class="status-line">Lade Trends…</p>
         <section id="criticalTrendsList" class="mobile-ops-stack" aria-live="polite"></section>
-      </div>
-
-      <div id="backupStatusView" class="mobile-view hidden" aria-label="Backup-Status">
-        <div class="mobile-subpage-bar">
-          <button type="button" class="btn-back" id="backupStatusBackButton" aria-label="Zurück zu Alerts">← Alerts</button>
-          <div class="mobile-subpage-titles">
-            <h2>Backup-Status</h2>
-            <p id="backupStatusSubtitle" class="mobile-subpage-hint">Aktualität &lt; 24h</p>
-          </div>
-          <button type="button" class="icon-btn icon-btn-compact" id="backupStatusRefreshButton" title="Aktualisieren" aria-label="Aktualisieren">↻</button>
-        </div>
-        <div class="mobile-ops-toolbar mobile-ops-toolbar--wrap">
-          <label class="sheet-check sheet-check--inline"><input id="backupFilterSql" type="checkbox" /> SQL</label>
-          <label class="sheet-check sheet-check--inline"><input id="backupFilterHana" type="checkbox" /> HANA</label>
-          <div id="backupStatusCountryFilter" class="host-country-filter" role="group" aria-label="Land filtern"></div>
-        </div>
-        <p id="backupStatusStatusLine" class="status-line">Lade Backups…</p>
-        <section id="backupStatusList" class="mobile-ops-stack" aria-live="polite"></section>
       </div>
 
       <div id="inactiveHostsView" class="mobile-view hidden" aria-label="Inaktive Hosts">

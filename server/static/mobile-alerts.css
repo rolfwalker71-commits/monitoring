@@ -562,8 +562,19 @@ body {
   margin-top: 10px;
 }
 
+.host-list-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .btn-host-list-sheet {
   width: 100%;
+  margin-top: 0;
+}
+
+.host-list-details-body > .btn-host-list-sheet {
   margin-top: 10px;
 }
 
@@ -2593,11 +2604,6 @@ body.host-insight-open {
 .kpi-trends {
   background: color-mix(in srgb, var(--accent) 10%, var(--panel));
   border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
-}
-
-.kpi-backup {
-  background: color-mix(in srgb, var(--warning) 12%, var(--panel));
-  border-color: color-mix(in srgb, var(--warning) 28%, var(--line));
 }
 
 .kpi-tap.is-active {
