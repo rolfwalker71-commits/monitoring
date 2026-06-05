@@ -9,7 +9,7 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260605d"
+PULL_SCRIPT_VERSION="20260605e"
 # Bump when FILES_LIST changes (must match script_guardian entries).
 PULL_FILES_MANIFEST="guardian-32-v1"
 PULL_FILES_EXPECTED_COUNT=32
@@ -973,9 +973,9 @@ explain_deploy_integrity_failure() {
   echo "  EmbeddedAgentVersion (client)=${embedded:-?}" >&2
   if [ -n "$agent_ver" ] && [ -n "$embedded" ] && [ "$embedded" != "$agent_ver" ]; then
     if version_gt "$agent_ver" "$embedded"; then
-      echo "  Hinweis: embedded hinter AGENT_VERSION (sollte nach Agent-Code-Aenderung nachgezogen werden)." >&2
+      echo "  Hinweis: embedded hinter AGENT_VERSION (unkritisch – Agent nutzt AGENT_VERSION-Datei)." >&2
     else
-      echo "  FEHLER: embedded neuer als AGENT_VERSION." >&2
+      echo "  Hinweis: embedded neuer als AGENT_VERSION – BUILD/AGENT-Dateien vermutlich veraltet." >&2
     fi
   fi
   if ! collect_ps1_mojibake_ok "$ps1"; then
@@ -1012,9 +1012,43 @@ verify_deployed_payload_integrity() {
   return 0
 }
 
+sync_version_files_if_embedded_ahead() {
+  local build_ver="" agent_ver="" embedded="" remote_ref="" remote_bv="" remote_av=""
+  local ps1="$TARGET_DIR/client/windows/collect_and_send.ps1"
+
+  build_ver="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
+  agent_ver="$(tr -d ' \t\r\n' < "$TARGET_DIR/AGENT_VERSION" 2>/dev/null || true)"
+  embedded="$(collect_ps1_embedded_version "$ps1" 2>/dev/null || true)"
+  [ -n "$build_ver" ] && [ "$build_ver" = "$agent_ver" ] || return 1
+  [ -n "$embedded" ] && version_gt "$embedded" "$agent_ver" || return 1
+
+  remote_ref="$(resolve_latest_main_sha main || true)"
+  if ! is_full_git_sha "$remote_ref"; then
+    return 1
+  fi
+  remote_bv="$(fetch_build_version_at_ref "$remote_ref")"
+  remote_av="$(fetch_repo_text_at_ref AGENT_VERSION "$remote_ref")"
+  [ -n "$remote_bv" ] && [ -n "$remote_av" ] && [ "$remote_bv" = "$remote_av" ] || return 1
+  if [ "$remote_bv" = "$agent_ver" ]; then
+    return 1
+  fi
+  if version_gt "$remote_bv" "$agent_ver" || [ "$remote_bv" = "$embedded" ]; then
+    echo "Version-Dateien nachziehen: BUILD/AGENT ${agent_ver} -> ${remote_bv} (embedded=${embedded})..." >&2
+    force_refresh_version_files "$remote_ref"
+    mirror_update_payloads
+    return 0
+  fi
+  return 1
+}
+
 repair_deploy_if_integrity_failed() {
   local repair_ref="" remote_av=""
   if verify_deployed_payload_integrity; then
+    return 0
+  fi
+
+  if sync_version_files_if_embedded_ahead && verify_deployed_payload_integrity; then
+    echo "Reparatur: BUILD/AGENT-Dateien nachgezogen (ohne Voll-Redeploy)." >&2
     return 0
   fi
 
