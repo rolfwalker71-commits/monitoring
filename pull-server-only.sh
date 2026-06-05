@@ -9,9 +9,11 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260605b"
+PULL_SCRIPT_VERSION="20260605d"
 # Bump when FILES_LIST changes (must match script_guardian entries).
 PULL_FILES_MANIFEST="guardian-32-v1"
+PULL_FILES_EXPECTED_COUNT=32
+_DEPLOY_MAIN_SHA_CACHED=""
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
 GITHUB_TOKEN="${MONITORING_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -137,6 +139,7 @@ fetch_build_version_at_ref() {
 }
 
 # Pick SHA with highest BUILD_VERSION among candidates (handles stale MAIN_HEAD_SHA CDN).
+# Bei gleicher BUILD_VERSION gewinnt der fruehere Kandidat (git ls-remote vor MAIN_HEAD_SHA CDN).
 pick_best_sha_by_build_version() {
   local sha="" bv="" best_sha="" best_bv=""
   for sha in "$@"; do
@@ -248,6 +251,7 @@ ensure_deploy_ref_is_latest_commit() {
   fi
 
   REF="$latest_sha"
+  invalidate_deploy_main_sha_cache
   MONITORING_PULL_USE_RAW_ONLY=0
   export MONITORING_PULL_USE_RAW_ONLY
 }
@@ -721,9 +725,23 @@ collect_main_sha_candidates() {
   return 0
 }
 
+invalidate_deploy_main_sha_cache() {
+  _DEPLOY_MAIN_SHA_CACHED=""
+}
+
 resolve_latest_main_sha() {
   local branch_ref="${1:-main}"
-  collect_main_sha_candidates "$branch_ref" || return 1
+  if is_full_git_sha "$_DEPLOY_MAIN_SHA_CACHED"; then
+    printf '%s' "$_DEPLOY_MAIN_SHA_CACHED"
+    return 0
+  fi
+  _DEPLOY_MAIN_SHA_CACHED="$(collect_main_sha_candidates "$branch_ref" || true)"
+  if ! is_full_git_sha "$_DEPLOY_MAIN_SHA_CACHED"; then
+    invalidate_deploy_main_sha_cache
+    return 1
+  fi
+  printf '%s' "$_DEPLOY_MAIN_SHA_CACHED"
+  return 0
 }
 
 write_repo_text_to_target() {
@@ -886,6 +904,7 @@ redeploy_files_from_ref() {
   force_refresh_version_files "$REF"
   mirror_update_payloads
   echo "$REF" > "$TARGET_DIR/DEPLOYED_COMMIT_SHA"
+  _DEPLOY_MAIN_SHA_CACHED="$redeploy_ref"
   return 0
 }
 
@@ -907,26 +926,87 @@ mirror_update_payloads() {
   chmod 0755 "$TARGET_DIR/updates/client/linux/collect_and_send.sh" "$TARGET_DIR/updates/client/linux/install_agent.sh" "$TARGET_DIR/updates/client/linux/self_update.sh" "$TARGET_DIR/updates/client/linux/script_guardian.sh" 2>/dev/null || true
 }
 
-verify_deployed_payload_integrity() {
-  local agent_ver="" expected_embedded="" ps1=""
-  agent_ver="$(tr -d ' \t\r\n' < "$TARGET_DIR/AGENT_VERSION" 2>/dev/null || true)"
-  [ -n "$agent_ver" ] || return 1
+collect_ps1_embedded_version() {
+  local ps1="$1"
+  sed -n "s/^\$EmbeddedAgentVersion = '\([^']*\)'.*/\1/p" "$ps1" 2>/dev/null | head -n 1
+}
 
-  ps1="$TARGET_DIR/client/windows/collect_and_send.ps1"
-  if [ ! -f "$ps1" ]; then
-    return 1
+collect_ps1_embedded_version_ok() {
+  local ps1="$1" agent_ver="$2" embedded=""
+  [ -f "$ps1" ] && [ -n "$agent_ver" ] || return 1
+  embedded="$(collect_ps1_embedded_version "$ps1")"
+  [ -n "$embedded" ] || return 1
+  if [ "$embedded" = "$agent_ver" ]; then
+    return 0
   fi
-  expected_embedded="\$EmbeddedAgentVersion = '$agent_ver'"
-  if ! grep -qF "$expected_embedded" "$ps1" 2>/dev/null; then
-    return 1
+  # Agent liest AGENT_VERSION-Datei zuerst; embedded hinter Datei ist bei Server/CSS-Releases unkritisch.
+  if version_gt "$agent_ver" "$embedded"; then
+    return 0
   fi
+  return 1
+}
+
+collect_ps1_mojibake_ok() {
+  local ps1="$1"
+  [ -f "$ps1" ] || return 1
   if grep -q 'function Get-AngLogMojibakeScore' "$ps1" 2>/dev/null \
     && ! grep -q '\[char\]0x00C3' "$ps1" 2>/dev/null; then
     return 1
   fi
+  return 0
+}
 
-  if [ -f "$TARGET_DIR/updates/client/windows/collect_and_send.ps1" ] \
-    && ! grep -qF "$expected_embedded" "$TARGET_DIR/updates/client/windows/collect_and_send.ps1" 2>/dev/null; then
+explain_deploy_integrity_failure() {
+  local build_ver="" agent_ver="" embedded="" updates_embedded=""
+  local ps1="$TARGET_DIR/client/windows/collect_and_send.ps1"
+  local updates_ps1="$TARGET_DIR/updates/client/windows/collect_and_send.ps1"
+
+  build_ver="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
+  agent_ver="$(tr -d ' \t\r\n' < "$TARGET_DIR/AGENT_VERSION" 2>/dev/null || true)"
+  echo "Integritaets-Details:" >&2
+  echo "  BUILD_VERSION=$build_ver AGENT_VERSION=$agent_ver" >&2
+  if [ ! -f "$ps1" ]; then
+    echo "  collect_and_send.ps1 fehlt unter $ps1" >&2
+    return 0
+  fi
+  embedded="$(collect_ps1_embedded_version "$ps1")"
+  echo "  EmbeddedAgentVersion (client)=${embedded:-?}" >&2
+  if [ -n "$agent_ver" ] && [ -n "$embedded" ] && [ "$embedded" != "$agent_ver" ]; then
+    if version_gt "$agent_ver" "$embedded"; then
+      echo "  Hinweis: embedded hinter AGENT_VERSION (sollte nach Agent-Code-Aenderung nachgezogen werden)." >&2
+    else
+      echo "  FEHLER: embedded neuer als AGENT_VERSION." >&2
+    fi
+  fi
+  if ! collect_ps1_mojibake_ok "$ps1"; then
+    echo "  FEHLER: Mojibake-Hilfsfunktion in collect_and_send.ps1 beschaedigt." >&2
+  fi
+  if [ -f "$updates_ps1" ]; then
+    updates_embedded="$(collect_ps1_embedded_version "$updates_ps1")"
+    echo "  EmbeddedAgentVersion (updates)=${updates_embedded:-?}" >&2
+  fi
+}
+
+verify_deployed_payload_integrity() {
+  local agent_ver="" build_ver="" ps1="" updates_ps1=""
+  build_ver="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
+  agent_ver="$(tr -d ' \t\r\n' < "$TARGET_DIR/AGENT_VERSION" 2>/dev/null || true)"
+  [ -n "$agent_ver" ] && [ -n "$build_ver" ] || return 1
+  if [ "$build_ver" != "$agent_ver" ]; then
+    return 1
+  fi
+
+  ps1="$TARGET_DIR/client/windows/collect_and_send.ps1"
+  if ! collect_ps1_mojibake_ok "$ps1"; then
+    return 1
+  fi
+  if ! collect_ps1_embedded_version_ok "$ps1" "$agent_ver"; then
+    return 1
+  fi
+
+  updates_ps1="$TARGET_DIR/updates/client/windows/collect_and_send.ps1"
+  if [ -f "$updates_ps1" ] \
+    && ! collect_ps1_embedded_version_ok "$updates_ps1" "$agent_ver"; then
     return 1
   fi
   return 0
@@ -938,7 +1018,8 @@ repair_deploy_if_integrity_failed() {
     return 0
   fi
 
-  echo "WARNUNG: Deploy-Inkonsistenz (AGENT_VERSION passt nicht zu collect_and_send.ps1)." >&2
+  echo "WARNUNG: Deploy-Inkonsistenz (BUILD/AGENT/collect_and_send.ps1)." >&2
+  explain_deploy_integrity_failure
   repair_ref="$(resolve_latest_main_sha main || true)"
   if ! is_full_git_sha "$repair_ref"; then
     repair_ref="$(probe_ref_with_matching_version_files "$REF" || true)"
@@ -955,6 +1036,7 @@ repair_deploy_if_integrity_failed() {
   fi
   if ! verify_deployed_payload_integrity; then
     echo "FEHLER: Nach Reparatur-Deploy weiterhin inkonsistent." >&2
+    explain_deploy_integrity_failure
     return 1
   fi
   echo "Reparatur-Deploy erfolgreich."
@@ -1049,11 +1131,14 @@ finalize_deploy_until_version_match() {
     local_bv="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
     remote_bv="$(fetch_build_version_at_ref "$latest_sha")"
     deployed_sha="$(tr -d ' \t\r\n' < "$TARGET_DIR/DEPLOYED_COMMIT_SHA" 2>/dev/null || true)"
-    if [ -n "$remote_bv" ] && [ "$local_bv" = "$remote_bv" ] && [ "$deployed_sha" = "$latest_sha" ]; then
-      REF="$latest_sha"
-      if [ "$attempt" -gt 1 ]; then
+    # BUILD-Gleichheit reicht (MAIN_HEAD_SHA-Nachzieh-Commits haben gleiche BUILD_VERSION).
+    if [ -n "$remote_bv" ] && [ "$local_bv" = "$remote_bv" ]; then
+      if [ "$deployed_sha" != "$latest_sha" ]; then
+        echo "Version-Sync OK: BUILD $local_bv (deploy ${deployed_sha:0:12}, main-Ziel ${latest_sha:0:12})" >&2
+      elif [ "$attempt" -gt 1 ]; then
         echo "Version-Sync OK: BUILD $local_bv @ ${latest_sha:0:12} (Versuch $attempt)" >&2
       fi
+      REF="${deployed_sha:-$latest_sha}"
       return 0
     fi
     if [ "$attempt" -ge "$max_attempts" ]; then
@@ -1064,7 +1149,7 @@ finalize_deploy_until_version_match() {
     if redeploy_files_from_ref "$latest_sha"; then
       REF="$latest_sha"
       mirror_update_payloads
-      repair_deploy_if_integrity_failed
+      repair_deploy_if_integrity_failed || true
     else
       echo "WARNUNG: Nachzug-Versuch $attempt fehlgeschlagen." >&2
     fi
@@ -1518,7 +1603,7 @@ fi
 
 # Mirror update payloads to /updates so agents can update from SERVER_URL.
 mirror_update_payloads
-repair_deploy_if_integrity_failed
+repair_deploy_if_integrity_failed || true
 if [ -f "$TARGET_DIR/scripts/watch-inventur-job.sh" ]; then
   chmod 0755 "$TARGET_DIR/scripts/watch-inventur-job.sh"
 fi
@@ -1606,9 +1691,72 @@ if is_full_git_sha "$REF"; then
   force_refresh_version_files "$REF"
 fi
 finalize_deploy_until_version_match || true
-repair_deploy_if_integrity_failed
+repair_deploy_if_integrity_failed || true
 
-LATEST_SHA_AFTER="$(resolve_latest_main_sha main || true)"
+print_deploy_consistency_summary() {
+  local local_bv="" local_av="" remote_bv="" remote_av="" remote_ref=""
+  local deployed_sha="" pull_version="" pull_manifest="" guardian_ok=1 rel dest
+  local file_count=0
+
+  local_bv="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
+  local_av="$(tr -d ' \t\r\n' < "$TARGET_DIR/AGENT_VERSION" 2>/dev/null || true)"
+  deployed_sha="$(tr -d ' \t\r\n' < "$TARGET_DIR/DEPLOYED_COMMIT_SHA" 2>/dev/null || true)"
+  file_count="$(printf '%s\n' "$FILES_LIST" | sed '/^$/d' | wc -l | tr -d ' ')"
+  pull_version="$(pull_script_version_from_file "$TARGET_DIR/pull-server-only.sh" 2>/dev/null || true)"
+  pull_manifest="$(pull_script_manifest_from_file "$TARGET_DIR/pull-server-only.sh" 2>/dev/null || true)"
+
+  invalidate_deploy_main_sha_cache
+  remote_ref="$(resolve_latest_main_sha main || true)"
+  if is_full_git_sha "$remote_ref"; then
+    remote_bv="$(fetch_build_version_at_ref "$remote_ref")"
+    remote_av="$(fetch_repo_text_at_ref AGENT_VERSION "$remote_ref")"
+  fi
+
+  for rel in \
+    "client/linux/script_guardian.sh" \
+    "updates/client/linux/script_guardian.sh" \
+    "client/windows/script_guardian.ps1" \
+    "updates/client/windows/script_guardian.ps1"; do
+    dest="$TARGET_DIR/$rel"
+    if [ ! -s "$dest" ]; then
+      guardian_ok=0
+      break
+    fi
+  done
+
+  echo "--- Deploy-Konsistenz ---"
+  echo "Pull-Skript lokal: Version ${pull_version:-?} / Manifest ${pull_manifest:-?} (erwartet ${PULL_FILES_EXPECTED_COUNT} Dateien, geladen ${file_count})"
+  if pull_script_has_guardian_files_list "$TARGET_DIR/pull-server-only.sh"; then
+    echo "Pull-Skript FILES_LIST: Guardian enthalten"
+  else
+    echo "WARNUNG: Pull-Skript FILES_LIST ohne Guardian – curl main/pull-server-only.sh" >&2
+  fi
+  if [ "$guardian_ok" -eq 1 ]; then
+    echo "Guardian-Updates: vorhanden"
+  else
+    echo "WARNUNG: Guardian-Updates: fehlen unter $TARGET_DIR/updates/client/" >&2
+  fi
+  echo "Deploy-Commit: ${deployed_sha:-$REF}"
+  if is_full_git_sha "$remote_ref"; then
+    echo "repo/main Ziel: ${remote_ref:0:12} (BUILD ${remote_bv:-?})"
+  fi
+  echo "BUILD lokal: ${local_bv:-?} | AGENT lokal: ${local_av:-?}"
+  if [ -n "$local_bv" ] && [ -n "$local_av" ] && [ "$local_bv" != "$local_av" ]; then
+    echo "WARNUNG: BUILD und AGENT lokal unterschiedlich." >&2
+  fi
+  if [ -n "$remote_bv" ] && [ -n "$local_bv" ] && [ "$local_bv" = "$remote_bv" ]; then
+    echo "Version-Status: AKTUELL (BUILD $local_bv)"
+  elif [ -n "$remote_bv" ] && [ -n "$local_bv" ]; then
+    echo "WARNUNG: Version-Status: BUILD lokal $local_bv, repo/main $remote_bv – Pull erneut oder MONITORING_DEPLOY_SHA pinnen." >&2
+  else
+    echo "Version-Status: UNBEKANNT (repo/main BUILD nicht ermittelbar)"
+  fi
+  if [ -n "$deployed_sha" ] && [ -n "$remote_ref" ] && [ "$deployed_sha" != "$remote_ref" ] \
+    && [ -n "$local_bv" ] && [ -n "$remote_bv" ] && [ "$local_bv" = "$remote_bv" ]; then
+    echo "Hinweis: Commit-SHA weicht ab, BUILD ist gleich (typisch nach MAIN_HEAD_SHA-Nachzieh-Commit)." >&2
+  fi
+  echo "-------------------------"
+}
 
 DEPLOYED_SHA="$(tr -d ' \t\r\n' < "$TARGET_DIR/DEPLOYED_COMMIT_SHA" 2>/dev/null || true)"
 
@@ -1618,50 +1766,13 @@ else
   echo "Fertig. Deploy-Commit: $REF [Deploy: $DEPLOY_TIME]"
 fi
 
-if [ -n "$LATEST_SHA_AFTER" ] && [ "$DEPLOYED_SHA" = "$LATEST_SHA_AFTER" ]; then
-  echo "Commit-Status: AKTUELL (deployter Commit entspricht repo/main)"
-elif [ -n "$LATEST_SHA_AFTER" ]; then
-  echo "Commit-Status: NICHT AKTUELL (deployt=$DEPLOYED_SHA, repo/main=$LATEST_SHA_AFTER)"
-else
-  echo "Commit-Status: UNBEKANNT (konnte latest main SHA nicht ermitteln)"
-fi
+print_deploy_consistency_summary
 
 LOCAL_BUILD_VERSION="$(tr -d ' \t\r\n' < "$TARGET_DIR/BUILD_VERSION" 2>/dev/null || true)"
 LOCAL_AGENT_VERSION="$(tr -d ' \t\r\n' < "$TARGET_DIR/AGENT_VERSION" 2>/dev/null || true)"
-MAIN_HEAD_SHA="${LATEST_SHA_AFTER:-}"
-if ! is_full_git_sha "$MAIN_HEAD_SHA"; then
-  MAIN_HEAD_SHA="$(resolve_latest_main_sha main || true)"
-fi
-REMOTE_BUILD_REF="${MAIN_HEAD_SHA:-$REF}"
-REMOTE_BUILD_VERSION=""
-REMOTE_AGENT_VERSION=""
-if is_full_git_sha "$REMOTE_BUILD_REF"; then
-  REMOTE_BUILD_VERSION="$(fetch_repo_text_at_ref BUILD_VERSION "$REMOTE_BUILD_REF")"
-  REMOTE_AGENT_VERSION="$(fetch_repo_text_at_ref AGENT_VERSION "$REMOTE_BUILD_REF")"
-fi
 
 echo "BUILD_VERSION deployiert: ${LOCAL_BUILD_VERSION:-?}"
 echo "AGENT_VERSION deployiert: ${LOCAL_AGENT_VERSION:-?}"
-if [ -n "$LOCAL_BUILD_VERSION" ] && [ -n "$LOCAL_AGENT_VERSION" ] && [ "$LOCAL_BUILD_VERSION" != "$LOCAL_AGENT_VERSION" ]; then
-  echo "WARNUNG: BUILD und AGENT Version unterscheiden sich – Deploy ist inkonsistent." >&2
-fi
-if [ -n "$REMOTE_BUILD_VERSION" ]; then
-  if is_full_git_sha "$REMOTE_BUILD_REF"; then
-    echo "BUILD_VERSION GitHub (main @ ${REMOTE_BUILD_REF:0:12}): $REMOTE_BUILD_VERSION"
-  else
-    echo "BUILD_VERSION GitHub ($REMOTE_BUILD_REF): $REMOTE_BUILD_VERSION"
-  fi
-  if [ "$LOCAL_BUILD_VERSION" != "$REMOTE_BUILD_VERSION" ]; then
-    echo "WARNUNG: Deploy-Ordner BUILD_VERSION weicht von main HEAD ab – Pull erneut oder MONITORING_DEPLOY_SHA pruefen." >&2
-  fi
-fi
-if [ -n "$REMOTE_AGENT_VERSION" ]; then
-  if is_full_git_sha "$REMOTE_BUILD_REF"; then
-    echo "AGENT_VERSION GitHub (main @ ${REMOTE_BUILD_REF:0:12}): $REMOTE_AGENT_VERSION"
-  else
-    echo "AGENT_VERSION GitHub ($REMOTE_BUILD_REF): $REMOTE_AGENT_VERSION"
-  fi
-fi
 echo ""
 print_deployed_commit_message_summary "${DEPLOYED_SHA:-$REF}"
 echo ""
@@ -1674,8 +1785,8 @@ fi
 if ! grep -q 'print_deployed_commit_message_summary' "$TARGET_DIR/pull-server-only.sh" 2>/dev/null; then
   echo "WARNUNG: $TARGET_DIR/pull-server-only.sh ohne Commit-Text-Funktion – Skript von main aktualisieren und Pull erneut starten." >&2
 fi
-if grep -q 'BUILD_VERSION GitHub main:' "$TARGET_DIR/pull-server-only.sh" 2>/dev/null; then
-  echo "WARNUNG: $TARGET_DIR/pull-server-only.sh ist noch die alte Version (zeigt 'GitHub main')." >&2
+if ! pull_script_has_guardian_files_list "$TARGET_DIR/pull-server-only.sh"; then
+  echo "WARNUNG: $TARGET_DIR/pull-server-only.sh ist veraltet (keine Guardian-Dateien in FILES_LIST)." >&2
   echo "         Einmalig: curl -fsSL 'https://raw.githubusercontent.com/$OWNER_REPO/main/pull-server-only.sh' -o $TARGET_DIR/pull-server-only.sh" >&2
 fi
 if [ -f "$TARGET_DIR/server/static/index.html" ]; then
