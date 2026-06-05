@@ -58,7 +58,7 @@
           </div>
         </div>
         <div id="headerMenu" class="header-menu hidden">
-          <button id="menuCriticalTrendsButton" type="button">Kritische Trends</button>
+          <button id="menuAddonSearchButton" type="button">AddOn-Suche</button>
           <button id="menuCustomerInfoButton" type="button">Kundeninfos (Alert)</button>
           <button id="liveFeedDetailsMenuButton" type="button">Report-Details (Live)</button>
           <button id="liveFeedShowMenuButton" type="button">Live Meldungen einblenden</button>
@@ -72,9 +72,6 @@
             <div class="kpi kpi-open"><strong id="kpiOpen">0</strong><span>Offen</span></div>
             <button type="button" class="kpi kpi-active kpi-tap" id="kpiActiveNav" title="Aktive Hosts anzeigen (Meldung in der letzten Stunde)"><strong id="kpiActiveHosts">0</strong><span>Aktiv</span></button>
             <button type="button" class="kpi kpi-inactive kpi-tap" id="kpiInactiveNav" title="Inaktive Hosts anzeigen (keine Meldung in der letzten Stunde)"><strong id="kpiInactiveHosts">0</strong><span>Inaktiv</span></button>
-          </div>
-          <div class="kpi-strip kpi-strip--secondary">
-            <button type="button" class="kpi kpi-trends kpi-tap" id="kpiTrendsNav" title="Kritische Trends"><strong id="kpiTrends">0</strong><span>Trends</span></button>
           </div>
         </div>
       </header>
@@ -115,35 +112,24 @@
         <section id="activeHostsList" class="inactive-hosts-stack" aria-live="polite"></section>
       </div>
 
-      <div id="criticalTrendsView" class="mobile-view hidden" aria-label="Kritische Trends">
+      <div id="addonSearchView" class="mobile-view hidden" aria-label="AddOn-Suche">
         <div class="mobile-subpage-bar">
-          <button type="button" class="btn-back" id="criticalTrendsBackButton" aria-label="Zurück zu Alerts">← Alerts</button>
+          <button type="button" class="btn-back" id="addonSearchBackButton" aria-label="Zurück zu Alerts">← Alerts</button>
           <div class="mobile-subpage-titles">
-            <h2>Kritische Trends</h2>
-            <p id="criticalTrendsSubtitle" class="mobile-subpage-hint">Projektion aus letzten 24 Std.</p>
+            <h2>AddOn-Suche</h2>
+            <p id="addonSearchSubtitle" class="mobile-subpage-hint">AddOn &gt; Version &gt; Kunde &gt; Host</p>
           </div>
-          <button type="button" class="icon-btn icon-btn-compact" id="criticalTrendsRefreshButton" title="Aktualisieren" aria-label="Aktualisieren">↻</button>
+          <button type="button" class="icon-btn icon-btn-compact" id="addonSearchRefreshButton" title="Aktualisieren" aria-label="Aktualisieren">↻</button>
         </div>
-        <div class="mobile-ops-toolbar">
-          <label class="mobile-range-label">
-            <span>Zeitraum</span>
-            <select id="criticalTrendsHoursSelect">
-              <option value="6">6 Std.</option>
-              <option value="24" selected>24 Std.</option>
-              <option value="72">3 Tage</option>
-            </select>
+        <div class="host-list-toolbar">
+          <label class="host-search-pill host-search-pill--wide">
+            <span class="host-search-icon" aria-hidden="true">⌕</span>
+            <input type="search" id="addonSearchInput" placeholder="AddOn-Name filtern…" autocomplete="off" enterkeyhint="search" />
           </label>
-          <label class="mobile-range-label">
-            <span>Projektion</span>
-            <select id="criticalTrendsProjectSelect">
-              <option value="8">8 Std.</option>
-              <option value="24">1 Tag</option>
-              <option value="72" selected>3 Tage</option>
-            </select>
-          </label>
+          <div id="addonSearchCountryFilter" class="host-country-filter" role="group" aria-label="Land filtern"></div>
         </div>
-        <p id="criticalTrendsStatusLine" class="status-line">Lade Trends…</p>
-        <section id="criticalTrendsList" class="mobile-ops-stack" aria-live="polite"></section>
+        <p id="addonSearchStatusLine" class="status-line">AddOn-Name eingeben (mind. 2 Zeichen).</p>
+        <section id="addonSearchList" class="mobile-addon-search-stack" aria-live="polite"></section>
       </div>
 
       <div id="inactiveHostsView" class="mobile-view hidden" aria-label="Inaktive Hosts">

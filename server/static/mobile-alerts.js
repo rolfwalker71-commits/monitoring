@@ -135,13 +135,12 @@ function hideAllMobileSubViews() {
   document.getElementById("alertsHomeView")?.classList.add("hidden");
   document.getElementById("inactiveHostsView")?.classList.add("hidden");
   document.getElementById("activeHostsView")?.classList.add("hidden");
-  document.getElementById("criticalTrendsView")?.classList.add("hidden");
+  document.getElementById("addonSearchView")?.classList.add("hidden");
 }
 
 function clearMobileKpiNavActive() {
   document.getElementById("kpiInactiveNav")?.classList.remove("is-active");
   document.getElementById("kpiActiveNav")?.classList.remove("is-active");
-  document.getElementById("kpiTrendsNav")?.classList.remove("is-active");
 }
 
 function showAlertsHomeView() {
@@ -149,19 +148,6 @@ function showAlertsHomeView() {
   hideAllMobileSubViews();
   document.getElementById("alertsHomeView")?.classList.remove("hidden");
   clearMobileKpiNavActive();
-}
-
-function isCriticalTrendsViewActive() {
-  return state.mobileView === "critical-trends";
-}
-
-function showCriticalTrendsView() {
-  state.mobileView = "critical-trends";
-  hideAllMobileSubViews();
-  document.getElementById("criticalTrendsView")?.classList.remove("hidden");
-  clearMobileKpiNavActive();
-  document.getElementById("kpiTrendsNav")?.classList.add("is-active");
-  void loadCriticalTrendsList();
 }
 
 function showInactiveHostsView() {
@@ -190,6 +176,22 @@ function showActiveHostsView() {
     subtitle.textContent = "Meldung in der letzten Stunde";
   }
   void loadActiveHostsList();
+}
+
+function isAddonSearchViewActive() {
+  return state.mobileView === "addon-search";
+}
+
+function showAddonSearchView() {
+  state.mobileView = "addon-search";
+  hideAllMobileSubViews();
+  document.getElementById("addonSearchView")?.classList.remove("hidden");
+  clearMobileKpiNavActive();
+  const input = document.getElementById("addonSearchInput");
+  if (input && String(input.value || "") !== String(state.addonSearchQuery || "")) {
+    input.value = String(state.addonSearchQuery || "");
+  }
+  updateAddonSearchView();
 }
 
 function buildCountryFlagIconHtml(countryCode) {
@@ -1470,20 +1472,47 @@ function mobileInsightFactsHtml(rows) {
   return html ? '<dl class="insight-facts">' + html + "</dl>" : "";
 }
 
+function mobileInsightSplitRow(leftText, rightText, variant) {
+  const left = String(leftText || "").trim();
+  const right = String(rightText || "").trim();
+  if (!left || !right) return "";
+  const rowClass = variant === "addon" ? "insight-addon-row" : "insight-kv-row";
+  const leftClass = variant === "addon" ? "insight-addon-name" : "insight-kv-label";
+  const rightClass = variant === "addon" ? "insight-addon-version" : "insight-kv-value";
+  return (
+    '<li class="' + rowClass + '">' +
+    '<span class="' + leftClass + '">' + mobileEsc(left) + "</span>" +
+    '<span class="' + rightClass + '">' + mobileEsc(right) + "</span>" +
+    "</li>"
+  );
+}
+
+function mobileInsightAddonRow(name, version) {
+  return mobileInsightSplitRow(name, version || "—", "addon");
+}
+
+function mobileInsightKvRow(label, value) {
+  return mobileInsightSplitRow(label, value, "kv");
+}
+
+function mobileInsightKvListHtml(rows) {
+  const items = (Array.isArray(rows) ? rows : [])
+    .map((entry) => mobileInsightKvRow(entry?.label, entry?.value))
+    .filter(Boolean);
+  return items.length ? '<ul class="insight-kv-list">' + items.join("") + "</ul>" : "";
+}
+
 function mobileInsightAddonListHtml(labels, maxVisible) {
   const items = Array.isArray(labels) ? labels : [];
   if (!items.length) return '<p class="insight-empty">Keine AddOns vorhanden.</p>';
   const limit = Math.max(1, Number(maxVisible) || 25);
   const visible = items.slice(0, limit);
   const hiddenCount = Math.max(0, items.length - visible.length);
-  const rows = visible.map((entry) => {
-    const version = String(entry.version || "").trim();
-    return mobileInsightFactRow(entry.name, mobileEsc(version || "—"));
-  });
+  const rows = visible.map((entry) => mobileInsightAddonRow(entry.name, entry.version)).filter(Boolean);
   const more = hiddenCount > 0
     ? '<p class="insight-empty">+' + hiddenCount + " weitere AddOns</p>"
     : "";
-  return mobileInsightFactsHtml(rows) + more;
+  return '<ul class="insight-addon-list">' + rows.join("") + "</ul>" + more;
 }
 
 function buildMobileSysOverviewHardwareBody(soHost, listHost) {
@@ -1494,12 +1523,12 @@ function buildMobileSysOverviewHardwareBody(soHost, listHost) {
   const cpuCoresRaw = Number(soHost?.cpu_cores);
   const cpuCores = Number.isFinite(cpuCoresRaw) ? String(cpuCoresRaw) + " vCPU" : "—";
   const systemModel = String(soHost?.model || soHost?.system_model || payload.model || "").trim() || "—";
-  return mobileInsightFactsHtml([
-    mobileInsightFactRow("Betriebssystem", mobileEsc(osLabel)),
-    mobileInsightFactRow("CPU", mobileEsc(cpuCores)),
-    mobileInsightFactRow("CPU-Modell", mobileEsc(String(soHost?.cpu_model_name || "").trim() || "—")),
-    mobileInsightFactRow("RAM", mobileEsc(ramGb)),
-    mobileInsightFactRow("Systemmodell", mobileEsc(systemModel)),
+  return mobileInsightKvListHtml([
+    { label: "Betriebssystem", value: osLabel },
+    { label: "CPU", value: cpuCores },
+    { label: "CPU-Modell", value: String(soHost?.cpu_model_name || "").trim() || "—" },
+    { label: "RAM", value: ramGb },
+    { label: "Systemmodell", value: systemModel },
   ]);
 }
 
@@ -1528,7 +1557,7 @@ function buildMobileSysOverviewLicenseInfoBody(soHost) {
   ].filter((entry) => entry.value);
 
   if (!rows.length) return '<p class="insight-empty">Keine Lizenzinfos vorhanden.</p>';
-  return mobileInsightFactsHtml(rows.map((entry) => mobileInsightFactRow(entry.label, mobileEsc(entry.value))));
+  return mobileInsightKvListHtml(rows);
 }
 
 function buildMobileSysOverviewLicenseTypesBody(soHost) {
@@ -1536,8 +1565,9 @@ function buildMobileSysOverviewLicenseTypesBody(soHost) {
   const sapLicense = payload.sap_license && typeof payload.sap_license === "object" ? payload.sap_license : null;
   const entries = mobileCollectSysOverviewLicenseTypes(sapLicense);
   if (!entries.length) return '<p class="insight-empty">Keine Lizenztypen vorhanden.</p>';
-  return mobileInsightFactsHtml(
-    entries.map((entry) => mobileInsightFactRow(entry.translated, mobileEsc(String(entry.count))))
+  return mobileInsightAddonListHtml(
+    entries.map((entry) => ({ name: entry.translated, version: String(entry.count) })),
+    50
   );
 }
 
@@ -1552,14 +1582,17 @@ function buildMobileSysOverviewDataBody(soHost, listHost) {
   const status = mobileFormatSysOverviewStatusText(soHost);
   const lastUpdate = mobileFormatSysOverviewLastUpdate(soHost?.last_update);
 
-  return mobileInsightFactsHtml([
-    mobileInsightFactRow("SQL Release", mobileEsc(sqlRelease)),
-    mobileInsightFactRow("SAP Release", mobileEsc(sapRelease)),
-    mobileInsightFactRow("HANA Release", mobileEsc(hanaVersion)),
-    mobileInsightFactRow("HANA SID", mobileEsc(hanaSid)),
-    mobileInsightFactRow("Status", mobileEsc(status)),
-    mobileInsightFactRow("Letztes Update", mobileEsc(lastUpdate)),
-  ]);
+  return mobileInsightAddonListHtml(
+    [
+      { name: "SQL Release", version: sqlRelease },
+      { name: "SAP Release", version: sapRelease },
+      { name: "HANA Release", version: hanaVersion },
+      { name: "HANA SID", version: hanaSid },
+      { name: "Status", version: status },
+      { name: "Letztes Update", version: lastUpdate },
+    ],
+    20
+  );
 }
 
 function findSystemOverviewHostInData(data, host) {
@@ -1699,6 +1732,278 @@ function handleHostListSheetClick(event) {
     return;
   }
   void openHostInsightCarousel(hosts[index], variant);
+}
+
+const ADDON_SEARCH_MIN_QUERY_LEN = 2;
+const ADDON_SEARCH_DEBOUNCE_MS = 350;
+
+function setAddonSearchStatus(text, isError = false) {
+  const line = document.getElementById("addonSearchStatusLine");
+  if (!line) return;
+  line.textContent = text;
+  line.classList.toggle("is-error", isError);
+}
+
+function collectAddonSearchCountriesFromData(data) {
+  const byCountry = data?.by_country;
+  if (!byCountry || typeof byCountry !== "object") return [];
+  return Object.keys(byCountry)
+    .map((code) => String(code || "").trim().toUpperCase())
+    .filter((code) => /^[A-Z]{2}$/.test(code))
+    .sort();
+}
+
+function collectAddonSearchHostEntries(data, countryFilter) {
+  const byCountry = data?.by_country;
+  const entries = [];
+  if (!byCountry || typeof byCountry !== "object") return entries;
+
+  const activeCountry = String(countryFilter || "all").trim().toUpperCase();
+  Object.entries(byCountry).forEach(([country, osMap]) => {
+    if (activeCountry !== "ALL" && String(country).toUpperCase() !== activeCountry) return;
+    if (!osMap || typeof osMap !== "object") return;
+    Object.entries(osMap).forEach(([osName, customerMap]) => {
+      if (!customerMap || typeof customerMap !== "object") return;
+      Object.entries(customerMap).forEach(([customer, hosts]) => {
+        if (!Array.isArray(hosts)) return;
+        hosts.forEach((host) => {
+          if (!host || typeof host !== "object") return;
+          entries.push({
+            country: String(country || "").trim(),
+            osName: String(osName || "").trim(),
+            customer: String(customer || "Ohne Kunde").trim() || "Ohne Kunde",
+            host,
+          });
+        });
+      });
+    });
+  });
+  return entries;
+}
+
+function resolveAddonSearchHostKey(host) {
+  return String(host?.host_uid || host?.hostname || "").trim();
+}
+
+function buildMobileAddonSearchTree(data, searchQuery, countryFilter) {
+  const query = String(searchQuery || "").trim().toLowerCase();
+  const entries = collectAddonSearchHostEntries(data, countryFilter);
+  const addonMap = new Map();
+  const displayedHostKeys = new Set();
+
+  entries.forEach((entry) => {
+    const addonItems = mobileCollectSysOverviewAddonLabels(entry.host).filter((addon) => {
+      if (!query) return false;
+      const haystack = (String(addon?.name || "") + " " + String(addon?.version || "")).toLowerCase();
+      return haystack.includes(query);
+    });
+    if (!addonItems.length) return;
+
+    addonItems.forEach((addon) => {
+      const addonNameKey = String(addon?.name || "").trim();
+      if (!addonNameKey) return;
+      if (!addonMap.has(addonNameKey)) addonMap.set(addonNameKey, new Map());
+      const versionMap = addonMap.get(addonNameKey);
+      const versionKey = String(addon?.version || "").trim() || "—";
+      if (!versionMap.has(versionKey)) versionMap.set(versionKey, new Map());
+      const customerMap = versionMap.get(versionKey);
+      const customerKey = String(entry.customer || "Ohne Kunde");
+      if (!customerMap.has(customerKey)) customerMap.set(customerKey, []);
+      customerMap.get(customerKey).push(entry);
+      displayedHostKeys.add(resolveAddonSearchHostKey(entry.host));
+    });
+  });
+
+  return { addonMap, hostCount: displayedHostKeys.size };
+}
+
+function renderMobileAddonSearchHostRow(entry, hostMap) {
+  const host = entry.host;
+  const hostKey = resolveAddonSearchHostKey(host);
+  if (hostKey) hostMap[hostKey] = host;
+
+  const labels = getHostListLabels({
+    hostname: host.hostname,
+    display_name: host.display_name,
+    customer_name: entry.customer,
+  });
+  const osLabel = String(entry.osName || "").trim() || "—";
+  const country = String(entry.country || "").trim().toUpperCase() || "—";
+  const status = mobileFormatSysOverviewStatusText(host);
+  const sapRelease = resolveSapReleaseDisplayMobile(String(host.sap_release || "").trim()) || "—";
+  const hostname = String(host.hostname || "").trim();
+
+  return (
+    '<article class="mobile-addon-host-row">' +
+    '<div class="mobile-addon-host-main">' +
+    '<p class="mobile-addon-host-title">' + mobileEsc(labels.hostLabel) + "</p>" +
+    (labels.hasCustomer && labels.customerLabel !== labels.hostLabel
+      ? '<p class="mobile-addon-host-meta">' + mobileEsc(labels.customerLabel) + "</p>"
+      : "") +
+    (hostname && hostname !== labels.hostLabel
+      ? '<p class="mobile-addon-host-meta">' + mobileEsc(hostname) + "</p>"
+      : "") +
+    '<p class="mobile-addon-host-meta">' + mobileEsc(osLabel) + " · " + mobileEsc(country) +
+    " · SAP " + mobileEsc(sapRelease) + " · " + mobileEsc(status) + "</p>" +
+    "</div>" +
+    '<button type="button" class="btn-secondary" data-action="addon-search-sys-overview" data-host-key="' + mobileEsc(hostKey) + '">Systemübersicht</button>' +
+    "</article>"
+  );
+}
+
+function renderMobileAddonSearchTreeHtml(tree) {
+  const addonMap = tree?.addonMap;
+  if (!addonMap || !(addonMap instanceof Map) || !addonMap.size) {
+    return '<div class="mobile-ops-empty">Keine AddOns für diese Suche gefunden.</div>';
+  }
+
+  const hostMap = {};
+  const sortedAddons = Array.from(addonMap.entries()).sort((a, b) =>
+    String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true })
+  );
+
+  const html = sortedAddons.map(([addonName, versionMap]) => {
+    const versionSections = Array.from(versionMap.entries())
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true }))
+      .map(([version, customerMap]) => {
+        const customerSections = Array.from(customerMap.entries())
+          .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true }))
+          .map(([customer, entries]) => {
+            const sortedEntries = entries.slice().sort((left, right) =>
+              String(left.host?.display_name || left.host?.hostname || "").localeCompare(
+                String(right.host?.display_name || right.host?.hostname || ""),
+                "de",
+                { sensitivity: "base", numeric: true }
+              )
+            );
+            const hostRows = sortedEntries.map((entry) => renderMobileAddonSearchHostRow(entry, hostMap)).join("");
+            return (
+              '<details class="mobile-addon-tree-item mobile-addon-tree-item--customer">' +
+              '<summary><span>👥 ' + mobileEsc(customer) + "</span><span class=\"mobile-addon-tree-count\">" + sortedEntries.length + "</span></summary>" +
+              '<div class="mobile-addon-tree-children">' + hostRows + "</div></details>"
+            );
+          })
+          .join("");
+
+        const versionCount = Array.from(customerMap.values()).reduce((sum, list) => sum + list.length, 0);
+        return (
+          '<details class="mobile-addon-tree-item mobile-addon-tree-item--version">' +
+          '<summary><span>🏷️ ' + mobileEsc(version) + "</span><span class=\"mobile-addon-tree-count\">" + versionCount + "</span></summary>" +
+          '<div class="mobile-addon-tree-children">' + customerSections + "</div></details>"
+        );
+      })
+      .join("");
+
+    const addonCount = Array.from(versionMap.values()).reduce(
+      (sum, customerMap) => sum + Array.from(customerMap.values()).reduce((inner, list) => inner + list.length, 0),
+      0
+    );
+    return (
+      '<details class="mobile-addon-tree-item mobile-addon-tree-item--addon" open>' +
+      '<summary><span>🧩 ' + mobileEsc(addonName) + "</span><span class=\"mobile-addon-tree-count\">" + addonCount + "</span></summary>" +
+      '<div class="mobile-addon-tree-children">' + versionSections + "</div></details>"
+    );
+  }).join("");
+
+  state.addonSearchHostMap = hostMap;
+  return '<div class="mobile-addon-tree">' + html + "</div>";
+}
+
+function updateAddonSearchView() {
+  const list = document.getElementById("addonSearchList");
+  if (!list) return;
+
+  const query = String(state.addonSearchQuery || "").trim();
+  if (query.length < ADDON_SEARCH_MIN_QUERY_LEN) {
+    list.innerHTML = '<div class="mobile-ops-empty">AddOn-Name eingeben, um Hosts zu finden.</div>';
+    setAddonSearchStatus("AddOn-Name eingeben (mind. " + ADDON_SEARCH_MIN_QUERY_LEN + " Zeichen).");
+    return;
+  }
+
+  if (!state.addonSearchLastData) {
+    if (!state.addonSearchLoading) {
+      list.innerHTML = '<div class="mobile-ops-empty">Noch keine Daten geladen.</div>';
+    }
+    return;
+  }
+
+  const tree = buildMobileAddonSearchTree(state.addonSearchLastData, query, state.addonSearchCountryFilter);
+  list.innerHTML = renderMobileAddonSearchTreeHtml(tree);
+  const addonCount = tree.addonMap instanceof Map ? tree.addonMap.size : 0;
+  setAddonSearchStatus(
+    addonCount > 0
+      ? addonCount + " AddOn(s) · " + tree.hostCount + " Host(s)"
+      : "Keine Treffer für \"" + query + "\""
+  );
+}
+
+function scheduleAddonSearchLoad() {
+  if (state.addonSearchDebounceTimerId !== null) {
+    window.clearTimeout(state.addonSearchDebounceTimerId);
+  }
+  state.addonSearchDebounceTimerId = window.setTimeout(() => {
+    state.addonSearchDebounceTimerId = null;
+    void loadAddonSearchResults();
+  }, ADDON_SEARCH_DEBOUNCE_MS);
+}
+
+async function loadAddonSearchResults(options = {}) {
+  if (!state.authenticated) return;
+  const authRetried = options.authRetried === true;
+  const force = options.force === true;
+  const list = document.getElementById("addonSearchList");
+  const query = String(state.addonSearchQuery || "").trim();
+
+  if (query.length < ADDON_SEARCH_MIN_QUERY_LEN) {
+    state.addonSearchLastData = null;
+    state.addonSearchHostMap = {};
+    updateAddonSearchView();
+    return;
+  }
+
+  if (!isAddonSearchViewActive() && !force) return;
+
+  state.addonSearchLoading = true;
+  if (list) list.innerHTML = '<div class="mobile-ops-empty">Lade AddOns…</div>';
+  setAddonSearchStatus("Lade Systemübersicht…");
+
+  try {
+    const resp = await fetch("/api/v1/system-overview?q=" + encodeURIComponent(query), { credentials: "same-origin" });
+    if (resp.status === 401) {
+      if (!authRetried && (await mobileRecoverSessionAfter401())) {
+        return loadAddonSearchResults({ authRetried: true, force: true });
+      }
+      mobileForceLogout("Session abgelaufen. Bitte erneut anmelden.");
+      return;
+    }
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+
+    const data = await resp.json().catch(() => ({}));
+    state.addonSearchLastData = data;
+    const countries = collectAddonSearchCountriesFromData(data);
+    renderHostCountryFilter("addonSearchCountryFilter", countries, state.addonSearchCountryFilter, (country) => {
+      state.addonSearchCountryFilter = country;
+      updateAddonSearchView();
+    });
+    updateAddonSearchView();
+  } catch (error) {
+    if (list) list.innerHTML = '<div class="mobile-ops-empty">Fehler beim Laden.</div>';
+    setAddonSearchStatus("Fehler: " + (error?.message || String(error)), true);
+  } finally {
+    state.addonSearchLoading = false;
+  }
+}
+
+function handleAddonSearchListClick(event) {
+  const btn = event.target.closest('[data-action="addon-search-sys-overview"]');
+  if (!btn) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const hostKey = String(btn.getAttribute("data-host-key") || "").trim();
+  if (!hostKey) return;
+  const host = state.addonSearchHostMap?.[hostKey];
+  if (!host) return;
+  void openSystemOverviewCarousel(host);
 }
 
 function updateActiveHostsListView() {
@@ -1998,14 +2303,14 @@ const state = {
   activeHostsLoading: false,
   activeHostsCountryFilter: "all",
   activeHostsSearchQuery: "",
-  criticalTrendsHours: 24,
-  criticalTrendsProjectHours: 72,
-  criticalTrendsCount: 0,
-  criticalTrendsLoading: false,
+  addonSearchQuery: "",
+  addonSearchCountryFilter: "all",
+  addonSearchLoading: false,
+  addonSearchLastData: null,
+  addonSearchHostMap: {},
+  addonSearchDebounceTimerId: null,
   latestAgentVersion: "",
 };
-
-const alertTrendCache = new Map();
 
 const SKELETON_CARD_COUNT = 4;
 /** Gleiches Intervall wie Desktop: Session bleibt bei offener App aktiv (Server-Timeout default 30 min). */
@@ -2731,101 +3036,6 @@ function buildAgentVersionBadgeHtml(version) {
   return '<span class="host-agent-badge" title="Neueste Agent-Version: ' + mobileEsc(latest) + '">⚠ ' + mobileEsc(label) + "</span>";
 }
 
-function normalizeMountpointMatch(value) {
-  return String(value || "").trim().replace(/\/+$/, "").toLowerCase();
-}
-
-function alertTrendCacheKey(item) {
-  const hostUid = String(item?.host_uid || "").trim();
-  const hostname = String(item?.hostname || "").trim();
-  const mount = normalizeMountpointMatch(item?.mountpoint);
-  return (hostUid || hostname) + "::" + mount;
-}
-
-function buildSparklineSvg(points) {
-  const values = (Array.isArray(points) ? points : [])
-    .map((point) => Number(point?.used_percent))
-    .filter((value) => Number.isFinite(value));
-  if (values.length < 2) return "";
-  const width = 120;
-  const height = 22;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = Math.max(0.5, max - min);
-  const coords = values.map((value, index) => {
-    const x = (index / (values.length - 1)) * width;
-    const y = height - ((value - min) / span) * (height - 4) - 2;
-    return x.toFixed(1) + "," + y.toFixed(1);
-  });
-  return (
-    '<svg viewBox="0 0 ' + width + " " + height + '" preserveAspectRatio="none" aria-hidden="true">' +
-    '<polyline fill="none" stroke="currentColor" stroke-width="2" points="' + coords.join(" ") + '"></polyline></svg>'
-  );
-}
-
-function buildAlertTrendLineHtml(item, trendData) {
-  if (!trendData) {
-    return '<div class="alert-trend-line" data-alert-trend-placeholder="1"><span class="alert-trend-text">Trend 24h …</span></div>';
-  }
-  const delta = Number(trendData.delta_used_percent);
-  const hasDelta = Number.isFinite(delta);
-  const deltaClass = hasDelta ? (delta > 0.05 ? "is-up" : delta < -0.05 ? "is-down" : "") : "";
-  const arrow = hasDelta ? (delta > 0.05 ? "▲" : delta < -0.05 ? "▼" : "→") : "→";
-  const deltaText = hasDelta ? arrow + " " + (delta >= 0 ? "+" : "") + delta.toFixed(1) + "% (24h)" : "Kein Verlauf";
-  const spark = buildSparklineSvg(trendData.series);
-  return (
-    '<div class="alert-trend-line">' +
-    '<span class="alert-trend-text ' + deltaClass + '">' + mobileEsc(deltaText) + "</span>" +
-    (spark ? '<span class="alert-trend-spark">' + spark + "</span>" : "") +
-    "</div>"
-  );
-}
-
-async function loadAlertTrendForItem(item) {
-  if (!item) return null;
-  const cacheKey = alertTrendCacheKey(item);
-  if (alertTrendCache.has(cacheKey)) {
-    return alertTrendCache.get(cacheKey);
-  }
-  const hostUid = String(item.host_uid || "").trim();
-  const hostname = String(item.hostname || "").trim();
-  if (!hostUid && !hostname) return null;
-  const query = hostUid
-    ? "host_uid=" + encodeURIComponent(hostUid)
-    : "hostname=" + encodeURIComponent(hostname);
-  try {
-    const resp = await fetch("/api/v1/analysis?" + query + "&hours=24", { credentials: "same-origin" });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const mount = normalizeMountpointMatch(item.mountpoint);
-    const trends = Array.isArray(data.filesystem_trends) ? data.filesystem_trends : [];
-    const match = trends.find((row) => normalizeMountpointMatch(row?.mountpoint) === mount) || trends[0];
-    const trendData = match
-      ? {
-          delta_used_percent: match.delta_used_percent,
-          current_used_percent: match.current_used_percent,
-          series: Array.isArray(match.series) ? match.series : [],
-        }
-      : null;
-    alertTrendCache.set(cacheKey, trendData);
-    return trendData;
-  } catch (_error) {
-    return null;
-  }
-}
-
-function updateAlertTrendOnCard(card, item) {
-  if (!card || !item) return;
-  const placeholder = card.querySelector("[data-alert-trend-placeholder]");
-  if (!placeholder) return;
-  void loadAlertTrendForItem(item).then((trendData) => {
-    if (!card.isConnected) return;
-    const line = buildAlertTrendLineHtml(item, trendData);
-    const current = card.querySelector(".alert-trend-line");
-    if (current) current.outerHTML = line;
-  });
-}
-
 function getJournalEntriesFromPayload(payload) {
   const block = payload?.journal_errors;
   if (Array.isArray(block)) return block;
@@ -2927,94 +3137,6 @@ function mobileFormatMb(value) {
   if (!Number.isFinite(mb) || mb <= 0) return "—";
   if (mb >= 1024) return (mb / 1024).toFixed(2) + " GiB";
   return mb.toFixed(0) + " MiB";
-}
-
-function setCriticalTrendsStatus(text, isError = false) {
-  const line = document.getElementById("criticalTrendsStatusLine");
-  if (!line) return;
-  line.textContent = text;
-  line.classList.toggle("is-error", isError);
-}
-
-function renderCriticalTrendsMobile(data) {
-  const warnings = Array.isArray(data?.warnings) ? data.warnings : [];
-  const hours = Number(data?.hours || state.criticalTrendsHours);
-  if (!warnings.length) {
-    return '<div class="mobile-ops-empty">Keine kritischen Trends in den letzten ' + hours + " Std.</div>";
-  }
-  const byHost = new Map();
-  warnings.forEach((warning) => {
-    const host = String(warning.hostname || "").trim() || "—";
-    if (!byHost.has(host)) byHost.set(host, []);
-    byHost.get(host).push(warning);
-  });
-  return Array.from(byHost.entries()).map(([hostname, items]) => {
-    const customer = String(items[0]?.customer_name || "").trim();
-    const displayName = String(items[0]?.display_name || hostname).trim();
-    const crit = items.filter((row) => row.level === "crit").length;
-    const cardClass = crit > 0 ? "is-crit" : "is-warn";
-    const rows = items.map((row) => {
-      const projected = Number(row.projected);
-      const current = row.current != null ? Number(row.current) : null;
-      const bar = Number.isFinite(projected) ? Math.min(100, Math.max(0, projected)) : 0;
-      const barClass = row.level === "crit" ? "is-crit" : "";
-      const eta = row.critical_eta_utc
-        ? " · Kritisch ca. " + formatUtcPlus2Mobile(row.critical_eta_utc)
-        : "";
-      return (
-        '<div class="mobile-ops-row">' +
-        '<div class="mobile-ops-row-top"><span>' + mobileEsc(String(row.metric || row.type || "Metric")) + "</span>" +
-        "<span>" + (Number.isFinite(current) ? current.toFixed(1) + "%" : "—") + " → " + (Number.isFinite(projected) ? projected.toFixed(1) + "%" : "—") + "</span></div>" +
-        '<div class="mobile-ops-bar ' + barClass + '"><span style="width:' + bar.toFixed(1) + '%"></span></div>' +
-        '<p class="mobile-ops-meta">Projektion' + mobileEsc(eta) + "</p></div>"
-      );
-    }).join("");
-    return (
-      '<article class="mobile-ops-card ' + cardClass + '">' +
-      '<div class="mobile-ops-card-head"><h3>' + mobileEsc(displayName) + "</h3>" +
-      (customer ? "<p>" + mobileEsc(customer) + "</p>" : "") +
-      (hostname !== displayName ? '<p class="mobile-ops-meta">' + mobileEsc(hostname) + "</p>" : "") +
-      '</div><div class="mobile-ops-card-body">' + rows + "</div></article>"
-    );
-  }).join("");
-}
-
-async function loadCriticalTrendsList(options = {}) {
-  if (!state.authenticated) return;
-  const authRetried = options.authRetried === true;
-  const list = document.getElementById("criticalTrendsList");
-  if (!list) return;
-  state.criticalTrendsLoading = true;
-  setCriticalTrendsStatus("Lade Trends…");
-  list.innerHTML = '<div class="mobile-ops-empty">Lade…</div>';
-  try {
-    const hours = Math.max(1, Number(state.criticalTrendsHours) || 24);
-    const projectHours = Math.max(1, Number(state.criticalTrendsProjectHours) || 72);
-    const resp = await fetch(
-      "/api/v1/critical-trends?hours=" + encodeURIComponent(String(hours)) + "&project_hours=" + encodeURIComponent(String(projectHours)),
-      { credentials: "same-origin" }
-    );
-    if (resp.status === 401) {
-      if (!authRetried && (await mobileRecoverSessionAfter401())) {
-        return loadCriticalTrendsList({ authRetried: true });
-      }
-      mobileForceLogout("Session abgelaufen. Bitte erneut anmelden.");
-      return;
-    }
-    if (!resp.ok) throw new Error("HTTP " + resp.status);
-    const data = await resp.json();
-    const warnings = Array.isArray(data.warnings) ? data.warnings : [];
-    state.criticalTrendsCount = warnings.length;
-    const elTrends = document.getElementById("kpiTrends");
-    if (elTrends) elTrends.textContent = String(state.criticalTrendsCount);
-    list.innerHTML = renderCriticalTrendsMobile(data);
-    setCriticalTrendsStatus(warnings.length + " Trend-Warnung" + (warnings.length === 1 ? "" : "en") + " geladen.");
-  } catch (error) {
-    list.innerHTML = '<div class="mobile-ops-empty">Fehler beim Laden.</div>';
-    setCriticalTrendsStatus("Fehler: " + (error?.message || String(error)), true);
-  } finally {
-    state.criticalTrendsLoading = false;
-  }
 }
 
 async function openCustomerInfoSheet() {
@@ -3494,10 +3616,8 @@ function countActiveHosts(hosts) {
 function renderHostKpis() {
   const elActive = document.getElementById("kpiActiveHosts");
   const elInactive = document.getElementById("kpiInactiveHosts");
-  const elTrends = document.getElementById("kpiTrends");
   if (elActive) elActive.textContent = String(Math.max(0, Number(state.activeHostsCount) || 0));
   if (elInactive) elInactive.textContent = String(Math.max(0, Number(state.inactiveHostsCount) || 0));
-  if (elTrends) elTrends.textContent = String(Math.max(0, Number(state.criticalTrendsCount) || 0));
 }
 
 function renderKpis(alerts) {
@@ -3521,10 +3641,9 @@ async function loadHostKpis(options = {}) {
 
   const hours = Math.max(1, Math.min(24 * 30, Number(state.hostKpisHours) || 1));
   try {
-    const [inactiveResp, hostsResp, trendsResp] = await Promise.all([
+    const [inactiveResp, hostsResp] = await Promise.all([
       fetch("/api/v1/inactive-hosts?hours=" + encodeURIComponent(String(hours)), { credentials: "same-origin" }),
       fetch("/api/v1/hosts?limit=200&offset=0", { credentials: "same-origin" }),
-      fetch("/api/v1/critical-trends?hours=24&project_hours=72", { credentials: "same-origin" }),
     ]);
 
     if (inactiveResp.status === 401 || hostsResp.status === 401) {
@@ -3546,12 +3665,6 @@ async function loadHostKpis(options = {}) {
       state.activeHostsCount = countActiveHosts(hosts);
     }
 
-    if (trendsResp.ok) {
-      const trendsPayload = await trendsResp.json();
-      const warnings = Array.isArray(trendsPayload.warnings) ? trendsPayload.warnings : [];
-      state.criticalTrendsCount = warnings.length;
-    }
-
     renderHostKpis();
   } catch (_error) {
     // Host-KPIs sind optional; Alert-Liste bleibt nutzbar.
@@ -3567,8 +3680,8 @@ async function refreshMobileData() {
     await Promise.all([loadActiveHostsList(), loadHostKpis()]);
     return;
   }
-  if (isCriticalTrendsViewActive()) {
-    await Promise.all([loadCriticalTrendsList(), loadHostKpis()]);
+  if (isAddonSearchViewActive()) {
+    await Promise.all([loadAddonSearchResults({ force: true }), loadHostKpis()]);
     return;
   }
   await Promise.all([loadAlerts(), loadHostKpis()]);
@@ -3645,7 +3758,6 @@ function renderAlerts(items) {
     const countryFlag = buildCountryFlagHtml(item.country_code);
     const ackStrip = buildAckStripHtml(item);
     const itContactHtml = buildAlertItContactLineHtml(item);
-    const trendHtml = buildAlertTrendLineHtml(item, alertTrendCache.get(alertTrendCacheKey(item)) || null);
     const muteBtn = buildMuteButtonHtml(item);
 
     return (
@@ -3662,7 +3774,6 @@ function renderAlerts(items) {
       ackStrip +
       itContactHtml +
       '  <p class="alert-meta alert-mountpoint-line">' + buildMountpointLine(item) + "</p>" +
-      trendHtml +
       '  <div class="usage-bar-block">' +
       '    <div class="usage-bar-row">' +
       '      <div class="usage-bar"><span class="usage-bar-fill" data-target-percent="' + barWidth + '" style="width:0%"></span></div>' +
@@ -3734,10 +3845,6 @@ function buildAlertDetailHtml(item) {
   if (item.delta_used_percent != null) {
     push("Delta", Number(item.delta_used_percent).toFixed(1) + "%");
   }
-  const trend = alertTrendCache.get(alertTrendCacheKey(item));
-  if (trend && trend.delta_used_percent != null) {
-    push("Trend 24h", Number(trend.delta_used_percent).toFixed(1) + "%");
-  }
   push("Erstellt", formatIsoLabel(item.created_at_utc));
   push("Zuletzt gesehen", formatIsoLabel(item.last_seen_at_utc));
 
@@ -3784,11 +3891,6 @@ function syncFocusedCarouselCard(list) {
     }
   });
   updateAlertDetailPanel(bestIndex);
-  const focusedCard = Array.from(cards).find((card) => Number(card.getAttribute("data-alert-index")) === bestIndex);
-  const focusedItem = state.lastAlerts[bestIndex];
-  if (focusedCard && focusedItem) {
-    updateAlertTrendOnCard(focusedCard, focusedItem);
-  }
   if (bestIndex !== lastUsageBarCarouselIndex) {
     triggerUsageBarAnimationForCarouselIndex(list, bestIndex);
     lastUsageBarCarouselIndex = bestIndex;
@@ -4561,39 +4663,38 @@ function wire() {
     showInactiveHostsView();
   });
 
-  document.getElementById("kpiTrendsNav")?.addEventListener("click", () => {
-    if (!state.authenticated) return;
-    showCriticalTrendsView();
-  });
-
-  document.getElementById("criticalTrendsBackButton")?.addEventListener("click", () => {
-    showAlertsHomeView();
-    setCriticalTrendsStatus("");
-  });
-
-  document.getElementById("criticalTrendsRefreshButton")?.addEventListener("click", () => {
-    void loadCriticalTrendsList().catch((error) => setCriticalTrendsStatus("Fehler: " + error.message, true));
-  });
-
-  document.getElementById("criticalTrendsHoursSelect")?.addEventListener("change", (event) => {
-    state.criticalTrendsHours = Math.max(1, Number(event.target?.value) || 24);
-    void loadCriticalTrendsList();
-  });
-
-  document.getElementById("criticalTrendsProjectSelect")?.addEventListener("change", (event) => {
-    state.criticalTrendsProjectHours = Math.max(1, Number(event.target?.value) || 72);
-    void loadCriticalTrendsList();
-  });
-
-  document.getElementById("menuCriticalTrendsButton")?.addEventListener("click", () => {
+  document.getElementById("menuAddonSearchButton")?.addEventListener("click", () => {
     document.getElementById("headerMenu")?.classList.add("hidden");
-    showCriticalTrendsView();
+    showAddonSearchView();
   });
 
   document.getElementById("menuCustomerInfoButton")?.addEventListener("click", () => {
     document.getElementById("headerMenu")?.classList.add("hidden");
     void openCustomerInfoSheet();
   });
+
+  document.getElementById("addonSearchBackButton")?.addEventListener("click", () => {
+    showAlertsHomeView();
+    setAddonSearchStatus("");
+  });
+
+  document.getElementById("addonSearchRefreshButton")?.addEventListener("click", () => {
+    void loadAddonSearchResults({ force: true }).catch((error) => setAddonSearchStatus("Fehler: " + error.message, true));
+  });
+
+  document.getElementById("addonSearchInput")?.addEventListener("input", (event) => {
+    state.addonSearchQuery = String(event.target?.value || "");
+    if (!isAddonSearchViewActive()) return;
+    if (state.addonSearchQuery.trim().length < ADDON_SEARCH_MIN_QUERY_LEN) {
+      state.addonSearchLastData = null;
+      state.addonSearchHostMap = {};
+      updateAddonSearchView();
+      return;
+    }
+    scheduleAddonSearchLoad();
+  });
+
+  document.getElementById("addonSearchList")?.addEventListener("click", handleAddonSearchListClick);
 
   document.getElementById("activeHostsBackButton")?.addEventListener("click", () => {
     showAlertsHomeView();
@@ -4647,8 +4748,8 @@ function wire() {
         setInactiveHostsStatus("Fehler: " + msg, true);
       } else if (isActiveHostsViewActive()) {
         setActiveHostsStatus("Fehler: " + msg, true);
-      } else if (isCriticalTrendsViewActive()) {
-        setCriticalTrendsStatus("Fehler: " + msg, true);
+      } else if (isAddonSearchViewActive()) {
+        setAddonSearchStatus("Fehler: " + msg, true);
       } else {
         setStatus("Fehler: " + msg, true);
       }

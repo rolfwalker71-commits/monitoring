@@ -196,10 +196,6 @@ body {
   gap: 5px;
 }
 
-.kpi-strip--secondary {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 .kpi {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -1895,6 +1891,58 @@ body.host-insight-open {
   word-break: break-all;
 }
 
+.insight-addon-list,
+.insight-kv-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.insight-addon-row,
+.insight-kv-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+  align-items: start;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.insight-addon-name,
+.insight-kv-label {
+  grid-column: 1;
+  min-width: 0;
+  text-align: left;
+  word-break: break-word;
+}
+
+.insight-addon-version {
+  grid-column: 2;
+  text-align: right;
+  color: var(--muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.insight-kv-label {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.insight-kv-value {
+  grid-column: 2;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+  max-width: min(58vw, 11rem);
+  justify-self: end;
+}
+
 .insight-metric-bar {
   margin-bottom: 12px;
 }
@@ -2601,11 +2649,6 @@ body.host-insight-open {
   margin: 10px 0 0;
 }
 
-.kpi-trends {
-  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
-  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
-}
-
 .kpi-tap.is-active {
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow);
 }
@@ -2621,41 +2664,6 @@ body.host-insight-open {
   color: var(--accent);
   font-weight: 700;
   text-decoration: none;
-}
-
-.alert-trend-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 4px;
-  min-height: 22px;
-}
-
-.alert-trend-text {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.alert-trend-text.is-up {
-  color: var(--warning);
-}
-
-.alert-trend-text.is-down {
-  color: var(--ok);
-}
-
-.alert-trend-spark {
-  flex: 1;
-  min-width: 0;
-  height: 22px;
-}
-
-.alert-trend-spark svg {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 
 .btn-mute {
@@ -2719,6 +2727,101 @@ body.host-insight-open {
   margin: 0;
   font-size: 0.82rem;
   font-weight: 700;
+}
+
+.host-search-pill--wide {
+  flex: 1 1 100%;
+}
+
+.mobile-addon-search-stack {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 16px;
+}
+
+.mobile-addon-tree {
+  display: grid;
+  gap: 8px;
+}
+
+.mobile-addon-tree-item {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.mobile-addon-tree-item--version,
+.mobile-addon-tree-item--customer {
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg) 35%, var(--panel));
+}
+
+.mobile-addon-tree-item > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  font-size: 0.84rem;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+
+.mobile-addon-tree-item > summary::-webkit-details-marker {
+  display: none;
+}
+
+.mobile-addon-tree-item > summary::before {
+  content: "▸";
+  margin-right: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  transition: transform 0.15s ease;
+}
+
+.mobile-addon-tree-item[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.mobile-addon-tree-count {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-addon-tree-children {
+  display: grid;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+.mobile-addon-host-row {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg) 45%, var(--panel));
+}
+
+.mobile-addon-host-title {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.mobile-addon-host-meta {
+  margin: 2px 0 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.mobile-addon-host-row .btn-secondary {
+  width: 100%;
 }
 
 .mobile-ops-stack {
