@@ -127,6 +127,11 @@
             <input type="search" id="addonSearchInput" placeholder="AddOn-Name filtern…" autocomplete="off" enterkeyhint="search" />
           </label>
           <div id="addonSearchCountryFilter" class="host-country-filter" role="group" aria-label="Land filtern"></div>
+          <div class="addon-search-group-bar" role="group" aria-label="Gruppierung">
+            <span class="addon-search-group-label">Gruppieren</span>
+            <button type="button" class="chip chip-ghost addon-search-group-chip active" data-addon-group="version-customer">Version</button>
+            <button type="button" class="chip chip-ghost addon-search-group-chip" data-addon-group="customer-version">Kunde</button>
+          </div>
         </div>
         <p id="addonSearchStatusLine" class="status-line">AddOn-Name eingeben (mind. 2 Zeichen).</p>
         <section id="addonSearchList" class="mobile-addon-search-stack" aria-live="polite"></section>

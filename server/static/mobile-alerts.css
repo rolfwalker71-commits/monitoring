@@ -2733,6 +2733,26 @@ body.host-insight-open {
   flex: 1 1 100%;
 }
 
+.addon-search-group-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.addon-search-group-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--muted);
+  margin-right: 2px;
+}
+
+.addon-search-group-chip {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 0.74rem;
+}
+
 .mobile-addon-search-stack {
   display: grid;
   gap: 10px;

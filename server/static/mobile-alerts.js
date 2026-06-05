@@ -191,6 +191,7 @@ function showAddonSearchView() {
   if (input && String(input.value || "") !== String(state.addonSearchQuery || "")) {
     input.value = String(state.addonSearchQuery || "");
   }
+  syncAddonSearchGroupChips();
   updateAddonSearchView();
 }
 
@@ -1785,11 +1786,31 @@ function resolveAddonSearchHostKey(host) {
   return String(host?.host_uid || host?.hostname || "").trim();
 }
 
-function buildMobileAddonSearchTree(data, searchQuery, countryFilter) {
+function normalizeAddonSearchGroupMode(value) {
+  return String(value || "").trim() === "customer-version" ? "customer-version" : "version-customer";
+}
+
+function getAddonSearchGroupModeLabel(mode) {
+  return normalizeAddonSearchGroupMode(mode) === "customer-version"
+    ? "AddOn > Kunde > Version > Host"
+    : "AddOn > Version > Kunde > Host";
+}
+
+function syncAddonSearchGroupChips() {
+  const mode = normalizeAddonSearchGroupMode(state.addonSearchGroupMode);
+  document.querySelectorAll(".addon-search-group-chip[data-addon-group]").forEach((chip) => {
+    chip.classList.toggle("active", chip.getAttribute("data-addon-group") === mode);
+  });
+  const subtitle = document.getElementById("addonSearchSubtitle");
+  if (subtitle) subtitle.textContent = getAddonSearchGroupModeLabel(mode);
+}
+
+function buildMobileAddonSearchTree(data, searchQuery, countryFilter, groupMode) {
   const query = String(searchQuery || "").trim().toLowerCase();
   const entries = collectAddonSearchHostEntries(data, countryFilter);
   const addonMap = new Map();
   const displayedHostKeys = new Set();
+  const byCustomer = normalizeAddonSearchGroupMode(groupMode) === "customer-version";
 
   entries.forEach((entry) => {
     const addonItems = mobileCollectSysOverviewAddonLabels(entry.host).filter((addon) => {
@@ -1802,22 +1823,58 @@ function buildMobileAddonSearchTree(data, searchQuery, countryFilter) {
     addonItems.forEach((addon) => {
       const addonNameKey = String(addon?.name || "").trim();
       if (!addonNameKey) return;
-      if (!addonMap.has(addonNameKey)) addonMap.set(addonNameKey, new Map());
-      const versionMap = addonMap.get(addonNameKey);
       const versionKey = String(addon?.version || "").trim() || "—";
-      if (!versionMap.has(versionKey)) versionMap.set(versionKey, new Map());
-      const customerMap = versionMap.get(versionKey);
       const customerKey = String(entry.customer || "Ohne Kunde");
-      if (!customerMap.has(customerKey)) customerMap.set(customerKey, []);
-      customerMap.get(customerKey).push(entry);
+
+      if (!addonMap.has(addonNameKey)) addonMap.set(addonNameKey, new Map());
+      const level2Map = addonMap.get(addonNameKey);
+
+      if (byCustomer) {
+        if (!level2Map.has(customerKey)) level2Map.set(customerKey, new Map());
+        const versionMap = level2Map.get(customerKey);
+        if (!versionMap.has(versionKey)) versionMap.set(versionKey, []);
+        versionMap.get(versionKey).push(entry);
+      } else {
+        if (!level2Map.has(versionKey)) level2Map.set(versionKey, new Map());
+        const customerMap = level2Map.get(versionKey);
+        if (!customerMap.has(customerKey)) customerMap.set(customerKey, []);
+        customerMap.get(customerKey).push(entry);
+      }
+
       displayedHostKeys.add(resolveAddonSearchHostKey(entry.host));
     });
   });
 
-  return { addonMap, hostCount: displayedHostKeys.size };
+  return {
+    addonMap,
+    hostCount: displayedHostKeys.size,
+    groupMode: byCustomer ? "customer-version" : "version-customer",
+  };
 }
 
-function renderMobileAddonSearchHostRow(entry, hostMap) {
+function sortAddonSearchHostEntries(entries) {
+  return (Array.isArray(entries) ? entries : []).slice().sort((left, right) =>
+    String(left.host?.display_name || left.host?.hostname || "").localeCompare(
+      String(right.host?.display_name || right.host?.hostname || ""),
+      "de",
+      { sensitivity: "base", numeric: true }
+    )
+  );
+}
+
+function countAddonSearchNestedEntries(nestedMap, leafIsList) {
+  let total = 0;
+  (nestedMap instanceof Map ? nestedMap : new Map()).forEach((value) => {
+    if (leafIsList) {
+      total += Array.isArray(value) ? value.length : 0;
+    } else {
+      total += countAddonSearchNestedEntries(value, true);
+    }
+  });
+  return total;
+}
+
+function renderMobileAddonSearchHostRow(entry, hostMap, options = {}) {
   const host = entry.host;
   const hostKey = resolveAddonSearchHostKey(host);
   if (hostKey) hostMap[hostKey] = host;
@@ -1832,12 +1889,13 @@ function renderMobileAddonSearchHostRow(entry, hostMap) {
   const status = mobileFormatSysOverviewStatusText(host);
   const sapRelease = resolveSapReleaseDisplayMobile(String(host.sap_release || "").trim()) || "—";
   const hostname = String(host.hostname || "").trim();
+  const hideCustomer = options.hideCustomer === true;
 
   return (
     '<article class="mobile-addon-host-row">' +
     '<div class="mobile-addon-host-main">' +
     '<p class="mobile-addon-host-title">' + mobileEsc(labels.hostLabel) + "</p>" +
-    (labels.hasCustomer && labels.customerLabel !== labels.hostLabel
+    (!hideCustomer && labels.hasCustomer && labels.customerLabel !== labels.hostLabel
       ? '<p class="mobile-addon-host-meta">' + mobileEsc(labels.customerLabel) + "</p>"
       : "") +
     (hostname && hostname !== labels.hostLabel
@@ -1851,6 +1909,65 @@ function renderMobileAddonSearchHostRow(entry, hostMap) {
   );
 }
 
+function renderMobileAddonSearchCustomerSection(customer, entries, hostMap, options = {}) {
+  const sortedEntries = sortAddonSearchHostEntries(entries);
+  const hostRows = sortedEntries
+    .map((entry) => renderMobileAddonSearchHostRow(entry, hostMap, options))
+    .join("");
+  return (
+    '<details class="mobile-addon-tree-item mobile-addon-tree-item--customer">' +
+    '<summary><span>👥 ' + mobileEsc(customer) + '</span><span class="mobile-addon-tree-count">' + sortedEntries.length + "</span></summary>" +
+    '<div class="mobile-addon-tree-children">' + hostRows + "</div></details>"
+  );
+}
+
+function renderMobileAddonSearchVersionSection(version, nestedMap, hostMap, groupMode) {
+  const byCustomer = normalizeAddonSearchGroupMode(groupMode) === "customer-version";
+  if (byCustomer) {
+    const entries = Array.isArray(nestedMap) ? nestedMap : [];
+    const sortedEntries = sortAddonSearchHostEntries(entries);
+    const hostRows = sortedEntries
+      .map((entry) => renderMobileAddonSearchHostRow(entry, hostMap, { hideCustomer: true }))
+      .join("");
+    return (
+      '<details class="mobile-addon-tree-item mobile-addon-tree-item--version">' +
+      '<summary><span>🏷️ ' + mobileEsc(version) + '</span><span class="mobile-addon-tree-count">' + sortedEntries.length + "</span></summary>" +
+      '<div class="mobile-addon-tree-children">' + hostRows + "</div></details>"
+    );
+  }
+
+  const customerSections = Array.from((nestedMap instanceof Map ? nestedMap : new Map()).entries())
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true }))
+    .map(([customer, entries]) => renderMobileAddonSearchCustomerSection(customer, entries, hostMap))
+    .join("");
+  const versionCount = countAddonSearchNestedEntries(nestedMap, true);
+  return (
+    '<details class="mobile-addon-tree-item mobile-addon-tree-item--version">' +
+    '<summary><span>🏷️ ' + mobileEsc(version) + '</span><span class="mobile-addon-tree-count">' + versionCount + "</span></summary>" +
+    '<div class="mobile-addon-tree-children">' + customerSections + "</div></details>"
+  );
+}
+
+function renderMobileAddonSearchLevel2Section(label, icon, nestedMap, hostMap, groupMode) {
+  const byCustomer = normalizeAddonSearchGroupMode(groupMode) === "customer-version";
+  const level2Class = byCustomer ? "mobile-addon-tree-item--customer" : "mobile-addon-tree-item--version";
+  const level3Sections = Array.from((nestedMap instanceof Map ? nestedMap : new Map()).entries())
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true }))
+    .map(([level3Key, level3Value]) => {
+      if (byCustomer) {
+        return renderMobileAddonSearchVersionSection(level3Key, level3Value, hostMap, groupMode);
+      }
+      return renderMobileAddonSearchCustomerSection(level3Key, level3Value, hostMap);
+    })
+    .join("");
+  const level2Count = countAddonSearchNestedEntries(nestedMap, false);
+  return (
+    '<details class="mobile-addon-tree-item ' + level2Class + '">' +
+    '<summary><span>' + icon + " " + mobileEsc(label) + '</span><span class="mobile-addon-tree-count">' + level2Count + "</span></summary>" +
+    '<div class="mobile-addon-tree-children">' + level3Sections + "</div></details>"
+  );
+}
+
 function renderMobileAddonSearchTreeHtml(tree) {
   const addonMap = tree?.addonMap;
   if (!addonMap || !(addonMap instanceof Map) || !addonMap.size) {
@@ -1858,50 +1975,25 @@ function renderMobileAddonSearchTreeHtml(tree) {
   }
 
   const hostMap = {};
+  const groupMode = normalizeAddonSearchGroupMode(tree.groupMode || state.addonSearchGroupMode);
   const sortedAddons = Array.from(addonMap.entries()).sort((a, b) =>
     String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true })
   );
 
-  const html = sortedAddons.map(([addonName, versionMap]) => {
-    const versionSections = Array.from(versionMap.entries())
+  const html = sortedAddons.map(([addonName, level2Map]) => {
+    const byCustomer = groupMode === "customer-version";
+    const level2Sections = Array.from((level2Map instanceof Map ? level2Map : new Map()).entries())
       .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true }))
-      .map(([version, customerMap]) => {
-        const customerSections = Array.from(customerMap.entries())
-          .sort((a, b) => String(a[0]).localeCompare(String(b[0]), "de", { sensitivity: "base", numeric: true }))
-          .map(([customer, entries]) => {
-            const sortedEntries = entries.slice().sort((left, right) =>
-              String(left.host?.display_name || left.host?.hostname || "").localeCompare(
-                String(right.host?.display_name || right.host?.hostname || ""),
-                "de",
-                { sensitivity: "base", numeric: true }
-              )
-            );
-            const hostRows = sortedEntries.map((entry) => renderMobileAddonSearchHostRow(entry, hostMap)).join("");
-            return (
-              '<details class="mobile-addon-tree-item mobile-addon-tree-item--customer">' +
-              '<summary><span>👥 ' + mobileEsc(customer) + "</span><span class=\"mobile-addon-tree-count\">" + sortedEntries.length + "</span></summary>" +
-              '<div class="mobile-addon-tree-children">' + hostRows + "</div></details>"
-            );
-          })
-          .join("");
-
-        const versionCount = Array.from(customerMap.values()).reduce((sum, list) => sum + list.length, 0);
-        return (
-          '<details class="mobile-addon-tree-item mobile-addon-tree-item--version">' +
-          '<summary><span>🏷️ ' + mobileEsc(version) + "</span><span class=\"mobile-addon-tree-count\">" + versionCount + "</span></summary>" +
-          '<div class="mobile-addon-tree-children">' + customerSections + "</div></details>"
-        );
+      .map(([level2Key, level3Map]) => {
+        const icon = byCustomer ? "👥" : "🏷️";
+        return renderMobileAddonSearchLevel2Section(level2Key, icon, level3Map, hostMap, groupMode);
       })
       .join("");
-
-    const addonCount = Array.from(versionMap.values()).reduce(
-      (sum, customerMap) => sum + Array.from(customerMap.values()).reduce((inner, list) => inner + list.length, 0),
-      0
-    );
+    const addonCount = countAddonSearchNestedEntries(level2Map, false);
     return (
       '<details class="mobile-addon-tree-item mobile-addon-tree-item--addon" open>' +
-      '<summary><span>🧩 ' + mobileEsc(addonName) + "</span><span class=\"mobile-addon-tree-count\">" + addonCount + "</span></summary>" +
-      '<div class="mobile-addon-tree-children">' + versionSections + "</div></details>"
+      '<summary><span>🧩 ' + mobileEsc(addonName) + '</span><span class="mobile-addon-tree-count">' + addonCount + "</span></summary>" +
+      '<div class="mobile-addon-tree-children">' + level2Sections + "</div></details>"
     );
   }).join("");
 
@@ -1927,7 +2019,12 @@ function updateAddonSearchView() {
     return;
   }
 
-  const tree = buildMobileAddonSearchTree(state.addonSearchLastData, query, state.addonSearchCountryFilter);
+  const tree = buildMobileAddonSearchTree(
+    state.addonSearchLastData,
+    query,
+    state.addonSearchCountryFilter,
+    state.addonSearchGroupMode
+  );
   list.innerHTML = renderMobileAddonSearchTreeHtml(tree);
   const addonCount = tree.addonMap instanceof Map ? tree.addonMap.size : 0;
   setAddonSearchStatus(
@@ -2304,6 +2401,7 @@ const state = {
   activeHostsCountryFilter: "all",
   activeHostsSearchQuery: "",
   addonSearchQuery: "",
+  addonSearchGroupMode: "version-customer",
   addonSearchCountryFilter: "all",
   addonSearchLoading: false,
   addonSearchLastData: null,
@@ -4680,6 +4778,16 @@ function wire() {
 
   document.getElementById("addonSearchRefreshButton")?.addEventListener("click", () => {
     void loadAddonSearchResults({ force: true }).catch((error) => setAddonSearchStatus("Fehler: " + error.message, true));
+  });
+
+  document.querySelectorAll(".addon-search-group-chip[data-addon-group]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const nextMode = normalizeAddonSearchGroupMode(chip.getAttribute("data-addon-group"));
+      if (state.addonSearchGroupMode === nextMode) return;
+      state.addonSearchGroupMode = nextMode;
+      syncAddonSearchGroupChips();
+      if (isAddonSearchViewActive()) updateAddonSearchView();
+    });
   });
 
   document.getElementById("addonSearchInput")?.addEventListener("input", (event) => {
