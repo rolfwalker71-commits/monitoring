@@ -12755,9 +12755,6 @@ function buildLiveReportFeedPreviewFromEvent(event) {
   if (Number.isFinite(Number(event?.memory_used_percent))) {
     metrics.push(`RAM ${formatNumber(event.memory_used_percent, 1)}%`);
   }
-  const metricsLine = metrics.length > 0
-    ? `${metrics.join(" · ")} <span class="${deliveryClass}">${escapeHtml(deliveryLabel)}</span>`
-    : `<span class="${deliveryClass}">${escapeHtml(deliveryLabel)}</span>`;
   return {
     id: `${hostIdentity}|${asText(event?.report_id, reportTs || Date.now())}`,
     hostIdentity,
@@ -12768,7 +12765,10 @@ function buildLiveReportFeedPreviewFromEvent(event) {
     ip,
     clockLabel: clock.label,
     clockTitle: clock.title,
-    metricsLine,
+    metricsText: metrics.join(" · "),
+    deliveryMode,
+    deliveryLabel,
+    deliveryClass,
     receivedAtUtc: reportTs,
   };
 }
@@ -12790,17 +12790,29 @@ function renderLiveReportFeed() {
   if (countEl) {
     countEl.textContent = `${liveReportFeedItems.length}`;
   }
-  body.innerHTML = liveReportFeedItems.map((item) => `
+  body.innerHTML = liveReportFeedItems.map((item) => {
+    const statsHtml = item.metricsText
+      ? `<span class="live-report-feed-stats">${escapeHtml(item.metricsText)}</span>`
+      : `<span class="live-report-feed-stats live-report-feed-stats--empty" aria-hidden="true"></span>`;
+    return `
     <button type="button" class="live-report-feed-item${item.isNew ? " is-new" : ""}" data-live-feed-host="${escapeHtml(item.hostname)}" data-live-feed-uid="${escapeHtml(item.hostIdentity)}">
       <div class="live-report-feed-item-head">
         <span class="live-report-feed-customer" title="${escapeHtml(item.customerName)}">${escapeHtml(item.customerName)}</span>
-        <span class="live-report-feed-time" title="${escapeHtml(item.clockTitle)}">${escapeHtml(item.clockLabel)}</span>
+        <time class="live-report-feed-time" datetime="${escapeHtml(item.receivedAtUtc)}" title="${escapeHtml(item.clockTitle)}">${escapeHtml(item.clockLabel)}</time>
       </div>
-      <div class="live-report-feed-designation">${escapeHtml(item.designation)}</div>
-      <div class="live-report-feed-hostline">${escapeHtml(item.shortHostname)} · ${escapeHtml(item.ip)}</div>
-      <div class="live-report-feed-metrics">${item.metricsLine}</div>
+      <p class="live-report-feed-designation" title="${escapeHtml(item.designation)}">${escapeHtml(item.designation)}</p>
+      <p class="live-report-feed-hostline">
+        <span class="live-report-feed-hostname" title="${escapeHtml(item.shortHostname)}">${escapeHtml(item.shortHostname)}</span>
+        <span class="live-report-feed-sep" aria-hidden="true">·</span>
+        <span class="live-report-feed-ip" title="${escapeHtml(item.ip)}">${escapeHtml(item.ip)}</span>
+      </p>
+      <div class="live-report-feed-item-foot">
+        ${statsHtml}
+        <span class="${item.deliveryClass}">${escapeHtml(item.deliveryLabel)}</span>
+      </div>
     </button>
-  `).join("");
+  `;
+  }).join("");
   for (const item of liveReportFeedItems) {
     item.isNew = false;
   }
