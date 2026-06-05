@@ -2026,6 +2026,9 @@ function buildCustomerLogoHtml(item) {
 function buildAlertIdentityHtml(item) {
   const customerName = String(item.customer_name || "").trim();
   const hostLabel = String(item.display_name || item.hostname || "-").trim();
+  const hostname = String(item.hostname || "").trim();
+  const showFqdn = Boolean(hostname && hostname.toLowerCase() !== hostLabel.toLowerCase());
+  const fqdnHtml = showFqdn ? '<p class="alert-host-fqdn">' + mobileEsc(hostname) + "</p>" : "";
   const logoHtml = buildCustomerLogoHtml(item);
   const hostRowAttrs =
     ' class="alert-host-row is-tappable" data-action="host-info" role="button" tabindex="0" aria-label="Host-Details"';
@@ -2039,7 +2042,10 @@ function buildAlertIdentityHtml(item) {
       + '<h2 class="alert-customer-name">' + mobileEsc(customerName) + "</h2>"
       + logoHtml
       + "</div>"
-      + "<div" + hostRowAttrs + '><p class="alert-host-name">' + mobileEsc(hostLabel) + "</p></div>"
+      + "<div" + hostRowAttrs + '><div class="alert-host-main">'
+      + '<p class="alert-host-name">' + mobileEsc(hostLabel) + "</p>"
+      + fqdnHtml
+      + "</div></div>"
       + "</div>"
     );
   }
@@ -2047,7 +2053,10 @@ function buildAlertIdentityHtml(item) {
   return (
     '<div class="alert-identity">'
     + "<div" + titleRowAttrs + ">"
+    + '<div class="alert-host-main">'
     + '<h2 class="alert-customer-name">' + mobileEsc(hostLabel) + "</h2>"
+    + fqdnHtml
+    + "</div>"
     + logoHtml
     + "</div></div>"
   );
@@ -2235,16 +2244,48 @@ function usagePercentForBar(item) {
   return Math.min(100, Math.max(0, Number(item.used_percent || 0)));
 }
 
-function buildUsageLine(item) {
-  const used = Number(item.used_percent || 0).toFixed(1);
-  const current = item.current_used_percent;
-  const mount = mobileEsc(item.mountpoint || "-");
-  if (current != null && Number.isFinite(Number(current))) {
-    return (
-      mount + " · " + used + '% <strong class="alert-usage-now">(jetzt ' + Number(current).toFixed(1) + "%)</strong>"
-    );
-  }
-  return mount + " · " + used + "%";
+function buildMountpointLine(item) {
+  return mobileEsc(String(item.mountpoint || "-").trim() || "-");
+}
+
+function wireUsageBarAnimations(list) {
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const durationMs = 2000;
+
+  list.querySelectorAll(".alert-card").forEach((card) => {
+    const fill = card.querySelector(".usage-bar-fill");
+    const counter = card.querySelector(".usage-bar-counter");
+    if (!fill || !counter) return;
+
+    const target = Number(fill.getAttribute("data-target-percent"));
+    if (!Number.isFinite(target)) return;
+
+    if (reduceMotion) {
+      fill.style.width = target + "%";
+      counter.textContent = target.toFixed(1) + "%";
+      return;
+    }
+
+    fill.style.width = "0%";
+    counter.textContent = "0.0%";
+    const start = performance.now();
+
+    const tick = (now) => {
+      const progress = Math.min(1, (now - start) / durationMs);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const value = target * eased;
+      fill.style.width = value + "%";
+      counter.textContent = value.toFixed(1) + "%";
+      if (progress < 1) {
+        window.requestAnimationFrame(tick);
+      } else {
+        fill.style.width = target + "%";
+        counter.textContent = target.toFixed(1) + "%";
+      }
+    };
+
+    window.requestAnimationFrame(tick);
+  });
 }
 
 function buildHeadsUpActionButton(item) {
@@ -2387,7 +2428,6 @@ function renderAlerts(items) {
   list.innerHTML = state.lastAlerts.map((item, index) => {
     const sev = String(item.severity || "warning").toLowerCase();
     const id = Number(item.id || 0);
-    const hostname = mobileEsc(item.hostname || "-");
     const identityHtml = buildAlertIdentityHtml(item);
     const envClass = buildEnvironmentCardClass(item.environment_type);
     const isAck = item.is_acknowledged === true;
@@ -2438,13 +2478,12 @@ function renderAlerts(items) {
       "  " + identityHtml +
       '<div class="alert-card-body">' +
       ackStrip +
-      '  <p class="alert-meta alert-usage-line">' + buildUsageLine(item) + "</p>" +
+      '  <p class="alert-meta alert-mountpoint-line">' + buildMountpointLine(item) + "</p>" +
       '  <div class="usage-bar-block">' +
       '    <div class="usage-bar-row">' +
-      '      <div class="usage-bar"><span class="usage-bar-fill" style="width:' + barWidth + '%"></span></div>' +
-      '      <strong class="usage-bar-counter">' + barWidth + '%</strong>' +
+      '      <div class="usage-bar"><span class="usage-bar-fill" data-target-percent="' + barWidth + '" style="width:0%"></span></div>' +
+      '      <strong class="usage-bar-counter" data-target-percent="' + barWidth + '">0.0%</strong>' +
       "    </div></div>" +
-      '  <p class="alert-meta">' + hostname + "</p>" +
       '  <div class="alert-card-actions">' + ackBtn +
       '    <button type="button" class="btn-secondary btn-expand" data-action="toggle-more">Mehr</button>' +
       "  </div>" +
@@ -2459,6 +2498,7 @@ function renderAlerts(items) {
 
   wireCustomerLogos(list);
   wireAlertsCarousel(list);
+  wireUsageBarAnimations(list);
   highlightTargetCard();
   syncFocusedCarouselCard(list);
 }
