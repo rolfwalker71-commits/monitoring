@@ -10897,6 +10897,70 @@ function renderSelectedHostControls(host) {
 }
 
 
+function buildCustomerLogoHoverPopupHtml(logoUrl, altText = "") {
+  if (!asText(logoUrl, "").trim()) {
+    return "";
+  }
+  return `<span class="customer-logo-hover-popup" role="presentation" aria-hidden="true">
+    <img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(altText)}" class="customer-logo-hover-popup-img">
+  </span>`;
+}
+
+function positionCustomerLogoHoverPopup(wrap, popup) {
+  if (!wrap || !popup) {
+    return;
+  }
+  const rect = wrap.getBoundingClientRect();
+  const popupWidth = 300;
+  const popupHeight = 132;
+  let left = rect.left + (rect.width / 2) - (popupWidth / 2);
+  let top = rect.top - popupHeight - 10;
+  if (top < 8) {
+    top = rect.bottom + 10;
+    popup.classList.add("is-below");
+  } else {
+    popup.classList.remove("is-below");
+  }
+  left = Math.max(8, Math.min(left, window.innerWidth - popupWidth - 8));
+  top = Math.max(8, Math.min(top, window.innerHeight - popupHeight - 8));
+  popup.style.left = `${left}px`;
+  popup.style.top = `${top}px`;
+}
+
+function wireCustomerLogoHoverPopup(wrap) {
+  if (!wrap || wrap.dataset.customerLogoPopupWired === "1") {
+    return;
+  }
+  const popup = wrap.querySelector(".customer-logo-hover-popup");
+  if (!popup) {
+    return;
+  }
+  wrap.dataset.customerLogoPopupWired = "1";
+  wrap.classList.add("customer-logo-hover-target");
+  if (!wrap.hasAttribute("tabindex")) {
+    wrap.setAttribute("tabindex", "0");
+  }
+
+  const show = () => {
+    positionCustomerLogoHoverPopup(wrap, popup);
+    popup.classList.add("is-visible");
+    popup.setAttribute("aria-hidden", "false");
+  };
+  const hide = () => {
+    popup.classList.remove("is-visible");
+    popup.setAttribute("aria-hidden", "true");
+  };
+
+  wrap.addEventListener("mouseenter", show);
+  wrap.addEventListener("mouseleave", hide);
+  wrap.addEventListener("focusin", show);
+  wrap.addEventListener("focusout", (event) => {
+    if (!wrap.contains(event.relatedTarget)) {
+      hide();
+    }
+  });
+}
+
 function renderSelectedHostCustomerChip(host) {
   if (!host) {
     return "";
@@ -10925,9 +10989,7 @@ function renderSelectedHostCustomerChip(host) {
   const customerLogoHtml = customerLogoUrl
     ? `<span class="selected-host-customer-logo-wrap">
         <img src="${escapeHtml(customerLogoUrl)}" alt="Logo ${escapeHtml(customerLabel)}" class="selected-host-customer-logo" onerror="this.closest('.selected-host-customer-logo-wrap').style.display='none'">
-        <span class="selected-host-customer-logo-popup" role="presentation" aria-hidden="true">
-          <img src="${escapeHtml(customerLogoUrl)}" alt="" class="selected-host-customer-logo-popup-img">
-        </span>
+        ${buildCustomerLogoHoverPopupHtml(customerLogoUrl, `Logo ${customerLabel}`)}
       </span>`
     : "";
   const cardBodyClass = customerLogoHtml
@@ -10990,6 +11052,7 @@ function updateReportChromeBar() {
   const dateEl = document.getElementById("reportChromeDate");
   const logoWrap = document.getElementById("reportChromeLogoWrap");
   const logoImg = document.getElementById("reportChromeLogo");
+  const logoPopupImg = document.getElementById("reportChromeLogoPopupImg");
   if (!titleEl) {
     return;
   }
@@ -11025,14 +11088,25 @@ function updateReportChromeBar() {
       logoImg.src = customerLogoUrl;
       logoImg.alt = `Logo ${customerPart}`;
       logoImg.removeAttribute("title");
+      if (logoPopupImg) {
+        logoPopupImg.src = customerLogoUrl;
+        logoPopupImg.alt = `Logo ${customerPart}`;
+      }
       logoImg.onerror = function onReportChromeLogoError() {
         logoWrap.classList.add("hidden");
       };
       logoWrap.classList.remove("hidden");
+      logoWrap.removeAttribute("aria-hidden");
+      wireCustomerLogoHoverPopup(logoWrap);
     } else {
       logoImg.removeAttribute("src");
       logoImg.alt = "";
+      if (logoPopupImg) {
+        logoPopupImg.removeAttribute("src");
+        logoPopupImg.alt = "";
+      }
       logoWrap.classList.add("hidden");
+      logoWrap.setAttribute("aria-hidden", "true");
     }
   }
 
@@ -11219,6 +11293,10 @@ function updateReportCustomerChip() {
     return;
   }
   chipWrap.innerHTML = customerChip;
+  const customerLogoWrap = chipWrap.querySelector(".selected-host-customer-logo-wrap");
+  if (customerLogoWrap) {
+    wireCustomerLogoHoverPopup(customerLogoWrap);
+  }
   updateReportChromeBar();
   renderOverviewHostMetrics();
 }

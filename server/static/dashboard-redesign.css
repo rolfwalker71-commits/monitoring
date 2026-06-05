@@ -471,6 +471,7 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
 }
 
 .report-chrome-logo-wrap {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -481,6 +482,7 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
   border: 1px solid var(--dr-line);
   border-radius: var(--radius-control);
   background: #fff;
+  overflow: visible;
 }
 
 .report-chrome-logo-wrap.hidden {

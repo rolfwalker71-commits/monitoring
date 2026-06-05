@@ -15704,7 +15704,6 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   right: var(--customer-logo-right-gap);
   transform: translateY(-50%);
   z-index: 3;
-  cursor: zoom-in;
 }
 
 .report-customer-chip-wrap .selected-host-customer-logo {
@@ -15716,16 +15715,17 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   border-radius: 4px;
 }
 
-.report-customer-chip-wrap .selected-host-customer-logo-popup {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 10px);
-  z-index: 140;
+.customer-logo-hover-target {
+  cursor: zoom-in;
+}
+
+.customer-logo-hover-popup {
+  position: fixed;
+  z-index: 12000;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 220px;
-  max-width: 320px;
+  width: 300px;
   min-height: 88px;
   max-height: 160px;
   padding: 12px 14px;
@@ -15738,25 +15738,32 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transform: translateY(6px);
+  transform: translateY(4px);
   transition: opacity 0.16s ease, visibility 0.16s ease, transform 0.16s ease;
 }
 
-.report-customer-chip-wrap .selected-host-customer-logo-popup-img {
+.customer-logo-hover-popup.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.customer-logo-hover-popup.is-below {
+  transform: translateY(-4px);
+}
+
+.customer-logo-hover-popup.is-below.is-visible {
+  transform: translateY(0);
+}
+
+.customer-logo-hover-popup-img {
   display: block;
-  max-width: 292px;
+  max-width: 272px;
   max-height: 136px;
   width: auto;
   height: auto;
   object-fit: contain;
   object-position: center center;
-}
-
-.report-customer-chip-wrap .selected-host-customer-logo-wrap:hover .selected-host-customer-logo-popup,
-.report-customer-chip-wrap .selected-host-customer-logo-wrap:focus-within .selected-host-customer-logo-popup {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
 }
 
 .report-customer-chip-wrap .selected-host-meta-card-sub {
@@ -15991,7 +15998,7 @@ body[data-theme="dark"] .report-customer-chip-wrap .selected-host-customer-logo-
   background: linear-gradient(180deg, #162741 0%, #13233b 100%);
 }
 
-body[data-theme="dark"] .report-customer-chip-wrap .selected-host-customer-logo-popup {
+body[data-theme="dark"] .customer-logo-hover-popup {
   border-color: #3f5f86;
   background: linear-gradient(180deg, #1a2f4a 0%, #15263d 100%);
   box-shadow:
