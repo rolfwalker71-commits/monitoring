@@ -9631,12 +9631,7 @@ function formatCronDSummary(cronInfo) {
 
 function renderReportCard(report) {
   const payload = report && report.payload ? report.payload : {};
-  const cpu = payload.cpu || {};
-  const memory = payload.memory || {};
-  const swap = payload.swap || {};
   const network = payload.network || {};
-  const cpuCores = Number(cpu.cores ?? cpu.core_count ?? cpu.logical_cores ?? payload.cpu_cores);
-  const cpuModelName = asText(cpu.model_name || cpu.model || cpu.name || payload.cpu_model_name || "-");
   const defaultNicIpv4 = resolveDefaultNicIpv4(report, payload, network);
   const technicalHostname = asText(report.hostname || payload.hostname);
   const deliveryMode = asText(report.delivery_mode || payload.delivery_mode || "live", "live").toLowerCase();
@@ -9691,69 +9686,83 @@ function renderReportCard(report) {
   const reportTimestampDate = asText(reportTimestampParts.shift(), reportTimestampFull).trim();
   const reportTimestampTime = asText(reportTimestampParts.join(","), "").trim();
 
-  // Helper function to render meta-group items
-  function renderMetaItem(label, value, options = {}) {
-    let valueHtml = escapeHtml(asText(value || "-"));
-    if (options.truncate === "hostname") {
+  const hostMeta = selectedHostMeta || {};
+  const customerLabel = asText(hostMeta.customer_name, "Kein Kunde");
+  const displayLabel = asText(hostMeta.display_name || technicalHostname, technicalHostname);
+  const hostUid = asText(report.host_uid || payload.host_uid || hostMeta.host_uid, "").trim();
+  const countryCode = normalizeHostCountryCode(hostMeta) || "-";
+  const envLabel = asText(hostMeta.environment_type, "").trim().toUpperCase() || "-";
+  const customerProject = asText(hostMeta.customer_maringo_project_number, "").trim();
+  const totalReports = Number.isFinite(Number(state.totalReports))
+    ? Number(state.totalReports).toLocaleString("de-CH")
+    : Number.isFinite(Number(hostMeta.report_count))
+      ? Number(hostMeta.report_count).toLocaleString("de-CH")
+      : "-";
+  const primaryIp = asText(report.primary_ip || payload.primary_ip || hostMeta.primary_ip || hostMeta.std_nic_ip, "-");
+  const stdNicIp = asText(defaultNicIpv4 || hostMeta.std_nic_ip, "-");
+  const dnsValue = Array.isArray(network.dns_servers)
+    ? network.dns_servers.filter(Boolean).join(", ") || "-"
+    : asText(network.dns_servers, "-");
+
+  const metricRow = (label, value, options = {}) => {
+    let valueHtml = escapeHtml(asText(value, "-"));
+    if (options.ellipsisFull) {
+      valueHtml = renderFullValueWithEllipsisHtml(value);
+    } else if (options.truncate === "hostname") {
       valueHtml = renderTruncatedHostnameHtml(value, { maxLen: options.truncateMaxLen });
+    } else if (options.truncate === "uid") {
+      valueHtml = renderTruncatedHostUidHtml(value);
     } else if (options.truncate) {
       valueHtml = renderTruncatedTextHtml(value);
+    } else if (options.html) {
+      valueHtml = value;
     }
-    return `<p class="meta-group-item"><strong class="kv-label">${label}</strong><span class="kv-value">${valueHtml}</span></p>`;
-  }
-
-  function renderMetaItemHtml(label, html) {
-    return `<p class="meta-group-item"><strong class="kv-label">${label}</strong><span class="kv-value">${html}</span></p>`;
-  }
-
-  // Build grouped meta sections
-  const agentGroup = `
-    <div class="meta-group">
-      <div class="meta-group-title">Agent-Info</div>
-      <div class="meta-group-content">
-        ${renderMetaItem("Agent ID", report.agent_id || payload.agent_id, { truncate: "hostname", truncateMaxLen: 22 })}
-        ${renderMetaItem("Version", payload.agent_version)}
-        ${renderMetaItem("API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config))}
-      </div>
+    const valueClass = options.nowrap ? " metric-value--nowrap" : "";
+    return `
+    <div class="metric-row">
+      <span class="metric-label">${escapeHtml(label)}</span>
+      <span class="metric-value${valueClass}">${valueHtml}</span>
     </div>
   `;
+  };
 
-  const systemGroup = `
-    <div class="meta-group">
-      <div class="meta-group-title">System</div>
-      <div class="meta-group-content">
-        ${renderMetaItem("OS", payload.os)}
-        ${renderMetaItem("Kernel", payload.kernel)}
-        ${renderMetaItem("Uptime", formatUptime(payload.uptime_seconds))}
-        ${renderMetaItem("Queue", queueDepth + " Dateien")}
-      </div>
-    </div>
-  `;
+  const hostIdentityRows = [
+    metricRow("Kunde", customerLabel, { truncate: true }),
+    metricRow("Bezeichnung", displayLabel, { truncate: true }),
+    metricRow("Hostname", technicalHostname, { ellipsisFull: true }),
+    metricRow("Host-UID", hostUid, { truncate: "uid" }),
+    metricRow("Land", countryCode),
+    metricRow("Umgebung", envLabel),
+    customerProject ? metricRow("Projekt", customerProject) : "",
+    metricRow("Meldungen", totalReports),
+    metricRow("Agent ID", report.agent_id || payload.agent_id || "-", { ellipsisFull: true }),
+    metricRow("Version", payload.agent_version || hostMeta.agent_version || "-"),
+    metricRow("API-Key", formatAgentApiKeyStatus(payload.agent_api_key, payload.agent_config)),
+    metricRow("Queue", `${queueDepth} Dateien`),
+  ].filter(Boolean).join("");
 
-  const loadLine = `load ${formatNumber(cpu.load_avg_1, 2)} / ${formatNumber(cpu.load_avg_5, 2)} / ${formatNumber(cpu.load_avg_15, 2)}`;
-  const ramSub = `${formatKilobytes(memory.used_kb)} / ${formatKilobytes(memory.total_kb)}`;
-  const coresModel = `${Number.isFinite(cpuCores) && cpuCores > 0 ? String(Math.floor(cpuCores)) : "-"} · ${cpuModelName}`;
-  const resourcesGroup = `
-    <div class="meta-group meta-group--resources">
-      <div class="meta-group-title">Ressourcen</div>
-      <div class="meta-group-content">
-        ${renderMetricBarRow("CPU", cpu.usage_percent, `<span class="metric-label">Load Ø</span><span class="metric-value">${escapeHtml(loadLine)}</span>`)}
-        ${renderMetricBarRow("RAM", memory.used_percent, `<span class="metric-label">Belegung</span><span class="metric-value">${escapeHtml(ramSub)}</span>`)}
-        ${renderMetricBarRow("SWAP", swap.used_percent, `<span class="metric-label">Kerne / Modell</span><span class="metric-value">${escapeHtml(coresModel)}</span>`)}
-      </div>
-    </div>
-  `;
+  const systemNetworkRows = [
+    metricRow("OS", payload.os || hostMeta.os || "-"),
+    metricRow("Kernel", payload.kernel || "-"),
+    metricRow("Uptime", formatUptime(payload.uptime_seconds)),
+    metricRow("Architektur", payload.architecture || payload.arch || "-"),
+    metricRow("Primary IP", primaryIp, { nowrap: true }),
+    metricRow("Std. NIC IP", stdNicIp, { nowrap: true }),
+    metricRow("Default NIC", network.default_interface || "-"),
+    metricRow("Gateway", network.default_gateway || "-", { nowrap: true }),
+    metricRow("DNS", dnsValue, { nowrap: true }),
+  ].join("");
 
-  const networkGroup = `
-    <div class="meta-group">
-      <div class="meta-group-title">Netzwerk</div>
-      <div class="meta-group-content">
-        ${renderMetaItem("Primary IP", report.primary_ip || payload.primary_ip)}
-        ${renderMetaItem("Std. NIC IP", defaultNicIpv4 || "-")}
-        ${renderMetaItem("Default NIC", network.default_interface)}
-        ${renderMetaItem("Default GW", network.default_gateway)}
-        ${renderMetaItemHtml("DNS", formatDnsServers(network.dns_servers))}
-      </div>
+  const reportMetricsGrid = `
+    <div class="overview-metrics-grid">
+      <article class="metric-card">
+        <h4>Host &amp; Agent</h4>
+        ${hostIdentityRows}
+      </article>
+      <article class="metric-card">
+        <h4>System &amp; Netzwerk</h4>
+        ${systemNetworkRows}
+      </article>
     </div>
   `;
 
@@ -9866,12 +9875,7 @@ function renderReportCard(report) {
         </div>
       </div>
 
-      ${showMetaGroups ? `<div class="meta-groups">
-        ${agentGroup}
-        ${systemGroup}
-        ${resourcesGroup}
-        ${networkGroup}
-      </div>` : ""}
+      ${showMetaGroups ? reportMetricsGrid : ""}
       ${detailContent}
     </article>
   `;
