@@ -1292,15 +1292,16 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
 }
 
 .live-report-feed-body {
-  --live-feed-slot: 46px;
-  --live-feed-gap: 3px;
+  --live-feed-slot: 62px;
+  --live-feed-gap: 4px;
+  --live-feed-body-pad: 6px;
   height: calc(
     var(--live-feed-visible-slots, 5) * var(--live-feed-slot)
     + (var(--live-feed-visible-slots, 5) - 1) * var(--live-feed-gap)
-    + 8px
+    + (2 * var(--live-feed-body-pad))
   );
   overflow: hidden;
-  padding: 4px;
+  padding: var(--live-feed-body-pad);
   display: flex;
   flex-direction: column;
   gap: var(--live-feed-gap);
@@ -1312,25 +1313,26 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
 }
 
 .live-report-feed-item {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 1px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: 11px 10px 10px 10px;
+  row-gap: 1px;
+  align-content: start;
   width: 100%;
   flex: 0 0 var(--live-feed-slot);
-  height: var(--live-feed-slot);
-  min-height: var(--live-feed-slot);
-  max-height: var(--live-feed-slot);
+  height: var(--live-feed-slot) !important;
+  min-height: var(--live-feed-slot) !important;
+  max-height: var(--live-feed-slot) !important;
   margin: 0;
   text-align: left;
-  padding: 4px 6px;
+  padding: 8px 10px;
   border: 1px solid #d5e0ef;
-  border-radius: 7px;
+  border-radius: 8px;
   background: linear-gradient(180deg, #ffffff 0%, #f6f9fd 100%);
   color: #1e293b;
   cursor: pointer;
   font: inherit;
-  line-height: 1.2;
+  line-height: 1;
   overflow: hidden;
   box-shadow:
     0 1px 1px rgba(15, 23, 42, 0.05),
@@ -1404,6 +1406,9 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
   justify-content: space-between;
   gap: 6px;
   min-width: 0;
+  height: 11px;
+  min-height: 11px;
+  max-height: 11px;
 }
 
 .live-report-feed-customer-row {
@@ -1416,8 +1421,8 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
 
 .live-report-feed-customer-logo-wrap {
   flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
+  width: 11px;
+  height: 11px;
   border: 1px solid #dbe4f0;
   border-radius: 3px;
   background: #fff;
@@ -1459,10 +1464,13 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
 
 .live-report-feed-designation {
   margin: 0;
+  height: 10px;
+  min-height: 10px;
+  max-height: 10px;
   font-size: 9px;
   font-weight: 600;
   color: #475569;
-  line-height: 1.2;
+  line-height: 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1474,10 +1482,13 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
   gap: 4px;
   min-width: 0;
   margin: 0;
+  height: 10px;
+  min-height: 10px;
+  max-height: 10px;
   font-family: var(--kv-value-family);
   font-size: 9px;
   font-weight: 500;
-  line-height: 1.35;
+  line-height: 10px;
   color: #7188a3;
 }
 
@@ -1498,11 +1509,13 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
-  margin-top: 0;
-  padding-top: 2px;
-  border-top: 1px solid rgba(226, 232, 240, 0.85);
-  min-height: 13px;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  height: 10px;
+  min-height: 10px;
+  max-height: 10px;
+  border-top: 1px solid rgba(226, 232, 240, 0.75);
 }
 
 .live-report-feed-stats {
