@@ -664,7 +664,11 @@
                     <input id="backupAutomationIntervalHours" type="number" min="1" max="168" class="settings-input" />
                   </label>
                   <label class="settings-field-wrap">
-                    <span>Retention (Tage)</span>
+                    <span>Lokale Kopien max</span>
+                    <input id="backupAutomationRetentionMaxFiles" type="number" min="0" max="20" class="settings-input" title="Anzahl lokaler Backup-Dateien (neueste zuerst)" />
+                  </label>
+                  <label class="settings-field-wrap">
+                    <span>Zusätzlich max. Alter (Tage)</span>
                     <input id="backupAutomationRetentionDays" type="number" min="1" max="365" class="settings-input" />
                   </label>
                   <label class="settings-field-wrap">

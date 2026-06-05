@@ -12240,7 +12240,10 @@ function updateBackupAutomationAuthModeUi() {
 function applyBackupAutomationSettingsToInputs(settings) {
   document.getElementById("backupAutomationLocalEnabled").checked = !!settings.local_enabled;
   document.getElementById("backupAutomationIntervalHours").value = String(settings.local_interval_hours || 12);
-  document.getElementById("backupAutomationRetentionDays").value = String(settings.local_retention_days || 7);
+  document.getElementById("backupAutomationRetentionMaxFiles").value = String(
+    settings.local_retention_max_files ?? 4
+  );
+  document.getElementById("backupAutomationRetentionDays").value = String(settings.local_retention_days || 3);
   document.getElementById("backupAutomationTargetDir").value = String(settings.local_target_dir || "auto_db_backups");
   document.getElementById("backupAutomationSftpEnabled").checked = !!settings.sftp_enabled;
   document.getElementById("backupAutomationSftpHost").value = String(settings.sftp_host || "");
@@ -12257,7 +12260,8 @@ function readBackupAutomationSettingsFromInputs() {
   return {
     local_enabled: !!document.getElementById("backupAutomationLocalEnabled")?.checked,
     local_interval_hours: Number(document.getElementById("backupAutomationIntervalHours")?.value || 12),
-    local_retention_days: Number(document.getElementById("backupAutomationRetentionDays")?.value || 7),
+    local_retention_max_files: Number(document.getElementById("backupAutomationRetentionMaxFiles")?.value || 4),
+    local_retention_days: Number(document.getElementById("backupAutomationRetentionDays")?.value || 3),
     local_target_dir: String(document.getElementById("backupAutomationTargetDir")?.value || "auto_db_backups").trim(),
     sftp_enabled: !!document.getElementById("backupAutomationSftpEnabled")?.checked,
     sftp_host: String(document.getElementById("backupAutomationSftpHost")?.value || "").trim(),
@@ -12345,7 +12349,9 @@ async function loadAdminBackupAutomation() {
   renderBackupAutomationRuns(runs);
   state.backupAutomationLoaded = true;
   const updated = settings.updated_at_utc ? formatUtcPlus2(settings.updated_at_utc) : "-";
-  setBackupAutomationStatus(`Lokales Backup: ${settings.local_enabled ? "aktiv" : "inaktiv"} · Intervall: ${settings.local_interval_hours || 12}h · Retention: ${settings.local_retention_days || 7} Tage · Letztes Settings-Update: ${updated}`);
+  setBackupAutomationStatus(
+    `Lokales Backup: ${settings.local_enabled ? "aktiv" : "inaktiv"} · Intervall: ${settings.local_interval_hours || 12}h · Lokale Kopien: ${settings.local_retention_max_files ?? 4} · Max. Alter: ${settings.local_retention_days || 3} Tage · Letztes Settings-Update: ${updated}`
+  );
   return data;
 }
 

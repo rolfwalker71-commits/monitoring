@@ -123,7 +123,11 @@ DEFAULT_SAP_LICENSE_TYPE_MAP_ENTRIES = [
     {"match_text": "FINANCE-LTD", "display_name": "Limited Finance", "visible": True},
 ]
 AUTO_BACKUP_DEFAULT_INTERVAL_HOURS = max(1, min(168, int(os.getenv("MONITORING_AUTO_BACKUP_INTERVAL_HOURS", "12") or "12")))
-AUTO_BACKUP_DEFAULT_RETENTION_DAYS = max(1, min(365, int(os.getenv("MONITORING_AUTO_BACKUP_RETENTION_DAYS", "7") or "7")))
+AUTO_BACKUP_DEFAULT_RETENTION_DAYS = max(1, min(365, int(os.getenv("MONITORING_AUTO_BACKUP_RETENTION_DAYS", "3") or "3")))
+AUTO_BACKUP_DEFAULT_RETENTION_MAX_FILES = max(
+    0,
+    min(20, int(os.getenv("MONITORING_AUTO_BACKUP_RETENTION_MAX_FILES", "4") or "4")),
+)
 SFTP_TEST_TIMEOUT_SECONDS = max(10, min(300, int(os.getenv("MONITORING_SFTP_TEST_TIMEOUT_SECONDS", "45") or "45")))
 SFTP_UPLOAD_TIMEOUT_MIN_SECONDS = max(30, min(3600, int(os.getenv("MONITORING_SFTP_UPLOAD_TIMEOUT_MIN_SECONDS", "300") or "300")))
 SFTP_UPLOAD_TIMEOUT_MAX_SECONDS = max(
@@ -1515,7 +1519,8 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 local_enabled INTEGER NOT NULL DEFAULT 1,
                 local_interval_hours INTEGER NOT NULL DEFAULT 12,
-                local_retention_days INTEGER NOT NULL DEFAULT 7,
+                local_retention_days INTEGER NOT NULL DEFAULT 3,
+                local_retention_max_files INTEGER NOT NULL DEFAULT 4,
                 local_target_dir TEXT NOT NULL DEFAULT 'auto_db_backups',
                 sftp_enabled INTEGER NOT NULL DEFAULT 0,
                 sftp_host TEXT NOT NULL DEFAULT '',
@@ -1550,6 +1555,17 @@ def init_db() -> None:
             ON backup_automation_runs(finished_at_utc DESC)
             """
         )
+        backup_automation_columns = {
+            str(row[1] or "")
+            for row in conn.execute("PRAGMA table_info(backup_automation_settings)").fetchall()
+        }
+        if "local_retention_max_files" not in backup_automation_columns:
+            conn.execute(
+                """
+                ALTER TABLE backup_automation_settings
+                ADD COLUMN local_retention_max_files INTEGER NOT NULL DEFAULT 4
+                """
+            )
         conn.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_filesystem_visibility_host_section
@@ -2590,6 +2606,7 @@ def get_backup_automation_settings(conn: sqlite3.Connection) -> dict[str, object
         SELECT local_enabled,
                local_interval_hours,
                local_retention_days,
+               local_retention_max_files,
                local_target_dir,
                sftp_enabled,
                sftp_host,
@@ -2613,6 +2630,7 @@ def get_backup_automation_settings(conn: sqlite3.Connection) -> dict[str, object
                 local_enabled,
                 local_interval_hours,
                 local_retention_days,
+                local_retention_max_files,
                 local_target_dir,
                 sftp_enabled,
                 sftp_host,
@@ -2623,12 +2641,13 @@ def get_backup_automation_settings(conn: sqlite3.Connection) -> dict[str, object
                 sftp_key_path,
                 sftp_password,
                 updated_at_utc
-            ) VALUES (1, ?, ?, ?, ?, 0, '', 22, '', '', 'key', '', '', ?)
+            ) VALUES (1, ?, ?, ?, ?, ?, 0, '', 22, '', '', 'key', '', '', ?)
             """,
             (
                 1 if AUTO_BACKUP_DEFAULT_ENABLED else 0,
                 AUTO_BACKUP_DEFAULT_INTERVAL_HOURS,
                 AUTO_BACKUP_DEFAULT_RETENTION_DAYS,
+                AUTO_BACKUP_DEFAULT_RETENTION_MAX_FILES,
                 AUTO_BACKUP_DIR.name,
                 now_utc,
             ),
@@ -2638,6 +2657,7 @@ def get_backup_automation_settings(conn: sqlite3.Connection) -> dict[str, object
             SELECT local_enabled,
                    local_interval_hours,
                    local_retention_days,
+                   local_retention_max_files,
                    local_target_dir,
                    sftp_enabled,
                    sftp_host,
@@ -2656,16 +2676,22 @@ def get_backup_automation_settings(conn: sqlite3.Connection) -> dict[str, object
         "local_enabled": bool(int(row[0] or 0)),
         "local_interval_hours": _coerce_int(row[1], AUTO_BACKUP_DEFAULT_INTERVAL_HOURS, 1, 168),
         "local_retention_days": _coerce_int(row[2], AUTO_BACKUP_DEFAULT_RETENTION_DAYS, 1, 365),
-        "local_target_dir": _normalize_backup_target_dir(row[3]),
-        "sftp_enabled": bool(int(row[4] or 0)),
-        "sftp_host": str(row[5] or ""),
-        "sftp_port": _coerce_int(row[6], 22, 1, 65535),
-        "sftp_username": str(row[7] or ""),
-        "sftp_remote_path": str(row[8] or ""),
-        "sftp_auth_mode": "password" if str(row[9] or "").strip().lower() == "password" else "key",
-        "sftp_key_path": str(row[10] or ""),
-        "sftp_password": str(row[11] or ""),
-        "updated_at_utc": str(row[12] or ""),
+        "local_retention_max_files": _coerce_int(
+            row[3],
+            AUTO_BACKUP_DEFAULT_RETENTION_MAX_FILES,
+            0,
+            20,
+        ),
+        "local_target_dir": _normalize_backup_target_dir(row[4]),
+        "sftp_enabled": bool(int(row[5] or 0)),
+        "sftp_host": str(row[6] or ""),
+        "sftp_port": _coerce_int(row[7], 22, 1, 65535),
+        "sftp_username": str(row[8] or ""),
+        "sftp_remote_path": str(row[9] or ""),
+        "sftp_auth_mode": "password" if str(row[10] or "").strip().lower() == "password" else "key",
+        "sftp_key_path": str(row[11] or ""),
+        "sftp_password": str(row[12] or ""),
+        "updated_at_utc": str(row[13] or ""),
     }
 
 
@@ -2683,6 +2709,15 @@ def save_backup_automation_settings(conn: sqlite3.Connection, payload: dict) -> 
         AUTO_BACKUP_DEFAULT_RETENTION_DAYS,
         1,
         365,
+    )
+    local_retention_max_files = _coerce_int(
+        payload.get(
+            "local_retention_max_files",
+            existing.get("local_retention_max_files", AUTO_BACKUP_DEFAULT_RETENTION_MAX_FILES),
+        ),
+        AUTO_BACKUP_DEFAULT_RETENTION_MAX_FILES,
+        0,
+        20,
     )
     local_target_dir = _normalize_backup_target_dir(
         payload.get("local_target_dir", existing.get("local_target_dir", AUTO_BACKUP_DIR.name))
@@ -2705,6 +2740,7 @@ def save_backup_automation_settings(conn: sqlite3.Connection, payload: dict) -> 
             local_enabled,
             local_interval_hours,
             local_retention_days,
+            local_retention_max_files,
             local_target_dir,
             sftp_enabled,
             sftp_host,
@@ -2715,11 +2751,12 @@ def save_backup_automation_settings(conn: sqlite3.Connection, payload: dict) -> 
             sftp_key_path,
             sftp_password,
             updated_at_utc
-        ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             local_enabled = excluded.local_enabled,
             local_interval_hours = excluded.local_interval_hours,
             local_retention_days = excluded.local_retention_days,
+            local_retention_max_files = excluded.local_retention_max_files,
             local_target_dir = excluded.local_target_dir,
             sftp_enabled = excluded.sftp_enabled,
             sftp_host = excluded.sftp_host,
@@ -2735,6 +2772,7 @@ def save_backup_automation_settings(conn: sqlite3.Connection, payload: dict) -> 
             1 if local_enabled else 0,
             local_interval_hours,
             local_retention_days,
+            local_retention_max_files,
             local_target_dir,
             1 if sftp_enabled else 0,
             sftp_host,
@@ -2967,6 +3005,33 @@ def list_backup_automation_runs(conn: sqlite3.Connection, limit: int = 20) -> li
     ]
 
 
+def _prune_local_automated_backups(
+    target_dir: Path,
+    *,
+    max_files: int,
+    retention_days: int,
+) -> int:
+    entries: list[tuple[datetime, Path]] = []
+    for path in target_dir.glob("monitoring-auto-*.db"):
+        try:
+            mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+            entries.append((mtime, path))
+        except OSError:
+            continue
+
+    entries.sort(key=lambda item: item[0], reverse=True)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    pruned_count = 0
+    for index, (mtime, path) in enumerate(entries):
+        if index >= max_files or mtime < cutoff:
+            try:
+                path.unlink()
+                pruned_count += 1
+            except OSError:
+                pass
+    return pruned_count
+
+
 def _run_local_automated_backup(settings: dict[str, object], trigger_source: str) -> dict[str, object]:
     started_at = utc_now_iso()
     local_target_dir = _normalize_backup_target_dir(settings.get("local_target_dir", AUTO_BACKUP_DIR.name))
@@ -2989,19 +3054,12 @@ def _run_local_automated_backup(settings: dict[str, object], trigger_source: str
         1,
         365,
     )
-    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
-    pruned_count = 0
-    for path in target_dir.glob("monitoring-auto-*.db"):
-        try:
-            mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
-        except OSError:
-            continue
-        if mtime < cutoff and path != backup_file:
-            try:
-                path.unlink()
-                pruned_count += 1
-            except OSError:
-                pass
+    retention_max_files = _coerce_int(
+        settings.get("local_retention_max_files", AUTO_BACKUP_DEFAULT_RETENTION_MAX_FILES),
+        AUTO_BACKUP_DEFAULT_RETENTION_MAX_FILES,
+        0,
+        20,
+    )
 
     uploaded_sftp = False
     upload_error_message = ""
@@ -3013,7 +3071,16 @@ def _run_local_automated_backup(settings: dict[str, object], trigger_source: str
         except Exception as exc:
             upload_error_message = str(exc)
 
+    pruned_count = _prune_local_automated_backups(
+        target_dir,
+        max_files=retention_max_files,
+        retention_days=retention_days,
+    )
+
     finished_at = utc_now_iso()
+    backup_path_value = str(backup_file.relative_to(DATA_DIR))
+    if not backup_file.exists():
+        backup_path_value = ""
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
@@ -3032,7 +3099,7 @@ def _run_local_automated_backup(settings: dict[str, object], trigger_source: str
                 started_at,
                 finished_at,
                 trigger_source,
-                str(backup_file.relative_to(DATA_DIR)),
+                backup_path_value,
                 size_bytes,
                 1 if uploaded_sftp else 0,
                 upload_error_message,
@@ -3044,9 +3111,10 @@ def _run_local_automated_backup(settings: dict[str, object], trigger_source: str
         "status": "ok",
         "started_at_utc": started_at,
         "finished_at_utc": finished_at,
-        "backup_path": str(backup_file.relative_to(DATA_DIR)),
+        "backup_path": backup_path_value,
         "backup_size_bytes": size_bytes,
         "pruned_count": pruned_count,
+        "local_retention_max_files": retention_max_files,
         "uploaded_sftp": uploaded_sftp,
         "sftp_error": upload_error_message,
         "sftp_details": upload_details,
@@ -3060,8 +3128,8 @@ def trigger_automated_backup_now(trigger_source: str = "manual", force_local: bo
         with sqlite3.connect(DB_PATH) as conn:
             settings = get_backup_automation_settings(conn)
 
-        if not force_local and not bool(settings.get("local_enabled", False)):
-            return {"status": "skipped", "reason": "local backup disabled"}
+        if not force_local and not bool(settings.get("local_enabled", False)) and not bool(settings.get("sftp_enabled", False)):
+            return {"status": "skipped", "reason": "backup automation disabled"}
 
         return _run_local_automated_backup(settings, trigger_source)
     except Exception as exc:
@@ -3099,7 +3167,7 @@ def _auto_backup_scheduler_loop() -> None:
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 settings = get_backup_automation_settings(conn)
-                if bool(settings.get("local_enabled", False)):
+                if bool(settings.get("local_enabled", False)) or bool(settings.get("sftp_enabled", False)):
                     latest_row = conn.execute(
                         """
                         SELECT finished_at_utc
