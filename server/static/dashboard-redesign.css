@@ -1159,11 +1159,36 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 6px 8px 6px 6px;
   border-bottom: 1px solid #e2e8f0;
   background: #f8fafc;
+}
+
+.live-report-feed-drag-zone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 6px;
   cursor: grab;
   touch-action: none;
+  user-select: none;
+}
+
+.live-report-feed-drag-zone:active,
+.live-report-feed.is-dragging .live-report-feed-drag-zone {
+  cursor: grabbing;
+}
+
+.live-report-feed-grip {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.12em;
+  color: #94a3b8;
+  line-height: 1;
+  flex: 0 0 auto;
 }
 
 .live-report-feed-head strong {

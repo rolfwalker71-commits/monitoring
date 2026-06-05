@@ -1655,9 +1655,12 @@
       </div>
 
       <div id="liveReportFeed" class="live-report-feed hidden" aria-live="polite">
-        <header class="live-report-feed-head" data-live-feed-drag-handle>
-          <strong>Live Meldungen</strong>
-          <span id="liveReportFeedCount" class="live-report-feed-count"></span>
+        <header class="live-report-feed-head">
+          <div class="live-report-feed-drag-zone" data-live-feed-drag-handle title="Verschieben">
+            <span class="live-report-feed-grip" aria-hidden="true">⋮⋮</span>
+            <strong>Live Meldungen</strong>
+            <span id="liveReportFeedCount" class="live-report-feed-count"></span>
+          </div>
           <div class="live-report-feed-actions">
             <button id="liveReportFeedMinimizeBtn" class="btn-icon live-report-feed-icon-btn" type="button" title="Einklappen" aria-expanded="true">−</button>
             <button id="liveReportFeedCloseBtn" class="btn-icon live-report-feed-icon-btn" type="button" title="Schliessen">✕</button>

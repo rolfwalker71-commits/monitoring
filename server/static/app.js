@@ -12774,6 +12774,7 @@ function buildLiveReportFeedPreviewFromEvent(event) {
 }
 
 function renderLiveReportFeed() {
+  wireLiveReportFeed();
   const panel = document.getElementById("liveReportFeed");
   const body = document.getElementById("liveReportFeedBody");
   const countEl = document.getElementById("liveReportFeedCount");
@@ -12955,15 +12956,15 @@ function wireLiveReportFeed() {
   if (liveReportFeedWired) {
     return;
   }
-  liveReportFeedWired = true;
   const panel = document.getElementById("liveReportFeed");
   const body = document.getElementById("liveReportFeedBody");
   const minimizeBtn = document.getElementById("liveReportFeedMinimizeBtn");
   const closeBtn = document.getElementById("liveReportFeedCloseBtn");
   const dragHandle = panel ? panel.querySelector("[data-live-feed-drag-handle]") : null;
-  if (!panel || !body) {
+  if (!panel || !body || !dragHandle) {
     return;
   }
+  liveReportFeedWired = true;
 
   applyLiveReportFeedPosition();
 
@@ -12999,55 +13000,51 @@ function wireLiveReportFeed() {
     selectHostFromLiveReportFeed(hostname, hostUid);
   });
 
-  if (dragHandle) {
-    dragHandle.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0) {
-        return;
-      }
-      const target = event.target instanceof Element ? event.target : null;
-      if (target && target.closest("button")) {
-        return;
-      }
-      event.preventDefault();
-      const rect = panel.getBoundingClientRect();
-      panel.style.left = `${rect.left}px`;
-      panel.style.top = `${rect.top}px`;
-      panel.style.transform = "none";
-      liveReportFeedDragState = {
-        pointerId: event.pointerId,
-        offsetX: event.clientX - rect.left,
-        offsetY: event.clientY - rect.top,
-      };
-      panel.classList.add("is-dragging");
-      dragHandle.setPointerCapture(event.pointerId);
-    });
+  const onDragPointerMove = (event) => {
+    if (!liveReportFeedDragState || liveReportFeedDragState.pointerId !== event.pointerId) {
+      return;
+    }
+    const nextLeft = Math.max(8, Math.min(window.innerWidth - panel.offsetWidth - 8, event.clientX - liveReportFeedDragState.offsetX));
+    const nextTop = Math.max(8, Math.min(window.innerHeight - 48, event.clientY - liveReportFeedDragState.offsetY));
+    panel.style.left = `${nextLeft}px`;
+    panel.style.top = `${nextTop}px`;
+  };
 
-    dragHandle.addEventListener("pointermove", (event) => {
-      if (!liveReportFeedDragState || liveReportFeedDragState.pointerId !== event.pointerId) {
-        return;
-      }
-      const nextLeft = Math.max(8, Math.min(window.innerWidth - panel.offsetWidth - 8, event.clientX - liveReportFeedDragState.offsetX));
-      const nextTop = Math.max(8, Math.min(window.innerHeight - 48, event.clientY - liveReportFeedDragState.offsetY));
-      panel.style.left = `${nextLeft}px`;
-      panel.style.top = `${nextTop}px`;
-    });
+  const endDrag = (event) => {
+    if (!liveReportFeedDragState || liveReportFeedDragState.pointerId !== event.pointerId) {
+      return;
+    }
+    liveReportFeedDragState = null;
+    panel.classList.remove("is-dragging");
+    persistLiveReportFeedPosition(panel);
+    document.removeEventListener("pointermove", onDragPointerMove);
+    document.removeEventListener("pointerup", endDrag);
+    document.removeEventListener("pointercancel", endDrag);
+  };
 
-    const endDrag = (event) => {
-      if (!liveReportFeedDragState || liveReportFeedDragState.pointerId !== event.pointerId) {
-        return;
-      }
-      liveReportFeedDragState = null;
-      panel.classList.remove("is-dragging");
-      persistLiveReportFeedPosition(panel);
-      try {
-        dragHandle.releasePointerCapture(event.pointerId);
-      } catch (_error) {
-        // Ignore capture release failures.
-      }
+  dragHandle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    const target = event.target instanceof Element ? event.target : null;
+    if (target && target.closest("button")) {
+      return;
+    }
+    event.preventDefault();
+    const rect = panel.getBoundingClientRect();
+    panel.style.left = `${rect.left}px`;
+    panel.style.top = `${rect.top}px`;
+    panel.style.transform = "none";
+    liveReportFeedDragState = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
     };
-    dragHandle.addEventListener("pointerup", endDrag);
-    dragHandle.addEventListener("pointercancel", endDrag);
-  }
+    panel.classList.add("is-dragging");
+    document.addEventListener("pointermove", onDragPointerMove);
+    document.addEventListener("pointerup", endDrag);
+    document.addEventListener("pointercancel", endDrag);
+  });
 }
 
 function initLiveReportFeed() {
