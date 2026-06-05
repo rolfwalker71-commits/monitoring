@@ -16,6 +16,8 @@
   --dr-crit: #b91c1c;
   --dr-host-active: #15803d;
   --dr-host-inactive: #b91c1c;
+  --dr-host-active-bg: #f0fdf4;
+  --dr-host-inactive-bg: #fef2f2;
 }
 
 /* Unified card surfaces (host list, KPIs, report meta, panels) */
@@ -243,6 +245,22 @@ body[data-theme="dark"] .brand-header .app-logo {
 }
 
 /* Hosts: Aktiv grün, Inaktiv rot (immer) */
+.panel-header .header-kpi-group--hosts > .header-stat-chip-active-hosts {
+  background: var(--dr-host-active-bg) !important;
+}
+
+.panel-header .header-kpi-group--hosts > .header-stat-chip-inactive {
+  background: var(--dr-host-inactive-bg) !important;
+}
+
+.panel-header .header-kpi-group--hosts > .header-stat-chip-active-hosts:hover {
+  background: #dcfce7 !important;
+}
+
+.panel-header .header-kpi-group--hosts > .header-stat-chip-inactive:hover {
+  background: #fee2e2 !important;
+}
+
 .panel-header .header-kpi-group--hosts > .header-stat-chip-active-hosts .header-chip-label,
 .panel-header .header-kpi-group--hosts > .header-stat-chip-active-hosts .header-chip-count {
   color: var(--dr-host-active) !important;
@@ -251,6 +269,22 @@ body[data-theme="dark"] .brand-header .app-logo {
 .panel-header .header-kpi-group--hosts > .header-stat-chip-inactive .header-chip-label,
 .panel-header .header-kpi-group--hosts > .header-stat-chip-inactive .header-chip-count {
   color: var(--dr-host-inactive) !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-group--hosts > .header-stat-chip-active-hosts {
+  background: rgba(34, 197, 94, 0.14) !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-group--hosts > .header-stat-chip-inactive {
+  background: rgba(248, 113, 113, 0.14) !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-group--hosts > .header-stat-chip-active-hosts:hover {
+  background: rgba(34, 197, 94, 0.22) !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-group--hosts > .header-stat-chip-inactive:hover {
+  background: rgba(248, 113, 113, 0.22) !important;
 }
 
 body[data-theme="dark"] .panel-header .header-kpi-group--hosts > .header-stat-chip-active-hosts .header-chip-label,
