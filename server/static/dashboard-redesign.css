@@ -1437,7 +1437,7 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
 }
 
 .live-report-feed-body {
-  --live-feed-slot: 62px;
+  --live-feed-slot: 64px;
   --live-feed-gap: 4px;
   --live-feed-body-pad: 6px;
   height: calc(
@@ -1460,7 +1460,7 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
 .live-report-feed-item {
   box-sizing: border-box;
   display: grid;
-  grid-template-rows: 11px 10px 10px 10px;
+  grid-template-rows: 11px 10px 12px 11px;
   row-gap: 1px;
   align-content: start;
   width: 100%;
@@ -1624,17 +1624,27 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
 .live-report-feed-hostline {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 6px;
   min-width: 0;
   margin: 0;
-  height: 10px;
-  min-height: 10px;
-  max-height: 10px;
+  height: 12px;
+  min-height: 12px;
+  max-height: 12px;
   font-family: var(--kv-value-family);
   font-size: 9px;
   font-weight: 500;
-  line-height: 10px;
+  line-height: 1;
   color: #7188a3;
+}
+
+.live-report-feed-host-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .live-report-feed-hostname,
@@ -1650,17 +1660,27 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
   color: #cbd5e1;
 }
 
+.live-report-feed-hostline .delivery-chip {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 1px 5px;
+  font-size: 7px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
+
 .live-report-feed-item-foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 6px;
   margin: 0;
-  padding: 0;
-  height: 10px;
-  min-height: 10px;
-  max-height: 10px;
+  padding: 4px 0 0;
+  height: 11px;
+  min-height: 11px;
+  max-height: 11px;
   border-top: 1px solid rgba(226, 232, 240, 0.75);
+  box-sizing: border-box;
 }
 
 .live-report-feed-stats {
@@ -1671,14 +1691,6 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
   font-size: 8.5px;
   font-weight: 600;
   color: #64748b;
-}
-
-.live-report-feed-item-foot .delivery-chip {
-  flex: 0 0 auto;
-  margin: 0;
-  font-size: 7.5px;
-  padding: 1px 5px;
-  line-height: 1.25;
 }
 
 body[data-theme="dark"] .host-card-country-code {

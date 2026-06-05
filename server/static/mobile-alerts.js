@@ -4838,13 +4838,15 @@ function buildMobileLiveReportFeedItemInnerHtml(item) {
     "</div>" +
     '<p class="live-report-feed-designation" title="' + mobileEsc(item.designation) + '">' + mobileEsc(item.designation) + "</p>" +
     '<p class="live-report-feed-hostline">' +
-      '<span class="live-report-feed-hostname" title="' + mobileEsc(item.shortHostname) + '">' + mobileEsc(item.shortHostname) + "</span>" +
-      '<span class="live-report-feed-sep" aria-hidden="true">·</span>' +
-      '<span class="live-report-feed-ip" title="' + mobileEsc(item.ip) + '">' + mobileEsc(item.ip) + "</span>" +
+      '<span class="live-report-feed-host-meta">' +
+        '<span class="live-report-feed-hostname" title="' + mobileEsc(item.shortHostname) + '">' + mobileEsc(item.shortHostname) + "</span>" +
+        '<span class="live-report-feed-sep" aria-hidden="true">·</span>' +
+        '<span class="live-report-feed-ip" title="' + mobileEsc(item.ip) + '">' + mobileEsc(item.ip) + "</span>" +
+      "</span>" +
+      '<span class="' + mobileEsc(item.deliveryClass) + '">' + mobileEsc(item.deliveryLabel) + "</span>" +
     "</p>" +
     '<div class="live-report-feed-item-foot">' +
       statsHtml +
-      '<span class="' + mobileEsc(item.deliveryClass) + '">' + mobileEsc(item.deliveryLabel) + "</span>" +
     "</div>"
   );
 }

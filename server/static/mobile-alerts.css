@@ -1913,7 +1913,11 @@ body.host-insight-open {
 }
 
 .insight-delivery-row {
-  margin: 0 0 10px;
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.85);
 }
 
 .insight-delivery-chip {
@@ -2315,13 +2319,13 @@ body.host-insight-open {
 }
 
 .live-report-feed {
-  --live-feed-slot: 100px;
+  --live-feed-slot: 104px;
   --live-feed-gap: 8px;
   --live-feed-body-pad: 10px;
   --live-feed-row-head: 18px;
   --live-feed-row-title: 16px;
-  --live-feed-row-host: 15px;
-  --live-feed-row-foot: 15px;
+  --live-feed-row-host: 18px;
+  --live-feed-row-foot: 18px;
   position: fixed;
   top: calc(118px + var(--safe-top));
   left: 50%;
@@ -2598,7 +2602,8 @@ body.host-insight-open {
 .live-report-feed-hostline {
   display: flex;
   align-items: center;
-  gap: 5px;
+  justify-content: space-between;
+  gap: 8px;
   min-width: 0;
   margin: 0;
   height: var(--live-feed-row-host);
@@ -2606,8 +2611,17 @@ body.host-insight-open {
   max-height: var(--live-feed-row-host);
   font-size: 11px;
   font-weight: 500;
-  line-height: var(--live-feed-row-host);
+  line-height: 1;
   color: #7188a3;
+}
+
+.live-report-feed-host-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .live-report-feed-hostname,
@@ -2623,17 +2637,27 @@ body.host-insight-open {
   color: #cbd5e1;
 }
 
+.live-report-feed-hostline .delivery-chip {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 2px 6px;
+  font-size: 8px;
+  line-height: 1;
+  letter-spacing: 0.05em;
+}
+
 .live-report-feed-item-foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
   margin: 0;
-  padding: 0;
+  padding: 6px 0 0;
   height: var(--live-feed-row-foot);
   min-height: var(--live-feed-row-foot);
   max-height: var(--live-feed-row-foot);
   border-top: 1px solid rgba(226, 232, 240, 0.75);
+  box-sizing: border-box;
 }
 
 .live-report-feed-stats {
@@ -2667,10 +2691,6 @@ body.host-insight-open {
   background: #fef3c7;
 }
 
-.live-report-feed-item-foot .delivery-chip {
-  flex: 0 0 auto;
-  margin: 0;
-}
 
 @media (prefers-color-scheme: dark) {
   .live-report-feed-item {

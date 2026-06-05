@@ -7792,16 +7792,17 @@ body[data-theme="dark"] .sap-services-changelog-item-changed {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
 }
 
 .report-header-meta {
   display: inline-flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
   align-self: center;
+  padding-bottom: 2px;
 }
 
 .report-sap-kpi-row {
@@ -8135,15 +8136,20 @@ body[data-theme="dark"] .report-license-meta {
 }
 
 .delivery-chip {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 2px 9px;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 3px 10px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.03em;
-  vertical-align: middle;
+  line-height: 1.2;
   border: 1px solid transparent;
+}
+
+.report-header-meta .delivery-chip {
+  margin-top: 0;
 }
 
 .delivery-chip.live {

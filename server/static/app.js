@@ -12869,13 +12869,15 @@ function buildLiveReportFeedItemInnerHtml(item) {
       </div>
       <p class="live-report-feed-designation" title="${escapeHtml(item.designation)}">${escapeHtml(item.designation)}</p>
       <p class="live-report-feed-hostline">
-        <span class="live-report-feed-hostname" title="${escapeHtml(item.shortHostname)}">${escapeHtml(item.shortHostname)}</span>
-        <span class="live-report-feed-sep" aria-hidden="true">·</span>
-        <span class="live-report-feed-ip" title="${escapeHtml(item.ip)}">${escapeHtml(item.ip)}</span>
+        <span class="live-report-feed-host-meta">
+          <span class="live-report-feed-hostname" title="${escapeHtml(item.shortHostname)}">${escapeHtml(item.shortHostname)}</span>
+          <span class="live-report-feed-sep" aria-hidden="true">·</span>
+          <span class="live-report-feed-ip" title="${escapeHtml(item.ip)}">${escapeHtml(item.ip)}</span>
+        </span>
+        <span class="${item.deliveryClass}">${escapeHtml(item.deliveryLabel)}</span>
       </p>
       <div class="live-report-feed-item-foot">
         ${statsHtml}
-        <span class="${item.deliveryClass}">${escapeHtml(item.deliveryLabel)}</span>
       </div>
   `;
 }
