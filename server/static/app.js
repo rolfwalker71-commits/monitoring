@@ -483,7 +483,9 @@ const state = {
   globalShowAcknowledged: true,
   globalShowClosed: false,
   globalHeadsUpSuppressedOnly: false,
-  hostAlertsCollapsed: false,
+  hostAlertsCollapsed: true,
+  hostAlertsCollapseHostKey: "",
+  hostAlertsUserToggled: false,
   globalSeverityFilter: "all",
   globalCountryFilter: "all",
   globalAvailableCountries: [],
@@ -13683,16 +13685,54 @@ async function closeAlert(hostname, hostUid, mountpoint, alertId, isClosed) {
   await loadHosts();
 }
 
+function currentHostAlertsCollapseKey() {
+  return `${asText(state.selectedHostUid, "").trim()}|${asText(state.selectedHost, "").trim()}`;
+}
+
+function applyHostAlertsPanelCollapsed(collapsed) {
+  const panelBody = document.getElementById("hostAlertsPanelBody");
+  const toggleButton = document.getElementById("toggleHostAlertsPanelButton");
+  const panel = document.querySelector("#overviewMainSection .alerts-panel--overview-top");
+  state.hostAlertsCollapsed = collapsed === true;
+  if (panelBody) {
+    panelBody.classList.toggle("hidden", state.hostAlertsCollapsed);
+  }
+  if (toggleButton) {
+    toggleButton.textContent = state.hostAlertsCollapsed ? "▸" : "▾";
+    toggleButton.setAttribute("aria-expanded", state.hostAlertsCollapsed ? "false" : "true");
+  }
+  if (panel) {
+    panel.classList.toggle("alerts-panel--collapsed", state.hostAlertsCollapsed);
+  }
+}
+
+function setHostAlertsCollapsedAuto(openAlertCount) {
+  const hostKey = currentHostAlertsCollapseKey();
+  const openCount = Number(openAlertCount || 0);
+  if (hostKey !== state.hostAlertsCollapseHostKey) {
+    state.hostAlertsCollapseHostKey = hostKey;
+    state.hostAlertsUserToggled = false;
+  }
+  if (openCount > 0) {
+    state.hostAlertsUserToggled = false;
+    applyHostAlertsPanelCollapsed(false);
+    return;
+  }
+  if (!state.hostAlertsUserToggled) {
+    applyHostAlertsPanelCollapsed(true);
+  } else {
+    applyHostAlertsPanelCollapsed(state.hostAlertsCollapsed);
+  }
+}
+
 async function loadAlertsForHost() {
   const alertsSummary = document.getElementById("alertsSummary");
   const alertsRows = document.getElementById("alertsRows");
-  const toggleButton = document.getElementById("toggleHostAlertsPanelButton");
-  const panelBody = document.getElementById("hostAlertsPanelBody");
-
-  panelBody.classList.toggle("hidden", state.hostAlertsCollapsed);
-  toggleButton.textContent = state.hostAlertsCollapsed ? "▸" : "▾";
 
   if (!state.selectedHost) {
+    state.hostAlertsCollapseHostKey = "";
+    state.hostAlertsUserToggled = false;
+    applyHostAlertsPanelCollapsed(true);
     alertsSummary.textContent = "";
     alertsRows.innerHTML = state.hostFilterNoMatches
       ? "<tr><td colspan=\"6\" class=\"muted\">Keine Daten zum Suchfilter vorhanden.</td></tr>"
@@ -13725,7 +13765,9 @@ async function loadAlertsForHost() {
     const listData = await listResp.json();
     const alerts = listData.alerts || [];
 
-    alertsSummary.textContent = `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning})`;
+    const openTotal = Number(summaryData.open?.total || 0);
+    alertsSummary.textContent = `Offen: ${openTotal} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning})`;
+    setHostAlertsCollapsedAuto(openTotal);
 
     if (alerts.length === 0) {
       alertsRows.innerHTML = "<tr><td colspan=\"6\" class=\"muted\">Keine Alerts vorhanden.</td></tr>";
@@ -17581,8 +17623,8 @@ function wireEvents() {
   });
 
   document.getElementById("toggleHostAlertsPanelButton").addEventListener("click", async () => {
-    state.hostAlertsCollapsed = !state.hostAlertsCollapsed;
-    await loadAlertsForHost();
+    state.hostAlertsUserToggled = true;
+    applyHostAlertsPanelCollapsed(!state.hostAlertsCollapsed);
   });
 
   document.getElementById("analysisRangeSelect").addEventListener("change", async (event) => {

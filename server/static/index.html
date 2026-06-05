@@ -1390,16 +1390,15 @@
                 <div class="overview-content">
 
               <section id="overviewMainSection" class="overview-subsection overview-scroll-panel" role="tabpanel" aria-labelledby="overviewMainTabButton">
-                <div id="overviewHostMetrics" class="overview-host-metrics" aria-live="polite"></div>
-                <section class="alerts-panel">
-                  <div class="analysis-header">
+                <section class="alerts-panel alerts-panel--overview-top">
+                  <div class="analysis-header alerts-panel-header">
                     <h4>Alerts</h4>
                     <div class="alerts-panel-actions">
                       <p id="alertsSummary" class="count"></p>
-                    <button id="toggleHostAlertsPanelButton" type="button" class="host-group-toggle">▾</button>
+                      <button id="toggleHostAlertsPanelButton" type="button" class="host-group-toggle" aria-expanded="false" aria-controls="hostAlertsPanelBody" title="Alerts ein-/ausklappen">▸</button>
                     </div>
                   </div>
-                  <div id="hostAlertsPanelBody">
+                  <div id="hostAlertsPanelBody" class="hidden">
                     <div class="table-wrap">
                       <table>
                         <colgroup>
@@ -1412,7 +1411,7 @@
                         </colgroup>
                         <thead>
                           <tr>
-                        <th>Status</th>
+                            <th>Status</th>
                             <th>Severity</th>
                             <th>Mountpoint</th>
                             <th>Initial</th>
@@ -1425,6 +1424,8 @@
                     </div>
                   </div>
                 </section>
+
+                <div id="overviewHostMetrics" class="overview-host-metrics" aria-live="polite"></div>
 
                 <section class="analysis-panel">
                   <div class="analysis-header">

@@ -955,6 +955,18 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
   padding: 12px 14px !important;
 }
 
+.overview-content .alerts-panel--overview-top {
+  margin-bottom: 12px;
+}
+
+.overview-content .alerts-panel--overview-top .alerts-panel-header {
+  margin-bottom: 0;
+}
+
+.overview-content .alerts-panel--overview-top:not(.alerts-panel--collapsed) .alerts-panel-header {
+  margin-bottom: 8px;
+}
+
 .report-list .report-card {
   background: transparent;
   border: none;
