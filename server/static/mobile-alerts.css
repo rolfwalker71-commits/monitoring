@@ -1317,9 +1317,25 @@ body {
 }
 
 .mobile-login-hint {
-  margin: 0 0 1rem;
+  margin: 0 0 0.45rem;
   color: var(--muted);
   font-size: 0.88rem;
+}
+
+.mobile-login-versions {
+  margin: 0 0 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.mobile-login-version-sep {
+  opacity: 0.45;
 }
 
 .mobile-login-card label {

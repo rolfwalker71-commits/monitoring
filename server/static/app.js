@@ -1694,11 +1694,28 @@ function compareSemverLike(leftVersion, rightVersion) {
 }
 
 async function loadWebclientVersion() {
-  const versionEl = document.getElementById("webclientVersion");
-  const agentVersionEl = document.getElementById("latestAgentVersion");
-  if (!versionEl && !agentVersionEl) {
+  const buildVersionEls = [
+    document.getElementById("webclientVersion"),
+    document.getElementById("loginBuildVersion"),
+  ].filter(Boolean);
+  const agentVersionEls = [
+    document.getElementById("latestAgentVersion"),
+    document.getElementById("loginAgentVersion"),
+  ].filter(Boolean);
+  if (!buildVersionEls.length && !agentVersionEls.length) {
     return;
   }
+
+  const setBuildVersions = (value) => {
+    buildVersionEls.forEach((el) => {
+      el.textContent = value;
+    });
+  };
+  const setAgentVersions = (value) => {
+    agentVersionEls.forEach((el) => {
+      el.textContent = value;
+    });
+  };
 
   try {
     const [webResp, agentResp] = await Promise.all([
@@ -1721,21 +1738,13 @@ async function loadWebclientVersion() {
     const value = webText || "-";
     const agentValue = agentText || "-";
 
-    if (versionEl) {
-      versionEl.textContent = value;
-    }
-    if (agentVersionEl) {
-      agentVersionEl.textContent = agentValue;
-    }
+    setBuildVersions(value);
+    setAgentVersions(agentValue);
     updateChangelogToolsBuildVersionBadge(value);
     state.latestAgentRelease = agentValue;
   } catch (_error) {
-    if (versionEl) {
-      versionEl.textContent = "-";
-    }
-    if (agentVersionEl) {
-      agentVersionEl.textContent = "-";
-    }
+    setBuildVersions("-");
+    setAgentVersions("-");
     state.latestAgentRelease = "";
   }
 }

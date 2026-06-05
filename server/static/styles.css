@@ -431,8 +431,31 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
 
 .brand-version {
   margin-left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   white-space: nowrap;
   letter-spacing: 0.08em;
+}
+
+.brand-version-sep {
+  opacity: 0.45;
+}
+
+.login-release-versions {
+  margin: 4px 0 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: rgba(60, 82, 112, 0.72);
+}
+
+.login-release-sep {
+  opacity: 0.45;
 }
 
 .brand-user {
@@ -13018,6 +13041,10 @@ body[data-theme="dark"] .brand-text h1 {
 
 body[data-theme="dark"] .subtitle-meta {
   color: rgba(173, 196, 224, 0.76);
+}
+
+body[data-theme="dark"] .login-release-versions {
+  color: rgba(173, 196, 224, 0.72);
 }
 
 body[data-theme="dark"] .brand-user-badge {

@@ -3043,9 +3043,46 @@ function wire() {
   });
 }
 
+async function loadMobileReleaseVersions() {
+  const buildVersionEls = [document.getElementById("mobileLoginBuildVersion")].filter(Boolean);
+  const agentVersionEls = [document.getElementById("mobileLoginAgentVersion")].filter(Boolean);
+  if (!buildVersionEls.length && !agentVersionEls.length) {
+    return;
+  }
+
+  const setBuildVersions = (value) => {
+    buildVersionEls.forEach((el) => {
+      el.textContent = value;
+    });
+  };
+  const setAgentVersions = (value) => {
+    agentVersionEls.forEach((el) => {
+      el.textContent = value;
+    });
+  };
+
+  try {
+    const [buildResp, agentResp] = await Promise.all([
+      fetch("/BUILD_VERSION", { cache: "no-store", credentials: "same-origin" }),
+      fetch("/AGENT_VERSION", { cache: "no-store", credentials: "same-origin" }),
+    ]);
+    if (!buildResp.ok) {
+      throw new Error("BUILD_VERSION HTTP " + buildResp.status);
+    }
+    const buildText = (await buildResp.text()).trim();
+    const agentText = agentResp.ok ? (await agentResp.text()).trim() : buildText;
+    setBuildVersions(buildText || "-");
+    setAgentVersions(agentText || "-");
+  } catch (_error) {
+    setBuildVersions("-");
+    setAgentVersions("-");
+  }
+}
+
 async function init() {
   state.highlightAlertId = parseHighlightAlertId();
   wire();
+  void loadMobileReleaseVersions();
   try {
     await ensureAuthenticated();
     if (state.authenticated) {
