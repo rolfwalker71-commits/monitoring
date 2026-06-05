@@ -372,10 +372,10 @@ function renderHostListCard(host, variant, index) {
     (variant === "active"
       ? '<div class="host-list-actions">' +
         '  <button type="button" class="btn-secondary btn-host-list-sheet" data-action="sys-overview" data-host-list="active" data-host-index="' + index + '">Systemübersicht</button>' +
-        '  <button type="button" class="btn-secondary btn-host-list-sheet" data-action="host-list-sheet" data-host-list="active" data-host-index="' + index + '">Report-Details</button>' +
+        '  <button type="button" class="btn-secondary btn-host-list-sheet" data-action="host-list-sheet" data-host-list="active" data-host-index="' + index + '">Einzelmeldungen</button>' +
         "</div>"
       : '<button type="button" class="btn-secondary btn-host-list-sheet" data-action="host-list-sheet" data-host-list="'
-        + mobileEsc(variant) + '" data-host-index="' + index + '">Alle Details</button>') +
+        + mobileEsc(variant) + '" data-host-index="' + index + '">Einzelmeldungen</button>') +
     "  </div>" +
     "</details>"
   );
@@ -437,16 +437,17 @@ function openMobileHostListSheet(host, variant) {
 }
 
 const HOST_INSIGHT_SLIDE_DEFS = [
-  { id: "overview", icon: "🏠", title: "Übersicht" },
-  { id: "resources", icon: "📊", title: "CPU & RAM" },
-  { id: "sap", icon: "📦", title: "SAP & HANA" },
-  { id: "filesystems", icon: "💾", title: "Dateisysteme" },
-  { id: "databases", icon: "🗄️", title: "Datenbanken" },
-  { id: "containers", icon: "🐳", title: "Container" },
-  { id: "journal", icon: "📰", title: "Journal" },
-  { id: "processes", icon: "⚡", title: "Top-Prozesse" },
-  { id: "logs", icon: "📜", title: "Logfiles" },
-  { id: "system", icon: "🖥️", title: "System & Netz" },
+  { id: "system", icon: "🖥️", title: "System", short: "System" },
+  { id: "journal", icon: "📰", title: "Journal", short: "Journal" },
+  { id: "processes", icon: "⚡", title: "Prozesse", short: "Prozesse" },
+  { id: "logfiles", icon: "📜", title: "Logfiles", short: "Logfiles" },
+  { id: "sap-b1", icon: "📦", title: "SAP B1", short: "SAP B1" },
+  { id: "containers", icon: "🐳", title: "Container", short: "Container" },
+  { id: "export", icon: "📤", title: "Export", short: "Export" },
+  { id: "agent", icon: "🤖", title: "Agent", short: "Agent" },
+  { id: "network", icon: "🌐", title: "Netzwerk", short: "Netzwerk" },
+  { id: "filesystems", icon: "💾", title: "Filesysteme", short: "FS" },
+  { id: "databases", icon: "🗄️", title: "Datenbanken", short: "DB" },
 ];
 
 let hostInsightScrollRaf = 0;
@@ -982,7 +983,7 @@ function buildInsightFilesystemsBody(payload) {
     return '<p class="insight-empty">Keine Dateisystem-Daten im letzten Report.</p>';
   }
   list.sort((a, b) => Number(b?.used_percent || 0) - Number(a?.used_percent || 0));
-  const top = list.slice(0, 6);
+  const top = list.slice(0, 20);
   const rows = top
     .map((fs) => {
       const mount = String(fs.mountpoint || fs.fs || "—").trim();
@@ -1007,31 +1008,34 @@ function buildInsightFilesystemsBody(payload) {
 
 function buildInsightProcessesBody(payload) {
   const block = payload?.top_processes && typeof payload.top_processes === "object" ? payload.top_processes : {};
-  const entries = Array.isArray(block.entries) ? block.entries.slice(0, 8) : [];
+  const entries = Array.isArray(block.entries) ? block.entries.slice(0, 15) : [];
   if (!entries.length) {
     return '<p class="insight-empty">Keine Prozessdaten im letzten Report.</p>';
   }
-  return (
-    '<ul class="insight-process-list">' +
-    entries
-      .map((entry) => {
-        const cmd = String(entry.command || entry.name || "—").trim();
-        const shortCmd = cmd.length > 48 ? cmd.slice(0, 45) + "…" : cmd;
-        const cpu = Number(entry.cpu_percent);
-        const mem = Number(entry.memory_percent);
-        const cpuText = Number.isFinite(cpu) ? cpu.toFixed(1) + "% CPU" : "";
-        const memText = Number.isFinite(mem) ? mem.toFixed(1) + "% RAM" : "";
-        const stats = [cpuText, memText].filter(Boolean).join(" · ") || "—";
-        return (
-          '<li class="insight-process-item">' +
-          '<span class="insight-process-stats">' + mobileEsc(stats) + "</span>" +
-          '<span class="insight-process-cmd" title="' + mobileEsc(cmd) + '">' + mobileEsc(shortCmd) + "</span>" +
-          "</li>"
-        );
-      })
-      .join("") +
-    "</ul>"
-  );
+  const rows = entries.map((entry) => {
+    const cmd = String(entry.command || entry.name || "—").trim();
+    const pid = Number(entry.pid);
+    const user = String(entry.user || "—").trim();
+    const cpu = Number(entry.cpu_percent);
+    const mem = Number(entry.memory_percent);
+    const rssKb = Number(entry.rss_kb);
+    const left = (Number.isFinite(pid) && pid > 0 ? String(pid) : "—") + " · " + user;
+    const right =
+      (Number.isFinite(cpu) ? cpu.toFixed(1) + "% CPU" : "—") +
+      " · " +
+      (Number.isFinite(mem) ? mem.toFixed(1) + "% RAM" : "—") +
+      (Number.isFinite(rssKb) ? " · " + mobileFormatKb(rssKb) : "");
+    return (
+      '<li class="insight-process-item">' +
+      '<div class="insight-process-head">' +
+      '<span class="insight-process-stats">' + mobileEsc(left) + "</span>" +
+      '<span class="insight-process-stats">' + mobileEsc(right) + "</span>" +
+      "</div>" +
+      '<span class="insight-process-cmd" title="' + mobileEsc(cmd) + '">' + mobileEsc(cmd) + "</span>" +
+      "</li>"
+    );
+  });
+  return '<p class="insight-hint">Sortiert nach CPU-Auslastung</p><ul class="insight-process-list">' + rows.join("") + "</ul>";
 }
 
 function buildInsightLogsBody(payload) {
@@ -1089,31 +1093,398 @@ function buildInsightGuardianLogHtml(scriptGuardian) {
   );
 }
 
-function buildInsightSystemBody(payload, report) {
+function mobileQueueDepthLabel(value) {
+  const depth = Number(value);
+  if (!Number.isFinite(depth) || depth < 0) return "0";
+  return String(Math.floor(depth));
+}
+
+function mobileFormatAgentApiKeyStatus(agentApiKeyBlock, agentConfigBlock) {
+  const block = agentApiKeyBlock && typeof agentApiKeyBlock === "object" ? agentApiKeyBlock : {};
+  const status = String(block.status || "").trim().toLowerCase();
+  const entries =
+    agentConfigBlock && typeof agentConfigBlock === "object" && Array.isArray(agentConfigBlock.entries)
+      ? agentConfigBlock.entries
+      : [];
+  const hasConfiguredApiKey = entries.some(
+    (entry) => String(entry?.key || "").trim().toUpperCase() === "API_KEY" && String(entry?.value || "").trim()
+  );
+  if (status === "key-auth") return "aktiv | letzter Report mit API-Key authentifiziert";
+  if (status === "grace") return "Grace | Host noch ohne Header zugelassen";
+  if (status === "configured") return "konfiguriert | letzter Report noch nicht mit Key authentifiziert";
+  if (status === "missing") return "fehlt | Server erwartet API-Key";
+  if (hasConfiguredApiKey) return "konfiguriert | Status ab nächstem Report sichtbar";
+  return "aus | Server verlangt aktuell keinen API-Key";
+}
+
+function mobileInsightSubsection(title, bodyHtml) {
+  const content = String(bodyHtml || "").trim();
+  if (!content) return "";
+  return (
+    '<section class="insight-subsection">' +
+    '<h5 class="insight-subsection-title">' + mobileEsc(title) + "</h5>" +
+    content +
+    "</section>"
+  );
+}
+
+function mobileDeliveryChipHtml(payload, report) {
   const p = payload && typeof payload === "object" ? payload : {};
-  const network = p.network && typeof p.network === "object" ? p.network : {};
-  const deliveryMode = String(p.delivery_mode || "").toLowerCase();
+  const deliveryMode = String(report?.delivery_mode || p.delivery_mode || "live").toLowerCase();
   const isDelayed = deliveryMode === "delayed" || p.is_delayed === true;
-  const journal = getJournalEntriesFromPayload(p);
+  const chipClass = isDelayed ? "insight-delivery-chip is-delayed" : "insight-delivery-chip is-live";
+  return '<p class="insight-delivery-row"><span class="' + chipClass + '">' + (isDelayed ? "DELAYED" : "LIVE") + "</span></p>";
+}
+
+function buildInsightEinzelSystemBody(host, variant, report, payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const h = host && typeof host === "object" ? host : {};
+  const network = p.network && typeof p.network === "object" ? p.network : {};
+  const { hostname, displayName, customerLabel } = getHostListLabels(h);
+  const envLabel = mobileEnvironmentLabel(h.environment_type) || "—";
+  const country = String(h.country_code || "").trim().toUpperCase() || "—";
+  const hostUid = String(report?.host_uid || p.host_uid || h.host_uid || "").trim() || "—";
+  const totalReports = Number.isFinite(Number(h.report_count))
+    ? Number(h.report_count).toLocaleString("de-CH")
+    : "—";
+  const primaryIp = String(report?.primary_ip || p.primary_ip || h.primary_ip || h.std_nic_ip || "").trim() || "—";
+  const stdNicIp = String(p.std_nic_ipv4 || h.std_nic_ip || primaryIp).trim() || "—";
   const dns = Array.isArray(network.dns_servers)
     ? network.dns_servers.map((s) => String(s || "").trim()).filter(Boolean).join(", ")
-    : "";
-  const rows = [
-    mobileInsightFactRow("OS", mobileEsc(String(p.os || "").trim() || "—")),
-    mobileInsightFactRow("Kernel", mobileEsc(String(p.kernel || "").trim() || "—")),
-    mobileInsightFactRow("Uptime", mobileEsc(mobileFormatUptime(p.uptime_seconds))),
-    mobileInsightFactRow("Agent-Version", mobileEsc(String(p.agent_version || "").trim() || "—") + buildAgentVersionBadgeHtml(p.agent_version)),
-    mobileInsightFactRow("Zustellung", mobileEsc(isDelayed ? "DELAYED" : "LIVE")),
-    mobileInsightFactRow("Queue", mobileEsc(String(p.queue_depth != null ? p.queue_depth : "—") + " Dateien")),
-    mobileInsightFactRow("Primary IP", mobileEsc(String(report?.primary_ip || p.primary_ip || "").trim() || "—")),
-    mobileInsightFactRow("Default GW", mobileEsc(String(network.default_gateway || "").trim() || "—")),
-    mobileInsightFactRow("DNS", mobileEsc(dns || "—")),
-    mobileInsightFactRow("Journal-Fehler", mobileEsc(journal.length ? String(journal.length) + " Einträge" : "keine")),
+    : String(network.dns_servers || "").trim();
+
+  const hostAgentRows = [
+    { label: "Kunde", value: customerLabel },
+    { label: "Bezeichnung", value: displayName },
+    { label: "Hostname", value: hostname },
+    { label: "Host-UID", value: hostUid },
+    { label: "Land", value: country },
+    { label: "Umgebung", value: envLabel },
+    { label: "Meldungen", value: totalReports },
+    { label: "Agent ID", value: String(report?.agent_id || p.agent_id || hostname).trim() || "—" },
+    {
+      label: "Version",
+      value: String(p.agent_version || h.agent_version || "").trim() || "—",
+    },
+    { label: "API-Key", value: mobileFormatAgentApiKeyStatus(p.agent_api_key, p.agent_config) },
+    { label: "Queue", value: mobileQueueDepthLabel(p.queue_depth) + " Dateien" },
   ];
-  const guardianHtml = buildInsightGuardianLogHtml(p.script_guardian);
+
+  const systemNetworkRows = [
+    { label: "OS", value: String(p.os || h.os || "").trim() || "—" },
+    { label: "Kernel", value: String(p.kernel || "").trim() || "—" },
+    { label: "Uptime", value: mobileFormatUptime(p.uptime_seconds) },
+    { label: "Architektur", value: String(p.architecture || p.arch || "").trim() || "—" },
+    { label: "Primary IP", value: primaryIp },
+    { label: "Std. NIC IP", value: stdNicIp },
+    { label: "Default NIC", value: String(network.default_interface || "").trim() || "—" },
+    { label: "Gateway", value: String(network.default_gateway || "").trim() || "—" },
+    { label: "DNS", value: dns || "—" },
+  ];
+
+  const sapRaw = resolveSapReleaseRawMobile(h, p);
+  const sapDisplay = resolveSapReleaseDisplayMobile(sapRaw);
+  const hanaRelease = resolveHanaReleaseMobile(h, p);
+  const hanaSid = resolveHanaSidMobile(h, p);
+  const kpiHtml =
+    sapDisplay || hanaRelease || hanaSid
+      ? '<div class="insight-kpi-grid insight-kpi-grid--compact">' +
+        (sapDisplay ? mobileInsightKpi("SAP Release", sapDisplay) : "") +
+        (hanaRelease ? mobileInsightKpi("HANA Release", hanaRelease) : "") +
+        (hanaSid ? mobileInsightKpi("HANA SID", hanaSid) : "") +
+        "</div>"
+      : "";
+
+  const resourcesHtml = buildInsightResourcesBody(p);
   return (
-    '<dl class="insight-facts">' + rows.filter(Boolean).join("") + "</dl>" + (guardianHtml || "")
+    mobileDeliveryChipHtml(p, report) +
+    kpiHtml +
+    mobileInsightSubsection("Host & Agent", mobileInsightKvListHtml(hostAgentRows)) +
+    mobileInsightSubsection("System & Netzwerk", mobileInsightKvListHtml(systemNetworkRows)) +
+    mobileInsightSubsection("CPU & RAM", resourcesHtml)
   );
+}
+
+function buildInsightEinzelNetworkBody(payload) {
+  const network = payload?.network && typeof payload.network === "object" ? payload.network : {};
+  const interfaces = Array.isArray(network.interfaces) ? network.interfaces : [];
+  if (!interfaces.length) {
+    return '<p class="insight-empty">Keine Netzwerk-Details im letzten Report.</p>';
+  }
+  const summaryRows = [
+    { label: "Default NIC", value: String(network.default_interface || "").trim() || "—" },
+    { label: "Gateway", value: String(network.default_gateway || "").trim() || "—" },
+    {
+      label: "DNS",
+      value: Array.isArray(network.dns_servers)
+        ? network.dns_servers.map((s) => String(s || "").trim()).filter(Boolean).join(", ") || "—"
+        : "—",
+    },
+  ];
+  const ifaceItems = interfaces.slice(0, 16).map((iface) => {
+    const name = String(iface.name || "—").trim();
+    const state = String(iface.state || "—").trim();
+    const defaultTag = iface.is_default ? " · default" : "";
+    const rx = Number(iface.rx_bytes);
+    const tx = Number(iface.tx_bytes);
+    const errors = Number(iface.rx_errors || 0) + Number(iface.tx_errors || 0);
+    const drops = Number(iface.rx_dropped || 0) + Number(iface.tx_dropped || 0);
+    const meta =
+      state +
+      defaultTag +
+      " · RX " +
+      (Number.isFinite(rx) ? mobileFormatKb(rx / 1024) : "—") +
+      " · TX " +
+      (Number.isFinite(tx) ? mobileFormatKb(tx / 1024) : "—") +
+      " · Err " +
+      errors +
+      " · Drop " +
+      drops;
+    return mobileInsightKvRow(name, meta);
+  });
+  const more =
+    interfaces.length > 16
+      ? '<p class="insight-hint">+' + (interfaces.length - 16) + " weitere Interfaces im Desktop-Report.</p>"
+      : "";
+  return (
+    mobileInsightSubsection("Übersicht", mobileInsightKvListHtml(summaryRows)) +
+    mobileInsightSubsection(
+      "Interfaces",
+      '<ul class="insight-kv-list">' + ifaceItems.filter(Boolean).join("") + "</ul>" + more
+    )
+  );
+}
+
+function buildInsightEinzelAgentBody(payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const parts = [];
+
+  const agentUpdate = p.agent_update && typeof p.agent_update === "object" ? p.agent_update : null;
+  if (agentUpdate) {
+    const lines = Array.isArray(agentUpdate.lines) ? agentUpdate.lines.map((line) => String(line || "")).filter(Boolean) : [];
+    const tail = lines.slice(-20);
+    parts.push(
+      '<details class="insight-log-file">' +
+      "<summary>⟳ Agent Update Log · " +
+      mobileEsc(String(agentUpdate.path || "agent-update.log")) +
+      "</summary>" +
+      (tail.length
+        ? '<div class="insight-log-viewer">' + mobileRenderLogfileLinesHtml(tail) + "</div>"
+        : '<p class="insight-empty">Kein Log-Inhalt.</p>') +
+      "</details>"
+    );
+  }
+
+  const guardianHtml = buildInsightGuardianLogHtml(p.script_guardian);
+  if (guardianHtml) parts.push(guardianHtml);
+
+  const agentConfig = p.agent_config && typeof p.agent_config === "object" ? p.agent_config : null;
+  if (agentConfig && Array.isArray(agentConfig.entries) && agentConfig.entries.length) {
+    const rows = agentConfig.entries.slice(0, 24).map((entry) => ({
+      label: String(entry?.key || "—").trim(),
+      value: String(entry?.value || "—").trim() || "—",
+    }));
+    parts.push(
+      '<details class="insight-log-file" open>' +
+      "<summary>🗂️ agent.conf · " +
+      rows.length +
+      " Einträge</summary>" +
+      mobileInsightKvListHtml(rows) +
+      "</details>"
+    );
+  }
+
+  const cron = p.cron_info && typeof p.cron_info === "object" ? p.cron_info : null;
+  if (cron) {
+    const rootLines = Array.isArray(cron.root_crontab_lines) ? cron.root_crontab_lines : [];
+    const cronDLines = Array.isArray(cron.cron_d_files) ? cron.cron_d_files : [];
+    if (rootLines.length) {
+      parts.push(
+        '<details class="insight-log-file">' +
+        "<summary>🕐 Root Crontab · " +
+        rootLines.length +
+        " Zeilen</summary>" +
+        '<div class="insight-log-viewer">' +
+        mobileRenderLogfileLinesHtml(rootLines.slice(0, 30)) +
+        "</div></details>"
+      );
+    }
+    if (cronDLines.length) {
+      parts.push(
+        '<details class="insight-log-file">' +
+        "<summary>📅 cron.d · " +
+        cronDLines.length +
+        " Dateien</summary>" +
+        '<div class="insight-log-viewer">' +
+        mobileRenderLogfileLinesHtml(
+          cronDLines.slice(0, 12).map((file) => String(file?.path || file?.name || "-") + ": " + String(file?.summary || "").trim())
+        ) +
+        "</div></details>"
+      );
+    }
+  }
+
+  if (!parts.length) {
+    return '<p class="insight-empty">Keine Agent-Diagnose-Daten im letzten Report.</p>';
+  }
+  return parts.join("");
+}
+
+function buildInsightEinzelExportBody(payload) {
+  const block = payload?.dir_listings && typeof payload.dir_listings === "object" ? payload.dir_listings : null;
+  const deepBlock = payload?.dir_deep_listings && typeof payload.dir_deep_listings === "object" ? payload.dir_deep_listings : null;
+  const parts = [];
+
+  if (block?.available && Array.isArray(block.entries) && block.entries.length) {
+    block.entries.slice(0, 8).forEach((entry) => {
+      const path = String(entry.path || entry.pattern || "—").trim();
+      const items = Array.isArray(entry.items) ? entry.items : [];
+      const itemLines = items.slice(0, 6).map((item) => {
+        const name = String(item.name || item.file_name || "—").trim();
+        const size = item.size_bytes != null ? mobileFormatKb(Number(item.size_bytes) / 1024) : "—";
+        const mtime = formatUtcPlus2Mobile(item.modified_utc || item.mtime_utc || "");
+        return mobileInsightKvRow(name, size + " · " + mtime);
+      });
+      parts.push(
+        mobileInsightSubsection(
+          path,
+          itemLines.length
+            ? '<ul class="insight-kv-list">' + itemLines.join("") + "</ul>"
+            : '<p class="insight-empty">Verzeichnis leer.</p>'
+        )
+      );
+    });
+  }
+
+  if (deepBlock?.available && Array.isArray(deepBlock.entries) && deepBlock.entries.length) {
+    deepBlock.entries.slice(0, 4).forEach((entry) => {
+      const path = String(entry.path || entry.pattern || "—").trim();
+      const subdirs = Array.isArray(entry.subdirs) ? entry.subdirs : [];
+      const subLines = subdirs.slice(0, 8).map((subdir) => {
+        const name = String(subdir.name || "—").trim();
+        const zipCount = Number(subdir.zip_item_count_total || subdir.items?.length || 0);
+        const latest = formatUtcPlus2Mobile(subdir.zip_latest_modified_utc || "");
+        return mobileInsightKvRow(name, zipCount + " ZIP · " + (latest !== "—" ? latest : "—"));
+      });
+      parts.push(
+        mobileInsightSubsection(
+          "Deep · " + path,
+          subLines.length
+            ? '<ul class="insight-kv-list">' + subLines.join("") + "</ul>"
+            : '<p class="insight-empty">Keine Unterordner.</p>'
+        )
+      );
+    });
+  }
+
+  if (!parts.length) {
+    return '<p class="insight-empty">Keine SAP-Export-Daten (DIR_SCAN_PATHS / DIR_SCAN_DEEP_PATHS).</p>';
+  }
+  return parts.join("");
+}
+
+function collectMobileSapAddonLabels(payload) {
+  const sap = payload?.sap_business_one && typeof payload.sap_business_one === "object" ? payload.sap_business_one : null;
+  const labels = [];
+  const extRows = Array.isArray(sap?.extensions?.rows) ? sap.extensions.rows : [];
+  extRows.forEach((row) => {
+    const name = String(row?.AddOnName || row?.name || "").trim();
+    const version = String(row?.Version || row?.version || "").trim();
+    if (name) labels.push({ name, version });
+  });
+  const sariRows = Array.isArray(sap?.sari_addons?.rows) ? sap.sari_addons.rows : [];
+  sariRows.forEach((row) => {
+    const name = String(row?.AName || row?.name || "").trim();
+    const version = String(row?.AddOnVer || row?.version || "").trim();
+    if (name) labels.push({ name: name + " (Legacy)", version });
+  });
+  return labels;
+}
+
+function buildInsightEinzelSapB1Body(host, payload) {
+  const p = payload && typeof payload === "object" ? payload : {};
+  const sap = p.sap_business_one && typeof p.sap_business_one === "object" ? p.sap_business_one : null;
+  const parts = [];
+
+  const sapRaw = resolveSapReleaseRawMobile(host, p);
+  const sapDisplay = resolveSapReleaseDisplayMobile(sapRaw) || "—";
+  const hanaRelease = resolveHanaReleaseMobile(host, p) || "—";
+  const hanaSid = resolveHanaSidMobile(host, p) || "—";
+  parts.push(
+    '<div class="insight-kpi-grid insight-kpi-grid--compact">' +
+    mobileInsightKpi("SAP Release", sapDisplay) +
+    mobileInsightKpi("HANA Release", hanaRelease) +
+    mobileInsightKpi("HANA SID", hanaSid) +
+    "</div>"
+  );
+
+  const addons = collectMobileSapAddonLabels(p);
+  if (addons.length) {
+    parts.push(
+      '<details class="insight-log-file" open>' +
+      "<summary>🧩 AddOns · " +
+      addons.length +
+      "</summary>" +
+      mobileInsightAddonListHtml(addons, 40) +
+      "</details>"
+    );
+  }
+
+  const hi = p.hana_info && typeof p.hana_info === "object" ? p.hana_info : null;
+  if (hi) {
+    const hanaRows = [
+      { label: "Status", value: hi.available === true ? "verfügbar" : "nicht gefunden" },
+      { label: "SID", value: String(hi.sid || "").trim() || "—" },
+      { label: "Version", value: String(hi.version || "").trim() || "—" },
+      { label: "Branch", value: String(hi.branch || "").trim() || "—" },
+    ];
+    parts.push(
+      '<details class="insight-log-file">' +
+      "<summary>🗄️ HANA Versions-Scan</summary>" +
+      mobileInsightKvListHtml(hanaRows) +
+      "</details>"
+    );
+  }
+
+  const sapLicense = p.sap_license && typeof p.sap_license === "object" ? p.sap_license : null;
+  if (sapLicense) {
+    const licenseRows = [
+      { label: "Lizenzserver", value: String(sapLicense.license_server || "").trim() || "—" },
+      { label: "System-ID", value: String(sapLicense.system_id || "").trim() || "—" },
+      { label: "Installation", value: String(sapLicense.installation_number || "").trim() || "—" },
+      { label: "Hardware-Key", value: String(sapLicense.hardware_key || "").trim() || "—" },
+    ];
+    parts.push(
+      '<details class="insight-log-file">' +
+      "<summary>📄 Lizenzinfos</summary>" +
+      mobileInsightKvListHtml(licenseRows) +
+      "</details>"
+    );
+  }
+
+  const services = sap?.installed_services && typeof sap.installed_services === "object" ? sap.installed_services : null;
+  if (services && Array.isArray(services.entries) && services.entries.length) {
+    const serviceLines = services.entries.slice(0, 16).map((entry) =>
+      mobileInsightKvRow(
+        String(entry?.name || entry?.service_name || "—").trim(),
+        String(entry?.status || entry?.state || "—").trim()
+      )
+    );
+    parts.push(
+      '<details class="insight-log-file">' +
+      "<summary>⚙️ Installierte Services · " +
+      services.entries.length +
+      "</summary>" +
+      '<ul class="insight-kv-list">' +
+      serviceLines.join("") +
+      "</ul></details>"
+    );
+  }
+
+  if (!sap && !hi && !sapLicense) {
+    return '<p class="insight-empty">Keine SAP-B1-Daten im letzten Report.</p>';
+  }
+  return parts.join("");
 }
 
 function buildHostInsightSlides(host, variant, report, payload) {
@@ -1125,7 +1496,7 @@ function buildHostInsightSlides(host, variant, report, payload) {
       wrapInsightSlide(
         "ℹ️",
         "Kein Report",
-        '<p class="insight-empty">Für diesen Host liegt kein aktueller Report-Payload vor. Host-Stammdaten siehe Übersicht.</p>' +
+        '<p class="insight-empty">Für diesen Host liegt kein aktueller Report-Payload vor.</p>' +
           buildInsightOverviewBody(host, variant),
         reportLabel
       ),
@@ -1133,21 +1504,44 @@ function buildHostInsightSlides(host, variant, report, payload) {
   }
 
   const builders = {
-    overview: () => buildInsightOverviewBody(host, variant),
-    resources: () => buildInsightResourcesBody(payload),
-    sap: () => buildInsightSapBody(host, payload),
-    filesystems: () => buildInsightFilesystemsBody(payload),
-    databases: () => buildInsightDatabasesBody(payload),
-    containers: () => buildInsightContainersBody(payload),
+    system: () => buildInsightEinzelSystemBody(host, variant, report, payload),
     journal: () => buildInsightJournalBody(payload),
     processes: () => buildInsightProcessesBody(payload),
-    logs: () => buildInsightLogsBody(payload),
-    system: () => buildInsightSystemBody(payload, report),
+    logfiles: () => buildInsightLogsBody(payload),
+    "sap-b1": () => buildInsightEinzelSapB1Body(host, payload),
+    containers: () => buildInsightContainersBody(payload),
+    export: () => buildInsightEinzelExportBody(payload),
+    agent: () => buildInsightEinzelAgentBody(payload),
+    network: () => buildInsightEinzelNetworkBody(payload),
+    filesystems: () => buildInsightFilesystemsBody(payload),
+    databases: () => buildInsightDatabasesBody(payload),
   };
 
   return HOST_INSIGHT_SLIDE_DEFS.map((def) =>
     wrapInsightSlide(def.icon, def.title, builders[def.id](), reportLabel)
   );
+}
+
+function scrollHostInsightToIndex(index, behavior) {
+  const track = document.getElementById("hostInsightTrack");
+  if (!track) return;
+  const slides = track.querySelectorAll(".host-insight-slide");
+  const target = slides[index];
+  if (target) {
+    target.scrollIntoView({ behavior: behavior || "smooth", inline: "center", block: "nearest" });
+  }
+}
+
+function renderHostInsightSectionNav() {
+  const nav = document.getElementById("hostInsightSectionNav");
+  if (!nav) return;
+  nav.innerHTML = HOST_INSIGHT_SLIDE_DEFS.map((def, index) => {
+    const active = index === 0 ? " is-active" : "";
+    return (
+      '<button type="button" class="host-insight-section-chip' + active + '" data-insight-index="' + index + '" ' +
+      'aria-label="' + mobileEsc(def.title) + '">' + mobileEsc(def.short || def.title) + "</button>"
+    );
+  }).join("");
 }
 
 function renderHostInsightDots(slideCount) {
@@ -1172,6 +1566,7 @@ function syncHostInsightCarouselUi() {
   const track = document.getElementById("hostInsightTrack");
   const counter = document.getElementById("hostInsightCounter");
   const dotsEl = document.getElementById("hostInsightDots");
+  const navEl = document.getElementById("hostInsightSectionNav");
   if (!track) return;
 
   const slides = track.querySelectorAll(".host-insight-slide");
@@ -1187,6 +1582,16 @@ function syncHostInsightCarouselUi() {
       dot.classList.toggle("is-active", active);
       dot.setAttribute("aria-selected", active ? "true" : "false");
     });
+  }
+
+  if (navEl) {
+    navEl.querySelectorAll(".host-insight-section-chip").forEach((chip, chipIndex) => {
+      chip.classList.toggle("is-active", chipIndex === index);
+    });
+    const activeChip = navEl.querySelector(".host-insight-section-chip.is-active");
+    if (activeChip && typeof activeChip.scrollIntoView === "function") {
+      activeChip.scrollIntoView({ behavior: "auto", inline: "nearest", block: "nearest" });
+    }
   }
 }
 
@@ -1204,16 +1609,15 @@ function bindHostInsightCarouselOnce() {
     { passive: true }
   );
 
-  document.getElementById("hostInsightDots")?.addEventListener("click", (event) => {
-    const dot = event.target.closest(".host-insight-dot");
-    if (!dot || !track) return;
-    const index = Number(dot.getAttribute("data-insight-index") || 0);
-    const slides = track.querySelectorAll(".host-insight-slide");
-    const target = slides[index];
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-    }
-  });
+  const handleInsightNavClick = (event) => {
+    const target = event.target.closest(".host-insight-dot, .host-insight-section-chip");
+    if (!target) return;
+    const index = Number(target.getAttribute("data-insight-index") || 0);
+    scrollHostInsightToIndex(index, "smooth");
+  };
+
+  document.getElementById("hostInsightDots")?.addEventListener("click", handleInsightNavClick);
+  document.getElementById("hostInsightSectionNav")?.addEventListener("click", handleInsightNavClick);
 }
 
 function closeHostInsightCarousel() {
@@ -1279,6 +1683,7 @@ async function openHostInsightCarousel(host, variant) {
   overlay.classList.remove("hidden");
   document.body.classList.add("host-insight-open");
   bindHostInsightCarouselOnce();
+  renderHostInsightSectionNav();
   renderHostInsightDots(1);
   syncHostInsightCarouselUi();
 
@@ -1300,6 +1705,7 @@ async function openHostInsightCarousel(host, variant) {
   }
 
   track.innerHTML = slides.join("");
+  renderHostInsightSectionNav();
   renderHostInsightDots(slides.length);
   track.scrollLeft = 0;
   syncHostInsightCarouselUi();
@@ -3142,11 +3548,21 @@ function getJournalEntriesFromPayload(payload) {
 }
 
 function buildInsightJournalBody(payload) {
+  const block = payload?.journal_errors && typeof payload.journal_errors === "object" ? payload.journal_errors : {};
   const entries = getJournalEntriesFromPayload(payload);
+  const sinceMinutes = Number(block.since_minutes || 0);
+  const sinceLabel =
+    Number.isFinite(sinceMinutes) && sinceMinutes > 0
+      ? "Fenster: letzte " + sinceMinutes + " Minuten"
+      : "Fenster: unbekannt";
   if (!entries.length) {
-    return '<p class="insight-empty">Keine kritischen Journal-Fehler im letzten Report.</p>';
+    return (
+      '<p class="insight-hint">' +
+      mobileEsc(sinceLabel) +
+      '</p><p class="insight-empty">Keine kritischen Journal-Fehler im letzten Report.</p>'
+    );
   }
-  const items = entries.slice(0, 12).map((entry) => {
+  const items = entries.slice(0, 20).map((entry) => {
     const time = formatUtcPlus2Mobile(entry.time_utc || entry.time || "");
     const priority = String(entry.priority || "-").trim();
     const unit = String(entry.unit || "-").trim();
@@ -3157,7 +3573,15 @@ function buildInsightJournalBody(payload) {
       "<span>" + mobileEsc(message) + "</span></li>"
     );
   });
-  return '<ul class="insight-journal-list">' + items.join("") + "</ul>";
+  return (
+    '<p class="insight-hint">' +
+    mobileEsc(sinceLabel) +
+    " · " +
+    entries.length +
+    ' Einträge</p><ul class="insight-journal-list">' +
+    items.join("") +
+    "</ul>"
+  );
 }
 
 function buildInsightContainersBody(payload) {
@@ -3172,15 +3596,19 @@ function buildInsightContainersBody(payload) {
   }
   return (
     '<div class="insight-container-list">' +
-    entries.slice(0, 20).map((entry) => {
+    entries.slice(0, 24).map((entry) => {
       const state = String(entry.state || "-").trim().toLowerCase();
       const bad = state !== "running";
+      const restarts = Number(entry.restart_count || 0);
       return (
         '<article class="insight-container-item' + (bad ? " is-bad" : "") + '">' +
         '<p class="insight-container-name">' + mobileEsc(String(entry.name || "-")) + "</p>" +
         '<p class="insight-container-meta">' + mobileEsc(String(entry.image || "-")) + " · " + mobileEsc(String(entry.state || "-")) +
         (entry.health ? " · " + mobileEsc(String(entry.health)) : "") +
-        "</p></article>"
+        (Number.isFinite(restarts) ? " · Restarts " + restarts : "") +
+        "</p>" +
+        (entry.status ? '<p class="insight-container-status">' + mobileEsc(String(entry.status)) + "</p>" : "") +
+        "</article>"
       );
     }).join("") +
     "</div>"
