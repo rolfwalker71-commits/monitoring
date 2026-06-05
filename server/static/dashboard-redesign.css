@@ -433,10 +433,25 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
   position: absolute;
   top: 8px;
   right: 10px;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: #64748b;
+}
+
+.host-tech-row--host .host-meta-v {
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  color: #7188a3 !important;
 }
 
 .host-list article {
@@ -1115,6 +1130,190 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
   background: #1e3a5f !important;
   border-color: #3b82f6 !important;
   color: #93c5fd !important;
+}
+
+/* Live report feed (floating, draggable) */
+.live-report-feed {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1250;
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(70vh, 520px);
+  display: flex;
+  flex-direction: column;
+  background: var(--dr-surface);
+  border: 1px solid var(--dr-card-border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
+  overflow: hidden;
+}
+
+.live-report-feed.is-dragging {
+  user-select: none;
+  cursor: grabbing;
+}
+
+.live-report-feed-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  cursor: grab;
+  touch-action: none;
+}
+
+.live-report-feed-head strong {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #334155;
+}
+
+.live-report-feed-count {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.live-report-feed-actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.live-report-feed-icon-btn {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.live-report-feed-body {
+  overflow: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.live-report-feed.is-minimized .live-report-feed-body {
+  display: none;
+}
+
+.live-report-feed-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.live-report-feed-item:hover {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
+.live-report-feed-item.is-new {
+  animation: live-report-feed-pulse 1.2s ease-out 1;
+}
+
+@keyframes live-report-feed-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.35); }
+  100% { box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
+}
+
+.live-report-feed-item-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.live-report-feed-customer {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-report-feed-time {
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+  flex: 0 0 auto;
+}
+
+.live-report-feed-designation,
+.live-report-feed-hostline,
+.live-report-feed-metrics {
+  font-size: 10.5px;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.live-report-feed-hostline {
+  font-family: var(--kv-value-family);
+}
+
+.live-report-feed-metrics {
+  margin-top: 2px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.live-report-feed-metrics .delivery-chip {
+  font-size: 9px;
+  padding: 1px 5px;
+  margin-left: 4px;
+}
+
+body[data-theme="dark"] .host-card-country-code {
+  border-color: #475569;
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+body[data-theme="dark"] .live-report-feed {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+body[data-theme="dark"] .live-report-feed-head {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+body[data-theme="dark"] .live-report-feed-head strong {
+  color: #e2e8f0;
+}
+
+body[data-theme="dark"] .live-report-feed-item {
+  background: #111827;
+  border-color: #334155;
+}
+
+body[data-theme="dark"] .live-report-feed-item:hover {
+  background: #172033;
+  border-color: #3b82f6;
+}
+
+body[data-theme="dark"] .live-report-feed-customer {
+  color: #f1f5f9;
 }
 
 /* Final pass: legacy styles.css grid must not shrink KPI groups (shows only 2 cells each) */

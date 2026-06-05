@@ -1653,6 +1653,19 @@
           </div>
         </div>
       </div>
+
+      <div id="liveReportFeed" class="live-report-feed hidden" aria-live="polite">
+        <header class="live-report-feed-head" data-live-feed-drag-handle>
+          <strong>Live Meldungen</strong>
+          <span id="liveReportFeedCount" class="live-report-feed-count"></span>
+          <div class="live-report-feed-actions">
+            <button id="liveReportFeedMinimizeBtn" class="btn-icon live-report-feed-icon-btn" type="button" title="Einklappen" aria-expanded="true">−</button>
+            <button id="liveReportFeedCloseBtn" class="btn-icon live-report-feed-icon-btn" type="button" title="Schliessen">✕</button>
+          </div>
+        </header>
+        <div id="liveReportFeedBody" class="live-report-feed-body"></div>
+      </div>
+
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js?v=__ASSET_VERSION__').catch(function(err) {

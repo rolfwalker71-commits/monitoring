@@ -97,6 +97,17 @@ const CHANGELOG_REBUILD_DAYS = 7;
 const CHANGELOG_MAINTENANCE_PANEL_OPEN_KEY = "monitoring.changelogMaintenancePanelOpen";
 let headerKpiWidthSyncFrameId = null;
 let headerKpiTrendPreviousValues = null;
+const LIVE_REPORT_FEED_MAX_ITEMS = 8;
+const LIVE_REPORT_FEED_POSITION_KEY = "monitoring.liveReportFeedPosition";
+const LIVE_REPORT_POLL_INTERVAL_MS = 25000;
+let liveReportFeedItems = [];
+let liveReportFeedMinimized = false;
+let liveReportFeedDismissed = false;
+let liveReportFeedWired = false;
+let liveReportFeedDragState = null;
+let liveReportPollTimerId = null;
+let liveReportPollCursorId = 0;
+let liveReportPollInFlight = false;
 const HEADER_KPI_WIDTH_STORAGE_KEY = "monitoring.headerKpiUniformWidth";
 const HEADER_SECTIONS_STORAGE_KEY_PREFIX = "monitoring.headerSections.";
 const LEGACY_HEADER_KPI_SECTION_OPEN_KEY = "monitoring.headerKpiSectionOpen";
@@ -3077,9 +3088,11 @@ function setAuthUiState(authenticated) {
   if (authenticated) {
     startSessionRefreshTimer();
     startSessionCountdownTimer();
+    startLiveReportPoll();
   } else {
     stopSessionRefreshTimer();
     stopSessionCountdownTimer();
+    stopLiveReportPoll();
     state.sessionExpiresAtUtc = "";
   }
   if (!authenticated) {
@@ -3444,6 +3457,11 @@ async function logoutWebClient() {
   }
   state.authDisplayName = "";
   state.sessionExpiresAtUtc = "";
+  liveReportFeedItems = [];
+  liveReportFeedDismissed = false;
+  liveReportPollCursorId = 0;
+  stopLiveReportPoll();
+  renderLiveReportFeed();
 }
 
 async function changePassword() {
@@ -12690,6 +12708,353 @@ function renderHosts(hosts) {
   wireHostListInteractions();
 }
 
+function isLiveReportEventVisible(event) {
+  if (!event || event.is_hidden) {
+    return false;
+  }
+  const host = {
+    hostname: asText(event.hostname, "").trim(),
+    host_uid: asText(event.host_uid, "").trim(),
+    country_code: asText(event.country_code, "").trim().toUpperCase(),
+  };
+  if (!host.hostname) {
+    return false;
+  }
+  const exclusions = getHostInterestManualExclusions();
+  if (hostInterestSetHasHost(exclusions, host)) {
+    return false;
+  }
+  const selectedCountries = getHostInterestSelectedCountries();
+  const additions = getHostInterestManualAdditions();
+  const hasExplicitBaseSelection = selectedCountries.size > 0 || additions.size > 0;
+  if (!hasExplicitBaseSelection) {
+    return true;
+  }
+  if (hostInterestSetHasHost(additions, host)) {
+    return true;
+  }
+  return selectedCountries.has(host.country_code);
+}
+
+function buildLiveReportFeedPreviewFromEvent(event) {
+  const deliveryMode = asText(event?.delivery_mode, "live").toLowerCase();
+  const deliveryLabel = deliveryMode === "delayed" ? "DELAYED" : "LIVE";
+  const deliveryClass = deliveryMode === "delayed" ? "delivery-chip delayed" : "delivery-chip live";
+  const customerName = asText(event?.customer_name, "Kein Kunde") || "Kein Kunde";
+  const hostname = asText(event?.hostname, "-");
+  const hostIdentity = asText(event?.host_uid, "").trim() || hostname;
+  const designation = asText(event?.display_name, hostname) || hostname;
+  const shortHostname = hostname.split(".")[0] || hostname;
+  const ip = asText(event?.std_nic_ip || event?.primary_ip, "-");
+  const reportTs = asText(event?.received_at_utc, "");
+  const clock = formatHostLastReportClock(reportTs);
+  const metrics = [];
+  if (Number.isFinite(Number(event?.cpu_usage_percent))) {
+    metrics.push(`CPU ${formatNumber(event.cpu_usage_percent, 1)}%`);
+  }
+  if (Number.isFinite(Number(event?.memory_used_percent))) {
+    metrics.push(`RAM ${formatNumber(event.memory_used_percent, 1)}%`);
+  }
+  const metricsLine = metrics.length > 0
+    ? `${metrics.join(" · ")} <span class="${deliveryClass}">${escapeHtml(deliveryLabel)}</span>`
+    : `<span class="${deliveryClass}">${escapeHtml(deliveryLabel)}</span>`;
+  return {
+    id: `${hostIdentity}|${asText(event?.report_id, reportTs || Date.now())}`,
+    hostIdentity,
+    hostname,
+    customerName,
+    designation,
+    shortHostname,
+    ip,
+    clockLabel: clock.label,
+    clockTitle: clock.title,
+    metricsLine,
+    receivedAtUtc: reportTs,
+  };
+}
+
+function renderLiveReportFeed() {
+  const panel = document.getElementById("liveReportFeed");
+  const body = document.getElementById("liveReportFeedBody");
+  const countEl = document.getElementById("liveReportFeedCount");
+  if (!panel || !body) {
+    return;
+  }
+  if (liveReportFeedDismissed || liveReportFeedItems.length === 0) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  panel.classList.toggle("is-minimized", liveReportFeedMinimized);
+  if (countEl) {
+    countEl.textContent = `${liveReportFeedItems.length}`;
+  }
+  body.innerHTML = liveReportFeedItems.map((item) => `
+    <button type="button" class="live-report-feed-item${item.isNew ? " is-new" : ""}" data-live-feed-host="${escapeHtml(item.hostname)}" data-live-feed-uid="${escapeHtml(item.hostIdentity)}">
+      <div class="live-report-feed-item-head">
+        <span class="live-report-feed-customer" title="${escapeHtml(item.customerName)}">${escapeHtml(item.customerName)}</span>
+        <span class="live-report-feed-time" title="${escapeHtml(item.clockTitle)}">${escapeHtml(item.clockLabel)}</span>
+      </div>
+      <div class="live-report-feed-designation">${escapeHtml(item.designation)}</div>
+      <div class="live-report-feed-hostline">${escapeHtml(item.shortHostname)} · ${escapeHtml(item.ip)}</div>
+      <div class="live-report-feed-metrics">${item.metricsLine}</div>
+    </button>
+  `).join("");
+  for (const item of liveReportFeedItems) {
+    item.isNew = false;
+  }
+}
+
+function applyLiveReportFeedPosition() {
+  const panel = document.getElementById("liveReportFeed");
+  if (!panel) {
+    return;
+  }
+  try {
+    const raw = window.localStorage.getItem(LIVE_REPORT_FEED_POSITION_KEY);
+    if (!raw) {
+      return;
+    }
+    const parsed = JSON.parse(raw);
+    const left = Number(parsed?.left);
+    const top = Number(parsed?.top);
+    if (!Number.isFinite(left) || !Number.isFinite(top)) {
+      return;
+    }
+    panel.style.left = `${left}px`;
+    panel.style.top = `${top}px`;
+    panel.style.transform = "none";
+  } catch (_error) {
+    // Ignore invalid persisted position.
+  }
+}
+
+function persistLiveReportFeedPosition(panel) {
+  if (!panel) {
+    return;
+  }
+  const rect = panel.getBoundingClientRect();
+  try {
+    window.localStorage.setItem(LIVE_REPORT_FEED_POSITION_KEY, JSON.stringify({
+      left: Math.round(rect.left),
+      top: Math.round(rect.top),
+    }));
+  } catch (_error) {
+    // Ignore storage failures.
+  }
+}
+
+function enqueueLiveReportFeedFromEvents(events) {
+  if (!Array.isArray(events) || events.length === 0) {
+    return;
+  }
+  liveReportFeedDismissed = false;
+  const sortedEvents = [...events].sort(
+    (left, right) => (Number(right?.report_id) || 0) - (Number(left?.report_id) || 0),
+  );
+  for (const event of sortedEvents) {
+    const preview = buildLiveReportFeedPreviewFromEvent(event);
+    preview.isNew = true;
+    liveReportFeedItems = [preview, ...liveReportFeedItems.filter((item) => item.id !== preview.id)];
+  }
+  liveReportFeedItems = liveReportFeedItems.slice(0, LIVE_REPORT_FEED_MAX_ITEMS);
+  renderLiveReportFeed();
+}
+
+function stopLiveReportPoll() {
+  if (liveReportPollTimerId !== null) {
+    window.clearInterval(liveReportPollTimerId);
+    liveReportPollTimerId = null;
+  }
+  liveReportPollInFlight = false;
+}
+
+function startLiveReportPoll() {
+  stopLiveReportPoll();
+  if (!state.isAuthenticated) {
+    return;
+  }
+  void pollLiveReportEvents();
+  liveReportPollTimerId = window.setInterval(() => {
+    void pollLiveReportEvents();
+  }, LIVE_REPORT_POLL_INTERVAL_MS);
+}
+
+async function pollLiveReportEvents() {
+  if (!state.isAuthenticated || liveReportPollInFlight) {
+    return;
+  }
+  liveReportPollInFlight = true;
+  try {
+    const query = liveReportPollCursorId > 0
+      ? `since_id=${encodeURIComponent(String(liveReportPollCursorId))}&limit=20`
+      : "limit=20";
+    const response = await fetch(`/api/v1/live-report-events?${query}`, {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (response.status === 401) {
+      stopLiveReportPoll();
+      return;
+    }
+    if (!response.ok) {
+      return;
+    }
+    const data = await response.json().catch(() => ({}));
+    const cursorId = Number(data?.cursor_id);
+    if (Number.isFinite(cursorId) && cursorId >= 0) {
+      liveReportPollCursorId = cursorId;
+    }
+    const events = Array.isArray(data?.events) ? data.events : [];
+    const visibleEvents = events.filter(isLiveReportEventVisible);
+    if (visibleEvents.length > 0) {
+      enqueueLiveReportFeedFromEvents(visibleEvents);
+      const selectedIdentity = asText(state.selectedHostUid, "").trim() || asText(state.selectedHost, "").trim();
+      const shouldRefreshSelectedReport = visibleEvents.some((event) => {
+        const eventIdentity = asText(event?.host_uid, "").trim() || asText(event?.hostname, "").trim();
+        return Boolean(selectedIdentity && eventIdentity && eventIdentity === selectedIdentity);
+      });
+      if (shouldRefreshSelectedReport) {
+        void loadReportsForHost();
+      }
+    }
+  } catch (_error) {
+    // Keep polling on transient network failures.
+  } finally {
+    liveReportPollInFlight = false;
+  }
+}
+
+function selectHostFromLiveReportFeed(hostname, hostUid) {
+  const hostList = document.getElementById("hostList");
+  const previousScrollTop = hostList ? hostList.scrollTop : 0;
+  state.selectedHost = hostname;
+  state.selectedHostUid = hostUid || hostname;
+  const hostRecord = Array.isArray(state.hosts)
+    ? state.hosts.find((host) => resolveHostIdentity(host) === (hostUid || hostname))
+    : null;
+  state.selectedDisplayName = asText(hostRecord?.display_name || hostname, hostname);
+  state.reportOffset = 0;
+  state.viewMode = "overview";
+  state.overviewSection = "main";
+  state.reportSection = "overview";
+  renderHosts(state.hosts || []);
+  if (hostList) {
+    hostList.scrollTop = previousScrollTop;
+  }
+  updateOverviewSection();
+  void loadReportsForHost();
+  void loadAnalysisForHost();
+  void loadAlertsForHost();
+  void loadDatabaseLifecycleForHost();
+  void loadConfigChangelogForHost();
+  loadAndRenderCustomerNotificationPanel(hostname, hostUid || "");
+}
+
+function wireLiveReportFeed() {
+  if (liveReportFeedWired) {
+    return;
+  }
+  liveReportFeedWired = true;
+  const panel = document.getElementById("liveReportFeed");
+  const body = document.getElementById("liveReportFeedBody");
+  const minimizeBtn = document.getElementById("liveReportFeedMinimizeBtn");
+  const closeBtn = document.getElementById("liveReportFeedCloseBtn");
+  const dragHandle = panel ? panel.querySelector("[data-live-feed-drag-handle]") : null;
+  if (!panel || !body) {
+    return;
+  }
+
+  applyLiveReportFeedPosition();
+
+  if (minimizeBtn) {
+    minimizeBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      liveReportFeedMinimized = !liveReportFeedMinimized;
+      panel.classList.toggle("is-minimized", liveReportFeedMinimized);
+      minimizeBtn.setAttribute("aria-expanded", liveReportFeedMinimized ? "false" : "true");
+      minimizeBtn.textContent = liveReportFeedMinimized ? "+" : "−";
+      minimizeBtn.title = liveReportFeedMinimized ? "Ausklappen" : "Einklappen";
+    });
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      liveReportFeedDismissed = true;
+      panel.classList.add("hidden");
+    });
+  }
+
+  body.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest(".live-report-feed-item") : null;
+    if (!button) {
+      return;
+    }
+    const hostname = String(button.getAttribute("data-live-feed-host") || "").trim();
+    const hostUid = String(button.getAttribute("data-live-feed-uid") || "").trim();
+    if (!hostname) {
+      return;
+    }
+    selectHostFromLiveReportFeed(hostname, hostUid);
+  });
+
+  if (dragHandle) {
+    dragHandle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+      const target = event.target instanceof Element ? event.target : null;
+      if (target && target.closest("button")) {
+        return;
+      }
+      event.preventDefault();
+      const rect = panel.getBoundingClientRect();
+      panel.style.left = `${rect.left}px`;
+      panel.style.top = `${rect.top}px`;
+      panel.style.transform = "none";
+      liveReportFeedDragState = {
+        pointerId: event.pointerId,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top,
+      };
+      panel.classList.add("is-dragging");
+      dragHandle.setPointerCapture(event.pointerId);
+    });
+
+    dragHandle.addEventListener("pointermove", (event) => {
+      if (!liveReportFeedDragState || liveReportFeedDragState.pointerId !== event.pointerId) {
+        return;
+      }
+      const nextLeft = Math.max(8, Math.min(window.innerWidth - panel.offsetWidth - 8, event.clientX - liveReportFeedDragState.offsetX));
+      const nextTop = Math.max(8, Math.min(window.innerHeight - 48, event.clientY - liveReportFeedDragState.offsetY));
+      panel.style.left = `${nextLeft}px`;
+      panel.style.top = `${nextTop}px`;
+    });
+
+    const endDrag = (event) => {
+      if (!liveReportFeedDragState || liveReportFeedDragState.pointerId !== event.pointerId) {
+        return;
+      }
+      liveReportFeedDragState = null;
+      panel.classList.remove("is-dragging");
+      persistLiveReportFeedPosition(panel);
+      try {
+        dragHandle.releasePointerCapture(event.pointerId);
+      } catch (_error) {
+        // Ignore capture release failures.
+      }
+    };
+    dragHandle.addEventListener("pointerup", endDrag);
+    dragHandle.addEventListener("pointercancel", endDrag);
+  }
+}
+
+function initLiveReportFeed() {
+  wireLiveReportFeed();
+  renderLiveReportFeed();
+}
+
 async function loadHosts(options = {}) {
   const preserveScroll = Boolean(options && options.preserveScroll);
   const hostList = document.getElementById("hostList");
@@ -17956,6 +18321,7 @@ async function init() {
   const sapLicenseTypeMapPromise = loadSapLicenseTypeMap();
 
   wireEvents();
+  initLiveReportFeed();
   initHeaderSectionCollapsibles();
   applyInitialHeaderKpiWidth();
   window.addEventListener("resize", scheduleHeaderKpiUniformCardWidthSync);

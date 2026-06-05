@@ -14972,6 +14972,84 @@ def collect_host_mail_context(conn: sqlite3.Connection, hostname: str, host_uid:
     }
 
 
+def _optional_metric_float(value: object) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed != parsed:  # NaN
+        return None
+    return parsed
+
+
+def collect_live_report_events(conn: sqlite3.Connection, since_report_id: int = 0, limit: int = 20) -> dict[str, object]:
+    safe_limit = max(1, min(int(limit or 20), 50))
+    safe_since_id = max(0, int(since_report_id or 0))
+
+    if safe_since_id <= 0:
+        max_row = conn.execute("SELECT COALESCE(MAX(id), 0) FROM reports").fetchone()
+        max_report_id = int((max_row[0] if max_row else 0) or 0)
+        return {
+            "events": [],
+            "cursor_id": max_report_id,
+            "server_now_utc": utc_now_iso(),
+        }
+
+    host_key_expr = reports_host_key_sql()
+    rows = conn.execute(
+        f"""
+        SELECT id, received_at_utc, hostname, COALESCE(host_uid, ''), primary_ip, payload_json,
+               {host_key_expr} AS host_key
+        FROM reports
+        WHERE id > ?
+        ORDER BY id ASC
+        LIMIT ?
+        """,
+        (safe_since_id, safe_limit),
+    ).fetchall()
+
+    events: list[dict[str, object]] = []
+    cursor_id = safe_since_id
+    for row in rows:
+        report_id = int(row[0] or 0)
+        if report_id > 0:
+            cursor_id = max(cursor_id, report_id)
+        hostname = str(row[2] or "").strip()
+        host_uid = str(row[3] or "").strip() or str(row[6] or "").strip()
+        primary_ip = str(row[4] or "").strip()
+        payload = parse_payload_json(str(row[5] or "{}"))
+        host_settings = get_host_settings(conn, hostname, host_uid)
+        display_override = get_display_name_override(conn, hostname, host_uid)
+        country_override = normalize_country_code(str(host_settings.get("country_code_override", "") or ""))
+        country_code = country_override or extract_country_code_from_payload(payload)
+        cpu = payload.get("cpu", {}) if isinstance(payload.get("cpu"), dict) else {}
+        memory = payload.get("memory", {}) if isinstance(payload.get("memory"), dict) else {}
+        delivery_mode = str(payload.get("delivery_mode", "live") or "live").strip().lower()
+        events.append(
+            {
+                "report_id": report_id,
+                "received_at_utc": str(row[1] or ""),
+                "hostname": hostname,
+                "host_uid": host_uid,
+                "primary_ip": primary_ip,
+                "std_nic_ip": _resolve_std_nic_ipv4(payload, primary_ip),
+                "delivery_mode": delivery_mode,
+                "display_name": effective_display_name(payload, display_override, hostname),
+                "customer_name": str(host_settings.get("customer_name", "") or "").strip(),
+                "country_code": country_code,
+                "is_hidden": bool(host_settings.get("is_hidden", False)),
+                "cpu_usage_percent": _optional_metric_float(cpu.get("usage_percent")),
+                "memory_used_percent": _optional_metric_float(memory.get("usage_percent")),
+            }
+        )
+
+    return {
+        "events": events,
+        "cursor_id": cursor_id,
+        "server_now_utc": utc_now_iso(),
+    }
+
+
 def extract_country_code_from_payload(payload: dict) -> str:
     direct = normalize_country_code(payload.get("country_code", ""))
     if direct:
@@ -17167,6 +17245,26 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             self._send_file(
                 payload_file,
                 "application/json; charset=utf-8",
+                extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+            )
+            return
+
+        if parsed.path == "/api/v1/live-report-events":
+            if not self._require_web_session():
+                return
+            query = parse_qs(parsed.query)
+            since_report_id = parse_int(query, "since_id", default=0, min_value=0, max_value=2_000_000_000)
+            limit = parse_int(query, "limit", default=20, min_value=1, max_value=50)
+            with sqlite3.connect(DB_PATH) as conn:
+                payload = collect_live_report_events(conn, since_report_id=since_report_id, limit=limit)
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "cursor_id": int(payload.get("cursor_id", 0) or 0),
+                    "server_now_utc": str(payload.get("server_now_utc", "") or ""),
+                    "events": payload.get("events", []),
+                },
                 extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
             )
             return
