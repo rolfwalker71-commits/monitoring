@@ -1132,63 +1132,92 @@ body[data-theme="dark"] #reportsView .overview-sidebar-item.active {
   color: #93c5fd !important;
 }
 
-/* Systemübersicht: stabile Toolbar ohne Sprung beim Tippen */
-#systemOverviewView .inactive-hosts-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(0, max-content) minmax(200px, 260px) repeat(4, max-content);
-  align-items: center;
+/* Systemübersicht: 2-zeilige Toolbar (Zeile 1: Stats/Suche/Aktionen, Zeile 2: Länder) */
+#systemOverviewView .system-overview-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
   flex-wrap: nowrap;
 }
 
+#systemOverviewView .system-overview-toolbar-primary {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(220px, 1fr) repeat(4, max-content);
+  align-items: center;
+  gap: 8px;
+}
+
 #systemOverviewView #systemOverviewStats {
   grid-column: 1;
+  display: inline-flex;
   flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
   white-space: nowrap;
 }
 
-#systemOverviewView #systemOverviewCountryFilter {
-  grid-column: 2;
-  min-width: 0;
-}
-
 #systemOverviewView #systemOverviewSearchInput {
-  grid-column: 3;
+  grid-column: 2;
   width: 100%;
   max-width: none;
-  min-width: 200px;
+  min-width: 0;
   flex: unset;
 }
 
 #systemOverviewView #toggleSystemOverviewSortModeButton {
-  grid-column: 4;
+  grid-column: 3;
 }
 
 #systemOverviewView #toggleSystemOverviewAddonsButton {
-  grid-column: 5;
+  grid-column: 4;
 }
 
 #systemOverviewView #expandAllSystemOverviewButton {
-  grid-column: 6;
+  grid-column: 5;
 }
 
 #systemOverviewView #refreshSystemOverviewButton {
-  grid-column: 7;
+  grid-column: 6;
+}
+
+#systemOverviewView .system-overview-toolbar-countries {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding-top: 2px;
+  border-top: 1px solid rgba(201, 216, 236, 0.65);
+}
+
+#systemOverviewView #systemOverviewCountryFilter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+}
+
+#systemOverviewView .system-overview-land-chip {
+  flex: 0 0 auto;
+}
+
+#systemOverviewView .so-country-filter-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 @media (max-width: 1180px) {
-  #systemOverviewView .inactive-hosts-toolbar {
-    grid-template-columns: minmax(0, max-content) minmax(0, max-content) minmax(180px, 1fr);
+  #systemOverviewView .system-overview-toolbar-primary {
+    grid-template-columns: minmax(0, max-content) minmax(180px, 1fr);
     grid-template-rows: auto auto;
   }
 
   #systemOverviewView #systemOverviewStats {
     grid-column: 1;
-    grid-row: 1;
-  }
-
-  #systemOverviewView #systemOverviewCountryFilter {
-    grid-column: 2;
     grid-row: 1;
   }
 

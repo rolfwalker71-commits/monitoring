@@ -19270,6 +19270,30 @@ function collectSystemOverviewAddonSearchText(payload) {
   return tokens.join(" ");
 }
 
+function renderSystemOverviewLandChipHtml() {
+  const scope = state.systemOverviewCountryFilter === "all"
+    ? "Alle Länder"
+    : String(state.systemOverviewCountryFilter || "all");
+  return `<span class="system-overview-stat-chip system-overview-land-chip">Land: ${escapeHtml(scope)}</span>`;
+}
+
+function syncSystemOverviewCountryFilterUi(filterEl) {
+  if (!filterEl) {
+    return;
+  }
+  const landChip = filterEl.querySelector(".system-overview-land-chip");
+  if (landChip) {
+    const scope = state.systemOverviewCountryFilter === "all"
+      ? "Alle Länder"
+      : String(state.systemOverviewCountryFilter || "all");
+    landChip.textContent = `Land: ${scope}`;
+  }
+  filterEl.querySelectorAll(".so-country-filter-btn").forEach((button) => {
+    const code = String(button.getAttribute("data-country-filter") || "all");
+    button.classList.toggle("active", code === state.systemOverviewCountryFilter);
+  });
+}
+
 function renderSystemOverviewCountryFilter(countryCodes) {
   const filterEl = document.getElementById("systemOverviewCountryFilter");
   if (!filterEl) return;
@@ -19290,10 +19314,7 @@ function renderSystemOverviewCountryFilter(countryCodes) {
 
   const signature = normalized.join("|");
   if (filterEl.dataset.signature === signature && filterEl.querySelector(".so-country-filter-list")) {
-    filterEl.querySelectorAll(".so-country-filter-btn").forEach((button) => {
-      const code = String(button.getAttribute("data-country-filter") || "all");
-      button.classList.toggle("active", code === state.systemOverviewCountryFilter);
-    });
+    syncSystemOverviewCountryFilterUi(filterEl);
     return;
   }
   filterEl.dataset.signature = signature;
@@ -19309,7 +19330,7 @@ function renderSystemOverviewCountryFilter(countryCodes) {
     }),
   ].join("");
 
-  filterEl.innerHTML = `<div class="so-country-filter-list">${buttons}</div>`;
+  filterEl.innerHTML = `${renderSystemOverviewLandChipHtml()}<div class="so-country-filter-list">${buttons}</div>`;
   filterEl.querySelectorAll(".so-country-filter-btn").forEach((button) => {
     button.addEventListener("click", () => {
       const nextFilter = String(button.getAttribute("data-country-filter") || "all");
@@ -19692,13 +19713,11 @@ async function loadSystemOverview() {
     }
 
     if (statsEl) {
-      const scope = activeCountryFilter === "all" ? "Alle Länder" : activeCountryFilter;
       const modeLabel = state.systemOverviewSortMode === "addon-customer-os"
         ? "Sicht: AddOn > Version > Kunde"
         : "Sicht: Land > Kunde";
       const chips = [
         `${displayedHostCount} Systeme`,
-        `Land: ${scope}`,
         modeLabel,
       ];
       statsEl.innerHTML = chips
