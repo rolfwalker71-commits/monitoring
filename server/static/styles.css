@@ -15505,6 +15505,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   display: flex;
   flex-direction: column;
   padding-bottom: 28px;
+  overflow: visible;
   --customer-logo-card-width: 112px;
   --customer-logo-right-gap: 8px;
   --customer-meta-gap: 10px;
@@ -15628,7 +15629,7 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   box-shadow: none;
   align-content: start;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .report-customer-chip-wrap .selected-host-meta-card-body {
@@ -15696,13 +15697,14 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   border: 1px solid #cddbeb;
   border-radius: 8px;
   background: #ffffff;
-  overflow: hidden;
+  overflow: visible;
   padding: 2px 4px;
   position: absolute;
   top: 50%;
   right: var(--customer-logo-right-gap);
   transform: translateY(-50%);
   z-index: 3;
+  cursor: zoom-in;
 }
 
 .report-customer-chip-wrap .selected-host-customer-logo {
@@ -15711,6 +15713,50 @@ body[data-theme="dark"] #globalView .admin-settings-nav-buttons .admin-settings-
   object-fit: contain;
   object-position: center center;
   display: block;
+  border-radius: 4px;
+}
+
+.report-customer-chip-wrap .selected-host-customer-logo-popup {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 140;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 220px;
+  max-width: 320px;
+  min-height: 88px;
+  max-height: 160px;
+  padding: 12px 14px;
+  border: 1px solid #c5d5ea;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%);
+  box-shadow:
+    0 10px 28px rgba(30, 58, 95, 0.18),
+    0 2px 8px rgba(30, 58, 95, 0.1);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition: opacity 0.16s ease, visibility 0.16s ease, transform 0.16s ease;
+}
+
+.report-customer-chip-wrap .selected-host-customer-logo-popup-img {
+  display: block;
+  max-width: 292px;
+  max-height: 136px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  object-position: center center;
+}
+
+.report-customer-chip-wrap .selected-host-customer-logo-wrap:hover .selected-host-customer-logo-popup,
+.report-customer-chip-wrap .selected-host-customer-logo-wrap:focus-within .selected-host-customer-logo-popup {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
 .report-customer-chip-wrap .selected-host-meta-card-sub {
@@ -15943,6 +15989,14 @@ body[data-theme="dark"] .report-customer-chip-wrap .selected-host-meta-chip--env
 body[data-theme="dark"] .report-customer-chip-wrap .selected-host-customer-logo-wrap {
   border-color: #355072;
   background: linear-gradient(180deg, #162741 0%, #13233b 100%);
+}
+
+body[data-theme="dark"] .report-customer-chip-wrap .selected-host-customer-logo-popup {
+  border-color: #3f5f86;
+  background: linear-gradient(180deg, #1a2f4a 0%, #15263d 100%);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.42),
+    0 2px 8px rgba(0, 0, 0, 0.28);
 }
 
 body[data-theme="dark"] .host-customer-bg-watermark {

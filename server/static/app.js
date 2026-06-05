@@ -10923,7 +10923,12 @@ function renderSelectedHostCustomerChip(host) {
     ? `Kunde · Maringo ${customerProject}`
     : (customerName ? "Kunde" : "Kein Kunde hinterlegt");
   const customerLogoHtml = customerLogoUrl
-    ? `<span class="selected-host-customer-logo-wrap" title="Kundenlogo"><img src="${escapeHtml(customerLogoUrl)}" alt="Logo ${escapeHtml(customerLabel)}" class="selected-host-customer-logo" onerror="this.parentElement.style.display='none'"></span>`
+    ? `<span class="selected-host-customer-logo-wrap">
+        <img src="${escapeHtml(customerLogoUrl)}" alt="Logo ${escapeHtml(customerLabel)}" class="selected-host-customer-logo" onerror="this.closest('.selected-host-customer-logo-wrap').style.display='none'">
+        <span class="selected-host-customer-logo-popup" role="presentation" aria-hidden="true">
+          <img src="${escapeHtml(customerLogoUrl)}" alt="" class="selected-host-customer-logo-popup-img">
+        </span>
+      </span>`
     : "";
   const cardBodyClass = customerLogoHtml
     ? "selected-host-meta-card-body selected-host-meta-card-body--with-logo"
@@ -11019,7 +11024,7 @@ function updateReportChromeBar() {
     if (customerLogoUrl) {
       logoImg.src = customerLogoUrl;
       logoImg.alt = `Logo ${customerPart}`;
-      logoImg.title = customerName ? `Kundenlogo ${customerName}` : "Kundenlogo";
+      logoImg.removeAttribute("title");
       logoImg.onerror = function onReportChromeLogoError() {
         logoWrap.classList.add("hidden");
       };
