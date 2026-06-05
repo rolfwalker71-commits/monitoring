@@ -17054,10 +17054,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if result.rowcount <= 0:
                 self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "Session not found"})
                 return
+            display_name = ""
+            with sqlite3.connect(DB_PATH) as conn:
+                user = get_web_user(conn, username)
+                display_name = str((user or {}).get("display_name", "") or "")
             self._send_json(
                 HTTPStatus.OK,
                 {
                     "username": username,
+                    "display_name": display_name,
                     "expires_at_utc": expires_iso,
                     "inactivity_timeout_minutes": WEB_SESSION_INACTIVITY_MINUTES,
                 },

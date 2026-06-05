@@ -43,18 +43,23 @@
     <main id="mobileAppShell" class="mobile-shell hidden">
       <header class="mobile-topbar">
         <div class="mobile-topbar-row">
-          <img src="/icons/logo.png" alt="" class="mobile-logo" width="40" height="40" />
+          <img src="/icons/logo.png" alt="" class="mobile-logo" width="52" height="52" />
           <div class="mobile-brand">
             <h1>SYSTEM Infoboard</h1>
             <p id="mobileUserLine" class="mobile-user-line"></p>
           </div>
           <div class="mobile-icon-actions">
             <button id="refreshButton" type="button" class="icon-btn" title="Aktualisieren" aria-label="Aktualisieren">↻</button>
+            <button id="liveReportFeedToggleButton" type="button" class="icon-btn live-feed-toggle-btn" title="Live Meldungen einblenden" aria-pressed="true" aria-label="Live Meldungen einblenden">
+              <span class="live-feed-toggle-dot" aria-hidden="true"></span>
+            </button>
             <button id="pushToggleButton" type="button" class="icon-btn" title="Push" aria-label="Push">🔕</button>
             <button id="menuToggleButton" type="button" class="icon-btn" title="Menü" aria-label="Menü">⋮</button>
           </div>
         </div>
         <div id="headerMenu" class="header-menu hidden">
+          <button id="liveFeedDetailsMenuButton" type="button">Report-Details (Live)</button>
+          <button id="liveFeedShowMenuButton" type="button">Live Meldungen einblenden</button>
           <button id="testPushButton" type="button">Test Push senden</button>
           <button id="mobileLogoutButton" type="button">Abmelden</button>
         </div>
@@ -188,16 +193,22 @@
       </div>
     </div>
 
-    <div id="toast" class="toast hidden" role="status"></div>
-
-    <div
-      id="mobileFloatingLogo"
-      class="mobile-floating-logo"
-      title="Logo verschieben: gedrückt halten und ziehen"
-      aria-label="ANG Logo"
-    >
-      <img src="/icons/ANG.png" alt="ANG" width="72" height="40" draggable="false" />
+    <div id="liveReportFeed" class="live-report-feed hidden" aria-live="polite">
+      <header class="live-report-feed-head">
+        <div class="live-report-feed-drag-zone" data-live-feed-drag-handle title="Verschieben">
+          <span class="live-report-feed-grip" aria-hidden="true">⋮⋮</span>
+          <strong>Live</strong>
+          <span id="liveReportFeedCount" class="live-report-feed-count"></span>
+        </div>
+        <div class="live-report-feed-actions">
+          <button id="liveReportFeedMinimizeBtn" class="icon-btn live-report-feed-icon-btn" type="button" title="Einklappen" aria-expanded="true">−</button>
+          <button id="liveReportFeedCloseBtn" class="icon-btn live-report-feed-icon-btn" type="button" title="Ausblenden (Header-Toggle zum Einblenden)">✕</button>
+        </div>
+      </header>
+      <div id="liveReportFeedBody" class="live-report-feed-body"></div>
     </div>
+
+    <div id="toast" class="toast hidden" role="status"></div>
 
     <script src="/mobile-alerts.js?v=__ASSET_VERSION__"></script>
   </body>

@@ -347,6 +347,22 @@ body[data-theme="dark"] .panel-header .header-kpi-strip .header-chip-count {
   color: #f1f5f9 !important;
 }
 
+body[data-theme="dark"] .panel-header .header-kpi-group--alerts > .header-stat-chip-alert.header-stat-chip--alarm-active {
+  background: rgba(251, 146, 60, 0.16) !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-group--alerts > .header-stat-chip-critical.header-stat-chip--alarm-active {
+  background: rgba(248, 113, 113, 0.18) !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-group--alerts > .header-stat-chip-alert.header-stat-chip--alarm-active .header-chip-count {
+  color: #fb923c !important;
+}
+
+body[data-theme="dark"] .panel-header .header-kpi-group--alerts > .header-stat-chip-critical.header-stat-chip--alarm-active .header-chip-count {
+  color: #f87171 !important;
+}
+
 body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-pill {
   background: #0f172a !important;
   border-color: #334155 !important;
@@ -1084,7 +1100,9 @@ body[data-theme="dark"] .header-stat-chip {
 
 body[data-theme="dark"] .host-list article.host-item.selected,
 body[data-theme="dark"] .hosts-column .host-item.selected {
+  background: #172033 !important;
   border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35), var(--dr-card-shadow-hover) !important;
 }
 
 body[data-theme="dark"] .host-license-dot {
@@ -1104,6 +1122,11 @@ body[data-theme="dark"] #reportsView .overview-content {
   background: var(--dr-zone-bg);
 }
 
+body[data-theme="dark"] .report-chrome-bar {
+  background: var(--dr-surface) !important;
+  border-bottom-color: var(--dr-line) !important;
+}
+
 body[data-theme="dark"] .report-chrome-logo-wrap {
   background: var(--dr-surface) !important;
   border-color: var(--dr-line) !important;
@@ -1115,6 +1138,25 @@ body[data-theme="dark"] .report-chrome-customer {
 
 body[data-theme="dark"] .report-chrome-host {
   color: #9fb4cb;
+}
+
+body[data-theme="dark"] .report-chrome-title .sep {
+  color: #475569;
+}
+
+body[data-theme="dark"] .report-chrome-env.env-prod {
+  background: rgba(34, 197, 94, 0.14) !important;
+  border-color: rgba(74, 222, 128, 0.35) !important;
+  color: #4ade80 !important;
+}
+
+body[data-theme="dark"] .report-chrome-date {
+  color: #94a3b8;
+}
+
+body[data-theme="dark"] .reports-column .view-tabs-shell {
+  background: var(--dr-surface) !important;
+  border-bottom-color: var(--dr-line) !important;
 }
 
 body[data-theme="dark"] .reports-column .overview-sidebar,

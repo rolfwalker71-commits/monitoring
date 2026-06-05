@@ -60,6 +60,8 @@ async function mobileRefreshSession() {
     state.authenticated = true;
     if (data.username) {
       state.username = String(data.username || state.username);
+    }
+    if (data.username || data.display_name) {
       state.userDisplayName = resolveUserDisplayName(data);
       updateUserLine();
     }
@@ -1471,6 +1473,7 @@ async function loadInactiveHostsList(options = {}) {
 
 function mobileForceLogout(message) {
   stopMobileSessionKeepAlive();
+  stopMobileLiveReportPoll();
   state.authenticated = false;
   showAlertsHomeView();
   showLoginOverlay(true);
@@ -1580,13 +1583,21 @@ const state = {
 };
 
 const SKELETON_CARD_COUNT = 4;
-const FLOATING_LOGO_STORAGE_KEY = "monitoring.mobile.floatingLogo";
-const FLOATING_LOGO_WIDTH_PX = 80;
-const FLOATING_LOGO_HEIGHT_PX = 48;
-const FLOATING_LOGO_MARGIN_PX = 12;
 /** Gleiches Intervall wie Desktop: Session bleibt bei offener App aktiv (Server-Timeout default 30 min). */
 const MOBILE_SESSION_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
 const MOBILE_SESSION_LOGIN_GRACE_MS = 20000;
+const LIVE_REPORT_FEED_MAX_ITEMS = 5;
+const LIVE_REPORT_FEED_POSITION_KEY = "monitoring.liveReportFeedPosition";
+const LIVE_REPORT_FEED_ENABLED_KEY = "monitoring.liveReportFeedEnabled";
+const LIVE_REPORT_POLL_INTERVAL_MS = 25000;
+let liveReportFeedItems = [];
+let liveReportFeedMinimized = false;
+let liveReportFeedEnabled = true;
+let liveReportFeedWired = false;
+let liveReportFeedDragState = null;
+let liveReportPollTimerId = null;
+let liveReportPollInFlight = false;
+let liveReportPollCursorId = 0;
 
 let serviceWorkerRegistrationPromise = null;
 let toastTimer = null;
@@ -1659,7 +1670,7 @@ function updateUserLine() {
     line.textContent = "";
     return;
   }
-  const label = state.userDisplayName || state.username;
+  const label = String(state.userDisplayName || "").trim() || String(state.username || "").trim();
   line.innerHTML = '<span class="mobile-user-badge">' + mobileEsc(label) + "</span>";
 }
 
@@ -2705,6 +2716,7 @@ async function submitLogin() {
     showLoginOverlay(false);
     setLoginStatus("");
     startMobileSessionKeepAlive();
+    initMobileLiveReportFeed();
     await loadMobileSapB1VersionMap();
     await refreshPushState();
     await refreshMobileData();
@@ -2713,117 +2725,6 @@ async function submitLogin() {
     showLoginOverlay(true);
     setLoginStatus(error?.message || "Login fehlgeschlagen", true);
   }
-}
-
-function readFloatingLogoPosition() {
-  try {
-    const raw = window.localStorage.getItem(FLOATING_LOGO_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    const left = Number(parsed?.left);
-    const top = Number(parsed?.top);
-    if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
-    return { left, top };
-  } catch (_err) {
-    return null;
-  }
-}
-
-function saveFloatingLogoPosition(left, top) {
-  try {
-    window.localStorage.setItem(
-      FLOATING_LOGO_STORAGE_KEY,
-      JSON.stringify({ left: Math.round(left), top: Math.round(top) })
-    );
-  } catch (_err) {
-    // Ignore storage failures.
-  }
-}
-
-function defaultFloatingLogoPosition() {
-  const safeBottom = parseFloat(
-    getComputedStyle(document.documentElement).getPropertyValue("--safe-bottom") || "0"
-  ) || 0;
-  return {
-    left: window.innerWidth - FLOATING_LOGO_WIDTH_PX - FLOATING_LOGO_MARGIN_PX,
-    top: window.innerHeight - FLOATING_LOGO_HEIGHT_PX - FLOATING_LOGO_MARGIN_PX - safeBottom,
-  };
-}
-
-function clampFloatingLogoPosition(left, top) {
-  const maxLeft = Math.max(
-    FLOATING_LOGO_MARGIN_PX,
-    window.innerWidth - FLOATING_LOGO_WIDTH_PX - FLOATING_LOGO_MARGIN_PX
-  );
-  const maxTop = Math.max(
-    FLOATING_LOGO_MARGIN_PX,
-    window.innerHeight - FLOATING_LOGO_HEIGHT_PX - FLOATING_LOGO_MARGIN_PX
-  );
-  return {
-    left: Math.min(maxLeft, Math.max(FLOATING_LOGO_MARGIN_PX, left)),
-    top: Math.min(maxTop, Math.max(FLOATING_LOGO_MARGIN_PX, top)),
-  };
-}
-
-function applyFloatingLogoPosition(el, left, top, persist) {
-  const clamped = clampFloatingLogoPosition(left, top);
-  el.style.left = clamped.left + "px";
-  el.style.top = clamped.top + "px";
-  el.style.right = "auto";
-  el.style.bottom = "auto";
-  if (persist) {
-    saveFloatingLogoPosition(clamped.left, clamped.top);
-  }
-  return clamped;
-}
-
-function wireFloatingLogo() {
-  const el = document.getElementById("mobileFloatingLogo");
-  if (!el) return;
-
-  const saved = readFloatingLogoPosition();
-  const initial = saved || defaultFloatingLogoPosition();
-  applyFloatingLogoPosition(el, initial.left, initial.top, false);
-
-  let dragActive = false;
-  let dragOffsetX = 0;
-  let dragOffsetY = 0;
-
-  const endDrag = (event) => {
-    if (!dragActive) return;
-    dragActive = false;
-    el.classList.remove("is-dragging");
-    if (event?.pointerId != null && el.hasPointerCapture(event.pointerId)) {
-      el.releasePointerCapture(event.pointerId);
-    }
-    const rect = el.getBoundingClientRect();
-    applyFloatingLogoPosition(el, rect.left, rect.top, true);
-  };
-
-  el.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return;
-    dragActive = true;
-    el.classList.add("is-dragging");
-    const rect = el.getBoundingClientRect();
-    dragOffsetX = event.clientX - rect.left;
-    dragOffsetY = event.clientY - rect.top;
-    el.setPointerCapture(event.pointerId);
-    event.preventDefault();
-  });
-
-  el.addEventListener("pointermove", (event) => {
-    if (!dragActive) return;
-    applyFloatingLogoPosition(el, event.clientX - dragOffsetX, event.clientY - dragOffsetY, false);
-    event.preventDefault();
-  });
-
-  el.addEventListener("pointerup", endDrag);
-  el.addEventListener("pointercancel", endDrag);
-
-  window.addEventListener("resize", () => {
-    const rect = el.getBoundingClientRect();
-    applyFloatingLogoPosition(el, rect.left, rect.top, true);
-  });
 }
 
 function wirePullToRefresh() {
@@ -2848,6 +2749,509 @@ function wirePullToRefresh() {
     },
     { passive: true }
   );
+}
+
+function mobileFormatNumber(value, digits = 0) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "-";
+  return num.toLocaleString("de-CH", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+function formatHostLastReportClockMobile(reportUtcValue) {
+  const raw = String(reportUtcValue || "").trim();
+  if (!raw || raw === "-") {
+    return {
+      label: "--:--",
+      title: "Noch kein Report empfangen",
+    };
+  }
+  const parsed = new Date(raw.includes("T") ? raw : raw.replace(" ", "T") + (raw.endsWith("Z") ? "" : "Z"));
+  if (Number.isNaN(parsed.getTime())) {
+    return {
+      label: "--:--",
+      title: "Ungültiger Zeitstempel: " + raw,
+    };
+  }
+  return {
+    label: parsed.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" }),
+    title: "Letzter Report: " + formatUtcPlus2Mobile(raw),
+  };
+}
+
+function isMobileLiveReportEventVisible(event) {
+  return Boolean(event && !event.is_hidden && String(event.hostname || "").trim());
+}
+
+function resolveMobileLiveReportCustomerLogoUrl(event) {
+  return String(event?.customer_logo_url || "").trim();
+}
+
+function buildMobileLiveReportFeedPreviewFromEvent(event) {
+  const deliveryMode = String(event?.delivery_mode || "live").toLowerCase();
+  const deliveryLabel = deliveryMode === "delayed" ? "DELAYED" : "LIVE";
+  const deliveryClass = deliveryMode === "delayed" ? "delivery-chip delayed" : "delivery-chip live";
+  const customerName = String(event?.customer_name || "Kein Kunde").trim() || "Kein Kunde";
+  const hostname = String(event?.hostname || "-");
+  const hostIdentity = String(event?.host_uid || "").trim() || hostname;
+  const customerLogoUrl = resolveMobileLiveReportCustomerLogoUrl(event);
+  const designation = String(event?.display_name || hostname).trim() || hostname;
+  const shortHostname = hostname.split(".")[0] || hostname;
+  const ip = String(event?.std_nic_ip || event?.primary_ip || "-");
+  const reportTs = String(event?.received_at_utc || "");
+  const clock = formatHostLastReportClockMobile(reportTs);
+  const metrics = [];
+  if (Number.isFinite(Number(event?.cpu_usage_percent))) {
+    metrics.push("CPU " + mobileFormatNumber(event.cpu_usage_percent, 1) + "%");
+  }
+  if (Number.isFinite(Number(event?.memory_used_percent))) {
+    metrics.push("RAM " + mobileFormatNumber(event.memory_used_percent, 1) + "%");
+  }
+  return {
+    id: hostIdentity + "|" + String(event?.report_id || reportTs || Date.now()),
+    hostIdentity,
+    hostname,
+    customerName,
+    customerLogoUrl,
+    designation,
+    shortHostname,
+    ip,
+    clockLabel: clock.label,
+    clockTitle: clock.title,
+    metricsText: metrics.join(" · "),
+    deliveryMode,
+    deliveryLabel,
+    deliveryClass,
+    receivedAtUtc: reportTs,
+  };
+}
+
+function hostRecordFromLiveFeedItem(item) {
+  return {
+    hostname: item.hostname,
+    host_uid: item.hostIdentity,
+    display_name: item.designation,
+    customer_name: item.customerName,
+  };
+}
+
+function openHostInsightFromLiveFeedItem(item) {
+  if (!item) return;
+  void openHostInsightCarousel(hostRecordFromLiveFeedItem(item), "live");
+}
+
+function loadMobileLiveReportFeedEnabled() {
+  try {
+    const raw = window.localStorage.getItem(LIVE_REPORT_FEED_ENABLED_KEY);
+    if (raw === null) return true;
+    return raw !== "0" && raw !== "false";
+  } catch (_error) {
+    return true;
+  }
+}
+
+function persistMobileLiveReportFeedEnabled(enabled) {
+  try {
+    window.localStorage.setItem(LIVE_REPORT_FEED_ENABLED_KEY, enabled ? "1" : "0");
+  } catch (_error) {
+    // Ignore storage failures.
+  }
+}
+
+function updateMobileLiveReportFeedToggleUi() {
+  const button = document.getElementById("liveReportFeedToggleButton");
+  if (!button) return;
+  button.setAttribute("aria-pressed", liveReportFeedEnabled ? "true" : "false");
+  const label = liveReportFeedEnabled ? "Live Meldungen ausblenden" : "Live Meldungen einblenden";
+  button.title = label;
+  button.setAttribute("aria-label", label);
+}
+
+function setMobileLiveReportFeedEnabled(enabled) {
+  liveReportFeedEnabled = Boolean(enabled);
+  persistMobileLiveReportFeedEnabled(liveReportFeedEnabled);
+  updateMobileLiveReportFeedToggleUi();
+  renderMobileLiveReportFeed();
+}
+
+function toggleMobileLiveReportFeedEnabled() {
+  setMobileLiveReportFeedEnabled(!liveReportFeedEnabled);
+}
+
+function showMobileLiveReportFeedPanelFromMenu() {
+  document.getElementById("headerMenu")?.classList.add("hidden");
+  setMobileLiveReportFeedEnabled(true);
+}
+
+function openLatestMobileLiveReportDetailsFromMenu() {
+  document.getElementById("headerMenu")?.classList.add("hidden");
+  const latest = liveReportFeedItems[0];
+  if (!latest) {
+    showToast("Noch keine Live-Meldungen.", false);
+    return;
+  }
+  openHostInsightFromLiveFeedItem(latest);
+}
+
+function buildMobileLiveReportFeedItemInnerHtml(item) {
+  const statsHtml = item.metricsText
+    ? '<span class="live-report-feed-stats">' + mobileEsc(item.metricsText) + "</span>"
+    : '<span class="live-report-feed-stats live-report-feed-stats--empty" aria-hidden="true"></span>';
+  const customerLogoHtml = item.customerLogoUrl
+    ? '<span class="live-report-feed-customer-logo-wrap" aria-hidden="true">' +
+      '<img src="' + mobileEsc(item.customerLogoUrl) + '" alt="" class="live-report-feed-customer-logo" loading="lazy" decoding="async" onerror="this.closest(\'.live-report-feed-customer-logo-wrap\').style.display=\'none\'">' +
+      "</span>"
+    : "";
+  return (
+    '<div class="live-report-feed-item-head">' +
+      '<span class="live-report-feed-customer-row">' +
+        customerLogoHtml +
+        '<span class="live-report-feed-customer" title="' + mobileEsc(item.customerName) + '">' + mobileEsc(item.customerName) + "</span>" +
+      "</span>" +
+      '<time class="live-report-feed-time" datetime="' + mobileEsc(item.receivedAtUtc) + '" title="' + mobileEsc(item.clockTitle) + '">' + mobileEsc(item.clockLabel) + "</time>" +
+    "</div>" +
+    '<p class="live-report-feed-designation" title="' + mobileEsc(item.designation) + '">' + mobileEsc(item.designation) + "</p>" +
+    '<p class="live-report-feed-hostline">' +
+      '<span class="live-report-feed-hostname" title="' + mobileEsc(item.shortHostname) + '">' + mobileEsc(item.shortHostname) + "</span>" +
+      '<span class="live-report-feed-sep" aria-hidden="true">·</span>' +
+      '<span class="live-report-feed-ip" title="' + mobileEsc(item.ip) + '">' + mobileEsc(item.ip) + "</span>" +
+    "</p>" +
+    '<div class="live-report-feed-item-foot">' +
+      statsHtml +
+      '<span class="' + mobileEsc(item.deliveryClass) + '">' + mobileEsc(item.deliveryLabel) + "</span>" +
+    "</div>"
+  );
+}
+
+function createMobileLiveReportFeedItemElement(item, extraClasses = []) {
+  const button = document.createElement("button");
+  button.type = "button";
+  const classes = ["live-report-feed-item"];
+  if (item.isNew) classes.push("is-new");
+  extraClasses.forEach((extraClass) => {
+    if (extraClass) classes.push(extraClass);
+  });
+  button.className = classes.join(" ");
+  button.dataset.liveFeedId = item.id;
+  button.dataset.liveFeedHost = item.hostname;
+  button.dataset.liveFeedUid = item.hostIdentity;
+  button.innerHTML = buildMobileLiveReportFeedItemInnerHtml(item);
+  return button;
+}
+
+function renderMobileLiveReportFeedStatic(body) {
+  body.innerHTML = liveReportFeedItems
+    .map((item) => {
+      const extraClass = item.isNew ? " is-new" : "";
+      return (
+        '<button type="button" class="live-report-feed-item' + extraClass + '" data-live-feed-id="' + mobileEsc(item.id) + '" data-live-feed-host="' + mobileEsc(item.hostname) + '" data-live-feed-uid="' + mobileEsc(item.hostIdentity) + '">' +
+        buildMobileLiveReportFeedItemInnerHtml(item) +
+        "</button>"
+      );
+    })
+    .join("");
+  liveReportFeedItems.forEach((item) => {
+    item.isNew = false;
+  });
+}
+
+function animateMobileLiveReportFeedDom(body) {
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (prefersReducedMotion) {
+    renderMobileLiveReportFeedStatic(body);
+    return;
+  }
+
+  const previousRects = new Map();
+  body.querySelectorAll(".live-report-feed-item").forEach((element) => {
+    const itemId = String(element.dataset.liveFeedId || "");
+    if (itemId) previousRects.set(itemId, element.getBoundingClientRect());
+  });
+
+  const desiredIds = liveReportFeedItems.map((item) => item.id);
+  const existingElements = new Map();
+  body.querySelectorAll(".live-report-feed-item").forEach((element) => {
+    const itemId = String(element.dataset.liveFeedId || "");
+    if (itemId) existingElements.set(itemId, element);
+  });
+
+  for (const [itemId, element] of existingElements.entries()) {
+    if (!desiredIds.includes(itemId)) element.remove();
+  }
+
+  body.classList.add("is-animating");
+  for (let index = 0; index < liveReportFeedItems.length; index += 1) {
+    const item = liveReportFeedItems[index];
+    let element = existingElements.get(item.id);
+    const extraClasses = [];
+    if (!element) {
+      if (item.isNew) extraClasses.push("is-entering");
+      element = createMobileLiveReportFeedItemElement(item, extraClasses);
+      body.insertBefore(element, body.children[index] || null);
+      continue;
+    }
+    if (item.isNew) element.classList.add("is-new");
+    if (body.children[index] !== element) {
+      body.insertBefore(element, body.children[index] || null);
+    }
+  }
+
+  window.requestAnimationFrame(() => {
+    body.querySelectorAll(".live-report-feed-item:not(.is-exiting)").forEach((element) => {
+      const itemId = String(element.dataset.liveFeedId || "");
+      const previousRect = previousRects.get(itemId);
+      if (!previousRect) return;
+      const nextRect = element.getBoundingClientRect();
+      const deltaY = previousRect.top - nextRect.top;
+      if (Math.abs(deltaY) < 1) return;
+      element.style.transform = "translateY(" + deltaY + "px)";
+      element.style.transition = "none";
+      window.requestAnimationFrame(() => {
+        element.style.transition = "transform 0.38s cubic-bezier(0.22, 1, 0.36, 1)";
+        element.style.transform = "";
+      });
+    });
+
+    body.querySelectorAll(".live-report-feed-item.is-entering").forEach((element) => {
+      window.requestAnimationFrame(() => element.classList.remove("is-entering"));
+    });
+
+    window.setTimeout(() => {
+      body.classList.remove("is-animating");
+      body.querySelectorAll(".live-report-feed-item").forEach((element) => {
+        element.style.transition = "";
+        element.style.transform = "";
+      });
+    }, 420);
+  });
+
+  liveReportFeedItems.forEach((item) => {
+    item.isNew = false;
+  });
+}
+
+function renderMobileLiveReportFeed(options = {}) {
+  wireMobileLiveReportFeed();
+  const panel = document.getElementById("liveReportFeed");
+  const body = document.getElementById("liveReportFeedBody");
+  const countEl = document.getElementById("liveReportFeedCount");
+  if (!panel || !body) return;
+  if (!liveReportFeedEnabled || liveReportFeedItems.length === 0) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  panel.classList.toggle("is-minimized", liveReportFeedMinimized);
+  if (countEl) countEl.textContent = String(liveReportFeedItems.length);
+
+  const shouldAnimate = Boolean(options.animate) && body.childElementCount > 0;
+  if (shouldAnimate) {
+    animateMobileLiveReportFeedDom(body);
+    return;
+  }
+  renderMobileLiveReportFeedStatic(body);
+}
+
+function applyMobileLiveReportFeedPosition() {
+  const panel = document.getElementById("liveReportFeed");
+  if (!panel) return;
+  try {
+    const raw = window.localStorage.getItem(LIVE_REPORT_FEED_POSITION_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    const left = Number(parsed?.left);
+    const top = Number(parsed?.top);
+    if (!Number.isFinite(left) || !Number.isFinite(top)) return;
+    panel.style.left = left + "px";
+    panel.style.top = top + "px";
+    panel.style.transform = "none";
+  } catch (_error) {
+    // Ignore invalid persisted position.
+  }
+}
+
+function persistMobileLiveReportFeedPosition(panel) {
+  if (!panel) return;
+  const rect = panel.getBoundingClientRect();
+  try {
+    window.localStorage.setItem(
+      LIVE_REPORT_FEED_POSITION_KEY,
+      JSON.stringify({ left: Math.round(rect.left), top: Math.round(rect.top) })
+    );
+  } catch (_error) {
+    // Ignore storage failures.
+  }
+}
+
+function enqueueMobileLiveReportFeedFromEvents(events) {
+  if (!Array.isArray(events) || events.length === 0) return;
+  const sortedEvents = [...events].sort(
+    (left, right) => (Number(right?.report_id) || 0) - (Number(left?.report_id) || 0)
+  );
+  for (const event of sortedEvents) {
+    const preview = buildMobileLiveReportFeedPreviewFromEvent(event);
+    preview.isNew = true;
+    liveReportFeedItems = [preview, ...liveReportFeedItems.filter((item) => item.id !== preview.id)];
+  }
+  liveReportFeedItems = liveReportFeedItems.slice(0, LIVE_REPORT_FEED_MAX_ITEMS);
+  renderMobileLiveReportFeed({ animate: true });
+}
+
+function stopMobileLiveReportPoll() {
+  if (liveReportPollTimerId !== null) {
+    window.clearInterval(liveReportPollTimerId);
+    liveReportPollTimerId = null;
+  }
+  liveReportPollInFlight = false;
+}
+
+function resetMobileLiveReportFeed() {
+  stopMobileLiveReportPoll();
+  liveReportFeedItems = [];
+  liveReportPollCursorId = 0;
+  renderMobileLiveReportFeed();
+}
+
+function startMobileLiveReportPoll() {
+  stopMobileLiveReportPoll();
+  if (!state.authenticated) return;
+  void pollMobileLiveReportEvents();
+  liveReportPollTimerId = window.setInterval(() => {
+    void pollMobileLiveReportEvents();
+  }, LIVE_REPORT_POLL_INTERVAL_MS);
+}
+
+async function pollMobileLiveReportEvents() {
+  if (!state.authenticated || liveReportPollInFlight) return;
+  liveReportPollInFlight = true;
+  try {
+    const query =
+      liveReportPollCursorId > 0
+        ? "since_id=" + encodeURIComponent(String(liveReportPollCursorId)) + "&limit=20"
+        : "limit=20";
+    const response = await fetch("/api/v1/live-report-events?" + query, {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    if (response.status === 401) {
+      stopMobileLiveReportPoll();
+      return;
+    }
+    if (!response.ok) return;
+    const data = await response.json().catch(() => ({}));
+    const cursorId = Number(data?.cursor_id);
+    if (Number.isFinite(cursorId) && cursorId >= 0) {
+      liveReportPollCursorId = cursorId;
+    }
+    const events = Array.isArray(data?.events) ? data.events : [];
+    const visibleEvents = events.filter(isMobileLiveReportEventVisible);
+    if (visibleEvents.length > 0) {
+      enqueueMobileLiveReportFeedFromEvents(visibleEvents);
+    }
+  } catch (_error) {
+    // Keep polling on transient network failures.
+  } finally {
+    liveReportPollInFlight = false;
+  }
+}
+
+function wireMobileLiveReportFeed() {
+  if (liveReportFeedWired) return;
+  const panel = document.getElementById("liveReportFeed");
+  const body = document.getElementById("liveReportFeedBody");
+  const minimizeBtn = document.getElementById("liveReportFeedMinimizeBtn");
+  const closeBtn = document.getElementById("liveReportFeedCloseBtn");
+  const dragHandle = panel ? panel.querySelector("[data-live-feed-drag-handle]") : null;
+  if (!panel || !body || !dragHandle) return;
+  liveReportFeedWired = true;
+
+  applyMobileLiveReportFeedPosition();
+
+  if (minimizeBtn) {
+    minimizeBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      liveReportFeedMinimized = !liveReportFeedMinimized;
+      panel.classList.toggle("is-minimized", liveReportFeedMinimized);
+      minimizeBtn.setAttribute("aria-expanded", liveReportFeedMinimized ? "false" : "true");
+      minimizeBtn.textContent = liveReportFeedMinimized ? "+" : "−";
+      minimizeBtn.title = liveReportFeedMinimized ? "Ausklappen" : "Einklappen";
+    });
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setMobileLiveReportFeedEnabled(false);
+    });
+  }
+
+  body.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest(".live-report-feed-item") : null;
+    if (!button) return;
+    const itemId = String(button.getAttribute("data-live-feed-id") || "").trim();
+    const item = liveReportFeedItems.find((entry) => entry.id === itemId);
+    if (item) {
+      openHostInsightFromLiveFeedItem(item);
+      return;
+    }
+    const hostname = String(button.getAttribute("data-live-feed-host") || "").trim();
+    const hostUid = String(button.getAttribute("data-live-feed-uid") || "").trim();
+    if (!hostname) return;
+    openHostInsightFromLiveFeedItem({
+      hostname,
+      hostIdentity: hostUid || hostname,
+      designation: hostname,
+      customerName: "",
+    });
+  });
+
+  const onDragPointerMove = (event) => {
+    if (!liveReportFeedDragState || liveReportFeedDragState.pointerId !== event.pointerId) return;
+    const nextLeft = Math.max(8, Math.min(window.innerWidth - panel.offsetWidth - 8, event.clientX - liveReportFeedDragState.offsetX));
+    const nextTop = Math.max(8, Math.min(window.innerHeight - 48, event.clientY - liveReportFeedDragState.offsetY));
+    panel.style.left = nextLeft + "px";
+    panel.style.top = nextTop + "px";
+  };
+
+  const endDrag = (event) => {
+    if (!liveReportFeedDragState || liveReportFeedDragState.pointerId !== event.pointerId) return;
+    liveReportFeedDragState = null;
+    panel.classList.remove("is-dragging");
+    persistMobileLiveReportFeedPosition(panel);
+    document.removeEventListener("pointermove", onDragPointerMove);
+    document.removeEventListener("pointerup", endDrag);
+    document.removeEventListener("pointercancel", endDrag);
+  };
+
+  dragHandle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target && target.closest("button")) return;
+    event.preventDefault();
+    const rect = panel.getBoundingClientRect();
+    panel.style.left = rect.left + "px";
+    panel.style.top = rect.top + "px";
+    panel.style.transform = "none";
+    liveReportFeedDragState = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+    };
+    panel.classList.add("is-dragging");
+    document.addEventListener("pointermove", onDragPointerMove);
+    document.addEventListener("pointerup", endDrag);
+    document.addEventListener("pointercancel", endDrag);
+  });
+}
+
+function initMobileLiveReportFeed() {
+  liveReportFeedEnabled = loadMobileLiveReportFeedEnabled();
+  updateMobileLiveReportFeedToggleUi();
+  wireMobileLiveReportFeed();
+  renderMobileLiveReportFeed();
+  startMobileLiveReportPoll();
 }
 
 function wire() {
@@ -2937,6 +3341,10 @@ function wire() {
 
   renderCountryFilterChips();
 
+  document.getElementById("liveReportFeedToggleButton")?.addEventListener("click", () => toggleMobileLiveReportFeedEnabled());
+  document.getElementById("liveFeedShowMenuButton")?.addEventListener("click", () => showMobileLiveReportFeedPanelFromMenu());
+  document.getElementById("liveFeedDetailsMenuButton")?.addEventListener("click", () => openLatestMobileLiveReportDetailsFromMenu());
+
   document.getElementById("pushToggleButton")?.addEventListener("click", () => void togglePush());
   document.getElementById("testPushButton")?.addEventListener("click", () => void sendTestPush());
 
@@ -2947,6 +3355,7 @@ function wire() {
   document.getElementById("mobileLogoutButton")?.addEventListener("click", async () => {
     await mobileLogout();
     mobileSessionEstablishedAtMs = 0;
+    resetMobileLiveReportFeed();
     state.authenticated = false;
     state.username = "";
     state.userDisplayName = "";
@@ -3014,7 +3423,6 @@ function wire() {
   }
 
   wirePullToRefresh();
-  wireFloatingLogo();
   syncSeverityChips();
 
   document.addEventListener("visibilitychange", () => {
@@ -3088,6 +3496,7 @@ async function init() {
     if (state.authenticated) {
       mobileSessionEstablishedAtMs = Date.now();
       startMobileSessionKeepAlive();
+      initMobileLiveReportFeed();
       await loadMobileSapB1VersionMap();
       await refreshPushState();
       await refreshMobileData();
