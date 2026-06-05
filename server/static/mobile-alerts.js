@@ -2253,18 +2253,25 @@ function buildMountpointLine(item) {
 
 let html2canvasLoadPromise = null;
 
+function resolveHtml2CanvasLib() {
+  const lib = window.html2canvas;
+  if (typeof lib === "function") return lib;
+  if (lib && typeof lib.default === "function") return lib.default;
+  return null;
+}
+
 function loadHtml2Canvas() {
-  if (window.html2canvas) {
-    return Promise.resolve(window.html2canvas);
-  }
+  const existing = resolveHtml2CanvasLib();
+  if (existing) return Promise.resolve(existing);
   if (!html2canvasLoadPromise) {
     html2canvasLoadPromise = new Promise((resolve, reject) => {
       const script = document.createElement("script");
       script.src = "/vendor/html2canvas.min.js";
       script.async = true;
       script.onload = () => {
-        if (window.html2canvas) {
-          resolve(window.html2canvas);
+        const lib = resolveHtml2CanvasLib();
+        if (lib) {
+          resolve(lib);
           return;
         }
         reject(new Error("html2canvas nicht verfügbar"));
@@ -2274,6 +2281,29 @@ function loadHtml2Canvas() {
     });
   }
   return html2canvasLoadPromise;
+}
+
+async function withDetachedPageStylesheets(run) {
+  const linkSnapshots = [];
+  const styleSnapshots = [];
+  document.querySelectorAll('link[rel="stylesheet"]').forEach((link) => {
+    linkSnapshots.push({ link, parent: link.parentNode, next: link.nextSibling });
+    link.remove();
+  });
+  document.querySelectorAll("style").forEach((style) => {
+    styleSnapshots.push({ style, parent: style.parentNode, next: style.nextSibling });
+    style.remove();
+  });
+  try {
+    return await run();
+  } finally {
+    linkSnapshots.forEach(({ link, parent, next }) => {
+      if (parent) parent.insertBefore(link, next);
+    });
+    styleSnapshots.forEach(({ style, parent, next }) => {
+      if (parent) parent.insertBefore(style, next);
+    });
+  }
 }
 
 function syncClonedImages(source, clone) {
@@ -2457,16 +2487,21 @@ async function shareAlertCard(card) {
     captureRoot.innerHTML = "";
     captureRoot.appendChild(wrapper);
     await waitForShareImages(wrapper);
+    inlineHtml2CanvasSafeStyles(wrapper, wrapper);
+    const captureCard = wrapper.querySelector(".alert-card");
+    if (captureCard) addShareCapturePseudoBars(captureCard, card);
 
-    const canvas = await html2canvas(wrapper, {
-      backgroundColor: "#ffffff",
-      scale: Math.min(2, Math.max(1.5, window.devicePixelRatio || 1.5)),
-      useCORS: true,
-      logging: false,
-      onclone: (clonedDoc, clonedWrapper) => {
-        prepareHtml2CanvasClone(clonedDoc, wrapper, clonedWrapper, card);
-      },
-    });
+    const canvas = await withDetachedPageStylesheets(() =>
+      html2canvas(wrapper, {
+        backgroundColor: "#ffffff",
+        scale: Math.min(2, Math.max(1.5, window.devicePixelRatio || 1.5)),
+        useCORS: true,
+        logging: false,
+        onclone: (clonedDoc, clonedWrapper) => {
+          prepareHtml2CanvasClone(clonedDoc, wrapper, clonedWrapper, card);
+        },
+      })
+    );
     captureRoot.innerHTML = "";
 
     const blob = await new Promise((resolve, reject) => {
