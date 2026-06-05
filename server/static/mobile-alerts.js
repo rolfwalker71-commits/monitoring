@@ -2292,6 +2292,82 @@ function syncClonedImages(source, clone) {
   });
 }
 
+const HTML2CANVAS_INLINE_PROPS = [
+  "display", "position", "top", "right", "bottom", "left", "z-index", "float", "clear",
+  "width", "height", "min-width", "max-width", "min-height", "max-height",
+  "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
+  "padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
+  "border", "border-top", "border-right", "border-bottom", "border-left",
+  "border-width", "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+  "border-style", "border-top-style", "border-right-style", "border-bottom-style", "border-left-style",
+  "border-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
+  "border-radius", "border-top-left-radius", "border-top-right-radius", "border-bottom-left-radius", "border-bottom-right-radius",
+  "background", "background-color", "background-image", "background-size", "background-position", "background-repeat",
+  "color", "font-family", "font-size", "font-weight", "font-style", "line-height", "letter-spacing",
+  "text-align", "text-transform", "text-decoration", "text-decoration-color", "white-space", "word-break",
+  "flex", "flex-grow", "flex-shrink", "flex-basis", "flex-direction", "flex-wrap", "align-items", "align-self", "justify-content", "gap", "grid-template-columns",
+  "opacity", "overflow", "overflow-x", "overflow-y", "box-shadow", "outline", "outline-color",
+  "transform", "object-fit", "vertical-align",
+];
+
+function removeHtml2CanvasBlockingStyles(clonedDoc) {
+  if (!clonedDoc) return;
+  clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach((node) => node.remove());
+  clonedDoc.querySelectorAll("style").forEach((node) => node.remove());
+}
+
+function inlineHtml2CanvasSafeStyles(sourceRoot, cloneRoot) {
+  if (!sourceRoot || !cloneRoot) return;
+  const sourceNodes = [sourceRoot, ...sourceRoot.querySelectorAll("*")];
+  const cloneNodes = [cloneRoot, ...cloneRoot.querySelectorAll("*")];
+  cloneNodes.forEach((cloneEl, index) => {
+    const sourceEl = sourceNodes[index];
+    if (!(sourceEl instanceof Element) || !(cloneEl instanceof Element)) return;
+    const computed = window.getComputedStyle(sourceEl);
+    HTML2CANVAS_INLINE_PROPS.forEach((prop) => {
+      const value = computed.getPropertyValue(prop);
+      if (value) cloneEl.style.setProperty(prop, value);
+    });
+  });
+}
+
+function addShareCapturePseudoBars(cardClone, sourceCard) {
+  if (!cardClone || !sourceCard) return;
+  const beforeStyle = window.getComputedStyle(sourceCard, "::before");
+  if (beforeStyle.content && beforeStyle.content !== "none") {
+    const bar = document.createElement("span");
+    bar.setAttribute("aria-hidden", "true");
+    bar.style.cssText =
+      "position:absolute;left:0;top:0;bottom:0;width:" +
+      beforeStyle.width +
+      ";background:" +
+      beforeStyle.backgroundColor +
+      ";pointer-events:none;z-index:0;";
+    cardClone.insertBefore(bar, cardClone.firstChild);
+  }
+  const afterStyle = window.getComputedStyle(sourceCard, "::after");
+  if (afterStyle.content && afterStyle.content !== "none") {
+    const bar = document.createElement("span");
+    bar.setAttribute("aria-hidden", "true");
+    bar.style.cssText =
+      "position:absolute;right:0;top:0;bottom:0;width:" +
+      afterStyle.width +
+      ";background:" +
+      afterStyle.backgroundColor +
+      ";pointer-events:none;z-index:0;";
+    cardClone.appendChild(bar);
+  }
+}
+
+function prepareHtml2CanvasClone(clonedDoc, sourceWrapper, clonedWrapper, sourceCard) {
+  removeHtml2CanvasBlockingStyles(clonedDoc);
+  inlineHtml2CanvasSafeStyles(sourceWrapper, clonedWrapper);
+  const cloneCard = clonedWrapper.querySelector(".alert-card");
+  if (cloneCard && sourceCard) {
+    addShareCapturePseudoBars(cloneCard, sourceCard);
+  }
+}
+
 function waitForShareImages(root, timeoutMs = 4500) {
   const imgs = Array.from(root.querySelectorAll("img")).filter((img) => String(img.src || "").trim());
   if (!imgs.length) return Promise.resolve();
@@ -2387,6 +2463,9 @@ async function shareAlertCard(card) {
       scale: Math.min(2, Math.max(1.5, window.devicePixelRatio || 1.5)),
       useCORS: true,
       logging: false,
+      onclone: (clonedDoc, clonedWrapper) => {
+        prepareHtml2CanvasClone(clonedDoc, wrapper, clonedWrapper, card);
+      },
     });
     captureRoot.innerHTML = "";
 
