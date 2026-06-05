@@ -15036,6 +15036,7 @@ def collect_live_report_events(conn: sqlite3.Connection, since_report_id: int = 
                 "delivery_mode": delivery_mode,
                 "display_name": effective_display_name(payload, display_override, hostname),
                 "customer_name": str(host_settings.get("customer_name", "") or "").strip(),
+                "customer_logo_url": str(host_settings.get("customer_logo_url", "") or "").strip(),
                 "country_code": country_code,
                 "is_hidden": bool(host_settings.get("is_hidden", False)),
                 "cpu_usage_percent": _optional_metric_float(cpu.get("usage_percent")),

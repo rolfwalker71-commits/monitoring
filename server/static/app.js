@@ -99,10 +99,11 @@ let headerKpiWidthSyncFrameId = null;
 let headerKpiTrendPreviousValues = null;
 const LIVE_REPORT_FEED_MAX_ITEMS = 8;
 const LIVE_REPORT_FEED_POSITION_KEY = "monitoring.liveReportFeedPosition";
+const LIVE_REPORT_FEED_ENABLED_KEY = "monitoring.liveReportFeedEnabled";
 const LIVE_REPORT_POLL_INTERVAL_MS = 25000;
 let liveReportFeedItems = [];
 let liveReportFeedMinimized = false;
-let liveReportFeedDismissed = false;
+let liveReportFeedEnabled = true;
 let liveReportFeedWired = false;
 let liveReportFeedDragState = null;
 let liveReportPollTimerId = null;
@@ -3458,7 +3459,6 @@ async function logoutWebClient() {
   state.authDisplayName = "";
   state.sessionExpiresAtUtc = "";
   liveReportFeedItems = [];
-  liveReportFeedDismissed = false;
   liveReportPollCursorId = 0;
   stopLiveReportPoll();
   renderLiveReportFeed();
@@ -12736,6 +12736,20 @@ function isLiveReportEventVisible(event) {
   return selectedCountries.has(host.country_code);
 }
 
+function resolveLiveReportCustomerLogoUrl(event, hostIdentity, hostname) {
+  const fromEvent = asText(event?.customer_logo_url, "").trim();
+  if (fromEvent) {
+    return fromEvent;
+  }
+  const hostRecord = Array.isArray(state.hosts)
+    ? state.hosts.find((host) => {
+      const identity = resolveHostIdentity(host);
+      return identity === hostIdentity || asText(host.hostname, "") === hostname;
+    })
+    : null;
+  return asText(hostRecord?.customer_logo_url, "").trim();
+}
+
 function buildLiveReportFeedPreviewFromEvent(event) {
   const deliveryMode = asText(event?.delivery_mode, "live").toLowerCase();
   const deliveryLabel = deliveryMode === "delayed" ? "DELAYED" : "LIVE";
@@ -12743,6 +12757,7 @@ function buildLiveReportFeedPreviewFromEvent(event) {
   const customerName = asText(event?.customer_name, "Kein Kunde") || "Kein Kunde";
   const hostname = asText(event?.hostname, "-");
   const hostIdentity = asText(event?.host_uid, "").trim() || hostname;
+  const customerLogoUrl = resolveLiveReportCustomerLogoUrl(event, hostIdentity, hostname);
   const designation = asText(event?.display_name, hostname) || hostname;
   const shortHostname = hostname.split(".")[0] || hostname;
   const ip = asText(event?.std_nic_ip || event?.primary_ip, "-");
@@ -12760,6 +12775,7 @@ function buildLiveReportFeedPreviewFromEvent(event) {
     hostIdentity,
     hostname,
     customerName,
+    customerLogoUrl,
     designation,
     shortHostname,
     ip,
@@ -12773,6 +12789,48 @@ function buildLiveReportFeedPreviewFromEvent(event) {
   };
 }
 
+function loadLiveReportFeedEnabled() {
+  try {
+    const raw = window.localStorage.getItem(LIVE_REPORT_FEED_ENABLED_KEY);
+    if (raw === null) {
+      return true;
+    }
+    return raw !== "0" && raw !== "false";
+  } catch (_error) {
+    return true;
+  }
+}
+
+function persistLiveReportFeedEnabled(enabled) {
+  try {
+    window.localStorage.setItem(LIVE_REPORT_FEED_ENABLED_KEY, enabled ? "1" : "0");
+  } catch (_error) {
+    // Ignore storage failures.
+  }
+}
+
+function updateLiveReportFeedToggleUi() {
+  const button = document.getElementById("liveReportFeedToggleButton");
+  if (!button) {
+    return;
+  }
+  button.setAttribute("aria-pressed", liveReportFeedEnabled ? "true" : "false");
+  const label = liveReportFeedEnabled ? "Live Meldungen ausblenden" : "Live Meldungen einblenden";
+  button.title = label;
+  button.setAttribute("aria-label", label);
+}
+
+function setLiveReportFeedEnabled(enabled) {
+  liveReportFeedEnabled = Boolean(enabled);
+  persistLiveReportFeedEnabled(liveReportFeedEnabled);
+  updateLiveReportFeedToggleUi();
+  renderLiveReportFeed();
+}
+
+function toggleLiveReportFeedEnabled() {
+  setLiveReportFeedEnabled(!liveReportFeedEnabled);
+}
+
 function renderLiveReportFeed() {
   wireLiveReportFeed();
   const panel = document.getElementById("liveReportFeed");
@@ -12781,7 +12839,7 @@ function renderLiveReportFeed() {
   if (!panel || !body) {
     return;
   }
-  if (liveReportFeedDismissed || liveReportFeedItems.length === 0) {
+  if (!liveReportFeedEnabled || liveReportFeedItems.length === 0) {
     panel.classList.add("hidden");
     return;
   }
@@ -12790,14 +12848,31 @@ function renderLiveReportFeed() {
   if (countEl) {
     countEl.textContent = `${liveReportFeedItems.length}`;
   }
+  for (const item of liveReportFeedItems) {
+    if (!item.customerLogoUrl) {
+      item.customerLogoUrl = resolveLiveReportCustomerLogoUrl(
+        { customer_logo_url: "" },
+        item.hostIdentity,
+        item.hostname,
+      );
+    }
+  }
   body.innerHTML = liveReportFeedItems.map((item) => {
     const statsHtml = item.metricsText
       ? `<span class="live-report-feed-stats">${escapeHtml(item.metricsText)}</span>`
       : `<span class="live-report-feed-stats live-report-feed-stats--empty" aria-hidden="true"></span>`;
+    const customerLogoHtml = item.customerLogoUrl
+      ? `<span class="live-report-feed-customer-logo-wrap" aria-hidden="true">
+          <img src="${escapeHtml(item.customerLogoUrl)}" alt="" class="live-report-feed-customer-logo" loading="lazy" decoding="async" onerror="this.closest('.live-report-feed-customer-logo-wrap').style.display='none'">
+        </span>`
+      : "";
     return `
     <button type="button" class="live-report-feed-item${item.isNew ? " is-new" : ""}" data-live-feed-host="${escapeHtml(item.hostname)}" data-live-feed-uid="${escapeHtml(item.hostIdentity)}">
       <div class="live-report-feed-item-head">
-        <span class="live-report-feed-customer" title="${escapeHtml(item.customerName)}">${escapeHtml(item.customerName)}</span>
+        <span class="live-report-feed-customer-row">
+          ${customerLogoHtml}
+          <span class="live-report-feed-customer" title="${escapeHtml(item.customerName)}">${escapeHtml(item.customerName)}</span>
+        </span>
         <time class="live-report-feed-time" datetime="${escapeHtml(item.receivedAtUtc)}" title="${escapeHtml(item.clockTitle)}">${escapeHtml(item.clockLabel)}</time>
       </div>
       <p class="live-report-feed-designation" title="${escapeHtml(item.designation)}">${escapeHtml(item.designation)}</p>
@@ -12861,7 +12936,6 @@ function enqueueLiveReportFeedFromEvents(events) {
   if (!Array.isArray(events) || events.length === 0) {
     return;
   }
-  liveReportFeedDismissed = false;
   const sortedEvents = [...events].sort(
     (left, right) => (Number(right?.report_id) || 0) - (Number(left?.report_id) || 0),
   );
@@ -12994,8 +13068,7 @@ function wireLiveReportFeed() {
   if (closeBtn) {
     closeBtn.addEventListener("click", (event) => {
       event.stopPropagation();
-      liveReportFeedDismissed = true;
-      panel.classList.add("hidden");
+      setLiveReportFeedEnabled(false);
     });
   }
 
@@ -13060,6 +13133,8 @@ function wireLiveReportFeed() {
 }
 
 function initLiveReportFeed() {
+  liveReportFeedEnabled = loadLiveReportFeedEnabled();
+  updateLiveReportFeedToggleUi();
   wireLiveReportFeed();
   renderLiveReportFeed();
 }
@@ -16919,6 +16994,13 @@ function wireEvents() {
   if (themeToggleButton) {
     themeToggleButton.addEventListener("click", () => {
       toggleTheme();
+    });
+  }
+
+  const liveReportFeedToggleButton = document.getElementById("liveReportFeedToggleButton");
+  if (liveReportFeedToggleButton) {
+    liveReportFeedToggleButton.addEventListener("click", () => {
+      toggleLiveReportFeedEnabled();
     });
   }
 

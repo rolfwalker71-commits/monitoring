@@ -67,9 +67,14 @@
           </p>
         </div>
         <div class="brand-user">
-          <button id="themeToggleButton" class="theme-toggle" type="button" title="Darkmode umschalten" aria-pressed="false">
-            <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
-          </button>
+          <div class="brand-user-toggles">
+            <button id="themeToggleButton" class="theme-toggle" type="button" title="Darkmode umschalten" aria-pressed="false">
+              <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
+            </button>
+            <button id="liveReportFeedToggleButton" class="theme-toggle live-report-feed-toggle" type="button" title="Live Meldungen einblenden" aria-pressed="true" aria-label="Live Meldungen einblenden">
+              <span class="theme-toggle-track"><span class="theme-toggle-thumb live-report-feed-toggle-thumb"></span></span>
+            </button>
+          </div>
           <div id="brandAccountShell" class="brand-account-shell hidden">
             <div class="brand-profile-card">
               <span class="brand-profile-copy">
@@ -1663,7 +1668,7 @@
           </div>
           <div class="live-report-feed-actions">
             <button id="liveReportFeedMinimizeBtn" class="btn-icon live-report-feed-icon-btn" type="button" title="Einklappen" aria-expanded="true">−</button>
-            <button id="liveReportFeedCloseBtn" class="btn-icon live-report-feed-icon-btn" type="button" title="Schliessen">✕</button>
+            <button id="liveReportFeedCloseBtn" class="btn-icon live-report-feed-icon-btn" type="button" title="Ausblenden (Header-Toggle zum Einblenden)">✕</button>
           </div>
         </header>
         <div id="liveReportFeedBody" class="live-report-feed-body"></div>
