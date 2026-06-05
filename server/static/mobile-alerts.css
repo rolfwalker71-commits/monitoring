@@ -727,9 +727,12 @@ body {
 .alerts-carousel-shell {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-bottom: calc(8px + var(--safe-bottom));
+  gap: 8px;
+  margin: 0 -12px;
+  padding: 10px 0 calc(12px + var(--safe-bottom));
   background: var(--panel);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .alerts-list.alerts-carousel {
@@ -740,8 +743,8 @@ body {
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   gap: 10px;
-  padding: 2px 14px 6px;
-  background: var(--panel);
+  padding: 2px 14px 4px;
+  background: transparent;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -1572,11 +1575,11 @@ body {
 }
 
 .alert-detail-panel {
-  margin: 0 14px 4px;
+  margin: 0 14px 2px;
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--panel) 96%, var(--accent) 4%);
+  background: var(--panel);
 }
 
 .alert-detail-title {

@@ -1601,6 +1601,9 @@ let liveReportFeedDragState = null;
 let liveReportPollTimerId = null;
 let liveReportPollInFlight = false;
 let liveReportPollCursorId = 0;
+const USAGE_BAR_ANIMATION_MS = 1500;
+let lastUsageBarCarouselIndex = -1;
+const usageBarAnimStates = new WeakMap();
 
 let serviceWorkerRegistrationPromise = null;
 let toastTimer = null;
@@ -2248,44 +2251,94 @@ function buildMountpointLine(item) {
   return mobileEsc(String(item.mountpoint || "-").trim() || "-");
 }
 
-function wireUsageBarAnimations(list) {
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const durationMs = 2000;
+function cancelUsageBarAnimation(card) {
+  if (!card) return;
+  const animState = usageBarAnimStates.get(card);
+  if (animState?.frameId) {
+    window.cancelAnimationFrame(animState.frameId);
+  }
+  if (animState) {
+    animState.cancelled = true;
+  }
+  usageBarAnimStates.delete(card);
+}
 
-  list.querySelectorAll(".alert-card").forEach((card) => {
-    const fill = card.querySelector(".usage-bar-fill");
-    const counter = card.querySelector(".usage-bar-counter");
-    if (!fill || !counter) return;
+function resetUsageBarToZero(card) {
+  if (!card) return;
+  cancelUsageBarAnimation(card);
+  const fill = card.querySelector(".usage-bar-fill");
+  const counter = card.querySelector(".usage-bar-counter");
+  if (!fill || !counter) return;
+  fill.style.width = "0%";
+  counter.textContent = "0.0%";
+}
 
-    const target = Number(fill.getAttribute("data-target-percent"));
-    if (!Number.isFinite(target)) return;
+function setUsageBarFinalValue(card) {
+  if (!card) return;
+  cancelUsageBarAnimation(card);
+  const fill = card.querySelector(".usage-bar-fill");
+  const counter = card.querySelector(".usage-bar-counter");
+  if (!fill || !counter) return;
+  const target = Number(fill.getAttribute("data-target-percent"));
+  if (!Number.isFinite(target)) return;
+  fill.style.width = target + "%";
+  counter.textContent = target.toFixed(1) + "%";
+}
 
-    if (reduceMotion) {
+function animateUsageBarForCard(card) {
+  if (!card) return;
+  const fill = card.querySelector(".usage-bar-fill");
+  const counter = card.querySelector(".usage-bar-counter");
+  if (!fill || !counter) return;
+
+  const target = Number(fill.getAttribute("data-target-percent"));
+  if (!Number.isFinite(target)) return;
+
+  cancelUsageBarAnimation(card);
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    setUsageBarFinalValue(card);
+    return;
+  }
+
+  fill.style.width = "0%";
+  counter.textContent = "0.0%";
+  const start = performance.now();
+  const animState = { cancelled: false, frameId: 0 };
+  usageBarAnimStates.set(card, animState);
+
+  const tick = (now) => {
+    if (animState.cancelled) return;
+    const progress = Math.min(1, (now - start) / USAGE_BAR_ANIMATION_MS);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const value = target * eased;
+    fill.style.width = value + "%";
+    counter.textContent = value.toFixed(1) + "%";
+    if (progress < 1) {
+      animState.frameId = window.requestAnimationFrame(tick);
+    } else {
       fill.style.width = target + "%";
       counter.textContent = target.toFixed(1) + "%";
-      return;
+      usageBarAnimStates.delete(card);
     }
+  };
 
-    fill.style.width = "0%";
-    counter.textContent = "0.0%";
-    const start = performance.now();
+  animState.frameId = window.requestAnimationFrame(tick);
+}
 
-    const tick = (now) => {
-      const progress = Math.min(1, (now - start) / durationMs);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const value = target * eased;
-      fill.style.width = value + "%";
-      counter.textContent = value.toFixed(1) + "%";
-      if (progress < 1) {
-        window.requestAnimationFrame(tick);
-      } else {
-        fill.style.width = target + "%";
-        counter.textContent = target.toFixed(1) + "%";
-      }
-    };
+function triggerUsageBarAnimationForCarouselIndex(list, index) {
+  const cards = list.querySelectorAll(".alert-card");
+  if (!cards.length) return;
 
-    window.requestAnimationFrame(tick);
+  cards.forEach((card) => {
+    const cardIndex = Number(card.getAttribute("data-alert-index"));
+    if (cardIndex !== index) {
+      resetUsageBarToZero(card);
+    }
   });
+
+  const focusedCard = Array.from(cards).find((card) => Number(card.getAttribute("data-alert-index")) === index);
+  animateUsageBarForCard(focusedCard);
 }
 
 function buildHeadsUpActionButton(item) {
@@ -2496,9 +2549,9 @@ function renderAlerts(items) {
     );
   }).join("");
 
+  lastUsageBarCarouselIndex = -1;
   wireCustomerLogos(list);
   wireAlertsCarousel(list);
-  wireUsageBarAnimations(list);
   highlightTargetCard();
   syncFocusedCarouselCard(list);
 }
@@ -2591,6 +2644,10 @@ function syncFocusedCarouselCard(list) {
     }
   });
   updateAlertDetailPanel(bestIndex);
+  if (bestIndex !== lastUsageBarCarouselIndex) {
+    triggerUsageBarAnimationForCarouselIndex(list, bestIndex);
+    lastUsageBarCarouselIndex = bestIndex;
+  }
 }
 
 function wireAlertsCarousel(list) {
