@@ -1368,7 +1368,10 @@
               <div class="overview-layout">
                 <nav class="overview-sidebar overview-sidebar--overview-only" role="tablist" aria-label="Übersichts-Register">
                   <button id="overviewMainTabButton" type="button" class="overview-sidebar-item active" role="tab" aria-selected="true" aria-controls="overviewMainSection">
-                    <span class="osi-icon">🔔</span> Alarme &amp; Infos
+                    <span class="osi-icon">🔔</span> Alarme &amp; Aktuell
+                  </button>
+                  <button id="overviewLangzeitTabButton" type="button" class="overview-sidebar-item" role="tab" aria-selected="false" aria-controls="overviewLangzeitSection">
+                    <span class="osi-icon">📊</span> Langzeit
                   </button>
                   <button id="overviewFilesystemTabButton" type="button" class="overview-sidebar-item" role="tab" aria-selected="false" aria-controls="overviewFilesystemSection">
                     <span class="osi-icon">💾</span> Filesysteme
@@ -1435,15 +1438,15 @@
                 </section>
 
                 <div id="overviewHostMetrics" class="overview-host-metrics" aria-live="polite"></div>
+              </section>
 
-                <section class="analysis-panel">
-                  <div class="analysis-header">
-                    <h4 id="analysisSectionTitle">Analyse (letzte 24 Std.)</h4>
-                    <p id="analysisSummary" class="count"></p>
-                  </div>
-                  <div id="resourceTrendCards" class="resource-trend-grid"></div>
-                  <div id="resourceCharts" class="resource-charts"></div>
-                </section>
+              <section id="overviewLangzeitSection" class="analysis-panel overview-subsection overview-scroll-panel hidden" role="tabpanel" aria-labelledby="overviewLangzeitTabButton">
+                <div class="analysis-header">
+                  <h4 id="analysisSectionTitle">Analyse (letzte 24 Std.)</h4>
+                  <p id="analysisSummary" class="count"></p>
+                </div>
+                <div id="resourceTrendCards" class="resource-trend-grid"></div>
+                <div id="resourceCharts" class="resource-charts"></div>
               </section>
 
               <section id="overviewNotificationSection" class="analysis-panel overview-subsection overview-scroll-panel hidden" role="tabpanel" aria-labelledby="overviewNotificationTabButton">

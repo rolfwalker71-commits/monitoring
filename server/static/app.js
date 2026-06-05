@@ -2707,11 +2707,13 @@ function renderHostInterestsEditor() {
 
 function updateOverviewSection() {
   const mainSection = document.getElementById("overviewMainSection");
+  const langzeitSection = document.getElementById("overviewLangzeitSection");
   const filesystemSection = document.getElementById("overviewFilesystemSection");
   const notificationSection = document.getElementById("overviewNotificationSection");
   const databaseChangelogSection = document.getElementById("overviewDatabaseChangelogSection");
   const configChangelogSection = document.getElementById("overviewConfigChangelogSection");
   const mainTabButton = document.getElementById("overviewMainTabButton");
+  const langzeitTabButton = document.getElementById("overviewLangzeitTabButton");
   const filesystemTabButton = document.getElementById("overviewFilesystemTabButton");
   const notificationTabButton = document.getElementById("overviewNotificationTabButton");
   const databaseChangelogTabButton = document.getElementById("overviewDatabaseChangelogTabButton");
@@ -2722,24 +2724,28 @@ function updateOverviewSection() {
   }
 
   const showMain = state.overviewSection === "main";
+  const showLangzeit = state.overviewSection === "langzeit";
   const showFilesystem = state.overviewSection === "filesystem";
   const showNotification = state.overviewSection === "notification";
   const showDatabaseChangelog = state.overviewSection === "database-changelog";
   const showConfigChangelog = state.overviewSection === "config-changelog";
 
   mainSection.classList.toggle("hidden", !showMain);
+  if (langzeitSection) langzeitSection.classList.toggle("hidden", !showLangzeit);
   filesystemSection.classList.toggle("hidden", !showFilesystem);
   if (notificationSection) notificationSection.classList.toggle("hidden", !showNotification);
   if (databaseChangelogSection) databaseChangelogSection.classList.toggle("hidden", !showDatabaseChangelog);
   if (configChangelogSection) configChangelogSection.classList.toggle("hidden", !showConfigChangelog);
 
   mainTabButton.classList.toggle("active", showMain);
+  if (langzeitTabButton) langzeitTabButton.classList.toggle("active", showLangzeit);
   filesystemTabButton.classList.toggle("active", showFilesystem);
   if (notificationTabButton) notificationTabButton.classList.toggle("active", showNotification);
   if (databaseChangelogTabButton) databaseChangelogTabButton.classList.toggle("active", showDatabaseChangelog);
   if (configChangelogTabButton) configChangelogTabButton.classList.toggle("active", showConfigChangelog);
   
   mainTabButton.setAttribute("aria-selected", showMain ? "true" : "false");
+  if (langzeitTabButton) langzeitTabButton.setAttribute("aria-selected", showLangzeit ? "true" : "false");
   filesystemTabButton.setAttribute("aria-selected", showFilesystem ? "true" : "false");
   if (notificationTabButton) notificationTabButton.setAttribute("aria-selected", showNotification ? "true" : "false");
   if (databaseChangelogTabButton) databaseChangelogTabButton.setAttribute("aria-selected", showDatabaseChangelog ? "true" : "false");
@@ -2747,7 +2753,7 @@ function updateOverviewSection() {
 
   const rangeWrap = document.querySelector("#overviewView .overview-sidebar-range");
   if (rangeWrap) {
-    const hideRange = showNotification || showDatabaseChangelog || showConfigChangelog;
+    const hideRange = showMain || showNotification || showDatabaseChangelog || showConfigChangelog;
     rangeWrap.classList.toggle("hidden", hideRange);
   }
 }
@@ -17599,6 +17605,14 @@ function wireEvents() {
   document.getElementById("overviewMainTabButton").addEventListener("click", () => {
     state.overviewSection = "main";
     updateOverviewSection();
+  });
+
+  document.getElementById("overviewLangzeitTabButton").addEventListener("click", () => {
+    state.overviewSection = "langzeit";
+    updateOverviewSection();
+    if (state.selectedHost) {
+      void loadAnalysisForHost();
+    }
   });
 
   document.getElementById("overviewFilesystemTabButton").addEventListener("click", () => {
