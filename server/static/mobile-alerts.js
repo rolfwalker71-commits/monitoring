@@ -2240,7 +2240,9 @@ function buildUsageLine(item) {
   const current = item.current_used_percent;
   const mount = mobileEsc(item.mountpoint || "-");
   if (current != null && Number.isFinite(Number(current))) {
-    return mount + " · " + used + "% (jetzt " + Number(current).toFixed(1) + "%)";
+    return (
+      mount + " · " + used + '% <strong class="alert-usage-now">(jetzt ' + Number(current).toFixed(1) + "%)</strong>"
+    );
   }
   return mount + " · " + used + "%";
 }
@@ -2840,9 +2842,42 @@ function hostRecordFromLiveFeedItem(item) {
   };
 }
 
-function openHostInsightFromLiveFeedItem(item) {
+async function fetchMobileHostRecord(hostUid, hostname, options = {}) {
+  const authRetried = options.authRetried === true;
+  const identity = String(hostUid || "").trim();
+  const host = String(hostname || "").trim();
+  if (!identity && !host) return null;
+
+  try {
+    const resp = await fetch("/api/v1/hosts?limit=200&offset=0", { credentials: "same-origin" });
+    if (resp.status === 401) {
+      if (!authRetried && (await mobileRecoverSessionAfter401())) {
+        return fetchMobileHostRecord(hostUid, hostname, { authRetried: true });
+      }
+      return null;
+    }
+    if (!resp.ok) return null;
+    const data = await resp.json().catch(() => ({}));
+    const hosts = Array.isArray(data?.hosts) ? data.hosts : [];
+    return (
+      hosts.find((entry) => {
+        const entryUid = String(entry?.host_uid || "").trim();
+        const entryHost = String(entry?.hostname || "").trim();
+        return (identity && entryUid === identity) || (host && entryHost === host);
+      }) || null
+    );
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function openHostInsightFromLiveFeedItem(item) {
   if (!item) return;
-  void openHostInsightCarousel(hostRecordFromLiveFeedItem(item), "live");
+  const hostname = String(item.hostname || "").trim();
+  const hostIdentity = String(item.hostIdentity || "").trim();
+  const hostRecord = (await fetchMobileHostRecord(hostIdentity, hostname)) || hostRecordFromLiveFeedItem(item);
+  const variant = isHostActive(hostRecord) ? "active" : "inactive";
+  void openHostInsightCarousel(hostRecord, variant);
 }
 
 function loadMobileLiveReportFeedEnabled() {
@@ -2895,7 +2930,7 @@ function openLatestMobileLiveReportDetailsFromMenu() {
     showToast("Noch keine Live-Meldungen.", false);
     return;
   }
-  openHostInsightFromLiveFeedItem(latest);
+  void openHostInsightFromLiveFeedItem(latest);
 }
 
 function buildMobileLiveReportFeedItemInnerHtml(item) {
@@ -3196,13 +3231,13 @@ function wireMobileLiveReportFeed() {
     const itemId = String(button.getAttribute("data-live-feed-id") || "").trim();
     const item = liveReportFeedItems.find((entry) => entry.id === itemId);
     if (item) {
-      openHostInsightFromLiveFeedItem(item);
+      void openHostInsightFromLiveFeedItem(item);
       return;
     }
     const hostname = String(button.getAttribute("data-live-feed-host") || "").trim();
     const hostUid = String(button.getAttribute("data-live-feed-uid") || "").trim();
     if (!hostname) return;
-    openHostInsightFromLiveFeedItem({
+    void openHostInsightFromLiveFeedItem({
       hostname,
       hostIdentity: hostUid || hostname,
       designation: hostname,
