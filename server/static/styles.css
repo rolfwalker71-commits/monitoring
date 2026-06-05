@@ -381,7 +381,7 @@ body[data-theme="dark"] .btn-emoji-pill:hover:not(:disabled) {
   font-size: 30px;
   line-height: 0.96;
   letter-spacing: -0.045em;
-  font-weight: 800;
+  font-weight: 700;
   white-space: nowrap;
   color: #102844;
   text-wrap: balance;
@@ -5309,7 +5309,7 @@ body[data-theme="dark"] .trend-progress-bar {
   min-width: 0;
   max-width: 100%;
   color: #6a819d;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.24;
   padding-bottom: 1px;
@@ -5608,7 +5608,7 @@ body[data-theme="dark"] .trend-progress-bar {
 
 .host-customer-line {
   display: block;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 900;
   letter-spacing: 0.01em;
   line-height: 1.22;
@@ -9591,7 +9591,7 @@ body[data-theme="dark"] th {
     font-size: 10px;
   }
   .host-customer-line {
-    font-size: 16px;
+    font-size: 17px;
   }
   .host-meta-line--with-alert {
     grid-template-columns: 1fr;
@@ -12733,7 +12733,7 @@ body[data-theme="dark"] .panel-header .header-kpi-strip > .header-stat-chip-db-s
 .brand-text h1 {
   font-size: 34px;
   line-height: 0.94;
-  font-weight: 900;
+  font-weight: 700;
   letter-spacing: -0.042em;
 }
 
