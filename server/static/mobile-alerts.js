@@ -2614,7 +2614,7 @@ function renderCriticalTrendsMobile(data) {
       '<div class="mobile-ops-card-head"><h3>' + mobileEsc(displayName) + "</h3>" +
       (customer ? "<p>" + mobileEsc(customer) + "</p>" : "") +
       (hostname !== displayName ? '<p class="mobile-ops-meta">' + mobileEsc(hostname) + "</p>" : "") +
-      "</div><div class="mobile-ops-card-body">" + rows + "</div></article>"
+      '</div><div class="mobile-ops-card-body">' + rows + "</div></article>"
     );
   }).join("");
 }
