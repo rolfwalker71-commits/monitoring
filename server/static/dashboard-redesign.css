@@ -500,18 +500,34 @@ body[data-theme="dark"] .panel-header .panel-actions .header-toolbar .btn-emoji-
 
 .report-chrome-title {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   flex-wrap: wrap;
   gap: 0;
-  font-size: 14px;
-  font-weight: 800;
-  color: #1e293b;
+  min-width: 0;
+}
+
+.report-chrome-customer {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  line-height: 1.22;
+  color: #0f3f5f;
+}
+
+.report-chrome-host {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.24;
+  color: #6a819d;
 }
 
 .report-chrome-title .sep {
   color: #cbd5e1;
   font-weight: 500;
-  margin: 0 5px;
+  font-size: 16px;
+  line-height: 1.22;
+  margin: 0 6px;
 }
 
 .report-chrome-env {
@@ -1076,6 +1092,14 @@ body[data-theme="dark"] #reportsView .overview-content {
 body[data-theme="dark"] .report-chrome-logo-wrap {
   background: var(--dr-surface) !important;
   border-color: var(--dr-line) !important;
+}
+
+body[data-theme="dark"] .report-chrome-customer {
+  color: #f4f8ff;
+}
+
+body[data-theme="dark"] .report-chrome-host {
+  color: #9fb4cb;
 }
 
 body[data-theme="dark"] .reports-column .overview-sidebar,

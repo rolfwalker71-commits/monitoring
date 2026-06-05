@@ -11081,7 +11081,7 @@ function updateReportChromeBar() {
   const displayName = asText(host.display_name || host.hostname, "").trim();
   const customerPart = customerName || "Kein Kunde";
   const customerLogoUrl = asText(host.customer_logo_url, "").trim();
-  titleEl.innerHTML = `${escapeHtml(customerPart)}<span class="sep">|</span>${escapeHtml(displayName)}`;
+  titleEl.innerHTML = `<span class="report-chrome-customer">${escapeHtml(customerPart)}</span><span class="sep" aria-hidden="true">|</span><span class="report-chrome-host">${escapeHtml(displayName)}</span>`;
 
   if (logoWrap && logoImg) {
     if (customerLogoUrl) {
