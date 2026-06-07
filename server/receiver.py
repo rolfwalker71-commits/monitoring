@@ -8590,28 +8590,28 @@ def collect_critical_trends(
     return warnings
 
 
-def _is_superseded_ghost_host_key(
-    *,
-    host_key: str,
-    hostname: str,
-    last_report_time_utc: str,
-    report_count: int,
-    newest_report_by_hostname: dict[str, str],
-    ghost_max_reports: int = INACTIVE_HOST_GHOST_MAX_REPORTS,
-) -> bool:
-    safe_host_key = str(host_key or "").strip()
-    safe_hostname = str(hostname or "").strip()
-    safe_last_report = str(last_report_time_utc or "").strip()
-    if not safe_host_key or not safe_hostname or not safe_last_report:
-        return True
-    if safe_host_key.startswith("__legacy_report__:"):
-        return True
-    hostname_newest = str(newest_report_by_hostname.get(safe_hostname) or "").strip()
-    if not hostname_newest:
-        return False
-    if int(report_count or 0) > int(ghost_max_reports or INACTIVE_HOST_GHOST_MAX_REPORTS):
-        return False
-    return safe_last_report < hostname_newest
+def _best_report_row_by_hostname(rows: list[tuple]) -> dict[str, tuple]:
+    """Pick the newest report row per hostname across all host_uid identities."""
+    best_row_by_hostname: dict[str, tuple] = {}
+    for row in rows:
+        host_uid = str(row[0] or "").strip()
+        hostname = str(row[1] or "").strip()
+        last_report_time_utc = str(row[2] or "").strip()
+        if not hostname or not host_uid or not last_report_time_utc:
+            continue
+        if host_uid.startswith("__legacy_report__:"):
+            continue
+
+        existing = best_row_by_hostname.get(hostname)
+        if not existing:
+            best_row_by_hostname[hostname] = row
+            continue
+
+        existing_last_report = str(existing[2] or "").strip()
+        if last_report_time_utc > existing_last_report:
+            best_row_by_hostname[hostname] = row
+
+    return best_row_by_hostname
 
 
 def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
@@ -8619,36 +8619,17 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
     now_utc = datetime.now(timezone.utc)
 
     rows = _latest_report_rows_by_host_key(conn)
-    newest_report_by_hostname: dict[str, str] = {}
-    for row in rows:
-        hostname = str(row[1] or "").strip()
-        last_report_time_utc = str(row[2] or "").strip()
-        if not hostname or not last_report_time_utc:
-            continue
-        existing = newest_report_by_hostname.get(hostname)
-        if not existing or last_report_time_utc > existing:
-            newest_report_by_hostname[hostname] = last_report_time_utc
+    best_row_by_hostname = _best_report_row_by_hostname(rows)
 
     inactive_hosts = []
-    for row in rows:
+    for hostname, row in best_row_by_hostname.items():
         host_uid = str(row[0] or "").strip()
-        hostname = str(row[1] or "").strip()
         last_report_time_utc = str(row[2] or "").strip()
         payload_json_str = str(row[3] or "{}")
         primary_ip = str(row[4] or "").strip()
         report_count = int(row[5] or 0)
 
-        if not hostname or not host_uid or not last_report_time_utc:
-            continue
         if last_report_time_utc >= cutoff_iso:
-            continue
-        if _is_superseded_ghost_host_key(
-            host_key=host_uid,
-            hostname=hostname,
-            last_report_time_utc=last_report_time_utc,
-            report_count=report_count,
-            newest_report_by_hostname=newest_report_by_hostname,
-        ):
             continue
 
         try:
@@ -8679,8 +8660,8 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
             customer_name = ""
 
         open_alerts = conn.execute(
-            "SELECT COUNT(*) FROM alerts WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ? AND status = 'open'",
-            (host_uid,),
+            "SELECT COUNT(*) FROM alerts WHERE hostname = ? AND status = 'open'",
+            (hostname,),
         ).fetchone()
         open_alert_count = int(open_alerts[0] or 0) if open_alerts else 0
 
