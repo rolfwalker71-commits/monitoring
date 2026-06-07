@@ -140,6 +140,30 @@ ALERTS_LIST_CACHE_TTL_SECONDS = max(
     0.0,
     min(600.0, float(os.getenv("MONITORING_ALERTS_LIST_CACHE_TTL_SECONDS", "45") or "45")),
 )
+SYSTEM_OVERVIEW_CACHE_TTL_SECONDS = max(
+    0.0,
+    min(600.0, float(os.getenv("MONITORING_SYSTEM_OVERVIEW_CACHE_TTL_SECONDS", "120") or "120")),
+)
+BACKUP_STATUS_CACHE_TTL_SECONDS = max(
+    0.0,
+    min(600.0, float(os.getenv("MONITORING_BACKUP_STATUS_CACHE_TTL_SECONDS", "120") or "120")),
+)
+CUSTOMER_OVERVIEW_CACHE_TTL_SECONDS = max(
+    0.0,
+    min(600.0, float(os.getenv("MONITORING_CUSTOMER_OVERVIEW_CACHE_TTL_SECONDS", "120") or "120")),
+)
+HOST_CONFIG_CHANGES_CACHE_TTL_SECONDS = max(
+    0.0,
+    min(600.0, float(os.getenv("MONITORING_HOST_CONFIG_CHANGES_CACHE_TTL_SECONDS", "60") or "60")),
+)
+AGENT_SOURCE_STATUS_CACHE_TTL_SECONDS = max(
+    0.0,
+    min(600.0, float(os.getenv("MONITORING_AGENT_SOURCE_STATUS_CACHE_TTL_SECONDS", "120") or "120")),
+)
+READ_ENDPOINT_BUSY_TIMEOUT_MS = max(
+    1000,
+    int(os.getenv("MONITORING_READ_ENDPOINT_BUSY_TIMEOUT_MS", "8000") or "8000"),
+)
 IDENTITY_MAPS_CACHE_TTL_SECONDS = max(
     5.0,
     min(180.0, float(os.getenv("MONITORING_IDENTITY_MAPS_CACHE_TTL_SECONDS", "120") or "120")),
@@ -341,6 +365,14 @@ def _flush_due_identity_maps_cache_invalidation() -> None:
         _invalidate_identity_maps_cache()
         _read_cache_invalidate_prefix("hosts:")
         _read_cache_invalidate_prefix("inactive-hosts:")
+        _read_cache_invalidate_prefix("system-overview:")
+        _read_cache_invalidate_prefix("backup-status-overview:")
+        _read_cache_invalidate_prefix("customer-overview:")
+        _read_cache_invalidate_prefix("critical-trends:")
+        _read_cache_invalidate_prefix("alerts-list:")
+        _read_cache_invalidate_prefix("alerts-summary:")
+        _read_cache_invalidate_prefix("host-config-changes:")
+        _read_cache_invalidate_prefix("agent-source-status:")
 
 
 def _read_cache_invalidate_prefix(prefix: str) -> None:
@@ -513,6 +545,16 @@ def sqlite_connect_interactive() -> sqlite3.Connection:
     conn = sqlite_connect()
     try:
         conn.execute(f"PRAGMA busy_timeout = {WEB_AUTH_BUSY_TIMEOUT_MS}")
+    except sqlite3.Error:
+        pass
+    return conn
+
+
+def sqlite_connect_read() -> sqlite3.Connection:
+    """Moderate busy timeout for read-heavy API paths (fail before proxy/nginx timeout)."""
+    conn = sqlite_connect()
+    try:
+        conn.execute(f"PRAGMA busy_timeout = {READ_ENDPOINT_BUSY_TIMEOUT_MS}")
     except sqlite3.Error:
         pass
     return conn
@@ -9071,11 +9113,13 @@ def collect_critical_trends(
             for item in allowed_hostnames
             if str(item or "").strip()
         }
-        if not normalized_allowed_hostnames:
-            return []
-        placeholders = ",".join("?" for _ in normalized_allowed_hostnames)
-        query += f" AND hostname IN ({placeholders})"
-        args.extend(sorted(normalized_allowed_hostnames))
+    else:
+        normalized_allowed_hostnames = _canonical_hostnames_from_identity_rows(_identity_report_rows(conn))
+    if not normalized_allowed_hostnames:
+        return []
+    placeholders = ",".join("?" for _ in normalized_allowed_hostnames)
+    query += f" AND hostname IN ({placeholders})"
+    args.extend(sorted(normalized_allowed_hostnames))
     query += " ORDER BY hostname ASC, id ASC"
     rows = conn.execute(query, tuple(args)).fetchall()
 
@@ -9497,6 +9541,20 @@ def _get_latest_identity_context(
         return rows, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid
 
 
+def _identity_report_rows(conn: sqlite3.Connection) -> list[tuple]:
+    rows, _, _, _ = _get_latest_identity_context(conn)
+    return rows
+
+
+def _canonical_hostnames_from_identity_rows(rows: list[tuple]) -> set[str]:
+    return {
+        str(row[1] or "").strip()
+        for row in rows
+        if str(row[1] or "").strip()
+        and int(row[5] or 0) > INACTIVE_HOST_GHOST_MAX_REPORTS
+    }
+
+
 def _latest_report_rows_by_host_key(conn: sqlite3.Connection) -> list[tuple]:
     host_key_expr = reports_host_key_sql()
     host_key_expr_r = reports_host_key_sql("r")
@@ -9786,7 +9844,33 @@ def _collect_latest_report_usage_by_host(conn: sqlite3.Connection, hostnames: li
     if not hostnames:
         return {}
 
-    placeholders = ",".join("?" for _ in hostnames)
+    hostname_set = {str(item or "").strip() for item in hostnames if str(item or "").strip()}
+    if not hostname_set:
+        return {}
+
+    usage_by_host: dict[str, dict[str, object]] = {}
+    missing_hostnames = set(hostname_set)
+
+    identity_rows, _, _, _ = _peek_identity_maps_cache()
+    if identity_rows is None:
+        identity_rows = _identity_report_rows(conn)
+
+    for row in identity_rows:
+        hostname = str(row[1] or "").strip()
+        if not hostname or hostname not in missing_hostnames:
+            continue
+        received_at_utc = str(row[2] or "").strip()
+        payload = parse_payload_json(str(row[3] or "{}"))
+        usage_by_host[hostname] = {
+            "received_at_utc": received_at_utc,
+            "usage_by_mountpoint": _usage_by_mountpoint_from_payload(payload),
+        }
+        missing_hostnames.discard(hostname)
+
+    if not missing_hostnames:
+        return usage_by_host
+
+    placeholders = ",".join("?" for _ in sorted(missing_hostnames))
     latest_rows = conn.execute(
         f"""
         SELECT hostname, received_at_utc, payload_json
@@ -9798,34 +9882,18 @@ def _collect_latest_report_usage_by_host(conn: sqlite3.Connection, hostnames: li
             GROUP BY hostname
         )
         """,
-        tuple(hostnames),
+        tuple(sorted(missing_hostnames)),
     ).fetchall()
 
-    usage_by_host: dict[str, dict[str, object]] = {}
     for row in latest_rows:
         hostname = str(row[0] or "").strip()
         if not hostname:
             continue
         received_at_utc = str(row[1] or "").strip()
         payload = parse_payload_json(str(row[2] or "{}"))
-        filesystems = payload.get("filesystems", [])
-        if not isinstance(filesystems, list):
-            continue
-        usage_by_mountpoint: dict[str, float] = {}
-        for fs in filesystems:
-            if not isinstance(fs, dict):
-                continue
-            mountpoint = str(fs.get("mountpoint", "") or "").strip()
-            if not mountpoint:
-                continue
-            try:
-                used_percent = float(fs.get("used_percent"))
-            except (TypeError, ValueError):
-                continue
-            usage_by_mountpoint[normalize_mountpoint_key(mountpoint)] = used_percent
         usage_by_host[hostname] = {
             "received_at_utc": received_at_utc,
-            "usage_by_mountpoint": usage_by_mountpoint,
+            "usage_by_mountpoint": _usage_by_mountpoint_from_payload(payload),
         }
     return usage_by_host
 
@@ -12185,7 +12253,7 @@ def backfill_host_config_changes(
 
 
 def collect_system_overview(conn: sqlite3.Connection, search_query: str = "") -> dict:
-    latest_rows = _latest_report_rows_by_host_key(conn)
+    latest_rows = _identity_report_rows(conn)
     if not latest_rows:
         return {"by_country": {}, "total": 0}
 
@@ -12330,7 +12398,7 @@ def collect_system_overview(conn: sqlite3.Connection, search_query: str = "") ->
 
 
 def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) -> dict:
-    latest_rows = _latest_report_rows_by_host_key(conn)
+    latest_rows = _identity_report_rows(conn)
     if not latest_rows:
         return {"generated_at": utc_now_iso(), "hours": max(1, int(hours or 24)), "total": 0, "missing_count": 0, "items": []}
 
@@ -12571,7 +12639,7 @@ def collect_backup_status_overview(conn: sqlite3.Connection, hours: int = 24) ->
 
 
 def collect_customer_overview(conn: sqlite3.Connection) -> dict:
-    latest_rows = _latest_report_rows_by_host_key(conn)
+    latest_rows = _identity_report_rows(conn)
     if not latest_rows:
         return {
             "generated_at": utc_now_iso(),
@@ -16687,20 +16755,13 @@ def collect_agent_source_status(conn: sqlite3.Connection) -> dict:
     country_override_map = {str(row[0] or ""): normalize_country_code(str(row[2] or "")) for row in settings_rows}
     customer_name_map = {str(row[0] or ""): str(row[3] or "").strip() for row in settings_rows}
 
-    latest_rows = conn.execute(
-        f"""
-        SELECT r.hostname, r.received_at_utc, r.payload_json
-        FROM reports r
-        JOIN (
-            SELECT hostname, MAX(id) AS latest_id
-            FROM reports
-            WHERE hostname IN ({placeholders})
-            GROUP BY hostname
-        ) latest ON latest.latest_id = r.id
-        ORDER BY LOWER(r.hostname)
-        """,
-        tuple(known_hosts),
-    ).fetchall()
+    known_hosts_set = set(known_hosts)
+    latest_rows = [
+        (str(row[1] or "").strip(), str(row[2] or "").strip(), str(row[3] or "{}"))
+        for row in _identity_report_rows(conn)
+        if str(row[1] or "").strip() in known_hosts_set
+    ]
+    latest_rows.sort(key=lambda item: str(item[0] or "").lower())
 
     items: list[dict] = []
     for row in latest_rows:
@@ -17679,6 +17740,12 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
     _schedule_read_cache_invalidation("inactive-hosts:")
     _schedule_read_cache_invalidation("alerts-summary:")
     _schedule_read_cache_invalidation("alerts-list:")
+    _schedule_read_cache_invalidation("system-overview:")
+    _schedule_read_cache_invalidation("backup-status-overview:")
+    _schedule_read_cache_invalidation("customer-overview:")
+    _schedule_read_cache_invalidation("critical-trends:")
+    _schedule_read_cache_invalidation("host-config-changes:")
+    _schedule_read_cache_invalidation("agent-source-status:")
 
     # Keep behavior identical to direct-ingest: non-blocking best effort.
     auto_sync_discovered_license_types(payload)
@@ -19420,7 +19487,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
                 _finish_endpoint_timer(endpoint_timer, meta=f"limit={limit} offset={offset} cache=hit")
                 return
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite_connect_read() as conn:
                 response_data = _build_hosts_endpoint_response(conn, limit=limit, offset=offset)
             _mark_endpoint_timer(endpoint_timer, "db+build")
             total_hosts = int(response_data.get("total_hosts") or 0)
@@ -19745,7 +19812,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} project_hours={project_hours} cache=hit")
                 return
             
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite_connect_read() as conn:
                 preferences = get_user_preferences(conn, username)
                 selected_metrics = parse_critical_trends_metrics(preferences.get("critical_trends_metrics", "filesystem"))
                 hidden_mountpoints_by_host: dict[str, list[str]] = {}
@@ -19847,7 +19914,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
                 _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} cache=hit")
                 return
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite_connect_read() as conn:
                 inactive = collect_inactive_hosts(conn, hours)
             _mark_endpoint_timer(endpoint_timer, "db+compute")
 
@@ -20123,18 +20190,24 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
                 _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} cache=hit")
                 return
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite_connect_read() as conn:
                 data = collect_backup_status_overview(conn, hours)
             _mark_endpoint_timer(endpoint_timer, "db+compute")
-            _read_cache_set(cache_key, data)
+            _read_cache_set(cache_key, data, ttl_seconds=BACKUP_STATUS_CACHE_TTL_SECONDS)
             self._send_json(HTTPStatus.OK, data)
             _mark_endpoint_timer(endpoint_timer, "send")
             _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} cache=miss total={int(data.get('total', 0) or 0)}")
             return
 
         if parsed.path == "/api/v1/customer-overview":
-            with sqlite3.connect(DB_PATH) as conn:
+            cache_key = "customer-overview:"
+            cached_data = _read_cache_get(cache_key)
+            if isinstance(cached_data, dict):
+                self._send_json(HTTPStatus.OK, cached_data)
+                return
+            with sqlite_connect_read() as conn:
                 data = collect_customer_overview(conn)
+            _read_cache_set(cache_key, data, ttl_seconds=CUSTOMER_OVERVIEW_CACHE_TTL_SECONDS)
             self._send_json(HTTPStatus.OK, data)
             return
 
@@ -20142,14 +20215,26 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
             limit = parse_int(query, "limit", default=300, min_value=1, max_value=1000)
-            with sqlite3.connect(DB_PATH) as conn:
+            cache_key = f"host-config-changes:{hours}:{limit}"
+            cached_data = _read_cache_get(cache_key)
+            if isinstance(cached_data, dict):
+                self._send_json(HTTPStatus.OK, cached_data)
+                return
+            with sqlite_connect_read() as conn:
                 data = collect_host_config_changes(conn, hours=hours, limit=limit)
+            _read_cache_set(cache_key, data, ttl_seconds=HOST_CONFIG_CHANGES_CACHE_TTL_SECONDS)
             self._send_json(HTTPStatus.OK, data)
             return
 
         if parsed.path == "/api/v1/agent-source-status":
-            with sqlite3.connect(DB_PATH) as conn:
+            cache_key = "agent-source-status:"
+            cached_data = _read_cache_get(cache_key)
+            if isinstance(cached_data, dict):
+                self._send_json(HTTPStatus.OK, cached_data)
+                return
+            with sqlite_connect_read() as conn:
                 data = collect_agent_source_status(conn)
+            _read_cache_set(cache_key, data, ttl_seconds=AGENT_SOURCE_STATUS_CACHE_TTL_SECONDS)
             self._send_json(HTTPStatus.OK, data)
             return
 
@@ -20436,7 +20521,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     """
 
             mobile_context_by_host_key: dict[str, dict[str, str]] = {}
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite_connect_read() as conn:
                 all_rows = conn.execute(
                     alerts_from_sql,
                     tuple(args),
@@ -20761,10 +20846,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
                 _finish_endpoint_timer(endpoint_timer, meta=f"cache=hit qlen={len(search_query)}")
                 return
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite_connect_read() as conn:
                 data = collect_system_overview(conn, search_query=search_query)
             _mark_endpoint_timer(endpoint_timer, "db+compute")
-            _read_cache_set(cache_key, data)
+            _read_cache_set(cache_key, data, ttl_seconds=SYSTEM_OVERVIEW_CACHE_TTL_SECONDS)
             self._send_json(HTTPStatus.OK, data)
             _mark_endpoint_timer(endpoint_timer, "send")
             _finish_endpoint_timer(
@@ -24048,17 +24133,21 @@ def main() -> None:
     )
     agent_ingest_worker_thread.start()
 
-    def _startup_prewarm_identity_cache() -> None:
+    def _startup_prewarm_read_caches() -> None:
         try:
             with sqlite_connect() as conn:
                 _get_latest_identity_context(conn)
-            print("[startup] identity maps cache pre-warmed")
+                system_data = collect_system_overview(conn, search_query="")
+                backup_data = collect_backup_status_overview(conn, 24)
+            _read_cache_set("system-overview:", system_data, ttl_seconds=SYSTEM_OVERVIEW_CACHE_TTL_SECONDS)
+            _read_cache_set("backup-status-overview:24", backup_data, ttl_seconds=BACKUP_STATUS_CACHE_TTL_SECONDS)
+            print("[startup] identity + overview read caches pre-warmed")
         except Exception as exc:
-            print(f"[startup] identity cache pre-warm failed: {exc}")
+            print(f"[startup] read cache pre-warm failed: {exc}")
 
     threading.Thread(
-        target=_startup_prewarm_identity_cache,
-        name="startup-identity-prewarm",
+        target=_startup_prewarm_read_caches,
+        name="startup-read-cache-prewarm",
         daemon=True,
     ).start()
 

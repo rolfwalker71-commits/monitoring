@@ -8,6 +8,17 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function formatApiLoadError(message, fallbackLabel = "Daten") {
+  const text = String(message || "").trim();
+  if (/502/.test(text)) {
+    return `Gateway-Fehler (502): ${fallbackLabel} vorübergehend nicht verfügbar. Bitte in 30 Sekunden erneut laden.`;
+  }
+  if (/503/.test(text)) {
+    return `Server vorübergehend überlastet (503). Bitte kurz warten und erneut laden.`;
+  }
+  return text.startsWith("HTTP ") ? `Fehler beim Laden: ${text}` : text;
+}
+
 function resolveHostOsIcon(osValue) {
   const osRaw = asText(osValue || "", "").toLowerCase();
   if (osRaw.includes("windows")) {
@@ -14863,7 +14874,7 @@ async function loadCriticalTrends(options = {}) {
     }
   } catch (error) {
     if (updateList && listEl) {
-      listEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
+      listEl.innerHTML = `<p class="muted">${escapeHtml(formatApiLoadError(error?.message, "Kritische Trends"))}</p>`;
     }
   }
 }
@@ -14955,7 +14966,7 @@ async function loadInactiveHosts(options = {}) {
     }
   } catch (error) {
     if (updateList && listEl) {
-      listEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
+      listEl.innerHTML = `<p class="muted">${escapeHtml(formatApiLoadError(error?.message, "Inaktive Hosts"))}</p>`;
     }
   }
 }
@@ -15212,7 +15223,7 @@ async function loadBackupStatus() {
       }
     }
   } catch (error) {
-    listEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
+    listEl.innerHTML = `<p class="muted">${escapeHtml(formatApiLoadError(error?.message, "Backup-Stati"))}</p>`;
   }
 }
 
@@ -15835,7 +15846,7 @@ async function loadHostConfigChanges() {
       }
     }
   } catch (error) {
-    groupsEl.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
+    groupsEl.innerHTML = `<p class="muted">${escapeHtml(formatApiLoadError(error?.message, "Changelog"))}</p>`;
   }
 }
 
@@ -19926,6 +19937,6 @@ async function loadSystemOverview() {
       });
     });
   } catch (error) {
-    container.innerHTML = `<p class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</p>`;
+    container.innerHTML = `<p class="muted">${escapeHtml(formatApiLoadError(error?.message, "Systemübersicht"))}</p>`;
   }
 }
