@@ -11850,10 +11850,10 @@ async function downloadDatabaseBackup(onProgress) {
       onProgress?.({ pct: null, label: "Datenbank wird gesichert (läuft)..." });
     }
     if (status === "ready") {
-      onProgress?.({ pct: null, label: "Download wird gestartet..." });
-      return triggerFileDownload(
+      onProgress?.({ pct: 100, label: "Download wird gestartet..." });
+      return triggerNativeDownload(
         `/api/v1/backup/database/download?job_id=${encodeURIComponent(jobId)}&t=${Date.now()}`,
-        fallbackFilename,
+        String(statusData.filename || fallbackFilename),
       );
     }
     if (status === "error") {
@@ -18004,7 +18004,7 @@ function wireEvents() {
       } catch (error) {
         barEl.classList.remove("db-ops-progress-bar--indeterminate");
         labelEl.className = "db-ops-progress-label error";
-        labelEl.textContent = "Fehler: " + error.message;
+        labelEl.textContent = formatApiLoadError(error.message, "Datenbank-Backup");
       } finally {
         backupButton.disabled = false;
       }
@@ -18052,7 +18052,7 @@ function wireEvents() {
       } catch (error) {
         barEl.classList.remove("db-ops-progress-bar--indeterminate");
         labelEl.className = "db-ops-progress-label error";
-        labelEl.textContent = "Fehler: " + error.message;
+        labelEl.textContent = formatApiLoadError(error.message, "Datenbank-Backup");
       } finally {
         restoreButton.disabled = false;
         restoreButton.innerHTML = "&#x267B;&#xFE0F; DB wiederherstellen";

@@ -3266,14 +3266,18 @@ def _create_database_backup_job() -> dict:
         }
 
     def _run_job() -> None:
+        backup_busy_ms = max(
+            30000,
+            min(300000, int(os.getenv("MONITORING_BACKUP_BUSY_TIMEOUT_MS", "120000") or "120000")),
+        )
         try:
             # Use SQLite's online backup API - WAL-aware and consistent under concurrent writes.
             with sqlite3.connect(DB_PATH) as src_conn:
-                src_conn.execute("PRAGMA busy_timeout = 10000")
+                src_conn.execute(f"PRAGMA busy_timeout = {backup_busy_ms}")
                 with sqlite3.connect(backup_path) as dst_conn:
-                    dst_conn.execute("PRAGMA busy_timeout = 10000")
-                    # Incremental copy yields between chunks while source DB is active.
-                    src_conn.backup(dst_conn, pages=2048, sleep=0.05)
+                    dst_conn.execute(f"PRAGMA busy_timeout = {backup_busy_ms}")
+                    # Smaller page batches reduce write-lock pressure on the live DB.
+                    src_conn.backup(dst_conn, pages=512, sleep=0.1)
             with _backup_jobs_lock:
                 job = _backup_jobs.get(job_id)
                 if job is not None:
@@ -19056,8 +19060,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         username = self._require_web_session()
         if not username:
             return ""
-        with sqlite3.connect(DB_PATH) as conn:
-            user = get_web_user(conn, username)
+        try:
+            with sqlite_connect_interactive() as conn:
+                user = get_web_user(conn, username)
+        except sqlite3.OperationalError as exc:
+            if _sqlite_operational_error_is_lock(exc):
+                self._send_json(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    {"error": "Datenbank kurz gesperrt. Bitte in wenigen Sekunden erneut versuchen."},
+                )
+                return ""
+            raise
         if not user or not user.get("is_admin"):
             self._send_json(HTTPStatus.FORBIDDEN, {"error": "admin required"})
             return ""
