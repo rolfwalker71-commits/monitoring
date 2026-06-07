@@ -2171,13 +2171,71 @@ def _reconcile_legacy_host_uids(
         """,
         (safe_hostname, *ambiguous_values),
     ).fetchone()
+    repoint_targets = sorted(candidates)
     if ambiguity_row:
-        return
+        repoint_targets = [
+            legacy_host_uid
+            for legacy_host_uid in repoint_targets
+            if _should_repoint_superseded_identity(conn, safe_hostname, legacy_host_uid, safe_host_uid)
+        ]
+        if not repoint_targets:
+            return
+    else:
+        # Keep legacy report rows under their original host_uid so temporary identities
+        # remain visible at the bottom of the host list. Only repoint alert-related state.
+        pass
 
-    # Keep legacy report rows under their original host_uid so temporary identities
-    # remain visible at the bottom of the host list. Only repoint alert-related state.
-    for legacy_host_uid in sorted(candidates):
+    for legacy_host_uid in repoint_targets:
         _repoint_host_identity_rows(conn, safe_hostname, legacy_host_uid, safe_host_uid)
+
+
+def _identity_last_report_utc(conn: sqlite3.Connection, hostname: str, host_uid: str) -> str:
+    safe_hostname = str(hostname or "").strip()
+    safe_host_uid = str(host_uid or "").strip()
+    if not safe_hostname or not safe_host_uid:
+        return ""
+    host_key_expr = reports_host_key_sql()
+    row = conn.execute(
+        f"""
+        SELECT MAX(received_at_utc)
+        FROM reports
+        WHERE hostname = ?
+          AND {host_key_expr} = ?
+        """,
+        (safe_hostname, safe_host_uid),
+    ).fetchone()
+    return str(row[0] or "").strip() if row else ""
+
+
+def _should_repoint_superseded_identity(
+    conn: sqlite3.Connection,
+    hostname: str,
+    old_host_uid: str,
+    new_host_uid: str,
+) -> bool:
+    old_key = str(old_host_uid or "").strip()
+    new_key = str(new_host_uid or "").strip()
+    if not old_key or not new_key or old_key == new_key:
+        return False
+
+    new_last = _identity_last_report_utc(conn, hostname, new_key)
+    if not new_last:
+        return False
+
+    old_last = _identity_last_report_utc(conn, hostname, old_key)
+    if not old_last:
+        has_state = conn.execute(
+            """
+            SELECT 1
+            FROM alerts
+            WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+            LIMIT 1
+            """,
+            (old_key,),
+        ).fetchone()
+        return bool(has_state)
+
+    return old_last < new_last
 
 
 def _repoint_host_identity_rows(
@@ -2185,28 +2243,215 @@ def _repoint_host_identity_rows(
     hostname: str,
     old_host_uid: str,
     new_host_uid: str,
-) -> None:
+) -> dict[str, int]:
     safe_hostname = str(hostname or "").strip()
     old_key = str(old_host_uid or "").strip()
     new_key = str(new_host_uid or "").strip()
+    stats = {
+        "alerts_repointed": 0,
+        "alerts_resolved_duplicate": 0,
+        "debounce_deleted": 0,
+        "debounce_repointed": 0,
+        "muted_repointed": 0,
+        "heads_up_repointed": 0,
+    }
     if not safe_hostname or not old_key or not new_key or old_key == new_key:
-        return
+        return stats
 
-    identity_tables = (
-        ("alerts", "host_uid"),
-        ("muted_alert_rules", "host_uid"),
-        ("heads_up_suppression_rules", "host_uid"),
-        ("alert_debounce", "host_uid"),
-    )
-    for table_name, column_name in identity_tables:
-        conn.execute(
-            f"""
-            UPDATE {table_name}
-            SET {column_name} = ?
-            WHERE {column_name} = ?
+    now_utc = utc_now_iso()
+    open_old_rows = conn.execute(
+        """
+        SELECT id, mountpoint
+        FROM alerts
+        WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+          AND status = 'open'
+        """,
+        (old_key,),
+    ).fetchall()
+    for alert_row in open_old_rows:
+        alert_id = int(alert_row[0] or 0)
+        mountpoint = str(alert_row[1] or "")
+        duplicate_open = conn.execute(
+            """
+            SELECT id
+            FROM alerts
+            WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+              AND mountpoint = ?
+              AND status = 'open'
+            LIMIT 1
             """,
+            (new_key, mountpoint),
+        ).fetchone()
+        if duplicate_open:
+            conn.execute(
+                """
+                UPDATE alerts
+                SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?
+                WHERE id = ?
+                """,
+                (now_utc, now_utc, alert_id),
+            )
+            stats["alerts_resolved_duplicate"] += 1
+        else:
+            conn.execute(
+                "UPDATE alerts SET host_uid = ? WHERE id = ?",
+                (new_key, alert_id),
+            )
+            stats["alerts_repointed"] += 1
+
+    conn.execute(
+        """
+        UPDATE alerts
+        SET host_uid = ?
+        WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+          AND status <> 'open'
+        """,
+        (new_key, old_key),
+    )
+
+    debounce_rows = conn.execute(
+        "SELECT mountpoint FROM alert_debounce WHERE host_uid = ?",
+        (old_key,),
+    ).fetchall()
+    for debounce_row in debounce_rows:
+        mountpoint = str(debounce_row[0] or "")
+        duplicate_debounce = conn.execute(
+            "SELECT 1 FROM alert_debounce WHERE host_uid = ? AND mountpoint = ? LIMIT 1",
+            (new_key, mountpoint),
+        ).fetchone()
+        if duplicate_debounce:
+            conn.execute(
+                "DELETE FROM alert_debounce WHERE host_uid = ? AND mountpoint = ?",
+                (old_key, mountpoint),
+            )
+            stats["debounce_deleted"] += 1
+        else:
+            conn.execute(
+                "UPDATE alert_debounce SET host_uid = ?, hostname = ? WHERE host_uid = ? AND mountpoint = ?",
+                (new_key, safe_hostname, old_key, mountpoint),
+            )
+            stats["debounce_repointed"] += 1
+
+    for table_name, stat_key in (
+        ("muted_alert_rules", "muted_repointed"),
+        ("heads_up_suppression_rules", "heads_up_repointed"),
+    ):
+        conn.execute(
+            f"UPDATE {table_name} SET host_uid = ? WHERE host_uid = ?",
             (new_key, old_key),
         )
+        changed = int(conn.execute("SELECT changes()").fetchone()[0] or 0)
+        stats[stat_key] += changed
+
+    return stats
+
+
+def _canonical_identities_by_hostname(conn: sqlite3.Connection) -> dict[str, dict[str, object]]:
+    rows = _latest_report_rows_by_host_key(conn)
+    best_row_by_hostname = _best_report_row_by_hostname(rows)
+    canonical: dict[str, dict[str, object]] = {}
+    for hostname, row in best_row_by_hostname.items():
+        canonical[hostname] = {
+            "host_uid": str(row[0] or "").strip(),
+            "last_report_time_utc": str(row[2] or "").strip(),
+            "report_count": int(row[5] or 0),
+        }
+    return canonical
+
+
+def _is_superseded_host_identity_key(
+    conn: sqlite3.Connection,
+    hostname: str,
+    host_uid: str,
+    canonical_by_hostname: dict[str, dict[str, object]] | None = None,
+) -> bool:
+    safe_hostname = str(hostname or "").strip()
+    safe_host_uid = str(host_uid or "").strip()
+    if not safe_hostname or not safe_host_uid:
+        return True
+    if safe_host_uid.startswith("__legacy_report__:"):
+        return True
+
+    canonical_map = canonical_by_hostname if canonical_by_hostname is not None else _canonical_identities_by_hostname(conn)
+    canonical = canonical_map.get(safe_hostname)
+    if not canonical:
+        return False
+
+    canonical_uid = str(canonical.get("host_uid") or "").strip()
+    canonical_last = str(canonical.get("last_report_time_utc") or "").strip()
+    if not canonical_uid or not canonical_last:
+        return False
+    if safe_host_uid == canonical_uid:
+        return False
+
+    return _should_repoint_superseded_identity(conn, safe_hostname, safe_host_uid, canonical_uid)
+
+
+def cleanup_superseded_host_identities(conn: sqlite3.Connection) -> dict[str, int]:
+    canonical_by_hostname = _canonical_identities_by_hostname(conn)
+    host_key_expr = reports_host_key_sql()
+    identity_rows = conn.execute(
+        f"""
+        SELECT DISTINCT hostname, identity_key
+        FROM (
+            SELECT COALESCE(hostname, '') AS hostname, {host_key_expr} AS identity_key
+            FROM reports
+            UNION
+            SELECT COALESCE(hostname, ''), COALESCE(NULLIF(host_uid, ''), hostname) AS identity_key
+            FROM alerts
+        )
+        WHERE COALESCE(hostname, '') <> ''
+          AND COALESCE(identity_key, '') <> ''
+        """
+    ).fetchall()
+
+    totals = {
+        "hosts_scanned": len(canonical_by_hostname),
+        "identities_scanned": 0,
+        "identities_repointed": 0,
+        "alerts_repointed": 0,
+        "alerts_resolved_duplicate": 0,
+        "debounce_deleted": 0,
+        "debounce_repointed": 0,
+        "orphan_reports_deleted": 0,
+    }
+
+    processed_pairs: set[tuple[str, str]] = set()
+    for row in identity_rows:
+        hostname = str(row[0] or "").strip()
+        identity_key = str(row[1] or "").strip()
+        if not hostname or not identity_key or identity_key.startswith("__legacy_report__:"):
+            continue
+        totals["identities_scanned"] += 1
+
+        canonical = canonical_by_hostname.get(hostname)
+        if not canonical:
+            continue
+        canonical_uid = str(canonical.get("host_uid") or "").strip()
+        if not canonical_uid or identity_key == canonical_uid:
+            continue
+        if not _should_repoint_superseded_identity(conn, hostname, identity_key, canonical_uid):
+            continue
+
+        pair = (hostname, identity_key)
+        if pair in processed_pairs:
+            continue
+        processed_pairs.add(pair)
+
+        repoint_stats = _repoint_host_identity_rows(conn, hostname, identity_key, canonical_uid)
+        totals["identities_repointed"] += 1
+        totals["alerts_repointed"] += int(repoint_stats.get("alerts_repointed", 0) or 0)
+        totals["alerts_resolved_duplicate"] += int(repoint_stats.get("alerts_resolved_duplicate", 0) or 0)
+        totals["debounce_deleted"] += int(repoint_stats.get("debounce_deleted", 0) or 0)
+        totals["debounce_repointed"] += int(repoint_stats.get("debounce_repointed", 0) or 0)
+
+        conn.execute(
+            f"DELETE FROM reports WHERE hostname = ? AND {host_key_expr} = ?",
+            (hostname, identity_key),
+        )
+        totals["orphan_reports_deleted"] += int(conn.execute("SELECT changes()").fetchone()[0] or 0)
+
+    return totals
 
 
 def _ensure_reports_host_uid_support(conn: sqlite3.Connection) -> None:
@@ -8847,6 +9092,17 @@ def collect_open_alerts(
         ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, used_percent DESC, id DESC
         """
     ).fetchall()
+    canonical_by_hostname = _canonical_identities_by_hostname(conn)
+    rows = [
+        row
+        for row in rows
+        if not _is_superseded_host_identity_key(
+            conn,
+            str(row[1] or ""),
+            str(row[2] or ""),
+            canonical_by_hostname,
+        )
+    ]
     blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
     if blacklist_patterns:
         rows = [row for row in rows if not is_filesystem_blacklisted_by_patterns(str(row[3] or ""), blacklist_patterns)]
@@ -22756,6 +23012,30 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path == "/api/v1/admin/cleanup-host-identities":
+            if not self._require_admin_session():
+                return
+
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    result = cleanup_superseded_host_identities(conn)
+                    conn.commit()
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
+            _read_cache_invalidate_prefix("hosts:")
+            _read_cache_invalidate_prefix("inactive-hosts:")
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "message": "Verwaiste Host-Identitäten bereinigt",
+                    **result,
+                },
+            )
+            return
+
         if path != "/api/v1/agent-report":
             self.send_error(HTTPStatus.NOT_FOUND, "Not found")
             return
@@ -22913,6 +23193,19 @@ def main() -> None:
     args = parser.parse_args()
 
     init_db()
+    try:
+        with sqlite_connect() as conn:
+            identity_cleanup = cleanup_superseded_host_identities(conn)
+            conn.commit()
+        if int(identity_cleanup.get("identities_repointed", 0) or 0) > 0:
+            print(
+                "[startup] superseded host identities cleaned: "
+                f"repointed={identity_cleanup.get('identities_repointed', 0)}, "
+                f"alerts_resolved_duplicate={identity_cleanup.get('alerts_resolved_duplicate', 0)}, "
+                f"orphan_reports_deleted={identity_cleanup.get('orphan_reports_deleted', 0)}"
+            )
+    except Exception as exc:
+        print(f"[startup] superseded host identity cleanup failed: {exc}")
     try:
         with sqlite_connect() as conn:
             _mark_interrupted_changelog_rebuild_jobs_on_startup(conn)
