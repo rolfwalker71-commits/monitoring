@@ -604,6 +604,16 @@ def sqlite_connect_read() -> sqlite3.Connection:
     return conn
 
 
+def sqlite_connect_maintenance() -> sqlite3.Connection:
+    """Longer busy timeout for manual/scheduled DB maintenance snapshots."""
+    conn = sqlite_connect()
+    try:
+        conn.execute(f"PRAGMA busy_timeout = {_maintenance_sqlite_busy_timeout_ms()}")
+    except sqlite3.Error:
+        pass
+    return conn
+
+
 def _sqlite_operational_error_is_lock(exc: sqlite3.OperationalError) -> bool:
     text = str(exc).lower()
     return "locked" in text or "busy" in text
@@ -4991,8 +5001,10 @@ def _upsert_db_maintenance_snapshot_for_bucket(
     conn: sqlite3.Connection,
     *,
     bucket_start_utc: datetime,
+    computed_at_utc: str | None = None,
 ) -> dict[str, object]:
     bucket_iso = bucket_start_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+    computed_iso = str(computed_at_utc or "").strip() or utc_now_iso()
     stats = collect_database_maintenance_stats(conn)
     conn.execute(
         """
@@ -5041,7 +5053,7 @@ def _upsert_db_maintenance_snapshot_for_bucket(
         """,
         (
             bucket_iso,
-            utc_now_iso(),
+            computed_iso,
             int(stats.get("retention_days", REPORT_RETENTION_DAYS) or REPORT_RETENTION_DAYS),
             int(stats.get("reports_total", 0) or 0),
             int(stats.get("hosts_with_reports", 0) or 0),
@@ -5062,6 +5074,7 @@ def _upsert_db_maintenance_snapshot_for_bucket(
             str(stats.get("newest_report_utc", "") or ""),
         ),
     )
+    stats["computed_at_utc"] = computed_iso
     return stats
 
 
@@ -5150,13 +5163,16 @@ def _ensure_db_maintenance_snapshot(conn: sqlite3.Connection, *, force_if_empty:
 
 def trigger_db_maintenance_snapshot_now(conn: sqlite3.Connection) -> dict[str, object]:
     bucket_start_utc = _maintenance_bucket_start_utc()
+    computed_at_utc = utc_now_iso()
     stats = _upsert_db_maintenance_snapshot_for_bucket(
         conn,
         bucket_start_utc=bucket_start_utc,
+        computed_at_utc=computed_at_utc,
     )
     conn.commit()
     return {
         "bucket_start_utc": bucket_start_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "computed_at_utc": computed_at_utc,
         "stats": stats,
     }
 
@@ -5392,23 +5408,17 @@ def build_db_maintenance_dashboard(conn: sqlite3.Connection) -> dict[str, object
 def _db_maintenance_scheduler_loop() -> None:
     while True:
         try:
-            if not _db_maintenance_lock.acquire(blocking=False):
-                threading.Event().wait(60)
-                continue
-            try:
-                with sqlite_connect() as conn:
-                    inserted = _insert_db_maintenance_snapshot_if_missing(
-                        conn,
-                        bucket_start_utc=_maintenance_bucket_start_utc(),
-                    )
-                    process_due_changelog_rebuild_jobs(conn, max_jobs=1)
-                    conn.commit()
-                if inserted:
-                    _read_cache_invalidate_prefix("admin-database-stats")
-                    _read_cache_invalidate_prefix("dashboard-db-kpis")
-            finally:
-                _db_maintenance_lock.release()
-                _agent_ingest_queue_wakeup.set()
+            inserted = False
+            with sqlite_connect_maintenance() as conn:
+                inserted = _insert_db_maintenance_snapshot_if_missing(
+                    conn,
+                    bucket_start_utc=_maintenance_bucket_start_utc(),
+                )
+                conn.commit()
+            if inserted:
+                _read_cache_invalidate_prefix("admin-database-stats")
+                _read_cache_invalidate_prefix("dashboard-db-kpis")
+            _start_background_changelog_jobs(max_jobs=1)
         except Exception as exc:
             print(f"[db-maintenance-scheduler] {exc}")
         threading.Event().wait(60)
@@ -24918,16 +24928,26 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                with _db_maintenance_lock:
-                    with sqlite_connect() as conn:
-                        snapshot = trigger_db_maintenance_snapshot_now(conn)
-                        payload = build_db_maintenance_dashboard(conn)
-                _read_cache_invalidate_prefix("admin-database-stats")
-                _read_cache_invalidate_prefix("dashboard-db-kpis")
+                with sqlite_connect_maintenance() as conn:
+                    snapshot = trigger_db_maintenance_snapshot_now(conn)
+                    payload = build_db_maintenance_dashboard(conn)
+            except sqlite3.OperationalError as exc:
+                if _sqlite_operational_error_is_lock(exc):
+                    self._send_json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {
+                            "error": "Datenbank gerade beschäftigt. Bitte in 1–2 Minuten erneut versuchen.",
+                            "code": "database_busy",
+                        },
+                    )
+                    return
+                raise
             except Exception as exc:
                 self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
                 return
 
+            _read_cache_invalidate_prefix("admin-database-stats")
+            _read_cache_invalidate_prefix("dashboard-db-kpis")
             self._send_json(
                 HTTPStatus.OK,
                 {

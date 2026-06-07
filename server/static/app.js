@@ -12522,19 +12522,7 @@ async function testAdminBackupAutomationSftp() {
   return data;
 }
 
-async function loadAdminDatabaseStats(retryCount = 0) {
-  const response = await fetch("/api/v1/admin/database-stats", {
-    method: "GET",
-    credentials: "same-origin",
-  });
-  if (response.status === 503 && retryCount < 3) {
-    await new Promise((resolve) => setTimeout(resolve, 1500 * (retryCount + 1)));
-    return loadAdminDatabaseStats(retryCount + 1);
-  }
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || ("HTTP " + response.status));
-  }
+function applyAdminDatabaseStatsPayload(data, options = {}) {
   const stats = data && typeof data.stats === "object" ? data.stats : {};
   const history = Array.isArray(data?.history) ? data.history : [];
   const recentRows = Array.isArray(data?.recent_rows) ? data.recent_rows : [];
@@ -12544,12 +12532,38 @@ async function loadAdminDatabaseStats(retryCount = 0) {
   renderDbMaintenanceStats(stats);
   renderDbMaintenanceCharts(history, forecasts, intervalHours);
   renderDbMaintenanceHistoryRows(recentRows);
-  const lastBucket = history.length > 0 ? formatUtcPlus2(history[history.length - 1]?.bucket_start_utc || "") : "-";
+  const lastHistory = history.length > 0 ? history[history.length - 1] : null;
+  const lastComputed = String(
+    options.computedAtUtc
+      || data?.triggered?.computed_at_utc
+      || lastHistory?.computed_at_utc
+      || lastHistory?.bucket_start_utc
+      || ""
+  ).trim();
+  const lastRunLabel = lastComputed ? formatUtcPlus2(lastComputed) : "-";
   const nextLocal = schedule?.next_bucket_local
     ? new Date(schedule.next_bucket_local).toLocaleString("de-CH", { timeZone: schedule.timezone || "Europe/Zurich" })
     : "-";
-  setDbMaintenanceStatus(`Letzter Lauf: ${lastBucket} · Nächster ${intervalHours}h-Lauf: ${nextLocal} (${schedule.timezone || "Europe/Zurich"})`);
+  const prefix = options.manualRun ? "Manuell berechnet" : "Letzter Lauf";
+  setDbMaintenanceStatus(`${prefix}: ${lastRunLabel} · Nächster ${intervalHours}h-Lauf: ${nextLocal} (${schedule.timezone || "Europe/Zurich"})`);
   return stats;
+}
+
+async function loadAdminDatabaseStats(retryCount = 0) {
+  const response = await fetch("/api/v1/admin/database-stats", {
+    method: "GET",
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (response.status === 503 && retryCount < 3) {
+    await new Promise((resolve) => setTimeout(resolve, 1500 * (retryCount + 1)));
+    return loadAdminDatabaseStats(retryCount + 1);
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return applyAdminDatabaseStatsPayload(data);
 }
 
 async function loadHeaderDatabaseKpis() {
@@ -18269,10 +18283,13 @@ function wireEvents() {
   if (triggerDatabaseStatsButton) {
     triggerDatabaseStatsButton.addEventListener("click", async () => {
       setDbMaintenanceActionButtonsDisabled(true);
-      setDbMaintenanceStatus("DB Kennzahlen werden neu berechnet...");
+      setDbMaintenanceStatus("DB Kennzahlen werden neu berechnet (Vollscan, kann 1–2 Min. dauern)...");
       try {
-        await triggerAdminDatabaseStatsNow();
-        await loadAdminDatabaseStats();
+        const data = await triggerAdminDatabaseStatsNow();
+        applyAdminDatabaseStatsPayload(data, { manualRun: true });
+        await loadHeaderDatabaseKpis().catch((error) => {
+          console.warn("loadHeaderDatabaseKpis after stats trigger failed:", error);
+        });
       } catch (error) {
         setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
       } finally {
