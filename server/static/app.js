@@ -10054,7 +10054,28 @@ function compareHostsByReportTime(a, b, direction) {
   return compareHostsCustomerAlpha(a, b);
 }
 
+function isTemporaryHostIdentity(host) {
+  if (host?.is_temporary_identity === true) {
+    return true;
+  }
+  const reportCount = Number(host?.report_count || 0);
+  return Number.isFinite(reportCount) && reportCount > 0 && reportCount <= 3;
+}
+
+function compareTemporaryHostPlacement(a, b) {
+  const temporaryA = isTemporaryHostIdentity(a) ? 1 : 0;
+  const temporaryB = isTemporaryHostIdentity(b) ? 1 : 0;
+  if (temporaryA !== temporaryB) {
+    return temporaryA - temporaryB;
+  }
+  return 0;
+}
+
 function compareHostsBySortMode(a, b, sortMode) {
+  const temporaryPlacement = compareTemporaryHostPlacement(a, b);
+  if (temporaryPlacement !== 0) {
+    return temporaryPlacement;
+  }
   const mode = normalizeHostSortMode(sortMode);
   if (mode === "report_desc") {
     return compareHostsByReportTime(a, b, "desc");
@@ -10099,6 +10120,10 @@ function filterAndSortHosts(hosts) {
 
   const sortMode = normalizeHostSortMode(state.hostSortMode);
   filtered.sort((a, b) => {
+    const temporaryPlacement = compareTemporaryHostPlacement(a, b);
+    if (temporaryPlacement !== 0) {
+      return temporaryPlacement;
+    }
     if (interestMode === "interested_first" && interestSet.size > 0) {
       const interestedA = hostInterestSetHasHost(interestSet, a) ? 1 : 0;
       const interestedB = hostInterestSetHasHost(interestSet, b) ? 1 : 0;
@@ -10301,10 +10326,12 @@ function renderSingleHostCard(host) {
   const hasOpenAlerts = openAlertCount > 0;
   const isFavorite = Boolean(host.is_favorite);
   const isHidden = Boolean(host.is_hidden);
+  const isTemporaryIdentity = isTemporaryHostIdentity(host);
   const environmentType = asText(host.environment_type, "").trim().toLowerCase();
   const envCardClass = environmentType === "prod" ? " host-item--env-prod" : "";
   const hiddenClass = isHidden ? " host-item-hidden" : "";
   const favoriteClass = isFavorite ? " host-item-favorite" : "";
+  const temporaryClass = isTemporaryIdentity ? " host-item-temporary" : "";
 
   const osIconInfo = resolveHostOsIcon(host.os);
   const countryCode = asText(host.country_code || "", "").toUpperCase();
@@ -10450,7 +10477,7 @@ function renderSingleHostCard(host) {
   }
 
   return `
-    <article class="${selectedClass}${envCardClass}${hiddenClass}${favoriteClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostIdentity)}">
+    <article class="${selectedClass}${envCardClass}${hiddenClass}${favoriteClass}${temporaryClass}" tabindex="0" role="button" data-host="${escapeHtml(hostname)}" data-host-uid="${escapeHtml(hostIdentity)}"${isTemporaryIdentity ? ' title="Temporäre Host-Identität (wenige Reports) – unten angepinnt"' : ""}>
       ${versionSideBarHtml}
       ${countryCodeHtml}
       ${cornerIcons}

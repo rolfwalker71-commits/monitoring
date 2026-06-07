@@ -2174,11 +2174,8 @@ def _reconcile_legacy_host_uids(
     if ambiguity_row:
         return
 
-    where_clause = " AND ".join(where_parts)
-    conn.execute(
-        f"UPDATE reports SET host_uid = ? WHERE {where_clause}",
-        (safe_host_uid, *args),
-    )
+    # Keep legacy report rows under their original host_uid so temporary identities
+    # remain visible at the bottom of the host list. Only repoint alert-related state.
     for legacy_host_uid in sorted(candidates):
         _repoint_host_identity_rows(conn, safe_hostname, legacy_host_uid, safe_host_uid)
 
@@ -18133,7 +18130,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             latest_id,
                             COUNT(*) OVER() AS total_hosts
                         FROM grouped
-                        ORDER BY last_seen_utc DESC
+                        ORDER BY
+                            CASE
+                                WHEN report_count <= {INACTIVE_HOST_GHOST_MAX_REPORTS} THEN 1
+                                ELSE 0
+                            END ASC,
+                            last_seen_utc DESC
                         LIMIT ? OFFSET ?
                     )
                     SELECT
@@ -18147,7 +18149,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         o.total_hosts
                     FROM ordered o
                     JOIN reports r_latest ON r_latest.id = o.latest_id
-                    ORDER BY o.last_seen_utc DESC
+                    ORDER BY
+                        CASE
+                            WHEN o.report_count <= {INACTIVE_HOST_GHOST_MAX_REPORTS} THEN 1
+                            ELSE 0
+                        END ASC,
+                        o.last_seen_utc DESC
                     """,
                     (limit, offset),
                 ).fetchall()
@@ -18332,6 +18339,8 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         "last_seen_utc": last_seen_utc,
                         "online": online,
                         "report_count": row[2],
+                        "is_temporary_identity": int(row[2] or 0) > 0
+                        and int(row[2] or 0) <= INACTIVE_HOST_GHOST_MAX_REPORTS,
                         "primary_ip": row[3] or "",
                         "std_nic_ip": _resolve_std_nic_ipv4(latest_payload, str(row[3] or "")),
                         "agent_id": row[4] or "",
