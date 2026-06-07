@@ -2825,6 +2825,8 @@ const LIVE_REPORT_FEED_POSITION_KEY = "monitoring.liveReportFeedPosition";
 const LIVE_REPORT_FEED_ENABLED_KEY = "monitoring.liveReportFeedEnabled";
 const LIVE_REPORT_POLL_INTERVAL_MS = 25000;
 const LIVE_REPORT_POLL_INTERVAL_FAST_MS = 8000;
+const LIVE_REPORT_PUSH_COOLDOWN_MS = 15 * 60 * 1000;
+const liveReportPushCooldownByHost = new Map();
 let liveReportFeedItems = [];
 let liveReportFeedMinimized = false;
 let liveReportFeedEnabled = true;
@@ -5117,8 +5119,30 @@ function buildLiveReportPushPayloadFromEvent(event) {
   };
 }
 
+function filterLiveReportEventsForPushCooldown(events) {
+  const nowMs = Date.now();
+  const eligible = [];
+  for (const event of Array.isArray(events) ? events : []) {
+    const hostKey = String(event?.host_uid || event?.hostname || "").trim();
+    if (!hostKey) {
+      continue;
+    }
+    const lastPushMs = Number(liveReportPushCooldownByHost.get(hostKey) || 0);
+    if (lastPushMs > 0 && nowMs - lastPushMs < LIVE_REPORT_PUSH_COOLDOWN_MS) {
+      continue;
+    }
+    liveReportPushCooldownByHost.set(hostKey, nowMs);
+    eligible.push(event);
+  }
+  return eligible;
+}
+
 async function postLiveReportEventsToServiceWorker(events) {
   if (!Array.isArray(events) || !events.length || !("serviceWorker" in navigator)) {
+    return;
+  }
+  const eligibleEvents = filterLiveReportEventsForPushCooldown(events);
+  if (!eligibleEvents.length) {
     return;
   }
   try {
@@ -5129,7 +5153,7 @@ async function postLiveReportEventsToServiceWorker(events) {
     }
     worker.postMessage({
       type: "live-report-feed-update",
-      events: events.map(buildLiveReportPushPayloadFromEvent),
+      events: eligibleEvents.map(buildLiveReportPushPayloadFromEvent),
     });
   } catch (_error) {
     // Best effort when polling finds events while the app is backgrounded.

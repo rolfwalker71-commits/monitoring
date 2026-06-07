@@ -155,7 +155,15 @@ LIVE_REPORT_PUSH_TTL_SECONDS = max(
     60,
     min(900, int(os.getenv("MONITORING_LIVE_REPORT_PUSH_TTL_SECONDS", "300") or "300")),
 )
+LIVE_REPORT_PUSH_COOLDOWN_SECONDS = max(
+    60,
+    min(3600, int(os.getenv("MONITORING_LIVE_REPORT_PUSH_COOLDOWN_SECONDS", "900") or "900")),
+)
 LIVE_DASHBOARD_PUSH_TAG = "monitoring-live-dashboard"
+INACTIVE_HOST_GHOST_MAX_REPORTS = max(
+    1,
+    min(10, int(os.getenv("MONITORING_INACTIVE_HOST_GHOST_MAX_REPORTS", "3") or "3")),
+)
 CUSTOMER_LOGO_MAX_BYTES = max(64 * 1024, min(10 * 1024 * 1024, int(os.getenv("MONITORING_CUSTOMER_LOGO_MAX_BYTES", str(2 * 1024 * 1024)) or str(2 * 1024 * 1024))))
 try:
     SCHEDULE_TIMEZONE = ZoneInfo(SCHEDULE_TIMEZONE_NAME)
@@ -246,6 +254,16 @@ def _read_cache_set(cache_key: str, value: object, ttl_seconds: float | None = N
         # Trim oldest-expiring entries first to keep cache bounded.
         for key, _ in sorted(_read_endpoint_cache.items(), key=lambda item: item[1][0])[: max(1, len(_read_endpoint_cache) // 8)]:
             _read_endpoint_cache.pop(key, None)
+
+
+def _read_cache_invalidate_prefix(prefix: str) -> None:
+    safe_prefix = str(prefix or "").strip()
+    if not safe_prefix:
+        return
+    with _read_endpoint_cache_lock:
+        for key in list(_read_endpoint_cache.keys()):
+            if str(key).startswith(safe_prefix):
+                _read_endpoint_cache.pop(key, None)
 
 
 def _new_endpoint_timer(endpoint: str) -> dict[str, object]:
@@ -1410,6 +1428,14 @@ def init_db() -> None:
             )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS live_report_push_cooldown (
+                host_uid TEXT PRIMARY KEY,
+                last_push_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS user_preferences (
                 username TEXT PRIMARY KEY,
                 critical_trends_metrics TEXT NOT NULL DEFAULT 'filesystem',
@@ -2088,6 +2114,8 @@ def _reconcile_legacy_host_uids(
         return
 
     candidates: set[str] = set()
+    if safe_hostname != safe_host_uid:
+        candidates.add(safe_hostname)
     if safe_agent_id:
         candidates.add(f"{safe_hostname}::agent:{safe_agent_id}")
 
@@ -2151,6 +2179,37 @@ def _reconcile_legacy_host_uids(
         f"UPDATE reports SET host_uid = ? WHERE {where_clause}",
         (safe_host_uid, *args),
     )
+    for legacy_host_uid in sorted(candidates):
+        _repoint_host_identity_rows(conn, safe_hostname, legacy_host_uid, safe_host_uid)
+
+
+def _repoint_host_identity_rows(
+    conn: sqlite3.Connection,
+    hostname: str,
+    old_host_uid: str,
+    new_host_uid: str,
+) -> None:
+    safe_hostname = str(hostname or "").strip()
+    old_key = str(old_host_uid or "").strip()
+    new_key = str(new_host_uid or "").strip()
+    if not safe_hostname or not old_key or not new_key or old_key == new_key:
+        return
+
+    identity_tables = (
+        ("alerts", "host_uid"),
+        ("muted_alert_rules", "host_uid"),
+        ("heads_up_suppression_rules", "host_uid"),
+        ("alert_debounce", "host_uid"),
+    )
+    for table_name, column_name in identity_tables:
+        conn.execute(
+            f"""
+            UPDATE {table_name}
+            SET {column_name} = ?
+            WHERE {column_name} = ?
+            """,
+            (new_key, old_key),
+        )
 
 
 def _ensure_reports_host_uid_support(conn: sqlite3.Connection) -> None:
@@ -8534,36 +8593,65 @@ def collect_critical_trends(
     return warnings
 
 
+def _is_superseded_ghost_host_key(
+    *,
+    host_key: str,
+    hostname: str,
+    last_report_time_utc: str,
+    report_count: int,
+    newest_report_by_hostname: dict[str, str],
+    ghost_max_reports: int = INACTIVE_HOST_GHOST_MAX_REPORTS,
+) -> bool:
+    safe_host_key = str(host_key or "").strip()
+    safe_hostname = str(hostname or "").strip()
+    safe_last_report = str(last_report_time_utc or "").strip()
+    if not safe_host_key or not safe_hostname or not safe_last_report:
+        return True
+    if safe_host_key.startswith("__legacy_report__:"):
+        return True
+    hostname_newest = str(newest_report_by_hostname.get(safe_hostname) or "").strip()
+    if not hostname_newest:
+        return False
+    if int(report_count or 0) > int(ghost_max_reports or INACTIVE_HOST_GHOST_MAX_REPORTS):
+        return False
+    return safe_last_report < hostname_newest
+
+
 def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
     cutoff_iso = utc_hours_ago_iso(hours)
     now_utc = datetime.now(timezone.utc)
 
     rows = _latest_report_rows_by_host_key(conn)
-    # A hostname can have multiple historical host keys (e.g., uid migration).
-    # For inactivity we must evaluate only the newest report per hostname.
-    latest_row_by_hostname: dict[str, tuple] = {}
+    newest_report_by_hostname: dict[str, str] = {}
     for row in rows:
         hostname = str(row[1] or "").strip()
-        if not hostname:
-            continue
         last_report_time_utc = str(row[2] or "").strip()
-        if not last_report_time_utc:
+        if not hostname or not last_report_time_utc:
             continue
-        existing = latest_row_by_hostname.get(hostname)
-        if existing is None or last_report_time_utc > str(existing[2] or ""):
-            latest_row_by_hostname[hostname] = row
+        existing = newest_report_by_hostname.get(hostname)
+        if not existing or last_report_time_utc > existing:
+            newest_report_by_hostname[hostname] = last_report_time_utc
 
     inactive_hosts = []
-    for row in latest_row_by_hostname.values():
+    for row in rows:
         host_uid = str(row[0] or "").strip()
         hostname = str(row[1] or "").strip()
         last_report_time_utc = str(row[2] or "").strip()
         payload_json_str = str(row[3] or "{}")
         primary_ip = str(row[4] or "").strip()
+        report_count = int(row[5] or 0)
 
-        if not hostname or not last_report_time_utc:
+        if not hostname or not host_uid or not last_report_time_utc:
             continue
         if last_report_time_utc >= cutoff_iso:
+            continue
+        if _is_superseded_ghost_host_key(
+            host_key=host_uid,
+            hostname=hostname,
+            last_report_time_utc=last_report_time_utc,
+            report_count=report_count,
+            newest_report_by_hostname=newest_report_by_hostname,
+        ):
             continue
 
         try:
@@ -8595,7 +8683,7 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
 
         open_alerts = conn.execute(
             "SELECT COUNT(*) FROM alerts WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ? AND status = 'open'",
-            (host_uid or hostname,),
+            (host_uid,),
         ).fetchone()
         open_alert_count = int(open_alerts[0] or 0) if open_alerts else 0
 
@@ -8618,6 +8706,7 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
             "primary_ip": primary_ip,
             "country_code": country_code,
             "open_alert_count": open_alert_count,
+            "report_count": report_count,
         })
 
     inactive_hosts.sort(key=lambda item: -item["hours_inactive"])
@@ -8628,19 +8717,21 @@ def _latest_report_rows_by_host_key(conn: sqlite3.Connection) -> list[tuple]:
     host_key_expr = reports_host_key_sql()
     return conn.execute(
         f"""
-        WITH latest AS (
+        WITH grouped AS (
             SELECT {host_key_expr} AS host_key,
-                   MAX(id) AS latest_id
+                   MAX(id) AS latest_id,
+                   COUNT(*) AS report_count
             FROM reports
             GROUP BY {host_key_expr}
         )
-        SELECT latest.host_key,
+        SELECT grouped.host_key,
                COALESCE(r.hostname, ''),
                COALESCE(r.received_at_utc, ''),
                COALESCE(r.payload_json, '{{}}'),
-               COALESCE(r.primary_ip, '')
-        FROM latest
-        JOIN reports r ON r.id = latest.latest_id
+               COALESCE(r.primary_ip, ''),
+               grouped.report_count
+        FROM grouped
+        JOIN reports r ON r.id = grouped.latest_id
         ORDER BY r.received_at_utc DESC
         """
     ).fetchall()
@@ -14835,6 +14926,48 @@ def build_live_report_push_payload(
     }
 
 
+def _live_report_push_cooldown_elapsed(
+    conn: sqlite3.Connection,
+    host_key: str,
+    received_at_utc: str,
+) -> bool:
+    safe_host_key = str(host_key or "").strip()
+    if not safe_host_key:
+        return False
+    row = conn.execute(
+        "SELECT last_push_at_utc FROM live_report_push_cooldown WHERE host_uid = ?",
+        (safe_host_key,),
+    ).fetchone()
+    if not row:
+        return True
+    last_push_at_utc = str(row[0] or "").strip()
+    if not last_push_at_utc:
+        return True
+    try:
+        last_push_dt = datetime.strptime(last_push_at_utc, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        received_dt = datetime.strptime(str(received_at_utc or ""), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return True
+    elapsed_seconds = (received_dt - last_push_dt).total_seconds()
+    return elapsed_seconds >= LIVE_REPORT_PUSH_COOLDOWN_SECONDS
+
+
+def _record_live_report_push_sent(conn: sqlite3.Connection, host_key: str, received_at_utc: str) -> None:
+    safe_host_key = str(host_key or "").strip()
+    safe_received_at_utc = str(received_at_utc or "").strip() or utc_now_iso()
+    if not safe_host_key:
+        return
+    conn.execute(
+        """
+        INSERT INTO live_report_push_cooldown (host_uid, last_push_at_utc)
+        VALUES (?, ?)
+        ON CONFLICT(host_uid) DO UPDATE SET
+            last_push_at_utc = excluded.last_push_at_utc
+        """,
+        (safe_host_key, safe_received_at_utc),
+    )
+
+
 def maybe_send_live_report_web_push(
     conn: sqlite3.Connection,
     *,
@@ -14848,6 +14981,9 @@ def maybe_send_live_report_web_push(
         return
     safe_hostname = str(hostname or "").strip()
     if not safe_hostname:
+        return
+    host_key = alert_host_key(safe_hostname, host_uid)
+    if not _live_report_push_cooldown_elapsed(conn, host_key, received_at_utc):
         return
 
     host_settings = get_host_settings(conn, safe_hostname, host_uid)
@@ -14885,6 +15021,7 @@ def maybe_send_live_report_web_push(
         return
 
     now_utc = utc_now_iso()
+    push_sent = False
     for row in target_rows:
         sub_id = int(row[0] or 0)
         endpoint = str(row[1] or "")
@@ -14902,6 +15039,7 @@ def maybe_send_live_report_web_push(
             ttl_seconds=LIVE_REPORT_PUSH_TTL_SECONDS,
         )
         if ok:
+            push_sent = True
             conn.execute(
                 """
                 UPDATE web_push_subscriptions
@@ -14928,6 +15066,8 @@ def maybe_send_live_report_web_push(
                 """,
                 (details[:500], now_utc, sub_id),
             )
+    if push_sent:
+        _record_live_report_push_sent(conn, host_key, received_at_utc)
 
 
 def _send_web_push_to_subscription(
@@ -16216,6 +16356,14 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
     if not incoming_host_uid:
         incoming_host_uid = _derive_host_uid(payload, hostname, incoming_agent_id, incoming_primary_ip)
         payload["host_uid"] = incoming_host_uid
+    _reconcile_legacy_host_uids(
+        conn,
+        payload,
+        hostname,
+        incoming_host_uid,
+        agent_id=incoming_agent_id,
+        primary_ip=incoming_primary_ip,
+    )
 
     cursor = conn.execute(
         """
@@ -16260,6 +16408,9 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
         payload=payload,
         received_at_utc=report_received_at_utc,
     )
+
+    _read_cache_invalidate_prefix("hosts:")
+    _read_cache_invalidate_prefix("inactive-hosts:")
 
     # Keep behavior identical to direct-ingest: non-blocking best effort.
     auto_sync_discovered_license_types(payload)
