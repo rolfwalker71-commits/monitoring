@@ -1510,6 +1510,29 @@ function parseUtcIso(value) {
   return parsed;
 }
 
+function hostClusterKey(hostname) {
+  const value = String(hostname || "").trim().toLowerCase();
+  if (!value) {
+    return "";
+  }
+  const dotIndex = value.indexOf(".");
+  return dotIndex === -1 ? value : value.slice(0, dotIndex);
+}
+
+function isHostRecentlyActive(host, windowMs = 60 * 60 * 1000) {
+  if (!host || typeof host !== "object") {
+    return false;
+  }
+  if (host.online === true) {
+    return true;
+  }
+  const parsedLastSeen = parseUtcIso(host.last_seen_utc || "");
+  if (!parsedLastSeen) {
+    return false;
+  }
+  return (Date.now() - parsedLastSeen.getTime()) <= windowMs;
+}
+
 function formatSessionRemaining(seconds) {
   const safeSeconds = Math.max(0, Number.parseInt(String(seconds || 0), 10) || 0);
   const h = Math.floor(safeSeconds / 3600);
@@ -3426,6 +3449,7 @@ async function loginWebClient() {
         renderHosts(state.hosts);
       }
     });
+    void loadHosts();
     return true;
   } catch (error) {
     let message = error?.message || "Anmeldung fehlgeschlagen.";
@@ -13328,7 +13352,7 @@ async function loadHosts(options = {}) {
 
   try {
     const url = `/api/v1/hosts?limit=${state.hostLimit}&offset=${state.hostOffset}`;
-    const response = await fetch(url);
+    const response = await fetch(url, { credentials: "same-origin", cache: "no-store" });
     if (!response.ok) {
       throw new Error("HTTP " + response.status);
     }
@@ -16696,17 +16720,17 @@ function updateHeaderStatChips() {
     mutedChip.classList.remove("hidden");
   }
   if (activeHostsChip && activeHostsCount) {
-    const nowMs = Date.now();
-    const activeHosts = (Array.isArray(state.hosts) ? state.hosts : []).reduce((sum, host) => {
-      if (host?.online === true) {
-        return sum + 1;
+    const activeClusters = new Set();
+    for (const host of Array.isArray(state.hosts) ? state.hosts : []) {
+      if (!isHostRecentlyActive(host)) {
+        continue;
       }
-      const parsedLastSeen = parseUtcIso(host?.last_seen_utc || "");
-      if (!parsedLastSeen) {
-        return sum;
+      const clusterKey = hostClusterKey(host.hostname || host.display_name || "");
+      if (clusterKey) {
+        activeClusters.add(clusterKey);
       }
-      return (nowMs - parsedLastSeen.getTime()) <= (60 * 60 * 1000) ? sum + 1 : sum;
-    }, 0);
+    }
+    const activeHosts = activeClusters.size;
     activeHostsCount.textContent = String(activeHosts);
     currentTrendValues.activeHosts = activeHosts;
     activeHostsChip.classList.remove("hidden");
@@ -18663,6 +18687,7 @@ async function init() {
     return;
   }
   sessionEstablishedAtMs = Date.now();
+  void loadHosts();
   // SAP maps already started above; hosts render immediately, badges fill in once ready.
   sapB1VersionMapPromise.then(() => {
     if (state.hosts && state.hosts.length > 0) {

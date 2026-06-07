@@ -120,6 +120,14 @@ ENDPOINT_TIMING_FILE_LOG_MAX_BYTES = max(
 )
 ENDPOINT_TIMING_FILE_LOG_BACKUPS = max(1, min(20, int(os.getenv("MONITORING_ENDPOINT_TIMING_FILE_LOG_BACKUPS", "5") or "5")))
 HOSTS_ENDPOINT_CACHE_TTL_SECONDS = max(0.0, min(600.0, float(os.getenv("MONITORING_HOSTS_CACHE_TTL_SECONDS", "45") or "45")))
+INACTIVE_HOSTS_ENDPOINT_CACHE_TTL_SECONDS = max(
+    0.0,
+    min(600.0, float(os.getenv("MONITORING_INACTIVE_HOSTS_CACHE_TTL_SECONDS", "30") or "30")),
+)
+IDENTITY_MAPS_CACHE_TTL_SECONDS = max(
+    5.0,
+    min(120.0, float(os.getenv("MONITORING_IDENTITY_MAPS_CACHE_TTL_SECONDS", "20") or "20")),
+)
 CRITICAL_TRENDS_ENDPOINT_CACHE_TTL_SECONDS = max(0.0, min(900.0, float(os.getenv("MONITORING_CRITICAL_TRENDS_CACHE_TTL_SECONDS", "180") or "180")))
 CHANGELOG_REBUILD_STALE_MINUTES = max(10, min(1440, int(os.getenv("MONITORING_CHANGELOG_REBUILD_STALE_MINUTES", "120") or "120")))
 SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES = max(5, min(720, int(os.getenv("MONITORING_SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES", "60") or "60")))
@@ -193,6 +201,8 @@ _web_session_purge_last_monotonic = 0.0
 _WEB_SESSION_PURGE_INTERVAL_SECONDS = max(60, int(os.getenv("MONITORING_WEB_SESSION_PURGE_INTERVAL_SECONDS", "300")))
 _read_endpoint_cache_lock = threading.Lock()
 _read_endpoint_cache: dict[str, tuple[float, object]] = {}
+_identity_maps_cache_lock = threading.Lock()
+_identity_maps_cache: dict[str, object] = {"expires_at": 0.0}
 _endpoint_timing_file_log_lock = threading.Lock()
 _agent_ingest_queue_wakeup = threading.Event()
 _local_cpu_sample_lock = threading.Lock()
@@ -9232,33 +9242,27 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
     cutoff_iso = utc_hours_ago_iso(hours)
     now_utc = datetime.now(timezone.utc)
 
-    rows = _latest_report_rows_by_host_key(conn)
-    active_clusters = _hostname_clusters_with_recent_reports(rows, cutoff_iso)
-    canonical_by_cluster = _canonical_identities_by_cluster_from_rows(rows)
-    last_seen_by_host_uid = _last_seen_by_host_uid_from_rows(rows)
-    best_row_by_cluster = _best_report_row_by_hostname_cluster(rows)
+    rows, _, canonical_by_cluster, _ = _get_latest_identity_context(conn)
+    row_by_host_uid = {str(row[0] or "").strip(): row for row in rows if str(row[0] or "").strip()}
 
     inactive_hosts = []
-    for cluster_key, row in best_row_by_cluster.items():
-        if cluster_key in active_clusters:
+    for cluster_key, canonical in canonical_by_cluster.items():
+        host_uid = str(canonical.get("host_uid") or "").strip()
+        hostname = str(canonical.get("hostname") or "").strip()
+        last_report_time_utc = str(canonical.get("last_report_time_utc") or "").strip()
+        report_count = int(canonical.get("report_count") or 0)
+        if not cluster_key or not host_uid or not hostname or not last_report_time_utc:
             continue
-
-        host_uid = str(row[0] or "").strip()
-        hostname = str(row[1] or "").strip()
-        last_report_time_utc = str(row[2] or "").strip()
-        payload_json_str = str(row[3] or "{}")
-        primary_ip = str(row[4] or "").strip()
-        report_count = int(row[5] or 0)
-
+        if host_uid.startswith("__legacy_report__:"):
+            continue
+        if report_count <= INACTIVE_HOST_GHOST_MAX_REPORTS:
+            continue
         if last_report_time_utc >= cutoff_iso:
             continue
 
-        canonical = canonical_by_cluster.get(cluster_key) or {}
-        canonical_uid = str(canonical.get("host_uid") or "").strip()
-        canonical_last = str(canonical.get("last_report_time_utc") or "").strip()
-        if canonical_uid and host_uid != canonical_uid:
-            if _identity_is_older_than(last_seen_by_host_uid.get(host_uid, ""), canonical_last):
-                continue
+        row = row_by_host_uid.get(host_uid)
+        payload_json_str = str(row[3] or "{}") if row else "{}"
+        primary_ip = str(row[4] or "").strip() if row else ""
 
         try:
             payload = json.loads(payload_json_str) if isinstance(payload_json_str, str) else {}
@@ -9319,26 +9323,65 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
     return inactive_hosts
 
 
+def _invalidate_identity_maps_cache() -> None:
+    with _identity_maps_cache_lock:
+        _identity_maps_cache["expires_at"] = 0.0
+
+
+def _get_latest_identity_context(
+    conn: sqlite3.Connection,
+) -> tuple[list[tuple], dict[str, dict[str, object]], dict[str, dict[str, object]], dict[str, str]]:
+    now_ts = datetime.now(timezone.utc).timestamp()
+    with _identity_maps_cache_lock:
+        expires_at = float(_identity_maps_cache.get("expires_at") or 0.0)
+        if expires_at > now_ts:
+            return (
+                list(_identity_maps_cache.get("rows") or []),
+                dict(_identity_maps_cache.get("canonical_by_hostname") or {}),
+                dict(_identity_maps_cache.get("canonical_by_cluster") or {}),
+                dict(_identity_maps_cache.get("last_seen_by_host_uid") or {}),
+            )
+
+    rows = _latest_report_rows_by_host_key(conn)
+    canonical_by_hostname = _canonical_identities_by_hostname_from_rows(rows)
+    canonical_by_cluster = _canonical_identities_by_cluster_from_rows(rows)
+    last_seen_by_host_uid = _last_seen_by_host_uid_from_rows(rows)
+    with _identity_maps_cache_lock:
+        _identity_maps_cache.clear()
+        _identity_maps_cache.update(
+            {
+                "expires_at": now_ts + IDENTITY_MAPS_CACHE_TTL_SECONDS,
+                "rows": rows,
+                "canonical_by_hostname": canonical_by_hostname,
+                "canonical_by_cluster": canonical_by_cluster,
+                "last_seen_by_host_uid": last_seen_by_host_uid,
+            }
+        )
+    return rows, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid
+
+
 def _latest_report_rows_by_host_key(conn: sqlite3.Connection) -> list[tuple]:
     host_key_expr = reports_host_key_sql()
     return conn.execute(
         f"""
-        WITH grouped AS (
-            SELECT {host_key_expr} AS host_key,
-                   MAX(id) AS latest_id,
-                   COUNT(*) AS report_count
+        WITH keyed AS (
+            SELECT
+                {host_key_expr} AS host_key,
+                COALESCE(hostname, '') AS hostname,
+                COALESCE(received_at_utc, '') AS received_at_utc,
+                COALESCE(payload_json, '{{}}') AS payload_json,
+                COALESCE(primary_ip, '') AS primary_ip,
+                ROW_NUMBER() OVER (
+                    PARTITION BY {host_key_expr}
+                    ORDER BY received_at_utc DESC, id DESC
+                ) AS row_rank,
+                COUNT(*) OVER (PARTITION BY {host_key_expr}) AS report_count
             FROM reports
-            GROUP BY {host_key_expr}
         )
-        SELECT grouped.host_key,
-               COALESCE(r.hostname, ''),
-               COALESCE(r.received_at_utc, ''),
-               COALESCE(r.payload_json, '{{}}'),
-               COALESCE(r.primary_ip, ''),
-               grouped.report_count
-        FROM grouped
-        JOIN reports r ON r.id = grouped.latest_id
-        ORDER BY r.received_at_utc DESC
+        SELECT host_key, hostname, received_at_utc, payload_json, primary_ip, report_count
+        FROM keyed
+        WHERE row_rank = 1
+        ORDER BY received_at_utc DESC
         """
     ).fetchall()
 
@@ -9475,10 +9518,7 @@ def collect_open_alerts(
         ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, used_percent DESC, id DESC
         """
     ).fetchall()
-    latest_identity_rows = _latest_report_rows_by_host_key(conn)
-    canonical_by_hostname = _canonical_identities_by_hostname_from_rows(latest_identity_rows)
-    canonical_by_cluster = _canonical_identities_by_cluster_from_rows(latest_identity_rows)
-    last_seen_by_host_uid = _last_seen_by_host_uid_from_rows(latest_identity_rows)
+    _, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid = _get_latest_identity_context(conn)
     rows = [
         row
         for row in rows
@@ -17016,6 +17056,7 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
     prune_reports_for_host(conn, hostname, incoming_host_uid, MAX_REPORTS_PER_HOST)
     alarm_settings = get_alarm_settings(conn)
     host_settings = get_host_settings(conn, hostname)
+    _invalidate_identity_maps_cache()
     if bool(host_settings.get("is_hidden", False)):
         resolve_open_alerts_for_host(conn, hostname, incoming_host_uid, report_id)
     else:
@@ -17032,7 +17073,7 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
         received_at_utc=report_received_at_utc,
     )
 
-    # Host/inactive lists use short TTL caches; avoid invalidating on every report ingest.
+    _invalidate_identity_maps_cache()
 
     # Keep behavior identical to direct-ingest: non-blocking best effort.
     auto_sync_discovered_license_types(payload)
@@ -17361,10 +17402,7 @@ def evaluate_severity(used_percent: float) -> str:
 
 def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: str, report_id: int, filesystems: list, alarm_settings: dict) -> None:
     now_utc = utc_now_iso()
-    latest_identity_rows = _latest_report_rows_by_host_key(conn)
-    canonical_by_hostname = _canonical_identities_by_hostname_from_rows(latest_identity_rows)
-    canonical_by_cluster = _canonical_identities_by_cluster_from_rows(latest_identity_rows)
-    last_seen_by_host_uid = _last_seen_by_host_uid_from_rows(latest_identity_rows)
+    _, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid = _get_latest_identity_context(conn)
     hostname, host_uid = _resolve_canonical_alert_identity_from_maps(
         conn,
         hostname,
@@ -19470,7 +19508,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "inactive_hosts": inactive,
                 "total": len(inactive),
             }
-            _read_cache_set(cache_key, response_data)
+            _read_cache_set(cache_key, response_data, ttl_seconds=INACTIVE_HOSTS_ENDPOINT_CACHE_TTL_SECONDS)
             self._send_json(HTTPStatus.OK, response_data)
             _mark_endpoint_timer(endpoint_timer, "send")
             _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} cache=miss total={len(inactive)}")
