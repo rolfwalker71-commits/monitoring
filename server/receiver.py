@@ -823,6 +823,26 @@ def init_db() -> None:
         )
         conn.execute(
             """
+            CREATE INDEX IF NOT EXISTS idx_reports_host_uid_received
+            ON reports(host_uid, received_at_utc, id)
+            WHERE COALESCE(host_uid, '') <> ''
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_reports_hostname_received_id
+            ON reports(hostname, received_at_utc, id)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_reports_legacy_no_uid_id
+            ON reports(id)
+            WHERE COALESCE(host_uid, '') = ''
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS agent_ingest_queue (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 enqueued_at_utc TEXT NOT NULL,
@@ -951,6 +971,19 @@ def init_db() -> None:
             """
             CREATE INDEX IF NOT EXISTS idx_alerts_host_uid_status
             ON alerts(host_uid, status, mountpoint)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_alerts_status_severity_id
+            ON alerts(status, severity, id DESC)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_alerts_status_open_id
+            ON alerts(id DESC)
+            WHERE status = 'open'
             """
         )
         conn.execute(
@@ -2928,6 +2961,26 @@ def _ensure_reports_host_uid_support(conn: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_reports_host_agent_ip_uid
         ON reports(hostname, agent_id, primary_ip, host_uid, id)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_reports_host_uid_received
+        ON reports(host_uid, received_at_utc, id)
+        WHERE COALESCE(host_uid, '') <> ''
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_reports_hostname_received_id
+        ON reports(hostname, received_at_utc, id)
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_reports_legacy_no_uid_id
+        ON reports(id)
+        WHERE COALESCE(host_uid, '') = ''
         """
     )
 
@@ -6367,49 +6420,65 @@ def save_user_preferences(conn: sqlite3.Connection, username: str, payload: dict
 
 
 def get_host_interest_targets(conn: sqlite3.Connection) -> list[dict]:
-    host_key_expr = reports_host_key_sql()
-    rows = conn.execute(
-        f"""
-        WITH grouped AS (
-            SELECT
-                {host_key_expr} AS host_key,
-                MAX(received_at_utc) AS last_seen_utc,
-                MAX(id) AS latest_id
-            FROM reports
-            GROUP BY {host_key_expr}
-        )
-        SELECT
-            g.host_key,
-            COALESCE(r_latest.host_uid, '') AS host_uid,
-            COALESCE(r_latest.hostname, '') AS hostname,
-            COALESCE(r_latest.payload_json, '{{}}') AS latest_payload_json,
-            '' AS latest_display_name,
-            COALESCE(hus.display_name_override, '') AS uid_display_name_override,
-            COALESCE(h.display_name_override, '') AS host_display_name_override,
-            COALESCE(hus.country_code_override, '') AS uid_country_code_override,
-            COALESCE(h.country_code_override, '') AS host_country_code_override,
-            COALESCE(c_uid.customer_name, '') AS uid_customer_name,
-            COALESCE(c_host.customer_name, '') AS host_customer_name
-        FROM grouped g
-        JOIN reports r_latest ON r_latest.id = g.latest_id
-        LEFT JOIN host_uid_settings hus ON COALESCE(r_latest.host_uid, '') <> '' AND hus.host_uid = r_latest.host_uid
-        LEFT JOIN host_settings h ON h.hostname = r_latest.hostname
-        LEFT JOIN customers c_uid ON c_uid.id = hus.customer_id
-        LEFT JOIN customers c_host ON c_host.id = h.customer_id
-        ORDER BY LOWER(COALESCE(NULLIF(hus.display_name_override, ''), NULLIF(h.display_name_override, ''), r_latest.hostname)), LOWER(r_latest.hostname)
+    identity_rows = _identity_report_rows(conn)
+    uid_settings: dict[str, dict[str, str]] = {}
+    for row in conn.execute(
         """
-    ).fetchall()
+        SELECT hus.host_uid,
+               COALESCE(hus.display_name_override, ''),
+               COALESCE(hus.country_code_override, ''),
+               COALESCE(c.customer_name, '')
+        FROM host_uid_settings hus
+        LEFT JOIN customers c ON c.id = hus.customer_id
+        """
+    ).fetchall():
+        host_uid = str(row[0] or "").strip()
+        if host_uid:
+            uid_settings[host_uid] = {
+                "display_name_override": str(row[1] or "").strip(),
+                "country_code_override": str(row[2] or "").strip(),
+                "customer_name": str(row[3] or "").strip(),
+            }
+    host_settings: dict[str, dict[str, str]] = {}
+    for row in conn.execute(
+        """
+        SELECT h.hostname,
+               COALESCE(h.display_name_override, ''),
+               COALESCE(h.country_code_override, ''),
+               COALESCE(c.customer_name, '')
+        FROM host_settings h
+        LEFT JOIN customers c ON c.id = h.customer_id
+        """
+    ).fetchall():
+        hostname = str(row[0] or "").strip()
+        if hostname:
+            host_settings[hostname] = {
+                "display_name_override": str(row[1] or "").strip(),
+                "country_code_override": str(row[2] or "").strip(),
+                "customer_name": str(row[3] or "").strip(),
+            }
 
     items: list[dict] = []
-    for row in rows:
+    for row in identity_rows:
+        host_key = str(row[0] or "").strip()
+        hostname = str(row[1] or "").strip() or host_key
         payload = parse_payload_json(str(row[3] or "{}"))
-        host_uid = str(row[1] or "").strip()
-        hostname = str(row[2] or "").strip() or str(row[0] or "").strip()
-        display_name = str(row[5] or "").strip() or str(row[6] or "").strip() or str(row[4] or "").strip() or hostname
+        host_uid = "" if host_key.startswith("__legacy_report__:") else host_key
+        uid_meta = uid_settings.get(host_uid, {})
+        host_meta = host_settings.get(hostname, {})
+        display_name = (
+            uid_meta.get("display_name_override", "")
+            or host_meta.get("display_name_override", "")
+            or hostname
+        )
         if not hostname:
             continue
-        country_code = normalize_country_code(str(row[7] or "")) or normalize_country_code(str(row[8] or "")) or extract_country_code_from_payload(payload)
-        customer_name = str(row[9] or "").strip() or str(row[10] or "").strip()
+        country_code = (
+            normalize_country_code(uid_meta.get("country_code_override", ""))
+            or normalize_country_code(host_meta.get("country_code_override", ""))
+            or extract_country_code_from_payload(payload)
+        )
+        customer_name = uid_meta.get("customer_name", "") or host_meta.get("customer_name", "")
         items.append(
             {
                 "host_uid": host_uid,
@@ -6419,6 +6488,12 @@ def get_host_interest_targets(conn: sqlite3.Connection) -> list[dict]:
                 "customer_name": customer_name,
             }
         )
+    items.sort(
+        key=lambda item: (
+            str(item.get("display_name") or item.get("hostname") or "").lower(),
+            str(item.get("hostname") or "").lower(),
+        )
+    )
     return items
 
 
@@ -9418,6 +9493,36 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
 
     rows, _, canonical_by_cluster, _ = _get_latest_identity_context(conn)
     row_by_host_uid = {str(row[0] or "").strip(): row for row in rows if str(row[0] or "").strip()}
+    open_alert_counts = _bulk_open_alert_counts_by_host_key(conn)
+    display_name_overrides: dict[str, str] = {}
+    for uid_row in conn.execute(
+        "SELECT host_uid, COALESCE(display_name_override, '') FROM host_uid_settings WHERE COALESCE(display_name_override, '') <> ''"
+    ).fetchall():
+        key = str(uid_row[0] or "").strip()
+        if key:
+            display_name_overrides[key] = str(uid_row[1] or "").strip()
+    for host_row in conn.execute(
+        "SELECT hostname, COALESCE(display_name_override, '') FROM host_settings WHERE COALESCE(display_name_override, '') <> ''"
+    ).fetchall():
+        key = str(host_row[0] or "").strip()
+        if key:
+            display_name_overrides[key] = str(host_row[1] or "").strip()
+    inactive_host_meta: dict[str, dict[str, str]] = {}
+    for meta_row in conn.execute(
+        """
+        SELECT hs.hostname,
+               COALESCE(hs.country_code_override, ''),
+               COALESCE(c.customer_name, '')
+        FROM host_settings hs
+        LEFT JOIN customers c ON c.id = hs.customer_id
+        """
+    ).fetchall():
+        hostname_key = str(meta_row[0] or "").strip()
+        if hostname_key:
+            inactive_host_meta[hostname_key] = {
+                "country_code": normalize_country_code(meta_row[1]),
+                "customer_name": str(meta_row[2] or "").strip(),
+            }
 
     inactive_hosts = []
     for cluster_key, canonical in canonical_by_cluster.items():
@@ -9443,33 +9548,15 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
         except (json.JSONDecodeError, TypeError):
             payload = {}
 
-        display_name = get_display_name_override(conn, hostname, host_uid) or effective_display_name(payload, "", hostname)
+        display_name = display_name_overrides.get(host_uid) or display_name_overrides.get(hostname) or effective_display_name(payload, "", hostname)
         os_name = str(payload.get("os", "") or "")
         if not primary_ip:
             primary_ip = str(payload.get("primary_ip", "") or "")
 
-        host_settings = conn.execute(
-            """
-            SELECT hs.country_code_override,
-                   COALESCE(c.customer_name, '')
-            FROM host_settings hs
-            LEFT JOIN customers c ON c.id = hs.customer_id
-            WHERE hs.hostname = ?
-            """,
-            (hostname,),
-        ).fetchone()
-        if host_settings:
-            country_code = normalize_country_code(host_settings[0])
-            customer_name = str(host_settings[1] or "").strip()
-        else:
-            country_code = ""
-            customer_name = ""
-
-        open_alerts = conn.execute(
-            "SELECT COUNT(*) FROM alerts WHERE hostname = ? AND status = 'open'",
-            (hostname,),
-        ).fetchone()
-        open_alert_count = int(open_alerts[0] or 0) if open_alerts else 0
+        host_meta = inactive_host_meta.get(hostname) or {}
+        country_code = host_meta.get("country_code", "")
+        customer_name = host_meta.get("customer_name", "")
+        open_alert_count = int(open_alert_counts.get(host_uid) or open_alert_counts.get(hostname) or 0)
 
         try:
             last_time = datetime.fromisoformat(last_report_time_utc.replace("Z", "+00:00"))
@@ -9571,42 +9658,56 @@ def _canonical_hostnames_from_identity_rows(rows: list[tuple]) -> set[str]:
 
 
 def _latest_report_rows_by_host_key(conn: sqlite3.Connection) -> list[tuple]:
-    host_key_expr = reports_host_key_sql()
-    host_key_expr_r = reports_host_key_sql("r")
+    """Latest report per host identity — indexed path for host_uid rows, separate legacy scan."""
     with _latest_report_rows_semaphore:
         return conn.execute(
-        f"""
-        WITH grouped AS (
+            """
+            WITH uid_grouped AS (
+                SELECT
+                    host_uid AS host_key,
+                    MAX(received_at_utc) AS last_seen_utc,
+                    COUNT(*) AS report_count
+                FROM reports
+                WHERE COALESCE(host_uid, '') <> ''
+                GROUP BY host_uid
+            ),
+            uid_latest AS (
+                SELECT
+                    g.host_key,
+                    g.last_seen_utc,
+                    g.report_count,
+                    MAX(r.id) AS latest_id
+                FROM uid_grouped g
+                INNER JOIN reports r
+                    ON r.host_uid = g.host_key
+                   AND r.received_at_utc = g.last_seen_utc
+                GROUP BY g.host_key, g.last_seen_utc, g.report_count
+            ),
+            legacy_latest AS (
+                SELECT
+                    '__legacy_report__:' || CAST(id AS TEXT) AS host_key,
+                    received_at_utc AS last_seen_utc,
+                    1 AS report_count,
+                    id AS latest_id
+                FROM reports
+                WHERE COALESCE(host_uid, '') = ''
+            ),
+            combined AS (
+                SELECT host_key, last_seen_utc, report_count, latest_id FROM uid_latest
+                UNION ALL
+                SELECT host_key, last_seen_utc, report_count, latest_id FROM legacy_latest
+            )
             SELECT
-                {host_key_expr} AS host_key,
-                MAX(received_at_utc) AS last_seen_utc,
-                COUNT(*) AS report_count
-            FROM reports
-            GROUP BY {host_key_expr}
-        ),
-        latest AS (
-            SELECT
-                g.host_key,
-                g.last_seen_utc,
-                g.report_count,
-                MAX(r.id) AS latest_id
-            FROM grouped g
-            JOIN reports r
-              ON {host_key_expr_r} = g.host_key
-             AND r.received_at_utc = g.last_seen_utc
-            GROUP BY g.host_key, g.last_seen_utc, g.report_count
-        )
-        SELECT
-            latest.host_key,
-            COALESCE(r.hostname, ''),
-            latest.last_seen_utc,
-            COALESCE(r.payload_json, '{{}}'),
-            COALESCE(r.primary_ip, ''),
-            latest.report_count
-        FROM latest
-        JOIN reports r ON r.id = latest.latest_id
-        ORDER BY latest.last_seen_utc DESC
-        """
+                c.host_key,
+                COALESCE(r.hostname, ''),
+                c.last_seen_utc,
+                COALESCE(r.payload_json, '{}'),
+                COALESCE(r.primary_ip, ''),
+                c.report_count
+            FROM combined c
+            INNER JOIN reports r ON r.id = c.latest_id
+            ORDER BY c.last_seen_utc DESC
+            """
         ).fetchall()
 
 
@@ -10072,30 +10173,89 @@ def _dedupe_alert_summary_rows(rows: list[tuple]) -> list[tuple]:
     return deduped
 
 
+def _alert_visibility_host_key(hostname: object, host_uid: object = "") -> str:
+    safe_host_uid = str(host_uid or "").strip()
+    if safe_host_uid:
+        return safe_host_uid
+    return str(hostname or "").strip()
+
+
+def _load_open_alert_visibility_context(
+    conn: sqlite3.Connection,
+) -> tuple[set[str], set[tuple[str, str]]]:
+    hidden_keys: set[str] = set()
+    for row in conn.execute(
+        "SELECT host_uid FROM host_uid_settings WHERE COALESCE(is_hidden, 0) = 1"
+    ).fetchall():
+        key = str(row[0] or "").strip()
+        if key:
+            hidden_keys.add(key)
+    for row in conn.execute(
+        "SELECT hostname FROM host_settings WHERE COALESCE(is_hidden, 0) = 1"
+    ).fetchall():
+        key = str(row[0] or "").strip()
+        if key:
+            hidden_keys.add(key)
+    muted_rules: set[tuple[str, str]] = set()
+    for row in conn.execute(
+        "SELECT host_uid, mountpoint FROM muted_alert_rules"
+    ).fetchall():
+        host_key = str(row[0] or "").strip()
+        mountpoint = str(row[1] or "").strip()
+        if host_key and mountpoint:
+            muted_rules.add((host_key, mountpoint))
+    return hidden_keys, muted_rules
+
+
+def _open_alert_row_is_visible(
+    row: tuple,
+    hidden_keys: set[str],
+    muted_rules: set[tuple[str, str]],
+) -> bool:
+    host_key = _alert_visibility_host_key(row[1], row[2])
+    mountpoint = str(row[3] or "").strip()
+    if not host_key:
+        return False
+    if host_key in hidden_keys:
+        return False
+    return (host_key, mountpoint) not in muted_rules
+
+
+def _bulk_open_alert_counts_by_host_key(conn: sqlite3.Connection) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in conn.execute(
+        """
+        SELECT COALESCE(NULLIF(host_uid, ''), hostname) AS host_key, COUNT(*) AS open_count
+        FROM alerts
+        WHERE status = 'open'
+        GROUP BY COALESCE(NULLIF(host_uid, ''), hostname)
+        """
+    ).fetchall():
+        host_key = str(row[0] or "").strip()
+        if host_key:
+            counts[host_key] = int(row[1] or 0)
+    return counts
+
+
 def collect_open_alerts(
     conn: sqlite3.Connection,
     allowed_hostnames: set[str] | None = None,
     allowed_tokens: set[str] | None = None,
 ) -> list[dict]:
+    hidden_keys, muted_rules = _load_open_alert_visibility_context(conn)
     rows = conn.execute(
         """
         SELECT id, hostname, COALESCE(host_uid, ''), mountpoint, severity, used_percent, created_at_utc, last_seen_at_utc
         FROM alerts
         WHERE status = 'open'
-                    AND COALESCE(
-                            (SELECT is_hidden FROM host_uid_settings hus
-                             WHERE hus.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)),
-                            (SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname),
-                            0
-                    ) = 0
-          AND NOT EXISTS (
-              SELECT 1 FROM muted_alert_rules m
-                            WHERE m.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)
-                                AND m.mountpoint = alerts.mountpoint
-          )
         ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, used_percent DESC, id DESC
         """
     ).fetchall()
+    rows = [
+        row
+        for row in rows
+        if _open_alert_row_is_visible(row, hidden_keys, muted_rules)
+    ]
     _, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid = _peek_identity_maps_cache()
     if canonical_by_hostname is not None and canonical_by_cluster is not None and last_seen_by_host_uid is not None:
         rows = [
@@ -16652,6 +16812,83 @@ def _optional_metric_float(value: object) -> float | None:
     return parsed
 
 
+def _load_compact_host_settings_maps(
+    conn: sqlite3.Connection,
+) -> tuple[dict[str, dict[str, object]], dict[str, dict[str, object]]]:
+    uid_map: dict[str, dict[str, object]] = {}
+    for row in conn.execute(
+        """
+        SELECT hus.host_uid,
+               COALESCE(hus.display_name_override, ''),
+               COALESCE(hus.country_code_override, ''),
+               COALESCE(hus.is_hidden, 0),
+               COALESCE(c.customer_name, ''),
+               hus.customer_id,
+               COALESCE(c.logo_filename, ''),
+               COALESCE(c.updated_at_utc, '')
+        FROM host_uid_settings hus
+        LEFT JOIN customers c ON c.id = hus.customer_id
+        """
+    ).fetchall():
+        host_uid = str(row[0] or "").strip()
+        if not host_uid:
+            continue
+        uid_map[host_uid] = {
+            "display_name_override": str(row[1] or "").strip(),
+            "country_code_override": normalize_country_code(row[2]),
+            "is_hidden": bool(int(row[3] or 0)),
+            "customer_name": str(row[4] or "").strip(),
+            "customer_logo_url": build_customer_logo_url(row[5], row[6], row[7]),
+        }
+    host_map: dict[str, dict[str, object]] = {}
+    for row in conn.execute(
+        """
+        SELECT h.hostname,
+               COALESCE(h.display_name_override, ''),
+               COALESCE(h.country_code_override, ''),
+               COALESCE(h.is_hidden, 0),
+               COALESCE(c.customer_name, ''),
+               h.customer_id,
+               COALESCE(c.logo_filename, ''),
+               COALESCE(c.updated_at_utc, '')
+        FROM host_settings h
+        LEFT JOIN customers c ON c.id = h.customer_id
+        """
+    ).fetchall():
+        hostname = str(row[0] or "").strip()
+        if not hostname:
+            continue
+        host_map[hostname] = {
+            "display_name_override": str(row[1] or "").strip(),
+            "country_code_override": normalize_country_code(row[2]),
+            "is_hidden": bool(int(row[3] or 0)),
+            "customer_name": str(row[4] or "").strip(),
+            "customer_logo_url": build_customer_logo_url(row[5], row[6], row[7]),
+        }
+    return uid_map, host_map
+
+
+def _resolve_compact_host_settings(
+    hostname: str,
+    host_uid: str,
+    uid_map: dict[str, dict[str, object]],
+    host_map: dict[str, dict[str, object]],
+) -> dict[str, object]:
+    safe_host_uid = str(host_uid or "").strip()
+    if safe_host_uid and safe_host_uid in uid_map:
+        return uid_map[safe_host_uid]
+    safe_hostname = str(hostname or "").strip()
+    if safe_hostname in host_map:
+        return host_map[safe_hostname]
+    return {
+        "display_name_override": "",
+        "country_code_override": "",
+        "is_hidden": False,
+        "customer_name": "",
+        "customer_logo_url": "",
+    }
+
+
 def collect_live_report_events(conn: sqlite3.Connection, since_report_id: int = 0, limit: int = 20) -> dict[str, object]:
     safe_limit = max(1, min(int(limit or 20), 50))
     safe_since_id = max(0, int(since_report_id or 0))
@@ -16678,6 +16915,7 @@ def collect_live_report_events(conn: sqlite3.Connection, since_report_id: int = 
         (safe_since_id, safe_limit),
     ).fetchall()
 
+    uid_settings_map, host_settings_map = _load_compact_host_settings_maps(conn)
     events: list[dict[str, object]] = []
     cursor_id = safe_since_id
     for row in rows:
@@ -16688,8 +16926,8 @@ def collect_live_report_events(conn: sqlite3.Connection, since_report_id: int = 
         host_uid = str(row[3] or "").strip() or str(row[6] or "").strip()
         primary_ip = str(row[4] or "").strip()
         payload = parse_payload_json(str(row[5] or "{}"))
-        host_settings = get_host_settings(conn, hostname, host_uid)
-        display_override = get_display_name_override(conn, hostname, host_uid)
+        host_settings = _resolve_compact_host_settings(hostname, host_uid, uid_settings_map, host_settings_map)
+        display_override = str(host_settings.get("display_name_override", "") or "").strip()
         country_override = normalize_country_code(str(host_settings.get("country_code_override", "") or ""))
         country_code = country_override or extract_country_code_from_payload(payload)
         cpu = payload.get("cpu", {}) if isinstance(payload.get("cpu"), dict) else {}
@@ -18907,7 +19145,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
                 _finish_endpoint_timer(endpoint_timer, meta="cache=hit")
                 return
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite_connect_read() as conn:
                 hosts = get_host_interest_targets(conn)
             data = {"hosts": hosts, "total_hosts": len(hosts)}
             _read_cache_set(cache_key, data, ttl_seconds=300)
@@ -19145,7 +19383,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             since_report_id = parse_int(query, "since_id", default=0, min_value=0, max_value=2_000_000_000)
             limit = parse_int(query, "limit", default=20, min_value=1, max_value=50)
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite_connect_read() as conn:
                 payload = collect_live_report_events(conn, since_report_id=since_report_id, limit=limit)
             self._send_json(
                 HTTPStatus.OK,
@@ -19162,7 +19400,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/dashboard-db-kpis":
             if not self._require_web_session():
                 return
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite_connect_read() as conn:
                 stats = collect_database_maintenance_stats(conn)
                 reports_last_hour_row = conn.execute(
                     """
@@ -19428,7 +19666,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             limit = parse_int(query, "limit", default=20, min_value=1, max_value=200)
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite_connect_read() as conn:
                 rows = conn.execute(
                     """
                     SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json
@@ -20892,41 +21130,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 _finish_endpoint_timer(endpoint_timer, meta="cache=hit")
                 return
 
-            where_clause = "WHERE status = 'open' AND (ack_by IS NULL OR ack_by = '')"
-            args = []
-            where_clause += (
-                " AND COALESCE((SELECT is_hidden FROM host_uid_settings hus "
-                "WHERE hus.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)), "
-                "(SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0"
-            )
-            muted_where_clause = "WHERE status = 'open'"
-            muted_where_clause += (
-                " AND COALESCE((SELECT is_hidden FROM host_uid_settings hus "
-                "WHERE hus.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)), "
-                "(SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname), 0) = 0"
-            )
-            muted_where_clause += (
-                " AND EXISTS (SELECT 1 FROM muted_alert_rules m "
-                "WHERE m.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname) "
-                "AND m.mountpoint = alerts.mountpoint)"
-            )
-            visible_where_clause = where_clause + (
-                " AND NOT EXISTS (SELECT 1 FROM muted_alert_rules m "
-                "WHERE m.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname) "
-                "AND m.mountpoint = alerts.mountpoint)"
-            )
+            sql_where = "WHERE status = 'open'"
+            args: list[object] = []
             if hostname_filter:
-                where_clause += " AND hostname = ?"
+                sql_where += " AND hostname = ?"
                 args.append(hostname_filter)
-                muted_where_clause += " AND hostname = ?"
-                visible_where_clause += " AND hostname = ?"
             if host_uid_filter:
-                where_clause += " AND COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname) = ?"
+                sql_where += " AND COALESCE(NULLIF(host_uid, ''), hostname) = ?"
                 args.append(host_uid_filter)
-                muted_where_clause += " AND COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname) = ?"
-                visible_where_clause += " AND COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname) = ?"
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite_connect_read() as conn:
+                hidden_keys, muted_rules = _load_open_alert_visibility_context(conn)
                 alarm_settings = get_alarm_settings(conn)
                 allowed_tokens = (
                     get_user_alert_visibility_tokens(conn, summary_username)
@@ -20935,36 +21149,36 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 )
                 rows = conn.execute(
                     f"""
-                    SELECT severity, mountpoint, hostname, COALESCE(host_uid, '')
-                    FROM alerts {visible_where_clause}
-                    """,
-                    tuple(args),
-                ).fetchall()
-                muted_rows = conn.execute(
-                    f"""
-                    SELECT 1, mountpoint, hostname, COALESCE(host_uid, '')
-                    FROM alerts {muted_where_clause}
+                    SELECT severity, mountpoint, hostname, COALESCE(host_uid, ''), COALESCE(ack_by, '')
+                    FROM alerts
+                    {sql_where}
                     """,
                     tuple(args),
                 ).fetchall()
                 blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
-                visible_rows = [
-                    row
-                    for row in rows
-                    if not is_filesystem_blacklisted_by_patterns(str(row[1] or ""), blacklist_patterns)
-                ]
-                if allowed_tokens is not None:
-                    visible_rows = [
-                        row
-                        for row in visible_rows
-                        if host_matches_alert_visibility_tokens(str(row[2] or ""), str(row[3] or ""), allowed_tokens)
-                    ]
-                    muted_rows = [
-                        row
-                        for row in muted_rows
-                        if not is_filesystem_blacklisted_by_patterns(str(row[1] or ""), blacklist_patterns)
-                        and host_matches_alert_visibility_tokens(str(row[2] or ""), str(row[3] or ""), allowed_tokens)
-                    ]
+                visible_rows: list[tuple] = []
+                muted_rows: list[tuple] = []
+                for row in rows:
+                    if not _open_alert_row_is_visible(
+                        (0, row[2], row[3], row[1]),
+                        hidden_keys,
+                        muted_rules,
+                    ):
+                        continue
+                    if is_filesystem_blacklisted_by_patterns(str(row[1] or ""), blacklist_patterns):
+                        continue
+                    if allowed_tokens is not None and not host_matches_alert_visibility_tokens(
+                        str(row[2] or ""),
+                        str(row[3] or ""),
+                        allowed_tokens,
+                    ):
+                        continue
+                    host_key = _alert_visibility_host_key(row[2], row[3])
+                    is_muted = (host_key, str(row[1] or "").strip()) in muted_rules
+                    if is_muted:
+                        muted_rows.append((row[0], row[1], row[2], row[3]))
+                    elif not str(row[4] or "").strip():
+                        visible_rows.append((row[0], row[1], row[2], row[3]))
                 visible_rows = _dedupe_alert_summary_rows(visible_rows)
                 muted_open = len(muted_rows)
                 total_open = len(visible_rows)
