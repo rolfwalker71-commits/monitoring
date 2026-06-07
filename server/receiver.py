@@ -102,7 +102,11 @@ DB_MAINTENANCE_INTERVAL_HOURS = max(1, min(24, int(os.getenv("MONITORING_DB_MAIN
 SQLITE_BUSY_TIMEOUT_SECONDS = max(1.0, min(300.0, float(os.getenv("MONITORING_SQLITE_BUSY_TIMEOUT_SECONDS", "120") or "120")))
 WEB_AUTH_BUSY_TIMEOUT_MS = max(
     1000,
-    int(os.getenv("MONITORING_WEB_AUTH_BUSY_TIMEOUT_MS", "8000") or "8000"),
+    int(os.getenv("MONITORING_WEB_AUTH_BUSY_TIMEOUT_MS", "20000") or "20000"),
+)
+WEB_AUTH_BUSY_RETRY_ATTEMPTS = max(
+    1,
+    min(12, int(os.getenv("MONITORING_WEB_AUTH_BUSY_RETRY_ATTEMPTS", "6") or "6")),
 )
 SQLITE_CACHE_SIZE_MIB = max(8, min(512, int(os.getenv("MONITORING_SQLITE_CACHE_SIZE_MIB", "64") or "64")))
 SQLITE_MMAP_SIZE_MIB = max(0, min(2048, int(os.getenv("MONITORING_SQLITE_MMAP_SIZE_MIB", "256") or "256")))
@@ -4752,6 +4756,49 @@ def verify_password(password: str, password_hash: str, password_salt: str) -> bo
     return hmac.compare_digest(candidate, password_hash)
 
 
+def _execute_web_login(
+    username: str,
+    password: str,
+    *,
+    source_ip: str = "",
+    user_agent: str = "",
+) -> tuple[dict, str, str]:
+    last_exc: sqlite3.OperationalError | None = None
+    for attempt in range(WEB_AUTH_BUSY_RETRY_ATTEMPTS):
+        try:
+            with sqlite_connect_interactive() as conn:
+                user = get_web_user(conn, username)
+                if not user or user.get("is_disabled"):
+                    raise ValueError("invalid credentials")
+                if not verify_password(password, str(user["password_hash"]), str(user["password_salt"])):
+                    raise ValueError("invalid credentials")
+
+                token, expires_at = create_web_session(conn, username)
+                record_web_login_event(
+                    conn,
+                    username=username,
+                    display_name=str(user.get("display_name", "") or ""),
+                    source_ip=source_ip,
+                    auth_method="password",
+                    user_agent=user_agent,
+                )
+                conn.commit()
+                return user, token, expires_at
+        except ValueError:
+            raise
+        except sqlite3.OperationalError as exc:
+            if not _sqlite_operational_error_is_lock(exc):
+                raise
+            last_exc = exc
+            if attempt + 1 >= WEB_AUTH_BUSY_RETRY_ATTEMPTS:
+                break
+            time.sleep(min(1.5, 0.2 * (attempt + 1)))
+
+    if last_exc is not None:
+        raise last_exc
+    raise sqlite3.OperationalError("database is locked")
+
+
 def create_web_session(conn: sqlite3.Connection, username: str) -> tuple[str, str]:
     now = datetime.now(timezone.utc)
     session_token = secrets.token_urlsafe(32)
@@ -9330,58 +9377,75 @@ def _invalidate_identity_maps_cache() -> None:
 
 def _get_latest_identity_context(
     conn: sqlite3.Connection,
+    *,
+    force_refresh: bool = False,
 ) -> tuple[list[tuple], dict[str, dict[str, object]], dict[str, dict[str, object]], dict[str, str]]:
     now_ts = datetime.now(timezone.utc).timestamp()
-    with _identity_maps_cache_lock:
-        expires_at = float(_identity_maps_cache.get("expires_at") or 0.0)
-        if expires_at > now_ts:
-            return (
-                list(_identity_maps_cache.get("rows") or []),
-                dict(_identity_maps_cache.get("canonical_by_hostname") or {}),
-                dict(_identity_maps_cache.get("canonical_by_cluster") or {}),
-                dict(_identity_maps_cache.get("last_seen_by_host_uid") or {}),
-            )
+    if not force_refresh:
+        with _identity_maps_cache_lock:
+            expires_at = float(_identity_maps_cache.get("expires_at") or 0.0)
+            if expires_at > now_ts:
+                return (
+                    list(_identity_maps_cache.get("rows") or []),
+                    dict(_identity_maps_cache.get("canonical_by_hostname") or {}),
+                    dict(_identity_maps_cache.get("canonical_by_cluster") or {}),
+                    dict(_identity_maps_cache.get("last_seen_by_host_uid") or {}),
+                )
 
     rows = _latest_report_rows_by_host_key(conn)
     canonical_by_hostname = _canonical_identities_by_hostname_from_rows(rows)
     canonical_by_cluster = _canonical_identities_by_cluster_from_rows(rows)
     last_seen_by_host_uid = _last_seen_by_host_uid_from_rows(rows)
-    with _identity_maps_cache_lock:
-        _identity_maps_cache.clear()
-        _identity_maps_cache.update(
-            {
-                "expires_at": now_ts + IDENTITY_MAPS_CACHE_TTL_SECONDS,
-                "rows": rows,
-                "canonical_by_hostname": canonical_by_hostname,
-                "canonical_by_cluster": canonical_by_cluster,
-                "last_seen_by_host_uid": last_seen_by_host_uid,
-            }
-        )
+    if not force_refresh:
+        with _identity_maps_cache_lock:
+            _identity_maps_cache.clear()
+            _identity_maps_cache.update(
+                {
+                    "expires_at": now_ts + IDENTITY_MAPS_CACHE_TTL_SECONDS,
+                    "rows": rows,
+                    "canonical_by_hostname": canonical_by_hostname,
+                    "canonical_by_cluster": canonical_by_cluster,
+                    "last_seen_by_host_uid": last_seen_by_host_uid,
+                }
+            )
     return rows, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid
 
 
 def _latest_report_rows_by_host_key(conn: sqlite3.Connection) -> list[tuple]:
     host_key_expr = reports_host_key_sql()
+    host_key_expr_r = reports_host_key_sql("r")
     return conn.execute(
         f"""
-        WITH keyed AS (
+        WITH grouped AS (
             SELECT
                 {host_key_expr} AS host_key,
-                COALESCE(hostname, '') AS hostname,
-                COALESCE(received_at_utc, '') AS received_at_utc,
-                COALESCE(payload_json, '{{}}') AS payload_json,
-                COALESCE(primary_ip, '') AS primary_ip,
-                ROW_NUMBER() OVER (
-                    PARTITION BY {host_key_expr}
-                    ORDER BY received_at_utc DESC, id DESC
-                ) AS row_rank,
-                COUNT(*) OVER (PARTITION BY {host_key_expr}) AS report_count
+                MAX(received_at_utc) AS last_seen_utc,
+                COUNT(*) AS report_count
             FROM reports
+            GROUP BY {host_key_expr}
+        ),
+        latest AS (
+            SELECT
+                g.host_key,
+                g.last_seen_utc,
+                g.report_count,
+                MAX(r.id) AS latest_id
+            FROM grouped g
+            JOIN reports r
+              ON {host_key_expr_r} = g.host_key
+             AND r.received_at_utc = g.last_seen_utc
+            GROUP BY g.host_key, g.last_seen_utc, g.report_count
         )
-        SELECT host_key, hostname, received_at_utc, payload_json, primary_ip, report_count
-        FROM keyed
-        WHERE row_rank = 1
-        ORDER BY received_at_utc DESC
+        SELECT
+            latest.host_key,
+            COALESCE(r.hostname, ''),
+            latest.last_seen_utc,
+            COALESCE(r.payload_json, '{{}}'),
+            COALESCE(r.primary_ip, ''),
+            latest.report_count
+        FROM latest
+        JOIN reports r ON r.id = latest.latest_id
+        ORDER BY latest.last_seen_utc DESC
         """
     ).fetchall()
 
@@ -17056,7 +17120,6 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
     prune_reports_for_host(conn, hostname, incoming_host_uid, MAX_REPORTS_PER_HOST)
     alarm_settings = get_alarm_settings(conn)
     host_settings = get_host_settings(conn, hostname)
-    _invalidate_identity_maps_cache()
     if bool(host_settings.get("is_hidden", False)):
         resolve_open_alerts_for_host(conn, hostname, incoming_host_uid, report_id)
     else:
@@ -17402,7 +17465,10 @@ def evaluate_severity(used_percent: float) -> str:
 
 def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: str, report_id: int, filesystems: list, alarm_settings: dict) -> None:
     now_utc = utc_now_iso()
-    _, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid = _get_latest_identity_context(conn)
+    _, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid = _get_latest_identity_context(
+        conn,
+        force_refresh=True,
+    )
     hostname, host_uid = _resolve_canonical_alert_identity_from_maps(
         conn,
         hostname,
@@ -20895,31 +20961,25 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                with sqlite_connect_interactive() as conn:
-                    user = get_web_user(conn, username)
-                    if not user or user.get("is_disabled"):
-                        self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid credentials"})
-                        return
-                    if not verify_password(password, str(user["password_hash"]), str(user["password_salt"])):
-                        self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid credentials"})
-                        return
-
-                    token, expires_at = create_web_session(conn, username)
-                    record_web_login_event(
-                        conn,
-                        username=username,
-                        display_name=str(user.get("display_name", "") or ""),
-                        source_ip=self._request_client_ip(),
-                        auth_method="password",
-                        user_agent=str(self.headers.get("User-Agent", "") or ""),
-                    )
-                    conn.commit()
+                user, token, expires_at = _execute_web_login(
+                    username,
+                    password,
+                    source_ip=self._request_client_ip(),
+                    user_agent=str(self.headers.get("User-Agent", "") or ""),
+                )
+            except ValueError:
+                self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "invalid credentials"})
+                return
             except sqlite3.OperationalError as exc:
                 if _sqlite_operational_error_is_lock(exc):
+                    maintenance_hint = " (Wartungsjob aktiv)" if _changelog_maintenance_active() else ""
                     self._send_json(
                         HTTPStatus.SERVICE_UNAVAILABLE,
                         {
-                            "error": "Datenbank voruebergehend gesperrt (Wartungsjob). Bitte in 1–2 Minuten erneut.",
+                            "error": (
+                                "Datenbank voruebergehend gesperrt"
+                                f"{maintenance_hint}. Bitte in 30–60 Sekunden erneut."
+                            ),
                             "code": "database_locked",
                         },
                     )
@@ -23700,8 +23760,8 @@ def main() -> None:
         print(f"[startup] changelog job recovery failed: {exc}")
 
     startup_rebuild_days = parse_startup_rebuild_days(
-        os.getenv("MONITORING_REBUILD_CHANGELOG_DAYS", ""),
-        default=18,
+        os.getenv("MONITORING_REBUILD_CHANGELOG_DAYS", "0"),
+        default=0,
         max_value=365,
     )
     if args.rebuild_changelog_days > 0:
