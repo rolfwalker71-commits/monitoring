@@ -18778,6 +18778,7 @@ async function init() {
   const sapLicenseTypeMapPromise = loadSapLicenseTypeMap();
 
   wireEvents();
+  window.__monitoringAppBooted = true;
   setAuthUiState(false);
   setLoginStatus("Sitzung wird geprüft…");
   initLiveReportFeed();

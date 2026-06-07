@@ -24299,22 +24299,29 @@ def main() -> None:
 
     def _startup_prewarm_read_caches() -> None:
         try:
-            with sqlite_connect() as conn:
+            with sqlite_connect_read() as conn:
                 _get_latest_identity_context(conn)
                 hosts_data = _build_hosts_endpoint_response(conn, limit=200, offset=0)
+            _read_cache_set("hosts:200:0", hosts_data, ttl_seconds=HOSTS_ENDPOINT_CACHE_TTL_SECONDS)
+            print("[startup] identity + hosts read caches pre-warmed")
+        except Exception as exc:
+            print(f"[startup] identity/hosts pre-warm failed: {exc}")
+        try:
+            with sqlite_connect_read() as conn:
                 system_data = collect_system_overview(conn, search_query="")
                 backup_data = collect_backup_status_overview(conn, 24)
-            _read_cache_set("hosts:200:0", hosts_data, ttl_seconds=HOSTS_ENDPOINT_CACHE_TTL_SECONDS)
             _read_cache_set("system-overview:", system_data, ttl_seconds=SYSTEM_OVERVIEW_CACHE_TTL_SECONDS)
             _read_cache_set("backup-status-overview:24", backup_data, ttl_seconds=BACKUP_STATUS_CACHE_TTL_SECONDS)
-            print("[startup] identity + hosts + overview read caches pre-warmed")
+            print("[startup] overview read caches pre-warmed")
         except Exception as exc:
-            print(f"[startup] read cache pre-warm failed: {exc}")
-
-    print("[startup] pre-warming read caches before accepting requests...")
-    _startup_prewarm_read_caches()
+            print(f"[startup] overview pre-warm failed: {exc}")
 
     server = ThreadingHTTPServer((args.host, args.port), MonitoringHandler)
+    threading.Thread(
+        target=_startup_prewarm_read_caches,
+        name="startup-read-cache-prewarm",
+        daemon=True,
+    ).start()
     print(f"Monitoring receiver running on http://{args.host}:{args.port}")
     if startup_rebuild_days > 0:
         threading.Thread(
