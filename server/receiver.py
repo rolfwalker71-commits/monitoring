@@ -260,6 +260,8 @@ _db_maintenance_lock = threading.Lock()
 
 def _changelog_maintenance_active() -> bool:
     return _db_maintenance_lock.locked()
+
+
 DB_CONNECT_TIMEOUT_SECONDS = max(5, int(os.getenv("MONITORING_DB_TIMEOUT_SECONDS", "30")))
 _web_session_purge_last_monotonic = 0.0
 _WEB_SESSION_PURGE_INTERVAL_SECONDS = max(60, int(os.getenv("MONITORING_WEB_SESSION_PURGE_INTERVAL_SECONDS", "300")))
@@ -517,6 +519,18 @@ AGENT_INGEST_RETRY_MAX_BACKOFF_SECONDS = max(
 AGENT_INGEST_WORKER_IDLE_SECONDS = max(
     0.1,
     min(10.0, float(os.getenv("MONITORING_AGENT_INGEST_WORKER_IDLE_SECONDS", "0.5") or "0.5")),
+)
+AGENT_INGEST_BATCH_SIZE = max(
+    1,
+    min(32, int(os.getenv("MONITORING_AGENT_INGEST_BATCH_SIZE", "8") or "8")),
+)
+AGENT_INGEST_MAX_ATTEMPTS = max(
+    5,
+    min(200, int(os.getenv("MONITORING_AGENT_INGEST_MAX_ATTEMPTS", "30") or "30")),
+)
+ADMIN_DATABASE_STATS_CACHE_TTL_SECONDS = max(
+    0.0,
+    min(300.0, float(os.getenv("MONITORING_ADMIN_DATABASE_STATS_CACHE_TTL_SECONDS", "45") or "45")),
 )
 AGENT_INGEST_AUDIT_MAX_ROWS = max(
     50,
@@ -893,6 +907,12 @@ def init_db() -> None:
             """
             CREATE INDEX IF NOT EXISTS idx_agent_ingest_audit_updated
             ON agent_ingest_audit_log(updated_at_utc DESC, id DESC)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_agent_ingest_audit_written
+            ON agent_ingest_audit_log(status, db_written_at_utc)
             """
         )
         existing_ingest_audit_columns = {
@@ -4260,9 +4280,10 @@ def collect_dashboard_db_kpis(conn: sqlite3.Connection) -> dict[str, object]:
         baseline = payload.get("db_size_baseline_1h_bytes")
         if baseline is not None:
             try:
-                payload["db_size_delta_1h_bytes"] = int(payload["total_file_bytes"]) - int(baseline)
+                payload["db_size_delta_1h_bytes"] = int(payload["db_file_bytes"]) - int(baseline)
             except (TypeError, ValueError):
                 pass
+        payload["total_file_bytes"] = int(payload.get("total_file_bytes", 0) or 0)
         payload.pop("db_size_baseline_1h_bytes", None)
         return payload
 
@@ -4280,32 +4301,46 @@ def collect_dashboard_db_kpis(conn: sqlite3.Connection) -> dict[str, object]:
     reports_total = int(latest_row[0] or 0) if latest_row else None
     reports_total_computed_at = str(latest_row[1] or "") if latest_row else ""
 
+    cutoff_1h = utc_hours_ago_iso(1)
     reports_last_hour_row = conn.execute(
-        "SELECT COUNT(*) FROM reports WHERE received_at_utc >= ?",
-        (utc_hours_ago_iso(1),),
+        """
+        SELECT COUNT(*)
+        FROM agent_ingest_audit_log
+        WHERE status = 'written'
+          AND db_written_at_utc >= ?
+        """,
+        (cutoff_1h,),
     ).fetchone()
     reports_last_hour = int((reports_last_hour_row[0] or 0) if reports_last_hour_row else 0)
+    if reports_last_hour <= 0:
+        fallback_row = conn.execute(
+            "SELECT COUNT(*) FROM reports WHERE received_at_utc >= ?",
+            (cutoff_1h,),
+        ).fetchone()
+        reports_last_hour = int((fallback_row[0] or 0) if fallback_row else 0)
 
+    db_file_bytes = int(file_stats["db_file_bytes"])
     delta_1h_row = conn.execute(
         """
-        SELECT total_file_bytes
+        SELECT db_file_bytes
         FROM db_maintenance_history
         WHERE computed_at_utc <= ?
         ORDER BY computed_at_utc DESC
         LIMIT 1
         """,
-        (utc_hours_ago_iso(1),),
+        (cutoff_1h,),
     ).fetchone()
     db_size_delta_1h_bytes = None
     db_size_baseline_1h_bytes = None
     if delta_1h_row and delta_1h_row[0] is not None:
         db_size_baseline_1h_bytes = int(delta_1h_row[0] or 0)
-        db_size_delta_1h_bytes = total_file_bytes - db_size_baseline_1h_bytes
+        db_size_delta_1h_bytes = db_file_bytes - db_size_baseline_1h_bytes
 
     cache_payload: dict[str, object] = {
         "reports_total": reports_total,
         "reports_last_hour": reports_last_hour,
         "total_file_bytes": total_file_bytes,
+        "db_file_bytes": db_file_bytes,
         "db_size_delta_1h_bytes": db_size_delta_1h_bytes,
         "db_size_baseline_1h_bytes": db_size_baseline_1h_bytes,
         "reports_total_computed_at_utc": reports_total_computed_at,
@@ -5042,6 +5077,77 @@ def _forecast_linear_14d(history: list[dict], key: str) -> dict[str, object] | N
     }
 
 
+def _lightweight_maintenance_stats(conn: sqlite3.Connection) -> dict[str, object]:
+    """File sizes + PRAGMA stats; reuses last history row instead of scanning reports."""
+    files = _read_sqlite_file_byte_sizes()
+    page_size = int((conn.execute("PRAGMA page_size").fetchone() or [0])[0] or 0)
+    page_count = int((conn.execute("PRAGMA page_count").fetchone() or [0])[0] or 0)
+    freelist_count = int((conn.execute("PRAGMA freelist_count").fetchone() or [0])[0] or 0)
+    used_pages = max(0, page_count - freelist_count)
+    free_ratio = (float(freelist_count) / float(page_count)) if page_count > 0 else 0.0
+
+    history_row = conn.execute(
+        """
+        SELECT reports_total,
+               hosts_with_reports,
+               hosts_total,
+               alerts_open,
+               avg_payload_bytes,
+               max_payload_bytes,
+               oldest_report_utc,
+               newest_report_utc
+        FROM db_maintenance_history
+        ORDER BY computed_at_utc DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    if history_row:
+        return {
+            "retention_days": int(REPORT_RETENTION_DAYS),
+            "reports_total": int(history_row[0] or 0),
+            "hosts_with_reports": int(history_row[1] or 0),
+            "hosts_total": int(history_row[2] or 0),
+            "alerts_open": int(history_row[3] or 0),
+            "avg_payload_bytes": float(history_row[4] or 0.0),
+            "max_payload_bytes": int(history_row[5] or 0),
+            "oldest_report_utc": str(history_row[6] or ""),
+            "newest_report_utc": str(history_row[7] or ""),
+            **files,
+            "page_size": page_size,
+            "page_count": page_count,
+            "freelist_count": freelist_count,
+            "used_pages": used_pages,
+            "free_ratio": free_ratio,
+            "stats_source": "history_snapshot",
+        }
+
+    alerts_row = conn.execute(
+        """
+        SELECT SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END)
+        FROM alerts
+        """
+    ).fetchone()
+    hosts_total_row = conn.execute("SELECT COUNT(DISTINCT hostname) FROM host_settings").fetchone()
+    return {
+        "retention_days": int(REPORT_RETENTION_DAYS),
+        "reports_total": 0,
+        "hosts_with_reports": 0,
+        "hosts_total": int((hosts_total_row[0] or 0) if hosts_total_row else 0),
+        "alerts_open": int((alerts_row[0] or 0) if alerts_row else 0),
+        "avg_payload_bytes": 0.0,
+        "max_payload_bytes": 0,
+        "oldest_report_utc": "",
+        "newest_report_utc": "",
+        **files,
+        "page_size": page_size,
+        "page_count": page_count,
+        "freelist_count": freelist_count,
+        "used_pages": used_pages,
+        "free_ratio": free_ratio,
+        "stats_source": "lightweight",
+    }
+
+
 def build_db_maintenance_dashboard(conn: sqlite3.Connection) -> dict[str, object]:
     rows = conn.execute(
         """
@@ -5098,7 +5204,7 @@ def build_db_maintenance_dashboard(conn: sqlite3.Connection) -> dict[str, object
             }
         )
 
-    latest_stats = history[-1] if history else collect_database_maintenance_stats(conn)
+    latest_stats = history[-1] if history else _lightweight_maintenance_stats(conn)
 
     recent_rows: list[dict[str, object]] = []
     recent_src = history[-20:]
@@ -5143,9 +5249,23 @@ def build_db_maintenance_dashboard(conn: sqlite3.Connection) -> dict[str, object
 def _db_maintenance_scheduler_loop() -> None:
     while True:
         try:
-            with sqlite3.connect(DB_PATH) as conn:
-                _ensure_db_maintenance_snapshot(conn)
-                process_due_changelog_rebuild_jobs(conn, max_jobs=1)
+            if not _db_maintenance_lock.acquire(blocking=False):
+                threading.Event().wait(60)
+                continue
+            try:
+                with sqlite_connect() as conn:
+                    inserted = _insert_db_maintenance_snapshot_if_missing(
+                        conn,
+                        bucket_start_utc=_maintenance_bucket_start_utc(),
+                    )
+                    process_due_changelog_rebuild_jobs(conn, max_jobs=1)
+                    conn.commit()
+                if inserted:
+                    _read_cache_invalidate_prefix("admin-database-stats")
+                    _read_cache_invalidate_prefix("dashboard-db-kpis")
+            finally:
+                _db_maintenance_lock.release()
+                _agent_ingest_queue_wakeup.set()
         except Exception as exc:
             print(f"[db-maintenance-scheduler] {exc}")
         threading.Event().wait(60)
@@ -18582,105 +18702,136 @@ def _agent_ingest_retry_backoff_seconds(attempt_count: int) -> int:
     return min(AGENT_INGEST_RETRY_MAX_BACKOFF_SECONDS, 2 ** min(safe_attempt, 10))
 
 
+def _agent_ingest_schedule_retry(
+    conn: sqlite3.Connection,
+    *,
+    queue_id: int,
+    attempt_count: int,
+    error_message: str,
+) -> None:
+    backoff = _agent_ingest_retry_backoff_seconds(attempt_count)
+    retry_at = (datetime.now(timezone.utc) + timedelta(seconds=backoff)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    failure_at_utc = utc_now_iso()
+    conn.execute(
+        """
+        UPDATE agent_ingest_queue
+        SET next_attempt_at_utc = ?,
+            processing_started_at_utc = '',
+            last_error = ?,
+            updated_at_utc = ?
+        WHERE id = ?
+        """,
+        (retry_at, error_message, failure_at_utc, queue_id),
+    )
+    _update_agent_ingest_audit_log_row(
+        conn,
+        queue_id=queue_id,
+        status="retrying",
+        updated_at_utc=failure_at_utc,
+        attempt_count=attempt_count,
+        error_message=error_message,
+    )
+    conn.commit()
+
+
 def _agent_ingest_worker_loop() -> None:
     while True:
-        if _changelog_maintenance_active():
-            _agent_ingest_queue_wakeup.wait(AGENT_INGEST_WORKER_IDLE_SECONDS)
-            _agent_ingest_queue_wakeup.clear()
-            continue
-
         had_work = False
         try:
             with sqlite_connect() as conn:
                 now_utc = utc_now_iso()
-                row = conn.execute(
+                rows = conn.execute(
                     """
                     SELECT id, payload_json, report_received_at_utc, enqueued_at_utc, attempt_count
                     FROM agent_ingest_queue
                     WHERE next_attempt_at_utc <= ?
                     ORDER BY id ASC
-                    LIMIT 1
+                    LIMIT ?
                     """,
-                    (now_utc,),
-                ).fetchone()
+                    (now_utc, AGENT_INGEST_BATCH_SIZE),
+                ).fetchall()
 
-                if row is None:
+                if not rows:
                     conn.commit()
                 else:
                     had_work = True
-                    queue_id = int(row[0] or 0)
-                    payload_json = str(row[1] or "{}")
-                    report_received_at_utc = str(row[2] or "") or now_utc
-                    enqueued_at_utc = str(row[3] or "") or report_received_at_utc
-                    attempt_count = int(row[4] or 0) + 1
-                    conn.execute(
-                        """
-                        UPDATE agent_ingest_queue
-                        SET attempt_count = ?,
-                            processing_started_at_utc = ?,
-                            updated_at_utc = ?
-                        WHERE id = ?
-                        """,
-                        (attempt_count, now_utc, now_utc, queue_id),
-                    )
-                    _update_agent_ingest_audit_log_row(
-                        conn,
-                        queue_id=queue_id,
-                        status="processing",
-                        updated_at_utc=now_utc,
-                        attempt_count=attempt_count,
-                    )
-                    conn.commit()
+                    for row in rows:
+                        queue_id = int(row[0] or 0)
+                        payload_json = str(row[1] or "{}")
+                        report_received_at_utc = str(row[2] or "") or now_utc
+                        enqueued_at_utc = str(row[3] or "") or report_received_at_utc
+                        attempt_count = int(row[4] or 0) + 1
+                        processing_started_at_utc = utc_now_iso()
 
-                    try:
-                        payload = json.loads(payload_json)
-                        if not isinstance(payload, dict):
-                            raise ValueError("queued payload must be a JSON object")
+                        if attempt_count > AGENT_INGEST_MAX_ATTEMPTS:
+                            failure_at_utc = utc_now_iso()
+                            error_message = f"max attempts ({AGENT_INGEST_MAX_ATTEMPTS}) exceeded"
+                            _update_agent_ingest_audit_log_row(
+                                conn,
+                                queue_id=queue_id,
+                                status="failed",
+                                updated_at_utc=failure_at_utc,
+                                attempt_count=attempt_count,
+                                error_message=error_message,
+                            )
+                            conn.execute("DELETE FROM agent_ingest_queue WHERE id = ?", (queue_id,))
+                            conn.commit()
+                            print(f"[agent-ingest-worker] queue_id={queue_id} dropped: {error_message}")
+                            continue
 
-                        _process_agent_report_payload(conn, payload, report_received_at_utc)
-                        written_at_utc = utc_now_iso()
-                        queue_wait_ms = _agent_ingest_duration_ms(enqueued_at_utc, now_utc)
-                        processing_ms = _agent_ingest_duration_ms(now_utc, written_at_utc)
-                        end_to_end_ms = _agent_ingest_duration_ms(report_received_at_utc, written_at_utc)
-                        _update_agent_ingest_audit_log_row(
-                            conn,
-                            queue_id=queue_id,
-                            status="written",
-                            updated_at_utc=written_at_utc,
-                            attempt_count=attempt_count,
-                            db_written_at_utc=written_at_utc,
-                            queue_wait_ms=queue_wait_ms,
-                            processing_ms=processing_ms,
-                            end_to_end_ms=end_to_end_ms,
-                            error_message="",
-                        )
-                        conn.execute("DELETE FROM agent_ingest_queue WHERE id = ?", (queue_id,))
-                        conn.commit()
-                    except Exception as exc:
-                        backoff = _agent_ingest_retry_backoff_seconds(attempt_count)
-                        retry_at = (datetime.now(timezone.utc) + timedelta(seconds=backoff)).strftime("%Y-%m-%dT%H:%M:%SZ")
-                        failure_at_utc = utc_now_iso()
-                        conn.execute(
-                            """
-                            UPDATE agent_ingest_queue
-                            SET next_attempt_at_utc = ?,
-                                processing_started_at_utc = '',
-                                last_error = ?,
-                                updated_at_utc = ?
-                            WHERE id = ?
-                            """,
-                            (retry_at, str(exc), failure_at_utc, queue_id),
-                        )
-                        _update_agent_ingest_audit_log_row(
-                            conn,
-                            queue_id=queue_id,
-                            status="retrying",
-                            updated_at_utc=failure_at_utc,
-                            attempt_count=attempt_count,
-                            error_message=str(exc),
-                        )
-                        conn.commit()
-                        print(f"[agent-ingest-worker] queue_id={queue_id} failed (attempt={attempt_count}): {exc}")
+                        conn.execute("BEGIN IMMEDIATE")
+                        try:
+                            conn.execute(
+                                """
+                                UPDATE agent_ingest_queue
+                                SET attempt_count = ?,
+                                    processing_started_at_utc = ?,
+                                    updated_at_utc = ?
+                                WHERE id = ?
+                                """,
+                                (attempt_count, processing_started_at_utc, processing_started_at_utc, queue_id),
+                            )
+                            _update_agent_ingest_audit_log_row(
+                                conn,
+                                queue_id=queue_id,
+                                status="processing",
+                                updated_at_utc=processing_started_at_utc,
+                                attempt_count=attempt_count,
+                            )
+
+                            payload = json.loads(payload_json)
+                            if not isinstance(payload, dict):
+                                raise ValueError("queued payload must be a JSON object")
+
+                            _process_agent_report_payload(conn, payload, report_received_at_utc)
+                            written_at_utc = utc_now_iso()
+                            queue_wait_ms = _agent_ingest_duration_ms(enqueued_at_utc, processing_started_at_utc)
+                            processing_ms = _agent_ingest_duration_ms(processing_started_at_utc, written_at_utc)
+                            end_to_end_ms = _agent_ingest_duration_ms(report_received_at_utc, written_at_utc)
+                            _update_agent_ingest_audit_log_row(
+                                conn,
+                                queue_id=queue_id,
+                                status="written",
+                                updated_at_utc=written_at_utc,
+                                attempt_count=attempt_count,
+                                db_written_at_utc=written_at_utc,
+                                queue_wait_ms=queue_wait_ms,
+                                processing_ms=processing_ms,
+                                end_to_end_ms=end_to_end_ms,
+                                error_message="",
+                            )
+                            conn.execute("DELETE FROM agent_ingest_queue WHERE id = ?", (queue_id,))
+                            conn.commit()
+                            _read_cache_invalidate_prefix("dashboard-db-kpis")
+                        except Exception as exc:
+                            conn.rollback()
+                            _agent_ingest_schedule_retry(
+                                conn,
+                                queue_id=queue_id,
+                                attempt_count=attempt_count,
+                                error_message=str(exc),
+                            )
+                            print(f"[agent-ingest-worker] queue_id={queue_id} failed (attempt={attempt_count}): {exc}")
         except Exception as exc:
             print(f"[agent-ingest-worker] loop failure: {exc}")
 
@@ -19762,9 +19913,23 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/v1/admin/database-stats":
             if not self._require_admin_session():
                 return
-            with sqlite3.connect(DB_PATH) as conn:
-                _ensure_db_maintenance_snapshot(conn, force_if_empty=True)
-                payload = build_db_maintenance_dashboard(conn)
+            cache_key = "admin-database-stats:v1"
+            cached = _read_cache_get(cache_key)
+            if isinstance(cached, dict):
+                self._send_json(HTTPStatus.OK, {"status": "ok", **cached})
+                return
+            try:
+                with sqlite_connect_read() as conn:
+                    payload = build_db_maintenance_dashboard(conn)
+            except sqlite3.OperationalError as exc:
+                if _sqlite_operational_error_is_lock(exc):
+                    self._send_json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {"error": "database busy, retry shortly"},
+                    )
+                    return
+                raise
+            _read_cache_set(cache_key, payload, ttl_seconds=ADMIN_DATABASE_STATS_CACHE_TTL_SECONDS)
             self._send_json(HTTPStatus.OK, {"status": "ok", **payload})
             return
 
@@ -24533,9 +24698,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                with sqlite3.connect(DB_PATH) as conn:
-                    snapshot = trigger_db_maintenance_snapshot_now(conn)
-                    payload = build_db_maintenance_dashboard(conn)
+                with _db_maintenance_lock:
+                    with sqlite_connect() as conn:
+                        snapshot = trigger_db_maintenance_snapshot_now(conn)
+                        payload = build_db_maintenance_dashboard(conn)
+                _read_cache_invalidate_prefix("admin-database-stats")
+                _read_cache_invalidate_prefix("dashboard-db-kpis")
             except Exception as exc:
                 self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
                 return

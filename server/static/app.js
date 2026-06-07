@@ -12522,11 +12522,15 @@ async function testAdminBackupAutomationSftp() {
   return data;
 }
 
-async function loadAdminDatabaseStats() {
+async function loadAdminDatabaseStats(retryCount = 0) {
   const response = await fetch("/api/v1/admin/database-stats", {
     method: "GET",
     credentials: "same-origin",
   });
+  if (response.status === 503 && retryCount < 3) {
+    await new Promise((resolve) => setTimeout(resolve, 1500 * (retryCount + 1)));
+    return loadAdminDatabaseStats(retryCount + 1);
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.error || ("HTTP " + response.status));
@@ -12573,11 +12577,19 @@ async function loadHeaderDatabaseKpis() {
   state.dbTotalFileBytes = Number.isFinite(totalFileBytes) && totalFileBytes >= 0 ? totalFileBytes : null;
   state.dbSizeDelta1hBytes = Number.isFinite(dbSizeDelta1hBytes) ? dbSizeDelta1hBytes : null;
   const dbReportsChip = document.getElementById("headerDbReportsChip");
+  const dbReportsHourChip = document.getElementById("headerDbReportsHourChip");
+  const dbSizeDeltaChip = document.getElementById("headerDbSizeDeltaChip");
   const computedAt = String(stats.reports_total_computed_at_utc || "").trim();
   if (dbReportsChip) {
     dbReportsChip.title = computedAt
       ? `Berichte in der Datenbank (Wartungssnapshot ${computedAt})`
       : "Berichte in der Datenbank";
+  }
+  if (dbReportsHourChip) {
+    dbReportsHourChip.title = "In der letzten Stunde in die DB geschriebene Agent-Reports";
+  }
+  if (dbSizeDeltaChip) {
+    dbSizeDeltaChip.title = "Wachstum der monitoring.db-Datei in 1h (ohne WAL-Schwankungen)";
   }
   updateHeaderStatChips();
   return stats;
