@@ -9368,7 +9368,7 @@ def _load_critical_trends_report_rows(
     cutoff_iso: str,
     allowed_hostnames: set[str],
 ) -> list[tuple[str, str]]:
-    """Hourly downsample: latest report per host per UTC hour (not every 5-min report)."""
+    """Hourly downsample: latest report per host per UTC hour (agents report every 15 min)."""
     if not allowed_hostnames:
         return []
     placeholders = ",".join("?" for _ in allowed_hostnames)
