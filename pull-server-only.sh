@@ -9,10 +9,10 @@ on_pull_script_error() {
 trap on_pull_script_error ERR
 
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
-PULL_SCRIPT_VERSION="20260605f"
+PULL_SCRIPT_VERSION="20260608a"
 # Bump when FILES_LIST changes (must match script_guardian entries).
-PULL_FILES_MANIFEST="guardian-34-v1"
-PULL_FILES_EXPECTED_COUNT=34
+PULL_FILES_MANIFEST="scripts-35-v1"
+PULL_FILES_EXPECTED_COUNT=35
 _DEPLOY_MAIN_SHA_CACHED=""
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
@@ -1409,7 +1409,7 @@ resolve_deploy_ref() {
 
 reexec_if_pull_script_missing_guardian_files "$@"
 
-echo "pull-server-only.sh Version: $PULL_SCRIPT_VERSION (Manifest: ${PULL_FILES_MANIFEST:-?}, erwartet 33 Deploy-Dateien)"
+echo "pull-server-only.sh Version: $PULL_SCRIPT_VERSION (Manifest: ${PULL_FILES_MANIFEST:-?}, erwartet ${PULL_FILES_EXPECTED_COUNT} Deploy-Dateien)"
 echo "Installiere Serverteil nach: $TARGET_DIR"
 echo "Hinweis: Ein Lauf genuegt – bei CDN-Verzoegerung wird BUILD_VERSION automatisch nachgezogen." >&2
 
@@ -1590,6 +1590,7 @@ MAIN_HEAD_SHA
 openapi.yaml
 scripts/watch-inventur-job.sh
 scripts/check-monitoring-health.sh
+scripts/dedupe-ingest-reports.sh
 scripts/deploy-agent-guardian.sh
 client/windows/collect_and_send.ps1
 client/windows/collect_and_scan_sap_tables.ps1
@@ -1645,6 +1646,9 @@ if [ -f "$TARGET_DIR/scripts/watch-inventur-job.sh" ]; then
 fi
 if [ -f "$TARGET_DIR/scripts/check-monitoring-health.sh" ]; then
   chmod 0755 "$TARGET_DIR/scripts/check-monitoring-health.sh"
+fi
+if [ -f "$TARGET_DIR/scripts/dedupe-ingest-reports.sh" ]; then
+  chmod 0755 "$TARGET_DIR/scripts/dedupe-ingest-reports.sh"
 fi
 
 # Selbst-Update am Ende: immer branch main (nie REF=a9edd8e o.ae. – sonst 29-Dateien-Skript zurueck).
