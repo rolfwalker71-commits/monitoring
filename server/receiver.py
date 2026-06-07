@@ -151,6 +151,11 @@ TELEGRAM_ACTION_TTL_MINUTES = max(10, min(10080, int(os.getenv("MONITORING_TELEG
 WEB_PUSH_VAPID_PUBLIC_KEY = os.getenv("MONITORING_WEB_PUSH_VAPID_PUBLIC_KEY", "").strip()
 WEB_PUSH_VAPID_PRIVATE_KEY = os.getenv("MONITORING_WEB_PUSH_VAPID_PRIVATE_KEY", "").strip()
 WEB_PUSH_VAPID_SUBJECT = os.getenv("MONITORING_WEB_PUSH_VAPID_SUBJECT", "mailto:monitoring@example.com").strip() or "mailto:monitoring@example.com"
+LIVE_REPORT_PUSH_TTL_SECONDS = max(
+    60,
+    min(900, int(os.getenv("MONITORING_LIVE_REPORT_PUSH_TTL_SECONDS", "300") or "300")),
+)
+LIVE_DASHBOARD_PUSH_TAG = "monitoring-live-dashboard"
 CUSTOMER_LOGO_MAX_BYTES = max(64 * 1024, min(10 * 1024 * 1024, int(os.getenv("MONITORING_CUSTOMER_LOGO_MAX_BYTES", str(2 * 1024 * 1024)) or str(2 * 1024 * 1024))))
 try:
     SCHEDULE_TIMEZONE = ZoneInfo(SCHEDULE_TIMEZONE_NAME)
@@ -1392,6 +1397,17 @@ def init_db() -> None:
             ON web_push_subscriptions(endpoint)
             """
         )
+        web_push_columns = {
+            str(row[1] or "")
+            for row in conn.execute("PRAGMA table_info(web_push_subscriptions)").fetchall()
+        }
+        if "live_report_push_enabled" not in web_push_columns:
+            conn.execute(
+                """
+                ALTER TABLE web_push_subscriptions
+                ADD COLUMN live_report_push_enabled INTEGER NOT NULL DEFAULT 1
+                """
+            )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS user_preferences (
@@ -14627,7 +14643,14 @@ def parse_web_push_subscription_payload(payload: object) -> dict:
     }
 
 
-def upsert_web_push_subscription(conn: sqlite3.Connection, username: str, subscription: dict, user_agent: str = "") -> dict:
+def upsert_web_push_subscription(
+    conn: sqlite3.Connection,
+    username: str,
+    subscription: dict,
+    user_agent: str = "",
+    *,
+    live_report_push_enabled: bool = True,
+) -> dict:
     endpoint = str(subscription.get("endpoint", "") or "").strip()
     p256dh = str(subscription.get("p256dh", "") or "").strip()
     auth = str(subscription.get("auth", "") or "").strip()
@@ -14644,24 +14667,35 @@ def upsert_web_push_subscription(conn: sqlite3.Connection, username: str, subscr
             auth,
             user_agent,
             is_active,
+            live_report_push_enabled,
             last_success_at_utc,
             last_error,
             created_at_utc,
             updated_at_utc
         )
-        VALUES (?, ?, ?, ?, ?, 1, '', '', ?, ?)
+        VALUES (?, ?, ?, ?, ?, 1, ?, '', '', ?, ?)
         ON CONFLICT(username, endpoint) DO UPDATE SET
             p256dh = excluded.p256dh,
             auth = excluded.auth,
             user_agent = excluded.user_agent,
             is_active = 1,
+            live_report_push_enabled = excluded.live_report_push_enabled,
             updated_at_utc = excluded.updated_at_utc
         """,
-        (username, endpoint, p256dh, auth, user_agent, now_utc, now_utc),
+        (
+            username,
+            endpoint,
+            p256dh,
+            auth,
+            user_agent,
+            1 if live_report_push_enabled else 0,
+            now_utc,
+            now_utc,
+        ),
     )
     row = conn.execute(
         """
-        SELECT id, endpoint, is_active, created_at_utc, updated_at_utc
+        SELECT id, endpoint, is_active, live_report_push_enabled, created_at_utc, updated_at_utc
         FROM web_push_subscriptions
         WHERE username = ? AND endpoint = ?
         """,
@@ -14671,15 +14705,16 @@ def upsert_web_push_subscription(conn: sqlite3.Connection, username: str, subscr
         "id": int(row[0] or 0) if row else 0,
         "endpoint": endpoint,
         "is_active": bool(int((row[2] if row else 0) or 0)),
-        "created_at_utc": str((row[3] if row else "") or ""),
-        "updated_at_utc": str((row[4] if row else "") or ""),
+        "live_report_push_enabled": bool(int((row[3] if row else 1) or 0)),
+        "created_at_utc": str((row[4] if row else "") or ""),
+        "updated_at_utc": str((row[5] if row else "") or ""),
     }
 
 
 def list_web_push_subscriptions(conn: sqlite3.Connection, username: str) -> list[dict]:
     rows = conn.execute(
         """
-        SELECT id, endpoint, is_active, created_at_utc, updated_at_utc, last_success_at_utc, last_error
+        SELECT id, endpoint, is_active, live_report_push_enabled, created_at_utc, updated_at_utc, last_success_at_utc, last_error
         FROM web_push_subscriptions
         WHERE username = ?
         ORDER BY updated_at_utc DESC, id DESC
@@ -14691,10 +14726,11 @@ def list_web_push_subscriptions(conn: sqlite3.Connection, username: str) -> list
             "id": int(row[0] or 0),
             "endpoint": str(row[1] or ""),
             "is_active": bool(int(row[2] or 0)),
-            "created_at_utc": str(row[3] or ""),
-            "updated_at_utc": str(row[4] or ""),
-            "last_success_at_utc": str(row[5] or ""),
-            "last_error": str(row[6] or ""),
+            "live_report_push_enabled": bool(int(row[3] or 0)),
+            "created_at_utc": str(row[4] or ""),
+            "updated_at_utc": str(row[5] or ""),
+            "last_success_at_utc": str(row[6] or ""),
+            "last_error": str(row[7] or ""),
         }
         for row in rows
     ]
@@ -14717,7 +14753,191 @@ def _push_tag_for_alert(host_uid: str, hostname: str, mountpoint: str) -> str:
     return f"alert:{host_key}:{mount_key}"
 
 
-def _send_web_push_to_subscription(endpoint: str, p256dh: str, auth: str, payload: dict) -> tuple[bool, str, bool]:
+def _push_tag_for_live_report(host_uid: str, hostname: str) -> str:
+    return f"live-report:{alert_host_key(hostname, host_uid)}"
+
+
+def _format_live_report_metric(value: object) -> str | None:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(numeric):
+        return None
+    return f"{numeric:.1f}%"
+
+
+def build_live_report_push_payload(
+    *,
+    report_id: int,
+    hostname: str,
+    host_uid: str,
+    customer_label: str,
+    host_title: str,
+    primary_ip: str,
+    delivery_mode: str,
+    cpu_usage_percent: float | None,
+    memory_used_percent: float | None,
+) -> dict[str, object]:
+    delivery_label = "DELAYED" if str(delivery_mode or "").strip().lower() == "delayed" else "LIVE"
+    metrics: list[str] = []
+    cpu_text = _format_live_report_metric(cpu_usage_percent)
+    mem_text = _format_live_report_metric(memory_used_percent)
+    if cpu_text:
+        metrics.append(f"CPU {cpu_text}")
+    if mem_text:
+        metrics.append(f"RAM {mem_text}")
+    metrics_line = " · ".join(metrics) if metrics else ""
+    short_hostname = hostname.split(".")[0] if hostname else hostname
+    body_lines = [
+        str(host_title or short_hostname or hostname).strip(),
+        f"{short_hostname or hostname} · {primary_ip or '-'}",
+    ]
+    if metrics_line:
+        body_lines.append(metrics_line)
+    body_lines.append(delivery_label)
+    now_label = datetime.now(timezone.utc).strftime("%H:%M")
+    dashboard_body = f"Neu {now_label}: {customer_label} · {short_hostname or hostname}"
+    if metrics_line:
+        dashboard_body += f" · {metrics_line}"
+    mobile_url = "/mobile/alerts"
+    return {
+        "kind": "live-report",
+        "title": f"📡 {customer_label}",
+        "body": " · ".join(line for line in body_lines if line),
+        "icon": "/icons/logo.png",
+        "badge": "/icons/logo.png",
+        "tag": _push_tag_for_live_report(host_uid, hostname),
+        "renotify": True,
+        "silent": False,
+        "autoCloseMs": LIVE_REPORT_PUSH_TTL_SECONDS * 1000,
+        "vibrate": [70, 35, 70],
+        "actions": [{"action": "open", "title": "Öffnen"}],
+        "dashboard": {
+            "kind": "live-dashboard",
+            "title": "Live Monitoring",
+            "body": dashboard_body,
+            "tag": LIVE_DASHBOARD_PUSH_TAG,
+            "renotify": False,
+            "persistent": True,
+        },
+        "data": {
+            "url": mobile_url,
+            "kind": "live-report",
+            "report_id": int(report_id or 0),
+            "hostname": hostname,
+            "host_uid": alert_host_key(hostname, host_uid),
+            "delivery_mode": delivery_label.lower(),
+            "expires_at_utc": (
+                datetime.now(timezone.utc) + timedelta(seconds=LIVE_REPORT_PUSH_TTL_SECONDS)
+            ).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        },
+    }
+
+
+def maybe_send_live_report_web_push(
+    conn: sqlite3.Connection,
+    *,
+    report_id: int,
+    hostname: str,
+    host_uid: str,
+    payload: dict,
+    received_at_utc: str,
+) -> None:
+    if not web_push_is_configured():
+        return
+    safe_hostname = str(hostname or "").strip()
+    if not safe_hostname:
+        return
+
+    host_settings = get_host_settings(conn, safe_hostname, host_uid)
+    if bool(host_settings.get("is_hidden", False)):
+        return
+
+    display_override = get_display_name_override(conn, safe_hostname, host_uid)
+    customer_label = str(host_settings.get("customer_name") or "").strip() or "Kein Kunde"
+    host_title = effective_display_name(payload, display_override, safe_hostname)
+    primary_ip = str(payload.get("primary_ip") or "").strip() or _resolve_std_nic_ipv4(payload, "")
+    delivery_mode = str(payload.get("delivery_mode", "live") or "live").strip().lower()
+    cpu = payload.get("cpu", {}) if isinstance(payload.get("cpu"), dict) else {}
+    memory = payload.get("memory", {}) if isinstance(payload.get("memory"), dict) else {}
+    push_payload = build_live_report_push_payload(
+        report_id=report_id,
+        hostname=safe_hostname,
+        host_uid=host_uid,
+        customer_label=customer_label,
+        host_title=host_title,
+        primary_ip=primary_ip,
+        delivery_mode=delivery_mode,
+        cpu_usage_percent=_optional_metric_float(cpu.get("usage_percent")),
+        memory_used_percent=_optional_metric_float(memory.get("usage_percent")),
+    )
+
+    target_rows = conn.execute(
+        """
+        SELECT DISTINCT s.id, s.endpoint, s.p256dh, s.auth, s.username
+        FROM web_push_subscriptions s
+        WHERE s.is_active = 1
+          AND s.live_report_push_enabled = 1
+        """
+    ).fetchall()
+    if not target_rows:
+        return
+
+    now_utc = utc_now_iso()
+    for row in target_rows:
+        sub_id = int(row[0] or 0)
+        endpoint = str(row[1] or "")
+        p256dh = str(row[2] or "")
+        auth = str(row[3] or "")
+        username = str(row[4] or "").strip()
+        allowed_tokens = get_user_alert_visibility_tokens(conn, username)
+        if allowed_tokens is not None and not host_matches_alert_visibility_tokens(safe_hostname, host_uid, allowed_tokens):
+            continue
+        ok, details, deactivate = _send_web_push_to_subscription(
+            endpoint,
+            p256dh,
+            auth,
+            push_payload,
+            ttl_seconds=LIVE_REPORT_PUSH_TTL_SECONDS,
+        )
+        if ok:
+            conn.execute(
+                """
+                UPDATE web_push_subscriptions
+                SET last_success_at_utc = ?, last_error = '', updated_at_utc = ?
+                WHERE id = ?
+                """,
+                (now_utc, now_utc, sub_id),
+            )
+        elif deactivate:
+            conn.execute(
+                """
+                UPDATE web_push_subscriptions
+                SET is_active = 0, last_error = ?, updated_at_utc = ?
+                WHERE id = ?
+                """,
+                (details[:500], now_utc, sub_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE web_push_subscriptions
+                SET last_error = ?, updated_at_utc = ?
+                WHERE id = ?
+                """,
+                (details[:500], now_utc, sub_id),
+            )
+
+
+def _send_web_push_to_subscription(
+    endpoint: str,
+    p256dh: str,
+    auth: str,
+    payload: dict,
+    *,
+    ttl_seconds: int = 120,
+) -> tuple[bool, str, bool]:
     if not web_push_is_configured():
         return False, "web push not configured", False
     if webpush is None:
@@ -14735,7 +14955,7 @@ def _send_web_push_to_subscription(endpoint: str, p256dh: str, auth: str, payloa
             data=json.dumps(payload, separators=(",", ":")),
             vapid_private_key=WEB_PUSH_VAPID_PRIVATE_KEY,
             vapid_claims={"sub": WEB_PUSH_VAPID_SUBJECT},
-            ttl=120,
+            ttl=max(60, min(900, int(ttl_seconds or 120))),
         )
         return True, "ok", False
     except WebPushException as exc:
@@ -16032,6 +16252,14 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
     maybe_send_alert_reminders(conn)
     maybe_send_inactive_host_notifications(conn)
     maybe_send_scheduled_user_mails(conn)
+    maybe_send_live_report_web_push(
+        conn,
+        report_id=report_id,
+        hostname=hostname,
+        host_uid=incoming_host_uid,
+        payload=payload,
+        received_at_utc=report_received_at_utc,
+    )
 
     # Keep behavior identical to direct-ingest: non-blocking best effort.
     auto_sync_discovered_license_types(payload)
@@ -18810,6 +19038,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if heads_up_suppressed_filter not in {"all", "yes", "no"}:
                 heads_up_suppressed_filter = "all"
 
+            muted_filter = query.get("muted", ["all"])[0].strip().lower()
+            if muted_filter not in {"all", "yes", "no"}:
+                muted_filter = "all"
+
             hostname_filter = query.get("hostname", [""])[0].strip()
             host_uid_filter = query.get("host_uid", [""])[0].strip()
             country_filter = query.get("country", ["all"])[0].strip().upper()
@@ -18819,77 +19051,181 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
 
             where_parts = []
-            args = []
-            where_parts.append(
-                """
-                COALESCE(
-                  (SELECT is_hidden FROM host_uid_settings hus
-                   WHERE hus.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)),
-                  (SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname),
-                  0
-                ) = 0
-                """
-            )
-            if status_filter != "all":
-                where_parts.append("status = ?")
-                args.append(status_filter)
-            if severity_filter != "all":
-                where_parts.append("severity = ?")
-                args.append(severity_filter)
-            if acknowledged_filter == "no":
-                where_parts.append("(ack_at_utc IS NULL OR ack_at_utc = '')")
-            elif acknowledged_filter == "yes":
-                where_parts.append("(ack_at_utc IS NOT NULL AND ack_at_utc != '')")
-            if closed_filter == "no":
-                where_parts.append("(closed_at_utc IS NULL OR closed_at_utc = '')")
-            elif closed_filter == "yes":
-                where_parts.append("(closed_at_utc IS NOT NULL AND closed_at_utc != '')")
-            if heads_up_suppressed_filter == "yes":
+            args: list[object] = []
+            muted_only_mode = muted_filter == "yes"
+
+            if muted_only_mode:
                 where_parts.append(
                     """
-                    EXISTS (
-                      SELECT 1
-                      FROM heads_up_suppression_rules hs
-                      WHERE hs.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)
-                        AND hs.mountpoint = alerts.mountpoint
-                    )
+                    COALESCE(
+                      (SELECT is_hidden FROM host_uid_settings hus
+                       WHERE hus.host_uid = COALESCE(NULLIF(m.host_uid, ''), m.hostname)),
+                      (SELECT is_hidden FROM host_settings hs WHERE hs.hostname = m.hostname),
+                      0
+                    ) = 0
                     """
                 )
-            elif heads_up_suppressed_filter == "no":
+                if hostname_filter:
+                    where_parts.append("m.hostname = ?")
+                    args.append(hostname_filter)
+                if host_uid_filter:
+                    where_parts.append("COALESCE(NULLIF(m.host_uid, ''), m.hostname) = ?")
+                    args.append(host_uid_filter)
+                if severity_filter != "all":
+                    where_parts.append("COALESCE(a.severity, 'warning') = ?")
+                    args.append(severity_filter)
+                if status_filter != "all":
+                    where_parts.append("COALESCE(a.status, 'resolved') = ?")
+                    args.append(status_filter)
+                if acknowledged_filter == "no":
+                    where_parts.append("(a.ack_at_utc IS NULL OR a.ack_at_utc = '')")
+                elif acknowledged_filter == "yes":
+                    where_parts.append("(a.ack_at_utc IS NOT NULL AND a.ack_at_utc != '')")
+                if closed_filter == "no":
+                    where_parts.append("(a.closed_at_utc IS NULL OR a.closed_at_utc = '')")
+                elif closed_filter == "yes":
+                    where_parts.append("(a.closed_at_utc IS NOT NULL AND a.closed_at_utc != '')")
+                if heads_up_suppressed_filter == "yes":
+                    where_parts.append(
+                        """
+                        EXISTS (
+                          SELECT 1
+                          FROM heads_up_suppression_rules hs
+                          WHERE hs.host_uid = COALESCE(NULLIF(m.host_uid, ''), m.hostname)
+                            AND hs.mountpoint = m.mountpoint
+                        )
+                        """
+                    )
+                elif heads_up_suppressed_filter == "no":
+                    where_parts.append(
+                        """
+                        NOT EXISTS (
+                          SELECT 1
+                          FROM heads_up_suppression_rules hs
+                          WHERE hs.host_uid = COALESCE(NULLIF(m.host_uid, ''), m.hostname)
+                            AND hs.mountpoint = m.mountpoint
+                        )
+                        """
+                    )
+                where_clause = ""
+                if where_parts:
+                    where_clause = "WHERE " + " AND ".join(where_parts)
+                alerts_from_sql = f"""
+                    SELECT
+                      COALESCE(a.id, 0),
+                      m.hostname,
+                      m.mountpoint,
+                      COALESCE(a.severity, 'warning'),
+                      COALESCE(a.used_percent, 0.0),
+                      COALESCE(a.status, 'resolved'),
+                      COALESCE(NULLIF(m.host_uid, ''), m.hostname),
+                      COALESCE(a.created_at_utc, m.muted_at_utc),
+                      COALESCE(a.last_seen_at_utc, m.muted_at_utc),
+                      COALESCE(a.resolved_at_utc, m.muted_at_utc),
+                      COALESCE(a.report_id, 0),
+                      COALESCE(a.ack_note, ''),
+                      COALESCE(a.ack_by, ''),
+                      COALESCE(a.ack_at_utc, ''),
+                      COALESCE(a.closed_at_utc, ''),
+                      COALESCE(a.closed_by, ''),
+                      COALESCE(m.muted_by, ''),
+                      COALESCE(m.muted_at_utc, '')
+                    FROM muted_alert_rules m
+                    LEFT JOIN alerts a ON a.id = (
+                      SELECT a2.id
+                      FROM alerts a2
+                      WHERE COALESCE(NULLIF(a2.host_uid, ''), a2.hostname) = COALESCE(NULLIF(m.host_uid, ''), m.hostname)
+                        AND a2.mountpoint = m.mountpoint
+                      ORDER BY a2.id DESC
+                      LIMIT 1
+                    )
+                    {where_clause}
+                    ORDER BY m.muted_at_utc DESC, COALESCE(a.id, 0) DESC
+                    """
+            else:
                 where_parts.append(
                     """
-                    NOT EXISTS (
-                      SELECT 1
-                      FROM heads_up_suppression_rules hs
-                      WHERE hs.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)
-                        AND hs.mountpoint = alerts.mountpoint
-                    )
+                    COALESCE(
+                      (SELECT is_hidden FROM host_uid_settings hus
+                       WHERE hus.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)),
+                      (SELECT is_hidden FROM host_settings hs WHERE hs.hostname = alerts.hostname),
+                      0
+                    ) = 0
                     """
                 )
-            if hostname_filter:
-                where_parts.append("hostname = ?")
-                args.append(hostname_filter)
-            if host_uid_filter:
-                where_parts.append("COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname) = ?")
-                args.append(host_uid_filter)
+                if status_filter != "all":
+                    where_parts.append("status = ?")
+                    args.append(status_filter)
+                if severity_filter != "all":
+                    where_parts.append("severity = ?")
+                    args.append(severity_filter)
+                if acknowledged_filter == "no":
+                    where_parts.append("(ack_at_utc IS NULL OR ack_at_utc = '')")
+                elif acknowledged_filter == "yes":
+                    where_parts.append("(ack_at_utc IS NOT NULL AND ack_at_utc != '')")
+                if closed_filter == "no":
+                    where_parts.append("(closed_at_utc IS NULL OR closed_at_utc = '')")
+                elif closed_filter == "yes":
+                    where_parts.append("(closed_at_utc IS NOT NULL AND closed_at_utc != '')")
+                if heads_up_suppressed_filter == "yes":
+                    where_parts.append(
+                        """
+                        EXISTS (
+                          SELECT 1
+                          FROM heads_up_suppression_rules hs
+                          WHERE hs.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)
+                            AND hs.mountpoint = alerts.mountpoint
+                        )
+                        """
+                    )
+                elif heads_up_suppressed_filter == "no":
+                    where_parts.append(
+                        """
+                        NOT EXISTS (
+                          SELECT 1
+                          FROM heads_up_suppression_rules hs
+                          WHERE hs.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)
+                            AND hs.mountpoint = alerts.mountpoint
+                        )
+                        """
+                    )
+                if muted_filter == "no":
+                    where_parts.append(
+                        """
+                        NOT EXISTS (
+                          SELECT 1
+                          FROM muted_alert_rules m
+                          WHERE m.host_uid = COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname)
+                            AND m.mountpoint = alerts.mountpoint
+                        )
+                        """
+                    )
+                if hostname_filter:
+                    where_parts.append("hostname = ?")
+                    args.append(hostname_filter)
+                if host_uid_filter:
+                    where_parts.append("COALESCE(NULLIF(alerts.host_uid, ''), alerts.hostname) = ?")
+                    args.append(host_uid_filter)
 
-            where_clause = ""
-            if where_parts:
-                where_clause = "WHERE " + " AND ".join(where_parts)
-
-            mobile_context_by_host_key: dict[str, dict[str, str]] = {}
-            with sqlite3.connect(DB_PATH) as conn:
-                all_rows = conn.execute(
-                    f"""
+                where_clause = ""
+                if where_parts:
+                    where_clause = "WHERE " + " AND ".join(where_parts)
+                alerts_from_sql = f"""
                     SELECT id, hostname, mountpoint, severity, used_percent, status,
                           COALESCE(host_uid, ''),
                           created_at_utc, last_seen_at_utc, resolved_at_utc, report_id,
                           COALESCE(ack_note, ''), COALESCE(ack_by, ''), COALESCE(ack_at_utc, ''),
-                          COALESCE(closed_at_utc, ''), COALESCE(closed_by, '')
+                          COALESCE(closed_at_utc, ''), COALESCE(closed_by, ''),
+                          '', ''
                     FROM alerts
                     {where_clause}
                     ORDER BY id DESC
-                    """,
+                    """
+
+            mobile_context_by_host_key: dict[str, dict[str, str]] = {}
+            with sqlite3.connect(DB_PATH) as conn:
+                all_rows = conn.execute(
+                    alerts_from_sql,
                     tuple(args),
                 ).fetchall()
                 blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
@@ -19003,6 +19339,15 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     (str(r[0]), str(r[1]))
                     for r in conn_mute.execute("SELECT host_uid, mountpoint FROM muted_alert_rules").fetchall()
                 }
+                muted_details_by_pair = {
+                    (str(r[0]), str(r[1])): {
+                        "muted_by": str(r[2] or ""),
+                        "muted_at_utc": str(r[3] or ""),
+                    }
+                    for r in conn_mute.execute(
+                        "SELECT host_uid, mountpoint, muted_by, muted_at_utc FROM muted_alert_rules"
+                    ).fetchall()
+                }
                 heads_up_suppressed_pairs = {
                     (str(r[0]), str(r[1]))
                     for r in conn_mute.execute("SELECT host_uid, mountpoint FROM heads_up_suppression_rules").fetchall()
@@ -19067,7 +19412,20 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                             "closed_by": str(row[15] or ""),
                             "closed_by_label": resolve_web_user_display_label(user_display_names, row[15]),
                             "is_closed": bool(str(row[14] or "").strip()),
-                            "is_muted": (host_uid_value, mountpoint) in muted_pairs,
+                            "is_muted": muted_only_mode or (host_uid_value, mountpoint) in muted_pairs,
+                            "muted_by": str(
+                                (muted_details_by_pair.get((host_uid_value, mountpoint)) or {}).get("muted_by", "")
+                                or str(row[16] or "")
+                            ),
+                            "muted_by_label": resolve_web_user_display_label(
+                                user_display_names,
+                                (muted_details_by_pair.get((host_uid_value, mountpoint)) or {}).get("muted_by", "")
+                                or str(row[16] or ""),
+                            ),
+                            "muted_at_utc": str(
+                                (muted_details_by_pair.get((host_uid_value, mountpoint)) or {}).get("muted_at_utc", "")
+                                or str(row[17] or "")
+                            ),
                             "is_heads_up_suppressed": (host_uid_value, mountpoint) in heads_up_suppressed_pairs,
                         }
                     )
@@ -19082,6 +19440,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "status": status_filter,
                 "severity": severity_filter,
                 "heads_up_suppressed": heads_up_suppressed_filter,
+                "muted": muted_filter,
                 "hostname": hostname_filter,
                 "host_uid": host_uid_filter,
                 "country": country_filter or "all",
@@ -20241,7 +20600,14 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
                 try:
                     subscription = parse_web_push_subscription_payload(payload)
-                    saved = upsert_web_push_subscription(conn, username, subscription, user_agent=user_agent)
+                    live_report_push_enabled = coerce_bool(payload.get("live_report_push", True))
+                    saved = upsert_web_push_subscription(
+                        conn,
+                        username,
+                        subscription,
+                        user_agent=user_agent,
+                        live_report_push_enabled=live_report_push_enabled,
+                    )
                     conn.commit()
                 except ValueError as exc:
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})

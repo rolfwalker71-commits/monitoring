@@ -2824,6 +2824,7 @@ const LIVE_REPORT_FEED_MAX_ITEMS = 5;
 const LIVE_REPORT_FEED_POSITION_KEY = "monitoring.liveReportFeedPosition";
 const LIVE_REPORT_FEED_ENABLED_KEY = "monitoring.liveReportFeedEnabled";
 const LIVE_REPORT_POLL_INTERVAL_MS = 25000;
+const LIVE_REPORT_POLL_INTERVAL_FAST_MS = 8000;
 let liveReportFeedItems = [];
 let liveReportFeedMinimized = false;
 let liveReportFeedEnabled = true;
@@ -2948,16 +2949,27 @@ function base64UrlToUint8Array(base64Url) {
   return output;
 }
 
+function resolveMobileAssetVersion() {
+  const script = document.querySelector('script[src*="mobile-alerts.js"]');
+  if (!script) return "";
+  const match = String(script.getAttribute("src") || "").match(/[?&]v=([^&]+)/);
+  return match ? decodeURIComponent(match[1]) : "";
+}
+
 async function getServiceWorkerRegistration() {
   if (!("serviceWorker" in navigator)) {
     throw new Error("Service Worker wird auf diesem Browser nicht unterstützt");
   }
   if (!serviceWorkerRegistrationPromise) {
-    serviceWorkerRegistrationPromise = navigator.serviceWorker.register("/sw.js");
+    const swVersion = resolveMobileAssetVersion() || String(Date.now());
+    serviceWorkerRegistrationPromise = navigator.serviceWorker.register("/sw.js?v=" + encodeURIComponent(swVersion));
   }
   const registration = await serviceWorkerRegistrationPromise;
   if (!registration) {
     throw new Error("Service Worker konnte nicht registriert werden");
+  }
+  if (typeof registration.update === "function") {
+    void registration.update();
   }
   return registration;
 }
@@ -2993,7 +3005,9 @@ function renderPushButton() {
 
   btn.disabled = false;
   btn.textContent = state.pushEnabled ? "🔔" : "🔕";
-  btn.title = state.pushEnabled ? "Push deaktivieren" : "Push aktivieren";
+  btn.title = state.pushEnabled
+    ? "Push deaktivieren (Live-Reports + Alerts)"
+    : "Push aktivieren (Live-Reports + Alerts)";
 }
 
 async function refreshPushState() {
@@ -3024,10 +3038,14 @@ async function refreshPushState() {
     }
 
     const serverSubs = Array.isArray(payload.subscriptions) ? payload.subscriptions : [];
+    const wasPushEnabled = state.pushEnabled;
     state.pushEnabled = Boolean(
       localEndpoint
       && serverSubs.some((item) => item && item.is_active === true && String(item.endpoint || "") === localEndpoint)
     );
+    if (state.authenticated && wasPushEnabled !== state.pushEnabled) {
+      startMobileLiveReportPoll();
+    }
   } catch (_error) {
     state.pushSupported = false;
     state.pushConfigured = false;
@@ -3086,14 +3104,19 @@ async function togglePush() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ action: "subscribe", subscription: sub.toJSON() }),
+      body: JSON.stringify({
+        action: "subscribe",
+        subscription: sub.toJSON(),
+        live_report_push: true,
+      }),
     });
     if (!saveResp.ok) {
       const err = await saveResp.json().catch(() => ({}));
       throw new Error(String(err.error || ("HTTP " + saveResp.status)));
     }
     state.pushEnabled = true;
-    showToast("Push aktiviert.");
+    startMobileLiveReportPoll();
+    showToast("Push aktiviert (Live-Reports + Alerts).");
   } catch (error) {
     showToast("Push fehlgeschlagen: " + (error?.message || String(error)), true);
   } finally {
@@ -5040,13 +5063,86 @@ function resetMobileLiveReportFeed() {
   renderMobileLiveReportFeed();
 }
 
+function getLiveReportPollIntervalMs() {
+  return state.pushEnabled ? LIVE_REPORT_POLL_INTERVAL_FAST_MS : LIVE_REPORT_POLL_INTERVAL_MS;
+}
+
+function buildLiveReportPushPayloadFromEvent(event) {
+  const preview = buildMobileLiveReportFeedPreviewFromEvent(event);
+  const hostUid = String(event?.host_uid || preview.hostIdentity || preview.hostname || "").trim();
+  const hostname = String(event?.hostname || preview.hostname || "").trim();
+  const hostKey = hostUid || hostname;
+  const metricsLine = String(preview.metricsText || "").trim();
+  const bodyLines = [
+    preview.designation,
+    preview.shortHostname + " · " + preview.ip,
+  ];
+  if (metricsLine) {
+    bodyLines.push(metricsLine);
+  }
+  bodyLines.push(preview.deliveryLabel);
+  const nowLabel = new Date().toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" });
+  let dashboardBody = "Neu " + nowLabel + ": " + preview.customerName + " · " + preview.shortHostname;
+  if (metricsLine) {
+    dashboardBody += " · " + metricsLine;
+  }
+  return {
+    kind: "live-report",
+    title: "📡 " + preview.customerName,
+    body: bodyLines.filter(Boolean).join(" · "),
+    icon: "/icons/logo.png",
+    badge: "/icons/logo.png",
+    tag: "live-report:" + hostKey,
+    renotify: true,
+    silent: false,
+    autoCloseMs: 5 * 60 * 1000,
+    vibrate: [70, 35, 70],
+    actions: [{ action: "open", title: "Öffnen" }],
+    dashboard: {
+      kind: "live-dashboard",
+      title: "Live Monitoring",
+      body: dashboardBody,
+      tag: "monitoring-live-dashboard",
+      renotify: false,
+      persistent: true,
+    },
+    data: {
+      url: "/mobile/alerts",
+      kind: "live-report",
+      report_id: Number(event?.report_id || 0),
+      hostname,
+      host_uid: hostKey,
+      delivery_mode: preview.deliveryMode,
+    },
+  };
+}
+
+async function postLiveReportEventsToServiceWorker(events) {
+  if (!Array.isArray(events) || !events.length || !("serviceWorker" in navigator)) {
+    return;
+  }
+  try {
+    const registration = await getServiceWorkerRegistration();
+    const worker = registration.active || registration.waiting || registration.installing;
+    if (!worker) {
+      return;
+    }
+    worker.postMessage({
+      type: "live-report-feed-update",
+      events: events.map(buildLiveReportPushPayloadFromEvent),
+    });
+  } catch (_error) {
+    // Best effort when polling finds events while the app is backgrounded.
+  }
+}
+
 function startMobileLiveReportPoll() {
   stopMobileLiveReportPoll();
   if (!state.authenticated) return;
   void pollMobileLiveReportEvents();
   liveReportPollTimerId = window.setInterval(() => {
     void pollMobileLiveReportEvents();
-  }, LIVE_REPORT_POLL_INTERVAL_MS);
+  }, getLiveReportPollIntervalMs());
 }
 
 async function pollMobileLiveReportEvents() {
@@ -5075,6 +5171,9 @@ async function pollMobileLiveReportEvents() {
     const visibleEvents = events.filter(isMobileLiveReportEventVisible);
     if (visibleEvents.length > 0) {
       enqueueMobileLiveReportFeedFromEvents(visibleEvents);
+      if (state.pushEnabled && document.visibilityState !== "visible") {
+        void postLiveReportEventsToServiceWorker(visibleEvents);
+      }
     }
   } catch (_error) {
     // Keep polling on transient network failures.
