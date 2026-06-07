@@ -11850,11 +11850,17 @@ async function downloadDatabaseBackup(onProgress) {
     );
     const statusData = await statusResponse.json().catch(() => ({}));
     if (!statusResponse.ok) {
-      if ((statusResponse.status === 502 || statusResponse.status === 503) && transientFailures < 60) {
+      const retryableStatus = statusResponse.status === 502
+        || statusResponse.status === 503
+        || statusResponse.status === 404;
+      if (retryableStatus && transientFailures < 90) {
         transientFailures += 1;
+        const retryLabel = statusResponse.status === 404
+          ? `Backup-Job wird gesucht (Server-Neustart?, ${transientFailures})...`
+          : `Backup läuft (Server kurz beschäftigt, Wiederholung ${transientFailures})...`;
         onProgress?.({
           pct: null,
-          label: `Backup läuft (Server kurz beschäftigt, Wiederholung ${transientFailures})...`,
+          label: retryLabel,
         });
         continue;
       }

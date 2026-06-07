@@ -3221,6 +3221,146 @@ def auto_sync_discovered_license_types(payload: object) -> None:
         pass  # Silent failure, don't block report storage
 
 
+def _backup_job_meta_path(job_id: str) -> Path:
+    safe_job_id = re.sub(r"[^A-Za-z0-9_-]", "", str(job_id or "").strip())
+    return BACKUP_TEMP_DIR / f"{safe_job_id}.meta.json"
+
+
+def _write_backup_job_meta(job_id: str, job: dict[str, str]) -> None:
+    safe_job_id = str(job_id or "").strip()
+    if not safe_job_id:
+        return
+    try:
+        BACKUP_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "job_id": safe_job_id,
+            "status": str(job.get("status") or ""),
+            "created_at_utc": str(job.get("created_at_utc") or ""),
+            "updated_at_utc": str(job.get("updated_at_utc") or ""),
+            "started_at_utc": str(job.get("started_at_utc") or ""),
+            "file_path": str(job.get("file_path") or ""),
+            "filename": str(job.get("filename") or ""),
+            "access_token": str(job.get("access_token") or ""),
+            "error": str(job.get("error") or ""),
+        }
+        meta_path = _backup_job_meta_path(safe_job_id)
+        meta_path.write_text(json.dumps(payload, ensure_ascii=True, separators=(",", ":")), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _read_backup_job_meta(job_id: str) -> dict[str, str] | None:
+    safe_job_id = str(job_id or "").strip()
+    if not safe_job_id:
+        return None
+    meta_path = _backup_job_meta_path(safe_job_id)
+    if not meta_path.is_file():
+        return None
+    try:
+        payload = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return {
+        "status": str(payload.get("status") or ""),
+        "created_at_utc": str(payload.get("created_at_utc") or ""),
+        "updated_at_utc": str(payload.get("updated_at_utc") or ""),
+        "started_at_utc": str(payload.get("started_at_utc") or ""),
+        "file_path": str(payload.get("file_path") or ""),
+        "filename": str(payload.get("filename") or ""),
+        "access_token": str(payload.get("access_token") or ""),
+        "error": str(payload.get("error") or ""),
+    }
+
+
+def _delete_backup_job_meta(job_id: str) -> None:
+    meta_path = _backup_job_meta_path(job_id)
+    try:
+        if meta_path.exists():
+            meta_path.unlink()
+    except OSError:
+        pass
+
+
+def _sqlite_backup_file_looks_valid(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    try:
+        if path.stat().st_size < 1024:
+            return False
+        with sqlite3.connect(str(path)) as conn:
+            conn.execute("SELECT 1 FROM sqlite_schema LIMIT 1")
+        return True
+    except (OSError, sqlite3.Error):
+        return False
+
+
+def _reconcile_backup_job_after_restart(job_id: str, job: dict[str, str]) -> dict[str, str]:
+    status = str(job.get("status") or "")
+    if status not in {"running", "ready"}:
+        return job
+    backup_path = Path(str(job.get("file_path") or ""))
+    if status == "ready":
+        if _sqlite_backup_file_looks_valid(backup_path):
+            return job
+        failed = dict(job)
+        failed["status"] = "error"
+        failed["error"] = "backup file missing or invalid"
+        failed["updated_at_utc"] = utc_now_iso()
+        return failed
+    if status != "running":
+        return job
+    if _sqlite_backup_file_looks_valid(backup_path):
+        reconciled = dict(job)
+        reconciled["status"] = "ready"
+        reconciled["error"] = ""
+        reconciled["updated_at_utc"] = utc_now_iso()
+        print(f"[backup] recovered completed job {job_id} from disk after process restart")
+        return reconciled
+    if backup_path.is_file():
+        try:
+            backup_path.unlink()
+        except OSError:
+            pass
+    interrupted = dict(job)
+    interrupted["status"] = "error"
+    interrupted["error"] = "backup interrupted (server restart or low memory) — please retry"
+    interrupted["updated_at_utc"] = utc_now_iso()
+    print(f"[backup] marked interrupted job {job_id} after process restart")
+    return interrupted
+
+
+def _remember_backup_job(job_id: str, job: dict[str, str]) -> None:
+    safe_job_id = str(job_id or "").strip()
+    if not safe_job_id:
+        return
+    with _backup_jobs_lock:
+        _backup_jobs[safe_job_id] = dict(job)
+    _write_backup_job_meta(safe_job_id, job)
+
+
+def _restore_backup_jobs_from_disk() -> None:
+    try:
+        BACKUP_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+        meta_paths = sorted(BACKUP_TEMP_DIR.glob("*.meta.json"))
+    except OSError:
+        return
+    restored = 0
+    for meta_path in meta_paths:
+        if not meta_path.name.endswith(".meta.json"):
+            continue
+        job_id = meta_path.name[: -len(".meta.json")]
+        job = _read_backup_job_meta(job_id)
+        if not isinstance(job, dict):
+            continue
+        job = _reconcile_backup_job_after_restart(job_id, job)
+        _remember_backup_job(job_id, job)
+        restored += 1
+    if restored > 0:
+        print(f"[backup] restored {restored} job(s) from disk")
+
+
 def _cleanup_backup_jobs(max_age_minutes: int = 30) -> None:
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
     remove_ids: list[str] = []
@@ -3242,6 +3382,7 @@ def _cleanup_backup_jobs(max_age_minutes: int = 30) -> None:
                 except OSError:
                     pass
             _backup_jobs.pop(job_id, None)
+            _delete_backup_job_meta(job_id)
 
 
 def _get_backup_job_if_token_valid(job_id: str, job_token: str) -> dict[str, str] | None:
@@ -3251,11 +3392,16 @@ def _get_backup_job_if_token_valid(job_id: str, job_token: str) -> dict[str, str
         return None
     with _backup_jobs_lock:
         job = _backup_jobs.get(safe_job_id)
-        if not isinstance(job, dict):
-            return None
-        if str(job.get("access_token") or "") != safe_job_token:
-            return None
-        return dict(job)
+    if not isinstance(job, dict):
+        job = _read_backup_job_meta(safe_job_id)
+        if isinstance(job, dict):
+            job = _reconcile_backup_job_after_restart(safe_job_id, job)
+            _remember_backup_job(safe_job_id, job)
+    if not isinstance(job, dict):
+        return None
+    if not secrets.compare_digest(str(job.get("access_token") or ""), safe_job_token):
+        return None
+    return dict(job)
 
 
 def _create_database_backup_job() -> dict:
@@ -3273,8 +3419,9 @@ def _create_database_backup_job() -> dict:
     backup_path = BACKUP_TEMP_DIR / f"{job_id}.db"
 
     created_at = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
-    with _backup_jobs_lock:
-        _backup_jobs[job_id] = {
+    _remember_backup_job(
+        job_id,
+        {
             "status": "running",
             "created_at_utc": created_at,
             "updated_at_utc": created_at,
@@ -3283,7 +3430,8 @@ def _create_database_backup_job() -> dict:
             "filename": backup_filename,
             "access_token": job_access_token,
             "error": "",
-        }
+        },
+    )
 
     def _run_job() -> None:
         backup_busy_ms = max(
@@ -3301,17 +3449,21 @@ def _create_database_backup_job() -> dict:
                     src_conn.backup(dst_conn, pages=256, sleep=0.15)
             with _backup_jobs_lock:
                 job = _backup_jobs.get(job_id)
-                if job is not None:
-                    job["status"] = "ready"
-                    job["error"] = ""
-                    job["updated_at_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            if isinstance(job, dict):
+                ready_job = dict(job)
+                ready_job["status"] = "ready"
+                ready_job["error"] = ""
+                ready_job["updated_at_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                _remember_backup_job(job_id, ready_job)
         except Exception as exc:
             with _backup_jobs_lock:
                 job = _backup_jobs.get(job_id)
-                if job is not None:
-                    job["status"] = "error"
-                    job["error"] = f"backup copy failed: {exc}"
-                    job["updated_at_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            if isinstance(job, dict):
+                error_job = dict(job)
+                error_job["status"] = "error"
+                error_job["error"] = f"backup copy failed: {exc}"
+                error_job["updated_at_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                _remember_backup_job(job_id, error_job)
             if backup_path.exists():
                 try:
                     backup_path.unlink()
@@ -21490,27 +21642,31 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
             _cleanup_backup_jobs()
             if job is None:
-                with _backup_jobs_lock:
-                    raw_job = _backup_jobs.get(job_id)
-                    job = dict(raw_job) if isinstance(raw_job, dict) else None
-            with _backup_jobs_lock:
-                if job and str(job.get("status") or "") == "running":
-                    started_raw = str(job.get("started_at_utc") or job.get("created_at_utc") or "").strip()
-                    started_at = None
-                    if started_raw:
-                        try:
-                            started_at = datetime.fromisoformat(started_raw.replace("Z", "+00:00"))
-                        except ValueError:
-                            started_at = None
-                    if started_at is not None:
-                        runtime_seconds = (datetime.now(timezone.utc) - started_at).total_seconds()
-                        if runtime_seconds > 900:
-                            stored = _backup_jobs.get(job_id)
-                            if isinstance(stored, dict):
-                                stored["status"] = "error"
-                                stored["error"] = "backup job timeout after 15 minutes"
-                                stored["updated_at_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-                                job = dict(stored)
+                disk_job = _read_backup_job_meta(job_id)
+                if isinstance(disk_job, dict):
+                    job = _reconcile_backup_job_after_restart(job_id, disk_job)
+                    _remember_backup_job(job_id, job)
+                else:
+                    with _backup_jobs_lock:
+                        raw_job = _backup_jobs.get(job_id)
+                        job = dict(raw_job) if isinstance(raw_job, dict) else None
+            if job and str(job.get("status") or "") == "running":
+                started_raw = str(job.get("started_at_utc") or job.get("created_at_utc") or "").strip()
+                started_at = None
+                if started_raw:
+                    try:
+                        started_at = datetime.fromisoformat(started_raw.replace("Z", "+00:00"))
+                    except ValueError:
+                        started_at = None
+                if started_at is not None:
+                    runtime_seconds = (datetime.now(timezone.utc) - started_at).total_seconds()
+                    if runtime_seconds > 900:
+                        timeout_job = dict(job)
+                        timeout_job["status"] = "error"
+                        timeout_job["error"] = "backup job timeout after 15 minutes"
+                        timeout_job["updated_at_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                        _remember_backup_job(job_id, timeout_job)
+                        job = dict(timeout_job)
             if not job:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup job not found"})
                 return
@@ -21537,12 +21693,21 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             _cleanup_backup_jobs()
             with _backup_jobs_lock:
                 stored = _backup_jobs.get(job_id)
-                if not isinstance(stored, dict):
-                    job = None
-                elif str(stored.get("status") or "") == "ready":
+            if not isinstance(stored, dict):
+                stored = _read_backup_job_meta(job_id)
+                if isinstance(stored, dict):
+                    stored = _reconcile_backup_job_after_restart(job_id, stored)
+                    _remember_backup_job(job_id, stored)
+            if not isinstance(stored, dict):
+                job = None
+            elif str(stored.get("status") or "") == "ready":
+                with _backup_jobs_lock:
                     job = _backup_jobs.pop(job_id, None)
-                else:
+                if not isinstance(job, dict):
                     job = dict(stored)
+                _delete_backup_job_meta(job_id)
+            else:
+                job = dict(stored)
             if not job:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup job not found"})
                 return
@@ -24674,6 +24839,7 @@ def main() -> None:
     args = parser.parse_args()
 
     init_db()
+    _restore_backup_jobs_from_disk()
 
     def _startup_identity_cleanup_loop() -> None:
         enabled_raw = str(os.getenv("MONITORING_STARTUP_IDENTITY_CLEANUP", "0") or "0").strip().lower()
