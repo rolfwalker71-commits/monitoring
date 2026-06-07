@@ -5335,10 +5335,11 @@ def build_db_maintenance_dashboard(conn: sqlite3.Connection) -> dict[str, object
                oldest_report_utc,
                newest_report_utc
         FROM db_maintenance_history
-        ORDER BY bucket_start_utc ASC
+        ORDER BY bucket_start_utc DESC
         LIMIT 240
         """
     ).fetchall()
+    rows = list(reversed(rows))
 
     history: list[dict[str, object]] = []
     for row in rows:
@@ -24956,6 +24957,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             _read_cache_invalidate_prefix("admin-database-stats")
             _read_cache_invalidate_prefix("dashboard-db-kpis")
+            _read_cache_set(
+                "admin-database-stats:v1",
+                payload,
+                ttl_seconds=ADMIN_DATABASE_STATS_CACHE_TTL_SECONDS,
+            )
             self._send_json(
                 HTTPStatus.OK,
                 {
