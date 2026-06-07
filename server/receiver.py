@@ -138,7 +138,7 @@ ALERTS_SUMMARY_CACHE_TTL_SECONDS = max(
 )
 IDENTITY_MAPS_CACHE_TTL_SECONDS = max(
     5.0,
-    min(180.0, float(os.getenv("MONITORING_IDENTITY_MAPS_CACHE_TTL_SECONDS", "60") or "60")),
+    min(180.0, float(os.getenv("MONITORING_IDENTITY_MAPS_CACHE_TTL_SECONDS", "120") or "120")),
 )
 READ_CACHE_DEBOUNCE_SECONDS = max(
     5.0,
@@ -335,6 +335,8 @@ def _flush_due_identity_maps_cache_invalidation() -> None:
         _identity_maps_invalidate_scheduled_at = 0.0
     if scheduled_at > 0.0:
         _invalidate_identity_maps_cache()
+        _read_cache_invalidate_prefix("hosts:")
+        _read_cache_invalidate_prefix("inactive-hosts:")
 
 
 def _read_cache_invalidate_prefix(prefix: str) -> None:
@@ -9529,6 +9531,252 @@ def _latest_report_rows_by_host_key(conn: sqlite3.Connection) -> list[tuple]:
         ORDER BY latest.last_seen_utc DESC
         """
         ).fetchall()
+
+
+def _sort_identity_rows_for_hosts_list(rows: list[tuple]) -> list[tuple]:
+    def sort_key(row: tuple) -> tuple[int, float]:
+        report_count = int(row[5] or 0)
+        is_ghost = report_count > 0 and report_count <= INACTIVE_HOST_GHOST_MAX_REPORTS
+        parsed_last_seen = parse_utc_iso(str(row[2] or "").strip())
+        last_seen_ts = parsed_last_seen.timestamp() if parsed_last_seen is not None else 0.0
+        return (1 if is_ghost else 0, -last_seen_ts)
+
+    return sorted(rows, key=sort_key)
+
+
+def _build_hosts_endpoint_response(
+    conn: sqlite3.Connection,
+    *,
+    limit: int,
+    offset: int,
+) -> dict[str, object]:
+    identity_rows, _, _, _ = _get_latest_identity_context(conn)
+    sorted_rows = _sort_identity_rows_for_hosts_list(identity_rows)
+    total_hosts = len(sorted_rows)
+    page_rows = sorted_rows[offset : offset + limit]
+
+    host_keys_for_counts = [str(row[0] or "").strip() for row in page_rows if str(row[0] or "").strip()]
+    open_counts_by_host_key: dict[str, tuple[int, int]] = {}
+    if host_keys_for_counts:
+        placeholders = ",".join(["?"] * len(host_keys_for_counts))
+        alert_rows = conn.execute(
+            f"""
+            SELECT COALESCE(NULLIF(a.host_uid, ''), a.hostname) AS host_key,
+                   COUNT(*) AS open_alert_count,
+                   SUM(CASE WHEN a.severity = 'critical' THEN 1 ELSE 0 END) AS open_critical_alert_count
+            FROM alerts a
+            LEFT JOIN muted_alert_rules m
+                                ON m.host_uid = COALESCE(NULLIF(a.host_uid, ''), a.hostname)
+                             AND m.mountpoint = a.mountpoint
+            WHERE a.status = 'open'
+                                AND m.host_uid IS NULL
+              AND COALESCE(NULLIF(a.host_uid, ''), a.hostname) IN ({placeholders})
+            GROUP BY COALESCE(NULLIF(a.host_uid, ''), a.hostname)
+            """,
+            tuple(host_keys_for_counts),
+        ).fetchall()
+        open_counts_by_host_key = {
+            str(row[0] or ""): (int(row[1] or 0), int(row[2] or 0))
+            for row in alert_rows
+        }
+
+    settings_rows = conn.execute(
+        """
+        SELECT h.hostname,
+               h.display_name_override,
+               COALESCE(h.country_code_override, ''),
+               COALESCE(h.is_favorite, 0),
+               COALESCE(h.is_hidden, 0),
+               h.customer_id,
+                  COALESCE(h.environment_type, ''),
+               COALESCE(c.customer_name, ''),
+               COALESCE(c.maringo_project_number, ''),
+               COALESCE(c.logo_filename, ''),
+               COALESCE(c.updated_at_utc, '')
+        FROM host_settings h
+        LEFT JOIN customers c ON c.id = h.customer_id
+        """
+    ).fetchall()
+
+    host_uid_keys = [str(row[0] or "").strip() for row in page_rows if str(row[0] or "").strip()]
+    host_uid_display_name_map: dict[str, str] = {}
+    host_uid_settings_map: dict[str, dict] = {}
+    if host_uid_keys:
+        placeholders = ",".join(["?"] * len(host_uid_keys))
+        host_uid_rows = conn.execute(
+            f"""
+            SELECT hus.host_uid,
+                   COALESCE(hus.display_name_override, ''),
+                   COALESCE(hus.country_code_override, ''),
+                   COALESCE(hus.is_favorite, 0),
+                   COALESCE(hus.is_hidden, 0),
+                   hus.customer_id,
+                   COALESCE(hus.environment_type, ''),
+                   COALESCE(c.customer_name, ''),
+                   COALESCE(c.maringo_project_number, ''),
+                   COALESCE(c.logo_filename, ''),
+                   COALESCE(c.updated_at_utc, '')
+            FROM host_uid_settings hus
+            LEFT JOIN customers c ON c.id = hus.customer_id
+            WHERE host_uid IN ({placeholders})
+            """,
+            tuple(host_uid_keys),
+        ).fetchall()
+        host_uid_display_name_map = {
+            str(uid_row[0] or "").strip(): str(uid_row[1] or "").strip()
+            for uid_row in host_uid_rows
+            if str(uid_row[0] or "").strip()
+        }
+
+        host_uid_settings_map = {
+            str(uid_row[0] or "").strip(): {
+                "country_code_override": normalize_country_code(uid_row[2]),
+                "is_favorite": bool(int(uid_row[3] or 0)),
+                "is_hidden": bool(int(uid_row[4] or 0)),
+                "customer_id": int(uid_row[5]) if uid_row[5] is not None else None,
+                "environment_type": str(uid_row[6] or "").strip().lower(),
+                "customer_name": str(uid_row[7] or ""),
+                "customer_maringo_project_number": str(uid_row[8] or ""),
+                "logo_filename": str(uid_row[9] or ""),
+                "logo_updated_at_utc": str(uid_row[10] or ""),
+            }
+            for uid_row in host_uid_rows
+            if str(uid_row[0] or "").strip()
+        }
+
+    settings_map = {
+        str(row[0]): {
+            "display_name_override": str(row[1] or ""),
+            "country_code_override": normalize_country_code(row[2]),
+            "is_favorite": bool(int(row[3] or 0)),
+            "is_hidden": bool(int(row[4] or 0)),
+            "customer_id": int(row[5]) if row[5] is not None else None,
+            "environment_type": str(row[6] or "").strip().lower(),
+            "customer_name": str(row[7] or ""),
+            "customer_maringo_project_number": str(row[8] or ""),
+            "logo_filename": str(row[9] or ""),
+            "logo_updated_at_utc": str(row[10] or ""),
+        }
+        for row in settings_rows
+    }
+
+    hosts = []
+    now_utc = datetime.now(timezone.utc)
+    for row in page_rows:
+        host_uid_key = str(row[0] or "").strip()
+        hostname = str(row[1] or "").strip()
+        last_seen_utc = str(row[2] or "")
+        latest_payload = parse_payload_json(row[3] or "{}")
+        primary_ip = str(row[4] or "")
+        report_count = int(row[5] or 0)
+        agent_id = str(latest_payload.get("agent_id", "") or "")
+        sap_license = latest_payload.get("sap_license") if isinstance(latest_payload, dict) else None
+        has_sap_license_info = False
+        if isinstance(sap_license, dict):
+            focus_types = sap_license.get("focus_license_types")
+            has_focus_types = isinstance(focus_types, list) and len(focus_types) > 0
+            has_license_core = any(
+                str(sap_license.get(field, "") or "").strip()
+                for field in ("hardware_key", "instno", "system_nr", "system_type", "customer_no", "customer_name", "expiration")
+            )
+            has_sap_license_info = bool(has_focus_types or has_license_core)
+        online = False
+        if last_seen_utc:
+            parsed_last_seen = parse_utc_iso(last_seen_utc)
+            if parsed_last_seen is not None:
+                online = (now_utc - parsed_last_seen) <= timedelta(minutes=SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES)
+        host_settings = settings_map.get(hostname, {
+            "display_name_override": "",
+            "country_code_override": "",
+            "is_favorite": False,
+            "is_hidden": False,
+            "customer_id": None,
+            "environment_type": "",
+            "customer_name": "",
+            "customer_maringo_project_number": "",
+        })
+        host_uid_settings = host_uid_settings_map.get(host_uid_key, {}) if host_uid_key else {}
+        display_name_override = str(host_uid_display_name_map.get(host_uid_key, "") or "").strip()
+        if not display_name_override:
+            display_name_override = str(host_settings.get("display_name_override", "") or "").strip()
+        country_code = normalize_country_code(host_uid_settings.get("country_code_override", ""))
+        if not country_code:
+            country_code = normalize_country_code(host_settings.get("country_code_override", ""))
+        if not country_code:
+            country_code = extract_country_code_from_payload(latest_payload)
+
+        is_favorite = bool(host_uid_settings.get("is_favorite", host_settings.get("is_favorite", False)))
+        is_hidden = bool(host_uid_settings.get("is_hidden", host_settings.get("is_hidden", False)))
+        customer_id = host_uid_settings.get("customer_id", host_settings.get("customer_id"))
+        environment_type = str(host_uid_settings.get("environment_type", host_settings.get("environment_type", "")) or "")
+        customer_name = str(host_uid_settings.get("customer_name", host_settings.get("customer_name", "")) or "")
+        customer_maringo_project_number = str(
+            host_uid_settings.get(
+                "customer_maringo_project_number",
+                host_settings.get("customer_maringo_project_number", ""),
+            )
+            or ""
+        )
+        release_info = _extract_sap_hana_ram(latest_payload)
+
+        hosts.append(
+            {
+                "host_uid": host_uid_key,
+                "hostname": hostname,
+                "display_name": effective_display_name(
+                    latest_payload,
+                    display_name_override,
+                    hostname,
+                ),
+                "last_seen_utc": last_seen_utc,
+                "online": online,
+                "report_count": report_count,
+                "is_temporary_identity": report_count > 0 and report_count <= INACTIVE_HOST_GHOST_MAX_REPORTS,
+                "primary_ip": primary_ip,
+                "std_nic_ip": _resolve_std_nic_ipv4(latest_payload, primary_ip),
+                "agent_id": agent_id,
+                "agent_version": str(latest_payload.get("agent_version", "")),
+                "delivery_mode": str(latest_payload.get("delivery_mode", "live") or "live"),
+                "is_delayed": bool(latest_payload.get("is_delayed", False)),
+                "queue_depth": payload_int(latest_payload, "queue_depth", 0),
+                "open_alert_count": int(open_counts_by_host_key.get(host_uid_key or hostname, (0, 0))[0]),
+                "open_critical_alert_count": int(open_counts_by_host_key.get(host_uid_key or hostname, (0, 0))[1]),
+                "os": str(latest_payload.get("os", "")),
+                "country_code": country_code,
+                "sap_release": release_info["sap_release"],
+                "sap_feature_pack": release_info["sap_release"],
+                "hana_release": release_info["hana_version"],
+                "hana_version": release_info["hana_version"],
+                "hana_sid": release_info["hana_sid"],
+                "ram_gb": release_info["ram_gb"],
+                "is_favorite": is_favorite,
+                "is_hidden": is_hidden,
+                "customer_id": customer_id,
+                "customer_name": customer_name,
+                "customer_maringo_project_number": customer_maringo_project_number,
+                "customer_logo_url": build_customer_logo_url(
+                    customer_id,
+                    host_uid_settings.get("logo_filename", host_settings.get("logo_filename", "")),
+                    host_uid_settings.get("logo_updated_at_utc", host_settings.get("logo_updated_at_utc", "")),
+                ),
+                "environment_type": environment_type,
+                "agent_api_key_status": str((latest_payload.get("agent_api_key") or {}).get("status", "off")),
+                "has_sap_license_info": has_sap_license_info,
+            }
+        )
+
+    hidden_hosts = sum(1 for host in hosts if bool(host.get("is_hidden", False)))
+    visible_hosts = len(hosts) - hidden_hosts
+    return {
+        "count": len(hosts),
+        "limit": limit,
+        "offset": offset,
+        "total_hosts": total_hosts,
+        "visible_hosts": visible_hosts,
+        "hidden_hosts": hidden_hosts,
+        "hosts": hosts,
+    }
+
 
 def _collect_latest_report_usage_by_host(conn: sqlite3.Connection, hostnames: list[str]) -> dict[str, dict[str, object]]:
     if not hostnames:
@@ -18984,282 +19232,11 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
                 _finish_endpoint_timer(endpoint_timer, meta=f"limit={limit} offset={offset} cache=hit")
                 return
-            host_key_expr = reports_host_key_sql()
-
             with sqlite3.connect(DB_PATH) as conn:
-                rows = conn.execute(
-                    f"""
-                    WITH grouped AS (
-                        SELECT
-                            {host_key_expr} AS host_key,
-                            MAX(received_at_utc) AS last_seen_utc,
-                            COUNT(*) AS report_count,
-                            MAX(id) AS latest_id
-                        FROM reports
-                        GROUP BY {host_key_expr}
-                    ),
-                    ordered AS (
-                        SELECT
-                            host_key,
-                            last_seen_utc,
-                            report_count,
-                            latest_id,
-                            COUNT(*) OVER() AS total_hosts
-                        FROM grouped
-                        ORDER BY
-                            CASE
-                                WHEN report_count <= {INACTIVE_HOST_GHOST_MAX_REPORTS} THEN 1
-                                ELSE 0
-                            END ASC,
-                            last_seen_utc DESC
-                        LIMIT ? OFFSET ?
-                    )
-                    SELECT
-                        o.host_key,
-                        o.last_seen_utc,
-                        o.report_count,
-                        COALESCE(r_latest.primary_ip, '') AS latest_primary_ip,
-                        COALESCE(r_latest.agent_id, '') AS latest_agent_id,
-                        COALESCE(r_latest.payload_json, '{{}}') AS latest_payload_json,
-                        COALESCE(r_latest.hostname, '') AS latest_hostname,
-                        o.total_hosts
-                    FROM ordered o
-                    JOIN reports r_latest ON r_latest.id = o.latest_id
-                    ORDER BY
-                        CASE
-                            WHEN o.report_count <= {INACTIVE_HOST_GHOST_MAX_REPORTS} THEN 1
-                            ELSE 0
-                        END ASC,
-                        o.last_seen_utc DESC
-                    """,
-                    (limit, offset),
-                ).fetchall()
-
-                total_hosts = int(rows[0][7] or 0) if rows else 0
-                if not rows and offset > 0:
-                    total_hosts = int(conn.execute(
-                        f"SELECT COUNT(*) FROM (SELECT 1 FROM reports GROUP BY {host_key_expr})"
-                    ).fetchone()[0] or 0)
-
-                host_keys_for_counts = [str(row[0] or "").strip() for row in rows if str(row[0] or "").strip()]
-                open_counts_by_host_key: dict[str, tuple[int, int]] = {}
-                if host_keys_for_counts:
-                    placeholders = ",".join(["?"] * len(host_keys_for_counts))
-                    alert_rows = conn.execute(
-                        f"""
-                        SELECT COALESCE(NULLIF(a.host_uid, ''), a.hostname) AS host_key,
-                               COUNT(*) AS open_alert_count,
-                               SUM(CASE WHEN a.severity = 'critical' THEN 1 ELSE 0 END) AS open_critical_alert_count
-                        FROM alerts a
-                        LEFT JOIN muted_alert_rules m
-                                                    ON m.host_uid = COALESCE(NULLIF(a.host_uid, ''), a.hostname)
-                                                 AND m.mountpoint = a.mountpoint
-                        WHERE a.status = 'open'
-                                                    AND m.host_uid IS NULL
-                          AND COALESCE(NULLIF(a.host_uid, ''), a.hostname) IN ({placeholders})
-                        GROUP BY COALESCE(NULLIF(a.host_uid, ''), a.hostname)
-                        """,
-                        tuple(host_keys_for_counts),
-                    ).fetchall()
-                    open_counts_by_host_key = {
-                        str(row[0] or ""): (int(row[1] or 0), int(row[2] or 0))
-                        for row in alert_rows
-                    }
-
-                settings_rows = conn.execute(
-                    """
-                    SELECT h.hostname,
-                           h.display_name_override,
-                           COALESCE(h.country_code_override, ''),
-                           COALESCE(h.is_favorite, 0),
-                           COALESCE(h.is_hidden, 0),
-                           h.customer_id,
-                              COALESCE(h.environment_type, ''),
-                           COALESCE(c.customer_name, ''),
-                           COALESCE(c.maringo_project_number, ''),
-                           COALESCE(c.logo_filename, ''),
-                           COALESCE(c.updated_at_utc, '')
-                    FROM host_settings h
-                    LEFT JOIN customers c ON c.id = h.customer_id
-                    """
-                ).fetchall()
-
-                host_uid_keys = [str(row[0] or "").strip() for row in rows if str(row[0] or "").strip()]
-                host_uid_display_name_map: dict[str, str] = {}
-                host_uid_settings_map: dict[str, dict] = {}
-                if host_uid_keys:
-                    placeholders = ",".join(["?"] * len(host_uid_keys))
-                    host_uid_rows = conn.execute(
-                        f"""
-                        SELECT hus.host_uid,
-                               COALESCE(hus.display_name_override, ''),
-                               COALESCE(hus.country_code_override, ''),
-                               COALESCE(hus.is_favorite, 0),
-                               COALESCE(hus.is_hidden, 0),
-                               hus.customer_id,
-                               COALESCE(hus.environment_type, ''),
-                               COALESCE(c.customer_name, ''),
-                               COALESCE(c.maringo_project_number, ''),
-                               COALESCE(c.logo_filename, ''),
-                               COALESCE(c.updated_at_utc, '')
-                        FROM host_uid_settings hus
-                        LEFT JOIN customers c ON c.id = hus.customer_id
-                        WHERE host_uid IN ({placeholders})
-                        """,
-                        tuple(host_uid_keys),
-                    ).fetchall()
-                    host_uid_display_name_map = {
-                        str(uid_row[0] or "").strip(): str(uid_row[1] or "").strip()
-                        for uid_row in host_uid_rows
-                        if str(uid_row[0] or "").strip()
-                    }
-
-                    host_uid_settings_map = {
-                        str(uid_row[0] or "").strip(): {
-                            "country_code_override": normalize_country_code(uid_row[2]),
-                            "is_favorite": bool(int(uid_row[3] or 0)),
-                            "is_hidden": bool(int(uid_row[4] or 0)),
-                            "customer_id": int(uid_row[5]) if uid_row[5] is not None else None,
-                            "environment_type": str(uid_row[6] or "").strip().lower(),
-                            "customer_name": str(uid_row[7] or ""),
-                            "customer_maringo_project_number": str(uid_row[8] or ""),
-                            "logo_filename": str(uid_row[9] or ""),
-                            "logo_updated_at_utc": str(uid_row[10] or ""),
-                        }
-                        for uid_row in host_uid_rows
-                        if str(uid_row[0] or "").strip()
-                    }
-
-            _mark_endpoint_timer(endpoint_timer, "db")
-
-            settings_map = {
-                str(row[0]): {
-                    "display_name_override": str(row[1] or ""),
-                    "country_code_override": normalize_country_code(row[2]),
-                    "is_favorite": bool(int(row[3] or 0)),
-                    "is_hidden": bool(int(row[4] or 0)),
-                    "customer_id": int(row[5]) if row[5] is not None else None,
-                    "environment_type": str(row[6] or "").strip().lower(),
-                    "customer_name": str(row[7] or ""),
-                    "customer_maringo_project_number": str(row[8] or ""),
-                    "logo_filename": str(row[9] or ""),
-                    "logo_updated_at_utc": str(row[10] or ""),
-                }
-                for row in settings_rows
-            }
-            hosts = []
-            now_utc = datetime.now(timezone.utc)
-            for row in rows:
-                latest_payload = parse_payload_json(row[5] or "{}")
-                sap_license = latest_payload.get("sap_license") if isinstance(latest_payload, dict) else None
-                has_sap_license_info = False
-                if isinstance(sap_license, dict):
-                    focus_types = sap_license.get("focus_license_types")
-                    has_focus_types = isinstance(focus_types, list) and len(focus_types) > 0
-                    has_license_core = any(
-                        str(sap_license.get(field, "") or "").strip()
-                        for field in ("hardware_key", "instno", "system_nr", "system_type", "customer_no", "customer_name", "expiration")
-                    )
-                    has_sap_license_info = bool(has_focus_types or has_license_core)
-                host_uid_key = str(row[0] or "").strip()
-                hostname = str(row[6] or "").strip()
-                last_seen_utc = str(row[1] or "")
-                online = False
-                if last_seen_utc:
-                    parsed_last_seen = parse_utc_iso(last_seen_utc)
-                    if parsed_last_seen is not None:
-                        online = (now_utc - parsed_last_seen) <= timedelta(minutes=SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES)
-                host_settings = settings_map.get(hostname, {
-                    "display_name_override": "",
-                    "country_code_override": "",
-                    "is_favorite": False,
-                    "is_hidden": False,
-                    "customer_id": None,
-                    "environment_type": "",
-                    "customer_name": "",
-                    "customer_maringo_project_number": "",
-                })
-                host_uid_settings = host_uid_settings_map.get(host_uid_key, {}) if host_uid_key else {}
-                display_name_override = str(host_uid_display_name_map.get(host_uid_key, "") or "").strip()
-                if not display_name_override:
-                    display_name_override = str(host_settings.get("display_name_override", "") or "").strip()
-                country_code = normalize_country_code(host_uid_settings.get("country_code_override", ""))
-                if not country_code:
-                    country_code = normalize_country_code(host_settings.get("country_code_override", ""))
-                if not country_code:
-                    country_code = extract_country_code_from_payload(latest_payload)
-
-                is_favorite = bool(host_uid_settings.get("is_favorite", host_settings.get("is_favorite", False)))
-                is_hidden = bool(host_uid_settings.get("is_hidden", host_settings.get("is_hidden", False)))
-                customer_id = host_uid_settings.get("customer_id", host_settings.get("customer_id"))
-                environment_type = str(host_uid_settings.get("environment_type", host_settings.get("environment_type", "")) or "")
-                customer_name = str(host_uid_settings.get("customer_name", host_settings.get("customer_name", "")) or "")
-                customer_maringo_project_number = str(
-                    host_uid_settings.get(
-                        "customer_maringo_project_number",
-                        host_settings.get("customer_maringo_project_number", ""),
-                    )
-                    or ""
-                )
-                release_info = _extract_sap_hana_ram(latest_payload)
-
-                hosts.append(
-                    {
-                        "host_uid": host_uid_key,
-                        "hostname": hostname,
-                        "display_name": effective_display_name(
-                            latest_payload,
-                            display_name_override,
-                            hostname,
-                        ),
-                        "last_seen_utc": last_seen_utc,
-                        "online": online,
-                        "report_count": row[2],
-                        "is_temporary_identity": int(row[2] or 0) > 0
-                        and int(row[2] or 0) <= INACTIVE_HOST_GHOST_MAX_REPORTS,
-                        "primary_ip": row[3] or "",
-                        "std_nic_ip": _resolve_std_nic_ipv4(latest_payload, str(row[3] or "")),
-                        "agent_id": row[4] or "",
-                        "agent_version": str(latest_payload.get("agent_version", "")),
-                        "delivery_mode": str(latest_payload.get("delivery_mode", "live") or "live"),
-                        "is_delayed": bool(latest_payload.get("is_delayed", False)),
-                        "queue_depth": payload_int(latest_payload, "queue_depth", 0),
-                        "open_alert_count": int(open_counts_by_host_key.get(host_uid_key or hostname, (0, 0))[0]),
-                        "open_critical_alert_count": int(open_counts_by_host_key.get(host_uid_key or hostname, (0, 0))[1]),
-                        "os": str(latest_payload.get("os", "")),
-                        "country_code": country_code,
-                        "sap_release": release_info["sap_release"],
-                        "sap_feature_pack": release_info["sap_release"],
-                        "hana_release": release_info["hana_version"],
-                        "hana_version": release_info["hana_version"],
-                        "hana_sid": release_info["hana_sid"],
-                        "ram_gb": release_info["ram_gb"],
-                        "is_favorite": is_favorite,
-                        "is_hidden": is_hidden,
-                        "customer_id": customer_id,
-                        "customer_name": customer_name,
-                        "customer_maringo_project_number": customer_maringo_project_number,
-                        "customer_logo_url": build_customer_logo_url(customer_id, host_uid_settings.get("logo_filename", host_settings.get("logo_filename", "")), host_uid_settings.get("logo_updated_at_utc", host_settings.get("logo_updated_at_utc", ""))),
-                        "environment_type": environment_type,
-                        "agent_api_key_status": str((latest_payload.get("agent_api_key") or {}).get("status", "off")),
-                        "has_sap_license_info": has_sap_license_info,
-                    }
-                )
-
-            _mark_endpoint_timer(endpoint_timer, "build")
-
-            hidden_hosts = sum(1 for host in hosts if bool(host.get("is_hidden", False)))
-            visible_hosts = len(hosts) - hidden_hosts
-
-            response_data = {
-                "count": len(hosts),
-                "limit": limit,
-                "offset": offset,
-                "total_hosts": total_hosts,
-                "visible_hosts": visible_hosts,
-                "hidden_hosts": hidden_hosts,
-                "hosts": hosts,
-            }
+                response_data = _build_hosts_endpoint_response(conn, limit=limit, offset=offset)
+            _mark_endpoint_timer(endpoint_timer, "db+build")
+            total_hosts = int(response_data.get("total_hosts") or 0)
+            hosts = response_data.get("hosts") or []
             _read_cache_set(cache_key, response_data, ttl_seconds=HOSTS_ENDPOINT_CACHE_TTL_SECONDS)
             self._send_json(HTTPStatus.OK, response_data)
             _mark_endpoint_timer(endpoint_timer, "send")
@@ -23912,6 +23889,20 @@ def main() -> None:
         daemon=True,
     )
     agent_ingest_worker_thread.start()
+
+    def _startup_prewarm_identity_cache() -> None:
+        try:
+            with sqlite_connect() as conn:
+                _get_latest_identity_context(conn)
+            print("[startup] identity maps cache pre-warmed")
+        except Exception as exc:
+            print(f"[startup] identity cache pre-warm failed: {exc}")
+
+    threading.Thread(
+        target=_startup_prewarm_identity_cache,
+        name="startup-identity-prewarm",
+        daemon=True,
+    ).start()
 
     server = ThreadingHTTPServer((args.host, args.port), MonitoringHandler)
     print(f"Monitoring receiver running on http://{args.host}:{args.port}")

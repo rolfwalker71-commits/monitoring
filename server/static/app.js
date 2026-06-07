@@ -1650,8 +1650,29 @@ async function refreshDashboard(options = {}) {
   try {
     const shouldRefreshGlobalAlertsList = state.viewMode === "global" && state.globalSubMode === "global-alerts";
 
-    // Critical path first: render host list quickly and keep startup interactive.
-    await loadHosts({ preserveScroll });
+    const hostsPromise = loadHosts({ preserveScroll });
+    let kpiPromise = Promise.resolve();
+    if (!state.deferredDashboardTasksInFlight) {
+      state.deferredDashboardTasksInFlight = true;
+      kpiPromise = Promise.allSettled([
+        loadGlobalAlertsOverview({ updateList: shouldRefreshGlobalAlertsList }),
+        loadInactiveHosts({ updateList: false }),
+        loadHeaderDatabaseKpis(),
+        loadWebclientVersion(),
+        loadCriticalTrends({ updateList: false }),
+      ])
+        .then(() => {
+          updateSummaryStrip();
+          if (automatic) {
+            updateAutoRefreshStatus(new Date());
+          }
+        })
+        .finally(() => {
+          state.deferredDashboardTasksInFlight = false;
+        });
+    }
+
+    await hostsPromise;
     if (state.selectedHost) {
       await Promise.allSettled([
         loadReportsForHost(),
@@ -1659,31 +1680,7 @@ async function refreshDashboard(options = {}) {
         loadAlertsForHost(),
       ]);
     }
-
-    // Defer heavy global tiles until after host list paint (avoid DB stampede on login).
-    if (!state.deferredDashboardTasksInFlight) {
-      state.deferredDashboardTasksInFlight = true;
-      window.setTimeout(() => {
-        Promise.allSettled([
-          loadGlobalAlertsOverview({ updateList: shouldRefreshGlobalAlertsList }),
-        ])
-          .finally(() => Promise.allSettled([
-            loadInactiveHosts({ updateList: false }),
-            loadHeaderDatabaseKpis(),
-            loadWebclientVersion(),
-            loadCriticalTrends({ updateList: false }),
-          ]))
-          .then(() => {
-            updateSummaryStrip();
-            if (automatic) {
-              updateAutoRefreshStatus(new Date());
-            }
-          })
-          .finally(() => {
-            state.deferredDashboardTasksInFlight = false;
-          });
-      }, 800);
-    }
+    await kpiPromise;
 
     if (state.viewMode === "settings") {
       try {
