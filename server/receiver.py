@@ -67,6 +67,14 @@ REPORT_RETENTION_DAYS = max(1, int(os.getenv("MONITORING_REPORT_RETENTION_DAYS",
 MAX_REPORTS_PER_HOST = max(0, int(os.getenv("MONITORING_MAX_REPORTS_PER_HOST", "0")))
 WARNING_THRESHOLD_PERCENT = float(os.getenv("MONITORING_WARNING_THRESHOLD", "80"))
 CRITICAL_THRESHOLD_PERCENT = float(os.getenv("MONITORING_CRITICAL_THRESHOLD", "90"))
+ALERT_RESOLVE_HYSTERESIS_PERCENT = max(
+    0.0,
+    min(20.0, float(os.getenv("MONITORING_ALERT_RESOLVE_HYSTERESIS_PERCENT", "2") or "2")),
+)
+ALERT_RESOLVE_MAIL_MIN_OPEN_MINUTES = max(
+    0,
+    min(120, int(os.getenv("MONITORING_ALERT_RESOLVE_MAIL_MIN_OPEN_MINUTES", "5") or "5")),
+)
 TELEGRAM_ENABLED_DEFAULT = os.getenv("MONITORING_TELEGRAM_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
 TELEGRAM_BOT_TOKEN_DEFAULT = os.getenv("MONITORING_TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID_DEFAULT = os.getenv("MONITORING_TELEGRAM_CHAT_ID", "")
@@ -2560,6 +2568,68 @@ def _identity_is_older_than(identity_last_seen: str, canonical_last_seen: str) -
     if not safe_identity_last:
         return True
     return safe_identity_last < safe_canonical_last
+
+
+def _resolve_canonical_alert_identity_from_maps(
+    conn: sqlite3.Connection,
+    hostname: str,
+    host_uid: str,
+    canonical_by_hostname: dict[str, dict[str, object]],
+    canonical_by_cluster: dict[str, dict[str, object]],
+    last_seen_by_host_uid: dict[str, str],
+) -> tuple[str, str]:
+    safe_hostname = str(hostname or "").strip()
+    safe_host_uid = str(host_uid or "").strip()
+    if not safe_hostname or not safe_host_uid:
+        return safe_hostname, safe_host_uid
+
+    if not _is_superseded_host_identity_key(
+        conn,
+        safe_hostname,
+        safe_host_uid,
+        canonical_by_hostname,
+        canonical_by_cluster,
+        last_seen_by_host_uid,
+    ):
+        return safe_hostname, safe_host_uid
+
+    canonical = canonical_by_hostname.get(safe_hostname)
+    if canonical:
+        canonical_uid = str(canonical.get("host_uid") or "").strip()
+        if canonical_uid:
+            return safe_hostname, canonical_uid
+
+    cluster_key = _hostname_cluster_key(safe_hostname)
+    if cluster_key:
+        cluster_canonical = canonical_by_cluster.get(cluster_key)
+        if cluster_canonical:
+            canonical_uid = str(cluster_canonical.get("host_uid") or "").strip()
+            canonical_hostname = str(cluster_canonical.get("hostname") or "").strip() or safe_hostname
+            if canonical_uid:
+                return canonical_hostname, canonical_uid
+
+    return safe_hostname, safe_host_uid
+
+
+def _should_resolve_alert_for_usage(
+    used_percent: float,
+    warning_threshold: float,
+    critical_threshold: float,
+    *,
+    hysteresis_percent: float = ALERT_RESOLVE_HYSTERESIS_PERCENT,
+) -> bool:
+    if used_percent >= critical_threshold:
+        return False
+    resolve_below = max(0.0, warning_threshold - hysteresis_percent)
+    return used_percent < resolve_below
+
+
+def _alert_open_duration_minutes(created_at_utc: str, now_utc: str) -> float | None:
+    created_dt = parse_utc_iso(str(created_at_utc or "").strip())
+    now_dt = parse_utc_iso(str(now_utc or "").strip())
+    if created_dt is None or now_dt is None:
+        return None
+    return max(0.0, (now_dt - created_dt).total_seconds() / 60.0)
 
 
 def _is_superseded_host_identity_key(
@@ -17291,6 +17361,18 @@ def evaluate_severity(used_percent: float) -> str:
 
 def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: str, report_id: int, filesystems: list, alarm_settings: dict) -> None:
     now_utc = utc_now_iso()
+    latest_identity_rows = _latest_report_rows_by_host_key(conn)
+    canonical_by_hostname = _canonical_identities_by_hostname_from_rows(latest_identity_rows)
+    canonical_by_cluster = _canonical_identities_by_cluster_from_rows(latest_identity_rows)
+    last_seen_by_host_uid = _last_seen_by_host_uid_from_rows(latest_identity_rows)
+    hostname, host_uid = _resolve_canonical_alert_identity_from_maps(
+        conn,
+        hostname,
+        host_uid,
+        canonical_by_hostname,
+        canonical_by_cluster,
+        last_seen_by_host_uid,
+    )
     alert_key = alert_host_key(hostname, host_uid)
     _resolve_cross_identity_open_alerts(
         conn,
@@ -17425,7 +17507,7 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: 
 
         open_alert = conn.execute(
             """
-            SELECT id, severity
+            SELECT id, severity, created_at_utc
             FROM alerts
             WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ? AND mountpoint = ? AND status = 'open'
             ORDER BY id DESC
@@ -17435,6 +17517,8 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: 
         ).fetchone()
 
         if severity == "ok":
+            if not _should_resolve_alert_for_usage(used_percent, warning_threshold, critical_threshold):
+                continue
             conn.execute(
                 "DELETE FROM alert_debounce WHERE host_uid = ? AND mountpoint = ?",
                 (alert_key, mountpoint),
@@ -17448,18 +17532,26 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: 
                     """,
                     (now_utc, now_utc, report_id, open_alert[0]),
                 )
-                maybe_send_alert_message(
-                    alarm_settings,
-                    "resolved",
-                    hostname,
-                    alert_key,
-                    mountpoint,
-                    "ok",
-                    used_percent,
-                    conn=conn,
-                    display_name=display_name,
-                    alert_id=int(open_alert[0] or 0),
+                open_minutes = _alert_open_duration_minutes(str(open_alert[2] or ""), now_utc)
+                should_send_resolve_mail = (
+                    ALERT_RESOLVE_MAIL_MIN_OPEN_MINUTES <= 0
+                    or open_minutes is None
+                    or open_minutes >= ALERT_RESOLVE_MAIL_MIN_OPEN_MINUTES
                 )
+                if should_send_resolve_mail:
+                    resolve_severity = str(open_alert[1] or "warning")
+                    maybe_send_alert_message(
+                        alarm_settings,
+                        "resolved",
+                        hostname,
+                        alert_key,
+                        mountpoint,
+                        resolve_severity,
+                        used_percent,
+                        conn=conn,
+                        display_name=display_name,
+                        alert_id=int(open_alert[0] or 0),
+                    )
             continue
 
         if not open_alert and not alert_started:
