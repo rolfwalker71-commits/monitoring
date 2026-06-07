@@ -4439,9 +4439,10 @@ def collect_agent_ingest_queue_overview(conn: sqlite3.Connection, recent_errors_
         SELECT
             COUNT(*) AS queue_depth,
             SUM(CASE WHEN next_attempt_at_utc <= ? THEN 1 ELSE 0 END) AS ready_count,
-            SUM(CASE WHEN attempt_count > 0 THEN 1 ELSE 0 END) AS retry_count,
+            SUM(CASE WHEN attempt_count > 0 OR COALESCE(last_error, '') <> '' THEN 1 ELSE 0 END) AS retry_count,
             SUM(CASE WHEN COALESCE(processing_started_at_utc, '') <> '' THEN 1 ELSE 0 END) AS in_flight_count,
-            SUM(CASE WHEN next_attempt_at_utc > ? THEN 1 ELSE 0 END) AS delayed_count
+            SUM(CASE WHEN next_attempt_at_utc > ? THEN 1 ELSE 0 END) AS delayed_count,
+            SUM(CASE WHEN attempt_count <= 0 AND COALESCE(last_error, '') = '' THEN 1 ELSE 0 END) AS pending_count
         FROM agent_ingest_queue
         """,
         (now_iso, now_iso),
@@ -4538,6 +4539,7 @@ def collect_agent_ingest_queue_overview(conn: sqlite3.Connection, recent_errors_
     retry_count = int((totals_row[2] or 0) if totals_row else 0)
     in_flight_count = int((totals_row[3] or 0) if totals_row else 0)
     delayed_count = int((totals_row[4] or 0) if totals_row else 0)
+    pending_count = int((totals_row[5] or 0) if totals_row else 0)
 
     return {
         "queue_depth": queue_depth,
@@ -4545,6 +4547,7 @@ def collect_agent_ingest_queue_overview(conn: sqlite3.Connection, recent_errors_
         "retry_count": retry_count,
         "in_flight_count": in_flight_count,
         "delayed_count": delayed_count,
+        "pending_count": pending_count,
         "oldest_enqueued_at_utc": oldest_enqueued_at_utc,
         "newest_enqueued_at_utc": newest_enqueued_at_utc,
         "oldest_age_seconds": oldest_age_seconds,
@@ -18888,10 +18891,11 @@ def _agent_ingest_schedule_retry(
         SET next_attempt_at_utc = ?,
             processing_started_at_utc = '',
             last_error = ?,
-            updated_at_utc = ?
+            updated_at_utc = ?,
+            attempt_count = ?
         WHERE id = ?
         """,
-        (retry_at, error_message, failure_at_utc, queue_id),
+        (retry_at, error_message, failure_at_utc, attempt_count, queue_id),
     )
     _update_agent_ingest_audit_log_row(
         conn,

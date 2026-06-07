@@ -12032,8 +12032,10 @@ async function loadAdminAgentIngestQueue() {
   const nextAttemptSeconds = Number(data?.next_attempt_in_seconds || 0);
   const oldestText = oldestAge > 0 ? formatDurationCompact(oldestAge) : "-";
   const nextText = nextAttemptSeconds > 0 ? `in ${formatDurationCompact(nextAttemptSeconds)}` : "sofort";
+  const pendingCount = Number(data?.pending_count || 0);
+  const retryCount = Number(data?.retry_count || 0);
   setAgentIngestQueueStatus(
-    `Queue: ${formatInteger(data?.queue_depth || 0)} · Ready: ${formatInteger(data?.ready_count || 0)} · Ältestes: ${oldestText} · Nächster Retry: ${nextText}`
+    `Queue: ${formatInteger(data?.queue_depth || 0)} · Neu: ${formatInteger(pendingCount)} · Retry: ${formatInteger(retryCount)} · Fällig: ${formatInteger(data?.ready_count || 0)} · Ältestes: ${oldestText} · Nächster Versuch: ${nextText}`
   );
   return data;
 }
