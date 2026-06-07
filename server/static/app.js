@@ -589,6 +589,7 @@ const state = {
   mutedAlertsSignature: "",
   deferredDashboardTasksInFlight: false,
   hostListDelegatedWired: false,
+  alertRowActionsDelegated: false,
   // Add a new user type "readOnly" to the state
   userType: "default", // Possible values: "default", "readOnly", "admin"
 };
@@ -14332,28 +14333,43 @@ async function loadAnalysisForHost() {
   }
 }
 
+async function refreshAlertsAfterMutation() {
+  if (state.selectedHost) {
+    await loadAlertsForHost();
+  }
+  const onGlobalAlerts = state.viewMode === "global" && state.globalSubMode === "global-alerts";
+  await loadGlobalAlertsOverview({ updateList: onGlobalAlerts });
+  void loadHosts();
+}
+
 async function toggleAlertMute(hostname, hostUid, mountpoint, alertId, currentlyMuted) {
   const endpoint = currentlyMuted ? "/api/v1/alert-unmute" : "/api/v1/alert-mute";
-  await fetch(endpoint, {
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     body: JSON.stringify({ hostname, host_uid: hostUid, mountpoint, alert_id: alertId }),
   });
-  await loadAlertsForHost();
-  await loadGlobalAlertsOverview();
-  await loadHosts();
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  await refreshAlertsAfterMutation();
 }
 
 async function toggleAlertHeadsUpSuppression(hostname, hostUid, mountpoint, alertId, currentlySuppressed) {
   const endpoint = currentlySuppressed ? "/api/v1/alert-headsup-unsuppress" : "/api/v1/alert-headsup-suppress";
-  await fetch(endpoint, {
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     body: JSON.stringify({ hostname, host_uid: hostUid, mountpoint, alert_id: alertId }),
   });
-  await loadAlertsForHost();
-  await loadGlobalAlertsOverview();
-  await loadHosts();
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  await refreshAlertsAfterMutation();
 }
 
 let _ackModalResolve = null;
@@ -14445,9 +14461,7 @@ async function acknowledgeAlert(hostname, hostUid, mountpoint, alertId, currentN
   }
 
   closeAckModal(null);
-  await loadAlertsForHost();
-  await loadGlobalAlertsOverview();
-  await loadHosts();
+  await refreshAlertsAfterMutation();
 }
 
 async function closeAlert(hostname, hostUid, mountpoint, alertId, isClosed) {
@@ -14464,9 +14478,7 @@ async function closeAlert(hostname, hostUid, mountpoint, alertId, isClosed) {
     alert(`Fehler: ${err.message}`);
     return;
   }
-  await loadAlertsForHost();
-  await loadGlobalAlertsOverview();
-  await loadHosts();
+  await refreshAlertsAfterMutation();
 }
 
 function currentHostAlertsCollapseKey() {
@@ -14605,51 +14617,6 @@ async function loadAlertsForHost() {
       })
       .join("");
 
-    alertsRows.querySelectorAll("[data-action='toggle-mute']").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const hostname = btn.getAttribute("data-hostname");
-        const hostUid = btn.getAttribute("data-host-uid");
-        const mountpoint = btn.getAttribute("data-mountpoint");
-        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
-        const isMuted = btn.getAttribute("data-muted") === "1";
-        await toggleAlertMute(hostname, hostUid, mountpoint, alertId, isMuted);
-      });
-    });
-    alertsRows.querySelectorAll("[data-action='toggle-headsup']").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const hostname = btn.getAttribute("data-hostname");
-        const hostUid = btn.getAttribute("data-host-uid");
-        const mountpoint = btn.getAttribute("data-mountpoint");
-        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
-        const isSuppressed = btn.getAttribute("data-headsup-suppressed") === "1";
-        await toggleAlertHeadsUpSuppression(hostname, hostUid, mountpoint, alertId, isSuppressed);
-      });
-    });
-    alertsRows.querySelectorAll("[data-action='ack']").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const hostname = btn.getAttribute("data-hostname");
-        const hostUid = btn.getAttribute("data-host-uid");
-        const mountpoint = btn.getAttribute("data-mountpoint");
-        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
-        const currentNote = decodeURIComponent(btn.getAttribute("data-ack-note") || "");
-        const isAlreadyAcknowledged = btn.getAttribute("data-acknowledged") === "1";
-        await acknowledgeAlert(hostname, hostUid, mountpoint, alertId, currentNote, isAlreadyAcknowledged);
-      });
-    });
-    alertsRows.querySelectorAll("[data-action='close']").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const hostname = btn.getAttribute("data-hostname");
-        const hostUid = btn.getAttribute("data-host-uid");
-        const mountpoint = btn.getAttribute("data-mountpoint");
-        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
-        const isClosed = btn.getAttribute("data-closed") === "1";
-        await closeAlert(hostname, hostUid, mountpoint, alertId, isClosed);
-      });
-    });
   } catch (error) {
     alertsRows.innerHTML = `<tr><td colspan="6" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
   }
@@ -17305,51 +17272,6 @@ async function loadGlobalAlertsOverview(options = {}) {
         : `Offen (Liste): ${totalForFilter} | Summary vorübergehend nicht verfügbar`;
     }
 
-    rowsEl.querySelectorAll("[data-action='toggle-mute']").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const hostname = btn.getAttribute("data-hostname");
-        const hostUid = btn.getAttribute("data-host-uid");
-        const mountpoint = btn.getAttribute("data-mountpoint");
-        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
-        const isMuted = btn.getAttribute("data-muted") === "1";
-        await toggleAlertMute(hostname, hostUid, mountpoint, alertId, isMuted);
-      });
-    });
-    rowsEl.querySelectorAll("[data-action='toggle-headsup']").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const hostname = btn.getAttribute("data-hostname");
-        const hostUid = btn.getAttribute("data-host-uid");
-        const mountpoint = btn.getAttribute("data-mountpoint");
-        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
-        const isSuppressed = btn.getAttribute("data-headsup-suppressed") === "1";
-        await toggleAlertHeadsUpSuppression(hostname, hostUid, mountpoint, alertId, isSuppressed);
-      });
-    });
-    rowsEl.querySelectorAll("[data-action='ack']").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const hostname = btn.getAttribute("data-hostname");
-        const hostUid = btn.getAttribute("data-host-uid");
-        const mountpoint = btn.getAttribute("data-mountpoint");
-        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
-        const currentNote = decodeURIComponent(btn.getAttribute("data-ack-note") || "");
-        const isAlreadyAcknowledged = btn.getAttribute("data-acknowledged") === "1";
-        await acknowledgeAlert(hostname, hostUid, mountpoint, alertId, currentNote, isAlreadyAcknowledged);
-      });
-    });
-    rowsEl.querySelectorAll("[data-action='close']").forEach((btn) => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const hostname = btn.getAttribute("data-hostname");
-        const hostUid = btn.getAttribute("data-host-uid");
-        const mountpoint = btn.getAttribute("data-mountpoint");
-        const alertId = Number(btn.getAttribute("data-alert-id") || 0);
-        const isClosed = btn.getAttribute("data-closed") === "1";
-        await closeAlert(hostname, hostUid, mountpoint, alertId, isClosed);
-      });
-    });
   } catch (error) {
     state.globalAlertsLoadedItems = [];
     globalAlertsTabButton.textContent = "Globale Alerts";
@@ -17363,7 +17285,59 @@ async function loadGlobalAlertsOverview(options = {}) {
   }
 }
 
+async function handleAlertRowActionClick(event) {
+  const btn = event.target instanceof Element ? event.target.closest("button[data-action]") : null;
+  if (!btn) {
+    return;
+  }
+  const action = String(btn.getAttribute("data-action") || "").trim();
+  if (!action) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  const hostname = btn.getAttribute("data-hostname") || "";
+  const hostUid = btn.getAttribute("data-host-uid") || "";
+  const mountpoint = btn.getAttribute("data-mountpoint") || "";
+  const alertId = Number(btn.getAttribute("data-alert-id") || 0);
+  try {
+    btn.disabled = true;
+    if (action === "toggle-mute") {
+      await toggleAlertMute(hostname, hostUid, mountpoint, alertId, btn.getAttribute("data-muted") === "1");
+    } else if (action === "toggle-headsup") {
+      await toggleAlertHeadsUpSuppression(hostname, hostUid, mountpoint, alertId, btn.getAttribute("data-headsup-suppressed") === "1");
+    } else if (action === "ack") {
+      const currentNote = decodeURIComponent(btn.getAttribute("data-ack-note") || "");
+      const isAlreadyAcknowledged = btn.getAttribute("data-acknowledged") === "1";
+      await acknowledgeAlert(hostname, hostUid, mountpoint, alertId, currentNote, isAlreadyAcknowledged);
+    } else if (action === "close") {
+      await closeAlert(hostname, hostUid, mountpoint, alertId, btn.getAttribute("data-closed") === "1");
+    }
+  } catch (error) {
+    window.alert(formatApiLoadError(error?.message, "Alert-Aktion"));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function wireAlertRowActions() {
+  if (state.alertRowActionsDelegated) {
+    return;
+  }
+  ["globalAlertsRows", "alertsRows"].forEach((elementId) => {
+    const root = document.getElementById(elementId);
+    if (!root) {
+      return;
+    }
+    root.addEventListener("click", (event) => {
+      void handleAlertRowActionClick(event);
+    });
+  });
+  state.alertRowActionsDelegated = true;
+}
+
 function wireEvents() {
+  wireAlertRowActions();
   wireHeaderLicenseCopyButton();
 
   if (!state.sapB1VmapBeforeUnloadWired) {

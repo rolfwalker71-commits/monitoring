@@ -346,6 +346,11 @@ def _read_cache_set(cache_key: str, value: object, ttl_seconds: float | None = N
             _read_endpoint_cache.pop(key, None)
 
 
+def _invalidate_alert_mutation_caches() -> None:
+    _read_cache_invalidate_prefix("alerts-list:")
+    _read_cache_invalidate_prefix("alerts-summary:")
+
+
 def _schedule_read_cache_invalidation(prefix: str) -> None:
     safe_prefix = str(prefix or "").strip()
     if not safe_prefix:
@@ -23729,6 +23734,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     (host_key, hostname, mountpoint, muted_by, utc_now_iso()),
                 )
                 conn.commit()
+            _invalidate_alert_mutation_caches()
             self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "host_uid": host_key, "mountpoint": mountpoint})
             return
 
@@ -23778,6 +23784,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     (host_key, mountpoint),
                 )
                 conn.commit()
+            _invalidate_alert_mutation_caches()
             self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "host_uid": host_key, "mountpoint": mountpoint})
             return
 
@@ -23828,6 +23835,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     (host_key, hostname, mountpoint, suppressed_by, utc_now_iso()),
                 )
                 conn.commit()
+            _invalidate_alert_mutation_caches()
             self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "host_uid": host_key, "mountpoint": mountpoint})
             return
 
@@ -23877,6 +23885,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     (host_key, mountpoint),
                 )
                 conn.commit()
+            _invalidate_alert_mutation_caches()
             self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "host_uid": host_key, "mountpoint": mountpoint})
             return
 
@@ -23948,6 +23957,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 )
                 conn.commit()
 
+            _invalidate_alert_mutation_caches()
             self._send_json(
                 HTTPStatus.OK,
                 {
@@ -24021,6 +24031,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 )
                 conn.commit()
 
+            _invalidate_alert_mutation_caches()
             self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "mountpoint": mountpoint})
             return
 
@@ -24084,6 +24095,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 )
                 conn.commit()
 
+            _invalidate_alert_mutation_caches()
             self._send_json(
                 HTTPStatus.OK,
                 {
@@ -24153,6 +24165,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 )
                 conn.commit()
 
+            _invalidate_alert_mutation_caches()
             self._send_json(HTTPStatus.OK, {"ok": True, "hostname": hostname, "mountpoint": mountpoint})
             return
 
