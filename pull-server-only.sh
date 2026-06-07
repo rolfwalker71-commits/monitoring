@@ -11,8 +11,8 @@ trap on_pull_script_error ERR
 # Bump when pull-server-only.sh logic changes (shown at start for deploy verification).
 PULL_SCRIPT_VERSION="20260605f"
 # Bump when FILES_LIST changes (must match script_guardian entries).
-PULL_FILES_MANIFEST="guardian-33-v1"
-PULL_FILES_EXPECTED_COUNT=33
+PULL_FILES_MANIFEST="guardian-34-v1"
+PULL_FILES_EXPECTED_COUNT=34
 _DEPLOY_MAIN_SHA_CACHED=""
 
 OWNER_REPO="rolfwalker71-commits/monitoring"
@@ -1589,6 +1589,7 @@ AGENT_VERSION
 MAIN_HEAD_SHA
 openapi.yaml
 scripts/watch-inventur-job.sh
+scripts/check-monitoring-health.sh
 scripts/deploy-agent-guardian.sh
 client/windows/collect_and_send.ps1
 client/windows/collect_and_scan_sap_tables.ps1
@@ -1641,6 +1642,9 @@ mirror_update_payloads
 repair_deploy_if_integrity_failed || true
 if [ -f "$TARGET_DIR/scripts/watch-inventur-job.sh" ]; then
   chmod 0755 "$TARGET_DIR/scripts/watch-inventur-job.sh"
+fi
+if [ -f "$TARGET_DIR/scripts/check-monitoring-health.sh" ]; then
+  chmod 0755 "$TARGET_DIR/scripts/check-monitoring-health.sh"
 fi
 
 # Selbst-Update am Ende: immer branch main (nie REF=a9edd8e o.ae. – sonst 29-Dateien-Skript zurueck).
