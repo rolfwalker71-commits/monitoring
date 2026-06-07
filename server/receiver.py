@@ -476,6 +476,142 @@ def _hostname_cluster_key(hostname: object) -> str:
     return safe.split(".", 1)[0]
 
 
+def _mountpoint_keys_from_filesystems(filesystems: object) -> set[str]:
+    keys: set[str] = set()
+    if not isinstance(filesystems, list):
+        return keys
+    for fs in filesystems:
+        if not isinstance(fs, dict):
+            continue
+        mountpoint = str(fs.get("mountpoint", "") or "").strip()
+        if mountpoint:
+            keys.add(normalize_mountpoint_key(mountpoint))
+    return keys
+
+
+def _previous_report_mountpoint_keys(
+    conn: sqlite3.Connection,
+    hostname: str,
+    host_uid: str,
+    before_report_id: int,
+) -> set[str]:
+    safe_hostname = str(hostname or "").strip()
+    safe_host_uid = str(host_uid or "").strip()
+    if not safe_hostname or before_report_id <= 0:
+        return set()
+
+    host_key_expr = reports_host_key_sql()
+    row = conn.execute(
+        f"""
+        SELECT payload_json
+        FROM reports
+        WHERE hostname = ?
+          AND {host_key_expr} = ?
+          AND id < ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (safe_hostname, safe_host_uid, before_report_id),
+    ).fetchone()
+    if not row:
+        return set()
+
+    payload = parse_payload_json(str(row[0] or "{}"))
+    return _mountpoint_keys_from_filesystems(payload.get("filesystems", []))
+
+
+def _report_filesystems_look_incomplete(
+    conn: sqlite3.Connection,
+    hostname: str,
+    host_uid: str,
+    report_id: int,
+    mountpoints_seen: set[str],
+) -> bool:
+    if not mountpoints_seen:
+        return True
+
+    previous_keys = _previous_report_mountpoint_keys(conn, hostname, host_uid, report_id)
+    if not previous_keys:
+        return False
+    if len(mountpoints_seen) >= len(previous_keys):
+        return False
+    return len(mountpoints_seen) < max(1, int(len(previous_keys) * 0.75))
+
+
+def _resolve_cross_identity_open_alerts(
+    conn: sqlite3.Connection,
+    *,
+    hostname: str,
+    canonical_host_uid: str,
+    now_utc: str,
+    report_id: int | None = None,
+    mountpoint: str | None = None,
+) -> int:
+    cluster_key = _hostname_cluster_key(hostname)
+    canonical_key = alert_host_key(hostname, canonical_host_uid)
+    if not cluster_key or not canonical_key:
+        return 0
+
+    safe_mountpoint = str(mountpoint or "").strip()
+    open_rows = conn.execute(
+        """
+        SELECT id, hostname, COALESCE(host_uid, ''), mountpoint
+        FROM alerts
+        WHERE status = 'open'
+        """
+    ).fetchall()
+
+    resolved = 0
+    for row in open_rows:
+        alert_id = int(row[0] or 0)
+        alert_hostname = str(row[1] or "").strip()
+        alert_host_uid = str(row[2] or "").strip()
+        alert_mountpoint = str(row[3] or "").strip()
+        if not alert_id or not alert_hostname or not alert_mountpoint:
+            continue
+        if safe_mountpoint and alert_mountpoint != safe_mountpoint:
+            continue
+        if _hostname_cluster_key(alert_hostname) != cluster_key:
+            continue
+
+        alert_key = alert_host_key(alert_hostname, alert_host_uid)
+        if alert_key == canonical_key:
+            continue
+
+        conn.execute(
+            """
+            UPDATE alerts
+            SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
+            WHERE id = ?
+            """,
+            (now_utc, now_utc, report_id, alert_id),
+        )
+        conn.execute(
+            "DELETE FROM alert_debounce WHERE host_uid = ? AND mountpoint = ?",
+            (alert_key, alert_mountpoint),
+        )
+        resolved += 1
+
+    return resolved
+
+
+def _dedupe_open_alert_rows_by_cluster_mountpoint(rows: list[tuple]) -> list[tuple]:
+    seen: set[tuple[str, str]] = set()
+    deduped: list[tuple] = []
+    for row in rows:
+        cluster_key = _hostname_cluster_key(str(row[1] or ""))
+        mountpoint_key = normalize_mountpoint_key(str(row[3] or ""))
+        if not cluster_key or not mountpoint_key:
+            deduped.append(row)
+            continue
+        dedupe_key = (cluster_key, mountpoint_key)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        deduped.append(row)
+    return deduped
+
+
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     CUSTOMER_LOGOS_DIR.mkdir(parents=True, exist_ok=True)
@@ -9212,6 +9348,7 @@ def collect_open_alerts(
             canonical_by_hostname,
         )
     ]
+    rows = _dedupe_open_alert_rows_by_cluster_mountpoint(rows)
     blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
     if blacklist_patterns:
         rows = [row for row in rows if not is_filesystem_blacklisted_by_patterns(str(row[3] or ""), blacklist_patterns)]
@@ -17083,6 +17220,13 @@ def evaluate_severity(used_percent: float) -> str:
 def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: str, report_id: int, filesystems: list, alarm_settings: dict) -> None:
     now_utc = utc_now_iso()
     alert_key = alert_host_key(hostname, host_uid)
+    _resolve_cross_identity_open_alerts(
+        conn,
+        hostname=hostname,
+        canonical_host_uid=host_uid,
+        now_utc=now_utc,
+        report_id=report_id,
+    )
     mountpoints_seen = set()
     blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
     hidden_mountpoint_keys = {
@@ -17255,6 +17399,14 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: 
         )
 
         if not open_alert:
+            _resolve_cross_identity_open_alerts(
+                conn,
+                hostname=hostname,
+                canonical_host_uid=host_uid,
+                now_utc=now_utc,
+                report_id=report_id,
+                mountpoint=mountpoint,
+            )
             conn.execute(
                 """
                 INSERT INTO alerts (
@@ -17311,16 +17463,17 @@ def update_alerts_for_report(conn: sqlite3.Connection, hostname: str, host_uid: 
             f"DELETE FROM alert_debounce WHERE host_uid = ? AND mountpoint NOT IN ({placeholders})",
             (alert_key, *sorted(mountpoints_seen)),
         )
-        conn.execute(
-            f"""
-            UPDATE alerts
-            SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
-            WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
-              AND status = 'open'
-              AND mountpoint NOT IN ({placeholders})
-            """,
-            (now_utc, now_utc, report_id, alert_key, *sorted(mountpoints_seen)),
-        )
+        if not _report_filesystems_look_incomplete(conn, hostname, host_uid, report_id, mountpoints_seen):
+            conn.execute(
+                f"""
+                UPDATE alerts
+                SET status = 'resolved', resolved_at_utc = ?, last_seen_at_utc = ?, report_id = ?
+                WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+                  AND status = 'open'
+                  AND mountpoint NOT IN ({placeholders})
+                """,
+                (now_utc, now_utc, report_id, alert_key, *sorted(mountpoints_seen)),
+            )
     else:
         conn.execute("DELETE FROM alert_debounce WHERE host_uid = ?", (alert_key,))
 
@@ -23302,19 +23455,30 @@ def main() -> None:
     args = parser.parse_args()
 
     init_db()
-    try:
-        with sqlite_connect() as conn:
-            identity_cleanup = cleanup_superseded_host_identities(conn)
-            conn.commit()
-        if int(identity_cleanup.get("identities_repointed", 0) or 0) > 0:
-            print(
-                "[startup] superseded host identities cleaned: "
-                f"repointed={identity_cleanup.get('identities_repointed', 0)}, "
-                f"alerts_resolved_duplicate={identity_cleanup.get('alerts_resolved_duplicate', 0)}, "
-                f"orphan_reports_deleted={identity_cleanup.get('orphan_reports_deleted', 0)}"
-            )
-    except Exception as exc:
-        print(f"[startup] superseded host identity cleanup failed: {exc}")
+
+    def _startup_identity_cleanup_loop() -> None:
+        try:
+            with sqlite_connect() as conn:
+                identity_cleanup = cleanup_superseded_host_identities(conn)
+                conn.commit()
+            if int(identity_cleanup.get("identities_repointed", 0) or 0) > 0:
+                print(
+                    "[startup] superseded host identities cleaned: "
+                    f"repointed={identity_cleanup.get('identities_repointed', 0)}, "
+                    f"alerts_resolved_duplicate={identity_cleanup.get('alerts_resolved_duplicate', 0)}, "
+                    f"orphan_reports_deleted={identity_cleanup.get('orphan_reports_deleted', 0)}"
+                )
+            _read_cache_invalidate_prefix("hosts:")
+            _read_cache_invalidate_prefix("inactive-hosts:")
+        except Exception as exc:
+            print(f"[startup] superseded host identity cleanup failed: {exc}")
+
+    threading.Thread(
+        target=_startup_identity_cleanup_loop,
+        name="startup-identity-cleanup",
+        daemon=True,
+    ).start()
+
     try:
         with sqlite_connect() as conn:
             _mark_interrupted_changelog_rebuild_jobs_on_startup(conn)
