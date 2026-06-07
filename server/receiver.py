@@ -18754,14 +18754,17 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
     maybe_send_alert_reminders(conn)
     maybe_send_inactive_host_notifications(conn)
     maybe_send_scheduled_user_mails(conn)
-    maybe_send_live_report_web_push(
-        conn,
-        report_id=report_id,
-        hostname=hostname,
-        host_uid=incoming_host_uid,
-        payload=payload,
-        received_at_utc=report_received_at_utc,
-    )
+    try:
+        maybe_send_live_report_web_push(
+            conn,
+            report_id=report_id,
+            hostname=hostname,
+            host_uid=incoming_host_uid,
+            payload=payload,
+            received_at_utc=report_received_at_utc,
+        )
+    except Exception as exc:
+        print(f"[live-report-push] report_id={report_id} hostname={hostname}: {exc}")
 
     _schedule_identity_maps_cache_invalidation()
     _schedule_read_cache_invalidation("hosts:")
