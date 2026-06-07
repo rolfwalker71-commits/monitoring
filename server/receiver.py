@@ -4811,6 +4811,149 @@ def _write_agent_ingest_audit_payload_file(
         return ""
 
 
+REPORT_DEDUPE_BATCH_SIZE = max(
+    100,
+    min(10_000, int(os.getenv("MONITORING_REPORT_DEDUPE_BATCH_SIZE", "2000") or "2000")),
+)
+
+
+def _report_dedupe_host_key_sql(alias: str = "") -> str:
+    alias_text = str(alias or "").strip()
+    if alias_text.endswith("."):
+        alias_text = alias_text[:-1]
+    prefix = f"{alias_text}." if alias_text else ""
+    return f"COALESCE(NULLIF({prefix}host_uid, ''), {prefix}hostname)"
+
+
+def analyze_ingest_duplicate_reports(conn: sqlite3.Connection) -> dict[str, object]:
+    """Find redundant report rows from ingest retries (same host, time, payload)."""
+    host_key = _report_dedupe_host_key_sql()
+    totals_row = conn.execute("SELECT COUNT(*) FROM reports").fetchone()
+    reports_total = int((totals_row[0] or 0) if totals_row else 0)
+
+    dup_row = conn.execute(
+        f"""
+        SELECT
+            COUNT(*) AS duplicate_groups,
+            COALESCE(SUM(group_count - 1), 0) AS redundant_rows,
+            COALESCE(MAX(group_count), 0) AS max_group_size
+        FROM (
+            SELECT COUNT(*) AS group_count
+            FROM reports
+            GROUP BY {host_key}, received_at_utc, payload_json
+            HAVING group_count > 1
+        )
+        """
+    ).fetchone()
+    duplicate_groups = int((dup_row[0] or 0) if dup_row else 0)
+    redundant_rows = int((dup_row[1] or 0) if dup_row else 0)
+    max_group_size = int((dup_row[2] or 0) if dup_row else 0)
+
+    files = _read_sqlite_file_byte_sizes()
+    avg_payload_row = conn.execute("SELECT AVG(LENGTH(payload_json)) FROM reports").fetchone()
+    avg_payload_bytes = float((avg_payload_row[0] or 0.0) if avg_payload_row else 0.0)
+    estimated_reclaim_bytes = int(redundant_rows * avg_payload_bytes)
+
+    return {
+        "reports_total": reports_total,
+        "duplicate_groups": duplicate_groups,
+        "redundant_rows": redundant_rows,
+        "unique_rows_after_dedupe": max(0, reports_total - redundant_rows),
+        "max_group_size": max_group_size,
+        "estimated_reclaim_bytes": estimated_reclaim_bytes,
+        "db_file_bytes": int(files.get("db_file_bytes", 0) or 0),
+        "total_file_bytes": int(files.get("total_file_bytes", 0) or 0),
+        "wal_file_bytes": int(files.get("wal_file_bytes", 0) or 0),
+    }
+
+
+def _unlink_and_delete_reports_by_ids(conn: sqlite3.Connection, report_ids: list[int]) -> int:
+    if not report_ids:
+        return 0
+    placeholders = ",".join("?" for _ in report_ids)
+    conn.execute(
+        f"UPDATE alerts SET report_id = NULL WHERE report_id IN ({placeholders})",
+        report_ids,
+    )
+    conn.execute(
+        f"DELETE FROM host_config_changes WHERE report_id IN ({placeholders})",
+        report_ids,
+    )
+    conn.execute(
+        f"DELETE FROM database_lifecycle WHERE report_id IN ({placeholders})",
+        report_ids,
+    )
+    conn.execute(
+        f"DELETE FROM reports WHERE id IN ({placeholders})",
+        report_ids,
+    )
+    return len(report_ids)
+
+
+def dedupe_ingest_duplicate_reports(
+    conn: sqlite3.Connection,
+    *,
+    dry_run: bool = False,
+    batch_size: int = REPORT_DEDUPE_BATCH_SIZE,
+) -> dict[str, object]:
+    """Remove ingest duplicate reports, keeping the lowest id per host/time/payload."""
+    started_at = datetime.now(timezone.utc)
+    before = analyze_ingest_duplicate_reports(conn)
+    host_key = _report_dedupe_host_key_sql()
+    safe_batch_size = max(100, min(10_000, int(batch_size or REPORT_DEDUPE_BATCH_SIZE)))
+
+    if dry_run:
+        return {
+            "dry_run": True,
+            "before": before,
+            "deleted_rows": int(before.get("redundant_rows", 0) or 0),
+            "duration_ms": int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000),
+        }
+
+    deleted_rows = 0
+    while True:
+        rows = conn.execute(
+            f"""
+            WITH ranked AS (
+                SELECT id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY {host_key}, received_at_utc, payload_json
+                           ORDER BY id ASC
+                       ) AS rn
+                FROM reports
+            )
+            SELECT id
+            FROM ranked
+            WHERE rn > 1
+            ORDER BY id ASC
+            LIMIT ?
+            """,
+            (safe_batch_size,),
+        ).fetchall()
+        if not rows:
+            break
+        report_ids = [int(row[0] or 0) for row in rows if int(row[0] or 0) > 0]
+        if not report_ids:
+            break
+        deleted_rows += _unlink_and_delete_reports_by_ids(conn, report_ids)
+        conn.commit()
+
+    after = analyze_ingest_duplicate_reports(conn)
+    _read_cache_invalidate_prefix("admin-database-stats")
+    _read_cache_invalidate_prefix("dashboard-db-kpis")
+    _schedule_identity_snapshot_refresh()
+    _schedule_identity_maps_cache_invalidation()
+    _schedule_read_cache_invalidation()
+
+    return {
+        "dry_run": False,
+        "before": before,
+        "after": after,
+        "deleted_rows": deleted_rows,
+        "duration_ms": int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000),
+    }
+
+
 def run_database_vacuum() -> dict[str, object]:
     started_at = datetime.now(timezone.utc)
     with sqlite3.connect(DB_PATH) as conn_before:
@@ -18545,6 +18688,23 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
         primary_ip=incoming_primary_ip,
     )
 
+    payload_json = json.dumps(payload, separators=(",", ":"))
+    host_lookup_key = incoming_host_uid if incoming_host_uid else hostname
+    existing_row = conn.execute(
+        """
+        SELECT id
+        FROM reports
+        WHERE COALESCE(NULLIF(host_uid, ''), hostname) = ?
+          AND received_at_utc = ?
+          AND payload_json = ?
+        ORDER BY id ASC
+        LIMIT 1
+        """,
+        (host_lookup_key, report_received_at_utc, payload_json),
+    ).fetchone()
+    if existing_row:
+        return int(existing_row[0] or 0)
+
     cursor = conn.execute(
         """
         INSERT INTO reports (received_at_utc, agent_id, hostname, host_uid, primary_ip, payload_json)
@@ -18556,7 +18716,7 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
             hostname,
             incoming_host_uid,
             incoming_primary_ip,
-            json.dumps(payload, separators=(",", ":")),
+            payload_json,
         ),
     )
     report_id = int(cursor.lastrowid)
@@ -19908,6 +20068,23 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             with sqlite3.connect(DB_PATH) as conn:
                 entries = list_web_login_events(conn, limit)
             self._send_json(HTTPStatus.OK, {"count": len(entries), "entries": entries})
+            return
+
+        if parsed.path == "/api/v1/admin/database-dedupe/analyze":
+            if not self._require_admin_session():
+                return
+            try:
+                with sqlite_connect_read() as conn:
+                    payload = analyze_ingest_duplicate_reports(conn)
+            except sqlite3.OperationalError as exc:
+                if _sqlite_operational_error_is_lock(exc):
+                    self._send_json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {"error": "database busy, retry shortly"},
+                    )
+                    return
+                raise
+            self._send_json(HTTPStatus.OK, {"status": "ok", "analysis": payload})
             return
 
         if parsed.path == "/api/v1/admin/database-stats":
@@ -24671,6 +24848,49 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             self._send_json(HTTPStatus.OK, result)
+            return
+
+        if path == "/api/v1/admin/database-dedupe/run":
+            if not self._require_admin_session():
+                return
+
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                body = json.loads(raw_body.decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid json"})
+                return
+            if not isinstance(body, dict):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "invalid payload"})
+                return
+
+            dry_run = bool(body.get("dry_run", False))
+            batch_size = max(
+                100,
+                parse_positive_int(body.get("batch_size"), default=REPORT_DEDUPE_BATCH_SIZE, max_value=10_000),
+            )
+
+            try:
+                with _db_maintenance_lock:
+                    with sqlite_connect() as conn:
+                        result = dedupe_ingest_duplicate_reports(
+                            conn,
+                            dry_run=dry_run,
+                            batch_size=batch_size,
+                        )
+            except Exception as exc:
+                self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(exc)})
+                return
+
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "status": "ok",
+                    "message": "Duplikat-Analyse abgeschlossen" if dry_run else "Duplikat-Bereinigung abgeschlossen",
+                    "result": result,
+                },
+            )
             return
 
         if path == "/api/v1/admin/database-vacuum":

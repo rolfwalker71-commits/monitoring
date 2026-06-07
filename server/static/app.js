@@ -12595,6 +12595,55 @@ async function loadHeaderDatabaseKpis() {
   return stats;
 }
 
+async function analyzeAdminReportDuplicates() {
+  const response = await fetch("/api/v1/admin/database-dedupe/analyze", {
+    method: "GET",
+    credentials: "same-origin",
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return data && typeof data.analysis === "object" ? data.analysis : {};
+}
+
+async function runAdminReportDedupe(dryRun = false) {
+  const response = await fetch("/api/v1/admin/database-dedupe/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ dry_run: dryRun }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || ("HTTP " + response.status));
+  }
+  return data;
+}
+
+function renderReportDedupeEffect(analysisOrResult) {
+  const el = document.getElementById("dbMaintenanceEffect");
+  if (!el) return;
+  const payload = analysisOrResult?.result || analysisOrResult || {};
+  const before = payload.before || payload;
+  const after = payload.after || {};
+  const redundant = Number(before.redundant_rows || 0);
+  const deleted = Number(payload.deleted_rows || 0);
+  const dbMb = formatMegabytesFromBytes(Number(before.db_file_bytes || 0));
+  const reclaimMb = formatMegabytesFromBytes(Number(before.estimated_reclaim_bytes || 0));
+  const lines = [
+    `Reports gesamt: ${Number(before.reports_total || 0).toLocaleString("de-CH")}`,
+    `Redundante Duplikate: ${redundant.toLocaleString("de-CH")}`,
+    `DB-Datei: ${dbMb} MB (geschätzt freigebbar ~${reclaimMb} MB)`,
+  ];
+  if (deleted > 0) {
+    lines.push(`Gelöscht: ${deleted.toLocaleString("de-CH")}`);
+    lines.push(`Verbleibend: ${Number(after.reports_total || 0).toLocaleString("de-CH")}`);
+    lines.push("Hinweis: VACUUM ausführen, um Speicherplatz zurückzugewinnen.");
+  }
+  el.textContent = lines.join(" · ");
+}
+
 async function runAdminDatabaseVacuum() {
   const response = await fetch("/api/v1/admin/database-vacuum", {
     method: "POST",
@@ -18161,16 +18210,65 @@ function wireEvents() {
 
   const vacuumDatabaseButton = document.getElementById("vacuumDatabaseButton");
   const triggerDatabaseStatsButton = document.getElementById("triggerDatabaseStatsButton");
+  const analyzeReportDuplicatesButton = document.getElementById("analyzeReportDuplicatesButton");
+  const dedupeReportDuplicatesButton = document.getElementById("dedupeReportDuplicatesButton");
   const saveBackupAutomationSettingsButton = document.getElementById("saveBackupAutomationSettingsButton");
   const triggerAutoBackupNowButton = document.getElementById("triggerAutoBackupNowButton");
   const testBackupAutomationSftpButton = document.getElementById("testBackupAutomationSftpButton");
   const backupAutomationSftpAuthMode = document.getElementById("backupAutomationSftpAuthMode");
   const refreshAgentIngestQueueButton = document.getElementById("refreshAgentIngestQueueButton");
 
+  function setDbMaintenanceActionButtonsDisabled(disabled) {
+    if (triggerDatabaseStatsButton) triggerDatabaseStatsButton.disabled = disabled;
+    if (vacuumDatabaseButton) vacuumDatabaseButton.disabled = disabled;
+    if (analyzeReportDuplicatesButton) analyzeReportDuplicatesButton.disabled = disabled;
+    if (dedupeReportDuplicatesButton) dedupeReportDuplicatesButton.disabled = disabled;
+  }
+
+  if (analyzeReportDuplicatesButton) {
+    analyzeReportDuplicatesButton.addEventListener("click", async () => {
+      setDbMaintenanceActionButtonsDisabled(true);
+      setDbMaintenanceStatus("Analysiere Report-Duplikate...");
+      try {
+        const analysis = await analyzeAdminReportDuplicates();
+        renderReportDedupeEffect(analysis);
+        setDbMaintenanceStatus(
+          `Duplikat-Analyse: ${Number(analysis.redundant_rows || 0).toLocaleString("de-CH")} redundante Reports`
+        );
+      } catch (error) {
+        setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
+      } finally {
+        setDbMaintenanceActionButtonsDisabled(false);
+      }
+    });
+  }
+
+  if (dedupeReportDuplicatesButton) {
+    dedupeReportDuplicatesButton.addEventListener("click", async () => {
+      const confirmed = window.confirm(
+        "Ingest-Duplikate jetzt entfernen?\n\nPro Host/Zeit/Payload bleibt nur der älteste Report. Danach VACUUM empfohlen."
+      );
+      if (!confirmed) return;
+
+      setDbMaintenanceActionButtonsDisabled(true);
+      setDbMaintenanceStatus("Duplikat-Bereinigung läuft...");
+      try {
+        const result = await runAdminReportDedupe(false);
+        renderReportDedupeEffect(result);
+        await loadAdminDatabaseStats();
+        await loadHeaderDatabaseKpis();
+        setDbMaintenanceStatus("Duplikat-Bereinigung abgeschlossen. VACUUM empfohlen.");
+      } catch (error) {
+        setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
+      } finally {
+        setDbMaintenanceActionButtonsDisabled(false);
+      }
+    });
+  }
+
   if (triggerDatabaseStatsButton) {
     triggerDatabaseStatsButton.addEventListener("click", async () => {
-      triggerDatabaseStatsButton.disabled = true;
-      if (vacuumDatabaseButton) vacuumDatabaseButton.disabled = true;
+      setDbMaintenanceActionButtonsDisabled(true);
       setDbMaintenanceStatus("DB Kennzahlen werden neu berechnet...");
       try {
         await triggerAdminDatabaseStatsNow();
@@ -18178,8 +18276,7 @@ function wireEvents() {
       } catch (error) {
         setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
       } finally {
-        triggerDatabaseStatsButton.disabled = false;
-        if (vacuumDatabaseButton) vacuumDatabaseButton.disabled = false;
+        setDbMaintenanceActionButtonsDisabled(false);
       }
     });
   }
@@ -18195,8 +18292,7 @@ function wireEvents() {
       const barEl = document.getElementById("dbOpsProgressBar");
       const labelEl = document.getElementById("dbOpsProgressLabel");
 
-      vacuumDatabaseButton.disabled = true;
-      if (triggerDatabaseStatsButton) triggerDatabaseStatsButton.disabled = true;
+      setDbMaintenanceActionButtonsDisabled(true);
       progressEl.classList.remove("hidden");
       barEl.style.width = "40%";
       barEl.classList.add("db-ops-progress-bar--indeterminate");
@@ -18220,8 +18316,7 @@ function wireEvents() {
         labelEl.textContent = `Fehler: ${error.message}`;
         setDbMaintenanceStatus(`Fehler: ${error.message}`, true);
       } finally {
-        vacuumDatabaseButton.disabled = false;
-        if (triggerDatabaseStatsButton) triggerDatabaseStatsButton.disabled = false;
+        setDbMaintenanceActionButtonsDisabled(false);
       }
     });
   }
