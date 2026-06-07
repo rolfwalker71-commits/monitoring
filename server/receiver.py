@@ -553,6 +553,22 @@ def _resolve_cross_identity_open_alerts(
         return 0
 
     safe_mountpoint = str(mountpoint or "").strip()
+    has_open_cluster_alerts = conn.execute(
+        """
+        SELECT 1
+        FROM alerts
+        WHERE status = 'open'
+          AND (
+            LOWER(hostname) = ?
+            OR LOWER(hostname) LIKE ?
+          )
+        LIMIT 1
+        """,
+        (cluster_key, f"{cluster_key}.%"),
+    ).fetchone()
+    if not has_open_cluster_alerts:
+        return 0
+
     open_rows = conn.execute(
         """
         SELECT id, hostname, COALESCE(host_uid, ''), mountpoint
@@ -16946,8 +16962,7 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
         received_at_utc=report_received_at_utc,
     )
 
-    _read_cache_invalidate_prefix("hosts:")
-    _read_cache_invalidate_prefix("inactive-hosts:")
+    # Host/inactive lists use short TTL caches; avoid invalidating on every report ingest.
 
     # Keep behavior identical to direct-ingest: non-blocking best effort.
     auto_sync_discovered_license_types(payload)

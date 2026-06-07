@@ -3417,6 +3417,10 @@ async function loginWebClient() {
     setAuthUiState(true);
     passwordInput.value = "";
     setLoginStatus("Anmeldung erfolgreich.");
+    const hostList = document.getElementById("hostList");
+    if (hostList) {
+      hostList.innerHTML = '<p class="muted">Lade Hosts…</p>';
+    }
     void loadUserPreferences().then(() => {
       if (state.hosts && state.hosts.length > 0) {
         renderHosts(state.hosts);
@@ -13314,8 +13318,13 @@ function initLiveReportFeed() {
 
 async function loadHosts(options = {}) {
   const preserveScroll = Boolean(options && options.preserveScroll);
+  const silent = Boolean(options && options.silent);
   const hostList = document.getElementById("hostList");
   const previousScrollTop = hostList ? hostList.scrollTop : 0;
+
+  if (!silent && hostList && (!Array.isArray(state.hosts) || state.hosts.length === 0)) {
+    hostList.innerHTML = '<p class="muted">Lade Hosts…</p>';
+  }
 
   try {
     const url = `/api/v1/hosts?limit=${state.hostLimit}&offset=${state.hostOffset}`;
@@ -18654,10 +18663,7 @@ async function init() {
     return;
   }
   sessionEstablishedAtMs = Date.now();
-  await loadSapB1VersionMap();
-  await loadSapLicenseTypeMap();
-  // sapB1VersionMapPromise runs in background — hosts render immediately,
-  // SAP badges fill in once the map is ready
+  // SAP maps already started above; hosts render immediately, badges fill in once ready.
   sapB1VersionMapPromise.then(() => {
     if (state.hosts && state.hosts.length > 0) {
       renderHosts(state.hosts);
