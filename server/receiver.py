@@ -469,6 +469,13 @@ def alert_host_key(hostname: object, host_uid: object = "") -> str:
     return str(hostname or "").strip()
 
 
+def _hostname_cluster_key(hostname: object) -> str:
+    safe = str(hostname or "").strip().lower()
+    if not safe:
+        return ""
+    return safe.split(".", 1)[0]
+
+
 def init_db() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     CUSTOMER_LOGOS_DIR.mkdir(parents=True, exist_ok=True)
@@ -2374,21 +2381,36 @@ def _is_superseded_host_identity_key(
 
     canonical_map = canonical_by_hostname if canonical_by_hostname is not None else _canonical_identities_by_hostname(conn)
     canonical = canonical_map.get(safe_hostname)
-    if not canonical:
+    if canonical:
+        canonical_uid = str(canonical.get("host_uid") or "").strip()
+        canonical_last = str(canonical.get("last_report_time_utc") or "").strip()
+        if canonical_uid and canonical_last:
+            if safe_host_uid == canonical_uid:
+                return False
+            if _should_repoint_superseded_identity(conn, safe_hostname, safe_host_uid, canonical_uid):
+                return True
+
+    cluster_key = _hostname_cluster_key(safe_hostname)
+    if not cluster_key:
         return False
 
-    canonical_uid = str(canonical.get("host_uid") or "").strip()
-    canonical_last = str(canonical.get("last_report_time_utc") or "").strip()
-    if not canonical_uid or not canonical_last:
-        return False
-    if safe_host_uid == canonical_uid:
+    cluster_canonical = _canonical_identities_by_cluster(conn).get(cluster_key)
+    if not cluster_canonical:
         return False
 
-    return _should_repoint_superseded_identity(conn, safe_hostname, safe_host_uid, canonical_uid)
+    cluster_uid = str(cluster_canonical.get("host_uid") or "").strip()
+    cluster_hostname = str(cluster_canonical.get("hostname") or "").strip() or safe_hostname
+    if not cluster_uid:
+        return False
+    if safe_host_uid == cluster_uid and _hostname_cluster_key(cluster_hostname) == cluster_key:
+        return False
+
+    return _should_repoint_superseded_identity(conn, cluster_hostname, safe_host_uid, cluster_uid)
 
 
 def cleanup_superseded_host_identities(conn: sqlite3.Connection) -> dict[str, int]:
     canonical_by_hostname = _canonical_identities_by_hostname(conn)
+    canonical_by_cluster = _canonical_identities_by_cluster(conn)
     host_key_expr = reports_host_key_sql()
     identity_rows = conn.execute(
         f"""
@@ -2424,13 +2446,22 @@ def cleanup_superseded_host_identities(conn: sqlite3.Connection) -> dict[str, in
             continue
         totals["identities_scanned"] += 1
 
+        canonical_uid = ""
+        canonical_hostname = hostname
         canonical = canonical_by_hostname.get(hostname)
-        if not canonical:
-            continue
-        canonical_uid = str(canonical.get("host_uid") or "").strip()
+        if canonical:
+            canonical_uid = str(canonical.get("host_uid") or "").strip()
+            canonical_hostname = hostname
+        else:
+            cluster_key = _hostname_cluster_key(hostname)
+            cluster_canonical = canonical_by_cluster.get(cluster_key) if cluster_key else None
+            if cluster_canonical:
+                canonical_uid = str(cluster_canonical.get("host_uid") or "").strip()
+                canonical_hostname = str(cluster_canonical.get("hostname") or "").strip() or hostname
+
         if not canonical_uid or identity_key == canonical_uid:
             continue
-        if not _should_repoint_superseded_identity(conn, hostname, identity_key, canonical_uid):
+        if not _should_repoint_superseded_identity(conn, canonical_hostname, identity_key, canonical_uid):
             continue
 
         pair = (hostname, identity_key)
@@ -2438,7 +2469,7 @@ def cleanup_superseded_host_identities(conn: sqlite3.Connection) -> dict[str, in
             continue
         processed_pairs.add(pair)
 
-        repoint_stats = _repoint_host_identity_rows(conn, hostname, identity_key, canonical_uid)
+        repoint_stats = _repoint_host_identity_rows(conn, canonical_hostname, identity_key, canonical_uid)
         totals["identities_repointed"] += 1
         totals["alerts_repointed"] += int(repoint_stats.get("alerts_repointed", 0) or 0)
         totals["alerts_resolved_duplicate"] += int(repoint_stats.get("alerts_resolved_duplicate", 0) or 0)
@@ -8859,16 +8890,88 @@ def _best_report_row_by_hostname(rows: list[tuple]) -> dict[str, tuple]:
     return best_row_by_hostname
 
 
+def _best_report_row_by_hostname_cluster(rows: list[tuple]) -> dict[str, tuple]:
+    """Pick the newest report row per hostname cluster (short name, case-insensitive)."""
+    best_row_by_cluster: dict[str, tuple] = {}
+    for row in rows:
+        host_uid = str(row[0] or "").strip()
+        hostname = str(row[1] or "").strip()
+        last_report_time_utc = str(row[2] or "").strip()
+        if not hostname or not host_uid or not last_report_time_utc:
+            continue
+        if host_uid.startswith("__legacy_report__:"):
+            continue
+
+        cluster_key = _hostname_cluster_key(hostname)
+        if not cluster_key:
+            continue
+
+        existing = best_row_by_cluster.get(cluster_key)
+        if not existing:
+            best_row_by_cluster[cluster_key] = row
+            continue
+
+        existing_last_report = str(existing[2] or "").strip()
+        if last_report_time_utc > existing_last_report:
+            best_row_by_cluster[cluster_key] = row
+
+    return best_row_by_cluster
+
+
+def _hostname_clusters_with_recent_reports(rows: list[tuple], cutoff_iso: str) -> set[str]:
+    clusters: set[str] = set()
+    safe_cutoff = str(cutoff_iso or "").strip()
+    if not safe_cutoff:
+        return clusters
+
+    for row in rows:
+        host_uid = str(row[0] or "").strip()
+        hostname = str(row[1] or "").strip()
+        last_report_time_utc = str(row[2] or "").strip()
+        if not hostname or not host_uid or not last_report_time_utc:
+            continue
+        if host_uid.startswith("__legacy_report__:"):
+            continue
+        if last_report_time_utc < safe_cutoff:
+            continue
+
+        cluster_key = _hostname_cluster_key(hostname)
+        if cluster_key:
+            clusters.add(cluster_key)
+
+    return clusters
+
+
+def _canonical_identities_by_cluster(conn: sqlite3.Connection) -> dict[str, dict[str, object]]:
+    rows = _latest_report_rows_by_host_key(conn)
+    best_row_by_cluster = _best_report_row_by_hostname_cluster(rows)
+    canonical: dict[str, dict[str, object]] = {}
+    for cluster_key, row in best_row_by_cluster.items():
+        canonical[cluster_key] = {
+            "host_uid": str(row[0] or "").strip(),
+            "hostname": str(row[1] or "").strip(),
+            "last_report_time_utc": str(row[2] or "").strip(),
+            "report_count": int(row[5] or 0),
+        }
+    return canonical
+
+
 def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
     cutoff_iso = utc_hours_ago_iso(hours)
     now_utc = datetime.now(timezone.utc)
 
     rows = _latest_report_rows_by_host_key(conn)
-    best_row_by_hostname = _best_report_row_by_hostname(rows)
+    active_clusters = _hostname_clusters_with_recent_reports(rows, cutoff_iso)
+    canonical_by_cluster = _canonical_identities_by_cluster(conn)
+    best_row_by_cluster = _best_report_row_by_hostname_cluster(rows)
 
     inactive_hosts = []
-    for hostname, row in best_row_by_hostname.items():
+    for cluster_key, row in best_row_by_cluster.items():
+        if cluster_key in active_clusters:
+            continue
+
         host_uid = str(row[0] or "").strip()
+        hostname = str(row[1] or "").strip()
         last_report_time_utc = str(row[2] or "").strip()
         payload_json_str = str(row[3] or "{}")
         primary_ip = str(row[4] or "").strip()
@@ -8876,6 +8979,12 @@ def collect_inactive_hosts(conn: sqlite3.Connection, hours: int) -> list[dict]:
 
         if last_report_time_utc >= cutoff_iso:
             continue
+
+        canonical = canonical_by_cluster.get(cluster_key) or {}
+        canonical_uid = str(canonical.get("host_uid") or "").strip()
+        if canonical_uid and host_uid != canonical_uid:
+            if _should_repoint_superseded_identity(conn, hostname, host_uid, canonical_uid):
+                continue
 
         try:
             payload = json.loads(payload_json_str) if isinstance(payload_json_str, str) else {}
