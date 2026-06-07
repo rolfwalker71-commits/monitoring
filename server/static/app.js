@@ -1519,6 +1519,10 @@ function hostClusterKey(hostname) {
   return dotIndex === -1 ? value : value.slice(0, dotIndex);
 }
 
+function isCanonicalHostCard(host) {
+  return Boolean(host && typeof host === "object" && !host.is_temporary_identity);
+}
+
 function isHostRecentlyActive(host, windowMs = 60 * 60 * 1000) {
   if (!host || typeof host !== "object") {
     return false;
@@ -1656,17 +1660,19 @@ async function refreshDashboard(options = {}) {
       ]);
     }
 
-    // Defer heavy global tiles until after host list paint.
+    // Defer heavy global tiles until after host list paint (avoid DB stampede on login).
     if (!state.deferredDashboardTasksInFlight) {
       state.deferredDashboardTasksInFlight = true;
       window.setTimeout(() => {
         Promise.allSettled([
-          loadWebclientVersion(),
           loadGlobalAlertsOverview({ updateList: shouldRefreshGlobalAlertsList }),
-          loadCriticalTrends({ updateList: false }),
-          loadInactiveHosts({ updateList: false }),
-          loadHeaderDatabaseKpis(),
         ])
+          .finally(() => Promise.allSettled([
+            loadInactiveHosts({ updateList: false }),
+            loadHeaderDatabaseKpis(),
+            loadWebclientVersion(),
+            loadCriticalTrends({ updateList: false }),
+          ]))
           .then(() => {
             updateSummaryStrip();
             if (automatic) {
@@ -1676,7 +1682,7 @@ async function refreshDashboard(options = {}) {
           .finally(() => {
             state.deferredDashboardTasksInFlight = false;
           });
-      }, 0);
+      }, 800);
     }
 
     if (state.viewMode === "settings") {
@@ -3449,7 +3455,6 @@ async function loginWebClient() {
         renderHosts(state.hosts);
       }
     });
-    void loadHosts();
     return true;
   } catch (error) {
     let message = error?.message || "Anmeldung fehlgeschlagen.";
@@ -16720,17 +16725,14 @@ function updateHeaderStatChips() {
     mutedChip.classList.remove("hidden");
   }
   if (activeHostsChip && activeHostsCount) {
-    const activeClusters = new Set();
-    for (const host of Array.isArray(state.hosts) ? state.hosts : []) {
-      if (!isHostRecentlyActive(host)) {
-        continue;
-      }
-      const clusterKey = hostClusterKey(host.hostname || host.display_name || "");
-      if (clusterKey) {
-        activeClusters.add(clusterKey);
-      }
-    }
-    const activeHosts = activeClusters.size;
+    const inactiveCount = Math.max(0, Number(state.inactiveHostsCount || 0));
+    const canonicalHosts = (Array.isArray(state.hosts) ? state.hosts : []).filter((host) => isCanonicalHostCard(host));
+    const activeFromCards = canonicalHosts.filter((host) => isHostRecentlyActive(host)).length;
+    const totalCanonical = Number(state.totalHosts || 0) > 0
+      ? Math.max(0, Number(state.totalHosts || 0) - (Array.isArray(state.hosts) ? state.hosts.filter((host) => host?.is_temporary_identity).length : 0))
+      : canonicalHosts.length;
+    const activeFromTotals = Math.max(0, totalCanonical - inactiveCount);
+    const activeHosts = Math.max(activeFromCards, activeFromTotals);
     activeHostsCount.textContent = String(activeHosts);
     currentTrendValues.activeHosts = activeHosts;
     activeHostsChip.classList.remove("hidden");
@@ -17069,12 +17071,25 @@ async function loadGlobalAlertsOverview(options = {}) {
       pagingStatus.textContent = `${Math.min(shownCount, totalForFilter)} / ${totalForFilter}`;
     }
 
-    const summaryResp = await summaryPromise;
-    if (!summaryResp.ok) throw new Error("Summary HTTP " + summaryResp.status);
-    const summaryData = await summaryResp.json();
-    state.globalOpenAlertsCount = Number(summaryData?.open?.total || 0);
-    state.globalCriticalOpenAlertsCount = Number(summaryData?.open?.critical || 0);
-    state.globalMutedOpenAlertsCount = Number(summaryData?.muted?.total || 0);
+    let summaryData = null;
+    try {
+      const summaryResp = await summaryPromise;
+      if (summaryResp.ok) {
+        summaryData = await summaryResp.json();
+      } else {
+        console.warn("alerts-summary failed:", summaryResp.status);
+      }
+    } catch (summaryError) {
+      console.warn("alerts-summary error:", summaryError);
+    }
+
+    if (summaryData) {
+      state.globalOpenAlertsCount = Number(summaryData?.open?.total || 0);
+      state.globalCriticalOpenAlertsCount = Number(summaryData?.open?.critical || 0);
+      state.globalMutedOpenAlertsCount = Number(summaryData?.muted?.total || 0);
+    } else if (!state.globalShowMutedOnly) {
+      state.globalOpenAlertsCount = Math.max(Number(state.globalOpenAlertsCount || 0), totalForFilter);
+    }
 
     const acknowledgedResp = await acknowledgedPromise;
     if (acknowledgedResp && acknowledgedResp.ok) {
@@ -17092,9 +17107,15 @@ async function loadGlobalAlertsOverview(options = {}) {
     const countryScope = state.globalCountryFilter && state.globalCountryFilter !== "all"
       ? ` | Land: ${state.globalCountryFilter}`
       : "";
-    summaryEl.textContent = state.globalShowMutedOnly
-      ? `Stummgeschaltet: ${totalForFilter} | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}${countryScope}${headsUpScope}`
-      : `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}${countryScope}${mutedScope}${headsUpScope}`;
+    if (summaryData) {
+      summaryEl.textContent = state.globalShowMutedOnly
+        ? `Stummgeschaltet: ${totalForFilter} | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}${countryScope}${headsUpScope}`
+        : `Offen: ${summaryData.open.total} (kritisch ${summaryData.open.critical}, warn ${summaryData.open.warning}) | Filter: ${state.globalSeverityFilter === "all" ? "alle" : state.globalSeverityFilter}${countryScope}${mutedScope}${headsUpScope}`;
+    } else if (summaryEl) {
+      summaryEl.textContent = state.globalShowMutedOnly
+        ? `Stummgeschaltet: ${totalForFilter} | Summary vorübergehend nicht verfügbar`
+        : `Offen (Liste): ${totalForFilter} | Summary vorübergehend nicht verfügbar`;
+    }
 
     rowsEl.querySelectorAll("[data-action='toggle-mute']").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
@@ -17142,12 +17163,14 @@ async function loadGlobalAlertsOverview(options = {}) {
       });
     });
   } catch (error) {
-    rowsEl.innerHTML = `<tr><td colspan="8" class="muted">Fehler: ${escapeHtml(error.message)}</td></tr>`;
     state.globalAlertsLoadedItems = [];
     globalAlertsTabButton.textContent = "Globale Alerts";
     globalAlertsTabButton.classList.remove("alert-active");
     if (updateList && rowsEl) {
       rowsEl.innerHTML = `<tr><td colspan="8" class="muted">Fehler beim Laden: ${escapeHtml(error.message)}</td></tr>`;
+    }
+    if (summaryEl) {
+      summaryEl.textContent = `Fehler: ${error.message}`;
     }
   }
 }
@@ -18687,7 +18710,6 @@ async function init() {
     return;
   }
   sessionEstablishedAtMs = Date.now();
-  void loadHosts();
   // SAP maps already started above; hosts render immediately, badges fill in once ready.
   sapB1VersionMapPromise.then(() => {
     if (state.hosts && state.hosts.length > 0) {

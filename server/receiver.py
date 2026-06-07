@@ -102,11 +102,11 @@ DB_MAINTENANCE_INTERVAL_HOURS = max(1, min(24, int(os.getenv("MONITORING_DB_MAIN
 SQLITE_BUSY_TIMEOUT_SECONDS = max(1.0, min(300.0, float(os.getenv("MONITORING_SQLITE_BUSY_TIMEOUT_SECONDS", "120") or "120")))
 WEB_AUTH_BUSY_TIMEOUT_MS = max(
     1000,
-    int(os.getenv("MONITORING_WEB_AUTH_BUSY_TIMEOUT_MS", "20000") or "20000"),
+    int(os.getenv("MONITORING_WEB_AUTH_BUSY_TIMEOUT_MS", "4000") or "4000"),
 )
 WEB_AUTH_BUSY_RETRY_ATTEMPTS = max(
     1,
-    min(12, int(os.getenv("MONITORING_WEB_AUTH_BUSY_RETRY_ATTEMPTS", "6") or "6")),
+    min(20, int(os.getenv("MONITORING_WEB_AUTH_BUSY_RETRY_ATTEMPTS", "8") or "8")),
 )
 SQLITE_CACHE_SIZE_MIB = max(8, min(512, int(os.getenv("MONITORING_SQLITE_CACHE_SIZE_MIB", "64") or "64")))
 SQLITE_MMAP_SIZE_MIB = max(0, min(2048, int(os.getenv("MONITORING_SQLITE_MMAP_SIZE_MIB", "256") or "256")))
@@ -123,14 +123,22 @@ ENDPOINT_TIMING_FILE_LOG_MAX_BYTES = max(
     min(256 * 1024 * 1024, int(os.getenv("MONITORING_ENDPOINT_TIMING_FILE_LOG_MAX_BYTES", str(10 * 1024 * 1024)) or str(10 * 1024 * 1024))),
 )
 ENDPOINT_TIMING_FILE_LOG_BACKUPS = max(1, min(20, int(os.getenv("MONITORING_ENDPOINT_TIMING_FILE_LOG_BACKUPS", "5") or "5")))
-HOSTS_ENDPOINT_CACHE_TTL_SECONDS = max(0.0, min(600.0, float(os.getenv("MONITORING_HOSTS_CACHE_TTL_SECONDS", "45") or "45")))
+HOSTS_ENDPOINT_CACHE_TTL_SECONDS = max(0.0, min(600.0, float(os.getenv("MONITORING_HOSTS_CACHE_TTL_SECONDS", "90") or "90")))
 INACTIVE_HOSTS_ENDPOINT_CACHE_TTL_SECONDS = max(
     0.0,
-    min(600.0, float(os.getenv("MONITORING_INACTIVE_HOSTS_CACHE_TTL_SECONDS", "30") or "30")),
+    min(600.0, float(os.getenv("MONITORING_INACTIVE_HOSTS_CACHE_TTL_SECONDS", "45") or "45")),
+)
+ALERTS_SUMMARY_CACHE_TTL_SECONDS = max(
+    0.0,
+    min(600.0, float(os.getenv("MONITORING_ALERTS_SUMMARY_CACHE_TTL_SECONDS", "45") or "45")),
 )
 IDENTITY_MAPS_CACHE_TTL_SECONDS = max(
     5.0,
-    min(120.0, float(os.getenv("MONITORING_IDENTITY_MAPS_CACHE_TTL_SECONDS", "20") or "20")),
+    min(180.0, float(os.getenv("MONITORING_IDENTITY_MAPS_CACHE_TTL_SECONDS", "60") or "60")),
+)
+READ_CACHE_DEBOUNCE_SECONDS = max(
+    5.0,
+    min(300.0, float(os.getenv("MONITORING_READ_CACHE_DEBOUNCE_SECONDS", "45") or "45")),
 )
 CRITICAL_TRENDS_ENDPOINT_CACHE_TTL_SECONDS = max(0.0, min(900.0, float(os.getenv("MONITORING_CRITICAL_TRENDS_CACHE_TTL_SECONDS", "180") or "180")))
 CHANGELOG_REBUILD_STALE_MINUTES = max(10, min(1440, int(os.getenv("MONITORING_CHANGELOG_REBUILD_STALE_MINUTES", "120") or "120")))
@@ -207,6 +215,8 @@ _read_endpoint_cache_lock = threading.Lock()
 _read_endpoint_cache: dict[str, tuple[float, object]] = {}
 _identity_maps_cache_lock = threading.Lock()
 _identity_maps_cache: dict[str, object] = {"expires_at": 0.0}
+_read_cache_debounce_lock = threading.Lock()
+_read_cache_debounce_pending: dict[str, float] = {}
 _endpoint_timing_file_log_lock = threading.Lock()
 _agent_ingest_queue_wakeup = threading.Event()
 _local_cpu_sample_lock = threading.Lock()
@@ -276,6 +286,27 @@ def _read_cache_set(cache_key: str, value: object, ttl_seconds: float | None = N
         # Trim oldest-expiring entries first to keep cache bounded.
         for key, _ in sorted(_read_endpoint_cache.items(), key=lambda item: item[1][0])[: max(1, len(_read_endpoint_cache) // 8)]:
             _read_endpoint_cache.pop(key, None)
+
+
+def _schedule_read_cache_invalidation(prefix: str) -> None:
+    safe_prefix = str(prefix or "").strip()
+    if not safe_prefix:
+        return
+    now_ts = datetime.now(timezone.utc).timestamp()
+    with _read_cache_debounce_lock:
+        _read_cache_debounce_pending[safe_prefix] = now_ts
+
+
+def _flush_due_read_cache_invalidations() -> None:
+    now_ts = datetime.now(timezone.utc).timestamp()
+    due_prefixes: list[str] = []
+    with _read_cache_debounce_lock:
+        for prefix, marked_at in list(_read_cache_debounce_pending.items()):
+            if now_ts - marked_at >= READ_CACHE_DEBOUNCE_SECONDS:
+                due_prefixes.append(prefix)
+                _read_cache_debounce_pending.pop(prefix, None)
+    for prefix in due_prefixes:
+        _read_cache_invalidate_prefix(prefix)
 
 
 def _read_cache_invalidate_prefix(prefix: str) -> None:
@@ -9510,10 +9541,13 @@ def _collect_latest_report_details_by_host_keys(conn: sqlite3.Connection, host_k
         SELECT latest.host_key,
                COALESCE(r.hostname, ''),
                COALESCE(r.primary_ip, ''),
-               COALESCE(r.payload_json, '{{}}')
+               COALESCE(r.payload_json, '{{}}'),
+               latest.last_seen_utc
         FROM (
-            SELECT {host_key_expr} AS host_key,
-                   MAX(id) AS latest_id
+            SELECT
+                {host_key_expr} AS host_key,
+                MAX(received_at_utc) AS last_seen_utc,
+                MAX(id) AS latest_id
             FROM reports
             WHERE {host_key_expr} IN ({placeholders})
             GROUP BY {host_key_expr}
@@ -9553,9 +9587,27 @@ def _collect_latest_report_details_by_host_keys(conn: sqlite3.Connection, host_k
             "latest_report_ip": latest_report_ip,
             "usage_by_mountpoint": usage_by_mountpoint,
             "country_code": extract_country_code_from_payload(payload),
+            "received_at_utc": str(row[4] or "").strip(),
         }
 
     return details_by_host_key
+
+
+def _dedupe_alert_summary_rows(rows: list[tuple]) -> list[tuple]:
+    seen: set[tuple[str, str]] = set()
+    deduped: list[tuple] = []
+    for row in rows:
+        cluster_key = _hostname_cluster_key(str(row[2] or ""))
+        mountpoint_key = normalize_mountpoint_key(str(row[1] or ""))
+        if not cluster_key or not mountpoint_key:
+            deduped.append(row)
+            continue
+        dedupe_key = (cluster_key, mountpoint_key)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        deduped.append(row)
+    return deduped
 
 
 def collect_open_alerts(
@@ -9582,19 +9634,22 @@ def collect_open_alerts(
         ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, used_percent DESC, id DESC
         """
     ).fetchall()
-    _, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid = _get_latest_identity_context(conn)
-    rows = [
-        row
-        for row in rows
-        if not _is_superseded_host_identity_key(
-            conn,
-            str(row[1] or ""),
-            str(row[2] or ""),
-            canonical_by_hostname,
-            canonical_by_cluster,
-            last_seen_by_host_uid,
-        )
-    ]
+    try:
+        _, canonical_by_hostname, canonical_by_cluster, last_seen_by_host_uid = _get_latest_identity_context(conn)
+        rows = [
+            row
+            for row in rows
+            if not _is_superseded_host_identity_key(
+                conn,
+                str(row[1] or ""),
+                str(row[2] or ""),
+                canonical_by_hostname,
+                canonical_by_cluster,
+                last_seen_by_host_uid,
+            )
+        ]
+    except sqlite3.OperationalError:
+        pass
     rows = _dedupe_open_alert_rows_by_cluster_mountpoint(rows)
     blacklist_patterns = get_filesystem_blacklist_pattern_strings(conn)
     if blacklist_patterns:
@@ -17137,6 +17192,9 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
     )
 
     _invalidate_identity_maps_cache()
+    _schedule_read_cache_invalidation("hosts:")
+    _schedule_read_cache_invalidation("inactive-hosts:")
+    _schedule_read_cache_invalidation("alerts-summary:")
 
     # Keep behavior identical to direct-ingest: non-blocking best effort.
     auto_sync_discovered_license_types(payload)
@@ -18061,6 +18119,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         )
 
     def do_GET(self) -> None:
+        _flush_due_read_cache_invalidations()
         parsed = urlparse(self.path)
 
         if parsed.path == "/oauth/microsoft/callback":
@@ -20464,6 +20523,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                         if not is_filesystem_blacklisted_by_patterns(str(row[1] or ""), blacklist_patterns)
                         and host_matches_alert_visibility_tokens(str(row[2] or ""), str(row[3] or ""), allowed_tokens)
                     ]
+                visible_rows = _dedupe_alert_summary_rows(visible_rows)
                 muted_open = len(muted_rows)
                 total_open = len(visible_rows)
                 warning_open = sum(1 for row in visible_rows if str(row[0] or "").strip().lower() == "warning")
@@ -20486,7 +20546,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     "total": muted_open,
                 },
             }
-            _read_cache_set(cache_key, response_data)
+            _read_cache_set(cache_key, response_data, ttl_seconds=ALERTS_SUMMARY_CACHE_TTL_SECONDS)
             self._send_json(HTTPStatus.OK, response_data)
             _mark_endpoint_timer(endpoint_timer, "send")
             _finish_endpoint_timer(
@@ -20938,6 +20998,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
     def do_POST(self) -> None:
+        _flush_due_read_cache_invalidations()
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
 
