@@ -12613,11 +12613,13 @@ function wireHostListInteractions() {
     renderHosts(state.hosts);
     hostList.scrollTop = previousScrollTop;
     void loadReportsForHost().then(() => {
-      void loadAnalysisForHost();
-      void loadAlertsForHost();
-      void loadDatabaseLifecycleForHost();
-      void loadConfigChangelogForHost();
-      void loadAndRenderCustomerNotificationPanel(hostname, hostUid);
+      window.setTimeout(() => {
+        void loadAnalysisForHost();
+        void loadAlertsForHost();
+        void loadDatabaseLifecycleForHost();
+        void loadConfigChangelogForHost();
+        void loadAndRenderCustomerNotificationPanel(hostname, hostUid);
+      }, 300);
     });
   };
 
@@ -13625,7 +13627,7 @@ async function loadReportsForHost(options = {}) {
     updatePagerButtons();
   } catch (error) {
     state.currentReport = null;
-    list.innerHTML = `<p class=\"muted\">Fehler: ${escapeHtml(error.message)}</p>`;
+    list.innerHTML = `<p class=\"muted\">${escapeHtml(formatApiLoadError(error.message, "Einzelmeldungen"))}</p>`;
     updateHeaderStatChips();
     updateReportChromeBar();
     renderOverviewHostMetrics();

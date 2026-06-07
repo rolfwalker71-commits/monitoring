@@ -9610,6 +9610,49 @@ def _latest_report_rows_by_host_key(conn: sqlite3.Connection) -> list[tuple]:
         ).fetchall()
 
 
+def _host_reports_where_clause(host_uid: str, hostname: str) -> tuple[str, tuple]:
+    """Indexed WHERE for per-host report queries (avoid CASE host_key_expr in WHERE)."""
+    safe_host_uid = str(host_uid or "").strip()
+    safe_hostname = str(hostname or "").strip()
+    if safe_host_uid:
+        return "host_uid = ?", (safe_host_uid,)
+    return "hostname = ?", (safe_hostname,)
+
+
+def _host_report_meta_from_identity(conn: sqlite3.Connection, host_cache_key: str) -> dict[str, object] | None:
+    safe_key = str(host_cache_key or "").strip()
+    if not safe_key:
+        return None
+    identity_rows, _, _, _ = _get_latest_identity_context(conn)
+    for row in identity_rows:
+        if str(row[0] or "").strip() != safe_key:
+            continue
+        return {
+            "total_reports": int(row[5] or 0),
+            "oldest_report_at_utc": "",
+            "newest_report_at_utc": str(row[2] or ""),
+        }
+    return None
+
+
+def _host_report_oldest_received_at(
+    conn: sqlite3.Connection,
+    where_clause: str,
+    where_args: tuple,
+) -> str:
+    row = conn.execute(
+        f"""
+        SELECT received_at_utc
+        FROM reports
+        WHERE {where_clause}
+        ORDER BY id ASC
+        LIMIT 1
+        """,
+        where_args,
+    ).fetchone()
+    return str((row[0] if row else "") or "")
+
+
 def _sort_identity_rows_for_hosts_list(rows: list[tuple]) -> list[tuple]:
     def sort_key(row: tuple) -> tuple[int, float]:
         report_count = int(row[5] or 0)
@@ -19505,8 +19548,22 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
                 _finish_endpoint_timer(endpoint_timer, meta=f"limit={limit} offset={offset} cache=hit")
                 return
-            with sqlite_connect_read() as conn:
-                response_data = _build_hosts_endpoint_response(conn, limit=limit, offset=offset)
+            try:
+                with sqlite_connect_read() as conn:
+                    response_data = _build_hosts_endpoint_response(conn, limit=limit, offset=offset)
+            except sqlite3.OperationalError as exc:
+                if _sqlite_operational_error_is_lock(exc):
+                    self._send_json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {
+                            "error": "database_busy",
+                            "message": "Datenbank kurz gesperrt. Bitte in wenigen Sekunden erneut laden.",
+                        },
+                        extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+                    )
+                    _finish_endpoint_timer(endpoint_timer, meta="db-busy")
+                    return
+                raise
             _mark_endpoint_timer(endpoint_timer, "db+build")
             total_hosts = int(response_data.get("total_hosts") or 0)
             hosts = response_data.get("hosts") or []
@@ -19529,12 +19586,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             host_key_expr = reports_host_key_sql()
             host_cache_key = host_uid or hostname
-
-            where_clause = "hostname = ?"
-            where_args: tuple = (hostname,)
-            if host_uid:
-                where_clause = f"({host_key_expr} = ?)"
-                where_args = (host_uid,)
+            where_clause, where_args = _host_reports_where_clause(host_uid, hostname)
 
             limit = parse_int(query, "limit", default=10, min_value=1, max_value=200)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
@@ -19574,84 +19626,96 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             newest_report_at_utc = ""
             meta_cache_key = f"host-reports-meta:{host_cache_key}"
 
-            with sqlite_connect_read() as conn:
-                if include_meta:
-                    cached_meta = _read_cache_get(meta_cache_key)
-                    if isinstance(cached_meta, dict):
-                        total_reports = int(cached_meta.get("total_reports") or 0)
-                        oldest_report_at_utc = str(cached_meta.get("oldest_report_at_utc") or "")
-                        newest_report_at_utc = str(cached_meta.get("newest_report_at_utc") or "")
-                    else:
-                        stats_row = conn.execute(
+            try:
+                with sqlite_connect_read() as conn:
+                    if include_meta:
+                        cached_meta = _read_cache_get(meta_cache_key)
+                        if isinstance(cached_meta, dict):
+                            total_reports = int(cached_meta.get("total_reports") or 0)
+                            oldest_report_at_utc = str(cached_meta.get("oldest_report_at_utc") or "")
+                            newest_report_at_utc = str(cached_meta.get("newest_report_at_utc") or "")
+                        else:
+                            identity_meta = _host_report_meta_from_identity(conn, host_cache_key)
+                            if isinstance(identity_meta, dict):
+                                total_reports = int(identity_meta.get("total_reports") or 0)
+                                newest_report_at_utc = str(identity_meta.get("newest_report_at_utc") or "")
+                            else:
+                                total_reports = 0
+                                newest_report_at_utc = ""
+                            oldest_report_at_utc = _host_report_oldest_received_at(conn, where_clause, where_args)
+                            _read_cache_set(
+                                meta_cache_key,
+                                {
+                                    "total_reports": total_reports,
+                                    "oldest_report_at_utc": oldest_report_at_utc,
+                                    "newest_report_at_utc": newest_report_at_utc,
+                                },
+                                ttl_seconds=HOST_REPORTS_META_CACHE_TTL_SECONDS,
+                            )
+
+                        if jump_to_utc_iso and total_reports > 0:
+                            jump_row = conn.execute(
+                                f"SELECT COUNT(*) FROM reports WHERE {where_clause} AND received_at_utc > ?",
+                                (*where_args, jump_to_utc_iso),
+                            ).fetchone()
+                            jump_offset = int((jump_row[0] if jump_row else 0) or 0)
+                            if jump_offset >= total_reports:
+                                offset = max(0, total_reports - 1)
+                            else:
+                                offset = max(0, jump_offset)
+
+                    if before_id > 0:
+                        rows = conn.execute(
                             f"""
-                            SELECT COUNT(*), MIN(received_at_utc), MAX(received_at_utc)
+                            SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json, {host_key_expr}
+                            FROM reports
+                            WHERE {where_clause} AND id < ?
+                            ORDER BY id DESC
+                            LIMIT ?
+                            """,
+                            (*where_args, before_id, limit),
+                        ).fetchall()
+                    elif after_id > 0:
+                        rows = conn.execute(
+                            f"""
+                            SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json, {host_key_expr}
+                            FROM reports
+                            WHERE {where_clause} AND id > ?
+                            ORDER BY id ASC
+                            LIMIT ?
+                            """,
+                            (*where_args, after_id, limit),
+                        ).fetchall()
+                        rows = list(reversed(rows))
+                    else:
+                        rows = conn.execute(
+                            f"""
+                            SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json, {host_key_expr}
                             FROM reports
                             WHERE {where_clause}
+                            ORDER BY id DESC
+                            LIMIT ? OFFSET ?
                             """,
-                            where_args,
-                        ).fetchone()
-                        total_reports = int((stats_row[0] if stats_row else 0) or 0)
-                        oldest_report_at_utc = str((stats_row[1] if stats_row else "") or "")
-                        newest_report_at_utc = str((stats_row[2] if stats_row else "") or "")
-                        _read_cache_set(
-                            meta_cache_key,
-                            {
-                                "total_reports": total_reports,
-                                "oldest_report_at_utc": oldest_report_at_utc,
-                                "newest_report_at_utc": newest_report_at_utc,
-                            },
-                            ttl_seconds=HOST_REPORTS_META_CACHE_TTL_SECONDS,
-                        )
+                            (*where_args, limit, offset),
+                        ).fetchall()
 
-                    if jump_to_utc_iso and total_reports > 0:
-                        jump_offset = conn.execute(
-                            f"SELECT COUNT(*) FROM reports WHERE {where_clause} AND received_at_utc > ?",
-                            (*where_args, jump_to_utc_iso),
-                        ).fetchone()[0]
-                        if jump_offset >= total_reports:
-                            offset = max(0, total_reports - 1)
-                        else:
-                            offset = max(0, jump_offset)
-
-                if before_id > 0:
-                    rows = conn.execute(
-                        f"""
-                        SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json, {host_key_expr}
-                        FROM reports
-                        WHERE {where_clause} AND id < ?
-                        ORDER BY id DESC
-                        LIMIT ?
-                        """,
-                        (*where_args, before_id, limit),
-                    ).fetchall()
-                elif after_id > 0:
-                    rows = conn.execute(
-                        f"""
-                        SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json, {host_key_expr}
-                        FROM reports
-                        WHERE {where_clause} AND id > ?
-                        ORDER BY id ASC
-                        LIMIT ?
-                        """,
-                        (*where_args, after_id, limit),
-                    ).fetchall()
-                    rows = list(reversed(rows))
-                else:
-                    rows = conn.execute(
-                        f"""
-                        SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json, {host_key_expr}
-                        FROM reports
-                        WHERE {where_clause}
-                        ORDER BY id DESC
-                        LIMIT ? OFFSET ?
-                        """,
-                        (*where_args, limit, offset),
-                    ).fetchall()
-
-                resolved_hostname = ""
-                if rows:
-                    resolved_hostname = str(rows[0][3] or "").strip()
-                display_name_override = get_display_name_override(conn, resolved_hostname or hostname, host_uid)
+                    resolved_hostname = ""
+                    if rows:
+                        resolved_hostname = str(rows[0][3] or "").strip()
+                    display_name_override = get_display_name_override(conn, resolved_hostname or hostname, host_uid)
+            except sqlite3.OperationalError as exc:
+                if _sqlite_operational_error_is_lock(exc):
+                    self._send_json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {
+                            "error": "database_busy",
+                            "message": "Datenbank kurz gesperrt. Bitte in wenigen Sekunden erneut laden.",
+                        },
+                        extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+                    )
+                    _finish_endpoint_timer(endpoint_timer, meta="db-busy")
+                    return
+                raise
 
             _mark_endpoint_timer(endpoint_timer, "db")
 
@@ -20029,43 +20093,54 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             cutoff_iso = utc_hours_ago_iso(hours)
-            host_key_expr = reports_host_key_sql()
-            where_clause = "hostname = ?"
-            where_args: tuple = (hostname,)
-            if host_uid:
-                where_clause = f"{host_key_expr} = ?"
-                where_args = (host_uid,)
+            where_clause, where_args = _host_reports_where_clause(host_uid, hostname)
 
-            with sqlite_connect_read() as conn:
-                rows = conn.execute(
-                    f"""
-                    SELECT id, received_at_utc, payload_json, COALESCE(hostname, '')
-                    FROM reports
-                    WHERE {where_clause} AND received_at_utc >= ?
-                    ORDER BY id ASC
-                    """,
-                    (*where_args, cutoff_iso),
-                ).fetchall()
-                resolved_hostname = hostname
-                if not resolved_hostname and rows:
-                    resolved_hostname = str(rows[-1][3] or "").strip()
+            try:
+                with sqlite_connect_read() as conn:
+                    rows = conn.execute(
+                        f"""
+                        SELECT id, received_at_utc, payload_json, COALESCE(hostname, '')
+                        FROM reports
+                        WHERE {where_clause} AND received_at_utc >= ?
+                        ORDER BY id ASC
+                        """,
+                        (*where_args, cutoff_iso),
+                    ).fetchall()
+                    resolved_hostname = hostname
+                    if not resolved_hostname and rows:
+                        resolved_hostname = str(rows[-1][3] or "").strip()
 
-                hidden_mountpoints = (
-                    get_filesystem_visibility_hidden(conn, username, resolved_hostname, host_uid, "analysis")
-                    if resolved_hostname
-                    else []
-                )
-                fs_focus_hidden = (
-                    get_filesystem_visibility_hidden(conn, username, resolved_hostname, host_uid, "fs-focus")
-                    if resolved_hostname
-                    else []
-                )
-                large_files_hidden = (
-                    get_filesystem_visibility_hidden(conn, username, resolved_hostname, host_uid, "large-files")
-                    if resolved_hostname
-                    else []
-                )
-                blacklist_patterns = [row[0] for row in conn.execute("SELECT pattern FROM filesystem_blacklist_patterns").fetchall()]
+                    hidden_mountpoints = (
+                        get_filesystem_visibility_hidden(conn, username, resolved_hostname, host_uid, "analysis")
+                        if resolved_hostname
+                        else []
+                    )
+                    fs_focus_hidden = (
+                        get_filesystem_visibility_hidden(conn, username, resolved_hostname, host_uid, "fs-focus")
+                        if resolved_hostname
+                        else []
+                    )
+                    large_files_hidden = (
+                        get_filesystem_visibility_hidden(conn, username, resolved_hostname, host_uid, "large-files")
+                        if resolved_hostname
+                        else []
+                    )
+                    blacklist_patterns = [
+                        row[0] for row in conn.execute("SELECT pattern FROM filesystem_blacklist_patterns").fetchall()
+                    ]
+            except sqlite3.OperationalError as exc:
+                if _sqlite_operational_error_is_lock(exc):
+                    self._send_json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {
+                            "error": "database_busy",
+                            "message": "Datenbank kurz gesperrt. Bitte in wenigen Sekunden erneut laden.",
+                        },
+                        extra_headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+                    )
+                    _finish_endpoint_timer(endpoint_timer, meta="db-busy")
+                    return
+                raise
 
             _mark_endpoint_timer(endpoint_timer, "db")
 
@@ -24226,19 +24301,18 @@ def main() -> None:
         try:
             with sqlite_connect() as conn:
                 _get_latest_identity_context(conn)
+                hosts_data = _build_hosts_endpoint_response(conn, limit=200, offset=0)
                 system_data = collect_system_overview(conn, search_query="")
                 backup_data = collect_backup_status_overview(conn, 24)
+            _read_cache_set("hosts:200:0", hosts_data, ttl_seconds=HOSTS_ENDPOINT_CACHE_TTL_SECONDS)
             _read_cache_set("system-overview:", system_data, ttl_seconds=SYSTEM_OVERVIEW_CACHE_TTL_SECONDS)
             _read_cache_set("backup-status-overview:24", backup_data, ttl_seconds=BACKUP_STATUS_CACHE_TTL_SECONDS)
-            print("[startup] identity + overview read caches pre-warmed")
+            print("[startup] identity + hosts + overview read caches pre-warmed")
         except Exception as exc:
             print(f"[startup] read cache pre-warm failed: {exc}")
 
-    threading.Thread(
-        target=_startup_prewarm_read_caches,
-        name="startup-read-cache-prewarm",
-        daemon=True,
-    ).start()
+    print("[startup] pre-warming read caches before accepting requests...")
+    _startup_prewarm_read_caches()
 
     server = ThreadingHTTPServer((args.host, args.port), MonitoringHandler)
     print(f"Monitoring receiver running on http://{args.host}:{args.port}")
