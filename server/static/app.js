@@ -14923,21 +14923,63 @@ function renderCriticalTrends(data) {
   return summary + cards;
 }
 
+async function fetchCriticalTrendsWithRetry() {
+  const url = `/api/v1/critical-trends?hours=${state.criticalTrendsHours}&project_hours=${state.criticalTrendsProjectHours}`;
+  const timeoutMs = 180000;
+  let transientFailures = 0;
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const controller = new AbortController();
+    const requestTimeout = window.setTimeout(() => controller.abort(), 45000);
+    try {
+      const response = await fetch(url, {
+        credentials: "same-origin",
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      window.clearTimeout(requestTimeout);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if ((response.status === 502 || response.status === 503) && transientFailures < 8) {
+          transientFailures += 1;
+          await waitMs(2000);
+          continue;
+        }
+        throw new Error(data.error || ("HTTP " + response.status));
+      }
+      return data;
+    } catch (error) {
+      window.clearTimeout(requestTimeout);
+      if (error && error.name === "AbortError" && transientFailures < 8) {
+        transientFailures += 1;
+        await waitMs(1500);
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error("Trend-Daten Timeout nach 3 Minuten");
+}
+
 async function loadCriticalTrends(options = {}) {
   const updateList = options.updateList !== false;
   const listEl = document.getElementById("criticalTrendsList");
   const tabButton = document.getElementById("criticalTrendsTabButton");
   if (updateList && !listEl) return;
 
+  const loadingStartedAt = Date.now();
   if (updateList && listEl) {
     listEl.innerHTML = "<p class=\"muted\">Lade Trend-Daten…</p>";
   }
+  const loadingTicker = updateList && listEl
+    ? window.setInterval(() => {
+      const elapsedSec = Math.max(1, Math.round((Date.now() - loadingStartedAt) / 1000));
+      listEl.innerHTML = `<p class="muted">Lade Trend-Daten… (${elapsedSec}s)</p>`;
+    }, 1000)
+    : null;
   try {
-    const response = await fetch(`/api/v1/critical-trends?hours=${state.criticalTrendsHours}&project_hours=${state.criticalTrendsProjectHours}`, {
-      credentials: "same-origin",
-    });
-    if (!response.ok) throw new Error("HTTP " + response.status);
-    const data = await response.json();
+    const data = await fetchCriticalTrendsWithRetry();
     if (updateList && listEl) {
       listEl.innerHTML = renderCriticalTrends(data);
     }
@@ -14963,6 +15005,10 @@ async function loadCriticalTrends(options = {}) {
   } catch (error) {
     if (updateList && listEl) {
       listEl.innerHTML = `<p class="muted">${escapeHtml(formatApiLoadError(error?.message, "Kritische Trends"))}</p>`;
+    }
+  } finally {
+    if (loadingTicker !== null) {
+      window.clearInterval(loadingTicker);
     }
   }
 }

@@ -189,6 +189,10 @@ READ_CACHE_DEBOUNCE_SECONDS = max(
     min(300.0, float(os.getenv("MONITORING_READ_CACHE_DEBOUNCE_SECONDS", "45") or "45")),
 )
 CRITICAL_TRENDS_ENDPOINT_CACHE_TTL_SECONDS = max(0.0, min(900.0, float(os.getenv("MONITORING_CRITICAL_TRENDS_CACHE_TTL_SECONDS", "180") or "180")))
+CRITICAL_TRENDS_MAX_POINTS_PER_HOST = max(
+    12,
+    min(168, int(os.getenv("MONITORING_CRITICAL_TRENDS_MAX_POINTS_PER_HOST", "72") or "72")),
+)
 CHANGELOG_REBUILD_STALE_MINUTES = max(10, min(1440, int(os.getenv("MONITORING_CHANGELOG_REBUILD_STALE_MINUTES", "120") or "120")))
 SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES = max(5, min(720, int(os.getenv("MONITORING_SYSTEM_OVERVIEW_ONLINE_THRESHOLD_MINUTES", "60") or "60")))
 AUTO_BACKUP_DEFAULT_ENABLED = os.getenv("MONITORING_AUTO_BACKUP_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
@@ -9359,6 +9363,44 @@ def get_user_alert_visibility_tokens(conn: sqlite3.Connection, username: str) ->
     return interest_tokens & mail_tokens
 
 
+def _load_critical_trends_report_rows(
+    conn: sqlite3.Connection,
+    cutoff_iso: str,
+    allowed_hostnames: set[str],
+) -> list[tuple[str, str]]:
+    """Hourly downsample: latest report per host per UTC hour (not every 5-min report)."""
+    if not allowed_hostnames:
+        return []
+    placeholders = ",".join("?" for _ in allowed_hostnames)
+    max_points = int(CRITICAL_TRENDS_MAX_POINTS_PER_HOST)
+    return conn.execute(
+        f"""
+        SELECT hostname, payload_json
+        FROM (
+            SELECT
+                COALESCE(hostname, '') AS hostname,
+                COALESCE(payload_json, '{{}}') AS payload_json,
+                id,
+                ROW_NUMBER() OVER (
+                    PARTITION BY hostname, substr(received_at_utc, 1, 13)
+                    ORDER BY id DESC
+                ) AS hour_rank,
+                ROW_NUMBER() OVER (
+                    PARTITION BY hostname
+                    ORDER BY id DESC
+                ) AS recent_rank
+            FROM reports
+            WHERE received_at_utc >= ?
+              AND hostname IN ({placeholders})
+        ) sampled
+        WHERE hour_rank = 1
+          AND recent_rank <= ?
+        ORDER BY hostname ASC, id ASC
+        """,
+        (cutoff_iso, *sorted(allowed_hostnames), max_points),
+    ).fetchall()
+
+
 def collect_critical_trends(
     conn: sqlite3.Connection,
     hours: int,
@@ -9416,8 +9458,6 @@ def collect_critical_trends(
         return None
 
     warnings: list[dict] = []
-    query = "SELECT COALESCE(hostname, ''), COALESCE(payload_json, '{}') FROM reports WHERE received_at_utc >= ?"
-    args: list[object] = [cutoff_iso]
     normalized_allowed_hostnames: set[str] | None = None
     if allowed_hostnames is not None:
         normalized_allowed_hostnames = {
@@ -9429,11 +9469,7 @@ def collect_critical_trends(
         normalized_allowed_hostnames = _canonical_hostnames_from_identity_rows(_identity_report_rows(conn))
     if not normalized_allowed_hostnames:
         return []
-    placeholders = ",".join("?" for _ in normalized_allowed_hostnames)
-    query += f" AND hostname IN ({placeholders})"
-    args.extend(sorted(normalized_allowed_hostnames))
-    query += " ORDER BY hostname ASC, id ASC"
-    rows = conn.execute(query, tuple(args)).fetchall()
+    rows = _load_critical_trends_report_rows(conn, cutoff_iso, normalized_allowed_hostnames)
 
     payload_rows_by_hostname: dict[str, list[dict]] = {}
     for raw_hostname, raw_payload_json in rows:
@@ -20561,17 +20597,19 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             hours = parse_int(query, "hours", default=72, min_value=1, max_value=24 * 30)
             project_hours = parse_int(query, "project_hours", default=72, min_value=1, max_value=24 * 7)
-            cache_key = f"critical-trends:{username}:{hours}:{project_hours}"
+            with sqlite_connect_read() as conn:
+                preferences = get_user_preferences(conn, username)
+                selected_metrics = parse_critical_trends_metrics(preferences.get("critical_trends_metrics", "filesystem"))
+            metrics_cache_key = ",".join(sorted(selected_metrics))
+            cache_key = f"critical-trends:{username}:{hours}:{project_hours}:{metrics_cache_key}"
             cached_data = _read_cache_get(cache_key)
             if isinstance(cached_data, dict):
                 self._send_json(HTTPStatus.OK, cached_data)
                 _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
                 _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} project_hours={project_hours} cache=hit")
                 return
-            
+
             with sqlite_connect_read() as conn:
-                preferences = get_user_preferences(conn, username)
-                selected_metrics = parse_critical_trends_metrics(preferences.get("critical_trends_metrics", "filesystem"))
                 hidden_mountpoints_by_host: dict[str, list[str]] = {}
                 visibility_rows = conn.execute(
                     """
