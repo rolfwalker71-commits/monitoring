@@ -11828,23 +11828,37 @@ async function downloadDatabaseBackup(onProgress) {
   }
 
   const jobId = String(startData.job_id || "").trim();
-  if (!jobId) {
+  const jobToken = String(startData.job_token || "").trim();
+  if (!jobId || !jobToken) {
     throw new Error("backup job start failed");
   }
 
   const startTs = Date.now();
   const timeoutMs = 600000;
+  let transientFailures = 0;
   onProgress?.({ pct: null, label: "Datenbank wird gesichert..." });
   while (Date.now() - startTs < timeoutMs) {
-    await waitMs(1200);
-    const statusResponse = await fetch(`/api/v1/backup/database/status?job_id=${encodeURIComponent(jobId)}`, {
-      method: "GET",
-      credentials: "same-origin",
-    });
+    await waitMs(2000);
+    const statusResponse = await fetch(
+      `/api/v1/backup/database/status?job_id=${encodeURIComponent(jobId)}&job_token=${encodeURIComponent(jobToken)}`,
+      {
+        method: "GET",
+        credentials: "same-origin",
+      },
+    );
     const statusData = await statusResponse.json().catch(() => ({}));
     if (!statusResponse.ok) {
+      if ((statusResponse.status === 502 || statusResponse.status === 503) && transientFailures < 60) {
+        transientFailures += 1;
+        onProgress?.({
+          pct: null,
+          label: `Backup läuft (Server kurz beschäftigt, Wiederholung ${transientFailures})...`,
+        });
+        continue;
+      }
       throw new Error(statusData.error || ("HTTP " + statusResponse.status));
     }
+    transientFailures = 0;
     const status = String(statusData.status || "");
     if (status === "running") {
       onProgress?.({ pct: null, label: "Datenbank wird gesichert (läuft)..." });
@@ -11852,7 +11866,7 @@ async function downloadDatabaseBackup(onProgress) {
     if (status === "ready") {
       onProgress?.({ pct: 100, label: "Download wird gestartet..." });
       return triggerNativeDownload(
-        `/api/v1/backup/database/download?job_id=${encodeURIComponent(jobId)}&t=${Date.now()}`,
+        `/api/v1/backup/database/download?job_id=${encodeURIComponent(jobId)}&job_token=${encodeURIComponent(jobToken)}&t=${Date.now()}`,
         String(statusData.filename || fallbackFilename),
       );
     }

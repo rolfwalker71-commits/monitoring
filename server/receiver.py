@@ -3240,6 +3240,20 @@ def _cleanup_backup_jobs(max_age_minutes: int = 30) -> None:
             _backup_jobs.pop(job_id, None)
 
 
+def _get_backup_job_if_token_valid(job_id: str, job_token: str) -> dict[str, str] | None:
+    safe_job_id = str(job_id or "").strip()
+    safe_job_token = str(job_token or "").strip()
+    if not safe_job_id or not safe_job_token:
+        return None
+    with _backup_jobs_lock:
+        job = _backup_jobs.get(safe_job_id)
+        if not isinstance(job, dict):
+            return None
+        if str(job.get("access_token") or "") != safe_job_token:
+            return None
+        return dict(job)
+
+
 def _create_database_backup_job() -> dict:
     _cleanup_backup_jobs()
     BACKUP_TEMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -3250,6 +3264,7 @@ def _create_database_backup_job() -> dict:
     now_utc = datetime.now(timezone.utc)
     timestamp = now_utc.strftime("%Y%m%d-%H%M%S")
     job_id = secrets.token_urlsafe(10)
+    job_access_token = secrets.token_urlsafe(24)
     backup_filename = f"monitoring-backup-{timestamp}.db"
     backup_path = BACKUP_TEMP_DIR / f"{job_id}.db"
 
@@ -3262,6 +3277,7 @@ def _create_database_backup_job() -> dict:
             "started_at_utc": created_at,
             "file_path": str(backup_path),
             "filename": backup_filename,
+            "access_token": job_access_token,
             "error": "",
         }
 
@@ -3271,13 +3287,14 @@ def _create_database_backup_job() -> dict:
             min(300000, int(os.getenv("MONITORING_BACKUP_BUSY_TIMEOUT_MS", "120000") or "120000")),
         )
         try:
-            # Use SQLite's online backup API - WAL-aware and consistent under concurrent writes.
-            with sqlite3.connect(DB_PATH) as src_conn:
+            # Read-only source URI avoids write-lock contention with live ingest/session traffic.
+            src_uri = f"file:{DB_PATH.resolve()}?mode=ro"
+            with sqlite3.connect(src_uri, uri=True) as src_conn:
                 src_conn.execute(f"PRAGMA busy_timeout = {backup_busy_ms}")
                 with sqlite3.connect(backup_path) as dst_conn:
                     dst_conn.execute(f"PRAGMA busy_timeout = {backup_busy_ms}")
                     # Smaller page batches reduce write-lock pressure on the live DB.
-                    src_conn.backup(dst_conn, pages=512, sleep=0.1)
+                    src_conn.backup(dst_conn, pages=256, sleep=0.15)
             with _backup_jobs_lock:
                 job = _backup_jobs.get(job_id)
                 if job is not None:
@@ -3298,7 +3315,12 @@ def _create_database_backup_job() -> dict:
                     pass
 
     threading.Thread(target=_run_job, daemon=True).start()
-    return {"status": "started", "job_id": job_id, "filename": backup_filename}
+    return {
+        "status": "started",
+        "job_id": job_id,
+        "job_token": job_access_token,
+        "filename": backup_filename,
+    }
 
 
 def _restore_database_from_bytes(raw_bytes: bytes) -> tuple[bool, str]:
@@ -21397,22 +21419,28 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 {
                     "status": "started",
                     "job_id": created["job_id"],
+                    "job_token": created.get("job_token", ""),
                     "filename": created["filename"],
                 },
             )
             return
 
         if parsed.path == "/api/v1/backup/database/status":
-            if not self._require_admin_session():
-                return
             query = parse_qs(parsed.query)
             job_id = str(query.get("job_id", [""])[0] or "").strip()
+            job_token = str(query.get("job_token", [""])[0] or "").strip()
             if not job_id:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "job_id query parameter is required"})
                 return
+            job = _get_backup_job_if_token_valid(job_id, job_token)
+            if job is None and not self._require_admin_session():
+                return
             _cleanup_backup_jobs()
+            if job is None:
+                with _backup_jobs_lock:
+                    raw_job = _backup_jobs.get(job_id)
+                    job = dict(raw_job) if isinstance(raw_job, dict) else None
             with _backup_jobs_lock:
-                job = _backup_jobs.get(job_id)
                 if job and str(job.get("status") or "") == "running":
                     started_raw = str(job.get("started_at_utc") or job.get("created_at_utc") or "").strip()
                     started_at = None
@@ -21424,9 +21452,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     if started_at is not None:
                         runtime_seconds = (datetime.now(timezone.utc) - started_at).total_seconds()
                         if runtime_seconds > 900:
-                            job["status"] = "error"
-                            job["error"] = "backup job timeout after 15 minutes"
-                            job["updated_at_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                            stored = _backup_jobs.get(job_id)
+                            if isinstance(stored, dict):
+                                stored["status"] = "error"
+                                stored["error"] = "backup job timeout after 15 minutes"
+                                stored["updated_at_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                                job = dict(stored)
             if not job:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup job not found"})
                 return
@@ -21442,18 +21473,23 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/v1/backup/database/download":
-            if not self._require_admin_session():
-                return
             query = parse_qs(parsed.query)
             job_id = str(query.get("job_id", [""])[0] or "").strip()
+            job_token = str(query.get("job_token", [""])[0] or "").strip()
             if not job_id:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "job_id query parameter is required"})
                 return
+            if _get_backup_job_if_token_valid(job_id, job_token) is None and not self._require_admin_session():
+                return
             _cleanup_backup_jobs()
             with _backup_jobs_lock:
-                job = _backup_jobs.get(job_id)
-                if job and str(job.get("status") or "") == "ready":
+                stored = _backup_jobs.get(job_id)
+                if not isinstance(stored, dict):
+                    job = None
+                elif str(stored.get("status") or "") == "ready":
                     job = _backup_jobs.pop(job_id, None)
+                else:
+                    job = dict(stored)
             if not job:
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "backup job not found"})
                 return
