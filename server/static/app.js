@@ -465,6 +465,7 @@ const state = {
   reportLimit: 1,
   reportOffset: 0,
   totalReports: 0,
+  hostReportMeta: null,
   currentReport: null,
   reportSection: "overview",
   analysisHours: 24,
@@ -1684,9 +1685,9 @@ async function refreshDashboard(options = {}) {
     }
 
     await hostsPromise;
-    if (state.selectedHost) {
-      await Promise.allSettled([
-        loadReportsForHost(),
+    if (state.selectedHost || state.selectedHostUid) {
+      await loadReportsForHost();
+      void Promise.allSettled([
         loadAnalysisForHost(),
         loadAlertsForHost(),
       ]);
@@ -9901,10 +9902,14 @@ function updatePagerButtons() {
 
 async function refreshSelectedHostPanels(options = {}) {
   const reportOptions = options && typeof options.reportOptions === "object" ? options.reportOptions : undefined;
+  const reportsOnly = Boolean(options && options.reportsOnly);
   const includeDatabaseLifecycle = Boolean(options && options.includeDatabaseLifecycle);
   const includeConfigChangelog = Boolean(options && options.includeConfigChangelog);
+  await loadReportsForHost(reportOptions || {});
+  if (reportsOnly) {
+    return;
+  }
   const tasks = [
-    loadReportsForHost(reportOptions || {}),
     loadAnalysisForHost(),
     loadAlertsForHost(),
   ];
@@ -9922,19 +9927,25 @@ async function refreshSelectedHostPanels(options = {}) {
 }
 
 async function goToPreviousReport() {
-  if (state.reportOffset <= 0) {
+  if (state.reportOffset <= 0 || !state.currentReport?.id) {
     return;
   }
   state.reportOffset = Math.max(0, state.reportOffset - state.reportLimit);
-  await refreshSelectedHostPanels();
+  await refreshSelectedHostPanels({
+    reportsOnly: true,
+    reportOptions: { beforeId: state.currentReport.id },
+  });
 }
 
 async function goToNextReport() {
-  if (state.reportOffset + state.reportLimit >= state.totalReports) {
+  if (state.reportOffset + state.reportLimit >= state.totalReports || !state.currentReport?.id) {
     return;
   }
   state.reportOffset += state.reportLimit;
-  await refreshSelectedHostPanels();
+  await refreshSelectedHostPanels({
+    reportsOnly: true,
+    reportOptions: { afterId: state.currentReport.id },
+  });
 }
 
 function normalizeHostOsFamily(host) {
@@ -10597,8 +10608,8 @@ async function loadHostLicenseInfoForHover(hostname, hostUid = "") {
   }
 
   const url = asText(hostUid, "").trim()
-    ? `/api/v1/host-reports?host_uid=${encodeURIComponent(asText(hostUid, "").trim())}&limit=1&offset=0`
-    : `/api/v1/host-reports?hostname=${encodeURIComponent(asText(hostname, "").trim())}&limit=1&offset=0`;
+    ? `/api/v1/host-reports?host_uid=${encodeURIComponent(asText(hostUid, "").trim())}&limit=1&offset=0&include_meta=0`
+    : `/api/v1/host-reports?hostname=${encodeURIComponent(asText(hostname, "").trim())}&limit=1&offset=0&include_meta=0`;
   const response = await fetch(url, { credentials: "same-origin" });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
@@ -12598,14 +12609,16 @@ function wireHostListInteractions() {
     state.selectedHostUid = hostUid;
     state.selectedDisplayName = item.querySelector("strong")?.textContent || hostname;
     state.reportOffset = 0;
+    state.hostReportMeta = null;
     renderHosts(state.hosts);
     hostList.scrollTop = previousScrollTop;
-    loadReportsForHost();
-    loadAnalysisForHost();
-    loadAlertsForHost();
-    loadDatabaseLifecycleForHost();
-    loadConfigChangelogForHost();
-    loadAndRenderCustomerNotificationPanel(hostname, hostUid);
+    void loadReportsForHost().then(() => {
+      void loadAnalysisForHost();
+      void loadAlertsForHost();
+      void loadDatabaseLifecycleForHost();
+      void loadConfigChangelogForHost();
+      void loadAndRenderCustomerNotificationPanel(hostname, hostUid);
+    });
   };
 
   hostList.addEventListener("click", (event) => {
@@ -13465,6 +13478,34 @@ async function loadHosts(options = {}) {
   }
 }
 
+function buildHostReportsUrl(options = {}) {
+  const hostNameParam = encodeURIComponent(state.selectedHost);
+  const hostUidParam = encodeURIComponent(state.selectedHostUid || "");
+  const jumpToUtc = typeof options.jumpToUtc === "string" ? options.jumpToUtc.trim() : "";
+  const beforeId = Number(options.beforeId || 0);
+  const afterId = Number(options.afterId || 0);
+  const useKeyset = beforeId > 0 || afterId > 0;
+  const includeMeta = !useKeyset && options.includeMeta !== false;
+  const queryParts = [`limit=${state.reportLimit}`];
+  if (beforeId > 0) {
+    queryParts.push(`before_id=${beforeId}`, "include_meta=0");
+  } else if (afterId > 0) {
+    queryParts.push(`after_id=${afterId}`, "include_meta=0");
+  } else {
+    queryParts.push(`offset=${state.reportOffset}`);
+    if (!includeMeta) {
+      queryParts.push("include_meta=0");
+    }
+  }
+  if (jumpToUtc) {
+    queryParts.push(`jump_to_utc=${encodeURIComponent(jumpToUtc)}`);
+  }
+  const query = queryParts.join("&");
+  return state.selectedHostUid
+    ? `/api/v1/host-reports?host_uid=${hostUidParam}&${query}`
+    : `/api/v1/host-reports?hostname=${hostNameParam}&${query}`;
+}
+
 async function loadReportsForHost(options = {}) {
   const jumpToUtc = typeof options?.jumpToUtc === "string" ? options.jumpToUtc.trim() : "";
   const list = document.getElementById("reportList");
@@ -13498,20 +13539,29 @@ async function loadReportsForHost(options = {}) {
   updateSelectedHostControls();
 
   try {
-    const hostNameParam = encodeURIComponent(state.selectedHost);
-    const hostUidParam = encodeURIComponent(state.selectedHostUid || "");
-    const jumpParam = jumpToUtc ? `&jump_to_utc=${encodeURIComponent(jumpToUtc)}` : "";
-    const url = state.selectedHostUid
-      ? `/api/v1/host-reports?host_uid=${hostUidParam}&limit=${state.reportLimit}&offset=${state.reportOffset}${jumpParam}`
-      : `/api/v1/host-reports?hostname=${hostNameParam}&limit=${state.reportLimit}&offset=${state.reportOffset}${jumpParam}`;
+    const url = buildHostReportsUrl(options);
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error("HTTP " + response.status);
     }
 
     const data = await response.json();
-    const oldestReportAtUtc = asText(data.oldest_report_at_utc, "");
-    const newestReportAtUtc = asText(data.newest_report_at_utc, "");
+    const hostKey = asText(state.selectedHostUid, "").trim() || asText(state.selectedHost, "").trim();
+    let totalReports = Number(data.total_reports || 0);
+    let oldestReportAtUtc = asText(data.oldest_report_at_utc, "");
+    let newestReportAtUtc = asText(data.newest_report_at_utc, "");
+    if (totalReports > 0) {
+      state.hostReportMeta = {
+        hostKey,
+        total_reports: totalReports,
+        oldest_report_at_utc: oldestReportAtUtc,
+        newest_report_at_utc: newestReportAtUtc,
+      };
+    } else if (state.hostReportMeta && state.hostReportMeta.hostKey === hostKey) {
+      totalReports = Number(state.hostReportMeta.total_reports || 0);
+      oldestReportAtUtc = asText(state.hostReportMeta.oldest_report_at_utc, oldestReportAtUtc);
+      newestReportAtUtc = asText(state.hostReportMeta.newest_report_at_utc, newestReportAtUtc);
+    }
     if (reportJumpDateInput) {
       const minDateTime = toLocalDateTimeInputValue(oldestReportAtUtc);
       const maxDateTime = toLocalDateTimeInputValue(newestReportAtUtc);
@@ -13541,10 +13591,11 @@ async function loadReportsForHost(options = {}) {
         reportJumpBounds.classList.add("hidden");
       }
     }
-    if (Number.isFinite(Number(data.offset))) {
+    const usedKeyset = Number(options.beforeId || 0) > 0 || Number(options.afterId || 0) > 0;
+    if (!usedKeyset && Number.isFinite(Number(data.offset))) {
       state.reportOffset = Math.max(0, Number(data.offset));
     }
-    state.totalReports = Number(data.total_reports || 0);
+    state.totalReports = totalReports;
     const reports = data.reports || [];
 
     if (reports.length === 0) {

@@ -160,6 +160,18 @@ AGENT_SOURCE_STATUS_CACHE_TTL_SECONDS = max(
     0.0,
     min(600.0, float(os.getenv("MONITORING_AGENT_SOURCE_STATUS_CACHE_TTL_SECONDS", "120") or "120")),
 )
+HOST_REPORTS_CACHE_TTL_SECONDS = max(
+    0.0,
+    min(600.0, float(os.getenv("MONITORING_HOST_REPORTS_CACHE_TTL_SECONDS", "45") or "45")),
+)
+HOST_REPORTS_META_CACHE_TTL_SECONDS = max(
+    0.0,
+    min(600.0, float(os.getenv("MONITORING_HOST_REPORTS_META_CACHE_TTL_SECONDS", "120") or "120")),
+)
+ANALYSIS_ENDPOINT_CACHE_TTL_SECONDS = max(
+    0.0,
+    min(600.0, float(os.getenv("MONITORING_ANALYSIS_CACHE_TTL_SECONDS", "60") or "60")),
+)
 READ_ENDPOINT_BUSY_TIMEOUT_MS = max(
     1000,
     int(os.getenv("MONITORING_READ_ENDPOINT_BUSY_TIMEOUT_MS", "8000") or "8000"),
@@ -373,6 +385,9 @@ def _flush_due_identity_maps_cache_invalidation() -> None:
         _read_cache_invalidate_prefix("alerts-summary:")
         _read_cache_invalidate_prefix("host-config-changes:")
         _read_cache_invalidate_prefix("agent-source-status:")
+        _read_cache_invalidate_prefix("host-reports:")
+        _read_cache_invalidate_prefix("host-reports-meta:")
+        _read_cache_invalidate_prefix("analysis:")
 
 
 def _read_cache_invalidate_prefix(prefix: str) -> None:
@@ -17746,6 +17761,9 @@ def _process_agent_report_payload(conn: sqlite3.Connection, payload: dict, repor
     _schedule_read_cache_invalidation("critical-trends:")
     _schedule_read_cache_invalidation("host-config-changes:")
     _schedule_read_cache_invalidation("agent-source-status:")
+    _schedule_read_cache_invalidation("host-reports:")
+    _schedule_read_cache_invalidation("host-reports-meta:")
+    _schedule_read_cache_invalidation("analysis:")
 
     # Keep behavior identical to direct-ingest: non-blocking best effort.
     auto_sync_discovered_license_types(payload)
@@ -19510,6 +19528,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 return
 
             host_key_expr = reports_host_key_sql()
+            host_cache_key = host_uid or hostname
 
             where_clause = "hostname = ?"
             where_args: tuple = (hostname,)
@@ -19519,6 +19538,10 @@ class MonitoringHandler(BaseHTTPRequestHandler):
 
             limit = parse_int(query, "limit", default=10, min_value=1, max_value=200)
             offset = parse_int(query, "offset", default=0, min_value=0, max_value=500000)
+            before_id = parse_int(query, "before_id", default=0, min_value=0, max_value=2_000_000_000)
+            after_id = parse_int(query, "after_id", default=0, min_value=0, max_value=2_000_000_000)
+            include_meta_raw = str(query.get("include_meta", ["1"])[0] or "1").strip().lower()
+            include_meta = include_meta_raw not in {"0", "false", "no", "off"}
             jump_to_utc_raw = query.get("jump_to_utc", [""])[0].strip()
 
             jump_to_utc_iso = ""
@@ -19535,40 +19558,95 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                     return
 
             endpoint_timer = _new_endpoint_timer("/api/v1/host-reports")
+            response_cache_key = (
+                f"host-reports:{host_cache_key}:{limit}:{offset}:{before_id}:{after_id}:"
+                f"{jump_to_utc_iso}:{1 if include_meta else 0}"
+            )
+            cached_data = _read_cache_get(response_cache_key)
+            if isinstance(cached_data, dict):
+                self._send_json(HTTPStatus.OK, cached_data)
+                _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
+                _finish_endpoint_timer(endpoint_timer, meta="cache=hit")
+                return
 
-            with sqlite3.connect(DB_PATH) as conn:
-                total_reports = conn.execute(
-                    f"SELECT COUNT(*) FROM reports WHERE {where_clause}",
-                    where_args,
-                ).fetchone()[0]
+            total_reports = 0
+            oldest_report_at_utc = ""
+            newest_report_at_utc = ""
+            meta_cache_key = f"host-reports-meta:{host_cache_key}"
 
-                bounds_row = conn.execute(
-                    f"SELECT MIN(received_at_utc), MAX(received_at_utc) FROM reports WHERE {where_clause}",
-                    where_args,
-                ).fetchone()
-                oldest_report_at_utc = str((bounds_row[0] if bounds_row else "") or "")
-                newest_report_at_utc = str((bounds_row[1] if bounds_row else "") or "")
-
-                if jump_to_utc_iso and total_reports > 0:
-                    jump_offset = conn.execute(
-                        f"SELECT COUNT(*) FROM reports WHERE {where_clause} AND received_at_utc > ?",
-                        (*where_args, jump_to_utc_iso),
-                    ).fetchone()[0]
-                    if jump_offset >= total_reports:
-                        offset = max(0, total_reports - 1)
+            with sqlite_connect_read() as conn:
+                if include_meta:
+                    cached_meta = _read_cache_get(meta_cache_key)
+                    if isinstance(cached_meta, dict):
+                        total_reports = int(cached_meta.get("total_reports") or 0)
+                        oldest_report_at_utc = str(cached_meta.get("oldest_report_at_utc") or "")
+                        newest_report_at_utc = str(cached_meta.get("newest_report_at_utc") or "")
                     else:
-                        offset = max(0, jump_offset)
+                        stats_row = conn.execute(
+                            f"""
+                            SELECT COUNT(*), MIN(received_at_utc), MAX(received_at_utc)
+                            FROM reports
+                            WHERE {where_clause}
+                            """,
+                            where_args,
+                        ).fetchone()
+                        total_reports = int((stats_row[0] if stats_row else 0) or 0)
+                        oldest_report_at_utc = str((stats_row[1] if stats_row else "") or "")
+                        newest_report_at_utc = str((stats_row[2] if stats_row else "") or "")
+                        _read_cache_set(
+                            meta_cache_key,
+                            {
+                                "total_reports": total_reports,
+                                "oldest_report_at_utc": oldest_report_at_utc,
+                                "newest_report_at_utc": newest_report_at_utc,
+                            },
+                            ttl_seconds=HOST_REPORTS_META_CACHE_TTL_SECONDS,
+                        )
 
-                rows = conn.execute(
-                    f"""
-                    SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json, {host_key_expr}
-                    FROM reports
-                    WHERE {where_clause}
-                    ORDER BY id DESC
-                    LIMIT ? OFFSET ?
-                    """,
-                    (*where_args, limit, offset),
-                ).fetchall()
+                    if jump_to_utc_iso and total_reports > 0:
+                        jump_offset = conn.execute(
+                            f"SELECT COUNT(*) FROM reports WHERE {where_clause} AND received_at_utc > ?",
+                            (*where_args, jump_to_utc_iso),
+                        ).fetchone()[0]
+                        if jump_offset >= total_reports:
+                            offset = max(0, total_reports - 1)
+                        else:
+                            offset = max(0, jump_offset)
+
+                if before_id > 0:
+                    rows = conn.execute(
+                        f"""
+                        SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json, {host_key_expr}
+                        FROM reports
+                        WHERE {where_clause} AND id < ?
+                        ORDER BY id DESC
+                        LIMIT ?
+                        """,
+                        (*where_args, before_id, limit),
+                    ).fetchall()
+                elif after_id > 0:
+                    rows = conn.execute(
+                        f"""
+                        SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json, {host_key_expr}
+                        FROM reports
+                        WHERE {where_clause} AND id > ?
+                        ORDER BY id ASC
+                        LIMIT ?
+                        """,
+                        (*where_args, after_id, limit),
+                    ).fetchall()
+                    rows = list(reversed(rows))
+                else:
+                    rows = conn.execute(
+                        f"""
+                        SELECT id, received_at_utc, agent_id, hostname, primary_ip, payload_json, {host_key_expr}
+                        FROM reports
+                        WHERE {where_clause}
+                        ORDER BY id DESC
+                        LIMIT ? OFFSET ?
+                        """,
+                        (*where_args, limit, offset),
+                    ).fetchall()
 
                 resolved_hostname = ""
                 if rows:
@@ -19608,6 +19686,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "host_uid": host_uid,
                 "reports": reports,
             }
+            _read_cache_set(response_cache_key, response_data, ttl_seconds=HOST_REPORTS_CACHE_TTL_SECONDS)
             self._send_json(HTTPStatus.OK, response_data)
             _mark_endpoint_timer(endpoint_timer, "send")
             _finish_endpoint_timer(
@@ -19939,8 +20018,17 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             endpoint_timer = _new_endpoint_timer("/api/v1/analysis")
 
             hours = parse_int(query, "hours", default=24, min_value=1, max_value=24 * 30)
-            cutoff_iso = utc_hours_ago_iso(hours)
             username = self._web_session_username()
+            host_cache_key = host_uid or hostname
+            analysis_cache_key = f"analysis:{host_cache_key}:{hours}:{username or ''}"
+            cached_data = _read_cache_get(analysis_cache_key)
+            if isinstance(cached_data, dict):
+                self._send_json(HTTPStatus.OK, cached_data)
+                _mark_endpoint_timer(endpoint_timer, "cache-hit+send")
+                _finish_endpoint_timer(endpoint_timer, meta=f"hours={hours} cache=hit")
+                return
+
+            cutoff_iso = utc_hours_ago_iso(hours)
             host_key_expr = reports_host_key_sql()
             where_clause = "hostname = ?"
             where_args: tuple = (hostname,)
@@ -19948,7 +20036,7 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 where_clause = f"{host_key_expr} = ?"
                 where_args = (host_uid,)
 
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite_connect_read() as conn:
                 rows = conn.execute(
                     f"""
                     SELECT id, received_at_utc, payload_json, COALESCE(hostname, '')
@@ -20171,11 +20259,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
                 "large_files": latest_large_files,
                 "filesystem_trends": trends,
             }
+            _read_cache_set(analysis_cache_key, response_data, ttl_seconds=ANALYSIS_ENDPOINT_CACHE_TTL_SECONDS)
             self._send_json(HTTPStatus.OK, response_data)
             _mark_endpoint_timer(endpoint_timer, "send")
             _finish_endpoint_timer(
                 endpoint_timer,
-                meta=f"hours={hours} reports={report_count} fs_trends={len(trends)}",
+                meta=f"hours={hours} reports={report_count} fs_trends={len(trends)} cache=miss",
             )
             return
 
