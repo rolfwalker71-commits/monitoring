@@ -168,6 +168,10 @@ HOST_REPORTS_META_CACHE_TTL_SECONDS = max(
     0.0,
     min(600.0, float(os.getenv("MONITORING_HOST_REPORTS_META_CACHE_TTL_SECONDS", "120") or "120")),
 )
+DASHBOARD_DB_KPIS_CACHE_TTL_SECONDS = max(
+    0.0,
+    min(300.0, float(os.getenv("MONITORING_DASHBOARD_DB_KPIS_CACHE_TTL_SECONDS", "30") or "30")),
+)
 ANALYSIS_ENDPOINT_CACHE_TTL_SECONDS = max(
     0.0,
     min(600.0, float(os.getenv("MONITORING_ANALYSIS_CACHE_TTL_SECONDS", "60") or "60")),
@@ -4070,6 +4074,85 @@ def collect_database_maintenance_stats(conn: sqlite3.Connection) -> dict[str, ob
         "used_pages": used_pages,
         "free_ratio": free_ratio,
     }
+
+
+def _read_sqlite_file_byte_sizes() -> dict[str, int]:
+    db_file_bytes = int(DB_PATH.stat().st_size) if DB_PATH.exists() else 0
+    wal_path, shm_path = _sqlite_sidecar_paths(DB_PATH)
+    wal_file_bytes = int(wal_path.stat().st_size) if wal_path.exists() else 0
+    shm_file_bytes = int(shm_path.stat().st_size) if shm_path.exists() else 0
+    return {
+        "db_file_bytes": db_file_bytes,
+        "wal_file_bytes": wal_file_bytes,
+        "shm_file_bytes": shm_file_bytes,
+        "total_file_bytes": db_file_bytes + wal_file_bytes + shm_file_bytes,
+    }
+
+
+def collect_dashboard_db_kpis(conn: sqlite3.Connection) -> dict[str, object]:
+    """Lightweight header KPIs: snapshot + indexed 1h count, no full reports scan."""
+    cache_key = "dashboard-db-kpis:v1"
+    cached = _read_cache_get(cache_key)
+    if isinstance(cached, dict):
+        payload = dict(cached)
+        payload.update(_read_sqlite_file_byte_sizes())
+        baseline = payload.get("db_size_baseline_1h_bytes")
+        if baseline is not None:
+            try:
+                payload["db_size_delta_1h_bytes"] = int(payload["total_file_bytes"]) - int(baseline)
+            except (TypeError, ValueError):
+                pass
+        payload.pop("db_size_baseline_1h_bytes", None)
+        return payload
+
+    file_stats = _read_sqlite_file_byte_sizes()
+    total_file_bytes = int(file_stats["total_file_bytes"])
+
+    latest_row = conn.execute(
+        """
+        SELECT reports_total, computed_at_utc
+        FROM db_maintenance_history
+        ORDER BY computed_at_utc DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    reports_total = int(latest_row[0] or 0) if latest_row else None
+    reports_total_computed_at = str(latest_row[1] or "") if latest_row else ""
+
+    reports_last_hour_row = conn.execute(
+        "SELECT COUNT(*) FROM reports WHERE received_at_utc >= ?",
+        (utc_hours_ago_iso(1),),
+    ).fetchone()
+    reports_last_hour = int((reports_last_hour_row[0] or 0) if reports_last_hour_row else 0)
+
+    delta_1h_row = conn.execute(
+        """
+        SELECT total_file_bytes
+        FROM db_maintenance_history
+        WHERE computed_at_utc <= ?
+        ORDER BY computed_at_utc DESC
+        LIMIT 1
+        """,
+        (utc_hours_ago_iso(1),),
+    ).fetchone()
+    db_size_delta_1h_bytes = None
+    db_size_baseline_1h_bytes = None
+    if delta_1h_row and delta_1h_row[0] is not None:
+        db_size_baseline_1h_bytes = int(delta_1h_row[0] or 0)
+        db_size_delta_1h_bytes = total_file_bytes - db_size_baseline_1h_bytes
+
+    cache_payload: dict[str, object] = {
+        "reports_total": reports_total,
+        "reports_last_hour": reports_last_hour,
+        "total_file_bytes": total_file_bytes,
+        "db_size_delta_1h_bytes": db_size_delta_1h_bytes,
+        "db_size_baseline_1h_bytes": db_size_baseline_1h_bytes,
+        "reports_total_computed_at_utc": reports_total_computed_at,
+    }
+    _read_cache_set(cache_key, cache_payload, ttl_seconds=DASHBOARD_DB_KPIS_CACHE_TTL_SECONDS)
+    public_payload = dict(cache_payload)
+    public_payload.pop("db_size_baseline_1h_bytes", None)
+    return public_payload
 
 
 def _read_proc_cpu_totals() -> tuple[int, int] | None:
@@ -19572,42 +19655,12 @@ class MonitoringHandler(BaseHTTPRequestHandler):
             if not self._require_web_session():
                 return
             with sqlite_connect_read() as conn:
-                stats = collect_database_maintenance_stats(conn)
-                reports_last_hour_row = conn.execute(
-                    """
-                    SELECT COUNT(*)
-                    FROM reports
-                    WHERE received_at_utc >= ?
-                    """,
-                    (utc_hours_ago_iso(1),),
-                ).fetchone()
-                reports_last_hour = int((reports_last_hour_row[0] or 0) if reports_last_hour_row else 0)
-
-                delta_1h_row = conn.execute(
-                    """
-                    SELECT total_file_bytes
-                    FROM db_maintenance_history
-                    WHERE computed_at_utc <= ?
-                    ORDER BY computed_at_utc DESC
-                    LIMIT 1
-                    """,
-                    (utc_hours_ago_iso(1),),
-                ).fetchone()
-
-            total_file_bytes = int(stats.get("total_file_bytes", 0) or 0)
-            db_size_delta_1h_bytes = None
-            if delta_1h_row and delta_1h_row[0] is not None:
-                db_size_delta_1h_bytes = total_file_bytes - int(delta_1h_row[0] or 0)
+                stats = collect_dashboard_db_kpis(conn)
             self._send_json(
                 HTTPStatus.OK,
                 {
                     "status": "ok",
-                    "stats": {
-                        "reports_total": int(stats.get("reports_total", 0) or 0),
-                        "reports_last_hour": reports_last_hour,
-                        "total_file_bytes": total_file_bytes,
-                        "db_size_delta_1h_bytes": db_size_delta_1h_bytes,
-                    },
+                    "stats": stats,
                 },
             )
             return

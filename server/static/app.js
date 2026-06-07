@@ -521,7 +521,7 @@ const state = {
   globalMutedOpenAlertsCount: 0,
   criticalTrendsCount: 0,
   inactiveHostsCount: 0,
-  dbReportsTotal: 0,
+  dbReportsTotal: null,
   dbReportsLastHour: 0,
   dbTotalFileBytes: null,
   dbSizeDelta1hBytes: null,
@@ -1663,13 +1663,15 @@ async function refreshDashboard(options = {}) {
     const shouldRefreshGlobalAlertsList = state.viewMode === "global" && state.globalSubMode === "global-alerts";
 
     const hostsPromise = loadHosts({ preserveScroll });
+    void loadHeaderDatabaseKpis().catch((error) => {
+      console.warn("loadHeaderDatabaseKpis failed:", error);
+    });
     let kpiPromise = Promise.resolve();
     if (!state.deferredDashboardTasksInFlight) {
       state.deferredDashboardTasksInFlight = true;
       kpiPromise = Promise.allSettled([
         loadGlobalAlertsOverview({ updateList: shouldRefreshGlobalAlertsList }),
         loadInactiveHosts({ updateList: false }),
-        loadHeaderDatabaseKpis(),
         loadWebclientVersion(),
         loadCriticalTrends({ updateList: false }),
       ])
@@ -12550,14 +12552,26 @@ async function loadHeaderDatabaseKpis() {
     throw new Error(data.error || ("HTTP " + response.status));
   }
   const stats = data && typeof data.stats === "object" ? data.stats : {};
-  const reportsTotal = Number(stats.reports_total || 0);
+  const reportsTotalRaw = stats.reports_total;
   const reportsLastHour = Number(stats.reports_last_hour || 0);
   const totalFileBytes = Number(stats.total_file_bytes);
   const dbSizeDelta1hBytes = Number(stats.db_size_delta_1h_bytes);
-  state.dbReportsTotal = Number.isFinite(reportsTotal) && reportsTotal >= 0 ? reportsTotal : 0;
+  if (reportsTotalRaw === null || reportsTotalRaw === undefined) {
+    state.dbReportsTotal = null;
+  } else {
+    const reportsTotal = Number(reportsTotalRaw);
+    state.dbReportsTotal = Number.isFinite(reportsTotal) && reportsTotal >= 0 ? reportsTotal : null;
+  }
   state.dbReportsLastHour = Number.isFinite(reportsLastHour) && reportsLastHour >= 0 ? reportsLastHour : 0;
   state.dbTotalFileBytes = Number.isFinite(totalFileBytes) && totalFileBytes >= 0 ? totalFileBytes : null;
   state.dbSizeDelta1hBytes = Number.isFinite(dbSizeDelta1hBytes) ? dbSizeDelta1hBytes : null;
+  const dbReportsChip = document.getElementById("headerDbReportsChip");
+  const computedAt = String(stats.reports_total_computed_at_utc || "").trim();
+  if (dbReportsChip) {
+    dbReportsChip.title = computedAt
+      ? `Berichte in der Datenbank (Wartungssnapshot ${computedAt})`
+      : "Berichte in der Datenbank";
+  }
   updateHeaderStatChips();
   return stats;
 }
@@ -16833,9 +16847,9 @@ function updateHeaderStatChips() {
     activeHostsChip.classList.remove("hidden");
   }
   if (dbReportsChip && dbReportsCount) {
-    const dbReportsValue = Number(state.dbReportsTotal || 0);
-    dbReportsCount.textContent = dbReportsValue.toLocaleString("de-CH");
-    currentTrendValues.dbReports = dbReportsValue;
+    const dbReportsValue = state.dbReportsTotal === null ? null : Number(state.dbReportsTotal);
+    dbReportsCount.textContent = dbReportsValue === null ? "-" : dbReportsValue.toLocaleString("de-CH");
+    currentTrendValues.dbReports = dbReportsValue === null ? Number.NaN : dbReportsValue;
     dbReportsChip.classList.remove("hidden");
   }
   if (dbReportsHourChip && dbReportsHourCount) {
